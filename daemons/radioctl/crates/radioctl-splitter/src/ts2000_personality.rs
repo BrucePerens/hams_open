@@ -8,9 +8,11 @@
 //! refusal or an unknown command is `?;`. With `AI1` the client is sent `FA`, `FB` and `MD` when
 //! the rig changes.
 //!
-//! Not answered: `IF`, the composite status. Its field layout is not verified here (the same
-//! reason `radioctl-protocols::kenwood` refuses to decode it), so it is answered `?;`; software
-//! that needs transmit state from `IF` will not work against this endpoint yet. Data modes map to
+//! `IF` is answered with the 38-character composite status of the TS-2000 (see
+//! [`Ts2000Personality::status_answer`] for the layout and its sources), built from the frequency
+//! of VFO A, the mode, the transmit state, RIT, XIT and its offset and split; a rig that cannot
+//! read RIT, XIT or split reports them off. It is the same layout `radioctl-protocols::kenwood`
+//! decodes, so what this endpoint says, a radioctl Kenwood client reads back. Data modes map to
 //! the sideband they sit on, and S-meter values pass through in the real rig's units.
 
 use std::time::Duration;
@@ -21,7 +23,7 @@ use radioctl_core::op::Observation;
 use radioctl_core::units::{Hz, Mode, Vfo};
 use radioctl_protocols::kenwood::{parse_digits, Token, Tokenizer};
 
-use crate::personality::{Action, Outcome, Pending, Personality, Request};
+use crate::personality::{Action, Outcome, Pending, Personality, Request, Status};
 
 /// The TS-2000 emulated by a CAT endpoint.
 pub struct Ts2000Personality {
@@ -63,6 +65,34 @@ impl Ts2000Personality {
         }
     }
 
+    // [@ANCHOR: radioctl_splitter_ts2000_status_answer]
+    /// The `IF` answer for a status. Layout (37 characters and the `;`): `IF`, P1 frequency of the
+    /// receive VFO (11 digits; always VFO A here), P2 step (4 digits, reported as 0000), P3 RIT/XIT
+    /// offset (sign and 5 digits), P4 RIT, P5 XIT, P6 and P7 memory bank and channel (000), P8
+    /// transmit (1) or receive (0), P9 mode digit, P10 function (0, VFO A), P11 scan (0), P12 split,
+    /// P13 to P15 tone and tone number (0000). Sources: TS-2000 Instruction Manual B62-1221-10,
+    /// appendix 21 `IF` (page 125 as transcribed, see `radioctl-protocols::kenwood`); offsets of the
+    /// fields cross-checked against Hamlib 4.6.2 `rigs/kenwood/kenwood.c` (`kenwood_get_ptt`,
+    /// `kenwood_get_mode`, `kenwood_get_rit`/`xit` in `kenwood_get_func`, `get_split_vfo_if`),
+    /// facts only. `None` when the mode has no TS-2000 digit.
+    fn status_answer(&self, status: &Status) -> Option<Vec<u8>> {
+        let mode = self.code(status.mode)?;
+        let sign = if status.rit_offset < 0 { '-' } else { '+' };
+        Some(
+            format!(
+                "IF{:011}0000{sign}{:05}{}{}000{}{}00{}0000;",
+                status.frequency.0,
+                status.rit_offset.unsigned_abs(),
+                u8::from(status.rit),
+                u8::from(status.xit),
+                u8::from(status.ptt),
+                char::from(mode),
+                u8::from(status.split),
+            )
+            .into_bytes(),
+        )
+    }
+
     // [@ANCHOR: radioctl_splitter_ts2000_classify]
     /// Turns one command (without its `;`) into an action.
     fn classify(&mut self, text: &str) -> Action {
@@ -86,6 +116,7 @@ impl Ts2000Personality {
             ("TX", "" | "0" | "1") => Self::rig(Request::SetPtt(true)),
             ("RX", "" | "0") => Self::rig(Request::SetPtt(false)),
             ("SM", "" | "0") => Self::rig(Request::ReadSignal),
+            ("IF", "") => Self::rig(Request::ReadStatus),
             ("ID", "") => Action::Local(b"ID019;".to_vec()),
             ("PS", "") => Action::Local(b"PS1;".to_vec()),
             ("AI", "") => Action::Local(format!("AI{};", u8::from(self.auto_info)).into_bytes()),
@@ -136,7 +167,10 @@ impl Personality for Ts2000Personality {
             (Outcome::Value(Observation::Signal(level)), _) => {
                 format!("SM0{level:04};").into_bytes()
             }
-            (Outcome::Value(_), _) => b"?;".to_vec(),
+            (Outcome::Status(status), Request::ReadStatus) => {
+                self.status_answer(status).unwrap_or_else(|| b"?;".to_vec())
+            }
+            (Outcome::Value(_) | Outcome::Status(_), _) => b"?;".to_vec(),
         }
     }
 
@@ -193,7 +227,7 @@ mod tests {
     fn commands_become_rig_actions_local_answers_or_refusals() {
         let mut p = Ts2000Personality::new();
         assert_eq!(
-            actions(&mut p, "FA;FB00007040000;MD;MD2;TX;RX;SM0;"),
+            actions(&mut p, "FA;FB00007040000;MD;MD2;TX;RX;SM0;IF;"),
             vec![
                 rig(Request::ReadFrequency(Vfo::A)),
                 rig(Request::SetFrequency(Vfo::B, Hz(7_040_000))),
@@ -202,6 +236,7 @@ mod tests {
                 rig(Request::SetPtt(true)),
                 rig(Request::SetPtt(false)),
                 rig(Request::ReadSignal),
+                rig(Request::ReadStatus),
             ]
         );
         assert_eq!(
@@ -212,15 +247,7 @@ mod tests {
                 Action::Local(b"AI0;".to_vec()),
             ]
         );
-        for refused in [
-            "IF;",
-            "ZZ;",
-            "FA123;",
-            "MD8;",
-            "MD22;",
-            "FAabcdefghijk;",
-            "TX9;",
-        ] {
+        for refused in ["ZZ;", "FA123;", "MD8;", "MD22;", "FAabcdefghijk;", "TX9;"] {
             assert_eq!(
                 actions(&mut p, refused),
                 vec![Action::Local(b"?;".to_vec())],
@@ -278,6 +305,49 @@ mod tests {
         assert_eq!(p.reply(&[], &read, &Outcome::Refused), b"?;");
         assert_eq!(
             p.reply(&[], &read, &Outcome::Value(Observation::Ptt(true))),
+            b"?;"
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_splitter_ts2000_status_answer]
+    // Tests [@ANCHOR: radioctl_splitter_ts2000_reply]
+    #[test]
+    fn the_composite_status_has_the_ts2000_layout() {
+        let mut p = Ts2000Personality::new();
+        let mut status = Status {
+            frequency: Hz(14_074_000),
+            mode: Mode::Usb,
+            ptt: false,
+            rit: false,
+            xit: false,
+            rit_offset: 0,
+            split: false,
+        };
+        let ask = |p: &mut Ts2000Personality, status: Status| {
+            p.reply(&[], &Request::ReadStatus, &Outcome::Status(status))
+        };
+        // The same bytes the virtual TS-2000 answers for this state (radioctl-protocols).
+        assert_eq!(
+            ask(&mut p, status),
+            b"IF000140740000000+0000000000020000000;"
+        );
+        status.rit = true;
+        status.xit = true;
+        status.rit_offset = -120;
+        status.ptt = true;
+        status.split = true;
+        status.mode = Mode::Cw;
+        let answer = String::from_utf8(ask(&mut p, status)).expect("ascii");
+        assert_eq!(answer, "IF000140740000000-0012011000130010000;");
+        assert_eq!(answer.len(), 38);
+        status.mode = Mode::Am;
+        assert!(ask(&mut p, status).starts_with(b"IF"));
+        // A mode the TS-2000 has no digit for is refused rather than guessed.
+        status.mode = Mode::Wfm;
+        assert_eq!(ask(&mut p, status), b"?;");
+        // A status is only the answer to a status request.
+        assert_eq!(
+            p.reply(&[], &Request::ReadMode, &Outcome::Status(status)),
             b"?;"
         );
     }

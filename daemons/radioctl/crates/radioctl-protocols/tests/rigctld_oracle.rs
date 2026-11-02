@@ -24,7 +24,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use radioctl_core::description::{Family, RigDescription};
-use radioctl_core::engine::{Inbound, ProtocolEngine};
+use radioctl_core::engine::{Inbound, ProtocolEngine, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::op::{Observation, Op};
 use radioctl_core::rigfile;
 use radioctl_core::units::{Hz, Level, Meter, Mode, Vfo};
@@ -162,6 +162,19 @@ impl Radio {
     }
 }
 
+/// The time a block-protocol Yaesu rig on the pty is told it is, whenever bytes arrive. The rig
+/// uses `now` only to throw away a half-received frame that is older than `PARTIAL_FRAME_TIMEOUT`.
+/// For the block models the pty has no half frame to lose (Hamlib always writes whole five-byte
+/// blocks, one byte at a time with a pause), but how the bytes are cut into reads depends on how
+/// long the machine stalls the controller, so the wall clock made the same scenario put different
+/// bytes in front of the rig on a busy machine (see the stall test below). A constant makes
+/// those rigs' answers a function of the bytes alone. The other families keep the wall clock on
+/// purpose: some pinned disagreements rely on a junk partial frame (the TT-538's `*A` plus four
+/// binary bytes without a terminator) being dropped after Hamlib's own reply timeout has run,
+/// which is time passing for real. The staleness rule itself is tested in
+/// `radioctl-protocols::virtual_rig` with explicit times.
+const LOGICAL_NOW: Duration = Duration::from_secs(1);
+
 /// A virtual rig on the master side of a pty, answering whoever opens the slave.
 struct RadioOnPty {
     rig: Arc<Mutex<Radio>>,
@@ -177,6 +190,7 @@ impl RadioOnPty {
         let (mut master, slave) = TTYPort::pair().expect("pty pair");
         let slave_path = slave.name().expect("slave name");
         drop(slave);
+        let logical_clock = desc.family == Family::YaesuLegacy;
         let rig = Arc::new(Mutex::new(Radio::from_description(desc)));
         let wire = Arc::new(Mutex::new(Vec::new()));
         let refused = Arc::new(Mutex::new(Vec::new()));
@@ -199,7 +213,14 @@ impl RadioOnPty {
                 };
                 let bytes = buffer.get(..n).unwrap_or(&[]);
                 wire_t.lock().expect("lock").extend_from_slice(bytes);
-                let reply = rig_t.lock().expect("lock").feed(bytes, started.elapsed());
+                let reply = rig_t.lock().expect("lock").feed(
+                    bytes,
+                    if logical_clock {
+                        LOGICAL_NOW
+                    } else {
+                        started.elapsed()
+                    },
+                );
                 if reply == b"?;" || reply.ends_with(&[0xFA, 0xFD]) {
                     let shown = if bytes.contains(&0xFE) {
                         bytes
@@ -499,6 +520,61 @@ fn no_rigctld_outlives_its_harness() {
         "rigctld {pid} outlived a panicking test"
     );
     assert!(rigctld_pids_on(&slave).is_empty());
+}
+
+// Tests the harness itself: the virtual block-protocol Yaesu rig on the pty never sees wall-clock
+// time pass between the pieces of one command. A controller may stall between two bytes of a block for as long as
+// the machine is busy (Hamlib's FT-840 backend writes one byte, sleeps 50 ms, and so on; under
+// load a gap of over half a second was seen), and the virtual rig's "a partial block older than
+// `PARTIAL_FRAME_TIMEOUT` is stale" rule, fed the wall clock, threw the half block away and read
+// every later block out of step: Hamlib's reads and sets then failed (FT-840 in
+// `the_block_protocol_yaesu_files_against_hamlib_record_every_disagreement`, one run in about
+// five at a load average of 15). With the logical clock the answer depends on the bytes only.
+#[test]
+fn a_stall_between_the_bytes_of_a_block_does_not_make_the_virtual_rig_drop_it() {
+    let desc = shipped("yaesu-ft-840");
+    let radio = RadioOnPty::start(&desc);
+    let mut port = serialport::new(radio.slave.as_str(), 4800)
+        .open_native()
+        .expect("open the slave side as a controller would");
+    port.set_timeout(Duration::from_secs(5)).expect("timeout");
+    // The "update" request (opcode 0x10) in two pieces, the second long after the first.
+    port.write_all(&[0, 0, 0]).expect("write");
+    port.flush().expect("flush");
+    thread::sleep(PARTIAL_FRAME_TIMEOUT + Duration::from_millis(300));
+    port.write_all(&[3, 0x10]).expect("write");
+    port.flush().expect("flush");
+    let mut first = [0u8; 1];
+    port.read_exact(&mut first)
+        .expect("the block was kept across the stall, so the rig answered it");
+    assert!(radio.refused.lock().expect("lock").is_empty());
+}
+
+// Tests [@ANCHOR: radioctl_virtual_legacy_model_block]
+// A read that goes to the radio and one answered from Hamlib's own startup cache must agree.
+// Hamlib's rigctld reads the radio when it opens it and keeps the answers for about a second
+// whatever `cache_timeout` says; a first command that came within that second was answered from
+// them, a later one went to the radio. The virtual FT-840, FT-890 and FT-900 answered the radio
+// read with a status-flag byte that says "neither a VFO nor a memory is displayed", which these
+// backends refuse ("Invalid parameter"), so the oracle test passed or failed by how long
+// rigctld and the machine took to get to the first command (`GetFrequency(A)` of the FT-840
+// failed at a load average of 15 to 25). The wait below is the stimulus (the cache's age), not
+// a wait for an answer.
+#[test]
+fn hamlib_reads_the_frequency_of_the_vfo_models_from_the_radio_not_only_from_its_cache() {
+    for (file, model) in [
+        ("yaesu-ft-840", 1011),
+        ("yaesu-ft-890", 1015),
+        ("yaesu-ft-900", 1013),
+    ] {
+        let desc = shipped(file);
+        let radio = RadioOnPty::start(&desc);
+        let mut oracle = Rigctld::start(model, &radio.slave, 4800);
+        thread::sleep(Duration::from_millis(1500));
+        let (fields, code) = oracle.call("f").expect("rigctld answers");
+        assert_eq!(code, 0, "{file}: a read that goes to the radio failed");
+        assert_eq!(field(&fields, "Frequency"), Some("14074000"), "{file}");
+    }
 }
 
 // Tests the harness itself: the readiness check names the process that holds a listening
@@ -1909,11 +1985,11 @@ fn known_block_divergences(file: &str) -> Vec<String> {
             "final freq_a",
             "final mode",
         ],
-        // Hamlib's set-mode to LSB fails and its wire shows only the later CW set being sent. Cause not isolated. The frequency reads agree through the VFO data block (opcode 10, parameter 3).
+        // Hamlib's set-mode to LSB fails and its wire shows only the later CW set being sent. Cause (Hamlib 4.6.2 ft840.c `ft840_set_mode`, facts only): the harness passes width 0, the code takes a width equal to `rig_passband_narrow(mode)` to mean the narrow filter, and for LSB (no narrow filter, narrow width 0) that is neither CW nor AM, so it answers "Invalid parameter" before any byte is written; CW and AM pass because they have a narrow code. A quirk of the Hamlib backend, not of the virtual rig. The frequency reads agree through the VFO data block (opcode 10, parameter 3) whether Hamlib answers from its startup cache or from the radio (`hamlib_reads_the_frequency_of_the_vfo_models_from_the_radio_not_only_from_its_cache`).
         "yaesu-ft-840" => &["SetMode(Lsb)", "GetMode"],
-        // As the FT-840: Hamlib's set-mode to LSB fails (cause not isolated).
+        // As the FT-840: Hamlib's set-mode to LSB fails (the same width test in `ft890_set_mode`).
         "yaesu-ft-890" => &["SetMode(Lsb)", "GetMode"],
-        // As the FT-840: Hamlib's set-mode to LSB fails (cause not isolated).
+        // As the FT-840: Hamlib's set-mode to LSB fails (the same width test in `ft900_set_mode`).
         "yaesu-ft-900" => &["SetMode(Lsb)", "GetMode"],
         // The old-ROM (1492-byte whole-radio update) layout offsets in this description are unverified guesses at which 16-byte record is missing; Hamlib's ft990v12 reads other offsets. Open question.
         "yaesu-ft-990-oldrom" => &["GetFrequency(A)", "GetMode"],

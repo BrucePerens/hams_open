@@ -30,10 +30,31 @@ pub enum Request {
     ReadSignal,
     /// Read the power meter.
     ReadPower,
+    /// Read the composite status (frequency, mode, transmit, RIT, XIT and its offset, split).
+    ReadStatus,
     /// Send Morse text.
     SendCw(String),
     /// Stop Morse in progress (always allowed, no owner check: a stop path).
     StopCw,
+}
+
+/// The rig state a composite status answer (the Kenwood `IF`) is built from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Status {
+    /// Frequency of VFO A.
+    pub frequency: Hz,
+    /// Operating mode.
+    pub mode: Mode,
+    /// Transmitting.
+    pub ptt: bool,
+    /// RIT on (off when the rig cannot say).
+    pub rit: bool,
+    /// XIT on (off when the rig cannot say).
+    pub xit: bool,
+    /// RIT/XIT offset in hertz (0 when the rig cannot say).
+    pub rit_offset: i16,
+    /// Split operation on (off when the rig cannot say).
+    pub split: bool,
 }
 
 /// What the splitter did with a [`Request`].
@@ -41,6 +62,8 @@ pub enum Request {
 pub enum Outcome {
     /// A value (the answer to a read).
     Value(Observation),
+    /// The composite status (the answer to [`Request::ReadStatus`]).
+    Status(Status),
     /// A set or key was done.
     Done,
     /// The request was refused (unsupported, gate closed, PTT owned by another client, failed).
