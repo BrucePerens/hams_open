@@ -138,6 +138,7 @@ impl VirtualRig {
                 self.state.ptt = false;
                 None
             }
+            ("KY", _) => self.kenwood_ky(arg),
             ("ID", "") => Some(format!("ID{:03};", self.kenwood_id())),
             ("AI", "") => Some(format!("AI{};", u8::from(self.state.transceive))),
             ("AI", a) => {

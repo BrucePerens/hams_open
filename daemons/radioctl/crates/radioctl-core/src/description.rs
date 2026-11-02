@@ -425,6 +425,110 @@ impl KenwoodDialect {
     }
 }
 
+/// How a Kenwood model takes `KY` (send CW text), as its own manual documents it. The command is
+/// used only where a manual of that model documents it (Bruce's decision of 2026-11-02): the
+/// text field width, the characters and the stop differ per model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KyForm {
+    /// No manual read documents `KY` for this model: send-CW-text is refused as not supported.
+    Undocumented,
+    /// `KY`, a space (P1) and a fixed field of `width` characters padded with spaces.
+    Padded,
+    /// `KY2` and up to `width` characters with no padding (TS-890S P1 = 2).
+    Variable,
+}
+
+/// How a documented `KY` message is stopped in flight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KyStop {
+    /// No stop is documented for the model: send-CW-text is not offered for it, because a message
+    /// that cannot be stopped is not allowed.
+    None,
+    /// `KY0;` (Set 2 of the TS-590, TS-890 and TS-990 guides).
+    Ky0,
+    /// `KY`, a space and a field of only spaces (TS-480 guide: all-space P2 stops the message).
+    Blank,
+}
+
+/// The `KY` capability of one Kenwood model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KyParams {
+    /// The form of the command.
+    pub form: KyForm,
+    /// Characters in the text field (24 in every guide read).
+    pub width: u8,
+    /// Whether lower-case letters are in the guide's character table.
+    pub lowercase: bool,
+    /// Whether `@` is in the guide's character table.
+    pub at_sign: bool,
+    /// How a message in flight is stopped.
+    pub stop: KyStop,
+}
+
+impl KyParams {
+    /// A model whose manuals document no `KY`.
+    pub const UNDOCUMENTED: KyParams = KyParams {
+        form: KyForm::Undocumented,
+        width: 0,
+        lowercase: false,
+        at_sign: false,
+        stop: KyStop::None,
+    };
+
+    // [@ANCHOR: radioctl_core_ky_offers_send_cw]
+    /// Whether the model gets the send-cw capability: documented and stoppable.
+    pub fn offers_send_cw(&self) -> bool {
+        self.form != KyForm::Undocumented && self.stop != KyStop::None
+    }
+
+    // [@ANCHOR: radioctl_core_ky_encode_text]
+    /// The wire form of a message, or the reason it is refused: 1 to `width` characters of the
+    /// guide's table with at least one that is not a space (an all-space field is a stop on some
+    /// models), no `;`.
+    pub fn encode_text(&self, text: &str) -> Result<String, String> {
+        if !self.offers_send_cw() {
+            return Err("send-CW-text (KY) is not documented for this model".into());
+        }
+        let width = usize::from(self.width);
+        if text.is_empty() || text.len() > width {
+            return Err(format!("CW text must be 1 to {width} characters"));
+        }
+        if text.trim().is_empty() {
+            return Err("CW text must contain a character other than spaces".into());
+        }
+        let ok = |c: char| {
+            c.is_ascii_uppercase()
+                || c.is_ascii_digit()
+                || (self.lowercase && c.is_ascii_lowercase())
+                || (self.at_sign && c == '@')
+                || " '\"()*+,-./:=?[_<#>]\\%".contains(c)
+        };
+        if let Some(bad) = text.chars().find(|c| !ok(*c)) {
+            return Err(format!(
+                "character {bad:?} is not in this model's CW character table"
+            ));
+        }
+        Ok(match self.form {
+            KyForm::Padded => format!("KY {text:<width$};"),
+            _ => format!("KY2{text};"),
+        })
+    }
+
+    // [@ANCHOR: radioctl_core_ky_encode_stop]
+    /// The wire form of the stop, or `None` where none is documented.
+    pub fn encode_stop(&self) -> Option<String> {
+        match self.stop {
+            KyStop::None => None,
+            KyStop::Ky0 => Some("KY0;".to_string()),
+            KyStop::Blank => Some(format!(
+                "KY {:width$};",
+                "",
+                width = usize::from(self.width)
+            )),
+        }
+    }
+}
+
 /// Kenwood-style parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KenwoodParams {
@@ -432,6 +536,8 @@ pub struct KenwoodParams {
     pub model_id: u16,
     /// The command set.
     pub dialect: KenwoodDialect,
+    /// The model's `KY` (send CW text) record; `None` where the description does not record one.
+    pub ky: Option<KyParams>,
 }
 
 /// Which command set a Kenwood handheld or mobile speaks.
@@ -993,6 +1099,7 @@ impl RigDescription {
             kenwood: Some(KenwoodParams {
                 model_id: 19,
                 dialect: KenwoodDialect::Classic,
+                ky: None,
             }),
             elecraft: None,
             yaesu: None,

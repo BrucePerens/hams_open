@@ -152,7 +152,7 @@ fn refusals_never_reach_the_wire_and_the_rig_refuses_what_it_does_not_know() {
         Op::SetRitOffset(10_000),
         Op::SetFrequency(Vfo::A, Hz(100_000_000_000)),
         Op::SetMode(Mode::Wfm),
-        Op::SendCw("cq".into()),
+        Op::SendCw("a".repeat(25)),
     ] {
         let err = engine.encode(&op).expect_err("refused");
         assert_eq!(err.kind, ErrorKind::Unsupported, "{op:?}");

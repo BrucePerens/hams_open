@@ -807,6 +807,49 @@ impl VirtualRig {
         self.state.cw_stops = self.state.cw_stops.saturating_add(1);
     }
 
+    // [@ANCHOR: radioctl_virtual_kenwood_ky]
+    /// A Kenwood `KY` command as the description's `[kenwood.ky]` block says the model takes it:
+    /// the read answers `KY0;` (buffer has room); a message of the right form and width is
+    /// recorded in `cw_sent`; the model's stop empties it; anything else, and every command on a
+    /// model whose manuals document no `KY`, is `?;`.
+    pub(super) fn kenwood_ky(&mut self, arg: &str) -> Option<String> {
+        use radioctl_core::description::{KyForm, KyStop};
+        let refused = Some("?;".to_string());
+        let Some(ky) = self
+            .desc
+            .kenwood
+            .as_ref()
+            .and_then(|k| k.ky)
+            .filter(|ky| ky.offers_send_cw())
+        else {
+            return refused;
+        };
+        let width = usize::from(ky.width);
+        if arg.is_empty() {
+            return Some("KY0;".to_string());
+        }
+        if arg == "0" && ky.stop == KyStop::Ky0 {
+            self.stop_cw();
+            return None;
+        }
+        if ky.stop == KyStop::Blank && arg.len() == width + 1 && arg.bytes().all(|b| b == b' ') {
+            self.stop_cw();
+            return None;
+        }
+        let payload = match (ky.form, arg.as_bytes().first()) {
+            (KyForm::Padded, Some(b' ')) if arg.len() == width + 1 => arg.get(1..),
+            (KyForm::Variable, Some(b'2')) if arg.len() <= width + 1 => arg.get(1..),
+            _ => None,
+        };
+        match payload.map(str::trim_end) {
+            Some(text) if ky.encode_text(text).is_ok() => {
+                self.state.cw_sent.push(text.to_string());
+                None
+            }
+            _ => refused,
+        }
+    }
+
     // [@ANCHOR: radioctl_virtual_kenwood_command]
     fn kenwood_command(&mut self, text: &str) -> Vec<u8> {
         if self.is_ts890() {
@@ -836,10 +879,7 @@ impl VirtualRig {
                 self.state.ptt = false;
                 None
             }
-            ("KY", "0") => {
-                self.stop_cw();
-                None
-            }
+            ("KY", _) => self.kenwood_ky(arg),
             ("ID", "") => Some(format!("ID{:03};", self.kenwood_id())),
             ("AI", "") => Some(format!("AI{};", u8::from(self.state.transceive))),
             ("AI", flag) => {

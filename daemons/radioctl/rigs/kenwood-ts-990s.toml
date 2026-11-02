@@ -6,7 +6,7 @@
 # LAN: the TS-990S also has a TCP/IP CAT stream with ##CN and ##ID login commands (PDF p. 62: account and password lengths 1 to 8, UTF-16, closed after 10 s without traffic). Not implemented here and unverified; the frames differ from the TS-890S's.
 # Transmit: set-ptt (TX and RX) is declared; the rig actor's transmit gate stays closed by default and PTT is unverified on hardware.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "rit-xit", "identify"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "rit-xit", "identify", "send-cw"]
 
 [rig]
 id = "kenwood-ts-990s"
@@ -16,6 +16,12 @@ family = "kenwood-ascii"
 [kenwood]
 model_id = 22
 dialect = "ts990"
+[kenwood.ky]
+form = "padded"
+width = 24
+lowercase = true
+at_sign = true
+stop = "ky0"
 
 [timing]
 timeout_ms = 200
@@ -111,3 +117,12 @@ key = "mode.*"
 provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER' (March/29/2013), file ts990_pc_command.pdf (a mirror copy from people.freebsd.org; sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c): OM, PDF p. 45: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R, C LSB-D1, D USB-D1", note = "Mapping to radioctl modes is ours, as for the TS-890S: FSK is rtty, FSK-R is rtty-r, LSB-D1 is data-r, USB-D1 is data. PSK, FM-D, AM-D and the D2 and D3 letters are not mapped." }
 verified = { state = "manual-checked", reference = "TS-990S PC command reference, OM, PDF p. 45" }
 
+[[facts]]
+key = "capability.send-cw"
+provenance = { kind = "manual", reference = "Kenwood TS-990S 'PC Control Command Reference Guide', file ts990_pc_command.pdf, https://people.freebsd.org/~wpaul/ts-990s/TS-990S_PC_Control_Command_Reference.pdf, sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c, PDF p. 34 (printed 33): KY Set 1 (P1 a space, P2 24 characters, blank ones spaces), Set 2 `KY0;` stops Set 1, read and answer (P1 0 buffer space, 1 none); table with lower case and @", note = "Transmit-capable: the rig actor's transmit gate applies and stays closed by default. See the kenwood.ky fact for the form." }
+verified = { state = "manual-checked", reference = "Kenwood TS-990S 'PC Control Command Reference Guide', KY (PDF p. 34 (printed 33))" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "Kenwood TS-990S 'PC Control Command Reference Guide', file ts990_pc_command.pdf, https://people.freebsd.org/~wpaul/ts-990s/TS-990S_PC_Control_Command_Reference.pdf, sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c, PDF p. 34 (printed 33): KY Set 1 (P1 a space, P2 24 characters, blank ones spaces), Set 2 `KY0;` stops Set 1, read and answer (P1 0 buffer space, 1 none); table with lower case and @", note = "Used as the guide gives it (space form, 24 characters, `KY0;` stop). Hamlib 4.6.2 kenwood_send_morse sends `KY2<text>` on firmware 1.10 or later for the TS-990S; this guide does not document P1 = 2 for the TS-990S, so it is not used. Unverified on a radio." }
+verified = { state = "manual-checked", reference = "Kenwood TS-990S 'PC Control Command Reference Guide', KY (PDF p. 34 (printed 33))" }

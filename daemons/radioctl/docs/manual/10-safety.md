@@ -125,8 +125,12 @@ held keyed by PTT stays keyed, the cache is not touched, and the watchdog stays 
 transceive report shows the radio receiving. Only the unkey is coalesced when the emergency queue is
 full and only an unkey's failure is `Alarm::UnkeyFailed` (`Op::is_unkey()`). The command per engine, all
 unverified on hardware: CI-V `17 FF` (Hamlib's `icom_stop_morse`), Elecraft `KY <EOT>;` (Programmer's
-Reference, "KY": EOT "quickly terminates transmission"), FlexRadio `cwx clear`, Kenwood `KY0;` (TS-590
-guide, "KY" Set 2; no Kenwood description carries `send-cw`, so it is refused today). The Yaesu CAT guides
+Reference, "KY": EOT "quickly terminates transmission"), FlexRadio `cwx clear`, Kenwood, only where
+the model's manual documents `KY` and a stop (`[kenwood.ky]` in its description): `KY0;` (TS-590, TS-890S and
+TS-990S guides, "KY" Set 2) or a field of 24 spaces (TS-480 guide). The other Kenwood-dialect models, among them
+the TS-570 and TS-870S whose manuals document `KY` but no stop, do not offer `send-cw` and report "not
+supported" (`KY <text>;` is used only where the manual documents it: text width, characters and stop differ per
+model). The Yaesu CAT guides
 have no Morse text command and no stop for one: `Unsupported` there, and unkeying is the stop path. In
 `radioctld` it is `\stop_morse`; the splitter's CI-V personality maps `17 FF` to it. Both serve it to any
 client, owner or not, gate open or closed.

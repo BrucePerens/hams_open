@@ -11,6 +11,8 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 19
+[kenwood.ky]
+form = "undocumented"
 
 [timing]
 timeout_ms = 200
@@ -86,4 +88,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Kenwood TS-2000/TS-2000X/TS-B2000 Instruction Manual B62-1221-10, appendix 21 PC Control Command Tables: MD command p. 127 (MD): 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R (0 and 8 reserved)", note = "Read as transcribed by manualsdir.com (pages 123-148 of its copy, text in reverse character order), because kenwood.com hosts no TS-2000 command guide file; the printed page numbers come from that transcription, which is itself unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "No manual read documents KY for this model: the TS-2000 manual B62-1221-10 as transcribed (appendix 21, printed pages 115 to 140) was read for kenwood.rs and has no KY entry; the real page was not read.", note = "Bruce's decision (2026-11-02): send-CW-text (KY) is used only on a model whose manual documents it; this model reports not supported (the generic keyer path or the existing fallback keys CW). Hamlib 4.6.2 has a send_morse in rigs/kenwood/ts2000.c (rig_caps of RIG_MODEL_TS2000) which is a fact about Hamlib, not a manual. Unverified." }
 verified = { state = "unverified" }

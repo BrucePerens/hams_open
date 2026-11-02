@@ -8,7 +8,7 @@
 //!
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
-//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `elecraft.model_id`, `yaesu.model_id`,
+//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `yaesu.model_id`,
 //! `yaesu.frequency_digits` (only when not 9),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
@@ -27,10 +27,10 @@ use serde::Deserialize;
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
     CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
-    KenwoodDialect, KenwoodHhParams, KenwoodParams, LegacyBlock, LegacyCommand, LegacyFlag,
-    LegacyFreqForm, LegacyRead, LevelParams, ReceiverParams, ReceiverProtocol, RigDescription,
-    ScopeParams, Timing, UsbParams, UsbProtocol, VendorParams, VendorProtocol, YaesuLegacyParams,
-    YaesuParams,
+    KenwoodDialect, KenwoodHhParams, KenwoodParams, KyForm, KyParams, KyStop, LegacyBlock,
+    LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams, ReceiverParams,
+    ReceiverProtocol, RigDescription, ScopeParams, Timing, UsbParams, UsbProtocol, VendorParams,
+    VendorProtocol, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -185,6 +185,22 @@ struct KenwoodSection {
     model_id: u16,
     #[serde(default)]
     dialect: Option<String>,
+    #[serde(default)]
+    ky: Option<KySection>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KySection {
+    form: String,
+    #[serde(default)]
+    width: Option<u8>,
+    #[serde(default)]
+    lowercase: bool,
+    #[serde(default)]
+    at_sign: bool,
+    #[serde(default)]
+    stop: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -462,6 +478,41 @@ pub fn parse(text: &str) -> Result<LoadedDescription, RigError> {
     Ok(LoadedDescription { description, facts })
 }
 
+// [@ANCHOR: radioctl_core_rigfile_build_ky]
+/// The `[kenwood.ky]` block: `form` is `undocumented` (nothing else allowed), `padded` or
+/// `variable`; `stop` is `none`, `ky0` or `blank`.
+fn build_ky(k: &KySection) -> Result<KyParams, RigError> {
+    let form = match k.form.as_str() {
+        "undocumented" => KyForm::Undocumented,
+        "padded" => KyForm::Padded,
+        "variable" => KyForm::Variable,
+        other => return Err(bad(format!("unknown kenwood.ky.form {other:?}"))),
+    };
+    if form == KyForm::Undocumented {
+        if k.width.is_some() || k.lowercase || k.at_sign || k.stop.is_some() {
+            return Err(bad("kenwood.ky.form undocumented takes no other field"));
+        }
+        return Ok(KyParams::UNDOCUMENTED);
+    }
+    let width = k
+        .width
+        .filter(|w| (1..=64).contains(w))
+        .ok_or_else(|| bad("kenwood.ky.width must be 1 to 64"))?;
+    let stop = match k.stop.as_deref() {
+        Some("none") => KyStop::None,
+        Some("ky0") => KyStop::Ky0,
+        Some("blank") => KyStop::Blank,
+        other => return Err(bad(format!("unknown kenwood.ky.stop {other:?}"))),
+    };
+    Ok(KyParams {
+        form,
+        width,
+        lowercase: k.lowercase,
+        at_sign: k.at_sign,
+        stop,
+    })
+}
+
 // [@ANCHOR: radioctl_core_rigfile_build_description]
 fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     let family = match doc.rig.family.as_str() {
@@ -555,9 +606,11 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
                 Some(name) => KenwoodDialect::from_name(name)
                     .ok_or_else(|| bad(format!("unknown kenwood.dialect {name:?}")))?,
             };
+            let ky = k.ky.as_ref().map(build_ky).transpose()?;
             Ok::<KenwoodParams, RigError>(KenwoodParams {
                 model_id: k.model_id,
                 dialect,
+                ky,
             })
         })
         .transpose()?;
@@ -657,6 +710,16 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     }
     if capabilities.is_empty() {
         return Err(bad("a description needs at least one capability"));
+    }
+    // A Kenwood model gets send-cw exactly when its manual documents KY and a way to stop it.
+    if let Some(ky) = kenwood.as_ref().and_then(|k| k.ky) {
+        if ky.offers_send_cw() != capabilities.contains(&Capability::SendCw) {
+            return Err(bad(
+                "send-cw must be listed exactly when kenwood.ky documents KY and a stop",
+            ));
+        }
+    } else if kenwood.is_some() && capabilities.contains(&Capability::SendCw) {
+        return Err(bad("a Kenwood send-cw capability needs a kenwood.ky block"));
     }
     let default_mode = Mode::from_name(&doc.defaults.mode)
         .ok_or_else(|| bad(format!("unknown default mode {:?}", doc.defaults.mode)))?;
@@ -1129,6 +1192,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
     }
     if description.kenwood.is_some() {
         keys.push("kenwood.model_id".to_string());
+        if description.kenwood.as_ref().is_some_and(|k| k.ky.is_some()) {
+            keys.push("kenwood.ky".to_string());
+        }
         if description
             .kenwood
             .as_ref()
