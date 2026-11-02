@@ -92,6 +92,7 @@ fn err(kind: ErrorKind, detail: impl Into<String>) -> RigError {
     RigError::new(kind, detail.into())
 }
 
+// [@ANCHOR: radioctl_perseus_usb_err]
 fn usb_err(what: &str, failure: UsbFailure) -> RigError {
     let kind = match failure {
         UsbFailure::NoDevice => ErrorKind::LinkDown,
@@ -935,6 +936,19 @@ mod tests {
         assert!(PerseusControl::open_ready(&fresh, &f, &mut |_| {}).is_err());
         assert!(fresh.state().fpga.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Tests [@ANCHOR: radioctl_perseus_usb_err]
+    #[test]
+    fn a_usb_failure_becomes_the_matching_error_kind() {
+        assert_eq!(usb_err("x", UsbFailure::NoDevice).kind, ErrorKind::LinkDown);
+        assert_eq!(usb_err("x", UsbFailure::Timeout).kind, ErrorKind::Timeout);
+        assert_eq!(usb_err("x", UsbFailure::Stall).kind, ErrorKind::Rejected);
+        let board = VirtualPerseusBackend::new(true, 1, true);
+        let mut dev = board.open(&target(false)).unwrap();
+        let e = load_fx2(dev.as_mut(), &[]).unwrap_err();
+        assert_eq!(e.kind, ErrorKind::LinkDown);
+        assert!(board.open(&target(true)).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_perseus_set_attenuator_db]

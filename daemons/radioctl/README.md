@@ -529,6 +529,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_funcube_twin_interrupt] (radioctl-protocols) `interrupt_write` (see the source).
 - [@ANCHOR: radioctl:radioctl_perseus_files_in_dir] (radioctl-protocols) The two files in `dir`: `fx2.hex` and `fpga.rbs`.
 - [@ANCHOR: radioctl:radioctl_perseus_files_default_dir] (radioctl-protocols) The directory in use: `env_dir` (the value of `RADIOCTL_PERSEUS_FIRMWARE_DIR`) when set and not empty, else `$HOME/.config/radioctl/firmware/perseus` (`home` is `$HOME`).
+- [@ANCHOR: radioctl:radioctl_perseus_usb_err] (radioctl-protocols) `usb_err` (see the source).
 - [@ANCHOR: radioctl:radioctl_perseus_read_file] (radioctl-protocols) `read_file` (see the source).
 - [@ANCHOR: radioctl:radioctl_perseus_parse_intel_hex] (radioctl-protocols) Parses Intel HEX text into data records, checking every record's checksum.
 - [@ANCHOR: radioctl:radioctl_perseus_load_fx2] (radioctl-protocols) Loads the FX2 firmware into the board's RAM: hold the CPU in reset, write every record at its address, release the reset.
