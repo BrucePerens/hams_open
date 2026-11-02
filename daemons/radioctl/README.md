@@ -260,6 +260,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 ## Rig coverage and volunteer testing
 
 - radioctl aims to describe every Hamlib model (313 in 4.6.2) and to say honestly which ones a person has verified on a radio. The generated list is [docs/RIG_SUPPORT.md](docs/RIG_SUPPORT.md) (`python3 tools/rig_support_matrix.py`; a test fails when it is stale). Today none is hardware-verified.
+- Which relay, switch and GPIO products suit the station layer, and which do not (the SainSmart 16-channel USB module is not recommended): [docs/RECOMMENDED_HARDWARE.md](docs/RECOMMENDED_HARDWARE.md). Provisional; nothing on it is hardware-verified.
 - The plan, in four tiers with counts and source rules, is [docs/RIG_COVERAGE_PLAN.md](docs/RIG_COVERAGE_PLAN.md).
 - To test your own radio, run `radioctl-selftest` (shipped with the hams.com local relay; or build `-p radioctld --bin radioctl-selftest`). It discovers radios, runs only read-only checks, never transmits, writes a local report per radio and uploads each to hams.com (`--no-upload` to skip). See [docs/VOLUNTEER_TESTING.md](docs/VOLUNTEER_TESTING.md) and [docs/RIG_REPORT_UPLOAD.md](docs/RIG_REPORT_UPLOAD.md).
 - Hardware reports are recorded in `rigs/reports/verified.toml`; the verification state itself stays in each rig file's facts.

@@ -1125,6 +1125,8 @@ mod tests {
         let sm = cat.get("sainsmart-16ch-modbus").expect("listed");
         let b = ModbusBoard::sainsmart_16ch();
         assert!(!sm.status_readable);
+        assert_eq!(sm.recommendation.as_deref(), Some("not-recommended"));
+        assert!(cat.get("shelly-gen2-1ch").unwrap().recommendation.is_none());
         assert_eq!(sm.safe_state, b.safe_state);
         assert_eq!(sm.pins.len(), usize::from(b.coils));
         assert!(!b.status_readable);

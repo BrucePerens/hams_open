@@ -8,6 +8,8 @@ at start-up, and every path that could transmit stays behind the closed gate. It
 (`crates/radioctl-station/README.md`) lists its anchors. Status of everything here: **Implemented**
 and tested against virtual devices and loopback fakes, **unverified** on hardware.
 
+Products that suit this layer, and the SainSmart module that does not: [Recommended hardware](../RECOMMENDED_HARDWARE.md).
+
 ## Real rig actors behind the radio manager
 
 `RadioManager` (power button, lifecycle, reconnect with backoff) learns about a radio through the
