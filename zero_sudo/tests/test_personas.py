@@ -21,8 +21,7 @@ class TestPersonas(common.HamsTransactionCase):
     def test_catalogue_users_have_the_shape_production_users_have(self):
         shapes = {"public": (False, False), "portal": (True, False), "internal": (False, False)}
         for key, spec in CATALOGUE.items():
-            needed = [self.env.ref(x, raise_if_not_found=False) for x in spec.get("groups", ())]
-            if not all(needed):
+            if personas_module.missing_prerequisites(self.env, spec):
                 with self.assertRaises(PersonaError, msg=f"{key} needs a module that is not installed"):
                     build_persona(self.env, key)
                 continue
@@ -30,7 +29,8 @@ class TestPersonas(common.HamsTransactionCase):
             user = persona.user
             self.assertEqual(bool(user.share), shapes[spec["kind"]][0] or spec["kind"] == "public", key)
             if spec.get("website") == "none":
-                self.assertFalse(user.website_id, f"{key}: no production user has a website")
+                if "website_id" in user._fields:
+                    self.assertFalse(user.website_id, f"{key}: no production user has a website")
             if spec.get("website") == "own":
                 self.assertTrue(user.website_id, key)
             if spec["kind"] != "public" and "website_slug" in user._fields:
