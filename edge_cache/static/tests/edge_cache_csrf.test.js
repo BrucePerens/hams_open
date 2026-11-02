@@ -63,6 +63,7 @@ describe("edge_cache_csrf", () => {
     });
 
     // [@ANCHOR: COMM_test_edge_cache_csrf_works_without_has_selector]
+    // Tests [@ANCHOR: COMM_edge_cache_is_token_form]
     test("a browser without the :has() selector still gets the token, and nothing throws", async () => {
         // Chrome before 105 throws a SyntaxError from closest() and matches() for :has(); the
         // listeners are capture listeners on document, so one such throw would fire at every focus

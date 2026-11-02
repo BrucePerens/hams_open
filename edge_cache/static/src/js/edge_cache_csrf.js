@@ -5,6 +5,7 @@
  * [@ANCHOR: COMM_edge_cache_csrf_refresh]
  * Verified by [@ANCHOR: COMM_test_edge_cached_form_posts_after_token_fetch]
  * Verified by [@ANCHOR: COMM_test_edge_cache_csrf_token_fetched_again_at_submit]
+ * Verified by [@ANCHOR: COMM_test_edge_cache_csrf_works_without_has_selector]
  *
  * A public page may come from Cloudflare's edge cache, rendered for an earlier visitor, and the
  * server sends such a page without a session cookie (edge_cache/models/ir_http.py), so the CSRF
@@ -88,6 +89,7 @@ export function refreshCsrfToken() {
  * SyntaxError from closest() and matches(), and as a capture listener on document that would throw
  * at every focus and every submit on the page (hams_helpdesk tickets 125 and 126, 2026-11-02).
  */
+// [@ANCHOR: COMM_edge_cache_is_token_form]
 function isTokenForm(el) {
     return (
         el.matches(WEBSITE_FORM) ||
