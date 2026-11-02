@@ -47,6 +47,7 @@ pub mod mds;
 pub mod micom;
 pub mod paragon;
 pub mod perseus;
+pub mod perseus_engine;
 pub mod prelude;
 pub mod prm80;
 pub mod racal;

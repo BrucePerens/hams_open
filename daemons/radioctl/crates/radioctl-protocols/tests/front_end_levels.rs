@@ -34,7 +34,7 @@ fn shipped() -> Vec<RigDescription> {
 fn has_virtual_rig(desc: &RigDescription) -> bool {
     !matches!(
         desc.family,
-        Family::Flex | Family::Hpsdr | Family::SerialVendor
+        Family::Flex | Family::Hpsdr | Family::SerialVendor | Family::UsbDevice
     )
 }
 

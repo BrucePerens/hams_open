@@ -58,6 +58,8 @@ kind = "virtual"                              # an in-memory rig generated from 
 # vid = 0x16C0                                # optional overrides of the description's ids
 # pid = 0x05DC
 # transfer_timeout_ms = 1000                  # longest wait for one USB transfer (50 to 10000)
+# firmware_dir = "/path"                      # Microtelecom Perseus only: the directory holding YOUR fx2.hex and fpga.rbs
+#                                             # (default: $RADIOCTL_PERSEUS_FIRMWARE_DIR, else ~/.config/radioctl/firmware/perseus)
 
 # One [[rotator]] per rotator, served in Hamlib's rotctld text protocol on its own listener
 # (rotctl -m 2 -r 127.0.0.1:4533). Tested against the virtual rotator only; unverified on a real one.

@@ -189,19 +189,19 @@ pub async fn build_rig(
             let twin = radioctl_protocols::usb_family::twin_for(&description).map_err(fail)?;
             let target = radioctl_protocols::usb_family::target_for(&description).map_err(fail)?;
             let backend: Arc<dyn UsbBackend> = Arc::new(FakeUsbBackend::new(twin));
-            let link = open_usb(runtime, backend, UsbConfig::new(target))
-                .await
-                .map_err(fail)?;
-            options.link_watch = Some(link.watch());
-            let (transport, monitor) = link.into_parts();
+            let (handle, monitor) =
+                start_usb_rig(runtime, engine, backend, UsbConfig::new(target), options)
+                    .await
+                    .map_err(fail)?;
             usb_link = Some(monitor);
-            spawn(runtime, engine, transport, options).map_err(fail)?
+            handle
         }
         TransportConfig::Usb {
             vid,
             pid,
             serial,
             transfer_timeout,
+            firmware_dir,
         } => {
             if description.family != Family::UsbDevice {
                 return Err(format!(
@@ -216,17 +216,28 @@ pub async fn build_rig(
             target.serial = serial.clone();
             let mut usb = UsbConfig::new(target);
             usb.transfer_timeout = *transfer_timeout;
+            // A board that needs the user's own firmware (the Perseus) is opened through its
+            // loader, which finds the files here; any other board is opened directly.
+            let env_dir = std::env::var("RADIOCTL_PERSEUS_FIRMWARE_DIR").ok();
+            let home = std::env::var("HOME").ok();
+            let backend = radioctl_protocols::usb_family::backend_for(
+                &description,
+                real_usb_backend().map_err(fail)?,
+                firmware_dir.as_deref(),
+                env_dir.as_deref(),
+                home.as_deref(),
+                true,
+            )
+            .map_err(fail)?;
             // One attempt at start, as for a serial port: a board that is not plugged in, or
-            // cannot be opened (a missing udev rule), stops the daemon from starting. After that
-            // the link reopens it without limit; the actor marks the link down meanwhile and
-            // unkeys the rig when it is back (RigOptions::link_watch).
-            let link = open_usb(runtime, real_usb_backend().map_err(fail)?, usb)
+            // cannot be opened (a missing udev rule, a missing firmware file), stops the daemon
+            // from starting. After that the link reopens it without limit; the actor marks the
+            // link down meanwhile and unkeys the rig when it is back (RigOptions::link_watch).
+            let (handle, monitor) = start_usb_rig(runtime, engine, backend, usb, options)
                 .await
                 .map_err(fail)?;
-            options.link_watch = Some(link.watch());
-            let (transport, monitor) = link.into_parts();
             usb_link = Some(monitor);
-            spawn(runtime, engine, transport, options).map_err(fail)?
+            handle
         }
         // A virtual DRT1 has no byte stream: its twin is the control lines the actor drives, and
         // the byte transport is a stream nothing ever writes to.
@@ -346,6 +357,23 @@ pub async fn build_rig(
     })
 }
 
+// [@ANCHOR: radioctld_rigs_start_usb_rig]
+/// Opens the USB link through `backend` and starts the rig actor over it. The first open's error
+/// (no board, no permission, a missing firmware file) is returned.
+async fn start_usb_rig(
+    runtime: &Handle,
+    engine: BoxedEngine,
+    backend: Arc<dyn UsbBackend>,
+    usb: UsbConfig,
+    mut options: RigOptions,
+) -> Result<(RigHandle, UsbMonitor), RigError> {
+    let link = open_usb(runtime, backend, usb).await?;
+    options.link_watch = Some(link.watch());
+    let (transport, monitor) = link.into_parts();
+    let handle = spawn(runtime, engine, transport, options)?;
+    Ok((handle, monitor))
+}
+
 // [@ANCHOR: radioctld_rigs_is_line_driven]
 /// True for a rig whose commands are control-line sequences and not bytes (the SAT-Schneider DRT1).
 fn is_line_driven(description: &RigDescription) -> bool {
@@ -419,5 +447,156 @@ mod tests {
                 .expect("no line sequence"),
             None
         );
+    }
+
+    fn perseus_description() -> RigDescription {
+        let path = format!(
+            "{}/../../rigs/microtelecom-perseus-usb.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        load_description(Path::new(&path)).expect("Perseus file")
+    }
+
+    fn synthetic_dir(name: &str, with_fpga: bool) -> std::path::PathBuf {
+        // Synthetic stand-ins for the user's files, nothing from Microtelecom.
+        let dir =
+            std::env::temp_dir().join(format!("radioctld-perseus-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        std::fs::write(dir.join("fx2.hex"), ":0400000001020304F2\n:00000001FF\n").expect("hex");
+        if with_fpga {
+            std::fs::write(dir.join("fpga.rbs"), [9u8, 8, 7]).expect("rbs");
+        }
+        dir
+    }
+
+    // Tests [@ANCHOR: radioctld_rigs_start_usb_rig]
+    // Tests [@ANCHOR: radioctl_usb_family_backend_for]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_perseus_is_loaded_from_the_firmware_directory_then_tuned_and_never_keyed() {
+        use radioctl_core::units::{Hz, Level, Vfo};
+        use radioctl_protocols::perseus::VirtualPerseusBackend;
+        let description = perseus_description();
+        let board = VirtualPerseusBackend::new(false, 5, true);
+        let dir = synthetic_dir("ok", true);
+        let backend = radioctl_protocols::usb_family::backend_for(
+            &description,
+            Arc::new(board.clone()),
+            Some(&dir),
+            None,
+            None,
+            false,
+        )
+        .expect("backend");
+        let target = radioctl_protocols::usb_family::target_for(&description).expect("target");
+        let engine = BoxedEngine(engine_for(&description).expect("engine"));
+        let mut options = RigOptions::default();
+        options.poll.enabled = false;
+        let (rig, _monitor) = start_usb_rig(
+            &Handle::current(),
+            engine,
+            backend,
+            UsbConfig::new(target),
+            options,
+        )
+        .await
+        .expect("starts");
+        assert!(
+            board.state().firmware_running,
+            "the user's firmware was loaded"
+        );
+        assert_eq!(board.state().fpga, vec![9, 8, 7]);
+        rig.set_frequency(Vfo::A, Hz(7_100_000))
+            .await
+            .expect("tune");
+        rig.execute(Op::SetLevel(Level::Attenuator, 10))
+            .await
+            .expect("att");
+        assert!(
+            rig.set_ptt(true).await.is_err(),
+            "the transmit gate is closed"
+        );
+        assert!(board
+            .state()
+            .commands
+            .iter()
+            .all(|c| c.first() != Some(&0x05)));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_missing_perseus_file_stops_the_start_naming_the_path_and_the_default_directory() {
+        use radioctl_protocols::perseus::VirtualPerseusBackend;
+        let description = perseus_description();
+        let target = radioctl_protocols::usb_family::target_for(&description).expect("target");
+        let attempt = |backend: Arc<dyn UsbBackend>| {
+            let engine = BoxedEngine(engine_for(&description).expect("engine"));
+            let target = target.clone();
+            async move {
+                start_usb_rig(
+                    &Handle::current(),
+                    engine,
+                    backend,
+                    UsbConfig::new(target),
+                    RigOptions::default(),
+                )
+                .await
+                .map(|_| ())
+                .expect_err("no file")
+            }
+        };
+        let dir = synthetic_dir("nofpga", false);
+        let backend = radioctl_protocols::usb_family::backend_for(
+            &description,
+            Arc::new(VirtualPerseusBackend::new(false, 5, true)),
+            Some(&dir),
+            None,
+            None,
+            false,
+        )
+        .expect("backend");
+        let why = attempt(backend).await.detail;
+        assert!(
+            why.contains(&dir.join("fpga.rbs").display().to_string()),
+            "{why}"
+        );
+        // Neither the setting nor the environment: the user's default directory is named.
+        let backend = radioctl_protocols::usb_family::backend_for(
+            &description,
+            Arc::new(VirtualPerseusBackend::new(false, 5, true)),
+            None,
+            None,
+            Some("/home/nobody"),
+            false,
+        )
+        .expect("backend");
+        let why = attempt(backend).await.detail;
+        assert!(
+            why.contains("/home/nobody/.config/radioctl/firmware/perseus/fx2.hex"),
+            "{why}"
+        );
+        // The environment variable wins over the default.
+        let backend = radioctl_protocols::usb_family::backend_for(
+            &description,
+            Arc::new(VirtualPerseusBackend::new(false, 5, true)),
+            None,
+            Some("/srv/perseus"),
+            Some("/home/nobody"),
+            false,
+        )
+        .expect("backend");
+        assert!(attempt(backend)
+            .await
+            .detail
+            .contains("/srv/perseus/fx2.hex"));
+        // No directory to look in at all.
+        assert!(radioctl_protocols::usb_family::backend_for(
+            &description,
+            Arc::new(VirtualPerseusBackend::new(false, 5, true)),
+            None,
+            None,
+            None,
+            false
+        )
+        .is_err());
     }
 }

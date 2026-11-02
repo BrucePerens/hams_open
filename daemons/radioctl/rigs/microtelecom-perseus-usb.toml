@@ -1,0 +1,66 @@
+# Rig description: Microtelecom Perseus receiver board over USB (usb-device, schema 1). See crates/radioctl-core/src/rigfile.rs.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no board has been connected.
+# WHAT THIS CONTROLS: the receiver board itself, not the vendor application's CAT port (that is `microtelecom-perseus`, the CI-V dialect Hamlib lists as 3074; only one of the two can own the board). The board is a Cypress FX2 microcontroller and an FPGA. It has no firmware when it is powered: radioctl loads the USER'S firmware when the board is opened and again after every unplug (the USB link reopens the device).
+# FIRMWARE IS THE USER'S: nothing from Microtelecom is stored in any repository. Put `fx2.hex` (Intel HEX of the FX2 image) and `fpga.rbs` (raw FPGA bitstream for the wanted sample rate) in the directory named by RADIOCTL_PERSEUS_FIRMWARE_DIR (the `firmware_dir` key of the rig's [rig.transport] overrides it), else in ~/.config/radioctl/firmware/perseus. A missing file stops the start with an error that names the path and says where the files come from.
+# Facts: the public libperseus-sdr source of Microtelecom (LGPL-3.0, commit c2c95daeaa08bf0daed0e8ada970ab17cc264e1b; perseusfx2.h, perseusfx2.c, perseus-sdr.h, perseus-sdr.c; read for facts only, copies outside every repository in ~/manuals/microtelecom/). Implementation: crates/radioctl-protocols/src/perseus.rs (loader, front end, virtual board) and perseus_engine.rs. Hamlib has no model for the board.
+# Controls: frequency (digital down-converter centre frequency, 0 to 40 MHz), attenuator 0/10/20/30 dB, preamplifier (ADC gain) 0/1, dither 0/1, preselector 0 (wide-band path) / 1 (the band filter of the tuned frequency). The board cannot be read back. RECEIVE ONLY: no PTT or CW capability exists and the transmit gate is never usable. I/Q streaming is the shared-receiver service's job.
+schema = 1
+capabilities = ["set-frequency", "levels"]
+
+[rig]
+id = "microtelecom-perseus-usb"
+name = "Microtelecom Perseus (receiver board over USB)"
+family = "usb-device"
+
+[usb]
+protocol = "perseus"
+vendor_id = 0x04B4
+product_id = 0x325C
+manufacturer = ""
+product = ""
+multiplier = 0
+
+[levels]
+attenuator_db = [10, 20, 30]
+attenuator_any_up_to_db = 0
+preamp_steps = 1
+absent = ["af-gain", "rf-gain", "mic-gain", "monitor-level", "keyer-speed", "rf-power"]
+
+[timing]
+timeout_ms = 1000
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 7074000
+mode = "usb"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "radioctl's own id and labelling; crates/radioctl-protocols/src/perseus.rs", note = "Hamlib has no model for the board (its 3074 is the vendor application's CAT port, `microtelecom-perseus`)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "usb.*"
+provenance = { kind = "repo-code", reference = "Microtelecom libperseus-sdr (LGPL-3.0) commit c2c95daeaa08bf0daed0e8ada970ab17cc264e1b: perseusfx2.h and perseusfx2.c (vendor 04B4, product 8613 while blank, 325C once the firmware runs)", note = "Read for facts only; no code copied. The loader finds the running board by id and, if absent, the blank one, loads the user's firmware over request 0xA0, and waits for the renumbering." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "repo-code", reference = "Microtelecom libperseus-sdr commit c2c95daeaa08bf0daed0e8ada970ab17cc264e1b: perseus-sdr.h and perseus-sdr.c (attenuator steps 0, 10, 20, 30 dB in the high nibble of the front-end port; ADC preamplifier and dither bits of the serial-IO control byte)", note = "Read for facts only. Attenuator, preamplifier, dither and preselector are write-only: the board has no read-back." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "crates/radioctl-core/src/usb_link.rs transfer timeout", note = "radioctl's own setting, not a measurement." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "repo-code", reference = "Microtelecom libperseus-sdr commit c2c95daeaa08bf0daed0e8ada970ab17cc264e1b: perseus-sdr.h (set-frequency and the front-end controls; no transmit path)", note = "A receiver: no PTT, CW, split or RIT; no read-back, so no read capability." }
+verified = { state = "unverified" }

@@ -201,15 +201,20 @@ pub enum UsbProtocol {
     Elektor507,
     /// Digital World Traveller DRM receiver.
     Dwt,
+    /// Microtelecom Perseus: the user's FX2 firmware and FPGA image are loaded when the board is
+    /// opened (`radioctl_protocols::perseus`); the engine sends front-end operations to that
+    /// session.
+    Perseus,
 }
 
 impl UsbProtocol {
-    const ALL: [UsbProtocol; 5] = [
+    const ALL: [UsbProtocol; 6] = [
         UsbProtocol::Si570,
         UsbProtocol::Fifisdr,
         UsbProtocol::Funcube,
         UsbProtocol::Elektor507,
         UsbProtocol::Dwt,
+        UsbProtocol::Perseus,
     ];
 
     // [@ANCHOR: radioctl_core_usbprotocol_name]
@@ -221,6 +226,7 @@ impl UsbProtocol {
             UsbProtocol::Funcube => "funcube",
             UsbProtocol::Elektor507 => "elektor507",
             UsbProtocol::Dwt => "dwt",
+            UsbProtocol::Perseus => "perseus",
         }
     }
 

@@ -28,7 +28,7 @@
 //!                                          # framing = "raw" | "ts890-lan", lan_account,
 //!                                          # lan_administrator, lan_password_secret, idle_timeout_ms)
 //!                                          # or "usb" (a USB SDR board or dongle: optional vid, pid,
-//!                                          # serial, transfer_timeout_ms; the description supplies
+//!                                          # serial, transfer_timeout_ms, firmware_dir (Perseus); the description supplies
 //!                                          # the ids and strings; needs a build with feature `usb`)
 //!
 //! [[rotator]]
@@ -141,6 +141,7 @@ enum TransportSection {
         pid: Option<u16>,
         serial: Option<String>,
         transfer_timeout_ms: Option<u64>,
+        firmware_dir: Option<String>,
     },
 }
 
@@ -249,6 +250,9 @@ pub enum TransportConfig {
         serial: Option<String>,
         /// Longest wait for one USB transfer.
         transfer_timeout: Duration,
+        /// Where a board that needs the user's own firmware (the Microtelecom Perseus) finds
+        /// it; default `RADIOCTL_PERSEUS_FIRMWARE_DIR`, else `~/.config/radioctl/firmware/perseus`.
+        firmware_dir: Option<PathBuf>,
     },
 }
 
@@ -571,7 +575,11 @@ fn transport_config(
             pid,
             serial,
             transfer_timeout_ms,
+            firmware_dir,
         } => {
+            if firmware_dir.as_deref().is_some_and(str::is_empty) {
+                return Err("usb transport firmware_dir must not be empty".to_string());
+            }
             if serial.as_deref().is_some_and(str::is_empty) {
                 return Err("usb transport serial must not be empty".to_string());
             }
@@ -582,6 +590,7 @@ fn transport_config(
                 vid,
                 pid,
                 serial,
+                firmware_dir: firmware_dir.map(PathBuf::from),
                 transfer_timeout: Duration::from_millis(in_range(
                     "transfer_timeout_ms",
                     transfer_timeout_ms,
@@ -996,6 +1005,7 @@ kind = "virtual"
                     pid,
                     serial,
                     transfer_timeout,
+                    ..
                 } => (vid, pid, serial, transfer_timeout),
                 other => panic!("not usb: {other:?}"),
             };

@@ -130,7 +130,7 @@ Not described, with the reason: Winradio (vendor driver only), the 29 not-applic
 RIG_SUPPORT.md, and three odd devices (AnyTone D578A, SAT-Schneider DRT1, TAPR DSP-10;
 see the plan).
 
-`microtelecom-perseus` (Hamlib 3074) uses the Icom CI-V family too: it describes the CAT port of the vendor's Windows application (address `0xE1`), not the receiver board, which speaks no CI-V.
+`microtelecom-perseus` (Hamlib 3074) uses the Icom CI-V family too: it describes the CAT port of the vendor's Windows application (address `0xE1`), not the receiver board, which speaks no CI-V. The board itself is `microtelecom-perseus-usb` (`usb-device`, protocol `perseus`, no Hamlib model): radioctld opens it through the USB transport (build with the `usb` feature), loads *your* firmware when it opens the board (and again after an unplug), and then sets frequency, attenuator (`ATT` 0/10/20/30), preamplifier (`PREAMP` 0/1) and, through the radioctl API, ADC dither and the preselector. Put `fx2.hex` (Intel HEX) and `fpga.rbs` (raw FPGA bitstream) in `RADIOCTL_PERSEUS_FIRMWARE_DIR`, the transport's `firmware_dir`, or `~/.config/radioctl/firmware/perseus`; Microtelecom's open `libperseus-sdr` repository (LGPL-3.0) publishes the FPGA images and FX2 firmware records, and radioctl ships none of them. A missing file stops the start and the error names the path. The board is receive only: no PTT or CW exists and the transmit gate is never usable. Only one program can own the board, so use either this description or the vendor application's CAT port, not both.
 
 The Xiegu files use the Icom CI-V family because those radios speak a subset of CI-V. The X5105 and X6200
 files are copies in structure of the X108G and X6100 files: Hamlib 4.6.2 gives the X5105 the X108G's settings (CI-V

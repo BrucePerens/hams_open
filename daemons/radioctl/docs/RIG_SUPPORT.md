@@ -9,8 +9,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **283** (289 description files), **99%** of the real radios
+- Not applicable (not a radio, or no transport radioctl has): **30**
+- Real radios (models less not applicable): **283**; with a radioctl description: **283** (290 description files), **100%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
@@ -19,8 +19,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | engine only | 0 |
 | needs variant | 0 |
 | needs engine | 0 |
-| odd device | 1 |
-| not applicable | 29 |
+| odd device | 0 |
+| not applicable | 30 |
 
 | Verification level | Models |
 |---|---:|
@@ -65,6 +65,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - `anan-10` (Apache Labs ANAN-10): highest level unverified
 - `anan-100` (Apache Labs ANAN-100): highest level unverified
+- `microtelecom-perseus-usb` (Microtelecom Perseus (receiver board over USB)): highest level unverified
 
 ## Models that are not applicable
 
@@ -85,6 +86,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 - OpenHPSDR PiHPSDR (2040): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
 - SDR Radio SDRConsole (2056): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
 - SDRPlay SDRUno (2051): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
+- TAPR DSP-10 (22001): TAPR DSP-10 (a 2 m transceiver whose DSP program is loaded by the PC first): Hamlib's backend states it does not work; both setters return not-implemented (the tuning-word formula is dead code after an early return, dsp10.c and tapr.c, 4.6.2), and the only wire fact is a six-byte frame, '$', a command byte and four argument bytes. The command document Hamlib cites (Larkin's pc_dsp2.txt) is not retrievable and no vendor protocol document is published at files.tapr.org, so there is no command to transcribe; no transmit-capable guess is made
 - Thetis  (2054): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
 - TRXManager TRXManager 5.7.630+ (5): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
 - Video4Linux SW/FM radio (26001): Video4Linux: Hamlib reaches the tuner only through the kernel's V4L ioctl interface (a driver, not a wire protocol), and it is an FM/AM broadcast tuner card; radioctl has no device-driver transport
@@ -329,7 +331,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 14004 | Skanti | TRP 8255 S R | C | other_serial | - | `skanti-trp-8255-s-r` | unverified | - | described |
 | 14002 | Skanti | TRP8000 | C | other_serial | - | `skanti-trp8000` | unverified | - | described |
 | 25009 | SoftRock | Si570 AVR-USB | D | other_usb | si570_usb | `softrock-si570-avr-usb` | unverified | - | described |
-| 22001 | TAPR | DSP-10 | D | other_serial | - | - | unverified | - | odd device |
+| 22001 | TAPR | DSP-10 | D | other_serial | - | - | unverified | - | not applicable |
 | 3064 | Ten-Tec | Delta II | C | other_serial | - | `tentec-delta-ii` | unverified | - | described |
 | 3051 | Ten-Tec | Omni VI Plus | C | other_serial | - | `tentec-omni-vi-plus` | unverified | - | described |
 | 16003 | Ten-Tec | RX-320 | C | other_serial | - | `tentec-rx-320` | unverified | - | described |

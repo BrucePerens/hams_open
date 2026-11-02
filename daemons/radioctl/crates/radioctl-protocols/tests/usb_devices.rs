@@ -48,7 +48,7 @@ fn every_usb_file_carries_its_ids_and_a_known_protocol() {
     let all = usb_descriptions();
     assert_eq!(
         all.len(),
-        10,
+        11,
         "{:?}",
         all.iter().map(|d| &d.id).collect::<Vec<_>>()
     );
@@ -386,7 +386,7 @@ fn the_conformance_stand_in_answers_the_frames_the_engines_encode() {
             "{}",
             d.id
         );
-        if d.id == "digital-world-traveller" {
+        if d.id == "digital-world-traveller" || d.id == "microtelecom-perseus-usb" {
             // Set only: there is no read on the wire.
             assert!(engine.encode(&Op::GetFrequency(Vfo::A)).is_err());
             continue;
@@ -474,4 +474,172 @@ fn a_bare_si570_twin_follows_the_ptt_request() {
     assert!(fifi
         .control_in(0xC0, 0x50, 1, 0, 3, Duration::from_millis(10))
         .is_err());
+}
+
+fn synthetic_firmware(name: &str, fpga: bool) -> std::path::PathBuf {
+    // Synthetic stand-ins, nothing from Microtelecom: two valid Intel HEX records and an
+    // end-of-file record, and a few arbitrary bytes for the bitstream.
+    let dir =
+        std::env::temp_dir().join(format!("radioctl-perseus-it-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("fx2.hex"),
+        ":0400000001020304F2\n:02001000AABB89\n:00000001FF\n",
+    )
+    .expect("hex");
+    if fpga {
+        std::fs::write(dir.join("fpga.rbs"), [1u8, 2, 3, 4, 5]).expect("rbs");
+    }
+    dir
+}
+
+// Tests [@ANCHOR: radioctl_perseus_engine_new]
+// Tests [@ANCHOR: radioctl_perseus_engine_transfer]
+// Tests [@ANCHOR: radioctl_perseus_engine_encode]
+// Tests [@ANCHOR: radioctl_perseus_engine_feed]
+// Tests [@ANCHOR: radioctl_perseus_session_new]
+// Tests [@ANCHOR: radioctl_perseus_session_failure]
+// Tests [@ANCHOR: radioctl_perseus_session_drop]
+// Tests [@ANCHOR: radioctl_perseus_session_control_out]
+// Tests [@ANCHOR: radioctl_perseus_from_device]
+// Tests [@ANCHOR: radioctl_perseus_ready_virtual_new]
+// Tests [@ANCHOR: radioctl_perseus_ready_virtual_board]
+// Tests [@ANCHOR: radioctl_perseus_ready_virtual_open]
+#[tokio::test]
+async fn a_perseus_is_tuned_and_its_front_end_set_through_the_actor_and_the_usb_link() {
+    use radioctl_core::units::Level;
+    use radioctl_protocols::perseus::{preselector_for, tuning_word, ReadyVirtualPerseus};
+    let desc = by_id("microtelecom-perseus-usb");
+    let board = ReadyVirtualPerseus::new(7);
+    let link = open_usb(&Handle::current(), Arc::new(board.clone()), fast(&desc))
+        .await
+        .expect("link");
+    let (stream, monitor) = link.into_parts();
+    let mut options = RigOptions::default();
+    options.poll.enabled = false;
+    options.link_watch = Some(monitor.watch());
+    let engine = radioctl_protocols::usb_family::engine_for(&desc).expect("engine");
+    let rig = spawn(&Handle::current(), engine, stream, options).expect("spawn");
+    rig.set_frequency(Vfo::A, Hz(14_074_000))
+        .await
+        .expect("tune");
+    let state = board.board().state();
+    assert_eq!(state.sio.1, tuning_word(14_074_000.0));
+    // The preselector follows the frequency: low nibble of Port E.
+    assert_eq!(state.port_e & 0x0F, preselector_for(14_074_000.0, true));
+    rig.execute(Op::SetLevel(Level::Attenuator, 20))
+        .await
+        .expect("att");
+    assert_eq!(board.board().state().port_e >> 4, 2);
+    assert!(rig
+        .execute(Op::SetLevel(Level::Attenuator, 15))
+        .await
+        .is_err());
+    rig.execute(Op::SetLevel(Level::Dither, 1))
+        .await
+        .expect("dither");
+    rig.execute(Op::SetLevel(Level::Preamp, 1))
+        .await
+        .expect("preamp");
+    let control = board.board().state().sio.0;
+    assert_eq!(control & 0x06, 0x06, "dither and preamp bits");
+    rig.execute(Op::SetLevel(Level::Dither, 0))
+        .await
+        .expect("dither off");
+    assert_eq!(board.board().state().sio.0 & 0x06, 0x04, "preamp stays");
+    // Wide-band path when the preselector is off.
+    rig.execute(Op::SetLevel(Level::Preselector, 0))
+        .await
+        .expect("preselector");
+    assert_eq!(board.board().state().port_e & 0x0F, 10);
+    assert!(rig.execute(Op::SetLevel(Level::Dither, 2)).await.is_err());
+    assert!(rig.execute(Op::SetLevel(Level::Preamp, 2)).await.is_err());
+    assert!(rig.set_frequency(Vfo::A, Hz(41_000_000)).await.is_err());
+}
+
+// Tests [@ANCHOR: radioctl_perseus_engine_encode]
+#[tokio::test]
+async fn a_perseus_has_no_transmit_path_and_its_gate_stays_closed() {
+    use radioctl_core::capability::Capability;
+    use radioctl_core::engine::ProtocolEngine;
+    let desc = by_id("microtelecom-perseus-usb");
+    for capability in [Capability::SetPtt, Capability::ReadPtt, Capability::SendCw] {
+        assert!(!desc.capabilities.has(capability), "{capability:?}");
+    }
+    let mut engine =
+        radioctl_protocols::perseus_engine::PerseusEngine::new(desc.clone()).expect("engine");
+    for op in [
+        Op::SetPtt(true),
+        Op::SetPtt(false),
+        Op::SendCw("CQ".into()),
+        Op::StopCw,
+    ] {
+        let error = engine.encode(&op).map(|_| ()).expect_err("refused");
+        assert_eq!(error.kind, ErrorKind::Unsupported, "{op:?}");
+    }
+    let (rig, bus) = rig_on_fake_bus(&desc).await;
+    assert!(rig.set_ptt(true).await.is_err(), "gate is closed");
+    assert!(rig.execute(Op::SendCw("CQ".into())).await.is_err());
+    // Nothing reached the device.
+    assert!(bus
+        .log()
+        .iter()
+        .all(|t| !matches!(t, FakeTransfer::BulkWrite(..))));
+    assert!(radioctl_protocols::perseus_engine::PerseusEngine::new(by_id("fifi-sdr")).is_err());
+}
+
+// Tests [@ANCHOR: radioctl_perseus_loader_new]
+// Tests [@ANCHOR: radioctl_perseus_loader_open]
+// Tests [@ANCHOR: radioctl_perseus_virtual_new]
+// Tests [@ANCHOR: radioctl_perseus_virtual_state]
+#[tokio::test]
+async fn the_loader_backend_loads_the_users_firmware_on_open_and_names_a_missing_file() {
+    use radioctl_protocols::perseus::{PerseusFiles, PerseusLoaderBackend, VirtualPerseusBackend};
+    let desc = by_id("microtelecom-perseus-usb");
+    let dir = synthetic_firmware("ok", true);
+    let board = VirtualPerseusBackend::new(false, 3, true);
+    let loader =
+        PerseusLoaderBackend::new(Arc::new(board.clone()), PerseusFiles::in_dir(&dir), false);
+    let link = open_usb(&Handle::current(), Arc::new(loader), fast(&desc))
+        .await
+        .expect("link opens after the load");
+    let state = board.state();
+    assert!(state.firmware_running);
+    assert_eq!(state.ram_writes.len(), 2);
+    assert_eq!(state.fpga, vec![1, 2, 3, 4, 5]);
+    drop(link);
+
+    // No bitstream: the start fails and the error names the path and says where to get it.
+    let dir = synthetic_firmware("nofpga", false);
+    let loader = PerseusLoaderBackend::new(
+        Arc::new(VirtualPerseusBackend::new(false, 3, true)),
+        PerseusFiles::in_dir(&dir),
+        false,
+    );
+    let error = open_usb(&Handle::current(), Arc::new(loader), fast(&desc))
+        .await
+        .map(|_| ())
+        .expect_err("no fpga.rbs");
+    let shown = error.detail.clone();
+    assert!(shown.contains("fpga.rbs"), "{shown}");
+    assert!(shown.contains(&dir.display().to_string()), "{shown}");
+    assert!(shown.contains("RADIOCTL_PERSEUS_FIRMWARE_DIR"), "{shown}");
+    assert!(shown.contains("libperseus-sdr"), "{shown}");
+
+    // No firmware at all on a blank board.
+    let empty =
+        std::env::temp_dir().join(format!("radioctl-perseus-it-empty-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&empty);
+    std::fs::create_dir_all(&empty).expect("dir");
+    let loader = PerseusLoaderBackend::new(
+        Arc::new(VirtualPerseusBackend::new(false, 3, true)),
+        PerseusFiles::in_dir(&empty),
+        false,
+    );
+    let error = open_usb(&Handle::current(), Arc::new(loader), fast(&desc))
+        .await
+        .map(|_| ())
+        .expect_err("no fx2.hex");
+    assert!(error.detail.contains("fx2.hex"), "{}", error.detail);
 }
