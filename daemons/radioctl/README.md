@@ -20,7 +20,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - USB SDR boards and dongles (Si570 kits, FiFi-SDR, FUNcube, Digital World Traveller) over a USB link: request/reply frames, a `UsbBackend` trait with a fake and a libusb backend (cargo feature `usb`, off by default), hot-plug reconnect and the same unkey-on-reopen rule. All unverified on hardware.
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
 - Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect and the handheld/mobile family), Elecraft, Yaesu newcat and the legacy block protocols, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V), the receiver families (AOR, Uniden, JRC, Icom PCR and marine, Rohde and Schwarz), about thirty small serial-vendor engines (Ten-Tec, Racal, Drake, Barrett, CODAN, MDS, MICOM, WJ, Paragon, XG3, Transfox and others), a UDP control frame (HiQSDR) and USB SDR boards.
-- Rig descriptions: 286 files in `rigs/`, 280 of the 284 real radios Hamlib 4.6.2 lists (counts in `docs/RIG_SUPPORT.md`). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
+- Rig descriptions: 287 files in `rigs/`, 281 of the 284 real radios Hamlib 4.6.2 lists (counts in `docs/RIG_SUPPORT.md`). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
 - Transmit: no transmit path to real hardware has been run. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -840,6 +840,19 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_wj_twin_snapshot] (radioctl-protocols) The virtual WJ-8888's frequency and mode bits.
 - [@ANCHOR: radioctl:radioctl_wj_twin_feed] (radioctl-protocols) The virtual WJ-8888 decodes ten-byte command frames.
 - [@ANCHOR: radioctl:radioctl_wj_twin_front_panel] (radioctl-protocols) A knob turned at the virtual WJ-8888: frequency or mode.
+- [@ANCHOR: radioctl:radioctl_anytone_open_records] (radioctl-protocols) The two AnyTone D578A open records the engine sends: the mode announcement and the 000 record.
+- [@ANCHOR: radioctl:radioctl_anytone_read_frequency_record] (radioctl-protocols) The 25-byte AnyTone D578A record that asks for the frequency of a VFO.
+- [@ANCHOR: radioctl:radioctl_anytone_answer_frequency] (radioctl-protocols) The frequency in a 138-byte AnyTone D578A answer: eight BCD digits in units of 10 Hz.
+- [@ANCHOR: radioctl:radioctl_anytone_frequency_answer] (radioctl-protocols) A 138-byte AnyTone D578A frequency answer, as the twin builds it.
+- [@ANCHOR: radioctl:radioctl_anytone_engine_new] (radioctl-protocols) Builds an AnyTone D578A engine from a vendor description of dialect `d578a`.
+- [@ANCHOR: radioctl:radioctl_anytone_engine_encode] (radioctl-protocols) Encodes the frequency read of VFO A or B for the AnyTone D578A; nothing else is encoded.
+- [@ANCHOR: radioctl:radioctl_anytone_engine_feed] (radioctl-protocols) Collects 138-byte AnyTone D578A answers, skipping the echo of the 000 record.
+- [@ANCHOR: radioctl:radioctl_anytone_engine_open_requests] (radioctl-protocols) The AnyTone D578A open dialogue, without the record that may key the radio.
+- [@ANCHOR: radioctl:radioctl_anytone_engine_link_restored] (radioctl-protocols) After a reconnect, drops a half answer and sends the AnyTone D578A open dialogue again.
+- [@ANCHOR: radioctl:radioctl_anytone_twin_new] (radioctl-protocols) A virtual AnyTone D578A in the description's default state.
+- [@ANCHOR: radioctl:radioctl_anytone_twin_snapshot] (radioctl-protocols) The virtual AnyTone D578A's VFO A frequency.
+- [@ANCHOR: radioctl:radioctl_anytone_twin_feed] (radioctl-protocols) The virtual AnyTone D578A answers the open records and the frequency read of either VFO.
+- [@ANCHOR: radioctl:radioctl_anytone_twin_front_panel] (radioctl-protocols) A knob turned at the virtual AnyTone D578A: frequency.
 - [@ANCHOR: radioctl:radioctl_skanti_dialect_from_name] (radioctl-protocols) The dialect with a file-format name.
 - [@ANCHOR: radioctl:radioctl_skanti_units] (radioctl-protocols) A frequency in 100 Hz units for the six-digit field, or `None` above 99.999999 MHz.
 - [@ANCHOR: radioctl:radioctl_skanti_mode_text] (radioctl-protocols) What the TRP8000 takes for a mode code of the description (`A` is CW and is sent as `A1`).

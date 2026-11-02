@@ -94,6 +94,8 @@ pub enum VendorProtocol {
     Hiqsdr,
     /// Watkins-Johnson WJ-8888 (`wj.rs`).
     Wj,
+    /// AnyTone D578A (`anytone.rs`).
+    Anytone,
 }
 
 impl VendorProtocol {
@@ -125,6 +127,7 @@ impl VendorProtocol {
             "micom" => Some(VendorProtocol::Micom),
             "hiqsdr" => Some(VendorProtocol::Hiqsdr),
             "wj" => Some(VendorProtocol::Wj),
+            "anytone" => Some(VendorProtocol::Anytone),
             _ => None,
         }
     }
@@ -157,6 +160,7 @@ impl VendorProtocol {
             VendorProtocol::Micom => "micom",
             VendorProtocol::Hiqsdr => "hiqsdr",
             VendorProtocol::Wj => "wj",
+            VendorProtocol::Anytone => "anytone",
         }
     }
 }

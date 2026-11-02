@@ -1,0 +1,67 @@
+# Rig description: AnyTone D578A (AT-D578UV III) mobile (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/anytone/anytone.c and d578.c, read for facts only, and `rigctl -m 37001 --dump-caps`); no AnyTone protocol document exists in public and no code or table was copied. Hamlib's driver is Beta and imitates the vendor programming tool's serial dialogue.
+# Hamlib lists: 115200 baud, 8N1, no handshake, receive 108 to 174, 222 to 225 and 420 to 450 MHz (USB and AM). The description format has no field for frequency ranges, so they are not repeated here.
+# Dialect d578a (anytone.rs): `+ADATA:00,<n>` records. The engine reads the frequency of VFO A and B (record 006), and opens the session with the mode announcement and the 000 record. It does NOT send Hamlib's first open record (001 with body `a`) because that record is byte for byte Hamlib's PTT-on record, and an engine must not key at open. It has no keep-alive (Hamlib sends one every second; a sans-IO engine has no clock), no set-frequency (Hamlib's setter returns "not implemented"), no PTT (see above) and no VFO read (Hamlib looks at the last byte of a 114-byte answer for 0x9B or 0x9C, which a frame ending in CR LF cannot hold). A captured transcript from a real radio settles all four.
+schema = 1
+capabilities = ["read-frequency", "second-vfo"]
+
+[rig]
+id = "anytone-d578a"
+name = "AnyTone D578A"
+family = "serial-vendor"
+
+[vendor]
+protocol = "anytone"
+dialect = "d578a"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 1000
+retries = 3
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 146520000
+mode = "usb"
+
+[[modes]]
+mode = "usb"
+code = 0
+
+[[modes]]
+mode = "am"
+code = 1
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 37001 --dump-caps` (Hamlib 4.6.2): timeout and retry lines", note = "Hamlib's settings, not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "repo-code", reference = "placeholder codes so that the description loads: Hamlib's D578A driver has no mode command", note = "Not a fact about the radio; the modes are the two Hamlib lists for the range." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/anytone/anytone.c (anytone_open, anytone_get_freq, anytone_set_ptt) and d578.c (caps)", note = "Record framing read for facts only; no code copied. The dialect name is ours. Open questions are listed in the header." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 37001 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/anytone/anytone.c", note = "Only the frequency read is claimed; Hamlib's frequency setter returns not-implemented and its PTT is unconfirmed." }
+verified = { state = "unverified" }

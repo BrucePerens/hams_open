@@ -10,16 +10,16 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **280** (286 description files), **98%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **281** (287 description files), **98%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 280 |
+| described | 281 |
 | engine only | 0 |
 | needs variant | 0 |
 | needs engine | 0 |
-| odd device | 4 |
+| odd device | 3 |
 | not applicable | 29 |
 
 | Verification level | Models |
@@ -36,13 +36,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 74 |
-| D | odd device | 54 | 29 |
+| D | odd device | 54 | 30 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 83 | 0 |
+| other_serial | C/D | aor | 94 | 84 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -111,7 +111,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 25006 | AmQRP | DDS-60 | D | other_parallel | - | - | unverified | - | not applicable |
 | 25013 | AMSAT-UK | FUNcube Dongle | D | other_usb | funcube | `amsat-uk-funcube-dongle` | unverified | - | described |
 | 25018 | AMSAT-UK | FUNcube Dongle Pro+ | D | other_usb | funcube | `amsat-uk-funcube-dongle-pro-plus` | unverified | - | described |
-| 37001 | AnyTone | D578A | D | other_serial | - | - | unverified | - | odd device |
+| 37001 | AnyTone | D578A | D | other_serial | - | `anytone-d578a` | unverified | - | described |
 | 5008 | AOR | AR2700 | C | other_serial | aor | `aor-ar2700` | unverified | - | described |
 | 5006 | AOR | AR3000A | C | other_serial | aor | `aor-ar3000a` | manual-checked | - | described |
 | 5005 | AOR | AR3030 | C | other_serial | aor | `aor-ar3030` | manual-checked | - | described |
