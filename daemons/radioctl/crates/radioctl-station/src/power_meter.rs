@@ -201,9 +201,9 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> MeterPoller<T> {
         let mut sample = Sample::default();
         for request in self.driver.requests() {
             io.write_all(request)
-                .await
+                .await // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
                 .map_err(|e| proto(format!("power meter: write failed: {e}")))?;
-            let frame = self.read_frame(&mut io).await?;
+            let frame = self.read_frame(&mut io).await?; // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
             match self.driver {
                 MeterDriver::Kpa500 => sample = parse_kpa500(&frame)?,
                 MeterDriver::Kpa1500 => match parse_kpa1500(&frame)? {
