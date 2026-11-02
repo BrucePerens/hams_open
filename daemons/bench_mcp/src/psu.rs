@@ -45,6 +45,7 @@ pub fn state(l: &mut Link) -> Result<Value, String> {
 }
 
 pub fn measure(l: &mut Link) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_psu_measure]
     let v = l.number("MEAS:VOLT?")?;
     let i = l.number("MEAS:CURR?")?;
     let p = l.number("MEAS:POW?")?;
@@ -63,6 +64,7 @@ fn in_range(name: &str, v: f64, max: f64) -> Result<f64, String> {
 }
 
 pub fn set(l: &mut Link, args: &Value, lim: &Limits) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_psu_set]
     let mut sent = Vec::new();
     if let Some(v) = args.get("voltage_v").and_then(|v| v.as_f64()) {
         let v = in_range("voltage_v", v, lim.max_volts)?;
@@ -343,5 +345,56 @@ mod tests {
         assert!(is_off("OFF") && is_off("0\r") && !is_off("ON") && !is_off(""));
         assert!(is_on("ON") && is_on("1") && is_on(" on\r"));
         assert!(!is_on("OFF") && !is_on("0"));
+    }
+
+    // Tests [@ANCHOR: bench_mcp_psu_measure]
+    #[test]
+    fn a_measurement_reads_volts_amps_watts_and_the_info_line() {
+        let dev = crate::example::testkit::FakeDevice::start(|c| {
+            Some(
+                match c {
+                    "MEAS:VOLT?" => "3.30",
+                    "MEAS:CURR?" => "0.25",
+                    "MEAS:POW?" => "0.825",
+                    "MEAS:ALL:INFO?" => "3.30V,0.25A",
+                    _ => return None,
+                }
+                .to_string(),
+            )
+        });
+        let mut l = dev.link()().unwrap();
+        let v = measure(&mut l).unwrap();
+        assert_eq!(
+            (
+                v["voltage_v"].as_f64(),
+                v["current_a"].as_f64(),
+                v["power_w"].as_f64()
+            ),
+            (Some(3.3), Some(0.25), Some(0.825))
+        );
+        assert_eq!(v["info"], "3.30V,0.25A");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_psu_set]
+    // Tests [@ANCHOR: bench_mcp_psu_caps]
+    #[test]
+    fn setpoints_are_sent_only_within_the_caps_and_something_must_be_given() {
+        let dev = fake_supply(3.3, false);
+        let mut l = dev.link()().unwrap();
+        let v = set(&mut l, &json!({"voltage_v": 3.3, "current_a": 0.5}), &lim()).unwrap();
+        assert_eq!(v["sent"], json!(["VOLT 3.300", "CURR 0.500"]));
+        assert_eq!(v["state"]["output"], "off");
+        assert_eq!(count(&dev, "VOLT 3.300"), 1);
+        // Over the voltage cap: refused, and nothing else is sent (not even the current).
+        let before = dev.received().len();
+        let e = set(&mut l, &json!({"voltage_v": 6.0, "current_a": 0.5}), &lim()).unwrap_err();
+        assert!(e.contains("voltage_v") && e.contains("outside"), "{e}");
+        assert_eq!(dev.received().len(), before);
+        let e = set(&mut l, &json!({"current_a": 2.0}), &lim()).unwrap_err();
+        assert!(e.contains("current_a"), "{e}");
+        assert_eq!(
+            set(&mut l, &json!({}), &lim()).unwrap_err(),
+            "give voltage_v and/or current_a"
+        );
     }
 }

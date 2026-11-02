@@ -24,6 +24,7 @@ impl Spectrum {
 
 /// In-place radix-2 FFT; the length must be a power of two.
 fn fft(re: &mut [f64], im: &mut [f64]) {
+    // [@ANCHOR: bench_mcp_dsp_fft]
     let n = re.len();
     let mut j = 0;
     for i in 1..n {
@@ -67,6 +68,7 @@ fn hann(n: usize) -> Vec<f64> {
 }
 
 fn check_len(fft_len: usize) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_dsp_check_len]
     if fft_len < 16 || !fft_len.is_power_of_two() {
         return Err(format!(
             "fft_len {fft_len} must be a power of two of at least 16"
@@ -77,6 +79,7 @@ fn check_len(fft_len: usize) -> Result<(), String> {
 
 /// The windowed FFT of one block starting at `at`, with DC moved to the middle.
 fn block_fft(samples: &[Iq], at: usize, w: &[f64]) -> (Vec<f64>, Vec<f64>) {
+    // [@ANCHOR: bench_mcp_dsp_block_fft]
     let n = w.len();
     let mut re: Vec<f64> = (0..n)
         .map(|i| f64::from(samples[at + i].0) * w[i])
@@ -129,6 +132,7 @@ pub fn welch(samples: &[Iq], fft_len: usize, rate_hz: f64) -> Result<Spectrum, S
 
 /// The median power of the spectrum, the noise floor estimate (peaks do not move it).
 pub fn noise_floor_db(s: &Spectrum) -> f64 {
+    // [@ANCHOR: bench_mcp_dsp_noise_floor]
     let mut v = s.power_db.clone();
     v.sort_by(|a, b| a.total_cmp(b));
     v[v.len() / 2]
@@ -150,6 +154,7 @@ pub fn peaks(
     min_sep_bins: usize,
     skip_dc_bins: usize,
 ) -> Vec<Peak> {
+    // [@ANCHOR: bench_mcp_dsp_peaks]
     let n = s.power_db.len();
     let floor = noise_floor_db(s);
     let mid = n / 2;
@@ -254,6 +259,7 @@ pub fn phase_between(
 
 /// Basic statistics of a capture: RMS and peak amplitude, the DC offset, and how many samples sit at full scale (clipping).
 pub fn stats(samples: &[Iq]) -> (f64, f64, (f64, f64), usize) {
+    // [@ANCHOR: bench_mcp_dsp_stats]
     let n = samples.len().max(1) as f64;
     let (mut p, mut peak, mut si, mut sq, mut clip) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0usize);
     for &(i, q) in samples {
@@ -293,6 +299,10 @@ mod tests {
             .collect()
     }
 
+    // Tests [@ANCHOR: bench_mcp_dsp_fft]
+    // Tests [@ANCHOR: bench_mcp_dsp_block_fft]
+    // Tests [@ANCHOR: bench_mcp_dsp_peaks]
+    // Tests [@ANCHOR: bench_mcp_dsp_check_len]
     // Tests [@ANCHOR: bench_mcp_sdr_spectrum_math]
     #[test]
     fn a_bin_centred_tone_reads_its_amplitude_and_offset() {
@@ -309,6 +319,8 @@ mod tests {
         assert!((peaks(&s, 1, 20.0, 4, 2)[0].offset_hz + f).abs() < 1.0);
     }
 
+    // Tests [@ANCHOR: bench_mcp_dsp_peaks]
+    // Tests [@ANCHOR: bench_mcp_dsp_noise_floor]
     #[test]
     fn peaks_are_ordered_floor_is_the_median_and_dc_is_skipped() {
         let (rate, n) = (2.0e6, 1 << 16);
@@ -327,6 +339,7 @@ mod tests {
         assert!(noise_floor_db(&s) < p[1].power_db - 30.0);
     }
 
+    // Tests [@ANCHOR: bench_mcp_dsp_check_len]
     #[test]
     fn bad_fft_lengths_and_short_captures_are_refused() {
         assert!(welch(&[(0.0, 0.0); 100], 100, 1e6).is_err());
@@ -354,6 +367,7 @@ mod tests {
         assert!(phase_between(&a[..100], &b[..100], 4096, rate, 2).is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_dsp_stats]
     #[test]
     fn stats_report_rms_peak_dc_and_clipping() {
         let x: Vec<Iq> = vec![(1.0, 0.0), (0.0, 0.0), (0.5, 0.5), (0.0, -1.0)];

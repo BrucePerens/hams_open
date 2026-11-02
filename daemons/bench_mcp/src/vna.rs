@@ -22,6 +22,7 @@ pub struct SweepArgs {
 }
 
 fn number(args: &Value, key: &str) -> Result<Option<f64>, String> {
+    // [@ANCHOR: bench_mcp_vna_number]
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v
@@ -429,6 +430,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_vna_number]
     // Tests [@ANCHOR: bench_mcp_vna_sweep_args]
     #[test]
     fn sweep_arguments_are_checked_and_override_the_instrument_settings() {

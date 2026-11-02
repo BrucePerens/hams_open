@@ -41,6 +41,7 @@ const XB200_SETTINGS: &[&str] = &[
 
 /// The settings of a radio that are checked when the configuration is read.
 pub fn check_config(c: &Config) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_sdr_check_config]
     if !matches!(c.driver.as_str(), "bladerf" | "limesdr") {
         return Err(format!("unknown SDR driver {:?}", c.driver));
     }
@@ -88,6 +89,7 @@ struct Limits {
 }
 
 fn limits(c: &Config) -> Limits {
+    // [@ANCHOR: bench_mcp_sdr_limits]
     if c.driver == "limesdr" {
         Limits {
             min_hz: 30e6,
@@ -104,6 +106,7 @@ fn limits(c: &Config) -> Limits {
 }
 
 fn number(args: &Value, key: &str) -> Result<Option<f64>, String> {
+    // [@ANCHOR: bench_mcp_sdr_number]
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v
@@ -115,6 +118,7 @@ fn number(args: &Value, key: &str) -> Result<Option<f64>, String> {
 }
 
 fn whole(args: &Value, key: &str, default: usize, min: usize, max: usize) -> Result<usize, String> {
+    // [@ANCHOR: bench_mcp_sdr_whole]
     match number(args, key)? {
         None => Ok(default),
         Some(x) if x.fract() == 0.0 && x >= min as f64 && x <= max as f64 => Ok(x as usize),
@@ -125,6 +129,7 @@ fn whole(args: &Value, key: &str, default: usize, min: usize, max: usize) -> Res
 }
 
 fn in_range(name: &str, x: f64, lo: f64, hi: f64) -> Result<f64, String> {
+    // [@ANCHOR: bench_mcp_sdr_in_range]
     if x >= lo && x <= hi {
         Ok(x)
     } else {
@@ -151,6 +156,7 @@ const LIME_INPUTS: &[&str] = &["LNAH", "LNAL", "LNAW"];
 
 /// The `antenna` argument: which receive input to use. Only the LimeSDR has a choice; the bladeRF has one receive input.
 fn antenna_arg(args: &Value, c: &Config) -> Result<Option<String>, String> {
+    // [@ANCHOR: bench_mcp_sdr_antenna_arg]
     match args.get("antenna") {
         None | Some(Value::Null) => Ok(None),
         Some(v) => {
@@ -566,6 +572,7 @@ pub fn continuous(capture_s: f64, real_s: f64) -> bool {
 }
 
 fn write_iq(path: &Path, samples: &[Iq]) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_sdr_write_iq]
     let mut bytes = Vec::with_capacity(samples.len() * 8);
     for &(i, q) in samples {
         bytes.extend_from_slice(&i.to_le_bytes());
@@ -775,6 +782,7 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: bench_mcp_sdr_check_config]
     // Tests [@ANCHOR: bench_mcp_sdr_args]
     #[test]
     fn the_soapy_argument_string_and_config_checks() {
@@ -807,6 +815,10 @@ mod tests {
         .is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_sdr_limits]
+    // Tests [@ANCHOR: bench_mcp_sdr_number]
+    // Tests [@ANCHOR: bench_mcp_sdr_whole]
+    // Tests [@ANCHOR: bench_mcp_sdr_in_range]
     // Tests [@ANCHOR: bench_mcp_sdr_capture_args]
     #[test]
     fn capture_arguments_are_checked_against_each_radios_limits() {
@@ -843,6 +855,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_sdr_antenna_arg]
     #[test]
     fn the_receive_input_can_be_chosen_on_the_lime_only() {
         let a = |driver: &Config, v: &str| {
@@ -867,6 +880,8 @@ mod tests {
         assert!(survey_args(&json!({"start_hz": 2.4e9, "antenna": 3}), &lime()).is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_sdr_whole]
+    // Tests [@ANCHOR: bench_mcp_sdr_in_range]
     // Tests [@ANCHOR: bench_mcp_sdr_survey_args]
     #[test]
     fn survey_arguments_bound_the_number_of_steps() {
@@ -903,5 +918,23 @@ mod tests {
         assert!(e.contains("freq_hz"), "{e}");
         let e = coherence(&lime(), &json!({"freq_hz": 100e6, "repeats": 50})).unwrap_err();
         assert!(e.contains("repeats"), "{e}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_sdr_write_iq]
+    #[test]
+    fn raw_iq_is_written_as_little_endian_f32_pairs_and_a_bad_path_is_an_error() {
+        let dir = std::env::temp_dir().join(format!("bench_sdr_iq_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("x.iq");
+        write_iq(&f, &[(1.0, -2.0), (0.5, 0.25)]).unwrap();
+        let b = std::fs::read(&f).unwrap();
+        let v: Vec<f32> = b
+            .chunks(4)
+            .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+            .collect();
+        assert_eq!(v, [1.0, -2.0, 0.5, 0.25]);
+        let e = write_iq(&dir.join("no/such/dir/x.iq"), &[(0.0, 0.0)]).unwrap_err();
+        assert!(e.contains("x.iq"), "{e}");
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

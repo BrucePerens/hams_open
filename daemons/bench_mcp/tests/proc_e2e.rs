@@ -201,6 +201,8 @@ fn alive(pid: i64) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
 }
 
+// Tests [@ANCHOR: bench_mcp_main_serve]
+// Tests [@ANCHOR: bench_mcp_main_call_tool]
 #[test]
 fn a_server_killed_during_a_run_leaves_a_lost_run_and_the_next_server_makes_the_instrument_safe() {
     let fake = Fake::start();
@@ -236,6 +238,8 @@ fn a_server_killed_during_a_run_leaves_a_lost_run_and_the_next_server_makes_the_
     next.child.wait().unwrap();
 }
 
+// Tests [@ANCHOR: bench_mcp_main_serve]
+// Tests [@ANCHOR: bench_mcp_main_call_tool]
 #[test]
 fn a_terminated_server_runs_the_cleanup_handlers_and_the_safe_state_before_it_exits() {
     let fake = Fake::start();

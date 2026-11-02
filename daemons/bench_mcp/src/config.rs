@@ -105,6 +105,7 @@ pub struct Instrument {
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
+    // [@ANCHOR: bench_mcp_config_tier_of]
     match s {
         None | Some("read_only") => Ok(Tier::ReadOnly),
         Some("read_config") => Ok(Tier::ReadConfig),
@@ -116,6 +117,7 @@ fn tier_of(s: Option<&str>) -> Result<Tier, String> {
 /// The VNA settings of an instrument entry: `codec_s11`, `codec_s21` (parts of the ALSA ids; found from the USB tree when omitted), `hub` and `hub_port` (the power-switching hub port, for cold resets), `retries`, `if_hz`, `point_ms`, `rf_level`,
 /// `settle_ms`, `window_ms`; anything omitted keeps the default of `vnwa_open::sweep::Config`.
 fn vna_config(c: &Value) -> Result<vnwa_open::sweep::Config, String> {
+    // [@ANCHOR: bench_mcp_config_vna]
     let mut v = vnwa_open::sweep::Config::default();
     let text = |k: &str| c.get(k).and_then(|x| x.as_str()).map(String::from);
     let num = |k: &str| c.get(k).and_then(|x| x.as_f64());
@@ -154,6 +156,7 @@ fn vna_config(c: &Value) -> Result<vnwa_open::sweep::Config, String> {
 }
 
 fn sdr_config(driver: &str, c: &Value) -> Result<crate::sdr::Config, String> {
+    // [@ANCHOR: bench_mcp_config_sdr]
     let text = |k: &str| c.get(k).and_then(|x| x.as_str()).map(String::from);
     let cfg = crate::sdr::Config {
         driver: driver.to_string(),
@@ -331,6 +334,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
 }
 
 pub fn load() -> Result<Vec<Instrument>, String> {
+    // [@ANCHOR: bench_mcp_config_load]
     let path =
         std::env::var("BENCH_MCP_CONFIG").map_err(|_| "BENCH_MCP_CONFIG is not set".to_string())?;
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
@@ -341,6 +345,7 @@ pub fn load() -> Result<Vec<Instrument>, String> {
 mod tests {
     use super::*;
 
+    // Tests [@ANCHOR: bench_mcp_config_tier_of]
     // Tests [@ANCHOR: bench_mcp_config]
     #[test]
     fn parses_both_drivers_with_defaults() {
@@ -361,6 +366,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_config_vna]
     #[test]
     fn a_vnwa_instrument_takes_its_settings_with_defaults_and_refuses_bad_ones() {
         let v = parse(
@@ -405,6 +411,7 @@ mod tests {
             .contains("example"));
     }
 
+    // Tests [@ANCHOR: bench_mcp_config_tier_of]
     #[test]
     fn rejects_bad_configs() {
         assert!(parse(r#"{"instruments":{}}"#).is_err());
@@ -420,6 +427,7 @@ mod tests {
         .is_err());
     }
 
+    // Tests [@ANCHOR: bench_mcp_config_vna]
     // Tests [@ANCHOR: bench_mcp_config]
     #[test]
     fn the_vna_hub_port_and_retries_are_read_and_must_come_as_a_pair() {
@@ -436,5 +444,55 @@ mod tests {
         assert!(vna(r#","hub":"3-2""#).unwrap_err().contains("together"));
         assert!(vna(r#","hub_port":2"#).unwrap_err().contains("together"));
         assert!(vna(r#","hub":"3-2","hub_port":300"#).is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_config_sdr]
+    #[test]
+    fn an_sdr_entry_takes_its_board_id_and_transverter_by_driver_and_refuses_what_does_not_fit() {
+        let sdr = |extra: &str, driver: &str| {
+            parse(&format!(
+                r#"{{"instruments":{{"r":{{"driver":"{driver}"{extra}}}}}}}"#
+            ))
+        };
+        let ok = sdr(r#","serial":"ca3e","xb200":"auto""#, "bladerf").unwrap();
+        assert_eq!(ok[0].kind, Kind::Sdr);
+        assert_eq!(ok[0].sdr.serial.as_deref(), Some("ca3e"));
+        assert_eq!(ok[0].sdr.xb200.as_deref(), Some("auto"));
+        assert_eq!(sdr("", "limesdr").unwrap()[0].sdr.driver, "limesdr");
+        assert!(sdr(r#","xb200":"auto""#, "limesdr")
+            .unwrap_err()
+            .contains("bladeRF only"));
+        assert!(sdr(r#","serial":"not hex""#, "bladerf").is_err());
+        assert!(sdr(r#","xb200":"enabled""#, "bladerf").is_err());
+        // A non-SDR driver does not read the SDR keys at all.
+        let scope =
+            parse(r#"{"instruments":{"s":{"driver":"siglent_sds","host":"h","serial":"zz"}}}"#)
+                .unwrap();
+        assert_eq!(scope[0].sdr.serial, None);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_config_load]
+    #[test]
+    fn the_config_is_read_from_the_file_named_by_the_environment() {
+        let dir =
+            std::env::temp_dir().join(format!("bench_mcp_config_load_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("bench.json");
+        std::fs::write(
+            &file,
+            r#"{"instruments":{"scope":{"driver":"siglent_sds","host":"10.0.0.2"}}}"#,
+        )
+        .unwrap();
+        // This is the only test in this process that reads the variable (the end-to-end tests set it in their child processes).
+        std::env::remove_var("BENCH_MCP_CONFIG");
+        assert_eq!(load().unwrap_err(), "BENCH_MCP_CONFIG is not set");
+        std::env::set_var("BENCH_MCP_CONFIG", dir.join("missing.json"));
+        assert!(load().unwrap_err().contains("missing.json"));
+        std::env::set_var("BENCH_MCP_CONFIG", &file);
+        let v = load().unwrap();
+        std::env::remove_var("BENCH_MCP_CONFIG");
+        std::fs::remove_dir_all(&dir).ok();
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].name, "scope");
     }
 }
