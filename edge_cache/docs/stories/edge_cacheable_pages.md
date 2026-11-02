@@ -28,7 +28,9 @@ cached at Cloudflare's edge without per-visitor cookies on them, so that most vi
 
 6. The page's CSRF token belongs to no session. Before the form posts, a script fetches a fresh token and
    the session cookie it is bound to `[@ANCHOR: COMM_edge_cache_csrf_refresh]`
-   `[@ANCHOR: COMM_cloudflare_csrf_token_route]`.
+   `[@ANCHOR: COMM_cloudflare_csrf_token_route]`. The script uses no CSS `:has()` selector, so a browser
+   that lacks it (Chrome before 105) neither throws `[@ANCHOR: COMM_edge_cache_is_token_form]` at every focus and submit nor loses the token
+   `[@ANCHOR: COMM_test_edge_cache_csrf_works_without_has_selector]`.
 
 **Status:** Verified by `[@ANCHOR: COMM_test_edge_cacheable_page_has_no_set_cookie]`,
 `[@ANCHOR: COMM_test_edge_cached_form_posts_after_token_fetch]` and

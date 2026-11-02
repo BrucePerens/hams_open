@@ -5,6 +5,7 @@
  * [@ANCHOR: COMM_edge_cache_csrf_refresh]
  * Verified by [@ANCHOR: COMM_test_edge_cached_form_posts_after_token_fetch]
  * Verified by [@ANCHOR: COMM_test_edge_cache_csrf_token_fetched_again_at_submit]
+ * Verified by [@ANCHOR: COMM_test_edge_cache_csrf_works_without_has_selector]
  *
  * A public page may come from Cloudflare's edge cache, rendered for an earlier visitor, and the
  * server sends such a page without a session cookie (edge_cache/models/ir_http.py), so the CSRF
@@ -31,7 +32,8 @@
 import { session } from "@web/session";
 
 const TOKEN_URL = "/cloudflare/csrf_token";
-const TOKEN_FORM = 'form:has(input[name="csrf_token"]), .s_website_form';
+const WEBSITE_FORM = ".s_website_form";
+const TOKEN_INPUT = 'input[name="csrf_token"]';
 const WEBSITE_FORM_SEND = ".s_website_form_send, .o_website_form_send";
 
 let pending = null;
@@ -81,8 +83,27 @@ export function refreshCsrfToken() {
     return settled && !pending ? Promise.resolve() : fetchToken();
 }
 
+/*
+ * A form that carries a CSRF token, or a website form. Written without the CSS :has() selector on
+ * purpose: a browser that does not know :has() (Chrome before 105, older WebViews) throws a
+ * SyntaxError from closest() and matches(), and as a capture listener on document that would throw
+ * at every focus and every submit on the page (hams_helpdesk tickets 125 and 126, 2026-11-02).
+ */
+// [@ANCHOR: COMM_edge_cache_is_token_form]
+function isTokenForm(el) {
+    return (
+        el.matches(WEBSITE_FORM) ||
+        (el instanceof HTMLFormElement && el.querySelector(TOKEN_INPUT) !== null)
+    );
+}
+
 function tokenForm(target) {
-    return target instanceof Element ? target.closest(TOKEN_FORM) : null;
+    for (let el = target instanceof Element ? target : null; el; el = el.parentElement) {
+        if (isTokenForm(el)) {
+            return el;
+        }
+    }
+    return null;
 }
 
 function onEarlyInteraction(ev) {
@@ -93,7 +114,7 @@ function onEarlyInteraction(ev) {
 
 function onSubmit(ev) {
     const form = ev.target;
-    if (!(form instanceof HTMLFormElement) || !form.matches(TOKEN_FORM)) {
+    if (!(form instanceof HTMLFormElement) || !isTokenForm(form)) {
         return;
     }
     if (replaying.has(form)) {
