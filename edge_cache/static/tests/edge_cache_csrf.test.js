@@ -61,4 +61,44 @@ describe("edge_cache_csrf", () => {
         expect(requests.every((route) => route === "/cloudflare/csrf_token")).toBe(true);
         stop();
     });
+
+    // [@ANCHOR: COMM_test_edge_cache_csrf_works_without_has_selector]
+    test("a browser without the :has() selector still gets the token, and nothing throws", async () => {
+        // Chrome before 105 throws a SyntaxError from closest() and matches() for :has(); the
+        // listeners are capture listeners on document, so one such throw would fire at every focus
+        // and submit on the page (hams_helpdesk tickets 125 and 126).
+        const originalClosest = Element.prototype.closest;
+        const originalMatches = Element.prototype.matches;
+        const refuseHas = (original) =>
+            function (selector, ...rest) {
+                if (String(selector).includes(":has(")) {
+                    throw new DOMException(`'${selector}' is not a valid selector.`, "SyntaxError");
+                }
+                return original.call(this, selector, ...rest);
+            };
+        Element.prototype.closest = refuseHas(originalClosest);
+        Element.prototype.matches = refuseHas(originalMatches);
+        const stop = install();
+        try {
+            const fixture = getFixture();
+            fixture.innerHTML = FORM;
+            const form = fixture.querySelector("#edge_form");
+            mockFetch(() => ({ csrf_token: "fresh" }));
+            const posted = [];
+            form.addEventListener("submit", (ev) => {
+                ev.preventDefault();
+                posted.push(form.querySelector('input[name="csrf_token"]').value);
+            });
+            // Focus inside the form (the early fetch) and a press on Send must both work.
+            form.querySelector('input[name="note"]').dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+            await waitUntil(() => form.querySelector('input[name="csrf_token"]').value === "fresh", { timeout: 2000 });
+            form.querySelector("button").click();
+            await waitUntil(() => posted.length > 0, { timeout: 2000 });
+            expect(posted).toEqual(["fresh"]);
+        } finally {
+            stop();
+            Element.prototype.closest = originalClosest;
+            Element.prototype.matches = originalMatches;
+        }
+    });
 });
