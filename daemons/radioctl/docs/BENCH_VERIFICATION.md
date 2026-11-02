@@ -46,8 +46,9 @@ and anything that unplugs or switches a radio. A hand stays on the radio's power
    (bench_mcp `bench_screenshot`, saved under `BENCH_MCP_OUT`) and a line in the day log (`bench_verify.py` writes it). Scrub serial numbers before
    anything is committed (`wire_to_transcript.py --redact HEX`).
 8. **Kill what you start:** `pkill -x radioctld; pkill -x bench_console; pkill -f virtual_radio_pty`, remove `/tmp/ic7300-virtual-pty`.
-9. **Upload policy.** `radioctl-selftest` uploads its report automatically (Bruce's decision; `--no-upload` turns it off). The runner's own bench report
-   and `verified.toml` proposal are never uploaded. When the runner invokes the selftest as a step it passes `--no-upload` unless `--upload` is given.
+9. **Upload policy.** `radioctl-selftest` uploads its report to hams.com always and automatically, with no prompt (Bruce, 2026-10-31); the runner's selftest step does the same.
+   `--no-upload` exists only as a testing convenience (virtual-rig unit tests, offline benches) and the runner passes it through only when given `--no-upload`.
+   The runner's own bench report and `verified.toml` proposal are never uploaded.
 
 ### How an outcome is recorded (all checks)
 
@@ -114,7 +115,7 @@ Rig: **IC** = IC-7300 (Bruce's), **F63** = FlexRadio 6300, **KX3**, **any** = an
 | A4 | Emergency stop within reach | any | A | 2 | yes | rule 4 |
 | A5 | Gate closed: `T 1` refused, nothing on the wire | any | A | 5 | | IC plan step 6 |
 | A6 | `radioctld --check` and `radioctl-selftest --list` | any | A | 3 | | VOLUNTEER_TESTING |
-| B1 | radioctl-selftest, read-only, no upload | any | B | 5 | | VOLUNTEER_TESTING |
+| B1 | radioctl-selftest, read-only (uploads automatically) | any | B | 5 | | VOLUNTEER_TESTING |
 | B2 | Identify and read everything (`bench_console`) | IC | B | 10 | | IC plan step 2 |
 | B3 | Front panel changes seen as events (Transceive vs Poll) | IC | B | 10 | | IC plan step 2 |
 | B4 | Sets without transmitting, read back against the display | IC | B | 15 | | IC plan step 3 |
@@ -196,10 +197,10 @@ Directory for commands on the Toughpad: `~/ic7300` (the examples find `rigs/` th
 ### Phase B. Receive only (gate closed)
 
 #### B1. radioctl-selftest, read-only
-- **Needs:** radio, A1/A2 done, no other program on the port. **Run:** `radioctl-selftest --description icom-ic-7300 --port usb:10c4:ea60 --baud 115200 --no-upload --out-dir day/`
+- **Needs:** radio, A1/A2 done, no other program on the port. **Run:** `radioctl-selftest --description icom-ic-7300 --port usb:10c4:ea60 --baud 115200 --out-dir day/`
   (use the radio's CI-V USB baud; `--baud auto` if unknown). It turns the VFO-knob check on at a terminal: turn the knob when asked.
 - **Expect:** every claimed check `PASS`; the report file in `day/`. It sends only the read commands in `is_read_only`. **Abort:** a timeout on every command: baud, address, Echo Back (A1).
-- **Record:** the report file. Uploading to hams.com is Bruce's choice after reading the report (`--upload` in the runner; the plain selftest uploads by default).
+- **Record:** the report file. The self-test uploads the report to hams.com automatically when it finishes (read the local file as well).
 - **Unlocks:** `identify`, frequency/mode reads, meter/level reads in `icom-ic-7300.toml` as `hardware-verified` with `tested = "radioctl-selftest read-only"`.
 
 #### B2. Identify and read everything
@@ -246,12 +247,12 @@ Directory for commands on the Toughpad: `~/ic7300` (the examples find `rigs/` th
   **Record:** level at two settings. **Unlocks:** the relay's per-rig audio facts (R6).
 
 #### B12. FlexRadio 6300 receive
-- **Needs:** the 6300 powered on, LAN, radio set to receive. **Run:** `radioctl-selftest --list` (it only listens for the discovery broadcast), then `radioctl-selftest --description flex-6300 ... --no-upload` once
+- **Needs:** the 6300 powered on, LAN, radio set to receive. **Run:** `radioctl-selftest --list` (it only listens for the discovery broadcast), then `radioctl-selftest --description flex-6300 ...` once
   network testing is supported (today "Testing network radios is not supported yet": use `bench_console` with the TCP transport). **Expect:** identify and slice reads. **Abort:** any transmit or `cwx` command: **receive-only until Bruce says**.
   **Record:** log. **Unlocks:** Flex read facts (VITA-49 receive tests also unlock the shared-receiver plan).
 
 #### B13. KX3 receive-only
-- **Needs:** KX3 with the correct cable. **Run:** `radioctl-selftest --description elecraft-kx3 --port usb:... --baud 38400 --no-upload`; turn on AI2 (auto-information) for the VFO knob check. **Expect:** all claimed checks pass.
+- **Needs:** KX3 with the correct cable. **Run:** `radioctl-selftest --description elecraft-kx3 --port usb:... --baud 38400`; turn on AI2 (auto-information) for the VFO knob check. **Expect:** all claimed checks pass.
   **Record:** report. **Unlocks:** KX3 read facts; the first Elecraft family hardware verification.
 
 #### B14. radioctld for Hamlib clients
@@ -339,7 +340,7 @@ R1 to R18 and U1 to U5 are in `docs/runbooks/RELAY_BENCH_CHECKLIST.md` (hams_com
 
 ## 8. The guided runner
 
-`python3 daemons/radioctl/tools/bench_verify.py list | detect | verify RIG_ID --port usb:VID:PID [--baud N] [--out-dir D] [--only A5,B2] [--auto-only] [--transmit] [--max-transmit-s N] [--upload]`.
+`python3 daemons/radioctl/tools/bench_verify.py list | detect | verify RIG_ID --port usb:VID:PID [--baud N] [--out-dir D] [--only A5,B2] [--auto-only] [--transmit] [--max-transmit-s N] [--no-upload]`.
 It reads this file (the index table and the `####` sections), so there is one copy of the checks.
 
 - `detect` runs `radioctl-selftest --list` (which opens no port) and reads `/proc/asound/cards`.
@@ -348,7 +349,7 @@ It reads this file (the index table and the `####` sections), so there is one co
 - **Transmit is a dry run by default.** C steps run only with `--transmit`, after the operator types `DUMMY LOAD ATTACHED`, and only if A1, A3, A4, A5, B1 and B2 passed in the same run,
   the port is a by-id path, `usb:VID:PID` or a pty (never a bare `ttyUSBn`), and `--max-transmit-s` is 1 to 10. Otherwise the step is `REFUSED` with the reasons. `--auto-only` skips the manual
   checks, so it can never transmit.
-- It writes `BENCH-REPORT-<rig>-<date>.txt` (the self-test's layout) and `verified.toml.proposed`; it edits no description and no `verified.toml`, and uploads nothing.
-  It runs the self-test with `--no-upload` unless `--upload` is given.
+- It writes `BENCH-REPORT-<rig>-<date>.txt` (the self-test's layout) and `verified.toml.proposed`; it edits no description and no `verified.toml`, and uploads nothing itself.
+  Its self-test step uploads automatically like the stand-alone self-test; `--no-upload` is a testing convenience only.
 - Not automated, by design: C3 to C11 (they need a hand on the radio), B3 to B9 and B11 to B13 (they need the front panel or other hardware). Tested only against virtual rigs
   (`tools/test_bench_verify.py`); the first real use is the bench day.
