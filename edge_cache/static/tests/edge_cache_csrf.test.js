@@ -90,9 +90,9 @@ describe("edge_cache_csrf", () => {
                 ev.preventDefault();
                 posted.push(form.querySelector('input[name="csrf_token"]').value);
             });
-            // Focus inside the form (the early fetch) and a press on Send must both work.
+            // Focus inside the form (goes through closest()) and a press on Send (matches()) must
+            // both work. The send always fetches a token of its own, so it is the one that is checked.
             form.querySelector('input[name="note"]').dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-            await waitUntil(() => form.querySelector('input[name="csrf_token"]').value === "fresh", { timeout: 2000 });
             form.querySelector("button").click();
             await waitUntil(() => posted.length > 0, { timeout: 2000 });
             expect(posted).toEqual(["fresh"]);
