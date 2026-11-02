@@ -655,6 +655,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_drt1_engine_encode] (radioctl-protocols) Refuses: the DRT1 has no byte commands.
 - [@ANCHOR: radioctl:radioctl_drt1_engine_feed] (radioctl-protocols) The feed of the drt1 code.
 - [@ANCHOR: radioctl:radioctl_drt1_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_drt1_dds_latch] (radioctl-protocols) Latches the bits clocked in while DTR was up into the register the instruction names.
 - [@ANCHOR: radioctl:radioctl_drt1_twin_frequency] (radioctl-protocols) The frequency the twin is tuned to.
 - [@ANCHOR: radioctl:radioctl_drt1_twin_registers] (radioctl-protocols) The CFR2 and FTW0 words last latched, if any.
 - [@ANCHOR: radioctl:radioctl_drt1_twin_set_line] (radioctl-protocols) Refuses: a DRT1 has no keying line.

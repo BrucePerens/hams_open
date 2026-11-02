@@ -193,6 +193,7 @@ struct DdsState {
 }
 
 impl DdsState {
+    // [@ANCHOR: radioctl_drt1_dds_latch]
     fn latch(&mut self) {
         let Some((instruction, data)) = self.bits.split_at_checked(8) else {
             return;
@@ -363,6 +364,7 @@ mod tests {
         assert_eq!(steps[4], step(ControlLine::Break, false));
     }
 
+    // Tests [@ANCHOR: radioctl_drt1_dds_latch]
     // Tests [@ANCHOR: radioctl_drt1_tune_steps]
     // Tests [@ANCHOR: radioctl_drt1_twin_set_control]
     // Tests [@ANCHOR: radioctl_drt1_twin_registers]
