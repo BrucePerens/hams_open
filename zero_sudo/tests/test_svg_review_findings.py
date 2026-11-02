@@ -23,17 +23,19 @@ class TestSvgReviewFindings(BaseCase):
         # so the cost is quadratic: 20000 empty blocks (220 KB) take about 11 s here,
         # 330 KB about 33 s, against 0.1 s unpatched. Any user who can write an Html
         # field can pin a worker.
+        # The budget is CPU time (process_time), not wall-clock: a busy box slows the clock, not the work, and
+        # the quadratic bug costs 10+ CPU seconds against the 2 s budget.
         value = "<svg></svg>" * 20000
-        started = time.monotonic()
+        started = time.process_time()
         html_sanitize(value)
-        elapsed = time.monotonic() - started
+        elapsed = time.process_time() - started
         self.assertLess(elapsed, 2.0, f"20000 sibling svgs took {elapsed:.1f}s")
 
     def test_02_many_svgs_interleaved_with_elements_are_linear_too(self):
         value = "<p>" + "<svg></svg><b>x</b>" * 20000 + "</p>"
-        started = time.monotonic()
+        started = time.process_time()
         html_sanitize(value)
-        elapsed = time.monotonic() - started
+        elapsed = time.process_time() - started
         self.assertLess(elapsed, 3.0, f"20000 interleaved svgs took {elapsed:.1f}s")
 
     def test_03_style_cannot_move_or_size_an_svg_over_the_page(self):
