@@ -339,6 +339,16 @@ R1 to R18 and U1 to U5 are in `docs/runbooks/RELAY_BENCH_CHECKLIST.md` (hams_com
 
 ## 8. The guided runner
 
-`python3 daemons/radioctl/tools/bench_verify.py verify <rig-id>` detects the attached rigs, prints the checks above for that rig, runs the receive, CAT and meter checks, and writes
-`BENCH-REPORT-<rig>-<date>.txt` and `verified.toml.proposed`. Transmit checks are dry runs (they print what they would do) unless `--transmit` is given **and** the operator types the phrase
-`DUMMY LOAD ATTACHED` when asked; they are refused while any safety precondition fails. See the tool's `--help` and its tests.
+`python3 daemons/radioctl/tools/bench_verify.py list | detect | verify RIG_ID --port usb:VID:PID [--baud N] [--out-dir D] [--only A5,B2] [--auto-only] [--transmit] [--max-transmit-s N] [--upload]`.
+It reads this file (the index table and the `####` sections), so there is one copy of the checks.
+
+- `detect` runs `radioctl-selftest --list` (which opens no port) and reads `/proc/asound/cards`.
+- `verify` walks phases A, B, C and E for the rig. It automates A2, A5, A6, B1, B2, B14, C1 and C2 (it starts `radioctld` on a config it generates, always stops it, and talks the rigctld protocol);
+  every other check prints its steps from this file and records the operator's pass, fail or skip (a manual pass is marked as not machine-checked).
+- **Transmit is a dry run by default.** C steps run only with `--transmit`, after the operator types `DUMMY LOAD ATTACHED`, and only if A1, A3, A4, A5, B1 and B2 passed in the same run,
+  the port is a by-id path, `usb:VID:PID` or a pty (never a bare `ttyUSBn`), and `--max-transmit-s` is 1 to 10. Otherwise the step is `REFUSED` with the reasons. `--auto-only` skips the manual
+  checks, so it can never transmit.
+- It writes `BENCH-REPORT-<rig>-<date>.txt` (the self-test's layout) and `verified.toml.proposed`; it edits no description and no `verified.toml`, and uploads nothing.
+  It runs the self-test with `--no-upload` unless `--upload` is given.
+- Not automated, by design: C3 to C11 (they need a hand on the radio), B3 to B9 and B11 to B13 (they need the front panel or other hardware). Tested only against virtual rigs
+  (`tools/test_bench_verify.py`); the first real use is the bench day.
