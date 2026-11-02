@@ -75,8 +75,11 @@ known safe state when it powers up and keep our own record. Its board descriptio
 - the driver records each coil only when the board acknowledges a write; a timeout, garbled reply or
   exception makes the coil unknown. `Switchboard::recorded` gives the level and its age, as
   "recorded, not confirmed";
-- a step that needs a confirmed power state (an amplifier needing its radio on) refuses on such a
-  channel; the keyed-state rules below apply as before, and the emergency all-off writes the
+- such a board is allowed for every channel, an amplifier's power-on included (Bruce, 2026-11-02):
+  the dependency checks (an amplifier needing its radio on or an antenna selected) accept the
+  driver's record, and the status of a channel keeps the caveat (`recorded` and `assurance`
+  fields; `confirmed` stays unknown). A lost record is unknown again and those checks refuse; the
+  keyed-state rules below apply as before, and the emergency all-off writes the
   board's safe state and is never blocked.
 
 ## The interlock: what the keyed state blocks

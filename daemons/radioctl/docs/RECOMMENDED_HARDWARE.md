@@ -6,7 +6,7 @@ Started 2026-11-01. Nothing on this list is verified by us on hardware yet. Entr
 
 - radioctl keeps its own record of every switch it drives (`Recorded`); a read-back upgrades it to `Confirmed`.
 - So the question for a product is: can it be driven safely?
-- Station actions that need a confirmed state (amplifier power-on, operate) refuse on a channel that can only be `Recorded`.
+- A board that can only be `Recorded` is allowed for every channel, amplifier power-on included (Bruce, 2026-11-02); the status shown to clients keeps the caveat (recorded, not confirmed).
 
 Criteria:
 
@@ -33,6 +33,11 @@ Status of an entry:
 ### SainSmart 16-channel 9-36 V USB relay module (sku 101-70-208)
 
 Status: **Not recommended.** Verified by us on hardware: no.
+
+Not recommended because it cannot report its state, has no watchdog or failsafe known to us, and
+its isolation and ratings are unconfirmed. radioctl nevertheless allows it for every channel,
+amplifier power-on included (Bruce, 2026-11-02): it sets the known safe state at power-up, keeps
+its own record of acknowledged writes, and shows clients that the state is recorded, not confirmed.
 
 | Criterion | Finding | Kind |
 |---|---|---|

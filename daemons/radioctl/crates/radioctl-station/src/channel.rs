@@ -166,6 +166,13 @@ pub struct ChannelStatus {
     pub confirmed: Option<Value>,
     /// Whether this channel's driver can read back at all.
     pub can_confirm: bool,
+    /// What the driver's own record of acknowledged writes says, for a channel on a
+    /// [`Assurance::Recorded`] driver (`None`: not such a channel, or the record is unknown).
+    /// Recorded, not confirmed: the board cannot report its state, so a front end shows this with
+    /// that caveat.
+    pub recorded: Option<Value>,
+    /// The assurance level of this channel's driver.
+    pub assurance: Assurance,
 }
 
 /// The result of a successful set.
@@ -496,11 +503,51 @@ impl Switchboard {
     pub fn status(&self, id: &ChannelId) -> Result<ChannelStatus, StationError> {
         let c = self.chan(id)?;
         let s = *lock(&c.state);
+        let assurance = c.driver.assurance();
         Ok(ChannelStatus {
             commanded: s.commanded,
             confirmed: s.confirmed,
             can_confirm: c.driver.can_read_back(),
+            recorded: if assurance == Assurance::Recorded {
+                self.record_value(c)
+            } else {
+                None
+            },
+            assurance,
         })
+    }
+
+    // [@ANCHOR: radioctl_station_board_known]
+    /// The state the station may act on: the confirmed value, or, for a channel on a
+    /// [`Assurance::Recorded`] driver (a relay board that cannot report its state, allowed for
+    /// every channel by Bruce's decision of 2026-11-02), the driver's own record of acknowledged
+    /// writes. `None`: unknown. The caveat that a recorded value is not a confirmation stays in
+    /// [`ChannelStatus::recorded`] and [`ChannelStatus::assurance`].
+    pub fn known(&self, id: &ChannelId) -> Result<Option<Value>, StationError> {
+        let s = self.status(id)?;
+        Ok(s.confirmed.or(s.recorded))
+    }
+
+    // [@ANCHOR: radioctl_station_board_record_value]
+    /// A channel's value from the driver's record of its lines: a binary channel's level, a
+    /// selector's single closed way (or off when every way is recorded open). `None`: a line is
+    /// unknown, or more than one way is closed.
+    fn record_value(&self, c: &Chan) -> Option<Value> {
+        if let ChannelKind::Selector { .. } = c.def.kind {
+            let mut on = Vec::new();
+            for (i, line) in c.def.lines().into_iter().enumerate() {
+                if c.driver.recorded_line(line)?.value? {
+                    on.push(i as u32 + 1);
+                }
+            }
+            return match on.as_slice() {
+                [] => Some(Value::Off),
+                [n] => Some(Value::Port(*n)),
+                _ => None,
+            };
+        }
+        let level = c.driver.recorded_line(c.def.line)?.value?;
+        Some(if level { Value::On } else { Value::Off })
     }
 
     // [@ANCHOR: radioctl_station_board_store]

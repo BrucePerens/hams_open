@@ -233,7 +233,13 @@ records the decisions that shape the code.
     1 (read coils) is never sent (refused below every other layer), there is no read-back step, and
     the driver reports the new `Assurance::Recorded` ("we sent the write and the board acknowledged
     it; the state is our own record"), never a confirmation, so the switchboard's confirmed state
-    stays unknown and a step that needs a confirmed power state refuses. The safe state goes out as
+    stays unknown. **Amended by Bruce, 2026-11-02: such a board is ALLOWED for every channel,
+    amplifier power-on and operate included.** There is no opt-in and no refusal on the board's
+    assurance: `Switchboard::known` (confirmed, else the driver's record) is what the dependency
+    checks (radio on before the amplifier, antenna selected, amplifier powered before operate or
+    tune) use, and `ChannelStatus` carries `recorded` and `assurance` so every client still sees
+    that the value is recorded, not confirmed. A lost record (timeout, garbled reply, exception) is
+    unknown again and the checks refuse. The safe state goes out as
     ONE function 15 frame over every coil when the link first opens and after every
     `ModbusRelay::reopen`, before any other command; until it is acknowledged every coil is unknown,
     no other frame is sent, and attempts are spaced by a backoff (250 ms doubling to 8 s). The driver
@@ -242,8 +248,10 @@ records the decisions that shape the code.
     `Switchboard::recorded` and `read_line` expose it as recorded, not confirmed. The emergency
     all-off writes the board's safe state (not a hard-coded all off), ignores the backoff, and is
     never blocked. The keyed-state guard is unchanged: an unknown or recorded relay state never
-    admits an action the keyed rules block. *Rejected:* trusting the module's function 1 reply, and
-    treating a recorded state as confirmed to let an amplifier go to operate.
+    admits an action the keyed rules block (that is about the PTT/key state, not the board).
+    *Rejected:* trusting the module's function 1 reply, treating a recorded state as confirmed
+    (it is reported as recorded), and refusing amplifier power-on on a recorded board (the
+    2026-11-01 refusal, withdrawn 2026-11-02).
 
 24. **The engine owns its session set-up; the actor sends it before traffic** (2026-11-01). Two
     default-no-op `ProtocolEngine` hooks return requests, never a transmit-capable one:
