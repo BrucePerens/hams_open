@@ -9,11 +9,13 @@
 //! TCP listener.
 
 use crate::rotator::{RotatorDescription, RotatorProtocol};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
+use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
 /// What the virtual rotator is doing.
@@ -216,6 +218,9 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 pub struct VirtualRotatorControl {
     rotator: Arc<Mutex<VirtualRotator>>,
     epoch: Instant,
+    /// The listener task, taken by the first [`VirtualRotatorControl::stop`].
+    task: Arc<Mutex<Option<JoinHandle<()>>>>,
+    address: Option<SocketAddr>,
 }
 
 impl VirtualRotatorControl {
@@ -239,6 +244,24 @@ impl VirtualRotatorControl {
         g.stuck = stuck;
     }
 
+    // [@ANCHOR: radioctl_station_vrot_control_address]
+    /// The socket the rotator is served on, if the listener could report it.
+    pub fn address(&self) -> Option<SocketAddr> {
+        self.address
+    }
+
+    // [@ANCHOR: radioctl_station_vrot_control_stop]
+    /// Stops the listener task and drops the client connection it holds, so the port is closed
+    /// and nothing of the served rotator keeps running. The rotator's state stays readable
+    /// through the control. A second call (on this or a clone) does nothing.
+    pub async fn stop(&self) {
+        let task = lock(&self.task).take();
+        if let Some(task) = task {
+            task.abort();
+            let _ = task.await;
+        }
+    }
+
     // [@ANCHOR: radioctl_station_vrot_control_set_silent]
     /// Makes the rotator silent (or lets it answer).
     pub fn set_silent(&self, silent: bool) {
@@ -248,7 +271,7 @@ impl VirtualRotatorControl {
 
 // [@ANCHOR: radioctl_station_vrot_serve]
 /// Serves `rotator` on `listener` from a task on `runtime`; one client at a time, a new
-/// connection replaces the old one.
+/// connection replaces the old one. The task ends with [`VirtualRotatorControl::stop`].
 pub fn serve_virtual_rotator(
     runtime: &Handle,
     listener: TcpListener,
@@ -257,9 +280,11 @@ pub fn serve_virtual_rotator(
     let control = VirtualRotatorControl {
         rotator: Arc::new(Mutex::new(rotator)),
         epoch: Instant::now(),
+        task: Arc::new(Mutex::new(None)),
+        address: listener.local_addr().ok(),
     };
     let shared = control.clone();
-    runtime.spawn(async move {
+    let task = runtime.spawn(async move {
         while let Ok((mut stream, _)) = listener.accept().await {
             let _ = stream.set_nodelay(true);
             let mut buffer = [0u8; 256];
@@ -275,6 +300,7 @@ pub fn serve_virtual_rotator(
             }
         }
     });
+    *lock(&control.task) = Some(task);
     control
 }
 

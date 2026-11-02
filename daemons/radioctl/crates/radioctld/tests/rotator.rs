@@ -232,3 +232,31 @@ async fn hamlib_rotctl_reads_and_moves_the_served_rotator() {
     assert!(values[0] >= 0.0 && values[0] <= 3.0, "{out}");
     daemon.stop().await;
 }
+
+// Tests [@ANCHOR: radioctld_daemon_stop]
+// Tests [@ANCHOR: radioctl_station_vrot_serve]
+// Tests [@ANCHOR: radioctl_station_vrot_control_stop]
+// Tests [@ANCHOR: radioctl_station_vrot_control_address]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stopping_the_daemon_stops_the_virtual_rotators_listener() {
+    let daemon = start(&rotator_text("rot", "generic-rotctld")).await;
+    let control = daemon.rotators[0].virtual_control.clone().expect("virtual");
+    let address = control
+        .address()
+        .expect("the virtual rotator reports its socket");
+    // Served now: a connection is accepted by the listener task.
+    let probe = tokio::net::TcpStream::connect(address).await;
+    assert!(
+        probe.is_ok(),
+        "the virtual rotator is served before the stop"
+    );
+    drop(probe);
+    daemon.stop().await;
+    // The listener task is gone and its socket closed: nothing accepts, the port is refused.
+    assert!(
+        tokio::net::TcpStream::connect(address).await.is_err(),
+        "the virtual rotator's listener outlived Daemon::stop"
+    );
+    // Stopping again, through the clone, is harmless.
+    control.stop().await;
+}

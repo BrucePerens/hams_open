@@ -209,7 +209,7 @@ pub struct LevelInfo {
     pub fraction: bool,
 }
 
-const LEVELS: [LevelInfo; 11] = [
+const LEVELS: [LevelInfo; 14] = [
     // Hamlib's PREAMP and ATT are integer levels in decibels. radioctld serves the attenuator in
     // decibels but the preamplifier as a step number (1, 2): a stage's gain varies by band and
     // model and no source we may use states it. The `\dump_state` lists carry the step numbers.
@@ -272,6 +272,27 @@ const LEVELS: [LevelInfo; 11] = [
         bit: 28,
         source: LevelSource::Swr,
         fraction: true,
+    },
+    // Hamlib's COMP_METER (decibels), VD_METER (volts) and ID_METER (amperes) are floats in those
+    // units, read-only; the CI-V rigs give a raw 0 to 255 deflection, converted by unverified
+    // points (`meter_cal`).
+    LevelInfo {
+        name: "COMP_METER",
+        bit: 33,
+        source: LevelSource::Meter(radioctl_core::units::Meter::Comp),
+        fraction: false,
+    },
+    LevelInfo {
+        name: "VD_METER",
+        bit: 34,
+        source: LevelSource::Meter(radioctl_core::units::Meter::Vd),
+        fraction: false,
+    },
+    LevelInfo {
+        name: "ID_METER",
+        bit: 35,
+        source: LevelSource::Meter(radioctl_core::units::Meter::Id),
+        fraction: false,
     },
     LevelInfo {
         name: "MONITOR_GAIN",
@@ -569,11 +590,14 @@ mod tests {
         let served = served_levels(&ic);
         let names: Vec<_> = served.iter().map(|l| l.name).collect();
         assert_eq!(names, ["RAWSTR"]);
-        // Raw meters add ALC and SWR (converted by the unverified `meter_cal` points).
+        // Raw meters add ALC, SWR, COMP_METER, VD_METER and ID_METER (converted by the unverified `meter_cal` points).
         let mut metered = ic.clone();
         metered.capabilities = CapabilitySet::of(&[Capability::ReadSignal, Capability::ReadMeters]);
         let names: Vec<_> = served_levels(&metered).iter().map(|l| l.name).collect();
-        assert_eq!(names, ["RAWSTR", "ALC", "SWR"]);
+        assert_eq!(
+            names,
+            ["RAWSTR", "ALC", "SWR", "COMP_METER", "VD_METER", "ID_METER"]
+        );
         assert_eq!(level_range(&ic, Level::AfGain), Some((0, 255)));
         assert_eq!(level_range(&ic, Level::KeyerSpeed), Some((6, 48)));
         let mut kx = RigDescription::ic7300();
@@ -587,14 +611,14 @@ mod tests {
         let served = served_levels(&kx);
         assert_eq!(
             served.len(),
-            LEVELS.len() - 3,
+            LEVELS.len() - 6,
             "no ATT or PREAMP without steps"
         );
         kx.levels.attenuator_db = vec![12];
         kx.levels.preamp_steps = 1;
         assert_eq!(
             served_levels(&kx).len(),
-            LEVELS.len() - 1,
+            LEVELS.len() - 4,
             "no ALC without raw meters"
         );
         assert_eq!(level_range(&kx, Level::Attenuator), Some((0, 12)));

@@ -245,6 +245,18 @@ records the decisions that shape the code.
     admits an action the keyed rules block. *Rejected:* trusting the module's function 1 reply, and
     treating a recorded state as confirmed to let an amplifier go to operate.
 
+24. **The engine owns its session set-up; the actor sends it before traffic** (2026-11-01). Two
+    default-no-op `ProtocolEngine` hooks return requests, never a transmit-capable one:
+    `open_requests` (once, when the actor starts with the link up: Icom PCR `H101` and `G300`) and
+    `link_restored` (after every reconnect of a serial, TCP, UDP or USB link: Kenwood, TS-890S,
+    Elecraft `AI2;` and Flex `sub` lines only if the controller had turned them on; the PCR family
+    repeats its open step; Barrett 4100 remote mode). On a restored link the actor first unkeys
+    (fail closed), then writes the hook's requests once each, then raises the link-restored event;
+    no queued command is served before them, and a failed write takes the link down again. The
+    engine also drops half frames and owed answers of the old link. The gate and the unkey are not
+    the hook's business. *Rejected:* each engine sending set-up from `encode` lazily (it would race the
+    queue), and the actor knowing protocol details.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.

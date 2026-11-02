@@ -481,7 +481,7 @@ impl RigService {
             }
             LevelSource::Meter(meter) => {
                 let raw = self.meter(meter).await?;
-                fmt_float(crate::meter_cal::alc_fraction(raw))
+                fmt_float(crate::meter_cal::level(meter, raw))
             }
             LevelSource::Swr => {
                 let Observation::Swr(tenths) = self.read(Field::Swr, Op::GetSwr).await? else {

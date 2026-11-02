@@ -126,7 +126,11 @@ fn granularity(info: &LevelInfo, description: &RigDescription) -> (String, Strin
             float(0.0, 1.0, 1.0 / f64::from(span))
         }
         LevelSource::Swr => float(0.0, 10.0, 0.1),
-        LevelSource::Meter(_) => float(0.0, 1.0, 1.0 / 120.0),
+        LevelSource::Meter(radioctl_core::units::Meter::Alc) => float(0.0, 1.0, 1.0 / 120.0),
+        LevelSource::Meter(meter) => {
+            let top = crate::meter_cal::full_scale(meter);
+            float(0.0, top, top / 255.0)
+        }
         LevelSource::RawStr => (
             wire_int_as_float(0),
             wire_int_as_float(255),

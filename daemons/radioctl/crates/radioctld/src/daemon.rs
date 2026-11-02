@@ -171,7 +171,8 @@ async fn start_one(
 impl Daemon {
     // [@ANCHOR: radioctld_daemon_stop]
     /// Stops every listener and client, and unkeys any rig whose transmitter a client held. A
-    /// rotator is left where it is: it keeps its own target, as it would if a `rotctld` stopped.
+    /// rotator is left where it is: it keeps its own target, as it would if a `rotctld` stopped. A
+    /// virtual rotator's listener task is stopped too, so its loopback port closes.
     pub async fn stop(self) {
         for served in self.rigs {
             served.server.shutdown().await;
@@ -179,6 +180,9 @@ impl Daemon {
         }
         for served in self.rotators {
             served.server.shutdown().await;
+            if let Some(control) = &served.virtual_control {
+                control.stop().await;
+            }
         }
     }
 }
