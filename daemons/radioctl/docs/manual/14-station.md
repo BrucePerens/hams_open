@@ -39,8 +39,10 @@ found off at start-up can be switched on at once.
 ## Assurance levels and the Home Assistant driver
 
 Each channel driver reports how far the station can rely on it (`Assurance`): `HardwareDeadMan`
-(the device stops itself if the host goes silent), `HostSupervised` (the default), `Mediated` (another
-system sits between the station and the device). The Home Assistant driver is `Mediated`:
+(the device stops itself if the host goes silent), `HostSupervised` (the default), `Recorded` (the
+board acknowledged the write but cannot report its state; the state is the driver's own record),
+`Mediated` (another system sits between the station and the device). The Home Assistant driver is
+`Mediated`:
 
 - a `ptt` channel on a `Mediated` driver is refused;
 - an amplifier powered through one is refused by `Station::new` unless its device declares
@@ -55,6 +57,25 @@ system sits between the station and the device). The Home Assistant driver is `M
 - the address is a private IP literal (no names, no internet) and the link is plain HTTP and
   WebSocket: no TLS is implemented;
 - every service call and session event goes to an `AuditLog`.
+
+### Relay boards whose status is not readable (SainSmart 16-channel)
+
+Decided by Bruce on 2026-11-01: assume the SainSmart module cannot report its state, so set it to a
+known safe state when it powers up and keep our own record. Its board description has
+`status_readable = false` and a `safe_state` (one level per coil, default all off), both in
+`data/station/boards.toml`. For such a board:
+
+- function 1 (read coils) is never sent, and nothing is read back; the channel's assurance is
+  `Recorded`, so its confirmed state is always unknown;
+- the safe state is written in one function 15 frame when the link first opens and after every
+  reconnect (`ModbusRelay::reopen`), before any other command. A failed or unacknowledged write
+  leaves every coil unknown, nothing else is sent, and it is retried with a backoff (250 ms to 8 s);
+- the driver records each coil only when the board acknowledges a write; a timeout, garbled reply or
+  exception makes the coil unknown. `Switchboard::recorded` gives the level and its age, as
+  "recorded, not confirmed";
+- a step that needs a confirmed power state (an amplifier needing its radio on) refuses on such a
+  channel; the keyed-state rules below apply as before, and the emergency all-off writes the
+  board's safe state and is never blocked.
 
 ## The interlock: what the keyed state blocks
 

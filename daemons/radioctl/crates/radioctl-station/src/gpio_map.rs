@@ -118,6 +118,18 @@ pub struct BoardModel {
     /// Pins that are outputs only or inputs only, if any (pin to direction class).
     #[serde(default)]
     pub notes: String,
+    /// Whether the board can report its relay or pin state back. False for a board whose status
+    /// read is not trusted: the driver keeps its own record and never claims a confirmation.
+    #[serde(default = "yes")]
+    pub status_readable: bool,
+    /// The level of each pin the driver applies when the link opens and in the emergency all-off
+    /// (empty: all off).
+    #[serde(default)]
+    pub safe_state: Vec<bool>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// The board models known to a build, parsed from TOML.

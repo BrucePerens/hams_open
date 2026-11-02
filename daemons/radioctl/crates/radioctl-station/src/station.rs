@@ -730,6 +730,81 @@ mod tests {
         (st, bank, key)
     }
 
+    fn rig_modbus() -> (Station, crate::modbus::test_peer::Module, Arc<Key>) {
+        use crate::modbus::{test_peer, ModbusBoard, ModbusRelay};
+        let def = StationDef::from_toml(crate::model::tests::SAMPLE).unwrap();
+        let mut board = ModbusBoard::sainsmart_16ch();
+        board.reply_timeout_ms = 50;
+        board.inter_frame_ms = 1;
+        let (io, module) = test_peer::spawn(vec![true; 16]);
+        let relay = Arc::new(ModbusRelay::new(board, io));
+        let mut b = Switchboard::new();
+        for c in def.channels.clone() {
+            b.add_channel(c, relay.clone()).unwrap();
+        }
+        let key = Arc::new(Key(AtomicU8::new(0)));
+        let st = Station::new(def, Arc::new(b), vec![key.clone()], None).unwrap();
+        (st, module, key)
+    }
+
+    // Tests [@ANCHOR: radioctl_station_station_guard_action]
+    // Tests [@ANCHOR: radioctl_station_station_all_off]
+    // Tests [@ANCHOR: radioctl_station_board_recorded]
+    // Tests [@ANCHOR: radioctl_station_board_assurance]
+    #[tokio::test(start_paused = true)]
+    async fn a_recorded_relay_board_never_lets_a_blocked_action_through_and_never_confirms() {
+        let (st, module, key) = rig_modbus();
+        assert_eq!(
+            st.power_assurance(&dev("ic7300")),
+            Some(Assurance::Recorded)
+        );
+        // keyed or keyed-unknown: RF-path actions are refused and nothing reaches the board,
+        // not even the safe state (no frame at all)
+        for (k, kind) in [
+            (1, StationErrorKind::Refused),
+            (2, StationErrorKind::KeyedUnknown),
+        ] {
+            key.0.store(k, Ordering::SeqCst);
+            assert_eq!(st.select(&ch("ant"), 1).await.unwrap_err().kind, kind);
+            assert_eq!(
+                st.set_channel(&ch("amp_pwr"), Value::On)
+                    .await
+                    .unwrap_err()
+                    .kind,
+                kind
+            );
+            assert_eq!(st.pulse(&ch("btn")).await.unwrap_err().kind, kind);
+        }
+        assert!(module.frames().is_empty());
+        // power-off and radio power-on pass in the unknown state; the board gets the safe state
+        // first, then the command
+        st.set_channel(&ch("radio_pwr"), Value::On).await.unwrap();
+        st.set_channel(&ch("amp_pwr"), Value::Off).await.unwrap();
+        let f = module.frames();
+        assert_eq!(f[0], ":FE0F00000010020000E1");
+        assert_eq!(f.len(), 3);
+        // the record is exposed as recorded; the confirmed state stays unknown
+        let r = st.board().recorded(&ch("radio_pwr")).unwrap().unwrap();
+        assert_eq!(r.value, Some(true));
+        let status = st.board().status(&ch("radio_pwr")).unwrap();
+        assert_eq!((status.confirmed, status.can_confirm), (None, false));
+        assert_eq!(st.device_power(&dev("ic7300")).unwrap(), None);
+        // a merely recorded radio power does not satisfy the amplifier's dependency
+        key.0.store(0, Ordering::SeqCst);
+        assert!(st.power_on(&dev("amp")).await.is_err());
+        // all_off is never blocked: keyed, board silent with a backoff running, it still sends
+        key.0.store(1, Ordering::SeqCst);
+        module.set(crate::modbus::test_peer::Mode::Silent);
+        let rep = st.all_off().await;
+        assert!(!rep.failed.is_empty());
+        module.set(crate::modbus::test_peer::Mode::Good);
+        let n = module.frames().len();
+        let rep = st.all_off().await;
+        assert!(rep.failed.is_empty(), "{:?}", rep.failed);
+        assert!(module.frames().len() > n);
+        assert!(module.coils.lock().unwrap().iter().all(|c| !c));
+    }
+
     // Tests [@ANCHOR: radioctl_station_station_new]
     // Tests [@ANCHOR: radioctl_station_station_board]
     // Tests [@ANCHOR: radioctl_station_station_def]
