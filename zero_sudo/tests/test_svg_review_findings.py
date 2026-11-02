@@ -9,10 +9,11 @@ Each test demonstrates a confirmed problem found on night-shift/svg-allowlist.
 They are expected to fail until the sanitizer is fixed; none changes the sanitizer.
 """
 import re
-import time
 
 from odoo.tests.common import BaseCase, tagged
 from odoo.tools import html_sanitize
+
+from .test_svg_sanitizer import assert_linear_cpu
 
 
 @tagged("post_install", "-at_install")
@@ -22,21 +23,17 @@ class TestSvgReviewFindings(BaseCase):
         # `_replace_with_text` rebuilds `parent.text` with `+=` for every adjacent svg,
         # so the cost is quadratic: 20000 empty blocks (220 KB) take about 11 s here,
         # 330 KB about 33 s, against 0.1 s unpatched. Any user who can write an Html
-        # field can pin a worker.
-        # The budget is CPU time (process_time), not wall-clock: a busy box slows the clock, not the work, and
-        # the quadratic bug costs 10+ CPU seconds against the 2 s budget.
-        value = "<svg></svg>" * 20000
-        started = time.process_time()
-        html_sanitize(value)
-        elapsed = time.process_time() - started
-        self.assertLess(elapsed, 2.0, f"20000 sibling svgs took {elapsed:.1f}s")
+        # field can pin a worker. Linear means doubling the input about doubles the CPU time
+        # (a quadratic cost quadruples it); see assert_linear_cpu for why this is not a wall-clock budget.
+        assert_linear_cpu(self, lambda n: "<svg></svg>" * n, 10000, 20000, "sibling svgs")
 
     def test_02_many_svgs_interleaved_with_elements_are_linear_too(self):
-        value = "<p>" + "<svg></svg><b>x</b>" * 20000 + "</p>"
-        started = time.process_time()
-        html_sanitize(value)
-        elapsed = time.process_time() - started
-        self.assertLess(elapsed, 3.0, f"20000 interleaved svgs took {elapsed:.1f}s")
+        # The same cost with an element between the blocks: `<svg></svg><b>x</b>` repeated, inside one
+        # paragraph, so every block has a different neighbour than in test_01 and the fix cannot be a
+        # special case for adjacent siblings. Doubling 10000 to 20000 pairs must about double the CPU time.
+        assert_linear_cpu(
+            self, lambda n: "<p>" + "<svg></svg><b>x</b>" * n + "</p>", 10000, 20000, "interleaved svgs"
+        )
 
     def test_03_style_cannot_move_or_size_an_svg_over_the_page(self):
         # The style whitelist accepts negative margins and unbounded width/height. An

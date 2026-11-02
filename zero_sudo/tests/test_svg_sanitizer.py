@@ -83,6 +83,30 @@ def assert_output_is_safe(test, name, output):
 
 
 
+def assert_linear_cpu(case, make, small, large, label, repeats=3):
+    """Fail when sanitising `make(large)` costs far more than twice `make(small)` (linear is 2x, quadratic 4x).
+
+    CPU time (process_time), best of `repeats`, compared between two sizes in the same process: a busy box or a slow
+    machine scales both sides alike, so the verdict does not depend on the machine's speed or load, and there is no
+    absolute second budget to widen."""
+
+    def cpu(count):
+        value = make(count)
+        best = None
+        for _ in range(repeats):
+            started = time.process_time()
+            html_sanitize(value)
+            spent = time.process_time() - started
+            best = spent if best is None else min(best, spent)
+        return best
+
+    t_small = cpu(small)
+    t_large = cpu(large)
+    case.assertLess(
+        t_large, 3.0 * max(t_small, 0.02), f"{label}: {large} took {t_large:.2f}s CPU, {small} took {t_small:.2f}s"
+    )
+
+
 class _DataFile(io.BytesIO):
     """convert_xml_import() reports errors against `xmlfile.name`."""
 
@@ -328,9 +352,8 @@ class TestSvgAllowlistSanitizerUnit(BaseCase, SafePatchMixin):
 
     def test_21_per_value_totals_bound_work_and_output(self):
         value = "<svg></svg>x" * 20000
-        started = time.process_time()
+        assert_linear_cpu(self, lambda n: "<svg></svg>x" * n, 10000, 20000, "svg blocks with text")
         text = str(html_sanitize(value))
-        self.assertLess(time.process_time() - started, 2.0)
         self.assertEqual(text.count("<svg"), svg_sanitizer.MAX_TOTAL_SVG_BLOCKS)
         self.assertLess(len(text), 2 * len(value))
         self.assertNotIn("hamssvg", text)
@@ -395,10 +418,14 @@ class TestSvgAllowlistSanitizerUnit(BaseCase, SafePatchMixin):
         self.assertNotIn("hamssvg", text)
 
     def test_26_far_more_than_1000_blocks_stay_fast(self):
-        for value in ("<svg></svg>" * 20000, "<p>" + "<svg></svg><b>x</b>" * 20000 + "</p>"):
-            started = time.process_time()
+        makers = (
+            lambda n: "<svg></svg>" * n,
+            lambda n: "<p>" + "<svg></svg><b>x</b>" * n + "</p>",
+        )
+        for make in makers:
+            assert_linear_cpu(self, make, 10000, 20000, "blocks past the limit")
+            value = make(20000)
             text = str(html_sanitize(value))
-            self.assertLess(time.process_time() - started, 2.0)
             self.assertEqual(text.count("<svg"), 1000)
             self.assertLess(len(text), 8 * len(value) + 100)
 
