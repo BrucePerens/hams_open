@@ -89,7 +89,7 @@ binary output (on = operate, off = standby) and must declare `safe = "off"`; `fu
 a momentary pulse (`pulse_ms`) that starts the device's own tune cycle (the station never keys a
 transmitter). Rules: operate is an RF-path change, so it is refused while anything is keyed or the
 keyed state is unknown; standby is the safe direction and passes every keyed state (like a
-power-off, of which it is the first step). Operate is refused unless the device is confirmed powered on and, when the channel names
+power-off, of which it is the first step). Operate is refused unless the device is known powered on (confirmed, or recorded on a board that cannot be read back) and, when the channel names
 a `fault_input` (an input channel, high = tripped), unless that line is confirmed clear; a tripped
 or unknown line refuses. Powering an amplifier off puts it in standby first, and the emergency
 `all_off` writes standby before anything else.
@@ -206,6 +206,8 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_driver_force_safe] (radioctl-station) Drives a line to its safe level for the emergency all-off: never held back by a retry delay.
 - [@ANCHOR: radioctl:radioctl_station_driver_recorded_line] (radioctl-station) The driver's own record of a line (`None`: this driver keeps none); what was last acknowledged, not a confirmation.
 - [@ANCHOR: radioctl:radioctl_station_board_recorded] (radioctl-station) The driver's own record of a binary channel's line: what the board last acknowledged, its age, or unknown. Recorded, not confirmed.
+- [@ANCHOR: radioctl:radioctl_station_board_known] (radioctl-station) The state the station may act on: the confirmed value, or, for a channel on a `Recorded` driver, the driver's own record of acknowledged writes (`None`: unknown). The recorded-not-confirmed caveat stays in `ChannelStatus`.
+- [@ANCHOR: radioctl:radioctl_station_board_record_value] (radioctl-station) A channel's value from the driver's record of its lines (binary level, or a selector's single closed way); `None` when a line is unknown or several ways are closed.
 - [@ANCHOR: radioctl:radioctl_station_modbus_safe_bits] (radioctl-station) The safe level of every coil, in coil order: `safe_state`, or all off when it is empty.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_reopen] (radioctl-station) Replaces the byte stream after a reconnect or reopen: every coil becomes unknown and the safe state is required again before any other command.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_exchange] (radioctl-station) Sends one request PDU on the locked stream and returns the validated reply; read coils is refused for a board whose status is not readable.
@@ -235,7 +237,7 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_station_set_channel] (radioctl-station) Sets a power, output or selector channel by hand, behind the interlock. A power channel
 - [@ANCHOR: radioctl:radioctl_station_station_select] (radioctl-station) Selects a way on a selector, behind the interlock.
 - [@ANCHOR: radioctl:radioctl_station_station_pulse] (radioctl-station) Pulses a momentary channel, behind the interlock.
-- [@ANCHOR: radioctl:radioctl_station_station_check_power_on] (radioctl-station) The dependency refusals: dependencies confirmed on, required antennas selected.
+- [@ANCHOR: radioctl:radioctl_station_station_check_power_on] (radioctl-station) The dependency refusals: dependencies known on, required antennas selected.
 - [@ANCHOR: radioctl:radioctl_station_station_power_on] (radioctl-station) Powers a device on, behind the interlock for its class (a radio passes every keyed state depends on is not
 - [@ANCHOR: radioctl:radioctl_station_station_power_kind] (radioctl-station) The channel kind that powers a device (an output kind for none).
 - [@ANCHOR: radioctl:radioctl_station_station_wait_ready] (radioctl-station) Waits for a device to answer, up to its ready timeout.
@@ -377,8 +379,8 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_driver_assurance] (radioctl-station) The assurance level of channels on a driver; host-supervised unless the driver says otherwise.
 - [@ANCHOR: radioctl:radioctl_station_board_assurance] (radioctl-station) The assurance level of a channel's driver.
 - [@ANCHOR: radioctl:radioctl_station_station_power_assurance] (radioctl-station) The assurance level of the channel that powers a device.
-- [@ANCHOR: radioctl:radioctl_station_station_check_operate] (radioctl-station) The refusals for putting an amplifier in operate: its device must be confirmed powered on, and its fault input, when it has one, must be confirmed clear (a tripped or unknown fault line refuses: fail closed).
-- [@ANCHOR: radioctl:radioctl_station_station_check_amp_powered] (radioctl-station) Refuses unless the amplifier or tuner is confirmed powered on.
+- [@ANCHOR: radioctl:radioctl_station_station_check_operate] (radioctl-station) The refusals for putting an amplifier in operate: its device must be known powered on, and its fault input, when it has one, must be confirmed clear (a tripped or unknown fault line refuses: fail closed).
+- [@ANCHOR: radioctl:radioctl_station_station_check_amp_powered] (radioctl-station) Refuses unless the amplifier or tuner is known powered on (confirmed, or recorded on a board that cannot be read back).
 - [@ANCHOR: radioctl:radioctl_station_station_standby] (radioctl-station) Puts a device's amplifier channel in standby before its power goes, best effort: a failure is already an event on the switchboard and does not stop the power-off, because removing power is the safe direction.
 - [@ANCHOR: radioctl:radioctl_station_rot_err] (radioctl-station) `rot_err` (see the source).
 - [@ANCHOR: radioctl:radioctl_station_rot_desc_validate] (radioctl-station) Checks the description on its own: ordered finite limits, sane travel, a park position inside the travel, a GS-232 description inside what that protocol can carry.

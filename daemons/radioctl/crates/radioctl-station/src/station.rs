@@ -304,12 +304,14 @@ impl Station {
     }
 
     // [@ANCHOR: radioctl_station_station_device_power]
-    /// The confirmed power state of a device: always-on is `On`; a channel's confirmed value;
-    /// `None` when unknown (a momentary-powered device has no power sensor here).
+    /// The known power state of a device: always-on is `On`; a channel's confirmed value, or, on a
+    /// `Recorded` board (no read-back, allowed for every channel), the driver's record of
+    /// acknowledged writes; `None` when unknown (a momentary-powered device has no power sensor
+    /// here). `power_assurance` says which kind of knowledge it is.
     pub fn device_power(&self, id: &DeviceId) -> Result<Option<Value>, StationError> {
         Ok(match &self.device(id)?.power {
             PowerSource::AlwaysOn => Some(Value::On),
-            PowerSource::Channel { channel } => self.board.status(channel)?.confirmed,
+            PowerSource::Channel { channel } => self.board.known(channel)?,
             PowerSource::Momentary { .. } => None,
         })
     }
@@ -339,7 +341,7 @@ impl Station {
     }
 
     // [@ANCHOR: radioctl_station_station_check_operate]
-    /// The refusals for putting an amplifier in operate: its device must be confirmed powered on,
+    /// The refusals for putting an amplifier in operate: its device must be known powered on,
     /// and its fault input, when it has one, must be confirmed clear (a tripped or unknown fault
     /// line refuses: fail closed). Other channels pass.
     fn check_operate(&self, c: &ChannelDef) -> Result<(), StationError> {
@@ -374,10 +376,14 @@ impl Station {
     }
 
     // [@ANCHOR: radioctl_station_station_check_amp_powered]
-    /// Refuses unless the amplifier or tuner is confirmed powered on.
+    /// Refuses unless the amplifier or tuner is known powered on (confirmed, or recorded on a
+    /// board that cannot be read back).
     fn check_amp_powered(&self, device: &DeviceId) -> Result<(), StationError> {
         if self.device_power(device)? != Some(Value::On) {
-            return Err(refused(format!("{} is not confirmed powered on", device.0)));
+            return Err(refused(format!(
+                "{} is not known to be powered on",
+                device.0
+            )));
         }
         Ok(())
     }
@@ -421,7 +427,7 @@ impl Station {
     }
 
     // [@ANCHOR: radioctl_station_station_check_power_on]
-    /// The dependency refusals: dependencies confirmed on, required antennas selected.
+    /// The dependency refusals: dependencies known on, required antennas selected.
     fn check_power_on(&self, d: &DeviceDef) -> Result<(), StationError> {
         for dep in &d.depends_on {
             if self.device_power(dep)? != Some(Value::On) {
@@ -429,7 +435,7 @@ impl Station {
             }
         }
         for a in &d.needs_antenna {
-            if !matches!(self.board.status(a)?.confirmed, Some(Value::Port(_))) {
+            if !matches!(self.board.known(a)?, Some(Value::Port(_))) {
                 return Err(refused(format!(
                     "{} needs an antenna selected on {}",
                     d.id.0, a.0
@@ -751,8 +757,11 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_station_all_off]
     // Tests [@ANCHOR: radioctl_station_board_recorded]
     // Tests [@ANCHOR: radioctl_station_board_assurance]
+    // Tests [@ANCHOR: radioctl_station_board_known]
+    // Tests [@ANCHOR: radioctl_station_board_record_value]
     #[tokio::test(start_paused = true)]
-    async fn a_recorded_relay_board_never_lets_a_blocked_action_through_and_never_confirms() {
+    async fn a_recorded_relay_board_is_allowed_for_every_channel_but_never_lets_a_blocked_action_through(
+    ) {
         let (st, module, key) = rig_modbus();
         assert_eq!(
             st.power_assurance(&dev("ic7300")),
@@ -788,10 +797,28 @@ mod tests {
         assert_eq!(r.value, Some(true));
         let status = st.board().status(&ch("radio_pwr")).unwrap();
         assert_eq!((status.confirmed, status.can_confirm), (None, false));
-        assert_eq!(st.device_power(&dev("ic7300")).unwrap(), None);
-        // a merely recorded radio power does not satisfy the amplifier's dependency
+        assert_eq!(st.device_power(&dev("ic7300")).unwrap(), Some(Value::On));
+        // the status carries the caveat: recorded, never confirmed, with the driver's assurance
+        assert_eq!(status.recorded, Some(Value::On));
+        assert_eq!(status.assurance, Assurance::Recorded);
+        // Bruce's decision of 2026-11-02: a recorded board is allowed for every channel, so the
+        // recorded radio power satisfies the amplifier's dependency and the amplifier powers on
+        // and goes to operate, while its confirmed state stays unknown
+        assert_eq!(st.board().known(&ch("radio_pwr")).unwrap(), Some(Value::On));
         key.0.store(0, Ordering::SeqCst);
-        assert!(st.power_on(&dev("amp")).await.is_err());
+        let e = st.power_on(&dev("amp")).await.unwrap_err();
+        assert!(e.detail.contains("antenna"), "{e}");
+        st.select(&ch("ant"), 2).await.unwrap();
+        assert_eq!(st.board().known(&ch("ant")).unwrap(), Some(Value::Port(2)));
+        st.power_on(&dev("amp")).await.unwrap();
+        assert_eq!(st.device_power(&dev("amp")).unwrap(), Some(Value::On));
+        let amp = st.board().status(&ch("amp_pwr")).unwrap();
+        assert_eq!((amp.confirmed, amp.recorded), (None, Some(Value::On)));
+        // a recorded value that is lost (a silent board) is unknown again and refuses
+        module.set(crate::modbus::test_peer::Mode::Silent);
+        let _ = st.set_channel(&ch("radio_pwr"), Value::Off).await;
+        assert_eq!(st.board().known(&ch("radio_pwr")).unwrap(), None);
+        module.set(crate::modbus::test_peer::Mode::Good);
         // all_off is never blocked: keyed, board silent with a backoff running, it still sends
         key.0.store(1, Ordering::SeqCst);
         module.set(crate::modbus::test_peer::Mode::Silent);
