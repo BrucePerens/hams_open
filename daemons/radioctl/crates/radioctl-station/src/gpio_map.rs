@@ -126,6 +126,10 @@ pub struct BoardModel {
     /// (empty: all off).
     #[serde(default)]
     pub safe_state: Vec<bool>,
+    /// Optional listing status in `docs/RECOMMENDED_HARDWARE.md`: `recommended`, `acceptable` or
+    /// `not-recommended`. Informational only; it never changes how a board is driven.
+    #[serde(default)]
+    pub recommendation: Option<String>,
 }
 
 fn yes() -> bool {

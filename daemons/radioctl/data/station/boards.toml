@@ -20,6 +20,8 @@ notes = "Modbus ASCII 9600 8N1, slave FE; no watchdog; relay state at power-up u
 # Bruce, 2026-11-01: assume the module cannot report its status. The driver never sends a read
 # coils request, sets safe_state at every open, and keeps its own record of acknowledged writes.
 status_readable = false
+# Not recommended: see docs/RECOMMENDED_HARDWARE.md
+recommendation = "not-recommended"
 safe_state = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]
 
 [[board]]

@@ -8,6 +8,8 @@ from the rig crates. Proposal: `docs/proposals/RELAY_EXTERNAL_SWITCHES_AND_POWER
 Phase 1 is virtual: no hardware, nothing is ever switched at start-up, and every transmit-related
 path stays behind radioctl's closed gate.
 
+Which relay and switch products suit it, and which do not: [docs/RECOMMENDED_HARDWARE.md](../../docs/RECOMMENDED_HARDWARE.md).
+
 **Interlock rule (decided by Bruce, 2026-10-31; emergency operations are never blocked).** The
 guard classifies every command by what it does to the RF path (`station::Action`):
 
