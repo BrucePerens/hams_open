@@ -66,4 +66,13 @@ manual.
 10. **The Flex engine reads no meters**, and the legacy Yaesu PTT-bit level is a single Hamlib fact; a
     wrong guess inverts the PTT read. Both need a bench.
 
+11. **Perseus receiver board.** `radioctl-protocols::perseus` loads the user's own Microtelecom FX2
+    firmware (`fx2.hex`, Intel HEX) and FPGA bitstream (`fpga.rbs`) into a board over the USB
+    transport traits and controls frequency, attenuator, preselector, ADC dither and preamplifier,
+    tested against a virtual board only. Nothing of Microtelecom's is stored or redistributed; the
+    files are looked up in `RADIOCTL_PERSEUS_FIRMWARE_DIR` or `~/.config/radioctl/firmware/perseus`.
+    It is not a `ProtocolEngine` and `radioctld` does not open it yet. **Boundary:** I/Q streaming
+    (bulk endpoint 0x82, sample-rate bitstream choice) belongs to the shared-receiver service
+    (`radiod`), which this board feeds; radioctl stops at control.
+
 Update this chapter whenever one of these changes.
