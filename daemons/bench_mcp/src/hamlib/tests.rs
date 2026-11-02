@@ -985,15 +985,20 @@ fn the_baseline_needs_the_confirmation_the_attested_range_and_a_quiet_path() {
     }
     assert!(load::baseline_file(&dir.0, "t_bl").exists());
     // A time station in the audio, even with the S-meter at its floor, means no baseline: ticks 40 dB under what the meter shows.
+    // The references listened to depend on the local hour (lower frequencies first at night, higher first by day), so the
+    // time station is on every one of the four time-station frequencies, and the test holds at any hour.
     let dir2 = Dir::new("baseline2");
     let (_f2, sim2, b2) = sim_rig(
         "t_bl2",
         &dir2,
-        vec![Signal {
-            hz: 10e6,
-            db: 0.0,
-            audio: "wwv",
-        }],
+        [2.5e6, 5e6, 10e6, 15e6]
+            .into_iter()
+            .map(|hz| Signal {
+                hz,
+                db: 0.0,
+                audio: "wwv",
+            })
+            .collect(),
     );
     let audio2 = SimAudio(sim2.clone());
     let mut c2 = client_of(&b2[0]);
