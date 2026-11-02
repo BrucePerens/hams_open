@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use crate::description::RigDescription;
 use crate::error::RigError;
+use crate::keyer::ControlLine;
 use crate::op::{Field, Observation, Op};
 use crate::scope::{FilterScopeFrame, ScopeFrame};
 
@@ -35,6 +36,17 @@ pub struct Request {
     pub bytes: Vec<u8>,
     /// The reply to wait for.
     pub reply: ReplyKind,
+}
+
+/// One step of a control-line sequence: set a line, then hold for `hold` before the next step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineStep {
+    /// The line to set.
+    pub line: ControlLine,
+    /// True to assert it (RTS, DTR) or put the transmit line in break.
+    pub asserted: bool,
+    /// How long to wait after setting it.
+    pub hold: Duration,
 }
 
 /// Something decoded from received bytes.
@@ -66,6 +78,17 @@ pub trait ProtocolEngine: Send + 'static {
 
     /// Consumes received bytes; `now` is the caller's monotonic time.
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>;
+
+    /// A command that is sent as a sequence of control-line changes and no bytes (a receiver
+    /// tuned by clocking a DDS through RTS, DTR and break). `Ok(Some(steps))` means the actor
+    /// drives the steps on the transport's control lines, in order, and the command is complete
+    /// with the last one; `encode` is not called. `Ok(None)`, the default, means the command is
+    /// an ordinary byte request. Never transmit-capable: the actor refuses a transmitting op
+    /// here, and the gate and the unkey are not the engine's business.
+    fn encode_lines(&mut self, op: &Op) -> Result<Option<Vec<LineStep>>, RigError> {
+        let _ = op;
+        Ok(None)
+    }
 
     /// The link to the rig came back after a loss. Whatever session state the engine had
     /// established on the old link (Kenwood and Elecraft `AI2;` auto-information, Flex
@@ -106,6 +129,12 @@ impl ProtocolEngine for Box<dyn ProtocolEngine> {
         self.as_mut().feed(bytes, now)
     }
 
+    // [@ANCHOR: radioctl_core_engine_box_encode_lines]
+    /// Forwards the control-line hook to the boxed engine.
+    fn encode_lines(&mut self, op: &Op) -> Result<Option<Vec<LineStep>>, RigError> {
+        self.as_mut().encode_lines(op)
+    }
+
     // [@ANCHOR: radioctl_core_engine_box_link_restored]
     /// Forwards the link-restored hook to the boxed engine.
     fn link_restored(&mut self) -> Vec<Request> {
@@ -144,6 +173,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_engine_box_description]
     // Tests [@ANCHOR: radioctl_core_engine_box_encode]
     // Tests [@ANCHOR: radioctl_core_engine_box_feed]
+    // Tests [@ANCHOR: radioctl_core_engine_box_encode_lines]
     // Tests [@ANCHOR: radioctl_core_engine_box_link_restored]
     // Tests [@ANCHOR: radioctl_core_engine_box_open_requests]
     #[test]
@@ -159,6 +189,15 @@ mod tests {
         assert_eq!(
             ProtocolEngine::feed(&mut boxed, b"yz", Duration::ZERO),
             vec![Inbound::Unrecognised(b"yz".to_vec())]
+        );
+        assert_eq!(
+            ProtocolEngine::encode_lines(
+                &mut boxed,
+                &Op::SetFrequency(crate::units::Vfo::A, Hz(7_000_000))
+            )
+            .expect("encode_lines"),
+            None,
+            "an ordinary engine has no control-line commands"
         );
         assert!(
             ProtocolEngine::link_restored(&mut boxed).is_empty(),

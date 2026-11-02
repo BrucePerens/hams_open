@@ -132,6 +132,7 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
         VendorProtocol::Gomspace => Box::new(crate::gomspace::GomspaceEngine::new(desc.clone())?),
         VendorProtocol::Rshfiq => Box::new(crate::rshfiq::RshfiqEngine::new(desc.clone())?),
         VendorProtocol::Rft => Box::new(crate::rft::RftEngine::new(desc.clone())?),
+        VendorProtocol::Drt1 => Box::new(crate::drt1::Drt1Engine::new(desc.clone())?),
         VendorProtocol::Prm80 => Box::new(crate::prm80::Prm80Engine::new(desc.clone())?),
         VendorProtocol::Skanti => Box::new(crate::skanti::SkantiEngine::new(desc.clone())?),
         VendorProtocol::Barrett if vendor_of(desc)?.1 == "barrett4100" => {
@@ -170,6 +171,7 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> 
         VendorProtocol::Gomspace => Box::new(crate::gomspace::GomspaceTwin::new(desc)?),
         VendorProtocol::Rshfiq => Box::new(crate::rshfiq::RshfiqTwin::new(desc)?),
         VendorProtocol::Rft => Box::new(crate::rft::RftTwin::new(desc)?),
+        VendorProtocol::Drt1 => Box::new(crate::drt1::Drt1Twin::new(desc)?),
         VendorProtocol::Prm80 => Box::new(crate::prm80::Prm80Twin::new(desc)?),
         VendorProtocol::Skanti => Box::new(crate::skanti::SkantiTwin::new(desc)?),
         VendorProtocol::Barrett if vendor_of(desc)?.1 == "barrett4100" => {

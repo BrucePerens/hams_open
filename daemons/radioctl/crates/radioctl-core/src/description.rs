@@ -64,6 +64,9 @@ pub enum VendorProtocol {
     Rshfiq,
     /// RFT EKD-500 receiver: a set-only ASCII frequency command (`rft.rs`).
     Rft,
+    /// SAT-Schneider DRT1 DRM receiver: tuned by clocking a DDS through the RTS, DTR and break
+    /// lines, no bytes (`drt1.rs`).
+    Drt1,
     /// Philips PRM8060 / PRM80 family: a prompt-driven console (`prm80.rs`).
     Prm80,
     /// Skanti TRP8000 and TRP 8255 S R (`skanti.rs`).
@@ -112,6 +115,7 @@ impl VendorProtocol {
             "gomspace" => Some(VendorProtocol::Gomspace),
             "rshfiq" => Some(VendorProtocol::Rshfiq),
             "rft" => Some(VendorProtocol::Rft),
+            "drt1" => Some(VendorProtocol::Drt1),
             "prm80" => Some(VendorProtocol::Prm80),
             "skanti" => Some(VendorProtocol::Skanti),
             "barrett" => Some(VendorProtocol::Barrett),
@@ -145,6 +149,7 @@ impl VendorProtocol {
             VendorProtocol::Gomspace => "gomspace",
             VendorProtocol::Rshfiq => "rshfiq",
             VendorProtocol::Rft => "rft",
+            VendorProtocol::Drt1 => "drt1",
             VendorProtocol::Prm80 => "prm80",
             VendorProtocol::Skanti => "skanti",
             VendorProtocol::Barrett => "barrett",
@@ -1094,6 +1099,7 @@ mod tests {
             VendorProtocol::Gomspace,
             VendorProtocol::Rshfiq,
             VendorProtocol::Rft,
+            VendorProtocol::Drt1,
             VendorProtocol::Prm80,
         ] {
             assert_eq!(VendorProtocol::from_name(p.name()), Some(p));

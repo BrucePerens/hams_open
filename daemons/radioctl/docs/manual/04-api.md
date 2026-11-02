@@ -132,6 +132,7 @@ pub struct RigOptions {
     pub link_watch: Option<watch::Receiver<LinkStatus>>,
     pub max_transmit: Duration,
     pub heartbeat: Option<Duration>,
+    pub control_lines: Option<Arc<dyn ControlLines>>,
 }
 
 pub struct PollConfig {

@@ -18,10 +18,34 @@ pub enum KeyLine {
     Dtr,
 }
 
+/// A serial control line a protocol engine may drive as data (never a keying line): the two
+/// modem outputs and the break state of the transmit line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlLine {
+    /// Request To Send.
+    Rts,
+    /// Data Terminal Ready.
+    Dtr,
+    /// The break state of the transmit data line (`true` is break, the line held at space).
+    Break,
+}
+
 /// Something with serial control lines. A serial link implements it; a keyer works on any.
 pub trait ControlLines: Send + Sync {
     /// Sets a line to the given electrical level (`true` is asserted).
     fn set_line(&self, line: KeyLine, asserted: bool) -> Result<(), RigError>;
+
+    // [@ANCHOR: radioctl_core_control_lines_set_control]
+    /// Sets a line that carries data for a rig tuned by its control lines (no byte stream):
+    /// RTS or DTR asserted or not, or the transmit line in break or not. The default refuses,
+    /// so a transport that cannot do it fails the command instead of dropping it.
+    fn set_control(&self, line: ControlLine, asserted: bool) -> Result<(), RigError> {
+        let _ = (line, asserted);
+        Err(RigError::new(
+            ErrorKind::Unsupported,
+            "this transport cannot drive the control lines as data",
+        ))
+    }
 }
 
 /// Keys a transmitter through one control line.
@@ -91,6 +115,17 @@ mod tests {
                 .push((line, asserted));
             Ok(())
         }
+    }
+
+    // Tests [@ANCHOR: radioctl_core_control_lines_set_control]
+    #[test]
+    fn a_transport_that_does_not_drive_lines_as_data_refuses_cleanly() {
+        let recorder = Recorder::default();
+        for line in [ControlLine::Rts, ControlLine::Dtr, ControlLine::Break] {
+            let refused = recorder.set_control(line, true).expect_err("default");
+            assert_eq!(refused.kind, ErrorKind::Unsupported);
+        }
+        assert!(recorder.0.lock().expect("lock").is_empty(), "nothing moved");
     }
 
     // Tests [@ANCHOR: radioctl_core_keyer_new]

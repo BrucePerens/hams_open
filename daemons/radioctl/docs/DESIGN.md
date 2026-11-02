@@ -257,6 +257,15 @@ records the decisions that shape the code.
     the hook's business. *Rejected:* each engine sending set-up from `encode` lazily (it would race the
     queue), and the actor knowing protocol details.
 
+25. **A control-line command is a hook, not bytes** (2026-11-01). A rig tuned by toggling the
+    serial control lines (SAT-Schneider DRT1: a DDS clocked through RTS, DTR and break) has no
+    byte stream. A default-no-op `ProtocolEngine::encode_lines` returns the steps (line, level,
+    hold) for an op; the actor drives them through `RigOptions::control_lines` and the command is
+    complete with the last step. Break is a `ControlLine` of its own, never a `KeyLine`, so the
+    keyer cannot key on it. The actor refuses a transmitting op, a missing line handle and a
+    passed deadline; the gate is not the engine's business. A virtual DRT1 decodes the same
+    steps. *Rejected:* a `lines` field on `Request` (it touches every engine's struct literal).
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.

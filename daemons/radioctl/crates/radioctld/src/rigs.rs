@@ -24,10 +24,12 @@ use radioctl_core::serial::{open_serial, LineControl, PortTarget, SerialConfig, 
 use radioctl_core::usb_device::{FakeUsbBackend, UsbBackend};
 use radioctl_core::usb_link::{open_usb, UsbConfig, UsbMonitor};
 use radioctl_protocols::conformance::engine_for;
+use radioctl_protocols::drt1::Drt1Twin;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
 use radioctl_protocols::kenwood_ts890_lan::{LanCredentials, Ts890LanFraming, KEEPALIVE_EVERY};
 use radioctl_protocols::virtual_rig::VirtualRig;
 use radioctl_station::homeassistant::{FileSecrets, SecretStore};
+use tokio::io::AsyncReadExt;
 use tokio::runtime::Handle;
 
 use crate::config::{BaudSetting, RigConfig, ServerConfig, TcpFraming, TransportConfig};
@@ -52,6 +54,24 @@ impl ProtocolEngine for BoxedEngine {
     // [@ANCHOR: radioctld_rigs_boxed_feed]
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<radioctl_core::engine::Inbound> {
         self.0.feed(bytes, now)
+    }
+
+    // [@ANCHOR: radioctld_rigs_boxed_encode_lines]
+    fn encode_lines(
+        &mut self,
+        op: &Op,
+    ) -> Result<Option<Vec<radioctl_core::engine::LineStep>>, RigError> {
+        self.0.encode_lines(op)
+    }
+
+    // [@ANCHOR: radioctld_rigs_boxed_link_restored]
+    fn link_restored(&mut self) -> Vec<Request> {
+        self.0.link_restored()
+    }
+
+    // [@ANCHOR: radioctld_rigs_boxed_open_requests]
+    fn open_requests(&mut self) -> Vec<Request> {
+        self.0.open_requests()
     }
 }
 
@@ -208,6 +228,19 @@ pub async fn build_rig(
             usb_link = Some(monitor);
             spawn(runtime, engine, transport, options).map_err(fail)?
         }
+        // A virtual DRT1 has no byte stream: its twin is the control lines the actor drives, and
+        // the byte transport is a stream nothing ever writes to.
+        TransportConfig::Virtual { .. } if is_line_driven(&description) => {
+            let twin = Drt1Twin::new(&description).map_err(fail)?;
+            options.control_lines = Some(Arc::new(twin));
+            let (stream, mut idle) = tokio::io::duplex(64);
+            runtime.spawn(async move {
+                // Ends when the actor drops its end.
+                let mut sink = [0u8; 64];
+                while idle.read(&mut sink).await.is_ok_and(|n| n > 0) {}
+            });
+            spawn(runtime, engine, stream, options).map_err(fail)?
+        }
         TransportConfig::Virtual { reply_delay } => {
             let virtual_rig = VirtualRig::from_description(&description).map_err(fail)?;
             let (stream, control) = spawn_virtual_rig(runtime, virtual_rig, *reply_delay);
@@ -252,6 +285,9 @@ pub async fn build_rig(
             // rig before any other command (RigOptions::link_watch). The control lines and
             // the status stay with the service so the link object is never dropped early.
             options.link_watch = Some(link.watch());
+            // The lines serve a rig whose commands are control-line sequences (SAT-Schneider
+            // DRT1); every other engine never asks for them.
+            options.control_lines = Some(Arc::new(link.control.clone()));
             let (transport, serial) = link.into_parts();
             serial_link = Some(serial);
             spawn(runtime, engine, transport, options).map_err(fail)?
@@ -310,6 +346,15 @@ pub async fn build_rig(
     })
 }
 
+// [@ANCHOR: radioctld_rigs_is_line_driven]
+/// True for a rig whose commands are control-line sequences and not bytes (the SAT-Schneider DRT1).
+fn is_line_driven(description: &RigDescription) -> bool {
+    matches!(
+        &description.vendor,
+        Some(vendor) if vendor.protocol == radioctl_core::description::VendorProtocol::Drt1
+    )
+}
+
 // [@ANCHOR: radioctld_rigs_real_usb_backend]
 /// The libusb backend of a build with the `usb` feature.
 #[cfg(feature = "usb")]
@@ -351,5 +396,28 @@ mod tests {
     fn a_missing_or_broken_description_is_an_error_naming_the_file() {
         let err = load_description(Path::new("/nonexistent/rig.toml")).expect_err("missing");
         assert!(err.contains("/nonexistent/rig.toml"), "{err}");
+    }
+
+    // Tests [@ANCHOR: radioctld_rigs_boxed_open_requests]
+    // Tests [@ANCHOR: radioctld_rigs_boxed_link_restored]
+    // Tests [@ANCHOR: radioctld_rigs_boxed_encode_lines]
+    #[test]
+    fn the_daemons_boxed_engine_forwards_every_engine_hook() {
+        let path = format!(
+            "{}/../../rigs/icom-ic-pcr1000.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let description = load_description(Path::new(&path)).expect("PCR-1000 file");
+        let mut pcr = BoxedEngine(engine_for(&description).expect("engine"));
+        assert!(
+            !pcr.open_requests().is_empty(),
+            "the PCR power-on step must reach the actor through the daemon's wrapper"
+        );
+        assert!(!pcr.link_restored().is_empty());
+        assert_eq!(
+            pcr.encode_lines(&Op::GetFrequency(radioctl_core::units::Vfo::A))
+                .expect("no line sequence"),
+            None
+        );
     }
 }
