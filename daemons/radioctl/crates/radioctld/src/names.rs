@@ -192,6 +192,10 @@ pub enum LevelSource {
     Swr,
     /// The raw S-meter reading.
     RawStr,
+    /// The output power in watts from the engine's power reading and the description's calibration.
+    PowerWatts,
+    /// The output power as a fraction of the meter's scale (calibrated when the description has points).
+    PowerFraction,
     /// A raw transmitter meter converted by the unverified [`crate::meter_cal`] points.
     Meter(radioctl_core::units::Meter),
 }
@@ -209,7 +213,7 @@ pub struct LevelInfo {
     pub fraction: bool,
 }
 
-const LEVELS: [LevelInfo; 14] = [
+const LEVELS: [LevelInfo; 16] = [
     // Hamlib's PREAMP and ATT are integer levels in decibels. radioctld serves the attenuator in
     // decibels but the preamplifier as a step number (1, 2): a stage's gain varies by band and
     // model and no source we may use states it. The `\dump_state` lists carry the step numbers.
@@ -294,6 +298,20 @@ const LEVELS: [LevelInfo; 14] = [
         source: LevelSource::Meter(radioctl_core::units::Meter::Id),
         fraction: false,
     },
+    // Hamlib's RFPOWER_METER is the output power as a 0 to 1 fraction of the meter's scale and
+    // RFPOWER_METER_WATTS the same in watts; the watts level is served only with a calibration.
+    LevelInfo {
+        name: "RFPOWER_METER",
+        bit: 32,
+        source: LevelSource::PowerFraction,
+        fraction: true,
+    },
+    LevelInfo {
+        name: "RFPOWER_METER_WATTS",
+        bit: 39,
+        source: LevelSource::PowerWatts,
+        fraction: false,
+    },
     LevelInfo {
         name: "MONITOR_GAIN",
         bit: 37,
@@ -303,7 +321,7 @@ const LEVELS: [LevelInfo; 14] = [
 ];
 
 /// Level names Hamlib has that radioctld does not serve: asking for one is "not available".
-const OTHER_LEVELS: [&str; 21] = [
+const OTHER_LEVELS: [&str; 19] = [
     "VOXDELAY",
     "SQL",
     "IF",
@@ -321,8 +339,6 @@ const OTHER_LEVELS: [&str; 21] = [
     "VOXGAIN",
     "ANTIVOX",
     "STRENGTH",
-    "RFPOWER_METER",
-    "RFPOWER_METER_WATTS",
     "NB",
     "TEMP_METER",
 ];
@@ -460,6 +476,14 @@ pub fn served_levels(description: &RigDescription) -> Vec<LevelInfo> {
                     || description.capabilities.has(Capability::ReadMeters)
             }
             LevelSource::Meter(_) => description.capabilities.has(Capability::ReadMeters),
+            LevelSource::PowerFraction => description.capabilities.has(Capability::ReadPower),
+            LevelSource::PowerWatts => {
+                description.capabilities.has(Capability::ReadPower)
+                    && description
+                        .power_meter
+                        .as_ref()
+                        .is_some_and(|p| p.cal().is_some())
+            }
             LevelSource::RawStr => description.capabilities.has(Capability::ReadSignal),
         })
         .copied()
@@ -599,7 +623,8 @@ mod tests {
         let ic = RigDescription::ic7300();
         let served = served_levels(&ic);
         let names: Vec<_> = served.iter().map(|l| l.name).collect();
-        assert_eq!(names, ["RAWSTR"]);
+        // The IC-7300 reads its power (RFPOWER_METER, a fraction); no calibration, so no watts level.
+        assert_eq!(names, ["RAWSTR", "RFPOWER_METER"]);
         // Raw meters add ALC, SWR, COMP_METER, VD_METER and ID_METER (converted by the unverified `meter_cal` points).
         let mut metered = ic.clone();
         metered.capabilities = CapabilitySet::of(&[Capability::ReadSignal, Capability::ReadMeters]);
@@ -621,14 +646,14 @@ mod tests {
         let served = served_levels(&kx);
         assert_eq!(
             served.len(),
-            LEVELS.len() - 6,
-            "no ATT or PREAMP without steps"
+            LEVELS.len() - 8,
+            "no ATT, PREAMP, power meter or raw meters without steps"
         );
         kx.levels.attenuator_db = vec![12];
         kx.levels.preamp_steps = 1;
         assert_eq!(
             served_levels(&kx).len(),
-            LEVELS.len() - 4,
+            LEVELS.len() - 6,
             "no ALC without raw meters"
         );
         assert_eq!(level_range(&kx, Level::Attenuator), Some((0, 12)));
