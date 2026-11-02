@@ -614,6 +614,30 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_hz_from_khz] Builds a frequency in hertz from whole kilohertz, refusing overflow.
 - [@ANCHOR: radioctl:radioctl_core_meter_name] (radioctl-core) The name of a raw meter (`swr`, `alc`, `comp`, `vd`, `id`).
 - [@ANCHOR: radioctl:radioctl_core_meter_from_name] (radioctl-core) The raw meter with a file-format name.
+- [@ANCHOR: radioctl:radioctl_core_powermeter_cal] (radioctl-core) The calibration, `None` when the points do not form one.
+- [@ANCHOR: radioctl:radioctl_power_from_watts] (radioctl-core) Power from a figure in watts; `None` for a negative, infinite or not-a-number figure.
+- [@ANCHOR: radioctl:radioctl_power_from_dbm] (radioctl-core) Power from decibels relative to one milliwatt: `P = 10^((dBm - 30) / 10)` watts.
+- [@ANCHOR: radioctl:radioctl_power_from_dbw] (radioctl-core) Power from decibels relative to one watt.
+- [@ANCHOR: radioctl:radioctl_power_from_dbmv_50] (radioctl-core) Power from decibels relative to one millivolt RMS across 50 ohms.
+- [@ANCHOR: radioctl:radioctl_power_watts] (radioctl-core) The figure in watts.
+- [@ANCHOR: radioctl:radioctl_power_dbm] (radioctl-core) The figure in dBm (negative infinity for no power).
+- [@ANCHOR: radioctl:radioctl_power_offset_db] (radioctl-core) Power at the transmitter for a figure measured behind a coupler and attenuator of a given loss in decibels.
+- [@ANCHOR: radioctl:radioctl_power_unit_name] (radioctl-core) The configuration name of the unit.
+- [@ANCHOR: radioctl:radioctl_power_unit_from_name] (radioctl-core) The unit with a configuration name.
+- [@ANCHOR: radioctl:radioctl_power_unit_to_power] (radioctl-core) Converts a figure in a unit, behind a coupler offset in decibels, into watts at the transmitter.
+- [@ANCHOR: radioctl:radioctl_power_origin_label] (radioctl-core) `rig` or `external`, the word telemetry carries.
+- [@ANCHOR: radioctl:radioctl_power_reader_read] (radioctl-core) The latest reading of a power source; none when there is none or it is stale.
+- [@ANCHOR: radioctl:radioctl_power_cal_new] (radioctl-core) A power calibration from ascending (raw, watts) points.
+- [@ANCHOR: radioctl:radioctl_power_cal_watts] (radioctl-core) Watts for a raw reading.
+- [@ANCHOR: radioctl:radioctl_power_cal_full_scale] (radioctl-core) The power at the last calibration point.
+- [@ANCHOR: radioctl:radioctl_power_rig_reading] (radioctl-core) The reading for a raw deflection of the rig's own power meter: watts with a calibration, else a relative bar.
+- [@ANCHOR: radioctl:radioctl_power_display_unit] (radioctl-core) The display unit (mW, W, kW) for a power, with 5 percent hysteresis around the thresholds.
+- [@ANCHOR: radioctl:radioctl_power_format] (radioctl-core) The text for a power: three significant digits, a fixed decimals rule per unit, dashes when unknown.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_power_meter] (radioctl-core) Validates the optional `[power_meter]` calibration block of a rig file.
+- [@ANCHOR: radioctl:radioctld_meter_cal_power_fraction] (radioctld) The uncalibrated output power as a 0 to 1 fraction of the meter's raw scale.
+- [@ANCHOR: radioctl:radioctld_meter_cal_power_fraction_cal] (radioctld) The output power as a fraction of the calibrated full scale (the last calibration point).
+- [@ANCHOR: radioctl:radioctld_service_power_raw] (radioctld) The engine's raw power reading in the family's own scale (CI-V deflection, Yaesu `RM5`, Elecraft `PO`).
+- [@ANCHOR: radioctl:radioctld_service_power_reading] (radioctld) The rig's own transmit-power reading (watts with a calibration, else a relative bar).
 - [@ANCHOR: radioctl:radioctl_core_level_name] (radioctl-core) The name of a level (AF gain, RF gain, mic gain, monitor level, keyer speed, RF power) in description and transcript files.
 - [@ANCHOR: radioctl:radioctl_core_level_from_name] (radioctl-core) The level with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_transcript_step_bytes] (radioctl-core) One direction of a transcript step, as hex or as ASCII text (not both).

@@ -479,6 +479,24 @@ impl RigService {
                 let ratio = self.meter(Meter::Swr).await?;
                 fmt_float(crate::meter_cal::swr_ratio(ratio))
             }
+            LevelSource::PowerWatts => {
+                let cal = self
+                    .description
+                    .power_meter
+                    .as_ref()
+                    .and_then(|p| p.cal())
+                    .ok_or(ENAVAIL)?;
+                let raw = self.power_raw().await?;
+                fmt_float(cal.watts(f64::from(raw)).watts())
+            }
+            LevelSource::PowerFraction => {
+                let raw = self.power_raw().await?;
+                let fraction = match self.description.power_meter.as_ref().and_then(|p| p.cal()) {
+                    Some(cal) => crate::meter_cal::power_fraction_cal(&cal, raw),
+                    None => crate::meter_cal::power_fraction(raw),
+                };
+                fmt_float(fraction)
+            }
             LevelSource::Meter(meter) => {
                 let raw = self.meter(meter).await?;
                 fmt_float(crate::meter_cal::level(meter, raw))
@@ -507,6 +525,25 @@ impl RigService {
             Observation::Meter(got, raw) if got == meter => Ok(raw),
             _ => Err(EIO),
         }
+    }
+
+    // [@ANCHOR: radioctld_service_power_raw]
+    /// The engine's raw power reading (the family's own scale: a CI-V 0 to 255 deflection, Yaesu
+    /// `RM5`, Elecraft `PO` watts); read-only, never keys the rig.
+    async fn power_raw(&self) -> Result<u16, i32> {
+        match self.read(Field::Power, Op::GetPower).await? {
+            Observation::Power(raw) => Ok(raw),
+            _ => Err(EIO),
+        }
+    }
+
+    // [@ANCHOR: radioctld_service_power_reading]
+    /// The rig's own transmit-power reading (watts with a calibration, else a relative bar), for a
+    /// rig whose description reads meters. Read-only; never keys the rig.
+    pub async fn power_reading(&self) -> Option<radioctl_core::power::PowerReading> {
+        let raw = self.power_raw().await.ok()?;
+        let cal = self.description.power_meter.as_ref().and_then(|p| p.cal());
+        Some(radioctl_core::power::rig_reading(raw, cal.as_ref()))
     }
 
     // [@ANCHOR: radioctld_service_set_level]

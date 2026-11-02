@@ -28,9 +28,9 @@ use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
     CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
     KenwoodDialect, KenwoodHhParams, KenwoodParams, KyForm, KyParams, KyStop, LegacyBlock,
-    LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams, ReceiverParams,
-    ReceiverProtocol, RigDescription, ScopeParams, Timing, UsbParams, UsbProtocol, VendorParams,
-    VendorProtocol, YaesuLegacyParams, YaesuParams,
+    LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams, PowerMeterParams,
+    ReceiverParams, ReceiverProtocol, RigDescription, ScopeParams, Timing, UsbParams, UsbProtocol,
+    VendorParams, VendorProtocol, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -138,6 +138,8 @@ struct FileDoc {
     usb: Option<UsbSection>,
     scope: Option<ScopeSection>,
     levels: Option<LevelsSection>,
+    #[serde(default)]
+    power_meter: Option<PowerMeterSection>,
     timing: TimingSection,
     defaults: DefaultsSection,
     capabilities: Vec<String>,
@@ -381,6 +383,12 @@ struct LevelsSection {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct PowerMeterSection {
+    raw_to_milliwatts: Vec<(u16, u32)>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TimingSection {
     timeout_ms: u64,
     retries: u8,
@@ -619,6 +627,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     });
     let scope = build_scope(doc.scope.as_ref(), family)?;
     let levels = build_levels(doc.levels.as_ref())?;
+    let power_meter = build_power_meter(doc.power_meter.as_ref())?;
     let yaesu = doc
         .yaesu
         .as_ref()
@@ -740,6 +749,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         usb,
         scope,
         levels,
+        power_meter,
         capabilities: CapabilitySet::of(&capabilities),
         // A USB device has no engine yet, so no mode has a wire code.
         mode_codes: build_mode_codes(
@@ -843,6 +853,24 @@ fn check_timing(timing: &TimingSection) -> Result<Timing, RigError> {
 const MAX_ATTENUATOR_STEPS: usize = 9;
 /// Most preamplifier steps a model may declare.
 const MAX_PREAMP_STEPS: u8 = 3;
+
+// [@ANCHOR: radioctl_core_rigfile_build_power_meter]
+fn build_power_meter(
+    section: Option<&PowerMeterSection>,
+) -> Result<Option<PowerMeterParams>, RigError> {
+    let Some(section) = section else {
+        return Ok(None);
+    };
+    let params = PowerMeterParams {
+        points: section.raw_to_milliwatts.clone(),
+    };
+    if params.cal().is_none() {
+        return Err(bad(
+            "power_meter.raw_to_milliwatts needs at least two points, ascending in raw value and not falling in power",
+        ));
+    }
+    Ok(Some(params))
+}
 
 // [@ANCHOR: radioctl_core_rigfile_build_levels]
 fn build_levels(section: Option<&LevelsSection>) -> Result<LevelParams, RigError> {
@@ -1176,6 +1204,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
             ]
             .map(String::from),
         );
+    }
+    if description.power_meter.is_some() {
+        keys.push("power_meter.raw_to_milliwatts".to_string());
     }
     if description.levels != LevelParams::default() {
         keys.extend(
@@ -1638,6 +1669,36 @@ verified = { state = "unverified" }
                 .replace("echo = false", "echo = false\nfrequency_bytes = 3"),
             "civ.frequency_bytes must be 4, 5 or 6",
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_power_meter]
+    // Tests [@ANCHOR: radioctl_core_powermeter_cal]
+    #[test]
+    fn a_power_meter_block_needs_a_calibration_and_its_fact() {
+        let fact = "\n[[facts]]\nkey = \"power_meter.raw_to_milliwatts\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let block = "\n[power_meter]\nraw_to_milliwatts = [[0, 0], [143, 100000], [213, 200000]]\n";
+        let ok = parse(&format!("{GOOD}{block}{fact}")).expect("loads");
+        let cal = ok
+            .description
+            .power_meter
+            .expect("block")
+            .cal()
+            .expect("calibration");
+        assert!((cal.watts(143.0).watts() - 100.0).abs() < 1e-9);
+        assert!((cal.full_scale().watts() - 200.0).abs() < 1e-9);
+        assert!(parse(GOOD)
+            .expect("loads")
+            .description
+            .power_meter
+            .is_none());
+        // The fact is required, and the points must rise.
+        assert!(parse(&format!("{GOOD}{block}")).is_err());
+        for bad in ["[[0, 0]]", "[[10, 5], [5, 9]]", "[[0, 9], [5, 1]]"] {
+            expect_rejected(
+                &format!("{GOOD}\n[power_meter]\nraw_to_milliwatts = {bad}\n{fact}"),
+                "power_meter.raw_to_milliwatts",
+            );
+        }
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_build_levels]

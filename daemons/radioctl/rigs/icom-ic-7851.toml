@@ -32,6 +32,9 @@ attenuator_db = [3, 6, 9, 12, 15, 18, 21]
 attenuator_any_up_to_db = 0
 preamp_steps = 2
 
+[power_meter]
+raw_to_milliwatts = [[0, 0], [143, 100000], [213, 200000]]
+
 [timing]
 timeout_ms = 1000
 retries = 3
@@ -166,3 +169,8 @@ verified = { state = "unverified" }
 key = "capability.split"
 provenance = { kind = "manual", reference = "Icom IC-7850/IC-7851 Instruction Manual, document A-7199H-1EX-0a, CI-V command table, PDF page 250 (command 0F split off/on; printed page numbers differ), https://archive.org/download/icom_IC-7850_InstructionManual/IC-7850_InstructionManual.pdf, sha256 9e38fc9e29edd8960042591a565e16a4726b0415e2279f6dfefe491bc4eb9114", note = "Command 0F with sub-command 00 (split off) and 01 (split on) is in the manual's CI-V table, the form the engine sends. Cross-check: Hamlib 4.6.2. Icom's download endpoint is excluded by robots.txt and the direct path is 403; the copy read is the archive.org mirror; read for facts under Bruce Perens' decision of 2026-10-31, nothing copied." }
 verified = { state = "manual-checked", reference = "Icom IC-7850/IC-7851 Instruction Manual, PDF page 250, command 0F split off/on" }
+
+[[facts]]
+key = "power_meter.raw_to_milliwatts"
+provenance = { kind = "manual", reference = "Icom IC-7850/IC-7851 Instruction Manual, document A-7199H-1EX-0a, CI-V command table, PDF page 251 (command 15 sub-command 11, read RF power meter; printed page numbers differ), https://archive.org/download/icom_IC-7850_InstructionManual/IC-7850_InstructionManual.pdf, sha256 9e38fc9e29edd8960042591a565e16a4726b0415e2279f6dfefe491bc4eb9114", note = "The table prints three scale points for the 0 to 255 reading: 0 is 0 W, 143 is 100 W, 213 is 200 W. radioctl interpolates linearly between them and holds the last value beyond; the manual prints no point past 213. The IC-7850 and IC-7851 share the manual. Bench: key into a dummy load at known power and compare the raw reading." }
+verified = { state = "manual-checked", reference = "Icom IC-7850/IC-7851 Instruction Manual, PDF page 251, command 15 11 scale points" }

@@ -98,6 +98,25 @@ pub fn id_amps(raw: u16) -> f64 {
     clamped(&ID_POINTS, raw)
 }
 
+// [@ANCHOR: radioctld_meter_cal_power_fraction]
+/// The output power as a 0 to 1 fraction of the meter's scale for a raw 0 to 255 deflection, the
+/// way an uncalibrated `RFPOWER_METER` is served: a relative bar, not a measurement. A rig with
+/// calibration points is served by [`power_fraction_cal`] instead. Unverified estimate.
+pub fn power_fraction(raw: u16) -> f64 {
+    (f64::from(raw) / 255.0).clamp(0.0, 1.0)
+}
+
+// [@ANCHOR: radioctld_meter_cal_power_fraction_cal]
+/// The output power as a fraction of the calibrated full scale (the last calibration point).
+pub fn power_fraction_cal(cal: &radioctl_core::power::PowerCal, raw: u16) -> f64 {
+    let full = cal.full_scale().watts();
+    if full > 0.0 {
+        (cal.watts(f64::from(raw)).watts() / full).clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
 // [@ANCHOR: radioctld_meter_cal_level]
 /// The `rigctl` value of `meter` for a raw deflection: SWR ratio, ALC fraction 0 to 1, COMP
 /// decibels, Vd volts, Id amperes. Unverified estimate.
@@ -153,6 +172,20 @@ mod tests {
             last = ratio;
         }
         assert!((swr_ratio(255) - 6.375).abs() < 1e-9);
+    }
+
+    // Tests [@ANCHOR: radioctld_meter_cal_power_fraction]
+    // Tests [@ANCHOR: radioctld_meter_cal_power_fraction_cal]
+    #[test]
+    fn power_is_a_fraction_and_follows_a_calibration() {
+        assert_eq!(power_fraction(0), 0.0);
+        assert!((power_fraction(255) - 1.0).abs() < 1e-9);
+        assert!(power_fraction(300) <= 1.0);
+        let cal =
+            radioctl_core::power::PowerCal::new(vec![(0.0, 0.0), (100.0, 50.0), (200.0, 100.0)])
+                .expect("valid");
+        assert!((power_fraction_cal(&cal, 100) - 0.5).abs() < 1e-9);
+        assert_eq!(power_fraction_cal(&cal, 255), 1.0);
     }
 
     // Tests [@ANCHOR: radioctld_meter_cal_alc_fraction]

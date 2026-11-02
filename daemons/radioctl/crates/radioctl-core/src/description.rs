@@ -608,6 +608,27 @@ pub struct ScopeParams {
     pub spans_hz: Vec<u64>,
 }
 
+/// The calibration points of a rig's raw power meter: `(raw, milliwatts)`, ascending in both.
+/// A rig that reports only a relative bar has none, and radioctl then reports a relative value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PowerMeterParams {
+    /// Ascending `(raw reading, milliwatts)` points.
+    pub points: Vec<(u16, u32)>,
+}
+
+impl PowerMeterParams {
+    // [@ANCHOR: radioctl_core_powermeter_cal]
+    /// The calibration, `None` when the points do not form one.
+    pub fn cal(&self) -> Option<crate::power::PowerCal> {
+        crate::power::PowerCal::new(
+            self.points
+                .iter()
+                .map(|(raw, mw)| (f64::from(*raw), f64::from(*mw) / 1000.0))
+                .collect(),
+        )
+    }
+}
+
 /// The receive attenuator and preamplifier steps a model has. Empty and zero mean the model has
 /// neither, or radioctl knows no command for them: the engines then refuse the levels.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -997,6 +1018,8 @@ pub struct RigDescription {
     pub scope: Option<ScopeParams>,
     /// Attenuator and preamplifier steps.
     pub levels: LevelParams,
+    /// The calibration of the rig's raw power meter, when a source gives one.
+    pub power_meter: Option<PowerMeterParams>,
     /// What the rig can do.
     pub capabilities: CapabilitySet,
     /// Mode to wire code: a CI-V mode byte, or the ASCII byte of a Kenwood `MD` digit.
@@ -1055,6 +1078,7 @@ impl RigDescription {
             receiver: None,
             scope: None,
             levels: LevelParams::default(),
+            power_meter: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
                 Capability::SetFrequency,
@@ -1112,6 +1136,7 @@ impl RigDescription {
             receiver: None,
             scope: None,
             levels: LevelParams::default(),
+            power_meter: None,
             capabilities: CapabilitySet::of(&[
                 Capability::ReadFrequency,
                 Capability::SetFrequency,

@@ -62,3 +62,60 @@ async fn radioctld_serves_the_meters_the_way_hamlib_reads_them() {
     assert_eq!(client.ask("T 0").await, "RPRT 0\n");
     daemon.stop().await;
 }
+
+// Tests [@ANCHOR: radioctld_service_get_level]
+// Tests [@ANCHOR: radioctld_service_power_reading]
+// Tests [@ANCHOR: radioctld_service_power_raw]
+// Tests [@ANCHOR: radioctld_names_served_levels]
+// Tests [@ANCHOR: radioctld_meter_cal_power_fraction]
+// Tests [@ANCHOR: radioctld_meter_cal_power_fraction_cal]
+// Tests [@ANCHOR: radioctld_caps_granularity]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_power_meter_is_a_fraction_and_watts_only_with_a_calibration() {
+    // The IC-7300 description has no power calibration: a fraction of the raw scale (the virtual
+    // rig keys at raw 128) and no watts level.
+    let daemon = start(&config_text("", "ic7300", "icom-ic-7300.toml", true, false)).await;
+    let mut client = Client::connect(&daemon).await;
+    assert_eq!(client.ask("l RFPOWER_METER").await, "0\n");
+    assert_eq!(client.ask("l RFPOWER_METER_WATTS").await, "RPRT -11\n");
+    assert_eq!(client.ask("T 1").await, "RPRT 0\n");
+    let rig = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
+    eventually("the virtual rig keyed", || rig.state().ptt).await;
+    wait_for(&mut client, "l RFPOWER_METER", 128.0 / 255.0).await;
+    assert_eq!(client.ask("L RFPOWER_METER 1").await, "RPRT -11\n");
+    assert_eq!(client.ask("T 0").await, "RPRT 0\n");
+    daemon.stop().await;
+
+    // The IC-7850/7851 manual prints scale points (0 = 0 W, 143 = 100 W, 213 = 200 W): the
+    // keyed raw 128 is 128/143 of 100 W, and the fraction is of the 200 W full scale.
+    let daemon = start(&config_text("", "ic7851", "icom-ic-7851.toml", true, false)).await;
+    let mut client = Client::connect(&daemon).await;
+    assert_eq!(client.ask("T 1").await, "RPRT 0\n");
+    let rig = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
+    eventually("the virtual rig keyed", || rig.state().ptt).await;
+    let watts = 128.0 / 143.0 * 100.0;
+    wait_for(&mut client, "l RFPOWER_METER_WATTS", watts).await;
+    wait_for(&mut client, "l RFPOWER_METER", watts / 200.0).await;
+    assert_eq!(client.ask("T 0").await, "RPRT 0\n");
+    daemon.stop().await;
+}
+
+/// Asks until the reply is `want` (the service caches a reading briefly).
+async fn wait_for(client: &mut Client, command: &str, want: f64) {
+    let started = std::time::Instant::now();
+    loop {
+        let reply = client.ask(command).await;
+        let got: f64 = reply
+            .trim()
+            .parse()
+            .unwrap_or_else(|_| panic!("{command}: {reply:?}"));
+        if (got - want).abs() < 1e-5 {
+            return;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{command}: {got} against {want}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}

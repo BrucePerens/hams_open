@@ -127,6 +127,15 @@ fn granularity(info: &LevelInfo, description: &RigDescription) -> (String, Strin
         }
         LevelSource::Swr => float(0.0, 10.0, 0.1),
         LevelSource::Meter(radioctl_core::units::Meter::Alc) => float(0.0, 1.0, 1.0 / 120.0),
+        LevelSource::PowerFraction => float(0.0, 1.0, 1.0 / 255.0),
+        LevelSource::PowerWatts => {
+            let top = description
+                .power_meter
+                .as_ref()
+                .and_then(|p| p.cal())
+                .map_or(1.0, |cal| cal.full_scale().watts());
+            float(0.0, top, top / 255.0)
+        }
         LevelSource::Meter(meter) => {
             let top = crate::meter_cal::full_scale(meter);
             float(0.0, top, top / 255.0)

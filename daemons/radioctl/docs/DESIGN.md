@@ -274,6 +274,24 @@ records the decisions that shape the code.
     passed deadline; the gate is not the engine's business. A virtual DRT1 decodes the same
     steps. *Rejected:* a `lines` field on `Request` (it touches every engine's struct literal).
 
+26. **Transmit power: one unit (watts), a source, a freshness rule** (Bruce, 2026-11-02).
+    Radios run milliwatts, amplifiers kilowatts, and some meters read dBm. `radioctl_core::power`
+    holds the canonical `Power` (watts, `f64`, finite and non-negative) and converts at the source:
+    dBm, dBW and dBmV into 50 ohms become watts (`P = 10^((dBm - 30) / 10)`), after the coupler and
+    attenuator offset in decibels has been applied. A `PowerReading` carries forward watts,
+    optional reflected watts, its `PowerOrigin` (`Rig` or `External(name)`), `valid_for`, a
+    `relative` flag and the meter's full scale. `RfPowerReader` is the trait a source implements.
+    The rig's own source is the raw power meter (`Meter::Power`, CI-V `15 11`): watts only when the
+    description has a `[power_meter]` calibration (ascending raw to milliwatt points, one `[[facts]]`
+    entry with provenance); without one the reading is a 0 to 100 bar flagged `relative`, never
+    watts. A stale reading is dropped to "no power", never held. The rigctld surface is Hamlib's:
+    `RFPOWER_METER` (0 to 1 of full scale) and `RFPOWER_METER_WATTS` (served only with a
+    calibration). The same crate carries the display formatter: below 1 W milliwatts, 1 W up to 999
+    W watts, 1000 W and up kilowatts, three significant digits, a 5 percent hysteresis on the way
+    down. External wattmeters are `radioctl-station` drivers over its byte-stream traits.
+    *Rejected:* per-rig calibration in `meter_cal.rs` (one table for every model is wrong for
+    power); reporting a relative bar as watts.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.
