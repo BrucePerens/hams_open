@@ -225,6 +225,26 @@ records the decisions that shape the code.
     of bytes (the actor, the link watch and the transcript machinery would all need a twin), and
     `nusb` or `hidapi` as the direct backend (libusb is what Hamlib uses, so its facts carry over).
 
+23. **A relay board whose status is not readable is run from the driver's own record, with a known
+    safe state** (Bruce, 2026-11-01; the SainSmart 16-channel USB module). Assume the module cannot
+    report its state and has no watchdog. The board description carries `status_readable` (default
+    true; false for the SainSmart in `data/station/boards.toml` and `ModbusBoard::sainsmart_16ch`)
+    and `safe_state` (one level per coil, default all off). With `status_readable = false`: function
+    1 (read coils) is never sent (refused below every other layer), there is no read-back step, and
+    the driver reports the new `Assurance::Recorded` ("we sent the write and the board acknowledged
+    it; the state is our own record"), never a confirmation, so the switchboard's confirmed state
+    stays unknown and a step that needs a confirmed power state refuses. The safe state goes out as
+    ONE function 15 frame over every coil when the link first opens and after every
+    `ModbusRelay::reopen`, before any other command; until it is acknowledged every coil is unknown,
+    no other frame is sent, and attempts are spaced by a backoff (250 ms doubling to 8 s). The driver
+    keeps a shadow of all coils (value, age, or unknown), updated only by an acknowledged function 5
+    or 15, made unknown by a timeout, garbled reply or exception; `ModbusRelay::record`,
+    `Switchboard::recorded` and `read_line` expose it as recorded, not confirmed. The emergency
+    all-off writes the board's safe state (not a hard-coded all off), ignores the backoff, and is
+    never blocked. The keyed-state guard is unchanged: an unknown or recorded relay state never
+    admits an action the keyed rules block. *Rejected:* trusting the module's function 1 reply, and
+    treating a recorded state as confirmed to let an amplifier go to operate.
+
 ## Consequences
 
 - A caller on any runtime can use any rig, at the price that the actor's runtime must be alive.

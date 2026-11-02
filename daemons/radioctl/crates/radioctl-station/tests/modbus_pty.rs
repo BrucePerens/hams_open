@@ -119,7 +119,7 @@ fn module(
 // Tests [@ANCHOR: radioctl_station_modbus_relay_new]
 // Tests [@ANCHOR: radioctl_station_modbus_relay_coil]
 // Tests [@ANCHOR: radioctl_station_modbus_relay_read_frame]
-// Tests [@ANCHOR: radioctl_station_modbus_relay_transact]
+// Tests [@ANCHOR: radioctl_station_modbus_relay_exchange]
 // Tests [@ANCHOR: radioctl_station_modbus_relay_write_all]
 // Tests [@ANCHOR: radioctl_station_modbus_relay_write_line]
 // Tests [@ANCHOR: radioctl_station_modbus_relay_read_line]
@@ -136,6 +136,7 @@ async fn the_driver_talks_to_a_virtual_module_over_a_pty() {
     let link = open_serial(&Handle::current(), config).await.expect("open");
     let mut board = ModbusBoard::sainsmart_16ch();
     board.reply_timeout_ms = 300;
+    board.status_readable = true; // this pty module answers function 1, to cover the read path
     let relay = ModbusRelay::new(board, link.transport);
     assert!(relay.can_read_back());
 
@@ -143,15 +144,20 @@ async fn the_driver_talks_to_a_virtual_module_over_a_pty() {
     relay.write_line(14, true).await.expect("ch15 on");
     relay.write_line(15, true).await.expect("ch16 on");
     assert_eq!(*coils.lock().expect("c"), 0b1100_0000_0000_0001);
+    assert_eq!(
+        log.lock().expect("log")[0],
+        ":FE0F00000010020000E1",
+        "safe state first"
+    );
     assert!(relay.read_line(15).await.expect("read"));
     assert!(!relay.read_line(1).await.expect("read"));
     relay.write_line(14, false).await.expect("ch15 off");
     assert!(!relay.read_line(14).await.expect("read"));
     {
         let log = log.lock().expect("log");
-        assert_eq!(log[0], ":FE050000FF00FE");
-        assert_eq!(log[1], ":FE05000EFF00F0");
-        assert_eq!(log[2], ":FE05000FFF00EF");
+        assert_eq!(log[1], ":FE050000FF00FE");
+        assert_eq!(log[2], ":FE05000EFF00F0");
+        assert_eq!(log[3], ":FE05000FFF00EF");
         assert!(log.contains(&":FE05000E0000EF".to_string()));
         assert!(log.contains(&":FE01000F0001F1".to_string()));
     }

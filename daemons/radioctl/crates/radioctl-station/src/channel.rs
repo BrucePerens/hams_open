@@ -29,6 +29,11 @@ pub enum Assurance {
     /// The command reaches the device through another system that can be down, slow or stale
     /// (Home Assistant). Never a PTT path, and an amplifier behind it needs an independent stop.
     Mediated,
+    /// The host talks to the device directly and the device acknowledged the write, but it cannot
+    /// report its state (a relay board whose status read is not trusted): the state is the
+    /// station's own record of acknowledged writes, never a confirmation. The driver sets a known
+    /// safe state whenever the link opens, because nothing in the board stops it misbehaving.
+    Recorded,
     /// The host talks to the device directly and supervises it, but nothing in the device stops
     /// it if the host dies (a relay board, a Shelly without its auto-off timer).
     HostSupervised,
@@ -51,6 +56,37 @@ pub trait ChannelDriver: Send + Sync {
     fn read_line(&self, line: u32) -> BoxFuture<'_, Result<bool, StationError>>;
     /// Whether [`ChannelDriver::read_line`] reports the device's state.
     fn can_read_back(&self) -> bool;
+
+    // [@ANCHOR: radioctl_station_driver_safe_line]
+    /// The level that means "safe" for a line in the emergency all-off (off unless the board
+    /// description says otherwise).
+    fn safe_line(&self, _line: u32) -> bool {
+        false
+    }
+
+    // [@ANCHOR: radioctl_station_driver_force_safe]
+    /// Drives a line to its safe level for the emergency all-off: never held back by a retry
+    /// delay. The default writes [`ChannelDriver::safe_line`].
+    fn force_safe(&self, line: u32) -> BoxFuture<'_, Result<(), StationError>> {
+        let safe = self.safe_line(line);
+        self.write_line(line, safe)
+    }
+
+    // [@ANCHOR: radioctl_station_driver_recorded_line]
+    /// The driver's own record of a line (`None`: this driver keeps none). A record is what was
+    /// last acknowledged, not a confirmation.
+    fn recorded_line(&self, _line: u32) -> Option<Recorded> {
+        None
+    }
+}
+
+/// A driver's own record of one line: recorded, not confirmed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Recorded {
+    /// The level last acknowledged by the device (`None`: unknown).
+    pub value: Option<bool>,
+    /// How long ago it was acknowledged (`None`: unknown).
+    pub age: Option<Duration>,
 }
 
 /// Something that happened in the station.
@@ -415,6 +451,14 @@ impl Switchboard {
         Ok(self.chan(id)?.driver.assurance())
     }
 
+    // [@ANCHOR: radioctl_station_board_recorded]
+    /// The driver's own record of a binary channel's line: what the board last acknowledged, its
+    /// age, or unknown. Recorded, not confirmed (`None`: the driver keeps no record).
+    pub fn recorded(&self, id: &ChannelId) -> Result<Option<Recorded>, StationError> {
+        let c = self.chan(id)?;
+        Ok(c.driver.recorded_line(c.def.line))
+    }
+
     // [@ANCHOR: radioctl_station_board_subscribe]
     /// A receiver of every event from now on.
     pub fn subscribe(&self) -> broadcast::Receiver<StationEvent> {
@@ -723,7 +767,8 @@ impl Switchboard {
     // [@ANCHOR: radioctl_station_board_force_off]
     /// Drives a power, output or selector channel to off without waiting for any operation in
     /// progress, without a minimum-time check and without a settle time. For the emergency
-    /// all-off only; it does not read back (the caller reports what it could not do).
+    /// all-off only; each line goes to its driver's safe level (off unless the board says
+    /// otherwise); it does not read back (the caller reports what it could not do).
     pub(crate) async fn force_off(&self, id: &ChannelId) -> Result<(), StationError> {
         let c = self.chan(id)?;
         match c.def.kind {
@@ -738,7 +783,7 @@ impl Switchboard {
         }
         let mut first = Ok(());
         for line in c.def.lines() {
-            if let Err(e) = c.driver.write_line(line, false).await {
+            if let Err(e) = c.driver.force_safe(line).await {
                 first = Err(e);
             }
         }
@@ -831,6 +876,19 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_vbank_line]
     // Tests [@ANCHOR: radioctl_station_vbank_log]
     // Tests [@ANCHOR: radioctl_station_vbank_write_line]
+    // Tests [@ANCHOR: radioctl_station_driver_safe_line]
+    // Tests [@ANCHOR: radioctl_station_driver_force_safe]
+    // Tests [@ANCHOR: radioctl_station_driver_recorded_line]
+    #[tokio::test]
+    async fn the_default_safe_level_is_off_and_there_is_no_record() {
+        let bank = VirtualBank::new();
+        bank.set_physical(4, true);
+        assert!(!bank.safe_line(4));
+        bank.force_safe(4).await.unwrap();
+        assert!(!bank.line(4));
+        assert_eq!(bank.recorded_line(4), None);
+    }
+
     // Tests [@ANCHOR: radioctl_station_vbank_read_line]
     // Tests [@ANCHOR: radioctl_station_vbank_can_read_back]
     // Tests [@ANCHOR: radioctl_station_vbank_set_physical]

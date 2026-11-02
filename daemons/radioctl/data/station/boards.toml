@@ -17,6 +17,10 @@ name = "sainsmart-16ch-modbus"
 # SainSmart 16-channel 9-36 V USB relay module (sku 101-70-208): coils 0 to 15 are channels 1 to 16.
 pins = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"]
 notes = "Modbus ASCII 9600 8N1, slave FE; no watchdog; relay state at power-up unknown"
+# Bruce, 2026-11-01: assume the module cannot report its status. The driver never sends a read
+# coils request, sets safe_state at every open, and keeps its own record of acknowledged writes.
+status_readable = false
+safe_state = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false]
 
 [[board]]
 name = "shelly-gen2-1ch"
