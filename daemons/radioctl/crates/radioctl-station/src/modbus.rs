@@ -633,8 +633,8 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ChannelDriver for ModbusRelay<T> 
             if !self.shadow().safe_done {
                 self.apply_safe(&mut io, true).await?; // lock-scope-ignore: the safe state must go out before any other exchange on this serial bus
             }
-            match self.exchange(&mut io, &pdu_read_coils(coil, 1)).await? {
-                // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
+            let read = self.exchange(&mut io, &pdu_read_coils(coil, 1)).await?; // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
+            match read {
                 Reply::Coils(bits) if bits.len() == 1 => Ok(bits[0]),
                 _ => Err(driver_err("modbus: unexpected read reply")),
             }
@@ -1039,10 +1039,8 @@ mod tests {
         assert!(r.age.is_some());
         // even asked directly, function 1 is refused below everything and never on the wire
         let mut io = relay.io.lock().await;
-        assert!(relay
-            .exchange(&mut io, &pdu_read_coils(0, 16))
-            .await
-            .is_err());
+        let r = relay.exchange(&mut io, &pdu_read_coils(0, 16)).await; // lock-scope-ignore: test
+        assert!(r.is_err());
         drop(io);
         assert!(module.frames().iter().all(|f| &f[3..5] != "01"));
         // a readable board does read, and says HostSupervised
