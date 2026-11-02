@@ -1039,7 +1039,12 @@ impl VirtualRig {
                     reply[usize::from(offset)] = *code;
                 }
             }
-            for (flag, on) in [(read.ptt, self.state.ptt), (read.split, self.state.split)] {
+            // A VFO is displayed (this virtual rig has no memory mode), and it is VFO A.
+            for (flag, on) in [
+                (read.ptt, self.state.ptt),
+                (read.split, self.state.split),
+                (read.vfo_mode, true),
+            ] {
                 if let Some(f) = flag {
                     // Set the first masked bit when the feature's state matches "on when set".
                     if on == f.on_when_set {
@@ -2341,6 +2346,24 @@ mod tests {
         assert_eq!(ft991.feed(b"AI;", T0), b"AI1;");
         let mut dx10 = shipped_rig("yaesu-ftdx10");
         assert_eq!(dx10.feed(b"ID;RM5;", T0), b"ID0761;RM5000000;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_legacy_model_block]
+    #[test]
+    fn the_vfo_models_flag_byte_says_vfo_a_is_displayed_and_keeps_split_and_ptt() {
+        // Bit 7 of the first flag byte set (a VFO, not a memory), bit 6 clear (VFO A): Hamlib's
+        // FT-840, FT-890 and FT-900 backends read it at open and refuse a radio that shows
+        // neither a VFO nor a memory.
+        for id in ["yaesu-ft-840", "yaesu-ft-890", "yaesu-ft-900"] {
+            let mut rig = shipped_rig(id);
+            let flags = rig.feed(&[0, 0, 0, 0, 0xFA], T0);
+            assert_eq!(flags.len(), 5, "{id}");
+            assert_eq!(flags[0] & 0xC0, 0x80, "{id}: VFO A displayed");
+            assert_eq!(flags[0] & 0x04, 0, "{id}: split off");
+            rig.front_panel(PanelChange::Split(true));
+            let flags = rig.feed(&[0, 0, 0, 0, 0xFA], T0);
+            assert_eq!(flags[0] & 0xC4, 0x84, "{id}: still VFO A, split on");
+        }
     }
 
     // Tests [@ANCHOR: radioctl_virtual_legacy_block]

@@ -260,6 +260,7 @@ struct LegacyReadEntry {
     mode: Option<LegacyModeEntry>,
     ptt: Option<LegacyFlagEntry>,
     split: Option<LegacyFlagEntry>,
+    vfo_mode: Option<LegacyFlagEntry>,
 }
 
 #[derive(Deserialize)]
@@ -910,6 +911,7 @@ fn build_legacy_block(y: &YaesuLegacySection) -> Result<Option<LegacyBlock>, Rig
             mode: r.mode.as_ref().map(|m| (m.offset, m.mask)),
             ptt: r.ptt.as_ref().map(flag),
             split: r.split.as_ref().map(flag),
+            vfo_mode: r.vfo_mode.as_ref().map(flag),
         });
     }
     let status_modes = if y.status_modes.is_empty() {

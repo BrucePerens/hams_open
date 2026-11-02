@@ -25,7 +25,7 @@ rig, a socket or a clock. Two exist:
 | Personality | Selected by | Commands answered |
 |---|---|---|
 | IC-7300 CI-V | `Protocol::Civ { address, echo }` (address `0x94` for the IC-7300) | `03` read frequency, `05` set frequency, `25 00`/`25 01` read or set the selected or unselected VFO, `04` and `26 00` read mode, `06` and `26 00` set mode, `1C 00` read or set PTT, `19 00` read ID, `15 02` S-meter, `15 11` power meter, `17` Morse text, `17 FF` stop Morse. Anything else is NG. |
-| TS-2000 CAT | `Protocol::Ts2000` | `FA`, `FB` read or set a VFO (11 digits), `MD` read or set mode, `TX`, `RX` key and unkey, `SM0` S-meter, `ID` (019), `AI` auto-information for this client, `PS` (power is on). A refusal or an unknown command is `?;`. |
+| TS-2000 CAT | `Protocol::Ts2000` | `FA`, `FB` read or set a VFO (11 digits), `MD` read or set mode, `TX`, `RX` key and unkey, `SM0` S-meter, `IF` composite status, `ID` (019), `AI` auto-information for this client, `PS` (power is on). A refusal or an unknown command is `?;`. |
 
 Requests reach the rig as one of: read or set a VFO's frequency, read or set the mode, read or set
 PTT, read signal, read power, send CW. Split, RIT, XIT, filter and levels are **not** presented; a
@@ -35,8 +35,11 @@ Limits, all from the code:
 
 - The mode table is the IC-7300's (or the TS-2000's) regardless of the real radio. Data modes map to
   the sideband they sit on (`Data` to USB, `DataR` to LSB). Modes the emulated radio lacks are refused.
-- The TS-2000 personality answers `IF;` with `?;`, although the Kenwood engine can decode `IF`. Software
-  that needs transmit state from `IF` will not work against this endpoint.
+- The TS-2000 personality answers `IF;` with the 38-character composite status (frequency of VFO A,
+  RIT/XIT offset and flags, transmit, mode, split; the layout the Kenwood engine decodes). The transmit
+  state, mode and frequency must be readable from the real radio or `IF;` is answered `?;`; a radio
+  that cannot read RIT, XIT or split reports them off, and the memory, scan and tone fields are zero.
+  The transmit VFO is not told apart from VFO A: split is the flag only.
 - S-meter values pass through in the real radio's units, not the emulated radio's scale.
 - While the rig is keyed **in split**, a plain read of the current frequency (CI-V `03`, TS-2000 `FA;`)
   answers with the transmit frequency, as OmniRig-style clients assume (Hamlib issue 138, chapter

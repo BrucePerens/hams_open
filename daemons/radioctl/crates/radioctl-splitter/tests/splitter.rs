@@ -285,11 +285,48 @@ async fn a_ts2000_client_reads_sets_and_is_refused_what_it_cannot_have() {
     );
     a.write_all(b"FA00007074000;MD2;").await.expect("write");
     wait_for(|| control.state().freq_a == Hz(7_074_000) && control.state().mode == Mode::Usb).await;
-    a.write_all(b"IF;ZZ;SM0;").await.expect("write");
-    assert_eq!(read_n(&mut a, 2 + 2 + 8).await, b"?;?;SM00015;");
+    a.write_all(b"ZZ;SM0;").await.expect("write");
+    assert_eq!(read_n(&mut a, 2 + 8).await, b"?;SM00015;");
     a.write_all(b"TX;").await.expect("write");
     assert_eq!(read_n(&mut a, 2).await, b"?;");
     assert!(!control.state().ptt);
+}
+
+// Tests [@ANCHOR: radioctl_splitter_read_status]
+// Tests [@ANCHOR: radioctl_splitter_read_frequency]
+// Tests [@ANCHOR: radioctl_splitter_ts2000_status_answer]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_ts2000_client_reads_the_composite_status_from_the_rigs_state() {
+    let (rig, control) = virtual_kx3().await;
+    let mut config = SplitterConfig::new(Protocol::Ts2000);
+    config.max_age = Duration::from_millis(50);
+    let splitter = Splitter::new(rig.clone(), config);
+    let mut a = client(&splitter);
+    a.write_all(b"FA00007074000;MD2;").await.expect("write");
+    wait_for(|| control.state().freq_a == Hz(7_074_000) && control.state().mode == Mode::Usb).await;
+    a.write_all(b"IF;").await.expect("write");
+    assert_eq!(
+        read_n(&mut a, 38).await,
+        b"IF000070740000000+0000000000020000000;"
+    );
+    // The front panel changes the offset, split and the transmit state; the next IF follows.
+    control.front_panel(PanelChange::RitOffset(-120));
+    control.front_panel(PanelChange::Split(true));
+    control.front_panel(PanelChange::Ptt(true));
+    wait_for(|| {
+        let state = control.state();
+        state.rit_offset == -120 && state.split && state.ptt
+    })
+    .await;
+    // Cached values are only as fresh as `max_age` (50 ms here): let the ones read above age out.
+    sleep(Duration::from_millis(150)).await;
+    a.write_all(b"IF;").await.expect("write");
+    let answer = String::from_utf8(read_n(&mut a, 38).await).expect("ascii");
+    assert_eq!(answer.get(..13), Some("IF00007074000"));
+    assert_eq!(answer.get(17..23), Some("-00120"), "{answer}");
+    assert_eq!(answer.get(28..29), Some("1"), "transmit: {answer}");
+    assert_eq!(answer.get(29..30), Some("2"), "mode: {answer}");
+    assert_eq!(answer.get(32..33), Some("1"), "split: {answer}");
 }
 
 // Tests [@ANCHOR: radioctl_splitter_serve_tcp]

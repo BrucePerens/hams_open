@@ -790,6 +790,11 @@ pub struct LegacyRead {
     pub ptt: Option<LegacyFlag>,
     /// Split flag.
     pub split: Option<LegacyFlag>,
+    /// "A VFO, not a memory, is displayed" flag, with VFO A the one active. radioctl never reads
+    /// it; a controller that does (Hamlib's FT-840, FT-890 and FT-900 backends read it at open and
+    /// refuse to set a mode or read a frequency when neither it nor a memory flag is set) needs a
+    /// virtual rig to set it.
+    pub vfo_mode: Option<LegacyFlag>,
 }
 
 /// The commands and status reads of a block-protocol Yaesu legacy model.

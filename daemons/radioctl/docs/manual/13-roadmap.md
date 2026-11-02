@@ -24,7 +24,7 @@ Do not build on a planned item as if it existed.
 | **C ABI** for non-Rust callers; Python bindings; an isolated mode (the API over IPC, one rig per process) | RC section 7 | a sketch exists: `radioctl-capi` (chapter [14](14-station.md#the-c-abi)): runtime and rig handles, frequency, mode, PTT behind the permit call; no rotators, no events, no Python |
 | **Rotators, amplifiers, tuners, keyers** (WinKeyer) on the same machinery | RC section 7; whether they are in release one is still open | rotators (`rotctld` and GS-232) and amplifier and tuner channels exist in `radioctl-station` (chapter [14](14-station.md)), and `radioctld` serves rotators in the `rotctld` protocol (chapter [9](09-radioctld.md#rotators), virtual rotator only); tuners as rig operations, and keyers (WinKeyer), do not |
 | **Splitter integration in `radioctld`**, one actor shared by both | not in a proposal | the splitter is a library with examples |
-| **Coverage-guided fuzzing** of every parser | RC section 8 | proptest only |
+| **Coverage-guided fuzzing** of every parser | RC section 8 | seven cargo-fuzz targets in `fuzz/` (60-second runs only, clean), beside the proptests; no long runs or kept corpus |
 | **Relay integration** behind a per-radio switch with Hamlib fallback in a per-rig process; removing `HAMLIB_CALL_LOCK` | RC section 9 | not in this repository |
 
 The first physical radio for radioctl is the **KX3** (roadmap decision, 2026-10-30), with a bladeRF/XB-200 or
@@ -52,10 +52,11 @@ manual.
    line" to `rigctl -vvv`).
 5. **Oracle disagreements to settle on real radios:** TS-590 VFO B read (`FA;` or `FB;`) and AF gain,
    IC-7610 split flow, IC-9700 VFO B, X108G final VFO A.
-6. **The TS-2000 splitter personality still refuses `IF;`**, though the Kenwood engine decodes it.
+6. Fixed 2026-11-01: the TS-2000 splitter personality answers `IF;` (`Request::ReadStatus`,
+   `Outcome::Status`, `Ts2000Personality::status_answer`), built from the rig's frequency, mode, PTT, RIT,
+   XIT, offset and split. Not yet: pushing `IF` to an `AI2` client when those change, and the transmit VFO.
 7. Fixed 2026-10-30: the stale module notes in `transport.rs` and `description.rs` and the `IF` wording of
-   `docs/DESIGN.md` item 16 (the personality still does not answer `IF`; the reason is a missing encoder,
-   not an unverified layout).
+   `docs/DESIGN.md` item 16.
 8. **`radioctld` serial transport is fixed** at 8N1 with one open attempt and default idle lines; there is
    no configuration for data bits, parity, flow control or reopen attempts.
 9. **Nothing has run on hardware.** All 233 facts in the 23 descriptions are `unverified`; no client other

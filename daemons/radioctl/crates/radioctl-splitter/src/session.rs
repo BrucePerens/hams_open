@@ -29,7 +29,7 @@ use tokio::time::{timeout, Instant};
 
 use crate::arbiter::{ClientId, PttOwner};
 use crate::civ_personality::CivPersonality;
-use crate::personality::{Action, Outcome, Personality, Request};
+use crate::personality::{Action, Outcome, Personality, Request, Status};
 use crate::ts2000_personality::Ts2000Personality;
 
 const CHANNEL: usize = 64;
@@ -400,6 +400,64 @@ impl Splitter {
         }
     }
 
+    // [@ANCHOR: radioctl_splitter_read_frequency]
+    /// A frequency read: the transmit frequency while keyed in split (when configured), else
+    /// the VFO's own.
+    async fn read_frequency(&self, vfo: Vfo) -> Outcome {
+        match self.keyed_split_frequency(vfo) {
+            Some(hz) => Outcome::Value(Observation::Frequency(vfo, hz)),
+            None => {
+                self.read(Field::Frequency(vfo), Op::GetFrequency(vfo))
+                    .await
+            }
+        }
+    }
+
+    // [@ANCHOR: radioctl_splitter_read_status]
+    /// The composite status: frequency of VFO A, mode and transmit state must be readable, else
+    /// the request is refused (an `IF` that guessed them would lie about the transmitter); RIT,
+    /// XIT, its offset and split are optional features, and one the rig cannot read is reported
+    /// at its neutral value (off, 0).
+    async fn read_status(&self) -> Outcome {
+        let (
+            Outcome::Value(Observation::Frequency(_, frequency)),
+            Outcome::Value(Observation::Mode(mode)),
+            Outcome::Value(Observation::Ptt(ptt)),
+        ) = (
+            self.read_frequency(Vfo::A).await,
+            self.read(Field::Mode, Op::GetMode).await,
+            self.read(Field::Ptt, Op::GetPtt).await,
+        )
+        else {
+            return Outcome::Refused;
+        };
+        let rit = matches!(
+            self.read(Field::Rit, Op::GetRit).await,
+            Outcome::Value(Observation::Rit(true))
+        );
+        let xit = matches!(
+            self.read(Field::Xit, Op::GetXit).await,
+            Outcome::Value(Observation::Xit(true))
+        );
+        let rit_offset = match self.read(Field::RitOffset, Op::GetRitOffset).await {
+            Outcome::Value(Observation::RitOffset(hz)) => hz,
+            _ => 0,
+        };
+        let split = matches!(
+            self.read(Field::Split, Op::GetSplit).await,
+            Outcome::Value(Observation::Split(true))
+        );
+        Outcome::Status(Status {
+            frequency,
+            mode,
+            ptt,
+            rit,
+            xit,
+            rit_offset,
+            split,
+        })
+    }
+
     // [@ANCHOR: radioctl_splitter_set]
     /// A set: asks the rig and reports done or refused.
     async fn set(&self, op: Op) -> Outcome {
@@ -419,13 +477,8 @@ impl Splitter {
     async fn execute(&self, client: ClientId, request: &Request) -> Outcome {
         self.count(&self.inner.counters.requests);
         let outcome = match request {
-            Request::ReadFrequency(vfo) => match self.keyed_split_frequency(*vfo) {
-                Some(hz) => Outcome::Value(Observation::Frequency(*vfo, hz)),
-                None => {
-                    self.read(Field::Frequency(*vfo), Op::GetFrequency(*vfo))
-                        .await
-                }
-            },
+            Request::ReadFrequency(vfo) => self.read_frequency(*vfo).await,
+            Request::ReadStatus => self.read_status().await,
             Request::ReadMode => self.read(Field::Mode, Op::GetMode).await,
             Request::ReadPtt => self.read(Field::Ptt, Op::GetPtt).await,
             Request::ReadSignal => self.read(Field::Signal, Op::GetSignal).await,

@@ -102,11 +102,20 @@ and AF gain; the IC-7610's split flow and VFO B; the IC-9700's VFO B; the Xiegu 
 
 ## Property tests and fuzzing
 
-There is **no coverage-guided fuzzing** (no `cargo-fuzz` target). The tests named "standing in for
-fuzzing" are `proptest` tests: arbitrary byte sequences of up to 600 bytes through each engine and the
+Coverage-guided fuzzing is `daemons/radioctl/fuzz/` (cargo-fuzz, libFuzzer), **outside the workspace**
+(its own `[workspace]` table), so `cargo build --workspace`, `cargo test --workspace` and CI never compile
+it. It needs a nightly compiler new enough for the workspace (`rust-version` 1.98 or later; a dated one
+such as `nightly-2026-10-25` installed with `rustup toolchain install nightly-2026-10-25 --profile
+minimal`, which leaves the default toolchain alone). Targets: `engine_feed` (the Icom, Kenwood, Elecraft,
+Yaesu newcat and legacy, Flex and HPSDR engines and the virtual rigs), `flex_lines`, `scope_frames`,
+`rigfile_parse`, `radioctld_lines`, `hpsdr_packets` and `splitter_personalities`. Run one with
+`cd daemons/radioctl/fuzz && cargo +nightly-2026-10-25 fuzz run -s none <target> -- -max_total_time=60`
+(`-s none`: the code forbids `unsafe`, so the address sanitizer adds nothing; overflow checks stay on).
+The first 60-second run of each target (2026-11-01, 0.6 to 6 million executions) found nothing; the corpora
+and artifacts are not committed. The `proptest` tests that stand beside them are: arbitrary byte sequences of up to 600 bytes through each engine and the
 virtual rigs, arbitrary text through the description and transcript parsers, arbitrary lines through the
 `radioctld` parser, and a whole-pipeline run that must never transmit through a closed gate. The proposal
-asks for fuzzing of every parser; real fuzz targets are **planned**.
+asks for fuzzing of every parser; longer runs (hours) and a corpus kept between sessions are not done.
 
 ## The anchor convention (ADR 0090)
 

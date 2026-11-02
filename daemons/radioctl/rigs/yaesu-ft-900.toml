@@ -43,6 +43,7 @@ request = [0x00, 0x00, 0x00, 0x00, 0xfa]
 length = 5
 ptt = { offset = 2, mask = 0x80, on_when_set = true }
 split = { offset = 0, mask = 0x04, on_when_set = true }
+vfo_mode = { offset = 0, mask = 0x80, on_when_set = true }
 
 [[yaesu_legacy.status_modes]]
 mode = "lsb"
@@ -105,8 +106,9 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "yaesu_legacy.block"
-provenance = { kind = "manual", reference = "Yaesu FT-900 Operating Manual (file rigpix/rigpix_ft900_manual.pdf, sha256 e11705cbc0efe51cb1829c6cc8f91692b6875e47d47c5863c6a05aec895b89e4): CAT chapter, PDF p.43-48 (printed 43-48): 0A set frequency (BCD, least significant byte first, 10 Hz, 14.25 MHz is 00 50 42 01 0A); 0C mode (0 LSB, 1 USB, 2 CW wide, 3 CW narrow, 4 AM wide, 5 AM narrow, 6 or 7 FM); 0F PTT (1 transmit); 01 split (parameter 1 on, 0 off); 10 with parameter 3 returns the 18-byte VFO A and B records (VFO A: frequency as three binary bytes, most significant first, in 10 Hz units at offsets 1 to 3, mode at offset 6; VFO B follows at +9) and with parameter 2 the 19-byte operating record (one memory-status byte first, so frequency at offsets 2 to 4 and mode at 7); mode codes 0 LSB, 1 USB, 2 CW, 3 AM, 4 FM; FA returns three flag bytes then 08 41: split is bit 2 of the first, transmitting is bit 7 of the third", note = "Hamlib 4.6.2 agrees on offsets, lengths, units and codes." }
+provenance = { kind = "manual", reference = "Yaesu FT-900 Operating Manual (file rigpix/rigpix_ft900_manual.pdf, sha256 e11705cbc0efe51cb1829c6cc8f91692b6875e47d47c5863c6a05aec895b89e4): CAT chapter, PDF p.43-48 (printed 43-48): 0A set frequency (BCD, least significant byte first, 10 Hz, 14.25 MHz is 00 50 42 01 0A); 0C mode (0 LSB, 1 USB, 2 CW wide, 3 CW narrow, 4 AM wide, 5 AM narrow, 6 or 7 FM); 0F PTT (1 transmit); 01 split (parameter 1 on, 0 off); 10 with parameter 3 returns the 18-byte VFO A and B records (VFO A: frequency as three binary bytes, most significant first, in 10 Hz units at offsets 1 to 3, mode at offset 6; VFO B follows at +9) and with parameter 2 the 19-byte operating record (one memory-status byte first, so frequency at offsets 2 to 4 and mode at 7); mode codes 0 LSB, 1 USB, 2 CW, 3 AM, 4 FM; FA returns three flag bytes then 08 41: split is bit 2 of the first, transmitting is bit 7 of the third", note = "Hamlib 4.6.2 agrees on offsets, lengths, units and codes. The vfo_mode flag (bit 7 of the first FA flag byte: a VFO, not a memory, is displayed; bit 6 would be VFO B) is from Hamlib 4.6.2 rigs/yaesu/ft900.c (SF_VFO, SF_VFOA, get_vfo), facts only; radioctl does not read it, the virtual rig sets it because Hamlib reads it at open." }
 verified = { state = "unverified" }
+
 
 [[facts]]
 key = "capability.*"

@@ -182,7 +182,7 @@ impl Personality for CivPersonality {
             Outcome::Value(Observation::Signal(v) | Observation::Power(v)) => {
                 with_prefix(&encode_bcd_meter(*v))
             }
-            Outcome::Value(_) => self.status_frame(to, false),
+            Outcome::Value(_) | Outcome::Status(_) => self.status_frame(to, false),
         }
     }
 

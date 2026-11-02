@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# cargo-fuzz targets for radioctl's parsers (see docs/manual/11-testing.md, "Property tests and fuzzing"). NOT part of the
+# radioctl workspace: the empty [workspace] table below makes this its own root, so
+# `cargo build --workspace`, `cargo test --workspace` and the CI workflows never compile it, and
+# it needs a nightly toolchain (`cargo +nightly fuzz run <target>`).
+[package]
+name = "radioctl-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-or-later"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+radioctl-core = { path = "../crates/radioctl-core" }
+radioctl-protocols = { path = "../crates/radioctl-protocols" }
+radioctl-splitter = { path = "../crates/radioctl-splitter" }
+radioctld = { path = "../crates/radioctld" }
+hpsdr = { path = "../../hpsdr" }
+
+[[bin]]
+name = "engine_feed"
+path = "fuzz_targets/engine_feed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "flex_lines"
+path = "fuzz_targets/flex_lines.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "scope_frames"
+path = "fuzz_targets/scope_frames.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rigfile_parse"
+path = "fuzz_targets/rigfile_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "radioctld_lines"
+path = "fuzz_targets/radioctld_lines.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hpsdr_packets"
+path = "fuzz_targets/hpsdr_packets.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "splitter_personalities"
+path = "fuzz_targets/splitter_personalities.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

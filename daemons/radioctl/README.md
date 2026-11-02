@@ -110,7 +110,6 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - `radioctld`'s own oracle runs Hamlib's `rigctl` client against a virtual KX3, IC-7300 and TS-590SG, and `rotctl -m 2` against the virtual rotator.
 - First results (Hamlib 4.6.2):
   - KX3 and IC-7300 agree on frequency, mode, PTT read, RIT offset and keyer speed.
-  - The TS-2000 differs because Hamlib's backend reads the frequency from `IF;`, which the virtual TS-2000 refuses (layout unverified). A test pins that known gap.
   - The oracle found and fixed two virtual-rig errors: IC-7300 `26 00` lacked the DATA flag byte, and the virtual KX3 lacked `PS`, `K2`/`K3`, `OM`, `IF`, `RV`, which Hamlib's KX3 backend sends at start-up.
 - Known disagreements are pinned in `tests/rigctld_oracle.rs`: `known_icom_divergences`, `known_ts890_divergences`.
 
@@ -1117,11 +1116,14 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_splitter_serve_tcp] (radioctl-splitter) Accepts connections on `listener` until the returned task is aborted, up to `max_clients` at a time (the rest closed at once, `connections_refused`); each connection is a
 - [@ANCHOR: radioctl:radioctl_splitter_cleanup] (radioctl-splitter) Gives up the client's PTT ownership, unkeying the rig if the client held it.
 - [@ANCHOR: radioctl:radioctl_splitter_read] (radioctl-splitter) A read: the cached value if fresh enough, else asks the rig.
+- [@ANCHOR: radioctl:radioctl_splitter_read_frequency] (radioctl-splitter) A frequency read: the transmit frequency while keyed in split (when configured), else the VFO's own.
+- [@ANCHOR: radioctl:radioctl_splitter_read_status] (radioctl-splitter) The composite status for `IF`: frequency of VFO A, mode and PTT must be readable (else refused); RIT, XIT, offset and split fall back to off.
 - [@ANCHOR: radioctl:radioctl_splitter_execute] (radioctl-splitter) Carries out one request for `client`, with PTT arbitration.
 - [@ANCHOR: radioctl:radioctl_splitter_send_cw] (radioctl-splitter) Sends Morse for a client, claiming the transmitter like a key does (given back if the rig refuses), so a departing sender unkeys the rig.
 - [@ANCHOR: radioctl:radioctl_splitter_key] (radioctl-splitter) Keys for `client` if no other client owns the transmitter; the claim is given back if the
 - [@ANCHOR: radioctl:radioctl_splitter_run_client] (radioctl-splitter) The task of one client: input, rig changes, until the client ends.
 - [@ANCHOR: radioctl:radioctl_splitter_ts2000_new] (radioctl-splitter) A TS-2000 personality with auto-information off.
+- [@ANCHOR: radioctl:radioctl_splitter_ts2000_status_answer] (radioctl-splitter) The 38-character TS-2000 `IF` answer for a status (layout and sources in the doc comment); refused when the mode has no TS-2000 digit.
 - [@ANCHOR: radioctl:radioctl_splitter_ts2000_classify] (radioctl-splitter) Turns one command (without its `;`) into an action.
 - [@ANCHOR: radioctl:radioctl_splitter_ts2000_parse] (radioctl-splitter) Splits a client's bytes into TS-2000 commands and classifies each.
 - [@ANCHOR: radioctl:radioctl_splitter_ts2000_reply] (radioctl-splitter) Renders a TS-2000 reply (`FA`, `MD`, `SM0`, nothing for a set, `?;` for a refusal).
