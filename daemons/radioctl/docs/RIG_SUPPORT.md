@@ -10,22 +10,22 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **282** (288 description files), **99%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **283** (289 description files), **99%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 282 |
+| described | 283 |
 | engine only | 0 |
 | needs variant | 0 |
 | needs engine | 0 |
-| odd device | 2 |
+| odd device | 1 |
 | not applicable | 29 |
 
 | Verification level | Models |
 |---|---:|
-| unverified | 279 |
-| manual-checked | 34 |
+| unverified | 278 |
+| manual-checked | 35 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -36,13 +36,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 74 |
-| D | odd device | 54 | 31 |
+| D | odd device | 54 | 32 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 85 | 0 |
+| other_serial | C/D | aor | 94 | 86 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -301,7 +301,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 36001 | MDS | 4710 | D | other_serial | - | `mds-4710` | unverified | - | described |
 | 36002 | MDS | 9710 | D | other_serial | - | `mds-9710` | unverified | - | described |
 | 38001 | Micom | Micom 2/3 | C | other_serial | - | `micom-2-3` | unverified | - | described |
-| 3074 | Microtelecom | Perseus | D | other_serial | - | - | unverified | - | odd device |
+| 3074 | Microtelecom | Perseus | D | other_serial | civ | `microtelecom-perseus` | manual-checked | - | described |
 | 25008 | mRS | miniVNA | D | other_serial | - | - | unverified | - | not applicable |
 | 25014 | N2ADR | HiQSDR | D | other_network | - | `n2adr-hiqsdr` | unverified | - | described |
 | 10 | N2ADR James Ahlstrom | Quisk | D | other_network | - | - | unverified | - | not applicable |

@@ -93,6 +93,7 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
         "icom-ic-7851",
         "icom-ic-9100",
         "icom-ic-r75",
+        "microtelecom-perseus",
         "icom-ic-r8600",
         "icom-ic-r9500",
         "icom-ic-706mkiig",

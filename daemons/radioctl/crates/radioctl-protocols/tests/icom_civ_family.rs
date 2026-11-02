@@ -39,6 +39,7 @@ const ADDRESSES: &[(&str, u8)] = &[
     ("icom-ic-9100", 0x7C),
     ("icom-ic-r8600", 0x96),
     ("icom-ic-r75", 0x5A),
+    ("microtelecom-perseus", 0xE1),
     ("icom-ic-r9500", 0x72),
     ("icom-ic-706", 0x48),
     ("icom-ic-706mkii", 0x4E),
@@ -371,4 +372,29 @@ fn the_ic_f8101_sets_frequency_and_mode_with_its_own_1a_commands() {
         read(engine.as_mut(), &mut rig, &Op::GetMode),
         Observation::Mode(Mode::Cw)
     );
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_encode]
+// Tests [@ANCHOR: radioctl_core_levelparams_max_attenuation]
+#[test]
+fn the_perseus_cat_port_has_three_attenuator_steps_and_pins_what_it_does_not_claim() {
+    let files = icom_files();
+    let perseus = files
+        .iter()
+        .find(|d| d.id == "microtelecom-perseus")
+        .expect("perseus file");
+    assert_eq!(perseus.levels.attenuator_db, vec![10, 20, 30]);
+    assert_eq!(perseus.levels.max_attenuation_db(), Some(30));
+    // Pinned open question: the Perseus packs the ADC preamplifier and dither into command 16 02
+    // as two bits (manual EN03), not the Icom P.AMP step number the engine sends, and sets AGC
+    // with 16 12 values 0..3; neither is claimed until a transcript shows what the engine would
+    // have to send. A preamplifier request is therefore refused, not mis-encoded.
+    assert_eq!(perseus.levels.preamp_steps, 0);
+    let mut engine = engine_for(perseus).expect("engine");
+    let err = engine
+        .encode(&Op::SetLevel(Level::Preamp, 1))
+        .expect_err("refused");
+    assert_eq!(err.kind, ErrorKind::Unsupported);
+    // SAM (mode byte 06 on the Perseus) has no radioctl mode, so no mode maps to 06.
+    assert!(perseus.mode_codes.iter().all(|(_, code)| *code != 0x06));
 }

@@ -172,7 +172,7 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
   Peaberry V1 and V2, FA-SDR, FiFi-SDR: frequency, PTT where listed), `funcube.rs` (both FUNcube dongles: frequency) and `dwt.rs`
   (Digital World Traveller: set frequency only, as Hamlib's libusb build). All unverified, tested against virtual twins. Not done:
   the Elektor SDR-USB (FTDI bit-bang I2C programming of a Cypress PLL), the pre-0x0F00 DG8SAQ firmware, the FiFi-SDR 0xAB/0xAC
-  requests, and the FUNcube gain and RSSI commands. Perseus (3074) and HiQSDR (25014, UDP) are not in this transport.
+  requests, and the FUNcube gain and RSSI commands. HiQSDR (25014, UDP) is not in this transport. Perseus (3074) is described as the CAT (CI-V) port of the vendor's Windows application on the Icom CI-V engine (`microtelecom-perseus`, 2026-11-02): Hamlib's model is that dialect (rigs/icom/perseus.c, address 0xE1), not the board, which speaks no CI-V.
 - Kenwood CAT emulations (done, on the classic Kenwood engine): (tr)uSDX (2055), Malachite DSP (2049), BG2FX FX-4 (2053),
   ELAD FDM-DUO (33001); the QRP Labs QCX/QDX and QMX went in with the Kenwood batch.
 - Serial radios and kits (done, 2026-10-31, Hamlib 4.6.2 facts only, each in its own engine file with a virtual twin,
@@ -186,7 +186,6 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
 
 | Model | Reason |
 |---|---|
-| Microtelecom Perseus (3074) | a vendor USB library with firmware load (needs a loader on top of the USB transport, which now exists) |
 | Dorji DRA818U/V (31001, 31002), MDS 4710/9710 (36001, 36002), Elektor 3/04 (25001) | the remaining small-vendor batch (Dorji, MDS and Elektor engines) |
 | TAPR DSP-10 (22001) | Hamlib's frequency and mode setters return "not implemented" after a FIXME (the tuning-word formula is disabled), so there is no command to transcribe; TAPR's own manual was not read |
 | PRM8060 setters | the `R` dialogue (receive PLL word, then transmit PLL word, each after a `:` prompt) needs an engine hook that sends the next argument when a prompt arrives |

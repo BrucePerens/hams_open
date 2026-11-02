@@ -127,8 +127,10 @@ their sources are in each file, the plan and the reasons for what is left in
 | `usb-device` | `ae9rb-peaberry-v1`, `ae9rb-peaberry-v2`, `funkamateur-fa-sdr`, `kth-si570-pic-usb`, `softrock-si570-avr-usb`, `amsat-uk-funcube-dongle`, `amsat-uk-funcube-dongle-pro-plus`, `fifi-sdr`, `elektor-sdr-usb`, `digital-world-traveller` | Hamlib 4.6.2 facts; USB transport with a fake and a libusb backend (feature `usb`). |
 
 Not described, with the reason: Winradio (vendor driver only), the 29 not-applicable models of
-RIG_SUPPORT.md, and four odd devices (AnyTone D578A, Microtelecom Perseus, SAT-Schneider DRT1, TAPR DSP-10;
+RIG_SUPPORT.md, and three odd devices (AnyTone D578A, SAT-Schneider DRT1, TAPR DSP-10;
 see the plan).
+
+`microtelecom-perseus` (Hamlib 3074) uses the Icom CI-V family too: it describes the CAT port of the vendor's Windows application (address `0xE1`), not the receiver board, which speaks no CI-V.
 
 The Xiegu files use the Icom CI-V family because those radios speak a subset of CI-V. The X5105 and X6200
 files are copies in structure of the X108G and X6100 files: Hamlib 4.6.2 gives the X5105 the X108G's settings (CI-V
