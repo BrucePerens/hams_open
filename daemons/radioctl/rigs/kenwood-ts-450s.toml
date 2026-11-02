@@ -20,6 +20,8 @@ family = "kenwood-ascii"
 [kenwood]
 model_id = 10
 dialect = "ts450"
+[kenwood.ky]
+form = "undocumented"
 
 [timing]
 timeout_ms = 1000
@@ -101,3 +103,8 @@ verified = { state = "unverified" }
 key = "mode.*"
 provenance = { kind = "manual", reference = "Kenwood TS-450S/TS-690S external-control manual (file qslnet_TS-450-690-Ext-control.pdf, a scan from qslnet.de; sha256 86b83837202d17e61a865e2955d6afe49c7a62e7c9cdae33dd945c47bc78310f): Parameter List, format 2 MODE, printed page 6: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R", note = "The manual's list is the same eight letters as the file." }
 verified = { state = "manual-checked", reference = "TS-450/690 external-control manual, parameter list, printed p. 6" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "No manual read documents KY for this model: the TS-450S/690S external control command list (qslnet_TS-450-690-Ext-control.pdf, sha256 86b83837202d17e61a865e2955d6afe49c7a62e7c9cdae33dd945c47bc78310f, scanned pages) lists no KY.", note = "Bruce's decision (2026-11-02): send-CW-text (KY) is used only on a model whose manual documents it; this model reports not supported (the generic keyer path or the existing fallback keys CW). Unverified." }
+verified = { state = "unverified" }

@@ -24,8 +24,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 278 |
-| manual-checked | 35 |
+| unverified | 275 |
+| manual-checked | 38 |
 | transcript-checked | 0 |
 | hardware-verified | 0 |
 
@@ -280,8 +280,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2001 | Kenwood | TS-50S | A | kenwood_ascii | kenwood | `kenwood-ts-50s` | unverified | - | described |
 | 2004 | Kenwood | TS-570D | A | kenwood_ascii | kenwood | `kenwood-ts-570d` | manual-checked | - | described |
 | 2016 | Kenwood | TS-570S | A | kenwood_ascii | kenwood | `kenwood-ts-570s` | manual-checked | - | described |
-| 2031 | Kenwood | TS-590S | A | kenwood_ascii | kenwood | `kenwood-ts-590s` | unverified | - | described |
-| 2037 | Kenwood | TS-590SG | A | kenwood_ascii | kenwood | `kenwood-ts-590sg` | unverified | - | described |
+| 2031 | Kenwood | TS-590S | A | kenwood_ascii | kenwood | `kenwood-ts-590s` | manual-checked | - | described |
+| 2037 | Kenwood | TS-590SG | A | kenwood_ascii | kenwood | `kenwood-ts-590sg` | manual-checked | - | described |
 | 2024 | Kenwood | TS-680S | A | kenwood_ascii | kenwood | `kenwood-ts-680s` | unverified | - | described |
 | 2005 | Kenwood | TS-690S | A | kenwood_ascii | kenwood | `kenwood-ts-690s` | manual-checked | - | described |
 | 2006 | Kenwood | TS-711 | A | kenwood_ascii | kenwood | `kenwood-ts-711` | unverified | - | described |
@@ -289,7 +289,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2008 | Kenwood | TS-811 | A | kenwood_ascii | kenwood | `kenwood-ts-811` | unverified | - | described |
 | 2009 | Kenwood | TS-850 | A | kenwood_ascii | kenwood | `kenwood-ts-850` | unverified | - | described |
 | 2010 | Kenwood | TS-870S | A | kenwood_ascii | kenwood | `kenwood-ts-870s` | manual-checked | - | described |
-| 2041 | Kenwood | TS-890S | A | kenwood_ascii | kenwood | `kenwood-ts-890s` | unverified | - | described |
+| 2041 | Kenwood | TS-890S | A | kenwood_ascii | kenwood | `kenwood-ts-890s` | manual-checked | - | described |
 | 2022 | Kenwood | TS-930 | A | kenwood_ascii | kenwood | `kenwood-ts-930` | unverified | - | described |
 | 2011 | Kenwood | TS-940S | A | kenwood_ascii | kenwood | `kenwood-ts-940s` | unverified | - | described |
 | 2012 | Kenwood | TS-950S | A | kenwood_ascii | kenwood | `kenwood-ts-950s` | unverified | - | described |

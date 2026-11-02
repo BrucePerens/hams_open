@@ -13,6 +13,8 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 21
+[kenwood.ky]
+form = "undocumented"
 
 [timing]
 timeout_ms = 500
@@ -83,4 +85,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "kenwood.model_id"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/ts590.c (fx4_caps) ", note = "Hamlib lists no ID for the FX4; the TS-590S answer is assumed (21), as the model is described as TS-590S compatible. Not read from a radio; unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "No manual for this model's KY was read (this model speaks the Kenwood command set but no Kenwood document covers it).", note = "Bruce's decision (2026-11-02): send-CW-text (KY) is used only on a model whose manual documents it; this model reports not supported (the generic keyer path or the existing fallback keys CW). Unverified." }
 verified = { state = "unverified" }

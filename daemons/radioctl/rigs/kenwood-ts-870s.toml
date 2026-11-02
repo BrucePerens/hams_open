@@ -13,6 +13,10 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 15
+[kenwood.ky]
+form = "padded"
+width = 24
+stop = "none"
 
 [timing]
 timeout_ms = 500
@@ -89,3 +93,8 @@ verified = { state = "manual-checked", reference = "TS-870S Instruction Manual, 
 key = "mode.*"
 provenance = { kind = "manual", reference = "Kenwood 'HF TRANSCEIVER TS-870S Instruction Manual', Appendix D 'COM connector protocol' (computer control commands), file ts870s_instruction_manuallib.pdf, https://archive.org/download/manuallib-id-2593504/2593504.pdf (an archive.org copy; Kenwood hosts no PC guide for this model), sha256 143e8273bd352fd0e4fb3bc25c1f095d6d5ba3ec2a0289d1dd6fc11c881f165a, read by us in this session; page numbers are PDF pages (printed page is 6 less): Parameter Table format 2 (MODE), PDF p. 90: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R (0 and 8 no mode)", note = "FSK and FSK-R are mapped to rtty and rtty-r." }
 verified = { state = "manual-checked", reference = "TS-870S Instruction Manual, Parameter Table format 2 (PDF p. 90)" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "Kenwood TS-870S instruction manual, file ts870s_instruction_manuallib.pdf (https://archive.org/download/manuallib-id-2593504/2593504.pdf), sha256 143e8273bd352fd0e4fb3bc25c1f095d6d5ba3ec2a0289d1dd6fc11c881f165a, appendices PDF p. 97 (printed 91): KY set (28 bytes: K Y, a space, 24 message bytes space-padded, ';'), read and answer (format 44); the note says the internal buffer holds about 5 times 28 characters; no stop is documented", note = "KY is documented but no way to stop a message in flight is, and Hamlib 4.6.2 has no send_morse for the TS-870S (rigs/kenwood/ts870s.c); so send-cw is not offered for this model. The form and 24-character width are recorded for when a stop is found. No lower case or @ in the table." }
+verified = { state = "manual-checked", reference = "Kenwood TS-870S instruction manual, KY (appendices PDF p. 97 (printed 91))" }

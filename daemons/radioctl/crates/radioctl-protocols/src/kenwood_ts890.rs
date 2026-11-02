@@ -224,6 +224,17 @@ impl Ts890Engine {
         self.scope.dropped
     }
 
+    // [@ANCHOR: radioctl_ts890_engine_ky]
+    /// The model's `KY` record, or "not supported" where the description has none.
+    fn ky(&self) -> Result<radioctl_core::description::KyParams, RigError> {
+        self.desc
+            .kenwood
+            .as_ref()
+            .and_then(|k| k.ky)
+            .filter(|ky| ky.offers_send_cw())
+            .ok_or_else(|| Self::unsupported("send-CW-text (KY) is not documented for this model"))
+    }
+
     fn unsupported(what: &str) -> RigError {
         RigError::new(ErrorKind::Unsupported, what.to_string())
     }
@@ -729,6 +740,21 @@ impl ProtocolEngine for Ts890Engine {
                 Self::command(format!("{}{value:03};", wire.name), none)
             }
             Op::GetModelId => Self::command("ID;".into(), observe(Field::ModelId)),
+            // `KY` as the TS-890S guide documents it (PDF p. 38): the form, width, character table
+            // and stop come from the description's `[kenwood.ky]` block.
+            Op::SendCw(text) => {
+                let ky = self.ky()?;
+                let bytes = ky
+                    .encode_text(text)
+                    .map_err(|why| Self::unsupported(&why))?;
+                Self::command(bytes, none)
+            }
+            Op::StopCw => {
+                let bytes = self.ky()?.encode_stop().ok_or_else(|| {
+                    Self::unsupported("no documented way to stop KY on this model")
+                })?;
+                Self::command(bytes, none)
+            }
             Op::SetScopeOutput(on) => {
                 self.scope_output = *on;
                 let text = if *on {

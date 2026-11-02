@@ -16,6 +16,8 @@ family = "kenwood-ascii"
 [kenwood]
 model_id = 4
 dialect = "ts440"
+[kenwood.ky]
+form = "undocumented"
 
 [timing]
 timeout_ms = 1000
@@ -90,3 +92,7 @@ key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/radioctl/rigs/kenwood-ts-590sg.toml", note = "Only the starting state of a virtual rig; says nothing about the radio." }
 verified = { state = "unverified" }
 
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "No manual read documents KY for this model: the IC-10 manual command list (qslnet_IC-10-IC-KIT-Manual.pdf, sha256 2a737b9f9f3f3860e582bb669bdcb6037ef856af4bcbfd340eac58b5f1ed4331, scanned pages) lists no KY.", note = "Bruce's decision (2026-11-02): send-CW-text (KY) is used only on a model whose manual documents it; this model reports not supported (the generic keyer path or the existing fallback keys CW). Unverified." }
+verified = { state = "unverified" }

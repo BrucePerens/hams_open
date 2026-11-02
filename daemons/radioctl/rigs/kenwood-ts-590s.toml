@@ -2,7 +2,7 @@
 # Written from Kenwood's published PC command reference (document and page in each fact). No radio has
 # been connected, so every `verified` is unverified. Known gaps: crates/radioctl-protocols/src/kenwood.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify", "send-cw"]
 
 [rig]
 id = "kenwood-ts-590s"
@@ -11,6 +11,12 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 21
+[kenwood.ky]
+form = "padded"
+width = 24
+lowercase = true
+at_sign = true
+stop = "ky0"
 
 [levels]
 attenuator_db = [12]
@@ -102,3 +108,13 @@ verified = { state = "unverified" }
 key = "mode.*"
 provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (October 23 2014), file ts_590_g_pc_command_e.pdf, sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999: MD command p. 16 (MD): 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R (0 and 8 reserved)" }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.send-cw"
+provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (2014-10-23), file ts_590_g_pc_command_e.pdf, https://git.sdf.org/scrape/ubitx-v5x/raw/branch/new-main-dev/References/ts_590_g_pc_command_e.pdf (a public copy; Kenwood's site refused automated downloads), sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999, PDF p. 16: KY Set 1 (P1 always a space, P2 24 characters), Set 2 `KY0;` stops Set 1, read and answer (P1 0 buffer space, 1 none); table with lower case and @; 'TS-590S / TS-590SG common'", note = "Transmit-capable: the rig actor's transmit gate applies and stays closed by default. See the kenwood.ky fact for the form." }
+verified = { state = "manual-checked", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (2014-10-23), KY (PDF p. 16)" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (2014-10-23), file ts_590_g_pc_command_e.pdf, https://git.sdf.org/scrape/ubitx-v5x/raw/branch/new-main-dev/References/ts_590_g_pc_command_e.pdf (a public copy; Kenwood's site refused automated downloads), sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999, PDF p. 16: KY Set 1 (P1 always a space, P2 24 characters), Set 2 `KY0;` stops Set 1, read and answer (P1 0 buffer space, 1 none); table with lower case and @; 'TS-590S / TS-590SG common'", note = "Used as the guide gives it: P2 is a fixed 24-character field, unused characters spaces; I pad on the right. Hamlib 4.6.2 kenwood_send_morse (rigs/kenwood/ts590.c .send_morse and .stop_morse) right-aligns the text for the TS-590S (`KY %24s`) and pads on the right for the SG; the guide does not say which side: pinned open question, bench check needed. A text longer than 24 characters is refused, not split. Unverified on a radio." }
+verified = { state = "manual-checked", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (2014-10-23), KY (PDF p. 16)" }

@@ -19,6 +19,10 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 17
+[kenwood.ky]
+form = "padded"
+width = 24
+stop = "none"
 
 [timing]
 timeout_ms = 500
@@ -95,3 +99,8 @@ verified = { state = "unverified" }
 key = "mode.*"
 provenance = { kind = "manual", reference = "Kenwood TS-570S/TS-570D Instruction Manual, 'APPENDIX: COM CONNECTOR PROTOCOL' (file ts570_user_manualsbase.pdf, an archive copy; sha256 de3f5ba3a55c6ffe5f7b1db3edc1fec78c48cd0fafd78b3e4063eb9762da03b8): Parameter Table, format 2 MODE, printed page 72: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW-R, 9 FSK-R", note = "CW-R and FSK-R (7 and 9) were added from the manual." }
 verified = { state = "manual-checked", reference = "TS-570 manual appendix, parameter table format 2, printed p. 72" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "Kenwood TS-570S/TS-570D instruction manual, file ts570_user_manualsbase.pdf (archive copy), sha256 de3f5ba3a55c6ffe5f7b1db3edc1fec78c48cd0fafd78b3e4063eb9762da03b8, appendix PDF p. 83 (printed 77: KY) and PDF p. 79 (printed 73: formats 43 and 44): KY set (28 bytes: K Y, a space, 24 message bytes space-padded, ';'; format 43 up to 24 characters), read and answer (format 44: 0 buffer space available, 1 not); no stop is documented", note = "KY is documented but no way to stop a message in flight is, and Hamlib 4.6.2 has no send_morse for the TS-570 (rigs/kenwood/ts570.c); so send-cw is not offered for this model (a message that cannot be stopped is not allowed). The form, 24-character width and character table are recorded for when a stop is found. No lower case or @ in the table." }
+verified = { state = "manual-checked", reference = "Kenwood TS-570S/TS-570D instruction manual, KY (appendix PDF p. 83 (printed 77: KY) and PDF p. 79 (printed 73: formats 43 and 44))" }

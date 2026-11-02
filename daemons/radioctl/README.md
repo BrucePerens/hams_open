@@ -990,6 +990,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_kenwood_parse_digits] (radioctl-protocols) Parses a string of ASCII digits only (no sign, no spaces).
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_new] (radioctl-protocols) Builds an engine from a Kenwood-style description.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_encode] (radioctl-protocols) Encodes an Op as a Kenwood ASCII request; refuses PTT readback, power meter and CW.
+- [@ANCHOR: radioctl:radioctl_kenwood_engine_ky] (radioctl-protocols) The model's `KY` record, or "not supported" where its manuals document none (Bruce's decision of 2026-11-02: `KY <text>;` only on models whose manual documents it).
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_feed] (radioctl-protocols) Decodes Kenwood replies, auto-information and `?;` refusals.
 - [@ANCHOR: radioctl:radioctl_elecraft_level_wire] (radioctl-protocols) The Elecraft command prefix and manual range of a level.
 - [@ANCHOR: radioctl:radioctl_elecraft_signed_offset] (radioctl-protocols) Formats a RIT/XIT offset as `+0050` / `-0050`.
@@ -1073,7 +1074,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_civ_engine_decode] (radioctl-protocols) Decodes one CI-V frame into an Inbound; drops echoes and other stations.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_decode] (radioctl-protocols) Decodes one Kenwood reply token into an Inbound.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_encode_ts440] (radioctl-protocols) The operations whose wire form differs in the TS-440S dialect (IC-10 manual): the mode and transmit VFO read from `IF`, split as `FN0;SP<n>;`, `AI` with one digit, and no exact RIT offset, signal or level.
-- [@ANCHOR: radioctl:radioctl_kenwood_engine_encode_ts990] (radioctl-protocols) The operations whose wire form differs in the TS-990S dialect (PC command reference): the mode as `OM0;` and `OM0<m>;`, and no `MD`, `FR`, `FT`, split, PTT read, level or `KY` the engine can use.
+- [@ANCHOR: radioctl:radioctl_kenwood_engine_encode_ts990] (radioctl-protocols) The operations whose wire form differs in the TS-990S dialect (PC command reference): the mode as `OM0;` and `OM0<m>;`, and no `MD`, `FR`, `FT`, split, PTT read or level the engine can use (`KY` follows the description's `[kenwood.ky]` block).
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_decode_front_end] (radioctl-protocols) An `RA` (attenuator: `P1P1` then an always-zero `P2P2`) or `PA` (preamplifier: `P1` then an always-zero `P2`) answer, mapped to a level by the description's steps.
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_front_end_set] (radioctl-protocols) The set command for the attenuator (`RA01;`) or preamplifier (`PA1;`).
 - [@ANCHOR: radioctl:radioctl_virtual_state_power] (radioctl-protocols) Power meter of a virtual rig: nonzero only while keyed.
@@ -1082,6 +1083,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_civ_mode_reply] (radioctl-protocols) Mode read reply of the virtual CI-V rig.
 - [@ANCHOR: radioctl:radioctl_virtual_stop_cw] (radioctl-protocols) A stop-Morse command (CI-V `17 FF`, Elecraft `KY <EOT>;`, Kenwood `KY0;`) empties the virtual rig's CW buffer and counts the stop.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_command] (radioctl-protocols) The virtual Kenwood command table.
+- [@ANCHOR: radioctl:radioctl_virtual_kenwood_ky] (radioctl-protocols) A Kenwood `KY` command as the description's `[kenwood.ky]` block says the model takes it: the read answers `KY0;`, a message of the right form and width is recorded, the model's stop empties it, anything else (and every command on a model with no documented `KY`) is `?;`.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_id] (radioctl-protocols) The ID the virtual Kenwood rig reports.
 - [@ANCHOR: radioctl:radioctl_virtual_set_frequency] (radioctl-protocols) Sets VFO A or B from 11 Kenwood digits, else `?;`.
 - [@ANCHOR: radioctl:radioctl_virtual_set_kenwood_mode] (radioctl-protocols) Sets the mode from one Kenwood digit, else `?;`.
@@ -1305,6 +1307,10 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_conformance_replay] (radioctl-protocols) Replays a transcript against the engine and the virtual rig built from one description; reports every byte-level disagreement.
 - [@ANCHOR: radioctl:radioctl_conformance_replay_solicited] (radioctl-protocols) Replays one command step: engine encoding, reply expectation and virtual rig answer against the transcript bytes.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_description] (radioctl-core) Builds the RigDescription from the parsed file: family, capabilities, defaults, timing, mode codes.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_ky] (radioctl-core) The `[kenwood.ky]` block: `form` (`undocumented`, `padded`, `variable`), `width`, `lowercase`, `at_sign`, `stop` (`none`, `ky0`, `blank`); send-cw is listed exactly when KY and a stop are documented.
+- [@ANCHOR: radioctl:radioctl_core_ky_offers_send_cw] (radioctl-core) Whether a model gets the send-cw capability: its manual documents `KY` and a way to stop a message.
+- [@ANCHOR: radioctl:radioctl_core_ky_encode_text] (radioctl-core) The wire form of a `KY` message, or why it is refused: 1 to `width` characters of the model's table, not all spaces, no `;`.
+- [@ANCHOR: radioctl:radioctl_core_ky_encode_stop] (radioctl-core) The wire form of the model's documented `KY` stop (`KY0;` or an all-space field), or none.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_facts] (radioctl-core) Builds the provenance facts; duplicates and empty references are errors.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_mode_codes] (radioctl-core) Builds the mode code table; duplicate modes or codes are errors.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_verified] (radioctl-core) Builds a verified state; each state requires its own evidence fields.
@@ -1727,6 +1733,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ts890_engine_note] (radioctl-protocols) Keeps what the frame edges are computed from.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_scope_start] (radioctl-protocols) The commands that turn the waveform output on: read the context, then `DD0`.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_encode] (radioctl-protocols) See the source.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_ky] (radioctl-protocols) The TS-890S `KY` record (P1 = 2, up to 24 characters, `KY0;` stop), or "not supported".
 - [@ANCHOR: radioctl:radioctl_ts890_engine_feed] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_virtual_ts440_is] (radioctl-protocols) True when this rig speaks the TS-440S dialect.
 - [@ANCHOR: radioctl:radioctl_virtual_ts440_is_fn_sp] (radioctl-protocols) True for the TS-440S (`FN` and `SP`), false for the TS-450S dialect.

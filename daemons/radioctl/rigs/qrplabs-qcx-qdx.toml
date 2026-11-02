@@ -13,6 +13,8 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 20
+[kenwood.ky]
+form = "undocumented"
 
 [timing]
 timeout_ms = 500
@@ -83,4 +85,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "kenwood.model_id"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/ts480.c (qrplabs_caps) and kenwood.c (kenwood_id_string_list: only the TS-480 entry, \"020\")", note = "Hamlib lists no ID for the QRP Labs models; they emulate the TS-480 and the same 20 is assumed. Hamlib's comment in kenwood.c says QRP Labs radios cannot decide between a 37- and a 38-byte IF answer, so the engine's IF parse may need a variant; unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "No manual for this model's KY was read (this model speaks the Kenwood command set but no Kenwood document covers it).", note = "Bruce's decision (2026-11-02): send-CW-text (KY) is used only on a model whose manual documents it; this model reports not supported (the generic keyer path or the existing fallback keys CW). Hamlib 4.6.2 rigs/kenwood/ts480.c (rig_caps of the QCX/QDX) has a send_morse: a fact about Hamlib, not a manual. Unverified." }
 verified = { state = "unverified" }

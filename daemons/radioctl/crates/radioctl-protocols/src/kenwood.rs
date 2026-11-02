@@ -102,7 +102,14 @@ impl Tokenizer {
             let printable = body
                 .iter()
                 .all(|b| (0x20..0x7F).contains(b) && *b != TERMINATOR);
-            let text = String::from_utf8_lossy(body).trim().to_string();
+            // A `KY` message is a fixed field whose trailing spaces count (an all-space field is
+            // the TS-480's stop), so only its start is trimmed.
+            let lossy = String::from_utf8_lossy(body);
+            let text = if body.starts_with(b"KY") {
+                lossy.trim_start().to_string()
+            } else {
+                lossy.trim().to_string()
+            };
             if printable && !text.is_empty() {
                 out.push(Token::Command(text));
             } else {
@@ -189,6 +196,17 @@ impl KenwoodEngine {
             if_frequency: dialect == Some(KenwoodDialect::Trc80),
             transceive: false,
         })
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_ky]
+    /// The model's `KY` record, or "not supported" where its manuals document none.
+    fn ky(&self) -> Result<radioctl_core::description::KyParams, RigError> {
+        self.desc
+            .kenwood
+            .as_ref()
+            .and_then(|k| k.ky)
+            .filter(|ky| ky.offers_send_cw())
+            .ok_or_else(|| Self::unsupported("send-CW-text (KY) is not documented for this model"))
     }
 
     fn unsupported(what: &str) -> RigError {
@@ -326,8 +344,8 @@ impl KenwoodEngine {
 
     // [@ANCHOR: radioctl_kenwood_engine_encode_ts990]
     /// The operations whose wire form differs in the TS-990S dialect (PC command reference, `OM`
-    /// PDF page 45): the mode is `OM0;` and `OM0<m>;`; there is no `MD`, `FR`, `FT`, level or `KY`
-    /// form the engine can use. `None` where the classic form is also the TS-990S form.
+    /// PDF page 45): the mode is `OM0;` and `OM0<m>;`; there is no `MD`, `FR`, `FT` or level
+    /// form the engine can use (`KY` follows the description's `[kenwood.ky]` block). `None` where the classic form is also the TS-990S form.
     fn encode_ts990(&self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
             Op::GetMode => Ok(Self::command(
@@ -346,8 +364,7 @@ impl KenwoodEngine {
             | Op::GetSplit
             | Op::GetPtt
             | Op::GetLevel(_)
-            | Op::SetLevel(..)
-            | Op::StopCw => Err(Self::unsupported("not in the TS-990S command set")),
+            | Op::SetLevel(..) => Err(Self::unsupported("not in the TS-990S command set")),
             _ => return None,
         })
     }
@@ -652,11 +669,24 @@ impl ProtocolEngine for KenwoodEngine {
                 Self::command(format!("{}{digit}{value:03};", wire.name), none)
             }
             Op::GetModelId => Self::command("ID;".into(), ReplyKind::Observation(Field::ModelId)),
-            // The TS-590 guide, "KY" (Set 2): `KY0;` stops the keying started by `KY <text>`.
-            // The TS-2000 transcription read for this module has no `KY` entry at all, and no
-            // Kenwood description carries `send-cw`, so the actor refuses this before it is
-            // encoded (`Unsupported`); the encoding is here for a description that gains it.
-            Op::StopCw => Self::command("KY0;".into(), none),
+            // `KY` is used only on a model whose manual documents it, in the form, width, character
+            // table and stop that manual gives (`KyParams`, one `[kenwood.ky]` block and fact per
+            // description); every other model refuses with "not supported". `KY;` (is there room
+            // in the buffer) is not sent: a message is one field of at most the model's width, and
+            // a full buffer is an error from the rig ("KY" in the TS-480, TS-590 and TS-990 guides).
+            Op::SendCw(text) => {
+                let ky = self.ky()?;
+                let bytes = ky
+                    .encode_text(text)
+                    .map_err(|why| Self::unsupported(&why))?;
+                Self::command(bytes, none)
+            }
+            Op::StopCw => {
+                let bytes = self.ky()?.encode_stop().ok_or_else(|| {
+                    Self::unsupported("no documented way to stop KY on this model")
+                })?;
+                Self::command(bytes, none)
+            }
             _ => {
                 return Err(Self::unsupported("not implemented for the Kenwood engine"));
             }
@@ -751,6 +781,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_kenwood_engine_encode]
+    // Tests [@ANCHOR: radioctl_kenwood_engine_ky]
     #[test]
     fn encode_matches_the_ts2000_commands() {
         let mut engine = engine();
@@ -782,12 +813,30 @@ mod tests {
             ErrorKind::Unsupported,
             "no Kenwood description carries send-cw"
         );
+        // A description that records a documented KY (here the TS-590 form) encodes it.
         let mut with_cw = RigDescription::ts2000();
         let mut list: Vec<_> = with_cw.capabilities.iter().collect();
         list.push(Capability::SendCw);
         with_cw.capabilities = CapabilitySet::of(&list);
+        // Without a `ky` record the capability alone does not make KY reachable.
+        let mut engine = KenwoodEngine::new(with_cw.clone()).expect("engine");
+        assert!(engine.encode(&Op::SendCw("cq".into())).is_err());
+        assert!(engine.encode(&Op::StopCw).is_err());
+        if let Some(k) = with_cw.kenwood.as_mut() {
+            k.ky = Some(radioctl_core::description::KyParams {
+                form: radioctl_core::description::KyForm::Padded,
+                width: 24,
+                lowercase: true,
+                at_sign: true,
+                stop: radioctl_core::description::KyStop::Ky0,
+            });
+        }
         let mut engine = KenwoodEngine::new(with_cw).expect("engine");
         assert_eq!(engine.encode(&Op::StopCw).expect("stop").bytes, b"KY0;");
+        assert_eq!(
+            engine.encode(&Op::SendCw("cq".into())).expect("send").bytes,
+            b"KY cq                      ;"
+        );
         assert!(engine
             .encode(&Op::SetFrequency(Vfo::A, Hz(100_000_000_000)))
             .is_err());

@@ -18,6 +18,8 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 12
+[kenwood.ky]
+form = "undocumented"
 
 [timing]
 timeout_ms = 600
@@ -85,4 +87,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kenwood/kenwood.c kenwood_mode_table (1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=RTTY); the mode list is that of `rigctl -m 2013 --dump-caps`", note = "Mode codes are Hamlib's default Kenwood mode table; modes Hamlib does not list for this model are omitted." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "No manual read documents KY for this model: ts950sdx_instruction.pdf (sha256 402e3e265d28ed57c8ce07deddf19b6d7e6bb9b2fbb6958c9a099b068182a733) is scanned with no text layer and no command table was read.", note = "Bruce's decision (2026-11-02): send-CW-text (KY) is used only on a model whose manual documents it; this model reports not supported (the generic keyer path or the existing fallback keys CW). Unverified." }
 verified = { state = "unverified" }

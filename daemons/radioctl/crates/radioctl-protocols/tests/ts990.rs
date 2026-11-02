@@ -76,7 +76,6 @@ fn the_wire_forms_are_those_of_the_ts990s_reference() {
         Op::GetTxVfo,
         Op::GetLevel(Level::AfGain),
         Op::SetLevel(Level::MicGain, 100),
-        Op::StopCw,
     ] {
         assert_eq!(
             engine.encode(&op).expect_err("not in this dialect").kind,
@@ -84,6 +83,12 @@ fn the_wire_forms_are_those_of_the_ts990s_reference() {
             "{op:?}"
         );
     }
+    // `KY` is the guide's (PDF p. 34): P1 a space, 24 characters, and `KY0;` stops it.
+    assert_eq!(wire(&mut engine, Op::StopCw), b"KY0;");
+    assert_eq!(
+        wire(&mut engine, Op::SendCw("CQ".into())),
+        b"KY CQ                      ;"
+    );
     // Answers: OM0<m>, and an IF whose P8 and P10 are not read. The sub band is not a VFO B.
     assert_seen(engine.feed(b"OM02;", NOW), Observation::Mode(Mode::Usb));
     for bad in [&b"MD2;"[..], b"FR0;", b"AG0128;", b"OM0Z;", b"OM2;"] {

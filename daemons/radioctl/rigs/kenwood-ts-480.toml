@@ -5,7 +5,7 @@
 # Engine: the classic Kenwood engine (IF answer of 38 characters, MD mode digits, FA/FB 11 digits): all three agree with the guide.
 # Pinned disagreement: the guide gives RG (RF gain) as 000 to 100 for the TS-480; the classic engine accepts 0 to 255 (the TS-590 and TS-2000 range), so a value of 101 to 255 would be sent to a radio that, per the guide, does not take it. PC is 005 to 100 on the SAT and 005 to 200 on the HX; the engine uses 5 to 100. Both are pinned in tests/ascii_families.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "split", "rit-xit", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "split", "rit-xit", "levels", "identify", "send-cw"]
 
 [rig]
 id = "kenwood-ts-480"
@@ -14,6 +14,10 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 20
+[kenwood.ky]
+form = "padded"
+width = 24
+stop = "blank"
 
 [levels]
 attenuator_db = [12]
@@ -115,3 +119,13 @@ verified = { state = "manual-checked", reference = "TS-480 PC control command re
 key = "mode.*"
 provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/SAT TRANSCEIVER' (dated 2003/11/28, 26 pages, no document number), file ts480_pc_command.pdf, https://www.radioamatore.info/attachments/059_TS-480_pc_control_command.pdf (a public copy; Kenwood's own site refused automated downloads), sha256 371c55d4c3ce59be1c4ea19d4f367eac0e927f4064794b09c052eba247c8c972, read by us in this session: MD, PDF p. 13 (1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK, 7 CW reverse, 9 FSK reverse; 0 and 8 are not used by the TS-480)", note = "FSK and FSK reverse are mapped to radioctl's rtty and rtty-r." }
 verified = { state = "manual-checked", reference = "TS-480 PC control command reference, MD (p. 13)" }
+
+[[facts]]
+key = "capability.send-cw"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/SAT TRANSCEIVER' (2003/11/28), file ts480_pc_command.pdf, https://www.radioamatore.info/attachments/059_TS-480_pc_control_command.pdf, sha256 371c55d4c3ce59be1c4ea19d4f367eac0e927f4064794b09c052eba247c8c972, PDF p. 13: KY set (30 bytes: K Y, P1 a space, P2 24 bytes space-padded, ';'), read and answer (P1 0 buffer available, 1 not); P2 table without lower case or @; 'If all P2 parameter characters are spaces, the transceiver stops sending the message' (the stop)", note = "Transmit-capable: the rig actor's transmit gate applies and stays closed by default. See the kenwood.ky fact for the form." }
+verified = { state = "manual-checked", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/SAT TRANSCEIVER' (2003/11/28), KY (PDF p. 13)" }
+
+[[facts]]
+key = "kenwood.ky"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/SAT TRANSCEIVER' (2003/11/28), file ts480_pc_command.pdf, https://www.radioamatore.info/attachments/059_TS-480_pc_control_command.pdf, sha256 371c55d4c3ce59be1c4ea19d4f367eac0e927f4064794b09c052eba247c8c972, PDF p. 13: KY set (30 bytes: K Y, P1 a space, P2 24 bytes space-padded, ';'), read and answer (P1 0 buffer available, 1 not); P2 table without lower case or @; 'If all P2 parameter characters are spaces, the transceiver stops sending the message' (the stop)", note = "Used as the guide gives it: text of 1 to 24 characters padded on the right with spaces, an all-space field as the stop. Characters: A-Z, 0-9, space and ' \" ( ) * + , - . / : = ? plus the prosign symbols [ _ < # > ] \\ % (BT AR AS HH SK KN BK SN) (no lower case, no @). A longer text is refused, not split, and `KY;` (buffer room) is not queried: a full buffer is an error from the rig. Hamlib 4.6.2 (kenwood.c kenwood_send_morse, rigs/kenwood/ts480.c rig_caps .send_morse) agrees on the 28-byte padded form and sends `KY0` to stop, which this guide does not document for the TS-480, so it is not used. Unverified on a radio." }
+verified = { state = "manual-checked", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/SAT TRANSCEIVER' (2003/11/28), KY (PDF p. 13)" }
