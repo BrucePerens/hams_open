@@ -15,10 +15,15 @@ class TestResConfigSettings(common.TransactionCase):
         anywhere hams_base is installed, caught incidentally by an
         unrelated module's own settings test."""
         settings = self.env["res.config.settings"].create({})
-        self.assertEqual(
+        # No placeholder address and no placeholder organisation: an empty setting means "use the company name" and
+        # "print no address", never a made-up one that a first save of Settings would write to the database.
+        self.assertFalse(
             settings.compliance_mailing_address,
-            "123 Main St, Anytown USA",
-            "[!] DIAGNOSTIC FOR AI: compliance_mailing_address default value did not load onto a newly created res.config.settings record.",
+            "[!] DIAGNOSTIC FOR AI: compliance_mailing_address must have no placeholder default (it used to be a fake street address).",
+        )
+        self.assertFalse(
+            settings.compliance_org_name,
+            "[!] DIAGNOSTIC FOR AI: compliance_org_name must default to empty so the footer uses the company name.",
         )
 
     def test_dns_records_reflect_the_configured_catchall_domain(self):

@@ -246,6 +246,27 @@ class TestHelpdeskCore(HamsTransactionCase):
             mailbacks(), 1, "Recovering a false positive still mails the customer."
         )
 
+    def test_04c_no_assignment_notice_for_a_ticket_created_as_spam(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_assignment_notice_for_spam]
+        # The email policy page says quarantined mail pages nobody. A ticket created already in "spam" (the inbound filter does this) is
+        # assigned to the on-duty admin like any other, but the assignment email and toast are skipped; a "new" ticket still sends them.
+        Ticket = self.env["hams_helpdesk.ticket"]
+        assignee = self.env.ref("base.user_admin")
+
+        def notices(ticket):
+            return self.env["mail.message"].search_count(
+                [
+                    ("res_id", "=", ticket.id),
+                    ("model", "=", "hams_helpdesk.ticket"),
+                    ("body", "ilike", "assigned to you"),
+                ]
+            )
+
+        spam = Ticket.create({"name": "Quarantined at creation", "stage": "spam", "user_id": assignee.id})
+        self.assertEqual(notices(spam), 0, "A ticket created in the spam quarantine must not notify the assignee.")
+        real = Ticket.create({"name": "Real at creation", "stage": "new", "user_id": assignee.id})
+        self.assertEqual(notices(real), 1, "A new ticket still notifies its assignee.")
+
     def test_05_portal_write_restrictions(self):
         """Verify portal users cannot modify administrative fields."""
         # [@ANCHOR: test_05_portal_write_restrictions]

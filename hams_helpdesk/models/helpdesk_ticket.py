@@ -516,6 +516,10 @@ class HelpdeskTicket(models.Model):
             quiet = ticket_service.ticket_type == "server_exception" and self.env.context.get(
                 "hams_exception_quiet"
             )
+            # A ticket that starts in the spam quarantine (the inbound filter sets stage="spam" before create()) pages nobody
+            # either: no assignment email and no toast. The email policy page (ham_init) says so.
+            # [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_assignment_notice_for_spam]
+            quiet = quiet or ticket_service.stage == "spam"
             if ticket_service.user_id and not quiet:
                 # Email Notification
                 # Bug-hunt fix (2026-09-09): this internal-only assignment
