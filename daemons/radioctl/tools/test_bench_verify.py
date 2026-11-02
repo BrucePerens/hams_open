@@ -235,15 +235,15 @@ class BenchVerifyTests(unittest.TestCase):
             self.assertTrue(tomllib.loads(proposal)["report"][0]["rig"] == "icom-ic-7300")
             self.assertTrue(all(p.terminated for p in env.procs))
             selftests = [a for a in env.runs if a[0] == "radioctl-selftest" and "--description" in a]
-            self.assertTrue(selftests and all("--no-upload" in a for a in selftests))
+            self.assertTrue(selftests and all("--no-upload" not in a for a in selftests))
 
     # Tests [@ANCHOR: radioctl_bench_check_b1]
-    def test_upload_is_passed_to_the_selftest_only_when_asked(self):
+    def test_no_upload_is_passed_to_the_selftest_only_as_a_testing_convenience(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = FakeEnv()
-            b.verify(env, opts(tmp, port="virtual", only=["B1"], upload=True))
+            b.verify(env, opts(tmp, port="virtual", only=["B1"], no_upload=True))
             argv = [a for a in env.runs if "--description" in a][0]
-            self.assertNotIn("--no-upload", argv)
+            self.assertIn("--no-upload", argv)
 
     # Tests [@ANCHOR: radioctl_bench_check_c1] [@ANCHOR: radioctl_bench_check_c2] [@ANCHOR: radioctl_bench_daemon_start]
     # Tests [@ANCHOR: radioctl_bench_daemon_stop] [@ANCHOR: radioctl_bench_rigctl_cmd] [@ANCHOR: radioctl_bench_free_port]

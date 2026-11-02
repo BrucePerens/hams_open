@@ -17,14 +17,15 @@ reads that file; it keeps no second copy). For a rig the tool
 * writes `BENCH-REPORT-<rig>-<date>.txt` in the layout of `radioctl-selftest`'s report and
   `verified.toml.proposed` (a proposal only: it never edits `rigs/reports/verified.toml` or a description).
 
-Nothing is uploaded by the tool. When it runs `radioctl-selftest` it adds `--no-upload` unless `--upload` is
-given (the stand-alone self-test keeps its own automatic upload).
+The tool's own report and proposal are never uploaded. The `radioctl-selftest` step follows the self-test's
+default (Bruce, 2026-10-31): it uploads its report to hams.com automatically, with no prompt. `--no-upload`
+is passed through only as a testing convenience (virtual-rig unit tests, offline benches).
 
 Usage:
     bench_verify.py list
     bench_verify.py detect
     bench_verify.py verify RIG_ID [--port P] [--baud N] [--out-dir D] [--only A5,B2] [--auto-only]
-                                  [--transmit] [--max-transmit-s N] [--upload]
+                                  [--transmit] [--max-transmit-s N] [--no-upload]
 """
 from __future__ import annotations
 
@@ -304,7 +305,7 @@ class Options:
     auto_only: bool = False
     transmit: bool = False
     max_transmit_s: int = 5
-    upload: bool = False
+    no_upload: bool = False  # testing convenience only; the self-test uploads by default
     radioctld: str = "radioctld"
     selftest: str = "radioctl-selftest"
     rigs_dir: Path = RADIOCTL_DIR / "rigs"
@@ -467,10 +468,10 @@ def auto_a6(r: Runner, c: Check) -> Result:
 
 # [@ANCHOR: radioctl_bench_check_b1]
 def auto_b1(r: Runner, c: Check) -> Result:
-    """B1: the read-only self-test, with --no-upload unless --upload was given."""
+    """B1: the read-only self-test; it uploads automatically (its default) unless --no-upload was given for testing."""
     argv = [r.opts.selftest, "--description", r.opts.rig, "--port", r.opts.port, "--baud", str(r.opts.baud),
             "--out-dir", str(r.opts.out_dir)]
-    if not r.opts.upload:
+    if r.opts.no_upload:
         argv.append("--no-upload")
     rc, out = r.env.run(argv, 180)
     return Result(c.id, "PASS" if rc == 0 else "FAIL", f"radioctl-selftest exit {rc}; {out.strip().splitlines()[-1][:100] if out.strip() else ''}")
@@ -562,7 +563,7 @@ def verify(env: Env, opts: Options, runbook_text: str | None = None) -> int:
     report = opts.out_dir / f"BENCH-REPORT-{opts.rig}-{date}.txt"
     report.write_text(render_report(opts, name, results, started, runner.wire))
     (opts.out_dir / "verified.toml.proposed").write_text(verified_proposal(opts, name, results, date))
-    env.say(f"\nreport: {report}\nproposal: {opts.out_dir / 'verified.toml.proposed'} (nothing uploaded)")
+    env.say(f"\nreport: {report}\nproposal: {opts.out_dir / 'verified.toml.proposed'} (this tool uploads nothing)")
     return 1 if any(r.verdict == "FAIL" for r in results) else 0
 
 
@@ -581,7 +582,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
     v.add_argument("--auto-only", action="store_true")
     v.add_argument("--transmit", action="store_true")
     v.add_argument("--max-transmit-s", type=int, default=5)
-    v.add_argument("--upload", action="store_true")
+    v.add_argument("--no-upload", action="store_true", help="testing convenience: pass --no-upload to radioctl-selftest (virtual rigs, offline benches)")
     v.add_argument("--radioctld", default="radioctld")
     v.add_argument("--selftest", default="radioctl-selftest")
     a = ap.parse_args(argv)
@@ -593,7 +594,7 @@ def main(argv: list[str] | None = None, env: Env | None = None) -> int:
         env.say(repr(detect(env)))
         return 0
     opts = Options(a.rig, a.port, a.baud, a.out_dir, [s for s in a.only.split(",") if s], a.auto_only,
-                   a.transmit, a.max_transmit_s, a.upload, a.radioctld, a.selftest)
+                   a.transmit, a.max_transmit_s, a.no_upload, a.radioctld, a.selftest)
     return verify(env, opts)
 
 
