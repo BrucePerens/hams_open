@@ -55,6 +55,20 @@ Virtual rigs implement what the engines use plus a few fixed answers that Hamlib
 start-up (so the oracle can run). They are **not** models of radios: a few starting values (levels,
 firmware, SWR) are our own choices.
 
+The raw CI-V meters are checked against Hamlib in two halves that share literals: the Hamlib oracle
+batch (`rigctld_oracle.rs`, `hamlib_converts_the_virtual_ic7300s_keyed_meters_...`) keys the virtual
+IC-7300 and asserts the floats Hamlib's own `rigctld -m 3073` answers for `SWR`, `ALC`,
+`COMP_METER`, `VD_METER` and `ID_METER` (deflections 12, 80, 0, 130, 90); `radioctld`'s
+`tests/meters.rs` asserts the same numbers from `radioctld` through its `rigctl` protocol. They agree
+because both use the same published scale points, which says nothing about a real radio: the
+points stay unverified until a bench measurement.
+
+`Daemon::stop` stops every task the daemon started, including the listener of a virtual rotator
+(`VirtualRotatorControl::stop`); `radioctld`'s `tests/rotator.rs` checks the port is closed after it.
+`ProtocolEngine::open_requests` and `link_restored` are tested with the virtual rigs and their fault
+knobs (drop the link, reconnect, check the set-up frames precede traffic and that none transmits;
+chapter [3](03-architecture.md)).
+
 ## Transcript replay
 
 See chapter [6](06-rig-descriptions.md). `cargo test -p radioctl-protocols --test rig_files` loads every

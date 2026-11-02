@@ -168,7 +168,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - The first four Icom files (IC-7300, 705, 7610, 9700) are **not written from Icom's guides**. For the 19 later models Icom's instruction manuals were read for facts, under Bruce Perens' decision of 2026-10-31 (the terms are unreasonable and would not survive a court): Icom's download endpoint is excluded by robots.txt and the direct path is 403, so the archive.org mirror copies were read; they are kept outside every repository (`~/manuals/icom/`, sha256 in `SHA256SUMS`) and are not redistributed.
 - Their facts were read from Hamlib 4.6.2 source (facts only, provenance kind `hamlib-source`, file and function named per fact) and from `rigctl --dump-caps` output.
 - Engine features: VFO B, split, RIT/XIT, levels, filter, model id.
-- Raw meters (`Op::GetMeter`: SWR, ALC, COMP, Vd, Id as 0 to 255 deflections, uncalibrated) and data modes (`USB-D`, `LSB-D`; `M PKTUSB` / `PKTLSB` through `radioctld`) are implemented for the IC-7300. The engine takes the mode being set as the mode for the filter table.
+- Raw meters (`Op::GetMeter`: SWR, ALC, COMP, Vd, Id as 0 to 255 deflections, uncalibrated) and data modes (`USB-D`, `LSB-D`; `M PKTUSB` / `PKTLSB` through `radioctld`) are implemented for the IC-7300. `radioctld` serves them as Hamlib's `ALC`, `SWR`, `COMP_METER`, `VD_METER` and `ID_METER` through unverified scale points (manual chapters 9 and C). The engine takes the mode being set as the mode for the filter table.
 - Scope (command 0x27) is in `crates/radioctl-protocols/src/civ_scope.rs`:
   - reachable through `Op` (`SetScopeOutput`, `SetScopeAxis`, `SetScopeSpan`, `SetScopeEdges`, `SetScopeReference` and their reads), capability `scope`, on the IC-7300 and IC-7610;
   - `CivEngine` returns each complete sweep as `Inbound::ScopeFrame`, a typed `radioctl_core::scope::ScopeFrame`;
@@ -1479,6 +1479,12 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_knob_watch] (radioctld) Watches the rig's event stream for up to `wait` for a frequency change whose source is
 - [@ANCHOR: radioctl:radioctld_knob_result] (radioctld) The report line for an outcome. A knob that was not seen counts as a check that did not pass
 - [@ANCHOR: radioctl:radioctld_knob_check] (radioctld) The whole check, or `None` when the description does not claim the capability. Without a
+- [@ANCHOR: radioctl:radioctld_meter_cal_clamped] (radioctld) The value on the line through a scale's points, the first or last value outside them. Unverified.
+- [@ANCHOR: radioctl:radioctld_meter_cal_comp_db] (radioctld) Compression in decibels (0 to 30) for a raw COMP meter deflection (Hamlib's IC-7300 points). Unverified estimate.
+- [@ANCHOR: radioctl:radioctld_meter_cal_id_amps] (radioctld) Drain current in amperes (0 to 25) for a raw Id meter deflection. Unverified estimate.
+- [@ANCHOR: radioctl:radioctld_meter_cal_level] (radioctld) The `rigctl` value of a meter for a raw deflection: SWR ratio, ALC fraction, COMP decibels, Vd volts, Id amperes. Unverified estimate.
+- [@ANCHOR: radioctl:radioctld_meter_cal_range] (radioctld) The largest value `rigctl` is told for a meter (the top of its advertised range).
+- [@ANCHOR: radioctl:radioctld_meter_cal_vd_volts] (radioctld) Supply voltage in volts (0 to 16) for a raw Vd meter deflection. Unverified estimate.
 - [@ANCHOR: radioctl:radioctld_meter_cal_swr_ratio] (radioctld) The SWR ratio (1.0 or more) for a raw 0 to 255 SWR meter deflection. Unverified estimate.
 - [@ANCHOR: radioctl:radioctld_meter_cal_alc_fraction] (radioctld) The ALC level as a 0 to 1 fraction for a raw 0 to 255 ALC meter deflection. Unverified estimate.
 - [@ANCHOR: radioctl:radioctld_cli_stdin_lines_from] (radioctld) Lines from `rx` as a [`BufRead`], and a poll that is true once a line was waiting (and

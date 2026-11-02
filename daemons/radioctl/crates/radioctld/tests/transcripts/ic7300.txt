@@ -69,6 +69,14 @@
 < 1
 > l ALC
 < 0
+> l COMP_METER
+< 0
+> l VD_METER
+< 13.078947
+> l ID_METER
+< 0
+> L VD_METER 1
+< RPRT -11
 > l COMP
 < RPRT -11
 > l RAWSTR

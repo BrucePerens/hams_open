@@ -873,6 +873,44 @@ fn ic7300_agrees_with_hamlib_on_frequency_and_mode() {
     assert!(divergences.is_empty(), "{divergences:#?}");
 }
 
+/// Hamlib's calibrated floats for the virtual IC-7300's keyed meter deflections, read through
+/// `rigctld -m 3073`: SWR 12, ALC 80, COMP 0, Vd 130, Id 90 (raw). radioctld converts the same
+/// deflections in `meter_cal` from the same scale points; its test
+/// `radioctld_serves_the_meters_the_way_hamlib_reads_them` pins the same numbers, so the two
+/// suites cannot drift apart. Virtual rig only: the "transmit" keys a program.
+// Tests [@ANCHOR: radioctl_virtual_state_meter]
+#[test]
+fn hamlib_converts_the_virtual_ic7300s_keyed_meters_to_the_numbers_radioctld_pins() {
+    let desc = shipped("icom-ic-7300");
+    let radio = RadioOnPty::start(&desc);
+    let mut oracle = Rigctld::start(HAMLIB_IC7300, &radio.slave, 19200);
+    let read = |oracle: &mut Rigctld, name: &str| -> f64 {
+        let (fields, code) = oracle.call(&format!("l {name}")).expect("answer");
+        assert_eq!(code, 0, "l {name}: {fields:?}");
+        fields
+            .iter()
+            .find_map(|(_, v)| v.parse().ok())
+            .unwrap_or_else(|| panic!("l {name}: no number in {fields:?}"))
+    };
+    let (_, code) = oracle.call("T 1").expect("T 1");
+    assert_eq!(code, 0);
+    let got: Vec<(&str, f64)> = ["SWR", "ALC", "COMP_METER", "VD_METER", "ID_METER"]
+        .into_iter()
+        .map(|name| (name, read(&mut oracle, name)))
+        .collect();
+    let _ = oracle.call("T 0");
+    for ((name, value), want) in got.iter().zip(HAMLIB_KEYED_METERS) {
+        assert!(
+            (value - want).abs() < 1e-4,
+            "{name}: Hamlib says {value}, pinned {want}"
+        );
+    }
+}
+
+/// What Hamlib 4.6.2 answers for the keyed virtual IC-7300 (see the test above); shared by
+/// literal with radioctld's test.
+const HAMLIB_KEYED_METERS: [f64; 5] = [1.125, 80.0 / 120.0, 0.0, 13.078947, 9.278351];
+
 /// The scenario for the Icom rigs: the common one plus PTT read, RIT offset and AF gain, the
 /// operations the harness can express through `rigctld` for CI-V.
 fn icom_scenario(first: u64, second: u64, other: u64) -> Vec<Op> {

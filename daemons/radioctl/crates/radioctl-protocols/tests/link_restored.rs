@@ -245,3 +245,52 @@ async fn an_icom_pcr_is_powered_on_when_the_actor_starts_and_again_after_a_link_
         .await
         .expect("read again");
 }
+
+// Tests [@ANCHOR: radioctl_core_engine_box_open_requests]
+// Tests [@ANCHOR: radioctl_core_engine_box_link_restored]
+// Tests [@ANCHOR: radioctl_core_op_transmits]
+#[test]
+fn no_engines_session_set_up_can_put_a_transmitter_on_the_air() {
+    // For every shipped description: whatever the open and link-restored hooks return (on a fresh
+    // engine, and again after the controller's usual session commands) differs from the bytes
+    // that key the rig (PTT on, CW) or contains none of them.
+    use radioctl_core::units::Mode;
+    use radioctl_protocols::conformance::engine_for;
+    let rigs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rigs");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(rigs).expect("rigs dir") {
+        let path = entry.expect("entry").path();
+        if path.extension().is_none_or(|x| x != "toml") {
+            continue;
+        }
+        let description = rigfile::parse(&std::fs::read_to_string(&path).expect("read"))
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+            .description;
+        let Ok(mut engine) = engine_for(&description) else {
+            continue;
+        };
+        let keying: Vec<Vec<u8>> = [Op::SetPtt(true), Op::SendCw("E".into())]
+            .iter()
+            .filter_map(|op| engine.encode(op).ok().map(|r| r.bytes))
+            .collect();
+        // The session the controller sets up, so link_restored has something to send again.
+        let _ = engine.encode(&Op::SetTransceive(true));
+        let _ = engine.encode(&Op::SetMode(Mode::Usb));
+        let mut hooks = engine.open_requests();
+        hooks.extend(engine.link_restored());
+        hooks.extend(engine.link_restored());
+        for request in hooks {
+            for key in &keying {
+                assert!(
+                    !key.is_empty() && !request.bytes.windows(key.len()).any(|w| w == &key[..]),
+                    "{}: a session set-up request {:?} carries a keying command {:?}",
+                    description.id,
+                    request.bytes,
+                    key
+                );
+            }
+        }
+        checked += 1;
+    }
+    assert!(checked >= 20, "only {checked} engines checked");
+}

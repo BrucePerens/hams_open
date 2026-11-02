@@ -421,6 +421,8 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_vrot_control_state] (radioctl-station) Where the rotator is and is going.
 - [@ANCHOR: radioctl:radioctl_station_vrot_control_received] (radioctl-station) Every command line received.
 - [@ANCHOR: radioctl:radioctl_station_vrot_control_set_stuck] (radioctl-station) Makes the rotator stuck (or frees it).
+- [@ANCHOR: radioctl:radioctl_station_vrot_control_address] (radioctl-station) The socket the virtual rotator is served on, if the listener could report it.
+- [@ANCHOR: radioctl:radioctl_station_vrot_control_stop] (radioctl-station) Stops the listener task and drops the client connection it holds, closing the port; a second call does nothing.
 - [@ANCHOR: radioctl:radioctl_station_vrot_control_set_silent] (radioctl-station) Makes the rotator silent (or lets it answer).
 - [@ANCHOR: radioctl:radioctl_station_vrot_serve] (radioctl-station) Serves `rotator` on `listener` from a task on `runtime`; one client at a time, a new connection replaces the old one.
 - [@ANCHOR: radioctl:radioctl_station_rigspec_tcp] (radioctl-station) A radio at a TCP address with the raw CAT stream and default settings.
