@@ -39,9 +39,10 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch, Notify};
 use tokio::time::{sleep_until, timeout_at, Instant};
 
 use crate::capability::{Capability, CapabilitySet};
-use crate::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
+use crate::engine::{Inbound, LineStep, ProtocolEngine, ReplyKind, Request};
 use crate::error::{ErrorKind, RigError};
 use crate::event::{Change, RigEvent, Source};
+use crate::keyer::ControlLines;
 use crate::op::{Alarm, Field, Observation, Op};
 use crate::poll::{PollConfig, PollEntry, PollSchedule};
 use crate::scope::{FilterScopeFrame, ScopeFrame};
@@ -91,6 +92,10 @@ pub struct RigOptions {
     /// [`RigHandle::heartbeat`] at least this often or the actor unkeys the rig. `None` (the
     /// default) relies on `max_transmit` alone. Not enforced while receiving.
     pub heartbeat: Option<Duration>,
+    /// The transport's control lines, for a rig whose commands are control-line sequences
+    /// ([`ProtocolEngine::encode_lines`]). `None` (the default) refuses such a command with
+    /// `Unsupported`.
+    pub control_lines: Option<Arc<dyn ControlLines>>,
 }
 
 impl Default for RigOptions {
@@ -104,6 +109,7 @@ impl Default for RigOptions {
             link_watch: None,
             max_transmit: DEFAULT_MAX_TRANSMIT,
             heartbeat: None,
+            control_lines: None,
         }
     }
 }
@@ -331,6 +337,7 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
         heartbeat: options.heartbeat,
         ptt_reserve: options.poll.ptt_reserve,
         link_watch: options.link_watch,
+        control_lines: options.control_lines,
         link_generation: 0,
         session_opened: false,
     };
@@ -958,6 +965,30 @@ enum Wait {
     LinkDown(String),
 }
 
+// [@ANCHOR: radioctl_core_rig_drive_lines]
+/// Sets each line of `steps` in order and holds as the step says; stops with `Timeout` when
+/// `limit` has passed between two steps (the next sequence starts by putting the lines idle).
+fn drive_lines(
+    lines: &dyn ControlLines,
+    steps: &[LineStep],
+    limit: Duration,
+) -> Result<(), RigError> {
+    let started = std::time::Instant::now();
+    for step in steps {
+        if started.elapsed() >= limit {
+            return Err(RigError::new(
+                ErrorKind::Timeout,
+                "control-line sequence did not finish before the deadline",
+            ));
+        }
+        lines.set_control(step.line, step.asserted)?;
+        if !step.hold.is_zero() {
+            std::thread::sleep(step.hold);
+        }
+    }
+    Ok(())
+}
+
 struct Actor<E, T> {
     engine: E,
     transport: T,
@@ -977,6 +1008,8 @@ struct Actor<E, T> {
     ptt_reserve: Duration,
     /// The transport's link status, when it has one ([`RigOptions::link_watch`]).
     link_watch: Option<watch::Receiver<LinkStatus>>,
+    /// The control lines for engines whose commands are line sequences.
+    control_lines: Option<Arc<dyn ControlLines>>,
     /// The `generation` of the last `Connected` status seen; 0 before the first.
     link_generation: u32,
     /// The open or restore requests have been written (once per actor start).
@@ -1361,6 +1394,59 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         let _ = command.reply.send(result);
     }
 
+    // [@ANCHOR: radioctl_core_actor_run_line_steps]
+    /// Drives a control-line sequence on the transport's lines, one step at a time, holding as
+    /// the step says. No bytes are written and no reply is expected, so the command is complete
+    /// with the last step. Refused for a transmitting op and when the transport has no control
+    /// lines; a step that fails or a deadline that passes stops the sequence where it is (the
+    /// next sequence starts by putting the lines in their idle state).
+    async fn run_line_steps(
+        &mut self,
+        op: &Op,
+        steps: &[LineStep],
+        deadline: Instant,
+        source: Source,
+    ) -> Reply {
+        if op.transmits() {
+            return Err(self.error(
+                ErrorKind::Unsupported,
+                "a control-line sequence never carries a transmit command",
+            ));
+        }
+        let Some(lines) = self.control_lines.clone() else {
+            return Err(self.error(
+                ErrorKind::Unsupported,
+                "this transport has no control lines to drive",
+            ));
+        };
+        if !self.shared.link_up.load(Ordering::Acquire) {
+            return Err(self.error(ErrorKind::LinkDown, "transport is down"));
+        }
+        // The line calls are system calls (a USB adapter takes about a millisecond each), so the
+        // sequence runs on a blocking thread and never stalls the runtime. The deadline is
+        // checked between steps on that thread.
+        let limit = deadline.saturating_duration_since(Instant::now());
+        let owned = steps.to_vec();
+        let ran = tokio::task::spawn_blocking(move || drive_lines(lines.as_ref(), &owned, limit))
+            .await
+            .unwrap_or_else(|_| {
+                Err(RigError::new(
+                    ErrorKind::LinkDown,
+                    "the control-line task failed",
+                ))
+            });
+        if let Err(error) = ran {
+            if error.kind == ErrorKind::LinkDown {
+                self.link_down(&error.to_string());
+            }
+            return Err(error);
+        }
+        self.transcript
+            .push_back(format!("LINES {} steps", steps.len()));
+        self.apply_set(op, source);
+        Ok(None)
+    }
+
     // [@ANCHOR: radioctl_core_actor_run_command]
     async fn run_command(
         &mut self,
@@ -1380,6 +1466,9 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 ErrorKind::TransmitGateClosed,
                 "transmit gate is closed for this rig",
             ));
+        }
+        if let Some(steps) = self.engine.encode_lines(op)? {
+            return self.run_line_steps(op, &steps, deadline, source).await;
         }
         let request = self.engine.encode(op)?;
         let timing = self.engine.description().timing;

@@ -1,0 +1,63 @@
+# Rig description: SAT-Schneider DRT1 DRM receiver (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Hamlib 4.6.2 (rigs/kit/drt1.c, read for facts only, and `rigctl -m 25002 --dump-caps`); no SAT-Schneider document was read and no code or comments were copied.
+# The DRT1 has no byte stream. Its local oscillator is an AD9951 DDS programmed through the serial port's control lines (drt1.rs): RTS carries the data inverted, the break state of the transmit line is the clock, DTR frames a register write. The description claims set-frequency only: no read-back, no mode command (AM, 10 kHz filter), no PTT (a receiver). Receive 50 kHz to 30 MHz (the description format has no range field). Oscillator 45.012 MHz, IF offset 45 MHz, multiplier 8 and pump current 150 uA are Hamlib's defaults; Hamlib lets the user change them and radioctl does not yet.
+schema = 1
+capabilities = ["set-frequency"]
+
+[rig]
+id = "sat-schneider-drt1"
+name = "SAT-Schneider DRT1"
+family = "serial-vendor"
+
+[vendor]
+protocol = "drt1"
+dialect = "drt1"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 2000
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 9500000
+mode = "am"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "Hamlib 4.6.2 model name and maker in `rigctl -l`; radioctl's own id", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 25002 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 25002 --dump-caps` (Hamlib 4.6.2): Write delay, timeout and retry lines; drt1_caps", note = "Hamlib's settings, not a measurement. radioctl allows two seconds for a whole tune because a tune is about 225 line changes held 20 us each (our choice: Hamlib waits with a spin loop of no stated duration; a USB serial adapter adds about 1 ms per change), and never retries a line sequence." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig (a shortwave broadcast frequency); says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/drt1.c, drt1_caps and ad_write_reg", note = "Hamlib lists the port as 9600 8N1 and says the rate does not matter (the lines are bit-banged); the line settings here are those. The dialect name is ours." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "program-output", reference = "`rigctl -m 25002 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/drt1.c drt1_caps (only set_freq is implemented, no PTT, tuner type)", note = "A capability is claimed when Hamlib's backend implements it and the engine has the command." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.dialect"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/drt1.c, ad_sdio, ad_sclk, ad_ioupd, ad_write_reg", note = "Line roles: RTS data (asserted for a 0 bit, the level converter inverts), break clock (set then cleared per bit), DTR frames a register write. Instruction byte then data, most significant bit first. Facts only; the step sequence in drt1.rs is our own." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.protocol"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/drt1.c, drt1_set_freq (register address defines, CFR2 and FTW0 formulas, defaults)", note = "CFR2 (address 1, 3 bytes) = multiplier<<3 | 0x4 | (pump uA - 75) / 25; FTW0 (address 4, 4 bytes) = (f + 45 MHz) / (45.012 MHz * 8) * 2^32 truncated; CFR2 is written first. Hamlib's comment says 75 uA while its default is 150 uA; 150 is used." }
+verified = { state = "unverified" }

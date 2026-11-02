@@ -39,7 +39,7 @@ use tokio::sync::{mpsc, oneshot, watch};
 use crate::backoff::Backoff;
 use crate::description::RigDescription;
 use crate::error::{ErrorKind, RigError};
-use crate::keyer::{ControlLines, KeyLine};
+use crate::keyer::{ControlLine, ControlLines, KeyLine};
 use crate::usb::{list_ports, select_port, UsbMatcher};
 
 const STREAM_BYTES: usize = 4096;
@@ -292,6 +292,30 @@ impl ControlLines for SerialControl {
         let result = match line {
             KeyLine::Rts => port.write_request_to_send(asserted),
             KeyLine::Dtr => port.write_data_terminal_ready(asserted),
+        };
+        result.map_err(|e| RigError::new(ErrorKind::LinkDown, format!("control line: {e}")))
+    }
+
+    // [@ANCHOR: radioctl_core_serial_control_set_control]
+    fn set_control(&self, line: ControlLine, asserted: bool) -> Result<(), RigError> {
+        if self.lines == LineControl::Unmanaged {
+            return Err(RigError::new(
+                ErrorKind::Unsupported,
+                "this port has no modem control lines",
+            ));
+        }
+        let mut guard = locked(&self.port);
+        let Some(port) = guard.as_mut() else {
+            return Err(RigError::new(
+                ErrorKind::LinkDown,
+                "serial port is not open",
+            ));
+        };
+        let result = match (line, asserted) {
+            (ControlLine::Rts, level) => port.write_request_to_send(level),
+            (ControlLine::Dtr, level) => port.write_data_terminal_ready(level),
+            (ControlLine::Break, true) => port.set_break(),
+            (ControlLine::Break, false) => port.clear_break(),
         };
         result.map_err(|e| RigError::new(ErrorKind::LinkDown, format!("control line: {e}")))
     }

@@ -10,16 +10,16 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **29**
-- Real radios (models less not applicable): **284**; with a radioctl description: **281** (287 description files), **98%** of the real radios
+- Real radios (models less not applicable): **284**; with a radioctl description: **282** (288 description files), **99%** of the real radios
 - Hardware-verified: **0**
 
 | Status | Models |
 |---|---:|
-| described | 281 |
+| described | 282 |
 | engine only | 0 |
 | needs variant | 0 |
 | needs engine | 0 |
-| odd device | 3 |
+| odd device | 2 |
 | not applicable | 29 |
 
 | Verification level | Models |
@@ -36,13 +36,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 74 |
-| D | odd device | 54 | 30 |
+| D | odd device | 54 | 31 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 84 | 0 |
+| other_serial | C/D | aor | 94 | 85 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -322,7 +322,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 27001 | Rohde&Schwarz | ESMC | C | other_serial | rs | `rs-esmc` | unverified | - | described |
 | 27003 | Rohde&Schwarz | XK2100 | C | other_serial | rs | `rs-xk2100` | unverified | - | described |
 | 27005 | Rohde&Schwarz | XK852 | C | other_serial | rs | `rs-xk852` | unverified | - | described |
-| 25002 | SAT-Schneider | DRT1 | D | other_serial | - | - | unverified | - | odd device |
+| 25002 | SAT-Schneider | DRT1 | D | other_serial | - | `sat-schneider-drt1` | unverified | - | described |
 | 2056 | SDR Radio | SDRConsole | D | other_serial | - | - | unverified | - | not applicable |
 | 2051 | SDRPlay | SDRUno | D | other_serial | - | - | unverified | - | not applicable |
 | 2032 | SigFox | Transfox | D | other_serial | - | `sigfox-transfox` | unverified | - | described |

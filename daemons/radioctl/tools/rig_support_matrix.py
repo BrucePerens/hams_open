@@ -243,6 +243,7 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "m0nka-mchf-qrp": [1045],
     "philips-prm8060": [28001],
     "rft-ekd-500": [24001],
+    "sat-schneider-drt1": [25002],
     "barrett-2050": [32001],
     "barrett-4050": [32003],
     "barrett-950": [32002],

@@ -14,7 +14,7 @@ use std::time::Duration;
 use radioctl_core::backoff::Backoff;
 use radioctl_core::description::RigDescription;
 use radioctl_core::error::{ErrorKind, RigError};
-use radioctl_core::keyer::{ControlLines, KeyLine, LineKeyer};
+use radioctl_core::keyer::{ControlLine, ControlLines, KeyLine, LineKeyer};
 use radioctl_core::rig::{spawn, Freshness, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
 use radioctl_core::serial::{
@@ -297,6 +297,7 @@ async fn a_replug_at_another_device_path_is_not_found_by_a_path_target_until_the
 
 // Tests [@ANCHOR: radioctl_core_serial_open_port]
 // Tests [@ANCHOR: radioctl_core_serial_control_set_line]
+// Tests [@ANCHOR: radioctl_core_serial_control_set_control]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_port_without_modem_lines_cannot_be_opened_as_managed_and_is_honest_when_unmanaged() {
     let (_master, path) = pty();
@@ -316,6 +317,13 @@ async fn a_port_without_modem_lines_cannot_be_opened_as_managed_and_is_honest_wh
         .set_line(KeyLine::Rts, true)
         .expect_err("no lines");
     assert_eq!(refused.kind, ErrorKind::Unsupported);
+    for line in [ControlLine::Rts, ControlLine::Dtr, ControlLine::Break] {
+        let refused = link
+            .control
+            .set_control(line, true)
+            .expect_err("no lines to drive as data either");
+        assert_eq!(refused.kind, ErrorKind::Unsupported);
+    }
 }
 
 // Tests [@ANCHOR: radioctl_core_serial_open]

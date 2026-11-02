@@ -539,6 +539,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_usb_family_stand_in_new] (radioctl-protocols) The stand-in for a description.
 - [@ANCHOR: radioctl:radioctl_usb_family_stand_in_feed] (radioctl-protocols) Performs every complete request frame in `bytes` on the device; returns the reply frames.
 - [@ANCHOR: radioctl:radioctld_rigs_real_usb_backend] (radioctld) The libusb backend of a build with the `usb` feature.
+- [@ANCHOR: radioctl:radioctld_rigs_is_line_driven] (radioctld) True for a rig whose commands are control-line sequences and not bytes (the SAT-Schneider DRT1).
 - [@ANCHOR: radioctl:radioctld_rigs_real_usb_backend_missing] (radioctld) A build without the `usb` feature cannot open a USB device; it says so rather than fail later.
 - [@ANCHOR: radioctl:radioctl_core_vfo_other] (radioctl-core) The other VFO.
 - [@ANCHOR: radioctl:radioctl_core_txstate_from_cache] (radioctl-core) The inputs of the transmit-frequency derivation, read from the cached observations.
@@ -644,6 +645,23 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_rft_twin_frequency] (radioctl-protocols) The frequency the twin is tuned to.
 - [@ANCHOR: radioctl:radioctl_rft_twin_feed] (radioctl-protocols) The feed of the rft code.
 - [@ANCHOR: radioctl:radioctl_rft_twin_front_panel] (radioctl-protocols) The front panel of the rft code.
+- [@ANCHOR: radioctl:radioctl_drt1_cfr2_word] (radioctl-protocols) The CFR2 data word for a reference multiplier and a charge pump current.
+- [@ANCHOR: radioctl:radioctl_drt1_tuning_word] (radioctl-protocols) The FTW0 tuning word for a receive frequency (truncated).
+- [@ANCHOR: radioctl:radioctl_drt1_word_frequency] (radioctl-protocols) The receive frequency a tuning word and a CFR2 word stand for.
+- [@ANCHOR: radioctl:radioctl_drt1_write_register] (radioctl-protocols) The line steps of one DDS register write.
+- [@ANCHOR: radioctl:radioctl_drt1_tune_steps] (radioctl-protocols) The whole tune: idle lines, CFR2, then FTW0.
+- [@ANCHOR: radioctl:radioctl_drt1_engine_new] (radioctl-protocols) Builds an engine from a DRT1 vendor description.
+- [@ANCHOR: radioctl:radioctl_drt1_engine_encode_lines] (radioctl-protocols) The line sequence of a set-frequency command.
+- [@ANCHOR: radioctl:radioctl_drt1_engine_encode] (radioctl-protocols) Refuses: the DRT1 has no byte commands.
+- [@ANCHOR: radioctl:radioctl_drt1_engine_feed] (radioctl-protocols) The feed of the drt1 code.
+- [@ANCHOR: radioctl:radioctl_drt1_twin_new] (radioctl-protocols) A twin in the description's default state.
+- [@ANCHOR: radioctl:radioctl_drt1_twin_frequency] (radioctl-protocols) The frequency the twin is tuned to.
+- [@ANCHOR: radioctl:radioctl_drt1_twin_registers] (radioctl-protocols) The CFR2 and FTW0 words last latched, if any.
+- [@ANCHOR: radioctl:radioctl_drt1_twin_set_line] (radioctl-protocols) Refuses: a DRT1 has no keying line.
+- [@ANCHOR: radioctl:radioctl_drt1_twin_set_control] (radioctl-protocols) Decodes the line changes into the DDS registers.
+- [@ANCHOR: radioctl:radioctl_drt1_twin_snapshot] (radioctl-protocols) The frequency the twin holds.
+- [@ANCHOR: radioctl:radioctl_drt1_twin_feed] (radioctl-protocols) The feed of the drt1 code.
+- [@ANCHOR: radioctl:radioctl_drt1_twin_front_panel] (radioctl-protocols) The front panel of the drt1 code.
 - [@ANCHOR: radioctl:radioctl_adat_mode_code_of_name] (radioctl-protocols) The wire code of a mode name, or `None`.
 - [@ANCHOR: radioctl:radioctl_adat_parse_frequency] (radioctl-protocols) The frequency of a number with a unit (`14.2MHz`, `7100.5kHz`, `800Hz`, `1.296GHz`), exact to
 - [@ANCHOR: radioctl:radioctl_adat_engine_new] (radioctl-protocols) Builds an engine from an ADAT vendor description.
@@ -1042,6 +1060,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_serial_config_new] (radioctl-core) A serial configuration: 8N1, lines managed and inactive, default backoff, one open attempt.
 - [@ANCHOR: radioctl:radioctl_core_serial_config_with_description] (radioctl-core) Takes a description's serial line settings (data bits, parity, stop bits, flow control) for the port.
 - [@ANCHOR: radioctl:radioctl_core_serial_control_set_line] (radioctl-core) Sets RTS or DTR immediately on the open port.
+- [@ANCHOR: radioctl:radioctl_core_serial_control_set_control] (radioctl-core) Drives RTS, DTR or the break state of the open port as data (a rig tuned by its control lines).
+- [@ANCHOR: radioctl:radioctl_core_control_lines_set_control] (radioctl-core) Sets a line that carries data for a rig tuned by its control lines; the default refuses with `Unsupported`.
 - [@ANCHOR: radioctl:radioctl_core_serial_link_status] (radioctl-core) The link status: connected (with generation), reconnecting, closed.
 - [@ANCHOR: radioctl:radioctl_core_serial_link_watch] (radioctl-core) A receiver that wakes on link status changes.
 - [@ANCHOR: radioctl:radioctl_core_serial_link_stats] (radioctl-core) Bytes in, out, dropped while down, and reconnects.
@@ -1171,6 +1191,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_actor_run] (radioctl-core) The actor loop: emergency channel first, then ordinary commands, unsolicited bytes from the rig, and polling last.
 - [@ANCHOR: radioctl:radioctl_core_actor_serve] (radioctl-core) Runs one command and answers its caller; counts successes, failures and preemptions.
 - [@ANCHOR: radioctl:radioctl_core_actor_run_command] (radioctl-core) Executes one command: deadline and gate checks, write, wait for the reply with retries, preemption by an emergency command, typed errors with the transcript tail.
+- [@ANCHOR: radioctl:radioctl_core_actor_run_line_steps] (radioctl-core) Drives an engine's control-line sequence on the transport's lines (no bytes, no reply); refused for a transmitting op or a transport without lines.
+- [@ANCHOR: radioctl:radioctl_core_rig_drive_lines] (radioctl-core) Sets each line of a control-line sequence in order on a blocking thread, holding as each step says; stops at the deadline.
 - [@ANCHOR: radioctl:radioctl_core_actor_observe] (radioctl-core) Updates the cache and, if the value changed, emits an event to the stream subscribers.
 - [@ANCHOR: radioctl:radioctl_core_actor_poll_once] (radioctl-core) Polls the next due field at lowest priority.
 - [@ANCHOR: radioctl:radioctl_core_actor_poll_entry] (radioctl-core) Reads one polled field and adapts its interval from whether it changed.
@@ -1203,6 +1225,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_actor_open_session] (radioctl-core) Once, as the actor starts with the link up, writes the requests the engine returns from `open_requests` (an Icom PCR is powered on) before any queued command is served; a failed write takes the link down.
 - [@ANCHOR: radioctl:radioctl_core_actor_write_session_requests] (radioctl-core) Writes session requests once each, in order, waiting for the reply each names.
 - [@ANCHOR: radioctl:radioctl_core_engine_box_link_restored] (radioctl-core) Forwards the link-restored hook to the boxed engine.
+- [@ANCHOR: radioctl:radioctl_core_engine_box_encode_lines] (radioctl-core) Forwards the control-line hook to the boxed engine.
 - [@ANCHOR: radioctl:radioctl_core_engine_box_open_requests] (radioctl-core) Forwards the open hook to the boxed engine.
 - [@ANCHOR: radioctl:radioctl_elecraft_engine_link_restored] (radioctl-protocols) Drops a half frame and sends `AI2;` again if the controller had turned auto-information on.
 - [@ANCHOR: radioctl:radioctl_flex_engine_link_restored] (radioctl-protocols) Drops the old connection's half line and owed replies; sends the `sub` lines and `info` again, once, if the client was subscribed.
@@ -1404,6 +1427,9 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_reply_render] (radioctld) Renders the answer to one request.
 - [@ANCHOR: radioctl:radioctld_rigs_boxed_encode] (radioctld) See the source.
 - [@ANCHOR: radioctl:radioctld_rigs_boxed_feed] (radioctld) See the source.
+- [@ANCHOR: radioctl:radioctld_rigs_boxed_encode_lines] (radioctld) The control-line hook of the boxed engine.
+- [@ANCHOR: radioctl:radioctld_rigs_boxed_link_restored] (radioctld) The link-restored hook of the boxed engine (the daemon's wrapper had dropped it).
+- [@ANCHOR: radioctl:radioctld_rigs_boxed_open_requests] (radioctld) The open hook of the boxed engine (the daemon's wrapper had dropped it).
 - [@ANCHOR: radioctl:radioctld_rigs_load_description] (radioctld) Reads and validates a rig description file.
 - [@ANCHOR: radioctl:radioctld_selftest_is_read_only] (radioctld) True only for operations that read; the self-test refuses anything else.
 - [@ANCHOR: radioctl:radioctld_selftest_plan_checks] (radioctld) The read-only checks for what a description claims, in a fixed order.
