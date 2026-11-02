@@ -310,9 +310,89 @@ fn default_profile_timeout_ms() -> u64 {
     120_000
 }
 
+/// An external RF power meter: "the power meter for rig X" (`docs/DESIGN.md` decision 26).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PowerMeterDef {
+    /// Its name, reported as the source of its readings.
+    pub id: String,
+    /// The rig whose transmit power it measures (the rig's name in the daemon configuration).
+    pub for_rig: String,
+    /// The driver: `kpa500` or `kpa1500`.
+    pub driver: String,
+    /// The serial port.
+    pub port: String,
+    /// The serial speed; the driver's default when absent.
+    #[serde(default)]
+    pub baud: Option<u32>,
+    /// The unit the meter reports in: `w`, `dbm`, `dbw` or `dbmv50`; the driver's own when absent.
+    #[serde(default)]
+    pub unit: Option<String>,
+    /// Loss of the coupler and attenuator in front of the meter, in tenths of a decibel (positive:
+    /// the meter reads lower than the line). The amplifier meters need none.
+    #[serde(default)]
+    pub offset_db_tenths: i32,
+    /// A reading older than this is no power.
+    #[serde(default = "default_meter_stale_ms")]
+    pub stale_ms: u64,
+}
+
+fn default_meter_stale_ms() -> u64 {
+    3000
+}
+
+impl PowerMeterDef {
+    // [@ANCHOR: radioctl_station_meterdef_validate]
+    /// Checks the definition: a known driver, a unit that driver can report, sane limits.
+    pub fn validate(&self) -> Result<(), StationError> {
+        let bad = |m: String| {
+            Err(StationError::new(
+                StationErrorKind::Config,
+                format!("power meter {}: {m}", self.id),
+            ))
+        };
+        if self.id.is_empty() || self.for_rig.is_empty() || self.port.is_empty() {
+            return bad("needs a name, a rig and a port".into());
+        }
+        let Some(driver) = crate::power_meter::MeterDriver::from_name(&self.driver) else {
+            return bad(format!(
+                "unknown driver {:?} (kpa500, kpa1500)",
+                self.driver
+            ));
+        };
+        if let Some(unit) = &self.unit {
+            if radioctl_core::power::PowerUnit::from_name(unit) != Some(driver.unit()) {
+                return bad(format!(
+                    "{} reports {}, not {unit}",
+                    self.driver,
+                    driver.unit().name()
+                ));
+            }
+        }
+        if self.baud.is_some_and(|b| !(300..=921_600).contains(&b)) {
+            return bad("baud is 300 to 921600".into());
+        }
+        if !(-1000..=1000).contains(&self.offset_db_tenths) {
+            return bad("the offset is within 100 dB".into());
+        }
+        if !(100..=60_000).contains(&self.stale_ms) {
+            return bad("stale_ms is 100 to 60000".into());
+        }
+        Ok(())
+    }
+
+    // [@ANCHOR: radioctl_station_meterdef_offset_db]
+    /// The offset in decibels.
+    pub fn offset_db(&self) -> f64 {
+        f64::from(self.offset_db_tenths) / 10.0
+    }
+}
+
 /// The whole station.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StationDef {
+    /// External RF power meters, one per rig at most.
+    #[serde(default)]
+    pub power_meters: Vec<PowerMeterDef>,
     /// Switch channels.
     #[serde(default)]
     pub channels: Vec<ChannelDef>,
@@ -383,6 +463,17 @@ impl StationDef {
                         c.driver
                     ));
                 }
+            }
+        }
+        let mut meters = BTreeSet::new();
+        let mut meter_rigs = BTreeSet::new();
+        for m in &self.power_meters {
+            m.validate()?;
+            if !meters.insert(&m.id) {
+                return bad(format!("power meter {} is defined twice", m.id));
+            }
+            if !meter_rigs.insert(&m.for_rig) {
+                return bad(format!("rig {} has two power meters", m.for_rig));
             }
         }
         let mut devs = BTreeSet::new();
@@ -704,5 +795,38 @@ steps = [
             assert!(err.detail.contains(want), "{want}: {}", err.detail);
         }
         assert!(StationDef::from_toml("not toml [").is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_station_meterdef_validate]
+    // Tests [@ANCHOR: radioctl_station_meterdef_offset_db]
+    #[test]
+    fn power_meters_are_validated_one_per_rig() {
+        let meter = |extra: &str| {
+            format!(
+                "[[power_meters]]\nid = \"amp\"\nfor_rig = \"kx3\"\ndriver = \"kpa1500\"\nport = \"/dev/ttyUSB1\"\n{extra}"
+            )
+        };
+        let def =
+            StationDef::from_toml(&meter("offset_db_tenths = 305\nunit = \"w\"\n")).expect("ok");
+        assert_eq!(def.power_meters[0].stale_ms, 3000);
+        assert!((def.power_meters[0].offset_db() - 30.5).abs() < 1e-9);
+        for bad in [
+            "unit = \"dbm\"\n",
+            "baud = 12\n",
+            "stale_ms = 5\n",
+            "offset_db_tenths = 5000\n",
+        ] {
+            assert!(StationDef::from_toml(&meter(bad)).is_err(), "{bad}");
+        }
+        assert!(StationDef::from_toml(&meter("").replace("kpa1500", "lp100a")).is_err());
+        // The same rig twice, or the same name twice.
+        let twice = format!(
+            "{}{}",
+            meter(""),
+            meter("").replace("id = \"amp\"", "id = \"amp2\"")
+        );
+        assert!(StationDef::from_toml(&twice).is_err());
+        let same_name = format!("{}{}", meter(""), meter("").replace("kx3", "ic7300"));
+        assert!(StationDef::from_toml(&same_name).is_err());
     }
 }

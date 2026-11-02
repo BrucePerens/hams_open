@@ -18,6 +18,8 @@
 //! - [`http_relay`]: Shelly Gen2 and Tasmota channel drivers.
 //! - [`lifecycle`]: the radio lifecycle state machine (sans-IO).
 //! - [`manager`]: lifecycle per radio, power button, reconnect with backoff, start-up reconcile.
+//! - [`power_meter`]: external RF power meters (Elecraft KPA500 and KPA1500 reads), the freshness-checked
+//!   feed behind `radioctl_core::power::RfPowerReader`, and a virtual meter for tests.
 //! - [`rotator`]: rotator descriptions, the rotctld and GS-232 engines, the command handle.
 //! - [`virtual_rotator`]: a virtual rotator (both protocols) for tests, served on a socket.
 //! - [`record`]: the durable radio record (JSON, owner-only, atomic).
@@ -34,6 +36,7 @@ pub mod lifecycle;
 pub mod manager;
 pub mod modbus;
 pub mod model;
+pub mod power_meter;
 pub mod record;
 pub mod rotator;
 pub mod spawner;

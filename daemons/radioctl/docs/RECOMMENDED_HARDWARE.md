@@ -138,7 +138,23 @@ All entries: meets the criteria on paper, not yet tested by us. Verified by us o
 - Antenna switch and amplifier PTT or power sequencer: the radioctl-station docs name no product, so none is listed.
 - A product will be listed here only after a source supports the criteria.
 
-## 4. How to add a product
+## 4. External RF power meters
+
+Started 2026-11-02 (decision 26 in `DESIGN.md`). radioctl reports transmit power in watts from the rig's own meter when the rig description has a calibration (`[power_meter]`, with its source in a `[[facts]]` entry); without one the rig gives only a relative bar and no watts. An external wattmeter, named in the station definition as `[[power_meters]]` with `for_rig`, replaces it. A reading older than `stale_ms` (3 s by default) is "no power", never the last number. Verified by us on hardware: **no**, for every entry here.
+
+| Meter | Reports | Link | Status |
+|---|---|---|---|
+| Elecraft KPA1500 amplifier | forward and reflected watts (`^PWF;`, `^PWR;`) | USB (FTDI serial) or TCP 1500 | Acceptable: measures the amplifier output only, the serial speed is not stated in the programming reference, and the first characters may be ignored while the amplifier is off. |
+| Elecraft KPA500 amplifier | forward watts, 0 to 999 (`^WS;`); no reflected power | serial, 38400 baud default | Acceptable: 8N1 is assumed (the reference does not state it), and the SWR field is not used. |
+
+Setup notes:
+
+- Both meters sit inside the amplifier, so no coupler or attenuator is involved and `offset_db_tenths` stays 0. They report the amplifier output; a rig that runs without the amplifier needs the rig's own meter or a meter in the line.
+- For a meter that reads dBm (a power sensor on a coupler), put a directional coupler in the line after the rig or amplifier and an attenuator behind the coupler so that the meter sees at most its rated input at full power. Enter the total of the coupler's coupling and the attenuator's value, from their data sheets or measured with a signal generator, as `offset_db_tenths` (305 is 30.5 dB). The offset is applied before the dBm, dBW or dBmV figure becomes watts, and the result is the power at the transmitter. No driver for such a sensor exists yet.
+- Use a 50 ohm coupler rated for the power and band, with a through-line SWR near 1.0, and keep the coupled arm terminated.
+- Not recommended until a protocol document is in hand: Telepost LP-100A (its serial protocol was not found), Mini-Circuits PWR sensors (USB HID, not serial).
+
+## 5. How to add a product
 
 Checklist, one line per criterion, each with a source URL or "unconfirmed":
 

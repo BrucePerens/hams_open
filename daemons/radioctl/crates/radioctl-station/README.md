@@ -433,3 +433,24 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_dspawner_add] (radioctl-station) Adds (or replaces) the spec of a radio.
 - [@ANCHOR: radioctl:radioctl_station_dspawner_fail] (radioctl-station) `fail` (see the source).
 - [@ANCHOR: radioctl:radioctl_station_dspawner_spawn] (radioctl-station) Builds the engine, opens the transport (reconnecting), and spawns the actor with the transport's link status.
+- [@ANCHOR: radioctl:radioctl_station_meter_driver_name] (radioctl-station) The configuration name.
+- [@ANCHOR: radioctl:radioctl_station_meter_driver_from_name] (radioctl-station) The driver with a configuration name.
+- [@ANCHOR: radioctl:radioctl_station_meter_driver_unit] (radioctl-station) The unit the driver reports in (both read watts).
+- [@ANCHOR: radioctl:radioctl_station_meter_driver_default_baud] (radioctl-station) The serial speed to use when the configuration gives none (38400).
+- [@ANCHOR: radioctl:radioctl_station_meter_driver_requests] (radioctl-station) The requests of one poll, in order. Each is sent after the previous one's reply.
+- [@ANCHOR: radioctl:radioctl_station_meter_driver_has_reflected] (radioctl-station) Whether the meter reports reflected power.
+- [@ANCHOR: radioctl:radioctl_station_meter_parse_kpa500] (radioctl-station) Parses a KPA500 `^WSppp sss;` frame into the output watts.
+- [@ANCHOR: radioctl:radioctl_station_meter_parse_kpa1500] (radioctl-station) Parses one KPA1500 `^PWF` or `^PWR` frame: the tag and the watts.
+- [@ANCHOR: radioctl:radioctl_station_meter_poller_new] (radioctl-station) A poller for `driver` over `io`. Nothing is sent until [`MeterPoller::poll`].
+- [@ANCHOR: radioctl:radioctl_station_meter_poller_read_frame] (radioctl-station) Reads one `;`-terminated reply frame, bounded in size and time.
+- [@ANCHOR: radioctl:radioctl_station_meter_poller_poll] (radioctl-station) Asks the meter once and returns what it said; a timeout or malformed reply is an error.
+- [@ANCHOR: radioctl:radioctl_station_feed_new] (radioctl-station) A feed for a named meter: its unit, coupler offset in decibels and how long a reading stays good.
+- [@ANCHOR: radioctl:radioctl_station_feed_with_clock] (radioctl-station) As [`PowerFeed::new`] with the clock the freshness rule reads.
+- [@ANCHOR: radioctl:radioctl_station_feed_push] (radioctl-station) Records a sample taken now.
+- [@ANCHOR: radioctl:radioctl_station_feed_name] (radioctl-station) The meter's name.
+- [@ANCHOR: radioctl:radioctl_station_feed_read] (radioctl-station) See the source.
+- [@ANCHOR: radioctl:radioctl_station_meter_run] (radioctl-station) Polls a meter at an interval into its feed; a failed poll leaves the feed to age out.
+- [@ANCHOR: radioctl:radioctl_station_vmeter_set] (radioctl-station) Sets what the device reports.
+- [@ANCHOR: radioctl:radioctl_station_vmeter_serve] (radioctl-station) Serves a virtual meter of a driver on a stream (duplex or pty) and returns its control.
+- [@ANCHOR: radioctl:radioctl_station_meterdef_validate] (radioctl-station) Checks the definition: a known driver, a unit that driver can report, sane limits.
+- [@ANCHOR: radioctl:radioctl_station_meterdef_offset_db] (radioctl-station) The offset in decibels.
