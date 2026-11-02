@@ -257,7 +257,8 @@ class Daemon:
     """One radioctld started for one phase and always stopped again."""
 
     def __init__(self, env: Env, cfg_dir: Path, args: "Options", transmit: bool):
-        self.env, self.proc = env, None
+        self.env = env
+        self.proc: subprocess.Popen | None = None
         self.port = free_port()
         self.cfg = cfg_dir / ("bench-tx.toml" if transmit else "bench-rx.toml")
         self.cfg.write_text(daemon_config(args.rig, args.port, args.baud, self.port, transmit, args.max_transmit_s))
