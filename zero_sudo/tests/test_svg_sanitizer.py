@@ -251,13 +251,13 @@ class TestSvgAllowlistSanitizerUnit(BaseCase, SafePatchMixin):
         exponentially. Both must be answered at once."""
         digits = "1" * 20000 + "x"
         transform = "translate(1) " * 50 + " " * 5000 + "x"
-        started = time.monotonic()
+        started = time.process_time()
         text = str(html_sanitize(
             f"<svg width='{digits}' height='{digits}'><rect x='{digits}' transform='{transform}' "
             f"fill='{digits}' stroke-width='{digits}' style='fill:{digits}'/>"
             f"<path d='{'M0 0 ' * 3000}x'/></svg>"
         ))
-        self.assertLess(time.monotonic() - started, 3.0)
+        self.assertLess(time.process_time() - started, 3.0)
         self.assertIn("<rect>", text)
         self.assertNotIn("transform", text)
 
@@ -328,9 +328,9 @@ class TestSvgAllowlistSanitizerUnit(BaseCase, SafePatchMixin):
 
     def test_21_per_value_totals_bound_work_and_output(self):
         value = "<svg></svg>x" * 20000
-        started = time.monotonic()
+        started = time.process_time()
         text = str(html_sanitize(value))
-        self.assertLess(time.monotonic() - started, 2.0)
+        self.assertLess(time.process_time() - started, 2.0)
         self.assertEqual(text.count("<svg"), svg_sanitizer.MAX_TOTAL_SVG_BLOCKS)
         self.assertLess(len(text), 2 * len(value))
         self.assertNotIn("hamssvg", text)
@@ -383,9 +383,9 @@ class TestSvgAllowlistSanitizerUnit(BaseCase, SafePatchMixin):
     def test_25_block_count_boundary_is_exactly_1000(self):
         self.assertEqual(svg_sanitizer.MAX_TOTAL_SVG_BLOCKS, 1000)
         for count, expected in ((1000, 1000), (1001, 1000)):
-            started = time.monotonic()
+            started = time.process_time()
             text = str(html_sanitize("<p>" + "<svg><circle r='1'/></svg>" * count + "</p>"))
-            self.assertLess(time.monotonic() - started, 2.0)
+            self.assertLess(time.process_time() - started, 2.0)
             self.assertEqual(text.count("<svg"), expected, count)
         # the 1001st (and later) blocks are the ones dropped, not an earlier one
         marked = "".join(f"<svg><text>b{i}</text></svg>" for i in range(1001))
@@ -396,9 +396,9 @@ class TestSvgAllowlistSanitizerUnit(BaseCase, SafePatchMixin):
 
     def test_26_far_more_than_1000_blocks_stay_fast(self):
         for value in ("<svg></svg>" * 20000, "<p>" + "<svg></svg><b>x</b>" * 20000 + "</p>"):
-            started = time.monotonic()
+            started = time.process_time()
             text = str(html_sanitize(value))
-            self.assertLess(time.monotonic() - started, 2.0)
+            self.assertLess(time.process_time() - started, 2.0)
             self.assertEqual(text.count("<svg"), 1000)
             self.assertLess(len(text), 8 * len(value) + 100)
 
