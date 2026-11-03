@@ -5,7 +5,7 @@ import logging
 from odoo import _, fields, models, api
 
 from .incident import TREND_TRACKED_SEVERITIES
-from odoo.addons.hams_helpdesk.models.inbound_spam_filter import detect_inbound_spam_signals
+from odoo.addons.hams_helpdesk.models.inbound_spam_filter import HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY, inbound_spam_reasons
 
 _logger = logging.getLogger(__name__)
 
@@ -140,8 +140,11 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         spam_reasons_by_incident = {}
         for incident in incidents_to_process:
             spam_reasons = []
-            if _is_inbound_email_source(incident.source):
-                spam_reasons = detect_inbound_spam_signals(
+            if HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY in self.env.context:
+                # pager.incident.message_new() already judged this message with its headers and HTML shape.
+                spam_reasons = list(self.env.context[HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY] or [])
+            elif _is_inbound_email_source(incident.source):
+                spam_reasons = inbound_spam_reasons(
                     subject=incident.name,
                     body_html=incident.description,
                 )

@@ -1,6 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+from . import bulk_mail_fixtures
 from . import test_github_webhook
 from . import test_helpdesk_ai_triage_external
 from . import test_helpdesk_core

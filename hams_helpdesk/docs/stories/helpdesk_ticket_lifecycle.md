@@ -48,6 +48,12 @@ message still becomes a ticket (never a silent drop), but it starts in the "Spam
 with an internal note listing the reasons, and a human can move it back to "New" to recover a false
 positive. Production tickets #2 and #43 arrived this way before the filter covered this path.
 
+The call is `inbound_spam_reasons(subject, body_html, signals, verdicts, trusted_sender)`, with the raw message's header facts and HTML
+shape (parked by `message_parse`) and the SES verdicts, so bulk marketing mail is caught by its headers and shape, not only by its
+subject; mail from a member (a sender with a user account) is never flagged. The full interface, the rules and their weights are in
+`helpdesk_ticket_creation.md` ([@ANCHOR: hams_helpdesk:inbound_spam_reasons]). Odoo's own assignment email is switched off for a ticket
+created in this stage (`hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail`).
+
 **[@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]**
 Moving a ticket into "Spam / Phishing" sends no stage-change mail-back: the From address is either
 the spammer (a reply confirms a live inbox) or a real customer whose address was spoofed. Moving
@@ -55,8 +61,8 @@ it back out of that stage mails the customer as usual.
 
 **[@ANCHOR: hams_helpdesk:COMM_helpdesk_no_assignment_notice_for_spam]**
 A ticket created already in "Spam / Phishing" is still assigned to the on-duty admin, but the
-assignment email and the toast are skipped: quarantined mail pages nobody. A "New" ticket notifies
-its assignee as before.
+assignment email, the toast and the "Shift CC" note to the next shift's admins are skipped, and Odoo's own auto-subscribe
+assignment email is off: quarantined mail pages nobody. A "New" ticket notifies its assignee as before.
 
 ### A member can submit a ticket that is routed to an agent
 The portal submit form creates the ticket under the helpdesk service account, also for the transaction's access check on the agent assignment note, so a plain member is never refused over contact access.

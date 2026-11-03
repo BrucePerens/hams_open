@@ -9,6 +9,14 @@ from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
+from .bulk_mail_fixtures import (
+    BULK_HEADERS,
+    REAL_MISSED_SPAM_NAMES,
+    SES_PASS_HEADERS,
+    NotificationWatch,
+    raw_message,
+)
+
 
 @tagged("post_install", "-at_install", "standard")
 class TestMailIngest(HamsTransactionCase):
@@ -363,3 +371,107 @@ class TestMailIngest(HamsTransactionCase):
         self.assertEqual(len(tickets), 2)
         for ticket, verdict in zip(tickets, ("PASS", "GRAY")):
             self.assertEqual(ticket.stage, "new", verdict)
+
+
+    # ------------------------------------------------------------------
+    # Bulk / marketing mail and "a quarantined ticket mails nobody", on the direct admin@/support@ route
+    # ------------------------------------------------------------------
+
+    def _on_duty(self):
+        """The on-duty admin a real ticket is assigned to, so the notification paths this tests actually run."""
+        admin = self.env.ref("base.user_admin")
+        admin.email = "on-duty-admin@example.org"
+        self.safe_patch_object(type(self.env["calendar.event"]), "get_current_on_duty_admin", lambda _self: admin, create=True)
+        return admin
+
+    def test_12_a_bulk_newsletter_to_support_is_quarantined_and_mails_nobody(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_spam_reasons]
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail]
+        admin = self._on_duty()
+        watch = NotificationWatch(self)
+        subject = REAL_MISSED_SPAM_NAMES[0]
+        self._ingest(raw_message("support@hams.com", subject, headers=SES_PASS_HEADERS + BULK_HEADERS))
+        ticket = self.env["hams_helpdesk.ticket"].search([("name", "=", subject)], order="id desc", limit=1)
+        self.assertTrue(ticket, "a flagged message still becomes a ticket")
+        self.assertEqual(ticket.stage, "spam")
+        self.assertEqual(ticket.user_id, admin, "the ticket is still assigned, for the record")
+        notes = self._spam_notes(ticket)
+        self.assertTrue(any("List-Unsubscribe" in note.body for note in notes), "the first note lists the bulk signals")
+        self.assertEqual(
+            [(m.subject, m.email_to, m.recipient_ids.mapped("email")) for m in watch.mails()], [], "no email was queued for anybody"
+        )
+        self.assertEqual(
+            [(n.res_partner_id.email, n.notification_type, n.mail_message_id.subject) for n in watch.notifications()],
+            [],
+            "no notification row was created",
+        )
+        self.assertEqual(watch.bus, [], "no bus message or toast was sent")
+        self.assertFalse(ticket.message_partner_ids, "a quarantined ticket has no followers, so nothing posted on it is mailed")
+        # Recovering a false positive makes it an ordinary ticket: its assignee follows it again, and nothing is sent by that.
+        before = watch.count()
+        ticket.write({"stage": "new"})
+        self.assertIn(admin.partner_id, ticket.message_partner_ids)
+        self.assertEqual(len(watch.mails()), 0)
+        self.assertEqual(watch.bus, [])
+        self.assertGreaterEqual(watch.count(), before)
+
+    def test_13_the_control_an_ordinary_ticket_does_notify_the_assignee(self):
+        # The test above proves nothing unless the same harness sees the notice for a real ticket.
+        self._on_duty()
+        watch = NotificationWatch(self)
+        self._ingest(self._raw_email("support@hams.com", subject="Rotator controller will not park"))
+        ticket = self.env["hams_helpdesk.ticket"].search([("name", "=", "Rotator controller will not park")], limit=1)
+        self.assertEqual(ticket.stage, "new")
+        self.assertGreater(watch.count(), 0, "a real ticket must still notify; otherwise the harness is blind")
+        self.assertTrue(any(kind == "simple_notification" for _target, kind in watch.bus))
+
+    def test_14_mail_from_a_member_is_never_flagged_even_when_it_looks_like_a_newsletter(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_sender_is_member]
+        member = self.env["res.users"].create(
+            {"name": "Member With A Fancy Signature", "login": "fancy_member", "email": "fancy-member@example.org"}
+        )
+        subject = REAL_MISSED_SPAM_NAMES[3]
+        self._ingest(raw_message("support@hams.com", subject, from_addr="Fancy Member <fancy-member@example.org>", headers=BULK_HEADERS))
+        ticket = self.env["hams_helpdesk.ticket"].search([("name", "=", subject)], order="id desc", limit=1)
+        self.assertEqual(ticket.partner_id, member.partner_id)
+        self.assertEqual(ticket.stage, "new")
+        self.assertTrue(self.env["hams_helpdesk.ticket"]._inbound_sender_is_member(member.partner_id.id))
+        self.assertFalse(self.env["hams_helpdesk.ticket"]._inbound_sender_is_member(False))
+        stranger = self.env["res.partner"].create({"name": "Contact Without A User", "email": "contact-only@example.org"})
+        self.assertFalse(self.env["hams_helpdesk.ticket"]._inbound_sender_is_member(stranger.id))
+
+    def test_15_a_reply_to_an_existing_ticket_is_not_judged_and_creates_no_ticket(self):
+        self._ingest(self._raw_email("support@hams.com", subject="Antenna analyzer question"))
+        ticket = self.env["hams_helpdesk.ticket"].search([("name", "=", "Antenna analyzer question")], limit=1)
+        original_id = ticket.message_ids.filtered(lambda m: m.message_id).sorted("id")[-1].message_id
+        count = self.env["hams_helpdesk.ticket"].search_count([])
+        reply = raw_message(
+            "support@hams.com",
+            "Re: Antenna analyzer question",
+            from_addr="customer@example.com",
+            headers=BULK_HEADERS + f"In-Reply-To: {original_id}\r\nReferences: {original_id}\r\n",
+        )
+        self._ingest(reply)
+        self.assertEqual(self.env["hams_helpdesk.ticket"].search_count([]), count, "the reply threads onto the ticket")
+        self.assertEqual(ticket.stage, "new")
+
+    def test_16_a_mixed_create_batch_keeps_order_and_notifies_only_the_real_ticket(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail]
+        admin = self._on_duty()
+        watch = NotificationWatch(self)
+        tickets = self.env["hams_helpdesk.ticket"].create(
+            [
+                {"name": "batch spam one", "stage": "spam"},
+                {"name": "batch real one", "stage": "new"},
+                {"name": "batch spam two", "stage": "spam"},
+            ]
+        )
+        self.assertEqual(tickets.mapped("name"), ["batch spam one", "batch real one", "batch spam two"])
+        self.assertEqual(tickets.mapped("user_id"), admin)
+        notified = {
+            ticket.name
+            for ticket in tickets
+            if self.env["mail.message"].search_count([("res_id", "=", ticket.id), ("model", "=", ticket._name), ("body", "ilike", "assigned to you")])
+        }
+        self.assertEqual(notified, {"batch real one"})
+        self.assertEqual(len(watch.bus), 1, "one toast, for the real ticket")

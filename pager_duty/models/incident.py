@@ -6,6 +6,7 @@ import logging
 from odoo import models, fields, api, _
 from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
 from odoo.addons.hams_helpdesk.models import untrusted_text as ut
+from odoo.addons.hams_helpdesk.models.inbound_spam_filter import HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY, inbound_spam_reasons
 from odoo.addons.hams_helpdesk.models.mail_thread_untrusted import stash_for
 
 _logger = logging.getLogger(__name__)
@@ -214,7 +215,7 @@ class PagerIncident(models.Model):
 
         # MTTA and MTTR are now handled via computed fields.
 
-        if self:
+        if self and not self.env.context.get("pager_quarantined_spam"):
             self.env["bus.bus"]._sendone("pager_duty", "update_board", {})
 
         return res
@@ -515,10 +516,27 @@ class PagerIncident(models.Model):
             msg_dict.get("body") or msg_dict.get("subject") or "(no content)"
         )
 
+        # The mail-ingestion spam filter judges the message here, once, before the incident exists, so a quarantined message
+        # can be recorded as an already-resolved incident: it never appears in the board's open list and sends no board
+        # refresh. The reasons travel to the helpdesk adapter in the context key HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY (an empty
+        # list means "judged, clean"). The parked findings are read here and popped further down.
+        parked_mail = stash_for(self.env).get(msg_dict.get("message_id") or "") or {}
+        spam_reasons = inbound_spam_reasons(
+            subject=data["name"],
+            body_html=data["description"],
+            signals=parked_mail.get("mail_signals"),
+            verdicts=parked_mail.get("ses_verdicts"),
+            trusted_sender=self.env["hams_helpdesk.ticket"]._inbound_sender_is_member(msg_dict.get("author_id")),
+        )
+        if spam_reasons:
+            data["status"] = "resolved"
+            data["time_resolved"] = fields.Datetime.now()
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "pager_duty.user_pager_incident_creator"
         )
-        incident = self.with_user(svc_uid).create(data)
+        incident = self.with_user(svc_uid).with_context(
+            **{HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY: spam_reasons, "pager_quarantined_spam": bool(spam_reasons)}
+        ).create(data)
         # A human email always gets a helpdesk ticket. create()'s severity
         # gate (incident_ticket_adapter.py) skips "low"/"medium" incidents
         # so monitoring signals go through trend detection instead of
@@ -568,7 +586,8 @@ class PagerIncident(models.Model):
         records = super(PagerIncident, self.with_context(mail_notrack=True)).create(
             vals_list
         )
-        if records:
+        # A message the inbound-mail filter quarantined is born resolved and is not announced to open boards.
+        if records and not self.env.context.get("pager_quarantined_spam"):
             self.env["bus.bus"]._sendone("pager_duty", "update_board", {})
         return records
 

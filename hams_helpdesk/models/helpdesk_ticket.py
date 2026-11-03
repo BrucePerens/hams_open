@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 from markupsafe import Markup
 
-from .inbound_spam_filter import detect_inbound_spam_signals, ses_verdict_reasons
+from .inbound_spam_filter import inbound_spam_reasons
 from .mail_thread_untrusted import stash_for
 from . import untrusted_text as ut
 from .triage_wakeup import write_triage_wakeups
@@ -407,7 +407,31 @@ class HelpdeskTicket(models.Model):
             if vals.get("ticket_type") == _CSAM_TICKET_TYPE:
                 vals["priority"] = "3"
 
+        # [@ANCHOR: hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail]
+        # A ticket created in the spam quarantine mails nobody. Odoo's own "you have been assigned" email is sent when create()
+        # auto-subscribes the user_id assignee, so it is switched off for those tickets (the custom notice, the Shift CC note
+        # and the toast are gated in _automated_routing_and_notification()). A batch that mixes spam with real tickets is
+        # created in two calls so the real tickets keep their assignment email; the result keeps the order of vals_list.
+        spam_flags = [vals.get("stage") == "spam" for vals in vals_list]
+        if any(spam_flags) and not all(spam_flags):
+            ticket_model = self.env["hams_helpdesk.ticket"]
+            by_flag = {
+                flag: ticket_model.create([vals for vals, vflag in zip(vals_list, spam_flags) if vflag == flag])
+                for flag in (True, False)
+            }
+            iterators = {flag: iter(records) for flag, records in by_flag.items()}
+            return ticket_model.browse([next(iterators[flag]).id for flag in spam_flags])
+        all_spam = bool(spam_flags) and all(spam_flags)
+        if all_spam:
+            self = self.with_context(mail_auto_subscribe_no_notify=True)
         tickets = super().create(vals_list)
+        if all_spam:
+            # Found by the route test 2026-11-03: the assignee is auto-subscribed by create(), and the inbound message that Odoo's
+            # mail gateway then posts on the new ticket is mailed to every follower: the spam itself reached the on-duty admin.
+            # A quarantined ticket has no followers until a person moves it out of the quarantine (see write()).
+            hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+            quarantined = tickets.with_env(hd_env)
+            quarantined.message_unsubscribe(partner_ids=quarantined.message_partner_ids.ids)
 
         # [@ANCHOR: hams_helpdesk:COMM_triage_wakeup_on_create]
         # Event-driven AI triage (NIGHT_PLAN decision 222): tell the triage daemon a ticket exists,
@@ -599,7 +623,7 @@ class HelpdeskTicket(models.Model):
                         )
 
             # Pre-Shift Awareness (CC upcoming admins)
-            if upcoming_partner_ids:
+            if upcoming_partner_ids and ticket_service.stage != "spam":
                 current_assignee_pid = (
                     ticket_service.user_id.partner_id.id
                     if ticket_service.user_id
@@ -619,8 +643,9 @@ class HelpdeskTicket(models.Model):
                         subtype_xmlid="mail.mt_note",
                     )
 
-            # Ensure customer is subscribed
-            if ticket_service.partner_id:
+            # Ensure customer is subscribed (not for a quarantined ticket: its "customer" is the From address of junk, and a follower
+            # is mailed every message posted on the ticket)
+            if ticket_service.partner_id and ticket_service.stage != "spam":
                 ticket_service.message_subscribe(
                     partner_ids=[ticket_service.partner_id.id]
                 )
@@ -698,7 +723,16 @@ class HelpdeskTicket(models.Model):
                     )
                 )
 
+        leaving_spam = self.filtered(lambda t: t.stage == "spam") if vals.get("stage") not in (None, "spam") else self.browse()
         res = super().write(vals)
+        if leaving_spam:
+            # A quarantined ticket has no followers (see create()); a person recovering it makes it an ordinary ticket again, so
+            # its assignee and customer follow it like any other. Subscribing sends nothing.
+            hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+            for ticket in leaving_spam.with_env(hd_env):
+                follower_partners = ticket.user_id.partner_id + ticket.partner_id
+                if follower_partners:
+                    ticket.message_subscribe(partner_ids=follower_partners.ids)
         # Mail-back facility on state change
         # [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]
         # Not when the ticket is being quarantined as spam: the "customer"
@@ -1015,11 +1049,13 @@ class HelpdeskTicket(models.Model):
         # adapter: a flagged message still becomes a ticket (never a silent
         # drop), it just starts in the "spam" quarantine stage, which a
         # human can move back to "new" to recover a false positive.
-        spam_reasons = detect_inbound_spam_signals(
+        parked = stash_for(self.env).get(msg_dict.get("message_id") or "") or {}
+        spam_reasons = inbound_spam_reasons(
             subject=msg_dict.get("subject") or "",
             body_html=msg_dict.get("body") or "",
-        ) + ses_verdict_reasons(
-            (stash_for(self.env).get(msg_dict.get("message_id") or "") or {}).get("ses_verdicts")
+            signals=parked.get("mail_signals"),
+            verdicts=parked.get("ses_verdicts"),
+            trusted_sender=self._inbound_sender_is_member(author_id),
         )
         if spam_reasons:
             values["stage"] = "spam"
@@ -1044,6 +1080,18 @@ class HelpdeskTicket(models.Model):
                 subtype_xmlid="mail.mt_note",
             )
         return ticket
+
+    @api.model
+    # [@ANCHOR: hams_helpdesk:inbound_sender_is_member]
+    def _inbound_sender_is_member(self, author_id):
+        """True when ``author_id`` (the res.partner id Odoo's mail gateway matched to the From address; False or None when
+        it matched nobody) belongs to someone with a user account: a member or staff. Mail from them is never run through
+        the spam filter (see inbound_spam_reasons). The lookup runs as the helpdesk service account because the calling
+        mail-ingest identity cannot read res.users."""
+        if not author_id:
+            return False
+        hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+        return bool(hd_env["res.users"].search_count([("partner_id", "=", int(author_id))]))
 
     def ingest_inbound_email(self, raw_email_bytes):
         """RPC entrypoint for the SES-to-S3-to-Odoo inbound mail daemon

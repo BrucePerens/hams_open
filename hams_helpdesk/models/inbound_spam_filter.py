@@ -28,7 +28,11 @@ Deliberately NOT a machine-learning classifier (per the to-do's own "start
 simple and defensible" instruction) -- every signal below is a plain,
 auditable rule with its own human-readable reason string, so a reviewer
 (or a future session) can see exactly why a message was flagged, not just
-an opaque score. See night_shift_todo/high/inbound-mail-ticket-ingestion-
+an opaque score. The bulk/marketing signals added 2026-11-03 are the one place
+a sum is used: each weak signal is its own rule with its own reason and weight,
+and the message is flagged only when the weights reach BULK_SCORE_THRESHOLD, so
+one innocent feature of a real message (a List-Id, an "unsubscribe" link in a
+vendor reply) can never flag it alone. See night_shift_todo/high/inbound-mail-ticket-ingestion-
 has-no-spam-phishing-filter-e3a8f612.md for the real, live spam/phishing
 examples this was built from.
 
@@ -38,8 +42,13 @@ responsible for routing a flagged message to a visible quarantine stage
 that a human can still review and recover from (see incident_ticket_
 adapter.py's and helpdesk_ticket.py's message_new() "spam" stage handling).
 """
+import logging
 import re
+from email.utils import parseaddr
+from html.parser import HTMLParser
 from urllib.parse import urlsplit
+
+_logger = logging.getLogger(__name__)
 
 # Known commercial-spam / scare-lure subject-line patterns, taken directly
 # from the real "new"-stage tickets found live 2026-10-01 (see the to-do
@@ -84,6 +93,19 @@ SPAM_SUBJECT_PATTERNS = [
     (
         re.compile(r"negative\s+(feedback|review)", re.IGNORECASE),
         "negative-review scare phishing",
+    ),
+    # Added 2026-11-03 from production tickets 113, 115 and 122 (names only).
+    (
+        re.compile(r"\bsubscription\s+renews?\s+soon", re.IGNORECASE),
+        "fake subscription-renewal lure",
+    ),
+    (
+        re.compile(r"\bsecurity\s+alert\s+for\s+\S+@\S+", re.IGNORECASE),
+        "fake account security-alert lure",
+    ),
+    (
+        re.compile(r"\bbalance\s+confirmation\b.*\baudit\b", re.IGNORECASE),
+        "fake audit balance-confirmation lure",
     ),
 ]
 
@@ -225,8 +247,9 @@ def detect_inbound_spam_signals(subject, body_html):
 # Verified by [@ANCHOR: test_ses_verdicts_flag_only_a_fail]
 # Amazon SES scans mail when the receipt rule has ScanEnabled (hams.com's does) and writes the result into the
 # stored message as X-SES-Spam-Verdict and X-SES-Virus-Verdict, each PASS, FAIL, GRAY or PROCESSING_FAILED.
-# Only a FAIL is used: GRAY and PROCESSING_FAILED mean SES could not decide. The authentication verdicts
-# (DKIM, SPF, DMARC) are deliberately not used: mailing lists and forwarders legitimately fail them.
+# Only a FAIL is used: GRAY and PROCESSING_FAILED mean SES could not decide. The authentication results (DKIM, SPF,
+# DMARC) are NOT strong signals: mailing lists and forwarders legitimately fail them. Since 2026-11-03 a DMARC, SPF
+# or DKIM failure is a weak, weighted bulk signal (see bulk_mail_findings), never a reason by itself.
 _SES_VERDICT_HEADERS = (
     ("spam", "X-SES-Spam-Verdict"),
     ("virus", "X-SES-Virus-Verdict"),
@@ -253,3 +276,278 @@ def ses_verdict_reasons(verdicts):
     if (verdicts or {}).get("virus") == "FAIL":
         reasons.append("Amazon SES virus scan verdict: FAIL")
     return reasons
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Bulk / marketing mail (2026-11-03). Production tickets 113-140 were HTML marketing newsletters that matched no
+# subject pattern. Each signal below is its own plain rule with its own reason; the weights add up and the message
+# is flagged only at BULK_SCORE_THRESHOLD, so no single weak signal can quarantine a message. The inputs are the
+# facts mail_signals() reads from the raw MIME message in mail.thread.message_parse() (the sanitised ticket body
+# has lost the images, the plain-text part and every header), plus the subject and body.
+# ----------------------------------------------------------------------------------------------------------------
+
+# The message is flagged when its bulk signals weigh at least this much. The largest single weight is 2, so three
+# independent facts are always required. A vendor's real notice often carries two of them (an unsubscribe link and a
+# branded table layout); it takes a third (no plain-text part, a tracking pixel, a clickbait subject) to flag it.
+BULK_SCORE_THRESHOLD = 5
+
+# Context key under which pager.incident.message_new() hands the adapter the reasons it already computed for this
+# one message (a list; empty means "judged, clean"), so the message is judged once and the adapter does not re-judge it
+# without the headers the adapter cannot see.
+HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY = "hams_inbound_spam_reasons"
+
+# The retroactive pass over tickets already stored (hams_com devbox_tools/reclassify_bulk_spam_tickets_hams_prod.py)
+# has only the subject and the sanitised body: no headers, no plain-text part, no images. It scores one lower, and
+# a person reads its dry run before anything changes.
+STORED_TICKET_SCORE_THRESHOLD = 4
+
+# Sender domains that are ours. Mail From one of these is exempt only when SES says DKIM or DMARC passed: a forged
+# From line must not buy a pass.
+OWN_SENDER_DOMAINS = ("hams.com",)
+
+# Health-supplement / "secret" / "researchers" clickbait subjects. A weak signal only (weight 1, counted once):
+# real mail can say "natural" or "researchers".
+CLICKBAIT_SUBJECT_PATTERNS = re.compile(
+    r"\bsecret\s+(behind|of|to)\b|\bresearchers?\b|\bdoctors?\b|\bnatural\s+(nutritional|evening|remedy|compound|ingredient|approach)"
+    r"|\bsimple\s+(kitchen|ritual|trick|habit)|\bwhat\s+to\s+know\s+about\b|\bbefore\s+(it'?s\s+)?(deleted|banned|removed)"
+    r"|\b(memory|neural|energy)\s+(loss|decline)\b|\bsupplement\b|\bmiracle\b|\bone\s+weird\s+trick\b",
+    re.IGNORECASE,
+)
+
+_UNSUBSCRIBE_RE = re.compile(r"\bunsubscrib", re.IGNORECASE)
+_VIEW_IN_BROWSER_RE = re.compile(
+    r"view\s+(this\s+)?(e-?mail\s+)?(in|on)\s+(your\s+)?(web\s+)?browser|view\s+online|trouble\s+(viewing|reading)\s+this",
+    re.IGNORECASE,
+)
+_PREFERENCES_RE = re.compile(
+    r"(update|manage|change)\s+(your\s+)?(e-?mail\s+)?(preferences|subscriptions?)"
+    r"|you\s+(are|'re)\s+(receiving|getting)\s+this\s+(e-?mail|message)|you\s+received\s+this\s+(e-?mail|message)\s+because",
+    re.IGNORECASE,
+)
+
+_SIGNAL_TEXT_LIMIT = 400000  # characters of HTML the shape parser reads; a hostile message may be far larger
+
+
+class _ShapeParser(HTMLParser):
+    """Counts the structure of an HTML part: tables and their nesting depth, images, and tracking pixels (an image
+    declared 0 or 1 pixel wide or high). Tolerates any markup; unbalanced tags never make the depth negative."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tables = 0
+        self.depth = 0
+        self.max_depth = 0
+        self.images = 0
+        self.pixels = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "table":
+            self.tables += 1
+            self.depth += 1
+            self.max_depth = max(self.max_depth, self.depth)
+        elif tag == "img":
+            self.images += 1
+            attributes = dict(attrs)
+            for key in ("width", "height"):
+                if _is_pixel_size(attributes.get(key)):
+                    self.pixels += 1
+                    break
+
+    def handle_endtag(self, tag):
+        if tag == "table" and self.depth:
+            self.depth -= 1
+
+
+def _is_pixel_size(value):
+    text = (value or "").strip().lower().rstrip("px").strip()
+    return text in ("0", "1")
+
+
+def html_shape(html):
+    """{"tables", "table_depth", "images", "tracking_pixels"} of an HTML string; all zero when it cannot be parsed."""
+    parser = _ShapeParser()
+    try:
+        parser.feed((html or "")[:_SIGNAL_TEXT_LIMIT])
+        parser.close()
+    except Exception as error:  # audit-ignore-catch-all: HTMLParser can raise on hostile markup; a message that cannot be parsed contributes no shape, it is never dropped
+        _logger.info("Inbound mail HTML shape could not be read (%s); it contributes no shape signals.", type(error).__name__)
+    return {
+        "tables": parser.tables,
+        "table_depth": parser.max_depth,
+        "images": parser.images,
+        "tracking_pixels": parser.pixels,
+    }
+
+
+def _domain_of(address_header):
+    """Lower-cased domain of the first address in a From/Return-Path header value, or ""."""
+    _name, address = parseaddr(str(address_header or ""))
+    return address.rpartition("@")[2].strip().lower()[:255] if "@" in address else ""
+
+
+def _auth_results(message):
+    """{"spf": "pass", "dkim": "fail", "dmarc": "pass"} from the Authentication-Results header written by Amazon SES
+    (authserv-id amazonses.com) on arrival. Only that header counts: the sender controls any other copy."""
+    found = {}
+    for value in message.get_all("Authentication-Results") or []:
+        text = str(value)
+        if text.split(";", 1)[0].strip().lower() != "amazonses.com":
+            continue
+        for method in ("spf", "dkim", "dmarc"):
+            match = re.search(r"(?:^|[;\s])%s=(\w+)" % method, text, re.IGNORECASE)
+            if match:
+                found[method] = match.group(1).lower()[:16]
+        break
+    return found
+
+
+def mail_signals(message):
+    """Header facts and HTML shape of one parsed inbound ``email.message.Message``, as a small JSON-able dict that
+    detect_bulk_mail_signals() and own_authenticated_sender() read. Never raises; an unreadable part contributes
+    nothing. Keys: list_unsubscribe (bool), list_id (bool), precedence (str), auto_submitted (str), spf / dkim /
+    dmarc ("pass", "fail", ... or absent), from_domain, return_path_domain, reply_headers (bool: In-Reply-To or
+    References present), has_plain (bool), plain_chars, html_chars, tables, table_depth, images, tracking_pixels."""
+    signals = {}
+    try:
+        signals["list_unsubscribe"] = bool(message.get("List-Unsubscribe"))
+        signals["list_id"] = bool(message.get("List-Id"))
+        signals["precedence"] = str(message.get("Precedence") or "").strip().lower()[:16]
+        signals["auto_submitted"] = str(message.get("Auto-Submitted") or "").strip().lower()[:32]
+        signals["reply_headers"] = bool(message.get("In-Reply-To") or message.get("References"))
+        signals["from_domain"] = _domain_of(message.get("From"))
+        signals["return_path_domain"] = _domain_of(message.get("Return-Path"))
+        signals.update(_auth_results(message))
+        plain_chars = html_chars = 0
+        has_plain = False
+        shape = {"tables": 0, "table_depth": 0, "images": 0, "tracking_pixels": 0}
+        for part in message.walk():
+            if part.is_multipart() or part.get_filename():
+                continue
+            ctype = part.get_content_type()
+            if ctype not in ("text/plain", "text/html"):
+                continue
+            payload = part.get_payload(decode=True) or b""
+            text = payload[:_SIGNAL_TEXT_LIMIT].decode(part.get_content_charset() or "utf-8", "replace")
+            if ctype == "text/plain":
+                has_plain = True
+                plain_chars += len(text.strip())
+            else:
+                html_chars += len(text)
+                part_shape = html_shape(text)
+                for key in ("tables", "images", "tracking_pixels"):
+                    shape[key] += part_shape[key]
+                shape["table_depth"] = max(shape["table_depth"], part_shape["table_depth"])
+        signals.update(shape, has_plain=has_plain, plain_chars=plain_chars, html_chars=html_chars)
+    except Exception as error:  # audit-ignore-catch-all: a hostile message is the input this must tolerate; partial signals are used, the mail is never dropped
+        _logger.info("Inbound mail signals could only be partly read (%s); the mail is still processed.", type(error).__name__)
+    return signals
+
+
+def own_authenticated_sender(signals):
+    """True when the message claims one of OWN_SENDER_DOMAINS in its From line AND SES recorded a DKIM or DMARC pass.
+    Our own systems (monitoring, the inbound path check) are exempt from the bulk rules this way; a forged From line
+    is not, because it fails authentication."""
+    signals = signals or {}
+    domain = signals.get("from_domain") or ""
+    ours = any(domain == own or domain.endswith("." + own) for own in OWN_SENDER_DOMAINS)
+    return ours and "pass" in (signals.get("dkim"), signals.get("dmarc"))
+
+
+def _organisational_domain(domain):
+    """The last two labels of a host name: enough to compare a bounce-domain sub-host with the From domain."""
+    labels = [label for label in (domain or "").split(".") if label]
+    return ".".join(labels[-2:])
+
+
+def bulk_mail_findings(subject, body_html, signals=None):
+    """[(weight, reason), ...] for every bulk/marketing signal present; the caller applies the threshold. ``signals`` is
+    the mail_signals() dict, or None/{} when only the stored subject and body exist (the retroactive production pass),
+    in which case the header and plain-text rules cannot fire and the shape comes from the body itself."""
+    signals = signals or {}
+    subject = subject or ""
+    body_html = (body_html or "")[:_SIGNAL_TEXT_LIMIT]
+    findings = []
+
+    if signals.get("list_unsubscribe"):
+        findings.append((2, "has a List-Unsubscribe header (bulk mailer)"))
+    if signals.get("precedence") in ("bulk", "list", "junk"):
+        findings.append((2, "Precedence: %s header (bulk mailer)" % signals["precedence"]))
+    if signals.get("list_id"):
+        findings.append((1, "has a List-Id header (mailing list)"))
+    auto_submitted = signals.get("auto_submitted")
+    if auto_submitted and auto_submitted != "no":
+        findings.append((1, "Auto-Submitted: %s header (machine-generated)" % auto_submitted))
+    if signals.get("dmarc") == "fail":
+        findings.append((2, "SES recorded a DMARC failure for the sender"))
+    if signals.get("spf") == "fail":
+        findings.append((1, "SES recorded an SPF failure for the sender"))
+    if signals.get("dkim") == "fail":
+        findings.append((1, "SES recorded a DKIM failure for the sender"))
+    from_domain = signals.get("from_domain")
+    path_domain = signals.get("return_path_domain")
+    if from_domain and path_domain and _organisational_domain(from_domain) != _organisational_domain(path_domain):
+        findings.append((1, "Return-Path domain %s is not aligned with the From domain %s" % (path_domain, from_domain)))
+
+    # Marketing HTML shape: from the raw MIME when we have it (images and pixels survive there), else from the body.
+    if signals.get("html_chars"):
+        shape = signals
+        if not signals.get("has_plain"):
+            findings.append((1, "HTML message with no plain-text alternative"))
+        elif signals.get("plain_chars", 0) < 200 and signals["html_chars"] > 3000:
+            findings.append((1, "HTML message whose plain-text alternative is almost empty"))
+    else:
+        shape = html_shape(body_html)
+    if shape.get("tables", 0) >= 4 or shape.get("table_depth", 0) >= 3:
+        findings.append((1, "layout built from %d tables nested %d deep (newsletter template)" % (shape.get("tables", 0), shape.get("table_depth", 0))))
+    if shape.get("images", 0) >= 3:
+        findings.append((1, "%d images (newsletter template)" % shape["images"]))
+    if shape.get("tracking_pixels", 0):
+        findings.append((1, "contains a 1-pixel tracking image"))
+
+    footer = []
+    # The List-Unsubscribe header and the unsubscribe footer are one fact (a bulk mailer), counted once.
+    if not signals.get("list_unsubscribe") and _UNSUBSCRIBE_RE.search(body_html):
+        footer.append((2, "unsubscribe footer"))
+    if _VIEW_IN_BROWSER_RE.search(body_html):
+        footer.append((1, "\"view in browser\" footer"))
+    if _PREFERENCES_RE.search(body_html):
+        footer.append((1, "\"update your preferences\" / \"you are receiving this because\" footer"))
+    findings.extend(footer)
+
+    if CLICKBAIT_SUBJECT_PATTERNS.search(subject):
+        findings.append((1, "subject in the health-supplement / \"secret\" / \"researchers\" clickbait style"))
+    return findings
+
+
+def detect_bulk_mail_signals(subject, body_html, signals=None, threshold=BULK_SCORE_THRESHOLD):
+    """Plain-English reasons when the bulk/marketing signals weigh at least ``threshold``, else []. The first
+    reason states the total; the rest list each contributing signal with its weight. A reply to an existing thread
+    (In-Reply-To or References present) is never judged by these rules."""
+    if (signals or {}).get("reply_headers"):
+        return []
+    findings = bulk_mail_findings(subject, body_html, signals)
+    total = sum(weight for weight, _reason in findings)
+    if total < threshold:
+        return []
+    return ["bulk/marketing mail: weak signals total %d (flag threshold %d)" % (total, threshold)] + [
+        "bulk signal (+%d): %s" % (weight, reason) for weight, reason in findings
+    ]
+
+
+# [@ANCHOR: hams_helpdesk:inbound_spam_reasons]
+def inbound_spam_reasons(subject, body_html, signals=None, verdicts=None, trusted_sender=False):
+    """The single entry point both inbound routes call: every reason this message should be quarantined, [] when it
+    should not. Order: exemptions first (a trusted sender or one of our own authenticated senders is never flagged),
+    then the strong rules (detect_inbound_spam_signals: subject patterns and brand impersonation; SES spam/virus
+    FAIL), then the weighted bulk/marketing rules. ``trusted_sender`` is honoured only when SES did not record a
+    DMARC failure, so a spoofed member address does not bypass the filter."""
+    signals = signals or {}
+    if own_authenticated_sender(signals):
+        return []
+    if trusted_sender and signals.get("dmarc") != "fail":
+        return []
+    return (
+        detect_inbound_spam_signals(subject, body_html)
+        + ses_verdict_reasons(verdicts)
+        + detect_bulk_mail_signals(subject, body_html, signals)
+    )

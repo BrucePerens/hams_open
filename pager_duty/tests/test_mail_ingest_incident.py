@@ -8,6 +8,14 @@ from datetime import timedelta
 from odoo import fields
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.hams_helpdesk.tests.bulk_mail_fixtures import (
+    BULK_HEADERS,
+    REAL_MISSED_SPAM_NAMES,
+    SES_PASS_HEADERS,
+    NotificationWatch,
+    newsletter_body,
+    raw_message,
+)
 
 
 @tagged("post_install", "-at_install", "standard")
@@ -197,3 +205,89 @@ class TestMailIngestIncident(HamsTransactionCase):
     # doesn't depend on hams_base, so that filtering isn't guaranteed to be
     # installed here. See hams_base/tests/test_mail_thread.py for that
     # coverage instead.
+
+
+    # ------------------------------------------------------------------
+    # Bulk / marketing mail through info@ -- the route every production miss of 2026-10-28..11-03 came through.
+    # ------------------------------------------------------------------
+
+    def _on_duty_admin(self):
+        user = self.env["res.users"].create(
+            {
+                "name": "Bulk Test On Duty",
+                "login": "bulk_test_on_duty",
+                "email": "bulk-test-on-duty@example.org",
+                "group_ids": [(6, 0, [self.env.ref("pager_duty.group_pager_admin").id, self.env.ref("hams_helpdesk.group_helpdesk_manager").id])],
+            }
+        )
+        now = fields.Datetime.now()
+        self.env["calendar.event"].create(
+            {"name": "Bulk test shift", "start": now - timedelta(hours=1), "stop": now + timedelta(hours=1), "is_pager_duty": True, "user_id": user.id}
+        )
+        return user
+
+    def _ingest_raw(self, raw):
+        self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(base64.b64encode(raw).decode("ascii"))
+
+    def test_info_bulk_newsletter_is_quarantined_resolved_and_mails_nobody(self):
+        # Tests [@ANCHOR: pager_incident_message_new]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_spam_reasons]
+        # The mail has no subject pattern: only its headers and HTML shape say what it is.
+        on_duty = self._on_duty_admin()
+        watch = NotificationWatch(self)
+        subject = REAL_MISSED_SPAM_NAMES[1]
+        self._ingest_raw(raw_message("info@hams.com", subject, headers=SES_PASS_HEADERS + BULK_HEADERS))
+        incident = self.env["pager.incident"].search([("name", "=", subject)], order="id desc", limit=1)
+        self.assertTrue(incident)
+        ticket = self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id)
+        self.assertEqual(ticket.name, "[PAGER] " + subject)
+        self.assertEqual(ticket.stage, "spam", "the mirrored ticket is in the visible quarantine, not deleted")
+        self.assertEqual(ticket.user_id, on_duty)
+        self.assertEqual(incident.status, "resolved", "a quarantined message is not an open incident on the pager board")
+        self.assertTrue(incident.time_resolved)
+        self.assertIn("List-Unsubscribe", ticket.description, "the ticket records the reasons")
+        self.assertFalse(
+            self.env["calendar.event"].search([("name", "ilike", subject)]), "no Incident Response calendar block for junk"
+        )
+        self.assertEqual(watch.mails().ids, [], "no email")
+        self.assertEqual(watch.notifications().ids, [], "no notification row")
+        self.assertEqual(watch.bus, [], "no bus message: no toast and no board refresh")
+
+    def test_info_ordinary_mail_still_notifies_and_stays_open(self):
+        # The control for the test above: the same harness sees the notice for a real message.
+        self._on_duty_admin()
+        watch = NotificationWatch(self)
+        self._ingest_raw(raw_message("info@hams.com", "Question about the club directory", from_addr="visitor@example.com", html=False, headers=SES_PASS_HEADERS))
+        incident = self.env["pager.incident"].search([("name", "=", "Question about the club directory")], limit=1)
+        self.assertEqual(incident.status, "open")
+        self.assertEqual(self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id).stage, "new")
+        self.assertGreater(watch.count(), 0)
+        self.assertTrue(any(kind == "simple_notification" for _target, kind in watch.bus))
+
+    def test_info_mail_from_a_member_is_not_flagged_and_a_ses_fail_still_is(self):
+        member = self.env["res.users"].create({"name": "Member Sender", "login": "member_sender", "email": "member-sender@example.org"})
+        subject = REAL_MISSED_SPAM_NAMES[4]
+        self._ingest_raw(raw_message("info@hams.com", subject, from_addr="member-sender@example.org", headers=BULK_HEADERS))
+        incident = self.env["pager.incident"].search([("name", "=", subject)], limit=1)
+        self.assertEqual(self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id).stage, "new")
+        self.assertEqual(incident.status, "open")
+        self.assertTrue(member.partner_id)
+        # The SES verdict reaches the pager route too (it only reached the admin@/support@ route before).
+        self._ingest_raw(
+            raw_message("info@hams.com", "Plain question", from_addr="visitor@example.com", html=False, headers="X-SES-Spam-Verdict: FAIL\r\nX-SES-Virus-Verdict: PASS\r\n")
+        )
+        incident = self.env["pager.incident"].search([("name", "=", "Plain question")], limit=1)
+        self.assertEqual(self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id).stage, "spam")
+
+    def test_monitoring_incidents_are_never_run_through_the_mail_filter(self):
+        # Tests [@ANCHOR: pd_helpdesk_adapter]
+        # "DX Spot Feed Freshness" and the other monitoring names must stay in "new" whatever their description looks like:
+        # the filter applies to inbound mail sources only.
+        for name in ("DX Spot Feed Freshness", "Backup Manager: hams_prod_pgbackrest_b2", "INC-AUTO"):
+            incident = self.env["pager.incident"].create(
+                {"name": name, "source": name, "severity": "high", "description": newsletter_body()}
+            )
+            incident.action_generate_helpdesk_ticket()
+            ticket = self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id)
+            self.assertEqual(ticket.stage, "new", name)
+            self.assertEqual(incident.status, "open", name)

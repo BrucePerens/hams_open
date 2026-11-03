@@ -13,7 +13,7 @@ See docs/security/TICKET_PROMPT_INJECTION.md.
 from odoo import api, models
 
 from . import untrusted_text as ut
-from .inbound_spam_filter import ses_verdicts
+from .inbound_spam_filter import mail_signals, ses_verdicts
 
 MAIL_STASH_KEY = "hams_helpdesk_untrusted_mail"
 
@@ -37,5 +37,9 @@ class MailThread(models.AbstractModel):
             # Amazon SES's scan verdicts, for message_new(); not a key of msg_dict, because Odoo passes every key of msg_dict on to
             # mail.message.create() and an unknown one is refused.
             "ses_verdicts": ses_verdicts(message),
+            # Header facts and HTML shape of the raw message (List-Unsubscribe, Precedence, SES authentication results, text/plain
+            # against text/html, tables, images, tracking pixels) for the bulk-mail rules of inbound_spam_reasons(): the sanitised
+            # ticket body has lost all of them. Read by helpdesk_ticket.message_new() and pager.incident.message_new().
+            "mail_signals": mail_signals(message),
         }
         return msg_dict
