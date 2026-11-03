@@ -247,7 +247,8 @@ fn the_wrong_kind_of_handle_and_a_panic_are_errors_not_crashes() {
             rctl_rig_get_frequency(rig, 2, &mut hz),
             RCTL_ERR_INVALID_ARG
         );
-        let bad: [c_char; 3] = [-1, -2, 0];
+        // Bytes that are not UTF-8. `c_char` is signed on x86-64 and unsigned on aarch64, so the literals `-1, -2` did not compile there.
+        let bad: [c_char; 3] = [0xFF_u8 as c_char, 0xFE_u8 as c_char, 0];
         assert_eq!(rctl_rig_set_mode(rig, bad.as_ptr()), RCTL_ERR_INVALID_ARG);
         assert!(last_error().contains("UTF-8"));
         assert_eq!(
