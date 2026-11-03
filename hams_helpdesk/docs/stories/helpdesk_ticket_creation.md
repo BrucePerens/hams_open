@@ -176,3 +176,33 @@ assignment email; the returned recordset keeps the order of `vals_list`. Togethe
 `_automated_routing_and_notification` (custom assignment notice, toast, and the "Shift CC" note to the next shift's admins), a
 ticket in the spam stage sends no email, notification or bus message to anyone. On the pager route the incident itself is created
 already resolved and without a board refresh (see the pager_duty incident lifecycle).
+
+## Convention hotel-booking offers to exhibitors [@ANCHOR: hams_helpdesk:inbound_housing_solicitation]
+
+**Purpose.** Third-party "housing" companies mail exhibitors of a convention (found live 2026-11-03: ticket 141, a
+"Hotel Booking Team" message "Dear Exhibitor, Hotel options for HamCation 2027 are now available ... View Hotel
+Options", sent from a bulk-mail service to the admin@ alias). `detect_inbound_spam_signals` flags such a message as
+spam so it goes to the visible spam stage and notifies nobody. Bruce confirmed the ticket was spam; the filter had
+found nothing in it because it names no brand and carries no known lure subject.
+
+**Data.** Two compiled patterns in `hams_helpdesk/models/inbound_spam_filter.py`:
+
+| Name | Type | Matches |
+|---|---|---|
+| `HOUSING_SALUTATION_RE` | compiled regular expression, case-insensitive | a greeting to exhibitors, vendors, attendees, sponsors or booth holders ("Dear Exhibitor") |
+| `HOUSING_OFFER_RE` | compiled regular expression, case-insensitive, dot matches newline | the words "hotel options", "hotel rates", "hotel booking", "hotel reservation(s)" or "hotel accommodation(s)" followed within 200 characters by "available", "reserve" or "book" |
+
+**Interface.** Used inside `detect_inbound_spam_signals(subject, body_html)` (unchanged signature; returns a list of
+plain-English reason strings, empty when nothing matched, never raises). The HTML tags are removed from `body_html`
+first. When BOTH patterns match the body, one reason is added: "body is an unsolicited convention hotel-booking offer
+to exhibitors (a third-party housing solicitation)". It is a strong signal: on its own it makes
+`inbound_spam_reasons` non-empty.
+
+**Special concerns.** Synchronous, pure, no database or network access; the patterns are bounded (a 200 character
+window), so a hostile message cannot make them run long. Both halves are required so that a member asking about hotel
+rates near a hamfest, or an organizer writing "Dear Exhibitor, your booth number is 12", is never flagged. The
+organizers' own mail is not whitelisted here: if a real organizer message is ever misjudged the recovery is the
+visible spam stage (a person moves the ticket back to new), and a sender allow-list is the next step.
+
+**Tests.** `test_31_a_convention_hotel_booking_offer_to_exhibitors_is_flagged` (tests/test_inbound_spam_filter.py).
+
