@@ -314,6 +314,8 @@ struct Rigctld {
     child: Reaped,
     reader: BufReader<TcpStream>,
     writer: TcpStream,
+    /// Where the child's stderr goes, for the failure message of a readiness check that never answers.
+    stderr_path: std::path::PathBuf,
 }
 
 /// Whether process `pid` holds a socket listening on 127.0.0.1:`port` (read from the kernel's
@@ -347,8 +349,14 @@ fn rigctld_binary() -> String {
     std::env::var("RIGCTLD").unwrap_or_else(|_| "rigctld".to_string())
 }
 
+/// How many commands were asked again after a transport-level miss, over the whole test binary.
+static RETRIES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// How long one answer from `rigctld` may take (see the note at its use).
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(40);
+
+/// How long a freshly started `rigctld` may take to answer its first query (see `wait_until_ready`).
+const READY_TIMEOUT: Duration = Duration::from_secs(240);
 
 impl Rigctld {
     fn start(model: u32, slave: &str, baud: u32) -> Rigctld {
@@ -385,6 +393,11 @@ impl Rigctld {
             32001..=32003 => "cache_timeout=0,serial_handshake=None",
             _ => "cache_timeout=0",
         };
+        let stderr_path = std::env::temp_dir().join(format!(
+            "radioctl-oracle-{}-{port}.stderr",
+            std::process::id()
+        ));
+        let stderr = std::fs::File::create(&stderr_path).expect("a file for rigctld's stderr");
         let mut child = Reaped(
             Command::new(rigctld_binary())
                 .args([
@@ -405,7 +418,7 @@ impl Rigctld {
                 .args(["-C", conf])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
-                .stderr(Stdio::null())
+                .stderr(Stdio::from(stderr))
                 .spawn()
                 .unwrap_or_else(|e| {
                     panic!(
@@ -429,6 +442,7 @@ impl Rigctld {
         let started = Instant::now();
         loop {
             if child.0.try_wait().ok().flatten().is_some() {
+                let _ = std::fs::remove_file(&stderr_path);
                 return None;
             }
             if listener_owned_by(child.pid(), port) {
@@ -450,11 +464,80 @@ impl Rigctld {
             .set_read_timeout(Some(ANSWER_TIMEOUT))
             .expect("timeout");
         let writer = stream.try_clone().expect("clone");
-        Some(Rigctld {
+        let mut started = Rigctld {
             child,
             reader: BufReader::new(stream),
             writer,
-        })
+            stderr_path,
+        };
+        started.wait_until_ready().then_some(started)
+    }
+
+    /// Readiness handshake: before any case runs, ask `rigctld` a cheap query that needs no radio
+    /// (`chk_vfo`) and wait, as long as a loaded machine needs (`ANSWER_TIMEOUT`), for a valid
+    /// reply, so a case never starts against a daemon whose command loop is not running yet. If
+    /// none comes, fail with what `rigctld` itself wrote to stderr.
+    ///
+    /// `false` when the connection was reset or closed, or the child is gone: that connection was
+    /// not to this `rigctld` (the stray-descriptor case above), so the caller starts over on another
+    /// port. The wait is `READY_TIMEOUT`, much longer than one answer: a backend that probes the radio
+    /// when it opens (Optoscan, the Yaesu block protocols) takes minutes on a loaded machine.
+    fn wait_until_ready(&mut self) -> bool {
+        // `chk_vfo` in the extended form answers one line, `ChkVFO: 0`, and no RPRT line.
+        self.reader
+            .get_ref()
+            .set_read_timeout(Some(READY_TIMEOUT))
+            .expect("timeout");
+        let outcome = writeln!(self.writer, "+\\chk_vfo")
+            .map_err(|e| format!("send: {e}"))
+            .and_then(|()| {
+                let mut line = String::new();
+                match self.reader.read_line(&mut line) {
+                    Ok(0) => Err("rigctld closed the connection".to_string()),
+                    Ok(_) => Ok(line.trim().to_string()),
+                    Err(e) => Err(format!("{e}")),
+                }
+            });
+        let gone = self.child.0.try_wait().ok().flatten().is_some();
+        let reset = matches!(&outcome, Err(why) if why.contains("reset") || why.contains("closed") || why.starts_with("send"));
+        if !outcome
+            .as_ref()
+            .is_ok_and(|seen| seen.starts_with("ChkVFO"))
+            && (gone || reset)
+        {
+            return false;
+        }
+        assert!(
+            outcome.as_ref().is_ok_and(|seen| seen.starts_with("ChkVFO")),
+            "rigctld did not answer the readiness query chk_vfo within {} s ({outcome:?}); its stderr: {:?}",
+            READY_TIMEOUT.as_secs(),
+            std::fs::read_to_string(&self.stderr_path).unwrap_or_default()
+        );
+        self.reader
+            .get_ref()
+            .set_read_timeout(Some(ANSWER_TIMEOUT))
+            .expect("timeout");
+        true
+    }
+
+    /// `call`, repeated ONCE when the miss is the transport's and not Hamlib's verdict: no
+    /// answer at all within the bound. Any RPRT code, a timeout (-5) included, is Hamlib's own
+    /// answer and is never retried, and
+    /// nothing in the comparison is loosened: the second answer is the one compared. Every retry is
+    /// counted and printed, so the rate shows in the test output.
+    fn call_retrying(&mut self, command: &str) -> Result<(Vec<(String, String)>, i32), String> {
+        let first = self.call(command);
+        // Only "no answer at all" counts. Hamlib's own timeout code (RPRT -5) is NOT retried: it is
+        // Hamlib's verdict on a radio that did not reply, and several models are pinned in the
+        // tests as exactly that (asking again would make the second attempt answer differently and
+        // erase a divergence the tests record).
+        let missed = matches!(&first, Err(why) if why.starts_with("no answer"));
+        if !missed {
+            return first;
+        }
+        let n = RETRIES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        eprintln!("oracle retry #{n}: {command:?} had a transport-level miss ({first:?}), asked once more");
+        self.call(command)
     }
 
     /// Sends one command in rigctld's extended form and returns its `key: value` lines and the
@@ -488,6 +571,7 @@ impl Rigctld {
 
 impl Drop for Rigctld {
     fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.stderr_path);
         // A polite quit first; `Reaped` kills and reaps whatever is left.
         let _ = writeln!(self.writer, "q");
     }
@@ -616,31 +700,31 @@ fn field<'a>(fields: &'a [(String, String)], key: &str) -> Option<&'a str> {
 /// The scenario step as Hamlib sees it.
 fn through_hamlib(oracle: &mut Rigctld, op: &Op) -> Reading {
     let answered = match op {
-        Op::SetFrequency(Vfo::A, hz) => oracle.call(&format!("F {}", hz.0)),
-        Op::SetMode(mode) => oracle.call(&format!("M {} 0", hamlib_mode(*mode))),
-        Op::GetFrequency(Vfo::A) => oracle.call("f"),
-        Op::GetMode => oracle.call("m"),
-        Op::GetPtt => oracle.call("t"),
-        Op::SetRitOffset(hz) => oracle.call(&format!("J {hz}")),
-        Op::GetRitOffset => oracle.call("j"),
-        Op::SetLevel(Level::KeyerSpeed, wpm) => oracle.call(&format!("L KEYSPD {wpm}")),
-        Op::GetLevel(Level::KeyerSpeed) => oracle.call("l KEYSPD"),
+        Op::SetFrequency(Vfo::A, hz) => oracle.call_retrying(&format!("F {}", hz.0)),
+        Op::SetMode(mode) => oracle.call_retrying(&format!("M {} 0", hamlib_mode(*mode))),
+        Op::GetFrequency(Vfo::A) => oracle.call_retrying("f"),
+        Op::GetMode => oracle.call_retrying("m"),
+        Op::GetPtt => oracle.call_retrying("t"),
+        Op::SetRitOffset(hz) => oracle.call_retrying(&format!("J {hz}")),
+        Op::GetRitOffset => oracle.call_retrying("j"),
+        Op::SetLevel(Level::KeyerSpeed, wpm) => oracle.call_retrying(&format!("L KEYSPD {wpm}")),
+        Op::GetLevel(Level::KeyerSpeed) => oracle.call_retrying("l KEYSPD"),
         Op::SetLevel(Level::AfGain, raw) => {
-            oracle.call(&format!("L AF {:.6}", f64::from(*raw) / 255.0))
+            oracle.call_retrying(&format!("L AF {:.6}", f64::from(*raw) / 255.0))
         }
-        Op::GetLevel(Level::AfGain) => oracle.call("l AF"),
-        Op::SetSplit(on) => oracle.call(if *on { "S 1 VFOB" } else { "S 0 VFOA" }),
-        Op::GetSplit => oracle.call("s"),
-        Op::SetFrequency(Vfo::B, hz) => oracle.call(&format!("I {}", hz.0)),
-        Op::GetFrequency(Vfo::B) => oracle.call("i"),
+        Op::GetLevel(Level::AfGain) => oracle.call_retrying("l AF"),
+        Op::SetSplit(on) => oracle.call_retrying(if *on { "S 1 VFOB" } else { "S 0 VFOA" }),
+        Op::GetSplit => oracle.call_retrying("s"),
+        Op::SetFrequency(Vfo::B, hz) => oracle.call_retrying(&format!("I {}", hz.0)),
+        Op::GetFrequency(Vfo::B) => oracle.call_retrying("i"),
         // Hamlib answers a meter as a calibrated float (its per-model tables); radioctl reports
         // the raw deflection. Only "answered" is compared: it proves the virtual rig's `15 1x`
         // replies satisfy Hamlib's read and radioctl's decode alike, nothing about the scale.
-        Op::GetMeter(Meter::Swr) => oracle.call("l SWR"),
-        Op::GetMeter(Meter::Alc) => oracle.call("l ALC"),
-        Op::GetMeter(Meter::Comp) => oracle.call("l COMP_METER"),
-        Op::GetMeter(Meter::Vd) => oracle.call("l VD_METER"),
-        Op::GetMeter(Meter::Id) => oracle.call("l ID_METER"),
+        Op::GetMeter(Meter::Swr) => oracle.call_retrying("l SWR"),
+        Op::GetMeter(Meter::Alc) => oracle.call_retrying("l ALC"),
+        Op::GetMeter(Meter::Comp) => oracle.call_retrying("l COMP_METER"),
+        Op::GetMeter(Meter::Vd) => oracle.call_retrying("l VD_METER"),
+        Op::GetMeter(Meter::Id) => oracle.call_retrying("l ID_METER"),
         other => panic!("the harness has no Hamlib command for {other:?}"),
     };
     let Ok((fields, code)) = answered else {
