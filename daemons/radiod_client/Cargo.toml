@@ -13,7 +13,7 @@ default = ["opus"]
 opus = ["dep:opus"]
 
 [dependencies]
-socket2 = { version = "0.5", features = ["all"] }
+socket2 = { version = "0.6", features = ["all"] }
 # Async only: no runtime of our own. The caller passes a runtime Handle to the socket
 # constructors; "rt" is needed for Handle::enter, "net" and "time" for the sockets and timeouts.
 tokio = { version = "1", default-features = false, features = ["rt", "net", "time"] }
