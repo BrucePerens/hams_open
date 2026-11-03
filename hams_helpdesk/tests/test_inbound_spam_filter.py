@@ -344,3 +344,19 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertEqual(mail_signals(message_from_bytes(b"\xff\xfe not a message")).get("tables", 0), 0)
         self.assertEqual(inbound_spam_reasons(None, None, None, None), [])
         self.assertLessEqual(html_shape("<table>" * 200000)["tables"], 400000 // len("<table>") + 1)
+
+    def test_31_a_convention_hotel_booking_offer_to_exhibitors_is_flagged(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_housing_solicitation]
+        # Real ticket 141 (2026-11-03): "Hotel Booking Team" mail to the admin@ alias.
+        offer = (
+            "<html><body><h2>HamCation 2027</h2><p>Dear Exhibitor , Hotel options for HamCation 2027 - February 12-14, "
+            "2027 , are now available. We have selected several hotels near the event venue to suit your stay.</p>"
+            "<a href='https://example.invalid/x'>View Hotel Options</a><p>If you have any questions about the hotels "
+            "or booking process, reply to this email.</p></body></html>"
+        )
+        reasons = detect_inbound_spam_signals("HamCation 2027", offer)
+        self.assertTrue(any("hotel-booking offer to exhibitors" in r for r in reasons), reasons)
+        self.assertTrue(inbound_spam_reasons("HamCation 2027", offer, {}))
+        # Both halves are needed: a hotel question from a member, or a greeting to an exhibitor, is not flagged.
+        self.assertEqual(detect_inbound_spam_signals("Hotel question", "<p>Are hotel rates available near the hamfest?</p>"), [])
+        self.assertEqual(detect_inbound_spam_signals("Booth", "<p>Dear Exhibitor, your booth number is 12.</p>"), [])

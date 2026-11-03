@@ -108,6 +108,17 @@ SPAM_SUBJECT_PATTERNS = [
     ),
 ]
 
+# Convention housing solicitations (found live 2026-11-03, ticket 141: "Hotel Booking Team" mailing "Dear Exhibitor, Hotel
+# options for HamCation 2027 are now available ... View Hotel Options" from a third-party domain, to the admin@ alias).
+# Both halves must be present, so a message that merely mentions a hotel, or greets an exhibitor, is not flagged.
+# [@ANCHOR: hams_helpdesk:inbound_housing_solicitation]
+# Verified by [@ANCHOR: hams_helpdesk:inbound_housing_solicitation]
+HOUSING_SALUTATION_RE = re.compile(r"\bdear\s+(?:exhibitors?|vendors?|attendees?|sponsors?|booth\s+holders?)\b", re.IGNORECASE)
+HOUSING_OFFER_RE = re.compile(
+    r"\bhotel\s+(?:options|rates|booking|reservations?|accommodations?)\b.{0,200}\b(?:available|reserve|book)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
 # Brands actually impersonated in the real phishing tickets found live
 # (ticket #13: QuickBooks/Intuit via a click.sleadtrack.com redirect to a
 # non-Intuit domain; ticket #15: a ShareFile-branded "Secure document" /
@@ -198,6 +209,12 @@ def detect_inbound_spam_signals(subject, body_html):
     for regex, reason in SPAM_SUBJECT_PATTERNS:
         if regex.search(subject):
             reasons.append("subject matches known spam pattern: %s" % reason)
+
+    plain_body = re.sub(r"<[^>]*>", " ", body_html)
+    if HOUSING_SALUTATION_RE.search(plain_body) and HOUSING_OFFER_RE.search(plain_body):
+        reasons.append(
+            "body is an unsolicited convention hotel-booking offer to exhibitors (a third-party housing solicitation)"
+        )
 
     combined_text = "%s\n%s" % (subject, body_html)
     link_domains = _extract_link_domains(body_html)
