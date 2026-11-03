@@ -45,7 +45,6 @@ adapter.py's and helpdesk_ticket.py's message_new() "spam" stage handling).
 import logging
 import re
 from email.utils import parseaddr
-from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
 _logger = logging.getLogger(__name__)
@@ -328,79 +327,32 @@ _PREFERENCES_RE = re.compile(
 _SIGNAL_TEXT_LIMIT = 400000  # characters of HTML the shape parser reads; a hostile message may be far larger
 
 
-class _ShapeParser(HTMLParser):
-    """Counts the structure of an HTML part: tables and their nesting depth, images, and tracking pixels (an image
-    declared 0 or 1 pixel wide or high). Tolerates any markup; unbalanced tags never make the depth negative."""
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.tables = 0
-        self.depth = 0
-        self.max_depth = 0
-        self.images = 0
-        self.pixels = 0
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "table":
-            self.tables += 1
-            self.depth += 1
-            self.max_depth = max(self.max_depth, self.depth)
-        elif tag == "img":
-            self.images += 1
-            attributes = dict(attrs)
-            for key in ("width", "height"):
-                if _is_pixel_size(attributes.get(key)):
-                    self.pixels += 1
-                    break
-
-    def handle_endtag(self, tag):
-        if tag == "table" and self.depth:
-            self.depth -= 1
+_SHAPE_TAG_RE = re.compile(r"<(/?)(table|img)\b([^>]*)>", re.IGNORECASE)
+_SIZE_ATTR_RE = re.compile(r"""\b(?:width|height)\s*=\s*["']?\s*([0-9]+)\s*(?:px)?\s*["'\s/>]""", re.IGNORECASE)
 
 
-def _is_pixel_size(value):
-    text = (value or "").strip().lower().rstrip("px").strip()
-    return text in ("0", "1")
-
-
+# [@ANCHOR: hams_helpdesk:inbound_html_shape]
 def html_shape(html):
-    """{"tables", "table_depth", "images", "tracking_pixels"} of an HTML string; all zero when it cannot be parsed."""
-    parser = _ShapeParser()
-    try:
-        parser.feed((html or "")[:_SIGNAL_TEXT_LIMIT])
-        parser.close()
-    except Exception as error:  # audit-ignore-catch-all: HTMLParser can raise on hostile markup; a message that cannot be parsed contributes no shape, it is never dropped
-        _logger.info("Inbound mail HTML shape could not be read (%s); it contributes no shape signals.", type(error).__name__)
-    return {
-        "tables": parser.tables,
-        "table_depth": parser.max_depth,
-        "images": parser.images,
-        "tracking_pixels": parser.pixels,
-    }
+    """{"tables", "table_depth", "images", "tracking_pixels"} of an HTML string, counted from its tags: tables and the deepest
+    nesting of them, images, and images declared 0 or 1 pixel wide or high. Unbalanced markup never makes the depth negative;
+    anything that is not a tag is ignored, so it cannot raise. Reads at most 400,000 characters."""
+    tables = depth = max_depth = images = pixels = 0
+    for closing, tag, attributes in _SHAPE_TAG_RE.findall((html or "")[:_SIGNAL_TEXT_LIMIT]):
+        if tag.lower() == "table":
+            if closing:
+                depth = max(0, depth - 1)
+            else:
+                tables += 1
+                depth += 1
+                max_depth = max(max_depth, depth)
+        elif not closing:
+            images += 1
+            if any(size in ("0", "1") for size in _SIZE_ATTR_RE.findall(attributes + " ")):
+                pixels += 1
+    return {"tables": tables, "table_depth": max_depth, "images": images, "tracking_pixels": pixels}
 
 
-def _domain_of(address_header):
-    """Lower-cased domain of the first address in a From/Return-Path header value, or ""."""
-    _name, address = parseaddr(str(address_header or ""))
-    return address.rpartition("@")[2].strip().lower()[:255] if "@" in address else ""
-
-
-def _auth_results(message):
-    """{"spf": "pass", "dkim": "fail", "dmarc": "pass"} from the Authentication-Results header written by Amazon SES
-    (authserv-id amazonses.com) on arrival. Only that header counts: the sender controls any other copy."""
-    found = {}
-    for value in message.get_all("Authentication-Results") or []:
-        text = str(value)
-        if text.split(";", 1)[0].strip().lower() != "amazonses.com":
-            continue
-        for method in ("spf", "dkim", "dmarc"):
-            match = re.search(r"(?:^|[;\s])%s=(\w+)" % method, text, re.IGNORECASE)
-            if match:
-                found[method] = match.group(1).lower()[:16]
-        break
-    return found
-
-
+# [@ANCHOR: hams_helpdesk:inbound_mail_signals]
 def mail_signals(message):
     """Header facts and HTML shape of one parsed inbound ``email.message.Message``, as a small JSON-able dict that
     detect_bulk_mail_signals() and own_authenticated_sender() read. Never raises; an unreadable part contributes
@@ -408,15 +360,30 @@ def mail_signals(message):
     dmarc ("pass", "fail", ... or absent), from_domain, return_path_domain, reply_headers (bool: In-Reply-To or
     References present), has_plain (bool), plain_chars, html_chars, tables, table_depth, images, tracking_pixels."""
     signals = {}
+
+    def domain_of(address_header):
+        _name, address = parseaddr(str(address_header or ""))
+        return address.rpartition("@")[2].strip().lower()[:255] if "@" in address else ""
+
     try:
         signals["list_unsubscribe"] = bool(message.get("List-Unsubscribe"))
         signals["list_id"] = bool(message.get("List-Id"))
         signals["precedence"] = str(message.get("Precedence") or "").strip().lower()[:16]
         signals["auto_submitted"] = str(message.get("Auto-Submitted") or "").strip().lower()[:32]
         signals["reply_headers"] = bool(message.get("In-Reply-To") or message.get("References"))
-        signals["from_domain"] = _domain_of(message.get("From"))
-        signals["return_path_domain"] = _domain_of(message.get("Return-Path"))
-        signals.update(_auth_results(message))
+        signals["from_domain"] = domain_of(message.get("From"))
+        signals["return_path_domain"] = domain_of(message.get("Return-Path"))
+        # Only the Authentication-Results header written by Amazon SES (authserv-id amazonses.com) is believed: the sender
+        # controls any other copy.
+        for value in message.get_all("Authentication-Results") or []:
+            text = str(value)
+            if text.split(";", 1)[0].strip().lower() != "amazonses.com":
+                continue
+            for method in ("spf", "dkim", "dmarc"):
+                match = re.search(r"(?:^|[;\s])%s=(\w+)" % method, text, re.IGNORECASE)
+                if match:
+                    signals[method] = match.group(1).lower()[:16]
+            break
         plain_chars = html_chars = 0
         has_plain = False
         shape = {"tables": 0, "table_depth": 0, "images": 0, "tracking_pixels": 0}
@@ -443,6 +410,7 @@ def mail_signals(message):
     return signals
 
 
+# [@ANCHOR: hams_helpdesk:inbound_own_authenticated_sender]
 def own_authenticated_sender(signals):
     """True when the message claims one of OWN_SENDER_DOMAINS in its From line AND SES recorded a DKIM or DMARC pass.
     Our own systems (monitoring, the inbound path check) are exempt from the bulk rules this way; a forged From line
@@ -453,12 +421,7 @@ def own_authenticated_sender(signals):
     return ours and "pass" in (signals.get("dkim"), signals.get("dmarc"))
 
 
-def _organisational_domain(domain):
-    """The last two labels of a host name: enough to compare a bounce-domain sub-host with the From domain."""
-    labels = [label for label in (domain or "").split(".") if label]
-    return ".".join(labels[-2:])
-
-
+# [@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]
 def bulk_mail_findings(subject, body_html, signals=None):
     """[(weight, reason), ...] for every bulk/marketing signal present; the caller applies the threshold. ``signals`` is
     the mail_signals() dict, or None/{} when only the stored subject and body exist (the retroactive production pass),
@@ -485,7 +448,8 @@ def bulk_mail_findings(subject, body_html, signals=None):
         findings.append((1, "SES recorded a DKIM failure for the sender"))
     from_domain = signals.get("from_domain")
     path_domain = signals.get("return_path_domain")
-    if from_domain and path_domain and _organisational_domain(from_domain) != _organisational_domain(path_domain):
+    # Organisational domain: the last two labels, enough to treat a bounce sub-host as the same sender.
+    if from_domain and path_domain and ".".join(from_domain.split(".")[-2:]) != ".".join(path_domain.split(".")[-2:]):
         findings.append((1, "Return-Path domain %s is not aligned with the From domain %s" % (path_domain, from_domain)))
 
     # Marketing HTML shape: from the raw MIME when we have it (images and pixels survive there), else from the body.
@@ -519,6 +483,7 @@ def bulk_mail_findings(subject, body_html, signals=None):
     return findings
 
 
+# [@ANCHOR: hams_helpdesk:inbound_detect_bulk_mail_signals]
 def detect_bulk_mail_signals(subject, body_html, signals=None, threshold=BULK_SCORE_THRESHOLD):
     """Plain-English reasons when the bulk/marketing signals weigh at least ``threshold``, else []. The first
     reason states the total; the rest list each contributing signal with its weight. A reply to an existing thread

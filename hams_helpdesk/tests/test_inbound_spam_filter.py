@@ -257,6 +257,7 @@ class TestBulkMailSignals(HamsTransactionCase):
             self.assertTrue(any("List-Unsubscribe" in r for r in reasons), reasons)
 
     def test_21_the_real_missed_newsletters_are_flagged_from_the_stored_ticket_alone(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_detect_bulk_mail_signals]
         # The retroactive pass has the subject and the sanitised body only (no headers, no plain part).
         body = "<table><table><table><table><p>text</p></table></table></table></table><a>Unsubscribe</a>"
         for subject in REAL_MISSED_SPAM_NAMES:
@@ -282,6 +283,7 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertEqual(inbound_spam_reasons("Renewal notice", body, signals), [])
 
     def test_25_each_weak_signal_has_its_own_reason_and_weight(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]
         findings = bulk_mail_findings(
             REAL_MISSED_SPAM_NAMES[0],
             newsletter_body(),
@@ -297,6 +299,7 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertGreaterEqual(BULK_SCORE_THRESHOLD, 3, "no two weak signals may flag a message")
 
     def test_26_a_failed_dmarc_spf_dkim_adds_weight_only(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_mail_signals]
         failing = "Authentication-Results: amazonses.com; spf=fail smtp.mailfrom=x.example.net; dkim=fail header.i=@x.example.net; dmarc=fail header.from=x.example.net\r\n"
         signals = self._signals("Hello", headers=failing, html=False, body="Plain words from someone.")
         self.assertEqual((signals["spf"], signals["dkim"], signals["dmarc"]), ("fail", "fail", "fail"))
@@ -311,6 +314,7 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertNotIn("dmarc", signals)
 
     def test_28_replies_members_and_our_own_authenticated_senders_are_exempt(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_own_authenticated_sender]
         subject = REAL_MISSED_SPAM_NAMES[0]
         signals = self._signals(subject)
         self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), signals))
@@ -334,6 +338,7 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertTrue(inbound_spam_reasons("Question", "<p>x</p>", {}, {"spam": "FAIL"}))
 
     def test_30_hostile_input_never_raises(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_html_shape]
         self.assertEqual(html_shape("<table>" * 3 + "</table>" * 9)["table_depth"], 3)
         self.assertEqual(html_shape("</table></table><table>")["table_depth"], 1)
         self.assertEqual(mail_signals(message_from_bytes(b"\xff\xfe not a message")).get("tables", 0), 0)

@@ -94,12 +94,70 @@ stage.
 **Status:** Verified by `TestBulkMailSignals` (tests/test_inbound_spam_filter.py), which runs the real ticket names of hams_prod.
 
 ### `mail_signals`
+**[@ANCHOR: hams_helpdesk:inbound_mail_signals]**
 
-`mail_signals(message)` takes a parsed `email.message.Message` and returns a small JSON-able dict: `list_unsubscribe`, `list_id`,
-`reply_headers` (bool), `precedence`, `auto_submitted` (lower-case, 16 and 32 characters at most), `from_domain`,
-`return_path_domain` (255 characters at most), `spf`, `dkim`, `dmarc` (only when SES wrote them), `has_plain` (bool), `plain_chars`,
-`html_chars`, `tables`, `table_depth`, `images`, `tracking_pixels` (ints). It reads at most 400,000 characters of each text part and
-never raises; a part it cannot read contributes nothing.
+Purpose: read the header facts and HTML shape of one raw inbound message, once, in `mail.thread.message_parse()`, because Odoo's
+sanitised ticket body has lost all of them. The dict is parked on the cursor beside `ses_verdicts` (cleared on commit and rollback)
+and read by `helpdesk_ticket.message_new()` and `pager.incident.message_new()`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `message` | `email.message.Message` | The parsed raw message, headers and all parts. |
+
+Returns a dict; a key is absent when the fact is unknown. Never raises: an unreadable part contributes nothing and the error class is
+logged at info level. It reads at most 400,000 characters of each text part and ignores attachments.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `list_unsubscribe`, `list_id` | bool | The header is present. |
+| `reply_headers` | bool | `In-Reply-To` or `References` is present. |
+| `precedence` | str | Lower-cased `Precedence` value, at most 16 characters. |
+| `auto_submitted` | str | Lower-cased `Auto-Submitted` value, at most 32 characters. |
+| `from_domain`, `return_path_domain` | str | Lower-cased domain of the first address of `From` and `Return-Path`, at most 255 characters; "" when absent. |
+| `spf`, `dkim`, `dmarc` | str | `pass`, `fail`, `none`, ... from the first `Authentication-Results` header whose authserv-id is `amazonses.com`; absent when SES wrote none. |
+| `has_plain` | bool | A `text/plain` part exists. |
+| `plain_chars`, `html_chars` | int | Stripped length of the plain parts and length of the HTML parts. |
+| `tables`, `table_depth`, `images`, `tracking_pixels` | int | `html_shape()` of the HTML parts, summed (depth is the maximum). |
+
+No locks, threads or network. The sender controls every header except the SES `Authentication-Results` and `X-SES-*` ones, so each
+fact is only ever a weak signal.
+
+**Status:** Verified by `test_26_a_failed_dmarc_spf_dkim_adds_weight_only` and `test_27_only_the_ses_authentication_results_header_is_believed`.
+
+### `html_shape`
+**[@ANCHOR: hams_helpdesk:inbound_html_shape]**
+
+`html_shape(html)`: `html` is a str (or None, read as empty). Returns `{"tables": int, "table_depth": int, "images": int,
+"tracking_pixels": int}`: the number of `<table>` tags, the deepest nesting, the number of `<img>` tags, and the number of images
+whose `width` or `height` attribute is 0 or 1 (with or without `px`). Counted from tags with a regular expression over the first
+400,000 characters, so unbalanced or hostile markup cannot raise and a stray `</table>` never makes the depth negative. Pure,
+no side effects. **Status:** Verified by `test_30_hostile_input_never_raises`.
+
+### `own_authenticated_sender`
+**[@ANCHOR: hams_helpdesk:inbound_own_authenticated_sender]**
+
+`own_authenticated_sender(signals)`: `signals` is a `mail_signals()` dict (or None). Returns True only when `from_domain` is one of
+`OWN_SENDER_DOMAINS` (`hams.com`) or a sub-domain of it AND SES recorded a `dkim` or `dmarc` pass. A forged From line fails
+authentication and returns False; `evil-hams.com` is not a sub-domain. Pure. `inbound_spam_reasons()` returns [] for such a sender.
+**Status:** Verified by `test_28_replies_members_and_our_own_authenticated_senders_are_exempt`.
+
+### `bulk_mail_findings`
+**[@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]**
+
+`bulk_mail_findings(subject, body_html, signals=None)`: `subject`, `body_html` as for `inbound_spam_reasons`; `signals` the
+`mail_signals()` dict, or None when only stored text exists (then the header and plain-text rules cannot fire and the shape is read
+from `body_html`). Returns a list of `(weight, reason)`, every weak signal present with its integer weight (1 or 2) and a
+plain-English reason; the caller applies the threshold. Pure, never raises. The weights are listed under `inbound_spam_reasons`.
+**Status:** Verified by `test_25_each_weak_signal_has_its_own_reason_and_weight`.
+
+### `detect_bulk_mail_signals`
+**[@ANCHOR: hams_helpdesk:inbound_detect_bulk_mail_signals]**
+
+`detect_bulk_mail_signals(subject, body_html, signals=None, threshold=BULK_SCORE_THRESHOLD)`: arguments as above; `threshold` is the
+total weight needed (live mail 5, `STORED_TICKET_SCORE_THRESHOLD` 4 for the one-off pass over stored tickets). Returns [] below the
+threshold or when `signals["reply_headers"]` is true; otherwise a first reason stating the total and the threshold followed by one
+`bulk signal (+N): ...` reason per finding. Pure, never raises. **Status:** Verified by
+`test_21_the_real_missed_newsletters_are_flagged_from_the_stored_ticket_alone`.
 
 ### `inbound_sender_is_member`
 **[@ANCHOR: hams_helpdesk:inbound_sender_is_member]**
