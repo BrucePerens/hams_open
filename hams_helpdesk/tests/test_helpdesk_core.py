@@ -267,6 +267,24 @@ class TestHelpdeskCore(HamsTransactionCase):
         real = Ticket.create({"name": "Real at creation", "stage": "new", "user_id": assignee.id})
         self.assertEqual(notices(real), 1, "A new ticket still notifies its assignee.")
 
+    def test_04d_a_ticket_created_as_spam_sends_no_shift_cc_note(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
+        # The "Shift CC" note mails the admins whose shift starts soon; it was not behind the spam gate and so mailed them about junk.
+        Ticket = self.env["hams_helpdesk.ticket"]
+        upcoming = self.env["res.users"].create({"name": "Next Shift Admin", "login": "next_shift_admin", "email": "next-shift@example.org"})
+        event = self.env["calendar.event"].create(
+            {"name": "Upcoming shift", "start": "2030-01-01 10:00:00", "stop": "2030-01-01 12:00:00", "user_id": upcoming.id}
+        )
+        self.safe_patch_object(type(self.env["calendar.event"]), "get_upcoming_duty_shifts", lambda _self: event, create=True)
+
+        def cc_notes(ticket):
+            return self.env["mail.message"].search_count(
+                [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket"), ("subject", "ilike", "Shift CC")]
+            )
+
+        self.assertEqual(cc_notes(Ticket.create({"name": "Junk at creation", "stage": "spam"})), 0)
+        self.assertEqual(cc_notes(Ticket.create({"name": "Real at creation", "stage": "new"})), 1, "a real ticket still copies the next shift")
+
     def test_05_portal_write_restrictions(self):
         """Verify portal users cannot modify administrative fields."""
         # [@ANCHOR: test_05_portal_write_restrictions]

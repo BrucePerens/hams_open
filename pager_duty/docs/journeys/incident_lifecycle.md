@@ -21,7 +21,13 @@ This journey tracks the technical state transitions of an incident from initial 
   `report_incident()`'s rate-limit/dedup (designed for repeated automated signals, not distinct
   human inquiries). `source` is built per-sender (`{prefix}:{sender email}`), so each correspondent
   gets their own incident thread; real replies thread onto it natively via Odoo's own
-  `message_update()`.
+  `message_update()`. Before creating the incident, `message_new()` judges the message once with
+  `inbound_spam_reasons()` (hams_helpdesk; the parked header facts and HTML shape of the raw mail, the SES verdicts, and whether the
+  sender is a member). A quarantined message is created already `resolved` (`time_resolved` set) with the context key
+  `pager_quarantined_spam`, so it is never on the board's open list and `create()`/`write()` send no `update_board` message; the
+  reasons travel to the helpdesk adapter in the context key `hams_inbound_spam_reasons` (a list, empty meaning "judged, clean"),
+  which routes the mirrored ticket to the `spam` stage with no calendar block. A person who moves that ticket back to New does not
+  reopen the incident.
 - **Bounce Filtering:** Before any of the above runs, `hams_base`'s `mail.thread.message_route()`
   override drops genuine DSN bounces, vacation auto-replies, and unsubscribe-intent messages sent to
   postmaster@ (the same filtering the dedicated bounce alias already had) -- only a genuine inquiry
@@ -72,7 +78,7 @@ This journey tracks the technical state transitions of an incident from initial 
 
 ## 6. Metric Computation and Write-Time Guards
 
-- **create() / write():** Both `create()` [@ANCHOR: incident_create] and `write()` [@ANCHOR: incident_write] on `pager.incident` are where the bus notification (`update_board`) and, on `write`, the timestamp bookkeeping for status transitions actually happen -- every state change described in sections 3 and 4 above routes through one of these two methods rather than the NOC Dashboard polling for changes itself.
+- **create() / write():** Both `create()` [@ANCHOR: incident_create] and `write()` [@ANCHOR: incident_write] on `pager.incident` are where the bus notification (`update_board`) and, on `write`, the timestamp bookkeeping for status transitions actually happen -- every state change described in sections 3 and 4 above routes through one of these two methods rather than the NOC Dashboard polling for changes itself. Neither sends `update_board` when the context key `pager_quarantined_spam` is true: an incident created from a message the inbound-mail filter quarantined is born resolved and is not announced to open boards (it is the only caller that sets the key).
 
 - **On-Duty Notification:** `_notify_on_duty()` [@ANCHOR: notify_on_duty] is the method that performs the calendar lookup and chatter post described in section 2 -- it only actually runs for `high`/`critical` severity per the trend-detection gate in section 1b, so a `low`/`medium` occurrence never triggers a real notification by itself.
 

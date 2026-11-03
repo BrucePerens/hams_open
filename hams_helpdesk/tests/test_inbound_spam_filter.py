@@ -13,9 +13,25 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from email import message_from_bytes
 
 from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
+    BULK_SCORE_THRESHOLD,
+    STORED_TICKET_SCORE_THRESHOLD,
+    bulk_mail_findings,
+    detect_bulk_mail_signals,
     detect_inbound_spam_signals,
+    html_shape,
+    inbound_spam_reasons,
+    mail_signals,
+    own_authenticated_sender,
     ses_verdict_reasons,
     ses_verdicts,
+)
+from .bulk_mail_fixtures import (
+    BULK_HEADERS,
+    REAL_LEGITIMATE_NAMES,
+    REAL_MISSED_SPAM_NAMES,
+    SES_PASS_HEADERS,
+    newsletter_body,
+    raw_message,
 )
 
 
@@ -222,3 +238,109 @@ class TestInboundSpamFilter(HamsTransactionCase):
         verdicts = ses_verdicts(self._ses_message("FAIL" + "x" * 500, "PASS"))
         self.assertLessEqual(len(verdicts["spam"]), 32)
         self.assertEqual(ses_verdict_reasons(verdicts), [])
+
+
+@tagged("post_install", "-at_install", "standard")
+class TestBulkMailSignals(HamsTransactionCase):
+    """The weighted bulk/marketing rules and the single entry point inbound_spam_reasons(), against the real ticket
+    names of hams_prod (ids 113-140) and synthetic legitimate mail. False positives are the named risk."""
+    # Tests [@ANCHOR: hams_helpdesk:inbound_spam_reasons]
+
+    def _signals(self, subject, headers=SES_PASS_HEADERS + BULK_HEADERS, **kw):
+        return mail_signals(message_from_bytes(raw_message("info@hams.com", subject, headers=headers, **kw)))
+
+    def test_20_the_real_missed_newsletters_are_flagged_with_their_headers(self):
+        for subject in REAL_MISSED_SPAM_NAMES:
+            reasons = inbound_spam_reasons(subject, newsletter_body(), self._signals(subject), {"spam": "PASS", "virus": "PASS"})
+            self.assertTrue(reasons, subject)
+            self.assertIn("bulk/marketing mail", reasons[0], subject)
+            self.assertTrue(any("List-Unsubscribe" in r for r in reasons), reasons)
+
+    def test_21_the_real_missed_newsletters_are_flagged_from_the_stored_ticket_alone(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_detect_bulk_mail_signals]
+        # The retroactive pass has the subject and the sanitised body only (no headers, no plain part).
+        body = "<table><table><table><table><p>text</p></table></table></table></table><a>Unsubscribe</a>"
+        for subject in REAL_MISSED_SPAM_NAMES:
+            self.assertFalse(detect_bulk_mail_signals(subject, body), "the live threshold needs the headers: %s" % subject)
+            self.assertTrue(detect_bulk_mail_signals(subject, body, threshold=STORED_TICKET_SCORE_THRESHOLD), subject)
+
+    def test_22_real_legitimate_names_with_an_ordinary_body_are_never_flagged(self):
+        plain = "<p>Feed has not updated for 31 minutes.</p>"
+        for name in REAL_LEGITIMATE_NAMES:
+            self.assertEqual(inbound_spam_reasons(name, plain, {}, {"spam": "PASS", "virus": "PASS"}), [], name)
+            self.assertEqual(inbound_spam_reasons(name, plain, self._signals(name, headers=SES_PASS_HEADERS, html=False, body="Hello")), [], name)
+
+    def test_23_a_clickbait_subject_alone_is_not_enough(self):
+        for subject in REAL_MISSED_SPAM_NAMES:
+            self.assertEqual(inbound_spam_reasons(subject, "<p>A short plain note from a person.</p>", {}), [], subject)
+            self.assertEqual(
+                detect_bulk_mail_signals(subject, "<p>Short.</p>", {"list_id": True}), [], "one header plus a subject stays below the threshold"
+            )
+
+    def test_24_a_vendor_notice_with_an_unsubscribe_link_is_not_flagged(self):
+        body = "<table><tr><td><p>Your domain hams.com renews on 1 Dec.</p></td></tr></table><p><a>Unsubscribe</a></p>"
+        signals = {"list_unsubscribe": True, "has_plain": True, "plain_chars": 400, "html_chars": 900, "tables": 1, "table_depth": 1}
+        self.assertEqual(inbound_spam_reasons("Renewal notice", body, signals), [])
+
+    def test_25_each_weak_signal_has_its_own_reason_and_weight(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]
+        findings = bulk_mail_findings(
+            REAL_MISSED_SPAM_NAMES[0],
+            newsletter_body(),
+            self._signals("x", headers=BULK_HEADERS + "Auto-Submitted: auto-generated\r\nList-Id: <l.example.net>\r\n"),
+        )
+        reasons = [reason for _weight, reason in findings]
+        for expected in (
+            "List-Unsubscribe", "Precedence: bulk", "List-Id", "Auto-Submitted: auto-generated", "no plain-text alternative",
+            "tables nested", "images", "tracking image", "view in browser", "update your preferences", "clickbait",
+        ):
+            self.assertTrue(any(expected.lower() in reason.lower() for reason in reasons), (expected, reasons))
+        self.assertTrue(all(0 < weight <= 2 for weight, _reason in findings))
+        self.assertGreaterEqual(BULK_SCORE_THRESHOLD, 3, "no two weak signals may flag a message")
+
+    def test_26_a_failed_dmarc_spf_dkim_adds_weight_only(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_mail_signals]
+        failing = "Authentication-Results: amazonses.com; spf=fail smtp.mailfrom=x.example.net; dkim=fail header.i=@x.example.net; dmarc=fail header.from=x.example.net\r\n"
+        signals = self._signals("Hello", headers=failing, html=False, body="Plain words from someone.")
+        self.assertEqual((signals["spf"], signals["dkim"], signals["dmarc"]), ("fail", "fail", "fail"))
+        self.assertEqual(inbound_spam_reasons("Hello", "<p>Plain words from someone.</p>", signals), [], "4 points of failures alone stay below 5")
+        self.assertTrue(inbound_spam_reasons("Hello", "<p>Unsubscribe here</p>", signals))
+
+    def test_27_only_the_ses_authentication_results_header_is_believed(self):
+        forged = "Authentication-Results: mx.attacker.example; spf=pass; dkim=pass; dmarc=pass\r\n"
+        signals = self._signals("Hello", headers=forged + SES_PASS_HEADERS.replace("pass", "fail"))
+        self.assertEqual(signals["dmarc"], "fail", "the first header not written by amazonses.com is ignored")
+        signals = self._signals("Hello", headers=forged)
+        self.assertNotIn("dmarc", signals)
+
+    def test_28_replies_members_and_our_own_authenticated_senders_are_exempt(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_own_authenticated_sender]
+        subject = REAL_MISSED_SPAM_NAMES[0]
+        signals = self._signals(subject)
+        self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), signals))
+        self.assertFalse(detect_bulk_mail_signals(subject, newsletter_body(), dict(signals, reply_headers=True)), "a reply is not judged by the bulk rules")
+        self.assertEqual(inbound_spam_reasons(subject, newsletter_body(), signals, trusted_sender=True), [])
+        self.assertTrue(
+            inbound_spam_reasons(subject, newsletter_body(), dict(signals, dmarc="fail"), trusted_sender=True),
+            "a spoofed member address (DMARC fail) does not bypass the filter",
+        )
+        own = dict(signals, from_domain="hams.com", dkim="pass")
+        self.assertTrue(own_authenticated_sender(own))
+        self.assertEqual(inbound_spam_reasons(subject, newsletter_body(), own), [])
+        forged = dict(signals, from_domain="hams.com", dkim="fail", dmarc="fail")
+        self.assertFalse(own_authenticated_sender(forged))
+        self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), forged), "a forged From: hams.com is judged")
+        self.assertFalse(own_authenticated_sender(dict(signals, from_domain="evil-hams.com", dkim="pass")))
+
+    def test_29_the_new_lure_subjects_and_ses_fail_are_strong_signals(self):
+        for subject in ("Your subscription renews soon", "Security alert for someone@gmail.com", "Trade receivable balance confirmation regarding the audit of K"):
+            self.assertTrue(inbound_spam_reasons(subject, "<p>x</p>", {}), subject)
+        self.assertTrue(inbound_spam_reasons("Question", "<p>x</p>", {}, {"spam": "FAIL"}))
+
+    def test_30_hostile_input_never_raises(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_html_shape]
+        self.assertEqual(html_shape("<table>" * 3 + "</table>" * 9)["table_depth"], 3)
+        self.assertEqual(html_shape("</table></table><table>")["table_depth"], 1)
+        self.assertEqual(mail_signals(message_from_bytes(b"\xff\xfe not a message")).get("tables", 0), 0)
+        self.assertEqual(inbound_spam_reasons(None, None, None, None), [])
+        self.assertLessEqual(html_shape("<table>" * 200000)["tables"], 400000 // len("<table>") + 1)
