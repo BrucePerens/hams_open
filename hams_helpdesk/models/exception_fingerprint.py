@@ -53,6 +53,13 @@ NEW_TICKETS_PER_HOUR = 50
 # Reports from visitors' browsers are anonymous and cheap to invent, so they have a cap of their own, inside the
 # one above: a flood of made-up browser reports can fill this and never the room for real server exceptions.
 BROWSER_NEW_TICKETS_PER_HOUR = 10
+# Relay reports come from software on machines we do not control, behind an authenticated link; they get a cap of their own
+# for the same reason.
+RELAY_NEW_TICKETS_PER_HOUR = 10
+# A relay's reports of its own kind are told apart by the source; the ticket title says which.
+TITLE_PREFIXES = {"browser": "Browser exception: ", "relay": "Relay exception: "}
+CRASH_TITLE_PREFIX = "Relay crash: "
+MAX_EXTRA_UIDS = 4
 # A new ticket pages the on-duty admin (an email and a toast) only when none did in this long; the
 # others in a burst are still created and assigned, just silent, and the next one that does page says
 # how many were silent. A release that breaks twenty pages is one page, not twenty.
@@ -97,7 +104,9 @@ def _admit(fingerprint, reporter=None, member=None):
         entry = _GATE.setdefault(fingerprint, [None, 0, set(), set()])
         last = entry[0]
         new_reporter = bool(reporter) and reporter not in entry[2]
-        new_member = isinstance(member, int) and member not in entry[3] and len(entry[3]) < GATE_MAX_REPORTERS
+        members = [m for m in (member if isinstance(member, (tuple, list)) else (member,)) if isinstance(m, int)]
+        new_members = [m for m in members if m not in entry[3]]
+        new_member = bool(new_members) and len(entry[3]) < GATE_MAX_REPORTERS
         if last is not None and now - last < PER_FINGERPRINT_SECONDS and not (new_reporter or new_member):
             entry[1] += 1
             return None
@@ -111,7 +120,7 @@ def _admit(fingerprint, reporter=None, member=None):
         if reporter and len(entry[2]) < GATE_MAX_REPORTERS:
             entry[2].add(reporter)
         if new_member:
-            entry[3].add(member)
+            entry[3].update(new_members[: GATE_MAX_REPORTERS - len(entry[3])])
         if len(_GATE) > GATE_MAX_ENTRIES:
             stale = [key for key, value in _GATE.items() if value[0] is None or now - value[0] >= 60]
             for key in stale:
@@ -179,7 +188,8 @@ def _write_report(registry, data, folded):
 
 # [@ANCHOR: hams_helpdesk:exc_report_event]
 def report_event(
-    registry, source, type_name, module, frame, route, trace, name, uid=None, reporter=None, key_parts=None
+    registry, source, type_name, module, frame, route, trace, name, uid=None, reporter=None, key_parts=None,
+    extra_uids=(), weight=1,
 ):
     """Turns an already-described failure into a ticket. Never raises, never recurses.
 
@@ -192,7 +202,11 @@ def report_event(
     reporter, and a new one is recorded at once. ``key_parts`` is a ``(type, module, frame, route)``
     tuple that sets the fingerprint when it should be shared by reports whose own text differs (every
     report about one systemd unit, see ``daemon_exception.unit_key_parts``); the row still stores
-    the values of the report that created it."""
+    the values of the report that created it.
+
+    ``extra_uids`` are further res.users ids affected by the same report (a relay report links its owner as ``uid``
+    and the operator who was acting here); each is linked like ``uid`` for sources in MEMBER_SOURCES. ``weight`` is
+    how many occurrences this report stands for (a relay coalesces repeats before it reports); at least 1."""
     if _STATE.active:
         return False
     _STATE.active = True
@@ -200,9 +214,13 @@ def report_event(
         key = scrub.fingerprint(*(key_parts or (type_name, module, frame, route)))
         reporter = str(reporter)[:80] if reporter else None
         member = uid if source in MEMBER_SOURCES and isinstance(uid, int) and uid > 0 else None
-        folded = _admit(key, reporter, member)
+        extras = tuple(
+            u for u in tuple(extra_uids or ())[:MAX_EXTRA_UIDS] if source in MEMBER_SOURCES and isinstance(u, int) and u > 0
+        )
+        folded = _admit(key, reporter, (member,) + extras if extras else member)
         if folded is None:
             return False
+        extra_hits = max(0, min(int(weight or 1), 1_000_000) - 1)
         data = {
             "name": str(name)[:290],
             "fingerprint": key,
@@ -212,10 +230,11 @@ def report_event(
             "route": route,
             "source": source,
             "uid": uid if isinstance(uid, int) else None,
+            "extra_uids": extras,
             "trace": str(trace)[:SAMPLE_TRACE_LIMIT],
             "reporter": reporter,
         }
-        written = _write_report(registry, data, folded)
+        written = _write_report(registry, data, folded + extra_hits)
         if written:
             _settle(key, folded)
         return bool(written)
@@ -270,6 +289,7 @@ class ExceptionFingerprint(models.Model):
             ("mail", "Outgoing / incoming mail"),
             ("daemon", "External daemon"),
             ("browser", "Browser"),
+            ("relay", "Relay"),
         ],
         readonly=True,
     )
@@ -354,14 +374,27 @@ class ExceptionFingerprint(models.Model):
         # Markup.format escapes every argument, so nothing here is interpolated unescaped.
         item = Markup("<li><b>{}:</b> {}</li>")
         lines = Markup("").join(item.format(label, str(value)) for label, value in rows)
-        if self.source == "browser":
+        if self.source == "relay":
+            what = (
+                "a crash or unexpected error reported by a relay (hams_local_relay) over its authenticated link to hams.com: "
+                "the error text, the stack as function paths, the relay version and build, the platform, the uptime and "
+                "the last scrubbed log lines. The relay's id is in the trace"
+            )
+        elif self.source == "browser":
             what = (
                 "a JavaScript error reported by a browser on this site (only the error text, the page path and "
                 "the browser family are sent)"
             )
         else:
             what = "an unhandled server exception"
-        if self.source in MEMBER_SOURCES:
+        if self.source == "relay":
+            privacy = (
+                "When the relay is linked to an account, its owner, and the operator who was acting when the "
+                "operator was known, are linked to this report (staff see them under Reporting members, so the site team can "
+                "write to them); no name, callsign or email is written into this text. An unlinked relay is anonymous. "
+                "No audio and no radio traffic are collected."
+            )
+        elif self.source in MEMBER_SOURCES:
             privacy = (
                 "When the person was signed in, the member's account is linked to this report (staff see it under "
                 "Reporting members, so the site team can write to them); no name, callsign or email is written "
@@ -399,6 +432,9 @@ class ExceptionFingerprint(models.Model):
         record = self.search([("fingerprint", "=", data["fingerprint"])], limit=1)
         Member = self.env["hams_helpdesk.exception.member"]
         member_uid = Member._reportable_member_uid(data["uid"]) if data["source"] in MEMBER_SOURCES else None
+        extra_members = [
+            u for u in (Member._reportable_member_uid(x) for x in data.get("extra_uids", ())) if u and u != member_uid
+        ] if data["source"] in MEMBER_SOURCES else []
         reopen = False
         reporter = data.get("reporter")
         if record:
@@ -409,7 +445,7 @@ class ExceptionFingerprint(models.Model):
             # A reporter the row has not listed yet is recorded even inside the window: two checks
             # that see the same failure at the same moment are both named on the one ticket.
             new_reporter = bool(reporter) and reporter not in reporters and len(reporters) < GATE_MAX_REPORTERS
-            new_member = bool(member_uid) and not Member._is_listed(record, member_uid)
+            new_member = any(not Member._is_listed(record, u) for u in ([member_uid] if member_uid else []) + extra_members)
             if last and (now - last).total_seconds() < PER_FINGERPRINT_SECONDS and not (new_reporter or new_member):
                 return False
             if new_reporter:
@@ -451,6 +487,8 @@ class ExceptionFingerprint(models.Model):
         self._sync_ticket(record, now, reopen)
         # After the ticket exists, so the member row's stored ticket link is computed from the finished row.
         Member._note_member(record, member_uid, now)
+        for extra in extra_members:
+            Member._note_member(record, extra, now)
         return True
 
     # [@ANCHOR: hams_helpdesk:exc_reopen_reason]
@@ -484,18 +522,22 @@ class ExceptionFingerprint(models.Model):
             return
         since = now - timedelta(hours=1)
         recent = Ticket.search_count([("ticket_type", "=", TICKET_TYPE), ("create_date", ">=", since)])
-        browser_recent = (
-            self.search_count([("source", "=", "browser"), ("ticket_id", "!=", False), ("create_date", ">=", since)])
-            if record.source == "browser"
+        capped_recent = (
+            self.search_count([("source", "=", record.source), ("ticket_id", "!=", False), ("create_date", ">=", since)])
+            if record.source in ("browser", "relay")
             else 0
         )
-        if recent >= NEW_TICKETS_PER_HOUR or browser_recent >= BROWSER_NEW_TICKETS_PER_HOUR:
+        cap = RELAY_NEW_TICKETS_PER_HOUR if record.source == "relay" else BROWSER_NEW_TICKETS_PER_HOUR
+        if recent >= NEW_TICKETS_PER_HOUR or capped_recent >= cap:
             _reporter_logger.warning(
                 "Not opening another server exception ticket: %s already opened in the last hour",
                 recent,
             )
             return
-        name = ("Browser exception: " if record.source == "browser" else "Server exception: ") + record.name
+        prefix = TITLE_PREFIXES.get(record.source, "Server exception: ")
+        if record.source == "relay" and (record.exc_type or "").startswith("relay.signal"):
+            prefix = CRASH_TITLE_PREFIX
+        name = prefix + record.name
         quiet, silent_since_page = self._notification_state(now)
         # mail_auto_subscribe_no_notify: Odoo's own "You have been assigned" email would repeat the
         # helpdesk's "Ticket Assigned" one and ignore the window.

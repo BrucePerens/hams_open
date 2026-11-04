@@ -21,3 +21,5 @@ from . import mail_exception
 from . import daemon_exception
 from . import browser_exception_schema
 from . import browser_exception
+from . import relay_exception_schema
+from . import relay_exception
