@@ -29,7 +29,7 @@ from odoo.exceptions import UserError
 MEMBER_LIST_LIMIT = 25
 # Sources with a signed-in member behind them. A cron job, a mail the server failed to send and an external
 # daemon have no member; the user those carry is the job's own account, which is not an affected person.
-MEMBER_SOURCES = ("http", "rpc", "browser")
+MEMBER_SOURCES = ("http", "rpc", "browser", "relay")
 STAFF_GROUPS = "hams_helpdesk.group_helpdesk_user,base.group_system"
 
 KIND_MEMBER = "member"

@@ -164,6 +164,14 @@ layer; the in-code Redis limit of 10 a minute and 60 an hour per visitor is the 
 - After deploying: `odoo -u hams_helpdesk` on hams1 (a new selection value, "Browser", and a new dependency on
   `distributed_redis_cache`), then `systemctl restart odoo`; the asset bundles regenerate by themselves.
 
+### Relay exceptions and crashes
+
+A `hams_local_relay` that panics, hits a fatal signal or reports an unexpected error sends a report on its authenticated uplink;
+`ham_relay_bridge` (hams_com) finds the relay's owner and the acting operator and calls `hams_helpdesk.relay.exception._submit()`.
+The tickets are titled "Relay exception: ..." or, for a fatal signal, "Relay crash: ...", one per stable fingerprint, with the
+owner and operator linked as Reporting members. Wire form, limits, every function and the decisions:
+`docs/stories/relay_exception_reports.md`. After deploying: `odoo -u hams_helpdesk`, then restart Odoo.
+
 ## Recent Improvements
 - Verified and linked all semantic anchors for traceability.
 - Added shift handoff verification to operator tours.
