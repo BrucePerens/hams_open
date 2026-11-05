@@ -28,16 +28,16 @@
         <record id="binary_manifest_etcd" model="binary.manifest">
             <field name="company_id" eval="False"/>
             <field name="name">etcd</field>
-            <field name="url">https://github.com/etcd-io/etcd/releases/download/v3.7.2/etcd-v3.7.2-linux-amd64.tar.gz</field>
-            <field name="checksum">3a3679bc51a4ee9d30bccea1da7cd4fe62c6fc1d2ca1255068d2c53bf3026135</field>
+            <field name="url">https://github.com/etcd-io/etcd/releases/download/v3.7.3/etcd-v3.7.3-linux-amd64.tar.gz</field>
+            <field name="checksum">5dfa9cc3b3ce3b4b491fbcc2057d3daa166bcc6676f743fcd20f8e5760cb9775</field>
             <field name="archive_type">tar.gz</field>
             <field name="extract_member">etcd</field>
         </record>
         <record id="binary_manifest_cloudflared" model="binary.manifest">
             <field name="company_id" eval="False"/>
             <field name="name">cloudflared</field>
-            <field name="url">https://github.com/cloudflare/cloudflared/releases/download/2026.9.3/cloudflared-linux-amd64</field>
-            <field name="checksum">77e26d8d900e0b8469f416239d14b5f296525fdf79fee6f511ef55609e3fbac2</field>
+            <field name="url">https://github.com/cloudflare/cloudflared/releases/download/2026.10.7/cloudflared-linux-amd64</field>
+            <field name="checksum">1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872</field>
             <field name="archive_type">binary</field>
         </record>
     </data>
