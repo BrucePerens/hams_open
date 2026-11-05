@@ -211,6 +211,8 @@ class TestPagerIncidentStandard(HamsTransactionCase):
 
     def test_06d_report_incident_repages_the_existing_open_incident(self):
         # Tests [@ANCHOR: pager_duty:repage_if_due]
+        # No Redis: the rate limiter would swallow the second report on a host that has one running.
+        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", None)
         vals = {"source": "repage_via_report", "severity": "high", "description": "d"}
         incident = self.incident_model.browse(self.incident_model.report_incident(dict(vals)))
         old = fields.Datetime.now() - datetime.timedelta(hours=REPAGE_HOURS + 1)
