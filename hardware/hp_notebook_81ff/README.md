@@ -28,6 +28,10 @@ What was tried, in order:
 
 The package keeps the driver options as well (harmless; the adapter was unreliable with its idle power saving).
 
+A better fix keeps ASPM on for every other link: a kernel with a PCI quirk for this adapter (`kernel/`, built and running on bruce17
+since 2026-11-04, Linux 7.3.1-hams1). With it the global `pcie_aspm=off` is not needed; the driver option `aspm=0` still is. See
+`kernel/README.md`.
+
 Cost: with the kernel not managing ASPM, the package never reached a package C-state deeper than PC3 (87% in PC3 on AC, none in
 PC6 to PC10) in a 20 s powertop run; with ASPM on, it was the same (81% PC3, 0% PC6+), so deeper idle was not available before either.
 

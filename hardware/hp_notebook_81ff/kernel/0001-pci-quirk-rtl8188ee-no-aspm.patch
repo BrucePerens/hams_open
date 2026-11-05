@@ -1,0 +1,28 @@
+--- a/drivers/pci/quirks.c	2026-10-30 05:09:52.000000000 -0700
++++ b/drivers/pci/quirks.c	2026-11-04 13:46:00.344292506 -0800
+@@ -6446,3 +6446,25 @@
+ DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_GLI, 0x9750, pci_mask_replay_timer_timeout);
+ DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_GLI, 0x9755, pci_mask_replay_timer_timeout);
+ #endif
++
++/*
++ * Realtek RTL8188EE (10ec:8179) wireless: with ASPM L0s/L1 enabled on its link, the root port logs a flood of
++ * correctable Physical Layer RxErr errors (about 2000 a minute on an HP Notebook, board 81FF, behind Intel
++ * 8086:9d15). Firmware leaves L0s/L1 enabled while the FADT tells the OS it may not manage ASPM, so
++ * pci_disable_link_state() cannot help; clear the ASPM control bits at both ends of this one link instead,
++ * at boot and again after resume (the firmware may set them again). Other links keep their ASPM.
++ * (hams.com local patch, 2026-11-04.)
++ */
++static void quirk_rtl8188ee_no_aspm(struct pci_dev *dev)
++{
++	struct pci_dev *bridge = pci_upstream_bridge(dev);
++
++	if (!pci_is_pcie(dev))
++		return;
++	pcie_capability_clear_word(dev, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_ASPMC);
++	if (bridge && pci_is_pcie(bridge))
++		pcie_capability_clear_word(bridge, PCI_EXP_LNKCTL, PCI_EXP_LNKCTL_ASPMC);
++	pci_info(dev, "ASPM L0s/L1 disabled on this link (RxErr flood)\n");
++}
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_REALTEK, 0x8179, quirk_rtl8188ee_no_aspm);
++DECLARE_PCI_FIXUP_RESUME(PCI_VENDOR_ID_REALTEK, 0x8179, quirk_rtl8188ee_no_aspm);
