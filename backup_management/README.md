@@ -103,3 +103,52 @@ This module does not itself detect or report cross-tenant data leakage. Tenant i
 - `pager_duty`: Used for failure reporting and stale snapshot alerts.
 - `pika`: Used for RabbitMQ integration in the daemon.
 - `cryptography`: Used for Fernet encryption of the stored Kopia password and S3/B2 secret key.
+
+## The worker's Odoo key (`daemon/main.py`)
+
+The worker (`backup.worker.service`, user `odoo`) calls back to Odoo over the JSON-2 API as `backup_service_internal` with a bearer key. systemd reads that key
+from `/opt/hams/etc/keys/backup_worker.env` (`ODOO_RPC_KEY=`) when the unit starts and the process keeps it in memory. A key rotation rewrites the file and the
+Odoo-side key but does not restart a running worker.
+
+### `[@ANCHOR: backup_management:reload_odoo_key]` `_reload_odoo_key()`
+
+**Purpose.** Lets the worker pick up a rotated key without a restart. On 2026-10-27 15:34 UTC every daemon key on hams1 was rotated; the worker, started on
+2026-10-22, went on sending the old key, got `401 Invalid apikey` on every call (25 a day) and the daily pgbackrest full backup to B2 (job type `pgbackrest`,
+13:13 UTC) never ran again: the last one was 20261027-131329F (ticket 116, left open as "no new snapshots in 26 hours"). Called by `_json2_call` after a 401.
+
+**Call interface.**
+
+| Name | Type | Meaning |
+|---|---|---|
+| (none) | | Reads the module constant `ODOO_KEY_ENV_FILE` (default `/opt/hams/etc/keys/backup_worker.env`, overridable with the environment variable `BACKUP_WORKER_KEY_ENV_FILE`) and writes the module global `ODOO_PASS`. |
+| returns | `bool` | `True` only when the file held a non-empty `ODOO_RPC_KEY` different from the key in use, which is now in use. `False` when the file is unreadable, has no such line, or holds the same key. |
+
+Errors: none raised. An unreadable file is logged as a warning (the reason only, never the key or the path's contents).
+
+**Special concerns.** Blocking file read of one small file; no locks (the worker handles one RabbitMQ message at a time, so nothing races the assignment).
+Never logs a key. Idempotent. Only the last `ODOO_RPC_KEY=` line counts; surrounding quotes are removed.
+
+**See also.** `[@ANCHOR: backup_management:test_json2_call_reloads_a_rotated_key]`; `zero_sudo/daemon/json_rpc_client.py`, which does the same for every other daemon.
+
+### `[@ANCHOR: backup_management:COMM_json2_call]` `_json2_call(model, method_name, svc_uid=None, **kwargs)`
+
+**Purpose.** One JSON-2 call to Odoo (`POST {ODOO_URL}/json/2/<model>/<method>`, database `ODOO_DB`, bearer `ODOO_PASS`); every report of a job's progress and result goes
+through it.
+
+**Call interface.**
+
+| Name | Type | Meaning |
+|---|---|---|
+| `model` | `str` | Odoo model, for example `backup.job`. |
+| `method_name` | `str` | Public method of that model. |
+| `svc_uid` | `int` or `None` | Sent as `X-Odoo-Service-Uid` when set. |
+| `**kwargs` | JSON values | The method's named arguments, sent as the JSON body. |
+| returns | decoded JSON | The method's result. |
+
+Errors: `OdooAPIError` for an HTTP error (the message starts `JSON-2 API HTTP Error <code>:`), a connection or parse failure, or an `error` member in the answer.
+
+**Special concerns.** Blocking, 15 second timeout, no retry except one: after an HTTP 401 it calls `_reload_odoo_key()` and repeats the call once with the new key when the
+key changed. The retry is safe for the calls this daemon makes because a 401 means Odoo refused before running anything. Secrets: the key is never logged.
+
+**See also.** `[@ANCHOR: backup_management:test_json2_call_reloads_a_rotated_key]`.
+
