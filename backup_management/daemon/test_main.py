@@ -973,3 +973,54 @@ class TestJson2CallReloadsARotatedKey(unittest.TestCase):
                     backup_worker._json2_call("backup.job", "get_jobs")
                 self.assertIn("401", str(caught.exception))
                 self.assertEqual(self.seen, [self.OLD])
+
+
+class TestJobThatCannotBeReportedIsRequeued(unittest.TestCase):
+    """Ticket 116: with the worker's key refused, jobs 794 to 1019 (hourly sync_snapshots and the daily pgbackrest full) were consumed, could not even
+    be marked "processing" or reported failed, and were acked: lost. They go back on the queue instead."""
+
+    BODY = json.dumps({"job_id": 41, "engine": "pgbackrest", "target_path": "stanza", "config_id": 7})
+
+    def _run(self, side_effect):
+        ch, method = MagicMock(), MagicMock()
+        method.delivery_tag = "tag-x"
+        with patch("main._json2_call", side_effect=side_effect), patch("main.time.sleep") as sleeper:
+            backup_worker.execute_job(ch, method, MagicMock(), self.BODY)
+        return ch, sleeper
+
+    # [@ANCHOR: backup_management:test_job_that_cannot_be_reported_is_requeued]
+    def test_job_that_cannot_be_reported_is_requeued(self):
+        # Tests [@ANCHOR: backup_management:odoo_unavailable_error]
+        ch, sleeper = self._run(backup_worker.OdooUnavailableError("JSON-2 API HTTP Error 401: Invalid apikey"))
+        ch.basic_nack.assert_called_once_with(delivery_tag="tag-x", requeue=True)
+        ch.basic_ack.assert_not_called()
+        sleeper.assert_called_once_with(backup_worker.REQUEUE_DELAY_SECONDS)
+
+    def test_a_job_odoo_rejects_for_its_own_reasons_is_still_acked_not_looped(self):
+        # Tests [@ANCHOR: backup_management:odoo_unavailable_error]
+        ch, sleeper = self._run(backup_worker.OdooAPIError("JSON-2 API HTTP Error 404: no such job"))
+        ch.basic_ack.assert_called_once_with(delivery_tag="tag-x")
+        ch.basic_nack.assert_not_called()
+        sleeper.assert_not_called()
+
+    def test_a_failure_that_is_reported_is_acked_even_if_odoo_refused_the_first_call(self):
+        # Tests [@ANCHOR: backup_management:odoo_unavailable_error]
+        # The first call (state processing) is refused, the failure report then gets through: the job is recorded, so no requeue.
+        ch, sleeper = self._run([backup_worker.OdooUnavailableError("503"), None, None, None])
+        ch.basic_ack.assert_called_once_with(delivery_tag="tag-x")
+        ch.basic_nack.assert_not_called()
+
+    def test_http_statuses_map_to_the_unavailable_error(self):
+        # Tests [@ANCHOR: backup_management:odoo_unavailable_error]
+        for code, expected in ((401, True), (403, True), (502, True), (404, False), (400, False)):
+            with self.subTest(code=code):
+                error = urllib.error.HTTPError("http://x", code, "m", {}, io.BytesIO(b"{}"))
+                with patch.object(backup_worker.urllib.request, "urlopen", side_effect=error), patch.object(
+                    backup_worker, "_reload_odoo_key", return_value=False
+                ):
+                    with self.assertRaises(backup_worker.OdooAPIError) as caught:
+                        backup_worker._json2_call("backup.job", "write")
+                self.assertEqual(isinstance(caught.exception, backup_worker.OdooUnavailableError), expected)
+        with patch.object(backup_worker.urllib.request, "urlopen", side_effect=urllib.error.URLError("refused")):
+            with self.assertRaises(backup_worker.OdooUnavailableError):
+                backup_worker._json2_call("backup.job", "write")

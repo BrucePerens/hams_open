@@ -91,6 +91,19 @@ class OdooAPIError(Exception):
     """Custom exception for Odoo JSON-2 API failures."""
 
 
+# [@ANCHOR: backup_management:odoo_unavailable_error]
+# Verified by [@ANCHOR: backup_management:test_job_that_cannot_be_reported_is_requeued]
+class OdooUnavailableError(OdooAPIError):
+    """Odoo could not be reached, or refused this worker's credentials (HTTP 401/403, 5xx, connection error).
+    A failure of that kind says nothing about the job, so a job whose result could not be recorded because of it is
+    put back on the queue rather than dropped. Documented in backup_management/README.md ("Jobs that cannot be reported")."""
+
+
+# Seconds the consumer waits after it puts a job back on the queue, so an Odoo outage or a bad key is retried
+# every 20 seconds and not in a tight loop (one message at a time, prefetch 1). Below RabbitMQ's heartbeat timeout.
+REQUEUE_DELAY_SECONDS = 20
+
+
 # [@ANCHOR: backup_management:COMM_strip_endpoint_scheme]
 # Verified by [@ANCHOR: backup_management:COMM_test_strip_endpoint_scheme]
 def _strip_endpoint_scheme(endpoint_url):
@@ -518,9 +531,14 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
             except UnicodeDecodeError as exc:
                 logger.exception("Could not decode response body: %s", exc)
                 err_body = "Could not decode response body."
-            raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}") from e
-        except (urllib.error.URLError, json.JSONDecodeError) as e:
-            raise OdooAPIError(f"JSON-2 API Connection/Parse Error: {e}")
+            message = f"JSON-2 API HTTP Error {e.code}: {err_body}"
+            if e.code in (401, 403) or e.code >= 500:
+                raise OdooUnavailableError(message) from e
+            raise OdooAPIError(message) from e
+        except urllib.error.URLError as e:
+            raise OdooUnavailableError(f"JSON-2 API Connection Error: {e}") from e
+        except json.JSONDecodeError as e:
+            raise OdooAPIError(f"JSON-2 API Connection/Parse Error: {e}") from e
 
 
 # [@ANCHOR: backup_management:COMM_test_backup_worker_real]
@@ -534,6 +552,14 @@ def execute_job(ch, method, properties, body):
         if not acked:
             ch.basic_ack(delivery_tag=method.delivery_tag)
             acked = True
+
+    def requeue():
+        # Put the message back and wait before the broker hands it out again. Never after ack().
+        nonlocal acked
+        if not acked:
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            acked = True
+            time.sleep(REQUEUE_DELAY_SECONDS)  # audit-ignore-sleep: back-off between redeliveries of a job Odoo could not record
 
     try:
         try:
@@ -924,6 +950,7 @@ def execute_job(ch, method, properties, body):
             e,
         )
         # If possible, report the failure back to Odoo before acking
+        report_failed = False
         try:
             payload = json.loads(body)
             job_id = payload.get("job_id")
@@ -958,7 +985,15 @@ def execute_job(ch, method, properties, body):
             # is valid JSON but not an object raises AttributeError here).
             report_err_msg = """Failed to report failure back to Odoo: %s"""
             logger.exception(report_err_msg, inner_e)
-        ack()
+            report_failed = isinstance(e, OdooUnavailableError) or isinstance(inner_e, OdooUnavailableError)
+        if report_failed:
+            # Odoo is unreachable or refuses our key, so neither the job nor its failure could be recorded.
+            # Acking would lose the job without a trace (jobs 794-1019 and the daily full were lost this way
+            # in the 2026-10-27 key rotation, ticket 116); the broker redelivers it instead.
+            logger.error("Job could not be reported to Odoo; putting it back on the queue.")
+            requeue()
+        else:
+            ack()
 
 
 def main():

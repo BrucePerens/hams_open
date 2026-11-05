@@ -44,6 +44,7 @@ Keys are automatically rotated every 60 days via an `ir.cron` job [@ANCHOR: COMM
 
 * **Graceful Failure:** Stateless batching (processing 10 records at a time and re-triggering) ensures that one failed file-write or database error does not block other rotations. Failures are logged, and the system attempts to continue.
 * **Buffer Period:** New keys are generated with a 90-day expiration, providing a 30-day "grace period" for the 60-day rotation cycle to succeed.
+* **Rotation does not restart daemons, and cannot.** Odoo has no privilege to run `systemctl`, and a blind restart would also kill a running 50-minute pgbackrest backup. A rotation revokes the old key and rewrites the key file, so every long-running daemon must re-read its key file after an HTTP 401 and retry once. Ones that do: everything built on `zero_sudo/daemon/json_rpc_client.py`, `backup_management/daemon/main.py` (`_reload_odoo_key`), `pager_duty/daemon/generalized_monitor.py` (`OdooClient.reload_key`), and `hams_helpdesk/daemon/exception_reporter.py` (reads the file on every report). A new daemon that keeps its key in memory must do the same. Found 2026-11-05: the backup worker kept the old key for nine days after the 2026-10-27 rotation (ticket 116).
 * **Self-Healing Daemons:** Daemons utilizing these keys MUST be designed to catch `AccessError` responses from Odoo, re-read their assigned `.env` file from the disk, and retry the request.
 
 ---

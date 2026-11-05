@@ -130,6 +130,22 @@ Never logs a key. Idempotent. Only the last `ODOO_RPC_KEY=` line counts; surroun
 
 **See also.** `test_json2_call_reloads_a_rotated_key` in `daemon/test_main.py`; `zero_sudo/daemon/json_rpc_client.py`, which does the same for every other daemon.
 
+### `[@ANCHOR: backup_management:odoo_unavailable_error]` `OdooUnavailableError` (jobs that cannot be reported)
+
+**Purpose.** A subclass of `OdooAPIError` that `_json2_call` raises when Odoo cannot be reached or refuses this worker's credentials: an HTTP 401 or 403 that the key reload did
+not cure, an HTTP 5xx, or a connection error. It says nothing about the job. While the worker's key was refused (2026-10-27 to 11-05, ticket 116) every job it received could
+neither be marked `processing` nor reported failed, and the worker acknowledged it: jobs 794 to 1019 (the hourly `sync_snapshots` and the daily pgbackrest full) were consumed and
+lost without a trace. `execute_job` now puts such a job back on the queue (`basic_nack` with requeue, then waits `REQUEUE_DELAY_SECONDS`, 20 s, so the retry is not a tight loop)
+when the failure and its report both failed for this reason, so the job runs once Odoo accepts the worker again. Any other error (HTTP 404 for a job that does not exist, a
+parse error) is still acknowledged, so a job that can never succeed cannot loop forever. A job already acknowledged early (the pgbackrest sidecar path) is never requeued.
+
+**Call interface.** `raise OdooUnavailableError(message)` from `_json2_call(model, method_name, svc_uid=None, **kwargs)`; `execute_job(ch, method, properties, body)` catches it.
+
+**Special concerns.** The consumer sleeps in the callback during the back-off, which is below RabbitMQ's heartbeat window. A key that stays refused makes the message cycle every 20
+seconds and log an error each time; the stale-backup alert (see "Backup health") is what pages in that case.
+
+**See also.** `test_job_that_cannot_be_reported_is_requeued` in `daemon/test_main.py`.
+
 ### `[@ANCHOR: backup_management:COMM_json2_call]` `_json2_call(model, method_name, svc_uid=None, **kwargs)`
 
 **Purpose.** One JSON-2 call to Odoo (`POST {ODOO_URL}/json/2/<model>/<method>`, database `ODOO_DB`, bearer `ODOO_PASS`); every report of a job's progress and result goes

@@ -25,6 +25,30 @@ The daemon reads its configuration file once, at startup, so restart it after pu
 - `check_recordings_disk_usage.py`: A stand-alone script for a "Synthetic Journey (Script)" check on the filesystem that holds a directory of recordings (default `/var/lib/hams/qso_recordings`). The built-in disk check has only a failure threshold, so this one warns (`medium`, recorded, not paged) from 70 percent used and fails (`high`, pages) from 85 percent (`--warn`, `--fail`), and prints a volume estimate (files, bytes, bytes per day over 7 days, days to the failure line) that a person can also get by running it by hand. It lists file names and sizes only and never opens a recording.
 - `*.service`, `*.timer`: systemd units for the daemons above (see `../DEPLOYMENT.md`).
 
+### Rotated key (`OdooClient`)
+
+The monitor reads `ODOO_RPC_KEY` from its systemd `EnvironmentFile` (`/opt/hams/etc/keys/pager_duty.env`, overridable with `PAGER_KEY_ENV_FILE`) when it starts. A daemon key
+rotation rewrites that file but cannot restart a running daemon (Odoo has no privilege to), so the client re-reads it itself.
+
+### `[@ANCHOR: pager_duty:odoo_client_reload_key]` `OdooClient.reload_key()`
+
+**Purpose.** Picks up a rotated Odoo API key without a restart. On 2026-10-27 every daemon key on hams1 was rotated; the backup worker kept the old key for nine days
+(ticket 116) and every other long-running daemon that reads its key once has the same exposure. `OdooClient.execute()` (`[@ANCHOR: pager_duty:odoo_client_execute]`) calls this after
+an HTTP 401 and sends the call once more with the new key.
+
+**Call interface.**
+
+| Name | Type | Meaning |
+|---|---|---|
+| (none) | | Reads the module constant `ODOO_KEY_ENV_FILE`, rewrites the client's `Authorization` header. |
+| returns | `bool` | `True` only when the file held a non-empty `ODOO_RPC_KEY` that differs from the key in use, which is now in use. `False` when the file is unreadable, has no such line, or holds the same key. |
+
+Errors: none raised; an unreadable file is logged as a warning (the reason only, never the key). A 401 that the reload cannot cure raises as before (`JSON-2 API Error 401`).
+
+**Special concerns.** One blocking read of a small file, at most once per failing call; never logs a key; only the last `ODOO_RPC_KEY=` line counts, quotes are removed.
+
+**See also.** `test_odoo_client_reloads_a_rotated_key` in `test_odoo_client_key_reload.py`; `backup_management/daemon/main.py` (`_reload_odoo_key`) and `zero_sudo/daemon/json_rpc_client.py`, which do the same.
+
 ### Running it unattended on a host
 
 - **Dry run:** `python3 generalized_monitor.py --check-once` runs every check in the configuration once, prints `PASS` or `FAIL` and the message for each, reports nothing to Odoo, creates no incident, sends no e-mail and writes no status, and exits 0 only when every check passed. Run it under the unit's own user, environment files and sandbox (for example with `systemd-run`) before enabling the unit.
