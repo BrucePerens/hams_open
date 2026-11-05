@@ -44,7 +44,7 @@ Keys are automatically rotated every 60 days via an `ir.cron` job [@ANCHOR: COMM
 
 * **Graceful Failure:** Stateless batching (processing 10 records at a time and re-triggering) ensures that one failed file-write or database error does not block other rotations. Failures are logged, and the system attempts to continue.
 * **Buffer Period:** New keys are generated with a 90-day expiration, providing a 30-day "grace period" for the 60-day rotation cycle to succeed.
-* **Rotation does not restart daemons, and cannot.** Odoo has no privilege to run `systemctl`, and a blind restart would also kill a running 50-minute pgbackrest backup. A rotation revokes the old key and rewrites the key file, so every long-running daemon must re-read its key file after an HTTP 401 and retry once. Ones that do: everything built on `zero_sudo/daemon/json_rpc_client.py`, `backup_management/daemon/main.py` (`_reload_odoo_key`), `pager_duty/daemon/generalized_monitor.py` (`OdooClient.reload_key`), and `hams_helpdesk/daemon/exception_reporter.py` (reads the file on every report). A new daemon that keeps its key in memory must do the same. Found 2026-11-05: the backup worker kept the old key for nine days after the 2026-10-27 rotation (ticket 116).
+* **Rotation does not restart daemons, and cannot.** Odoo has no privilege to run `systemctl`, and a blind restart would also kill a running 50-minute pgbackrest backup. A rotation revokes the old key and rewrites the key file, so every long-running daemon must re-read its key file after an HTTP 401 and retry once. Ones that do: every daemon built on `hams_config.get_odoo_client()` (hams_com `daemons/hams_config.py`, `execute()`), everything built on `zero_sudo/daemon/json_rpc_client.py`, `backup_management/daemon/main.py` (`_reload_odoo_key`), `pager_duty/daemon/generalized_monitor.py` (`OdooClient.reload_key`), and `hams_helpdesk/daemon/exception_reporter.py` (reads the file on every report). A new daemon that keeps its key in memory must do the same, and `ROTATED_KEY_RELOAD_POLICY` in `hams_shared/tools/infrastructure.py` fails a test until it is declared (see the audit below). Found 2026-11-05: the backup worker kept the old key for nine days after the 2026-10-27 rotation (ticket 116).
 * **Self-Healing Daemons:** Daemons utilizing these keys MUST be designed to catch `AccessError` responses from Odoo, re-read their assigned `.env` file from the disk, and retry the request.
 
 ---
@@ -106,6 +106,99 @@ In containerized/orchestrated environments:
 ODOO_RPC_LOGIN=service_account_login
 ODOO_RPC_KEY=12345abcd...
 ```
+
+---
+
+## Rotation safety audit 2026-11-05
+
+**Why.** A rotation writes the new key to the daemon's key file, revokes the old key, and restarts nothing. `backup.worker` read its key once
+from its `EnvironmentFile=` and failed every Odoo call with 401 for nine days (2026-10-27 to 2026-11-05, ticket 116). Bruce asked that no
+other daemon have the same bug. Every one of the 32 registered keys was traced to the processes that read it, in `hams_com`, `hams_open`
+and the units of `hams_shared/tools/infrastructure.py` (`MANIFEST`), and the units running on hams1 were checked with
+`systemctl show` (`Type`, `EnvironmentFiles`, `ExecStart`).
+
+**What rotates, and when.** The monthly cron (`_cron_rotate_all_keys`, commits after each registry), and **every start of
+`hams.daemon.keys.service`**, which calls `action_force_provision_all()`: that also revokes and re-mints every key that is not remote
+self-rotating (it commits once, at the end of the shell command). So a provision or a boot rotates all keys, not only the monthly cron. In
+both paths the key file is written before the transaction commits. Nothing running is restarted.
+
+**Verdict classes.** *One-shot*: a `Type=oneshot` unit (every timer-driven service on hams1 is one) reads the file afresh at each run, so a
+rotation between runs cannot hurt; a long one (`callbook.geo.enrich`, up to 31 minutes) is also covered by the reload below. *Reload*: a
+long-running process whose Odoo client re-reads the key file after a 401 and retries once. *Per call*: a long-running process that makes a
+new client (a new read of the key file) for every use. *Unused*: the key is loaded and never sent to Odoo. *BUG*: a long-running process that
+keeps the key it read at start; there were two, both fixed before this audit finished (below). Result: **no process remains in the BUG
+class.**
+
+`hams_config.get_odoo_client()` (hams_com `daemons/hams_config.py`) is the shared reload: `execute()` treats a 401 ("Unauthorized"),
+"Invalid apikey" or an AccessError as a rotation, calls `load_credentials()` again (the key file named by `ODOO_KEY_FILE`),
+re-authenticates and sends the call once more. Test: `test_an_unauthorized_response_triggers_a_key_reload_and_successful_retry`.
+The hams1 copy of `hams_config.py`, `backup_worker/main.py`, `generalized_monitor.py` and `exception_reporter.py` has the same sha256 as
+main (checked 2026-11-05), and every `get_odoo_client()` daemon was restarted at 18:34 UTC that day, so the reload is running.
+
+| # | Key (registry name) | Key file under `/opt/hams/etc/keys/` | Process (unit) | Unit type | How it reads the key | Verdict | Fix |
+|---|---|---|---|---|---|---|---|
+| 1 | Ham Radio Activator Reference Data Sync Service | `activator_sync/activator_data_service_internal.key` | `pota.sync`, `sota.sync` | oneshot, timer | file at start, `get_odoo_client()` reload | safe: one-shot | - |
+| 2 | AI Safety Reporting | `ai_safety_reporting_service_internal.env` | `hams.simulated.bots`, `hams.simulated.observer` | simple, `Restart=always` | `ODOO_KEY_FILE`, a new `get_odoo_client()` for each safety ticket (`create_safety_ticket`, `_create_observer_ticket`); the observer keeps failed flags in a retry queue | safe: per call | - |
+| 3 | AI Ticket Triage Service | `ai_triage_service_internal.key` | `run-ticket-triage-mcp.sh` -> `hams_ticket_triage_mcp` (stdio MCP server for one agent session, started by the `ticket.triage` one-shot) | process lives one session | a new `get_odoo_client()` per tool call | safe: per call + reload | - |
+| 4 | Ham Radio APRS Sync Service | `aprs_sync/aprs_sync_service_internal.key` | `aprs.is.sync` | simple, `Restart=always` | `get_odoo_client()` at each (re)connect to APRS-IS, held for the connection, reload on 401 | safe: reload | - |
+| 5 | Ham Radio Callbook Australia PII Sync Service | `au_pii/au_pii_sync_service_internal.key` | `au.pii.sync` | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 6 | Backup Worker RabbitMQ Consumer | `backup_worker.env` | `backup.worker` | simple, `Restart=always`; `EnvironmentFile=` only seeds the first key | **was** the environment at start; now `_reload_odoo_key()` re-reads the file after a 401 | **was BUG**, fixed | hams_open #1204 |
+| 7 | Redis Cache Manager | `cache_manager.env` | `cache-manager` | simple, `Restart=always`, running since 2026-10-12 | `EnvironmentFile=-` and `load_dotenv`, but `cache_manager.py` has no HTTP client and never uses `ODOO_RPC_KEY` (only its PostgreSQL login from `cache_manager_db.env`) | safe: unused | - |
+| 8 | Ham Radio Callbook Geo-Enrichment Service | `callbook_geo/callbook_geo_service_internal.key` | `callbook.geo.enrich` | oneshot, timer | file at start, reload mid-run | safe: one-shot | - |
+| 9 | Club Crawl Service | `club_crawl/club_crawl_service_internal.key` | `club.crawl` | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 10 | Code Review Sweep Service | `code_review_sweep_service_internal.key` | `code.review.sweep` | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 11 | Ham Radio Callbook Sync Service | `country_sync/callbook_sync_service_internal.key` | `au.acma.sync`, `au.callsign.sync`, `br.anatel.sync`, `de.bnetza.sync`, `nz.rsm.sync`, `uk.ofcom.sync`, `ised.canada.sync`, `fcc.uls.sync` (hams1) | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 12 | Ham Radio Callbook DNS Export Service | `dns_export/callbook_dns_export_service_internal.key` | `callbook.dns.export`, `callbook.delta.export` | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 13 | Ham Radio DNS API Service | `dns_sync/dns_api_service_internal.key` | `pdns.sync` | simple, `Restart=always` | `get_odoo_client()` at start, reload on 401 (its PowerDNS key is a different credential) | safe: reload | - |
+| 14 | Ham DX Daemon Service | `dx_daemon/dx_daemon_service.key` | `ham.dx.daemon`; `skimmer.list.sync` | simple, `Restart=always`; oneshot, timer | `get_odoo_client()` at start (30 s call timeout), reload on 401; file at start | safe: reload; one-shot | - |
+| 15 | AI Event Enrichment Service | `event_ai_correction_service_internal.key` | `event.ai.enrichment`; `run-event-enrichment-mcp.sh` -> `hams_event_enrichment_mcp` | oneshot, timer; MCP process lives one session | file at start; a new `get_odoo_client()` per tool call | safe: one-shot; per call | - |
+| 16 | Ham Radio Event Sync Service | `event_sync/event_sync_service_internal.key` | the nine `event_sync` units (`wa7bnm.contest`, `arrl.hamfests`, `event.cover.image`, `rac.events`, `sm3cer.contest`, `electronicsfleamarket`, `hamstudy.sessions`, `radio.history.events`, `monthly.events.recheck`) | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 17 | Exception Reporter (OnFailure and daemon helper) | `exception_reporter.env` | `hams-exception-report@` (`exception_reporter.py report-unit`, also run from daemons' `ExecStopPost=`) | oneshot | `load_key()` reads the file on every report (`post_report`) | safe: per call | - |
+| 18 | FCC ULS Sync (mac1) | `fcc_uls_sync_mac1.env` (on mac1: `keys/fcc_uls_sync.env`) | `fcc-uls-sync` on the mac1 VM | oneshot, hourly timer | `get_odoo_client()`, then `rotate_own_key_if_due(client)` | safe: self-rotation, see below | - |
+| 19 | FCC ULS Sync (pi500-1) | `fcc_uls_sync_pi500.env` | `fcc.uls.sync` on pi500-1 | oneshot, timer | same | safe: self-rotation, see below | - |
+| 20 | GDPR CSV Export Service | `gdpr_export/gdpr_export_service_internal.key` | `gdpr.csv.export` | simple, `Restart=always` | a new `get_odoo_client()` for each export request (`_consume_token`), reload on 401 | safe: per call + reload | - |
+| 21 | HamCall Verify Index Sync Service | `hamcall_sync/hamcall_verify_sync_service_internal.key` | `hamcall.idx.sync` | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 22 | Ham Radio Logbook API Service | `logbook_api_service_internal.key` | `adif.ingress` | simple, `Restart=always` | `get_odoo_client()` per request, reload on 401 | safe: reload | - |
+| 23 | Ham Radio Logbook Sync Service | `logbook_sync_service_internal.key` | `adif.processor` | simple, `Restart=always` | one `get_odoo_client()` for the consumer's life, reload on 401 | safe: reload | - |
+| 24 | Inbound Mail Ingest Service | `mail_ingest/mail_ingest_service_internal.key` | `ses.inbound.mail.ingest` | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 25 | Ham Radio NCVEC Sync Service | `ncvec_sync/ncvec_sync_service_internal.key` | `ncvec.sync` | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 26 | Pager Duty - Generalized Monitor | `pager_duty.env` | `pager-os-monitor` | simple, `Restart=always`; `EnvironmentFile=` only seeds the first key | **was** the environment at start; now `OdooClient.reload_key()` re-reads the file after a 401 | **was BUG**, fixed | hams_open #1208 |
+| 27 | Ham Radio Onboarding Service | `qrz_scraper/onboarding_service_internal.key` | none: `daemons/qrz_scraper` holds only a `__pycache__` | - | nothing reads it | registered, no consumer | - |
+| 28 | Relay Wildcard Cert Renewal Service | `relay_cert_renew_service_internal.key` | none: the daemon was removed and its service account is archived (`action_force_provision_all` skips it) | - | nothing reads it | registered, no consumer | - |
+| 29 | Repeater Re-Crawl Service | `repeater_recrawl_service_internal.key` | `club_registry_recrawl/repeater_recrawl.py` and `event_recrawl.py`: no unit in the `MANIFEST`, none on hams1 | would be oneshot | `get_odoo_client()`, reload | safe if it is ever run; no deployed consumer | - |
+| 30 | S3 Storage Manager | `s3_manager.env` | none: `hams_s3` registers the key and nothing reads the file | - | nothing reads it | registered, no consumer | - |
+| 31 | Ham Radio AMSAT TLE Sync Service | `satellite_sync/satellite_sync_service_internal.key` | `amsat.tle.sync`, `relay.satellites.publish` | oneshot, timer | file at start, reload | safe: one-shot | - |
+| 32 | Ham Radio Space Weather Service | `space_weather/space_weather_service.key` | `noaa-swpc-sync` | simple, `Restart=always` | `get_odoo_client()` per poll, reload on 401 | safe: reload | - |
+
+**Remote self-rotation (rows 18 and 19).** `fcc_uls_sync/main.py` calls `rotate_own_key_if_due(client, logger)` after authenticating, once a
+run. When the key is more than 59 days old the daemon fetches a new key, writes it atomically to its own `ODOO_KEY_FILE`
+(`write_key_file`), sets `client.login, client.key` from the file, and proves it with a second call; only then does Odoo revoke the old key.
+The unit is a one-shot on an hourly timer, so the next run reads the new file; the client that rotated already holds the new key. Odoo never
+writes these files (`remote_self_rotation` is set), neither the cron nor `action_force_provision_all` touches them.
+
+**Things that are not among the 32 keys.** `hams_relay_bridge` presents `BRIDGE_API_KEY` from `bridge.env`, matched against the Odoo
+parameter `ham_relay_bridge.api_key`; it is not a registry key and is not rotated. `hams_auth_gateway`, `hams_data_relay`,
+`shack_console` and `hams_simulated_band` hold no Odoo API key (the gateway's only HTTP client fetches public revocation lists and CRLs). `pager_mcp_server.py`
+uses `PAGER_MCP_API_KEY` from its environment, creates a client per tool call, is not registered here and is not deployed.
+`zero_sudo/daemon/json_rpc_client.py` reloads on 401 and has no caller. No Odoo module other than this one reads a key file or holds a
+daemon key in memory (searched: `/opt/hams/etc/keys`, `ODOO_RPC_KEY`, `Bearer`, `/json/2` across `hams_open` and `hams_com`).
+`dx.firehose` has no key by design, but its `_read_qsos()` calls `get_odoo_client()`, which exits for want of `ODOO_KEY_FILE`; that is a
+different bug (it has not met a QSO yet), filed as a to-do in hams_com.
+
+**The guard.** `ROTATED_KEY_RELOAD_POLICY` in `hams_shared/tools/infrastructure.py` lists every non-oneshot `MANIFEST` unit and MCP wrapper
+script that names a file under `/opt/hams/etc/keys/`, with its mechanism (`hams_config`, `own_reload`, `per_call`, `unused`) and the source
+file that does the re-read. `RotatedKeyReloadPolicyTests` in `test_infrastructure.py` fails when a new such unit has no row, when a row
+names a unit that is gone, and when a key arrives through `EnvironmentFile=` (read once by systemd) without `own_reload` or `unused`.
+hams_com's `daemons/test_daemon_key_reload_coverage.py` then reads the source of each `hams_config` and `per_call` row and fails if the
+daemon does not call `get_odoo_client()` or reads `ODOO_RPC_KEY` itself. This form was chosen over scanning the daemons' source alone because
+the `MANIFEST` is where a daemon is added to the system, so a new unit cannot be added silently, and a table needs no guess about what
+a daemon's code does; the source check closes the other half. Adding a long-running daemon that holds a key means adding a row to that table
+and a row to this one.
+
+**Known limits.** (1) A daemon that *starts* between the key file being written and the transaction committing reads a key that Odoo does not
+yet know and exits; `Restart=always` brings it back. At boot `hams.daemon.keys.service` runs before the daemons. (2) A rotation that rolls
+back after the file was written leaves the file ahead of the database; the next rotation repairs it. (3) The guard proves the code path
+exists, not that Odoo answers a revoked key with 401 for every endpoint; the full rotation drill does that on hams1.
 
 ---
 
