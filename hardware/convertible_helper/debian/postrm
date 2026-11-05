@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+case "$1" in
+    remove|purge)
+        if [ -x /usr/share/gdm/generate-config ]; then
+            /usr/share/gdm/generate-config || true   # 96-convertible-helper-osk is gone from the login screen's settings
+        fi
+        ;;
+esac
+#DEBHELPER#

@@ -7,6 +7,10 @@ case "$1" in
             udevadm control --reload
             udevadm trigger --subsystem-match=input --action=change
         fi
+        # The login screen's settings are compiled from /usr/share/gdm/dconf when GDM starts; compile them now too.
+        if [ -x /usr/share/gdm/generate-config ]; then
+            /usr/share/gdm/generate-config || true
+        fi
         ;;
 esac
 #DEBHELPER#

@@ -46,3 +46,13 @@ setting in tablet mode; GNOME 48) and on a Toughbook CF-19 (rotation and securit
 desktops or GNOME versions.
 
 Licence: GPL-3.0-or-later.
+
+## The login screen
+
+GNOME shows its on-screen keyboard by itself only when the seat is in touch mode (from a tablet-mode switch the kernel
+reports) and the last input came from the touchscreen. These convertibles report no switch GNOME understands, so the helper
+turns the keyboard setting on in the user's session; the GDM login screen runs as its own user and never got that. Since
+1.4.0 the package installs `/usr/share/gdm/dconf/96-convertible-helper-osk`, which turns
+`org.gnome.desktop.a11y.applications screen-keyboard-enabled` on for the login screen, and compiles it with
+`/usr/share/gdm/generate-config` on install and removal. In laptop position the keyboard then also appears when the password
+field takes focus; dismiss it, or type on the physical keyboard as usual.
