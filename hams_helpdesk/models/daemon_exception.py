@@ -56,7 +56,8 @@ class ExceptionFingerprintDaemon(models.Model):
         result = result if result in scrub.DAEMON_RESULTS else "unknown"
         trace = "\n".join(
             (
-                f"Daemon failure reported from outside Odoo: {name}",
+                (f"Quota used up, reported from outside Odoo by: {name}" if kind == "quota_exhausted"
+                 else f"Daemon failure reported from outside Odoo: {name}"),
                 f"kind: {kind}",
                 f"result: {result}",
                 "Journal tail (scrubbed; exception messages are withheld):",
@@ -71,7 +72,7 @@ class ExceptionFingerprintDaemon(models.Model):
             f"result:{result}",
             f"systemd:{name}",
             trace,
-            f"Daemon failure: {name}",
+            f"AI service quota used up (reported by {name})" if kind == "quota_exhausted" else f"Daemon failure: {name}",
             reporter=f"exception report ({kind})",
             key_parts=unit_key_parts(name),
         )

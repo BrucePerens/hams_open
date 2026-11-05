@@ -62,7 +62,7 @@ recorded at once, repeats are counted and written at most once a minute.
   in code, a unit file or an argument list. The key is registered by `post_init_hook` on a fresh
   install and by `migrations/1.1` on an installed database.
 * **Input.** `unit` must be a plain systemd unit name (the instance part of `name@instance.service` is
-  dropped); `kind` is `unit_failed` or `consumer_exception`; `result` is one of systemd's Result words,
+  dropped); `kind` is `unit_failed`, `consumer_exception` or `quota_exhausted` (a paid service the daemon depends on has used up its quota, e.g. the AI service accounts' Claude plan: one ticket per reporting unit, titled "AI service quota used up (reported by <unit>)", apart from that unit's real failures); `result` is one of systemd's Result words,
   else "unknown".
 * **Scrubbing.** The journal tail is free text from outside, so every line goes through the strict
   scrubber (emails, URLs, IP addresses, `password=` / `token=` pairs, long tokens, callsigns, long digit
