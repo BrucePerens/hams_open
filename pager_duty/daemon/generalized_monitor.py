@@ -59,6 +59,10 @@ REDIS_PASS = os.getenv("REDIS_PASSWORD") or os.getenv("redis_password")
 REDIS_USERNAME = os.getenv("REDIS_USERNAME") or None
 
 
+# The EnvironmentFile systemd read ODOO_RPC_KEY from when this daemon started (written by daemon_key_manager).
+ODOO_KEY_ENV_FILE = os.environ.get("PAGER_KEY_ENV_FILE", "/opt/hams/etc/keys/pager_duty.env")
+
+
 class OdooClient:
     # [@ANCHOR: pager_duty:odoo_client_init]
     def __init__(self, url, db, user, password):
@@ -71,20 +75,49 @@ class OdooClient:
             "User-Agent": "Pager-Daemon/1.0",
         }
 
+    # [@ANCHOR: pager_duty:odoo_client_reload_key]
+    # Verified by [@ANCHOR: pager_duty:test_odoo_client_reloads_a_rotated_key]
+    def reload_key(self):
+        """Re-reads ODOO_RPC_KEY from ODOO_KEY_ENV_FILE into the bearer header; True only when that changed the key.
+        A key rotation rewrites the file but not the environment of a running daemon, so after a 401 the daemon
+        picks the new key up here instead of failing every call until someone restarts it (the backup worker did
+        for nine days, 2026-10-27, ticket 116). Documented in pager_duty/daemon/README.md ("Rotated key")."""
+        try:
+            with open(ODOO_KEY_ENV_FILE, encoding="utf-8") as handle:  # audit-ignore-path: fixed key file of this daemon
+                lines = handle.read().splitlines()
+        except OSError as e:
+            logging.getLogger("generalized_monitor").warning(
+                "Could not re-read the Odoo key file %s: %s", ODOO_KEY_ENV_FILE, e.strerror or type(e).__name__
+            )
+            return False
+        fresh = ""
+        for line in lines:
+            name, separator, value = line.strip().partition("=")
+            if separator and name.strip() == "ODOO_RPC_KEY":
+                fresh = value.strip().strip("'\"")
+        if not fresh or self.headers["Authorization"] == f"bearer {fresh}":
+            return False
+        self.headers["Authorization"] = f"bearer {fresh}"
+        return True
+
     # [@ANCHOR: pager_duty:odoo_client_execute]
     def execute(self, model, method, **kwargs):
-        req = urllib.request.Request(
-            f"{self.url}/json/2/{model}/{method}",
-            data=json.dumps(kwargs).encode("utf-8"),
-            headers=self.headers,
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=15) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8")
-            raise Exception(f"JSON-2 API Error {e.code}: {err_body}")
+        # A 401 re-reads the key file once and sends the call again (see reload_key).
+        for attempt in (1, 2):
+            req = urllib.request.Request(
+                f"{self.url}/json/2/{model}/{method}",
+                data=json.dumps(kwargs).encode("utf-8"),
+                headers=self.headers,
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=15) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as e:
+                if e.code == 401 and attempt == 1 and self.reload_key():
+                    continue
+                err_body = e.read().decode("utf-8")
+                raise Exception(f"JSON-2 API Error {e.code}: {err_body}")
 
 
 # [@ANCHOR: pager_duty:get_odoo_client]
