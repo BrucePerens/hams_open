@@ -1479,11 +1479,14 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
     http_request_allow_all = False
 
     # [@ANCHOR: zero_sudo:hams_http_case_url_open]
+    # 30 s, not 10: the first request after Odoo rebuilds its routing map ("Generating routing map") takes that rebuild with it,
+    # 11.8 s on bruce-yoga with ham_base, ham_club_management, ham_repeater_dir and their test companions installed (2026-11-04,
+    # ham_onboarding TestResetPasswordShield timed out reading a 200 that arrived). A slow answer is not a failure; a hang still is.
     def url_open(
         self,
         url,
         data=None,
-        timeout=10,
+        timeout=30,
         headers=None,
         allow_redirects=True,
         head=False,
