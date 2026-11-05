@@ -31,6 +31,7 @@ from . import test_views
 from . import test_facility
 from . import test_controllers
 from . import test_offline_store_hoot
+from . import test_tour_abort_gate
 from . import test_hoot_empty_run_guard
 from . import test_confirm_submit_csp
 from . import svg_corpus
