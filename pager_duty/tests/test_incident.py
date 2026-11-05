@@ -9,7 +9,7 @@ import datetime
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.pager_duty import hooks
-from odoo.addons.pager_duty.models.incident import TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
+from odoo.addons.pager_duty.models.incident import REPAGE_HOURS, TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
 from unittest.mock import MagicMock
 from odoo import fields, _
 
@@ -173,6 +173,57 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertFalse(low.is_escalated)
         self.assertFalse(medium.is_escalated)
         self.assertTrue(critical.is_escalated)
+
+    # [@ANCHOR: pager_duty:test_repage_if_due]
+    def test_06c_an_open_incident_that_keeps_being_reported_pages_again(self):
+        # Tests [@ANCHOR: pager_duty:repage_if_due]
+        # A paging incident nobody acknowledged is announced again REPAGE_HOURS after the last page, not before, and not
+        # once somebody has acknowledged it, and not for the severities that do not page.
+        self.env.user.group_ids = [(4, self.env.ref("pager_duty.group_pager_admin").id)]
+        source = "repage_test"
+        vals = {"source": source, "severity": "critical", "description": "backup stale"}
+        incident = self.incident_model.browse(self.incident_model.report_incident(dict(vals)))
+        self.assertTrue(incident.last_paged)
+        posted = self.safe_patch_object(type(incident), "message_post")
+        # Reported again at once: nothing more is sent.
+        self.assertFalse(incident._repage_if_due())
+        posted.assert_not_called()
+        # Last paged long enough ago: sent, and the clock restarts.
+        old = fields.Datetime.now() - datetime.timedelta(hours=REPAGE_HOURS + 1)
+        self.env.cr.execute("UPDATE pager_incident SET last_paged = %s WHERE id = %s", (old, incident.id))
+        incident.invalidate_recordset(["last_paged"])
+        self.assertTrue(incident._repage_if_due())
+        posted.assert_called()
+        self.assertIn("STILL OPEN", posted.call_args.kwargs["body"])
+        incident.invalidate_recordset(["last_paged"])
+        self.assertGreater(incident.last_paged, old)
+        self.assertFalse(incident._repage_if_due())
+        # Acknowledged: a person has it, no re-page.
+        self.env.cr.execute("UPDATE pager_incident SET last_paged = %s WHERE id = %s", (old, incident.id))
+        incident.invalidate_recordset(["last_paged"])
+        incident.write({"status": "acknowledged"})
+        self.assertFalse(incident._repage_if_due())
+        # A severity that does not page is never re-paged.
+        low = self.incident_model.create({"source": "repage_low", "severity": "low", "description": "d"})
+        self.env.cr.execute("UPDATE pager_incident SET last_paged = %s WHERE id = %s", (old, low.id))
+        low.invalidate_recordset(["last_paged"])
+        self.assertFalse(low._repage_if_due())
+
+    def test_06d_report_incident_repages_the_existing_open_incident(self):
+        # Tests [@ANCHOR: pager_duty:repage_if_due]
+        # No Redis: the rate limiter would swallow the second report on a host that has one running.
+        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", None)
+        vals = {"source": "repage_via_report", "severity": "high", "description": "d"}
+        incident = self.incident_model.browse(self.incident_model.report_incident(dict(vals)))
+        old = fields.Datetime.now() - datetime.timedelta(hours=REPAGE_HOURS + 1)
+        self.env.cr.execute("UPDATE pager_incident SET last_paged = %s WHERE id = %s", (old, incident.id))
+        incident.invalidate_recordset(["last_paged"])
+        posted = self.safe_patch_object(type(incident), "message_post")
+        self.assertEqual(self.incident_model.report_incident(dict(vals)), incident.id)
+        posted.assert_called()
+        incident.invalidate_recordset(["last_paged", "occurrence_count"])
+        self.assertGreater(incident.last_paged, old)
+        self.assertEqual(incident.occurrence_count, 2)
 
     def test_04_views_render(self):
         # [@ANCHOR: test_pager_view]

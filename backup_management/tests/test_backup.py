@@ -381,3 +381,51 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(res.get("res_model"), "backup.job")
         job = self.env["backup.job"].browse(res.get("res_id"))
         self.assertEqual(job.config_id, self.config_kopia)
+
+    # [@ANCHOR: backup_management:test_backup_job_problems]
+    def test_backup_job_problems_reports_failed_and_missing_successful_jobs(self):
+        # Tests [@ANCHOR: backup_management:backup_job_problems]
+        # Ticket 116: every job failed for nine days and nothing said so again after the first alert.
+        config = self.config_kopia
+        Job = self.env["backup.job"]
+        now = fields.Datetime.now()
+        Job.search([("config_id", "=", config.id)]).unlink()
+        self.assertEqual(config._backup_job_problems(now), [])  # no job at all: a new configuration is not alarming
+
+        def make(state, hours_ago):
+            job = Job.create({"config_id": config.id, "job_type": "kopia", "state": state})
+            self.env.cr.execute(
+                "UPDATE backup_job SET create_date = %s WHERE id = %s", (now - datetime.timedelta(hours=hours_ago), job.id)
+            )
+            job.invalidate_recordset(["create_date"])
+            return job
+
+        make("done", 30)
+        make("failed", 3)
+        make("failed", 2)
+        problems = config._backup_job_problems(now)
+        self.assertEqual(len(problems), 1)  # two failures are not three, but no success within 26 hours
+        self.assertIn("No Successful Backup Job", problems[0])
+        make("failed", 1)
+        problems = config._backup_job_problems(now)
+        self.assertEqual(len(problems), 2)
+        self.assertTrue(any("Backup Jobs Failing" in p for p in problems))
+        make("done", 0.5)
+        self.assertEqual(config._backup_job_problems(now), [])  # a recent success clears both
+        Job.search([("config_id", "=", config.id)]).unlink()
+        make("failed", 1)
+        self.assertEqual(config._backup_job_problems(now), [])  # nothing older than 26 hours: not judged yet
+
+    def test_cron_sync_all_backups_reports_job_problems_every_run(self):
+        # Tests [@ANCHOR: backup_management:backup_job_problems]
+        # Tests [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
+        config = self.config_kopia
+        now = fields.Datetime.now()
+        job = self.env["backup.job"].create({"config_id": config.id, "job_type": "kopia", "state": "failed"})
+        self.env.cr.execute(
+            "UPDATE backup_job SET create_date = %s WHERE id = %s", (now - datetime.timedelta(hours=40), job.id)
+        )
+        reported = self.safe_patch_object(type(config), "report_backup_failure")
+        self.safe_patch_object(type(config), "action_sync_snapshots")
+        self.env["backup.config"].cron_sync_all_backups()
+        self.assertTrue(any("No Successful Backup Job" in c.args[0] for c in reported.call_args_list))
