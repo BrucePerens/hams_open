@@ -25,6 +25,7 @@ from odoo.tools import mute_logger
 from odoo.tools.safe_eval import safe_eval
 
 from odoo.addons.hams_helpdesk.controllers import portal as helpdesk_portal
+from odoo.addons.hams_helpdesk.models import daemon_exception
 from odoo.addons.hams_helpdesk.models import exception_fingerprint as reporter
 from odoo.addons.hams_helpdesk.models import exception_scrub as scrub
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -265,7 +266,6 @@ class TestExceptionScrubbing(ExceptionTicketCase):
 
     def test_a_secret_or_address_across_the_cut_is_scrubbed_before_it_is_cut(self):
         # Tests [@ANCHOR: hams_helpdesk:exc_daemon_tail]
-    # Tests [@ANCHOR: hams_helpdesk:exc_quota_key_parts]
         # Tests [@ANCHOR: hams_helpdesk:exc_frame_lines]
         line = "x" * 150 + " user=alice@example.com key Zk3Jq9XaaaaaaaaaaaaaaaaaaaaZZZ"
         tail = scrub.scrub_daemon_tail(line)
@@ -901,22 +901,31 @@ class TestDaemonFailureReports(ExceptionTicketCase):
         self.assertEqual(again, {"recorded": False})
         self.assertEqual(len(self.daemon_rows()), 1)
 
-    def test_quota_exhausted_is_one_ticket_apart_from_failures_of_the_same_unit(self):
-        # Bruce 2026-11-05: "one ticket when the account is out of quota". The credential touch reports it twice a day.
+    def test_quota_exhausted_is_one_ticket_for_every_unit_apart_from_failures(self):
+        # Bruce 2026-11-05: "one ticket when the account is out of quota", from any unit that finds it out.
         self.env.flush_all()
         service = self.as_reporter()
         first = service.report_daemon_failure(
             "credential.touch.timer.service", "quota_exhausted", "exit-code", "hams_ai_agent: You've hit your weekly limit")
         again = service.report_daemon_failure(
-            "credential.touch.timer.service", "quota_exhausted", "exit-code", "hams_event_agent: You've hit your weekly limit")
-        failure = service.report_daemon_failure("credential.touch.timer.service", "unit_failed", "exit-code", "x")
+            "ticket.triage.service", "quota_exhausted", "exit-code", "You've hit your weekly limit")
+        third = service.report_daemon_failure(
+            "event.ai.enrichment.service", "quota_exhausted", "exit-code", "You've hit your weekly limit")
+        failure = service.report_daemon_failure("ticket.triage.service", "unit_failed", "exit-code", "x")
         self.env.invalidate_all()
-        self.assertEqual((first, again, failure), ({"recorded": True}, {"recorded": False}, {"recorded": True}))
+        self.assertEqual(
+            (first, again, third, failure), ({"recorded": True}, {"recorded": False}, {"recorded": False}, {"recorded": True}))
         rows = self.daemon_rows()
         self.assertEqual(sorted(rows.mapped("exc_type")), ["daemon.quota_exhausted", "daemon.unit_failed"])
         quota = rows.filtered(lambda row: row.exc_type == "daemon.quota_exhausted")
-        self.assertEqual(quota.ticket_id.name, "Server exception: AI service quota used up (reported by credential.touch.timer.service)")
+        self.assertEqual(quota.ticket_id.name, "Server exception: AI service quota used up")
+        self.assertIn("credential.touch.timer.service", quota.samples_json)
         self.assertNotEqual(quota.ticket_id, (rows - quota).ticket_id)
+
+    def test_quota_key_parts_do_not_depend_on_the_unit(self):
+        # Tests [@ANCHOR: hams_helpdesk:exc_quota_key_parts]
+        self.assertEqual(daemon_exception.quota_key_parts(), ("daemon.quota_exhausted", "claude-plan", "quota", "service:claude-plan"))
+        self.assertNotEqual(daemon_exception.quota_key_parts(), daemon_exception.unit_key_parts("ticket.triage.service"))
 
     def test_another_account_is_refused(self):
         with self.assertRaises(AccessError):

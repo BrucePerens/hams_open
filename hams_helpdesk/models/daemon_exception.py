@@ -34,12 +34,17 @@ def unit_key_parts(name):
     return ("daemon.unit_failed", name, "result:exit-code", f"systemd:{name}")
 
 
+# The paid service whose quota every ``quota_exhausted`` report is about (the Claude plan the AI daemons share).
+QUOTA_SERVICE = "claude-plan"
+
+
 # [@ANCHOR: hams_helpdesk:exc_quota_key_parts]
-def quota_key_parts(name):
-    """The fingerprint inputs of a ``quota_exhausted`` report from the unit ``name``: its own row and ticket, apart from
-    the unit's failures (``unit_key_parts``), so "the AI service is out of quota" is one ticket that counts its
-    occurrences (Bruce 2026-11-05: "one ticket when the account is out of quota")."""
-    return ("daemon.quota_exhausted", name, "quota", f"systemd:{name}")
+def quota_key_parts():
+    """The fingerprint inputs of EVERY ``quota_exhausted`` report, whichever unit sends it: the one service whose quota
+    is used up (``QUOTA_SERVICE``), apart from any unit's failures (``unit_key_parts``), so "the AI service is out of
+    quota" is one ticket that counts its occurrences (Bruce 2026-11-05: "one ticket when the account is out of quota").
+    The reporting unit is not part of the key; it is in the sample trace."""
+    return ("daemon.quota_exhausted", QUOTA_SERVICE, "quota", f"service:{QUOTA_SERVICE}")
 
 
 class ExceptionFingerprintDaemon(models.Model):
@@ -76,13 +81,13 @@ class ExceptionFingerprintDaemon(models.Model):
             self.env.registry,
             "daemon",
             f"daemon.{kind}",
-            name,
+            QUOTA_SERVICE if kind == "quota_exhausted" else name,
             f"result:{result}",
-            f"systemd:{name}",
+            f"service:{QUOTA_SERVICE}" if kind == "quota_exhausted" else f"systemd:{name}",
             trace,
-            f"AI service quota used up (reported by {name})" if kind == "quota_exhausted" else f"Daemon failure: {name}",
+            "AI service quota used up" if kind == "quota_exhausted" else f"Daemon failure: {name}",
             reporter=f"exception report ({kind})",
-            key_parts=quota_key_parts(name) if kind == "quota_exhausted" else unit_key_parts(name),
+            key_parts=quota_key_parts() if kind == "quota_exhausted" else unit_key_parts(name),
         )
         return {"recorded": bool(recorded)}
 
