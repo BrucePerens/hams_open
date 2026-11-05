@@ -18,7 +18,7 @@ class TestTourAbortGate(HamsHttpCase):
         # Tests [@ANCHOR: zero_sudo:js_describe_phase]
         # Tests [@ANCHOR: zero_sudo:js_abort_channel]
         self.browser_js(
-            "/web/tests?headless&loglevel=2&preset=desktop&timeout=15000&tag=zero_sudo_tour_abort_gate",
+            "/web/tests?headless&loglevel=2&preset=desktop&timeout=15000&tag=zero_sudo_abort_gate",
             "",
             "",
             login="admin",
@@ -35,7 +35,7 @@ class TestTourAbortGate(HamsHttpCase):
         # Tests [@ANCHOR: zero_sudo:js_abort_channel]
         browser_logger = self._logger.getChild("browser")
         with self.assertLogs(browser_logger.name, level="WARNING") as captured:
-            self.start_tour("/web/login", "zero_sudo_tour_abort_gate", login=None)
+            self.start_tour("/odoo?debug=1", "zero_sudo_abort_gate_late_event", login="admin")
         text = "\n".join(captured.output)
         self.assertIn("[WATCHDOG NOTICE]", text)
         self.assertNotIn("[WATCHDOG ALARM]", text)

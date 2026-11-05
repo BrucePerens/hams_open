@@ -4,7 +4,7 @@
 import { describe, expect, test } from "@odoo/hoot";
 import { abortChannel, describePhase, describeRejectionReason } from "@zero_sudo/js/tour_abort_gate";
 
-describe.tags("zero_sudo_tour_abort_gate");
+describe.tags("zero_sudo_abort_gate");
 describe("tour watchdog abort gate", () => {
     test("an Event rejection is named by type and target, other reasons pass through", () => {
         // Tests [@ANCHOR: zero_sudo:js_describe_rejection_reason]
