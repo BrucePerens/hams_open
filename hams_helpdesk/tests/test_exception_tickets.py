@@ -255,6 +255,7 @@ class TestExceptionScrubbing(ExceptionTicketCase):
             ("id_token=abc123", "abc123"),
             ("postgres://user:pw0rd9@dbhost/db", "pw0rd9"),
             ("amqp://guest:pw0rd9@mq.example.org:5672/", "pw0rd9"),
+            ("redis://:pw0rd9@cache:6379/0", "pw0rd9"),
             ("Authorization: Basic dXNlcjpwdw==", "dXNlcjpwdw"),
             ('"Authorization": "Bearer abc123.def"', "abc123"),
         )

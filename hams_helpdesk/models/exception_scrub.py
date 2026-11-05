@@ -65,7 +65,7 @@ _AUTH_RE = re.compile(
     r"(?i)(?<![A-Za-z0-9])(authorization['\"]?\s*[=:]\s*['\"]?)[^\s,;&'\"]+(?:\s+[^\s,;&'\"]+)?"
 )
 # scheme://user:password@host (a database or broker URL): the password is replaced before the URL step.
-_DSN_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)([^/\s:@]+):([^@\s/]+)@")
+_DSN_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)([^/\s:@]*):([^@\s/]+)@")
 # Longest text given to the patterns when a line is cut after scrubbing (keeps the regexes cheap).
 SCRUB_INPUT_LIMIT = 4000
 _BEARER_RE = re.compile(r"(?i)\bbearer\s+[\w.~+/=-]+")
