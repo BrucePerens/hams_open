@@ -432,7 +432,8 @@ fn impostor(sock: &std::path::Path) -> std::thread::JoinHandle<bool> {
     let listener = UnixListener::bind(sock).unwrap();
     std::thread::spawn(move || {
         let (mut conn, _) = listener.accept().unwrap();
-        conn.set_read_timeout(Some(Duration::from_millis(500))).unwrap();
+        conn.set_read_timeout(Some(Duration::from_millis(500)))
+            .unwrap();
         let mut byte = [0u8; 1];
         // The client verifies and hangs up without sending anything: EOF (0) or a timeout.
         matches!(conn.read(&mut byte), Ok(n) if n > 0)
@@ -480,6 +481,9 @@ fn the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_noth
         run(&mut broker, &listener, Duration::from_secs(10), Some(1)).unwrap(),
         1
     );
-    assert!(matches!(worker.join().unwrap().unwrap().0, Response::Devices(_)));
+    assert!(matches!(
+        worker.join().unwrap().unwrap().0,
+        Response::Devices(_)
+    ));
     std::fs::remove_dir_all(dir).unwrap();
 }
