@@ -291,6 +291,12 @@ class TestRunPgbackrestViaSidecar(unittest.TestCase):
             backup_worker._run_pgbackrest_via_sidecar(cmd, {}, 101)
         self.assertEqual(os.listdir(self._tmpdir), [])
 
+    def test_a_stanza_with_a_trailing_newline_is_refused(self):
+        cmd = ["pgbackrest", "backup", "--stanza=hams_prod\n"]
+        with self.assertRaises(ValueError):
+            backup_worker._run_pgbackrest_via_sidecar(cmd, {}, 103)
+        self.assertEqual(os.listdir(self._tmpdir), [])
+
     def test_timeout_cleans_up_the_request_and_reports_failure(self):
         cmd = ["pgbackrest", "backup", "--stanza=hams_prod"]
         return_code, output = backup_worker._run_pgbackrest_via_sidecar(cmd, {}, 102)

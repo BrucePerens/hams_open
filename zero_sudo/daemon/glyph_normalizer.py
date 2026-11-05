@@ -83,10 +83,10 @@ _MINUS_SIGNS = frozenset("−‐‑‒–—―﹣－⁻₋")
 _SEPARATORS = {"٫": ".", "٬": ",", "․": ".", "،": ",", "‚": ","}
 
 _CALLSIGN_SHAPE = re.compile(
-    r"^(?P<pre>[A-Z]{1,2}|[0-9][A-Z]|[A-Z][0-9])(?P<d>[0-9])(?P<suf>[A-Z]{1,4})(?:[/-](?P<port>[A-Z0-9]{1,4}))?$"
+    r"^(?P<pre>[A-Z]{1,2}|[0-9][A-Z]|[A-Z][0-9])(?P<d>[0-9])(?P<suf>[A-Z]{1,4})(?:[/-](?P<port>[A-Z0-9]{1,4}))?\Z"
 )
 _EDGE_PUNCTUATION = ".,;:()[]\"'"
-_NUMBER_SHAPE = re.compile(r"^[+-]?[0-9]+(?:[.,][0-9]+)*$")
+_NUMBER_SHAPE = re.compile(r"^[+-]?[0-9]+(?:[.,][0-9]+)*\Z")
 
 
 # [@ANCHOR: zero_sudo:glyph_normalizer_code]

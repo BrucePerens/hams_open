@@ -46,7 +46,7 @@ ALIGN_CLASSES = {
 }
 ALLOWED_CLASSES = frozenset(ALIGN_CLASSES.values())
 LINK_SCHEMES = frozenset({"http", "https", "mailto"})
-IMAGE_PATH_RE = re.compile(r"^/web/(image|content)/[0-9]+(/[A-Za-z0-9._-]+)*(\?[A-Za-z0-9=&._-]*)?$")
+IMAGE_PATH_RE = re.compile(r"^/web/(image|content)/[0-9]+(/[A-Za-z0-9._-]+)*(\?[A-Za-z0-9=&._-]*)?\Z")
 TEXT_ALIGN_RE = re.compile(r"text-align\s*:\s*([a-z]+)", re.I)
 MAX_BODY_CHARS = 200_000
 
@@ -220,7 +220,7 @@ RESERVED_PAGE_SLUGS = frozenset(
         "rss", "sitemap", "privacy", "terms", "report", "image", "images", "files",
     }
 )
-PAGE_SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?$")
+PAGE_SLUG_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?\Z")
 
 
 def menu_pages(env, domain_field, record_id, slug):

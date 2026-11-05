@@ -39,7 +39,7 @@ SPOOL_DIR_ENV = "HAMS_TRIAGE_SPOOL_DIR"
 DEFAULT_SPOOL_DIR = "/opt/hams/spool/ticket_triage"
 MAX_SPOOL_FILES = 500
 # Must match the daemon's own _SPOOL_NAME_RE and the path unit's PathExistsGlob.
-_WAKEUP_NAME_RE = re.compile(r"^ticket-\d+\.json$")
+_WAKEUP_NAME_RE = re.compile(r"^ticket-\d+\.json\Z")
 
 
 def spool_dir():

@@ -54,13 +54,13 @@ TITLE_PREFIX_CRASH = "Relay crash: "
 SOURCE = "relay"
 CRATE = "hams_local_relay"
 
-VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,31}$")
-BUILD_RE = re.compile(r"^[0-9A-Za-z._-]{1,64}$")
-OS_RE = re.compile(r"^[0-9A-Za-z._ -]{1,32}$")
-ARCH_RE = re.compile(r"^[0-9A-Za-z._-]{1,16}$")
-OPERATOR_KEY_RE = re.compile(r"^(?:[0-9a-f]{64,130})?$")
+VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,31}\Z")
+BUILD_RE = re.compile(r"^[0-9A-Za-z._-]{1,64}\Z")
+OS_RE = re.compile(r"^[0-9A-Za-z._ -]{1,32}\Z")
+ARCH_RE = re.compile(r"^[0-9A-Za-z._-]{1,16}\Z")
+OPERATOR_KEY_RE = re.compile(r"^(?:[0-9a-f]{64,130})?\Z")
 # A frame is a function path, optionally followed by " (file:line)" or an offset; never free text.
-FRAME_RE = re.compile(r"^[^\s\x00-\x1f][^\x00-\x1f]{0,239}$")
+FRAME_RE = re.compile(r"^[^\s\x00-\x1f][^\x00-\x1f]{0,239}\Z")
 # The relay id comes from the authenticated link (a hash of its key), not from the report; it is kept to a plain alphabet and not scrubbed as a token.
 _RELAY_ID_BAD_RE = re.compile(r"[^0-9A-Za-z_.:-]")
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")

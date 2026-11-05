@@ -121,6 +121,19 @@ class TestRelayReportSchema(MemberCase):
         for label, report, reason in cases:
             self.assertEqual(rejected(self, schema.validate_report, report).reason, reason, label)
 
+    def test_a_trailing_newline_is_refused_in_every_checked_text(self):
+        # `$` also matches before a final newline; the patterns now end with \Z.
+        for label, report, reason in (
+            ("version", good(version="0.3.4\n"), "wrong_version"),
+            ("build", good(build="1a2b3c4d\n"), "wrong_build"),
+            ("os", good(os="linux\n"), "wrong_os"),
+            ("arch", good(arch="x86_64\n"), "wrong_arch"),
+            ("operator key", good(operator_key="ab" * 32 + "\n"), "wrong_operator_key"),
+            ("frame", good(frames=["a::b (src/x.rs:1)\n"]), "wrong_frames"),
+        ):
+            self.assertEqual(rejected(self, schema.validate_report, report).reason, reason, label)
+        self.assertTrue(schema.validate_report(good(operator_key="ab" * 32)))
+
     def test_the_body_is_size_capped_and_must_be_json_without_nul(self):
         too_large = json.dumps(good(log_tail=["x" * 240] * 20, frames=["a" * 240] * 25)).encode() + b" " * 16384
         self.assertEqual(rejected(self, schema.parse_body, too_large).status, 413)

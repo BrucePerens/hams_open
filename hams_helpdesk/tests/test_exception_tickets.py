@@ -918,6 +918,13 @@ class TestDaemonFailureReports(ExceptionTicketCase):
         self.assertEqual(scrub.daemon_unit_name("plain.service"), "plain.service")
         self.assertIsNone(scrub.daemon_unit_name("-bad.service"))
 
+    def test_unit_name_pattern_refuses_a_trailing_newline(self):
+        # `$` also matches before a final newline, and a unit name goes into a ticket; the pattern ends with \Z.
+        # (daemon_unit_name strips first, so the pattern itself is checked.)
+        self.assertIsNone(scrub._DAEMON_UNIT_RE.match("plain.service\n"))
+        self.assertTrue(scrub._DAEMON_UNIT_RE.match("plain.service"))
+        self.assertIsNone(scrub.daemon_unit_name("-bad.service\n"))
+
     def test_tail_is_bounded_and_unknown_result_is_not_stored(self):
         huge = "\n".join(f"line {number} " + "y" * 500 for number in range(500))
         cut = scrub.scrub_daemon_tail(huge)

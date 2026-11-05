@@ -307,7 +307,7 @@ DAEMON_TAIL_LINES = 20
 DAEMON_TAIL_LINE_LIMIT = 160
 DAEMON_TAIL_LIMIT = 4000
 _DAEMON_UNIT_SUFFIXES = (".service", ".timer", ".socket", ".target")
-_DAEMON_UNIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,79}$")
+_DAEMON_UNIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@-]{0,79}\Z")
 _DAEMON_EXC_LINE_RE = re.compile(r"^((?:[A-Za-z_][\w.]*\.)?[A-Z]\w*(?:Error|Exception|Exit|Interrupt|Warning)):.*$")
 
 

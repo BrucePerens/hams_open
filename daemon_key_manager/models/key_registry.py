@@ -42,7 +42,7 @@ KEY_FILE_GROUP_MODE = 0o640
 # The only group names a registry row may name. The prefix is what keeps a row from pointing a
 # key file at a privileged group (hams_com, adm, shadow): one OS account and group per daemon
 # family, named hamsd_<family> (docs/proposals/DAEMON_OS_ISOLATION_PLAN.md in hams_com).
-OS_GROUP_RE = re.compile(r"^hamsd_[a-z0-9_]{1,24}$")
+OS_GROUP_RE = re.compile(r"^hamsd_[a-z0-9_]{1,24}\Z")
 
 
 def key_directory_for_group(group):

@@ -427,7 +427,7 @@ def severity_for_days_left(days_left):
 
 
 # [@ANCHOR: pager_duty:extract_severity_prefix]
-_SEVERITY_PREFIX_RE = re.compile(r"^\[SEVERITY:(low|medium|high|critical)\] (.*)$", re.DOTALL)
+_SEVERITY_PREFIX_RE = re.compile(r"^\[SEVERITY:(low|medium|high|critical)\] (.*)\Z", re.DOTALL)
 
 
 def extract_severity_prefix(msg, default="high"):

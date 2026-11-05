@@ -14,6 +14,10 @@ from datetime import date
 from odoo.tests.common import BaseCase, tagged
 
 from odoo.addons.zero_sudo.daemon.repeater_page_text import (
+    _BASE_CALLSIGN,
+    _DESIGNATOR,
+    _OTHER_WEAK,
+    _PLACEHOLDER_PATTERNS,
     _page_numbers,
     apply_page_checks, callsign_adjacent, callsign_core, callsigns_in_text, frequency_on_page, ground_item, grounded_notes,
     header_callsigns, node_operator_callsigns, number_on_page, orbiting_repeater, page_date, placeholder_page, row_ownership,
@@ -77,6 +81,18 @@ PAGE = (
 
 @tagged("post_install", "-at_install")
 class TestRepeaterPageText(BaseCase):
+
+    def test_a_trailing_newline_does_not_match_the_whole_text_patterns(self):
+        # `$` also matches before a final newline; the whole-text patterns now end with \Z.
+        self.assertTrue(_BASE_CALLSIGN.match("W6ABC"))
+        self.assertIsNone(_BASE_CALLSIGN.match("W6ABC\n"))
+        self.assertTrue(_DESIGNATOR.match("W6ABC-R"))
+        self.assertIsNone(_DESIGNATOR.match("W6ABC-R\n"))
+        self.assertTrue(any(p.match("repeaters nearby") for p in _OTHER_WEAK))
+        self.assertFalse(any(p.match("repeaters nearby\n") for p in _OTHER_WEAK))
+        for text in ("sample page", "coming soon!", "it works"):
+            self.assertTrue(any(p.search(text) for p in _PLACEHOLDER_PATTERNS), text)
+            self.assertFalse(any(p.search(text + "\n") for p in _PLACEHOLDER_PATTERNS if p.pattern.startswith("^")), text)
 
     # [@ANCHOR: zero_sudo:test_repeater_page_text_designator]
     def test_a_repeater_designator_suffix_is_stripped_from_a_callsign_shaped_token_only(self):

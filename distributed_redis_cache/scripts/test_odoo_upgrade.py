@@ -33,6 +33,13 @@ class TestOdooUpgrade(unittest.TestCase):
                    list_backups=lambda: ["/opt/hams/backups/deploy-20261013-0100", "/opt/hams/backups/deploy-20261014-1500"])
         return rc, out.getvalue()
 
+    def test_a_module_or_database_name_with_a_trailing_newline_is_refused(self):
+        # `$` also matches before a final newline; both name patterns now end with \Z.
+        for argv in (["--db", "hams_prod", "--modules", "a_b\n"], ["--db", "hams_prod", "--modules", "a,b\n"],
+                     ["--db", "hams_prod\n", "--modules", "a_b"]):
+            with self.subTest(argv=argv), self.assertRaisesRegex(u.UpgradeError, "invalid --"):
+                self._run(argv)
+
     def test_command_uses_service_environment_files_by_path_and_never_contains_values(self):
         rc, out = self._run(["--db", "hams_prod", "--modules", "a_b,c", "--dry-run"])
         self.assertEqual(rc, 0)
