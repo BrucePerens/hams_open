@@ -265,6 +265,7 @@ class TestExceptionScrubbing(ExceptionTicketCase):
 
     def test_a_secret_or_address_across_the_cut_is_scrubbed_before_it_is_cut(self):
         # Tests [@ANCHOR: hams_helpdesk:exc_daemon_tail]
+    # Tests [@ANCHOR: hams_helpdesk:exc_quota_key_parts]
         # Tests [@ANCHOR: hams_helpdesk:exc_frame_lines]
         line = "x" * 150 + " user=alice@example.com key Zk3Jq9XaaaaaaaaaaaaaaaaaaaaZZZ"
         tail = scrub.scrub_daemon_tail(line)

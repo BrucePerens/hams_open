@@ -34,6 +34,14 @@ def unit_key_parts(name):
     return ("daemon.unit_failed", name, "result:exit-code", f"systemd:{name}")
 
 
+# [@ANCHOR: hams_helpdesk:exc_quota_key_parts]
+def quota_key_parts(name):
+    """The fingerprint inputs of a ``quota_exhausted`` report from the unit ``name``: its own row and ticket, apart from
+    the unit's failures (``unit_key_parts``), so "the AI service is out of quota" is one ticket that counts its
+    occurrences (Bruce 2026-11-05: "one ticket when the account is out of quota")."""
+    return ("daemon.quota_exhausted", name, "quota", f"systemd:{name}")
+
+
 class ExceptionFingerprintDaemon(models.Model):
     _inherit = "hams_helpdesk.exception.fingerprint"
 
@@ -74,7 +82,7 @@ class ExceptionFingerprintDaemon(models.Model):
             trace,
             f"AI service quota used up (reported by {name})" if kind == "quota_exhausted" else f"Daemon failure: {name}",
             reporter=f"exception report ({kind})",
-            key_parts=unit_key_parts(name),
+            key_parts=quota_key_parts(name) if kind == "quota_exhausted" else unit_key_parts(name),
         )
         return {"recorded": bool(recorded)}
 
