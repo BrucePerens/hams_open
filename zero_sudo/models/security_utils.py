@@ -22,6 +22,8 @@ from odoo.exceptions import AccessError, UserError
 from odoo.http import request
 from odoo.modules.module import get_manifest as odoo_get_manifest
 
+from ..peer_address import is_loopback_peer
+
 _logger = logging.getLogger(__name__)
 
 # Module-level, process-lifetime cache of {(dbname, xml_id): uid} for every KNOWN service
@@ -414,7 +416,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             request_obj = request._get_current_object()
 
         remote_addr = request_obj.httprequest.remote_addr
-        if remote_addr not in ("127.0.0.1", "::1"):  # burn-ignore-tunnel-peer-check
+        if not is_loopback_peer(remote_addr):
             # Not proxied through our own Tunnel -- CF-*/X-Forwarded-For
             # headers here are unverifiable and must not be trusted.
             return remote_addr

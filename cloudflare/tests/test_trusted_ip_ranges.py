@@ -75,6 +75,17 @@ class TestTrustedIpRanges(HamsTransactionCase):
         self.assertTrue(self._utils()._is_trusted_cf_peer("127.0.0.1"))  # burn-ignore-ssrf-test-value
         self.assertTrue(self._utils()._is_trusted_cf_peer("::1"))
 
+    def test_04a_is_trusted_cf_peer_true_for_ipv4_mapped_loopback(self):
+        # A dual-stack listener reports a loopback peer as "::ffff:127.0.0.1".
+        self.assertTrue(self._utils()._is_trusted_cf_peer("::ffff:127.0.0.1"))  # burn-ignore-ssrf-test-value
+        self.assertFalse(self._utils()._is_trusted_cf_peer("::ffff:8.8.8.8"))
+
+    def test_05a_is_trusted_cf_peer_unmaps_a_mapped_address_before_the_range_test(self):
+        self._enable_non_tunnel_mode()
+        self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
+        self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "203.0.113.0/24")
+        self.assertTrue(self._utils()._is_trusted_cf_peer("::ffff:203.0.113.55"))
+
     def test_04b_is_trusted_cf_peer_false_for_a_cloudflare_range_ip_when_mode_is_off(self):
         """The core of this bug-hunt fix: a real Cloudflare-published address is NOT a trusted
         peer on a Tunnel-only deployment (the default) even though it is a genuine Cloudflare

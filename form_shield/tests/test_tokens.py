@@ -80,6 +80,26 @@ class TestTokens(HamsTransactionCase):
         for malformed in ("", "v1", "v2." + ".".join(fields[1:]), ".".join(fields[:-1]), token + ".x"):
             self.assertEqual(tokens.parse_challenge(KEY, malformed)[1], tokens.BAD_FORMAT, malformed)
 
+    def test_non_ascii_signature_is_a_bad_signature_not_an_exception(self):
+        # Tests [@ANCHOR: form_shield:parse_challenge]
+        token = tokens.make_challenge(KEY, "203.0.113.9", 1000, 12, tokens.KIND_POW, 600)
+        head = token.rsplit(".", 1)[0]
+        for signature in ("\u00e9", "\u0661" * 40, "\u202e", "\U0001f600", "\udc80", "a\u00e9" * 20):
+            self.assertEqual(
+                tokens.parse_challenge(KEY, head + "." + signature),
+                (None, tokens.BAD_SIGNATURE),
+                ascii(signature),
+            )
+
+    def test_ipv4_mapped_addresses_keep_their_own_network(self):
+        # Tests [@ANCHOR: form_shield:ip_tag]
+        self.assertEqual(tokens.ip_prefix("::ffff:203.0.113.5"), "203.0.113.0/24")
+        self.assertEqual(tokens.ip_prefix("::ffff:198.51.100.7"), "198.51.100.0/24")
+        self.assertEqual(tokens.ip_tag(KEY, "::ffff:203.0.113.5"), tokens.ip_tag(KEY, "203.0.113.200"))
+        self.assertNotEqual(
+            tokens.ip_tag(KEY, "::ffff:203.0.113.5"), tokens.ip_tag(KEY, "::ffff:198.51.100.7")
+        )
+
     # [@ANCHOR: form_shield:test_ip_tag_uses_prefix_and_keeps_no_address]
     def test_ip_tag_uses_prefix_and_keeps_no_address(self):
         # Tests [@ANCHOR: form_shield:ip_tag_hash]
