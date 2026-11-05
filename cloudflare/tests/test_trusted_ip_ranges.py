@@ -77,7 +77,7 @@ class TestTrustedIpRanges(HamsTransactionCase):
 
     def test_04a_is_trusted_cf_peer_true_for_ipv4_mapped_loopback(self):
         # A dual-stack listener reports a loopback peer as "::ffff:127.0.0.1".
-        self.assertTrue(self._utils()._is_trusted_cf_peer("::ffff:127.0.0.1"))
+        self.assertTrue(self._utils()._is_trusted_cf_peer("::ffff:127.0.0.1"))  # burn-ignore-ssrf-test-value
         self.assertFalse(self._utils()._is_trusted_cf_peer("::ffff:8.8.8.8"))
 
     def test_05a_is_trusted_cf_peer_unmaps_a_mapped_address_before_the_range_test(self):

@@ -59,7 +59,7 @@ class TestWsgiProxyScheme(HamsTransactionCase):
     # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
     def test_01b_ipv4_mapped_loopback_peer_is_the_tunnel(self):
         environ = {
-            "REMOTE_ADDR": "::ffff:127.0.0.1",
+            "REMOTE_ADDR": "::ffff:127.0.0.1",  # burn-ignore-ssrf-test-value
             "HTTP_CF_VISITOR": '{"scheme":"https"}',
             "wsgi.url_scheme": "http",
         }

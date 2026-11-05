@@ -7,6 +7,7 @@
 import logging
 
 from . import css_sanitizer
+from . import peer_address
 from . import svg_sanitizer
 
 # [@ANCHOR: zero_sudo:svg_allowlist_install]

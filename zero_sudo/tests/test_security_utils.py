@@ -7,6 +7,7 @@
 from odoo.tests.common import tagged
 from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.peer_address import is_loopback_peer, parse_peer_address
 from odoo.addons.zero_sudo.models import security_utils as security_utils_module
 from odoo.exceptions import AccessError, UserError
 from unittest.mock import MagicMock, mock_open
@@ -1173,11 +1174,9 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_28b3_peer_address_helpers(self):
         # Tests [@ANCHOR: zero_sudo:is_loopback_peer]
         # Tests [@ANCHOR: zero_sudo:parse_peer_address]
-        from odoo.addons.zero_sudo.peer_address import is_loopback_peer, parse_peer_address
-
-        for address in ("127.0.0.1", "::1", "::ffff:127.0.0.1", " ::FFFF:127.0.0.1 "):
+        for address in ("127.0.0.1", "::1", "::ffff:127.0.0.1", " ::FFFF:127.0.0.1 "):  # burn-ignore-ssrf-test-value
             self.assertTrue(is_loopback_peer(address), address)
-        for address in ("203.0.113.5", "::ffff:203.0.113.5", "2001:db8::1", "", None, "localhost", "::ffff:"):
+        for address in ("203.0.113.5", "::ffff:203.0.113.5", "2001:db8::1", "", None, "localhost", "::ffff:"):  # burn-ignore-ssrf-test-value
             self.assertFalse(is_loopback_peer(address), address)
         self.assertEqual(str(parse_peer_address("::ffff:203.0.113.5")), "203.0.113.5")
         self.assertEqual(str(parse_peer_address("2001:db8::1")), "2001:db8::1")
