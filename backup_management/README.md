@@ -128,7 +128,7 @@ Errors: none raised. An unreadable file is logged as a warning (the reason only,
 **Special concerns.** Blocking file read of one small file; no locks (the worker handles one RabbitMQ message at a time, so nothing races the assignment).
 Never logs a key. Idempotent. Only the last `ODOO_RPC_KEY=` line counts; surrounding quotes are removed.
 
-**See also.** `[@ANCHOR: backup_management:test_json2_call_reloads_a_rotated_key]`; `zero_sudo/daemon/json_rpc_client.py`, which does the same for every other daemon.
+**See also.** `test_json2_call_reloads_a_rotated_key` in `daemon/test_main.py`; `zero_sudo/daemon/json_rpc_client.py`, which does the same for every other daemon.
 
 ### `[@ANCHOR: backup_management:COMM_json2_call]` `_json2_call(model, method_name, svc_uid=None, **kwargs)`
 
@@ -150,5 +150,5 @@ Errors: `OdooAPIError` for an HTTP error (the message starts `JSON-2 API HTTP Er
 **Special concerns.** Blocking, 15 second timeout, no retry except one: after an HTTP 401 it calls `_reload_odoo_key()` and repeats the call once with the new key when the
 key changed. The retry is safe for the calls this daemon makes because a 401 means Odoo refused before running anything. Secrets: the key is never logged.
 
-**See also.** `[@ANCHOR: backup_management:test_json2_call_reloads_a_rotated_key]`.
+**See also.** `test_json2_call_reloads_a_rotated_key` in `daemon/test_main.py`.
 
