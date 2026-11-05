@@ -16,6 +16,10 @@ from . import untrusted_text as ut
 from .inbound_spam_filter import mail_signals, ses_verdicts
 
 MAIL_STASH_KEY = "hams_helpdesk_untrusted_mail"
+# [@ANCHOR: hams_helpdesk:inbound_reply_message_models]
+# The records an inbound message becomes (a ticket, or a pager incident through the pager adapter): a Message-ID stored on one of
+# them is mail hams.com sent or received.
+REPLY_MESSAGE_MODELS = ["hams_helpdesk.ticket", "pager.incident"]
 
 
 def stash_for(env):
@@ -48,7 +52,7 @@ class MailThread(models.AbstractModel):
     # [@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]
     def _with_verified_reply_headers(self, signals):
         """``signals`` (from ``mail_signals``) with ``reply_headers`` set: True only when one of its
-        ``referenced_message_ids`` is the Message-ID of a message already stored on a ticket. The sender writes
+        ``referenced_message_ids`` is the Message-ID of a message already stored on a ticket or a pager incident. The sender writes
         In-Reply-To and References, so a header alone must not exempt a message from the bulk-mail rules. The lookup
         runs as the helpdesk service account (the mail-ingest identity cannot read tickets)."""
         ids = signals.get("referenced_message_ids") or []
@@ -56,7 +60,7 @@ class MailThread(models.AbstractModel):
         if ids:
             hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
             known = bool(
-                hd_env["mail.message"].search_count([("model", "=", "hams_helpdesk.ticket"), ("message_id", "in", ids)])
+                hd_env["mail.message"].search_count([("model", "in", REPLY_MESSAGE_MODELS), ("message_id", "in", ids)])
             )
         signals["reply_headers"] = known
         return signals

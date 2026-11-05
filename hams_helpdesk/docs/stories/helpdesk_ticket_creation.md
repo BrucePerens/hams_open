@@ -82,7 +82,7 @@ against more than 3000 characters of HTML (1); four or more tables or nesting th
 pixel image (1); "unsubscribe" in the body, counted only when there is no `List-Unsubscribe` header because they are one fact (2);
 "view in browser" footer (1); "update your preferences" or "you are receiving this because" footer (1); a health-supplement,
 "secret", "researchers" or "natural" clickbait subject (1, counted once). A reply (a message whose `In-Reply-To` or `References`
-names a Message-ID already stored on a ticket; the headers alone are the sender's claim) is never judged by the weighted rules. Only the authentication results written by Amazon SES itself (the first
+names a Message-ID already stored on a ticket or incident; the headers alone are the sender's claim) is never judged by the weighted rules. Only the authentication results written by Amazon SES itself (the first
 `Authentication-Results` header whose authserv-id is `amazonses.com`) are read; any other copy is the sender's claim.
 
 Special concerns: the first reason of a weighted flag states the total and the threshold, the following lines one signal each, so a
@@ -108,6 +108,14 @@ nearest ancestors); `[]` when the headers are absent or hold no `<...>` token. R
 
 **Status:** Verified by `test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail` (tests/test_inbound_spam_filter.py).
 
+### `REPLY_MESSAGE_MODELS`
+**[@ANCHOR: hams_helpdesk:inbound_reply_message_models]**
+
+A module constant in `models/mail_thread_untrusted.py`: the list `["hams_helpdesk.ticket", "pager.incident"]` of Odoo model names a stored
+`mail.message` may belong to for its Message-ID to count as a real thread (an inbound message becomes a ticket, or a pager incident
+through the pager adapter). Read only, by `_with_verified_reply_headers()` as the `model` term of its lookup; a model that is not
+installed simply matches nothing. Immutable by convention; add a model here when another record type starts receiving inbound mail.
+
 ### `_with_verified_reply_headers`
 **[@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]**
 
@@ -120,7 +128,7 @@ sender writes `In-Reply-To` and `References` (a bulk sender could add any value 
 | `signals` | dict | A `mail_signals()` dict; mutated (the `reply_headers` key is set) and returned. |
 
 Returns the same dict with `reply_headers` True only when one of `signals["referenced_message_ids"]` is the `message_id` of a
-`mail.message` on a `hams_helpdesk.ticket`; False otherwise, including when the list is empty. One `search_count` per message, run as
+`mail.message` on a `hams_helpdesk.ticket` or a `pager.incident` (`REPLY_MESSAGE_MODELS`; the service account sees only the records it can read, so an unreadable thread counts as not found and the message is judged); False otherwise, including when the list is empty. One `search_count` per message, run as
 the helpdesk service account (`hams_helpdesk.user_helpdesk_service`) because the mail-ingest identity cannot read tickets. No other
 side effect; a database error propagates to the mail ingest, which retries the message.
 

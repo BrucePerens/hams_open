@@ -341,6 +341,7 @@ class TestBulkMailSignals(HamsTransactionCase):
     def test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_referenced_message_ids]
         # Tests [@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_reply_message_models]
         # Tests [@ANCHOR: hams_helpdesk:inbound_mail_signals]
         subject = REAL_MISSED_SPAM_NAMES[0]
         forged = "In-Reply-To: <made-up@mailer.example.net>\r\nReferences: <a@x.test> <made-up@mailer.example.net>\r\n"
