@@ -182,8 +182,9 @@ parameter `ham_relay_bridge.api_key`; it is not a registry key and is not rotate
 uses `PAGER_MCP_API_KEY` from its environment, creates a client per tool call, is not registered here and is not deployed.
 `zero_sudo/daemon/json_rpc_client.py` reloads on 401 and has no caller. No Odoo module other than this one reads a key file or holds a
 daemon key in memory (searched: `/opt/hams/etc/keys`, `ODOO_RPC_KEY`, `Bearer`, `/json/2` across `hams_open` and `hams_com`).
-`dx.firehose` has no key by design, but its `_read_qsos()` calls `get_odoo_client()`, which exits for want of `ODOO_KEY_FILE`; that is a
-different bug (it has not met a QSO yet), filed as a to-do in hams_com.
+`dx.firehose` has no key by design. Its `_read_qsos()` used to call `get_odoo_client()`, which exits for want of `ODOO_KEY_FILE` (it had not
+met a QSO yet); fixed 2026-11-05 (hams_com #3109) by reading the QSOs with the PostgreSQL login it already holds (`db_app.env`), so it
+holds no daemon key, needs no registry row and no `ROTATED_KEY_RELOAD_POLICY` row.
 
 **The guard.** `ROTATED_KEY_RELOAD_POLICY` in `hams_shared/tools/infrastructure.py` lists every non-oneshot `MANIFEST` unit and MCP wrapper
 script that names a file under `/opt/hams/etc/keys/`, with its mechanism (`hams_config`, `own_reload`, `per_call`, `unused`) and the source
