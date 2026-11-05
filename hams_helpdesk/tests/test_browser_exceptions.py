@@ -132,7 +132,8 @@ class TestBrowserReportSchema(HamsTransactionCase):
         # through the real entry points
         self.assertEqual(rejected(self, schema.parse_frame, "/ham_base/static/a.js:1:2\n", OWN_HOST).status, 400)
         for key, value in (("type", "TypeError\n"), ("release", f"{BUNDLE}@1a2b3c4\n")):
-            rejected(self, schema.parse_body, encode(good_body(**{key: value})))
+            self.assertEqual(rejected(self, schema.build_report, good_body(**{key: value}), OWN_HOST).status, 400, key)
+        schema.build_report(good_body(), OWN_HOST)  # the clean body is accepted
 
     def test_the_fingerprint_frame_drops_the_bundle_version_and_keeps_line_and_column(self):
         old = schema.parse_frame(f"/web/assets/1a2b3c4/{BUNDLE}.min.js:10:20")
