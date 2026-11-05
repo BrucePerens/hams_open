@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -11,6 +12,7 @@ import tempfile
 import threading
 import time
 import unittest
+import urllib.error
 from unittest.mock import MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -908,3 +910,66 @@ class TestRunReportsFailures(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestJson2CallReloadsARotatedKey(unittest.TestCase):
+    """Ticket 116 (2026-10-28): every daemon key was rotated on 2026-10-27 15:34; this long-running worker kept the key it
+    read at start, got "401 Invalid apikey" on every call for nine days and ran no pgbackrest backup."""
+
+    OLD, NEW = "old-key-value", "new-key-value"
+
+    def setUp(self):
+        self.seen = []
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.env_file = os.path.join(self.tmp.name, "backup_worker.env")
+        for name, value in (("ODOO_PASS", self.OLD), ("ODOO_KEY_ENV_FILE", self.env_file)):
+            patcher = patch.object(backup_worker, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = patch.object(backup_worker.urllib.request, "urlopen", side_effect=self._odoo)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _odoo(self, request, timeout=None):
+        """Odoo's JSON-2 endpoint: the new key is accepted, any other is refused with a 401."""
+        token = request.get_header("Authorization").removeprefix("Bearer ")
+        self.seen.append(token)
+        if token != self.NEW:
+            raise urllib.error.HTTPError(
+                request.full_url, 401, "Unauthorized", {}, io.BytesIO(b'{"message": "Invalid apikey"}')
+            )
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b"[1, 2]"
+        return response
+
+    def _write_key_file(self, text):
+        with open(self.env_file, "w", encoding="utf-8") as handle:
+            handle.write(text)
+
+    # [@ANCHOR: backup_management:test_json2_call_reloads_a_rotated_key]
+    def test_json2_call_reloads_a_rotated_key(self):
+        # Tests [@ANCHOR: backup_management:reload_odoo_key]
+        # Tests [@ANCHOR: backup_management:COMM_json2_call]
+        self._write_key_file(f"OTHER=x\nODOO_RPC_KEY={self.NEW}\n")
+        self.assertEqual(backup_worker._json2_call("backup.job", "get_jobs"), [1, 2])
+        self.assertEqual(self.seen, [self.OLD, self.NEW])  # one refusal, one retry with the rotated key
+        self.assertEqual(backup_worker.ODOO_PASS, self.NEW)
+        self.seen.clear()
+        backup_worker._json2_call("backup.job", "get_jobs")
+        self.assertEqual(self.seen, [self.NEW])  # the next call uses it at once
+
+    def test_a_401_with_an_unchanged_or_unreadable_key_file_is_still_an_error_without_a_retry_loop(self):
+        # Tests [@ANCHOR: backup_management:reload_odoo_key]
+        for content in (f"ODOO_RPC_KEY={self.OLD}\n", "NOTHING=here\n", None):
+            with self.subTest(content=content):
+                self.seen.clear()
+                if content is not None:
+                    self._write_key_file(content)
+                elif os.path.exists(self.env_file):
+                    os.remove(self.env_file)
+                with self.assertRaises(backup_worker.OdooAPIError) as caught:
+                    backup_worker._json2_call("backup.job", "get_jobs")
+                self.assertIn("401", str(caught.exception))
+                self.assertEqual(self.seen, [self.OLD])

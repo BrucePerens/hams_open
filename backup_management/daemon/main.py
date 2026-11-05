@@ -454,38 +454,73 @@ def _redact_payload(payload):
     }
 
 
+# The EnvironmentFile systemd read this daemon's ODOO_RPC_KEY from at start (odoo-owned, 0600; the daemon runs as odoo).
+ODOO_KEY_ENV_FILE = os.environ.get("BACKUP_WORKER_KEY_ENV_FILE", "/opt/hams/etc/keys/backup_worker.env")
+
+
+# [@ANCHOR: backup_management:reload_odoo_key]
+# Verified by [@ANCHOR: backup_management:test_json2_call_reloads_a_rotated_key]
+def _reload_odoo_key():
+    """Re-reads ODOO_RPC_KEY from ODOO_KEY_ENV_FILE into ODOO_PASS; True only when that changed the key.
+    Documented in backup_management/README.md ("The worker's Odoo key")."""
+    global ODOO_PASS
+    try:
+        with open(ODOO_KEY_ENV_FILE, encoding="utf-8") as handle:
+            lines = handle.read().splitlines()
+    except OSError as e:
+        logger.warning("Could not re-read the Odoo key file %s: %s", ODOO_KEY_ENV_FILE, e.strerror or type(e).__name__)
+        return False
+    fresh = ""
+    for line in lines:
+        name, separator, value = line.strip().partition("=")
+        if separator and name.strip() == "ODOO_RPC_KEY":
+            fresh = value.strip().strip("'\"")
+    if not fresh or fresh == ODOO_PASS:
+        return False
+    ODOO_PASS = fresh
+    logger.warning("Odoo refused the API key; the key file holds a different one (rotated), now using it.")
+    return True
+
+
 # [@ANCHOR: backup_management:COMM_json2_call]
 def _json2_call(model, method_name, svc_uid=None, **kwargs):
+    # Verified by [@ANCHOR: backup_management:test_json2_call_reloads_a_rotated_key]
     payload_str = json.dumps(kwargs)
 
-    headers = {
-        "X-Odoo-Database": ODOO_DB,
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {ODOO_PASS}",
-    }
-    if svc_uid:
-        headers["X-Odoo-Service-Uid"] = str(svc_uid)
-    req = urllib.request.Request(
-        f"{ODOO_URL}/json/2/{model}/{method_name}",
-        data=payload_str.encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as response:
-            res_data = json.loads(response.read().decode("utf-8"))
-            if isinstance(res_data, dict) and res_data.get("error"):
-                raise OdooAPIError(f"Odoo Error: {res_data['error']}")
-            return res_data
-    except urllib.error.HTTPError as e:
+    # 2026-10-27 15:34 every daemon key was rotated; this long-running worker kept the old key it read at start and
+    # got "401 Invalid apikey" on every call for nine days, so no pgbackrest backup ran (ticket 116). A 401 now
+    # re-reads the key file once and sends the call again, the way zero_sudo's json_rpc_client does.
+    for attempt in (1, 2):
+        headers = {
+            "X-Odoo-Database": ODOO_DB,
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {ODOO_PASS}",
+        }
+        if svc_uid:
+            headers["X-Odoo-Service-Uid"] = str(svc_uid)
+        req = urllib.request.Request(
+            f"{ODOO_URL}/json/2/{model}/{method_name}",
+            data=payload_str.encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
         try:
-            err_body = e.read().decode("utf-8")
-        except UnicodeDecodeError as exc:
-            logger.exception("Could not decode response body: %s", exc)
-            err_body = "Could not decode response body."
-        raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}") from e
-    except (urllib.error.URLError, json.JSONDecodeError) as e:
-        raise OdooAPIError(f"JSON-2 API Connection/Parse Error: {e}")
+            with urllib.request.urlopen(req, timeout=15) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                if isinstance(res_data, dict) and res_data.get("error"):
+                    raise OdooAPIError(f"Odoo Error: {res_data['error']}")
+                return res_data
+        except urllib.error.HTTPError as e:
+            if e.code == 401 and attempt == 1 and _reload_odoo_key():
+                continue
+            try:
+                err_body = e.read().decode("utf-8")
+            except UnicodeDecodeError as exc:
+                logger.exception("Could not decode response body: %s", exc)
+                err_body = "Could not decode response body."
+            raise OdooAPIError(f"JSON-2 API HTTP Error {e.code}: {err_body}") from e
+        except (urllib.error.URLError, json.JSONDecodeError) as e:
+            raise OdooAPIError(f"JSON-2 API Connection/Parse Error: {e}")
 
 
 # [@ANCHOR: backup_management:COMM_test_backup_worker_real]
