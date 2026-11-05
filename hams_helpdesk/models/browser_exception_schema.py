@@ -46,7 +46,8 @@ IGNORED_TYPES = frozenset(
 )
 IGNORED_MESSAGE_RE = re.compile(
     r"(?i)(ResizeObserver loop|^script error\.?$|failed to fetch|load failed|networkerror when attempting|"
-    r"the operation was aborted|the user aborted a request|network request failed|fetch is aborted)"
+    r"the operation was aborted|the user aborted a request|network request failed|fetch is aborted|"
+    r"couldn't be established or was interrupted|the database connection is closing|on 'IDBDatabase')"
 )
 
 FRAME_RE = re.compile(r"^(?P<url>.+):(?P<line>\d{1,7}):(?P<col>\d{1,7})\Z")

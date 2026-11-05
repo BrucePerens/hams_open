@@ -18,6 +18,7 @@ import {
     sendReport,
     stripQuery,
     stripUrlQueries,
+    unwrapOwlError,
 } from "@hams_helpdesk/js/browser_error_reporter";
 
 const ORIGIN = "https://hams.example";
@@ -101,6 +102,59 @@ describe("hams_helpdesk browser error reporter", () => {
         expect(isIgnorable("Error", "ResizeObserver loop completed with undelivered notifications.")).toBe(true);
         expect(isIgnorable("Error", "x", { exceptionName: "odoo.exceptions.UserError" })).toBe(true);
         expect(isIgnorable("TypeError", "Cannot read properties of null")).toBe(false);
+    });
+
+    test("isIgnorable skips a connection that Odoo's own class names Error, IndexedDB refusals and old-browser selectors", () => {
+        // Tests [@ANCHOR: hams_helpdesk:js_is_ignorable]
+        // Tickets 105 and 127 (Safari): Odoo's ConnectionLostError never sets its own name, so its type is "Error".
+        class ConnectionLostError extends Error {}
+        expect(isIgnorable("Error", "x", new ConnectionLostError("x"))).toBe(true);
+        expect(isIgnorable("Error", 'Connection to "/web/dataset/call_kw" couldn\'t be established or was interrupted')).toBe(true);
+        // Ticket 121: IDBDatabase.transaction() on a connection the browser is closing.
+        expect(
+            isIgnorable("InvalidStateError", "Failed to execute 'transaction' on 'IDBDatabase': The database connection is closing.")
+        ).toBe(true);
+        // Tickets 125 and 126: a browser without :has() cannot parse the selector; only there is that noise.
+        const selector = "Failed to execute 'closest' on 'Element': 'form:has(input)' is not a valid selector.";
+        expect(isIgnorable("SyntaxError", selector, null, false)).toBe(true);
+        expect(isIgnorable("SyntaxError", selector, null, true)).toBe(false);
+        expect(isIgnorable("SyntaxError", selector)).toBe(false);
+    });
+
+    test("an Owl lifecycle wrapper is reported as the error it wraps", () => {
+        // Tests [@ANCHOR: hams_helpdesk:js_unwrap_owl_error]
+        // Ticket 95: the report held only Owl's own frames; the real error is the wrapper's `cause`.
+        const real = errorWith("TypeError", "Cannot read properties of null (reading 'x')", CHROME_STACK);
+        const wrapper = errorWith("OwlError", "An error occured in the owl lifecycle", `OwlError\n    at ${BUNDLE}:493:1`);
+        wrapper.cause = real;
+        expect(unwrapOwlError(wrapper)).toBe(real);
+        expect(unwrapOwlError(real)).toBe(real);
+        const report = buildReport(wrapper, null, ENV);
+        expect(report.type).toBe("TypeError");
+        expect(report.frames[0]).toBe(`${BUNDLE}:10:20`);
+        // a wrapper without a cause, and a non-Owl error that has a cause, are left alone
+        const bare = errorWith("OwlError", "x", `OwlError\n    at ${BUNDLE}:493:1`);
+        expect(unwrapOwlError(bare)).toBe(bare);
+        const other = errorWith("Error", "x", CHROME_STACK);
+        other.cause = real;
+        expect(unwrapOwlError(other)).toBe(other);
+        // a wrapper whose cause is a dropped connection is not reported at all
+        const lost = errorWith("ConnectionLostError", "x", CHROME_STACK);
+        const wrapped = errorWith("OwlError", "x", CHROME_STACK);
+        wrapped.cause = lost;
+        expect(buildReport(wrapped, null, ENV)).toBe(null);
+    });
+
+    test("pageEnv says whether the browser knows :has()", () => {
+        // Tests [@ANCHOR: hams_helpdesk:js_page_env]
+        const win = {
+            location: { origin: ORIGIN, pathname: "/" },
+            navigator: { userAgent: "x" },
+            document: { querySelectorAll: () => [] },
+        };
+        expect(pageEnv(win).supportsHas).toBe(false);
+        expect(pageEnv({ ...win, CSS: { supports: (q) => q === "selector(:has(*))" } }).supportsHas).toBe(true);
+        expect(pageEnv({ ...win, CSS: { supports: () => false } }).supportsHas).toBe(false);
     });
 
     test("stripUrlQueries cuts the query out of a URL quoted in a message", () => {

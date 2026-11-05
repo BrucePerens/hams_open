@@ -158,6 +158,10 @@ class TestBrowserReportSchema(HamsTransactionCase):
         self.assertTrue(schema.is_ignorable("RPC_ERROR", "x"))
         self.assertTrue(schema.is_ignorable("Error", "ResizeObserver loop completed with undelivered notifications."))
         self.assertTrue(schema.is_ignorable("TypeError", "Failed to fetch"))
+        # Tickets 105, 127 (Odoo's ConnectionLostError has the type "Error") and 121 (IndexedDB closing)
+        self.assertTrue(schema.is_ignorable("Error", 'Connection to "/x" couldn\'t be established or was interrupted'))
+        self.assertTrue(schema.is_ignorable(
+            "InvalidStateError", "Failed to execute 'transaction' on 'IDBDatabase': The database connection is closing."))
         self.assertFalse(schema.is_ignorable("TypeError", "Cannot read properties of null"))
         self.assertEqual(rejected(self, schema.build_report, good_body(type="RPC_ERROR"), OWN_HOST).status, 204)
 
