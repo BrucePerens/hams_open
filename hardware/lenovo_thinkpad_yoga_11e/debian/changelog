@@ -1,0 +1,14 @@
+lenovo-thinkpad-yoga-11e (1.0.0) unstable; urgency=medium
+
+  * Initial release for the first-generation Lenovo ThinkPad Yoga 11e (20D9CTO1WW, BIOS N15ET21W 1.07, Celeron
+    N2930 Bay Trail, Intel Wireless 7260, Atmel ATML1000 touchscreen, ITE8386 sensor hub) used as a demo laptop.
+    No kernel parameter or module option was needed: every device present works with stock Debian 13 (kernel
+    6.12), firmware-iwlwifi and iio-sensor-proxy.
+  * Depends on convertible-helper (screen upright when leaving tablet mode, on-screen keyboard at the login screen)
+    and convertible-power (no inactivity suspend on AC, also at the login screen).
+  * Stay-awake settings: screen off after 5 minutes; on AC the lid switch is ignored and there is no inactivity
+    suspend; Wi-Fi power saving off and unlimited reconnect attempts in NetworkManager.
+  * TLP settings on top of convertible-power: governors, Wi-Fi power saving off on battery, webcam and Bluetooth
+    kept out of USB autosuspend.  No charge thresholds (the model has none).
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 05 Nov 2026 16:30:00 -0800

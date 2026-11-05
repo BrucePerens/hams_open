@@ -1,3 +1,11 @@
+lenovo-thinkpad-t430 (1.0.1) unstable; urgency=medium
+
+  * NetworkManager: unlimited reconnect attempts now set with autoconnect-retries-default=0 in [main].  1.0.0 put
+    connection.autoconnect-retries=0 in [connection], which NetworkManager 1.52 ignores as an unknown key.
+  * README: BIOS flashed to G1ETC2WW (2.82).
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 05 Nov 2026 16:45:00 -0800
+
 lenovo-thinkpad-t430 (1.0.0) unstable; urgency=medium
 
   * Initial release for the Lenovo ThinkPad T430 (23426QU, BIOS G1ET98WW 2.58, Core i5-3230M, Intel Centrino

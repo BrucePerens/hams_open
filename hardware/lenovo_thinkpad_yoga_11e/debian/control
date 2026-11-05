@@ -1,0 +1,23 @@
+Source: lenovo-thinkpad-yoga-11e
+Section: kernel
+Priority: optional
+Maintainer: Bruce Perens <bruce@perens.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/BrucePerens/hams_open/tree/main/hardware/lenovo_thinkpad_yoga_11e
+
+Package: lenovo-thinkpad-yoga-11e-support
+Architecture: all
+Depends: convertible-power (>= 1.0.3), convertible-helper (>= 1.4.0), iio-sensor-proxy, udev, network-manager, ${misc:Depends}
+Recommends: thermald, smartmontools, firmware-iwlwifi
+Description: Lenovo ThinkPad Yoga 11e demo-laptop support for Debian
+ Settings for the first-generation Lenovo ThinkPad Yoga 11e convertible on a
+ stock Debian GNOME desktop: it pulls in convertible-power (maximum
+ performance on AC, maximum battery life on battery, no inactivity suspend at
+ the login screen on AC) and convertible-helper (screen upright when leaving
+ tablet mode, on-screen keyboard at the login screen), and adds this laptop's
+ settings: lid ignored and no inactivity suspend on AC, screen off after 5
+ minutes, Wi-Fi power saving off.
+ .
+ The settings are applied only when the DMI product version is "ThinkPad Yoga 11e".

@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -e
+case "$1" in
+    remove|purge)
+        rm -f /etc/tlp.d/20-lenovo-thinkpad-yoga-11e.conf /etc/systemd/logind.conf.d/50-lenovo-thinkpad-yoga-11e.conf \
+            /etc/dconf/db/local.d/50-lenovo-thinkpad-yoga-11e /etc/NetworkManager/conf.d/50-lenovo-thinkpad-yoga-11e.conf
+        if command -v dconf >/dev/null 2>&1; then
+            dconf update >/dev/null 2>&1 || true
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl reload NetworkManager >/dev/null 2>&1 || true
+        fi
+        if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
+            tlp start >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+#DEBHELPER#
