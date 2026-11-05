@@ -65,6 +65,7 @@ class TestFormShield(HamsTransactionCase):
             ("wrong counter", token + "~" + str(int(counter) + 1), (S, "bad_solution")),
             ("not a number", token + "~abc", (S, "bad_solution")),
             ("forged signature", token[:-1] + ("0" if token[-1] != "0" else "1") + "~" + counter, (S, "bad_signature")),
+            ("non-ASCII signature", token[:-1] + "\u00e9~" + counter, (S, "bad_signature")),
             ("expired", shield_response(self.env, "contact", GUEST, age=ttl + 5), (R, "expired")),
             ("another network", shield_response(self.env, "contact", "198.51.100.7"), (R, "ip_changed")),
             ("too fast", shield_response(self.env, "contact", GUEST, age=0), (R, "too_fast")),

@@ -57,6 +57,15 @@ class TestWsgiProxyScheme(HamsTransactionCase):
         self.assertEqual(result["HTTP_X_FORWARDED_PROTO"], "https")
 
     # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
+    def test_01b_ipv4_mapped_loopback_peer_is_the_tunnel(self):
+        environ = {
+            "REMOTE_ADDR": "::ffff:127.0.0.1",
+            "HTTP_CF_VISITOR": '{"scheme":"https"}',
+            "wsgi.url_scheme": "http",
+        }
+        self.assertEqual(self._call(environ)["wsgi.url_scheme"], "https")
+
+    # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
     def test_02_non_loopback_peer_forged_cf_visitor_is_ignored(self):
         """Bug-hunt-shaped case, matching cloudflare/models/edge_context.py's own
         loopback trust check: a direct, non-tunneled connection could send any

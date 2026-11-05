@@ -72,6 +72,10 @@ def ip_prefix(address):
         parsed = ipaddress.ip_address((address or "").strip())
     except ValueError:
         return "none"
+    if parsed.version == 6 and parsed.ipv4_mapped is not None:
+        # "::ffff:a.b.c.d" is the IPv4 address a.b.c.d seen through a dual-stack socket; as an IPv6
+        # address every one of them would share the one /48 "::/48".
+        parsed = parsed.ipv4_mapped
     if parsed.version == 4:
         return str(ipaddress.ip_network(f"{parsed}/24", strict=False))
     return str(ipaddress.ip_network(f"{parsed}/48", strict=False))
@@ -136,7 +140,9 @@ def parse_challenge(key, token):
         return None, BAD_FORMAT
     body = ".".join(parts[:7])
     expected = _mac(key, body)[:SIGNATURE_CHARS]
-    if not hmac.compare_digest(expected, parts[7]):
+    # Bytes, not str: compare_digest raises TypeError for a str with a non-ASCII character, and the
+    # signature field is the visitor's own text.
+    if not hmac.compare_digest(expected.encode(), parts[7].encode("utf-8", "replace")):
         return None, BAD_SIGNATURE
     try:
         issued = int(parts[2])

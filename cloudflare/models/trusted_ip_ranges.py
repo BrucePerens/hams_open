@@ -56,6 +56,7 @@ import requests
 
 from odoo import models, fields, api
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
+from odoo.addons.zero_sudo.peer_address import parse_peer_address
 
 _logger = logging.getLogger(__name__)
 
@@ -165,12 +166,11 @@ class CloudflareTrustedIpUtils(models.AbstractModel):
         by callers that already have an `env` (e.g. edge_context.py); the env-less WSGI entry
         hook (wsgi_proxy_scheme.py) has its own equivalent that reads the same data from Redis
         instead, since it runs before any `env` exists for the request."""
-        if remote_addr in ("127.0.0.1", "::1"):  # burn-ignore-tunnel-peer-check
-            return True
-        try:
-            peer = ipaddress.ip_address(remote_addr)
-        except ValueError:
+        peer = parse_peer_address(remote_addr)
+        if peer is None:
             return False
+        if peer.is_loopback:
+            return True
         for cidr in self._get_effective_trusted_ip_ranges():
             if peer in ipaddress.ip_network(cidr):
                 return True

@@ -1157,6 +1157,32 @@ class TestSecurityUtils(HamsTransactionCase):
             "X-Forwarded-For chain must be used.",
         )
 
+    def test_28b2_get_trusted_client_ip_trusts_cf_header_from_ipv4_mapped_loopback(self):
+        # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
+        # Tests [@ANCHOR: zero_sudo:is_loopback_peer]
+        # Tests [@ANCHOR: zero_sudo:parse_peer_address]
+        """A dual-stack listener reports the tunnel's loopback peer as ::ffff:127.0.0.1."""
+        utils = self.env["zero_sudo.security.utils"]
+        mock_obj = self._mock_request_obj(
+            "::ffff:127.0.0.1", {"CF-Connecting-IP": "8.8.4.4"}  # burn-ignore-ssrf-test-value
+        )
+        self.assertEqual(utils._get_trusted_client_ip(mock_obj), "8.8.4.4")
+        mock_obj = self._mock_request_obj("::ffff:203.0.113.5", {"CF-Connecting-IP": "1.2.3.4"})
+        self.assertEqual(utils._get_trusted_client_ip(mock_obj), "::ffff:203.0.113.5")
+
+    def test_28b3_peer_address_helpers(self):
+        # Tests [@ANCHOR: zero_sudo:is_loopback_peer]
+        # Tests [@ANCHOR: zero_sudo:parse_peer_address]
+        from odoo.addons.zero_sudo.peer_address import is_loopback_peer, parse_peer_address
+
+        for address in ("127.0.0.1", "::1", "::ffff:127.0.0.1", " ::FFFF:127.0.0.1 "):
+            self.assertTrue(is_loopback_peer(address), address)
+        for address in ("203.0.113.5", "::ffff:203.0.113.5", "2001:db8::1", "", None, "localhost", "::ffff:"):
+            self.assertFalse(is_loopback_peer(address), address)
+        self.assertEqual(str(parse_peer_address("::ffff:203.0.113.5")), "203.0.113.5")
+        self.assertEqual(str(parse_peer_address("2001:db8::1")), "2001:db8::1")
+        self.assertIsNone(parse_peer_address("not an address"))
+
     def test_28c_get_trusted_client_ip_ignores_forged_headers_from_a_non_loopback_peer(self):
         # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
         """Bug-hunt fix, 2026-09-11: a request whose real transport peer is

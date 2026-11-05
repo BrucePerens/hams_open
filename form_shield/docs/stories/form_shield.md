@@ -16,7 +16,7 @@ The functions behind those steps each carry their own anchor. The proof-of-work 
 
 ## Scenario: The server decides
 
-The challenge must be signed, unexpired, issued to the same /24 or /48 network, at least three seconds old, solved for this very form and
+The challenge must be signed, unexpired, issued to the same /24 (IPv4, including an IPv4-mapped IPv6 address) or /48 (IPv6) network, at least three seconds old, solved for this very form and
 never used before; then the per-network, per-page and per-form limits are counted [@ANCHOR: form_shield:check] [@ANCHOR: form_shield:parse_challenge]
 [@ANCHOR: form_shield:pow_valid] [@ANCHOR: form_shield:ip_tag]. A filled honeypot or a bad solution is answered like a success and stores nothing;
 an expired challenge, a changed network or a wrong answer tells the visitor to try again; a rate limit answers 429; Redis being down answers 503.

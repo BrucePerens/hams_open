@@ -65,11 +65,11 @@ import time
 
 import odoo.http
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
+from odoo.addons.zero_sudo.peer_address import parse_peer_address
 from .models.trusted_ip_ranges import REDIS_KEY
 
 _logger = logging.getLogger(__name__)
 
-_TRUSTED_LOOPBACK_ADDRS = ("127.0.0.1", "::1")  # burn-ignore-tunnel-peer-check
 
 # [@ANCHOR: cloudflare:strip_client_forwarded_host]
 # WSGI environ keys Cloudflare's edge always adds to a request it forwards. Their presence means the
@@ -119,12 +119,11 @@ def _get_cached_trusted_networks():
 
 def _is_trusted_cf_peer(remote_addr):
     # [@ANCHOR: cloudflare:is_trusted_cf_peer]
-    if remote_addr in _TRUSTED_LOOPBACK_ADDRS:
-        return True
-    try:
-        peer = ipaddress.ip_address(remote_addr)
-    except ValueError:
+    peer = parse_peer_address(remote_addr)
+    if peer is None:
         return False
+    if peer.is_loopback:
+        return True
     return any(peer in network for network in _get_cached_trusted_networks())
 
 
