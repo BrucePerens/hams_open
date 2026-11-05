@@ -225,6 +225,11 @@ class TestSiteSlugOneSite(HamsHttpCase):
             )
             self.env.flush_all()
 
+    def test_09b_a_redirect_target_with_a_trailing_newline_is_not_a_slug_path(self):
+        # `$` also matches before a final newline; the single-segment path pattern now ends with \Z.
+        self.assertTrue(site_slug._SLUG_PATH_RE.match("/k6zz"))
+        self.assertIsNone(site_slug._SLUG_PATH_RE.match("/k6zz\n"))
+
     def test_10_a_service_account_is_recognised_and_never_given_a_callsign_slug(self):
         # Tests [@ANCHOR: user_websites:fn_site_slug_is_service_account]
         # Tests [@ANCHOR: user_websites:COMM_res_users_slug_policy]

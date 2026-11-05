@@ -115,6 +115,26 @@ class TestBrowserReportSchema(HamsTransactionCase):
         ):
             self.assertEqual(rejected(self, schema.parse_frame, text, OWN_HOST).status, 400, text)
 
+    def test_a_trailing_newline_is_refused_by_every_pattern(self):
+        # `$` also matches before a final newline; the patterns now end with \Z.
+        # (A frame's `.+` cannot match a newline, so the newline lands at the end of a pattern-checked piece.)
+        self.assertIsNone(schema.ASSET_PATH_RE.match(f"/web/assets/1a2b3c4/{BUNDLE}.min.js\n"))
+        self.assertIsNone(schema.STATIC_PATH_RE.match("/ham_base/static/src/js/a.js\n"))
+        self.assertIsNone(schema.FRAME_RE.match("/ham_base/static/a.js:1:2\n"))
+        self.assertIsNone(schema.TYPE_RE.match("TypeError\n"))
+        self.assertIsNone(schema.RELEASE_RE.match(f"{BUNDLE}@1a2b3c4\n"))
+        # and the same patterns still accept the clean forms
+        self.assertTrue(schema.ASSET_PATH_RE.match(f"/web/assets/1a2b3c4/{BUNDLE}.min.js"))
+        self.assertTrue(schema.STATIC_PATH_RE.match("/ham_base/static/src/js/a.js"))
+        self.assertTrue(schema.FRAME_RE.match("/ham_base/static/a.js:1:2"))
+        self.assertTrue(schema.TYPE_RE.match("TypeError"))
+        self.assertTrue(schema.RELEASE_RE.match(f"{BUNDLE}@1a2b3c4"))
+        # through the real entry points
+        self.assertEqual(rejected(self, schema.parse_frame, "/ham_base/static/a.js:1:2\n", OWN_HOST).status, 400)
+        for key, value in (("type", "TypeError\n"), ("release", f"{BUNDLE}@1a2b3c4\n")):
+            self.assertEqual(rejected(self, schema.build_report, good_body(**{key: value}), OWN_HOST).status, 400, key)
+        schema.build_report(good_body(), OWN_HOST)  # the clean body is accepted
+
     def test_the_fingerprint_frame_drops_the_bundle_version_and_keeps_line_and_column(self):
         old = schema.parse_frame(f"/web/assets/1a2b3c4/{BUNDLE}.min.js:10:20")
         new = schema.parse_frame(f"/web/assets/9f8e7d6/{BUNDLE}.min.js:10:20")

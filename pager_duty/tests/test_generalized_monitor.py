@@ -933,6 +933,11 @@ class TestMonitorExhaustive(HamsTransactionCase):
             generalized_monitor.log_tail_thread(mock_client, check)
         self.assertIn("Log Tail Test Check", generalized_monitor.THREAD_TIMEOUTS)
 
+    def test_22b_extract_severity_prefix_ends_at_the_end_of_the_text(self):
+        # Tests [@ANCHOR: pager_duty:extract_severity_prefix]
+        # The pattern now ends with \Z (DOTALL, so the message keeps any trailing newline as before).
+        self.assertEqual(generalized_monitor.extract_severity_prefix("[SEVERITY:low] disk\n"), ("low", "disk\n"))
+
     def test_22_extract_severity_prefix(self):
         # Tests [@ANCHOR: pager_duty:extract_severity_prefix]
         """The standalone parser both polling_thread() call sites use to pull a synthetic

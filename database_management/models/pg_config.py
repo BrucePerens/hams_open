@@ -242,7 +242,7 @@ class PgHaWizard(models.TransientModel):
                 )
             )
 
-        alnum_pattern = re.compile(r"^[a-zA-Z0-9_]+$")
+        alnum_pattern = re.compile(r"^[a-zA-Z0-9_]+\Z")
         if not self.cluster_name or not alnum_pattern.match(self.cluster_name):
             raise UserError(_("Invalid cluster name. Must be alphanumeric."))
         if not self.superuser_user or not alnum_pattern.match(self.superuser_user):
@@ -259,7 +259,7 @@ class PgHaWizard(models.TransientModel):
         # text) so no character that could alter the YAML structure reaches
         # the template.
         etcd_host_pattern = re.compile(
-            r"^[a-zA-Z0-9_.-]+:[0-9]+(,[a-zA-Z0-9_.-]+:[0-9]+)*$"
+            r"^[a-zA-Z0-9_.-]+:[0-9]+(,[a-zA-Z0-9_.-]+:[0-9]+)*\Z"
         )
         if not self.etcd_hosts or not etcd_host_pattern.match(self.etcd_hosts):
             raise UserError(

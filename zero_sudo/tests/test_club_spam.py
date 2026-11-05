@@ -211,6 +211,13 @@ def _sitemap(name, xml):
 class TestScoring(BaseCase):
     """The lexicon: what is flagged, and what an amateur radio club legitimately writes is not."""
 
+    def test_00_a_trailing_newline_is_not_a_year_stamp_or_a_counter(self):
+        # `$` also matches before a final newline; both token patterns now end with \Z.
+        self.assertTrue(spam._YEAR_STAMP.match("2026"))
+        self.assertIsNone(spam._YEAR_STAMP.match("2026\n"))
+        self.assertTrue(spam._COUNTER_SUFFIX.match("12"))
+        self.assertIsNone(spam._COUNTER_SUFFIX.match("12\n"))
+
     def test_01_the_spam_a_hacked_club_site_publishes_is_flagged(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_score_text]
         # Tests [@ANCHOR: zero_sudo:club_spam_fold]

@@ -220,7 +220,7 @@ class BackupConfig(models.Model):
                 # pgBackRest target_path is a stanza name, not a direct path.
                 # Strictly allow only alphanumeric and underscores for stanza names.
                 if not rec.target_path or not re.match(
-                    r"^[a-zA-Z0-9_]+$", rec.target_path
+                    r"^[a-zA-Z0-9_]+\Z", rec.target_path
                 ):
                     raise ValidationError(
                         _(

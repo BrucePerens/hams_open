@@ -131,6 +131,7 @@ class TestBackupSecurity(RealTransactionCase):
             "main`id`",
             "main$(whoami)",
             "main|ls",
+            "main_stanza\n",  # `$` accepted one trailing newline; the name now ends with \Z
         ]
         for stanza in malicious_stanza_names:
             with self.subTest(stanza=stanza):

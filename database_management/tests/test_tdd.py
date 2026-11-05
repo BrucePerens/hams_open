@@ -140,6 +140,33 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
         with self.assertRaisesRegex(UserError, msg):
             wizard.action_generate()
 
+    def test_tdd_pg_config_names_and_etcd_hosts_refuse_a_trailing_newline(self):
+        # Tests [@ANCHOR: COMM_pg_ha_wizard_validate_inputs]
+        # `$` also matches before a final newline, so a value that was one line plus "\n" passed the
+        # pattern; the patterns now end with \Z.
+        admin = self.env.ref("base.user_admin")
+        good = {
+            "primary_ip": "10.0.0.1",
+            "secondary_ip": "10.0.0.2",
+            "cluster_name": "hams_cluster",
+            "superuser_user": "postgres",
+            "replication_user": "replicator",
+            "replication_pass": "SecureRepPass123!",
+            "etcd_hosts": "10.0.0.1:2379",
+        }
+        self.safe_patch("odoo.addons.database_management.models.pg_config.PgHaWizard._get_executable", return_value="/bin/mock")
+        for field, message in (
+            ("cluster_name", "Invalid cluster name"),
+            ("superuser_user", "Invalid superuser name"),
+            ("replication_user", "Invalid replication user name"),
+            ("etcd_hosts", "Invalid Etcd Hosts format"),
+        ):
+            with self.subTest(field=field):
+                values = dict(good, **{field: good[field] + "\n"})
+                wizard = self.env["pg.ha.wizard"].with_user(admin).create(values)
+                with self.assertRaisesRegex(UserError, message):
+                    wizard.action_generate()
+
     def test_tdd_pg_config_etcd_hosts_valid_multi_host(self):
         # The legitimate documented format (comma-separated host:port pairs)
         # must still be accepted after tightening etcd_hosts validation.

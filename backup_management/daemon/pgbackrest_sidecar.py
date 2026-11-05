@@ -40,10 +40,10 @@ SPOOL_DIR = os.environ.get("PGBACKREST_SPOOL_DIR", "/opt/hams/backup_requests")
 RUN_AS_USER = os.environ.get("PGBACKREST_SIDECAR_RUN_AS", "postgres")
 PGBACKREST_BIN = os.environ.get("PGBACKREST_BIN", "pgbackrest")
 
-_STANZA_RE = re.compile(r"^[a-zA-Z0-9_]+$")
-_GENERIC_VALUE_RE = re.compile(r"^[a-zA-Z0-9_.:/-]+$")
-_REPO_OPTION_RE = re.compile(r"^--repo=[0-9]{1,3}$")
-_REPO_RETENTION_RE = re.compile(r"^--repo[0-9]{1,3}-retention-full=[0-9]{1,5}$")
+_STANZA_RE = re.compile(r"^[a-zA-Z0-9_]+\Z")
+_GENERIC_VALUE_RE = re.compile(r"^[a-zA-Z0-9_.:/-]+\Z")
+_REPO_OPTION_RE = re.compile(r"^--repo=[0-9]{1,3}\Z")
+_REPO_RETENTION_RE = re.compile(r"^--repo[0-9]{1,3}-retention-full=[0-9]{1,5}\Z")
 # Operations delegated here. "info" is read-only but must read
 # /etc/pgbackrest/pgbackrest.conf, which holds the repository cipher
 # passphrase and storage keys and is therefore readable only by root and

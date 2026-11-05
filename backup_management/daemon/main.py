@@ -69,7 +69,7 @@ RMQ_PASS = os.environ.get("RMQ_PASS")  # Tested by [@ANCHOR: backup_management:C
 PGBACKREST_SPOOL_DIR = os.environ.get("PGBACKREST_SPOOL_DIR", "/opt/hams/backup_requests")
 PGBACKREST_SIDECAR_TIMEOUT = int(os.environ.get("PGBACKREST_SIDECAR_TIMEOUT", "3600"))
 PGBACKREST_SIDECAR_POLL_INTERVAL = float(os.environ.get("PGBACKREST_SIDECAR_POLL_INTERVAL", "2"))
-_STANZA_RE = re.compile(r"^[a-zA-Z0-9_]+$")
+_STANZA_RE = re.compile(r"^[a-zA-Z0-9_]+\Z")
 
 
 # [@ANCHOR: backup_management:COMM_require_rabbitmq_credentials]
@@ -660,9 +660,9 @@ def execute_job(ch, method, properties, body):
                     if not arg.startswith("--") or "=" not in arg:
                         raise PermissionError(f"Invalid argument format in worker: {arg}")
                     key, val = arg.split("=", 1)
-                    if key == "--stanza" and not re.match(r"^[a-zA-Z0-9_]+$", val):
+                    if key == "--stanza" and not re.match(r"^[a-zA-Z0-9_]+\Z", val):
                         raise PermissionError(f"Invalid stanza name in worker: {val}")
-                    elif not re.match(r"^[a-zA-Z0-9_.:-]+$", val):
+                    elif not re.match(r"^[a-zA-Z0-9_.:-]+\Z", val):
                         err_msg = f"""Malicious argument detected in worker: {arg}"""
                         raise PermissionError(err_msg)
 

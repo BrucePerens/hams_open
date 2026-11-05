@@ -420,6 +420,27 @@ class TestORMSecurity(RealTransactionCase):
             )
             self.assertEqual(live_attrs.get("data-blocked-t-esc"), payload)
 
+    def test_08b_t_name_with_a_trailing_newline_is_not_kept(self):
+        # Tests [@ANCHOR: user_websites:page_arch_qweb_allowlist]
+        # `$` also matches before a final newline, so a t-name of "user_websites.x\n" used to pass the name
+        # pattern; it now ends with \Z and the attribute is moved to the inert data-blocked-t-name.
+        for i, (name_value, kept) in enumerate((("user_websites.nl_ok", True), ("user_websites.nl_bad&#10;", False))):
+            page = (
+                self.env["website.page"]
+                .with_user(self.user_a)
+                .create(
+                    {
+                        "url": f"/{self.user_a.website_slug}/tname-newline-{i}",
+                        "name": f"T-name newline {i}",
+                        "type": "qweb",
+                        "owner_user_id": self.user_a.id,
+                        "arch": f'<t name="TN{i}"><div t-name="{name_value}">x</div></t>',
+                    }
+                )
+            )
+            attrs = etree.fromstring(f"<root>{page.arch}</root>").find(".//div").attrib
+            self.assertEqual("t-name" in attrs, kept, (name_value, dict(attrs)))
+
     def test_09_qweb_arch_sanitization_blocks_javascript_uri_via_t_att_href(self):
         # Adversarial security review, 2026-09-03: t-att-href/t-att-src are
         # were once allowed (see git history), and the scheme

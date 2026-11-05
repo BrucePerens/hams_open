@@ -54,7 +54,7 @@ UPGRADE_UNIT = "odoo-upgrade"
 ODOO_BIN = "/usr/bin/odoo"
 ODOO_CONF = "/etc/odoo/odoo.conf"
 AUTH_FAILURE = re.compile(r".*(Authentication required|invalid username-password|NOAUTH)", re.I)
-MODULE_NAME = re.compile(r"^[a-z0-9_]+$")
+MODULE_NAME = re.compile(r"^[a-z0-9_]+\Z")
 REDIS_SECRET_KEY = "REDIS_PASSWORD"
 # The stylesheet check: a second transient unit (own name, so `systemctl is-active odoo-upgrade` stays about the upgrade) that
 # runs `odoo shell` with check_asset_bundles_shell.py on stdin.
@@ -76,7 +76,7 @@ def parse_service(show_output):
     for line in show_output.splitlines():
         key, _, value = line.partition("=")
         if key == "EnvironmentFiles":
-            match = re.match(r"^(\S+) \(ignore_errors=(yes|no)\)$", value.strip())
+            match = re.match(r"^(\S+) \(ignore_errors=(yes|no)\)\Z", value.strip())
             if match:
                 files.append((match.group(1), match.group(2) == "yes"))
         elif key == "Environment":
@@ -164,7 +164,7 @@ def run(argv, show=None, read_text=None, execute=None, is_active=None, out=None,
     bad = [m for m in modules if not MODULE_NAME.match(m)]
     if not modules or bad:
         raise UpgradeError(f"invalid --modules {args.modules!r}")
-    if not re.match(r"^[A-Za-z0-9_]+$", args.db):
+    if not re.match(r"^[A-Za-z0-9_]+\Z", args.db):
         raise UpgradeError(f"invalid --db {args.db!r}")
     show = show or (lambda: subprocess.run(
         ["systemctl", "show", SERVICE, "-p", "EnvironmentFiles", "-p", "Environment", "-p", "User", "-p", "Group"],

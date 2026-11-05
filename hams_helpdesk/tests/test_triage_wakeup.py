@@ -43,6 +43,11 @@ class TestTriageWakeup(HamsTransactionCase):
         self.addCleanup(patcher.stop)
         self.Ticket = self.env["hams_helpdesk.ticket"]
 
+    def test_a_spool_name_with_a_trailing_newline_is_not_a_wakeup_file(self):
+        # `$` also matches before a final newline; the name pattern now ends with \Z.
+        self.assertTrue(triage_wakeup._WAKEUP_NAME_RE.match("ticket-5.json"))
+        self.assertIsNone(triage_wakeup._WAKEUP_NAME_RE.match("ticket-5.json\n"))
+
     def _files(self):
         return sorted(os.listdir(self.spool))
 

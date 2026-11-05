@@ -31,7 +31,7 @@ SLUG_POLICY_PARAM = "user_websites.slug_policy"
 POLICY_NAME_CALLSIGN = "name_callsign"
 POLICY_CALLSIGN = "callsign"
 SVC = "user_websites.user_websites_service_account"
-_SLUG_PATH_RE = re.compile(r"^/[a-z0-9\-]+$")
+_SLUG_PATH_RE = re.compile(r"^/[a-z0-9\-]+\Z")
 
 
 def _like_escape(text):

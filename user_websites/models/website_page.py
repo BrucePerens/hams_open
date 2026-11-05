@@ -319,7 +319,7 @@ class WebsitePage(models.Model):
                     "user_websites.report_violation_modal",
                 }
             )
-            T_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,128}$")
+            T_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]{1,128}\Z")
 
             for elem in root.xpath("//*"):
                 # An svg block was rebuilt from the allowlist above (that rebuild sets a

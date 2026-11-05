@@ -47,8 +47,8 @@ if __package__:  # imported as odoo.addons.zero_sudo.daemon.repeater_page_text
 else:  # the flat copy in a daemon's directory, a top-level module beside glyph_normalizer.py
     import glyph_normalizer
 
-_BASE_CALLSIGN = re.compile(r"^[A-Z0-9]{1,3}[0-9][A-Z]{1,4}$")
-_DESIGNATOR = re.compile(r"^(?P<base>[A-Z0-9]{1,3}[0-9][A-Z]{1,4})(?P<suffix>[/-](?:R|RPT|REP)|\s+(?:RPT|REP))$")
+_BASE_CALLSIGN = re.compile(r"^[A-Z0-9]{1,3}[0-9][A-Z]{1,4}\Z")
+_DESIGNATOR = re.compile(r"^(?P<base>[A-Z0-9]{1,3}[0-9][A-Z]{1,4})(?P<suffix>[/-](?:R|RPT|REP)|\s+(?:RPT|REP))\Z")
 _CALL = r"[A-Za-z0-9]{1,3}[0-9][A-Za-z]{1,4}"
 _CALLSIGN_TOKEN = re.compile(rf"(?<![A-Za-z0-9/.-])({_CALL})(?:[/-](?:R|RPT|REP)\b)?(?![A-Za-z0-9])")
 _OPERATOR_PATTERNS = (
@@ -174,9 +174,9 @@ _OTHER_STRONG = tuple(re.compile(p) for p in (
     r"^altri\b.*\bripetitori",
 ))
 _OTHER_WEAK = tuple(re.compile(p) for p in (
-    r"^(?:area|regional|surrounding)\s+repeaters?$",
-    r"^repeaters?\s+(?:in|around)\s+(?:the\s+)?(?:area|region|vicinity|neighbou?rhood)$",
-    r"^repeaters?\s+nearby$",
+    r"^(?:area|regional|surrounding)\s+repeaters?\Z",
+    r"^repeaters?\s+(?:in|around)\s+(?:the\s+)?(?:area|region|vicinity|neighbou?rhood)\Z",
+    r"^repeaters?\s+nearby\Z",
 ))
 _CLUB_OWN = re.compile(r"^(?:our|my|club|member|the club['\u2019]?s?)\b.*\brepeaters?\b")
 _CLUB_TITLE = re.compile(r"\brepeaters?\b")
@@ -469,9 +469,9 @@ def ground_item(item, page_text):
 
 _PLACEHOLDER_PATTERNS = tuple(re.compile(p, re.I) for p in (
     r"this is an example page", r"as a new wordpress user,? you should go to your dashboard", r"hello world!?\s*welcome to wordpress",
-    r"this is your first post", r"just another wordpress site", r"^sample page$", r"bike messenger by day", r"xyz doohickey company",
-    r"lorem ipsum", r"\byour content here\b", r"^coming soon!?$", r"\bwebsite coming soon\b", r"\bunder construction\b",
-    r"welcome to your new (?:site|website)", r"this is a placeholder", r"default web site page", r"^it works!?$",
+    r"this is your first post", r"just another wordpress site", r"^sample page\Z", r"bike messenger by day", r"xyz doohickey company",
+    r"lorem ipsum", r"\byour content here\b", r"^coming soon!?\Z", r"\bwebsite coming soon\b", r"\bunder construction\b",
+    r"welcome to your new (?:site|website)", r"this is a placeholder", r"default web site page", r"^it works!?\Z",
     r"apache2? (?:ubuntu |debian )?default page", r"test page for the apache", r"welcome to nginx", r"internet information services",
     r"\b(?:this )?domain (?:is )?(?:parked|for sale)\b", r"\bbuy this domain\b", r"\bsite (?:is )?(?:temporarily )?unavailable\b",
     r"\bthis site is (?:currently )?being built\b", r"\bstart editing (?:your|this) (?:site|page)\b",

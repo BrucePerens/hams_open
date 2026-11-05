@@ -36,7 +36,7 @@ AGENT_FAMILIES = frozenset(("Firefox", "Chrome", "Edge", "Safari", "Opera", "Oth
 # (reading 'x')"). Any other class (Error, a library's own, a rejection value) is free text that
 # can carry what a person typed, so its message is withheld, as for a Python exception.
 MESSAGE_SAFE_TYPES = frozenset(("TypeError", "ReferenceError", "RangeError", "SyntaxError", "EvalError", "URIError"))
-TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$]{0,39}$")
+TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$]{0,39}\Z")
 
 # Errors that are not bugs in the page: Odoo's own RPC errors (the server already made a ticket for
 # the ones that matter), a dropped connection, a user navigating away, the benign ResizeObserver
@@ -49,10 +49,10 @@ IGNORED_MESSAGE_RE = re.compile(
     r"the operation was aborted|the user aborted a request|network request failed|fetch is aborted)"
 )
 
-FRAME_RE = re.compile(r"^(?P<url>.+):(?P<line>\d{1,7}):(?P<col>\d{1,7})$")
-ASSET_PATH_RE = re.compile(r"^/web/assets/(?:\d+/)?(?P<version>[0-9a-f]{7,64})/(?P<bundle>[A-Za-z0-9_.]+)\.min\.js$")
-STATIC_PATH_RE = re.compile(r"^/(?P<module>[a-z_][a-z0-9_]{0,63})/static/(?P<rest>[A-Za-z0-9_./-]{1,200}\.js)$")
-RELEASE_RE = re.compile(r"^(?P<bundle>[A-Za-z0-9_.]{3,80})@(?P<version>[0-9a-f]{7,64})$")
+FRAME_RE = re.compile(r"^(?P<url>.+):(?P<line>\d{1,7}):(?P<col>\d{1,7})\Z")
+ASSET_PATH_RE = re.compile(r"^/web/assets/(?:\d+/)?(?P<version>[0-9a-f]{7,64})/(?P<bundle>[A-Za-z0-9_.]+)\.min\.js\Z")
+STATIC_PATH_RE = re.compile(r"^/(?P<module>[a-z_][a-z0-9_]{0,63})/static/(?P<rest>[A-Za-z0-9_./-]{1,200}\.js)\Z")
+RELEASE_RE = re.compile(r"^(?P<bundle>[A-Za-z0-9_.]{3,80})@(?P<version>[0-9a-f]{7,64})\Z")
 # The bundles the reporter is shipped in, and the other frontend ones a page loads beside them.
 KNOWN_BUNDLES = ("web.assets_frontend", "web.assets_frontend_minimal", "web.assets_frontend_lazy", "web.assets_backend")
 

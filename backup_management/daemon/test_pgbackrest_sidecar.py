@@ -288,6 +288,19 @@ class TestRepoSelectionAndInfo(unittest.TestCase):
             with self.assertRaises(ValueError, msg=op):
                 sidecar._validate_request_cmd(["pgbackrest", op, "--stanza=hams_prod", "--repo=2"])
 
+    def test_a_trailing_newline_is_refused_in_every_validated_value(self):
+        # `$` also matches before a final newline; each pattern now ends with \Z.
+        for bad in (
+            "--stanza=hams_prod\n",
+            "--repo=2\n",
+            "--repo1-retention-full=5\n",
+            "--repo1-path=/hams_prod\n",
+            "--repo1-s3-bucket=hams-backups\n",
+        ):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                sidecar._validate_request_cmd(["pgbackrest", "backup", "--stanza=hams_prod", bad]
+                                              if not bad.startswith("--stanza") else ["pgbackrest", "backup", bad])
+
 
 if __name__ == "__main__":
     unittest.main()

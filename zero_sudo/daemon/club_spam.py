@@ -211,8 +211,8 @@ _FOREIGN_WORDS = frozenset((
 ).split())
 
 _TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
-_YEAR_STAMP = re.compile(r"^20[2-3]\d$")
-_COUNTER_SUFFIX = re.compile(r"^\d{1,2}$")
+_YEAR_STAMP = re.compile(r"^20[2-3]\d\Z")
+_COUNTER_SUFFIX = re.compile(r"^\d{1,2}\Z")
 
 
 # [@ANCHOR: zero_sudo:club_spam_fold]

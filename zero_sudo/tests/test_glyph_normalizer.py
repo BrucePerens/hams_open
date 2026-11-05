@@ -15,11 +15,23 @@ import unicodedata
 
 from odoo.tests.common import BaseCase, tagged
 
-from odoo.addons.zero_sudo.daemon.glyph_normalizer import normalize_callsign_text, normalize_number_text
+from odoo.addons.zero_sudo.daemon.glyph_normalizer import (
+    _CALLSIGN_SHAPE,
+    _NUMBER_SHAPE,
+    normalize_callsign_text,
+    normalize_number_text,
+)
 
 
 @tagged("post_install", "-at_install")
 class TestGlyphNormalizer(BaseCase):
+
+    def test_a_trailing_newline_does_not_match_the_shape_patterns(self):
+        # `$` also matches before a final newline; both patterns now end with \Z.
+        self.assertTrue(_CALLSIGN_SHAPE.match("K6BP/P"))
+        self.assertIsNone(_CALLSIGN_SHAPE.match("K6BP/P\n"))
+        self.assertTrue(_NUMBER_SHAPE.match("-12,5"))
+        self.assertIsNone(_NUMBER_SHAPE.match("-12,5\n"))
 
     # [@ANCHOR: zero_sudo:test_glyph_normalizer_callsign]
     def test_callsigns_with_odd_glyphs_are_repaired_and_every_change_is_listed(self):

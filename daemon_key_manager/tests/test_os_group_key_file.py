@@ -249,7 +249,7 @@ class TestOsGroupKeyFile(RealTransactionCase):
         # Tests [@ANCHOR: COMM_security_constraints_os_group]
         # [@ANCHOR: COMM_test_os_group_registry_constraint]
         registry = self.registry_model.with_user(self.manager_user.id)
-        bad_names = ("hams_com", "adm", "hamsd_", "hamsd_Bad", "hamsd_x y")
+        bad_names = ("hams_com", "adm", "hamsd_", "hamsd_Bad", "hamsd_x y", "hamsd_ncvec_sync\n")
         for index, name in enumerate(bad_names):
             with self.subTest(group=name):
                 with self.assertRaises(UserError):

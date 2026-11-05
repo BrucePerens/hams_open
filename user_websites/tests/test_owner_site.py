@@ -18,6 +18,7 @@ from odoo.tests.common import BaseCase
 from odoo.addons.user_websites.controllers import owner_site
 from odoo.addons.user_websites.controllers.main import redis_client
 from odoo.addons.user_websites.models.member_html import (
+    IMAGE_PATH_RE,
     PAGE_SLUG_RE,
     RESERVED_PAGE_SLUGS,
     sanitize_member_html,
@@ -126,8 +127,11 @@ class TestMemberHtmlSanitizer(BaseCase):
         for word in ("home", "blog", "manage", "create_site", "subscribe"):
             self.assertIn(word, RESERVED_PAGE_SLUGS)
         self.assertTrue(PAGE_SLUG_RE.match("about-me"))
-        for bad in ("", "-x", "x-", "A", "a/b", "a b", "x" * 61, "../x"):
+        for bad in ("", "-x", "x-", "A", "a/b", "a b", "x" * 61, "../x", "about-me\n"):
             self.assertIsNone(PAGE_SLUG_RE.match(bad), bad)
+        # `$` also matched before a final newline; both URL patterns now end with \Z
+        self.assertIsNone(IMAGE_PATH_RE.match("/web/image/12\n"))
+        self.assertTrue(IMAGE_PATH_RE.match("/web/image/12"))
 
     def test_image_magic_numbers(self):
         # Tests [@ANCHOR: user_websites:owner_image_mimetype]
