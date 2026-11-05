@@ -6,6 +6,9 @@ case "$1" in
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload || true   # the drop-in for upower.service changed
             deb-systemd-invoke try-restart upower.service || true
+            if [ -x /usr/share/gdm/generate-config ]; then
+                /usr/share/gdm/generate-config || true   # 95-convertible-power is gone from the login screen's settings
+            fi
         fi
         ;;
 esac
