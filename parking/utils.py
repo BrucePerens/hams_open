@@ -27,12 +27,18 @@ def validate_redirect_url(url, own_host=""):
         return "empty or too long"
     if any(ord(ch) < 33 or ord(ch) == 127 for ch in url):
         return "contains spaces or control characters"
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https"):
+    try:
+        # urlsplit itself raises ValueError for a bracket in the wrong place ("https://x.y[::1]"),
+        # and the hostname read can raise it too.
+        parts = urlsplit(url)
+        scheme, netloc, hostname = parts.scheme, parts.netloc, parts.hostname
+    except ValueError:
+        return "not a valid URL"
+    if scheme not in ("http", "https"):
         return "scheme must be http or https"
-    if not parts.netloc or "@" in parts.netloc or "\\" in url:
+    if not netloc or "@" in netloc or "\\" in url:
         return "needs a plain host (no credentials, no backslash)"
-    host = normalize_host(parts.hostname or "")
+    host = normalize_host(hostname or "")
     if not host:
         return "host is not a valid domain name"
     if own_host and host == own_host:
