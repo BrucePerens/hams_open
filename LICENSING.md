@@ -72,6 +72,9 @@ reason as `hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table
 **`hardware/hp_notebook_81ff/` (Debian packaging and settings files for the HP Notebook board 81FF, added 2026-10-29) is GPL-3.0-or-later**, for the same
 reason as `hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table above.
 
+**`hardware/lenovo_thinkpad_t430/` (Debian packaging and settings files for the Lenovo ThinkPad T430, added 2026-11-05) is GPL-3.0-or-later**, for the same
+reason as `hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table above.
+
 **`hardware/grub_large_console/` (a shell script and Debian packaging, added 2026-10-29) is GPL-3.0-or-later**, for the same reason as
 `hardware/panasonic_cf19/`. Not counted in the 2026-08-25 survey table above.
 

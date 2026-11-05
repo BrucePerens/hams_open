@@ -1,0 +1,10 @@
+lenovo-thinkpad-t430 (1.0.0) unstable; urgency=medium
+
+  * Initial release for the Lenovo ThinkPad T430 (23426QU, BIOS G1ET98WW 2.58, Core i5-3230M, Intel Centrino
+    Wireless-N 2200, HD Graphics 4000) used as a demo laptop.  No kernel parameter or module option was needed:
+    every device present works with stock Debian 13 (kernel 6.12) and firmware-iwlwifi.
+  * Stay-awake settings: screen off after 5 minutes; on AC the lid switch is ignored and there is no inactivity
+    suspend; Wi-Fi power saving off and unlimited reconnect attempts in NetworkManager.
+  * TLP settings on top of convertible-power: governors, 75/80 charge thresholds, Wi-Fi power saving off on battery.
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 05 Nov 2026 15:00:00 -0800
