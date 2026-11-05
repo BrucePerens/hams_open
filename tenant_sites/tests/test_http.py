@@ -104,6 +104,29 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertEqual(own.status_code, 301)
         self.assertEqual(self.get("/shared-old", TENANT).status_code, 404)
 
+    # [@ANCHOR: tenant_sites:test_ensure_request_uri]
+    def test_a_request_without_request_uri_is_a_404_not_a_server_error(self):
+        # Tests [@ANCHOR: tenant_sites:ensure_request_uri]
+        # Tickets 134 and 136 (2026-11-03): nginx's prefix `location /websocket` also sends /websocket.js and
+        # /websocket.js.map to Odoo's gevent worker, whose WSGI server (unlike werkzeug's) sets no REQUEST_URI, and the
+        # website module's _serve_redirect read environ['REQUEST_URI'] unguarded: KeyError, HTTP 500.
+        from werkzeug.serving import WSGIRequestHandler
+
+        real = WSGIRequestHandler.make_environ
+
+        def without_request_uri(handler):
+            environ = real(handler)
+            environ.pop("REQUEST_URI", None)
+            return environ
+
+        with patch.object(WSGIRequestHandler, "make_environ", without_request_uri):
+            for host in (MAIN, TENANT):
+                for path in ("/websocket.js", "/websocket.js.map", "/old?a=b"):
+                    response = self.get(path, host)
+                    self.assertNotEqual(response.status_code, 500, (host, path))
+            self.assertEqual(self.get("/websocket.js", MAIN).status_code, 404)
+            self.assertEqual(self.get("/old", TENANT).status_code, 301)  # the tenant's own redirect still works
+
     def test_tenant_blog_shows_only_its_own_posts(self):
         response = self.get("/blog", TENANT)
         if response.status_code == 302:  # a website with one blog goes straight to it
