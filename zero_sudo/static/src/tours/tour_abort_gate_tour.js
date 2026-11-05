@@ -18,6 +18,8 @@ registry.category("web_tour.tours").add("zero_sudo_abort_gate_late_event", {
                 const poll = setInterval(() => {
                     if (window._hamsPhase && window._hamsPhase.succeededAt) {
                         clearInterval(poll);
+                        // The unhandled rejection is the point of this tour.
+                        // eslint-disable-next-line promise/catch-or-return, @typescript-eslint/no-floating-promises
                         Promise.reject(new Event("error"));
                     }
                 }, 2);
