@@ -13,7 +13,6 @@ import logging
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
 from datetime import timedelta
 
 import psycopg2.errors
@@ -275,8 +274,8 @@ class TestExceptionScrubbing(ExceptionTicketCase):
 
         source = "x" * 150 + " = 'alice@example.com'"
         exc = self.caught(raise_type_error, "x")
-        with patch.object(scrub.linecache, "getline", return_value=source + "\n"):
-            lines = scrub._frame_lines(exc)
+        self.safe_patch_object(scrub.linecache, "getline", lambda *_args, **_kwargs: source + "\n")
+        lines = scrub._frame_lines(exc)
         for text in lines:
             self.assertNotIn("alic", text)
             self.assertNotIn("@exa", text)
