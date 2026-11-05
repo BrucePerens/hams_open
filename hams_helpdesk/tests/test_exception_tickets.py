@@ -915,7 +915,7 @@ class TestDaemonFailureReports(ExceptionTicketCase):
         rows = self.daemon_rows()
         self.assertEqual(sorted(rows.mapped("exc_type")), ["daemon.quota_exhausted", "daemon.unit_failed"])
         quota = rows.filtered(lambda row: row.exc_type == "daemon.quota_exhausted")
-        self.assertEqual(quota.ticket_id.name, "AI service quota used up (reported by credential.touch.timer.service)")
+        self.assertEqual(quota.ticket_id.name, "Server exception: AI service quota used up (reported by credential.touch.timer.service)")
         self.assertNotEqual(quota.ticket_id, (rows - quota).ticket_id)
 
     def test_another_account_is_refused(self):
