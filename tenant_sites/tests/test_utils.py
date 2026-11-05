@@ -15,8 +15,10 @@ class TestTenantSitesUtils(HamsTransactionCase):
         self.assertEqual(utils.normalize_host("example.com."), "example.com")
         self.assertEqual(utils.normalize_host("bücher.example"), "xn--bcher-kva.example")
         for bad in ("", None, "10.1.2.3", "[::1]", "a b.example", "-a.example", "x.example:abc",
-                    "a" * 64 + ".example", 5):
+                    "a" * 64 + ".example", 5, "a\n.example.com", "a.b\n.example.com", "1\n.comcom",
+                    "a.example\ncom", "a\r.example.com", "a.example.com\n.org"):
             self.assertEqual(utils.normalize_host(bad), "", bad)
+        self.assertEqual(utils.normalize_host(" example.com\n"), "example.com")  # outer white space is stripped
         self.assertEqual(utils.normalize_host("localhost"), "")  # burn-ignore-ssrf-test-value: classification input
 
     # [@ANCHOR: tenant_sites:COMM_test_original_host]
@@ -57,7 +59,8 @@ class TestTenantSitesUtils(HamsTransactionCase):
             self.assertTrue(utils.tenant_path_allowed(path), path)
         refused = ["/odoo", "/odoo/action-1", "/jsonrpc", "/xmlrpc/2/common", "/json/2/res.users", "/websocket",
                    "/website/info", "/website/force/1", "/@/", "/my", "/my/home", "/shop", "/blogger", "/about",
-                   "/longpolling/poll", "/mail/x", "/robots.txt/x", ""]
+                   "/longpolling/poll", "/mail/x", "/robots.txt/x", "",
+                   "/\n", "/robots.txt\n", "/favicon.ico\n", "/blog\n", "/sitemap.xml\n"]
         # The /web/ backend paths, each tagged: they are test data for the allow-list, not navigation.
         refused.append("/web")  # burn-ignore-route: refused-path test data
         refused.append("/web/login")

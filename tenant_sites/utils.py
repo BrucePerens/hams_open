@@ -6,21 +6,22 @@ Nothing here touches Odoo, so the same code is unit-tested without a database.
 
 import re
 
-LABEL_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
+# \Z, not $: in Python `$` also matches before a final newline, so "a\n" would be a label.
+LABEL_RE = re.compile(r"(?!-)[a-z0-9-]{1,63}(?<!-)\Z")
 SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 # Paths a public tenant website may answer through a route. Every other path is not a route on a
 # tenant host: it falls through to the website's own page and redirect lookup, then to a 404.
 TENANT_PATH_ALLOW = re.compile(
-    r"^(?:/$"
-    r"|/blog(?:/|$)"
+    r"^(?:/\Z"
+    r"|/blog(?:/|\Z)"
     r"|/web/(?:assets|static)/"
-    r"|/web/(?:image|content)(?:/|$)"
-    r"|/website/(?:static|image)(?:/|$)"
+    r"|/web/(?:image|content)(?:/|\Z)"
+    r"|/website/(?:static|image)(?:/|\Z)"
     r"|/[a-z0-9_]+/static/"
-    r"|/robots\.txt$"
-    r"|/sitemap[^/]*\.xml$"
-    r"|/favicon\.ico$)"
+    r"|/robots\.txt\Z"
+    r"|/sitemap[^/]*\.xml\Z"
+    r"|/favicon\.ico\Z)"
 )
 # Controllers whose routes may answer on a tenant host (Python module prefixes of the endpoint).
 TENANT_MODULE_ALLOW = (
