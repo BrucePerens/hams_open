@@ -1,0 +1,30 @@
+# A recorded session with a Siglent SSA3021X over the LAN raw socket (port 5025), read-only queries, 2026-11-05.
+# "> " is what the host sent, "< " the instrument's reply. The serial number is scrubbed (SN-0000); no address is recorded.
+> *IDN?
+< Siglent Technologies,SSA3021X,SN-0000,1.3.9.10
+> :SYSTem:OPTions?
+< Meas EMI TG CAT 
+> :OUTPut:STATe?
+< 0
+> :SOURce:POWer?
+< -20.000000
+> :SOURce:CORRection:OFFSet?
+< 0.000000
+> :INITiate:CONTinuous?
+< 1
+> :SENSe:FREQuency:STARt?
+< +0.0000000000E+00
+> :SENSe:FREQuency:STOP?
+< +2.1000000000E+09
+> :SENSe:BWIDth?
+< +1.0000000000E+06
+> :SENSe:BWIDth:VIDeo?
+< +1.0000000000E+06
+> :DISPlay:WINDow:TRACe:Y:RLEVel?
+< +0.0000000000E+00
+> :SENSe:POWer:RF:ATTenuation?
+< 20.000000
+> :SENSe:DETector:TRACe1:FUNCtion?
+< POSitive
+> :SENSe:SWEep:TIME?
+< +2.1600000000E-01

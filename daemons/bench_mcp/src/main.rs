@@ -19,6 +19,7 @@ mod nanovna;
 mod procedure;
 mod psu;
 mod rotator;
+mod sa;
 mod scope;
 mod sdr;
 mod spectrum;
@@ -163,6 +164,12 @@ const MODULES: &[Module] = &[
         call: rotator::call,
         tool_defs: rotator::tool_defs,
         sample: r#""rotor":{"driver":"rotator","tier":"full","rotctld_port":4533}"#,
+    },
+    Module {
+        prefix: "bench_sa_",
+        call: sa::call,
+        tool_defs: sa::tool_defs,
+        sample: r#""sa":{"driver":"siglent_ssa","tier":"full","host":"192.0.2.42"}"#,
     },
     Module {
         prefix: "bench_usb_",
