@@ -378,7 +378,7 @@ fn provisioning_reports_by_default_and_applies_only_when_configured() {
 }
 
 // Tests [@ANCHOR: relay_broker_run]
-// Tests [@ANCHOR: relay_broker_client_connect_and_call]
+// Tests [@ANCHOR: relay_broker_client_connect_and_call_as]
 // Tests [@ANCHOR: relay_broker_activated_listener]
 #[test]
 fn the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_when_idle() {
@@ -388,11 +388,12 @@ fn the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_wh
     let mut broker = broker_with(&test_config(), FakeOs::typical(), None);
     let path = sock.clone();
     let client = std::thread::spawn(move || {
-        client::connect_and_call(
+        client::connect_and_call_as(
             &path,
             &Request::ListDevices {
                 class: Some(DeviceClass::Serial),
             },
+            &[nix::unistd::getuid().as_raw()],
         )
     });
     let served = run(&mut broker, &listener, Duration::from_secs(10), Some(1)).unwrap();
@@ -421,5 +422,68 @@ fn the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_wh
     );
     // Without systemd's environment there is no activated listener.
     assert!(relay_broker::server::activated_listener().is_none());
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+/// An impostor that listens on the broker's path as the test's own account, answers any request
+/// with a device list, and records whether it ever received a byte.
+fn impostor(sock: &std::path::Path) -> std::thread::JoinHandle<bool> {
+    use std::io::Read;
+    let listener = UnixListener::bind(sock).unwrap();
+    std::thread::spawn(move || {
+        let (mut conn, _) = listener.accept().unwrap();
+        conn.set_read_timeout(Some(Duration::from_millis(500)))
+            .unwrap();
+        let mut byte = [0u8; 1];
+        // The client verifies and hangs up without sending anything: EOF (0) or a timeout.
+        matches!(conn.read(&mut byte), Ok(n) if n > 0)
+    })
+}
+
+// Tests [@ANCHOR: relay_broker_client_verify_server]
+// Tests [@ANCHOR: relay_broker_client_connect_and_call_as]
+// Tests [@ANCHOR: relay_broker_client_connect_and_call]
+// Tests [@ANCHOR: relay_broker_client_default_server_uids]
+#[test]
+fn the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_nothing() {
+    let me = nix::unistd::getuid().as_raw();
+    let req = Request::ListDevices { class: None };
+    let dir = temp_dir("impostor");
+    let sock = dir.join("broker.sock");
+    let spy = impostor(&sock);
+    // An account that is not the one serving the socket: refused before any byte is sent.
+    let err = client::connect_and_call_as(&sock, &req, &[me.wrapping_add(1)]).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied, "{err}");
+    assert!(
+        !spy.join().unwrap(),
+        "the impostor must not receive the request"
+    );
+    // An empty list permits no one.
+    let spy = impostor(&dir.join("empty.sock"));
+    let err = client::connect_and_call_as(&dir.join("empty.sock"), &req, &[]).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+    assert!(!spy.join().unwrap());
+    // The default expects root: a server run by any other account is refused (when the tests
+    // themselves run as root there is no other account to be, so only the named case is checked).
+    if me != 0 {
+        let spy = impostor(&dir.join("default.sock"));
+        let err = client::connect_and_call(&dir.join("default.sock"), &req).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+        assert!(!spy.join().unwrap());
+    }
+    assert_eq!(client::DEFAULT_SERVER_UIDS, &[0]);
+    // The expected account is accepted: verification passes and the request is sent.
+    let listener = UnixListener::bind(dir.join("ok.sock")).unwrap();
+    let mut broker = broker_with(&test_config(), FakeOs::typical(), None);
+    let path = dir.join("ok.sock");
+    let worker = std::thread::spawn(move || client::connect_and_call_as(&path, &req, &[me]));
+    assert_eq!(
+        run(&mut broker, &listener, Duration::from_secs(10), Some(1)).unwrap(),
+        1
+    );
+    assert!(matches!(
+        worker.join().unwrap().unwrap().0,
+        Response::Devices(_)
+    ));
     std::fs::remove_dir_all(dir).unwrap();
 }

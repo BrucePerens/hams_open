@@ -33,6 +33,12 @@ allow-list in the root-owned config (`/etc/hams-relay-broker.conf`, `key = value
 are errors; it must be owned by uid 0 and not group/world-writable). An empty allow-list answers
 nobody. Unlisted peers are logged and closed with no response.
 
+The other direction: a client reads the server's `SO_PEERCRED` after `connect` and sends nothing
+unless the uid is one it expects (`client::verify_server`; `connect_and_call` expects root, which
+is what a socket-activated broker shows; `connect_and_call_as` names other accounts). A process that
+took over the socket path therefore cannot answer the relay, and the relay does not depend on the
+installer making the socket's directory writable by root alone.
+
 ## Policy (`src/policy.rs`)
 
 Three checks, each closing a different hole: lexical (absolute, under `/dev`, no `.`/`..`/empty
@@ -134,7 +140,19 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 - [@ANCHOR: relay_broker:relay_broker_broker_open_device] (broker.rs) The open action: lexical check, node walk, open, post-open check. Any failure closes the
 - [@ANCHOR: relay_broker:relay_broker_broker_grant] (broker.rs) The provisioning action: which of `groups` the caller lacks, applied only when the
 - [@ANCHOR: relay_broker:relay_broker_client_call] (client.rs) Sends `req` on `stream` and waits for the answer. The descriptor, if any, is the opened
-- [@ANCHOR: relay_broker:relay_broker_client_connect_and_call] (client.rs) Connects to the broker socket at `path` and performs one call.
+- [@ANCHOR: relay_broker:relay_broker_client_default_server_uids] (client.rs) `DEFAULT_SERVER_UIDS: &[u32] = &[0]`, the accounts a broker socket may be served
+  by when the caller names none: root. A socket-activated broker has its listener made by systemd, so a client reads root's credentials even
+  though the service runs as `hams-relay-broker`; a broker started directly by a service account must be named to `connect_and_call_as`.
+- [@ANCHOR: relay_broker:relay_broker_client_verify_server] (client.rs) `verify_server(stream: &UnixStream, expected_uids: &[u32]) -> io::Result<()>`.
+  Reads `SO_PEERCRED` of the connected socket and requires its uid to be in `expected_uids` (an empty list permits no one). Nothing has been
+  sent when it runs. `Err(PermissionDenied)` names the uid found; any other error is the failure to read the credentials. This is the
+  client authenticating the broker; the broker authenticating the client is `auth.rs`. Blocking, no side effect.
+- [@ANCHOR: relay_broker:relay_broker_client_connect_and_call] (client.rs) `connect_and_call(path, req)`: `connect_and_call_as` with `DEFAULT_SERVER_UIDS` (root).
+  Errors: connect failure, `PermissionDenied` from the verification, then those of `call`.
+- [@ANCHOR: relay_broker:relay_broker_client_connect_and_call_as] (client.rs) `connect_and_call_as(path: &Path, req: &Request, expected_uids: &[u32])
+  -> io::Result<(Response, Option<OwnedFd>)>`. Connects, runs `verify_server`, and only then sends `req` and returns the response and the passed
+  descriptor, if any (`call`). A wrong server is refused with `PermissionDenied` and receives no byte, so an impostor on the socket path cannot
+  answer `ListDevices`, `ProvisionGroups` or `OpenDevice` with a descriptor of its choice. Blocking; one connection per call.
 - [@ANCHOR: relay_broker:relay_broker_parse_usb_pair] (config.rs) Parses `vvvv:pppp` (hex) into a vendor/product pair.
 - [@ANCHOR: relay_broker:relay_broker_config_parse] (config.rs) Parses the file text. Comments start with `#`; blank lines are skipped.
 - [@ANCHOR: relay_broker:relay_broker_config_load] (config.rs) Reads and parses `path`, first requiring it to be owned by `owner_uid` (0 in production)
