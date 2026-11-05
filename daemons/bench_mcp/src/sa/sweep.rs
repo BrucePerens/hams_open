@@ -13,6 +13,7 @@ pub const POINTS: usize = 751;
 /// The longest total sweep time (sweep time times the average count) a tool will start, seconds.
 const MAX_SWEEP_S: f64 = 120.0;
 
+// [@ANCHOR: bench_mcp_sa_span]
 /// The frequency range of a sweep, Hz.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Span {
@@ -20,6 +21,7 @@ pub struct Span {
     pub stop_hz: f64,
 }
 
+// [@ANCHOR: bench_mcp_sa_sweep_req]
 /// A checked sweep request. `None` fields are left as the instrument has them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SweepReq {
@@ -36,6 +38,7 @@ pub struct SweepReq {
     pub continuous_after: bool,
 }
 
+// [@ANCHOR: bench_mcp_sa_trace]
 /// One trace and the settings the unit reported for it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Trace {
@@ -51,6 +54,7 @@ pub struct Trace {
     pub average: u32,
 }
 
+// [@ANCHOR: bench_mcp_sa_peak]
 /// A peak: frequency and level.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Peak {
@@ -71,11 +75,15 @@ pub fn sweep_args(args: &Value, max_hz: f64) -> Result<SweepReq, String> {
         n("center_hz", 0.0, max_hz, top)?,
         n("span_hz", 100.0, max_hz, top)?,
     );
-    let (start_hz, stop_hz) = match (start, stop, center, span) {
-        (Some(a), Some(b), None, None) => (a, b),
-        (None, None, Some(c), Some(s)) => (c - s / 2.0, c + s / 2.0),
-        _ => return Err("give start_hz and stop_hz, or center_hz and span_hz (not a mixture, not neither)".into()),
-    };
+    let (start_hz, stop_hz) =
+        match (start, stop, center, span) {
+            (Some(a), Some(b), None, None) => (a, b),
+            (None, None, Some(c), Some(s)) => (c - s / 2.0, c + s / 2.0),
+            _ => return Err(
+                "give start_hz and stop_hz, or center_hz and span_hz (not a mixture, not neither)"
+                    .into(),
+            ),
+        };
     if start_hz < 0.0 || stop_hz > max_hz + 0.5 || stop_hz - start_hz < 100.0 {
         return Err(format!(
             "the range {start_hz}..{stop_hz} Hz must lie inside 0..{max_hz} Hz ({top}) and be at least 100 Hz wide"
@@ -89,7 +97,9 @@ pub fn sweep_args(args: &Value, max_hz: f64) -> Result<SweepReq, String> {
             Some("sample") => "SAMPle",
             Some("average") => "AVERage",
             Some("normal") => "NORMal",
-            _ => return Err("detector must be positive, negative, sample, average or normal".into()),
+            _ => {
+                return Err("detector must be positive, negative, sample, average or normal".into())
+            }
         }),
     };
     let int = |k: &str, lo: f64, hi: f64, why: &str| -> Result<Option<u32>, String> {
@@ -102,7 +112,12 @@ pub fn sweep_args(args: &Value, max_hz: f64) -> Result<SweepReq, String> {
         span: Span { start_hz, stop_hz },
         rbw_hz: n("rbw_hz", 10.0, 1e6, "the unit's resolution bandwidths")?,
         vbw_hz: n("vbw_hz", 1.0, 1e6, "the unit's video bandwidths")?,
-        ref_level_dbm: n("ref_level_dbm", -100.0, 30.0, "the unit's reference level range")?,
+        ref_level_dbm: n(
+            "ref_level_dbm",
+            -100.0,
+            30.0,
+            "the unit's reference level range",
+        )?,
         attenuation_db: int("attenuation_db", 0.0, 50.0, "the unit's attenuator")?,
         detector,
         average: int("average_count", 1.0, 999.0, "the unit's average count")?.unwrap_or(1),
@@ -122,7 +137,11 @@ pub fn parse_trace(reply: &str) -> Result<Vec<f64>, String> {
         }
         match f.parse::<f64>() {
             Ok(x) if x.is_finite() => v.push(x),
-            _ => return Err(format!("the trace has a field {f:?} that is not a finite number")),
+            _ => {
+                return Err(format!(
+                    "the trace has a field {f:?} that is not a finite number"
+                ))
+            }
         }
     }
     if v.len() < 2 {
@@ -147,9 +166,7 @@ pub fn find_peaks(t: &Trace, count: usize, threshold_db: f64) -> Vec<Peak> {
     let floor = sorted[sorted.len() / 2] + threshold_db;
     let mut cand: Vec<usize> = (0..v.len())
         .filter(|&i| {
-            v[i] >= floor
-                && (i == 0 || v[i] >= v[i - 1])
-                && (i + 1 == v.len() || v[i] > v[i + 1])
+            v[i] >= floor && (i == 0 || v[i] >= v[i - 1]) && (i + 1 == v.len() || v[i] > v[i + 1])
         })
         .collect();
     cand.sort_by(|&a, &b| v[b].total_cmp(&v[a]));
@@ -293,13 +310,22 @@ fn sweep_inner(l: &mut Link, req: &SweepReq) -> Result<Trace, String> {
         vbw_hz: ask_f64(l, ":SENSe:BWIDth:VIDeo?")?,
         ref_level_dbm: ask_f64(l, ":DISPlay:WINDow:TRACe:Y:RLEVel?")?,
         attenuation_db: ask_f64(l, ":SENSe:POWer:RF:ATTenuation?")?,
-        detector: ask(l, ":SENSe:DETector:TRACe1:FUNCtion?", READ_TRIES, REPLY_TIMEOUT_S)?,
+        detector: ask(
+            l,
+            ":SENSe:DETector:TRACe1:FUNCtion?",
+            READ_TRIES,
+            REPLY_TIMEOUT_S,
+        )?,
         sweep_time_s,
         average: req.average,
     };
     for (name, want, got) in [
         ("ref_level_dbm", req.ref_level_dbm, t.ref_level_dbm),
-        ("attenuation_db", req.attenuation_db.map(f64::from), t.attenuation_db),
+        (
+            "attenuation_db",
+            req.attenuation_db.map(f64::from),
+            t.attenuation_db,
+        ),
     ] {
         if want.is_some_and(|w| (w - got).abs() > 0.05) {
             return Err(format!(
@@ -462,11 +488,22 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_sa_sweep_args]
+    // Tests [@ANCHOR: bench_mcp_sa_span]
+    // Tests [@ANCHOR: bench_mcp_sa_sweep_req]
     #[test]
     fn sweep_arguments_are_checked_before_anything_is_sent() {
         let ok = sweep_args(&json!({"center_hz": 100e6, "span_hz": 1e6, "rbw_hz": 1000, "detector": "sample", "average_count": 4}), 2.1e9).unwrap();
-        assert_eq!(ok.span, Span { start_hz: 99.5e6, stop_hz: 100.5e6 });
-        assert_eq!((ok.rbw_hz, ok.average, ok.detector), (Some(1000.0), 4, Some("SAMPle")));
+        assert_eq!(
+            ok.span,
+            Span {
+                start_hz: 99.5e6,
+                stop_hz: 100.5e6
+            }
+        );
+        assert_eq!(
+            (ok.rbw_hz, ok.average, ok.detector),
+            (Some(1000.0), 4, Some("SAMPle"))
+        );
         assert!(ok.continuous_after);
         assert!(sweep_args(&json!({"start_hz": 1e6, "stop_hz": 2e6}), 2.1e9).is_ok());
         for bad in [
@@ -500,6 +537,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_sa_bin_hz]
     // Tests [@ANCHOR: bench_mcp_sa_find_peaks]
+    // Tests [@ANCHOR: bench_mcp_sa_peak]
     #[test]
     fn peaks_are_local_maxima_above_the_median_strongest_first_and_not_adjacent() {
         let mut v = vec![-90.0; 751];
@@ -508,12 +546,32 @@ mod tests {
         v[400] = -50.0;
         v[700] = -85.0;
         let t = Trace {
-            start_hz: 0.0, stop_hz: 750.0, dbm: v, rbw_hz: 1.0, vbw_hz: 1.0, ref_level_dbm: 0.0,
-            attenuation_db: 0.0, detector: "POSitive".into(), sweep_time_s: 1.0, average: 1,
+            start_hz: 0.0,
+            stop_hz: 750.0,
+            dbm: v,
+            rbw_hz: 1.0,
+            vbw_hz: 1.0,
+            ref_level_dbm: 0.0,
+            attenuation_db: 0.0,
+            detector: "POSitive".into(),
+            sweep_time_s: 1.0,
+            average: 1,
         };
         assert_eq!(bin_hz(0.0, 750.0, 751, 100), 100.0);
         let p = find_peaks(&t, 5, 10.0);
-        assert_eq!(p, [Peak { freq_hz: 100.0, level_dbm: -30.0 }, Peak { freq_hz: 400.0, level_dbm: -50.0 }]);
+        assert_eq!(
+            p,
+            [
+                Peak {
+                    freq_hz: 100.0,
+                    level_dbm: -30.0
+                },
+                Peak {
+                    freq_hz: 400.0,
+                    level_dbm: -50.0
+                }
+            ]
+        );
         assert_eq!(find_peaks(&t, 1, 10.0).len(), 1);
         assert!(find_peaks(&t, 0, 10.0).is_empty());
     }
@@ -524,7 +582,16 @@ mod tests {
     fn csv_files_have_comments_a_header_one_row_per_point_and_never_share_a_name() {
         let d = out();
         let a: Vec<f64> = (0..5).map(|i| i as f64).collect();
-        let p = write_csv(&d, "t", &[("k".into(), "v".into())], "freq_hz,x", 100.0, 200.0, &[&a]).unwrap();
+        let p = write_csv(
+            &d,
+            "t",
+            &[("k".into(), "v".into())],
+            "freq_hz,x",
+            100.0,
+            200.0,
+            &[&a],
+        )
+        .unwrap();
         let text = std::fs::read_to_string(&p).unwrap();
         assert_eq!(text.lines().next(), Some("# k=v"));
         assert_eq!(text.lines().nth(1), Some("freq_hz,x"));
@@ -537,6 +604,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sa_run_sweep]
     // Tests [@ANCHOR: bench_mcp_sa_sweep_inner]
     // Tests [@ANCHOR: bench_mcp_sa_trace_summary]
+    // Tests [@ANCHOR: bench_mcp_sa_trace]
     // Tests [@ANCHOR: bench_mcp_sa_sweep]
     #[test]
     fn a_sweep_sets_the_unit_reads_back_what_it_holds_saves_the_trace_and_restores_continuous() {
@@ -547,7 +615,11 @@ mod tests {
             &json!({"start_hz": 1e6, "stop_hz": 751e6, "rbw_hz": 200, "attenuation_db": 10, "detector": "average", "average_count": 3}),
         ).unwrap();
         assert_eq!(v["points"], 751);
-        assert_eq!(v["rbw_hz"].as_f64(), Some(300.0), "the unit rounded the RBW up and the tool reports the unit's value");
+        assert_eq!(
+            v["rbw_hz"].as_f64(),
+            Some(300.0),
+            "the unit rounded the RBW up and the tool reports the unit's value"
+        );
         assert_eq!(v["average_count"], 3);
         assert_eq!(v["peaks"][0]["level_dbm"].as_f64(), Some(-30.0));
         assert_eq!(v["peaks"][0]["freq_hz"].as_f64(), Some(1e6 + 100.0 * 1e6));
@@ -557,46 +629,130 @@ mod tests {
         let rows = std::fs::read_to_string(&file).unwrap();
         assert_eq!(rows.lines().count(), 752);
         let sent = dev.received();
-        let pos = |c: &str| sent.iter().position(|s| s == c).unwrap_or_else(|| panic!("{c} not sent: {sent:?}"));
+        let pos = |c: &str| {
+            sent.iter()
+                .position(|s| s == c)
+                .unwrap_or_else(|| panic!("{c} not sent: {sent:?}"))
+        };
         assert!(pos(":INITiate:CONTinuous OFF") < pos(":INITiate:IMMediate"));
         assert!(pos(":INITiate:IMMediate") < pos("*OPC?") && pos("*OPC?") < pos(":TRACe:DATA? 1"));
-        assert!(sent.contains(&":TRACe1:MODE AVERage".to_string()) && sent.contains(&":SENSe:SWEep:COUNt 3".to_string()));
-        assert_eq!(sent.iter().filter(|c| c.starts_with(":OUTPut:STATe ")).count(), 0, "the sweep does not touch the generator");
+        assert!(
+            sent.contains(&":TRACe1:MODE AVERage".to_string())
+                && sent.contains(&":SENSe:SWEep:COUNt 3".to_string())
+        );
+        assert_eq!(
+            sent.iter()
+                .filter(|c| c.starts_with(":OUTPut:STATe "))
+                .count(),
+            0,
+            "the sweep does not touch the generator"
+        );
         assert!(pos(":INITiate:CONTinuous ON") > pos(":TRACe:DATA? 1"));
         // continuous_after false leaves it off.
         let dev2 = FakeDevice::sim(Sim::default());
-        call_with(&dev2.connector(), &bench(""), "bench_sa_sweep",
-            &json!({"start_hz": 1e6, "stop_hz": 2e6, "continuous_after": false})).unwrap();
-        assert!(!dev2.received().contains(&":INITiate:CONTinuous ON".to_string()));
+        call_with(
+            &dev2.connector(),
+            &bench(""),
+            "bench_sa_sweep",
+            &json!({"start_hz": 1e6, "stop_hz": 2e6, "continuous_after": false}),
+        )
+        .unwrap();
+        assert!(!dev2
+            .received()
+            .contains(&":INITiate:CONTinuous ON".to_string()));
     }
 
     #[test]
-    fn a_clamped_range_a_too_long_sweep_and_a_short_trace_are_errors_and_continuous_is_still_restored() {
+    fn a_clamped_range_a_too_long_sweep_and_a_short_trace_are_errors_and_continuous_is_still_restored(
+    ) {
         out();
-        let sim = Sim { sweep_time: 90.0, ..Sim::default() };
+        let sim = Sim {
+            sweep_time: 90.0,
+            ..Sim::default()
+        };
         let long = FakeDevice::sim(sim);
-        let e = call_with(&long.connector(), &bench(""), "bench_sa_sweep",
-            &json!({"start_hz": 1e6, "stop_hz": 2e6, "average_count": 2})).unwrap_err();
+        let e = call_with(
+            &long.connector(),
+            &bench(""),
+            "bench_sa_sweep",
+            &json!({"start_hz": 1e6, "stop_hz": 2e6, "average_count": 2}),
+        )
+        .unwrap_err();
         assert!(e.contains("120 s limit"), "{e}");
-        assert!(long.received().contains(&":INITiate:CONTinuous ON".to_string()));
+        assert!(long
+            .received()
+            .contains(&":INITiate:CONTinuous ON".to_string()));
         assert!(!long.received().contains(&":INITiate:IMMediate".to_string()));
-        let clamp = FakeDevice::sim(Sim { clamp_stop: 1e9, ..Sim::default() });
-        let e = call_with(&clamp.connector(), &bench(""), "bench_sa_sweep",
-            &json!({"start_hz": 1e6, "stop_hz": 2e9})).unwrap_err();
+        let clamp = FakeDevice::sim(Sim {
+            clamp_stop: 1e9,
+            ..Sim::default()
+        });
+        let e = call_with(
+            &clamp.connector(),
+            &bench(""),
+            "bench_sa_sweep",
+            &json!({"start_hz": 1e6, "stop_hz": 2e9}),
+        )
+        .unwrap_err();
         assert!(e.contains("clamps"), "{e}");
-        assert!(clamp.received().contains(&":INITiate:CONTinuous ON".to_string()));
-        assert!(!clamp.received().contains(&":INITiate:IMMediate".to_string()));
+        assert!(clamp
+            .received()
+            .contains(&":INITiate:CONTinuous ON".to_string()));
+        assert!(!clamp
+            .received()
+            .contains(&":INITiate:IMMediate".to_string()));
         let short = FakeDevice::start(|c| match c {
             "*IDN?" => Some("Siglent Technologies,SSA3021X,SN-0000,1.3.9.10".into()),
             ":TRACe:DATA? 1" => Some("-1.0,-2.0,-3.0".into()),
             "*OPC?" => Some("1".into()),
             ":SENSe:FREQuency:STOP?" => Some("+2.0E+06".into()),
+            ":SENSe:SWEep:TIME?" => Some("+2.0E-01".into()),
             q if q.ends_with('?') => Some("+1.0E+06".into()),
             _ => None,
         });
-        let e = call_with(&short.connector(), &bench(""), "bench_sa_sweep",
-            &json!({"start_hz": 1e6, "stop_hz": 2e6})).unwrap_err();
+        let e = call_with(
+            &short.connector(),
+            &bench(""),
+            "bench_sa_sweep",
+            &json!({"start_hz": 1e6, "stop_hz": 2e6}),
+        )
+        .unwrap_err();
         assert!(e.contains("not the 751"), "{e}");
+    }
+
+    #[test]
+    fn a_reference_level_or_attenuation_the_unit_does_not_keep_is_a_coupled_error_and_nothing_is_swept(
+    ) {
+        out();
+        for (query, setting, name) in [
+            (
+                ":DISPlay:WINDow:TRACe:Y:RLEVel?",
+                json!({"ref_level_dbm": -10}),
+                "ref_level_dbm",
+            ),
+            (
+                ":SENSe:POWer:RF:ATTenuation?",
+                json!({"attenuation_db": 10}),
+                "attenuation_db",
+            ),
+        ] {
+            let liar = FakeDevice::sim(Sim {
+                garbage: Some((query.into(), "+5.0E+00".into())),
+                ..Sim::default()
+            });
+            let mut args = json!({"start_hz": 1e6, "stop_hz": 2e6});
+            args.as_object_mut()
+                .unwrap()
+                .extend(setting.as_object().unwrap().clone());
+            let e = call_with(&liar.connector(), &bench(""), "bench_sa_sweep", &args).unwrap_err();
+            assert!(e.contains(name) && e.contains("coupled"), "{e}");
+            assert!(!liar.received().contains(&":INITiate:IMMediate".to_string()));
+            assert!(
+                liar.received()
+                    .contains(&":INITiate:CONTinuous ON".to_string()),
+                "continuous restored"
+            );
+        }
     }
 
     // Tests [@ANCHOR: bench_mcp_sa_marker]
@@ -604,15 +760,49 @@ mod tests {
     fn a_marker_searches_or_is_placed_and_reads_back_frequency_and_level() {
         out();
         let dev = FakeDevice::sim(Sim::default());
-        call_with(&dev.connector(), &bench(""), "bench_sa_sweep",
-            &json!({"start_hz": 0, "stop_hz": 750e6})).unwrap();
-        let v = call_with(&dev.connector(), &bench(""), "bench_sa_marker", &json!({"marker": 2, "search": "max"})).unwrap();
-        assert_eq!((v["marker"].as_u64(), v["freq_hz"].as_f64(), v["level_dbm"].as_f64()), (Some(2), Some(100e6), Some(-30.0)));
-        assert!(dev.received().contains(&":CALCulate:MARKer2:MAXimum".to_string()));
-        let v = call_with(&dev.connector(), &bench(""), "bench_sa_marker", &json!({"freq_hz": 200e6})).unwrap();
+        call_with(
+            &dev.connector(),
+            &bench(""),
+            "bench_sa_sweep",
+            &json!({"start_hz": 0, "stop_hz": 750e6}),
+        )
+        .unwrap();
+        let v = call_with(
+            &dev.connector(),
+            &bench(""),
+            "bench_sa_marker",
+            &json!({"marker": 2, "search": "max"}),
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                v["marker"].as_u64(),
+                v["freq_hz"].as_f64(),
+                v["level_dbm"].as_f64()
+            ),
+            (Some(2), Some(100e6), Some(-30.0))
+        );
+        assert!(dev
+            .received()
+            .contains(&":CALCulate:MARKer2:MAXimum".to_string()));
+        let v = call_with(
+            &dev.connector(),
+            &bench(""),
+            "bench_sa_marker",
+            &json!({"freq_hz": 200e6}),
+        )
+        .unwrap();
         assert_eq!(v["freq_hz"].as_f64(), Some(200e6));
-        for bad in [json!({"marker": 5}), json!({"search": "min"}), json!({"search": "max", "freq_hz": 1e6}), json!({"freq_hz": 3e9})] {
-            assert!(call_with(&dev.connector(), &bench(""), "bench_sa_marker", &bad).is_err(), "{bad}");
+        for bad in [
+            json!({"marker": 5}),
+            json!({"search": "min"}),
+            json!({"search": "max", "freq_hz": 1e6}),
+            json!({"freq_hz": 3e9}),
+        ] {
+            assert!(
+                call_with(&dev.connector(), &bench(""), "bench_sa_marker", &bad).is_err(),
+                "{bad}"
+            );
         }
     }
 
@@ -633,16 +823,31 @@ mod tests {
         let port = bmp_device(with_newline);
         let connect = move |_: &Instrument| Link::tcp("127.0.0.1", port);
         let v = call_with(&connect, &bench(""), "bench_sa_screenshot", &json!({})).unwrap();
-        assert_eq!((v["width"].as_u64(), v["height"].as_u64(), v["bytes"].as_u64()), (Some(8), Some(4), Some(size as u64)));
+        assert_eq!(
+            (
+                v["width"].as_u64(),
+                v["height"].as_u64(),
+                v["bytes"].as_u64()
+            ),
+            (Some(8), Some(4), Some(size as u64))
+        );
         let f = PathBuf::from(v["file"].as_str().unwrap());
         assert!(f.starts_with(&d));
         assert_eq!(std::fs::read(&f).unwrap(), bmp);
         let short = bmp_device(bmp[..60].to_vec());
         let connect = move |_: &Instrument| Link::tcp("127.0.0.1", short);
-        assert!(call_with(&connect, &bench(""), "bench_sa_screenshot", &json!({})).unwrap_err().contains("arrived"));
+        assert!(
+            call_with(&connect, &bench(""), "bench_sa_screenshot", &json!({}))
+                .unwrap_err()
+                .contains("arrived")
+        );
         let junk = bmp_device(vec![b'x'; 200]);
         let connect = move |_: &Instrument| Link::tcp("127.0.0.1", junk);
-        assert!(call_with(&connect, &bench(""), "bench_sa_screenshot", &json!({})).unwrap_err().contains("BMP"));
+        assert!(
+            call_with(&connect, &bench(""), "bench_sa_screenshot", &json!({}))
+                .unwrap_err()
+                .contains("BMP")
+        );
         assert!(bmp_header(b"BM").is_err());
     }
 }

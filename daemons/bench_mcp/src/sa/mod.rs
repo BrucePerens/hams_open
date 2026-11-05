@@ -21,6 +21,7 @@ use rmcp::model::Tool;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+// [@ANCHOR: bench_mcp_sa_limits]
 /// The model prefix the instrument must report in `*IDN?` (the SSA3000X family). Anything else is another device at that
 /// address: stop before sending it any other command.
 const MODEL_PREFIX: &str = "SSA3";
@@ -34,6 +35,7 @@ const OFF_TRIES: u32 = 3;
 pub(crate) const TG_RATED_MIN_DBM: f64 = -20.0;
 pub(crate) const TG_RATED_MAX_DBM: f64 = 0.0;
 
+// [@ANCHOR: bench_mcp_sa_config]
 /// The `siglent_ssa` settings of an instrument entry.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
@@ -65,6 +67,7 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     Ok(cfg)
 }
 
+// [@ANCHOR: bench_mcp_sa_spec]
 /// One tool: name, tier, description for the model, JSON-schema properties and required keys.
 pub struct Spec {
     pub name: &'static str,
@@ -98,6 +101,7 @@ macro_rules! sweep_props {
     };
 }
 
+// [@ANCHOR: bench_mcp_sa_specs]
 /// Every tool of this instrument. A new tool is a new entry here, a match arm in `call_with`, a page under
 /// `manual/tools/<name>.md` and a test.
 pub const SPECS: &[Spec] = &[
@@ -267,6 +271,7 @@ pub(crate) fn number(
 
 /// The text to end an I/O error with: the next step, in order.
 fn next_step(what: &str) -> String {
+    // [@ANCHOR: bench_mcp_sa_next_step]
     format!(
         "{what}. Next: check the LAN cable and that the analyzer is on and at the configured host and port (the raw SCPI socket is port 5025), then call bench_sa_status. If it stays silent, power-cycle the analyzer. Do not use the USB connection: its replies are cut short."
     )
@@ -322,6 +327,7 @@ pub(crate) fn model_max_hz(model: &str) -> Option<f64> {
     (n > 0.0).then_some(n * 1e8)
 }
 
+// [@ANCHOR: bench_mcp_sa_ident]
 /// What `open` learned from `*IDN?`.
 pub struct Ident {
     pub make: String,
@@ -362,7 +368,10 @@ fn open(connect: &Connector, inst: &Instrument) -> Result<(Link, Ident), String>
 pub(crate) fn options(l: &mut Link) -> Result<Vec<String>, String> {
     // [@ANCHOR: bench_mcp_sa_options]
     let r = ask(l, ":SYSTem:OPTions?", READ_TRIES, REPLY_TIMEOUT_S)?;
-    Ok(r.split([' ', ',']).filter(|s| !s.is_empty()).map(String::from).collect())
+    Ok(r.split([' ', ','])
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .collect())
 }
 
 /// Identity, options, the tracking generator and the sweep settings, read back from the unit. Changes nothing.
@@ -400,6 +409,7 @@ pub fn status(connect: &Connector, inst: &Instrument) -> Result<Value, String> {
     }))
 }
 
+// [@ANCHOR: bench_mcp_sa_connector]
 /// How a call reaches the instrument. Production opens the TCP socket; tests pass a connector to a fake instrument.
 pub type Connector = dyn Fn(&Instrument) -> Result<Link, String>;
 
@@ -460,6 +470,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_sa_parse_config]
+    // Tests [@ANCHOR: bench_mcp_sa_config]
+    // Tests [@ANCHOR: bench_mcp_sa_limits]
     #[test]
     fn config_takes_the_tg_cap_with_a_default_and_refuses_bad_ones() {
         assert_eq!(bench("")[0].sa, Config::default());
@@ -506,6 +518,9 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_sa_instrument]
     // Tests [@ANCHOR: bench_mcp_sa_tool_defs]
+    // Tests [@ANCHOR: bench_mcp_sa_spec]
+    // Tests [@ANCHOR: bench_mcp_sa_specs]
+    // Tests [@ANCHOR: bench_mcp_sa_connector]
     // Tests [@ANCHOR: bench_mcp_sa_call]
     // Tests [@ANCHOR: bench_mcp_sa_call_with]
     #[test]
@@ -542,6 +557,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sa_status]
     // Tests [@ANCHOR: bench_mcp_sa_open]
     // Tests [@ANCHOR: bench_mcp_sa_options]
+    // Tests [@ANCHOR: bench_mcp_sa_ident]
     #[test]
     fn status_reads_the_recorded_session_and_a_stranger_is_sent_nothing() {
         let dev = FakeDevice::from_transcript("tests/sa_fixtures/status.txt");
@@ -576,6 +592,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sa_ask]
     // Tests [@ANCHOR: bench_mcp_sa_ask_f64]
     // Tests [@ANCHOR: bench_mcp_sa_tcp]
+    // Tests [@ANCHOR: bench_mcp_sa_next_step]
     #[test]
     fn a_silent_analyzer_is_retried_a_bounded_number_of_times_and_a_garbage_number_is_an_error() {
         let quiet = FakeDevice::start(|_| None);
@@ -609,8 +626,7 @@ mod tests {
             garbage: Some((":SENSe:BWIDth?".into(), "----".into())),
             ..Sim::default()
         });
-        let e = call_with(&bad.connector(), &bench(""), "bench_sa_status", &json!({}))
-            .unwrap_err();
+        let e = call_with(&bad.connector(), &bench(""), "bench_sa_status", &json!({})).unwrap_err();
         assert!(e.contains("not a finite number"), "{e}");
         // The production connector cannot reach a port nothing listens on.
         let port = {

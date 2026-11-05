@@ -98,20 +98,9 @@ impl FakeDevice {
         })
     }
 
-    /// The local port the device listens on, for a bench config that names it.
-    pub fn port(&self) -> u16 {
-        self.port
-    }
-
     /// The commands received so far, in order, across all connections.
     pub fn received(&self) -> Vec<String> {
         self.log.lock().unwrap().clone()
-    }
-
-    /// A new link to this device, for code that opens its own (the supply's timed switch-off).
-    pub fn link(&self) -> impl Fn() -> Result<Link, String> + Send + 'static {
-        let port = self.port;
-        move || Link::tcp("127.0.0.1", port)
     }
 
     /// The way for `call_with` to reach this device.
@@ -183,7 +172,11 @@ impl Default for Sim {
 }
 
 fn hz(arg: &str) -> f64 {
-    arg.trim().trim_end_matches("Hz").trim().parse().unwrap_or(f64::NAN)
+    arg.trim()
+        .trim_end_matches("Hz")
+        .trim()
+        .parse()
+        .unwrap_or(f64::NAN)
 }
 
 impl Sim {
@@ -304,14 +297,18 @@ impl Sim {
                 let i = (0..self.trace.len())
                     .max_by(|&a, &b| self.trace[a].total_cmp(&self.trace[b]))
                     .unwrap_or(0);
-                self.marker = (self.freq_of(i), self.trace.get(i).copied().unwrap_or(-999.0));
+                self.marker = (
+                    self.freq_of(i),
+                    self.trace.get(i).copied().unwrap_or(-999.0),
+                );
                 Reply::Silent
             }
             _ if c.contains(":X?") => e(self.marker.0),
             _ if c.contains(":Y?") => e(self.marker.1),
             _ if c.contains(":X ") => {
                 let f = hz(arg);
-                let i = (((f - self.start) / (self.stop - self.start) * 750.0).round() as usize).min(750);
+                let i = (((f - self.start) / (self.stop - self.start) * 750.0).round() as usize)
+                    .min(750);
                 self.marker = (f, self.trace.get(i).copied().unwrap_or(-999.0));
                 Reply::Silent
             }
