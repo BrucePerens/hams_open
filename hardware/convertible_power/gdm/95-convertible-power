@@ -1,0 +1,7 @@
+# Installed by convertible-power: the GDM login screen never suspends from inactivity while on AC power.
+# GNOME's default for the greeter is to suspend after 15 minutes idle even on AC, so a laptop left at the login
+# screen (after any reboot, with nobody logged in) went to sleep and dropped off the network (bruce17, 2026-11-04).
+# On battery the greeter keeps GNOME's default, so a laptop left on battery still saves itself.
+# GDM compiles /usr/share/gdm/dconf at start (/usr/share/gdm/generate-config); this file sorts after Debian's 90-debian-settings.
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='nothing'

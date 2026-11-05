@@ -1,3 +1,12 @@
+convertible-power (1.0.3) unstable; urgency=medium
+
+  * The GDM login screen no longer suspends from inactivity on AC power
+    (/usr/share/gdm/dconf/95-convertible-power). GNOME's greeter default is to
+    suspend after 15 minutes idle even on AC, so a laptop left at the login
+    screen after a reboot went to sleep and dropped off the network (bruce17).
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 04 Nov 2026 21:10:00 -0800
+
 convertible-power (1.0.2) unstable; urgency=medium
 
   * Stop a still-running power-profiles-daemon when configuring: TLP will not set

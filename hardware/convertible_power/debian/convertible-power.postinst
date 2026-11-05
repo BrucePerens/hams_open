@@ -11,6 +11,10 @@ case "$1" in
             if systemctl is-active --quiet power-profiles-daemon.service; then
                 systemctl stop power-profiles-daemon.service || true
             fi
+            # The login screen's settings are compiled from /usr/share/gdm/dconf when GDM starts; compile them now too.
+            if [ -x /usr/share/gdm/generate-config ]; then
+                /usr/share/gdm/generate-config || true
+            fi
             if command -v tlp >/dev/null 2>&1; then
                 tlp start >/dev/null 2>&1 || true
             fi

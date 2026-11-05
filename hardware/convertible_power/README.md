@@ -56,3 +56,12 @@ The behaviour on battery (the machines were on AC during the work): the settings
 (`tlp-stat`), but no discharge-rate measurement was made. The CF-19 has not been tried with this package.
 
 Licence: GPL-3.0-or-later.
+
+## The login screen on AC
+
+GNOME suspends the GDM login screen after 15 minutes without input, even on AC power. A laptop left at the login screen after a
+reboot, with nobody logged in, therefore went to sleep and dropped off the network: on bruce17 (2026-11-04) each boot suspended
+exactly 15 minutes after it started, although the logind lid rules and the user session settings said never on AC. The package
+installs `/usr/share/gdm/dconf/95-convertible-power` (`sleep-inactive-ac-type='nothing'`), which GDM compiles into the greeter's
+settings when it starts (`/usr/share/gdm/generate-config`; the postinst runs it too). It sorts after Debian's `90-debian-settings`, so it
+wins. On battery the login screen keeps GNOME's default. A greeter that is already running reads it at its next start.
