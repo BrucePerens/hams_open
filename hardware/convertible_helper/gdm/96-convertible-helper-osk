@@ -1,0 +1,9 @@
+# Installed by convertible-helper: the GDM login screen offers GNOME's on-screen keyboard.
+# GNOME shows its keyboard by itself only when the seat is in touch mode (a tablet-mode switch the kernel reports) and
+# the last input came from the touchscreen. On these convertibles GNOME does not see tablet mode, which is why
+# convertible-helper turns the keyboard setting on in the user's session -- but the login screen runs as its own user
+# and never got it, so in tablet position there was no way to type the password (Bruce, 2026-11-05).
+# The cost: in laptop position the keyboard also appears when the password field takes focus; it can be dismissed.
+# GDM compiles /usr/share/gdm/dconf at start (/usr/share/gdm/generate-config); this file sorts after 90-debian-settings.
+[org/gnome/desktop/a11y/applications]
+screen-keyboard-enabled=true

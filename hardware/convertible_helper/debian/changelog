@@ -1,3 +1,13 @@
+convertible-helper (1.4.0) unstable; urgency=medium
+
+  * The GDM login screen now offers the on-screen keyboard
+    (/usr/share/gdm/dconf/96-convertible-helper-osk). GNOME does not see
+    tablet mode on these convertibles, and the helper only set the keyboard
+    for the user's session, so in tablet position the password could not be
+    typed at the login screen.
+
+ -- Bruce Perens <bruce@perens.com>  Thu, 05 Nov 2026 14:30:00 -0800
+
 convertible-helper (1.3.0) unstable; urgency=medium
 
   * Auto-rotate for tablets whose desktop does not rotate by itself: an
