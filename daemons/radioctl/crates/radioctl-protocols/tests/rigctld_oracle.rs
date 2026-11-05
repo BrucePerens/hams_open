@@ -350,6 +350,10 @@ fn rigctld_binary() -> String {
 /// How long one answer from `rigctld` may take (see the note at its use).
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(40);
 
+/// How many answers, over the whole test binary, came only in the second `ANSWER_TIMEOUT` window
+/// (see `Rigctld::call`); printed at each occurrence so the rate shows in the test output.
+static LATE_ANSWERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 impl Rigctld {
     fn start(model: u32, slave: &str, baud: u32) -> Rigctld {
         // The port is found by binding to 0 and letting go, so two harnesses (the nine tests of
@@ -459,15 +463,48 @@ impl Rigctld {
 
     /// Sends one command in rigctld's extended form and returns its `key: value` lines and the
     /// RPRT code.
+    ///
+    /// An answer that has not come within `ANSWER_TIMEOUT` is waited for ONCE more, for the same
+    /// bound, without sending the command again: `rigctld` works through one client's commands in
+    /// order, so a resent command would be queued behind the first and every later answer would be
+    /// read one step late. Each such wait is counted and printed, and the answer compared is the
+    /// one `rigctld` gave to the one command sent. A closed or reset connection is not waited on:
+    /// `rigctld` drops a client when `rig_open` fails for the model (Hamlib's verdict, pinned as
+    /// `NoAnswer` steps in the known divergences).
+    ///
+    /// No readiness query is sent before the first command: Hamlib 4.6.2's `rigctld` runs
+    /// `rig_open` before it answers any client command, `chk_vfo` included, and for a model it
+    /// cannot open (the OptoScan files, whose `7F 02` the virtual rig refuses) it retries the open
+    /// for as long as the client stays connected without ever answering, so a separate handshake
+    /// only waits longer for the same `NoAnswer`.
     fn call(&mut self, command: &str) -> Result<(Vec<(String, String)>, i32), String> {
         writeln!(self.writer, "+{command}").map_err(|e| format!("send: {e}"))?;
         let mut fields = Vec::new();
+        let mut waited_again = false;
         loop {
             let mut line = String::new();
-            let n = self
-                .reader
-                .read_line(&mut line)
-                .map_err(|e| format!("no answer to {command:?}: {e}"))?;
+            let n = loop {
+                // On a timeout `read_line` keeps what it had read of the line in `line`, so the
+                // second wait continues the same line.
+                match self.reader.read_line(&mut line) {
+                    Ok(n) => break n,
+                    Err(e)
+                        if !waited_again
+                            && matches!(
+                                e.kind(),
+                                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                            ) =>
+                    {
+                        waited_again = true;
+                        let late = LATE_ANSWERS.fetch_add(1, Ordering::Relaxed) + 1;
+                        eprintln!(
+                            "oracle late answer #{late}: no answer to {command:?} within {} s, waiting once more",
+                            ANSWER_TIMEOUT.as_secs()
+                        );
+                    }
+                    Err(e) => return Err(format!("no answer to {command:?}: {e}")),
+                }
+            };
             if n == 0 {
                 return Err("rigctld closed the connection".to_string());
             }
