@@ -656,6 +656,36 @@ class BackupConfig(models.Model):
                         err_msg = f"""Snapshot Anomaly: Snapshot {c.get('snapshot_id')} is {snap_mb:.2f} MB, below the {self.minimum_size_mb} MB minimum."""
                         self.report_backup_failure(err_msg)
 
+    # Failed jobs in a row (newest first, any job type) after which a configuration is reported.
+    CONSECUTIVE_FAILED_JOBS_ALERT = 3
+
+    # [@ANCHOR: backup_management:backup_job_problems]
+    # Verified by [@ANCHOR: backup_management:test_backup_job_problems]
+    def _backup_job_problems(self, now):
+        """The messages for what is wrong with this configuration's jobs, empty when nothing is.
+        Two things are reported: its newest CONSECUTIVE_FAILED_JOBS_ALERT jobs all failed (the worker cannot run or report
+        jobs; 2026-10-27 to 11-05 it was refused by Odoo with a rotated key, ticket 116), or it has had jobs for more than
+        26 hours and none of them has succeeded in the last 26 hours. Jobs the pending-timeout marks failed count as failed.
+        A configuration with no job older than 26 hours is not judged (a new one is not alarming). Documented in
+        backup_management/README.md ("Backup health")."""
+        self.ensure_one()
+        problems = []
+        Job = self.env["backup.job"]
+        limit_time = now - datetime.timedelta(hours=26)
+        newest = Job.search([("config_id", "=", self.id)], order="create_date desc, id desc", limit=self.CONSECUTIVE_FAILED_JOBS_ALERT)
+        if len(newest) == self.CONSECUTIVE_FAILED_JOBS_ALERT and all(job.state == "failed" for job in newest):
+            problems.append(
+                f"Backup Jobs Failing: the last {len(newest)} jobs for {self.name} all failed (newest: job {newest[0].id}). "
+                "Check the backup worker."
+            )
+        if Job.search_count([("config_id", "=", self.id), ("create_date", "<", limit_time)], limit=1) and not Job.search_count(
+            [("config_id", "=", self.id), ("state", "=", "done"), ("create_date", ">=", limit_time)], limit=1
+        ):
+            problems.append(
+                f"No Successful Backup Job: no job for {self.name} has succeeded in over 26 hours. Check the backup worker."
+            )
+        return problems
+
     @api.model
     def cron_sync_all_backups(self):
         # [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
@@ -689,6 +719,11 @@ class BackupConfig(models.Model):
                 ):  # 26 hours (allows for 24h cron jitter without false positives)
                     stale_msg = f"""Stale Backup Alert: No new snapshots detected for {conf.name} in over 26 hours."""
                     conf.report_backup_failure(stale_msg)
+
+            # Reported every hour for as long as it lasts: the incident is deduplicated by source, so it stays one open
+            # incident, and pager.incident re-pages it while nobody acknowledges it (REPAGE_HOURS).
+            for job_problem in conf._backup_job_problems(now):
+                conf.report_backup_failure(job_problem)
 
             if conf.restore_drill_script:
                 delta_drill = (

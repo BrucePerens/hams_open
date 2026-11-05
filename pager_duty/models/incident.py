@@ -29,6 +29,11 @@ TREND_OCCURRENCE_THRESHOLD = 5
 # today's unchanged immediate-page behavior.
 TREND_TRACKED_SEVERITIES = ("low", "medium")
 
+# A paging incident that is still open (not acknowledged, not resolved) while its source keeps reporting it is announced
+# again this many hours after the last time it paged. 2026-10-28 to 11-05: a backup failure paged once, sat unacknowledged in
+# the helpdesk "new" stage for nine days, and nothing paged again (ticket 116).
+REPAGE_HOURS = 6
+
 
 class PagerIncident(models.Model):
     """
@@ -166,6 +171,13 @@ class PagerIncident(models.Model):
         "'Trend:' incident was raised for it. Prevents raising a new trend "
         "incident on every subsequent occurrence once one has already "
         "fired for this burst.",
+    )
+
+    last_paged = fields.Datetime(
+        string="Last Paged",
+        default=lambda self: fields.Datetime.now(),
+        help="When the on-duty administrator was last told about this incident (its creation, or the last re-page "
+        "while it stayed open and unacknowledged).",
     )
 
     # [@ANCHOR: pager_duty:incident_write]
@@ -315,6 +327,40 @@ class PagerIncident(models.Model):
             incident.with_user(mail_svc).message_post(
                 body=msg_body, partner_ids=partner_ids)   # fmt: skip
 
+    # [@ANCHOR: pager_duty:repage_if_due]
+    # Verified by [@ANCHOR: pager_duty:test_repage_if_due]
+    def _repage_if_due(self):
+        """Tells the on-duty administrator again about this incident when it is still open and was last paged REPAGE_HOURS
+        or more ago; True when it did. Called by report_incident() each time the same source reports the same open
+        incident, so an incident that keeps being reported and that nobody acknowledged keeps paging until someone does.
+        The note goes on the incident and, when a helpdesk ticket carries the incident, on the ticket with the on-duty
+        administrator as a recipient (the ticket is the page when helpdesk integration is on). Documented in
+        pager_duty/README.md ("Re-paging an unacknowledged incident")."""
+        self.ensure_one()
+        if self.status != "open" or self.severity in TREND_TRACKED_SEVERITIES:
+            return False
+        now = fields.Datetime.now()
+        if self.last_paged and (now - self.last_paged).total_seconds() < REPAGE_HOURS * 3600:
+            return False
+        hours_open = int((now - (self.create_date or now)).total_seconds() // 3600)
+        on_duty_user = self.env["calendar.event"].with_context(website_id=self.website_id.id).get_current_on_duty_admin()
+        partner_ids = [on_duty_user.partner_id.id] if on_duty_user else []
+        body = _(
+            "STILL OPEN: this incident has been open for %(hours)s hours without being acknowledged and has been reported "
+            "%(count)s times. Nobody has taken it yet.",
+            hours=hours_open,
+            count=self.occurrence_count,
+        )
+        mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.mail_service_internal")
+        self.with_user(mail_svc).message_post(body=body, partner_ids=partner_ids)  # audit-ignore-mail: Tested by [@ANCHOR: pager_duty:test_repage_if_due]  # fmt: skip
+        if self.helpdesk_ticket_id and self.helpdesk_ticket_model in self.env:
+            hd_svc = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_helpdesk_service")
+            ticket = self.env[self.helpdesk_ticket_model].with_user(hd_svc).browse(self.helpdesk_ticket_id).exists()
+            if ticket and hasattr(ticket, "message_post"):
+                ticket.message_post(body=body, partner_ids=partner_ids)  # audit-ignore-mail: Tested by [@ANCHOR: pager_duty:test_repage_if_due]  # fmt: skip
+        self.write({"last_paged": now})
+        return True
+
     def _raise_trend_incident(self, source_incident, website_id):
         """
         [@ANCHOR: pager_raise_trend_incident]
@@ -462,6 +508,7 @@ class PagerIncident(models.Model):
                 and new_window_count >= TREND_OCCURRENCE_THRESHOLD
             ):
                 self._raise_trend_incident(existing, website_id)
+            existing._repage_if_due()
             return existing.id
 
         if vals.get("name", "New") == "New":

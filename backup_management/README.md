@@ -104,6 +104,30 @@ This module does not itself detect or report cross-tenant data leakage. Tenant i
 - `pika`: Used for RabbitMQ integration in the daemon.
 - `cryptography`: Used for Fernet encryption of the stored Kopia password and S3/B2 secret key.
 
+## Backup health
+
+`cron_sync_all_backups` (hourly) reports a configuration through `report_backup_failure()` (a critical `pager.incident` with source `Backup Manager: <name>`) when its newest snapshot is more than 26 hours old,
+and, new, when its jobs show the worker is not working. The reports repeat each hour, so they stay one open incident whose occurrence count grows, and `pager.incident` re-pages it every six hours until someone acknowledges it
+(`pager_duty:repage_if_due`).
+
+### `[@ANCHOR: backup_management:backup_job_problems]` `backup.config._backup_job_problems(now)`
+
+**Purpose.** Names what is wrong with a configuration's jobs, so a worker that cannot run or report jobs is noticed from the Odoo side without depending on the worker. 2026-10-27 to 11-05 (ticket 116) every job failed or was
+lost for nine days while only the 26-hour snapshot alert (once) spoke.
+
+**Call interface.**
+
+| Name | Type | Meaning |
+|---|---|---|
+| `now` | `datetime` | The reference time (`fields.Datetime.now()` from the cron). |
+| returns | `list[str]` | Zero, one or two messages: `Backup Jobs Failing` when the newest `CONSECUTIVE_FAILED_JOBS_ALERT` (3) jobs of any job type all have state `failed` (jobs the six-hour pending timeout marked failed count), and `No Successful Backup Job` when the configuration has a job older than 26 hours but none in state `done` created within the last 26 hours. |
+
+Errors: none. A configuration with no job older than 26 hours is not judged, so a new one is quiet.
+
+**Special concerns.** Two cheap indexed searches per configuration per hour. It reads only `backup.job`, so it still works while the worker is down. The caller reports each message through `report_backup_failure()`.
+
+**See also.** `test_backup_job_problems_reports_failed_and_missing_successful_jobs`, `test_cron_sync_all_backups_reports_job_problems_every_run` in `tests/test_backup.py`.
+
 ## The worker's Odoo key (`daemon/main.py`)
 
 The worker (`backup.worker.service`, user `odoo`) calls back to Odoo over the JSON-2 API as `backup_service_internal` with a bearer key. systemd reads that key
