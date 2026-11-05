@@ -40,6 +40,23 @@ class MailThread(models.AbstractModel):
             # Header facts and HTML shape of the raw message (List-Unsubscribe, Precedence, SES authentication results, text/plain
             # against text/html, tables, images, tracking pixels) for the bulk-mail rules of inbound_spam_reasons(): the sanitised
             # ticket body has lost all of them. Read by helpdesk_ticket.message_new() and pager.incident.message_new().
-            "mail_signals": mail_signals(message),
+            "mail_signals": self._with_verified_reply_headers(mail_signals(message)),
         }
         return msg_dict
+
+    @api.model
+    # [@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]
+    def _with_verified_reply_headers(self, signals):
+        """``signals`` (from ``mail_signals``) with ``reply_headers`` set: True only when one of its
+        ``referenced_message_ids`` is the Message-ID of a message already stored on a ticket. The sender writes
+        In-Reply-To and References, so a header alone must not exempt a message from the bulk-mail rules. The lookup
+        runs as the helpdesk service account (the mail-ingest identity cannot read tickets)."""
+        ids = signals.get("referenced_message_ids") or []
+        known = False
+        if ids:
+            hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+            known = bool(
+                hd_env["mail.message"].search_count([("model", "=", "hams_helpdesk.ticket"), ("message_id", "in", ids)])
+            )
+        signals["reply_headers"] = known
+        return signals

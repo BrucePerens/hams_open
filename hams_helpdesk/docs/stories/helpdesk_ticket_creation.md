@@ -81,8 +81,8 @@ organisational domain differs from the From domain (1); HTML with no plain-text 
 against more than 3000 characters of HTML (1); four or more tables or nesting three deep (1); three or more images (1); a 0 or 1
 pixel image (1); "unsubscribe" in the body, counted only when there is no `List-Unsubscribe` header because they are one fact (2);
 "view in browser" footer (1); "update your preferences" or "you are receiving this because" footer (1); a health-supplement,
-"secret", "researchers" or "natural" clickbait subject (1, counted once). A reply (a message carrying `In-Reply-To` or `References`)
-is never judged by the weighted rules. Only the authentication results written by Amazon SES itself (the first
+"secret", "researchers" or "natural" clickbait subject (1, counted once). A reply (a message whose `In-Reply-To` or `References`
+names a Message-ID already stored on a ticket; the headers alone are the sender's claim) is never judged by the weighted rules. Only the authentication results written by Amazon SES itself (the first
 `Authentication-Results` header whose authserv-id is `amazonses.com`) are read; any other copy is the sender's claim.
 
 Special concerns: the first reason of a weighted flag states the total and the threshold, the following lines one signal each, so a
@@ -92,6 +92,39 @@ by a person before anything changes. False positives are worse than false negati
 stage.
 
 **Status:** Verified by `TestBulkMailSignals` (tests/test_inbound_spam_filter.py), which runs the real ticket names of hams_prod.
+
+### `referenced_message_ids`
+**[@ANCHOR: hams_helpdesk:inbound_referenced_message_ids]**
+
+Purpose: list the Message-IDs a raw inbound message says it replies to, so the caller can check them against stored mail. Pure (no
+database); called by `mail_signals()`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `message` | `email.message.Message` | The parsed raw message; only the `In-Reply-To` and `References` headers are read (at most 20,000 characters of each). |
+
+Returns a list of `<local@host>` strings in header order without repeats, at most `MAX_REFERENCED_IDS` (10, the last ones, which are the
+nearest ancestors); `[]` when the headers are absent or hold no `<...>` token. Raises nothing for any header text.
+
+**Status:** Verified by `test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail` (tests/test_inbound_spam_filter.py).
+
+### `_with_verified_reply_headers`
+**[@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]**
+
+Purpose: decide whether a message really is a reply, because `detect_bulk_mail_signals()` skips the bulk rules for a reply and the
+sender writes `In-Reply-To` and `References` (a bulk sender could add any value and escape the weighted rules). Called by
+`mail.thread.message_parse()` (`models/mail_thread_untrusted.py`) on the `mail_signals()` dict before it is parked.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `signals` | dict | A `mail_signals()` dict; mutated (the `reply_headers` key is set) and returned. |
+
+Returns the same dict with `reply_headers` True only when one of `signals["referenced_message_ids"]` is the `message_id` of a
+`mail.message` on a `hams_helpdesk.ticket`; False otherwise, including when the list is empty. One `search_count` per message, run as
+the helpdesk service account (`hams_helpdesk.user_helpdesk_service`) because the mail-ingest identity cannot read tickets. No other
+side effect; a database error propagates to the mail ingest, which retries the message.
+
+**Status:** Verified by `test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail`.
 
 ### `mail_signals`
 **[@ANCHOR: hams_helpdesk:inbound_mail_signals]**
@@ -110,7 +143,8 @@ logged at info level. It reads at most 400,000 characters of each text part and 
 | Key | Type | Meaning |
 |---|---|---|
 | `list_unsubscribe`, `list_id` | bool | The header is present. |
-| `reply_headers` | bool | `In-Reply-To` or `References` is present. |
+| `referenced_message_ids` | list of str | The Message-IDs (`<local@host>`) named by `In-Reply-To` and `References`, in header order, at most 10 (the last ones). The sender writes them, so they are only a claim. |
+| `reply_headers` | bool | **Not set by `mail_signals`.** `message_parse()` sets it through `_with_verified_reply_headers()` (below): true only when one of `referenced_message_ids` is the Message-ID of a message already stored on a ticket. |
 | `precedence` | str | Lower-cased `Precedence` value, at most 16 characters. |
 | `auto_submitted` | str | Lower-cased `Auto-Submitted` value, at most 32 characters. |
 | `from_domain`, `return_path_domain` | str | Lower-cased domain of the first address of `From` and `Return-Path`, at most 255 characters; "" when absent. |
