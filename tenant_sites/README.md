@@ -42,6 +42,32 @@ hostname, the path `^/static/` and that service, or the push is refused with the
 (the catch-all would otherwise send them to Odoo, which answers 404). The 1.1 migration adopts the sites that
 already have those rules, so the guard protects them from the first push.
 
+## REQUEST_URI (`models/ir_http.py`)
+
+### `[@ANCHOR: tenant_sites:ensure_request_uri]` `ir.http._tenant_ensure_request_uri()`
+
+**Purpose.** Odoo's `website` module reads `request.httprequest.environ['REQUEST_URI']` without a default in `_serve_redirect` and in the canonical
+URL of every page it renders. Werkzeug's server (Odoo's HTTP workers) sets that key; the gevent server of the websocket worker (port 8072) does not.
+nginx sends everything under the prefix `/websocket` to that worker, so `/websocket.js` and `/websocket.js.map` (browsers and extensions ask for them) reached
+Odoo without the key and ended in `KeyError` and HTTP 500 (tickets 134 and 136, 2026-11-03). Called first thing by `_serve_fallback`, which every
+request that matched no route passes through.
+
+**Call interface.**
+
+| Name | Type | Meaning |
+|---|---|---|
+| (none) | | A classmethod; works on the current `odoo.http.request`. |
+| returns | `None` | Nothing. |
+
+Effect: when `REQUEST_URI` is missing it is set to the request's `RAW_URI` if the server provided one, otherwise to `PATH_INFO` plus `?` and `QUERY_STRING`
+when there is a query string. A value that is already present is never changed. Errors: none; it needs an active `request`.
+
+**Special concerns.** Synchronous, no database, no locks, idempotent. It only adds a key to the request's own WSGI environment, so it cannot change which
+page is served; it is not a security check and the value is used only to look up redirects and to build canonical URLs.
+
+**See also.** Test `test_a_request_without_request_uri_is_a_404_not_a_server_error` in `tests/test_http.py` (a real request with the key removed from the server's environment);
+`[@ANCHOR: tenant_sites:COMM_serve_fallback]`, the caller.
+
 ## Not done here
 
 DNS records and Cloudflare Custom Hostnames. The `cloudflare` module has a `cloudflare.dns.record` model but it is data only (no push), and

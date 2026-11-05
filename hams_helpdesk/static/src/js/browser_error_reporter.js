@@ -37,7 +37,11 @@ export const IGNORED_TYPES = new Set([
     "TimeoutError",
 ]);
 export const IGNORED_MESSAGE_RE =
-    /(ResizeObserver loop|^script error\.?$|failed to fetch|load failed|networkerror when attempting|the operation was aborted|the user aborted a request|network request failed|fetch is aborted)/i;
+    /(ResizeObserver loop|^script error\.?$|failed to fetch|load failed|networkerror when attempting|the operation was aborted|the user aborted a request|network request failed|fetch is aborted|couldn't be established or was interrupted|the database connection is closing|on 'IDBDatabase')/i;
+// A selector the browser cannot parse (Odoo's public interactions and our own scripts use :has()): ignored only
+// in a browser that does not know :has(), where it is the browser's age and not a bug of ours.
+export const UNSUPPORTED_SELECTOR_RE = /is not a valid selector|invalid selector/i;
+export const MAX_CAUSE_DEPTH = 3;
 
 const TYPE_RE = /^[A-Za-z][A-Za-z0-9_$]{0,39}$/;
 const FRAME_RE = /^(.*):(\d+):(\d+)$/;
@@ -124,25 +128,51 @@ export function releaseOf(topFrame, scriptUrls) {
 
 // [@ANCHOR: hams_helpdesk:js_is_ignorable]
 // Errors that are not bugs in the page (see the server's IGNORED_TYPES): Odoo's RPC errors, which the
-// server has already ticketed, a dropped connection, an aborted request, ResizeObserver notices.
-export function isIgnorable(typeName, message, error) {
+// server has already ticketed, a dropped connection, an aborted request, ResizeObserver notices, a browser's
+// storage refusing IndexedDB, and (only when `supportsHas` is false) a selector an old browser cannot parse.
+// An error class that does not set its own `name` (Odoo's ConnectionLostError) is also known by its constructor's name.
+export function isIgnorable(typeName, message, error, supportsHas = true) {
     if (IGNORED_TYPES.has(typeName) || IGNORED_MESSAGE_RE.test(message || "")) {
         return true;
     }
+    if (!supportsHas && UNSUPPORTED_SELECTOR_RE.test(message || "")) {
+        return true;
+    }
+    if (error && typeof error === "object" && error.constructor && IGNORED_TYPES.has(error.constructor.name)) {
+        return true;
+    }
     return Boolean(error && typeof error === "object" && (error.exceptionName || (error.data && error.data.name)));
+}
+
+// [@ANCHOR: hams_helpdesk:js_unwrap_owl_error]
+// Owl wraps an error thrown while a component renders or runs a hook in an OwlError whose own stack is Owl's
+// handler (the "error in the owl lifecycle" ticket 95, 2026-10-23, had nothing but Owl's frames) and keeps the real
+// error in `cause`. Returns the innermost cause of such a wrapper, at most MAX_CAUSE_DEPTH levels down, else `error`.
+export function unwrapOwlError(error) {
+    let current = error;
+    for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
+        const isOwl = current && typeof current === "object" && current.name === "OwlError";
+        const cause = isOwl ? current.cause : null;
+        if (!cause || typeof cause !== "object") {
+            break;
+        }
+        current = cause;
+    }
+    return current;
 }
 
 // [@ANCHOR: hams_helpdesk:js_build_report]
 // The report object for one error, or null when nothing worth sending can be said about it.
 // `error` is the thrown value; `fallback` is `{filename, lineno, colno}` from an `error` event, used
 // when the value has no stack. `env` is `{origin, pathname, userAgent, scriptUrls}`.
-export function buildReport(error, fallback, env) {
+export function buildReport(rawError, fallback, env) {
+    const error = unwrapOwlError(rawError);
     const isObject = error !== null && typeof error === "object";
     const rawName = isObject ? error.name || (error.constructor && error.constructor.name) : "";
     const typeName = TYPE_RE.test(rawName || "") ? rawName : isObject ? "Error" : "UnhandledRejection";
     const rawMessage = isObject ? error.message : typeof error === "string" ? error : "";
     const message = stripUrlQueries(String(rawMessage || "")).slice(0, MESSAGE_LIMIT);
-    if (isIgnorable(typeName, message, isObject ? error : null)) {
+    if (isIgnorable(typeName, message, isObject ? error : null, env.supportsHas !== false)) {
         return null;
     }
     let frames = isObject ? reduceStack(error.stack) : [];
@@ -263,6 +293,7 @@ export function pageEnv(win) {
         pathname: win.location.pathname,
         userAgent: win.navigator.userAgent,
         scriptUrls: Array.from(win.document.querySelectorAll("script[src]"), (script) => script.src),
+        supportsHas: Boolean(win.CSS && win.CSS.supports && win.CSS.supports("selector(:has(*))")),
     };
 }
 

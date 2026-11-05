@@ -145,10 +145,25 @@ class IrHttp(models.AbstractModel):
             _logger.debug("tenant request %s refused", request.httprequest.path)
         raise NotFound()
 
+    # [@ANCHOR: tenant_sites:ensure_request_uri]
+    # Verified by [@ANCHOR: tenant_sites:test_ensure_request_uri]
+    @classmethod
+    def _tenant_ensure_request_uri(cls):
+        """Gives the request the REQUEST_URI the website module reads. Documented in README.md ("REQUEST_URI")."""
+        environ = request.httprequest.environ
+        if "REQUEST_URI" not in environ:
+            raw = environ.get("RAW_URI")
+            if not raw:
+                raw = environ.get("PATH_INFO", "/")
+                if environ.get("QUERY_STRING"):
+                    raw += "?" + environ["QUERY_STRING"]
+            environ["REQUEST_URI"] = raw
+
     # [@ANCHOR: tenant_sites:COMM_serve_fallback]
     # Verified by [@ANCHOR: tenant_sites:COMM_test_serve_fallback]
     @classmethod
     def _serve_fallback(cls):
+        cls._tenant_ensure_request_uri()
         kind = cls._tenant_classify()
         if kind == KIND_TENANT and request.httprequest.method not in utils.SAFE_METHODS:
             return cls._tenant_plain_response("not found", 404)
