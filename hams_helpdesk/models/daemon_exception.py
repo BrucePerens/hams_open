@@ -34,6 +34,14 @@ def unit_key_parts(name):
     return ("daemon.unit_failed", name, "result:exit-code", f"systemd:{name}")
 
 
+# [@ANCHOR: hams_helpdesk:exc_quota_key_parts]
+def quota_key_parts(name):
+    """The fingerprint inputs of a ``quota_exhausted`` report from the unit ``name``: its own row and ticket, apart from
+    the unit's failures (``unit_key_parts``), so "the AI service is out of quota" is one ticket that counts its
+    occurrences (Bruce 2026-11-05: "one ticket when the account is out of quota")."""
+    return ("daemon.quota_exhausted", name, "quota", f"systemd:{name}")
+
+
 class ExceptionFingerprintDaemon(models.Model):
     _inherit = "hams_helpdesk.exception.fingerprint"
 
@@ -56,7 +64,8 @@ class ExceptionFingerprintDaemon(models.Model):
         result = result if result in scrub.DAEMON_RESULTS else "unknown"
         trace = "\n".join(
             (
-                f"Daemon failure reported from outside Odoo: {name}",
+                (f"Quota used up, reported from outside Odoo by: {name}" if kind == "quota_exhausted"
+                 else f"Daemon failure reported from outside Odoo: {name}"),
                 f"kind: {kind}",
                 f"result: {result}",
                 "Journal tail (scrubbed; exception messages are withheld):",
@@ -71,9 +80,9 @@ class ExceptionFingerprintDaemon(models.Model):
             f"result:{result}",
             f"systemd:{name}",
             trace,
-            f"Daemon failure: {name}",
+            f"AI service quota used up (reported by {name})" if kind == "quota_exhausted" else f"Daemon failure: {name}",
             reporter=f"exception report ({kind})",
-            key_parts=unit_key_parts(name),
+            key_parts=quota_key_parts(name) if kind == "quota_exhausted" else unit_key_parts(name),
         )
         return {"recorded": bool(recorded)}
 
