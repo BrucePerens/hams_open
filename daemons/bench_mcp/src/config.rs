@@ -27,6 +27,7 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("procedure", Kind::Procedure),
     ("rotator", Kind::Rotator),
     ("siglent_sds", Kind::Scope),
+    ("siglent_ssa", Kind::Sa),
     ("usb_hub", Kind::UsbHub),
     ("vnwa_open", Kind::Vna),
 ];
@@ -71,6 +72,8 @@ pub enum Kind {
     Hamlib,
     /// An antenna rotator driven through Hamlib's `rotctld` (`rotator` module).
     Rotator,
+    /// A Siglent SSA3000X spectrum analyzer with tracking generator (`sa` module), SCPI over the LAN.
+    Sa,
     /// The skeleton instrument (`example` module): an imaginary SCPI signal source, the starting point for a new driver.
     Example,
     /// The procedure runner (`procedure` module): programs that call bench tools in loops, next to the server.
@@ -101,6 +104,7 @@ pub struct Instrument {
     pub hamlib: crate::hamlib::Config,
     pub rotator: crate::rotator::Config,
     pub example: crate::example::Config,
+    pub sa: crate::sa::Config,
     pub procedure: crate::procedure::Config,
 }
 
@@ -303,12 +307,20 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             hamlib: module_config!(hamlib, driver_name, c, name),
             rotator: module_config!(rotator, driver_name, c, name),
             example: module_config!(example, driver_name, c, name),
+            sa: if driver_name == "siglent_ssa" {
+                crate::sa::parse_config(c).map_err(|e| format!("{name}: {e}"))?
+            } else {
+                crate::sa::Config::default()
+            },
             procedure: module_config!(procedure, driver_name, c, name),
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),
             (Kind::Example, None, _) => {
                 return Err(format!("{name}: an example instrument needs \"host\""))
+            }
+            (Kind::Sa, None, _) => {
+                return Err(format!("{name}: a spectrum analyzer needs \"host\""))
             }
             (Kind::Psu, _, None) => return Err(format!("{name}: a supply needs \"serial\"")),
             _ => {}

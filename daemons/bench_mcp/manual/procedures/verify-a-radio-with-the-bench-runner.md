@@ -4,7 +4,7 @@ summary: How the radioctl bench runner and the bench_mcp transmit tools fit toge
 see_also: [procedures/test-a-transmitter-into-a-dummy-load, procedures/check-a-receiver, instruments/hamlib/limits]
 tools: [bench_hamlib_stations, bench_hamlib_load_baseline, bench_hamlib_load_check, bench_hamlib_tx_key_test, bench_hamlib_safe_state]
 instrument: hamlib
-verified: code only, 2026-11-02 (runner tested against virtual rigs; nothing run on hardware)
+verified: code only, 2026-11-02 (runner tested against virtual rigs only)
 ---
 
 # Verify a radio with the bench runner

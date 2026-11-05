@@ -54,3 +54,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - instruments/vna/spectrum-analyzer: new page, the uncalibrated spectrum analyzer and what is not verified
 - tools/bench_vna_spectrum: new tool page
 - instruments/vna/troubleshooting: a dead TX path (all four channels dead) is a cabling problem first; tools/bench_vna_sweep: the same in its error text
+- instruments/sa: the Siglent SSA3000X spectrum analyzer with tracking generator (overview, setup, operation, limits, troubleshooting, protocol), and tools/bench_sa_status, _sweep, _marker, _screenshot, _tg_on, _tg_off, _tg_level, _tg_normalize, _tg_s21
+- procedures/verify-a-radio-with-the-bench-runner: the verified line no longer reads as a hardware claim under `code only`
+- instruments/sa: the Siglent SSA3000X spectrum analyzer with tracking generator (overview, setup, operation, limits, troubleshooting, protocol), and tools/bench_sa_status, _sweep, _marker, _screenshot, _tg_on, _tg_off, _tg_level, _tg_normalize, _tg_s21
+- procedures/verify-a-radio-with-the-bench-runner: the verified line no longer reads as a hardware claim under `code only`
