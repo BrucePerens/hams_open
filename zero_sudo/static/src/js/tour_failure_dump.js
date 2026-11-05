@@ -1,6 +1,8 @@
 /** @odoo-module **/
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 
+import { abortChannel, describePhase, describeRejectionReason } from "@zero_sudo/js/tour_abort_gate";
+
 const originalConsoleError = console.error;
 const originalLog = console.log;
 const originalWarn = console.warn;
@@ -37,6 +39,16 @@ console.info = function(...args) {
     originalInfo.apply(console, args);
 };
 
+// Where the page is in its life, for the abort message and for telling a failure inside a tour
+// from noise while the finished tour's page is torn down (see abortChannel in tour_abort_gate.js).
+window._hamsPhase = { succeededAt: 0, unloadingAt: 0 };
+for (const ev of ['beforeunload', 'pagehide']) {
+    // Registered at load time, so it runs before the tour engine's own beforeunload handler.
+    window.addEventListener(ev, () => {
+        if (!window._hamsPhase.unloadingAt) window._hamsPhase.unloadingAt = Date.now();
+    }, true);
+}
+
 // =================================================================================
 // 1. INSTANT ABORT RELAY TRIGGER
 // =================================================================================
@@ -46,9 +58,17 @@ function triggerInstantAbort(reason, details) {
 
     const stack = new Error("Abort Trace").stack;
 
-    // The magic string that tools/test.py is listening for on stdout
-    const msg = "\n[WATCHDOG ALARM] FATAL JS EVENT DETECTED: " + reason + "\n" + (details || '') + "\nStack Trace:\n" + stack + "\n";
-    originalConsoleError.call(console, msg);
+    // Before the tour reported success this is a failure: console.error, which Odoo's harness
+    // turns into a failed test. After it, the test has passed and the page is being closed, so
+    // the same dump goes to console.warn under a different heading (test.py matches the
+    // "[WATCHDOG ALARM]" string below, and a console.error here fails a passed run).
+    const teardown = abortChannel(window._hamsPhase) === "teardown";
+    const emit = teardown ? originalWarn : originalConsoleError;
+    const heading = teardown
+        ? "\n[WATCHDOG NOTICE] JS event after the tour succeeded, while its page was torn down (not a failure): "
+        : "\n[WATCHDOG ALARM] FATAL JS EVENT DETECTED: ";
+    const msg = heading + reason + "\n" + (details || '') + "\n" + describePhase(window._hamsPhase, Date.now(), document) + "\nStack Trace:\n" + stack + "\n";
+    emit.call(console, msg);
 
     // Freeze and dump the DOM state for Python to capture
     if (!window._domDumped) {
@@ -58,9 +78,9 @@ function triggerInstantAbort(reason, details) {
             let currentHash = document.location.hash || document.location.pathname;
             let stateHeader = "\n========== UI STATE SUMMARY ==========\nURL/Hash: " + currentHash + "\nPending RPCs: " + rpcList + "\n======================================\n";
             let skeleton = buildInteractableSkeleton(document.body).replace(/\s{2,}/g, ' ');
-            originalConsoleError.call(console, stateHeader + "\n========== INTERACTABLE DOM SKELETON ==========\n" + skeleton + "\n===============================================\n");
+            emit.call(console, stateHeader + "\n========== INTERACTABLE DOM SKELETON ==========\n" + skeleton + "\n===============================================\n");
         } catch (e) {
-            originalConsoleError.call(console, "Failed to dump DOM skeleton: " + e.toString());
+            emit.call(console, "Failed to dump DOM skeleton: " + e.toString());
         }
     }
 }
@@ -92,7 +112,7 @@ window.addEventListener('error', (event) => {
 
 // Catch asynchronous crashes and broken promises (RPC failures, async tour step crashes)
 window.addEventListener('unhandledrejection', (event) => {
-    let reason = event.reason ? (event.reason.stack || event.reason) : "Unknown Promise Error";
+    let reason = event.reason ? (event.reason.stack || describeRejectionReason(event.reason)) : "Unknown Promise Error";
     let msg = event.reason && event.reason.message ? event.reason.message.toLowerCase() : "";
     if (event.defaultPrevented || msg.includes("un-mounted") || msg.includes("fetch") || msg.includes("modal") || msg.includes("abort") || msg.includes("reading 'contains'") || msg.includes("undefined or null to object")) {
         event.preventDefault();
@@ -269,6 +289,7 @@ window._hamsTourWatchdog = {
 console.log = function(...args) {
     originalLog.apply(console, args);
     const msg = args.map(a => typeof a === 'string' ? a : (a && a.message ? a.message : '')).join(' ');
+    if (msg === 'tour succeeded' && !window._hamsPhase.succeededAt) window._hamsPhase.succeededAt = Date.now();
 
     // Reset idle timer on native Odoo tour progression logs
     if (msg.toLowerCase().includes('tour') || msg.toLowerCase().includes('step') || msg.toLowerCase().includes('trigger')) {

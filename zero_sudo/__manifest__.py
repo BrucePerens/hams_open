@@ -43,8 +43,10 @@
         ],
         "web.assets_tests": [
             "zero_sudo/static/src/js/tour_utils.js",
+            "zero_sudo/static/src/js/tour_abort_gate.js",
             "zero_sudo/static/src/js/tour_failure_dump.js",
             "zero_sudo/static/src/tours/zero_sudo_tour.js",
+            "zero_sudo/static/src/tours/tour_abort_gate_tour.js",
         ],
         # Fast, hardware-independent hoot unit tests -- distinct from the full-browser-tour
         # suite above. offline_store.js is duplicated here (not just referenced via
@@ -56,6 +58,8 @@
         "web.assets_unit_tests": [
             "zero_sudo/static/src/js/offline_store.js",
             "zero_sudo/static/tests/offline_store.test.js",
+            "zero_sudo/static/src/js/tour_abort_gate.js",
+            "zero_sudo/static/tests/tour_abort_gate.test.js",
         ],
     },
     "data": [

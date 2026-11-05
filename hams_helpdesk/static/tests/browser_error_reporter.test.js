@@ -254,6 +254,7 @@ describe("hams_helpdesk browser error reporter", () => {
             pathname: "/my/tickets",
             userAgent: ENV.userAgent,
             scriptUrls: [BUNDLE],
+            supportsHas: false, // the stand-in window has no CSS.supports
         });
         const sent = [];
         install(win, { send: (r) => sent.push(r) });
