@@ -240,6 +240,46 @@ class TestExceptionScrubbing(ExceptionTicketCase):
         self.assertIn("TypeError: bad value for <email>", trace)
         self.assertIn("raise_type_error", trace)
 
+    def test_source_line_secrets_are_scrubbed_in_every_shape(self):
+        # Tests [@ANCHOR: hams_helpdesk:exc_scrub_text]
+        cases = (
+            ("api_key = 'sk-live-abc123'", "sk-live-abc123"),
+            ('{"secret":"abc123"}', "abc123"),
+            ("client_secret=abc123", "abc123"),
+            ("refresh_token=abc123", "abc123"),
+            ("access_token=abc123", "abc123"),
+            ("db_password: abc123", "abc123"),
+            ("SECRET_KEY=abc123", "abc123"),
+            ("AWS_SECRET_ACCESS_KEY=AKIAabc123", "AKIAabc123"),
+            ("id_token=abc123", "abc123"),
+            ("postgres://user:pw0rd9@dbhost/db", "pw0rd9"),
+            ("amqp://guest:pw0rd9@mq.example.org:5672/", "pw0rd9"),
+            ("redis://:pw0rd9@cache:6379/0", "pw0rd9"),
+            ("Authorization: Basic dXNlcjpwdw==", "dXNlcjpwdw"),
+            ('"Authorization": "Bearer abc123.def"', "abc123"),
+        )
+        for text, secret in cases:
+            self.assertNotIn(secret, scrub.scrub_text(text, strict=False), text)
+        for harmless in ("inside=1", "side=left", "decided: yes", "x = compute(y)"):
+            self.assertEqual(scrub.scrub_text(harmless, strict=False), harmless)
+
+    def test_a_secret_or_address_across_the_cut_is_scrubbed_before_it_is_cut(self):
+        # Tests [@ANCHOR: hams_helpdesk:exc_daemon_tail]
+        # Tests [@ANCHOR: hams_helpdesk:exc_frame_lines]
+        line = "x" * 150 + " user=alice@example.com key Zk3Jq9XaaaaaaaaaaaaaaaaaaaaZZZ"
+        tail = scrub.scrub_daemon_tail(line)
+        self.assertLessEqual(len(tail), scrub.DAEMON_TAIL_LINE_LIMIT)
+        for fragment in ("alic", "@exa", "Zk3Jq9"):
+            self.assertNotIn(fragment, tail)
+
+        source = "x" * 150 + " = 'alice@example.com'"
+        exc = self.caught(raise_type_error, "x")
+        self.safe_patch_object(scrub.linecache, "getline", lambda *_args, **_kwargs: source + "\n")
+        lines = scrub._frame_lines(exc)
+        for text in lines:
+            self.assertNotIn("alic", text)
+            self.assertNotIn("@exa", text)
+
     def test_route_drops_query_string_and_variable_parts(self):
         self.assertEqual(
             scrub.normalize_route("/community/k6bp?email=a@b.com&token=zzz", "/community/<string:slug>"),

@@ -52,11 +52,22 @@ _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _URL_RE = re.compile(r"(?i)\b(?:https?|wss?|ftp)://\S+")
 _IPV4_RE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 _IPV6_RE = re.compile(r"(?i)(?<![\w:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\w:])")
+# A keyword may carry a prefix or suffix (client_secret, AWS_SECRET_ACCESS_KEY, db_password), the
+# key may be quoted ("secret": "x", api_key = 'x'), and the value may start with a quote. The affixes
+# are bounded so a long run of word characters cannot make the match slow.
 _SECRET_KV_RE = re.compile(
-    r"(?i)\b(pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|apikey|"
-    r"session[_-]?id|sid|cookie|set-cookie|authorization|bearer|csrf[_-]?token|"
-    r"signature|otp|private[_-]?key|access[_-]?key)\b(\s*[=:]\s*)([^\s,;&'\"]+)"
+    r"(?i)(?<![A-Za-z0-9])((?:[\w.-]{0,40}?(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|apikey|"
+    r"session[_-]?id|cookie|authorization|bearer|signature|otp|private[_-]?key|access[_-]?key|credential)"
+    r"[\w.-]{0,40})|sid)(['\"]?\s*[=:]\s*['\"]?)([^\s,;&'\"]+)"
 )
+# The scheme and the credential of an Authorization header ("Basic <base64>", "Bearer <token>").
+_AUTH_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])(authorization['\"]?\s*[=:]\s*['\"]?)[^\s,;&'\"]+(?:\s+[^\s,;&'\"]+)?"
+)
+# scheme://user:password@host (a database or broker URL): the password is replaced before the URL step.
+_DSN_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)([^/\s:@]*):([^@\s/]+)@")
+# Longest text given to the patterns when a line is cut after scrubbing (keeps the regexes cheap).
+SCRUB_INPUT_LIMIT = 4000
 _BEARER_RE = re.compile(r"(?i)\bbearer\s+[\w.~+/=-]+")
 _LONG_TOKEN_RE = re.compile(r"\b[\w+/=-]{24,}\b")
 _HEX_RE = re.compile(r"(?i)\b[0-9a-f]{16,}\b")
@@ -75,8 +86,10 @@ def scrub_text(text, strict=True):
     bearer tokens, hex/base64 tokens and, if ``strict``, callsigns and long digit runs. ``strict`` is
     for exception messages; source lines are code and only get the first group."""
     text = str(text or "")
+    text = _DSN_RE.sub(lambda m: m.group(1) + m.group(2) + ":<redacted>@", text)
     text = _URL_RE.sub("<url>", text)
     text = _EMAIL_RE.sub("<email>", text)
+    text = _AUTH_RE.sub(lambda m: m.group(1) + "<redacted>", text)
     text = _BEARER_RE.sub("bearer <redacted>", text)
     text = _SECRET_KV_RE.sub(lambda m: m.group(1) + m.group(2) + "<redacted>", text)
     text = _IPV4_RE.sub("<ip>", text)
@@ -221,7 +234,7 @@ def _frame_lines(exc):
         out.append(f"  {name}:{lineno} in {frame.f_code.co_name}")
         source = linecache.getline(frame.f_code.co_filename, lineno).strip()
         if source:
-            out.append("    " + scrub_text(source[:CODE_LINE_LIMIT], strict=False))
+            out.append("    " + scrub_text(source[:SCRUB_INPUT_LIMIT], strict=False)[:CODE_LINE_LIMIT])
     return out[-2 * MAX_FRAMES:]
 
 
@@ -327,5 +340,6 @@ def scrub_daemon_tail(text):
         exc_line = _DAEMON_EXC_LINE_RE.match(line)
         if exc_line:
             line = exc_line.group(1) + ": <message withheld>"
-        out.append(scrub_text(line[:DAEMON_TAIL_LINE_LIMIT]))
+        # Scrub the whole line and cut afterwards: a cut first leaves half an address or token.
+        out.append(scrub_text(line[:SCRUB_INPUT_LIMIT])[:DAEMON_TAIL_LINE_LIMIT])
     return "\n".join(out)[:DAEMON_TAIL_LIMIT]
