@@ -8,7 +8,7 @@
 use std::os::fd::AsFd;
 use std::path::Path;
 
-use relay_broker::client::connect_and_call;
+use relay_broker::client::{connect_and_call_as, DEFAULT_SERVER_UIDS};
 use relay_broker::os::{LinuxOs, Os};
 use relay_broker::wire::{DeviceClass, Group, Request, Response};
 
@@ -48,7 +48,13 @@ fn main() {
         (Some("provision"), None, None, None) => Request::ProvisionGroups,
         _ => panic!("{usage}"),
     };
-    let (resp, fd) = connect_and_call(Path::new(socket), &req).expect("broker call");
+    // The account that serves the socket: root unless BROKER_UID names another (a broker started by hand).
+    let uid: Vec<u32> = std::env::var("BROKER_UID")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map(|u| vec![u])
+        .unwrap_or_else(|| DEFAULT_SERVER_UIDS.to_vec());
+    let (resp, fd) = connect_and_call_as(Path::new(socket), &req, &uid).expect("broker call");
     match resp {
         Response::Devices(devs) => {
             for d in devs {
