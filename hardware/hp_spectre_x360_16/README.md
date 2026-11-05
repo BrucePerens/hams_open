@@ -31,14 +31,7 @@ Platform profile: `hp-wmi` accepts writes to `/sys/firmware/acpi/platform_profil
 TLP reports the profile as "not available" and ignores `PLATFORM_PROFILE_*`. The package sets it instead from a udev
 rule (when the charger changes) and a boot service: `performance` on AC, `cool` on battery.
 
-Runtime power management: TLP's `RUNTIME_PM_DENYLIST` keeps the integrated GPU (`00:02.0`, which drives the panel) awake
-and lets the discrete Arc A370M (`03:00.0`) suspend. Measured on battery with the same settings (idle, 4K panel, no
-other load, 2026-10-29): 30.8 to 32.4 W with the Arc GPU held awake by a driver-level exclusion, **27.6 W** with it
-suspended. On kernel 7.1.2 each suspend of the Arc GPU logs one i915 kernel WARNING (`gen2_assert_iir_is_zero`, from
-`pm_runtime_work`); the GPU suspends and resumes normally. Forcing runtime PM on both GPUs the first time produced
-that warning twice plus an `intel_uncore` unclaimed-write warning, which is why the integrated GPU is left alone. The
-earlier belief that the warnings came from the integrated GPU was wrong. If the warning is unwelcome, add `03:00.0` to
-`RUNTIME_PM_DENYLIST` in `/etc/tlp.conf`, at a cost of about 3 to 5 W.
+Runtime power management: TLP's `RUNTIME_PM_DENYLIST` keeps **both** GPUs awake, the integrated GPU (`00:02.0`, which drives the panel) and the discrete Arc A370M (`03:00.0`), since version 1.3.1. Version 1.3.0 let the Arc GPU suspend, which saved 3 to 5 W on battery (2026-10-29: 27.6 W suspended against 31 W awake), but on kernel 7.1.2 the GPU did not always return: from 2026-10-31 to 2026-11-05 the kernel logged `Lost access to MMIO BAR` / `MMIO unreliable` for it eight times, each with an i915 WARNING, and the audio DSP (SOF, `00:1f.3`) hung with IPC timeouts 30 s after one of them until the next reboot. The GuC firmware the kernel recommends (70.53.0; Debian trixie ships 70.36.0) was installed from linux-firmware under `/lib/firmware/updates` on 2026-11-05; once it has run a while, the saving can be measured again with `03:00.0` taken out of the list.
 
 Measured idle power (battery, same brightness): AC-style settings 36.8 to 38.8 W, battery settings 30.8 to 32.4 W (the
 Arc GPU still awake), about 16% lower.
