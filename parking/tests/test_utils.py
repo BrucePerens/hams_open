@@ -15,6 +15,10 @@ class TestParkingUtils(HamsTransactionCase):
                     "https://own.example/x", "https://x.example\\@evil.example", "https://", "",
                     "https://x.example/a b", "https://[::1]/", "https://10.1.2.3/", "https://x.example:99999/"):
             self.assertNotEqual(utils.validate_redirect_url(bad, "own.example"), "", bad)
+        # A bracket in the wrong place makes urlsplit raise ValueError; the answer is a message.
+        for malformed in ("https://x.y[::1]", "http://[::1]evil.com", "//[::1]@", "https://[::1]@", "https://[x"):
+            self.assertEqual(utils.validate_redirect_url(malformed, "own.example"), "not a valid URL", malformed)
+        self.assertEqual(utils.validate_redirect_url("https://x.example:99999/", "own.example"), "invalid port")
 
     # [@ANCHOR: parking:COMM_test_redirect_location]
     def test_redirect_location_never_changes_host(self):
