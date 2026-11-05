@@ -28,8 +28,8 @@
         <record id="binary_manifest_etcd" model="binary.manifest">
             <field name="company_id" eval="False"/>
             <field name="name">etcd</field>
-            <field name="url">https://github.com/etcd-io/etcd/releases/download/v3.7.2/etcd-v3.7.2-linux-amd64.tar.gz</field>
-            <field name="checksum">3a3679bc51a4ee9d30bccea1da7cd4fe62c6fc1d2ca1255068d2c53bf3026135</field>
+            <field name="url">https://github.com/etcd-io/etcd/releases/download/v3.7.3/etcd-v3.7.3-linux-amd64.tar.gz</field>
+            <field name="checksum">5dfa9cc3b3ce3b4b491fbcc2057d3daa166bcc6676f743fcd20f8e5760cb9775</field>
             <field name="archive_type">tar.gz</field>
             <field name="extract_member">etcd</field>
         </record>
