@@ -344,6 +344,8 @@ Every I/O error ends with the next step (check the LAN cable and host, call `ben
 
 #### `bench_mcp_sa_config` - `Config`
 
+[@ANCHOR: bench_mcp_sa_config]
+
 The `siglent_ssa` settings of an instrument entry, in `src/sa/mod.rs`; held in `Instrument.sa` (`src/config.rs`) for the life of the process.
 
 | Field | Type | Meaning |
@@ -353,6 +355,8 @@ The `siglent_ssa` settings of an instrument entry, in `src/sa/mod.rs`; held in `
 Invariants: finite and inside the rating whenever it came from `parse_config`. Created when the config file is read, immutable afterwards, shared read-only by all tool calls. Wire form: the optional key `max_tg_dbm` in the instrument's JSON entry; no versioning (an absent key means the default). Concurrency: none, it is never mutated.
 
 #### `bench_mcp_sa_limits` - fixed limits
+
+[@ANCHOR: bench_mcp_sa_limits]
 
 Constants in `src/sa/mod.rs` and `src/sa/sweep.rs` and `src/sa/tg.rs` that bound what the driver does.
 
@@ -371,6 +375,8 @@ Plain compile-time constants: no ownership, no wire form, no locking.
 
 #### `bench_mcp_sa_spec` - `Spec`
 
+[@ANCHOR: bench_mcp_sa_spec]
+
 One tool's definition, in `src/sa/mod.rs`; created at compile time as an element of `SPECS`.
 
 | Field | Type | Meaning |
@@ -385,9 +391,13 @@ Invariants: names are unique; `props` parses as a JSON object. Read-only, shared
 
 #### `bench_mcp_sa_specs` - `SPECS`
 
+[@ANCHOR: bench_mcp_sa_specs]
+
 The table of the nine tools (`bench_sa_status`, `_sweep`, `_marker`, `_screenshot`, `_tg_on`, `_tg_off`, `_tg_level`, `_tg_normalize`, `_tg_s21`) as `&[Spec]`. The sweep arguments shared by `bench_sa_sweep`, `bench_sa_tg_normalize` and `bench_sa_tg_s21` come from the macro `sweep_props!` (`instrument`, `start_hz`, `stop_hz`, `center_hz`, `span_hz`, `rbw_hz`, `vbw_hz`, `ref_level_dbm`, `attenuation_db`, `detector`, `average_count`, `continuous_after`). Adding a tool means one entry here, one arm in `call_with`, one manual page and a test. Read by `tool_defs` and `call_with`.
 
 #### `bench_mcp_sa_ident` - `Ident`
+
+[@ANCHOR: bench_mcp_sa_ident]
 
 What `open` learned from `*IDN?`, in `src/sa/mod.rs`; created per call, dropped when the call returns.
 
@@ -401,9 +411,13 @@ What `open` learned from `*IDN?`, in `src/sa/mod.rs`; created per call, dropped 
 
 #### `bench_mcp_sa_connector` - `Connector`
 
+[@ANCHOR: bench_mcp_sa_connector]
+
 `type Connector = dyn Fn(&Instrument) -> Result<Link, String>`: how a call reaches the instrument. Production passes `tcp`; the tests pass a closure to a fake instrument on a local socket, so the full path is the production one. It is called once per tool call (and by nothing else), borrowed, and must be safe to call from the tool thread. A failure to connect is the returned error text.
 
 #### `bench_mcp_sa_span` - `Span`
+
+[@ANCHOR: bench_mcp_sa_span]
 
 The frequency range of a sweep, in `src/sa/sweep.rs`.
 
@@ -415,6 +429,8 @@ The frequency range of a sweep, in `src/sa/sweep.rs`.
 Copied by value; created by `sweep_args`.
 
 #### `bench_mcp_sa_sweep_req` - `SweepReq`
+
+[@ANCHOR: bench_mcp_sa_sweep_req]
 
 A checked sweep request, created by `sweep_args` and read by `run_sweep`; a `None` field means "leave the instrument as it is".
 
@@ -431,6 +447,8 @@ A checked sweep request, created by `sweep_args` and read by `run_sweep`; a `Non
 
 #### `bench_mcp_sa_trace` - `Trace`
 
+[@ANCHOR: bench_mcp_sa_trace]
+
 One trace and the settings the unit itself reported for it (read back after they were set), in `src/sa/sweep.rs`. Created by `run_sweep`, consumed by `find_peaks`, `trace_summary`, `write_csv` and the S21 code; stored (cloned) inside a `Reference`.
 
 | Field | Type | Meaning |
@@ -446,9 +464,13 @@ One trace and the settings the unit itself reported for it (read back after they
 
 #### `bench_mcp_sa_peak` - `Peak`
 
+[@ANCHOR: bench_mcp_sa_peak]
+
 A spectral peak: `freq_hz` (`f64`, Hz, from the bin position) and `level_dbm` (`f64`, dBm). Created by `find_peaks`, serialised by `trace_summary` as `{"freq_hz", "level_dbm"}`.
 
 #### `bench_mcp_sa_reference` - `Reference`
+
+[@ANCHOR: bench_mcp_sa_reference]
 
 A through reference, in `src/sa/tg.rs`: the trace taken with the TG cabled straight to the RF input.
 
@@ -465,6 +487,8 @@ Lives in the process-wide `refs()` map under `"<instrument>:<name>"` until the s
 
 #### `bench_mcp_sa_parse_config` - `parse_config(c: &Value) -> Result<Config, String>`
 
+[@ANCHOR: bench_mcp_sa_parse_config]
+
 Reads the optional `max_tg_dbm` from an instrument's JSON entry when the config file is loaded.
 
 | Argument | Type | Meaning |
@@ -475,17 +499,25 @@ Returns the `Config` (default when the key is absent). Errors: not a number, or 
 
 #### `bench_mcp_sa_instrument` - `instrument(insts, args) -> Result<&Instrument, String>`
 
+[@ANCHOR: bench_mcp_sa_instrument]
+
 Picks the analyzer for a call: the one named by `args.instrument`, or the only configured analyzer (`Kind::Sa`). Errors: no such name, none configured, or several and no name (the message lists them). Pure.
 
 #### `bench_mcp_sa_tool_defs` - `tool_defs(insts: &[Instrument]) -> Vec<Tool>`
+
+[@ANCHOR: bench_mcp_sa_tool_defs]
 
 The tool list for the MCP: every `SPECS` entry whose tier is at or below the tier of at least one configured analyzer, with the description prefixed by the tier. Called by the server when a client lists tools (`bench_mcp_main_all_tool_defs`). Pure; panics only if a `props` text is not JSON, which the tests rule out.
 
 #### `bench_mcp_sa_flag` - `flag(args, key, default) -> Result<bool, String>`
 
+[@ANCHOR: bench_mcp_sa_flag]
+
 A boolean argument. Absent or null gives `default`; `true`/`false` gives itself; anything else (a string, a number) is an error naming the key. No coercion.
 
 #### `bench_mcp_sa_number` - `number(args, key, lo, hi, why) -> Result<Option<f64>, String>`
+
+[@ANCHOR: bench_mcp_sa_number]
 
 A numeric argument that may be absent.
 
@@ -500,45 +532,67 @@ Returns `Ok(None)` when absent or null, `Ok(Some(x))` for a finite number inside
 
 #### `bench_mcp_sa_next_step` - `next_step(what: &str) -> String`
 
+[@ANCHOR: bench_mcp_sa_next_step]
+
 Ends an I/O error message with the ordered next steps (check the LAN cable, host and port 5025; call `bench_sa_status`; power-cycle the unit; do not use USB). Pure.
 
 #### `bench_mcp_sa_ask` - `ask(l: &mut Link, cmd, tries, secs) -> Result<String, String>`
+
+[@ANCHOR: bench_mcp_sa_ask]
 
 Sends a query and returns its reply, trying up to `tries` times in all with a `secs` second reply timeout each (the timeout is set on the link before each try). An empty reply counts as a failure. **Only for reads**: repeating a read changes nothing, and a command that changes the instrument is never passed through it. Blocking for up to `tries * secs` seconds. Error: the last failure text plus the next steps. The link is exclusively borrowed.
 
 #### `bench_mcp_sa_ask_f64` - `ask_f64(l: &mut Link, cmd: &str) -> Result<f64, String>`
 
+[@ANCHOR: bench_mcp_sa_ask_f64]
+
 `ask` with 3 tries of 5 s, then the reply must parse as a finite number (SCPI scientific notation such as `+2.1E+09` is accepted). Error: no reply, or a reply that is not a finite number (quoted in the message).
 
 #### `bench_mcp_sa_on_off` - `on_off(cmd: &str, reply: &str) -> Result<bool, String>`
+
+[@ANCHOR: bench_mcp_sa_on_off]
 
 Reads a state reply: `1`, `ON` or `1.000000` is true; `0`, `OFF` or `0.000000` is false (case and surrounding space ignored). Anything else is an error, not a guess; `cmd` is used for the message. Pure. Used to verify the generator's state, so a garbled reply can never be taken as "off".
 
 #### `bench_mcp_sa_model_max_hz` - `model_max_hz(model: &str) -> Option<f64>`
 
+[@ANCHOR: bench_mcp_sa_model_max_hz]
+
 The top frequency in Hz from a model name: `SSA3021X` is 2.1e9 (the two digits after `SSA30` times 100 MHz), `SSA3032X` 3.2e9, `SSA3015X` 1.5e9. `None` when the name does not carry two positive digits after `SSA30`. Pure.
 
 #### `bench_mcp_sa_open` - `open(connect, inst) -> Result<(Link, Ident), String>`
+
+[@ANCHOR: bench_mcp_sa_open]
 
 Connects, asks `*IDN?` and returns the link and the `Ident`. If the reply has fewer than four fields or the model is not an `SSA3...` with a known top frequency, it returns an error that names the host and port and says nothing else was sent. Blocking. Every tool calls it first, so a mistyped address never receives a command.
 
 #### `bench_mcp_sa_options` - `options(l: &mut Link) -> Result<Vec<String>, String>`
 
+[@ANCHOR: bench_mcp_sa_options]
+
 The installed options from `:SYSTem:OPTions?`, split at spaces and commas (for example `Meas EMI TG CAT`). Used to check that `TG` is present; the other names are only reported, never required.
 
 #### `bench_mcp_sa_status` - `status(connect, inst) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_sa_status]
 
 `bench_sa_status`: identity, options, the generator (`state`, `level_dbm`, `max_tg_dbm`, `level_offset_db`; `not installed` when `TG` is not listed) and the sweep settings (`start_hz`, `stop_hz`, `rbw_hz`, `vbw_hz`, `ref_level_dbm`, `attenuation_db`, `detector`, `sweep_time_s`, `continuous`, `points`), all read back. Reads only; it never changes the instrument or the generator.
 
 #### `bench_mcp_sa_tcp` - `tcp(inst: &Instrument) -> Result<Link, String>`
 
+[@ANCHOR: bench_mcp_sa_tcp]
+
 The production `Connector`: opens `Link::tcp(host, port)`. Error: connection refused or timed out (the text of the link error).
 
 #### `bench_mcp_sa_call` - `call(insts, name, args) -> Result<Value, String>`
 
+[@ANCHOR: bench_mcp_sa_call]
+
 The entry point used by the server's dispatcher: `call_with` over `tcp`.
 
 #### `bench_mcp_sa_call_with` - `call_with(connect, insts, name, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_sa_call_with]
 
 Looks the tool up in `SPECS`, picks the instrument, refuses a tool above the instrument's tier (before any connection), and dispatches by name to `status`, `sweep::sweep`, `sweep::marker`, `sweep::screenshot`, `tg::tg_on`, `tg::tg_off`, `tg::tg_level`, `tg::normalize` or `tg::s21`. Errors: unknown tool, no or ambiguous instrument, tier too low, or the tool's own error. Blocking for the tool's duration.
 
@@ -547,6 +601,8 @@ Looks the tool up in `SPECS`, picks the instrument, refuses a tool above the ins
 <a id="sa-sweeprs-functions"></a>
 
 #### `bench_mcp_sa_sweep_args` - `sweep_args(args: &Value, max_hz: f64) -> Result<SweepReq, String>`
+
+[@ANCHOR: bench_mcp_sa_sweep_args]
 
 Checks the sweep arguments before anything is sent to the unit.
 
@@ -559,49 +615,73 @@ Returns a `SweepReq`. Errors: neither or both frequency forms, a range outside 0
 
 #### `bench_mcp_sa_parse_trace` - `parse_trace(reply: &str) -> Result<Vec<f64>, String>`
 
+[@ANCHOR: bench_mcp_sa_parse_trace]
+
 Parses the comma-separated ASCII trace of `:TRACe:DATA? 1`. Empty fields are skipped; every other field must be a finite number; at least two points. Error names the bad field or the count.
 
 #### `bench_mcp_sa_bin_hz` - `bin_hz(t_start, t_stop, n, i) -> f64`
+
+[@ANCHOR: bench_mcp_sa_bin_hz]
 
 The frequency of point `i` (0-based) of `n` evenly spaced from `t_start` to `t_stop` inclusive: `t_start + (t_stop - t_start) * i / (n - 1)`. `n` must be at least 2. Pure.
 
 #### `bench_mcp_sa_find_peaks` - `find_peaks(t: &Trace, count: usize, threshold_db: f64) -> Vec<Peak>`
 
+[@ANCHOR: bench_mcp_sa_find_peaks]
+
 The local maxima of `t.dbm` that are at least `threshold_db` above the trace median, strongest first, at most `count` of them, none within two points of a stronger one already taken. `count` 0 gives none. Pure; O(n log n).
 
 #### `bench_mcp_sa_new_path` - `new_path(out: &Path, stem: &str, ext: &str) -> PathBuf`
+
+[@ANCHOR: bench_mcp_sa_new_path]
 
 `<out>/<stem>_<milliseconds since the epoch>_<counter>.<ext>`; the process-wide atomic counter makes two calls in the same millisecond differ. Does not touch the disk.
 
 #### `bench_mcp_sa_write_csv` - `write_csv(out, stem, comments, header, start, stop, cols) -> Result<PathBuf, String>`
 
+[@ANCHOR: bench_mcp_sa_write_csv]
+
 Writes a CSV into `out` (created if missing): `# key=value` comment lines, the `header` line, then one row per point with the frequency (from `bin_hz`, one decimal) and one column per entry of `cols` (three decimals). Errors: no columns, fewer than two points, columns of unequal length, or a failed write. Returns the new path.
 
 #### `bench_mcp_sa_run_sweep` - `run_sweep(l: &mut Link, req: &SweepReq) -> Result<Trace, String>`
+
+[@ANCHOR: bench_mcp_sa_run_sweep]
 
 Runs one measurement (see `sweep_inner`) and then, on every path including failure, puts the unit back into continuous sweep when `req.continuous_after`. Blocking for the sweep time times the average count (at most 120 s) plus the readbacks. Does not touch the tracking generator.
 
 #### `bench_mcp_sa_sweep_inner` - `sweep_inner(l, req) -> Result<Trace, String>`
 
+[@ANCHOR: bench_mcp_sa_sweep_inner]
+
 Continuous sweep off, dBm, logarithmic scale, ASCII trace format; start, stop, start (so the unit's clamping cannot leave the wrong end); RBW, VBW, attenuation (before the reference level: the unit moves the reference level when the attenuator is set), reference level, detector, averaging; then reads everything back. Errors: the range the unit holds differs from the request by more than 1 Hz (it clamps); the sweep would take more than 120 s; the reference level or attenuation read back differs by more than 0.05 from the request ("coupled": choose a value that fits the other settings); `*OPC?` does not answer within twice the sweep time plus ten seconds; the trace is not exactly 751 points. In every error case no sweep was started unless the error is the `*OPC?` timeout.
 
 #### `bench_mcp_sa_trace_summary` - `trace_summary(t: &Trace, peaks: &[Peak]) -> Value`
+
+[@ANCHOR: bench_mcp_sa_trace_summary]
 
 The JSON summary of a trace: points, start, stop, bin width, the unit's own settings, `min_dbm`, `median_dbm`, `max_dbm` and the peaks. Pure.
 
 #### `bench_mcp_sa_sweep` - `sweep(connect, inst, args) -> Result<Value, String>`
 
+[@ANCHOR: bench_mcp_sa_sweep]
+
 `bench_sa_sweep`. Arguments: those of `sweep_args`, plus `peaks` (0 to 50, default 5), `peak_threshold_db` (0 to 200, default 10) and `tg_off_after` (default false). Opens the unit, runs the sweep, reads the generator state, switches the generator off and verifies it when `tg_off_after` (also when the sweep failed; an off failure is the error returned), writes `sa_sweep_*.csv` (`freq_hz,level_dbm`) into `BENCH_MCP_OUT` and returns the summary with `file` and `tracking_generator`. Without `tg_off_after` the generator is reported and left as it is.
 
 #### `bench_mcp_sa_marker` - `marker(connect, inst, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_sa_marker]
 
 `bench_sa_marker`. Arguments: `marker` (1 to 4, default 1), `search` (`max`, `next`, `left`, `right`) or `freq_hz` (0 to the model's top), not both. Switches the marker on, in position mode, on trace 1, runs the search or places it, and returns `marker`, `trace`, `freq_hz` and `level_dbm` as read. Works on the trace the unit currently holds.
 
 #### `bench_mcp_sa_screenshot` - `screenshot(connect, inst) -> Result<Value, String>`
 
+[@ANCHOR: bench_mcp_sa_screenshot]
+
 `bench_sa_screenshot`. Reads `:HCOPy:SDUMp:DATA?` as raw bytes (the answer has no length header and no line end, so the read ends when the unit has been quiet 1.5 s, at most 40 s), checks the BMP header's size against what arrived and saves `sa_screen_*.bmp`. Returns `file`, `bytes`, `width`, `height` and `format`. Error: not a BMP, or fewer bytes than the header says (call again).
 
 #### `bench_mcp_sa_bmp_header` - `bmp_header(raw: &[u8]) -> Result<(u32, u32, usize), String>`
+
+[@ANCHOR: bench_mcp_sa_bmp_header]
 
 Width, height and total size from a BMP header: at least 54 bytes, starting `BM`, size at least 54, width and height 1 to 4096. Error otherwise. Pure.
 
@@ -611,77 +691,115 @@ Width, height and total size from a BMP header: at least 54 bytes, starting `BM`
 
 #### `bench_mcp_sa_tg_state` - `tg_state(l: &mut Link) -> Result<(bool, f64), String>`
 
+[@ANCHOR: bench_mcp_sa_tg_state]
+
 The generator's output state (`:OUTPut:STATe?`) and level in dBm (`:SOURce:POWer?`) as the unit reports them. Reads only; a state reply that is not clearly on or off is an error.
 
 #### `bench_mcp_sa_ensure_tg_off` - `ensure_tg_off(l: &mut Link) -> Result<(), String>`
+
+[@ANCHOR: bench_mcp_sa_ensure_tg_off]
 
 Sends `:OUTPut:STATe OFF` and reads the state back, up to 3 times; `Ok` only when the unit itself says off. Otherwise the error begins `SAFE STATE NOT CONFIRMED` and gives the manual remedy. Safe to call at any time and idempotent; this is the only place that switches the generator off, and it is attempted on every path that switched it on.
 
 #### `bench_mcp_sa_finish` - `finish<T>(work: Result<T, String>, off: Option<Result<(), String>>) -> Result<T, String>`
 
+[@ANCHOR: bench_mcp_sa_finish]
+
 Combines a piece of work with the switch-off that followed it (`None`: none asked for). Work and switch-off fine: the work's value. Work failed, off fine: the work's error. Work fine, off failed: the off error. Both failed: `"<work error>; <off error>"`. A failed switch-off is never lost. Pure.
 
 #### `bench_mcp_sa_level_arg` - `level_arg(inst, args) -> Result<Option<f64>, String>`
+
+[@ANCHOR: bench_mcp_sa_level_arg]
 
 `tg_level_dbm` checked against -20 dBm and the lower of 0 dBm and the instrument's `max_tg_dbm`; `None` when absent. Error: not a number or outside the range (names the range). Pure.
 
 #### `bench_mcp_sa_require_tg` - `require_tg(l: &mut Link) -> Result<(), String>`
 
+[@ANCHOR: bench_mcp_sa_require_tg]
+
 Refuses unless `:SYSTem:OPTions?` lists `TG`. This is the only option the driver depends on besides the base analyzer.
 
 #### `bench_mcp_sa_set_level` - `set_level(l: &mut Link, dbm: f64) -> Result<(), String>`
+
+[@ANCHOR: bench_mcp_sa_set_level]
 
 Sets `:SOURce:POWer`, reads it back and fails when the difference exceeds 0.05 dB. Does not change whether the output is on.
 
 #### `bench_mcp_sa_switch_on` - `switch_on(l, inst, level: Option<f64>) -> Result<Value, String>`
 
+[@ANCHOR: bench_mcp_sa_switch_on]
+
 Sets and verifies `level` (or, when `None`, checks that the level the unit already holds is not above `max_tg_dbm`), sends `:OUTPut:STATe ON` and requires the unit to report on. **Any failure switches the output off again** (through `ensure_tg_off`) before the error is returned. Returns `{"tracking_generator": "on", "level_dbm"}`. The level is always set before the output goes on.
 
 #### `bench_mcp_sa_tg_on` - `tg_on(connect, inst, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_sa_tg_on]
 
 `bench_sa_tg_on`: `tg_level_dbm` (optional, -20 to the cap). Checks the argument, opens the unit, requires `TG`, calls `switch_on`. The output stays on until `bench_sa_tg_off` or a tool with `tg_off_after`.
 
 #### `bench_mcp_sa_tg_off` - `tg_off(connect, inst) -> Result<Value, String>`
 
+[@ANCHOR: bench_mcp_sa_tg_off]
+
 `bench_sa_tg_off`: `ensure_tg_off`, then the level; returns `{"tracking_generator": "off", "verified": true, "level_dbm"}`. Does not require `TG` to be listed.
 
 #### `bench_mcp_sa_tg_level` - `tg_level(connect, inst, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_sa_tg_level]
 
 `bench_sa_tg_level`: `tg_level_dbm` (required). Sets and verifies the level without changing on or off; returns the state and level as read back.
 
 #### `bench_mcp_sa_refs` - `refs() -> &'static Mutex<HashMap<String, Reference>>`
 
+[@ANCHOR: bench_mcp_sa_refs]
+
 The process-wide store of through references, created on first use and kept until the server exits. Key `"<instrument>:<name>"`. The lock is held only for an insert or a clone; it is never held across I/O.
 
 #### `bench_mcp_sa_ref_name` - `ref_name(v: Option<&str>) -> Result<String, String>`
+
+[@ANCHOR: bench_mcp_sa_ref_name]
 
 A reference name: absent is `default`; otherwise 1 to 40 characters of letters, digits, `-` and `_`, so a name can never make a path. Error otherwise.
 
 #### `bench_mcp_sa_reference_comments` - `comments(r: &Reference) -> Vec<(String, String)>`
 
+[@ANCHOR: bench_mcp_sa_reference_comments]
+
 The `# key=value` header lines of a reference CSV: `tool`, `tg_level_dbm`, `start_hz`, `stop_hz`, `rbw_hz`, `vbw_hz`, `attenuation_db`, `detector`, `average_count`. The keys are exactly those `parse_reference` reads and `check_same` compares.
 
 #### `bench_mcp_sa_parse_reference` - `parse_reference(text: &str) -> Result<Reference, String>`
+
+[@ANCHOR: bench_mcp_sa_parse_reference]
 
 Reads a reference CSV (see `Reference`). Errors: a missing or non-numeric key, a data row that is not a finite number, or a count other than 751. For a file from an earlier session (`reference_file`); the file's text is read by `s21`, not here.
 
 #### `bench_mcp_sa_check_same` - `check_same(r, t, tg_level_dbm) -> Result<(), String>`
 
+[@ANCHOR: bench_mcp_sa_check_same]
+
 Refuses a measurement taken with other settings than the reference: compares start, stop, RBW, VBW, attenuation, average count and TG level (relative tolerance 1e-6) and the detector name, and names the first that differs and what to do. The reference level is not compared (it does not change the measured dBm).
 
 #### `bench_mcp_sa_with_defaults` - `with_defaults(args: &Value, r: &Reference) -> Value`
+
+[@ANCHOR: bench_mcp_sa_with_defaults]
 
 A copy of the arguments with the ones the caller left out filled from the reference: the range (only when the caller gave none of `start_hz`, `stop_hz`, `center_hz`, `span_hz`), RBW, VBW, attenuation, detector, average count and TG level. Explicit arguments win (and are then checked by `check_same`). Pure.
 
 #### `bench_mcp_sa_tg_sweep` - `tg_sweep(l, inst, req, level, leave_on) -> Result<Trace, String>`
 
+[@ANCHOR: bench_mcp_sa_tg_sweep]
+
 Generator on at `level` (`switch_on`), one sweep (`run_sweep`) and, unless `leave_on`, the verified switch-off, which is attempted on every path, including a failed switch-on or sweep. Result combined by `finish`. The generator is on only for the duration of the call.
 
 #### `bench_mcp_sa_normalize` - `normalize(connect, inst, args) -> Result<Value, String>`
 
+[@ANCHOR: bench_mcp_sa_normalize]
+
 `bench_sa_tg_normalize`, step 1 of a through-normalised S21: the TG cabled straight to the RF input. Arguments: the sweep arguments, `name` (default `default`), `tg_level_dbm` (default -20), `leave_tg_on` (default false). Sweeps with the generator on, stores the `Reference` in memory under `<instrument>:<name>` and writes `sa_tg_reference_<name>_*.csv`. Returns the trace summary with `name`, `tg_level_dbm`, `file` and `tracking_generator`. Replaces an earlier reference of the same name.
 
 #### `bench_mcp_sa_s21` - `s21(connect, inst, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_sa_s21]
 
 `bench_sa_tg_s21`: a scalar transmission sweep of what is between the TG output and the RF input. Arguments: the sweep arguments, `tg_level_dbm`, `reference` (name from `normalize`) or `reference_file` (not both), `leave_tg_on`. With a reference, unset sweep arguments come from it (`with_defaults`), the settings are checked (`check_same`) and `s21_db` is the measured level minus the through, point by point; without one it is the measured level minus the TG level, and the answer says `uncalibrated: cable and generator flatness included`. Writes `sa_tg_s21_*.csv` (`freq_hz,s21_db,measured_dbm`) and returns the summary, `s21` (`relative_to`, `max_db` and `max_at_hz`, `min_db` and `min_at_hz`, `mean_db`), `tg_level_dbm`, `file` and `tracking_generator`. The generator is off again afterwards unless `leave_tg_on`, also when the settings check refused the comparison.
 
