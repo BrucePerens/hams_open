@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -11,6 +12,7 @@ import tempfile
 import threading
 import time
 import unittest
+import urllib.error
 from unittest.mock import MagicMock, patch
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -917,41 +919,30 @@ class TestJson2CallReloadsARotatedKey(unittest.TestCase):
     OLD, NEW = "old-key-value", "new-key-value"
 
     def setUp(self):
-        import http.server
-
-        test = self
-        test.seen = []
-
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def do_POST(self):
-                self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                token = (self.headers.get("Authorization") or "").removeprefix("Bearer ")
-                test.seen.append(token)
-                good = token == test.NEW
-                body = json.dumps([1, 2] if good else {"name": "werkzeug.exceptions.Unauthorized", "message": "Invalid apikey"})
-                self.send_response(200 if good else 401)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(body.encode())
-
-            def log_message(self, *args):
-                pass
-
-        self.server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
-        threading.Thread(target=self.server.serve_forever, daemon=True).start()
-        self.addCleanup(self.server.server_close)
-        self.addCleanup(self.server.shutdown)
+        self.seen = []
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.env_file = os.path.join(self.tmp.name, "backup_worker.env")
-        for name, value in (
-            ("ODOO_URL", f"http://127.0.0.1:{self.server.server_address[1]}"),
-            ("ODOO_PASS", self.OLD),
-            ("ODOO_KEY_ENV_FILE", self.env_file),
-        ):
+        for name, value in (("ODOO_PASS", self.OLD), ("ODOO_KEY_ENV_FILE", self.env_file)):
             patcher = patch.object(backup_worker, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
+        patcher = patch.object(backup_worker.urllib.request, "urlopen", side_effect=self._odoo)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _odoo(self, request, timeout=None):
+        """Odoo's JSON-2 endpoint: the new key is accepted, any other is refused with a 401."""
+        token = request.get_header("Authorization").removeprefix("Bearer ")
+        self.seen.append(token)
+        if token != self.NEW:
+            raise urllib.error.HTTPError(
+                request.full_url, 401, "Unauthorized", {}, io.BytesIO(b'{"message": "Invalid apikey"}')
+            )
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b"[1, 2]"
+        return response
 
     def _write_key_file(self, text):
         with open(self.env_file, "w", encoding="utf-8") as handle:
