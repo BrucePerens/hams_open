@@ -91,8 +91,8 @@ class TestRepeaterPageText(BaseCase):
         self.assertTrue(any(p.match("repeaters nearby") for p in _OTHER_WEAK))
         self.assertFalse(any(p.match("repeaters nearby\n") for p in _OTHER_WEAK))
         for text in ("sample page", "coming soon!", "it works"):
-            self.assertTrue(any(p.search(text) for p in _PLACEHOLDER_PATTERNS), text)
-            self.assertFalse(any(p.search(text + "\n") for p in _PLACEHOLDER_PATTERNS if p.pattern.startswith("^")), text)
+            self.assertTrue(any(p.match(text) for p in _PLACEHOLDER_PATTERNS), text)
+            self.assertFalse(any(p.match(text + "\n") for p in _PLACEHOLDER_PATTERNS if p.pattern.startswith("^")), text)
 
     # [@ANCHOR: zero_sudo:test_repeater_page_text_designator]
     def test_a_repeater_designator_suffix_is_stripped_from_a_callsign_shaped_token_only(self):
