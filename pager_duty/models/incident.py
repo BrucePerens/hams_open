@@ -353,10 +353,10 @@ class PagerIncident(models.Model):
         )
         mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.mail_service_internal")
         self.with_user(mail_svc).message_post(body=body, partner_ids=partner_ids)  # audit-ignore-mail: Tested by [@ANCHOR: pager_duty:test_repage_if_due]  # fmt: skip
-        if self.helpdesk_ticket_id and self.helpdesk_ticket_model in self.env:
+        if self.helpdesk_ticket_id and self.helpdesk_ticket_model == "hams_helpdesk.ticket":
             hd_svc = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_helpdesk_service")
-            ticket = self.env[self.helpdesk_ticket_model].with_user(hd_svc).browse(self.helpdesk_ticket_id).exists()
-            if ticket and hasattr(ticket, "message_post"):
+            ticket = self.env["hams_helpdesk.ticket"].with_user(hd_svc).browse(self.helpdesk_ticket_id).exists()
+            if ticket:
                 ticket.message_post(body=body, partner_ids=partner_ids)  # audit-ignore-mail: Tested by [@ANCHOR: pager_duty:test_repage_if_due]  # fmt: skip
         self.write({"last_paged": now})
         return True
