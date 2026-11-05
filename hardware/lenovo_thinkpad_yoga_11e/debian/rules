@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+P = debian/lenovo-thinkpad-yoga-11e-support/usr/share/lenovo-thinkpad-yoga-11e-support
+
+override_dh_auto_install:
+	install -D -m 0644 tlp.d/20-lenovo-thinkpad-yoga-11e.conf $(P)/20-lenovo-thinkpad-yoga-11e.conf
+	install -D -m 0644 logind.d/50-lenovo-thinkpad-yoga-11e.conf $(P)/logind-50-lenovo-thinkpad-yoga-11e.conf
+	install -D -m 0644 dconf.d/50-lenovo-thinkpad-yoga-11e $(P)/dconf-50-lenovo-thinkpad-yoga-11e
+	install -D -m 0644 NetworkManager/50-lenovo-thinkpad-yoga-11e.conf $(P)/nm-50-lenovo-thinkpad-yoga-11e.conf

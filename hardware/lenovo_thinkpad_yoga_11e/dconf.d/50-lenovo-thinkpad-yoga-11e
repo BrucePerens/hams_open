@@ -1,0 +1,11 @@
+# Installed by lenovo-thinkpad-yoga-11e-support on the ThinkPad Yoga 11e (demo laptop): default GNOME power settings for all users
+# (a user's own choices in Settings override them).  The screen turns off after 5 minutes without input.  On AC the
+# machine never suspends from inactivity; on battery it suspends after 20 minutes.
+# To undo: remove /etc/dconf/db/local.d/50-lenovo-thinkpad-yoga-11e and run dconf update.
+[org/gnome/desktop/session]
+idle-delay=uint32 300
+
+[org/gnome/settings-daemon/plugins/power]
+sleep-inactive-ac-type='nothing'
+sleep-inactive-battery-type='suspend'
+sleep-inactive-battery-timeout=1200

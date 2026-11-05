@@ -1,7 +1,7 @@
 # lenovo_thinkpad_t430
 
-A Debian package, `lenovo-thinkpad-t430-support`, for a **Lenovo ThinkPad T430** (machine type-model 23426QU, BIOS G1ET98WW
-2.58, Core i5-3230M, 11 GB RAM, HGST HTS725050A7E630 hard disk, DVD-RAM drive) on Debian 13 with GNOME. It is the **demo laptop**
+A Debian package, `lenovo-thinkpad-t430-support`, for a **Lenovo ThinkPad T430** (machine type-model 23426QU, BIOS G1ETC2WW
+2.82, Core i5-3230M, 11 GB RAM, HGST HTS725050A7E630 hard disk, DVD-RAM drive) on Debian 13 with GNOME. It is the **demo laptop**
 (ssh alias `thinkpad-i5`); it is not a lint, test, build or CI host. It follows the pattern of the other laptop packages in
 `hardware/`: it depends on `convertible-power` (TLP; 1.0.3 or later, which also stops the GDM login screen from suspending on AC)
 and adds this model's settings, applied only when `/sys/class/dmi/id/product_version` is `ThinkPad T430`.
@@ -38,8 +38,9 @@ The kernel messages above are the only warnings; none needed a kernel parameter 
   sits on the charger; use 40/80 for one that travels); Wi-Fi power saving off on battery too.
 * `/etc/systemd/logind.conf.d/50-lenovo-thinkpad-t430.conf`: lid switch ignored on AC power and when docked, suspends on battery.
 * `/etc/dconf/db/local.d/50-lenovo-thinkpad-t430`: screen off after 300 s idle; no inactivity suspend on AC; 20 minutes on battery.
-* `/etc/NetworkManager/conf.d/50-lenovo-thinkpad-t430.conf`: `wifi.powersave=2` (off) and `connection.autoconnect-retries=0`
-  (unlimited) as defaults for every connection. The existing connection `Bruce` was also set explicitly with `nmcli`.
+* `/etc/NetworkManager/conf.d/50-lenovo-thinkpad-t430.conf`: `wifi.powersave=2` (off) for every connection and
+  `autoconnect-retries-default=0` in `[main]` (unlimited reconnect attempts for every connection left at the default; 1.0.0
+  put `connection.autoconnect-retries=0` in `[connection]`, which NetworkManager 1.52 ignores as an unknown key). The existing connection `Bruce` was also set explicitly with `nmcli`.
 
 The login screen's no-suspend-on-AC setting comes from `convertible-power` (`/usr/share/gdm/dconf/95-convertible-power`).
 Verified with the greeter's dconf profile (`DCONF_PROFILE=gdm gsettings get ... sleep-inactive-ac-type` returns `'nothing'`); a
@@ -52,8 +53,8 @@ Behaviour on battery; HDMI/VGA/DP projection; SD card, DVD disc and Ethernet wit
 
 ## BIOS
 
-Installed G1ET98WW (2.58). A web search on 2026-11-05 shows Lenovo's download page listing 2.59 (G1ET99WW) above 2.58, and forum
-posts mention later builds, so 2.58 is **not** confirmed to be the last. Nothing was flashed. fwupd cannot update it (the machine
-boots in legacy BIOS mode and has no LVFS entry for the BIOS).
+Flashed to **G1ETC2WW (2.82, 2019-08-07)** on 2026-11-05 from Lenovo's bootable ISO `g1uj49us.iso` written to a USB stick
+(booting the ISO's El Torito image with GRUB's `memdisk` hung at the flasher's menu, so use a USB stick). Before that it ran
+G1ET98WW (2.58). fwupd cannot update it (the machine boots in legacy BIOS mode and has no LVFS entry for the BIOS).
 
 Licence: GPL-3.0-or-later.
