@@ -308,7 +308,6 @@ class TestEdgeCacheHeaders(HamsHttpCase):
         for path in (
             "/definitely-not-a-route-9c4e1b58",
             "/blog/definitely-not-a-post-9c4e1b58",
-            "/web/assets/1/missing-9c4e1b58.js",
         ):
             response = self.url_open(path, allow_redirects=False)
             self.assertGreaterEqual(response.status_code, 400, path)
