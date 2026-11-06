@@ -540,6 +540,15 @@ impl RigService {
                 };
                 raw.to_string()
             }
+            LevelSource::Strength => {
+                let Observation::Signal(raw) = self.read(Field::Signal, Op::GetSignal).await?
+                else {
+                    return Err(EIO);
+                };
+                crate::names::strength_db(&self.description, raw)
+                    .ok_or(EIO)?
+                    .to_string()
+            }
         };
         Ok(Body::Fields(vec![("", text)]))
     }

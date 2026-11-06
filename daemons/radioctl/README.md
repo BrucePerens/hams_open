@@ -1155,6 +1155,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_feed] (radioctl-protocols) Decodes Kenwood replies, auto-information and `?;` refusals.
 - [@ANCHOR: radioctl:radioctl_elecraft_level_wire] (radioctl-protocols) The Elecraft command prefix and manual range of a level.
 - [@ANCHOR: radioctl:radioctl_elecraft_level_wire_for] (radioctl-protocols) The command and range of a level on the described model: the K3 range of `level_wire`, replaced by the description's per-model range where it gives one (the KX3's AG 0-60, RG 190-250, MG 0-80, PC 0-15, measured 2026-11-05; the KX2's PC 0-12 and the K3 and K3S's PC 0-12, from the manuals and Hamlib, unverified).
+- [@ANCHOR: radioctl:radioctl_elecraft_strength_db] (radioctl-protocols) The signal strength in decibels relative to S9 for an `SM` reading 0 to 15 (`strength_db(sm)`): -54 at 0, 0 at 6 (S9), +20 at 9, +40 at 12, +60 at 15, the table of Hamlib 4.6.2's `K3_SM_CAL` which the manual's anchors confirm; `None` outside 0 to 15.
 - [@ANCHOR: radioctl:radioctl_elecraft_signed_offset] (radioctl-protocols) Formats a RIT/XIT offset as `+0050` / `-0050`.
 - [@ANCHOR: radioctl:radioctl_elecraft_parse_offset] (radioctl-protocols) Parses `ROsnnnn` data (sign or blank, four digits).
 - [@ANCHOR: radioctl:radioctl_elecraft_parse_firmware] (radioctl-protocols) Parses the `NN.NN` revision of an `RVx` answer.
@@ -1634,7 +1635,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_names_vfo_name] (radioctld) Hamlib's name for a VFO.
 - [@ANCHOR: radioctl:radioctld_names_level_lookup] (radioctld) Finds a level by its Hamlib name (case-insensitive).
 - [@ANCHOR: radioctl:radioctld_names_level_range] (radioctld) The rig's own range for a level, when radioctld knows it for the rig's family. Levels of
-- [@ANCHOR: radioctl:radioctld_names_served_levels] (radioctld) The levels this rig can serve: its capabilities, and a known range for numeric levels.
+- [@ANCHOR: radioctl:radioctld_names_served_levels] (radioctld) The levels this rig can serve: its capabilities, and a known range for numeric levels. `STRENGTH` is served when the rig reads its signal and its family has a decibel table (Elecraft only).
+- [@ANCHOR: radioctl:radioctld_names_strength_db] (radioctld) The signal strength in decibels relative to S9 for the rig's raw signal reading (`strength_db(description, raw)`), when the family has a table (Elecraft: the `SM` table); `None` for a family without one, which then does not serve `STRENGTH`.
 - [@ANCHOR: radioctl:radioctld_names_func_lookup] (radioctld) Finds a function by its Hamlib name (case-insensitive).
 - [@ANCHOR: radioctl:radioctld_names_func_mask] (radioctld) The `has_get_func` / `has_set_func` mask for a rig that has RIT and XIT or neither.
 - [@ANCHOR: radioctl:radioctld_names_level_mask] (radioctld) The `has_get_level` / `has_set_level` mask of a list of levels; `settable_only` leaves out

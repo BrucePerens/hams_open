@@ -107,7 +107,7 @@
 > l NOSUCH
 < RPRT -1
 > l STRENGTH
-< RPRT -11
+< -54
 > u NB
 < RPRT -11
 > u NOSUCH
