@@ -541,7 +541,10 @@ mod tests {
         assert_eq!(level_wire_for(&desc, Level::RfGain).min, 190);
         assert_eq!(level_wire_for(&desc, Level::MicGain).max, 80);
         assert_eq!(level_wire_for(&desc, Level::RfPower).max, 15);
-        assert_eq!(level_wire_for(&desc, Level::KeyerSpeed), level_wire(Level::KeyerSpeed));
+        assert_eq!(
+            level_wire_for(&desc, Level::KeyerSpeed),
+            level_wire(Level::KeyerSpeed)
+        );
         let mut e = engine();
         assert_eq!(bytes(&mut e, Op::SetLevel(Level::RfPower, 15)), b"PC015;");
         for op in [
@@ -551,7 +554,10 @@ mod tests {
         ] {
             assert!(e.encode(&op).is_err(), "{op:?}");
         }
-        assert!(matches!(e.feed(b"AG061;", T0).as_slice(), [Inbound::Unrecognised(_)]));
+        assert!(matches!(
+            e.feed(b"AG061;", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
         assert_eq!(
             e.feed(b"RG190;", T0),
             vec![Inbound::Observation(Observation::Level(Level::RfGain, 190))]

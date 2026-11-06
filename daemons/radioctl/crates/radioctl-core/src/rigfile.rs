@@ -1578,10 +1578,7 @@ verified = { state = "unverified" }
             .replace("key = \"kenwood.model_id\"", "key = \"elecraft.model_id\"");
         let loaded = parse(&elecraft).expect("loads");
         assert_eq!(loaded.description.family, Family::ElecraftAscii);
-        assert_eq!(
-            loaded.description.elecraft,
-            Some(ElecraftParams::new(19))
-        );
+        assert_eq!(loaded.description.elecraft, Some(ElecraftParams::new(19)));
         assert!(expected_keys(&loaded.description).contains(&"elecraft.model_id".to_string()));
         assert!(!expected_keys(&loaded.description).contains(&"elecraft.levels".to_string()));
         expect_rejected(
@@ -1612,7 +1609,12 @@ verified = { state = "unverified" }
         assert_eq!(params.level_range(Level::RfGain), Some((190, 250)));
         assert_eq!(params.level_range(Level::RfPower), None);
         assert!(expected_keys(&loaded.description).contains(&"elecraft.levels".to_string()));
-        for bad in ["preamp = [0, 1]", "wobble = [0, 1]", "af-gain = [9, 1]", "af-gain = [0, 1000]"] {
+        for bad in [
+            "preamp = [0, 1]",
+            "wobble = [0, 1]",
+            "af-gain = [9, 1]",
+            "af-gain = [0, 1000]",
+        ] {
             let text = elecraft.replace(
                 "[elecraft]\nmodel_id = 19",
                 &format!("[elecraft]\nmodel_id = 19\nlevels = {{ {bad} }}"),

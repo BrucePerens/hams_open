@@ -192,10 +192,7 @@ impl VirtualRig {
                 tokenizer: Tokenizer::default(),
             },
             (Family::ElecraftAscii, _, _) if desc.elecraft.is_some() => Wire::Elecraft {
-                params: desc
-                    .elecraft
-                    .clone()
-                    .unwrap_or(ElecraftParams::new(0)),
+                params: desc.elecraft.clone().unwrap_or(ElecraftParams::new(0)),
                 tokenizer: Tokenizer::default(),
             },
             (Family::KenwoodHh, _, _) if desc.kenwood_hh.is_some() => Wire::KenwoodHh {
