@@ -1265,6 +1265,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_serial_config_new] (radioctl-core) A serial configuration: 8N1, lines managed and inactive, default backoff, one open attempt.
 - [@ANCHOR: radioctl:radioctl_core_serial_config_with_description] (radioctl-core) Takes a description's serial line settings (data bits, parity, stop bits, flow control) for the port.
 - [@ANCHOR: radioctl:radioctl_core_serial_control_set_line] (radioctl-core) Sets RTS or DTR immediately on the open port.
+- [@ANCHOR: radioctl:radioctl_core_serial_control_check_rts_free] (radioctl-core) Refuses every write of RTS (key, release, or data) on a port using hardware flow control, where the driver owns RTS; a keyer cannot be built on it.
 - [@ANCHOR: radioctl:radioctl_core_serial_control_set_control] (radioctl-core) Drives RTS, DTR or the break state of the open port as data (a rig tuned by its control lines).
 - [@ANCHOR: radioctl:radioctl_core_control_lines_set_control] (radioctl-core) Sets a line that carries data for a rig tuned by its control lines; the default refuses with `Unsupported`.
 - [@ANCHOR: radioctl:radioctl_core_serial_link_status] (radioctl-core) The link status: connected (with generation), reconnecting, closed.
