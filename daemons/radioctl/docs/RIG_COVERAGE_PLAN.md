@@ -188,7 +188,8 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
 
 | Model | Reason |
 |---|---|
-| Dorji DRA818U/V (31001, 31002), MDS 4710/9710 (36001, 36002), Elektor 3/04 (25001) | the remaining small-vendor batch (Dorji, MDS and Elektor engines) |
+| Dorji DRA818U/V (31001, 31002), MDS 4710/9710 (36001, 36002) | done (`dorji.rs`, `mds.rs`; unverified) |
+| Elektor 3/04 (25001) | not applicable: no byte protocol, the DDS is steered by serial control-line toggles (see RIG_SUPPORT.md) |
 | TAPR DSP-10 (22001) | Not applicable (2026-11-02, Hamlib 4.6.2 `rigs/tapr/dsp10.c` and `tapr.c` read for facts): the backend says it does not work; `tapr_set_freq` returns not-implemented before its disabled tuning-word formula and `tapr_set_mode` always does. The only wire fact is a six-byte frame (`$`, a command byte, four arguments) and that the DSP program must be loaded first. The command document Hamlib cites (Larkin's pc_dsp2.txt) could not be retrieved (original host gone, archive.org rate-limited) and files.tapr.org carries no DSP-10 protocol document, so there is no command to transcribe; a transmit-capable 2 m rig is not guessed at. Revisit if a public protocol text is found |
 | PRM8060 setters | the `R` dialogue (receive PLL word, then transmit PLL word, each after a `:` prompt) needs an engine hook that sends the next argument when a prompt arrives |
 - SAT-Schneider DRT1 (25002), done 2026-11-01 (`drt1.rs`, DESIGN decision 25): a DRM receiver tuned by clocking an AD9951 DDS through RTS (data, inverted), break (clock) and DTR (frame), so its commands are control-line sequences (`ProtocolEngine::encode_lines`), driven on a real port's lines or decoded by the virtual DRT1. Set-frequency only, from Hamlib facts. Not in the Hamlib oracle batch: Hamlib drives the lines with a spin loop and a pty has no modem lines to observe. The TAPR DSP-10 is not the same kind of change (a byte protocol whose setters Hamlib stubs) and stays below.
@@ -196,6 +197,11 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
 - Public-document search, 2026-11-01 (web searches only; no file was downloaded, no engine added). AnyTone D578A: no vendor CAT or protocol document; the Hamlib developer list says the vendor tool documents no CAT, and the only public notes are community reverse engineering of the hand-microphone UART (k0hax `d578uv` Python library, jrobertfisher AT-D578UV-software-mic), which covers PTT and keys, not frequency or mode; not read in full. Microtelecom Perseus: no protocol document; the interface is the GPL `libperseus-sdr` source (Microtelecom on GitHub), a USB library with FPGA load, still needing the USB loader. TAPR DSP-10: no manual at files.tapr.org turned up; the public description is Bob Larkin W7PUA's 1999 QST articles, which are mirrored on a third-party server under QST copyright, so they are skipped; the W3SZ DSP-10 page and the moetronix ASCP interface are leads for a later read. SAT-Schneider DRT1: only Hamlib's `kit/drt1.c` and the AD9951 datasheets; no vendor protocol text. None of the four has a usable public protocol document yet.
 - Measuring instrument: the mRS miniVNA (25008) is a vector network analyser that Hamlib lists as a tuner.
 - Parallel-port devices: FlexRadio SDR-1000 (23001) and the AmQRP DDS-60 (25006); radioctl has no parallel-port transport.
+
+Status (2026-11-06): Tiers A to D are finished as far as the matrix can say. Every one of the 283 real radios has a description;
+the 8 left in Tier C (Winradio) and the 22 left in Tier D are the 30 models recorded as not applicable, each with its reason in
+RIG_SUPPORT.md. Nothing more is open by model count; what remains is per-model fidelity (see the low to-do on engine fidelity)
+and the volunteer verification of every description.
 
 ## Recommended order
 
