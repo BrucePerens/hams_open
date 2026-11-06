@@ -34,6 +34,7 @@ pub struct Detection {
 
 /// Amplitude of the best-fit sinusoid of frequency `hz` in `x` (least squares over the frame).
 fn fit_sinusoid(x: &[f64], hz: f64) -> f64 {
+    // [@ANCHOR: ambe_float_tone_fit_sinusoid]
     let w = 2.0 * PI * hz / 8000.0;
     let (mut sc, mut cc, mut sn, mut xc, mut xs) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
     for (i, &v) in x.iter().enumerate() {
@@ -56,6 +57,7 @@ fn fit_sinusoid(x: &[f64], hz: f64) -> f64 {
 /// Fraction of the frame's energy explained by sinusoids at the given frequencies (fitted independently; adequate for
 /// well-separated tones).
 fn explained_fraction(x: &[f64], hzs: &[f64]) -> (f64, Vec<f64>) {
+    // [@ANCHOR: ambe_float_tone_explained_fraction]
     let total: f64 = x.iter().map(|v| v * v).sum();
     let amps: Vec<f64> = hzs.iter().map(|&hz| fit_sinusoid(x, hz)).collect();
     let explained: f64 = amps.iter().map(|a| a * a / 2.0 * x.len() as f64).sum();
@@ -85,6 +87,7 @@ pub fn volume_for_amplitude(amplitude: f64) -> u32 {
 
 /// Detects a tone in one 160-sample frame, or `None` for anything else (speech, silence, noise).
 pub fn detect_tone(frame: &[f64]) -> Option<Detection> {
+    // [@ANCHOR: ambe_float_tone_detect]
     if frame.len() != FRAME {
         return None;
     }
@@ -177,6 +180,9 @@ mod tests {
             .collect()
     }
 
+    // Tests [@ANCHOR: ambe_float_tone_detect]
+    // Tests [@ANCHOR: ambe_float_tone_fit_sinusoid]
+    // Tests [@ANCHOR: ambe_float_tone_explained_fraction]
     #[test]
     #[allow(clippy::needless_range_loop)]
     fn detects_every_dtmf_digit_with_the_chip_index_and_level() {
@@ -201,6 +207,9 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: ambe_float_tone_detect]
+    // Tests [@ANCHOR: ambe_float_tone_fit_sinusoid]
+    // Tests [@ANCHOR: ambe_float_tone_explained_fraction]
     #[test]
     fn single_tone_index_and_levels_match_the_chip() {
         for (hz, index) in [
@@ -222,6 +231,9 @@ mod tests {
         assert_eq!(volume_for_amplitude(12000.0), 213);
     }
 
+    // Tests [@ANCHOR: ambe_float_tone_detect]
+    // Tests [@ANCHOR: ambe_float_tone_fit_sinusoid]
+    // Tests [@ANCHOR: ambe_float_tone_explained_fraction]
     #[test]
     fn chip_non_detections_are_reproduced_and_speech_like_frames_are_rejected() {
         assert!(detect_tone(&sines(&[100.0], 4000.0, 0)).is_none());
