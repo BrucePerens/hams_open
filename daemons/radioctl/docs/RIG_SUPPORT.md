@@ -11,7 +11,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **30**
 - Real radios (models less not applicable): **283**; with a radioctl description: **283** (291 description files), **100%** of the real radios
-- Hardware-verified: **0**
+- Hardware-verified: **1**
 
 | Status | Models |
 |---|---:|
@@ -24,10 +24,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 275 |
+| unverified | 274 |
 | manual-checked | 38 |
 | transcript-checked | 0 |
-| hardware-verified | 0 |
+| hardware-verified | 1 |
 
 ### By tier
 
@@ -52,7 +52,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | other_usb | D | si570_usb | 10 | 10 | 0 |
 | flexradio_network | A | flex | 9 | 9 | 0 |
 | other_network | C/D | - | 8 | 2 | 0 |
-| elecraft_ascii | A | elecraft | 7 | 7 | 0 |
+| elecraft_ascii | A | elecraft | 7 | 7 | 1 |
 | icom_marine | C | icom_marine | 4 | 4 | 0 |
 | icom_pcr_ascii | C | icom_pcr | 4 | 4 | 0 |
 | other_parallel | D | - | 2 | 0 | 0 |
@@ -147,7 +147,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2043 | Elecraft | K3S | A | elecraft_ascii | elecraft | `elecraft-k3s` | unverified | - | described |
 | 2047 | Elecraft | K4 | A | elecraft_ascii | elecraft | `elecraft-k4` | unverified | - | described |
 | 2044 | Elecraft | KX2 | A | elecraft_ascii | elecraft | `elecraft-kx2` | unverified | - | described |
-| 2045 | Elecraft | KX3 | A | elecraft_ascii | elecraft | `elecraft-kx3` | unverified | - | described |
+| 2045 | Elecraft | KX3 | A | elecraft_ascii | elecraft | `elecraft-kx3` | hardware-verified | K6BP (bench run by Claude on bruce-toughpad), 2026-11-05 | described |
 | 2038 | Elecraft | XG3 | A | elecraft_ascii | elecraft | `elecraft-xg3` | manual-checked | - | described |
 | 25001 | Elektor | Elektor 3/04 | D | other_serial | - | - | unverified | - | not applicable |
 | 25007 | Elektor | Elektor SDR-USB | D | other_usb | - | `elektor-sdr-usb` | unverified | - | described |

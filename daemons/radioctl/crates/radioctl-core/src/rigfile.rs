@@ -8,7 +8,7 @@
 //!
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
-//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `yaesu.model_id`,
+//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
 //! `yaesu.frequency_digits` (only when not 9),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
@@ -209,6 +209,9 @@ struct KySection {
 #[serde(deny_unknown_fields)]
 struct ElecraftSection {
     model_id: u16,
+    /// Per-model level ranges, `level-name = [min, max]` (see `ElecraftParams::level_ranges`).
+    #[serde(default)]
+    levels: BTreeMap<String, (u16, u16)>,
 }
 
 #[derive(Deserialize)]
@@ -625,9 +628,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
             })
         })
         .transpose()?;
-    let elecraft = doc.elecraft.as_ref().map(|e| ElecraftParams {
-        model_id: e.model_id,
-    });
+    let elecraft = doc.elecraft.as_ref().map(build_elecraft).transpose()?;
     let scope = build_scope(doc.scope.as_ref(), family)?;
     let levels = build_levels(doc.levels.as_ref())?;
     let power_meter = build_power_meter(doc.power_meter.as_ref())?;
@@ -856,6 +857,40 @@ fn check_timing(timing: &TimingSection) -> Result<Timing, RigError> {
 const MAX_ATTENUATOR_STEPS: usize = 9;
 /// Most preamplifier steps a model may declare.
 const MAX_PREAMP_STEPS: u8 = 3;
+
+// [@ANCHOR: radioctl_core_rigfile_build_elecraft]
+/// The `[elecraft]` block: the model id and the per-model level ranges, each naming one of the
+/// numeric levels (af-gain, rf-gain, mic-gain, monitor-level, keyer-speed, rf-power) with
+/// `min <= max <= 999` (three wire digits).
+fn build_elecraft(section: &ElecraftSection) -> Result<ElecraftParams, RigError> {
+    let mut params = ElecraftParams::new(section.model_id);
+    for (name, (min, max)) in &section.levels {
+        let level = Level::from_name(name)
+            .filter(|l| {
+                matches!(
+                    l,
+                    Level::AfGain
+                        | Level::RfGain
+                        | Level::MicGain
+                        | Level::MonitorLevel
+                        | Level::KeyerSpeed
+                        | Level::RfPower
+                )
+            })
+            .ok_or_else(|| {
+                bad(format!(
+                    "elecraft.levels names {name:?}, which is not one of af-gain, rf-gain, mic-gain, monitor-level, keyer-speed, rf-power"
+                ))
+            })?;
+        if min > max || *max > 999 {
+            return Err(bad(format!(
+                "elecraft.levels.{name} must be [min, max] with min <= max <= 999"
+            )));
+        }
+        params.level_ranges.push((level, *min, *max));
+    }
+    Ok(params)
+}
 
 // [@ANCHOR: radioctl_core_rigfile_build_power_meter]
 fn build_power_meter(
@@ -1237,8 +1272,11 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
             keys.push("kenwood.dialect".to_string());
         }
     }
-    if description.elecraft.is_some() {
+    if let Some(elecraft) = &description.elecraft {
         keys.push("elecraft.model_id".to_string());
+        if !elecraft.level_ranges.is_empty() {
+            keys.push("elecraft.levels".to_string());
+        }
     }
     if let Some(yaesu) = &description.yaesu {
         keys.push("yaesu.model_id".to_string());
@@ -1542,13 +1580,45 @@ verified = { state = "unverified" }
         assert_eq!(loaded.description.family, Family::ElecraftAscii);
         assert_eq!(
             loaded.description.elecraft,
-            Some(ElecraftParams { model_id: 19 })
+            Some(ElecraftParams::new(19))
         );
         assert!(expected_keys(&loaded.description).contains(&"elecraft.model_id".to_string()));
+        assert!(!expected_keys(&loaded.description).contains(&"elecraft.levels".to_string()));
         expect_rejected(
             &elecraft.replace("[elecraft]", "[kenwood]"),
             "does not match",
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_elecraft]
+    // Tests [@ANCHOR: radioctl_core_elecraft_level_range]
+    // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    #[test]
+    fn elecraft_level_ranges_parse_need_a_fact_and_refuse_nonsense() {
+        let elecraft = GOOD
+            .replace("family = \"kenwood-ascii\"", "family = \"elecraft-ascii\"")
+            .replace("[kenwood]", "[elecraft]")
+            .replace("key = \"kenwood.model_id\"", "key = \"elecraft.model_id\"");
+        let with_levels = elecraft.replace(
+            "[elecraft]\nmodel_id = 19",
+            "[elecraft]\nmodel_id = 19\nlevels = { af-gain = [0, 60], rf-gain = [190, 250] }",
+        );
+        assert_ne!(with_levels, elecraft, "the GOOD text changed shape");
+        expect_rejected(&with_levels, "elecraft.levels");
+        let fact = "\n[[facts]]\nkey = \"elecraft.levels\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let loaded = parse(&format!("{with_levels}{fact}")).expect("loads");
+        let params = loaded.description.elecraft.clone().expect("elecraft");
+        assert_eq!(params.level_range(Level::AfGain), Some((0, 60)));
+        assert_eq!(params.level_range(Level::RfGain), Some((190, 250)));
+        assert_eq!(params.level_range(Level::RfPower), None);
+        assert!(expected_keys(&loaded.description).contains(&"elecraft.levels".to_string()));
+        for bad in ["preamp = [0, 1]", "wobble = [0, 1]", "af-gain = [9, 1]", "af-gain = [0, 1000]"] {
+            let text = elecraft.replace(
+                "[elecraft]\nmodel_id = 19",
+                &format!("[elecraft]\nmodel_id = 19\nlevels = {{ {bad} }}"),
+            );
+            expect_rejected(&format!("{text}{fact}"), "elecraft.levels");
+        }
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]

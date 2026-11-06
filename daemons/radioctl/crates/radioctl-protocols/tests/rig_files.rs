@@ -72,8 +72,10 @@ fn the_ic7300_file_loads_and_extends_the_builtin_description() {
 #[test]
 fn the_worked_file_claims_no_verification_it_does_not_have() {
     // The only files that may hold `manual-checked` facts: those whose vendor manual was read
-    // (see the facts' references, each with the manual's SHA-256). Nothing else is verified in
-    // any way, and nothing is hardware-verified or transcript-checked.
+    // (see the facts' references, each with the manual's SHA-256). Hardware-verified facts only in
+    // the files of radios run on a bench (each listed in rigs/reports/verified.toml), and nothing
+    // is transcript-checked.
+    const BENCH_RUN: &[&str] = &["elecraft-kx3"];
     const MANUAL_READ: &[&str] = &[
         "kenwood-ts-440s",
         "kenwood-ts-450s",
@@ -122,7 +124,9 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
             summary.contains_key("unverified"),
             "{id} claims verification: {summary:?}"
         );
-        let allowed: &[&str] = if MANUAL_READ.contains(&id) {
+        let allowed: &[&str] = if BENCH_RUN.contains(&id) {
+            &["unverified", "hardware-verified"]
+        } else if MANUAL_READ.contains(&id) {
             &["unverified", "manual-checked"]
         } else {
             &["unverified"]

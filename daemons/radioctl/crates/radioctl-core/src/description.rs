@@ -594,6 +594,29 @@ pub struct KenwoodHhParams {
 pub struct ElecraftParams {
     /// The number the rig returns for `ID;` (017 on the K3, KX3 and KX2).
     pub model_id: u16,
+    /// Per-model wire ranges `(level, min, max)` that replace the K3 ranges of the engine's
+    /// `level_wire` (the KX3's `AG` is 0-60, `RG` 190-250, `MG` 0-80 and `PC` 0-15). Empty means
+    /// the K3 ranges apply.
+    pub level_ranges: Vec<(Level, u16, u16)>,
+}
+
+impl ElecraftParams {
+    /// Parameters with a model id and no per-model level ranges.
+    pub fn new(model_id: u16) -> ElecraftParams {
+        ElecraftParams {
+            model_id,
+            level_ranges: Vec::new(),
+        }
+    }
+
+    // [@ANCHOR: radioctl_core_elecraft_level_range]
+    /// The per-model `(min, max)` of `level`, if the description gives one.
+    pub fn level_range(&self, level: Level) -> Option<(u16, u16)> {
+        self.level_ranges
+            .iter()
+            .find(|(l, _, _)| *l == level)
+            .map(|(_, min, max)| (*min, *max))
+    }
 }
 
 /// Spectrum scope (band scope) parameters of a model, for waveform data the rig sends on its own

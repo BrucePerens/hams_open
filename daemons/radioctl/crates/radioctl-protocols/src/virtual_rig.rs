@@ -195,7 +195,7 @@ impl VirtualRig {
                 params: desc
                     .elecraft
                     .clone()
-                    .unwrap_or(ElecraftParams { model_id: 0 }),
+                    .unwrap_or(ElecraftParams::new(0)),
                 tokenizer: Tokenizer::default(),
             },
             (Family::KenwoodHh, _, _) if desc.kenwood_hh.is_some() => Wire::KenwoodHh {
@@ -1575,7 +1575,11 @@ impl VirtualRig {
                 }
                 None => refuse(),
             },
-            ("SW", "") => Some(format!("SW{:03};", self.state.swr)),
+            // A real KX3 (MCU 3.02) answers `SW000;` in receive: there is no reading.
+            ("SW", "") => Some(format!(
+                "SW{:03};",
+                if self.state.ptt { self.state.swr } else { 0 }
+            )),
             ("ID", "") => Some(format!("ID{:03};", self.elecraft_id())),
             ("IF", "") => Some(self.elecraft_if()),
             // Firmware revisions ("RV", p. 23): the MCU and the main DSP report ours; a module
@@ -1664,7 +1668,7 @@ impl VirtualRig {
     /// Reads or sets a level of the virtual Elecraft rig; a set outside the manual's range is
     /// clamped to it, a malformed one is refused.
     fn elecraft_level(&mut self, level: Level, data: &str) -> Option<String> {
-        let wire = elecraft::level_wire(level);
+        let wire = elecraft::level_wire_for(&self.desc, level);
         if data.is_empty() {
             let value = self.state.levels.get(&level).copied().unwrap_or(wire.min);
             return Some(format!("{}{value:03};", wire.prefix));
@@ -1991,7 +1995,7 @@ mod tests {
         assert!(rig.state().cw_sent.is_empty());
         assert_eq!(rig.state().cw_stops, 1);
         assert_eq!(rig.feed(b"KY;", T0), b"KY0;");
-        assert_eq!(rig.feed(b"SW;", T0), b"SW010;");
+        assert_eq!(rig.feed(b"SW;", T0), b"SW000;", "no SWR reading in receive");
         for refused in [
             &b"ZZ;"[..],
             b"RT7;",

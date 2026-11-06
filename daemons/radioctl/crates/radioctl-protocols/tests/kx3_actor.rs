@@ -79,7 +79,8 @@ async fn the_actor_drives_a_virtual_kx3_through_its_whole_vocabulary() {
     );
     assert_eq!(get(Op::GetModelId).await, Observation::ModelId(17));
     assert_eq!(get(Op::GetFirmware).await, Observation::Firmware(2, 37));
-    assert_eq!(get(Op::GetSwr).await, Observation::Swr(10));
+    // Unkeyed, a KX3 has no SWR reading and answers SW000 (MCU 3.02, 2026-11-05).
+    assert_eq!(get(Op::GetSwr).await, Observation::Swr(0));
     assert_eq!(get(Op::GetPtt).await, Observation::Ptt(false));
     assert_eq!(rig.stats().commands_failed, 0);
 }

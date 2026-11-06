@@ -224,10 +224,11 @@ fn every_ascii_file_round_trips_what_it_claims_and_refuses_the_rest() {
             );
         }
         if has(Capability::Levels) {
-            write(engine.as_mut(), &mut rig, &Op::SetLevel(Level::AfGain, 128));
+            // 40 is inside every family's AF range, the KX3's 0-60 included.
+            write(engine.as_mut(), &mut rig, &Op::SetLevel(Level::AfGain, 40));
             assert_eq!(
                 read(engine.as_mut(), &mut rig, &Op::GetLevel(Level::AfGain)),
-                Observation::Level(Level::AfGain, 128),
+                Observation::Level(Level::AfGain, 40),
                 "{id}"
             );
         }

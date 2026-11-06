@@ -84,6 +84,19 @@ pub fn level_wire(level: Level) -> LevelWire {
     LevelWire { prefix, min, max }
 }
 
+// [@ANCHOR: radioctl_elecraft_level_wire_for]
+/// The wire command and range of a level on the described model: [`level_wire`] with the
+/// description's per-model range (`[elecraft] levels`) where it gives one. A real KX3 (MCU 3.02)
+/// clamps `AG` to 0-60, `RG` to 190-250, `MG` to 0-80 and `PC` to its maximum power, so the K3
+/// ranges made a Hamlib fraction mean something else on it (half power was full power).
+pub fn level_wire_for(desc: &RigDescription, level: Level) -> LevelWire {
+    let wire = level_wire(level);
+    match desc.elecraft.as_ref().and_then(|e| e.level_range(level)) {
+        Some((min, max)) => LevelWire { min, max, ..wire },
+        None => wire,
+    }
+}
+
 // [@ANCHOR: radioctl_elecraft_signed_offset]
 /// Formats a RIT/XIT offset as the `ROsnnnn` data (`+0050`, `-0050`).
 pub fn signed_offset(hz: i16) -> String {
@@ -269,7 +282,7 @@ impl ElecraftEngine {
                 }
             }
             Op::SetLevel(level, value) => {
-                let wire = level_wire(*level);
+                let wire = level_wire_for(&self.desc, *level);
                 if *value < wire.min || *value > wire.max {
                     return Err(Self::unsupported("level outside the rig's range"));
                 }
@@ -283,7 +296,13 @@ impl ElecraftEngine {
             // terminator the page lists, `@`, is a prosign instead when CONFIG:CW WGHT has been
             // changed, so EOT is the one that cannot be remapped. Sent as `KY <space><EOT>;`
             // (the blank is the KY mode character, `KY*[text]`).
-            Op::StopCw => Self::set("KY \u{4};".to_string()),
+            //
+            // A real KX3 (MCU 3.02, 2026-11-05) does NOT stop on it: with `KY TEST TEST TEST;`
+            // buffered at 8 WPM it went on keying the carrier for more than 2 s after the EOT (and
+            // after `KY @;`). `RX;` ("RX", p. 23) stopped it at once and the rest of the text was
+            // not sent. So the stop is the EOT, which empties the buffer on radios that honour it,
+            // followed by `RX;`, which ends the transmission on all of them.
+            Op::StopCw => Self::set("KY \u{4};RX;".to_string()),
             _ => return Err(Self::unsupported("not a setting command")),
         })
     }
@@ -350,7 +369,7 @@ impl ElecraftEngine {
         .into_iter()
         .find(|l| level_wire(*l).prefix == name)
         {
-            let wire = level_wire(level);
+            let wire = level_wire_for(&self.desc, level);
             return number(3)
                 .filter(|v| *v >= wire.min && *v <= wire.max)
                 .map(|v| Observation::Level(level, v));
@@ -371,8 +390,10 @@ impl ElecraftEngine {
             "RO" => parse_offset(data).map(Observation::RitOffset),
             "SM" => number(4).filter(|v| *v <= 15).map(Observation::Signal),
             "PO" => number(3).map(Observation::Power),
+            // The manual gives 010-999, but a KX3 (MCU 3.02) answers `SW000;` in receive: no
+            // reading. It is passed on as 0, which is what Hamlib's KX3 backend reports too.
             "SW" => number(3)
-                .filter(|v| (10..=999).contains(v))
+                .filter(|v| *v == 0 || (10..=999).contains(v))
                 .map(Observation::Swr),
             "BW" => number(4).map(|v| Observation::FilterWidth(Hz(u64::from(v) * 10))),
             "ID" => number(3).map(Observation::ModelId),
@@ -512,6 +533,31 @@ mod tests {
         assert_eq!(parse_firmware("99.99"), Some((99, 99)));
     }
 
+    // Tests [@ANCHOR: radioctl_elecraft_level_wire_for]
+    #[test]
+    fn the_kx3_levels_use_its_own_ranges() {
+        let desc = kx3();
+        assert_eq!(level_wire_for(&desc, Level::AfGain).max, 60);
+        assert_eq!(level_wire_for(&desc, Level::RfGain).min, 190);
+        assert_eq!(level_wire_for(&desc, Level::MicGain).max, 80);
+        assert_eq!(level_wire_for(&desc, Level::RfPower).max, 15);
+        assert_eq!(level_wire_for(&desc, Level::KeyerSpeed), level_wire(Level::KeyerSpeed));
+        let mut e = engine();
+        assert_eq!(bytes(&mut e, Op::SetLevel(Level::RfPower, 15)), b"PC015;");
+        for op in [
+            Op::SetLevel(Level::RfPower, 16),
+            Op::SetLevel(Level::AfGain, 61),
+            Op::SetLevel(Level::RfGain, 189),
+        ] {
+            assert!(e.encode(&op).is_err(), "{op:?}");
+        }
+        assert!(matches!(e.feed(b"AG061;", T0).as_slice(), [Inbound::Unrecognised(_)]));
+        assert_eq!(
+            e.feed(b"RG190;", T0),
+            vec![Inbound::Observation(Observation::Level(Level::RfGain, 190))]
+        );
+    }
+
     // Tests [@ANCHOR: radioctl_elecraft_engine_new]
     #[test]
     fn engine_refuses_other_families() {
@@ -562,7 +608,7 @@ mod tests {
         let get = e.encode(&Op::GetMode).expect("get");
         assert_eq!(get.reply, ReplyKind::Observation(Field::Mode));
         assert_eq!(bytes(&mut e, Op::SendCw("CQ TEST".into())), b"KY CQ TEST;");
-        assert_eq!(bytes(&mut e, Op::StopCw), b"KY \x04;");
+        assert_eq!(bytes(&mut e, Op::StopCw), b"KY \x04;RX;");
     }
 
     // Tests [@ANCHOR: radioctl_elecraft_engine_encode]
@@ -629,8 +675,9 @@ mod tests {
         expect("SM0006;", O::Signal(6));
         expect("PO050;", O::Power(50));
         expect("SW015;", O::Swr(15));
+        expect("SW000;", O::Swr(0));
         expect("BW0050;", O::FilterWidth(Hz(500)));
-        expect("AG100;", O::Level(Level::AfGain, 100));
+        expect("AG040;", O::Level(Level::AfGain, 40));
         expect("RG250;", O::Level(Level::RfGain, 250));
         expect("KS020;", O::Level(Level::KeyerSpeed, 20));
         expect("PC005;", O::Level(Level::RfPower, 5));

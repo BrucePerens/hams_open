@@ -7,7 +7,7 @@
 # needs a description with a hardware-verified fact. Nothing is copied between them.
 #
 # How a report gets here: docs/VOLUNTEER_TESTING.md ("How a maintainer promotes a description").
-# No radio has been verified yet; the first entries are expected from the IC-7300 bench day.
+# The first entry is the KX3 bench run of 2026-11-05.
 #
 # Entry format (keep one [[report]] per radio and test day):
 #
@@ -19,3 +19,12 @@
 #   reporter = "K6BP"                     # callsign or GitHub user name, as the reporter wishes
 #   issue = "https://github.com/OWNER/REPO/issues/0"   # the report the maintainer worked from
 #   transmit_tested = false               # true only if the transmit procedure was run
+
+[[report]]
+rig = "elecraft-kx3"
+radio = "Elecraft KX3"
+firmware = "MCU 3.02 / DSP 1.52"
+date = "2026-11-05"
+reporter = "K6BP (bench run by Claude on bruce-toughpad)"
+issue = "hams_com docs/reviews/KX3_RADIOCTL_2026-11-05.md"
+transmit_tested = true

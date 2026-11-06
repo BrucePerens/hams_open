@@ -4,7 +4,8 @@
 # FA/FB/FT/FR p. 11, ID/IF p. 14, KS/KY p. 15, MD p. 16, PC/PO p. 22, RO/RT/RV/SM p. 23, SW p. 24,
 # TQ p. 27, TX/XT p. 28. This is NOT a recording of a radio. It proves the manual's formats, the
 # engine, the virtual rig and the description agree with each other, not that they agree with a
-# KX3. The virtual rig's starting levels, firmware and SWR are our own values.
+# KX3. The virtual rig's starting levels and firmware are our own values. The SW000 answer in
+# receive is what a real KX3 (MCU 3.02) sends (bench run 2026-11-05).
 schema = 1
 rig = "elecraft-kx3"
 origin = "hand-written from the Elecraft Programmer's Reference Rev. G5; not a capture of a radio"
@@ -187,8 +188,8 @@ tx_text = "KY CQ DE K6BP;"
 [[step]]
 op = { kind = "get-swr" }
 tx_text = "SW;"
-rx_text = "SW010;"
-expect = { kind = "swr", value = 10 }
+rx_text = "SW000;"
+expect = { kind = "swr", value = 0 }
 
 [[step]]
 op = { kind = "get-model-id" }

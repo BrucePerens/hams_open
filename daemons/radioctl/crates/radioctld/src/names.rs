@@ -406,7 +406,7 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
     }
     match description.family {
         Family::ElecraftAscii => {
-            let wire = radioctl_protocols::elecraft::level_wire(level);
+            let wire = radioctl_protocols::elecraft::level_wire_for(description, level);
             Some((wire.min, wire.max))
         }
         Family::IcomCiv => match level {
@@ -668,6 +668,15 @@ mod tests {
             Capability::ReadSignal,
         ]);
         assert_eq!(level_range(&kx, Level::KeyerSpeed), Some((8, 50)));
+        assert_eq!(level_range(&kx, Level::RfPower), Some((0, 110)), "K3 range");
+        // The KX3 description carries its own ranges (measured on MCU 3.02, 2026-11-05).
+        let kx3 = radioctl_core::rigfile::parse(include_str!("../../../rigs/elecraft-kx3.toml"))
+            .expect("kx3")
+            .description;
+        assert_eq!(level_range(&kx3, Level::RfPower), Some((0, 15)));
+        assert_eq!(level_range(&kx3, Level::AfGain), Some((0, 60)));
+        assert_eq!(level_range(&kx3, Level::RfGain), Some((190, 250)));
+        assert_eq!(level_range(&kx3, Level::MicGain), Some((0, 80)));
         let served = served_levels(&kx);
         assert_eq!(
             served.len(),

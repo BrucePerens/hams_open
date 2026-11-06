@@ -20,7 +20,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - USB SDR boards and dongles (Si570 kits, FiFi-SDR, FUNcube, Digital World Traveller) over a USB link: request/reply frames, a `UsbBackend` trait with a fake and a libusb backend (cargo feature `usb`, off by default), hot-plug reconnect and the same unkey-on-reopen rule. All unverified on hardware.
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
 - Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect and the handheld/mobile family), Elecraft, Yaesu newcat and the legacy block protocols, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V), the receiver families (AOR, Uniden, JRC, Icom PCR and marine, Rohde and Schwarz), about thirty small serial-vendor engines (Ten-Tec, Racal, Drake, Barrett, CODAN, MDS, MICOM, WJ, Paragon, XG3, Transfox and others), a UDP control frame (HiQSDR) and USB SDR boards.
-- Rig descriptions: 287 files in `rigs/`, 281 of the 284 real radios Hamlib 4.6.2 lists (counts in `docs/RIG_SUPPORT.md`). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`; no description is `hardware-verified`.
+- Rig descriptions: 287 files in `rigs/`, 281 of the 284 real radios Hamlib 4.6.2 lists (counts in `docs/RIG_SUPPORT.md`). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`. The one `hardware-verified` description is the Elecraft KX3 (MCU 3.02 / DSP 1.52, bench run with transmit into a dummy load, 2026-11-05): every fact the run exercised says what ran; front-panel auto-information and the virtual-rig defaults stay unverified.
 - Transmit: no transmit path to real hardware has been run. Anything that can transmit must fail closed behind an explicit capability gate.
 
 ## Layout
@@ -392,7 +392,7 @@ Files: `crates/radioctl-protocols/src/radiod_net.rs` (engine, pure, no I/O), `cr
 
 ## Rig coverage and volunteer testing
 
-- radioctl aims to describe every Hamlib model (313 in 4.6.2) and to say honestly which ones a person has verified on a radio. The generated list is [docs/RIG_SUPPORT.md](docs/RIG_SUPPORT.md) (`python3 tools/rig_support_matrix.py`; a test fails when it is stale). Today none is hardware-verified.
+- radioctl aims to describe every Hamlib model (313 in 4.6.2) and to say honestly which ones a person has verified on a radio. The generated list is [docs/RIG_SUPPORT.md](docs/RIG_SUPPORT.md) (`python3 tools/rig_support_matrix.py`; a test fails when it is stale). Today one is hardware-verified: the Elecraft KX3 (2026-11-05).
 - Which relay, switch and GPIO products suit the station layer, and which do not (the SainSmart 16-channel USB module is not recommended): [docs/RECOMMENDED_HARDWARE.md](docs/RECOMMENDED_HARDWARE.md). Provisional; nothing on it is hardware-verified.
 - The plan, in four tiers with counts and source rules, is [docs/RIG_COVERAGE_PLAN.md](docs/RIG_COVERAGE_PLAN.md).
 - To test your own radio, run `radioctl-selftest` (shipped with the hams.com local relay; or build `-p radioctld --bin radioctl-selftest`). It discovers radios, runs only read-only checks, never transmits, writes a local report per radio and uploads each to hams.com (`--no-upload` to skip). See [docs/VOLUNTEER_TESTING.md](docs/VOLUNTEER_TESTING.md) and [docs/RIG_REPORT_UPLOAD.md](docs/RIG_REPORT_UPLOAD.md).
@@ -749,6 +749,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_meter_name] (radioctl-core) The name of a raw meter (`swr`, `alc`, `comp`, `vd`, `id`).
 - [@ANCHOR: radioctl:radioctl_core_meter_from_name] (radioctl-core) The raw meter with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_powermeter_cal] (radioctl-core) The calibration, `None` when the points do not form one.
+- [@ANCHOR: radioctl:radioctl_core_elecraft_level_range] (radioctl-core) The per-model `(min, max)` wire range of an Elecraft level from the description's `[elecraft] levels`, `None` when the K3 range applies.
 - [@ANCHOR: radioctl:radioctl_power_from_watts] (radioctl-core) Power from a figure in watts; `None` for a negative, infinite or not-a-number figure.
 - [@ANCHOR: radioctl:radioctl_power_from_dbm] (radioctl-core) Power from decibels relative to one milliwatt: `P = 10^((dBm - 30) / 10)` watts.
 - [@ANCHOR: radioctl:radioctl_power_from_dbw] (radioctl-core) Power from decibels relative to one watt.
@@ -768,6 +769,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_power_display_unit] (radioctl-core) The display unit (mW, W, kW) for a power, with 5 percent hysteresis around the thresholds.
 - [@ANCHOR: radioctl:radioctl_power_format] (radioctl-core) The text for a power: three significant digits, a fixed decimals rule per unit, dashes when unknown.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_power_meter] (radioctl-core) Validates the optional `[power_meter]` calibration block of a rig file.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_elecraft] (radioctl-core) Validates the `[elecraft]` block: the model id and the optional per-model `levels` table (`level-name = [min, max]`, numeric levels only, `min <= max <= 999`).
 - [@ANCHOR: radioctl:radioctld_meter_cal_power_fraction] (radioctld) The uncalibrated output power as a 0 to 1 fraction of the meter's raw scale.
 - [@ANCHOR: radioctl:radioctld_meter_cal_power_fraction_cal] (radioctld) The output power as a fraction of the calibrated full scale (the last calibration point).
 - [@ANCHOR: radioctl:radioctld_service_power_raw] (radioctld) The engine's raw power reading in the family's own scale (CI-V deflection, Yaesu `RM5`, Elecraft `PO`).
@@ -1151,6 +1153,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_ky] (radioctl-protocols) The model's `KY` record, or "not supported" where its manuals document none (Bruce's decision of 2026-11-02: `KY <text>;` only on models whose manual documents it).
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_feed] (radioctl-protocols) Decodes Kenwood replies, auto-information and `?;` refusals.
 - [@ANCHOR: radioctl:radioctl_elecraft_level_wire] (radioctl-protocols) The Elecraft command prefix and manual range of a level.
+- [@ANCHOR: radioctl:radioctl_elecraft_level_wire_for] (radioctl-protocols) The command and range of a level on the described model: the K3 range of `level_wire`, replaced by the description's per-model range where it gives one (the KX3's AG 0-60, RG 190-250, MG 0-80, PC 0-15, measured 2026-11-05).
 - [@ANCHOR: radioctl:radioctl_elecraft_signed_offset] (radioctl-protocols) Formats a RIT/XIT offset as `+0050` / `-0050`.
 - [@ANCHOR: radioctl:radioctl_elecraft_parse_offset] (radioctl-protocols) Parses `ROsnnnn` data (sign or blank, four digits).
 - [@ANCHOR: radioctl:radioctl_elecraft_parse_firmware] (radioctl-protocols) Parses the `NN.NN` revision of an `RVx` answer.
@@ -1239,7 +1242,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_civ_frame] (radioctl-protocols) Answers one CI-V frame: address filter, bus echo, OK/NG.
 - [@ANCHOR: radioctl:radioctl_virtual_civ_dispatch] (radioctl-protocols) The virtual CI-V command table (frequency, mode, PTT, CW, ID, meters).
 - [@ANCHOR: radioctl:radioctl_virtual_civ_mode_reply] (radioctl-protocols) Mode read reply of the virtual CI-V rig.
-- [@ANCHOR: radioctl:radioctl_virtual_stop_cw] (radioctl-protocols) A stop-Morse command (CI-V `17 FF`, Elecraft `KY <EOT>;`, Kenwood `KY0;`) empties the virtual rig's CW buffer and counts the stop.
+- [@ANCHOR: radioctl:radioctl_virtual_stop_cw] (radioctl-protocols) A stop-Morse command (CI-V `17 FF`, Elecraft `KY <EOT>;RX;`, Kenwood `KY0;`) empties the virtual rig's CW buffer and counts the stop.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_command] (radioctl-protocols) The virtual Kenwood command table.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_ky] (radioctl-protocols) A Kenwood `KY` command as the description's `[kenwood.ky]` block says the model takes it: the read answers `KY0;`, a message of the right form and width is recorded, the model's stop empties it, anything else (and every command on a model with no documented `KY`) is `?;`.
 - [@ANCHOR: radioctl:radioctl_virtual_kenwood_id] (radioctl-protocols) The ID the virtual Kenwood rig reports.
