@@ -1015,3 +1015,277 @@ prediction-error energy that the encoder quantizes) computed in Q23, converted t
 `[@ANCHOR: apply_bw_gamma_fixed]` multiplies coefficient `a[i]` in place by `0.994^i` (the `BW_GAMMA_Q23` table, Q8.23),
 shifting right by 23 (floor). It widens the LPC spectral peaks' bandwidth slightly and must be applied after the energy
 is computed, because the energy is defined on the un-expanded coefficients.
+
+## AMBE fixed-point arithmetic primitives (`src/ambe/fixed/general/fixed_ops.rs`, `explog.rs`, `trig.rs`)
+
+These are the integer-only building blocks of the fixed-point AMBE chain. **Q16.16** means a signed `i32` whose low 16 bits are
+fractional (`real = value / 65536`). A **phase** is a wrapping `u32` where a full turn is `1 << 32`, so a quarter turn is `1 << 30`
+and wrap-around is the modulo-2*pi reduction. Wide values are an `i64` with the same 16 fractional bits. None of these functions
+blocks, allocates, takes a lock or panics for any input; they are pure and safe on any thread. Their tests live in
+`tests/ambe_fixed_general.rs` (an integration test, so the `f64` reference values never appear inside `src/ambe/fixed`).
+
+| Function | Anchor | One line |
+|---|---|---|
+| `mul_q16` | `ambe_fixed_mul_q16` | Q16.16 product, rounded |
+| `div_q16` | `ambe_fixed_div_q16` | Q16.16 quotient, truncated, saturating |
+| `mul_q16_i64` | `ambe_fixed_mul_q16_i64` | Wide value times a Q16.16 scalar |
+| `div_q16_i64` | `ambe_fixed_div_q16_i64` | Q16.16 ratio of two wide values |
+| `sqrt_q16` | `ambe_fixed_sqrt_q16` | Square root of a Q16.16 value |
+| `sqrt_wide_q16` | `ambe_fixed_sqrt_wide_q16` | Square root of a wide value, wide result |
+| `log2_q16` | `ambe_fixed_log2_q16` | Base-2 logarithm by table and interpolation |
+| `log2_q16_i64` | `ambe_fixed_log2_q16_i64` | The same for a wide positive value |
+| `exp2_q16` | `ambe_fixed_exp2_q16` | `2^y` by table and interpolation |
+| `quarter_sine_interp` | `ambe_fixed_quarter_sine_interp` | Interpolated quarter-wave sine table |
+| `sin_q16` | `ambe_fixed_sin_q16` | Sine of a wrapping phase |
+| `cos_pi_frac` | `ambe_fixed_cos_pi_frac` | `cos(pi * a * b / c)` for the DCT shapes |
+| `radians_from_phase_q16` | `ambe_fixed_radians_from_phase_q16` | Phase to bounded Q16.16 radians |
+| `radians_q32_from_phase` | `ambe_fixed_radians_q32_from_phase` | Phase to bounded Q32 radians |
+| `round_div_to_u32` | `ambe_fixed_round_div_to_u32` | Rounded integer division to a phase |
+
+### `ambe_fixed_mul_q16` [@ANCHOR: ambe_fixed_mul_q16]
+
+**Purpose.** Multiply two Q16.16 numbers; used throughout the dequantize and synthesis chain.
+
+```rust
+pub fn mul_q16(a: i32, b: i32) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a`, `b` | `i32` | Q16.16 factors (`real = value / 65536`), passed by value. |
+
+**Returns.** `(a * b) >> 16` with half an LSB added first, computed in `i64` so the product itself never overflows. The final cast to `i32` wraps if the true result is outside `+-32768.0`; callers keep their operands scaled to avoid that.
+
+**Special concerns.** Pure. Known limitation: for a negative product the half is subtracted and the shift floors, so such a result can be one count (1/65536) lower than round-to-nearest; filed as `night_shift_todo/low/ambe-fixed-mul-q16-negative-rounding-bias-*`. The test asserts the one-count bound, not exact negative results.
+
+**See also.** `ambe_fixed_mul_q16_i64`, `ambe_fixed_div_q16`. Test: `mul_q16_rounds_to_nearest_and_tracks_f64`.
+
+### `ambe_fixed_div_q16` [@ANCHOR: ambe_fixed_div_q16]
+
+**Purpose.** Divide two Q16.16 numbers.
+
+```rust
+pub fn div_q16(a: i32, b: i32) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a` | `i32` | Q16.16 numerator. |
+| `b` | `i32` | Q16.16 divisor. |
+
+**Returns.** `(a << 16) / b` truncated toward zero, clamped to `i32::MIN..=i32::MAX`. A zero `b` gives `i32::MAX` when `a >= 0` and `i32::MIN` when `a < 0` (the crate's never-panic convention, where `f64` would give an infinity).
+
+**Special concerns.** Pure, no panic. Truncates; it does not round. Test: `div_q16_truncates_toward_zero_and_saturates_on_zero_or_overflow_instead_of_panicking`.
+
+### `ambe_fixed_mul_q16_i64` [@ANCHOR: ambe_fixed_mul_q16_i64]
+
+**Purpose.** Multiply a wide value (for example the enhancement stage's `R_M0` or `S_E`) by a Q16.16 scalar without overflow.
+
+```rust
+pub fn mul_q16_i64(a: i64, b_q16: i32) -> i64
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a` | `i64` | A value with 16 fractional bits, any `i64`. |
+| `b_q16` | `i32` | Q16.16 scalar. |
+
+**Returns.** The product with the same 16-fractional-bit convention, from an `i128` intermediate so `a * b` may exceed `i64::MAX`. Rounds the same way as `mul_q16` (same negative one-count bias). The final cast wraps if the result itself exceeds `i64`.
+
+**Special concerns.** Pure, no panic. Test: `mul_q16_i64_keeps_a_product_that_overflows_i64_and_rounds_like_mul_q16`.
+
+### `ambe_fixed_div_q16_i64` [@ANCHOR: ambe_fixed_div_q16_i64]
+
+**Purpose.** A dimensionless Q16.16 ratio of two wide values that individually do not fit `i32`, for example `R_M1 / R_M0` or the final `sqrt(R_M0 / E_enh)` rescale.
+
+```rust
+pub fn div_q16_i64(a: i64, b: i64) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a` | `i64` | Numerator, 16 fractional bits. |
+| `b` | `i64` | Divisor, the same convention. |
+
+**Returns.** The Q16.16 ratio `a / b`. Both operands are first shifted right together so the larger has at most 47 significant bits, then divided as in `div_q16`, so `a << 16` cannot overflow. Division by zero, or a divisor that shifts away to zero (the ratio is beyond `i32`), gives `i32::MAX` for a non-negative numerator and `i32::MIN` for a negative one. Other overflow clamps.
+
+**Special concerns.** Pure, no panic. The shift drops low bits of both operands, a relative error below 2^-47. Test: `div_q16_i64_gives_the_ratio_of_wide_values_and_saturates_instead_of_panicking`.
+
+### `ambe_fixed_sqrt_q16` [@ANCHOR: ambe_fixed_sqrt_q16]
+
+**Purpose.** Square root of a Q16.16 value.
+
+```rust
+pub fn sqrt_q16(x: i32) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `i32` | Q16.16 value. |
+
+**Returns.** `isqrt(x * 65536)` as Q16.16: the exact integer square root, so the result is the floor of the true root at the Q16.16 grid. `0` for a negative `x` (where `f64` gives NaN).
+
+**Special concerns.** Pure, no panic, accurate to one count. Test: `sqrt_q16_is_exact_to_the_nearest_q16_value_and_is_zero_for_a_negative`.
+
+### `ambe_fixed_sqrt_wide_q16` [@ANCHOR: ambe_fixed_sqrt_wide_q16]
+
+**Purpose.** Square root of a wide non-negative value whose root also exceeds `i32` (the unvoiced-synthesis windowed-noise power).
+
+```rust
+pub fn sqrt_wide_q16(x_q16: i64) -> i64
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x_q16` | `i64` | Wide value, 16 fractional bits. |
+
+**Returns.** The root on the same wide convention. `0` for zero or negative input. The value `x << 16` is formed in `u128`; if it does not fit `u64`, its lowest `2k` bits are dropped, the exact root taken, and the result shifted left by `k`, a relative error far below 1e-9 at these magnitudes.
+
+**Special concerns.** Pure, no panic for any `i64`. Test: `sqrt_wide_q16_handles_values_far_beyond_i32_and_is_zero_for_zero_or_negative`.
+
+### `ambe_fixed_log2_q16` [@ANCHOR: ambe_fixed_log2_q16]
+
+**Purpose.** Base-2 logarithm of a Q16.16 value, the basis of every fractional power in the chain (`x^p = 2^(p * log2 x)`).
+
+```rust
+pub fn log2_q16(x: i32) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `i32` | Positive Q16.16 value. |
+
+**Returns.** `log2(x / 65536)` as Q16.16 (negative for inputs below 1.0). `i32::MIN` (a stand-in for minus infinity) when `x <= 0`. The leading 1 is located, the 30-bit fraction below it is split into an 8-bit table index (257-entry table in `explog_table`) and 22 bits of linear interpolation.
+
+**Special concerns.** Pure, no panic. Error stays small in absolute terms across the whole range. Tests: `log2_q16_tracks_f64_across_many_decades`, `log2_q16_and_exp2_q16_hit_exact_powers_of_two`.
+
+### `ambe_fixed_log2_q16_i64` [@ANCHOR: ambe_fixed_log2_q16_i64]
+
+**Purpose.** `log2_q16` for a wide positive value whose integer part exceeds `i32` (about 9 to 4e8 for the enhancement stage's `R_M0` and `S_E`).
+
+```rust
+pub fn log2_q16_i64(x: i64) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `i64` | Positive value with 16 fractional bits. |
+
+**Returns.** The same table and interpolation as `log2_q16`, so it returns exactly `log2_q16(x)` for any `x` that fits `i32`. `i32::MIN` for `x <= 0`.
+
+**Special concerns.** Pure, no panic. Test: `log2_q16_i64_matches_log2_q16_where_both_apply_and_reaches_beyond_i32`.
+
+### `ambe_fixed_exp2_q16` [@ANCHOR: ambe_fixed_exp2_q16]
+
+**Purpose.** `2^y`, the inverse of `log2_q16`.
+
+```rust
+pub fn exp2_q16(y: i32) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `y` | `i32` | Q16.16 exponent, may be negative. |
+
+**Returns.** `2^(y / 65536)` as Q16.16, from a 257-entry table of `2^f` with linear interpolation, shifted by the integer part of `y`. Saturates to `i32::MAX` when the result would exceed `i32` (an integer part of 15 or more, or an overflow after the shift) and to `0` when the integer part is -63 or lower.
+
+**Special concerns.** Pure, no panic. Relative precision falls for very negative `y` because the Q16.16 grid is fixed (a result near 2^-10 has about 6 significant bits); callers keep `y` above about -8. Tests: `exp2_q16_tracks_f64_within_its_comfortable_precision_range`, `log2_q16_and_exp2_q16_hit_exact_powers_of_two`, `exp2_q16_saturates_instead_of_overflowing_or_panicking`.
+
+### `ambe_fixed_quarter_sine_interp` [@ANCHOR: ambe_fixed_quarter_sine_interp]
+
+**Purpose.** The single table lookup under every sine and cosine; private to `trig`.
+
+```rust
+fn quarter_sine_interp(x: u32) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `u32` | Angle within the first quadrant, `0..=1 << 30` (a phase). |
+
+**Returns.** The sine of that angle as Q16.16 (`0..=65536`): the top 8 bits index the 257-entry quarter-wave table, the low 22 bits interpolate linearly; an index past the end returns the last entry (65536).
+
+**Special concerns.** Pure, no panic. Tested through `sin_q16`: `sin_cos_q16_track_f64_across_a_dense_sweep`, `sin_cos_q16_hit_the_four_cardinal_angles_exactly_at_full_scale`.
+
+### `ambe_fixed_sin_q16` [@ANCHOR: ambe_fixed_sin_q16]
+
+**Purpose.** Sine of a phase, for the voiced-synthesis oscillators and the DCT sums; `cos_q16` is the same shifted by a quarter turn.
+
+```rust
+pub fn sin_q16(phase: u32) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `phase` | `u32` | Wrapping phase, `1 << 32` is one turn. |
+
+**Returns.** `sin` as Q16.16, `-65536..=65536`. The two top bits pick the quadrant and the remainder is folded into the one quarter-wave table, so the cardinal angles are exact (0, 65536, 0, -65536). Within 3 counts of `f64::sin` across a dense sweep.
+
+**Special concerns.** Pure, no panic, any thread. Tests: the two named under `ambe_fixed_quarter_sine_interp`, and `sin_q16_never_exceeds_full_scale_magnitude`.
+
+### `ambe_fixed_cos_pi_frac` [@ANCHOR: ambe_fixed_cos_pi_frac]
+
+**Purpose.** `cos(pi * a * b / c)` for the integer-and-half-integer shapes of the 8-point and block DCTs.
+
+```rust
+pub fn cos_pi_frac(a: i64, b_times_2: i64, c: i64) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a` | `i64` | Small non-negative integer. |
+| `b_times_2` | `i64` | `2 * b`, odd (so `i - 0.5` is passed as `2 * i - 1`). |
+| `c` | `i64` | Small positive integer; zero divides by zero and panics. |
+
+**Returns.** The cosine as Q16.16. The exact integer ratio `a * b_times_2 / (2 * c)` is formed before the single conversion to a phase, so rounding does not compound. Within about 6 counts of `f64` for the DCT ranges (`a` 0..8, `b_times_2` 1..15, `c` 1..8).
+
+**Special concerns.** Pure. The only panic is `c == 0`; the callers pass constants. Test: `cos_pi_frac_tracks_f64_for_the_dct_shapes_and_hits_a_half_turn_exactly`.
+
+### `ambe_fixed_radians_from_phase_q16` [@ANCHOR: ambe_fixed_radians_from_phase_q16]
+
+**Purpose.** Recover a bounded radian value from a wrapping phase accumulator, for the within-frame arithmetic in voiced synthesis.
+
+```rust
+pub fn radians_from_phase_q16(phase: u32) -> i32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `phase` | `u32` | Wrapping phase. |
+
+**Returns.** The angle in `(-pi, pi]` as Q16.16, from the phase read as `i32` and scaled by a 48-bit `pi`, rounded to nearest with ties away from zero. A half turn comes out as `-pi` (about -205887). It inverts `phase_from_radians_q16` within one count.
+
+**Special concerns.** Pure, no panic. Test: `radians_from_phase_q16_inverts_phase_from_radians_q16_within_one_count`.
+
+### `ambe_fixed_radians_q32_from_phase` [@ANCHOR: ambe_fixed_radians_q32_from_phase]
+
+**Purpose.** The same recovery at 32 fractional bits, matching `phase_from_radians_q32` (pitch is carried at that precision).
+
+```rust
+pub fn radians_q32_from_phase(phase: u32) -> i64
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `phase` | `u32` | Wrapping phase. |
+
+**Returns.** `(-pi, pi]` as an `i64` with 32 fractional bits, rounded to nearest, ties away from zero. `phase_from_radians_q32(radians_q32_from_phase(p)) == p` for every phase tried.
+
+**Special concerns.** Pure, no panic. Test: `radians_q32_from_phase_recovers_a_bounded_radian_value_and_round_trips_the_phase`.
+
+### `ambe_fixed_round_div_to_u32` [@ANCHOR: ambe_fixed_round_div_to_u32]
+
+**Purpose.** The rounding step shared by `phase_from_radians_q16`, `_q16_i64` and `_q32`; private to `trig`.
+
+```rust
+fn round_div_to_u32(numerator: i128, denominator: i128) -> u32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `numerator` | `i128` | Angle scaled up so one turn is a whole number of `denominator`s. |
+| `denominator` | `i128` | The 48-bit `pi`; nonzero. |
+
+**Returns.** `numerator / denominator` rounded to nearest, ties away from zero, then truncated (wrapped) to `u32`, which is the modulo-one-turn reduction.
+
+**Special concerns.** Pure; a zero `denominator` would panic, and the only callers pass the constant. Tested through the phase conversions: `radians_from_phase_q16_inverts_phase_from_radians_q16_within_one_count`, `radians_q32_from_phase_recovers_a_bounded_radian_value_and_round_trips_the_phase`.

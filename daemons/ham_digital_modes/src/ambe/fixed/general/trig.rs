@@ -23,6 +23,7 @@ const FRAC_MASK: u32 = (1 << INDEX_SHIFT) - 1;
 /// Linearly interpolates the quarter-wave table at `x` (`0..=QUARTER_TURN`), returning a Q16.16
 /// sine value for the angle `x` represents within `[0, pi/2]`.
 fn quarter_sine_interp(x: u32) -> i32 {
+    // [@ANCHOR: ambe_fixed_quarter_sine_interp]
     let index = (x >> INDEX_SHIFT) as usize;
     if index + 1 >= QUARTER_SINE_LEN {
         return QUARTER_SINE_Q16_16[QUARTER_SINE_LEN - 1];
@@ -36,6 +37,7 @@ fn quarter_sine_interp(x: u32) -> i32 {
 /// `sin(phase)` in Q16.16, `phase` interpreted per this module's own turn convention (`1u32 << 32`
 /// = `2*pi`). Exact quadrant folding from the single quarter-wave table, not a second table.
 pub fn sin_q16(phase: u32) -> i32 {
+    // [@ANCHOR: ambe_fixed_sin_q16]
     let quadrant = phase >> 30;
     let r = phase & (QUARTER_TURN - 1);
     match quadrant {
@@ -56,6 +58,7 @@ pub fn cos_q16(phase: u32) -> i32 {
 /// across every DCT-style reconstruction in this crate's fixed-point port (`general::mbe_speech`'s
 /// own 8-point cosine sum and inverse DCT, `tia_102_baba::reconstruct`'s gain-vector and block DCTs).
 pub fn cos_pi_frac(a: i64, b_times_2: i64, c: i64) -> i32 {
+    // [@ANCHOR: ambe_fixed_cos_pi_frac]
     // (a * b) / c = (a * b_times_2 / 2) / c = a * b_times_2 / (2*c), kept as one exact integer
     // ratio until the final Q16.16 conversion so no intermediate rounding compounds.
     let numerator_q16 = (a * b_times_2) << 16; // Q16.16 numerator of `a * b_times_2`
@@ -121,6 +124,7 @@ pub fn phase_from_radians_q32(angle_q32: i64) -> u32 {
 /// The inverse of [`phase_from_radians_q32`]: recovers a bounded `(-pi, pi]` Q32 radian value from a
 /// wrapping phase, rounded to nearest (ties away from zero).
 pub fn radians_q32_from_phase(phase: u32) -> i64 {
+    // [@ANCHOR: ambe_fixed_radians_q32_from_phase]
     let numerator = (phase as i32 as i128) * PI_Q48;
     let denominator = 1i128 << 47;
     let half = denominator / 2;
@@ -135,6 +139,7 @@ pub fn radians_q32_from_phase(phase: u32) -> i64 {
 /// Rounds `numerator / denominator` to the nearest integer (ties away from zero, the same convention
 /// [`super::fixed_ops::mul_q16`]/`explog::exp2_q16` already use) before truncating to `u32`.
 fn round_div_to_u32(numerator: i128, denominator: i128) -> u32 {
+    // [@ANCHOR: ambe_fixed_round_div_to_u32]
     let half = denominator.abs() / 2;
     let rounded = if numerator >= 0 {
         numerator + half
@@ -164,6 +169,7 @@ fn round_div_to_u32(numerator: i128, denominator: i128) -> u32 {
 /// mere per-sample rounding noise). Uses [`PI_Q48`], not `fixed_ops::PI_Q16_16`, for the same reason
 /// [`phase_from_radians_q16`] does -- see that constant's own doc comment.
 pub fn radians_from_phase_q16(phase: u32) -> i32 {
+    // [@ANCHOR: ambe_fixed_radians_from_phase_q16]
     let numerator = (phase as i32 as i128) * PI_Q48;
     let denominator = 1i128 << 63;
     let half = denominator / 2;
