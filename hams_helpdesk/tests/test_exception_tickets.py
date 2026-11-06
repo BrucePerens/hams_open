@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import tempfile
+import types
 import unittest
 from datetime import timedelta
 
@@ -416,6 +417,28 @@ class TestExceptionNeverRaises(ExceptionTicketCase):
         self.safe_patch_object(reporter, "SERVICE_XMLID", new="hams_helpdesk.no_such_service_account")
         with self.assertLogs("hams_helpdesk.exception_reporter", level="ERROR"):
             self.assertFalse(self.report(exc))
+
+
+@tagged("post_install", "-at_install", "standard")
+class TestExceptionWriterUnderReadOnlyTestCursor(ExceptionTicketCase):
+    # Tests [@ANCHOR: hams_helpdesk:exc_write_report]
+
+    def test_a_read_only_test_cursor_means_no_write_and_no_error_log(self):
+        # Odoo refuses to open a read/write test cursor above a read-only one with a plain Exception; the
+        # reporter used to log that as an ERROR traceback, which the test harness charged to the module
+        # under test (ham_club_management, 2026-11-06). Now the write is skipped quietly.
+        exc = self.caught(raise_attribute_error)
+        readonly_cursor = types.SimpleNamespace(readonly=True, _savepoint=object())
+        self.safe_patch_object(reporter._TestCursor, "_cursors_stack", new=[readonly_cursor])
+        with self.assertNoLogs("hams_helpdesk.exception_reporter", level="ERROR"):
+            self.assertFalse(self.report(exc))
+        self.assertFalse(self.fingerprints())
+
+    def test_a_read_write_test_cursor_still_writes(self):
+        exc = self.caught(raise_attribute_error)
+        read_write_cursor = types.SimpleNamespace(readonly=False, _savepoint=object())
+        self.safe_patch_object(reporter._TestCursor, "_cursors_stack", new=[read_write_cursor])
+        self.assertTrue(self.report(exc))
 
 
 @tagged("post_install", "-at_install", "standard")
