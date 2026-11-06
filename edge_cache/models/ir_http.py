@@ -2,7 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 import logging
 from odoo import models
-from odoo.http import request
+from odoo.http import Response, request
 
 _logger = logging.getLogger(__name__)
 
@@ -163,6 +163,22 @@ class IrHttp(models.AbstractModel):
             )
 
         return res
+
+    @classmethod
+    def _handle_error(cls, exception):
+        # [@ANCHOR: COMM_ir_http_handle_error_no_store]
+        # Verified by [@ANCHOR: COMM_test_error_responses_are_no_store]
+        """Mark the error page Odoo renders for an exception (404, 403, 500...) as never stored.
+
+        Odoo builds that response here and does not always pass it through _post_dispatch (a NotFound
+        raised from a controller or from the router's no-fallback path), so the headers are set at the
+        source too. super() may return a plain HTTPException instead of a Response; that has no
+        headers to set and is left alone.
+        """
+        response = super()._handle_error(exception)
+        if isinstance(response, Response) and cls._cloudflare_error_never_stored(response):
+            response.headers.setdefault("Cloudflare-CDN-Cache-Control", NO_EDGE_CACHE)
+        return response
 
     @classmethod
     def _cloudflare_error_never_stored(cls, response):

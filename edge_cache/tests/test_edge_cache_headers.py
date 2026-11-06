@@ -303,6 +303,7 @@ class TestEdgeCacheHeaders(HamsHttpCase):
     def test_07_error_responses_are_no_store(self):
         # [@ANCHOR: COMM_test_error_responses_are_no_store]
         # Tests [@ANCHOR: COMM_cloudflare_error_never_stored]
+        # Tests [@ANCHOR: COMM_ir_http_handle_error_no_store]
         """Every 4xx/5xx answer carries Cache-Control: no-store, on a public route and a real miss."""
         for path in (
             "/definitely-not-a-route-9c4e1b58",
@@ -311,7 +312,9 @@ class TestEdgeCacheHeaders(HamsHttpCase):
         ):
             response = self.url_open(path, allow_redirects=False)
             self.assertGreaterEqual(response.status_code, 400, path)
-            self.assertEqual(response.headers.get("Cache-Control"), "no-store", path)
+            self.assertEqual(
+                response.headers.get("Cache-Control"), "no-store", f"{path} {response.status_code} {dict(response.headers)}"
+            )
             self.assertEqual(
                 response.headers.get("Cloudflare-CDN-Cache-Control"), "no-cache, no-store", path
             )

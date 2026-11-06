@@ -28,7 +28,7 @@ cached at Cloudflare's edge without per-visitor cookies on them, so that most vi
 
 6a. Every error answer is marked `Cache-Control: no-store` as well as no-cache at the edge, so a cached
     error page cannot keep a site down after the fix is deployed
-    `[@ANCHOR: COMM_cloudflare_error_never_stored]` `[@ANCHOR: COMM_test_error_responses_are_no_store]`.
+    `[@ANCHOR: COMM_cloudflare_error_never_stored]` `[@ANCHOR: COMM_ir_http_handle_error_no_store]` `[@ANCHOR: COMM_test_error_responses_are_no_store]`.
 
 ## Scenario: A visitor posts a form on a cached page
 
