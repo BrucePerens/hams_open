@@ -242,7 +242,8 @@ class TestPurgeFailureAlerts(RealTransactionCase):
     def test_03_success_resolves_the_incident(self):
         # Tests [@ANCHOR: cloudflare:COMM_resolve_purge_failure]
         self.website.write({"cloudflare_api_token": "t", "cloudflare_zone_id": "z"})
-        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=True)
+        for name in ("purge_urls", "purge_tags", "purge_everything"):
+            self.safe_patch(f"odoo.addons.cloudflare.models.purge_queue.{name}", return_value=True)
         self._enqueue()
         self.Queue.process_queue()
         self.assertEqual(self._reports(self.incidents.report_incident), [])
