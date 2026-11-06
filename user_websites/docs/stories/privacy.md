@@ -22,7 +22,7 @@ As a **Community Member**, I want full control over my personal data so that I c
 
 - **And** I am shown a public confirmation page ([@ANCHOR: user_websites:COMM_privacy_erased]) stating my data was permanently erased, even though my session is gone. Verified by `[@ANCHOR: user_websites:test_privacy_erased_public_page]`.
 
-- **And** my account is anonymized and deactivated to prevent future data processing.
+- **And** I am removed from the public community directory. This module does not anonymize the profile; account handling beyond that belongs to the hams.com onboarding module, if installed.
 
 ## Technical Notes
 - Data exports use streaming generators to handle large datasets without exhausting server memory ([@ANCHOR: UX_GDPR_EXPORT]).
