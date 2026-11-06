@@ -16,6 +16,7 @@ pub const TWO_PI_Q16_16: i32 = 411775;
 /// `a * b` for two Q16.16 values, rounding to nearest rather than truncating (adds half an LSB
 /// before the final shift, the same idiom [`super::explog::exp2_q16`] uses).
 pub fn mul_q16(a: i32, b: i32) -> i32 {
+    // [@ANCHOR: ambe_fixed_mul_q16]
     let product = (a as i64) * (b as i64);
     let rounded = if product >= 0 {
         product + (1 << 15)
@@ -29,6 +30,7 @@ pub fn mul_q16(a: i32, b: i32) -> i32 {
 /// (matching the sign of the true result) on division by zero, rather than panicking -- this crate's
 /// own established "never panic" convention, extended to a case `f64` would represent as `inf`/`-inf`.
 pub fn div_q16(a: i32, b: i32) -> i32 {
+    // [@ANCHOR: ambe_fixed_div_q16]
     if b == 0 {
         return if a >= 0 { i32::MAX } else { i32::MIN };
     }
@@ -46,6 +48,7 @@ pub fn div_q16(a: i32, b: i32) -> i32 {
 /// product costs nothing extra here (it is not a floating-point type; this crate's own "no floating
 /// point whatsoever" rule is about `f32`/`f64`, not integer width).
 pub fn mul_q16_i64(a: i64, b_q16: i32) -> i64 {
+    // [@ANCHOR: ambe_fixed_mul_q16_i64]
     let product = (a as i128) * (b_q16 as i128);
     let rounded = if product >= 0 {
         product + (1i128 << 15)
@@ -65,6 +68,7 @@ pub fn mul_q16_i64(a: i64, b_q16: i32) -> i64 {
 /// `i32::MIN` on division by zero (before or after normalizing), matching [`div_q16`]'s own
 /// never-panic convention.
 pub fn div_q16_i64(a: i64, b: i64) -> i32 {
+    // [@ANCHOR: ambe_fixed_div_q16_i64]
     if b == 0 {
         return if a >= 0 { i32::MAX } else { i32::MIN };
     }
@@ -95,6 +99,7 @@ pub fn div_q16_i64(a: i64, b: i64) -> i32 {
 /// sqrt(x_q16 * 256^2) = sqrt(x_q16 * 65536)` -- so a single `isqrt_u64` call on `x_q16 * 65536`
 /// gives the Q16.16 result directly.
 pub fn sqrt_q16(x: i32) -> i32 {
+    // [@ANCHOR: ambe_fixed_sqrt_q16]
     if x < 0 {
         return 0;
     }
@@ -120,6 +125,7 @@ pub fn sqrt_q16(x: i32) -> i32 {
 /// on the order of `2^(2k) / target`, negligible at these magnitudes -- at most a few bits out of a
 /// 70+ bit number for every real caller) don't need to be reasoned about bit-by-bit, only bounded.
 pub fn sqrt_wide_q16(x_q16: i64) -> i64 {
+    // [@ANCHOR: ambe_fixed_sqrt_wide_q16]
     if x_q16 <= 0 {
         return 0;
     }

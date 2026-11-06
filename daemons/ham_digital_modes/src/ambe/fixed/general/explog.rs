@@ -24,6 +24,7 @@ use super::explog_table::{EXP2_FRAC_LEN, EXP2_FRAC_Q16_16, LOG2_FRAC_LEN, LOG2_F
 /// 64-bit input instead of a 32-bit one -- never panics: a non-positive `x` returns `i32::MIN`, the
 /// same sentinel [`log2_q16`] uses.
 pub fn log2_q16_i64(x: i64) -> i32 {
+    // [@ANCHOR: ambe_fixed_log2_q16_i64]
     if x <= 0 {
         return i32::MIN;
     }
@@ -58,6 +59,7 @@ pub fn log2_q16_i64(x: i64) -> i32 {
 /// convention rather than mirroring `f64::log2`'s own `-inf`/`NaN` (which have no exact fixed-point
 /// representation).
 pub fn log2_q16(x: i32) -> i32 {
+    // [@ANCHOR: ambe_fixed_log2_q16]
     if x <= 0 {
         return i32::MIN;
     }
@@ -104,6 +106,7 @@ pub fn log2_q16(x: i32) -> i32 {
 /// in that port's own tests -- this module only guarantees the *table-and-interpolation* math is
 /// correct, not that every caller's chosen scaling stays inside the format's comfortable range).
 pub fn exp2_q16(y: i32) -> i32 {
+    // [@ANCHOR: ambe_fixed_exp2_q16]
     let n = y >> 16; // arithmetic shift: floor(y / 65536), correct for negative y in two's complement.
     let frac = (y & 0xFFFF) as u32; // 0..=65535, the fractional part `f` (0..1) scaled by 65536.
 
