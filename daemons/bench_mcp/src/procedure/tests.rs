@@ -1016,6 +1016,10 @@ fn the_command_line_has_the_interpreter_flags_and_the_optional_systemd_wrapper()
         &limits,
     );
     assert_eq!(v[..3], ["/usr/bin/python3", "-I", "-B"]);
+    assert!(
+        !v.contains(&"-W".to_string()),
+        "no warning filter: a numpy/scipy version skew must show, not be hidden"
+    );
     assert_eq!(v.last().unwrap(), "/r");
     let wrapped = cpython::CPython {
         wrapper: "systemd-run".into(),
