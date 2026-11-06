@@ -641,8 +641,249 @@ checked against it.
 ## Codec2 3200 fixed-point encoder
 
 - `encoder_fixed:shift_in` slides the `i16` pitch history left by one 10 ms step and appends the new samples;
-  a wrong length panics.
+  a wrong length panics. `pub(super)`: `EncoderMbe` drives the same history.
   *(Reference: `src/codec2_3200/encoder_fixed.rs` -> `[@ANCHOR: encoder_fixed:shift_in]`)*
+
+### `EncoderFixed::lpc_fields` [@ANCHOR: EncoderFixed::lpc_fields]
+
+**Purpose.** The energy index and the ten line spectral pair indexes of the frame now in the encoder's history
+buffer. It is the second half of `EncoderFixed::encode`, split out unchanged (bit for bit; the golden hash in
+`tests/codec2_3200_encoder_golden_hash.rs` pins it) so `EncoderMbe` can share it and differ only in pitch and
+voicing.
+
+```rust
+pub(super) fn lpc_fields(&self) -> (u32, [u32; LPC_ORD])
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&EncoderFixed` | Read only: its 320-sample `sn` history, after the second `shift_in` of a 20 ms frame. |
+
+**Returns.** `(e_index, lsp_indexes)`: the 5-bit energy quantizer index and the ten scalar LSP quantizer indexes,
+ready for `bits::pack_frame`.
+
+**Special concerns.** Pure, integer end to end, no allocation. Windows and correlates only `window::ANALYSIS_SPAN`.
+Applies white noise correction (`R[0] * (1 + 1e-3)`) to Levinson-Durbin's input, so on strongly predictable vowels the
+energy index is up to a few steps above the C reference's (measured on real speech: never below it, 0 steps on 63
+percent of frames, 1 step on 16 percent, 2 to 6 steps on the rest; see hams_com
+`docs/reviews/M17_CODEC2_WOJCIECH_2026-11-06.md`).
+
+**See also.** `analysis_span`, `EncoderMbe::encode`. Test: `encoder_mbe_marks_a_steady_vowel_voiced_and_keeps_the_fixed_encoders_envelope`.
+
+## Codec2 3200 spectral pitch and voicing analysis (`src/codec2_3200/encoder_mbe.rs`)
+
+`EncoderMbe` is the 3200 bit/s encoder for hosts with a floating-point unit, and the relay's M17 voice encoder. It
+replaces `EncoderFixed`'s pitch bin and energy/zero-crossing voicing heuristic with the multi-band-excitation analysis
+every Codec2 encoder in the wild uses (Griffin and Lim, 1988, as Codec2 applies it; Codec2-mod keeps it): the windowed
+speech spectrum, a harmonic-sum pitch refinement and a harmonic-fit voicing decision. Energy and line spectral pairs
+come from `EncoderFixed::lpc_fields`. It is an independent implementation from the method, not a translation of the
+LGPL-2.1-only C (see `LICENSING.md`). On the four Open Speech Repository sentences it agrees with the Codec2-mod C
+encoder on both voicing bits in 93 to 98 percent of frames (`EncoderFixed`: 6 to 15 percent) and on the pitch index
+in 62 to 65 percent (`EncoderFixed`: 25 to 31), `tests/codec2_3200_encoder_vs_reference.rs`. Cost: 47 s of speech in
+62 ms on one x86-64 core (`EncoderFixed`: 29 ms; the C reference: 45 ms). Only with the `std` feature.
+
+### `EncoderMbe` [@ANCHOR: EncoderMbe]
+
+**Purpose.** State of one encoding stream: one per voice transmission (an M17 over), created at its start, dropped
+at its end.
+
+```rust
+pub struct EncoderMbe { core: EncoderFixed, analyser: MbeAnalyser }
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `core` | `EncoderFixed` | The 320-sample `i16` history, the pitch estimator's state, and the integer LPC path. |
+| `analyser` | `MbeAnalyser` | The analysis window and its spectrum, fixed after `new`. |
+
+**Lifetime and concurrency.** Owned by one caller, `Send`, not shared; about 13 KB. Not reset between overs: make a
+new one. Created by `EncoderMbe::new`, changed only by `EncoderMbe::encode`.
+
+### `EncoderMbe::new` [@ANCHOR: EncoderMbe::new]
+
+**Purpose.** A fresh encoder: silent history, pitch estimator at its initial state.
+
+```rust
+pub fn new() -> EncoderMbe
+```
+
+**Returns.** The encoder. **Special concerns.** Computes the window spectrum once (one 512-point FFT); no I/O, no
+panics. `Default` does the same.
+
+### `EncoderMbe::encode` [@ANCHOR: EncoderMbe::encode]
+
+**Purpose.** Encodes one 20 ms frame of 8 kHz speech to one 8-byte Codec2 3200 frame.
+
+```rust
+pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `speech` | `&[i16; 160]` | 20 ms of mono speech at 8000 samples per second, full scale +-32767, borrowed. |
+
+**Returns.** The packed frame: voicing bit of the first 10 ms, voicing bit of the second, 7-bit pitch index (from the
+second analysis), 5-bit energy index, 50 bits of line spectral pairs, in the standard Codec2 3200 layout (any
+Codec2 3200 decoder decodes it).
+
+**Special concerns.** Synchronous, CPU only (about 26 microseconds per frame on x86-64), no allocation besides two
+small vectors per analysis, never panics on any input. Frames must be given in order; the encoder keeps 40 ms of
+history, so a stream's first two frames see the silent start.
+
+**Example.**
+
+```rust
+let mut enc = EncoderMbe::new();
+for chunk in pcm.chunks_exact(SAMPLES_PER_FRAME) {
+    frames.push(enc.encode(chunk.try_into().unwrap()));
+}
+```
+
+**See also.** `EncoderMbe::analyse_half`, `EncoderFixed::lpc_fields`. Tests:
+`encoder_mbe_voicing_and_pitch_agree_with_the_c_reference_on_real_speech`,
+`encoder_mbe_bitstream_on_real_speech_and_noise_is_unchanged`.
+
+### `EncoderMbe::analyse_half` [@ANCHOR: EncoderMbe::analyse_half]
+
+**Purpose.** Shifts 10 ms (`half`, 80 samples) into the history, runs the integer pitch estimator for its 3.125 Hz bin,
+and refines and classifies it with `MbeAnalyser::analyse`. Private; called twice per `encode`.
+
+**Returns.** The `MbeFrame`. **Errors.** A `half` that is not 80 samples panics (in `shift_in`); `encode` always
+passes 80.
+
+### `MbeFrame` [@ANCHOR: MbeFrame]
+
+**Purpose.** The result of one 10 ms analysis.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `wo` | `f32` | Fundamental in radians per sample (`2 pi f0 / 8000`), within `[2 pi / 160, 2 pi / 20]` (50 to 400 Hz). |
+| `l` | `usize` | Harmonics below 4 kHz, `floor(pi / wo)`, one fewer if the last is within 5 percent of 4 kHz; at least 1. |
+| `voiced` | `bool` | The voicing decision after the energy-ratio rules. |
+| `snr_db` | `f32` | Harmonic-fit signal-to-error ratio below 1 kHz, dB, before those rules (diagnostic). |
+
+`Copy`, created by `MbeAnalyser::analyse`, read by `EncoderMbe::encode`.
+
+### `MbeAnalyser` [@ANCHOR: MbeAnalyser]
+
+**Purpose.** What the analysis keeps between frames: nothing that changes.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `window` | `[f32; 320]` | `make_analysis_window()`: the 279-sample Hann window centred in the history. |
+| `window_spectrum` | `[f32; 512]` | Real part of the window's 512-point spectrum with the window centred on time zero, rotated so index 256 is DC. The voicing fit places it on each harmonic. |
+
+Immutable after `new`; shareable between threads by reference.
+
+### `MbeAnalyser::new` [@ANCHOR: MbeAnalyser::new]
+
+**Purpose.** Builds the window and its spectrum. **Returns.** The analyser. Pure, one FFT, no panics.
+
+### `MbeAnalyser::spectrum` [@ANCHOR: MbeAnalyser::spectrum]
+
+**Purpose.** The 512-point spectrum `Sw` of the windowed history, the window's centre at time zero (its second half at
+the start of the FFT input, its first half wrapped to the end), so harmonic phases are referred to the frame centre.
+
+```rust
+pub fn spectrum(&self, sn: &[i16; M_PITCH]) -> [Complex32; FFT_ENC]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sn` | `&[i16; 320]` | The encoder's 40 ms history, newest sample last. |
+
+**Returns.** All 512 bins (the input is real, so bins above 256 mirror those below; the pitch search reads them).
+Forward transform, no scaling. Pure.
+
+### `MbeAnalyser::analyse` [@ANCHOR: MbeAnalyser::analyse]
+
+**Purpose.** Pitch and voicing of the frame in `sn`.
+
+```rust
+pub fn analyse(&self, sn: &[i16; M_PITCH], f0_hz: f32) -> MbeFrame
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sn` | `&[i16; 320]` | History, as for `spectrum`. |
+| `f0_hz` | `f32` | Starting pitch in Hz (the estimator's); clamped to 50 to 400 Hz first, so any value is accepted. |
+
+**Returns.** The `MbeFrame`: `refine_pitch`, then `harmonic_count`, `harmonic_amplitudes`, `harmonic_fit_snr_db`
+against `VOICING_SNR_DB` (6 dB), then `apply_energy_ratio_rules`. Pure, no panics.
+
+### Constants [@ANCHOR: mbe_voicing_constants]
+
+| Name | Value | Meaning |
+|---|---|---|
+| `VOICING_SNR_DB` | `6.0` | Harmonic-fit signal-to-error ratio (dB, below 1 kHz) above which a frame is voiced. |
+| `NLP_BIN_HZ` | `3.125` | Width of the pitch estimator's bin, `8000 / (512 * 5)` Hz; turns its bin into a starting `f0`. |
+
+### `mbe_bin_of` [@ANCHOR: mbe_bin_of]
+
+`fn bin_of(x: f32) -> f32`: the spectrum bin of angular frequency `x` (radians per sample), `x * 512 / (2 pi)`, as a
+real number for the caller to round or take the ceiling of. Pure.
+
+### `mbe_harmonic_count` [@ANCHOR: mbe_harmonic_count]
+
+`pub fn harmonic_count(wo: f32) -> usize`: harmonics below 4 kHz for fundamental `wo` (radians per sample, > 0):
+`floor(pi / wo)`, minus one if `l * wo >= 0.95 pi` (a rounding guard), at least 1. Pure.
+
+### `mbe_harmonic_sum` [@ANCHOR: mbe_harmonic_sum]
+
+`fn harmonic_sum(sw, wo, l) -> f32`: the spectral power at the rounded bins of harmonics `1..=l` of `wo`; a bin past
+the spectrum's end adds nothing. The pitch search maximizes it. Pure.
+
+### `mbe_refine_pitch` [@ANCHOR: mbe_refine_pitch]
+
+**Purpose.** Corrects the pitch estimator's coarse fundamental to the one whose harmonics collect the most power.
+
+```rust
+pub fn refine_pitch(sw: &[Complex32; FFT_ENC], wo: f32) -> f32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sw` | `&[Complex32; 512]` | The frame's spectrum (`MbeAnalyser::spectrum`). |
+| `wo` | `f32` | Starting fundamental, radians per sample, > 0. |
+
+**Returns.** The refined fundamental, clamped to `[2 pi / 160, 2 pi / 20]`. Two passes over the pitch period
+`P = 2 pi / wo`: `P - 5 .. P + 5` samples in steps of 1, then `+-1` around the winner in steps of 0.25; each candidate
+is scored by `harmonic_sum` with the harmonic count of the pass's starting pitch; the first maximum wins. Pure; about
+50 candidate scorings per call. It can move the pitch by at most 6 samples of period, so it does not correct an octave
+error of the estimator.
+
+### `mbe_harmonic_amplitudes` [@ANCHOR: mbe_harmonic_amplitudes]
+
+`pub fn harmonic_amplitudes(sw, wo, l) -> Vec<f32>`: index `m` in `1..=l` holds the square root of the power in
+harmonic `m`'s band, bins `round((m - 1/2) wo)` up to but not including `round((m + 1/2) wo)` (bins of `bin_of`);
+index 0 is 0. Length `l + 1`. Pure.
+
+### `mbe_harmonic_fit_snr_db` [@ANCHOR: mbe_harmonic_fit_snr_db]
+
+**Purpose.** How voiced the frame is: how well a sum of harmonics explains its spectrum below 1 kHz.
+
+```rust
+pub fn harmonic_fit_snr_db(sw: &[Complex32; FFT_ENC], window_spectrum: &[f32; FFT_ENC], wo: f32, l: usize, amps: &[f32]) -> f32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sw` | `&[Complex32; 512]` | The frame's spectrum. |
+| `window_spectrum` | `&[f32; 512]` | `MbeAnalyser`'s, DC at index 256. |
+| `wo`, `l` | `f32`, `usize` | Refined fundamental and harmonic count. |
+| `amps` | `&[f32]` | `harmonic_amplitudes`' output, length at least `l + 1`. |
+
+**Returns.** `10 log10(signal / error)` in dB: the signal is the power of the harmonics below 1 kHz
+(`floor(l * 1000 / 4000)` of them); for each, the bins from `ceil((h - 1/2) wo)` to `ceil((h + 1/2) wo)` are fitted by
+the window spectrum centred on harmonic `h` times the least-squares complex gain, and the error is the power the fit
+leaves. Both have `1e-4` added, so the result is finite. Pure. **Errors.** `amps` shorter than `l + 1` panics.
+
+### `mbe_apply_energy_ratio_rules` [@ANCHOR: mbe_apply_energy_ratio_rules]
+
+`pub fn apply_energy_ratio_rules(voiced: bool, wo: f32, l: usize, amps: &[f32]) -> bool`: corrects the fit's decision
+with the ratio of harmonic power below 2 kHz to power from 2 kHz up, in dB. An unvoiced frame becomes voiced above
+10 dB (low-passed speech the fit missed); a voiced frame becomes unvoiced below -10 dB (sibilants), or below -4 dB when
+`wo` is 60 Hz or lower (a pitch locked on low-frequency noise). Pure; `amps` shorter than `l + 1` panics.
 
 ## Spectral envelope (decoder)
 
@@ -883,6 +1124,22 @@ and searches the spectrum for the strongest bin in the 50 to 400 Hz range, then 
   *(Reference: `src/codec2_3200/window.rs` -> `[@ANCHOR: make_analysis_window]`)*
 - `make_analysis_window_fixed` returns the same window as the committed Q30 table.
   *(Reference: `[@ANCHOR: make_analysis_window_fixed]`)*
+
+### `analysis_span` [@ANCHOR: analysis_span]
+
+**Purpose.** Where the analysis window is non-zero, so the encoders window and correlate only that span.
+
+```rust
+pub const ANALYSIS_SPAN: core::ops::Range<usize> = 21..300; // M_PITCH/2 - NW/2 .. + NW
+```
+
+**Meaning.** Samples 21 to 299 of the 320-sample history. Outside it both windows (`make_analysis_window`, the Q30
+table) are exactly zero (tested), so every windowed sample there is zero and adds nothing to the autocorrelation:
+restricting `EncoderFixed::lpc_fields` and `floating_reference::Encoder::encode` to it is bit-exact (each skipped term
+is an exact zero; in `f32` adding a signed zero changes no sum) and saves about 13 percent of the multiply-accumulates.
+The golden hashes in `tests/codec2_3200_encoder_golden_hash.rs` were measured before the change and still hold.
+Codec2-mod made the same change in September 2026 (`W_START`/`W_END`); this is our own implementation of the idea.
+Used by: `EncoderFixed::lpc_fields`, `floating_reference::Encoder::encode`.
 
 ## Codec2 3200 LPC analysis (`src/codec2_3200/lpc.rs`)
 

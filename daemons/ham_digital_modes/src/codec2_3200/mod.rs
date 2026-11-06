@@ -138,6 +138,8 @@ macro_rules! profile_mark {
 
 pub mod bits;
 pub mod encoder_fixed;
+#[cfg(feature = "std")]
+pub mod encoder_mbe;
 pub mod envelope;
 pub mod fixed_fft;
 pub mod fixed_point;
@@ -158,6 +160,8 @@ pub mod voicing;
 pub mod window;
 
 pub use encoder_fixed::EncoderFixed;
+#[cfg(feature = "std")]
+pub use encoder_mbe::EncoderMbe;
 
 /// LPC analysis order -- 10 reflection coefficients / LSP frequencies,
 /// the real Codec2 3200bps format's own choice.

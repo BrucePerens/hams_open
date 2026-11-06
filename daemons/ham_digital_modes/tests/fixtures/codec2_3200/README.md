@@ -90,3 +90,24 @@ no instrumentation needed, just the real reference's own unmodified
 `codec2_encode`/`codec2_decode` -- encode the same synthesized non-speech
 signal to get the bits, decode those bits to get the PCM, strip any WAV
 header from the PCM output.
+
+## Reference-encoder bitstreams of real speech (added 2026-11-06)
+
+`osr_0010_codec2mod_c_encoded_bits.bin`, `osr_0011_...`, `osr_0030_...`, `osr_0031_...`: the Codec2-mod C
+encoder's own 3200 bit/s bitstream (8 bytes per 20 ms frame, nothing else) for the four Open Speech Repository
+sentences in `../osr_speech` (the WAV's samples, whole frames only). Produced on 2026-11-06 with
+M17-Project/Codec2-mod commit `7c334283794fa6304dc014f12df70afc8393143a` (2026-09-30, `main`), built for
+x86-64 with gcc 13.3 `-O2` against glibc 2.39, driven by a 20-line program that calls
+`codec2_encoder_init` once and `codec2_encode` per frame. The vendored January commit
+(`vendor/codec2-mod`, `680a0b1`) produces byte-identical files (checked), which is Codec2-mod's own
+bit-exactness claim for its September refactor. SHA-256:
+
+| File | SHA-256 |
+|---|---|
+| `osr_0010_codec2mod_c_encoded_bits.bin` | `b8994e36e40f0c3e50697e550129e55c222572f9e57c3221a5e1104841d43e11` |
+| `osr_0011_codec2mod_c_encoded_bits.bin` | `94a68af414c6155116a4a29ac7f44a72a9db1aa9d6be719b18bf87e98761699c` |
+| `osr_0030_codec2mod_c_encoded_bits.bin` | `0aeafad993f9d63abe138d0b1226469dfdfcb2ab63686157bcf8571ce3be71d7` |
+| `osr_0031_codec2mod_c_encoded_bits.bin` | `202a6f4acbdca839d43aaacb433a51941c3fbba6ce3b951078e00f09d366466d` |
+
+They are the output of a program, not its code, and carry the same OSR attribution as the speech
+(`../osr_speech/README.md`). Used by `tests/codec2_3200_encoder_vs_reference.rs`.
