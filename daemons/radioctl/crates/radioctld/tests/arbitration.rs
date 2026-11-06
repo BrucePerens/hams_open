@@ -319,3 +319,20 @@ async fn shutdown_unkeys_even_when_no_owner_is_recorded() {
     })
     .await;
 }
+
+// Tests [@ANCHOR: radioctld_service_set_mode]
+// Tests [@ANCHOR: radioctld_service_mode_before]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_width_the_rig_refuses_leaves_the_mode_as_it_was() {
+    let daemon = start(&config_text("", "kx3", "elecraft-kx3.toml", false, false)).await;
+    let mut client = Client::connect(&daemon).await;
+    assert_eq!(client.ask("M USB 2400").await, "RPRT 0\n");
+    // 505 Hz is not a bandwidth the KX3 can be given: the mode change must not stay behind.
+    let reply = client.ask("M LSB 505").await;
+    assert_ne!(reply, "RPRT 0\n", "{reply:?}");
+    assert!(reply.starts_with("RPRT -"), "{reply:?}");
+    assert!(client.ask("m").await.starts_with("USB\n"));
+    assert_eq!(client.ask("M LSB 2400").await, "RPRT 0\n");
+    assert!(client.ask("m").await.starts_with("LSB\n"));
+    daemon.stop().await;
+}

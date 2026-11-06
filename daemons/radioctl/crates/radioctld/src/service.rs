@@ -263,17 +263,43 @@ impl RigService {
 
     // [@ANCHOR: radioctld_service_set_mode]
     /// Sets the mode, and the receive bandwidth when one is asked for and the rig has the
-    /// filter capability (0 and -1 leave the rig's own width).
+    /// filter capability (0 and -1 leave the rig's own width). A width the rig refuses refuses the
+    /// whole `M`: the previous mode is put back (best effort) and the width's error is the answer.
     async fn set_mode(&self, mode: Mode, passband: i64) -> Result<Body, i32> {
         if !(-1..=1_000_000).contains(&passband) {
             return Err(EINVAL);
         }
+        let wants_width = passband > 0 && self.description.capabilities.has(Capability::Filter);
+        // The mode before, so a refused width does not leave the rig in the new mode (`M FM 15000`
+        // answered an error with the mode already changed). Read only when a width is to follow.
+        let before = if wants_width {
+            self.mode_before().await
+        } else {
+            None
+        };
         self.exec(Op::SetMode(mode)).await?;
-        if passband > 0 && self.description.capabilities.has(Capability::Filter) {
-            self.exec(Op::SetFilterWidth(Hz(passband.unsigned_abs())))
-                .await?;
+        if wants_width {
+            let width = self
+                .exec(Op::SetFilterWidth(Hz(passband.unsigned_abs())))
+                .await;
+            if let Err(code) = width {
+                if let Some(old) = before.filter(|old| *old != mode) {
+                    // Best effort: the width's own error is the answer either way.
+                    let _ = self.exec(Op::SetMode(old)).await;
+                }
+                return Err(code);
+            }
         }
         Ok(Body::Done)
+    }
+
+    // [@ANCHOR: radioctld_service_mode_before]
+    /// The rig's current mode, or `None` when it cannot be read (the caller then cannot restore it).
+    async fn mode_before(&self) -> Option<Mode> {
+        match self.read(Field::Mode, Op::GetMode).await {
+            Ok(Observation::Mode(mode)) => Some(mode),
+            _ => None,
+        }
     }
 
     // [@ANCHOR: radioctld_service_require_mode]
