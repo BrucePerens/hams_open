@@ -609,20 +609,35 @@ async fn rts_cannot_key_or_carry_data_on_a_port_whose_rts_is_flow_control() {
             .set_line(KeyLine::Rts, asserted)
             .expect_err("RTS is the driver's");
         assert_eq!(refused.kind, ErrorKind::Unsupported);
-        assert!(refused.detail.contains("flow control"), "{}", refused.detail);
+        assert!(
+            refused.detail.contains("flow control"),
+            "{}",
+            refused.detail
+        );
         let refused = link
             .control
             .set_control(ControlLine::Rts, asserted)
             .expect_err("RTS is the driver's, as data too");
-        assert!(refused.detail.contains("flow control"), "{}", refused.detail);
+        assert!(
+            refused.detail.contains("flow control"),
+            "{}",
+            refused.detail
+        );
     }
     // No keyer can be built on it: the first thing a keyer does is make the line inactive.
     let keyer = LineKeyer::new(link.control.clone(), KeyLine::Rts, true);
-    assert!(keyer.is_err(), "a keyer on a flow-control RTS must not exist");
+    assert!(
+        keyer.is_err(),
+        "a keyer on a flow-control RTS must not exist"
+    );
     // DTR is not flow control here: the refusal there is only the unmanaged port's own.
     let dtr = link
         .control
         .set_line(KeyLine::Dtr, true)
         .expect_err("a pty has no lines");
-    assert!(dtr.detail.contains("no modem control lines"), "{}", dtr.detail);
+    assert!(
+        dtr.detail.contains("no modem control lines"),
+        "{}",
+        dtr.detail
+    );
 }
