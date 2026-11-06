@@ -10,6 +10,8 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/rx888: the RX-888 MkII receiver through ka9q-radio's radiod (all seven pages) and the tools bench_rx888_status, bench_rx888_frontend, bench_rx888_boot, bench_rx888_radiod_start, bench_rx888_radiod_stop, bench_rx888_tune, bench_rx888_spectrum, bench_rx888_capture; receive only, verified on the unit with no antenna
+- instruments/usb-hubs/setup: the example port is labelled RX-888 (the VNWA is disconnected; hub 3-2 port 2 now powers the RX-888)
 - concepts/several-instruments: the group form of the config, the `device` argument on every tool, per-instance tiers and locks, shared-device rules; every tool page gains `device`
 - instruments/vna/nanovna: the NanoVNA driver (not hardware-verified), and a NanoVNA note on every bench_vna tool page
 - procedures/sweep-series-with-retries: the shipped procedure example-sweep-series (repeat a sweep, retry, power-cycle after failures, tabulate the spread)

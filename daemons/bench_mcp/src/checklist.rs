@@ -374,8 +374,10 @@ fn leak(line: &str) -> Option<String> {
             || (n[0] == 198 && n[1] == 51 && n[2] == 100)
             || (n[0] == 203 && n[1] == 0 && n[2] == 113)
             || (n[0] == 169 && n[1] == 254);
+        // A multicast group (224.0.0.0/4, such as radiod's 239.x control and data groups) names no host.
+        let multicast = (224..=239).contains(&n[0]);
         // A dotted version (firmware 1.3.27.0, 5.22.1.0) has a small first number.
-        if !private && n[0] >= 20 {
+        if !private && !multicast && n[0] >= 20 {
             return Some(format!("public IPv4 address {tok}"));
         }
     }
@@ -596,6 +598,8 @@ fn the_leak_detector_sees_what_it_should() {
     assert!(leak("api_key=abc").is_some());
     assert!(leak("host 192.0.2.10 firmware 1.3.27.0 SN-0000").is_none());
     assert!(leak("sdr 192.168.10.51 and 10.99.0.1").is_none());
+    assert!(leak("radiod status 239.88.8.1 data 239.88.8.2, mdns 224.0.0.251").is_none());
+    assert!(leak("not multicast 240.1.2.3").is_some());
 }
 
 // Tests [@ANCHOR: bench_mcp_checklist]

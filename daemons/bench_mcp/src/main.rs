@@ -19,6 +19,7 @@ mod nanovna;
 mod procedure;
 mod psu;
 mod rotator;
+mod rx888;
 mod sa;
 mod scope;
 mod sdr;
@@ -164,6 +165,12 @@ const MODULES: &[Module] = &[
         call: rotator::call,
         tool_defs: rotator::tool_defs,
         sample: r#""rotor":{"driver":"rotator","tier":"full","rotctld_port":4533}"#,
+    },
+    Module {
+        prefix: "bench_rx888_",
+        call: rx888::call,
+        tool_defs: rx888::tool_defs,
+        sample: r#""rx888":{"driver":"rx888","tier":"read_config"}"#,
     },
     Module {
         prefix: "bench_sa_",

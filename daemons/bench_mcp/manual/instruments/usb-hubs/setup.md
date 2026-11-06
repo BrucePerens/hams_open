@@ -15,8 +15,7 @@ Add an instrument with `"driver": "usb_hub"` to the bench config (`BENCH_MCP_CON
 ```json
 {"instruments": {
   "usb": {"driver": "usb_hub", "tier": "read_only",
-          "ports": {"3-2/2": {"label": "VNWA 3E", "hub_uplink_ok": true,
-                              "confirmed_by_hand": "goes dark and keeps no settings"}},
+          "ports": {"3-2/2": {"label": "RX-888"}},
           "critical_devices": ["0451:2036"]}
 }}
 ```

@@ -26,6 +26,7 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("nanovna", Kind::Vna),
     ("procedure", Kind::Procedure),
     ("rotator", Kind::Rotator),
+    ("rx888", Kind::Rx888),
     ("siglent_sds", Kind::Scope),
     ("siglent_ssa", Kind::Sa),
     ("usb_hub", Kind::UsbHub),
@@ -78,6 +79,8 @@ pub enum Kind {
     Example,
     /// The procedure runner (`procedure` module): programs that call bench tools in loops, next to the server.
     Procedure,
+    /// The RX-888 MkII HF receiver through ka9q-radio's `radiod` (`rx888` module), receive only.
+    Rx888,
 }
 
 #[derive(Clone, Debug)]
@@ -106,6 +109,7 @@ pub struct Instrument {
     pub example: crate::example::Config,
     pub sa: crate::sa::Config,
     pub procedure: crate::procedure::Config,
+    pub rx888: crate::rx888::Config,
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
@@ -313,6 +317,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
                 crate::sa::Config::default()
             },
             procedure: module_config!(procedure, driver_name, c, name),
+            rx888: module_config!(rx888, driver_name, c, name),
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),

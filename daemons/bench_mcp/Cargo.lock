@@ -50,8 +50,10 @@ name = "bench_mcp"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "radiod_client",
  "rmcp",
  "serde_json",
+ "socket2",
  "tokio",
  "vnwa_open",
 ]
@@ -735,6 +737,14 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "radiod_client"
+version = "0.1.0"
+dependencies = [
+ "socket2",
+ "tokio",
+]
 
 [[package]]
 name = "ref-cast"
