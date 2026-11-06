@@ -584,7 +584,18 @@ impl RigService {
             if !(0.0..=1.0).contains(&value) {
                 return Err(EINVAL);
             }
-            f64::from(min) + (value * f64::from(max.saturating_sub(min))).round()
+            // Transmit power is rounded down: 0.5 of a 15 W scale is 7 W, never 8 W, so a request
+            // is never exceeded. Every other level rounds to the nearest step.
+            let scaled = value * f64::from(max.saturating_sub(min));
+            f64::from(min)
+                + if level == radioctl_core::units::Level::RfPower {
+                    // A client prints the fraction with six decimals (5/15 is 0.333333), which
+                    // lands a hair under the whole watt it came from; the tolerance, far below
+                    // one step, keeps that step.
+                    (scaled + 1e-4).floor()
+                } else {
+                    scaled.round()
+                }
         } else {
             value.round()
         };

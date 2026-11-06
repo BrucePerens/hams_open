@@ -168,7 +168,7 @@ verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MC
 
 [[facts]]
 key = "capability.levels"
-provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: AG p. 7 (000-255), RG p. 23 (000-250), MG and ML p. 16 (000-060), KS p. 15 (008-050), PC p. 22 (KX3: 000-012 or 000-015 without a KXPA100, 000-110 with one)", note = "The engine accepts PC up to 110; the radio decides what it accepts." }
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: AG p. 7 (000-255), RG p. 23 (000-250), MG and ML p. 16 (000-060), KS p. 15 (008-050), PC p. 22 (KX3: 000-012 or 000-015 without a KXPA100, 000-110 with one)", note = "The ranges the engine accepts are in elecraft.levels; the radio decides what it accepts within them." }
 verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "AG, RG, MG, ML, KS, PC set and read back within the ranges in elecraft.levels" }
 
 [[facts]]
