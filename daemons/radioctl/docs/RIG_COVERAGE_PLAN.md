@@ -6,15 +6,17 @@ verified, and make a best effort to make them work out of the box.
 
 This plan splits the remaining work into four tiers. The counts are from [RIG_SUPPORT.md](RIG_SUPPORT.md), which is
 generated from Hamlib 4.6.2's 313 models and the files in `rigs/` and is the place to look for current numbers.
-Today 121 of 313 models have a description (126 files, because the four FlexRadio 6000-series files share Hamlib's one
-"6xxx" model and the two ANAN files have no Hamlib model), and one is hardware-verified (the Elecraft KX3, 2026-11-05).
+Today every one of the 283 real radios (of 313 models; 30 are not applicable) has a description (291 files, because the four FlexRadio 6000-series files share Hamlib's one
+"6xxx" model and the ANAN and other files have no Hamlib model), and one is hardware-verified (the Elecraft KX3, 2026-11-05).
 
 | Tier | Work | Models | Described | Left |
 |---|---|---:|---:|---:|
-| A | data only, on an existing engine | 135 | 116 | 19 |
-| B | variants of an existing engine | 41 | 4 | 37 |
-| C | a new engine per family | 83 | 0 | 83 |
-| D | odd devices | 54 | 0 | 54 |
+| A | data only, on an existing engine | 135 | 135 | 0 |
+| B | variants of an existing engine | 42 | 42 | 0 |
+| C | a new engine per family | 82 | 74 | 8 |
+| D | odd devices | 54 | 32 | 22 |
+
+The C and D "left" figures include models recorded as not applicable (see RIG_SUPPORT.md for the exact split).
 
 ## Rules that apply to every tier
 
@@ -52,7 +54,7 @@ capabilities, plus an engine fix when a model differs.
   provenance. Xiegu documents forbid reuse: use Hamlib facts and `--dump-caps` and say so, as the shipped files do. Icom's manuals are read for facts (rule 2).
 - Order inside the tier: models with many users first (Icom IC-7000/7100/7200/746/756 series, Kenwood TS-480/570/990/50,
   Yaesu FT-710/891/950/2000/FTDX-3000/5000, Elecraft K3/K3S/KX2/K4), then the rest by family, one pull request per family.
-- 116 are done (the 18 earlier ones, 66 Icom CI-V models, 15 Yaesu newcat and Elecraft models and 16 Kenwood ASCII models, see below). Done means a description exists, not that it is verified.
+- All 135 are done (Icom CI-V 79, Kenwood ASCII 25, Yaesu NewCAT 15, Elecraft 7, FlexRadio 9; counts as of 2026-11-06, generated in RIG_SUPPORT.md). What remains in this tier is engine fidelity (per-model level ranges, split, clarifier forms), tracked in night_shift_todo, not missing descriptions. Done means a description exists, not that it is verified.
 - Flex: the SmartSDR "slice A to H" models are the same network engine; one file covers them with the slice letter as a parameter.
 
 ### Icom CI-V: what is done and what is left (79 models in Hamlib's `icom_civ` family)
