@@ -78,6 +78,14 @@ pub fn is_ack(status: &ChannelStatus, ssrc: u32, tag: u32) -> bool {
     status.ssrc == ssrc && status.tag == Some(u64::from(tag))
 }
 
+// [@ANCHOR: radiod_client_net_is_front_end]
+/// True when `status` describes the front end (SSRC 0). `radiod` does not echo the command tag in
+/// a front-end reply (observed on the RX-888, 2026-11-05), so any front-end status counts as the
+/// answer to a front-end poll: it is the same front end whoever asked.
+pub fn is_front_end(status: &ChannelStatus) -> bool {
+    status.ssrc == 0
+}
+
 // [@ANCHOR: radiod_client_net_classify]
 /// Decode one received datagram: a status is returned, our own looped-back commands are
 /// skipped, and a malformed datagram is counted in `malformed` and skipped.
@@ -195,6 +203,31 @@ impl Control {
                 return Ok(Some(status));
             }
         }
+    }
+
+    // [@ANCHOR: radiod_client_net_control_front_end]
+    /// Ask for the front end's status (SSRC 0: sample rate, A/D overrange count, RF gain and
+    /// attenuation, usable edges) and wait up to `wait` for it, repeating the poll every 200 ms.
+    /// Creates no channel. `Ok(None)` if nothing answered. While no channel exists the front end
+    /// is stopped, and its `if_power_db` reads `-inf`.
+    pub async fn front_end(&mut self, wait: Duration) -> Result<Option<ChannelStatus>, NetError> {
+        let deadline = Instant::now() + wait;
+        while Instant::now() < deadline {
+            let tag = self.next_tag;
+            self.next_tag = next_tag(tag);
+            let pkt = crate::command::encode_front_end_poll(tag);
+            self.sock.send_to(&pkt, self.dest).await?;
+            let retry = (Instant::now() + RETRY_INTERVAL).min(deadline);
+            while Instant::now() < retry {
+                let left = retry.saturating_duration_since(Instant::now());
+                if let Some(status) = self.recv_status(left).await? {
+                    if is_front_end(&status) {
+                        return Ok(Some(status));
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 
     // [@ANCHOR: radiod_client_net_control_request]
@@ -550,5 +583,54 @@ mod tests {
         // The listener sees our own commands, which recv_status skips.
         let nothing = control.recv_status(Duration::from_millis(50)).await;
         assert!(matches!(nothing, Ok(None)), "{nothing:?}");
+    }
+
+    // Tests [@ANCHOR: radiod_client_net_control_front_end]
+    // Tests [@ANCHOR: radiod_client_net_is_front_end]
+    #[tokio::test]
+    async fn front_end_read_matches_ssrc_zero_without_a_tag() {
+        let handle = Handle::current();
+        let (g, port) = (group(5), test_port(4));
+        let opened = open_group(g, port, LOOPBACK).and_then(|s| register(&handle, s));
+        assert!(opened.is_ok(), "multicast on loopback: {opened:?}");
+        let Ok(peer) = opened else { return };
+        let control = Control::open_on_port(&handle, g, port, LOOPBACK, Policy::default());
+        assert!(control.is_ok(), "{control:?}");
+        let Ok(mut control) = control else { return };
+
+        // Answer a front-end poll as the RX-888's radiod did: a status for SSRC 0 with no tag,
+        // preceded by an unrelated channel status that must not be taken for it. Record what
+        // the poll carried.
+        let responder = tokio::spawn(async move {
+            let dest = SocketAddrV4::new(g, port);
+            while let Some(pkt) = next_datagram(&peer, Duration::from_secs(3)).await {
+                let Ok((Kind::Command, entries)) = parse(&pkt) else {
+                    continue;
+                };
+                let types: Vec<u8> = entries.iter().map(|e| e.ty).collect();
+                let channel = [0u8, ty::OUTPUT_SSRC, 1, 9, ty::AD_OVER, 1, 99, ty::EOL];
+                let front = [0u8, ty::OUTPUT_SSRC, 0, ty::AD_OVER, 1, 3, ty::EOL];
+                let _ = peer.send_to(&channel, dest).await;
+                let _ = peer.send_to(&front, dest).await;
+                return types;
+            }
+            Vec::new()
+        });
+        let got = control.front_end(Duration::from_secs(2)).await;
+        assert!(
+            matches!(&got, Ok(Some(st)) if is_front_end(st) && st.ad_over == Some(3)),
+            "{got:?}"
+        );
+        let types = responder.await.unwrap_or_default();
+        assert_eq!(
+            types,
+            vec![ty::OUTPUT_SSRC, ty::COMMAND_TAG],
+            "no lifetime, no channel fields"
+        );
+        let channel = ChannelStatus {
+            ssrc: 9,
+            ..ChannelStatus::default()
+        };
+        assert!(!is_front_end(&channel));
     }
 }

@@ -4,7 +4,9 @@
 //! Every datagram this crate sends to `radiod` is produced by [`Command::encode`] from typed,
 //! validated fields. There is no entry point that takes caller-supplied TLV bytes, and no field
 //! for `OUTPUT_DATA_DEST_SOCKET` (which would let a client send a channel's audio to any host) or
-//! for the front end (`gain`, `tuner` and `lock` commands). A channel always gets a lifetime.
+//! for the front end (RF `gain`, attenuation, `tuner` and `lock` commands). A channel always gets a
+//! lifetime. The one exception to "every command names a channel" is [`encode_front_end_poll`], a
+//! read of the front end's status (SSRC 0) that carries nothing but a tag.
 
 use crate::tlv::{ty, Writer};
 use std::fmt;
@@ -16,6 +18,14 @@ pub const MAX_FLOAT_BINS: u32 = 16_000;
 /// Hard ceiling on a byte-format (`BIN_BYTE_DATA`) spectrum request, whatever the [`Policy`]
 /// says. 65,000 worked in the trial and 66,000 crashed `radiod`; this keeps a margin.
 pub const MAX_BYTE_BINS: u32 = 60_000;
+// [@ANCHOR: radiod_client_command_limits]
+/// Largest filter edge magnitude, Hz: half the widest output rate the schema asks for (24 kHz FM).
+/// An edge beyond the output Nyquist frequency only narrows the passband (`radiod` cannot pass
+/// what its output rate cannot carry), so this bound loses nothing.
+pub const MAX_FILTER_EDGE_HZ: f32 = 12_000.0;
+/// Channel (audio) gain range for a fixed-gain channel, dB. The RX-888 bring-up (2026-11-05) saw
+/// about 61 dB under AGC on an AM channel and needed about 100 dB for I/Q noise to reach -35 dBFS.
+pub const GAIN_RANGE_DB: (f32, f32) = (-20.0, 160.0);
 
 /// Channel identifier (RTP SSRC). `0` addresses the front end and `0xffff_ffff` means "all
 /// channels" in `radiod`, so neither is constructible.
@@ -41,6 +51,7 @@ impl Ssrc {
 
 /// Audio demodulation modes the gateway offers. Each maps to explicit parameters, not to a
 /// server-side preset name (the `radiod` documentation recommends explicit parameters).
+// [@ANCHOR: radiod_client_command_mode]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     /// Upper sideband, 50 to 3000 Hz.
@@ -53,6 +64,9 @@ pub enum Mode {
     Am,
     /// Narrow FM, +-8 kHz, 24 kHz output.
     Fm,
+    /// Raw I/Q: linear demodulator with no detection, +-5 kHz, 12 kHz output, two channels (I then
+    /// Q in each sample pair). The parameters of `radiod`'s own `[iq]` preset, sent explicitly.
+    Iq,
 }
 
 /// Output encoding of the channel's RTP stream.
@@ -103,6 +117,7 @@ pub struct SpectrumChannel {
 }
 
 /// Everything the gateway may ask of `radiod`.
+// [@ANCHOR: radiod_client_command_command]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     /// Create an audio channel or retune an existing one.
@@ -121,6 +136,29 @@ pub enum Command {
     },
     /// Remove a channel now (sets a one-frame lifetime).
     Remove(Ssrc),
+    /// Set the passband of an existing channel, Hz relative to the carrier. A later
+    /// [`Command::Audio`] puts the mode's own passband back.
+    Filter {
+        /// Channel id.
+        ssrc: Ssrc,
+        /// Low edge, Hz (negative is below the carrier).
+        low_hz: f32,
+        /// High edge, Hz; above `low_hz`.
+        high_hz: f32,
+        /// Frames before an unrefreshed channel is removed.
+        lifetime_frames: u32,
+    },
+    /// Set the channel's own audio gain: a fixed gain in dB (AGC off) or `None` for AGC. This is the
+    /// demodulator's output gain, not the front end's RF gain, which this schema cannot touch. A later
+    /// [`Command::Audio`] turns AGC back on.
+    Gain {
+        /// Channel id.
+        ssrc: Ssrc,
+        /// Fixed gain, dB, inside [`GAIN_RANGE_DB`]; `None` for AGC.
+        gain_db: Option<f32>,
+        /// Frames before an unrefreshed channel is removed.
+        lifetime_frames: u32,
+    },
 }
 
 /// Site limits the gateway enforces before anything reaches the wire.
@@ -156,6 +194,7 @@ impl Default for Policy {
 }
 
 /// A rejected command; nothing was sent.
+// [@ANCHOR: radiod_client_command_error]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CommandError {
     /// SSRC 0 or 0xffffffff.
@@ -172,6 +211,10 @@ pub enum CommandError {
     Averaging(u32),
     /// Opus bit rate out of range.
     Bitrate(u32),
+    /// Filter edges not finite, beyond [`MAX_FILTER_EDGE_HZ`], or low not below high.
+    Filter(f32, f32),
+    /// Fixed gain not finite or outside [`GAIN_RANGE_DB`].
+    Gain(f32),
 }
 
 impl fmt::Display for CommandError {
@@ -202,6 +245,44 @@ fn check_life(p: &Policy, l: u32) -> Result<(), CommandError> {
     }
 }
 
+// [@ANCHOR: radiod_client_command_check_filter]
+fn check_filter(low: f32, high: f32) -> Result<(), CommandError> {
+    let edge_ok = |e: f32| e.is_finite() && e.abs() <= MAX_FILTER_EDGE_HZ;
+    if edge_ok(low) && edge_ok(high) && low < high {
+        Ok(())
+    } else {
+        Err(CommandError::Filter(low, high))
+    }
+}
+
+// [@ANCHOR: radiod_client_command_encode_front_end_poll]
+/// The datagram that asks `radiod` for its front end's status: SSRC 0 and the tag, nothing else.
+/// SSRC 0 is the front end, not a channel, so no channel is created and no lifetime applies. Observed
+/// on the RX-888 (2026-11-05): the reply carries no `COMMAND_TAG`, so it is recognised by SSRC 0
+/// alone ([`crate::net::is_front_end`]), and `radiod` sends it only when asked.
+pub fn encode_front_end_poll(tag: u32) -> Vec<u8> {
+    let mut w = Writer::command();
+    w.uint(ty::OUTPUT_SSRC, 0);
+    w.uint(ty::COMMAND_TAG, u64::from(tag));
+    w.finish()
+}
+
+// [@ANCHOR: radiod_client_command_max_spectrum_span_hz]
+/// The widest spectrum span (bin count times bin width) a front end can fill: half its sample rate
+/// for a real (direct-sampling) front end such as the RX-888, the whole rate for a complex one.
+/// Observed on the RX-888 at 64.8 Msps (2026-11-05): spans up to 32.41 MHz came back with every bin
+/// filled, and 32.44 MHz or wider with about half the bins exactly zero; half the rate (32.4 MHz) is
+/// the bound kept here. A caller that knows the front end (its status has `input_samprate` and
+/// `fe_is_real`) keeps requests inside this.
+pub fn max_spectrum_span_hz(input_samprate: u64, real: bool) -> f64 {
+    let rate = input_samprate as f64;
+    if real {
+        rate / 2.0
+    } else {
+        rate
+    }
+}
+
 impl Policy {
     // [@ANCHOR: radiod_client_command_policy_bin_limit]
     /// The largest bin count this policy permits for a format: the site limit, never above the
@@ -223,7 +304,7 @@ impl Command {
         match self {
             Self::Audio(a) => a.ssrc,
             Self::Spectrum(s) => s.ssrc,
-            Self::Poll { ssrc, .. } => *ssrc,
+            Self::Poll { ssrc, .. } | Self::Filter { ssrc, .. } | Self::Gain { ssrc, .. } => *ssrc,
             Self::Remove(s) => *s,
         }
     }
@@ -260,6 +341,30 @@ impl Command {
                 lifetime_frames, ..
             } => check_life(p, *lifetime_frames),
             Self::Remove(_) => Ok(()),
+            Self::Filter {
+                low_hz,
+                high_hz,
+                lifetime_frames,
+                ..
+            } => {
+                check_life(p, *lifetime_frames)?;
+                check_filter(*low_hz, *high_hz)
+            }
+            Self::Gain {
+                gain_db,
+                lifetime_frames,
+                ..
+            } => {
+                check_life(p, *lifetime_frames)?;
+                match gain_db {
+                    Some(g)
+                        if !(g.is_finite() && *g >= GAIN_RANGE_DB.0 && *g <= GAIN_RANGE_DB.1) =>
+                    {
+                        Err(CommandError::Gain(*g))
+                    }
+                    _ => Ok(()),
+                }
+            }
         }
     }
 
@@ -276,11 +381,43 @@ impl Command {
                 lifetime_frames, ..
             } => w.uint(ty::LIFETIME, u64::from(*lifetime_frames)),
             Self::Remove(_) => w.uint(ty::LIFETIME, 1),
+            Self::Filter {
+                low_hz,
+                high_hz,
+                lifetime_frames,
+                ..
+            } => {
+                w.uint(ty::LIFETIME, u64::from(*lifetime_frames));
+                w.f32(ty::LOW_EDGE, *low_hz);
+                w.f32(ty::HIGH_EDGE, *high_hz);
+            }
+            Self::Gain {
+                gain_db,
+                lifetime_frames,
+                ..
+            } => {
+                w.uint(ty::LIFETIME, u64::from(*lifetime_frames));
+                match gain_db {
+                    Some(g) => {
+                        w.bool(ty::AGC_ENABLE, false);
+                        w.f32(ty::GAIN, *g);
+                    }
+                    None => w.bool(ty::AGC_ENABLE, true),
+                }
+            }
             Self::Audio(a) => {
                 w.uint(ty::LIFETIME, u64::from(a.lifetime_frames));
                 w.f64(ty::RADIO_FREQUENCY, a.frequency_hz);
-                w.uint(ty::OUTPUT_CHANNELS, 1);
+                w.uint(ty::OUTPUT_CHANNELS, if a.mode == Mode::Iq { 2 } else { 1 });
                 match a.mode {
+                    Mode::Iq => {
+                        w.uint(ty::DEMOD_TYPE, 0);
+                        w.uint(ty::OUTPUT_SAMPRATE, 12_000);
+                        w.f32(ty::LOW_EDGE, -5000.0);
+                        w.f32(ty::HIGH_EDGE, 5000.0);
+                        w.bool(ty::ENVELOPE, false);
+                        w.bool(ty::AGC_ENABLE, true);
+                    }
                     Mode::Usb | Mode::Lsb | Mode::Cw | Mode::Am => {
                         let (lo, hi) = match a.mode {
                             Mode::Usb => (50.0, 3000.0),
@@ -451,8 +588,10 @@ mod tests {
                 lifetime_frames: 50,
             },
             Command::Remove(ssrc(3)),
+            filter(-3000.0, -50.0, 10),
+            gain(None, 10),
         ];
-        for mode in [Mode::Lsb, Mode::Cw, Mode::Am, Mode::Fm] {
+        for mode in [Mode::Lsb, Mode::Cw, Mode::Am, Mode::Fm, Mode::Iq] {
             cmds.push(Command::Audio(AudioChannel {
                 mode,
                 encoding: Encoding::Opus { bitrate: 24_000 },
@@ -615,6 +754,11 @@ mod tests {
     #[test]
     fn errors_display() {
         assert_eq!(CommandError::BinCount(7).to_string(), "BinCount(7)");
+        assert_eq!(
+            CommandError::Filter(1.0, 0.0).to_string(),
+            "Filter(1.0, 0.0)"
+        );
+        assert_eq!(CommandError::Gain(200.0).to_string(), "Gain(200.0)");
     }
 
     // Tests [@ANCHOR: radiod_client_command_encode]
@@ -628,5 +772,167 @@ mod tests {
             .unwrap_or_default();
         assert_eq!(pkt.first(), Some(&1));
         assert_eq!(pkt.last(), Some(&ty::EOL));
+    }
+
+    fn filter(low: f32, high: f32, life: u32) -> Command {
+        Command::Filter {
+            ssrc: ssrc(100),
+            low_hz: low,
+            high_hz: high,
+            lifetime_frames: life,
+        }
+    }
+
+    fn gain(g: Option<f32>, life: u32) -> Command {
+        Command::Gain {
+            ssrc: ssrc(100),
+            gain_db: g,
+            lifetime_frames: life,
+        }
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_check_filter]
+    // Tests [@ANCHOR: radiod_client_command_command]
+    // Tests [@ANCHOR: radiod_client_command_error]
+    // Tests [@ANCHOR: radiod_client_command_limits]
+    // Tests [@ANCHOR: radiod_client_command_validate]
+    // Tests [@ANCHOR: radiod_client_command_encode]
+    // Tests [@ANCHOR: radiod_client_command_ssrc]
+    #[test]
+    fn filter_command_is_bounded_and_carries_a_lifetime() {
+        let p = Policy::default();
+        assert_eq!(filter(300.0, 800.0, 10).ssrc(), ssrc(100));
+        for (lo, hi) in [
+            (f32::NAN, 100.0),
+            (100.0, f32::INFINITY),
+            (500.0, 500.0),
+            (800.0, 300.0),
+            (-12_001.0, 0.0),
+            (0.0, 12_001.0),
+        ] {
+            assert!(
+                matches!(
+                    filter(lo, hi, 10).validate(&p),
+                    Err(CommandError::Filter(..))
+                ),
+                "{lo} {hi}"
+            );
+        }
+        assert_eq!(
+            filter(300.0, 800.0, 0).validate(&p),
+            Err(CommandError::Lifetime(0))
+        );
+        assert!(filter(-12_000.0, 12_000.0, 10).validate(&p).is_ok());
+        let pkt = filter(-2700.0, -300.0, 75)
+            .encode(&p, 3)
+            .unwrap_or_default();
+        let e = entries(&pkt);
+        assert!(e
+            .iter()
+            .any(|x| x.ty == ty::LOW_EDGE && x.f32() == Ok(-2700.0)));
+        assert!(e
+            .iter()
+            .any(|x| x.ty == ty::HIGH_EDGE && x.f32() == Ok(-300.0)));
+        assert!(e.iter().any(|x| x.ty == ty::LIFETIME && x.uint() == Ok(75)));
+        assert!(e
+            .iter()
+            .all(|x| x.ty != ty::RADIO_FREQUENCY && x.ty != ty::OUTPUT_DATA_DEST_SOCKET));
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_validate]
+    // Tests [@ANCHOR: radiod_client_command_encode]
+    #[test]
+    fn gain_command_is_the_channel_gain_or_agc() {
+        let p = Policy::default();
+        let fixed = gain(Some(95.0), 50).encode(&p, 4).unwrap_or_default();
+        let e = entries(&fixed);
+        assert!(e
+            .iter()
+            .any(|x| x.ty == ty::AGC_ENABLE && x.bool() == Ok(false)));
+        assert!(e.iter().any(|x| x.ty == ty::GAIN && x.f32() == Ok(95.0)));
+        assert!(e.iter().any(|x| x.ty == ty::LIFETIME && x.uint() == Ok(50)));
+        let agc = gain(None, 50).encode(&p, 4).unwrap_or_default();
+        let e = entries(&agc);
+        assert!(e
+            .iter()
+            .any(|x| x.ty == ty::AGC_ENABLE && x.bool() == Ok(true)));
+        assert!(e.iter().all(|x| x.ty != ty::GAIN));
+        // Never the front end's RF gain or attenuation.
+        for pkt in [&fixed, &agc] {
+            assert!(entries(pkt)
+                .iter()
+                .all(|x| x.ty != ty::RF_GAIN && x.ty != ty::RF_ATTEN && x.ty != ty::RF_AGC));
+        }
+        for bad in [f32::NAN, f32::INFINITY, -20.5, 160.5] {
+            assert!(
+                matches!(gain(Some(bad), 50).validate(&p), Err(CommandError::Gain(_))),
+                "{bad}"
+            );
+        }
+        assert_eq!(gain(None, 0).validate(&p), Err(CommandError::Lifetime(0)));
+        assert!(
+            gain(Some(-20.0), 1).validate(&p).is_ok() && gain(Some(160.0), 1).validate(&p).is_ok()
+        );
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_encode]
+    // Tests [@ANCHOR: radiod_client_command_mode]
+    #[test]
+    fn iq_mode_is_two_channel_linear_without_detection() {
+        let pkt = Command::Audio(AudioChannel {
+            mode: Mode::Iq,
+            ..base_audio()
+        })
+        .encode(&Policy::default(), 2)
+        .unwrap_or_default();
+        let e = entries(&pkt);
+        let has = |t: u8, v: u64| e.iter().any(|x| x.ty == t && x.uint() == Ok(v));
+        assert!(has(ty::OUTPUT_CHANNELS, 2));
+        assert!(has(ty::DEMOD_TYPE, 0));
+        assert!(has(ty::OUTPUT_SAMPRATE, 12_000));
+        assert!(e
+            .iter()
+            .any(|x| x.ty == ty::ENVELOPE && x.bool() == Ok(false)));
+        assert!(e
+            .iter()
+            .any(|x| x.ty == ty::LOW_EDGE && x.f32() == Ok(-5000.0)));
+        // Every other mode stays mono.
+        for mode in [Mode::Usb, Mode::Lsb, Mode::Cw, Mode::Am, Mode::Fm] {
+            let pkt = Command::Audio(AudioChannel {
+                mode,
+                ..base_audio()
+            })
+            .encode(&Policy::default(), 2)
+            .unwrap_or_default();
+            assert!(entries(&pkt)
+                .iter()
+                .any(|x| x.ty == ty::OUTPUT_CHANNELS && x.uint() == Ok(1)));
+        }
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_encode_front_end_poll]
+    #[test]
+    fn front_end_poll_names_only_ssrc_zero_and_the_tag() {
+        let pkt = encode_front_end_poll(77);
+        let e = entries(&pkt);
+        assert_eq!(e.len(), 2, "{e:?}");
+        assert!(e
+            .iter()
+            .any(|x| x.ty == ty::OUTPUT_SSRC && x.uint() == Ok(0)));
+        assert!(e
+            .iter()
+            .any(|x| x.ty == ty::COMMAND_TAG && x.uint() == Ok(77)));
+        assert_eq!(pkt.last(), Some(&ty::EOL));
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_max_spectrum_span_hz]
+    #[test]
+    fn spectrum_span_is_half_the_rate_for_a_real_front_end() {
+        assert_eq!(max_spectrum_span_hz(64_800_000, true), 32_400_000.0);
+        assert_eq!(max_spectrum_span_hz(2_000_000, false), 2_000_000.0);
+        assert_eq!(max_spectrum_span_hz(0, true), 0.0);
+        // The RX-888 observations: 8192 x 3950 Hz fits, 8192 x 3960 Hz does not.
+        assert!(8192.0 * 3950.0 <= max_spectrum_span_hz(64_800_000, true));
+        assert!(8192.0 * 3960.0 > max_spectrum_span_hz(64_800_000, true));
     }
 }
