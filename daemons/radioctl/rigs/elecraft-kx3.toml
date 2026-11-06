@@ -88,7 +88,7 @@ verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MC
 
 [[facts]]
 key = "power_meter.raw_to_milliwatts"
-provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: PO (Actual Power Output Level, KX3/KX2 only) p. 22: tenths of a watt in QRP mode", note = "Estimated by the radio from drive level, not measured at the load. With a KXPA100 the unit is watts and this calibration is wrong." }
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: PO (Actual Power Output Level, KX3/KX2 only) p. 22: tenths of a watt in QRP mode", note = "Estimated by the radio from drive level, not measured at the load. With a KXPA100 the unit is watts and this calibration is wrong; `OM;` (radioctld self-test check `identify: power amplifier`) shows a P in the second slot when the amplifier is present, which tells the two cases apart." }
 verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "KY TEST in CW at PC005 into a dummy load: PO048 (4.8 W) while sending, PO000 in receive" }
 
 [[facts]]

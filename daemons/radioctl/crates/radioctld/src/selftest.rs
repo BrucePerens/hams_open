@@ -105,6 +105,7 @@ pub fn is_read_only(op: &Op) -> bool {
             | Op::GetMeter(_)
             | Op::GetModelId
             | Op::GetFirmware
+            | Op::GetPowerAmplifier
     )
 }
 
@@ -116,6 +117,10 @@ pub fn plan_checks(description: &RigDescription) -> Vec<(String, Op)> {
     if has(Capability::Identify) {
         plan.push(("identify: model id".into(), Op::GetModelId));
         plan.push(("identify: firmware".into(), Op::GetFirmware));
+        // The Elecraft models that claim levels (K3, K3S, KX2, KX3) answer OM with the amplifier slot.
+        if description.elecraft.is_some() && has(Capability::Levels) {
+            plan.push(("identify: power amplifier".into(), Op::GetPowerAmplifier));
+        }
     }
     if has(Capability::ReadFrequency) {
         plan.push(("read frequency A".into(), Op::GetFrequency(Vfo::A)));
