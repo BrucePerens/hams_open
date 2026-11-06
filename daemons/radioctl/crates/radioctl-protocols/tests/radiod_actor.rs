@@ -339,9 +339,16 @@ async fn a_radiod_channel_is_a_receive_only_virtual_rig() {
     assert!(stats.acks > 5 && stats.audio_frames > 0, "{stats:?}");
 
     // The channel restart: counted once per restart, with its outage, and the new stream is in order.
-    eventually("the restart is counted", || control.stats().rtp_restarts > 0).await;
+    eventually("the restart is counted", || {
+        control.stats().rtp_restarts > 0
+    })
+    .await;
     let stats = control.stats();
-    assert_eq!((stats.rtp_lost, stats.rtp_out_of_order), (0, 0), "{stats:?}");
+    assert_eq!(
+        (stats.rtp_lost, stats.rtp_out_of_order),
+        (0, 0),
+        "{stats:?}"
+    );
     assert!(
         stats.rtp_stalls >= 1 && stats.rtp_stall_ms >= 300,
         "{stats:?}"
