@@ -4,9 +4,10 @@
 //! ```json
 //! {"instruments": {
 //!   "scope": {"driver": "siglent_sds", "tier": "read_config", "host": "192.168.10.51", "port": 5025},
-//!   "psu":   {"driver": "atm6301", "tier": "read_config", "serial": "/dev/ttyUSB0", "baud": 115200,
+//!   "psu":   {"driver": "atm6301", "tier": "read_config", "serial": "/dev/serial/by-id/usb-EXAMPLE_supply-if00-port0", "baud": 115200,
 //!             "max_volts": 5.5, "max_amps": 1.0, "max_on_s": 600}
-//! }}
+//! }, "reserved_serial": ["/dev/serial/by-id/usb-EXAMPLE_relay_board-if00-port0", "usb:1-4.2"]}
+//! (`reserved_serial`: devices no bench tool opens; see `serial_guard.rs`)
 //! ```
 //!
 //! Each instrument has its own permission tier (`read_only` when omitted).
@@ -355,6 +356,8 @@ pub fn load() -> Result<Vec<Instrument>, String> {
     let path =
         std::env::var("BENCH_MCP_CONFIG").map_err(|_| "BENCH_MCP_CONFIG is not set".to_string())?;
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
+    let top: Value = serde_json::from_str(&text).map_err(|e| format!("config: {e}"))?;
+    crate::serial_guard::set_reserved(crate::serial_guard::parse_reserved(&top)?);
     parse(&text)
 }
 
@@ -500,13 +503,33 @@ mod tests {
             r#"{"instruments":{"scope":{"driver":"siglent_sds","host":"10.0.0.2"}}}"#,
         )
         .unwrap();
+        let bad = dir.join("bad.json");
+        std::fs::write(&bad, r#"{"instruments":{"scope":{"driver":"siglent_sds","host":"h"}},"reserved_serial":["ttyUSB0"]}"#).unwrap();
         // This is the only test in this process that reads the variable (the end-to-end tests set it in their child processes).
         std::env::remove_var("BENCH_MCP_CONFIG");
         assert_eq!(load().unwrap_err(), "BENCH_MCP_CONFIG is not set");
         std::env::set_var("BENCH_MCP_CONFIG", dir.join("missing.json"));
         assert!(load().unwrap_err().contains("missing.json"));
         std::env::set_var("BENCH_MCP_CONFIG", &file);
+        // Tests [@ANCHOR: bench_mcp_serial_guard_set_reserved]
+        std::env::set_var("BENCH_MCP_CONFIG", &bad);
+        assert!(load().unwrap_err().contains("reserved_serial"));
+        std::fs::write(&file, r#"{"instruments":{"scope":{"driver":"siglent_sds","host":"10.0.0.2"}},"reserved_serial":["/dev/serial/by-id/usb-guard-test-only-never-exists"]}"#).unwrap();
+        std::env::set_var("BENCH_MCP_CONFIG", &file);
         let v = load().unwrap();
+        // The list from the file is now the process's: serial opens of that device are refused before anything is touched.
+        let entry = "/dev/serial/by-id/usb-guard-test-only-never-exists";
+        assert!(crate::serial_guard::check_reserved_open(entry)
+            .unwrap_err()
+            .contains("reserved"));
+        assert!(crate::link::Serial::open(entry, 115200)
+            .err()
+            .unwrap()
+            .contains("reserved_serial"));
+        assert!(crate::link::Link::serial(entry, 115200)
+            .err()
+            .unwrap()
+            .contains("reserved_serial"));
         std::env::remove_var("BENCH_MCP_CONFIG");
         std::fs::remove_dir_all(&dir).ok();
         assert_eq!(v.len(), 1);
