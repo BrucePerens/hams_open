@@ -1617,6 +1617,12 @@ fn known_ascii_batch_divergences(file: &str) -> Vec<&'static str> {
         // ends in a `FW;` read the virtual Elecraft does not answer, so Hamlib never gets a
         // connection and every step fails with no answer: a limit of the harness, not a finding
         // about the radio. Pinned as an open question (the K2 filter read `FW` is not modelled).
+        // Elecraft KX2: the scenario sets AF to the raw value 128 of a 0-255 scale. Hamlib's KX2
+        // backend scales a fraction to the KX3's 0-60 AG range (rigs/kenwood/k3.c kx3_set_level), as
+        // the description now does, so radioctl refuses the out-of-range raw 128 where the harness
+        // hands Hamlib the equivalent fraction. A difference of the harness's units, pinned; the
+        // KX2 range itself is unverified until a KX2 is on the bench.
+        "elecraft-kx2" => vec!["SetLevel(AfGain, 128)", "GetLevel(AfGain)"],
         "elecraft-k2" => vec![
             "GetFrequency(A)",
             "GetMode",

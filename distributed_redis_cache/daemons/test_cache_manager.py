@@ -3,7 +3,9 @@
 # -*- coding: utf-8 -*-
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch, AsyncMock
 
@@ -58,6 +60,52 @@ class RequireDbCredentialsTests(unittest.IsolatedAsyncioTestCase):
         return mock_obj
 
 
+class DbEnvFileTests(unittest.TestCase):
+    """Tests [@ANCHOR: COMM_cache_manager_db_env_file]
+
+    The daemon runs as its own account, hamsd_cache_manager, and its PostgreSQL login moved into the family key
+    directory (keys/cache_manager/, odoo:hamsd_cache_manager). The old flat file is read only while a host has not been
+    provisioned with the new one, so deploying the code before the provisioning run does not stop the daemon."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.new = os.path.join(self.tmp, "cache_manager", "cache_manager_db.env")
+        self.legacy = os.path.join(self.tmp, "cache_manager_db.env")
+
+    def _write(self, path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("DB_USER=cache_manager_ro\n")
+
+    def test_cache_manager_db_env_file_prefers_the_family_directory(self):
+        self._write(self.new)
+        self._write(self.legacy)
+        self.assertEqual(cache_manager._db_env_file(self.new, self.legacy), self.new)
+
+    def test_the_old_flat_file_is_used_only_when_the_new_one_is_absent(self):
+        self._write(self.legacy)
+        self.assertEqual(cache_manager._db_env_file(self.new, self.legacy), self.legacy)
+
+    def test_neither_file_names_the_new_path(self):
+        self.assertEqual(cache_manager._db_env_file(self.new, self.legacy), self.new)
+
+    def test_the_default_paths_are_the_family_directory_and_the_old_flat_file(self):
+        self.assertEqual(cache_manager.LEGACY_DB_ENV_FILE, "/opt/hams/etc/keys/cache_manager_db.env")
+        self.assertEqual(
+            cache_manager._db_env_file.__defaults__,
+            ("/opt/hams/etc/keys/cache_manager/cache_manager_db.env", "/opt/hams/etc/keys/cache_manager_db.env"),
+        )
+
+    def test_the_daemon_never_opens_the_daemon_key_manager_file(self):
+        # keys/cache_manager.env is odoo:odoo 0600; as hamsd_cache_manager, load_dotenv() on it would raise at import.
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_manager.py")
+        with open(path, encoding="utf-8") as f:
+            code = "".join(line for line in f if not line.lstrip().startswith("#"))
+        self.assertNotIn("keys/cache_manager.env", code)
+        self.assertNotIn("ODOO_RPC", code)
+
+
 class UnitFileTests(unittest.TestCase):
     """The shipped cache-manager.service must be one that works on a real host: found on hams1,
     2026-10-12, the sample unit pointed at /opt/odoo/addons and loaded no Redis credentials, and no
@@ -70,6 +118,15 @@ class UnitFileTests(unittest.TestCase):
 
     def test_unit_loads_the_redis_login(self):
         self.assertIn("EnvironmentFile=/opt/hams/etc/redis.env\n", self.text)
+
+    def test_unit_runs_as_its_own_account_and_loads_no_odoo_key(self):
+        self.assertIn("User=hamsd_cache_manager\nGroup=hamsd_cache_manager\n", self.text)
+        self.assertNotIn("User=odoo", self.text)
+        directives = "".join(line for line in self.text.splitlines(keepends=True) if not line.startswith("#"))
+        self.assertNotIn("/opt/hams/etc/keys/", directives)
+        for line in ("ProtectProc=invisible", "ProcSubset=pid", "UMask=0027", "RestrictSUIDSGID=true", "LockPersonality=true"):
+            self.assertIn(line + "\n", self.text)
+        self.assertNotIn("ReadWritePaths", self.text)
 
     def test_unit_runs_the_deployed_file_that_exists(self):
         self.assertNotIn("/opt/odoo/addons", self.text)

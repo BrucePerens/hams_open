@@ -3,7 +3,9 @@
 """
 One-off operator script: provisions a dedicated, minimally-privileged
 Postgres role for the cache_manager.py daemon (distributed_redis_cache),
-and writes its credentials to /opt/hams/etc/keys/cache_manager_db.env.
+and writes its credentials to /opt/hams/etc/keys/cache_manager/cache_manager_db.env
+(the daemon's own account, hamsd_cache_manager, must be able to read it: hand it over with
+`chown odoo:hamsd_cache_manager` and `chmod 0640`, as hams_shared's provisioning does).
 
 Why this exists: cache_manager.py only ever issues `LISTEN
 distributed_cache_invalidation` and a constant-expression `SELECT 1`
@@ -49,7 +51,7 @@ from psycopg2 import sql
 
 
 ROLE_NAME = "cache_manager_ro"
-DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager_db.env"
+DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager/cache_manager_db.env"
 
 
 def parse_args():
@@ -140,7 +142,8 @@ def write_env_file(path, role_name, password, admin_host, admin_port, target_db)
         env_file.write(f"DB_NAME={target_db}\n")
         env_file.write(f"DB_USER={role_name}\n")
         env_file.write(f"DB_PASS={password}\n")
-    print(f"Wrote credentials to {path} (0600).")
+    print(f"Wrote credentials to {path} (0600). Give it to the daemon's account: "
+          f"chown odoo:hamsd_cache_manager {path} && chmod 0640 {path}")
 
 
 def main():

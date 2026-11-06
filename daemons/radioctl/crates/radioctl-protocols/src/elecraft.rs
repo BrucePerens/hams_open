@@ -111,6 +111,23 @@ pub fn strength_db(sm: u16) -> Option<i32> {
     SM_DB.get(usize::from(sm)).copied()
 }
 
+// [@ANCHOR: radioctl_elecraft_parse_power_amplifier]
+/// Parses `OM` data ("OM", p. 21) for whether the power amplifier module is present: a blank
+/// and 12 option positions, in the second of which `P` means installed and `-` absent. The
+/// K3 and K3S list `APXSDFfLVR--` (P is the KPA3); the KX3 and KX2 list `APF---TBXI0n` (P is the
+/// KXPA100, the external 100 W amplifier). `None` when the answer is not that shape.
+pub fn parse_power_amplifier(data: &str) -> Option<bool> {
+    let positions = data.strip_prefix(' ').unwrap_or(data);
+    if positions.len() != 12 || !positions.is_ascii() {
+        return None;
+    }
+    match positions.as_bytes().get(1)? {
+        b'P' => Some(true),
+        b'-' => Some(false),
+        _ => None,
+    }
+}
+
 // [@ANCHOR: radioctl_elecraft_signed_offset]
 /// Formats a RIT/XIT offset as the `ROsnnnn` data (`+0050`, `-0050`).
 pub fn signed_offset(hz: i16) -> String {
@@ -411,6 +428,7 @@ impl ElecraftEngine {
                 .map(Observation::Swr),
             "BW" => number(4).map(|v| Observation::FilterWidth(Hz(u64::from(v) * 10))),
             "ID" => number(3).map(Observation::ModelId),
+            "OM" => parse_power_amplifier(data).map(Observation::PowerAmplifier),
             "RV" => {
                 let revision = data.strip_prefix('M')?;
                 let (major, minor) = parse_firmware(revision)?;
@@ -457,6 +475,7 @@ impl ProtocolEngine for ElecraftEngine {
             Op::GetLevel(level) => level_get(*level)?,
             Op::GetSwr => Self::get("SW;", Field::Swr),
             Op::GetModelId => Self::get("ID;", Field::ModelId),
+            Op::GetPowerAmplifier => Self::get("OM;", Field::PowerAmplifier),
             Op::GetFirmware => Self::get("RVM;", Field::Firmware),
             other => return self.encode_set(other),
         })
@@ -545,6 +564,34 @@ mod tests {
         assert_eq!(parse_firmware("02.37"), Some((2, 37)));
         assert_eq!(parse_firmware("2.37"), None);
         assert_eq!(parse_firmware("99.99"), Some((99, 99)));
+    }
+
+    // Tests [@ANCHOR: radioctl_elecraft_parse_power_amplifier]
+    // Tests [@ANCHOR: radioctl_elecraft_engine_encode]
+    // Tests [@ANCHOR: radioctl_elecraft_decode_one]
+    #[test]
+    fn the_om_answer_tells_whether_a_power_amplifier_is_installed() {
+        // The answer a real KX3 (KXAT3 and KXFL3, no KXPA100) gave on 2026-11-05.
+        assert_eq!(parse_power_amplifier(" A-F----B--02"), Some(false));
+        // The manual's examples: K3 with a PA and sub receiver, KX3 with a KXPA100.
+        assert_eq!(parse_power_amplifier(" -P-S--------"), Some(true));
+        assert_eq!(parse_power_amplifier(" APF---TBXI01"), Some(true));
+        assert_eq!(parse_power_amplifier(" AXF---TBXI01"), None);
+        assert_eq!(parse_power_amplifier(" A-F"), None);
+        let mut e = engine();
+        assert_eq!(bytes(&mut e, Op::GetPowerAmplifier), b"OM;");
+        assert_eq!(
+            e.feed(b"OM A-F----B--02;", T0),
+            vec![Inbound::Observation(Observation::PowerAmplifier(false))]
+        );
+        assert_eq!(
+            e.feed(b"OM APF----B--02;", T0),
+            vec![Inbound::Observation(Observation::PowerAmplifier(true))]
+        );
+        assert!(matches!(
+            e.feed(b"OM garbage;", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
     }
 
     // Tests [@ANCHOR: radioctl_elecraft_strength_db]
