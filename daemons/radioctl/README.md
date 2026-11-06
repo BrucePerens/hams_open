@@ -1615,7 +1615,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_server_rig_disconnect] (radioctld) `LineService::disconnect` for a rig: releases the transmitter if the client held it.
 - [@ANCHOR: radioctl:radioctld_main_parse_args] (radioctld) Parses the command line (without the program name); `--help`/`-h` is a request for the usage, not an error.
 - [@ANCHOR: radioctl:radioctld_main_load] (radioctld) Reads the configuration file and every rig description it names.
-- [@ANCHOR: radioctl:radioctld_main_run] (radioctld) Runs the daemon until the process is interrupted.
+- [@ANCHOR: radioctl:radioctld_main_run] (radioctld) Runs the daemon until a stop signal arrives (SIGINT, SIGTERM or SIGHUP), then stops it, which unkeys every rig.
+- [@ANCHOR: radioctl:radioctld_main_stop_signal] (radioctld) Waits for a signal asking the daemon to stop and names it: SIGINT, and on Unix SIGTERM and SIGHUP. Each one leads to the orderly stop that unkeys every rig (only SIGINT was caught before 2026-11-05, so `kill` or `systemctl stop` left a keyed radio keyed).
 - [@ANCHOR: radioctl:radioctld_main] (radioctld) The daemon entry point: reads the command line, loads the configuration, runs the daemon on the one runtime it owns.
 - [@ANCHOR: radioctl:radioctld_names_mode_from_hamlib] (radioctld) The mode a Hamlib mode name stands for (case-insensitive).
 - [@ANCHOR: radioctl:radioctld_names_mode_to_hamlib] (radioctld) Hamlib's name for a mode.
