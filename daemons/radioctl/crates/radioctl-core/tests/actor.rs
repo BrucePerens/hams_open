@@ -354,6 +354,9 @@ async fn a_late_ack_for_a_timed_out_key_is_not_taken_for_the_unkeys_answer() {
     // an OK of its own. By order it is the key's: the unkey's answer comes at 2.5 s.
     let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
     rig.open_transmit_gate(permit());
+    rig.active_tx_frequency(Freshness::Fresh)
+        .await
+        .expect("the transmit frequency is read before keying, as a poll would");
     control.set_reply_delay(Duration::from_millis(1500));
     let started = Instant::now();
     let error = rig.set_ptt(true).await.expect_err("the key times out");
@@ -559,6 +562,11 @@ async fn an_emergency_unkey_does_not_wait_for_inter_command_spacing() {
     let (stream, control) = spawn_virtual_rig(&Handle::current(), rig_model, Duration::ZERO);
     let rig = spawn_current(CivEngine::new(desc).expect("engine"), stream, quiet()).expect("spawn");
     rig.open_transmit_gate(permit());
+    rig.active_tx_frequency(Freshness::Fresh)
+        .await
+        .expect("the transmit frequency is read before keying, as a poll would");
+    // The spacing after the last read is not what this test measures.
+    tokio::time::sleep(Duration::from_secs(10)).await;
     rig.set_ptt(true).await.expect("keyed");
     let started = Instant::now();
     rig.set_ptt(false).await.expect("unkeyed");
@@ -1107,6 +1115,9 @@ fn civ_with_timing(timeout: Duration, retries: u8) -> (RigHandle, VirtualRigCont
 async fn a_key_the_rig_never_answers_is_unkeyed_fail_closed() {
     let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
     rig.open_transmit_gate(permit());
+    rig.active_tx_frequency(Freshness::Fresh)
+        .await
+        .expect("the transmit frequency is read before keying, as a poll would");
     // The radio keys on the command but its answer is lost for three seconds.
     control.set_reply_delay(Duration::from_secs(3));
     let failed = rig
@@ -1609,4 +1620,50 @@ async fn a_transceive_frame_arriving_before_a_pending_answer_is_an_event_not_the
     assert_eq!(stats.unsolicited, 1);
     assert_eq!(stats.commands_failed, 0);
     assert_eq!(stats.stale_replies, 0);
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_require_known_tx_frequency]
+// Tests [@ANCHOR: radioctl_core_handle_prime_tx_state]
+#[tokio::test(start_paused = true)]
+async fn a_key_is_refused_while_the_transmit_frequency_cannot_be_read_and_goes_through_once_it_can()
+{
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    rig.open_transmit_gate(permit());
+    // Nothing is cached and every read times out: the transmit frequency is unknown.
+    control.set_reply_delay(Duration::from_secs(3));
+    let refused = rig
+        .set_ptt(true)
+        .await
+        .expect_err("an unknown transmit frequency must refuse the key");
+    assert_eq!(refused.kind, ErrorKind::TransmitFrequencyUnknown);
+    assert!(
+        !control.state().ptt,
+        "a refused key never reaches the radio"
+    );
+    // Unkeying is never refused for this.
+    control.set_reply_delay(Duration::ZERO);
+    // Let the late answers to the abandoned reads arrive.
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    rig.set_ptt(false)
+        .await
+        .expect("unkey is not gated on the frequency");
+    // The rig answers again: the handle reads the frequency itself and the key goes through.
+    rig.set_ptt(true)
+        .await
+        .expect("keyed once the frequency is known");
+    assert!(control.state().ptt);
+    rig.set_ptt(false).await.expect("unkeyed");
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_require_known_tx_frequency]
+#[tokio::test(start_paused = true)]
+async fn sending_cw_is_refused_while_the_transmit_frequency_is_unknown() {
+    let (rig, control) = civ_with_timing(Duration::from_secs(1), 0);
+    rig.open_transmit_gate(permit());
+    control.set_reply_delay(Duration::from_secs(3));
+    let cw = rig
+        .execute(Op::SendCw("E".into()))
+        .await
+        .expect_err("CW is a transmission too");
+    assert_eq!(cw.kind, ErrorKind::TransmitFrequencyUnknown);
 }

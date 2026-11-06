@@ -43,9 +43,12 @@
 //! Not implemented: the VFO A/B toggle (`81`, so no second VFO), lock, repeater offset, CTCSS and
 //! DCS, power on and off, the clarifier frequency read (there is none), FM-N and PKT modes.
 
-// TODO(radioctl tx frequency): split and the transmit VFO (`Observation::TxVfo`, `Op::GetTxVfo`) are
-// not mapped here; another agent is rebasing this engine. When it lands, report `TxVfo` from the
-// split flag so `active_tx_frequency` follows (see radioctl-core `txstate`).
+// Split and the transmit VFO (radioctl tx frequency). The status read reports the split flag but not which
+// VFO is selected, and this engine has no second VFO (no `81` toggle, so VFO B's frequency is never read), so it
+// cannot say which VFO transmits: `TxVfo` is deliberately not reported. In split operation the core derivation
+// (radioctl-core `txstate`) therefore takes the transmit VFO to be the other VFO, whose frequency is unknown, so
+// `active_tx_frequency` is unknown and a key-on is refused (`ErrorKind::TransmitFrequencyUnknown`) rather than
+// checked against the receive frequency. Reading VFO B takes a VFO swap on these rigs (bench work, a follow-up).
 
 use std::time::Duration;
 

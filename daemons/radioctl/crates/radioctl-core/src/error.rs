@@ -19,6 +19,10 @@ pub enum ErrorKind {
     Cancelled,
     /// A transmit-capable command was refused because the rig's transmit gate is closed.
     TransmitGateClosed,
+    /// A transmit-capable command was refused because the frequency the rig would transmit on is not
+    /// known (split state or the transmit VFO's frequency never read). Fail closed: reading it
+    /// (`RigHandle::active_tx_frequency`, or any poll) makes a retry succeed.
+    TransmitFrequencyUnknown,
     /// The rig sent bytes the protocol engine could not make sense of.
     Malformed,
     /// The rig's command queue is full.
@@ -54,7 +58,10 @@ impl RigError {
     /// Builds an error with the default retry hint for its kind and an empty transcript.
     pub fn new(kind: ErrorKind, detail: impl Into<String>) -> RigError {
         let retry = match kind {
-            ErrorKind::Timeout | ErrorKind::QueueFull | ErrorKind::Cancelled => RetryHint::Now,
+            ErrorKind::Timeout
+            | ErrorKind::QueueFull
+            | ErrorKind::Cancelled
+            | ErrorKind::TransmitFrequencyUnknown => RetryHint::Now,
             ErrorKind::LinkDown => RetryHint::After(Duration::from_secs(1)),
             ErrorKind::Rejected
             | ErrorKind::Unsupported
@@ -100,6 +107,10 @@ mod tests {
         assert_eq!(
             RigError::new(ErrorKind::TransmitGateClosed, "x").retry,
             RetryHint::Never
+        );
+        assert_eq!(
+            RigError::new(ErrorKind::TransmitFrequencyUnknown, "x").retry,
+            RetryHint::Now
         );
         assert!(matches!(
             RigError::new(ErrorKind::LinkDown, "x").retry,

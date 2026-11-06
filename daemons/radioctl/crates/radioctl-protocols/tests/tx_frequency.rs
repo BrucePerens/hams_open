@@ -173,3 +173,64 @@ fn kenwood_if_and_ft_report_receive_on_b_and_transmit_on_a() {
     let seen = engine.feed(&rig.feed(&request.bytes, now), now);
     assert_eq!(seen, vec![Inbound::Observation(Observation::TxVfo(Vfo::A))]);
 }
+
+/// With the gate open on a virtual rig (in memory; no hardware), a key-on in split goes through
+/// once the transmit VFO's frequency is known, whatever the rig reported before.
+async fn split_key_on_is_allowed_with_a_known_transmit_frequency<E: ProtocolEngine>(
+    desc: RigDescription,
+    engine: E,
+) {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let (rig, control) = start(&desc, engine, events);
+    rig.set_frequency(Vfo::A, RX).await.expect("set a");
+    rig.set_frequency(Vfo::B, TX).await.expect("set b");
+    rig.execute(Op::SetSplit(true)).await.expect("split");
+    rig.open_transmit_gate(radioctl_core::rig::TransmitPermit::new("virtual rig test"));
+    rig.set_ptt(true).await.expect("keyed in split");
+    assert!(control.state().ptt);
+    rig.set_ptt(false).await.expect("unkeyed");
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_require_known_tx_frequency]
+// Tests [@ANCHOR: radioctl_core_handle_prime_tx_state]
+#[tokio::test(start_paused = true)]
+async fn a_key_on_in_split_is_allowed_on_every_engine_with_a_second_vfo() {
+    let d = description("kenwood-ts-590sg");
+    let e = KenwoodEngine::new(d.clone()).expect("engine");
+    split_key_on_is_allowed_with_a_known_transmit_frequency(d, e).await;
+    let d = description("elecraft-kx3");
+    let e = ElecraftEngine::new(d.clone()).expect("engine");
+    split_key_on_is_allowed_with_a_known_transmit_frequency(d, e).await;
+    let d = description("icom-ic-7300");
+    let e = CivEngine::new(d.clone()).expect("engine");
+    split_key_on_is_allowed_with_a_known_transmit_frequency(d, e).await;
+    let d = description("yaesu-ft-991a");
+    let e = YaesuEngine::new(d.clone()).expect("engine");
+    split_key_on_is_allowed_with_a_known_transmit_frequency(d, e).await;
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_require_known_tx_frequency]
+// Tests [@ANCHOR: radioctl_core_txstate_known_for_transmit]
+#[tokio::test(start_paused = true)]
+async fn yaesu_legacy_in_split_refuses_a_key_on_because_vfo_b_is_unreadable() {
+    use radioctl_core::error::ErrorKind;
+    use radioctl_protocols::yaesu_legacy::YaesuLegacyEngine;
+    let desc = description("yaesu-ft-817");
+    let engine = YaesuLegacyEngine::new(desc.clone()).expect("engine");
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let (rig, control) = start(&desc, engine, events);
+    rig.open_transmit_gate(radioctl_core::rig::TransmitPermit::new("virtual rig test"));
+    // Simplex: the receive VFO is the transmit VFO.
+    rig.execute(Op::SetSplit(false)).await.expect("simplex");
+    rig.set_ptt(true).await.expect("keyed in simplex");
+    assert!(control.state().ptt);
+    rig.set_ptt(false).await.expect("unkeyed");
+    // Split: the transmit VFO is the other one, whose frequency this engine cannot read.
+    rig.execute(Op::SetSplit(true)).await.expect("split");
+    let refused = rig
+        .set_ptt(true)
+        .await
+        .expect_err("transmit frequency unknown");
+    assert_eq!(refused.kind, ErrorKind::TransmitFrequencyUnknown);
+    assert!(!control.state().ptt, "nothing was sent to the rig");
+}

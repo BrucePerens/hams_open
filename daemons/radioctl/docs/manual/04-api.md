@@ -296,6 +296,7 @@ pub enum RetryHint {
 | `LinkDown` | the transport is down or the actor stopped | `After(1 s)` |
 | `Cancelled` | abandoned for an emergency unkey, or shut down | `Now` |
 | `TransmitGateClosed` | a transmit-capable command with the gate closed | `Never` |
+| `TransmitFrequencyUnknown` | a transmit-capable command while the frequency the rig would transmit on is unknown (split state or the transmit VFO's frequency unread); `RigHandle` reads them first, so this means the rig could not be read | `Now` |
 | `Malformed` | the radio sent something the engine could not use | `Never` |
 | `QueueFull` | the command queue is full; nothing was waited for | `Now` |
 

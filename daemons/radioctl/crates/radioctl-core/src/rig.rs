@@ -541,6 +541,7 @@ impl RigHandle {
     /// Runs a command that must finish within `timeout`. Unkeying the transmitter takes the
     /// emergency path. The call waits only on a channel; the actor enforces the deadline.
     pub async fn execute_within(&self, op: Op, timeout: Duration) -> Reply {
+        self.prime_tx_state(&op).await;
         let receiver = self.submit(op, timeout, Source::Api)?;
         receiver
             .await
@@ -551,10 +552,23 @@ impl RigHandle {
     /// Like [`RigHandle::execute_within`], recording `source` on the events the command causes
     /// (the protocol splitter passes [`Source::Splitter`]). Same queue, same gates, same priority.
     pub async fn execute_from(&self, op: Op, timeout: Duration, source: Source) -> Reply {
+        self.prime_tx_state(&op).await;
         let receiver = self.submit(op, timeout, source)?;
         receiver
             .await
             .unwrap_or_else(|_| Err(RigError::new(ErrorKind::LinkDown, "rig actor stopped")))
+    }
+
+    // [@ANCHOR: radioctl_core_handle_prime_tx_state]
+    /// Before a transmit-capable command with the gate open, reads whatever the transmit-frequency
+    /// derivation lacks (never a value already cached), so the actor's fail-closed check
+    /// ([`ErrorKind::TransmitFrequencyUnknown`]) refuses only when the rig could not be read.
+    /// Errors are ignored here: the actor's check is the one that refuses.
+    async fn prime_tx_state(&self, op: &Op) {
+        if op.transmits() && self.shared.gate.load(Ordering::Acquire) {
+            // Boxed: the reads below go through `execute`, which calls this function.
+            let _ = Box::pin(self.tx_state(Freshness::Cached)).await;
+        }
     }
 
     // [@ANCHOR: radioctl_core_handle_submit]
@@ -1351,6 +1365,24 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         self.transcript.iter().cloned().collect()
     }
 
+    // [@ANCHOR: radioctl_core_actor_require_known_tx_frequency]
+    /// Refuses a transmit-capable command while the frequency the rig would transmit on is not
+    /// known from the rig's own reports: the split state (on a rig with split) and the transmit
+    /// VFO's frequency must both be in the cache. Fail closed; [`RigHandle`] reads them before it
+    /// submits such a command, so a caller that goes through the handle is refused only when the
+    /// rig could not be read.
+    fn require_known_tx_frequency(&self) -> Result<(), RigError> {
+        let split_capable = self.shared.capabilities.has(Capability::Split);
+        let state = TxState::from_cache(|f| guard(&self.shared.cache).get(&f).map(|e| e.value));
+        match state.known_for_transmit(split_capable) {
+            Some(_) => Ok(()),
+            None => Err(self.error(
+                ErrorKind::TransmitFrequencyUnknown,
+                "the frequency the rig would transmit on is not known (split state or transmit VFO frequency unread)",
+            )),
+        }
+    }
+
     fn error(&self, kind: ErrorKind, detail: &str) -> RigError {
         RigError::new(kind, detail.to_string()).with_transcript(self.tail())
     }
@@ -1466,6 +1498,9 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 ErrorKind::TransmitGateClosed,
                 "transmit gate is closed for this rig",
             ));
+        }
+        if op.transmits() {
+            self.require_known_tx_frequency()?;
         }
         if let Some(steps) = self.engine.encode_lines(op)? {
             return self.run_line_steps(op, &steps, deadline, source).await;
