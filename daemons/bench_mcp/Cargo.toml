@@ -8,5 +8,11 @@ license = "AGPL-3.0-or-later"
 serde_json = "1"
 libc = "0.2"
 vnwa_open = { path = "../vnwa_open" }
+# ka9q-radio radiod client (closed command schema, loopback multicast, RTP) for the RX-888 tools; no Opus.
+radiod_client = { path = "../radiod_client", default-features = false }
 rmcp = { version = "3.7", features = ["server", "transport-io"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+
+[dev-dependencies]
+# A fake radiod on loopback multicast in src/rx888/testkit.rs (the version radiod_client uses).
+socket2 = { version = "0.6", features = ["all"] }

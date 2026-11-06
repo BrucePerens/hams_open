@@ -17,6 +17,7 @@ calibration does not pass through the agent's context step by step. There is als
 | `nanovna` (VNA) | NanoVNA-H (ChibiOS USB serial shell) behind the same `bench_vna_*` tools; NOT verified on hardware (the unit on the dev box did not answer 2026-10-31), tested against a fake, a pty fake and a synthetic transcript | S11/S21 sweeps (101 points on the H, 401 on the H4, 50 kHz to 900 MHz on the H), software SOLT calibration shared with the VNWA, power cycle with a hub; generator, AM, FM, meter and spectrum return `not supported by this instrument` | [manual page](manual/instruments/vna/nanovna.md) |
 | `vnwa_open` (VNA) | DG8SAQ VNWA 3E vector network analyser through the `vnwa_open` crate, no vendor software | S11/S21 sweeps, calibration (open, short, load, through), generator (CW, level, AM, FM), frequency meter, spectrum analyser, firmware and temperature, reliability ladder with hub power cycle | [The VNA's functions](#the-vnas-functions-as-tools-2026-10-28) |
 | `bladerf`, `limesdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers) | capture, survey, coherence; receive only | [Tools](#tools) |
+| `rx888` | RX-888 MkII direct-sampling HF receiver (0 to 30 MHz) through ka9q-radio's `radiod` on loopback; verified on the unit with no antenna | firmware boot, radiod start and stop, front end (overrange, RF gain, attenuation), channel level and SNR, spectrum CSV, I/Q or audio WAV; receive only | [RX-888](#rx-888-receiver-rx888-driver) |
 | `usb_hub` | USB topology and hub port power (uhubctl) | topology, find, diagnose, bandwidth, watch, history, port power (verified cold reset), protection of devices | [USB hub tools](#usb-hub-tools-usb_hub-driver), `docs/USB_HUB_TOOLS.md` |
 | `audio` | Sound devices, with discovery by signature | play, record, meter, loopback, speak, alert, verify, synthesizers; never the system default device; `dry_run` and a safe state | [Audio tools](#audio-tools-audio-driver), `docs/AUDIO_TOOLS.md` |
 | `hamlib` | Radios through Hamlib's `rigctld` (a separate process; LGPL, not linked) | models, get and set, scan, watch, memory, load checks, transmit tests with an attestation and a watchdog | [Hamlib rigs](#hamlib-rigs-hamlib-driver), `docs/HAMLIB_TOOLS.md` |
@@ -51,6 +52,10 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
       "nano_alone":  {"driver": "nanovna", "tier": "read_config", "serial": "/dev/serial/by-id/usb-STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_400-if00"},
       "blade": {"driver": "bladerf", "tier": "read_config", "xb200": "auto1db"},
       "lime":  {"driver": "limesdr", "tier": "read_config"},
+      "rx888": {"driver": "rx888", "tier": "read_config", "radiod": "/usr/local/sbin/radiod",
+                "driver_library": "/usr/local/lib/ka9q-radio/rx888.so", "boot": "/usr/local/sbin/rx888_boot",
+                "firmware": "/usr/local/share/ka9q-radio/W1EUJ_0.1.0_FX3.img", "presets": "/usr/local/share/ka9q-radio/presets.conf",
+                "status_group": "239.88.8.1", "data_group": "239.88.8.2"},
       "rig":   {"driver": "hamlib", "tier": "read_only", "model": 1},
       "rotor": {"driver": "rotator", "tier": "read_config", "rotctld_port": 4533, "min_az": 0, "max_az": 360}}}
 
@@ -95,6 +100,8 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_sa_sweep`, `bench_sa_marker` | read_config | spectrum analyzer |
 | `bench_sa_tg_on`, `_tg_off`, `_tg_level`, `bench_sa_tg_normalize`, `bench_sa_tg_s21` | read_config (RF out of the tracking generator, 0 dBm at most; off unless a tool turns it on; no confirm flags) | spectrum analyzer |
 | `bench_sdr_capture`, `bench_sdr_survey`, `bench_sdr_coherence` | read_config (they tune the radio; receive only) | SDR |
+| `bench_rx888_status`, `bench_rx888_frontend` | read_only | RX-888 |
+| `bench_rx888_boot`, `bench_rx888_radiod_start`, `bench_rx888_radiod_stop`, `bench_rx888_tune`, `bench_rx888_spectrum`, `bench_rx888_capture` | read_config (firmware boot re-enumerates the device; radiod and its channels are local; receive only) | RX-888 |
 
 `bench_identify` and `bench_status` also answer for the VNA (USB present and answering a harmless read, hub, both codecs found from the USB tree, IF, time per point, level, power cycles done by this server).
 `bench_vna_sweep` takes `start_hz`, optionally `stop_hz`, `points` (1 to 401, about 0.2 s each), `if_hz`, `point_ms`
@@ -802,6 +809,301 @@ Generator on at `level` (`switch_on`), one sweep (`run_sweep`) and, unless `leav
 [@ANCHOR: bench_mcp_sa_s21]
 
 `bench_sa_tg_s21`: a scalar transmission sweep of what is between the TG output and the RF input. Arguments: the sweep arguments, `tg_level_dbm`, `reference` (name from `normalize`) or `reference_file` (not both), `leave_tg_on`. With a reference, unset sweep arguments come from it (`with_defaults`), the settings are checked (`check_same`) and `s21_db` is the measured level minus the through, point by point; without one it is the measured level minus the TG level, and the answer says `uncalibrated: cable and generator flatness included`. Writes `sa_tg_s21_*.csv` (`freq_hz,s21_db,measured_dbm`) and returns the summary, `s21` (`relative_to`, `max_db` and `max_at_hz`, `min_db` and `min_at_hz`, `mean_db`), `tg_level_dbm`, `file` and `tracking_generator`. The generator is off again afterwards unless `leave_tg_on`, also when the settings check refused the comparison.
+
+## RX-888 receiver (`rx888` driver)
+
+The RX-888 MkII (Cypress FX3, 16-bit direct-sampling ADC, 0 to 30 MHz at 64.8 Msps) is run through ka9q-radio. Its `rx888_boot` loads the firmware, and its `radiod` (GPL-3.0, run unmodified as a separate process) runs the receiver on loopback multicast with TTL 0. The tools talk to `radiod` through the `radiod_client` crate (`daemons/radiod_client`). They are receive only, so none is tier `full`. Manual: `instruments/rx888`. Verified on the unit with no antenna (2026-11-05):
+- boot to 5000 Mb/s;
+- `radiod` at 64.8 Msps, measured 64.8 MS/s;
+- overrange 0, RF AGC at 34 dB, IF power -52.4 dBFS;
+- channel noise density about -159 to -161 dB/Hz;
+- an 8192-bin spectrum with the floor at -122.7 dB per 5.9 kHz noise bandwidth;
+- I/Q and audio captures with 0 lost.
+
+The hardware check is `tests/hil_rx888.rs` (`--ignored`). A real-signal check is still owed.
+
+### RX-888 anchor reference (ADR 0113)
+
+Files: `src/rx888/mod.rs` (config, tool list, USB scan, boot, the `radiod` process, front end, dispatch), `src/rx888/radio.rs` (tune, spectrum, capture), `src/rx888/testkit.rs` (a fake `radiod` on loopback multicast, test only).
+
+Every tool is a blocking call on the server's tool thread. A call that talks to `radiod` builds its own current-thread tokio runtime (`runtime`) and opens its own sockets, so calls share no socket state; the server's per-instrument lock serialises calls to one RX-888. Every channel a tool opens has a 5 s lifetime, renewed by its reads, and is removed before the tool returns.
+
+#### `bench_mcp_rx888_config` - `Config` and `parse_config(c: &Value) -> Result<Config, String>`
+
+[@ANCHOR: bench_mcp_rx888_config]
+
+The `rx888` settings of an instrument entry. They are parsed when the config file is loaded, held in `Instrument.rx888`, and never change afterwards.
+
+| Field (config key) | Type | Default | Meaning and check |
+|---|---|---|---|
+| `radiod` | `PathBuf` | `/usr/local/sbin/radiod` | the `radiod` binary; absolute |
+| `driver_library` | `PathBuf` | `/usr/local/lib/ka9q-radio/rx888.so` | ka9q-radio's RX-888 driver, loaded by `radiod` with `library =`; absolute |
+| `boot` | `PathBuf` | `/usr/local/sbin/rx888_boot` | the firmware loader; absolute |
+| `firmware` | `PathBuf` | `/usr/local/share/ka9q-radio/W1EUJ_0.1.0_FX3.img` | the FX3 image; absolute (`rx888_boot` prefixes its own directory to a relative name) |
+| `presets` | `PathBuf` | `/usr/local/share/ka9q-radio/presets.conf` | `radiod`'s presets file; absolute |
+| `status_group`, `data_group` | `Ipv4Addr` | 239.88.8.1, 239.88.8.2 | multicast groups; must be multicast |
+| `status_port`, `data_port` | `u16` | 5006, 5004 | 1 to 65535; status and data must differ in group or port |
+| `ssrc_base` | `u32` | 88000 | first of the three SSRCs the tools use (tune, spectrum, capture); 1 to 4294967280 |
+
+`parse_config` returns an error naming the key for any value that fails its check. An absent key keeps its default.
+
+#### `bench_mcp_rx888_instrument` - `instrument(insts, args) -> Result<&Instrument, String>`
+
+[@ANCHOR: bench_mcp_rx888_instrument]
+
+The RX-888 a call is for. This is the one named in `instrument`, or the only one configured. An unknown name, no RX-888, or several RX-888s with no name are errors.
+
+#### `bench_mcp_rx888_tool_defs` - `tool_defs(insts: &[Instrument]) -> Vec<Tool>`
+
+[@ANCHOR: bench_mcp_rx888_tool_defs]
+
+The `SPECS` entries listed for this config: a tool appears when an RX-888 is configured at or above its tier. At `read_only` that is `status` and `frontend`; at `read_config` all eight. Each description is prefixed with its tier.
+
+#### `bench_mcp_rx888_number` - `number(args, key, default: Option<f64>, lo, hi) -> Result<f64, String>`
+
+[@ANCHOR: bench_mcp_rx888_number]
+
+A numeric argument. Absent or null gives `default`, and is an error when there is none. Present, it must be a finite number in `lo..=hi`; the error names the key and the range.
+
+#### `bench_mcp_rx888_find_usb` - `find_usb(root: &Path) -> Vec<UsbSeen>`
+
+[@ANCHOR: bench_mcp_rx888_find_usb]
+
+Scans `root` (production: `/sys/bus/usb/devices`) for devices with `idVendor` 04b4 and `idProduct` 00f3 (unbooted) or 00f1 (booted), sorted by sysfs name. `UsbSeen` has these fields: `path` (sysfs name such as `2-3.2`), `product_id` (`00f3` or `00f1`), `speed_mbps` (`Option<u32>`, the kernel's `speed`: 480 is USB 2, 5000 is USB 3) and `product`. Read only; a missing or unreadable tree gives an empty list.
+
+#### `bench_mcp_rx888_usb_json` - `usb_json(seen: &[UsbSeen]) -> Value`
+
+[@ANCHOR: bench_mcp_rx888_usb_json]
+
+The USB part of a status. `state` is `booted`, `unbooted (FX3 loader)...` or `not on the USB bus`. `devices` lists each device with `sysfs`, `usb_id`, `speed_mbps`, `superspeed` and `product`. Pure.
+
+#### `bench_mcp_rx888_running` and `bench_mcp_rx888_running_pid` - the started `radiod`s
+
+[@ANCHOR: bench_mcp_rx888_running] [@ANCHOR: bench_mcp_rx888_running_pid]
+
+`running()` is a process-wide `Mutex<HashMap<instrument name, Running>>` holding each `radiod` this server started. `Running` holds the `Child`, the config path, the log path and the start time. `running_pid(name) -> Option<u32>` returns the child's pid if it is still alive. A child that has exited is reaped and removed. The mutex is held only for the lookup.
+
+#### `bench_mcp_rx888_tail` - `tail(path: &Path, n: usize) -> Vec<String>`
+
+[@ANCHOR: bench_mcp_rx888_tail]
+
+The last `n` lines of a file, empty when it cannot be read. Used for `radiod` log tails in errors and in the stop result.
+
+#### `bench_mcp_rx888_loopback_multicast` - `loopback_multicast(sys_class_net: &Path) -> bool`
+
+[@ANCHOR: bench_mcp_rx888_loopback_multicast]
+
+True when `<sys_class_net>/lo/flags` has `IFF_MULTICAST` (0x1000) set. Production passes `/sys/class/net`. `radiod` runs on `lo` only, so this must be on (`ip link set dev lo multicast on`, as root, until reboot).
+
+#### `bench_mcp_rx888_radiod_config_text` - `radiod_config_text(cfg, description, sample_rate_hz, rf_gain_db: Option<f64>, rf_atten_db: Option<f64>, fft_threads) -> String`
+
+[@ANCHOR: bench_mcp_rx888_radiod_config_text]
+
+The `radiod` config: `[global]` with `hardware = rx888`, the two groups, `iface = lo`, `ttl = 0`, `mode = usb`, `advertise = no`, the presets file, `fft-threads` and `verbose = 1`, and `[rx888]` with `device`, `library` (the driver path), `description` (quotes and newlines replaced by spaces) and `samprate`. `gain =` and `att =` are written only when given. Pure.
+
+#### `bench_mcp_rx888_runtime` - `runtime() -> Result<Runtime, String>`
+
+[@ANCHOR: bench_mcp_rx888_runtime]
+
+A current-thread tokio runtime with I/O and timers, built per call. Tool calls run under `spawn_blocking`, outside any runtime, so blocking on it is allowed.
+
+#### `bench_mcp_rx888_control` - `control(cfg, rt) -> Result<Control, String>`
+
+[@ANCHOR: bench_mcp_rx888_control]
+
+Joins `radiod`'s status group on 127.0.0.1 with `radiod_client`'s default policy (10 kHz to 30 MHz, at most 8192 bins). The socket sends with TTL 0. The error says to check loopback multicast.
+
+#### `bench_mcp_rx888_front_end` - `front_end(cfg, rt, wait: Duration) -> Result<ChannelStatus, String>`
+
+[@ANCHOR: bench_mcp_rx888_front_end]
+
+Polls the front end (SSRC 0, no channel created; the reply carries no tag) for up to `wait`. The error says `radiod` does not answer and names the next tools to call.
+
+#### `bench_mcp_rx888_front_end_json` - `front_end_json(fe: &ChannelStatus) -> Value`
+
+[@ANCHOR: bench_mcp_rx888_front_end_json]
+
+The front-end fields as JSON: `input_sample_rate_hz`, `real_samples`, `ad_bits`, `ad_overrange_count`, `samples_since_overrange`, `rf_gain_db`, `rf_atten_db`, `rf_agc`, `if_power_dbfs`, `front_end_running`, `rf_level_cal_db`, `usable_low_hz`, `usable_high_hz` and `description`. Non-finite levels become null. While no channel exists the front end idles, so `if_power_dbfs` is null and `front_end_running` is false. Pure.
+
+#### `bench_mcp_rx888_status` - `status(inst, usb_root) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_status]
+
+`bench_rx888_status`: `usb` (`usb_json`), `radiod` (running, pid, config, log, uptime of the one this server started), `front_end` (`front_end_json`, or `answering: false` with the reason after 0.8 s), `loopback_multicast` and `groups`. Changes nothing.
+
+#### `bench_mcp_rx888_frontend` - `frontend(inst) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_frontend]
+
+`bench_rx888_frontend`: `front_end_json` of a front-end poll with 2 s to answer. Changes nothing.
+
+#### `bench_mcp_rx888_boot` - `boot(inst, usb_root) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_boot]
+
+`bench_rx888_boot`. It checks, in order:
+1. this server runs no `radiod` for the instrument;
+2. a booted device means nothing to do (`already_booted`);
+3. an unbooted one must be present (else the error says to check the cable or power-cycle the hub port);
+4. the firmware path must be a file.
+
+It then runs `<boot> <firmware>`, waits up to 20 s for `04b4:00f1`, and returns `booted`, `sysfs`, `speed_mbps`, `superspeed`, a `note` about the link and the loader's output. Side effect: the device leaves the bus and re-enumerates; the firmware is loaded to RAM only. If it does not come back, the error tells the person to power-cycle its hub port, not to unbind the USB controller.
+
+#### `bench_mcp_rx888_radiod_start` - `radiod_start(inst, args, usb_root) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_radiod_start]
+
+`bench_rx888_radiod_start`.
+
+| Argument | Type | Range | Default |
+|---|---|---|---|
+| `sample_rate_hz` | integer | 64800000 or 129600000 | 64800000 |
+| `rf_gain_db` | number | -8 to 34 | omitted (driver default, RF AGC) |
+| `rf_atten_db` | number | 0 to 31.5 in 0.5 steps | omitted (0) |
+| `fft_threads` | integer | 1 to 8 | 2 |
+
+Refused when:
+- this server, or an earlier one (its pid file names a live `radiod` with this config), runs one;
+- the device is not booted;
+- loopback multicast is off;
+- a configured file is missing.
+
+It writes `rx888-<name>.conf`, `.log` and `.pid` in `BENCH_MCP_OUT` and starts `nice -n 10 <radiod> -v <conf>` as the server's user. It then waits up to 15 s for the front end and returns `started`, `pid`, `config`, `log` and `front_end`. If `radiod` exits or does not answer, it is stopped and the error carries the log tail.
+
+#### `bench_mcp_rx888_is_our_radiod` - `is_our_radiod(pid: u32, radiod: &Path, config: &Path) -> bool`
+
+[@ANCHOR: bench_mcp_rx888_is_our_radiod]
+
+True when `/proc/<pid>/cmdline` has `radiod` as its first argument and `config` as one of its arguments. This keeps a stale pid file from naming another process. Read only.
+
+#### `bench_mcp_rx888_stop_pid` - `stop_pid(inst) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_stop_pid]
+
+Stops the instrument's `radiod`. That is the child this server holds; failing that, the pid in `rx888-<name>.pid` when `is_our_radiod` confirms it, and otherwise the stale pid file is removed and nothing is signalled. It sends `SIGTERM` (a `libc::kill` on that one pid only, never by name or pattern), waits up to 5 s, then sends `SIGKILL`. It removes the pid file and returns `stopped`, `pid`, `exit`, `sigkill_needed` and `log_tail`. Error when no `radiod` was started.
+
+#### `bench_mcp_rx888_radiod_stop` - `radiod_stop(inst) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_radiod_stop]
+
+`bench_rx888_radiod_stop`: `stop_pid`.
+
+#### `bench_mcp_rx888_call` / `bench_mcp_rx888_call_with` - `call(insts, name, args)` and `call_with(usb_root, insts, name, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_call] [@ANCHOR: bench_mcp_rx888_call_with]
+
+The dispatcher. It finds the tool in `SPECS` and the instrument, and refuses a tool above the instrument's tier before anything runs. `call` passes `/sys/bus/usb/devices` as the USB root.
+
+#### `bench_mcp_rx888_ssrc` - `ssrc(cfg, which: u32) -> Result<Ssrc, String>`
+
+[@ANCHOR: bench_mcp_rx888_ssrc]
+
+The SSRC `ssrc_base + which`: 0 tune, 1 spectrum, 2 capture. Each call uses a fixed SSRC, so a repeated call reuses the same `radiod` channel slot.
+
+#### `bench_mcp_rx888_mode_arg` - `mode_arg(args, default: Mode) -> Result<Mode, String>`
+
+[@ANCHOR: bench_mcp_rx888_mode_arg]
+
+`mode`: `usb`, `lsb`, `cw`, `am` or `fm` (`radiod_client` modes); absent gives `default`. I/Q is chosen by `kind`, not `mode`.
+
+#### `bench_mcp_rx888_edges` - `edges(mode, width: f64) -> (f32, f32)`
+
+[@ANCHOR: bench_mcp_rx888_edges]
+
+Passband edges in Hz from the carrier for a width: USB `(50, 50+w)`, LSB `(-50-w, -50)`, CW `(600-w/2, 600+w/2)`, AM, FM and I/Q `(-w/2, w/2)`. These match radioctl's radiod channel. Pure.
+
+#### `bench_mcp_rx888_ask` - `ask(rt, c, cmd, wait) -> Result<ChannelStatus, String>`
+
+[@ANCHOR: bench_mcp_rx888_ask]
+
+Sends one `radiod_client` command and waits up to `wait` for the status that echoes its tag. The client re-sends every 200 ms; commands are idempotent. Opening a channel uses 10 s, because the first channel after `radiod` starts waits for FFT planning; other commands use 1 s.
+
+#### `bench_mcp_rx888_remove` - `remove(rt, c, s: Ssrc)`
+
+[@ANCHOR: bench_mcp_rx888_remove]
+
+Removes a channel (lifetime 1), best effort: an unacknowledged removal still expires by the 5 s lifetime.
+
+#### `bench_mcp_rx888_snr_db` - `snr_db(baseband_db: f64, noise_in_band_db: f64) -> f64`
+
+[@ANCHOR: bench_mcp_rx888_snr_db]
+
+SNR from the channel's power (signal plus noise) and the noise in its passband: `10 log10(10^((P-N)/10) - 1)`. It returns -30 when the power is at or within 0.004 dB of the noise. Pure.
+
+#### `bench_mcp_rx888_tune` - `tune(inst, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_tune]
+
+`bench_rx888_tune`.
+
+| Argument | Type | Range | Default |
+|---|---|---|---|
+| `freq_hz` | number | 10 000 to 30 000 000 | required |
+| `mode` | string | usb, lsb, cw, am, fm | am |
+| `bandwidth_hz` | number | 100 to 24 000 | the mode's own |
+| `readings` | integer | 1 to 50 | 10 |
+
+It opens the channel, sets the passband if one was given, waits 0.5 s, then takes `readings` polls 100 ms apart, each renewing the lifetime. The channel is removed even on error. Returns:
+- the means of baseband power and noise density;
+- the passband, the noise in it and `snr_db`;
+- AGC, channel gain and output level;
+- the input rate measured from the `INPUT_SAMPLES` counter over the readings, with `rate_interval_s` and `rate_resolution_fraction` (0.02 s divided by the interval: the counter advances in 20 ms blocks).
+
+#### `bench_mcp_rx888_out_path` - `out_path(stem, ext) -> PathBuf`
+
+[@ANCHOR: bench_mcp_rx888_out_path]
+
+`<BENCH_MCP_OUT>/<stem>_<milliseconds since the epoch>.<ext>`. Does not create the file.
+
+#### `bench_mcp_rx888_peaks` - `peaks(bins: &[(f64, f32)], floor: f64, above_db: f64, count: usize) -> Vec<(f64, f64)>`
+
+[@ANCHOR: bench_mcp_rx888_peaks]
+
+Local maxima (frequency, dB) at least `above_db` over `floor`, strongest first, at most `count`, none within 2 bins of a stronger one. A non-finite neighbour does not hide a peak. Pure.
+
+#### `bench_mcp_rx888_spectrum` - `spectrum(inst, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_spectrum]
+
+`bench_rx888_spectrum`.
+
+| Argument | Type | Range | Default |
+|---|---|---|---|
+| `center_hz` | number | 0 to 64 800 000 | 16 200 000 |
+| `span_hz` | number | 1000 to 129 600 000, and at most `max_spectrum_span_hz` of the front end | 32 400 000 |
+| `bins` | integer | 64 to 16 000 | 1024 |
+| `averaging` | integer | 1 to 64 | 10 |
+| `peaks` | integer | 0 to 50 | 10 |
+
+It reads the front end first and refuses a span the front end cannot fill: more than half its rate for real samples. The spectrum channel is asked twice (10 s each for FFT planning) and then removed. The bins, ascending, go to a CSV with a comment header. Returns:
+- the CSV path and the geometry;
+- the noise bandwidth and `fft_n`;
+- floor (median), min and max;
+- the zero-bin count;
+- peaks at least 10 dB over the floor;
+- the front end's overrange count and RF gain.
+
+#### `bench_mcp_rx888_wav_header` - `wav_header(rate: u32, channels: u16, frames: u32) -> Vec<u8>`
+
+[@ANCHOR: bench_mcp_rx888_wav_header]
+
+The 44-byte RIFF/WAVE header for 16-bit little-endian PCM. Pure.
+
+#### `bench_mcp_rx888_capture` - `capture(inst, args) -> Result<Value, String>`
+
+[@ANCHOR: bench_mcp_rx888_capture]
+
+`bench_rx888_capture`.
+
+| Argument | Type | Range | Default |
+|---|---|---|---|
+| `freq_hz` | number | 10 000 to 30 000 000 | required |
+| `kind` | string | iq, audio | iq |
+| `mode` | string | usb, lsb, cw, am, fm (audio only) | am |
+| `seconds` | number | 0.1 to 60 | 5 |
+| `gain_db` | number | -20 to 160 (iq only) | chosen so the noise is near -30 dBFS |
+
+It opens the channel; for I/Q it reads the baseband power and sets the fixed gain. It then joins the data group and collects this SSRC's packets of the announced payload type for up to `seconds + 3`, renewing the lifetime every second, and converts them from big- to little-endian. The result goes to `rx888_<name>_<kind>_<ms>.wav`, and the channel is removed. Returns the file, rate, channels, frames, seconds, RTP received/lost/out-of-order/skipped counts, the gain used, RMS in dBFS and peak counts. Error when no audio arrived.
 
 ## Procedure runner (`procedure` driver)
 
