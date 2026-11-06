@@ -115,6 +115,7 @@ impl Vnwa {
 
     /// One host-to-device vendor request.
     pub fn send(&self, r: &Request) -> Result<(), String> {
+        // [@ANCHOR: vnwa_open_usb_send]
         let what = format!("request {:#04x}", r.request);
         let sent = self.attempt(&what, || {
             self.link
@@ -174,6 +175,7 @@ impl Vnwa {
 
     /// A device-to-host vendor request of at most `len` bytes (for example 0x3a, the generator's read-back).
     pub fn read(&self, request: u8, value: u16, index: u16, len: usize) -> Result<Vec<u8>, String> {
+        // [@ANCHOR: vnwa_open_usb_read]
         let mut buf = vec![0u8; len];
         let got = self.attempt(&format!("read request {request:#04x}"), || {
             self.link.read(request, value, index, &mut buf)
@@ -317,5 +319,37 @@ mod tests {
             crate::transport::classify(rusb::Error::Access),
             TransferError::Other(_)
         ));
+    }
+
+    // Tests [@ANCHOR: vnwa_open_usb_read]
+    // Tests [@ANCHOR: vnwa_open_usb_send]
+    #[test]
+    fn a_read_returns_only_the_bytes_the_unit_sent_and_a_send_is_a_write_of_the_request() {
+        let (u, s) = unit(vec![Ok(vec![1, 2, 3]), Ok(vec![]), Ok(vec![9, 9, 9, 9])]);
+        assert_eq!(u.read(0x3a, 0, 0, 8).unwrap(), vec![1, 2, 3]);
+        let r = crate::protocol::generator_frequency(10e6, 0x00c8);
+        u.send(&r).unwrap();
+        assert_eq!(u.read(0x04, 0x090a, 0, 2).unwrap(), vec![9, 9]);
+        assert_eq!(
+            s.seen(),
+            vec![
+                Seen {
+                    write: false,
+                    request: 0x3a
+                },
+                Seen {
+                    write: true,
+                    request: 0x4c
+                },
+                Seen {
+                    write: false,
+                    request: 0x04
+                },
+            ]
+        );
+        // A send the unit cannot take names the request.
+        let (u, _) = unit(vec![Err(TransferError::NoDevice("gone".into()))]);
+        let e = u.send(&r).unwrap_err();
+        assert!(e.contains("request 0x4c") && e.contains("gone"), "{e}");
     }
 }

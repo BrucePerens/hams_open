@@ -75,6 +75,7 @@ const LEAVE: [Read; 3] = [
 ];
 
 fn run(usb: &Vnwa, reads: &[Read]) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_generator_run]
     for r in reads {
         usb.read(r.request, r.value, 0, r.len)?;
     }
@@ -83,6 +84,7 @@ fn run(usb: &Vnwa, reads: &[Read]) -> Result<(), String> {
 
 /// Sets the generator frequency (the unit must be in generator mode): read 0x0e, write 0x4c, read 0x04.
 fn set_frequency(usb: &Vnwa, freq_hz: f64, first: bool) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_generator_set_frequency]
     usb.read(0x0e, 0, 0, 64)?;
     usb.send(&generator_frequency(
         freq_hz,
@@ -100,6 +102,7 @@ fn set_level(usb: &Vnwa, attenuation_db: f64) -> Result<(), String> {
 
 /// Switches the generator on at a frequency and an attenuation (0 to -50 dB below full scale) and leaves it running.
 pub fn on(usb: &Vnwa, freq_hz: f64, attenuation_db: f64) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_generator_on]
     level_for_attenuation(attenuation_db)?;
     run(usb, &ENTER)?;
     set_frequency(usb, freq_hz, true)?;
@@ -591,6 +594,87 @@ mod tests {
         let (u, s) = unit(vec![Err(TransferError::NoDevice("No such device".into()))]);
         let e = am_captured_500hz_100pct(&u, 10e6).unwrap_err();
         assert!(e.contains("No such device"), "{e}");
+        assert_eq!(s.seen().len(), 1);
+    }
+
+    /// A transport that records (is a write, request, wValue, buffer or data length) of every transfer and answers each.
+    type Log = std::sync::Arc<std::sync::Mutex<Vec<(bool, u8, u16, usize)>>>;
+    struct Recorder(Log);
+    impl crate::transport::Transport for Recorder {
+        fn reset(&self) -> Result<(), crate::transport::TransferError> {
+            Ok(())
+        }
+        fn write(
+            &self,
+            _t: u8,
+            r: u8,
+            v: u16,
+            _i: u16,
+            d: &[u8],
+        ) -> Result<usize, crate::transport::TransferError> {
+            self.0.lock().unwrap().push((true, r, v, d.len()));
+            Ok(d.len())
+        }
+        fn read(
+            &self,
+            r: u8,
+            v: u16,
+            _i: u16,
+            b: &mut [u8],
+        ) -> Result<usize, crate::transport::TransferError> {
+            self.0.lock().unwrap().push((false, r, v, b.len()));
+            Ok(b.len())
+        }
+    }
+
+    fn recorded() -> (Vnwa, Log) {
+        let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        (Vnwa::with_transport(Box::new(Recorder(log.clone()))), log)
+    }
+
+    // Tests [@ANCHOR: vnwa_open_generator_on]
+    // Tests [@ANCHOR: vnwa_open_generator_run]
+    // Tests [@ANCHOR: vnwa_open_generator_set_frequency]
+    #[test]
+    fn switching_the_generator_on_sends_the_vendor_sequence_and_a_bad_level_sends_nothing() {
+        let (u, log) = recorded();
+        on(&u, 10e6, -30.0).unwrap();
+        let level = level_for_attenuation(-30.0).unwrap();
+        assert_eq!(
+            *log.lock().unwrap(),
+            vec![
+                (false, 0x62, 0x0002, 64),
+                (false, 0x61, 0x0000, 64),
+                (false, 0x98, 0x0815, 64),
+                (false, 0x9a, 0x00c8, 64),
+                (false, 0x0e, 0, 64),
+                // The first frequency carries 0x00c8 in wValue.
+                (true, 0x4c, 0x00c8, 8),
+                (false, 0x04, 0x090a, 8),
+                (false, 0x58, level, 64),
+            ]
+        );
+        // A running generator is retuned without the 0x00c8.
+        log.lock().unwrap().clear();
+        retune(&u, 11e6).unwrap();
+        assert_eq!(
+            *log.lock().unwrap(),
+            vec![
+                (false, 0x0e, 0, 64),
+                (true, 0x4c, 0, 8),
+                (false, 0x04, 0x090a, 8)
+            ]
+        );
+        // An attenuation outside 0 to -50 dB is refused before any transfer.
+        let (u, log) = recorded();
+        let e = on(&u, 10e6, 3.0).unwrap_err();
+        assert!(e.contains("outside"), "{e}");
+        assert!(log.lock().unwrap().is_empty());
+        // A failure part way through stops the sequence.
+        let (u, s) = unit(vec![Err(crate::transport::TransferError::NoDevice(
+            "gone".into(),
+        ))]);
+        assert!(on(&u, 10e6, -10.0).unwrap_err().contains("gone"));
         assert_eq!(s.seen().len(), 1);
     }
 }

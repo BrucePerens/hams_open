@@ -327,3 +327,153 @@ pub fn compare(first: &str, now: &str, hub: &HubPort) -> Change
 **Returns.** `Change::Unit` if the unit subtrees differ (a codec missing, a different port, a different speed or driver, the bus gone); otherwise `OutsideOnly` if the rest differs; otherwise `None`. Pure.
 
 **See also.** Tests in `src/soak_topology.rs`: the dock removal in the recorded pair is `OutsideOnly`; a missing codec, a changed port, a changed speed and a missing bus are `Unit`. Real-hardware follow-up: none needed for the logic; the next real soak will show whether an `INFO` line appears when a device is unplugged.
+
+## USB, generator, set-up and sweep-check functions (ADR 0113 entries)
+
+### `vnwa_open_usb_send` [@ANCHOR: vnwa_open_usb_send]
+
+**Purpose.** Send one host-to-device vendor control transfer (a `Request` built by `protocol`) to the unit. Every block of the sweep set-up, the generator frequency and the modulation sequences go through it, so every send gets the same bounded resend of transient errors.
+
+```rust
+impl Vnwa { pub fn send(&self, r: &Request) -> Result<(), String> }
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `r` | `&Request` | Borrowed; `request_type`, `request`, `value`, `index` and the `data` stage, all used as given. |
+
+**Returns.** `Ok(())` when the transport accepted all of `r.data`. `Err` text `request 0x<nn>: ...` when a transient error outlasted `TRANSFER_RETRIES` (`still failing after 3 resends (...)`), when the unit has left the bus or the transfer failed for another reason (the transport's text), or when fewer bytes than `r.data.len()` were written (`N of M bytes sent`).
+
+**Special concerns.** Blocking; waits `RETRY_PAUSE` (5 ms) between resends, so at worst about 15 ms of sleeping plus the transport timeout (1 s) per try. Every try, and each resend, is counted in `resends()` and remembered by `recent_transfers()` for the evidence record. Not idempotent in general (a repeated write reaches the unit twice), but the requests this crate sends are state settings, safe to repeat. No transmitter is keyed; the unit is a measuring instrument.
+
+**See also.** `vnwa_open_usb_read`, `vnwa_open_transfer_retry`, `vnwa_open_transfer_log`. Test: `a_read_returns_only_the_bytes_the_unit_sent_and_a_send_is_a_write_of_the_request` (over the `Scripted` transport).
+
+### `vnwa_open_usb_read` [@ANCHOR: vnwa_open_usb_read]
+
+**Purpose.** Send one device-to-host vendor control transfer and return what the unit answered. Used for the generator read-back (0x3a), the 0x0e/0x04 handshakes and the reads the vendor program makes to switch modes.
+
+```rust
+impl Vnwa { pub fn read(&self, request: u8, value: u16, index: u16, len: usize) -> Result<Vec<u8>, String> }
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `request` | `u8` | The vendor request number (`bRequest`). |
+| `value` | `u16` | `wValue`; for 0x58 it is the RF level, for the generator reads a fixed vendor constant. |
+| `index` | `u16` | `wIndex`; 0 for every request this crate uses. |
+| `len` | `usize` | The size of the receive buffer, which is the most the unit may return. |
+
+**Returns.** `Ok(bytes)` truncated to the number of bytes the unit actually sent (it may be fewer than `len`, even none). `Err` text `read request 0x<nn>: ...`, with the same causes as `vnwa_open_usb_send`.
+
+**Special concerns.** Blocking, with the same resend rule (3 resends, 5 ms apart) and counters as `send`. The 0x0d read, which the unit stalls while busy, uses `read_patient` instead. Allocates a zeroed `len`-byte buffer per call.
+
+**See also.** `vnwa_open_usb_send`, `vnwa_open_patient_read`. Test: as for `send`.
+
+### `vnwa_open_generator_run` [@ANCHOR: vnwa_open_generator_run]
+
+**Purpose.** Play a fixed list of vendor reads in order (the `ENTER` list that switches the generator mode on); private to `generator`.
+
+```rust
+fn run(usb: &Vnwa, reads: &[Read]) -> Result<(), String> // Read { request: u8, value: u16, len: usize }
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `usb` | `&Vnwa` | The open unit. |
+| `reads` | `&[Read]` | The reads, each sent as `usb.read(request, value, 0, len)`, with the answers discarded. |
+
+**Returns.** `Ok(())` after the last read; the first `Err` from a read stops the list (nothing after it is sent) and is returned unchanged.
+
+**Special concerns.** Blocking; each read has the bounded resend of `vnwa_open_usb_read`. Order matters: the unit takes the vendor sequence only in the order the vendor program sends it. Test: `switching_the_generator_on_sends_the_vendor_sequence_and_a_bad_level_sends_nothing` checks all four reads with their wValues.
+
+### `vnwa_open_generator_set_frequency` [@ANCHOR: vnwa_open_generator_set_frequency]
+
+**Purpose.** Set the generator frequency of a unit already in generator mode; private, used by `on` (first frequency) and `retune`.
+
+```rust
+fn set_frequency(usb: &Vnwa, freq_hz: f64, first: bool) -> Result<(), String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `usb` | `&Vnwa` | The open unit, already in generator mode. |
+| `freq_hz` | `f64` | The output frequency in hertz; converted to the unit's tuning word by `protocol::generator_frequency` (see `vnwa_open_generator_frequency` for the range). |
+| `first` | `bool` | `true` for the first frequency after switching on: the write carries `wValue` 0x00c8, as the vendor program does; `false` for a retune: `wValue` 0. |
+
+**Returns.** `Ok(())` after three transfers: read 0x0e (64 bytes), write 0x4c (the frequency, 8 data bytes), read 0x04 with `wValue` 0x090a (8 bytes). The first failing transfer returns its error and stops the sequence.
+
+**Special concerns.** Blocking. Changes the frequency of the RF output on the unit's port at once; it does not change the level. Safe to repeat. Test: the generator sequence test above, including the retune without 0x00c8.
+
+### `vnwa_open_generator_on` [@ANCHOR: vnwa_open_generator_on]
+
+**Purpose.** Switch the unit's signal generator on at a frequency and a level and leave it running. The public entry of the generator mode, used by the generator example and the bench tools.
+
+```rust
+pub fn on(usb: &Vnwa, freq_hz: f64, attenuation_db: f64) -> Result<(), String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `usb` | `&Vnwa` | The open unit, borrowed. |
+| `freq_hz` | `f64` | The output frequency in hertz (see `set_frequency`). |
+| `attenuation_db` | `f64` | 0 (full scale) down to -50 dB, inclusive. |
+
+**Returns.** `Ok(())` once the level is set. `Err` `generator attenuation <x> dB is outside -50 to 0 dB` before anything is sent; otherwise the first transfer error, with the later transfers not sent.
+
+**Special concerns.** Blocking, 8 control transfers in the order: four mode reads (0x62, 0x61, 0x98, 0x9a), the frequency (0x0e, 0x4c, 0x04), the level (0x58). The output stays on until `generator::off` or another mode is entered. The level is checked first so a bad argument cannot leave the unit half set up. It emits a measurement signal at the unit's own low output level, not through a transmitter or a relay.
+
+**See also.** `vnwa_open_generator_level`, `vnwa_open_generator_run`, `vnwa_open_generator_set_frequency`. Test: `switching_the_generator_on_sends_the_vendor_sequence_and_a_bad_level_sends_nothing`.
+
+### `vnwa_open_audio_analysis_span` [@ANCHOR: vnwa_open_audio_analysis_span]
+
+**Purpose.** Choose which part of one point's audio to analyse: a whole number of IF periods, so the DFT of the tone has no leakage. Called by `measure_point`.
+
+```rust
+pub fn analysis_span(len: usize, fs: f64, if_hz: f64, presamples: usize, postsamples: usize) -> Option<(usize, usize)>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `len` | `usize` | Samples in one channel of the point. |
+| `fs` | `f64` | Sample rate in hertz (48000). |
+| `if_hz` | `f64` | The measurement IF in hertz; `fs / if_hz` is the samples per period (not necessarily a whole number). |
+| `presamples` | `usize` | Samples skipped at the start (the settling). |
+| `postsamples` | `usize` | Samples reserved at the end. |
+
+**Returns.** `Some((start, count))`: `start` is `presamples`, `count` is `round(periods * fs / if_hz)` with `periods = floor((len - presamples - postsamples) / (fs / if_hz))`. `None` when not even one period fits, or when `presamples + postsamples` exceeds `len`; the vendor program refuses to sweep in that case too.
+
+**Special concerns.** Pure, no allocation, no blocking, any thread. No panic: the subtraction is checked. `if_hz` of 0 gives an infinite period and so `None`.
+
+**See also.** `vnwa_open_measure_point`. Test: `the_analysis_span_is_whole_if_periods_between_the_presamples_and_postsamples`.
+
+### `vnwa_open_setup_timing_pair` [@ANCHOR: vnwa_open_setup_timing_pair]
+
+**Purpose.** The two timing counts (bytes 2 and 5 of request 0x40) the unit wants for a time per point; private to `setup`, called by `point_time_fields`.
+
+```rust
+fn timing_pair(b0: u8) -> (u8, u8)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `b0` | `u8` | The first byte: the time per point in the vendor program's 0.667 ms units. |
+
+**Returns.** `(byte2, byte5)`: `ceil(16 / b0)` for both, except `(3, 4)` at `b0` = 5, and `(1, 1)` from `b0` = 16 up (and for 0). Fitted to the 84 captured settings in `TIMING_OBSERVED`; why the program has two counts is not known.
+
+**Special concerns.** Pure; no panic. The rule is empirical, so a setting outside the captured ones is a fit, not a measurement. Test: `the_timing_pair_follows_the_ceiling_rule_with_the_one_exception_at_five`.
+
+### `vnwa_open_sweep_check` [@ANCHOR: vnwa_open_sweep_check]
+
+**Purpose.** Refuse a `Config` the unit or the analysis cannot use, before any hardware is opened. `Vna::open` calls it first.
+
+```rust
+pub fn check(c: &Config) -> Result<(), String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `&Config` | Borrowed; read-only. |
+
+**Returns.** `Ok(())`, or `Err` text for the first rule broken, in this order: `if_hz` not finite, not positive, not dividing 48 kHz into a whole number of samples of at least 4 (`does not divide 48 kHz`); `point_ms` outside 0.2 to 100 ms (from `point_time_fields`); `rf_level` above 0x3fff (`14-bit`); the analysis window (`settle` + `window`) ending later than 5 point times + 15 ms (`the analysis window ... must end by`); a window shorter than one IF period.
+
+**Special concerns.** Pure and instant; any thread; no panic (a NaN or zero IF is an error). Safe to call repeatedly. Test: `a_configuration_the_unit_or_the_analysis_cannot_use_is_refused_with_the_reason`.

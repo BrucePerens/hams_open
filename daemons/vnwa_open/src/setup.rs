@@ -34,6 +34,7 @@ pub struct SetupParams {
 /// `ceil(16 / b0)`, byte 2 the same except that it is 3 at `b0` = 5 (where byte 5 is 4); both are 1 from `b0` = 16 up. This is
 /// the rule that fits the 84 settings in `TIMING_OBSERVED`; why the program has two such counts is not known.
 fn timing_pair(b0: u8) -> (u8, u8) {
+    // [@ANCHOR: vnwa_open_setup_timing_pair]
     match b0 {
         1 => (16, 16),
         2 => (8, 8),
@@ -229,5 +230,34 @@ mod tests {
             ..base
         })
         .is_ok());
+    }
+
+    // Tests [@ANCHOR: vnwa_open_setup_timing_pair]
+    #[test]
+    fn the_timing_pair_follows_the_ceiling_rule_with_the_one_exception_at_five() {
+        let table = [
+            (1u8, (16u8, 16u8)),
+            (2, (8, 8)),
+            (3, (6, 6)),
+            (4, (4, 4)),
+            (5, (3, 4)),
+            (6, (3, 3)),
+            (7, (3, 3)),
+            (8, (2, 2)),
+            (15, (2, 2)),
+            (16, (1, 1)),
+            (255, (1, 1)),
+        ];
+        for (b0, want) in table {
+            assert_eq!(timing_pair(b0), want, "b0 = {b0}");
+        }
+        // Byte 5 is ceil(16 / b0) for every b0 from 1 to 20.
+        for b0 in 1u8..=20 {
+            assert_eq!(
+                timing_pair(b0).1 as u32,
+                16u32.div_ceil(b0 as u32),
+                "b0 = {b0}"
+            );
+        }
     }
 }

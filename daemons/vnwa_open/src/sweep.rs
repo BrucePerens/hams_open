@@ -109,6 +109,7 @@ impl Config {
 /// Refuses a configuration the unit or the analysis cannot use: an IF that does not divide 48 kHz into a whole number of
 /// samples, a time per point outside the program's range, a level above 14 bits, a window that runs past the emission.
 pub fn check(c: &Config) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_sweep_check]
     let per = SAMPLE_RATE as f64 / c.if_hz;
     if !(c.if_hz.is_finite() && c.if_hz > 0.0 && per.fract() == 0.0 && per >= 4.0) {
         return Err(format!(
@@ -989,5 +990,69 @@ mod tests {
             },
         );
         assert!((m - 1.0).abs() < 1e-9 && (p - 2.0).abs() < 1e-9, "{m} {p}");
+    }
+
+    // Tests [@ANCHOR: vnwa_open_sweep_check]
+    #[test]
+    fn a_configuration_the_unit_or_the_analysis_cannot_use_is_refused_with_the_reason() {
+        assert!(check(&Config::default()).is_ok());
+        let refused = |c: Config, want: &str| {
+            let e = check(&c).unwrap_err();
+            assert!(e.contains(want), "{e}");
+        };
+        refused(
+            Config {
+                if_hz: 7_000.0,
+                ..Config::default()
+            },
+            "does not divide 48 kHz",
+        );
+        refused(
+            Config {
+                if_hz: 48_000.0,
+                ..Config::default()
+            },
+            "does not divide 48 kHz",
+        );
+        refused(
+            Config {
+                if_hz: f64::NAN,
+                ..Config::default()
+            },
+            "does not divide 48 kHz",
+        );
+        refused(
+            Config {
+                point_ms: 0.1,
+                ..Config::default()
+            },
+            "outside the program's",
+        );
+        refused(
+            Config {
+                rf_level: 0x4000,
+                ..Config::default()
+            },
+            "14-bit",
+        );
+        refused(
+            Config {
+                settle_ms: Some(400.0),
+                ..Config::default()
+            },
+            "analysis window",
+        );
+        refused(
+            Config {
+                window_ms: Some(0.01),
+                ..Config::default()
+            },
+            "shorter than one IF period",
+        );
+        assert!(check(&Config {
+            if_hz: 6_000.0,
+            ..Config::default()
+        })
+        .is_ok());
     }
 }
