@@ -379,7 +379,7 @@ pub fn release(&self) -> Result<(), RigError>
 - `LineControl::Managed` (the default) takes the modem lines under control; `Unmanaged` is for
   ports that have none (a pty, a CDC ACM gadget): the lines are never touched and `set_line`
   reports them unsupported.
-- With `Flow::Hardware`, RTS belongs to flow control; do not also key with RTS.
+- With `Flow::Hardware`, RTS belongs to flow control: `set_line` and `set_control` refuse every write of RTS (`Unsupported`), so a `LineKeyer` on RTS cannot be built on such a port. Key with DTR or use another flow setting.
 - **Installation note (the open glitch).** Opening a serial port asserts DTR and RTS for a short
   time before `open_port` makes them inactive: the operating system and the USB-serial driver do
   it, not radioctl, and it happens again on **every reconnect** after a USB glitch, when nobody is

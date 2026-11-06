@@ -271,11 +271,30 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 pub struct SerialControl {
     port: SharedPort,
     lines: LineControl,
+    flow: Flow,
+}
+
+impl SerialControl {
+    // [@ANCHOR: radioctl_core_serial_control_check_rts_free]
+    /// Refuses RTS when the port uses hardware flow control: the driver owns RTS then, so a write
+    /// would either do nothing or fight the flow control, and a keyer built on it would look keyed
+    /// while the line is not under its control. Checked before everything else, for every write of
+    /// RTS (the release too, so a keyer on that line cannot be built).
+    fn check_rts_free(&self, is_rts: bool) -> Result<(), RigError> {
+        if is_rts && self.flow == Flow::Hardware {
+            return Err(RigError::new(
+                ErrorKind::Unsupported,
+                "RTS belongs to hardware flow control on this port; it cannot also key or carry data",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl ControlLines for SerialControl {
     // [@ANCHOR: radioctl_core_serial_control_set_line]
     fn set_line(&self, line: KeyLine, asserted: bool) -> Result<(), RigError> {
+        self.check_rts_free(line == KeyLine::Rts)?;
         if self.lines == LineControl::Unmanaged {
             return Err(RigError::new(
                 ErrorKind::Unsupported,
@@ -298,6 +317,7 @@ impl ControlLines for SerialControl {
 
     // [@ANCHOR: radioctl_core_serial_control_set_control]
     fn set_control(&self, line: ControlLine, asserted: bool) -> Result<(), RigError> {
+        self.check_rts_free(line == ControlLine::Rts)?;
         if self.lines == LineControl::Unmanaged {
             return Err(RigError::new(
                 ErrorKind::Unsupported,
@@ -689,6 +709,7 @@ pub async fn open_serial(runtime: &Handle, config: SerialConfig) -> Result<Seria
     let counters = Arc::new(Counters::default());
     let (first_tx, first_rx) = oneshot::channel();
     let lines = config.lines;
+    let flow = config.flow;
     let supervisor = Supervisor {
         config,
         commands: command_rx,
@@ -736,6 +757,7 @@ pub async fn open_serial(runtime: &Handle, config: SerialConfig) -> Result<Seria
             control: SerialControl {
                 port: shared,
                 lines,
+                flow,
             },
             status: status_rx,
             counters,

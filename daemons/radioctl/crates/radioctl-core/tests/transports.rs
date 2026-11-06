@@ -18,7 +18,7 @@ use radioctl_core::keyer::{ControlLine, ControlLines, KeyLine, LineKeyer};
 use radioctl_core::rig::{spawn, Freshness, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
 use radioctl_core::serial::{
-    open_serial, resolve, LineControl, LinkStatus, PortTarget, SerialConfig,
+    open_serial, resolve, Flow, LineControl, LinkStatus, PortTarget, SerialConfig,
 };
 
 use radioctl_core::tcp::{connect_tcp, TcpConfig};
@@ -591,4 +591,53 @@ async fn a_descriptions_line_settings_reach_the_port() {
         assert_eq!(master.parity().expect("parity"), serialport::Parity::None);
         drop(link);
     }
+}
+
+// Tests [@ANCHOR: radioctl_core_serial_control_check_rts_free]
+// Tests [@ANCHOR: radioctl_core_keyer_new]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rts_cannot_key_or_carry_data_on_a_port_whose_rts_is_flow_control() {
+    let (_master, path) = pty();
+    let mut config = fast_config(&path);
+    config.flow = Flow::Hardware;
+    let link = open_serial(&Handle::current(), config)
+        .await
+        .expect("a pty opens with hardware flow control");
+    for asserted in [true, false] {
+        let refused = link
+            .control
+            .set_line(KeyLine::Rts, asserted)
+            .expect_err("RTS is the driver's");
+        assert_eq!(refused.kind, ErrorKind::Unsupported);
+        assert!(
+            refused.detail.contains("flow control"),
+            "{}",
+            refused.detail
+        );
+        let refused = link
+            .control
+            .set_control(ControlLine::Rts, asserted)
+            .expect_err("RTS is the driver's, as data too");
+        assert!(
+            refused.detail.contains("flow control"),
+            "{}",
+            refused.detail
+        );
+    }
+    // No keyer can be built on it: the first thing a keyer does is make the line inactive.
+    let keyer = LineKeyer::new(link.control.clone(), KeyLine::Rts, true);
+    assert!(
+        keyer.is_err(),
+        "a keyer on a flow-control RTS must not exist"
+    );
+    // DTR is not flow control here: the refusal there is only the unmanaged port's own.
+    let dtr = link
+        .control
+        .set_line(KeyLine::Dtr, true)
+        .expect_err("a pty has no lines");
+    assert!(
+        dtr.detail.contains("no modem control lines"),
+        "{}",
+        dtr.detail
+    );
 }
