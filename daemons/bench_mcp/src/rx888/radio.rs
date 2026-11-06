@@ -517,7 +517,7 @@ pub fn capture(inst: &Instrument, args: &Value) -> Result<Value, String> {
         "frequency_hz": freq,
         "sample_rate_hz": rate, "channels": channels, "frames": frames,
         "seconds": f64::from(frames) / f64::from(rate),
-        "rtp_packets": seq.received, "rtp_lost": seq.lost, "rtp_out_of_order": seq.out_of_order, "rtp_skipped": skipped,
+        "rtp_packets": seq.received, "rtp_lost": seq.lost, "rtp_out_of_order": seq.out_of_order, "rtp_restarts": seq.restarts, "rtp_skipped": skipped,
         "gain_db": used_gain,
         "rms_dbfs": if rms > 0.0 { Some(20.0 * (rms / 32768.0).log10()) } else { None },
         "peak_counts": peak,
