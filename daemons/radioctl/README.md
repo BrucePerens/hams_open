@@ -770,7 +770,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_power_display_unit] (radioctl-core) The display unit (mW, W, kW) for a power, with 5 percent hysteresis around the thresholds.
 - [@ANCHOR: radioctl:radioctl_power_format] (radioctl-core) The text for a power: three significant digits, a fixed decimals rule per unit, dashes when unknown.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_power_meter] (radioctl-core) Validates the optional `[power_meter]` calibration block of a rig file.
-- [@ANCHOR: radioctl:radioctl_core_rigfile_build_elecraft] (radioctl-core) Validates the `[elecraft]` block: the model id and the optional per-model `levels` table (`level-name = [min, max]`, numeric levels only, `min <= max <= 999`).
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_elecraft] (radioctl-core) Validates the `[elecraft]` block: the model id and the optional per-model `levels` table (`level-name = [min, max]`, numeric levels only, `min <= max <= 999`). `parse` refuses an Elecraft description that claims the levels capability without an `rf-power` range: no default power range stands in for the model's own.
 - [@ANCHOR: radioctl:radioctld_meter_cal_power_fraction] (radioctld) The uncalibrated output power as a 0 to 1 fraction of the meter's raw scale.
 - [@ANCHOR: radioctl:radioctld_meter_cal_power_fraction_cal] (radioctld) The output power as a fraction of the calibrated full scale (the last calibration point).
 - [@ANCHOR: radioctl:radioctld_service_power_raw] (radioctld) The engine's raw power reading in the family's own scale (CI-V deflection, Yaesu `RM5`, Elecraft `PO`).
@@ -1154,7 +1154,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_ky] (radioctl-protocols) The model's `KY` record, or "not supported" where its manuals document none (Bruce's decision of 2026-11-02: `KY <text>;` only on models whose manual documents it).
 - [@ANCHOR: radioctl:radioctl_kenwood_engine_feed] (radioctl-protocols) Decodes Kenwood replies, auto-information and `?;` refusals.
 - [@ANCHOR: radioctl:radioctl_elecraft_level_wire] (radioctl-protocols) The Elecraft command prefix and manual range of a level.
-- [@ANCHOR: radioctl:radioctl_elecraft_level_wire_for] (radioctl-protocols) The command and range of a level on the described model: the K3 range of `level_wire`, replaced by the description's per-model range where it gives one (the KX3's AG 0-60, RG 190-250, MG 0-80, PC 0-15, measured 2026-11-05).
+- [@ANCHOR: radioctl:radioctl_elecraft_level_wire_for] (radioctl-protocols) The command and range of a level on the described model: the K3 range of `level_wire`, replaced by the description's per-model range where it gives one (the KX3's AG 0-60, RG 190-250, MG 0-80, PC 0-15, measured 2026-11-05; the KX2's PC 0-12 and the K3 and K3S's PC 0-12, from the manuals and Hamlib, unverified).
 - [@ANCHOR: radioctl:radioctl_elecraft_signed_offset] (radioctl-protocols) Formats a RIT/XIT offset as `+0050` / `-0050`.
 - [@ANCHOR: radioctl:radioctl_elecraft_parse_offset] (radioctl-protocols) Parses `ROsnnnn` data (sign or blank, four digits).
 - [@ANCHOR: radioctl:radioctl_elecraft_parse_firmware] (radioctl-protocols) Parses the `NN.NN` revision of an `RVx` answer.
@@ -1799,7 +1799,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_service_served_level] (radioctld) The level info if this rig serves the named level.
 - [@ANCHOR: radioctl:radioctld_service_get_level] (radioctld) `l`: a level as the client sees it (a 0 to 1 fraction, or the rig's own integer).
 - [@ANCHOR: radioctl:radioctld_service_meter] (radioctld) A raw transmitter meter deflection (read-only; the read never keys the rig).
-- [@ANCHOR: radioctl:radioctld_service_set_level] (radioctld) `L`: sets a numeric level; meters are read-only.
+- [@ANCHOR: radioctl:radioctld_service_set_level] (radioctld) `L`: sets a numeric level; meters are read-only. A 0 to 1 fraction is scaled to the rig's range and rounded to the nearest step, except transmit power (`RFPOWER`), which is rounded down so a request is never exceeded.
 - [@ANCHOR: radioctl:radioctld_service_get_func] (radioctld) `u`: RIT or XIT on or off.
 - [@ANCHOR: radioctl:radioctld_service_set_func] (radioctld) `U`: RIT or XIT on or off.
 - [@ANCHOR: radioctl:radioctld_service_vfo_info] (radioctld) `\get_vfo_info`: frequency, mode, width and split of the selected VFO.

@@ -564,6 +564,47 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: radioctl_elecraft_level_wire_for]
+    #[test]
+    fn the_kx2_k3_and_k3s_state_their_own_ranges_and_never_the_110_watt_default() {
+        let load = |text: &str| rigfile::parse(text).expect("parses").description;
+        let kx2 = load(include_str!("../../../rigs/elecraft-kx2.toml"));
+        let k3 = load(include_str!("../../../rigs/elecraft-k3.toml"));
+        let k3s = load(include_str!("../../../rigs/elecraft-k3s.toml"));
+        // The KX2 shares the KX3's AG, RG and MG ranges (Hamlib's kx3_set_level serves both) and
+        // tops out at 12 W, the smallest per-band maximum in the Programmer's Reference and the
+        // Owner's Manual.
+        let kx2_ranges = [
+            (Level::AfGain, 0, 60),
+            (Level::RfGain, 190, 250),
+            (Level::MicGain, 0, 80),
+            (Level::RfPower, 0, 12),
+        ];
+        // The K3 and K3S: the manual's ranges, and the K3 without a KPA3 (12 W) for power.
+        let k3_ranges = [
+            (Level::AfGain, 0, 255),
+            (Level::RfGain, 0, 250),
+            (Level::MicGain, 0, 60),
+            (Level::RfPower, 0, 12),
+        ];
+        for (desc, ranges) in [(&kx2, kx2_ranges), (&k3, k3_ranges), (&k3s, k3_ranges)] {
+            for (level, min, max) in ranges {
+                let wire = level_wire_for(desc, level);
+                assert_eq!((wire.min, wire.max), (min, max), "{} {level:?}", desc.id);
+            }
+        }
+        // Half of the 12 W scale is PC006, and one watt past it is refused, not sent.
+        for desc in [kx2, k3, k3s] {
+            let mut e = ElecraftEngine::new(desc).expect("engine");
+            assert_eq!(bytes(&mut e, Op::SetLevel(Level::RfPower, 6)), b"PC006;");
+            assert!(e.encode(&Op::SetLevel(Level::RfPower, 13)).is_err());
+            assert!(matches!(
+                e.feed(b"PC055;", T0).as_slice(),
+                [Inbound::Unrecognised(_)]
+            ));
+        }
+    }
+
     // Tests [@ANCHOR: radioctl_elecraft_engine_new]
     #[test]
     fn engine_refuses_other_families() {

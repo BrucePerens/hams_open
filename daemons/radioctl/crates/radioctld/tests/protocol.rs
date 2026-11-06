@@ -124,3 +124,12 @@ async fn the_virtual_kx3_attenuator_and_preamplifier() {
     let text = config_text("", "kx3", "elecraft-kx3.toml", false, false);
     replay(&text, None, include_str!("transcripts/front_end_kx3.txt")).await;
 }
+
+// Tests [@ANCHOR: radioctld_service_set_level]
+// Tests [@ANCHOR: radioctld_service_get_level]
+// Tests [@ANCHOR: radioctld_names_level_range]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_virtual_kx2_power_is_a_fraction_of_12_watts_rounded_down() {
+    let text = config_text("", "kx2", "elecraft-kx2.toml", false, false);
+    replay(&text, None, include_str!("transcripts/power_kx2.txt")).await;
+}

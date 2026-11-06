@@ -1,0 +1,37 @@
+# Virtual Elecraft KX2: RFPOWER is a fraction of 12 W (the smallest per-band maximum the manuals give),
+# rounded DOWN to a whole watt so a request is never exceeded. AF, RF and MICGAIN use the KX3's ranges
+# (AG 0-60, RG 190-250, MG 0-80). All of it unverified until a KX2 is on the bench.
+> L RFPOWER 0.5
+< RPRT 0
+> l RFPOWER
+< 0.5
+> L RFPOWER 0.34
+< RPRT 0
+> l RFPOWER
+< 0.333333
+> L RFPOWER 0.999
+< RPRT 0
+> l RFPOWER
+< 0.916667
+> L RFPOWER 1
+< RPRT 0
+> l RFPOWER
+< 1
+> L RFPOWER 1.01
+< RPRT -1
+> L RFPOWER 0.08
+< RPRT 0
+> l RFPOWER
+< 0
+> L AF 0.5
+< RPRT 0
+> l AF
+< 0.5
+> L RF 0.5
+< RPRT 0
+> l RF
+< 0.5
+> L MICGAIN 0.5
+< RPRT 0
+> l MICGAIN
+< 0.5

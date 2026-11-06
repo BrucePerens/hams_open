@@ -721,6 +721,17 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         }
         capabilities.push(capability);
     }
+    // A transmit-power range is never a default: the K3's 110 W made half power full power on a
+    // KX3. An Elecraft model that claims `levels` must state its own `rf-power` range.
+    if capabilities.contains(&Capability::Levels)
+        && elecraft
+            .as_ref()
+            .is_some_and(|e| e.level_range(Level::RfPower).is_none())
+    {
+        return Err(bad(
+            "elecraft.levels.rf-power is required when the model claims the levels capability",
+        ));
+    }
     if capabilities.is_empty() {
         return Err(bad("a description needs at least one capability"));
     }
@@ -861,7 +872,8 @@ const MAX_PREAMP_STEPS: u8 = 3;
 // [@ANCHOR: radioctl_core_rigfile_build_elecraft]
 /// The `[elecraft]` block: the model id and the per-model level ranges, each naming one of the
 /// numeric levels (af-gain, rf-gain, mic-gain, monitor-level, keyer-speed, rf-power) with
-/// `min <= max <= 999` (three wire digits).
+/// `min <= max <= 999` (three wire digits). [`parse`] also requires an `rf-power` range of any
+/// Elecraft model that claims the levels capability.
 fn build_elecraft(section: &ElecraftSection) -> Result<ElecraftParams, RigError> {
     let mut params = ElecraftParams::new(section.model_id);
     for (name, (min, max)) in &section.levels {
@@ -1609,6 +1621,15 @@ verified = { state = "unverified" }
         assert_eq!(params.level_range(Level::RfGain), Some((190, 250)));
         assert_eq!(params.level_range(Level::RfPower), None);
         assert!(expected_keys(&loaded.description).contains(&"elecraft.levels".to_string()));
+        // A model that claims the levels capability must state its transmit-power range: no
+        // default stands in for it (a K3 default of 110 W sent full power on a KX3).
+        let claims = format!("{with_levels}{fact}").replace("\"set-ptt\"]", "\"set-ptt\", \"levels\"]");
+        assert_ne!(claims, format!("{with_levels}{fact}"), "the GOOD text changed shape");
+        expect_rejected(&claims, "elecraft.levels.rf-power");
+        let stated = claims.replace("rf-gain = [190, 250]", "rf-gain = [190, 250], rf-power = [0, 12]");
+        let loaded = parse(&stated).expect("loads with rf-power");
+        let params = loaded.description.elecraft.clone().expect("elecraft");
+        assert_eq!(params.level_range(Level::RfPower), Some((0, 12)));
         for bad in [
             "preamp = [0, 1]",
             "wobble = [0, 1]",
