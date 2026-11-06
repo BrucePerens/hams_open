@@ -67,13 +67,14 @@ fn real(p: &Path) -> PathBuf {
 
 /// The USB bus-port of a tty (`1-4.2` for `.../1-4.2/1-4.2:1.0/ttyUSB0`), from its sysfs entry.
 fn usb_port_of(dev: &Path, sys: &Path) -> Option<String> {
+    // [@ANCHOR: bench_mcp_serial_guard_usb_port_of]
     let name = dev.file_name()?;
     let link = std::fs::canonicalize(sys.join("class/tty").join(name).join("device")).ok()?;
     link.components()
         .filter_map(|c| c.as_os_str().to_str())
         .filter(|c| c.contains('-') && c.chars().next().is_some_and(|f| f.is_ascii_digit()))
         .filter_map(|c| c.split(':').next())
-        .last()
+        .next_back()
         .map(String::from)
 }
 
@@ -134,6 +135,7 @@ pub fn check_supply_open(path: &str) -> Result<(), String> {
 
 /// The reserved check alone (any serial device), against the process's list and the real file system.
 pub fn check_reserved_open(path: &str) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_serial_guard_check_reserved_open]
     match reserved_reason(path, RESERVED.get().map_or(&[], |v| v), &real_roots()) {
         Some(why) => Err(why),
         None => Ok(()),
@@ -192,6 +194,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_serial_guard_reserved_reason]
+    // Tests [@ANCHOR: bench_mcp_serial_guard_usb_port_of]
     // Tests [@ANCHOR: bench_mcp_serial_guard_by_id_name]
     #[test]
     fn a_reserved_usb_port_or_by_id_path_is_found_whatever_name_the_device_has() {

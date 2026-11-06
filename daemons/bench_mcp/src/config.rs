@@ -512,6 +512,7 @@ mod tests {
         assert!(load().unwrap_err().contains("missing.json"));
         std::env::set_var("BENCH_MCP_CONFIG", &file);
         // Tests [@ANCHOR: bench_mcp_serial_guard_set_reserved]
+        // Tests [@ANCHOR: bench_mcp_serial_guard_check_reserved_open]
         std::env::set_var("BENCH_MCP_CONFIG", &bad);
         assert!(load().unwrap_err().contains("reserved_serial"));
         std::fs::write(&file, r#"{"instruments":{"scope":{"driver":"siglent_sds","host":"10.0.0.2"}},"reserved_serial":["/dev/serial/by-id/usb-guard-test-only-never-exists"]}"#).unwrap();
