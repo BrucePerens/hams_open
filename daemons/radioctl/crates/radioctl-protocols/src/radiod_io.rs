@@ -72,7 +72,7 @@ pub struct RadiodLink {
     pub policy: Policy,
     /// Starting dial frequency, Hz.
     pub frequency_hz: u64,
-    /// Starting mode (USB, LSB, CW, AM or FM).
+    /// Starting mode (USB, LSB, CW, AM, FM, SAM, SAM-L or SAM-U).
     pub mode: Mode,
     /// Audio frames queued for [`RadiodControl::take_audio`] before new ones are dropped (default 50,
     /// one second).
@@ -116,7 +116,7 @@ impl RadiodLink {
         }
         if crate::radiod_net::mode_name(self.mode).is_none() {
             return bad(format!(
-                "radiod starting mode {:?} is not USB, LSB, CW, AM or FM",
+                "radiod starting mode {:?} is not USB, LSB, CW, AM, FM, SAM, SAM-L or SAM-U",
                 self.mode
             ));
         }
@@ -197,6 +197,8 @@ struct Format {
 
 struct Shared {
     stats: Mutex<RadiodStats>,
+    /// The mode the engine last set successfully (the bridge's `State::mode`), for `carrier_lock`.
+    mode: Mutex<Mode>,
     format: Mutex<Option<Format>>,
     audio: Mutex<Option<mpsc::Receiver<AudioFrame>>>,
 }
@@ -233,6 +235,22 @@ impl RadiodControl {
     pub fn front_end(&self) -> Option<ChannelStatus> {
         lock(&self.shared.stats).front_end.clone()
     }
+
+    // [@ANCHOR: radioctl_radiod_control_carrier_lock]
+    /// The carrier lock of the channel's synchronous detector (`radiod`'s PLL): `Some(true)` locked,
+    /// `Some(false)` not locked, `None` when the channel is not in a synchronous mode (SAM, SAM-L,
+    /// SAM-U), or its latest status does not report the PLL. As fresh as the latest status: one per
+    /// acknowledged command, so at least every refresh and at every signal read (`GS`).
+    pub fn carrier_lock(&self) -> Option<bool> {
+        let mode = *lock(&self.shared.mode);
+        if !radiod_mode(mode).is_some_and(RadiodMode::is_synchronous) {
+            return None;
+        }
+        lock(&self.shared.stats)
+            .channel
+            .as_ref()
+            .and_then(ChannelStatus::carrier_lock)
+    }
 }
 
 // [@ANCHOR: radioctl_radiod_radiod_mode]
@@ -244,6 +262,9 @@ fn radiod_mode(mode: Mode) -> Option<RadiodMode> {
         Mode::Cw => RadiodMode::Cw,
         Mode::Am => RadiodMode::Am,
         Mode::Fm => RadiodMode::Fm,
+        Mode::Sam => RadiodMode::Sam,
+        Mode::SamL => RadiodMode::SamLower,
+        Mode::SamU => RadiodMode::SamUpper,
         _ => return None,
     })
 }
@@ -402,7 +423,10 @@ impl Bridge {
                     self.state.mode = mode;
                     self.state.width = None;
                     match self.assert().await {
-                        Ok(_) => "OK\n".to_string(),
+                        Ok(_) => {
+                            *lock(&self.shared.mode) = mode;
+                            "OK\n".to_string()
+                        }
                         Err(e) => {
                             (self.state.mode, self.state.width) = before;
                             format!("ERR {e}\n")
@@ -472,6 +496,7 @@ pub fn serve_radiod(
     let (tx, rx) = mpsc::channel(link.audio_queue);
     let shared = Arc::new(Shared {
         stats: Mutex::new(RadiodStats::default()),
+        mode: Mutex::new(link.mode),
         format: Mutex::new(None),
         audio: Mutex::new(Some(rx)),
     });

@@ -10,7 +10,7 @@
 //! |---|---|---|
 //! | `GF` | `F <hz>` | dial (carrier) frequency |
 //! | `F <hz>` | `OK` or `ERR <text>` | tune |
-//! | `GM` | `M <usb\|lsb\|cw\|am\|fm>` | mode |
+//! | `GM` | `M <usb\|lsb\|cw\|am\|fm\|sam\|sam-l\|sam-u>` | mode |
 //! | `M <name>` | `OK` or `ERR <text>` | set mode (the mode's own passband comes back) |
 //! | `GW` | `W <hz>` | passband width |
 //! | `W <hz>` | `OK` or `ERR <text>` | set passband width (edges placed per mode by the bridge) |
@@ -38,6 +38,14 @@ const MAX_LINE: usize = 128;
 /// Largest passband edge magnitude, Hz: `radiod_client::command::MAX_FILTER_EDGE_HZ`, repeated here
 /// so the sans-IO engine does not need the client (a test pins the two equal).
 pub const MAX_EDGE_HZ: f32 = 12_000.0;
+
+// [@ANCHOR: radioctl_radiod_sam_passband]
+/// How far a single-sideband synchronous passband (SAM-L, SAM-U) reaches across the carrier, Hz:
+/// the PLL tracks the carrier, so it must stay inside the passband (`radiod_client`'s `SamLower` and
+/// `SamUpper` use the same 100 Hz, from `radiod`'s `[ame]` preset).
+pub const SAM_CARRIER_GUARD_HZ: f32 = 100.0;
+/// The narrowest SAM-L or SAM-U passband, Hz: twice the guard, so the carrier is never at an edge.
+pub const SAM_SIDEBAND_MIN_WIDTH_HZ: f32 = 200.0;
 
 /// Signal scale: the raw value is `(dB - SIGNAL_FLOOR_DB) * 10`, clamped to `0..=u16::MAX`.
 pub const SIGNAL_FLOOR_DB: f32 = -200.0;
@@ -68,6 +76,9 @@ pub fn mode_name(mode: Mode) -> Option<&'static str> {
         Mode::Cw => "cw",
         Mode::Am => "am",
         Mode::Fm => "fm",
+        Mode::Sam => "sam",
+        Mode::SamL => "sam-l",
+        Mode::SamU => "sam-u",
         _ => return None,
     })
 }
@@ -81,6 +92,9 @@ pub fn mode_from_name(name: &str) -> Option<Mode> {
         "cw" => Mode::Cw,
         "am" => Mode::Am,
         "fm" => Mode::Fm,
+        "sam" => Mode::Sam,
+        "sam-l" => Mode::SamL,
+        "sam-u" => Mode::SamU,
         _ => return None,
     })
 }
@@ -88,10 +102,11 @@ pub fn mode_from_name(name: &str) -> Option<Mode> {
 // [@ANCHOR: radioctl_radiod_mode_spec]
 /// How a mode is demodulated by `radiod` and where a passband of a given width sits for it. The
 /// edges are Hz from the carrier, in the `radiod_client` modes' own placement: USB and LSB keep their
-/// 50 Hz edge next to the carrier, CW centres on its 600 Hz tone, AM and FM centre on the carrier.
+/// 50 Hz edge next to the carrier, CW centres on its 600 Hz tone, AM, SAM and FM centre on the carrier,
+/// and SAM-L and SAM-U keep their sideband plus 100 Hz across the carrier (the PLL must see it).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ModeSpec {
-    /// The line-protocol name (`usb`, `lsb`, `cw`, `am`, `fm`).
+    /// The line-protocol name (`usb`, `lsb`, `cw`, `am`, `fm`, `sam`, `sam-l`, `sam-u`).
     pub name: &'static str,
     /// The passband width the mode comes back with after a mode change, Hz.
     pub default_width_hz: u64,
@@ -107,6 +122,9 @@ impl ModeSpec {
             Mode::Cw => ("cw", 400),
             Mode::Am => ("am", 10_000),
             Mode::Fm => ("fm", 16_000),
+            Mode::Sam => ("sam", 10_000),
+            Mode::SamL => ("sam-l", 5_100),
+            Mode::SamU => ("sam-u", 5_100),
             _ => ("usb", 2950),
         };
         ModeSpec {
@@ -117,13 +135,17 @@ impl ModeSpec {
 
     // [@ANCHOR: radioctl_radiod_mode_spec_edges]
     /// The passband edges, Hz from the carrier, for a width in Hz (clamped to 1 Hz to 24 kHz, and
-    /// to the 12 kHz edge limit of `radiod_client`).
+    /// to the 12 kHz edge limit of `radiod_client`). SAM-L and SAM-U take at least
+    /// [`SAM_SIDEBAND_MIN_WIDTH_HZ`], so the carrier stays inside the passband.
     pub fn edges(self, width_hz: u64) -> (f32, f32) {
         let w = width_hz.clamp(1, 24_000) as f32;
+        let ws = w.max(SAM_SIDEBAND_MIN_WIDTH_HZ);
         let (lo, hi) = match self.name {
             "lsb" => (-50.0 - w, -50.0),
             "cw" => (600.0 - w / 2.0, 600.0 + w / 2.0),
-            "am" | "fm" => (-w / 2.0, w / 2.0),
+            "am" | "fm" | "sam" => (-w / 2.0, w / 2.0),
+            "sam-l" => (SAM_CARRIER_GUARD_HZ - ws, SAM_CARRIER_GUARD_HZ),
+            "sam-u" => (-SAM_CARRIER_GUARD_HZ, ws - SAM_CARRIER_GUARD_HZ),
             _ => (50.0, 50.0 + w),
         };
         (

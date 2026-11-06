@@ -8,6 +8,7 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -37,10 +38,18 @@ struct Seen {
     lifetime: Option<u64>,
     frequency: Option<f64>,
     edges: Option<(f32, f32)>,
+    /// `PLL_ENABLE` as sent, when the command carried it.
+    pll: Option<bool>,
 }
 
 fn ports() -> (u16, u16) {
-    let base = 30_000 + (std::process::id() % 15_000) as u16 * 2;
+    ports_at(0)
+}
+
+/// A second pair of ports for a test that runs beside the first (a socket bound to a port gets every
+/// group joined on it, so two concurrent fakes must not share one).
+fn ports_at(pair: u16) -> (u16, u16) {
+    let base = 30_000 + (std::process::id() % 7_000) as u16 * 4 + pair * 2;
     (base, base + 1)
 }
 
@@ -65,11 +74,19 @@ fn tlv(out: &mut Vec<u8>, t: u8, v: &[u8]) {
     out.extend_from_slice(v);
 }
 
-/// The fake radiod's status socket loop: records every command and answers it.
-async fn fake_radiod(sock: UdpSocket, dest: SocketAddrV4, seen: Arc<Mutex<Vec<Seen>>>) {
+/// The fake radiod's status socket loop: records every command and answers it. A channel whose PLL
+/// was turned on (`PLL_ENABLE`) reports `PLL_ENABLE` and a `PLL_LOCK` that follows `locked`, as the
+/// documented status fields say (ka9q-radio `docs/ka9q-radio-3.md`, `status.h`).
+async fn fake_radiod(
+    sock: UdpSocket,
+    dest: SocketAddrV4,
+    seen: Arc<Mutex<Vec<Seen>>>,
+    locked: Arc<AtomicBool>,
+) {
     let mut buf = vec![0u8; 65_536];
     let mut edges = (50.0f32, 3000.0f32);
     let mut freq = 0.0f64;
+    let mut pll = false;
     loop {
         let Ok(n) = sock.recv(&mut buf).await else {
             return;
@@ -87,11 +104,13 @@ async fn fake_radiod(sock: UdpSocket, dest: SocketAddrV4, seen: Arc<Mutex<Vec<Se
         let lo = find(ty::LOW_EDGE).and_then(|e| e.f32().ok());
         let hi = find(ty::HIGH_EDGE).and_then(|e| e.f32().ok());
         let f = find(ty::RADIO_FREQUENCY).and_then(|e| e.f64().ok());
+        let pll_sent = find(ty::PLL_ENABLE).and_then(|e| e.bool().ok());
         seen.lock().unwrap().push(Seen {
             ssrc,
             lifetime: find(ty::LIFETIME).and_then(|e| e.uint().ok()),
             frequency: f,
             edges: lo.zip(hi),
+            pll: pll_sent,
         });
         let mut reply = vec![0u8];
         if ssrc == 0 {
@@ -105,6 +124,9 @@ async fn fake_radiod(sock: UdpSocket, dest: SocketAddrV4, seen: Arc<Mutex<Vec<Se
             }
             if let Some(f) = f {
                 freq = f;
+            }
+            if let Some(p) = pll_sent {
+                pll = p;
             }
             tlv(&mut reply, ty::OUTPUT_SSRC, &ssrc.to_be_bytes());
             tlv(&mut reply, ty::COMMAND_TAG, &(tag as u32).to_be_bytes());
@@ -124,6 +146,14 @@ async fn fake_radiod(sock: UdpSocket, dest: SocketAddrV4, seen: Arc<Mutex<Vec<Se
             tlv(&mut reply, ty::OUTPUT_ENCODING, &[2]);
             tlv(&mut reply, ty::OUTPUT_CHANNELS, &[1]);
             tlv(&mut reply, ty::OUTPUT_SAMPRATE, &12_000u32.to_be_bytes());
+            tlv(&mut reply, ty::PLL_ENABLE, &[u8::from(pll)]);
+            if pll {
+                tlv(
+                    &mut reply,
+                    ty::PLL_LOCK,
+                    &[u8::from(locked.load(Ordering::SeqCst))],
+                );
+            }
         }
         reply.push(ty::EOL);
         let _ = sock.send_to(&reply, dest).await;
@@ -174,7 +204,14 @@ fn observation(reply: Result<Option<Observation>, RigError>) -> Observation {
 }
 
 async fn rig(status: Ipv4Addr, data: Ipv4Addr) -> (RigHandle, RadiodControl) {
-    let (status_port, data_port) = ports();
+    rig_on(status, data, ports()).await
+}
+
+async fn rig_on(
+    status: Ipv4Addr,
+    data: Ipv4Addr,
+    (status_port, data_port): (u16, u16),
+) -> (RigHandle, RadiodControl) {
     let mut link = RadiodLink::new(status, data, SSRC);
     link.status_port = status_port;
     link.data_port = data_port;
@@ -226,6 +263,7 @@ async fn a_radiod_channel_is_a_receive_only_virtual_rig() {
         join(status, status_port),
         SocketAddrV4::new(status, status_port),
         Arc::clone(&seen),
+        Arc::new(AtomicBool::new(true)),
     ));
     tokio::spawn(fake_rtp(
         join(data, data_port),
@@ -363,6 +401,90 @@ async fn a_radiod_channel_is_a_receive_only_virtual_rig() {
             .any(|s| s.ssrc == SSRC && s.lifetime == Some(1))
     })
     .await;
+}
+
+// Tests [@ANCHOR: radioctl_radiod_control_carrier_lock]
+// Tests [@ANCHOR: radioctl_radiod_radiod_mode]
+// Tests [@ANCHOR: radioctl_radiod_bridge_handle_line]
+// Tests [@ANCHOR: radioctl_radiod_mode_spec_edges]
+// Tests [@ANCHOR: radioctl_radiod_sam_passband]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn synchronous_am_turns_radiods_pll_on_and_reports_its_lock() {
+    let (status, data) = (
+        Ipv4Addr::new(239, 255, 88, 3),
+        Ipv4Addr::new(239, 255, 88, 4),
+    );
+    let pair = ports_at(1);
+    let seen = Arc::new(Mutex::new(Vec::<Seen>::new()));
+    let locked = Arc::new(AtomicBool::new(true));
+    tokio::spawn(fake_radiod(
+        join(status, pair.0),
+        SocketAddrV4::new(status, pair.0),
+        Arc::clone(&seen),
+        Arc::clone(&locked),
+    ));
+    let (handle, control) = rig_on(status, data, pair).await;
+    let last = |seen: &Arc<Mutex<Vec<Seen>>>| {
+        seen.lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|s| s.ssrc == SSRC && s.frequency.is_some())
+            .cloned()
+    };
+
+    // USB: no PLL, and no lock to report.
+    eventually("the channel is created", || last(&seen).is_some()).await;
+    assert_eq!(last(&seen).and_then(|s| s.pll), Some(false));
+    assert_eq!(control.carrier_lock(), None);
+
+    // SAM: the PLL goes on, the mode's own passband comes back, and the lock is reported.
+    handle.set_mode(Mode::Sam).await.expect("sam");
+    assert_eq!(
+        handle.mode(Freshness::Fresh).await.expect("mode").value,
+        Mode::Sam
+    );
+    let cmd = last(&seen).expect("audio command");
+    assert_eq!((cmd.pll, cmd.edges), (Some(true), Some((-5000.0, 5000.0))));
+    assert_eq!(control.carrier_lock(), Some(true));
+
+    // The carrier is lost: the next status (a signal read polls the channel) says unlocked.
+    locked.store(false, Ordering::SeqCst);
+    handle.signal(Freshness::Fresh).await.expect("signal");
+    assert_eq!(control.carrier_lock(), Some(false));
+    locked.store(true, Ordering::SeqCst);
+    handle.signal(Freshness::Fresh).await.expect("signal");
+    assert_eq!(control.carrier_lock(), Some(true));
+
+    // SAM-U and SAM-L keep 100 Hz across the carrier, and a width keeps it inside.
+    handle.set_mode(Mode::SamU).await.expect("sam-u");
+    assert_eq!(last(&seen).and_then(|s| s.edges), Some((-100.0, 5000.0)));
+    handle
+        .execute(Op::SetFilterWidth(Hz(3000)))
+        .await
+        .expect("width");
+    assert_eq!(
+        seen.lock().unwrap().last().and_then(|s| s.edges),
+        Some((-100.0, 2900.0))
+    );
+    handle
+        .execute(Op::SetFilterWidth(Hz(50)))
+        .await
+        .expect("narrow width");
+    assert_eq!(
+        seen.lock().unwrap().last().and_then(|s| s.edges),
+        Some((-100.0, 100.0)),
+        "never narrower than 200 Hz, so the carrier is not at an edge"
+    );
+    handle.set_mode(Mode::SamL).await.expect("sam-l");
+    assert_eq!(last(&seen).and_then(|s| s.edges), Some((-5000.0, 100.0)));
+    assert_eq!(control.carrier_lock(), Some(true));
+
+    // Back to AM (envelope detection): the PLL is turned off and no lock is reported.
+    handle.set_mode(Mode::Am).await.expect("am");
+    assert_eq!(last(&seen).and_then(|s| s.pll), Some(false));
+    assert_eq!(control.carrier_lock(), None);
+    drop(handle);
 }
 
 // Tests [@ANCHOR: radioctl_radiod_link_validate]

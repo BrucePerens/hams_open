@@ -67,6 +67,30 @@ pub enum Mode {
     /// Raw I/Q: linear demodulator with no detection, +-5 kHz, 12 kHz output, two channels (I then
     /// Q in each sample pair). The parameters of `radiod`'s own `[iq]` preset, sent explicitly.
     Iq,
+    /// Synchronous AM, both sidebands: linear demodulator with `radiod`'s carrier PLL on (the
+    /// documented `pll = on`), envelope detection off, +-5 kHz, 12 kHz mono. The squelch the PLL
+    /// brings with it is held open (`SQUELCH_OPEN` -1000 dB, as `radiod`'s documentation says).
+    Sam,
+    /// Synchronous AM, lower sideband and carrier: as [`Mode::Sam`], passband -5000 to +100 Hz
+    /// (the carrier must stay inside it for the PLL to track; `radiod`'s `[ame]` preset mirrored).
+    SamLower,
+    /// Synchronous AM, upper sideband and carrier: as [`Mode::Sam`], passband -100 to +5000 Hz (the
+    /// placement of `radiod`'s `[ame]` preset).
+    SamUpper,
+}
+
+// [@ANCHOR: radiod_client_command_sam_squelch]
+/// The squelch thresholds sent with a synchronous mode, dB SNR: `radiod`'s carrier squelch comes on
+/// with its PLL, and its documentation says an opening threshold of -1000 dB keeps it open.
+pub const SAM_SQUELCH_OPEN_DB: f32 = -1000.0;
+
+impl Mode {
+    // [@ANCHOR: radiod_client_command_mode_is_synchronous]
+    /// True for the synchronous AM modes (`Sam`, `SamLower`, `SamUpper`): the ones that turn on
+    /// `radiod`'s carrier PLL, so their status carries a carrier lock.
+    pub fn is_synchronous(self) -> bool {
+        matches!(self, Mode::Sam | Mode::SamLower | Mode::SamUpper)
+    }
 }
 
 /// Output encoding of the channel's RTP stream.
@@ -416,6 +440,7 @@ impl Command {
                         w.f32(ty::LOW_EDGE, -5000.0);
                         w.f32(ty::HIGH_EDGE, 5000.0);
                         w.bool(ty::ENVELOPE, false);
+                        w.bool(ty::PLL_ENABLE, false);
                         w.bool(ty::AGC_ENABLE, true);
                     }
                     Mode::Usb | Mode::Lsb | Mode::Cw | Mode::Am => {
@@ -430,6 +455,25 @@ impl Command {
                         w.f32(ty::LOW_EDGE, lo);
                         w.f32(ty::HIGH_EDGE, hi);
                         w.bool(ty::ENVELOPE, a.mode == Mode::Am);
+                        w.bool(ty::PLL_ENABLE, false);
+                        w.bool(ty::AGC_ENABLE, true);
+                    }
+                    Mode::Sam | Mode::SamLower | Mode::SamUpper => {
+                        let (lo, hi) = match a.mode {
+                            Mode::SamLower => (-5000.0, 100.0),
+                            Mode::SamUpper => (-100.0, 5000.0),
+                            _ => (-5000.0, 5000.0),
+                        };
+                        w.uint(ty::DEMOD_TYPE, 0);
+                        w.uint(ty::OUTPUT_SAMPRATE, 12_000);
+                        w.f32(ty::LOW_EDGE, lo);
+                        w.f32(ty::HIGH_EDGE, hi);
+                        w.bool(ty::ENVELOPE, false);
+                        w.bool(ty::PLL_ENABLE, true);
+                        w.bool(ty::PLL_SQUARE, false);
+                        w.bool(ty::SNR_SQUELCH, false);
+                        w.f32(ty::SQUELCH_OPEN, SAM_SQUELCH_OPEN_DB);
+                        w.f32(ty::SQUELCH_CLOSE, SAM_SQUELCH_OPEN_DB);
                         w.bool(ty::AGC_ENABLE, true);
                     }
                     Mode::Fm => {
@@ -591,7 +635,16 @@ mod tests {
             filter(-3000.0, -50.0, 10),
             gain(None, 10),
         ];
-        for mode in [Mode::Lsb, Mode::Cw, Mode::Am, Mode::Fm, Mode::Iq] {
+        for mode in [
+            Mode::Lsb,
+            Mode::Cw,
+            Mode::Am,
+            Mode::Fm,
+            Mode::Iq,
+            Mode::Sam,
+            Mode::SamLower,
+            Mode::SamUpper,
+        ] {
             cmds.push(Command::Audio(AudioChannel {
                 mode,
                 encoding: Encoding::Opus { bitrate: 24_000 },
@@ -897,7 +950,16 @@ mod tests {
             .iter()
             .any(|x| x.ty == ty::LOW_EDGE && x.f32() == Ok(-5000.0)));
         // Every other mode stays mono.
-        for mode in [Mode::Usb, Mode::Lsb, Mode::Cw, Mode::Am, Mode::Fm] {
+        for mode in [
+            Mode::Usb,
+            Mode::Lsb,
+            Mode::Cw,
+            Mode::Am,
+            Mode::Fm,
+            Mode::Sam,
+            Mode::SamLower,
+            Mode::SamUpper,
+        ] {
             let pkt = Command::Audio(AudioChannel {
                 mode,
                 ..base_audio()
@@ -934,5 +996,65 @@ mod tests {
         // The RX-888 observations: 8192 x 3950 Hz fits, 8192 x 3960 Hz does not.
         assert!(8192.0 * 3950.0 <= max_spectrum_span_hz(64_800_000, true));
         assert!(8192.0 * 3960.0 > max_spectrum_span_hz(64_800_000, true));
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_mode]
+    // Tests [@ANCHOR: radiod_client_command_sam_squelch]
+    // Tests [@ANCHOR: radiod_client_command_encode]
+    #[test]
+    fn synchronous_modes_turn_the_pll_on_and_hold_its_squelch_open() {
+        for (mode, lo, hi) in [
+            (Mode::Sam, -5000.0f32, 5000.0f32),
+            (Mode::SamLower, -5000.0, 100.0),
+            (Mode::SamUpper, -100.0, 5000.0),
+        ] {
+            let pkt = Command::Audio(AudioChannel {
+                mode,
+                ..base_audio()
+            })
+            .encode(&Policy::default(), 9)
+            .unwrap_or_default();
+            let e = entries(&pkt);
+            let flag = |t: u8| e.iter().find(|x| x.ty == t).map(|x| x.bool());
+            let float = |t: u8| e.iter().find(|x| x.ty == t).map(|x| x.f32());
+            assert_eq!(flag(ty::PLL_ENABLE), Some(Ok(true)), "{mode:?}");
+            assert_eq!(flag(ty::PLL_SQUARE), Some(Ok(false)), "{mode:?}");
+            assert_eq!(flag(ty::ENVELOPE), Some(Ok(false)), "{mode:?}");
+            assert_eq!(flag(ty::SNR_SQUELCH), Some(Ok(false)), "{mode:?}");
+            assert_eq!(flag(ty::AGC_ENABLE), Some(Ok(true)), "{mode:?}");
+            assert_eq!(float(ty::SQUELCH_OPEN), Some(Ok(SAM_SQUELCH_OPEN_DB)));
+            assert_eq!(float(ty::SQUELCH_CLOSE), Some(Ok(SAM_SQUELCH_OPEN_DB)));
+            assert_eq!(float(ty::LOW_EDGE), Some(Ok(lo)), "{mode:?}");
+            assert_eq!(float(ty::HIGH_EDGE), Some(Ok(hi)), "{mode:?}");
+            // The carrier (0 Hz) stays inside the passband, or the PLL has nothing to track.
+            assert!(lo < 0.0 && hi > 0.0, "{mode:?}");
+            assert!(e
+                .iter()
+                .any(|x| x.ty == ty::DEMOD_TYPE && x.uint() == Ok(0)));
+            assert!(mode.is_synchronous());
+        }
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_mode_is_synchronous]
+    #[test]
+    fn every_other_linear_mode_turns_the_pll_off() {
+        // A channel switched from SAM back to AM (or any other linear mode) must lose its PLL:
+        // radiod keeps a channel's parameters across commands.
+        for mode in [Mode::Usb, Mode::Lsb, Mode::Cw, Mode::Am, Mode::Iq] {
+            assert!(!mode.is_synchronous(), "{mode:?}");
+            let pkt = Command::Audio(AudioChannel {
+                mode,
+                ..base_audio()
+            })
+            .encode(&Policy::default(), 9)
+            .unwrap_or_default();
+            assert!(
+                entries(&pkt)
+                    .iter()
+                    .any(|x| x.ty == ty::PLL_ENABLE && x.bool() == Ok(false)),
+                "{mode:?}"
+            );
+        }
+        assert!(!Mode::Fm.is_synchronous());
     }
 }

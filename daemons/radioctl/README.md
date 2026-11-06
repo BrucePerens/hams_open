@@ -303,12 +303,12 @@ Files: `crates/radioctl-protocols/src/radiod_net.rs` (engine, pure, no I/O), `cr
 | `ack_wait` | `Duration` | 1 s | wait for one acknowledgement |
 | `policy` | `radiod_client::command::Policy` | default (10 kHz to 30 MHz) | frequencies outside are refused before sending |
 | `frequency_hz` | `u64`, Hz | 10 000 000 | starting dial frequency |
-| `mode` | `Mode` | AM | starting mode, USB/LSB/CW/AM/FM |
+| `mode` | `Mode` | AM | starting mode, USB/LSB/CW/AM/FM/SAM/SAM-L/SAM-U |
 | `audio_queue` | `usize`, frames | 50 (1 s) | audio frames held before new ones are dropped |
 
 **`radioctl_radiod_mode_spec` / `ModeSpec`** [@ANCHOR: radioctl:radioctl_radiod_mode_spec]
 
-`Copy` value. `name: &'static str` is the line-protocol name (`usb`, `lsb`, `cw`, `am`, `fm`). `default_width_hz: u64` is the width a mode change brings back: USB and LSB 2950, CW 400, AM 10 000, FM 16 000 (the `radiod_client` modes' own passbands).
+`Copy` value. `name: &'static str` is the line-protocol name (`usb`, `lsb`, `cw`, `am`, `fm`, `sam`, `sam-l`, `sam-u`). `default_width_hz: u64` is the width a mode change brings back: USB and LSB 2950, CW 400, AM and SAM 10 000, FM 16 000, SAM-L and SAM-U 5 100 (the `radiod_client` modes' own passbands: 5 kHz of sideband plus 100 Hz across the carrier).
 
 `AudioFrame` (fields `samples: Vec<f32>` mono -1..=1, `rate_hz: u32`, `seq: u16`, `timestamp: u32`) and `RadiodStats` (counters `acks`, `ack_timeouts`, `refused`, `audio_frames`, `audio_dropped`, `rtp_lost`, `rtp_out_of_order`, `rtp_restarts`, `rtp_stalls`, `rtp_stall_ms`, `rtp_bad`, plus the latest `channel` and `front_end` statuses) are plain data returned by the control handle, documented with `take_audio` and `stats` below.
 
@@ -318,19 +318,19 @@ Files: `crates/radioctl-protocols/src/radiod_net.rs` (engine, pure, no I/O), `cr
 
 **`radioctl_radiod_signal_db`** [@ANCHOR: radioctl:radioctl_radiod_signal_db] `signal_db(raw: u16) -> f32`. The inverse: `-200 + raw / 10` dB re full scale.
 
-**`radioctl_radiod_mode_name`** [@ANCHOR: radioctl:radioctl_radiod_mode_name] `mode_name(mode: Mode) -> Option<&'static str>`. The line-protocol name of USB, LSB, CW, AM or FM, otherwise `None` (the mode is refused).
+**`radioctl_radiod_mode_name`** [@ANCHOR: radioctl:radioctl_radiod_mode_name] `mode_name(mode: Mode) -> Option<&'static str>`. The line-protocol name of USB, LSB, CW, AM, FM, SAM, SAM-L or SAM-U (`usb`, `lsb`, `cw`, `am`, `fm`, `sam`, `sam-l`, `sam-u`: the rig-file names of `radioctl_core::units::Mode`), otherwise `None` (the mode is refused). Pure.
 
 **`radioctl_radiod_mode_from_name`** [@ANCHOR: radioctl:radioctl_radiod_mode_from_name] `mode_from_name(name: &str) -> Option<Mode>`. The inverse; exact lower-case names only.
 
 **`radioctl_radiod_mode_spec_of`** [@ANCHOR: radioctl:radioctl_radiod_mode_spec_of] `ModeSpec::of(mode: Mode) -> ModeSpec`. The spec of a mode. An unsupported mode gets USB's spec; callers refuse such a mode earlier.
 
-**`radioctl_radiod_mode_spec_edges`** [@ANCHOR: radioctl:radioctl_radiod_mode_spec_edges] `ModeSpec::edges(self, width_hz: u64) -> (f32, f32)`. Passband edges in Hz from the carrier for a width clamped to 1..=24 000 Hz. USB is `(50, 50+w)`, LSB `(-50-w, -50)`, CW `(600-w/2, 600+w/2)`, AM and FM `(-w/2, w/2)`. Each edge is clamped to ±`MAX_EDGE_HZ` (12 kHz, equal to `radiod_client`'s limit and pinned by a test).
+**`radioctl_radiod_mode_spec_edges`** [@ANCHOR: radioctl:radioctl_radiod_mode_spec_edges] `ModeSpec::edges(self, width_hz: u64) -> (f32, f32)`. Passband edges in Hz from the carrier for a width clamped to 1..=24 000 Hz. USB is `(50, 50+w)`, LSB `(-50-w, -50)`, CW `(600-w/2, 600+w/2)`, AM, SAM and FM `(-w/2, w/2)`, SAM-L `(100-w', 100)` and SAM-U `(-100, w'-100)` where `w' = max(w, 200)` (`SAM_CARRIER_GUARD_HZ`, `SAM_SIDEBAND_MIN_WIDTH_HZ`: the PLL needs the carrier inside the passband, never at an edge). Each edge is clamped to ±`MAX_EDGE_HZ` (12 kHz, equal to `radiod_client`'s limit and pinned by a test).
 
 **`radioctl_radiod_check_receive_only`** [@ANCHOR: radioctl:radioctl_radiod_check_receive_only] `check_receive_only(desc: &RigDescription) -> Result<(), RigError>`. `Err(Unsupported)` naming the first transmit-capable capability the description claims (`set-ptt`, `send-cw`).
 
 **`radioctl_radiod_engine_new`** [@ANCHOR: radioctl:radioctl_radiod_engine_new] `RadiodEngine::new(desc: RigDescription) -> Result<RadiodEngine, RigError>`. Builds the engine. Refuses a description of another family, or one that claims a transmit capability.
 
-**`radioctl_radiod_engine_encode`** [@ANCHOR: radioctl:radioctl_radiod_engine_encode] `ProtocolEngine::encode(&mut self, op: &Op) -> Result<Request, RigError>`. Encodes `GetFrequency(A)` as `GF`, `SetFrequency(A, hz <= u32::MAX)` as `F <hz>`, `GetMode` as `GM`, `SetMode` of USB/LSB/CW/AM/FM as `M <name>`, `GetFilterWidth` as `GW`, `SetFilterWidth(1..=24000)` as `W <hz>`, and `GetSignal` as `GS`, each with a newline. Sets expect `Ack`, reads expect the field. Anything else, PTT and CW included, is `Err(Unsupported)`.
+**`radioctl_radiod_engine_encode`** [@ANCHOR: radioctl:radioctl_radiod_engine_encode] `ProtocolEngine::encode(&mut self, op: &Op) -> Result<Request, RigError>`. Encodes `GetFrequency(A)` as `GF`, `SetFrequency(A, hz <= u32::MAX)` as `F <hz>`, `GetMode` as `GM`, `SetMode` of USB/LSB/CW/AM/FM/SAM/SAM-L/SAM-U as `M <name>`, `GetFilterWidth` as `GW`, `SetFilterWidth(1..=24000)` as `W <hz>`, and `GetSignal` as `GS`, each with a newline. Sets expect `Ack`, reads expect the field. Anything else, PTT and CW included, is `Err(Unsupported)`.
 
 **`radioctl_radiod_engine_feed`** [@ANCHOR: radioctl:radioctl_radiod_engine_feed] `ProtocolEngine::feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>`. Splits bytes into lines (lines may span calls) and parses each with `parse_line`. A line longer than 128 bytes yields one `Unrecognised(empty)` and is discarded up to its newline.
 
@@ -350,9 +350,21 @@ Files: `crates/radioctl-protocols/src/radiod_net.rs` (engine, pure, no I/O), `cr
 
 **`radioctl_radiod_control_front_end`** [@ANCHOR: radioctl:radioctl_radiod_control_front_end] `RadiodControl::front_end(&self) -> Option<ChannelStatus>`. The front end's latest status (`ad_over`, `rf_gain_db`, `rf_atten_db`, `input_samprate`, ...), read at every refresh; `None` until `radiod` answers.
 
+**`radioctl_radiod_control_carrier_lock`** [@ANCHOR: radioctl:radioctl_radiod_control_carrier_lock] `RadiodControl::carrier_lock(&self) -> Option<bool>`. The carrier lock of the channel's synchronous detector, for a console's Sync indicator (hams_com reports it as `sync_locked` in `get_rig_state`).
+
+| Returns | When |
+|---|---|
+| `Some(true)` | the mode the engine last set successfully is SAM, SAM-L or SAM-U, and the channel's latest status says the PLL is on and locked (`radiod_client::status::ChannelStatus::carrier_lock`) |
+| `Some(false)` | as above, but the status says the PLL is not locked |
+| `None` | any other mode (no PLL), no status yet, or a status that does not report the PLL |
+
+Synchronous, non-blocking apart from two short mutex holds (the mode, then the counters; never both at once), safe from any thread. Sends nothing: the lock is as fresh as the latest acknowledged status, which arrives at every keep-alive refresh (`RadiodLink::refresh`, 2 s by default), every mode, frequency or width change, and every signal read (`GS` polls the channel). Receive only; no effect on `radiod`. Test: `synchronous_am_turns_radiods_pll_on_and_reports_its_lock` (fake `radiod`, lock toggled between polls).
+
+**`radioctl_radiod_sam_passband`** [@ANCHOR: radioctl:radioctl_radiod_sam_passband] Constants in `radiod_net.rs`: `SAM_CARRIER_GUARD_HZ: f32 = 100.0`, how far a SAM-L or SAM-U passband reaches across the carrier (the value `radiod_client`'s `SamLower`/`SamUpper` and `radiod`'s `[ame]` preset use), and `SAM_SIDEBAND_MIN_WIDTH_HZ: f32 = 200.0`, the narrowest SAM-L or SAM-U passband `ModeSpec::edges` gives, so the carrier is never at an edge. Compile-time, no state.
+
 **`radioctl_radiod_lock`** [@ANCHOR: radioctl:radioctl_radiod_lock] `lock(m: &Mutex<T>) -> MutexGuard<T>` (private). Locks, taking the data of a poisoned mutex (counters only).
 
-**`radioctl_radiod_radiod_mode`** [@ANCHOR: radioctl:radioctl_radiod_radiod_mode] `radiod_mode(mode: Mode) -> Option<radiod_client::command::Mode>` (private). The client crate's mode for USB/LSB/CW/AM/FM.
+**`radioctl_radiod_radiod_mode`** [@ANCHOR: radioctl:radioctl_radiod_radiod_mode] `radiod_mode(mode: Mode) -> Option<radiod_client::command::Mode>` (private). The client crate's mode for USB/LSB/CW/AM/FM, and `Sam`, `SamLower`, `SamUpper` for SAM, SAM-L, SAM-U (radiod's carrier PLL on). `None` for anything else. Pure.
 
 **`radioctl_radiod_state_commands`** [@ANCHOR: radioctl:radioctl_radiod_state_commands] `State::commands(&self, lifetime: u32) -> Vec<Command>` (private). The commands that make the channel match the state: `Audio` (frequency, mode, 16-bit PCM, lifetime), then `Filter` with `ModeSpec::edges` when a width was set.
 

@@ -5,8 +5,8 @@
 #   `radiod_client` crate (daemons/radiod_client), whose protocol facts come from radiod's documentation
 #   (docs/ka9q-api.md) and the trials recorded in hams_com docs/reviews/RADIOD_TRIAL_2026-10-30.md and
 #   RX888_BRINGUP_2026-11-05.md. radiod is GPL-3.0 and runs unmodified as a separate process.
-# SCOPE: receive only. Frequency, mode (USB, LSB, CW, AM, FM), passband width and the channel's signal
-#   level. No transmit capability may be claimed: the engine refuses a radiod-channel description that
+# SCOPE: receive only. Frequency, mode (USB, LSB, CW, AM, FM, and synchronous AM: SAM, SAM-L, SAM-U, done
+#   by radiod's own carrier PLL), passband width and the channel's signal level. No transmit capability may be claimed: the engine refuses a radiod-channel description that
 #   claims one, so a console never offers Transmit for this rig. Audio is the channel's RTP stream, taken
 #   from the bridge (RadiodControl::take_audio), not a radioctl operation.
 # WHERE: the radiod group, ports and the channel's SSRC are transport settings (radioctld
@@ -51,6 +51,18 @@ code = 3
 mode = "fm"
 code = 4
 
+[[modes]]
+mode = "sam"
+code = 5
+
+[[modes]]
+mode = "sam-l"
+code = 6
+
+[[modes]]
+mode = "sam-u"
+code = 7
+
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/radiod_net.rs", note = "Our own labels for a radiod channel; not a radio model." }
@@ -63,7 +75,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.*"
-provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/radiod_net.rs mode_name", note = "The codes are placeholders required by the description format; the line protocol sends the mode by name (usb, lsb, cw, am, fm)." }
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/radiod_net.rs mode_name", note = "The codes are placeholders required by the description format; the line protocol sends the mode by name (usb, lsb, cw, am, fm, sam, sam-l, sam-u). The synchronous modes turn on radiod's documented carrier PLL (docs/ka9q-radio-3.md 'pll'); not yet run on a real carrier." }
 verified = { state = "unverified" }
 
 [[facts]]
