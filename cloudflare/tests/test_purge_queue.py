@@ -199,6 +199,11 @@ class TestPurgeFailureAlerts(RealTransactionCase):
         )
         self.safe_patch("time.sleep")
 
+    def _reports(self, mock_method):
+        """Calls of a mocked pager method that concern this test's website (other websites' queued purges also run)."""
+        return [c for c in mock_method.call_args_list
+                if (c[0][0].get("website_id") if c[0] and isinstance(c[0][0], dict) else c[1].get("website_id")) == self.website.id]
+
     def _enqueue(self, n=2):
         self.Queue.create(
             [
@@ -216,8 +221,9 @@ class TestPurgeFailureAlerts(RealTransactionCase):
             self.Queue.search_count([("website_id", "=", self.website.id)]), 0,
             "unsendable purges must not pile up as failed rows",
         )
-        self.incidents.report_incident.assert_called_once()
-        vals = self.incidents.report_incident.call_args[0][0]
+        reports = self._reports(self.incidents.report_incident)
+        self.assertEqual(len(reports), 1)
+        vals = reports[0][0][0]
         self.assertEqual(vals["source"], "Cloudflare purge queue")
         self.assertEqual(vals["severity"], "medium")
         self.assertEqual(vals["website_id"], self.website.id)
@@ -231,7 +237,7 @@ class TestPurgeFailureAlerts(RealTransactionCase):
         self.Queue.process_queue()
         rows = self.Queue.search([("website_id", "=", self.website.id)])
         self.assertEqual(set(rows.mapped("state")), {"failed"})
-        self.assertEqual(self.incidents.report_incident.call_args[0][0]["severity"], "high")
+        self.assertEqual(self._reports(self.incidents.report_incident)[0][0][0]["severity"], "high")
 
     def test_03_success_resolves_the_incident(self):
         # Tests [@ANCHOR: cloudflare:COMM_resolve_purge_failure]
@@ -239,8 +245,9 @@ class TestPurgeFailureAlerts(RealTransactionCase):
         self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=True)
         self._enqueue()
         self.Queue.process_queue()
-        self.incidents.report_incident.assert_not_called()
-        self.incidents.auto_resolve_incidents.assert_called_once_with(
+        self.assertEqual(self._reports(self.incidents.report_incident), [])
+        self.assertEqual(len(self._reports(self.incidents.auto_resolve_incidents)), 1)
+        self.incidents.auto_resolve_incidents.assert_any_call(
             "Cloudflare purge queue", website_id=self.website.id
         )
 
