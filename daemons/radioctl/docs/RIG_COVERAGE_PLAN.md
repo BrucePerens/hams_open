@@ -7,7 +7,7 @@ verified, and make a best effort to make them work out of the box.
 This plan splits the remaining work into four tiers. The counts are from [RIG_SUPPORT.md](RIG_SUPPORT.md), which is
 generated from Hamlib 4.6.2's 313 models and the files in `rigs/` and is the place to look for current numbers.
 Today 121 of 313 models have a description (126 files, because the four FlexRadio 6000-series files share Hamlib's one
-"6xxx" model and the two ANAN files have no Hamlib model), and none is hardware-verified.
+"6xxx" model and the two ANAN files have no Hamlib model), and one is hardware-verified (the Elecraft KX3, 2026-11-05).
 
 | Tier | Work | Models | Described | Left |
 |---|---|---:|---:|---:|

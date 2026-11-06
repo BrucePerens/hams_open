@@ -6,8 +6,11 @@
 # The manual has no numbered sections; references below give the manual's own command or
 # heading names and the printed page number ("p.").
 #
-# EVERYTHING HERE IS UNVERIFIED: written from the manual, never run against a radio (a bench run
-# of the first KX3 is what upgrades `verified`). Hamlib source was not read for this file.
+# Written from the manual. Bench run 2026-11-05 on a real KX3 (MCU 3.02 / DSP 1.52, no KXPA100,
+# into a dummy load; hams_com docs/reviews/KX3_RADIOCTL_2026-11-05.md): the facts it exercised are
+# hardware-verified, each saying what ran. The level ranges in [elecraft] and the power meter were
+# measured on that radio; Hamlib 4.6.2's KX3 backend (rigctl -m 2045) agrees on the scales.
+# Hamlib source was not read for this file.
 schema = 1
 capabilities = [
   "read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt",
@@ -22,6 +25,12 @@ family = "elecraft-ascii"
 
 [elecraft]
 model_id = 17
+# Wire ranges where the KX3 differs from the K3 (measured: the radio clamps a set outside them).
+levels = { af-gain = [0, 60], rf-gain = [190, 250], mic-gain = [0, 80], rf-power = [0, 15] }
+
+[power_meter]
+# PO is tenths of a watt in QRP mode (no KXPA100): 150 is 15 W.
+raw_to_milliwatts = [[0, 0], [150, 15000]]
 
 [levels]
 attenuator_db = [10]
@@ -65,32 +74,42 @@ code = "9"
 [[facts]]
 key = "rig.*"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: title page and Command Set Overview p. 2 (KX3 and KX2 accept all K3 commands; some are KX3/KX2 only)", note = "The id and display name are our own labels." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "ID; answered ID017; and OM; answered OM A-F----B--02; (KX3 with KXAT3 and KXFL3)" }
 
 [[facts]]
 key = "elecraft.model_id"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: ID (Transceiver Identifier), p. 14: IDnnn; where nnn is 017; the K3, KX3 and KX2 are told apart with K3; and OM;", note = "Not a unique identifier of a KX3." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "ID; answered ID017;" }
+
+[[facts]]
+key = "elecraft.levels"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: PC p. 22 (KX3: 000-012 or 000-015 without a KXPA100); AG, RG and MG ranges measured on the radio", note = "Set out of range and read back: AG061 and AG255 read AG060; RG100 read RG190; MG080 read MG080; ML061 read ML060 (ML stays 0-60); PC015, PC016, PC055 and PC110 read PC010 on 14.060 MHz from this supply, PC000 and PC005 read back as sent. 15 W is the KX3's rated maximum and Hamlib's KX3 scale (RFPOWER 0.333333 at PC005), so rf-power is 0-15 here." }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "raw AG/RG/MG/ML/PC sets out of range and read back (see note); radioctld L/l RF, AF, MICGAIN, RFPOWER fractions compared with rigctl -m 2045" }
+
+[[facts]]
+key = "power_meter.raw_to_milliwatts"
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: PO (Actual Power Output Level, KX3/KX2 only) p. 22: tenths of a watt in QRP mode", note = "Estimated by the radio from drive level, not measured at the load. With a KXPA100 the unit is watts and this calibration is wrong." }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "KY TEST in CW at PC005 into a dummy load: PO048 (4.8 W) while sending, PO000 in receive" }
 
 [[facts]]
 key = "timing.timeout_ms"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: Response Time, p. 3: typically under 10 ms, worst case about 100 ms, up to 500 ms for commands that change bands", note = "600 ms is the 500 ms band-change worst case plus margin." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "about 130 commands at 38400 baud: slowest answer 345 ms (MD; after a mode change to FM), no timeouts once SW000 was decoded" }
 
 [[facts]]
 key = "timing.retries"
 provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/elecraft.rs", note = "Our choice; the manual says nothing about retries." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "never needed in the bench run (no lost answers)" }
 
 [[facts]]
 key = "timing.inter_command_ms"
 provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/elecraft.rs", note = "Our choice; the manual specifies no minimum gap (Response Time, p. 3 warns only that fast polling during transmit should be tested)." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "polls and commands back to back at 0 ms gap: no ?; and no lost answers" }
 
 [[facts]]
 key = "levels.*"
 provenance = { kind = "manual", reference = "Elecraft K3S/K3/KX3/KX2 Programmer's Reference Rev. G5 (Feb. 20, 2019), file pgmrs_ref_g5.pdf, sha256 015b60c1b5f44346247a00375a23174012ce4da66a6a27eaa00c00c20877f95d: RA p. 22 (RAnn; for the KX3 nn 00 off, 01 on, -10 dB), PA p. 22 (PAn; n 0 off, 1 on; 2 is the K3's KXV3B module)", note = "Main receiver only; the sub-receiver forms (RA$, PA$) are not used." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "RA01 set reads RA01 (attenuator 10 dB) and RA00; PA1/PA0 set and read back" }
 
 [[facts]]
 key = "defaults.*"
@@ -100,12 +119,12 @@ verified = { state = "unverified" }
 [[facts]]
 key = "capability.set-ptt"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: TX (Transmit Mode) p. 28 and RX (Receive Mode) p. 23", note = "Transmit-capable; the rig actor's transmit gate applies. TX is ignored by the radio in direct data modes (FSK-D, PSK-D)." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "radioctld transmit = true, max_transmit_s = 5, PC005, 14.060 MHz CW: T 1 then TQ1, T 0 then TQ0 (the radio takes 200-300 ms to drop TQ); watchdog unkeyed at 5.6-6.2 s; closing the keying connection unkeyed; SIGINT stop unkeyed; kill -9 then restart unkeyed at start-up; SIGTERM left it keyed until the 2026-11-05 signal fix" }
 
 [[facts]]
 key = "capability.send-cw"
-provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: KY (CW or CW-to-DATA Keying from Text) p. 15: KY*[text]; 0 to 24 characters", note = "Transmit-capable; the engine refuses text with ; < > or control characters." }
-verified = { state = "unverified" }
+provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: KY (CW or CW-to-DATA Keying from Text) p. 15: KY*[text]; 0 to 24 characters", note = "Transmit-capable; the engine refuses text with ; < > or control characters. The stop is KY EOT followed by RX; (the KX3 ignores the EOT)." }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "radioctld b TEST and b TEST TEST TEST at PC005, 14.060 MHz, KS008/KS022: carrier on (PO048-PO050), TQ1 while sending; \\stop_morse (KY EOT then RX;) ended it within 0.5 s. EOT alone did not stop the radio (it kept keying for 2 s+), hence the RX;" }
 
 [[facts]]
 key = "capability.transceive"
@@ -115,54 +134,54 @@ verified = { state = "unverified" }
 [[facts]]
 key = "capability.read-ptt"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: TQ (Transmit Query) p. 27; TQ1 also during TX TEST and pre-armed CW transmit" }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "TQ0 and TQ1 read back across every PTT test" }
 
 [[facts]]
 key = "capability.read-power"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: PO (Actual Power Output Level, KX3/KX2 only) p. 22; tenths of a watt in QRP mode", note = "Raw units; the reading is approximate (estimated from drive level)." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "PO000 in receive, PO048 while sending KY TEST at PC005" }
 
 [[facts]]
 key = "capability.read-signal"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: SM (S-meter Read) p. 23, Basic format 0000-0015 (S9 = 6)" }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "SM0000 on the dummy load only (no signal source): the read works, the scale is not exercised" }
 
 [[facts]]
 key = "capability.read-swr"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: SW (SWR) p. 24, SWnnn; tenths of a unit, 010-999" }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "SW000 in receive (outside the manual's 010-999; now decoded as 0), SW010 after transmitting into the dummy load" }
 
 [[facts]]
 key = "capability.split"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: FT (TX VFO Assignment and optional SPLIT Enable) and FR (SPLIT Cancel) p. 11; split is entered with FT1; and left with FR0;" }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "FT1 set reads FT1 (TX VFO B), FR0 cancels it and FT reads FT0" }
 
 [[facts]]
 key = "capability.rit-xit"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: RT p. 23, XT p. 28, RO (RIT/XIT Offset, Absolute) p. 23, range -9999 to +9999 Hz under computer control" }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "RO+0120 set reads back, RT1/RT0 and XT1/XT0 set and read back; the radio reports a zero offset as RO-0000" }
 
 [[facts]]
 key = "capability.filter"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: BW (Filter Bandwidth) p. 8, BWxxxx; in 10 Hz units; BW is used instead of the legacy FW", note = "May be quantized or range limited by the radio's mode." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "BW set and read back: USB 2400 and 1800 Hz (radio at 4000), CW 500 and 250 Hz" }
 
 [[facts]]
 key = "capability.levels"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: AG p. 7 (000-255), RG p. 23 (000-250), MG and ML p. 16 (000-060), KS p. 15 (008-050), PC p. 22 (KX3: 000-012 or 000-015 without a KXPA100, 000-110 with one)", note = "The engine accepts PC up to 110; the radio decides what it accepts." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "AG, RG, MG, ML, KS, PC set and read back within the ranges in elecraft.levels" }
 
 [[facts]]
 key = "capability.identify"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: ID p. 14 and RV (Firmware Revisions) p. 23, RVM for the MCU" }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "ID017 and RVM03.02 (RVD01.52)" }
 
 [[facts]]
 key = "capability.*"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: FA and FB p. 11, MD p. 16, command formats on p. 3" }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "FA and FB set and read back (14.060000 and 14.065000 MHz), MD read" }
 
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: MD (Operating Mode) p. 16: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA, 7 CW-REV, 9 DATA-REV", note = "FM does not apply to the KX2." }
-verified = { state = "unverified" }
+verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "MD1 to MD7 and MD9 each set and read back (LSB, USB, CW, FM, AM, DATA, CW-REV, DATA-REV)" }

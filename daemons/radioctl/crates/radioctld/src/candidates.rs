@@ -217,11 +217,17 @@ mod tests {
     // Tests [@ANCHOR: radioctld_candidates_load_summaries]
     // Tests [@ANCHOR: radioctld_candidates_highest_state]
     #[test]
-    fn shipped_descriptions_load_and_none_is_hardware_verified_yet() {
+    fn shipped_descriptions_load_and_only_bench_run_ones_are_hardware_verified() {
         let rigs = rigs();
         assert!(rigs.len() >= 27, "{}", rigs.len());
         assert!(rigs.iter().any(|r| r.id == "icom-ic-7300"));
-        assert!(rigs.iter().all(|r| r.highest != "hardware-verified"));
+        // The KX3 was run on a bench on 2026-11-05 (rigs/reports/verified.toml).
+        let verified: Vec<&str> = rigs
+            .iter()
+            .filter(|r| r.highest == "hardware-verified")
+            .map(|r| r.id.as_str())
+            .collect();
+        assert_eq!(verified, ["elecraft-kx3"]);
     }
 
     // Tests [@ANCHOR: radioctld_candidates_summaries_from]

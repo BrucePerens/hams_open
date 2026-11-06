@@ -124,8 +124,10 @@ that `SendCw` started (or that another program or the front panel started). It i
 held keyed by PTT stays keyed, the cache is not touched, and the watchdog stays armed until a poll or a
 transceive report shows the radio receiving. Only the unkey is coalesced when the emergency queue is
 full and only an unkey's failure is `Alarm::UnkeyFailed` (`Op::is_unkey()`). The command per engine, all
-unverified on hardware: CI-V `17 FF` (Hamlib's `icom_stop_morse`), Elecraft `KY <EOT>;` (Programmer's
-Reference, "KY": EOT "quickly terminates transmission"), FlexRadio `cwx clear`, Kenwood, only where
+unverified on hardware except the Elecraft one: CI-V `17 FF` (Hamlib's `icom_stop_morse`), Elecraft `KY <EOT>;RX;`
+(Programmer's Reference, "KY": EOT "quickly terminates transmission"; a real KX3 with MCU 3.02 kept sending for more
+than 2 s after the EOT on 2026-11-05, and `RX;` stopped it at once and dropped the rest of the text, so the Elecraft
+stop also ends any transmission, PTT included), FlexRadio `cwx clear`, Kenwood, only where
 the model's manual documents `KY` and a stop (`[kenwood.ky]` in its description): `KY0;` (TS-590, TS-890S and
 TS-990S guides, "KY" Set 2) or a field of 24 spaces (TS-480 guide). The other Kenwood-dialect models, among them
 the TS-570 and TS-870S whose manuals document `KY` but no stop, do not offer `send-cw` and report "not

@@ -113,7 +113,7 @@
 > u NOSUCH
 < RPRT -1
 > l SWR
-< 1
+< 0
 > t
 < 0
 > +t
