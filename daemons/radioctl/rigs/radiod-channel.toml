@@ -1,0 +1,77 @@
+# Rig description: one receive channel of a ka9q-radio `radiod` (for example an RX-888 MkII), schema 1.
+# See crates/radioctl-core/src/rigfile.rs.
+#
+# SOURCE: our own engine and bridge (crates/radioctl-protocols/src/radiod_net.rs, radiod_io.rs) over the
+#   `radiod_client` crate (daemons/radiod_client), whose protocol facts come from radiod's documentation
+#   (docs/ka9q-api.md) and the trials recorded in hams_com docs/reviews/RADIOD_TRIAL_2026-10-30.md and
+#   RX888_BRINGUP_2026-11-05.md. radiod is GPL-3.0 and runs unmodified as a separate process.
+# SCOPE: receive only. Frequency, mode (USB, LSB, CW, AM, FM), passband width and the channel's signal
+#   level. No transmit capability may be claimed: the engine refuses a radiod-channel description that
+#   claims one, so a console never offers Transmit for this rig. Audio is the channel's RTP stream, taken
+#   from the bridge (RadiodControl::take_audio), not a radioctl operation.
+# WHERE: the radiod group, ports and the channel's SSRC are transport settings (radioctld
+#   `[rig.transport] kind = "radiod"`), not part of this description.
+#
+# The bridge ran against an RX-888 MkII with no antenna (2026-11-05): tuning, mode, width and level
+# behaved on noise. The levels are radiod's baseband power referred to the input, not dBm.
+schema = 1
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "filter", "read-signal"]
+
+[rig]
+id = "radiod-channel"
+name = "radiod receive channel (RX-888 and other radiod front ends)"
+family = "radiod-channel"
+
+[timing]
+timeout_ms = 3000
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 10000000
+mode = "am"
+
+[[modes]]
+mode = "usb"
+code = 0
+
+[[modes]]
+mode = "lsb"
+code = 1
+
+[[modes]]
+mode = "cw"
+code = 2
+
+[[modes]]
+mode = "am"
+code = 3
+
+[[modes]]
+mode = "fm"
+code = 4
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/radiod_net.rs", note = "Our own labels for a radiod channel; not a radio model." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/radiod_io.rs; daemons/radiod_client", note = "Frequency, mode and width are radiod channel parameters set through radiod_client's closed schema; the signal is the channel's baseband power. Receive only: radiod has no transmit path." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/radiod_net.rs mode_name", note = "The codes are placeholders required by the description format; the line protocol sends the mode by name (usb, lsb, cw, am, fm)." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/radiod_io.rs", note = "Our choice: a set is up to two radiod commands of up to 1 s each (Audio, then Filter), so 3 s covers both." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-protocols/src/radiod_io.rs RadiodLink::new", note = "Only the starting state; 10 MHz AM (WWV)." }
+verified = { state = "unverified" }

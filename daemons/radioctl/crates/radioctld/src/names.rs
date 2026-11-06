@@ -457,6 +457,8 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
         Family::YaesuLegacy | Family::KenwoodHh => None,
         // The OpenHPSDR control plane has no level commands.
         Family::Hpsdr => None,
+        // A radiod channel has no level commands (the front end's gain is not a channel's to set).
+        Family::Radiod => None,
         // The vendor serial engines have no level commands yet.
         Family::SerialVendor => None,
         // The receiver engines have no level commands yet.

@@ -464,4 +464,27 @@ mod tests {
         assert!(open.contains("Can set PTT:\tY"));
         assert!(open.contains("Mode list: "));
     }
+
+    // Tests [@ANCHOR: radioctld_caps_dump_caps]
+    // Tests [@ANCHOR: radioctld_caps_dump_state]
+    #[test]
+    fn a_radiod_channel_offers_no_transmit_even_with_the_gate_configured_open() {
+        let desc = radioctl_core::rigfile::parse(include_str!("../../../rigs/radiod-channel.toml"))
+            .expect("the shipped file loads")
+            .description;
+        for tx in [false, true] {
+            let caps = dump_caps(&view(&desc, tx));
+            assert!(
+                caps.contains("Can set PTT:\tN\nCan get PTT:\tN\n"),
+                "{caps}"
+            );
+            assert!(
+                caps.contains("Can set Frequency:\tY\n") && caps.contains("Can set Mode:\tY\n")
+            );
+            let state = dump_state(&view(&desc, tx));
+            assert!(state.contains("\nptt_type=0x0\n"), "{state}");
+            let lines: Vec<&str> = state.lines().collect();
+            assert_eq!(lines[5], "0 0 0 0 0 0 0", "no transmit range");
+        }
+    }
 }

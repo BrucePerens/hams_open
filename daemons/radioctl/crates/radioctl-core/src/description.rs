@@ -29,6 +29,10 @@ pub enum Family {
     Flex,
     /// OpenHPSDR (ANAN, Hermes) over UDP, control plane only (Protocol 1 or 2).
     Hpsdr,
+    /// One receive channel of a ka9q-radio `radiod` (RX-888 and the other front ends it drives), a
+    /// receive-only virtual rig. No family block; the `radiod` group and channel are transport
+    /// settings (`radiod_io`).
+    Radiod,
     /// Kenwood handheld and mobile ASCII commands ended by a carriage return (TH-D7, TM-D710, ...).
     KenwoodHh,
     /// Vendor serial protocols of the smaller makers (Ten-Tec, Drake, Racal, ...): one engine

@@ -1,0 +1,81 @@
+# Conformance transcript for rigs/radiod-channel.toml: the line protocol between the radiod-channel
+# engine and the radiod_io bridge (crates/radioctl-protocols/src/radiod_net.rs, radiod_io.rs), NOT
+# radiod's multicast TLV wire, replayed against a stand-in for the bridge (conformance.rs,
+# RadiodStandIn). ORIGIN: written by hand from the engine and the bridge, both our own code. The signal
+# line "S 729" is -127.1 dB re full scale, about what the RX-888 read on a 2.95 kHz USB channel with no
+# antenna (2026-11-05); the stand-in always reads it.
+schema = 1
+rig = "radiod-channel"
+origin = "hand-written from the engine-to-bridge line protocol; not radiod's wire, not a capture"
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "GF\n"
+rx_text = "F 10000000\n"
+expect = { kind = "frequency", vfo = "a", hz = 10000000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 7074000 }
+tx_text = "F 7074000\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "set-mode", mode = "usb" }
+tx_text = "M usb\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "GM\n"
+rx_text = "M usb\n"
+expect = { kind = "mode", mode = "usb" }
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx_text = "GW\n"
+rx_text = "W 2950\n"
+expect = { kind = "filter-width", hz = 2950 }
+
+[[step]]
+op = { kind = "set-filter-width", hz = 2400 }
+tx_text = "W 2400\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx_text = "GW\n"
+rx_text = "W 2400\n"
+expect = { kind = "filter-width", hz = 2400 }
+
+[[step]]
+op = { kind = "get-signal" }
+tx_text = "GS\n"
+rx_text = "S 729\n"
+expect = { kind = "signal", value = 729 }
+
+[[step]]
+op = { kind = "get-frequency", vfo = "a" }
+tx_text = "GF\n"
+rx_text = "F 7074000\n"
+expect = { kind = "frequency", vfo = "a", hz = 7074000 }
+
+[[step]]
+op = { kind = "set-frequency", vfo = "a", hz = 100000000 }
+tx_text = "F 100000000\n"
+rx_text = "ERR command\n"
+expect = { kind = "nak" }
+
+[[step]]
+op = { kind = "set-mode", mode = "am" }
+tx_text = "M am\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx_text = "GW\n"
+rx_text = "W 10000\n"
+expect = { kind = "filter-width", hz = 10000 }
