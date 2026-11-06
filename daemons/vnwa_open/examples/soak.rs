@@ -273,12 +273,11 @@ struct Scope {
 
 impl Scope {
     fn open(addr: &str) -> Result<Scope, String> {
-        let s = TcpStream::connect(addr).map_err(|e| format!("scope {addr}: {e}"))?;
-        s.set_read_timeout(Some(Duration::from_secs(5))).ok();
-        Ok(Scope {
-            r: BufReader::new(s.try_clone().map_err(|e| e.to_string())?),
-            w: s,
-        })
+        // Checked with *IDN?; a scope that still holds a dead session (after a host power loss) resets the first queries, so wait it out.
+        let waits = [2, 5, 10, 20].map(Duration::from_secs);
+        let (r, w) =
+            vnwa_open::soak_scope::open_checked(addr, &waits, &vnwa_open::soak_scope::state)?;
+        Ok(Scope { r, w })
     }
     fn send(&mut self, c: &str) -> Result<(), String> {
         self.w

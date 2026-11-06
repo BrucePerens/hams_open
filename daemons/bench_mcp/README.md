@@ -1200,3 +1200,54 @@ One line per group of functions; each anchor is also on its functions in `src/`.
 * The SDR tools check a radio's configuration and its tuning, rate and gain limits, parse numeric and whole-number arguments and the receive input, and write raw I/Q as little-endian f32 pairs. [@ANCHOR: bench_mcp_sdr_check_config] [@ANCHOR: bench_mcp_sdr_limits] [@ANCHOR: bench_mcp_sdr_number] [@ANCHOR: bench_mcp_sdr_whole] [@ANCHOR: bench_mcp_sdr_in_range] [@ANCHOR: bench_mcp_sdr_antenna_arg] [@ANCHOR: bench_mcp_sdr_write_iq]
 * The VNA sweep tool reads its numeric arguments strictly. [@ANCHOR: bench_mcp_vna_number]
 * The server connects a scope over TCP and a supply over serial, takes one lock per instrument name, creates its output directory, and serves tool calls over MCP until it is terminated. [@ANCHOR: bench_mcp_main_connect] [@ANCHOR: bench_mcp_main_instrument_lock] [@ANCHOR: bench_mcp_main_out_dir] [@ANCHOR: bench_mcp_main_serve] [@ANCHOR: bench_mcp_main_call_tool]
+
+## Scope connection recovery
+
+Both anchors are in `src/link.rs`; `connect` in `src/main.rs` uses them for every scope tool call.
+
+### `bench_mcp_link_tcp_checked` [@ANCHOR: bench_mcp_link_tcp_checked]
+
+**Purpose.** Opens a scope link and proves the scope answers before any tool uses it. The Siglent scope serves one SCPI client at a time. After the dev box lost power on 2026-10-29 the scope kept power and, probably, the dead session: it accepted TCP on 5025 and reset every connection on `*IDN?` until it was power-cycled (cause unconfirmed). This function waits and retries, and when the scope still does not answer it reports NO-GO with evidence and the action, instead of a bare "Connection reset by peer".
+
+```rust
+Link::tcp_checked(host: &str, port: u16, waits: &[Duration], diagnose: &dyn Fn(&str, u16) -> String) -> Result<Link, String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `host` | `&str` | Name or address of the scope. Borrowed. |
+| `port` | `u16` | SCPI port, 5025 for the scope. |
+| `waits` | `&[Duration]` | The sleep after each failed attempt, in order. There is one more attempt than waits; an empty slice means one attempt and no sleep. `connect` uses 2, 5, 10 and 20 s (37 s in all, five attempts). |
+| `diagnose` | `&dyn Fn(&str, u16) -> String` | Called once, after the last attempt, for the state text in the error. `Link::scope_state` is the production one. |
+
+**Returns.** `Ok(Link)` on the first attempt that connects and gets a non-empty line back for `*IDN?` (the reply is consumed). `Err` with `NO-GO: <host>:<port> did not answer *IDN? in N attempts over S s (attempt 1: ...; attempt N: ...). State: <diagnose>. Recommended action: power-cycle the scope ...` when every attempt failed: connect error, send error, read error (reset, timeout) or an empty reply.
+
+**Special concerns.** Blocking; sleeps the sum of `waits` at worst, so call it from a worker thread or a tool call, not a UI loop. Each failed attempt drops its socket, which also frees the scope's single-client slot if the failure was its own half-open session. A healthy scope costs one extra `*IDN?` round trip per connection. It sends only `*IDN?`, a query that changes nothing on the instrument. Safe to retry.
+
+**Example.**
+
+```rust
+let waits = [2, 5, 10, 20].map(Duration::from_secs);
+let link = Link::tcp_checked("192.168.10.51", 5025, &waits, &|h, p| Link::scope_state(h, &[p, 80]))?;
+```
+
+**See also.** `bench_mcp_link_tcp` (one plain connect), `bench_mcp_link_scope_state`, `bench_mcp_main_connect`. Tests: `a_scope_that_resets_the_first_connections_is_waited_out_and_then_answers` and `a_scope_that_never_answers_gives_a_no_go_with_the_evidence_and_the_action` in `src/link.rs` (a fake scope on loopback that resets with linger 0). Follow-up needing the real scope: confirm or refute the stale-session cause if it recurs (wait out its idle timeout before power-cycling).
+
+### `bench_mcp_link_scope_state` [@ANCHOR: bench_mcp_link_scope_state]
+
+**Purpose.** The evidence for a failed scope connection: is the scope on the network, and which of its ports accept TCP.
+
+```rust
+Link::scope_state(host: &str, ports: &[u16]) -> String
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `host` | `&str` | Name or address; borrowed. |
+| `ports` | `&[u16]` | Ports to try with a 2 s connect limit each (5025 and 80 for the scope). |
+
+**Returns.** One line, for example `ping answers, port 5025 accepts, port 80: Connection refused (os error 111)`. `ping unavailable` if the `ping` program is missing. Never an error.
+
+**Special concerns.** Blocking, at most about 1 s for ping plus 2 s per port. Runs the system `ping -c 1 -W 1` and opens, then drops, a TCP connection to each port: opening the scope's SCPI port takes its single-client slot briefly, so call it only after the real attempts failed. Reads nothing from the scope.
+
+**See also.** `bench_mcp_link_tcp_checked`. Test: `the_scope_state_reports_an_accepting_and_a_refused_port` in `src/link.rs`.
