@@ -3,13 +3,15 @@
 # soak_gonogo.sh [run_dir] : a 3-minute go/no-go before the long soak: the soak itself for 0.05 hours (about 5 rounds: 60-point sweep against its baseline, the frequency meter on the
 # loopback, the generator at -6 and -12 dB and off on the scope), then a verdict from its log. GO needs: no WRONG number and no error event, at least 4 rounds, the generator readings
 # near 5.17, 2.59 and 0.14 mV (within 8 %), the sweep's worst deviation under 1 % and 1 degree (the soak's own tolerance), the meter under 0.01 Hz. Needs the unit on the bus, the scope on the tee and
-# nothing else using either. Same binary location as soak_run.sh.
+# nothing else using either. A scope that resets or does not answer *IDN? is retried with backoff by the soak (soak_scope.rs); if it never answers, the verdict is NO-GO with the evidence and
+# the action (power-cycle the scope). Same binary location as soak_run.sh.
 set -u
 dir=$(realpath -m "${1:-$HOME/.claude-tmp/x/gonogo_$(date +%s)}")
 target=${CARGO_TARGET_DIR:-$HOME/.cache/hams-cargo-target-vna-soak}
 here=$(dirname "$(realpath "$0")")
 mkdir -p "$dir"
-"$here/soak_run.sh" 0.05 "$dir" 30 > /dev/null 2>&1
+# GONOGO_VERDICT_ONLY=1 judges the log already in the run directory without running the soak (used by the test).
+[ -n "${GONOGO_VERDICT_ONLY:-}" ] || "$here/soak_run.sh" 0.05 "$dir" 30 > /dev/null 2>&1
 python3 - "$dir" <<'PY'
 import json, re, sys
 d = sys.argv[1]
@@ -42,7 +44,9 @@ for l in meter:
     if m and abs(float(m.group(1))) > 0.01:
         problems.append("meter " + l.split("METER ")[1])
 for e in bad_events:
-    problems.append("event %s: %s" % (e["class"], e["summary"][:120]))
+    # A scope that never answered *IDN? carries its evidence (attempts, ping and port state, the action) in the summary: keep all of it.
+    keep = 600 if "did not answer *IDN?" in e["summary"] else 120
+    problems.append("event %s: %s" % (e["class"], e["summary"][:keep]))
 print("rounds %d, generator lines %d, events %d (soft events are not failures: %s)" % (len(sw), len(gen), len(events), sorted({e["class"] for e in events if e not in bad_events})))
 if gen:
     print("last generator line:", gen[-1].split("GENERATOR ")[1])

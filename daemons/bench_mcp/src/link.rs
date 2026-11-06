@@ -153,6 +153,74 @@ impl Link {
         Ok(Link::new(Box::new(Serial::open(path, baud)?), "\r\n"))
     }
 
+    /// A scope link that is checked with `*IDN?` and that waits out a stale session. The Siglent scope serves one SCPI client at a time: after a host
+    /// power loss it kept the dead session, accepted TCP on 5025 and reset every connection on its first query (soak 2026-10-29, unconfirmed cause).
+    /// Each failed attempt (connect error, reset, no reply) drops the socket, sleeps the next of `waits` and tries again; after the last the error carries
+    /// every attempt's text, the state `diagnose(host, port)` reports, and the recommended action.
+    pub fn tcp_checked(
+        host: &str,
+        port: u16,
+        waits: &[Duration],
+        diagnose: &dyn Fn(&str, u16) -> String,
+    ) -> Result<Link, String> {
+        // [@ANCHOR: bench_mcp_link_tcp_checked]
+        let mut errors = Vec::new();
+        for attempt in 0..=waits.len() {
+            let tried = Link::tcp(host, port).and_then(|mut l| {
+                let id = l.query("*IDN?")?;
+                if id.is_empty() {
+                    Err("empty reply to *IDN?".to_string())
+                } else {
+                    Ok(l)
+                }
+            });
+            match tried {
+                Ok(l) => return Ok(l),
+                Err(e) => errors.push(format!("attempt {}: {e}", attempt + 1)),
+            }
+            if let Some(w) = waits.get(attempt) {
+                std::thread::sleep(*w);
+            }
+        }
+        let total: Duration = waits.iter().sum();
+        Err(format!(
+            "NO-GO: {host}:{port} did not answer *IDN? in {} attempts over {:.0} s ({}). State: {}. Recommended action: power-cycle the scope (its single-client SCPI server probably still holds a dead session from before a host power loss); if that is not the cause, note it in the to-do.",
+            errors.len(),
+            total.as_secs_f64(),
+            errors.join("; "),
+            diagnose(host, port)
+        ))
+    }
+
+    /// The scope's state for a failure report: a one-packet ping, and whether TCP connects to each of `ports` (2 s limit each). Reads the network only.
+    pub fn scope_state(host: &str, ports: &[u16]) -> String {
+        // [@ANCHOR: bench_mcp_link_scope_state]
+        let ping = match std::process::Command::new("ping")
+            .args(["-c", "1", "-W", "1", host])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+        {
+            Ok(s) if s.success() => "ping answers",
+            Ok(_) => "ping does not answer",
+            Err(_) => "ping unavailable",
+        };
+        let mut out = vec![ping.to_string()];
+        for p in ports {
+            let r = (host, *p)
+                .to_socket_addrs()
+                .ok()
+                .and_then(|mut a| a.next())
+                .map(|a| TcpStream::connect_timeout(&a, Duration::from_secs(2)));
+            out.push(match r {
+                Some(Ok(_)) => format!("port {p} accepts"),
+                Some(Err(e)) => format!("port {p}: {e}"),
+                None => format!("port {p}: no address"),
+            });
+        }
+        out.join(", ")
+    }
+
     fn new(mut p: Box<dyn Port>, eol: &'static str) -> Link {
         // [@ANCHOR: bench_mcp_link_new]
         let default_timeout = Duration::from_secs(10);
@@ -288,6 +356,7 @@ mod tests {
     use std::net::TcpListener;
     use std::os::fd::FromRawFd;
     use std::thread::JoinHandle;
+    use std::time::Duration;
 
     #[test]
     fn value_handles_both_header_settings() {
@@ -370,6 +439,92 @@ mod tests {
         server.join().unwrap();
         let e = l.line().unwrap_err();
         assert!(e.starts_with("read:"), "{e}");
+    }
+
+    /// A scope that resets the first `resets` connections on their first query (linger 0 makes the close a TCP reset) and answers on the next.
+    fn stale_scope(resets: usize, total: usize) -> (u16, JoinHandle<usize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let h = std::thread::spawn(move || {
+            let mut n = 0;
+            while n < total {
+                let (mut s, _) = listener.accept().unwrap();
+                n += 1;
+                let mut b = [0u8; 1];
+                while s.read_exact(&mut b).is_ok() && b[0] != b'\n' {}
+                if n <= resets {
+                    let l = libc::linger {
+                        l_onoff: 1,
+                        l_linger: 0,
+                    };
+                    // SAFETY: a valid socket descriptor and a linger struct of the stated size.
+                    unsafe {
+                        libc::setsockopt(
+                            std::os::fd::AsRawFd::as_raw_fd(&s),
+                            libc::SOL_SOCKET,
+                            libc::SO_LINGER,
+                            &l as *const _ as *const libc::c_void,
+                            std::mem::size_of::<libc::linger>() as u32,
+                        );
+                    }
+                    drop(s);
+                } else {
+                    s.write_all(b"ACME,SCOPE,1,2\n").unwrap();
+                    let mut rest = Vec::new();
+                    let _ = s.read_to_end(&mut rest);
+                }
+            }
+            n
+        });
+        (port, h)
+    }
+
+    // Tests [@ANCHOR: bench_mcp_link_tcp_checked]
+    #[test]
+    fn a_scope_that_resets_the_first_connections_is_waited_out_and_then_answers() {
+        let (port, server) = stale_scope(2, 3);
+        let waits = [Duration::from_millis(20); 4];
+        let l = Link::tcp_checked("127.0.0.1", port, &waits, &|_, _| "unused".into()).unwrap();
+        drop(l);
+        assert_eq!(server.join().unwrap(), 3);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_link_tcp_checked]
+    // Tests [@ANCHOR: bench_mcp_link_scope_state]
+    #[test]
+    fn a_scope_that_never_answers_gives_a_no_go_with_the_evidence_and_the_action() {
+        let (port, server) = stale_scope(99, 3);
+        let waits = [Duration::from_millis(10); 2];
+        // Something that accepts, standing in for port 80 being closed and 5025 open.
+        let live = TcpListener::bind("127.0.0.1:0").unwrap();
+        let live_port = live.local_addr().unwrap().port();
+        let e = Link::tcp_checked("127.0.0.1", port, &waits, &|h, _| {
+            Link::scope_state(h, &[live_port])
+        })
+        .err()
+        .unwrap();
+        assert_eq!(server.join().unwrap(), 3, "one connection per attempt");
+        assert!(e.starts_with("NO-GO:"), "{e}");
+        assert!(e.contains("3 attempts"), "{e}");
+        assert!(e.contains("attempt 1:") && e.contains("attempt 3:"), "{e}");
+        assert!(e.contains(&format!("port {live_port} accepts")), "{e}");
+        assert!(e.contains("power-cycle the scope"), "{e}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_link_scope_state]
+    #[test]
+    fn the_scope_state_reports_an_accepting_and_a_refused_port() {
+        let live = TcpListener::bind("127.0.0.1:0").unwrap();
+        let live_port = live.local_addr().unwrap().port();
+        let dead_port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let s = Link::scope_state("127.0.0.1", &[live_port, dead_port]);
+        assert!(s.contains(&format!("port {live_port} accepts")), "{s}");
+        assert!(s.contains(&format!("port {dead_port}: ")), "{s}");
+        assert!(!s.contains(&format!("port {dead_port} accepts")), "{s}");
     }
 
     // Tests [@ANCHOR: bench_mcp_link_block]

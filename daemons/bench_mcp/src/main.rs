@@ -238,7 +238,12 @@ fn pick<'a>(
 fn connect(i: &Instrument) -> Result<Link, String> {
     // [@ANCHOR: bench_mcp_main_connect]
     match i.kind {
-        Kind::Scope => Link::tcp(i.host.as_deref().unwrap_or_default(), i.port),
+        Kind::Scope => {
+            // A scope still holding a dead session resets the first queries: wait it out (about 37 s at most) before reporting NO-GO.
+            let host = i.host.as_deref().unwrap_or_default();
+            let waits = [2, 5, 10, 20].map(std::time::Duration::from_secs);
+            Link::tcp_checked(host, i.port, &waits, &|h, p| Link::scope_state(h, &[p, 80]))
+        }
         Kind::Psu => Link::serial(i.serial.as_deref().unwrap_or_default(), i.baud),
         // Every other kind has its own tool module (`MODULES`) or driver and opens its own link.
         _ => Err(format!("{:?} instruments have no SCPI link", i.kind)),
@@ -1128,7 +1133,17 @@ mod tests {
         let scope = v.iter().position(|i| i.name == "scope").unwrap();
         let psu = v.iter().position(|i| i.name == "psu").unwrap();
         v[scope].port = port;
-        let server = std::thread::spawn(move || listener.accept().map(|_| ()).is_ok());
+        // The scope is checked with *IDN? when it is connected.
+        let server = std::thread::spawn(move || {
+            use std::io::{BufRead, Write};
+            let (mut s, _) = listener.accept().unwrap();
+            let mut line = String::new();
+            std::io::BufReader::new(s.try_clone().unwrap())
+                .read_line(&mut line)
+                .unwrap();
+            assert_eq!(line.trim(), "*IDN?");
+            s.write_all(b"ACME,SCOPE,1,2\n").is_ok()
+        });
         assert!(connect(&v[scope]).is_ok());
         assert!(server.join().unwrap());
         // The supply's serial path is opened (here a path with no device behind it).

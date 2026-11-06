@@ -188,3 +188,44 @@ plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that basel
 * Spectrum analyzer: the audio power around the LO at each frequency (TX chip silent or a 12 kHz tracking generator), band power by DFT, settings refused if they would leave holes. [@ANCHOR: vnwa_open_sa_band_rms] [@ANCHOR: vnwa_open_sa_spectrum]
 * A point with all four channels dead says nothing leaves the TX port and names the TX connector, pad, tee and leads first. [@ANCHOR: vnwa_open_no_reference_message]
 * The functions that modulate, choose the power-cycle implementation, climb the modulation ladder and measure one spectrum point are anchored. [@ANCHOR: vnwa_open_generator_modulate] [@ANCHOR: vnwa_open_power_cycle_with] [@ANCHOR: vnwa_open_power_modulation_ladder] [@ANCHOR: vnwa_open_spectrum_sa_once]
+
+## Soak scope connection (`soak_scope`)
+
+`src/soak_scope.rs` is the soak harness's scope connection; `examples/soak.rs` uses it, and `tools/soak_gonogo.sh` reports its failure. It follows the same rule as bench_mcp's `Link::tcp_checked`: a Siglent scope that still holds a dead single-client SCPI session (after a host power loss, as on 2026-10-29) resets queries, so the harness waits and retries, then says NO-GO with the evidence and the action.
+
+### `vnwa_open_soak_scope_open_checked`
+
+**Purpose.** Connect to the scope and prove it answers `*IDN?` before the generator step uses it.
+
+```rust
+pub fn open_checked(addr: &str, waits: &[Duration], diagnose: &dyn Fn(&str) -> String) -> Result<ScopeStream, String>
+pub type ScopeStream = (BufReader<TcpStream>, TcpStream); // reader and writer on one socket, 5 s read timeout
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `addr` | `&str` | `host:port`, for example `192.168.10.51:5025`. |
+| `waits` | `&[Duration]` | Sleep after each failed attempt; one more attempt than waits. The soak uses 2, 5, 10 and 20 s. |
+| `diagnose` | `&dyn Fn(&str) -> String` | Called once after the last failure for the state text; `soak_scope::state` in production. |
+
+**Returns.** `Ok` with the connected stream after the first non-empty `*IDN?` reply. `Err` starting `NO-GO: scope <addr> did not answer *IDN? in N attempts over S s (...)`, with each attempt's error, the state, and the recommended action (power-cycle the scope).
+
+**Special concerns.** Blocking, up to the sum of `waits` plus 5 s connect and 5 s read per attempt. Each failed attempt drops its socket. Sends only `*IDN?`. In the soak the error becomes a `generator_step_failed` event, which `soak_gonogo.sh` prints in full (up to 600 characters) as the NO-GO reason.
+
+**See also.** `vnwa_open_soak_scope_state`. Tests: the unit tests in `src/soak_scope.rs` (fake scope on loopback that resets the first connections) and `tests/soak_gonogo.rs` (the verdict script on a recorded log).
+
+### `vnwa_open_soak_scope_state`
+
+**Purpose.** Evidence for the failure report.
+
+```rust
+pub fn state(addr: &str) -> String
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `addr` | `&str` | `host:port`; the port defaults to 5025 if missing. |
+
+**Returns.** `ping answers|ping does not answer|ping unavailable, port <p> accepts|port <p>: <error>, port 80 ...`. Never an error. Blocking (about 1 s ping plus 2 s per port); briefly opens TCP connections to the SCPI port and port 80, so call it only after the real attempts failed.
+
+**See also.** `vnwa_open_soak_scope_open_checked`. Test: `the_state_names_an_accepting_port_and_a_refused_one`.
