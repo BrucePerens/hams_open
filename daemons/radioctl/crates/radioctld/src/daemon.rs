@@ -53,6 +53,10 @@ pub struct Served {
     /// What the baud probe found, for a serial rig configured with `baud = "auto"` or
     /// `baud_probe`; `None` otherwise.
     pub baud_probe: Option<ProbeResult>,
+    /// The `radiod` channel's audio queue, counters and front-end status, for a rig on a `radiod`
+    /// transport (`RadiodControl::take_audio`): a program that embeds the daemon takes the channel's
+    /// audio from here. `None` for every other transport.
+    pub radiod: Option<radioctl_protocols::radiod_io::RadiodControl>,
 }
 
 /// The running daemon.
@@ -165,6 +169,7 @@ async fn start_one(
         net_link: built.net_link,
         usb_link: built.usb_link,
         baud_probe: built.baud_probe,
+        radiod: built.radiod,
     })
 }
 

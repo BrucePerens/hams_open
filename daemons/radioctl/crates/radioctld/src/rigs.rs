@@ -376,6 +376,16 @@ pub async fn build_rig(
     })
 }
 
+// [@ANCHOR: radioctld_rigs_radiod_channel_description]
+/// The shipped `radiod-channel` description (`rigs/radiod-channel.toml`), built in, so a program that
+/// embeds radioctld (the hams.com relay) can serve a `radiod` channel with no rigs directory. The file
+/// is parsed exactly as `load_description` parses it; it grants no transmit capability.
+pub fn radiod_channel_description() -> Result<RigDescription, String> {
+    radioctl_core::rigfile::parse(include_str!("../../../rigs/radiod-channel.toml"))
+        .map(|file| file.description)
+        .map_err(|e| format!("the built-in radiod-channel description: {e}"))
+}
+
 // [@ANCHOR: radioctld_rigs_radiod_link]
 /// The bridge settings for a `radiod` transport: the configured groups, channel, lifetime, refresh
 /// and frequency limits, the description's starting frequency and mode.
@@ -454,6 +464,22 @@ fn serial_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: radioctld_rigs_radiod_channel_description]
+    #[test]
+    fn the_built_in_radiod_channel_is_the_shipped_file_and_cannot_transmit() {
+        let path = format!(
+            "{}/../../rigs/radiod-channel.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let built_in = radiod_channel_description().expect("the built-in description loads");
+        assert_eq!(
+            built_in,
+            load_description(Path::new(&path)).expect("the shipped file")
+        );
+        assert_eq!(built_in.family, Family::Radiod);
+        assert!(built_in.capabilities.iter().all(|c| !c.transmits()));
+    }
 
     // Tests [@ANCHOR: radioctld_rigs_radiod_link]
     #[test]

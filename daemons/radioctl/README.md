@@ -384,6 +384,10 @@ Files: `crates/radioctl-protocols/src/radiod_net.rs` (engine, pure, no I/O), `cr
 
 **`radioctld_rigs_radiod_link`** [@ANCHOR: radioctl:radioctld_rigs_radiod_link] `radiod_link(t: &RadiodTransport, description: &RigDescription) -> RadiodLink`. The bridge settings: the transport's groups, ports, interface, SSRC, lifetime, refresh and frequency limits, with the description's starting frequency and mode. `build_rig` passes the result to `serve_radiod`, keeps the `RadiodControl` in `BuiltRig::radiod`, and refuses a `radiod` transport for any family other than `radiod-channel`.
 
+**`radioctld_rigs_radiod_channel_description`** [@ANCHOR: radioctl:radioctld_rigs_radiod_channel_description] `radiod_channel_description() -> Result<RigDescription, String>`. The shipped `rigs/radiod-channel.toml`, compiled into the library and parsed exactly as `load_description` parses the file, so a program that embeds radioctld (the hams.com relay) can serve a `radiod` channel with no rigs directory. It is receive only: no capability it grants transmits. An error names the built-in description.
+
+**`Served::radiod`** (in `radioctld_daemon_start_one`) `Option<RadiodControl>`. For a rig on a `radiod` transport, `start_one` keeps the bridge's control that `build_rig` returned in `BuiltRig::radiod`, so the program that started the daemon can take the channel's audio (`take_audio`, once) and read its counters and front-end status. `None` for every other transport. Before this the control was dropped at start, and the audio could not be reached through `daemon::start`.
+
 ## Rig coverage and volunteer testing
 
 - radioctl aims to describe every Hamlib model (313 in 4.6.2) and to say honestly which ones a person has verified on a radio. The generated list is [docs/RIG_SUPPORT.md](docs/RIG_SUPPORT.md) (`python3 tools/rig_support_matrix.py`; a test fails when it is stale). Today none is hardware-verified.
