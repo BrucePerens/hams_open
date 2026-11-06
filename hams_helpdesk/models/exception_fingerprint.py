@@ -39,6 +39,11 @@ from datetime import timedelta
 from markupsafe import Markup
 from odoo import api, fields, http, models
 
+try:  # Odoo's test harness only; production never has a test cursor stack
+    from odoo.tests.test_cursor import TestCursor as _TestCursor
+except ImportError:  # pragma: no cover - a build without the test harness
+    _TestCursor = None
+
 from . import exception_scrub as scrub
 from .exception_member import MEMBER_SOURCES
 
@@ -175,7 +180,16 @@ def _without_request():
 # [@ANCHOR: hams_helpdesk:exc_write_report]
 def _write_report(registry, data, folded):
     """Writes one occurrence on its own cursor. No try/except here on purpose: the service-account
-    lookup must fail fast, and ``report_exception`` is the single place that swallows."""
+    lookup must fail fast, and ``report_exception`` is the single place that swallows.
+
+    Returns False without writing when the process is inside a test whose newest cursor is read-only
+    (a ``readonly=True`` route such as ``/event/<id>/register`` serving its 403): Odoo's test cursors refuse
+    to open a read/write cursor above it, so the write cannot happen and the test harness would charge the
+    logged ERROR traceback to the module under test. A production worker has no test cursors."""
+    if _TestCursor is not None:
+        newest = _TestCursor._cursors_stack[-1] if _TestCursor._cursors_stack else None
+        if newest is not None and newest.readonly and newest._savepoint:
+            return False
     with _without_request(), registry.cursor() as cr:
         # The failed request's transaction may still be open, holding row locks, while this runs. A
         # wait on one of them would hang this worker (one thread waiting on itself, which Postgres
