@@ -101,6 +101,21 @@ impl TxState {
     }
 }
 
+impl TxState {
+    // [@ANCHOR: radioctl_core_txstate_known_for_transmit]
+    /// The transmit frequency when it is known well enough to key, else `None`: the gate of every
+    /// transmit-capable command. Unlike [`TxState::active_tx_frequency`], which assumes "not
+    /// split" while the split state is unread, a rig that has split (`split_capable`) must have
+    /// had its split state read, because the transmit VFO is a guess until then. A rig without
+    /// split transmits on the receive VFO by construction and needs only that VFO's frequency.
+    pub fn known_for_transmit(&self, split_capable: bool) -> Option<Hz> {
+        if split_capable && self.split.is_none() {
+            return None;
+        }
+        self.active_tx_frequency()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +171,33 @@ mod tests {
         let state = TxState::from_cache(get);
         assert_eq!(state.active_tx_frequency(), Some(Hz(7_100_000)));
         assert_eq!(TxState::from_cache(|_| None).active_tx_frequency(), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_core_txstate_known_for_transmit]
+    #[test]
+    fn a_rig_with_split_needs_its_split_state_read_before_the_transmit_frequency_is_known() {
+        let unread = TxState {
+            split: None,
+            ..state(false, None)
+        };
+        // The derivation alone guesses "not split" ...
+        assert_eq!(unread.active_tx_frequency(), Some(Hz(14_195_000)));
+        // ... the transmit gate does not, on a rig that has split.
+        assert_eq!(unread.known_for_transmit(true), None);
+        // A rig without split transmits where it receives.
+        assert_eq!(unread.known_for_transmit(false), Some(Hz(14_195_000)));
+        // Read: split on, transmit VFO B.
+        assert_eq!(
+            state(true, None).known_for_transmit(true),
+            Some(Hz(14_205_000))
+        );
+        // Split read but the transmit VFO's frequency is not: unknown on either kind of rig.
+        let no_b = TxState {
+            freq_b: None,
+            ..state(true, None)
+        };
+        assert_eq!(no_b.known_for_transmit(true), None);
+        let none = TxState::default();
+        assert_eq!(none.known_for_transmit(false), None);
     }
 }

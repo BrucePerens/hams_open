@@ -154,7 +154,7 @@ fn run(body: impl FnOnce() -> Result<(), Fail>) -> i32 {
 fn from_rig_error(e: &RigError) -> Fail {
     let code = match e.kind {
         ErrorKind::Timeout => RCTL_ERR_TIMEOUT,
-        ErrorKind::Rejected => RCTL_ERR_REJECTED,
+        ErrorKind::Rejected | ErrorKind::TransmitFrequencyUnknown => RCTL_ERR_REJECTED,
         ErrorKind::Unsupported => RCTL_ERR_UNSUPPORTED,
         ErrorKind::LinkDown | ErrorKind::Cancelled => RCTL_ERR_LINK_DOWN,
         ErrorKind::TransmitGateClosed => RCTL_ERR_TX_GATE_CLOSED,

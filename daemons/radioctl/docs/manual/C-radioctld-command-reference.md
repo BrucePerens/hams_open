@@ -40,7 +40,7 @@ explains the design and the differences from Hamlib's `rigctld`.
 | -11 | feature not available | the rig or its description lacks it; raw `send_cmd`, power control; a VFO the rig has not |
 | -14 | bus busy | the rig's command queue is full |
 
-An `ErrorKind` maps as: `Rejected` and `TransmitGateClosed` to -9, `Unsupported` to -11, `LinkDown` and
+An `ErrorKind` maps as: `Rejected`, `TransmitGateClosed` and `TransmitFrequencyUnknown` to -9, `Unsupported` to -11, `LinkDown` and
 `Cancelled` to -6, `Timeout` to -5, `Malformed` to -8, `QueueFull` to -14 (`reply::error_code`).
 
 ## Commands served

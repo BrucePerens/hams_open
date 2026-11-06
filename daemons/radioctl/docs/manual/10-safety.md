@@ -26,6 +26,11 @@ and `SendCw` are the transmit-capable capabilities. For such an op:
 2. The actor checks again when the command runs, so a command queued before someone closed the gate is
    still refused. The test `a_transmit_command_already_queued_is_refused_when_the_gate_closes` pins this.
 3. A transmit command is never retried, whatever the description's `retries` says.
+4. The actor also refuses it with `TransmitFrequencyUnknown` while the frequency the rig would transmit on
+   is not known: on a rig with split, until its split state has been read (the transmit VFO is a guess before
+   that), and on any rig until the transmit VFO's frequency has been read. `RigHandle` reads what is missing
+   before it submits the command, so the refusal means the rig could not be read. The test
+   `a_key_is_refused_while_the_transmit_frequency_cannot_be_read_and_goes_through_once_it_can` pins this.
 
 The gate is per rig and opened only by a permit that records who decided:
 

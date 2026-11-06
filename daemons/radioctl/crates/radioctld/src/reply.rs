@@ -65,7 +65,9 @@ pub struct Header {
 pub fn error_code(error: &RigError) -> i32 {
     match error.kind {
         ErrorKind::Timeout => ETIMEOUT,
-        ErrorKind::Rejected | ErrorKind::TransmitGateClosed => ERJCTED,
+        ErrorKind::Rejected
+        | ErrorKind::TransmitGateClosed
+        | ErrorKind::TransmitFrequencyUnknown => ERJCTED,
         ErrorKind::Unsupported => ENAVAIL,
         ErrorKind::LinkDown | ErrorKind::Cancelled => EIO,
         ErrorKind::Malformed => EPROTO,
@@ -155,6 +157,7 @@ mod tests {
         let code = |kind| error_code(&RigError::new(kind, "x"));
         assert_eq!(code(ErrorKind::Timeout), ETIMEOUT);
         assert_eq!(code(ErrorKind::TransmitGateClosed), ERJCTED);
+        assert_eq!(code(ErrorKind::TransmitFrequencyUnknown), ERJCTED);
         assert_eq!(code(ErrorKind::Rejected), ERJCTED);
         assert_eq!(code(ErrorKind::Unsupported), ENAVAIL);
         assert_eq!(code(ErrorKind::LinkDown), EIO);
