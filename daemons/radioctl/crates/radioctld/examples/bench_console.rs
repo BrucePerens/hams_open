@@ -78,7 +78,7 @@ impl Out {
 
 const HELP: &str = "\
 reads:   freq [a|b] | mode | signal | power | swr | meter swr|alc|comp|vd|id | ptt | split
-         txvfo | rit | xit | ritoffset | filter | level NAME | id | firmware | cached | stats
+         txvfo | rit | xit | ritoffset | filter | level NAME | id | firmware | amplifier | cached | stats
 sets:    setfreq a|b HZ | setmode NAME | setsplit 0|1 | setrit 0|1 | setxit 0|1 | setritoffset HZ
          setfilter HZ | setlevel NAME RAW | transceive 0|1
 scope:   scope on|off|state | axis [RX] | setaxis RX center|fixed|scroll-center|scroll-fixed
@@ -184,6 +184,7 @@ fn parse_op(words: &[&str]) -> Result<Op, String> {
         ),
         "id" => Op::GetModelId,
         "firmware" => Op::GetFirmware,
+        "amplifier" => Op::GetPowerAmplifier,
         "transceive" => Op::SetTransceive(on(1)?),
         "scope" => match words.get(1).copied() {
             Some("on") => Op::SetScopeOutput(true),
@@ -429,6 +430,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     Field::FilterWidth,
                     Field::ModelId,
                     Field::Firmware,
+                    Field::PowerAmplifier,
                 ] {
                     if let Some(cached) = rig.cached(field) {
                         out.line(&format!("cached {field:?}: {:?}", cached.value));

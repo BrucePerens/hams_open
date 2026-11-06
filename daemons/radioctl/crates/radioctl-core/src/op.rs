@@ -69,6 +69,9 @@ pub enum Op {
     GetModelId,
     /// Read the rig's main firmware revision.
     GetFirmware,
+    /// Read whether the rig has its power amplifier module (Elecraft `OM`: the K3's KPA3, the KX2's and
+    /// KX3's KXPA100). A power-range question, not a transmit one: read-only.
+    GetPowerAmplifier,
     /// Switch the rig's waveform output (the scope sweeps it sends on its own) on or off.
     SetScopeOutput(bool),
     /// Read whether waveform output is on.
@@ -135,6 +138,8 @@ pub enum Field {
     ModelId,
     /// The firmware revision.
     Firmware,
+    /// Whether the power amplifier module is installed.
+    PowerAmplifier,
     /// Waveform output on or off.
     ScopeOutput,
     /// A receiver's scope axis mode.
@@ -207,6 +212,8 @@ pub enum Observation {
     ModelId(u16),
     /// The firmware revision, major and minor (`02.37` is `(2, 37)`).
     Firmware(u8, u8),
+    /// Whether the rig's power amplifier module is installed and detected.
+    PowerAmplifier(bool),
     /// Waveform output on or off.
     ScopeOutput(bool),
     /// A receiver's scope axis mode.
@@ -244,6 +251,7 @@ impl Observation {
             Observation::Meter(meter, _) => Field::Meter(*meter),
             Observation::ModelId(_) => Field::ModelId,
             Observation::Firmware(..) => Field::Firmware,
+            Observation::PowerAmplifier(_) => Field::PowerAmplifier,
             Observation::ScopeOutput(_) => Field::ScopeOutput,
             Observation::ScopeAxis(rx, _) => Field::ScopeAxis(*rx),
             Observation::ScopeSpan(rx, _) => Field::ScopeSpan(*rx),
@@ -282,7 +290,7 @@ impl Op {
             Op::GetLevel(_) | Op::SetLevel(..) => Capability::Levels,
             Op::GetSwr => Capability::ReadSwr,
             Op::GetMeter(_) => Capability::ReadMeters,
-            Op::GetModelId | Op::GetFirmware => Capability::Identify,
+            Op::GetModelId | Op::GetFirmware | Op::GetPowerAmplifier => Capability::Identify,
             Op::SetScopeOutput(_)
             | Op::GetScopeOutput
             | Op::SetScopeAxis(..)
@@ -364,6 +372,10 @@ mod tests {
         );
         assert_eq!(Observation::ModelId(17).field(), Field::ModelId);
         assert_eq!(Observation::Firmware(2, 37).field(), Field::Firmware);
+        assert_eq!(
+            Observation::PowerAmplifier(true).field(),
+            Field::PowerAmplifier
+        );
         assert_eq!(Observation::ScopeOutput(true).field(), Field::ScopeOutput);
         assert_eq!(
             Observation::ScopeAxis(1, ScopeAxis::Fixed).field(),
@@ -430,6 +442,11 @@ mod tests {
         );
         assert!(!Op::GetMeter(Meter::Alc).transmits());
         assert_eq!(Op::GetFirmware.required_capability(), Capability::Identify);
+        assert_eq!(
+            Op::GetPowerAmplifier.required_capability(),
+            Capability::Identify
+        );
+        assert!(!Op::GetPowerAmplifier.transmits());
         assert_eq!(
             Op::SendCw("x".into()).required_capability(),
             Capability::SendCw
