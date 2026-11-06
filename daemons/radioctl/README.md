@@ -256,6 +256,134 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - PTT passes the actor's closed transmit gate, then the hpsdr crate's own gate, for a bounded lease at drive zero by default.
 - All unverified; tested against the loopback emulators in `tests/hpsdr_actor.rs`.
 
+### radiod receive channels (RX-888 and other ka9q-radio front ends)
+
+- Rig: one receive channel of a ka9q-radio `radiod`; family `radiod-channel`, no family block; file `radiod-channel`. Each channel is a virtual rig, so one RX-888 can serve many of them, one per SSRC.
+- **Receive only.** The file claims `read-frequency`, `set-frequency`, `read-mode`, `set-mode`, `filter` and `read-signal`. The engine refuses any `radiod-channel` description that claims a transmit capability, and it encodes no transmit operation. radioctld therefore reports no PTT (`ptt_type=0x0`, "Can set PTT: N"), even with `transmit = true`, and a console reading those capabilities hides Transmit. `radiod` itself has no transmit path.
+- Structure, as for OpenHPSDR: a line-protocol engine (`radiod_net.rs`) over an in-memory stream to a bridge (`radiod_io.rs`). The bridge owns the `radiod_client` sockets (`daemons/radiod_client`, a closed command schema in which every channel command carries a lifetime) and the channel's RTP audio.
+- Configuration (radioctld):
+
+  ```toml
+  [[rig]]
+  name = "rx888"
+  description = "rigs/radiod-channel.toml"
+  [rig.transport]
+  kind = "radiod"
+  status = "239.88.8.1"     # radiod's status group (a literal IPv4 multicast address)
+  data = "239.88.8.2"       # its data (RTP) group
+  ssrc = 7001               # this channel; unique among the clients of this radiod
+  # optional: status_port = 5006, data_port = 5004, iface = "127.0.0.1",
+  #           lifetime_frames = 500, refresh_ms = 2000, min_hz = 10000, max_hz = 30000000
+  ```
+
+- Mode changes bring back the mode's own passband. `SetFilterWidth` places the passband per mode: USB and LSB keep their 50 Hz edge next to the carrier, CW centres on its 600 Hz tone, AM and FM centre on the carrier.
+- Signal (`RAWSTR`): the channel's baseband power in tenths of a dB above -200 dB re full scale. It is referred to the input (`radiod` removes the front end's RF gain), not calibrated to dBm, and not an S-meter.
+- The channel is kept by re-asserting its whole state every `refresh_ms`, never by a bare poll. So a `radiod` that restarted gets the channel back at the right frequency (seen on the RX-888: one missed acknowledgement, then the channel was back at 14.074 MHz). When the rig is dropped the channel is removed. If the process dies, the channel expires by its lifetime.
+- Audio is `RadiodControl::take_audio` (16-bit PCM decoded to mono `f32`, 12 kHz, 24 kHz for FM), not a radioctl operation. `RadiodControl::front_end` gives the front end's overrange count and RF gain.
+- **Verified** against an RX-888 MkII on `radiod` 8c50dbbe, loopback, with no antenna (2026-11-05): tuning, mode, width, signal, PTT refused, audio at 50 frames/s with 0 lost, and the restart recovery above (`hams_com/docs/reviews/RX888_BRINGUP_2026-11-05.md`). Not yet verified: a real signal (no antenna yet) and the relay wiring.
+
+#### radiod channel anchor reference (ADR 0113)
+
+Files: `crates/radioctl-protocols/src/radiod_net.rs` (engine, pure, no I/O), `crates/radioctl-protocols/src/radiod_io.rs` (bridge; feature `tokio-io`, which is on by default), `crates/radioctl-protocols/src/conformance.rs` (stand-in), `crates/radioctld/src/config.rs` and `rigs.rs` (configuration). Everything in `radiod_net.rs` is synchronous and pure. The bridge runs two tasks on the caller's tokio runtime. Its shared state is behind `std::sync::Mutex`es that are held only for a copy or an update, never across an `.await`. Nothing here can key a transmitter.
+
+##### Data structures
+
+**`radioctl_radiod_link_new` / `RadiodLink`** [@ANCHOR: radioctl:radioctl_radiod_link_new]
+
+`RadiodLink::new(status_group: Ipv4Addr, data_group: Ipv4Addr, ssrc: u32) -> RadiodLink`. Where a channel lives and how it is kept: the defaults below, adjusted field by field before `serve_radiod`. Owned by the caller and moved into the bridge.
+
+| Field | Type, unit | Default | Meaning |
+|---|---|---|---|
+| `status_group`, `status_port` | `Ipv4Addr`, `u16` | given, 5006 | `radiod`'s status (control) group and port |
+| `data_group`, `data_port` | `Ipv4Addr`, `u16` | given, 5004 | its data (RTP) group and port |
+| `iface` | `Ipv4Addr` | 127.0.0.1 | interface to join on; the client always sends with TTL 0 |
+| `ssrc` | `u32` | given | the channel; 1 to 0xfffffffe, unique among this `radiod`'s clients (two clients on one SSRC share one channel) |
+| `lifetime_frames` | `u32`, 20 ms frames | 500 (10 s) | sent with every command; 1 to `policy.max_lifetime_frames` |
+| `refresh` | `Duration` | 2 s | keep-alive interval; non-zero, at most a third of the lifetime |
+| `ack_wait` | `Duration` | 1 s | wait for one acknowledgement |
+| `policy` | `radiod_client::command::Policy` | default (10 kHz to 30 MHz) | frequencies outside are refused before sending |
+| `frequency_hz` | `u64`, Hz | 10 000 000 | starting dial frequency |
+| `mode` | `Mode` | AM | starting mode, USB/LSB/CW/AM/FM |
+| `audio_queue` | `usize`, frames | 50 (1 s) | audio frames held before new ones are dropped |
+
+**`radioctl_radiod_mode_spec` / `ModeSpec`** [@ANCHOR: radioctl:radioctl_radiod_mode_spec]
+
+`Copy` value. `name: &'static str` is the line-protocol name (`usb`, `lsb`, `cw`, `am`, `fm`). `default_width_hz: u64` is the width a mode change brings back: USB and LSB 2950, CW 400, AM 10 000, FM 16 000 (the `radiod_client` modes' own passbands).
+
+`AudioFrame` (fields `samples: Vec<f32>` mono -1..=1, `rate_hz: u32`, `seq: u16`, `timestamp: u32`) and `RadiodStats` (counters `acks`, `ack_timeouts`, `refused`, `audio_frames`, `audio_dropped`, `rtp_lost`, `rtp_bad`, plus the latest `channel` and `front_end` statuses) are plain data returned by the control handle, documented with `take_audio` and `stats` below.
+
+##### Engine functions (`radiod_net.rs`)
+
+**`radioctl_radiod_signal_raw`** [@ANCHOR: radioctl:radioctl_radiod_signal_raw] `signal_raw(db: f32) -> u16`. The raw signal is `round((db + 200) * 10)`, clamped to `0..=65535`. Non-finite input gives 0.
+
+**`radioctl_radiod_signal_db`** [@ANCHOR: radioctl:radioctl_radiod_signal_db] `signal_db(raw: u16) -> f32`. The inverse: `-200 + raw / 10` dB re full scale.
+
+**`radioctl_radiod_mode_name`** [@ANCHOR: radioctl:radioctl_radiod_mode_name] `mode_name(mode: Mode) -> Option<&'static str>`. The line-protocol name of USB, LSB, CW, AM or FM, otherwise `None` (the mode is refused).
+
+**`radioctl_radiod_mode_from_name`** [@ANCHOR: radioctl:radioctl_radiod_mode_from_name] `mode_from_name(name: &str) -> Option<Mode>`. The inverse; exact lower-case names only.
+
+**`radioctl_radiod_mode_spec_of`** [@ANCHOR: radioctl:radioctl_radiod_mode_spec_of] `ModeSpec::of(mode: Mode) -> ModeSpec`. The spec of a mode. An unsupported mode gets USB's spec; callers refuse such a mode earlier.
+
+**`radioctl_radiod_mode_spec_edges`** [@ANCHOR: radioctl:radioctl_radiod_mode_spec_edges] `ModeSpec::edges(self, width_hz: u64) -> (f32, f32)`. Passband edges in Hz from the carrier for a width clamped to 1..=24 000 Hz. USB is `(50, 50+w)`, LSB `(-50-w, -50)`, CW `(600-w/2, 600+w/2)`, AM and FM `(-w/2, w/2)`. Each edge is clamped to ±`MAX_EDGE_HZ` (12 kHz, equal to `radiod_client`'s limit and pinned by a test).
+
+**`radioctl_radiod_check_receive_only`** [@ANCHOR: radioctl:radioctl_radiod_check_receive_only] `check_receive_only(desc: &RigDescription) -> Result<(), RigError>`. `Err(Unsupported)` naming the first transmit-capable capability the description claims (`set-ptt`, `send-cw`).
+
+**`radioctl_radiod_engine_new`** [@ANCHOR: radioctl:radioctl_radiod_engine_new] `RadiodEngine::new(desc: RigDescription) -> Result<RadiodEngine, RigError>`. Builds the engine. Refuses a description of another family, or one that claims a transmit capability.
+
+**`radioctl_radiod_engine_encode`** [@ANCHOR: radioctl:radioctl_radiod_engine_encode] `ProtocolEngine::encode(&mut self, op: &Op) -> Result<Request, RigError>`. Encodes `GetFrequency(A)` as `GF`, `SetFrequency(A, hz <= u32::MAX)` as `F <hz>`, `GetMode` as `GM`, `SetMode` of USB/LSB/CW/AM/FM as `M <name>`, `GetFilterWidth` as `GW`, `SetFilterWidth(1..=24000)` as `W <hz>`, and `GetSignal` as `GS`, each with a newline. Sets expect `Ack`, reads expect the field. Anything else, PTT and CW included, is `Err(Unsupported)`.
+
+**`radioctl_radiod_engine_feed`** [@ANCHOR: radioctl:radioctl_radiod_engine_feed] `ProtocolEngine::feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>`. Splits bytes into lines (lines may span calls) and parses each with `parse_line`. A line longer than 128 bytes yields one `Unrecognised(empty)` and is discarded up to its newline.
+
+**`radioctl_radiod_engine_parse_line`** [@ANCHOR: radioctl:radioctl_radiod_engine_parse_line] `parse_line(line: &str) -> Inbound` (private). Maps `OK` to `Ack`, `ERR ...` to `Nak`, `F <hz>` to a frequency, `M <name>` to a mode, `W <hz>` to a filter width, and `S <raw <= 65535>` to a signal. Anything else is `Unrecognised`.
+
+**`radioctl_radiod_engine_link_restored`** [@ANCHOR: radioctl:radioctl_radiod_engine_link_restored] `ProtocolEngine::link_restored(&mut self) -> Vec<Request>`. Drops a half line and returns no requests. The bridge restores the channel itself.
+
+##### Bridge functions (`radiod_io.rs`)
+
+**`radioctl_radiod_link_validate`** [@ANCHOR: radioctl:radioctl_radiod_link_validate] `RadiodLink::validate(&self) -> Result<(), RigError>`. `Err(Unsupported)` naming the field when any of these fails: the SSRC is usable, the starting mode is supported, the lifetime is in 1..=policy maximum, the refresh is non-zero and at most a third of the lifetime, and `ack_wait` and `audio_queue` are non-zero.
+
+**`radioctl_radiod_serve`** [@ANCHOR: radioctl:radioctl_radiod_serve] `serve_radiod(runtime: &Handle, link: RadiodLink) -> Result<(DuplexStream, RadiodControl), RigError>`. Validates the link and opens the control and RTP sockets. It returns `Err(LinkDown)` if a socket cannot be opened, for example a group that is not multicast or no multicast on the interface. It then spawns the control task and the audio task on `runtime`, and returns the actor's end of the stream with the control handle. Synchronous; the channel is created by the control task straight after.
+
+**`radioctl_radiod_control_take_audio`** [@ANCHOR: radioctl:radioctl_radiod_control_take_audio] `RadiodControl::take_audio(&self) -> Option<mpsc::Receiver<AudioFrame>>`. The audio queue, once; later calls give `None`. Frames that find the queue full or untaken are dropped and counted (`audio_dropped`).
+
+**`radioctl_radiod_control_stats`** [@ANCHOR: radioctl:radioctl_radiod_control_stats] `RadiodControl::stats(&self) -> RadiodStats`. A copy of the counters and the latest channel and front-end statuses.
+
+**`radioctl_radiod_control_front_end`** [@ANCHOR: radioctl:radioctl_radiod_control_front_end] `RadiodControl::front_end(&self) -> Option<ChannelStatus>`. The front end's latest status (`ad_over`, `rf_gain_db`, `rf_atten_db`, `input_samprate`, ...), read at every refresh; `None` until `radiod` answers.
+
+**`radioctl_radiod_lock`** [@ANCHOR: radioctl:radioctl_radiod_lock] `lock(m: &Mutex<T>) -> MutexGuard<T>` (private). Locks, taking the data of a poisoned mutex (counters only).
+
+**`radioctl_radiod_radiod_mode`** [@ANCHOR: radioctl:radioctl_radiod_radiod_mode] `radiod_mode(mode: Mode) -> Option<radiod_client::command::Mode>` (private). The client crate's mode for USB/LSB/CW/AM/FM.
+
+**`radioctl_radiod_state_commands`** [@ANCHOR: radioctl:radioctl_radiod_state_commands] `State::commands(&self, lifetime: u32) -> Vec<Command>` (private). The commands that make the channel match the state: `Audio` (frequency, mode, 16-bit PCM, lifetime), then `Filter` with `ModeSpec::edges` when a width was set.
+
+**`radioctl_radiod_bridge_send`** [@ANCHOR: radioctl:radioctl_radiod_bridge_send] `async Bridge::send(&mut self, cmd: &Command) -> Result<ChannelStatus, String>` (private). Sends one command and waits up to `ack_wait` for its tag. It records the status and the stream format, and counts `acks`, `ack_timeouts` and `refused`. `Err` is the line-protocol error text.
+
+**`radioctl_radiod_bridge_assert`** [@ANCHOR: radioctl:radioctl_radiod_bridge_assert] `async Bridge::assert(&mut self) -> Result<ChannelStatus, String>` (private). Sends `State::commands` in order and stops at the first failure. It creates the channel if `radiod` has none.
+
+**`radioctl_radiod_bridge_refresh`** [@ANCHOR: radioctl:radioctl_radiod_bridge_refresh] `async Bridge::refresh(&mut self)` (private). The keep-alive: `assert`, then a front-end read. Failures are counted and not reported to the actor; the next request reports them.
+
+**`radioctl_radiod_bridge_handle_line`** [@ANCHOR: radioctl:radioctl_radiod_bridge_handle_line] `async Bridge::handle_line(&mut self, line: &str) -> String` (private). Answers one request:
+- `GF`, `GM` and `GW` come from the latest status or the state.
+- `GS` sends a lifetime-carrying poll and answers `S <signal_raw(baseband)>`.
+- `F`, `M` and `W` update the state and `assert`. On failure they restore the old state and answer `ERR <why>`.
+- Anything else answers `ERR command`.
+
+**`radioctl_radiod_format_of`** [@ANCHOR: radioctl:radioctl_radiod_format_of] `format_of(s: &ChannelStatus) -> Option<Format>` (private). The payload type, encoding, channel count (1 or 2) and rate a status announces, when all are present and the encoding is PCM.
+
+**`radioctl_radiod_run_control`** [@ANCHOR: radioctl:radioctl_radiod_run_control] `async run_control(bridge, far, stop)` (private task). Creates the channel, then answers lines and refreshes until the actor closes the stream. It then stops the audio task and removes the channel (lifetime 1).
+
+**`radioctl_radiod_run_audio`** [@ANCHOR: radioctl:radioctl_radiod_run_audio] `async run_audio(rtp, ssrc, shared, tx, stop)` (private task). Reads the data group and keeps packets of `ssrc` whose payload type matches the announced format; others of that SSRC count as `rtp_bad`. It decodes to mono, tracks loss and offers each frame to the queue, until stopped.
+
+**`radioctl_conformance_radiod_stand_in_feed`** [@ANCHOR: radioctl:radioctl_conformance_radiod_stand_in_feed] `RadiodStandIn::feed(&mut self, bytes: &[u8]) -> Vec<u8>` (conformance, private). Answers the line protocol as the bridge does, with no `radiod`: frequency 10 kHz to 30 MHz, mode with its default width, width 1 to 24 000, and the signal fixed at `S 729`. Used by the shipped transcript `rigs/transcripts/radiod-channel-basic.toml`.
+
+##### radioctld
+
+**`radioctld_config_radiod_transport` / `RadiodTransport`** [@ANCHOR: radioctl:radioctld_config_radiod_transport] The checked `[rig.transport] kind = "radiod"`. Fields: `status_group`/`status_port` (`status`, `status_port` 1 to 65535, default 5006), `data_group`/`data_port` (`data`, `data_port`, default 5004), `iface` (an IPv4 address, default 127.0.0.1), `ssrc` (1 to 0xfffffffe), `lifetime_frames` (50 to 15 000, default 500), `refresh` (`refresh_ms` 200 to 60 000, default 2000, at most a third of the lifetime), and `min_hz`/`max_hz` (1 to 6 GHz, min below max, defaults 10 kHz and 30 MHz). Unknown keys are refused, so there is no TTL or destination key. Compared by value (`Eq`).
+
+**`radioctld_config_multicast_group`** [@ANCHOR: radioctl:radioctld_config_multicast_group] `multicast_group(key: &str, text: &str) -> Result<Ipv4Addr, String>` (private). A literal IPv4 multicast address. A name such as `hf.local` is refused, because there is no mDNS lookup.
+
+**`radioctld_rigs_radiod_link`** [@ANCHOR: radioctl:radioctld_rigs_radiod_link] `radiod_link(t: &RadiodTransport, description: &RigDescription) -> RadiodLink`. The bridge settings: the transport's groups, ports, interface, SSRC, lifetime, refresh and frequency limits, with the description's starting frequency and mode. `build_rig` passes the result to `serve_radiod`, keeps the `RadiodControl` in `BuiltRig::radiod`, and refuses a `radiod` transport for any family other than `radiod-channel`.
+
 ## Rig coverage and volunteer testing
 
 - radioctl aims to describe every Hamlib model (313 in 4.6.2) and to say honestly which ones a person has verified on a radio. The generated list is [docs/RIG_SUPPORT.md](docs/RIG_SUPPORT.md) (`python3 tools/rig_support_matrix.py`; a test fails when it is stale). Today none is hardware-verified.

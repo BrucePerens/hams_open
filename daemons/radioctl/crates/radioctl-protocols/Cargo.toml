@@ -15,17 +15,22 @@ tokio = { workspace = true, optional = true, features = ["rt", "sync", "time", "
 radioctl-core = { path = "../radioctl-core" }
 # The OpenHPSDR client (control plane only is used here); a standalone crate in daemons/hpsdr.
 hpsdr = { path = "../../../hpsdr", optional = true }
+# The ka9q-radio radiod client (closed command schema, multicast sockets, RTP); daemons/radiod_client.
+# No Opus: the radiod bridge asks for 16-bit PCM, so radioctl needs no libopus.
+radiod_client = { path = "../../../radiod_client", default-features = false, optional = true }
 
 [features]
 # tokio glue that exposes a VirtualRig as an in-memory duplex stream (module `io`).
 default = ["tokio-io"]
-tokio-io = ["dep:tokio", "dep:hpsdr"]
+tokio-io = ["dep:tokio", "dep:hpsdr", "dep:radiod_client"]
 # Differential tests against Hamlib's rigctld (tests/rigctld_oracle.rs). Needs the `rigctld`
 # binary (or RIGCTLD=/path) and fails loudly without it; off by default so a machine without
 # Hamlib can still run the rest. Run: cargo test -p radioctl-protocols --features hamlib-oracle
 hamlib-oracle = []
 
 [dev-dependencies]
+# A fake radiod on loopback multicast in tests/radiod_actor.rs (same version radiod_client uses).
+socket2 = { version = "0.6", features = ["all"] }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time", "io-util", "sync", "test-util"] }
 proptest = "1"
 serialport = { version = "4.10", default-features = false }

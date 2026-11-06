@@ -51,6 +51,7 @@ pub mod perseus_engine;
 pub mod prelude;
 pub mod prm80;
 pub mod racal;
+pub mod radiod_net;
 pub mod receiver;
 pub mod rft;
 pub mod rs;
@@ -80,3 +81,5 @@ pub mod flex_io;
 pub mod hpsdr_io;
 #[cfg(feature = "tokio-io")]
 pub mod io;
+#[cfg(feature = "tokio-io")]
+pub mod radiod_io;

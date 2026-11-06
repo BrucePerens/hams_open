@@ -30,6 +30,10 @@
 //!                                          # or "usb" (a USB SDR board or dongle: optional vid, pid,
 //!                                          # serial, transfer_timeout_ms, firmware_dir (Perseus); the description supplies
 //!                                          # the ids and strings; needs a build with feature `usb`)
+//!                                          # or "radiod" (one receive channel of a ka9q-radio radiod,
+//!                                          # for a "radiod-channel" description: status and data
+//!                                          # multicast groups, ssrc; optional status_port, data_port,
+//!                                          # iface, lifetime_frames, refresh_ms, min_hz, max_hz)
 //!
 //! [[rotator]]
 //! name = "g5500"
@@ -143,6 +147,18 @@ enum TransportSection {
         transfer_timeout_ms: Option<u64>,
         firmware_dir: Option<String>,
     },
+    Radiod {
+        status: String,
+        status_port: Option<u16>,
+        data: String,
+        data_port: Option<u16>,
+        iface: Option<String>,
+        ssrc: u32,
+        lifetime_frames: Option<u32>,
+        refresh_ms: Option<u64>,
+        min_hz: Option<u64>,
+        max_hz: Option<u64>,
+    },
 }
 
 /// `baud = 19200` or `baud = "auto"`.
@@ -254,6 +270,36 @@ pub enum TransportConfig {
         /// it; default `RADIOCTL_PERSEUS_FIRMWARE_DIR`, else `~/.config/radioctl/firmware/perseus`.
         firmware_dir: Option<PathBuf>,
     },
+    /// One receive channel of a ka9q-radio `radiod`, reached on its multicast groups
+    /// (`radioctl_protocols::radiod_io`); only for a `radiod-channel` description.
+    Radiod(RadiodTransport),
+}
+
+// [@ANCHOR: radioctld_config_radiod_transport]
+/// Where a `radiod` channel lives, from `[rig.transport] kind = "radiod"`. Every value is checked at
+/// load time (`transport_config`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RadiodTransport {
+    /// `radiod`'s status (control) multicast group, from `status`.
+    pub status_group: std::net::Ipv4Addr,
+    /// Its port, `status_port` (default 5006).
+    pub status_port: u16,
+    /// The data (RTP) multicast group the channel's audio goes to, from `data`.
+    pub data_group: std::net::Ipv4Addr,
+    /// Its port, `data_port` (default 5004).
+    pub data_port: u16,
+    /// The interface address to join on, `iface` (default 127.0.0.1).
+    pub iface: std::net::Ipv4Addr,
+    /// The channel's SSRC, `ssrc`: 1 to 0xfffffffe, unique among the clients of this `radiod`.
+    pub ssrc: u32,
+    /// Lifetime sent with every command, 20 ms frames, `lifetime_frames` (default 500, 50..=15000).
+    pub lifetime_frames: u32,
+    /// Keep-alive interval, `refresh_ms` (default 2000, 200..=60000, at most a third of the lifetime).
+    pub refresh: Duration,
+    /// Lowest frequency a member may tune, Hz, `min_hz` (default 10 kHz).
+    pub min_hz: u64,
+    /// Highest frequency a member may tune, Hz, `max_hz` (default 30 MHz, at most 6 GHz).
+    pub max_hz: u64,
 }
 
 /// One rig to serve.
@@ -495,6 +541,17 @@ fn baud_setting(
     }
 }
 
+// [@ANCHOR: radioctld_config_multicast_group]
+/// Parses a multicast IPv4 group for a `radiod` transport key.
+fn multicast_group(key: &str, text: &str) -> Result<std::net::Ipv4Addr, String> {
+    match text.parse::<std::net::Ipv4Addr>() {
+        Ok(ip) if ip.is_multicast() => Ok(ip),
+        _ => Err(format!(
+            "radiod transport {key} {text:?} is not a literal IPv4 multicast group (239.x.x.x)"
+        )),
+    }
+}
+
 // [@ANCHOR: radioctld_config_transport]
 /// Validates a rig's `[rig.transport]`. `has_secrets_dir` says whether the server has a secret
 /// store for a framing that needs one.
@@ -569,6 +626,55 @@ fn transport_config(
                 framing,
                 idle_timeout,
             })
+        }
+        TransportSection::Radiod {
+            status,
+            status_port,
+            data,
+            data_port,
+            iface,
+            ssrc,
+            lifetime_frames,
+            refresh_ms,
+            min_hz,
+            max_hz,
+        } => {
+            let iface = match iface.as_deref() {
+                None => std::net::Ipv4Addr::LOCALHOST,
+                Some(text) => text.parse().map_err(|_| {
+                    format!("radiod transport iface {text:?} is not an IPv4 interface address")
+                })?,
+            };
+            if ssrc == 0 || ssrc == u32::MAX {
+                return Err(format!(
+                    "radiod transport ssrc {ssrc} is reserved (0 is the front end, 0xffffffff all channels)"
+                ));
+            }
+            let lifetime_frames = in_range("lifetime_frames", lifetime_frames, 500, 50, 15_000)?;
+            let refresh_ms = in_range("refresh_ms", refresh_ms, 2000, 200, 60_000)?;
+            if refresh_ms * 3 > u64::from(lifetime_frames) * 20 {
+                return Err(format!(
+                    "radiod transport refresh_ms {refresh_ms} must be at most a third of the lifetime ({} ms)",
+                    u64::from(lifetime_frames) * 20
+                ));
+            }
+            let min_hz = in_range("min_hz", min_hz, 10_000, 1, 6_000_000_000)?;
+            let max_hz = in_range("max_hz", max_hz, 30_000_000, 1, 6_000_000_000)?;
+            if min_hz >= max_hz {
+                return Err("radiod transport min_hz must be below max_hz".to_string());
+            }
+            Ok(TransportConfig::Radiod(RadiodTransport {
+                status_group: multicast_group("status", &status)?,
+                status_port: in_range("status_port", status_port, 5006, 1, 65_535)?,
+                data_group: multicast_group("data", &data)?,
+                data_port: in_range("data_port", data_port, 5004, 1, 65_535)?,
+                iface,
+                ssrc,
+                lifetime_frames,
+                refresh: Duration::from_millis(refresh_ms),
+                min_hz,
+                max_hz,
+            }))
         }
         TransportSection::Usb {
             vid,
@@ -1178,5 +1284,63 @@ kind = "virtual"
             .secrets_dir,
             Some(PathBuf::from("/run/secrets"))
         );
+    }
+
+    // Tests [@ANCHOR: radioctld_config_transport]
+    // Tests [@ANCHOR: radioctld_config_radiod_transport]
+    // Tests [@ANCHOR: radioctld_config_multicast_group]
+    #[test]
+    fn radiod_transport_is_checked_at_load() {
+        let with = |transport: &str| parse(&MINIMAL.replace("kind = \"virtual\"", transport));
+        let base = "kind = \"radiod\"\nstatus = \"239.88.8.1\"\ndata = \"239.88.8.2\"\nssrc = 1001";
+        let config = with(base).expect("loads");
+        let TransportConfig::Radiod(t) = &config.rigs[0].transport else {
+            panic!("not radiod: {:?}", config.rigs[0].transport);
+        };
+        assert_eq!(
+            t,
+            &RadiodTransport {
+                status_group: std::net::Ipv4Addr::new(239, 88, 8, 1),
+                status_port: 5006,
+                data_group: std::net::Ipv4Addr::new(239, 88, 8, 2),
+                data_port: 5004,
+                iface: std::net::Ipv4Addr::LOCALHOST,
+                ssrc: 1001,
+                lifetime_frames: 500,
+                refresh: Duration::from_secs(2),
+                min_hz: 10_000,
+                max_hz: 30_000_000,
+            }
+        );
+        let full = format!(
+            "{base}\nstatus_port = 6006\ndata_port = 6004\niface = \"127.0.0.1\"\nlifetime_frames = 1500\nrefresh_ms = 5000\nmin_hz = 15000\nmax_hz = 30456000"
+        );
+        assert!(with(&full).is_ok());
+        for (bad, why) in [
+            (
+                base.replace("239.88.8.1", "hf.local"),
+                "not a literal group",
+            ),
+            (base.replace("239.88.8.2", "192.0.2.1"), "unicast data"),
+            (base.replace("ssrc = 1001", "ssrc = 0"), "front end ssrc"),
+            (
+                base.replace("ssrc = 1001", "ssrc = 4294967295"),
+                "all-channels ssrc",
+            ),
+            (format!("{base}\nlifetime_frames = 0"), "immortal channel"),
+            (
+                format!("{base}\nrefresh_ms = 4000"),
+                "refresh over a third of 10 s",
+            ),
+            (format!("{base}\nmin_hz = 30000000"), "min not below max"),
+            (format!("{base}\niface = \"lo\""), "iface is an address"),
+            (format!("{base}\nttl = 1"), "no ttl key"),
+            (
+                format!("{base}\ndestination = \"10.0.0.1:5004\""),
+                "no destination key",
+            ),
+        ] {
+            assert!(with(&bad).is_err(), "{why}: {bad}");
+        }
     }
 }

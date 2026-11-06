@@ -27,12 +27,15 @@ use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::drt1::Drt1Twin;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
 use radioctl_protocols::kenwood_ts890_lan::{LanCredentials, Ts890LanFraming, KEEPALIVE_EVERY};
+use radioctl_protocols::radiod_io::{serve_radiod, RadiodControl, RadiodLink};
 use radioctl_protocols::virtual_rig::VirtualRig;
 use radioctl_station::homeassistant::{FileSecrets, SecretStore};
 use tokio::io::AsyncReadExt;
 use tokio::runtime::Handle;
 
-use crate::config::{BaudSetting, RigConfig, ServerConfig, TcpFraming, TransportConfig};
+use crate::config::{
+    BaudSetting, RadiodTransport, RigConfig, ServerConfig, TcpFraming, TransportConfig,
+};
 use crate::service::{RigService, ServiceConfig};
 
 /// The rate in the serial configuration the baud probe is handed; it replaces it at every open.
@@ -91,6 +94,8 @@ pub struct BuiltRig {
     /// What the baud probe found, when the configuration asked for one (`baud = "auto"` or
     /// `baud_probe`); `None` for a fixed rate, which is the default.
     pub baud_probe: Option<ProbeResult>,
+    /// The `radiod` channel's audio queue, counters and front-end status, for radiod rigs.
+    pub radiod: Option<RadiodControl>,
 }
 
 // [@ANCHOR: radioctld_rigs_tcp_framing]
@@ -182,7 +187,20 @@ pub async fn build_rig(
     let mut net_link = None;
     let mut usb_link = None;
     let mut baud_probe = None;
+    let mut radiod = None;
     let handle: RigHandle = match &rig.transport {
+        TransportConfig::Radiod(t) => {
+            if description.family != Family::Radiod {
+                return Err(format!(
+                    "rig {}: transport radiod needs a radiod-channel description, {} is not one",
+                    rig.name, description.id
+                ));
+            }
+            let (stream, control) =
+                serve_radiod(runtime, radiod_link(t, &description)).map_err(fail)?;
+            radiod = Some(control);
+            spawn(runtime, engine, stream, options).map_err(fail)?
+        }
         // A virtual USB board is its twin behind the fake bus: the same link, frames and engine
         // as a real one, with no USB device.
         TransportConfig::Virtual { .. } if description.family == Family::UsbDevice => {
@@ -354,7 +372,25 @@ pub async fn build_rig(
         net_link,
         usb_link,
         baud_probe,
+        radiod,
     })
+}
+
+// [@ANCHOR: radioctld_rigs_radiod_link]
+/// The bridge settings for a `radiod` transport: the configured groups, channel, lifetime, refresh
+/// and frequency limits, the description's starting frequency and mode.
+pub fn radiod_link(t: &RadiodTransport, description: &RigDescription) -> RadiodLink {
+    let mut link = RadiodLink::new(t.status_group, t.data_group, t.ssrc);
+    link.status_port = t.status_port;
+    link.data_port = t.data_port;
+    link.iface = t.iface;
+    link.lifetime_frames = t.lifetime_frames;
+    link.refresh = t.refresh;
+    link.policy.min_hz = t.min_hz as f64;
+    link.policy.max_hz = t.max_hz as f64;
+    link.frequency_hz = description.default_frequency.0;
+    link.mode = description.default_mode;
+    link
 }
 
 // [@ANCHOR: radioctld_rigs_start_usb_rig]
@@ -418,6 +454,45 @@ fn serial_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: radioctld_rigs_radiod_link]
+    #[test]
+    fn a_radiod_transport_becomes_the_bridge_settings_with_the_descriptions_start() {
+        let path = format!(
+            "{}/../../rigs/radiod-channel.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let description = load_description(Path::new(&path)).expect("radiod-channel file");
+        let t = RadiodTransport {
+            status_group: std::net::Ipv4Addr::new(239, 88, 8, 1),
+            status_port: 6006,
+            data_group: std::net::Ipv4Addr::new(239, 88, 8, 2),
+            data_port: 6004,
+            iface: std::net::Ipv4Addr::LOCALHOST,
+            ssrc: 7001,
+            lifetime_frames: 1500,
+            refresh: Duration::from_secs(5),
+            min_hz: 15_000,
+            max_hz: 30_456_000,
+        };
+        let link = radiod_link(&t, &description);
+        assert_eq!(
+            (link.status_group, link.status_port),
+            (t.status_group, 6006)
+        );
+        assert_eq!((link.data_group, link.data_port), (t.data_group, 6004));
+        assert_eq!(
+            (link.ssrc, link.lifetime_frames, link.refresh),
+            (7001, 1500, t.refresh)
+        );
+        assert_eq!(
+            (link.policy.min_hz, link.policy.max_hz),
+            (15_000.0, 30_456_000.0)
+        );
+        assert_eq!(link.frequency_hz, description.default_frequency.0);
+        assert_eq!(link.mode, description.default_mode);
+        assert!(link.validate().is_ok());
+    }
 
     // Tests [@ANCHOR: radioctld_rigs_load_description]
     #[test]

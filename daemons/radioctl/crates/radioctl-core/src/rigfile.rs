@@ -531,6 +531,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         "yaesu-legacy" => Family::YaesuLegacy,
         "flex-smartsdr" => Family::Flex,
         "hpsdr-network" => Family::Hpsdr,
+        "radiod-channel" => Family::Radiod,
         "kenwood-hh" => Family::KenwoodHh,
         "serial-vendor" => Family::SerialVendor,
         "receiver" => Family::Receiver,
@@ -577,6 +578,8 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
                 && doc.hpsdr.is_none()
                 && doc.kenwood_hh.is_none()
                 && doc.vendor.is_none() => {}
+        (Family::Radiod, None, None, None, None, None)
+            if !others && doc.vendor.is_none() && doc.usb.is_none() && doc.receiver.is_none() => {}
         (Family::Receiver, None, None, None, None, None)
             if doc.flex.is_none()
                 && doc.hpsdr.is_none()

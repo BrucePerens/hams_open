@@ -159,6 +159,7 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
 // Tests [@ANCHOR: radioctl_conformance_stand_in_feed]
 // Tests [@ANCHOR: radioctl_conformance_stand_in_front_panel]
 // Tests [@ANCHOR: radioctl_conformance_bridge_stand_in_feed]
+// Tests [@ANCHOR: radioctl_conformance_radiod_stand_in_feed]
 // Tests [@ANCHOR: radioctl_core_transcript_parse]
 #[test]
 fn every_shipped_transcript_replays_against_its_description() {

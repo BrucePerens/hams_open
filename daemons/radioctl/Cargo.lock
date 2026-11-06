@@ -705,7 +705,9 @@ dependencies = [
  "hpsdr",
  "proptest",
  "radioctl-core",
+ "radiod_client",
  "serialport",
+ "socket2",
  "tokio",
 ]
 
@@ -752,6 +754,14 @@ dependencies = [
  "webpki-roots",
  "zip",
  "zipsign-api",
+]
+
+[[package]]
+name = "radiod_client"
+version = "0.1.0"
+dependencies = [
+ "socket2",
+ "tokio",
 ]
 
 [[package]]

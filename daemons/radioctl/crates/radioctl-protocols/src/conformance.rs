@@ -43,6 +43,7 @@ pub fn engine_for(description: &RigDescription) -> Result<Box<dyn ProtocolEngine
         )?),
         Family::Flex => Box::new(crate::flex::FlexEngine::new(description.clone())?),
         Family::Hpsdr => Box::new(crate::hpsdr_net::HpsdrEngine::new(description.clone())?),
+        Family::Radiod => Box::new(crate::radiod_net::RadiodEngine::new(description.clone())?),
         Family::SerialVendor => crate::serial_vendor::engine_for(description)?,
         Family::Receiver => receiver_engine(description)?,
         Family::UsbDevice => crate::usb_family::engine_for(description)?,
@@ -119,6 +120,7 @@ enum StandIn {
     Flex(Box<VirtualFlex>),
     Vendor(Box<dyn crate::serial_vendor::VendorTwin>),
     HpsdrBridge(BridgeStandIn),
+    RadiodBridge(RadiodStandIn),
     Usb(Box<crate::usb_family::UsbFrameStandIn>),
 }
 
@@ -192,6 +194,56 @@ impl BridgeStandIn {
     }
 }
 
+/// What the `radiod_io` bridge answers on its line protocol, with no `radiod` behind it: frequency,
+/// mode and passband width are kept (a mode change brings back that mode's own width, as the bridge
+/// does); the signal reads a fixed noise level, `S 729` (-127.1 dB re full scale, the RX-888's
+/// 2.95 kHz noise with no antenna). Transcripts for `radiod-channel` files are of this protocol, not
+/// of `radiod`'s multicast wire.
+struct RadiodStandIn {
+    freq: u64,
+    mode: &'static str,
+    width: u64,
+}
+
+impl RadiodStandIn {
+    // [@ANCHOR: radioctl_conformance_radiod_stand_in_feed]
+    /// Answers one request line as `radiod_io` answers it.
+    fn feed(&mut self, bytes: &[u8]) -> Vec<u8> {
+        let mut out = String::new();
+        for line in String::from_utf8_lossy(bytes).lines() {
+            let mut parts = line.split_whitespace();
+            let (head, arg) = (parts.next(), parts.next());
+            let number = arg.and_then(|v| v.parse::<u64>().ok());
+            let answer = match (head, number) {
+                (Some("GF"), _) => format!("F {}\n", self.freq),
+                (Some("GM"), _) => format!("M {}\n", self.mode),
+                (Some("GW"), _) => format!("W {}\n", self.width),
+                (Some("GS"), _) => "S 729\n".to_string(),
+                (Some("F"), Some(hz)) if (10_000..=30_000_000).contains(&hz) => {
+                    self.freq = hz;
+                    "OK\n".to_string()
+                }
+                (Some("W"), Some(hz)) if (1..=24_000).contains(&hz) => {
+                    self.width = hz;
+                    "OK\n".to_string()
+                }
+                (Some("M"), _) => match arg.and_then(crate::radiod_net::mode_from_name) {
+                    Some(mode) => {
+                        let spec = crate::radiod_net::ModeSpec::of(mode);
+                        self.mode = spec.name;
+                        self.width = spec.default_width_hz;
+                        "OK\n".to_string()
+                    }
+                    None => "ERR mode\n".to_string(),
+                },
+                _ => "ERR command\n".to_string(),
+            };
+            out.push_str(&answer);
+        }
+        out.into_bytes()
+    }
+}
+
 impl StandIn {
     // [@ANCHOR: radioctl_conformance_stand_in_for]
     /// The stand-in for a description's family.
@@ -207,6 +259,14 @@ impl StandIn {
                 ptt: false,
                 att_db: 0,
             }),
+            Family::Radiod => {
+                let spec = crate::radiod_net::ModeSpec::of(description.default_mode);
+                StandIn::RadiodBridge(RadiodStandIn {
+                    freq: description.default_frequency.0,
+                    mode: spec.name,
+                    width: spec.default_width_hz,
+                })
+            }
             _ => StandIn::Rig(Box::new(VirtualRig::from_description(description)?)),
         })
     }
@@ -216,9 +276,11 @@ impl StandIn {
     fn prologue(&self) -> Vec<u8> {
         match self {
             StandIn::Flex(radio) => radio.greeting(),
-            StandIn::Rig(_) | StandIn::Vendor(_) | StandIn::HpsdrBridge(_) | StandIn::Usb(_) => {
-                Vec::new()
-            }
+            StandIn::Rig(_)
+            | StandIn::Vendor(_)
+            | StandIn::HpsdrBridge(_)
+            | StandIn::RadiodBridge(_)
+            | StandIn::Usb(_) => Vec::new(),
         }
     }
 
@@ -230,6 +292,7 @@ impl StandIn {
             StandIn::Flex(radio) => radio.feed(bytes, NOW),
             StandIn::Vendor(twin) => twin.feed(bytes, NOW),
             StandIn::HpsdrBridge(bridge) => bridge.feed(bytes),
+            StandIn::RadiodBridge(bridge) => bridge.feed(bytes),
             StandIn::Usb(device) => device.feed(bytes),
         }
     }
@@ -250,6 +313,7 @@ impl StandIn {
             }
             StandIn::Vendor(twin) => twin.front_panel(panel),
             StandIn::HpsdrBridge(_) => Err("the hpsdr_io bridge pushes nothing unasked".into()),
+            StandIn::RadiodBridge(_) => Err("the radiod_io bridge pushes nothing unasked".into()),
             StandIn::Usb(_) => Err("a USB board has no front panel to turn here".into()),
         }
     }
