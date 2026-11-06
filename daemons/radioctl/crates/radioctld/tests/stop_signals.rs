@@ -34,10 +34,7 @@ fn config(dir: &PathBuf, port: u16) -> PathBuf {
 }
 
 fn key_then_signal(signal: &str) {
-    let dir = std::env::temp_dir().join(format!(
-        "radioctld-stop-{signal}-{}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("radioctld-stop-{signal}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("dir");
     let port = free_port();
     let mut child = Command::new(env!("CARGO_BIN_EXE_radioctld"))

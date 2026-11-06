@@ -124,8 +124,8 @@ async fn stop_signal() -> Result<&'static str, String> {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{signal, SignalKind};
-        let mut term = signal(SignalKind::terminate())
-            .map_err(|e| format!("cannot wait for SIGTERM: {e}"))?;
+        let mut term =
+            signal(SignalKind::terminate()).map_err(|e| format!("cannot wait for SIGTERM: {e}"))?;
         let mut hup =
             signal(SignalKind::hangup()).map_err(|e| format!("cannot wait for SIGHUP: {e}"))?;
         tokio::select! {
