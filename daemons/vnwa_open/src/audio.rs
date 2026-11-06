@@ -98,6 +98,7 @@ pub fn analysis_span(
     presamples: usize,
     postsamples: usize,
 ) -> Option<(usize, usize)> {
+    // [@ANCHOR: vnwa_open_audio_analysis_span]
     let per = fs / if_hz;
     let usable = len.checked_sub(presamples + postsamples)?;
     let periods = (usable as f64 / per).floor();
@@ -399,5 +400,19 @@ mod tests {
             assert!(m.phase_deg().abs() > 170.0, "{}: {}", e.name, m.phase_deg());
             assert!((0.8..1.4).contains(&m.abs()), "{}: {}", e.name, m.abs());
         }
+    }
+
+    // Tests [@ANCHOR: vnwa_open_audio_analysis_span]
+    #[test]
+    fn the_analysis_span_is_whole_if_periods_between_the_presamples_and_postsamples() {
+        // 12 kHz at 48 kHz is 4 samples a period: 100 - 2 - 2 = 96 samples is 24 periods.
+        assert_eq!(analysis_span(100, 48_000.0, 12_000.0, 2, 2), Some((2, 96)));
+        // 5 kHz is 9.6 samples a period: 100 samples hold ten periods (96 samples), the rest is dropped.
+        assert_eq!(analysis_span(100, 48_000.0, 5_000.0, 0, 0), Some((0, 96)));
+        // Exactly one period fits.
+        assert_eq!(analysis_span(8, 48_000.0, 12_000.0, 2, 2), Some((2, 4)));
+        // Less than one period fits, or the pre- and postsamples are longer than the window.
+        assert_eq!(analysis_span(7, 48_000.0, 12_000.0, 2, 2), None);
+        assert_eq!(analysis_span(3, 48_000.0, 12_000.0, 2, 2), None);
     }
 }
