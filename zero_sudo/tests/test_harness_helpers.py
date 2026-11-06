@@ -11,7 +11,6 @@ import concurrent.futures
 import os
 import threading
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import psutil
 import psycopg2
@@ -135,13 +134,13 @@ class TestHarnessHelpers(HamsTransactionCase):
     def test_invalidating_the_utils_cache_does_nothing_when_zero_sudo_is_not_in_the_registry(self):
         """edge_cache's own run has no `zero_sudo.security.utils` model, and must not reach Redis for it."""
         without_model = SimpleNamespace(registry={}, env=self.env)
-        with patch.object(common, "invalidate_model_cache") as invalidate:
-            common.invalidate_zero_sudo_utils_cache(without_model)
+        invalidate = self.safe_patch_object(common, "invalidate_model_cache")
+        common.invalidate_zero_sudo_utils_cache(without_model)
         invalidate.assert_not_called()
 
     # Tests [@ANCHOR: zero_sudo:invalidate_zero_sudo_utils_cache]
     def test_invalidating_the_utils_cache_runs_when_the_model_is_installed(self):
         with_model = SimpleNamespace(registry={"zero_sudo.security.utils": object()}, env=self.env)
-        with patch.object(common, "invalidate_model_cache") as invalidate:
-            common.invalidate_zero_sudo_utils_cache(with_model)
+        invalidate = self.safe_patch_object(common, "invalidate_model_cache")
+        common.invalidate_zero_sudo_utils_cache(with_model)
         invalidate.assert_called_once_with(self.env, "zero_sudo.security.utils")
