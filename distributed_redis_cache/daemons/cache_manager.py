@@ -24,18 +24,32 @@ logger = logging.getLogger("cache_manager")
 
 # --- Configuration ---
 # [@ANCHOR: COMM_cache_manager_config]
-ENV_FILE = "/opt/hams/etc/keys/cache_manager.env"
-if os.path.exists(ENV_FILE):
-    load_dotenv(ENV_FILE)
+# The daemon does not read /opt/hams/etc/keys/cache_manager.env (the Daemon Key Manager's Odoo login for
+# this service): no line of it ever used ODOO_RPC_LOGIN or ODOO_RPC_KEY, and since it runs as its own
+# account (hamsd_cache_manager) that odoo-owned 0600 file is unreadable to it, so opening it would stop
+# the daemon at start.
+#
+# The restricted Postgres role's own file, written by provisioning (hams_shared infrastructure.py
+# _provision_cache_manager_role, or scripts/provision_cache_manager_db_role.py) in the family key
+# directory, odoo:hamsd_cache_manager 0640. Deliberately not the Daemon Key Manager's file, which
+# key_registry._write_secure_env_file() rewrites with only ODOO_RPC_LOGIN/ODOO_RPC_KEY on every rotation.
+DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager/cache_manager_db.env"
+# Where the file lived while the daemon ran as odoo (odoo:odoo 0600). Read only while a host has not yet
+# been provisioned with the new path; remove once hams1 has the new file (night_shift_todo, daemon OS isolation).
+LEGACY_DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager_db.env"
 
-# Separate, dedicated file for the restricted Postgres role
-# (scripts/provision_cache_manager_db_role.py) provisions -- deliberately
-# NOT written into ENV_FILE above, which daemon_key_manager's own
-# key_registry._write_secure_env_file() truncates and fully overwrites
-# (with only ODOO_RPC_LOGIN/ODOO_RPC_KEY) on every install/upgrade/key
-# rotation. Sharing that file would silently wipe DB_USER/DB_PASS back to
-# the "odoo" superuser-role fallback the next time either happens.
-DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager_db.env"
+
+# [@ANCHOR: COMM_cache_manager_db_env_file]
+# Verified by [@ANCHOR: test_cache_manager_db_env_file_prefers_the_family_directory]
+def _db_env_file(path=DB_ENV_FILE, legacy_path=LEGACY_DB_ENV_FILE):
+    """The PostgreSQL login file to load: `path`, or `legacy_path` when only the old file exists (a host whose
+    code was deployed before its provisioning ran). `path` when neither exists, so the warning names the new one."""
+    if not os.path.exists(path) and os.path.exists(legacy_path):
+        return legacy_path
+    return path
+
+
+DB_ENV_FILE = _db_env_file()
 if os.path.exists(DB_ENV_FILE):
     # override=True: load_dotenv() defaults to leaving any already-exported
     # OS environment variable alone. If a systemd unit or container already
