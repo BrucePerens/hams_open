@@ -1623,10 +1623,18 @@ verified = { state = "unverified" }
         assert!(expected_keys(&loaded.description).contains(&"elecraft.levels".to_string()));
         // A model that claims the levels capability must state its transmit-power range: no
         // default stands in for it (a K3 default of 110 W sent full power on a KX3).
-        let claims = format!("{with_levels}{fact}").replace("\"set-ptt\"]", "\"set-ptt\", \"levels\"]");
-        assert_ne!(claims, format!("{with_levels}{fact}"), "the GOOD text changed shape");
+        let claims =
+            format!("{with_levels}{fact}").replace("\"set-ptt\"]", "\"set-ptt\", \"levels\"]");
+        assert_ne!(
+            claims,
+            format!("{with_levels}{fact}"),
+            "the GOOD text changed shape"
+        );
         expect_rejected(&claims, "elecraft.levels.rf-power");
-        let stated = claims.replace("rf-gain = [190, 250]", "rf-gain = [190, 250], rf-power = [0, 12]");
+        let stated = claims.replace(
+            "rf-gain = [190, 250]",
+            "rf-gain = [190, 250], rf-power = [0, 12]",
+        );
         let loaded = parse(&stated).expect("loads with rf-power");
         let params = loaded.description.elecraft.clone().expect("elecraft");
         assert_eq!(params.level_range(Level::RfPower), Some((0, 12)));
