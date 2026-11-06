@@ -10,7 +10,7 @@ This module enables:
 - Users to manage a blog within their site.
 - Privacy controls and content violation reporting.
 - Advanced Moderation, 3-Strike suspension, and Appeals.
-- Subscriptions and Privacy-Friendly View Counters.
+- Subscriptions and Server-Side View Counters.
     """,
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",

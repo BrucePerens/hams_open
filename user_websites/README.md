@@ -12,7 +12,7 @@ Welcome to User Websites! This Odoo 19 module allows you to build and manage you
 *   **Start a Blog:** Share your thoughts and stories with the community. Everyone gets their own blog section.
 *   **Collaborate with Groups:** Create shared websites for your team, club, or project.
 *   **Join the Community:** Choose to show off your site in our public directory and discover what others are building.
-*   **Control Your Privacy:** You decide what's public. We also provide full GDPR-compliant data export and deletion tools.
+*   **Control What Is Public:** You decide which of your pages are published. There is no expectation of privacy for anything you publish or enter. We also provide GDPR data export and content-erasure tools, which exist because the law requires them.
 
 ## 🚀 Getting Started
 

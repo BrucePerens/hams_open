@@ -11,6 +11,6 @@ Charlie needs to understand how the platform handles data to answer a query from
 2. He finds an article titled **"Site Owner's Guide to Regulatory Compliance"**.
 4. The guide explains technical details such as:
    - Data minimization practices.
-   - How privacy-friendly view counters work.
+   - How server-side view counters work.
    - Procedures for data portability and erasure via the `/my/privacy` dashboard.
 5. Charlie uses this information to confidently respond to the regulatory inquiry.

@@ -44,7 +44,7 @@
     <ul>
         <li><strong>Geographic Data:</strong> The module extracts location information (Country, City, etc.) provided by Cloudflare for every request. It is trusted only when the request comes through your local Cloudflare Tunnel or, if an administrator has turned on <strong>Trust Cloudflare's Published IP Ranges</strong> (Settings > Cloudflare, for a site with no Tunnel), from an address in that trusted range list; otherwise the location fields are left empty, so a request sent straight to your server cannot fake them. This data is handled safely even in background tasks where a standard web request might not be present.</li>
         <li><strong>Turnstile CAPTCHA:</strong> Securely verify Cloudflare Turnstile tokens on your public forms to prevent spam. Without a Turnstile Secret in the settings, every token is rejected.</li>
-        <li><strong>Safe Caching:</strong> Sensitive areas like your shopping cart, checkout, and portal pages, and every page shown to a logged-in user, are automatically excluded from edge caching to protect user privacy.</li>
+        <li><strong>Safe Caching:</strong> Sensitive areas like your shopping cart, checkout, and portal pages, and every page shown to a logged-in user, are automatically excluded from edge caching, so one person's page is never served to another from the cache.</li>
     </ul>
 
     <!-- [@ANCHOR: COMM_cloudflare:DNS_HOSTNAMES] -->

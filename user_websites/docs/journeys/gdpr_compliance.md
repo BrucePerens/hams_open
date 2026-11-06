@@ -20,5 +20,5 @@ This journey describes how a user manages their data footprint on the platform.
 
 3. **Asynchronous Processing**: The system hands off the erasure task to a background executor ([@ANCHOR: gdpr_sudo_erasure]). Verified by `[@ANCHOR: test_gdpr_erasure_pages]`.
 4. **Content Removal**: The background task unlinks all pages, blog posts, and media associated with the user.
-5. **Anonymization**: The user's profile is scrubbed of PII and deactivated.
+5. **Directory removal**: The user is removed from the public community directory (`privacy_show_in_directory` is turned off). This module does not anonymize the profile; the account steps beyond it belong to the hams.com onboarding module, if installed.
 6. **Confirmation**: The user is logged out and redirected to a confirmation page.
