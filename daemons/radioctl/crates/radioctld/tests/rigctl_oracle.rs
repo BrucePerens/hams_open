@@ -173,12 +173,12 @@ async fn hamlibs_rigctl_drives_a_virtual_kx3_through_radioctld() {
         .expect("float");
     assert!((af - 0.5).abs() < 0.01, "{af}");
 
-    // STRENGTH is served from SM through Hamlib's K3 table: the virtual KX3 hears S0, -54 dB.
+    // STRENGTH is served from SM through Hamlib's K3 table: the virtual KX3 hears SM0015, S9+60 dB.
     let strength: i32 = printed(&rigctl(&daemon, &["l", "STRENGTH"]).await)
         .trim()
         .parse()
         .expect("integer");
-    assert_eq!(strength, -54);
+    assert_eq!(strength, 60);
     // A level that is not advertised is still refused by the client.
     let rejected = rigctl(&daemon, &["l", "TEMP_METER"]).await;
     assert!(
