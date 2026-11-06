@@ -1214,6 +1214,18 @@ class SafePatchMixin:
         return cls._callsign_map[key]
 
 
+# [@ANCHOR: zero_sudo:invalidate_zero_sudo_utils_cache]
+def invalidate_zero_sudo_utils_cache(test_class):
+    """Drop the cached `zero_sudo.security.utils` entries after a test class has written its config parameters.
+
+    A module that deliberately does not depend on zero_sudo (edge_cache: a tenant instance has no Redis) still uses these base classes, and
+    `-u edge_cache` alone has no `zero_sudo.security.utils` model: `invalidate_model_cache` then reaches `env["zero_sudo.security.utils"]`
+    through `get_redis_connection` and raised KeyError in setUpClass (0 tests, 1 error; seen 2026-10-29). With the model absent from the
+    registry nothing can have been cached under it, so there is nothing to invalidate and this does nothing."""
+    if "zero_sudo.security.utils" in test_class.registry:
+        invalidate_model_cache(test_class.env, "zero_sudo.security.utils")
+
+
 class HamsTransactionCase(TransactionCase, SafePatchMixin, PersonaMixin):
     # [@ANCHOR: zero_sudo:COMM_hams_transaction_case]
     _active_daemons = []
@@ -1284,7 +1296,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin, PersonaMixin):
             )
             # The context manager automatically commits if no exception is raised.
         cls.registry.clear_cache('stable')
-        invalidate_model_cache(cls.env, "zero_sudo.security.utils")
+        invalidate_zero_sudo_utils_cache(cls)
 
     @classmethod
     # [@ANCHOR: zero_sudo:hams_transaction_case_teardown_class]
@@ -1542,7 +1554,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                 "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value"
             )
         cls.registry.clear_cache('stable')
-        invalidate_model_cache(cls.env, "zero_sudo.security.utils")
+        invalidate_zero_sudo_utils_cache(cls)
 
         # 🚨 PROVISION SOCAT PROXY FOR HTTPS 🚨
         os.makedirs("/opt/hams/test/socat_certs", exist_ok=True)

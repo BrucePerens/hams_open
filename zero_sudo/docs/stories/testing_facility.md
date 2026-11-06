@@ -13,6 +13,7 @@ The testing facility provides a safe environment.
 
 
 - **HamsHttpCase** `[@ANCHOR: zero_sudo:COMM_hams_http_case]`: Extended class for running UI tours and HTTP cases under true transactional isolation.
+- **invalidate_zero_sudo_utils_cache(test_class)** `[@ANCHOR: zero_sudo:invalidate_zero_sudo_utils_cache]`: Called at the end of `HamsTransactionCase.setUpClass` and `HamsHttpCase.setUpClass`, after the class has written its `ir_config_parameter` rows, to drop the cached `zero_sudo.security.utils` entries. Takes the test class (its `registry` and `env`) and returns nothing. When the registry has no `zero_sudo.security.utils` model it does nothing: a module that deliberately does not depend on zero_sudo (`edge_cache`, which a Redis-less tenant instance installs) still uses these base classes, and its own run (`-u edge_cache`) used to end in a `KeyError` in `setUpClass` because Redis settings are read through that model.
 
 ## The Leak Detection Mechanism
 The [module README](../../README.md) attributes the end-of-test Database Leak Prevention checks to `RealTransactionCase` (`tests/real_transaction.py`). A table is exempt from the final comparison below when it is registered in `zero_sudo.noisy_table` (tables with high-frequency or technically necessary writes, such as `ir_logging` and `bus_bus`), and `RealTransactionCase` also keeps its own built-in exemption list.
