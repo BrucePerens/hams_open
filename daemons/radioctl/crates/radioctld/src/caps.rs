@@ -140,6 +140,12 @@ fn granularity(info: &LevelInfo, description: &RigDescription) -> (String, Strin
             let top = crate::meter_cal::full_scale(meter);
             float(0.0, top, top / 255.0)
         }
+        // Hamlib's own level_gran for STRENGTH on the Elecraft backends reads 0 to 60 with no step.
+        LevelSource::Strength => (
+            wire_int_as_float(0),
+            wire_int_as_float(60),
+            wire_int_as_float(0),
+        ),
         LevelSource::RawStr => (
             wire_int_as_float(0),
             wire_int_as_float(255),

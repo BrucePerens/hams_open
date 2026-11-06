@@ -210,6 +210,9 @@ pub enum LevelSource {
     Swr,
     /// The raw S-meter reading.
     RawStr,
+    /// The signal strength in decibels relative to S9 (Hamlib's `STRENGTH`), from the engine's
+    /// signal reading through the family's table; served only where the family has one.
+    Strength,
     /// The output power in watts from the engine's power reading and the description's calibration.
     PowerWatts,
     /// The output power as a fraction of the meter's scale (calibrated when the description has points).
@@ -231,7 +234,7 @@ pub struct LevelInfo {
     pub fraction: bool,
 }
 
-const LEVELS: [LevelInfo; 16] = [
+const LEVELS: [LevelInfo; 17] = [
     // Hamlib's PREAMP and ATT are integer levels in decibels. radioctld serves the attenuator in
     // decibels but the preamplifier as a step number (1, 2): a stage's gain varies by band and
     // model and no source we may use states it. The `\dump_state` lists carry the step numbers.
@@ -281,6 +284,14 @@ const LEVELS: [LevelInfo; 16] = [
         name: "RAWSTR",
         bit: 26,
         source: LevelSource::RawStr,
+        fraction: false,
+    },
+    // Hamlib's STRENGTH: decibels relative to S9 as an integer (-54 at S0, 0 at S9, +60 at S9+60 on
+    // an Elecraft). Served only for a family with a signal table (see `strength_db`).
+    LevelInfo {
+        name: "STRENGTH",
+        bit: 30,
+        source: LevelSource::Strength,
         fraction: false,
     },
     LevelInfo {
@@ -339,7 +350,7 @@ const LEVELS: [LevelInfo; 16] = [
 ];
 
 /// Level names Hamlib has that radioctld does not serve: asking for one is "not available".
-const OTHER_LEVELS: [&str; 19] = [
+const OTHER_LEVELS: [&str; 18] = [
     "VOXDELAY",
     "SQL",
     "IF",
@@ -356,7 +367,6 @@ const OTHER_LEVELS: [&str; 19] = [
     "METER",
     "VOXGAIN",
     "ANTIVOX",
-    "STRENGTH",
     "NB",
     "TEMP_METER",
 ];
@@ -479,6 +489,17 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
     }
 }
 
+// [@ANCHOR: radioctld_names_strength_db]
+/// The signal strength in decibels relative to S9 for the rig's raw signal reading, when the
+/// rig's family has a table for it (the Elecraft `SM` scale, Hamlib's `K3_SM_CAL`); `None` for a
+/// family without one, which then does not serve `STRENGTH`.
+pub fn strength_db(description: &RigDescription, raw: u16) -> Option<i32> {
+    match description.family {
+        Family::ElecraftAscii => radioctl_protocols::elecraft::strength_db(raw),
+        _ => None,
+    }
+}
+
 // [@ANCHOR: radioctld_names_served_levels]
 /// The levels this rig can serve: its capabilities, and a known range for numeric levels.
 pub fn served_levels(description: &RigDescription) -> Vec<LevelInfo> {
@@ -505,6 +526,10 @@ pub fn served_levels(description: &RigDescription) -> Vec<LevelInfo> {
                         .is_some_and(|p| p.cal().is_some())
             }
             LevelSource::RawStr => description.capabilities.has(Capability::ReadSignal),
+            LevelSource::Strength => {
+                description.capabilities.has(Capability::ReadSignal)
+                    && strength_db(description, 0).is_some()
+            }
         })
         .copied()
         .collect()
@@ -636,12 +661,14 @@ mod tests {
     #[test]
     fn level_names_are_known_unserved_or_unknown() {
         assert!(matches!(level_lookup("keyspd"), LevelLookup::Known(i) if i.bit == 14));
-        assert_eq!(level_lookup("STRENGTH"), LevelLookup::Unserved);
+        assert!(matches!(level_lookup("STRENGTH"), LevelLookup::Known(_)));
+        assert_eq!(level_lookup("TEMP_METER"), LevelLookup::Unserved);
         assert_eq!(level_lookup("NOSUCH"), LevelLookup::Unknown);
     }
 
     // Tests [@ANCHOR: radioctld_names_level_range]
     // Tests [@ANCHOR: radioctld_names_served_levels]
+    // Tests [@ANCHOR: radioctld_names_strength_db]
     // Tests [@ANCHOR: radioctld_names_level_mask]
     #[test]
     fn only_a_rig_with_ranges_and_the_capability_serves_levels() {
@@ -678,6 +705,14 @@ mod tests {
         assert_eq!(level_range(&kx3, Level::RfGain), Some((190, 250)));
         assert_eq!(level_range(&kx3, Level::MicGain), Some((0, 80)));
         let served = served_levels(&kx);
+        assert!(
+            served.iter().any(|l| l.name == "STRENGTH"),
+            "Elecraft has a table"
+        );
+        assert!(!served_levels(&ic).iter().any(|l| l.name == "STRENGTH"));
+        assert_eq!(strength_db(&kx, 6), Some(0));
+        assert_eq!(strength_db(&kx, 16), None);
+        assert_eq!(strength_db(&ic, 6), None, "no CI-V table");
         assert_eq!(
             served.len(),
             LEVELS.len() - 8,

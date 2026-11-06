@@ -97,6 +97,20 @@ pub fn level_wire_for(desc: &RigDescription, level: Level) -> LevelWire {
     }
 }
 
+/// Decibels relative to S9 for each `SM` reading 0 to 15, as Hamlib 4.6.2's `K3_SM_CAL` has them
+/// (rigs/kenwood/elecraft.h). The manual's anchors agree: S9 = 6, S9+20 = 9, S9+40 = 12,
+/// S9+60 = 15 ("SM", p. 23).
+const SM_DB: [i32; 16] = [
+    -54, -42, -36, -24, -12, -6, 0, 10, 15, 20, 30, 35, 40, 50, 55, 60,
+];
+
+// [@ANCHOR: radioctl_elecraft_strength_db]
+/// The signal strength in decibels relative to S9 for an `SM` reading (0 to 15, the basic
+/// format): -54 at 0, 0 at 6 (S9), +60 at 15. `None` for a reading outside 0 to 15.
+pub fn strength_db(sm: u16) -> Option<i32> {
+    SM_DB.get(usize::from(sm)).copied()
+}
+
 // [@ANCHOR: radioctl_elecraft_signed_offset]
 /// Formats a RIT/XIT offset as the `ROsnnnn` data (`+0050`, `-0050`).
 pub fn signed_offset(hz: i16) -> String {
@@ -531,6 +545,23 @@ mod tests {
         assert_eq!(parse_firmware("02.37"), Some((2, 37)));
         assert_eq!(parse_firmware("2.37"), None);
         assert_eq!(parse_firmware("99.99"), Some((99, 99)));
+    }
+
+    // Tests [@ANCHOR: radioctl_elecraft_strength_db]
+    #[test]
+    fn strength_follows_the_sm_anchors_of_the_manual_and_hamlibs_table() {
+        // "SM", p. 23: S9 = 6, S9+20 = 9, S9+40 = 12, S9+60 = 15.
+        assert_eq!(strength_db(6), Some(0));
+        assert_eq!(strength_db(9), Some(20));
+        assert_eq!(strength_db(12), Some(40));
+        assert_eq!(strength_db(15), Some(60));
+        // Hamlib's KX3 serves -54 at SM0000.
+        assert_eq!(strength_db(0), Some(-54));
+        assert_eq!(strength_db(16), None);
+        assert!(
+            SM_DB.windows(2).all(|w| w[0] < w[1]),
+            "rises with the reading"
+        );
     }
 
     // Tests [@ANCHOR: radioctl_elecraft_level_wire_for]
