@@ -30,6 +30,8 @@ pub mod ty {
     pub const INPUT_SAMPRATE: u8 = 10;
     /// Base level of byte spectrum, dB.
     pub const SPECTRUM_BASE: u8 = 11;
+    /// Front end samples taken since start (counter).
+    pub const INPUT_SAMPLES: u8 = 13;
     /// FFTs averaged per response.
     pub const SPECTRUM_AVG: u8 = 12;
     /// Spectrum window type.
@@ -110,6 +112,18 @@ pub mod ty {
     pub const CROSSOVER: u8 = 95;
     /// Float spectrum bins (power, linear).
     pub const BIN_DATA: u8 = 96;
+    /// Front end RF attenuation, dB.
+    pub const RF_ATTEN: u8 = 97;
+    /// Front end RF gain, dB.
+    pub const RF_GAIN: u8 = 98;
+    /// Front end RF AGC on (boolean).
+    pub const RF_AGC: u8 = 99;
+    /// Lowest usable front end frequency, Hz.
+    pub const FE_LOW_EDGE: u8 = 100;
+    /// Highest usable front end frequency, Hz.
+    pub const FE_HIGH_EDGE: u8 = 101;
+    /// Front end samples are real (direct sampling), not complex (boolean).
+    pub const FE_ISREAL: u8 = 102;
     /// Front end A/D overrange count.
     pub const AD_OVER: u8 = 104;
     /// RTP payload type.

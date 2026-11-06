@@ -4,6 +4,7 @@
 use crate::tlv::{parse, ty, Kind, TlvError};
 use std::net::SocketAddr;
 
+// [@ANCHOR: radiod_client_status_channel_status]
 /// A decoded status datagram. Unknown types are ignored, as the protocol intends.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChannelStatus {
@@ -51,7 +52,8 @@ pub struct ChannelStatus {
     pub averaging: Option<u64>,
     /// Spectrum: FFT length.
     pub fft_n: Option<u64>,
-    /// Spectrum: noise bandwidth of a bin, in bins.
+    /// Spectrum: noise bandwidth of one bin, Hz. (Observed on the RX-888, 2026-11-05: 45,000 for a
+    /// 30 kHz bin and 150 for a 100 Hz bin, so Hz, not bins as this field was first documented.)
     pub noise_bw_bins: Option<f32>,
     /// Spectrum: float bin power (linear), DC first, then positive, then negative frequencies.
     pub bin_data: Vec<f32>,
@@ -61,6 +63,39 @@ pub struct ChannelStatus {
     pub base_db: Option<f32>,
     /// Spectrum (byte format): dB per byte step.
     pub step_db: Option<f32>,
+    /// Channel passband low edge, Hz relative to the carrier.
+    pub low_edge_hz: Option<f32>,
+    /// Channel passband high edge, Hz relative to the carrier.
+    pub high_edge_hz: Option<f32>,
+    /// Channel AGC on.
+    pub agc: Option<bool>,
+    /// Channel (audio) gain, dB.
+    pub gain_db: Option<f32>,
+    /// Channel output level, dB re full scale.
+    pub output_level_db: Option<f32>,
+    /// Front end: A/D input power, dB re full scale (before the RF gain is removed). `-inf` while the
+    /// front end is stopped (no channels).
+    pub if_power_db: Option<f32>,
+    /// Front end: RF gain now, dB (moves under the front end's RF AGC).
+    pub rf_gain_db: Option<f32>,
+    /// Front end: RF attenuation now, dB.
+    pub rf_atten_db: Option<f32>,
+    /// Front end: RF AGC on.
+    pub rf_agc: Option<bool>,
+    /// Front end: level calibration, dB (dBm to dBFS).
+    pub rf_level_cal_db: Option<f32>,
+    /// Front end: lowest usable frequency, Hz.
+    pub fe_low_edge_hz: Option<f32>,
+    /// Front end: highest usable frequency, Hz.
+    pub fe_high_edge_hz: Option<f32>,
+    /// Front end: real (direct-sampling) samples rather than complex.
+    pub fe_is_real: Option<bool>,
+    /// Front end: A/D bits per sample.
+    pub ad_bits: Option<u64>,
+    /// Front end: samples taken since start; two readings over a known time give the real rate.
+    pub input_samples: Option<u64>,
+    /// Front end: samples since the last A/D overrange.
+    pub samples_since_over: Option<u64>,
 }
 
 impl ChannelStatus {
@@ -102,6 +137,22 @@ impl ChannelStatus {
                 ty::BIN_BYTE_DATA => s.bin_bytes = e.value.to_vec(),
                 ty::SPECTRUM_BASE => s.base_db = Some(e.f32()?),
                 ty::SPECTRUM_STEP => s.step_db = Some(e.f32()?),
+                ty::LOW_EDGE => s.low_edge_hz = Some(e.f32()?),
+                ty::HIGH_EDGE => s.high_edge_hz = Some(e.f32()?),
+                ty::AGC_ENABLE => s.agc = Some(e.bool()?),
+                ty::GAIN => s.gain_db = Some(e.f32()?),
+                ty::OUTPUT_LEVEL => s.output_level_db = Some(e.f32()?),
+                ty::IF_POWER => s.if_power_db = Some(e.f32()?),
+                ty::RF_GAIN => s.rf_gain_db = Some(e.f32()?),
+                ty::RF_ATTEN => s.rf_atten_db = Some(e.f32()?),
+                ty::RF_AGC => s.rf_agc = Some(e.bool()?),
+                ty::RF_LEVEL_CAL => s.rf_level_cal_db = Some(e.f32()?),
+                ty::FE_LOW_EDGE => s.fe_low_edge_hz = Some(e.f32()?),
+                ty::FE_HIGH_EDGE => s.fe_high_edge_hz = Some(e.f32()?),
+                ty::FE_ISREAL => s.fe_is_real = Some(e.bool()?),
+                ty::AD_BITS_PER_SAMPLE => s.ad_bits = Some(e.uint()?),
+                ty::INPUT_SAMPLES => s.input_samples = Some(e.uint()?),
+                ty::SAMPLES_SINCE_OVER => s.samples_since_over = Some(e.uint()?),
                 _ => {}
             }
         }
@@ -268,5 +319,78 @@ mod tests {
         assert_eq!(db[6], (10.0e6 + 2000.0, -150.0 + 0.5 * 255.0));
         // No bin width means no frequency axis.
         assert!(ChannelStatus::default().spectrum_db(1.0).is_empty());
+    }
+
+    /// A front-end status as the RX-888's `radiod` sent it on 2026-11-05 (pinned commit 8c50dbbe), in
+    /// reply to a front-end poll while no channel existed. Fields: description, GPS time, input rate,
+    /// real samples, RF gain, attenuation (a float 0 sent as an empty value), RF AGC, level
+    /// calibration, usable edges, A/D bits, IF power (`-inf`, the front end is stopped), overrange
+    /// count and the status group. No command tag: front-end replies do not echo one.
+    const RX888_FRONT_END: &str = "001200041e72783838382062656e63682062727563653136206e6f20616e74656e6e6103081482c5860288e40d0a0403dcc50066010118006204411fc5af220061006e043fb333336301016404466a600065044be85c605201102a0313c6802b0304f1a12d04ff80000068000506ef580801138e00";
+
+    fn unhex(h: &str) -> Vec<u8> {
+        (0..h.len() / 2)
+            .filter_map(|i| u8::from_str_radix(h.get(2 * i..2 * i + 2)?, 16).ok())
+            .collect()
+    }
+
+    // Tests [@ANCHOR: radiod_client_status_decode]
+    // Tests [@ANCHOR: radiod_client_status_channel_status]
+    #[test]
+    fn decodes_a_real_rx888_front_end_status() {
+        let pkt = unhex(RX888_FRONT_END);
+        assert_eq!(pkt.len(), 117);
+        let st = ChannelStatus::decode(&pkt)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        assert_eq!(st.ssrc, 0);
+        assert_eq!(st.tag, None, "front-end replies carry no tag");
+        assert_eq!(
+            st.description.as_deref(),
+            Some("rx888 bench bruce16 no antenna")
+        );
+        assert_eq!(st.input_samprate, Some(64_800_000));
+        assert_eq!(st.fe_is_real, Some(true));
+        assert_eq!(st.rf_agc, Some(true));
+        assert_eq!(st.rf_atten_db, Some(0.0));
+        assert!(st.rf_gain_db.is_some_and(|g| (g - 9.99).abs() < 0.01));
+        assert!(st.rf_level_cal_db.is_some_and(|c| (c - 1.4).abs() < 1e-6));
+        assert_eq!(st.fe_low_edge_hz, Some(15_000.0));
+        assert_eq!(st.fe_high_edge_hz, Some(30_456_000.0));
+        assert_eq!(st.ad_bits, Some(16));
+        assert_eq!(st.ad_over, Some(0));
+        assert!(st.if_power_db.is_some_and(|p| p == f32::NEG_INFINITY));
+        assert_eq!(st.frequency_hz, None);
+    }
+
+    // Tests [@ANCHOR: radiod_client_status_decode]
+    #[test]
+    fn decodes_channel_passband_gain_and_counters() {
+        let f = |v: f32| v.to_bits().to_be_bytes().to_vec();
+        let pkt = status(&[
+            (ty::OUTPUT_SSRC, vec![0x03, 0xe9]),
+            (ty::LOW_EDGE, f(-5000.0)),
+            (ty::HIGH_EDGE, f(5000.0)),
+            (ty::AGC_ENABLE, vec![1]),
+            (ty::GAIN, f(61.2)),
+            (ty::OUTPUT_LEVEL, f(-53.0)),
+            (ty::INPUT_SAMPLES, vec![0x02, 0x16, 0x0e, 0xc0]),
+            (ty::SAMPLES_SINCE_OVER, vec![0x10]),
+        ]);
+        let st = ChannelStatus::decode(&pkt)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        assert_eq!(st.ssrc, 1001);
+        assert_eq!(
+            (st.low_edge_hz, st.high_edge_hz),
+            (Some(-5000.0), Some(5000.0))
+        );
+        assert_eq!(st.agc, Some(true));
+        assert_eq!(st.gain_db, Some(61.2));
+        assert_eq!(st.output_level_db, Some(-53.0));
+        assert_eq!(st.input_samples, Some(35_000_000));
+        assert_eq!(st.samples_since_over, Some(16));
     }
 }
