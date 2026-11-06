@@ -17,6 +17,11 @@ only: no Redis, no `zero_sudo`, so a small tenant instance (perens.com, postopen
 * **Cookies.** Odoo gives every cookieless visitor a new unsaved `session_id` and a default-language
   `frontend_lang` cookie. On an edge-cacheable GET both carry nothing for that visitor, so both are dropped.
   A cached response is replayed to everyone, so a response never carries a cookie and is cacheable at once.
+* **Errors.** Every 4xx/5xx response is sent `Cache-Control: no-store` (replacing any value it carried) and
+  `Cloudflare-CDN-Cache-Control: no-cache, no-store`, so a 404 or 500 from a bad deploy cannot outlive the fix in
+  a browser, Cloudflare's edge, Automatic Platform Optimization or a zone TTL rule. Redirects and 304 keep their own rules.
+  `IrHttp._cloudflare_error_never_stored(response)` does it and returns whether it did
+  `[@ANCHOR: COMM_cloudflare_error_never_stored]`.
 * **Never cached:** `/web/`, `/odoo`, `/my/`, `/api/`, `/shop/cart|checkout|confirm_order`, `/helpdesk/`, any
   POST, any logged-in visitor, any response with a cookie that is not one of the two above.
 * **Forms.** The CSRF token baked into a cached page belongs to a session nobody holds. A small script

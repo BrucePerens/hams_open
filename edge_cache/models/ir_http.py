@@ -12,6 +12,10 @@ _logger = logging.getLogger(__name__)
 # header out of the controller; _post_dispatch consumes it and never lets it reach the client.
 EDGE_CACHEABLE_MARKER = "X-Cloudflare-Edge-Cacheable"
 NO_EDGE_CACHE = "no-cache, no-store"
+# Browser/shared-cache directive for any error answer. Cloudflare-CDN-Cache-Control is only the edge's
+# own opt-out; a zone rule, Automatic Platform Optimization or Browser Cache TTL can still store an
+# answer that carries no Cache-Control of its own (perens.com held a 404 for 30 minutes, 2026-10-29).
+NO_STORE = "no-store"
 PUBLIC_PAGE_EDGE_CACHE = "max-age=86400"
 # Cookies Odoo sets on a first anonymous visit that carry nothing per-visitor when the conditions
 # in _cloudflare_strip_redundant_cookies() hold. Any other cookie makes a response uncacheable.
@@ -63,6 +67,9 @@ class IrHttp(models.AbstractModel):
 
         # Fail loudly if request lacks httprequest
         path = request.httprequest.path
+
+        # Error answers are never stored anywhere, whatever the route below decides.
+        cls._cloudflare_error_never_stored(response)
 
         # 1. Media & Assets (Max aggressive caching: 1 year)
         # CRITICAL: /web/image and /web/content MUST NOT be aggressively cached here,
@@ -156,6 +163,20 @@ class IrHttp(models.AbstractModel):
             )
 
         return res
+
+    @classmethod
+    def _cloudflare_error_never_stored(cls, response):
+        # [@ANCHOR: COMM_cloudflare_error_never_stored]
+        # Verified by [@ANCHOR: COMM_test_error_responses_are_no_store]
+        """Mark every 4xx/5xx response `Cache-Control: no-store` (replacing any value it carried).
+
+        A bad deploy answers 404 or 500 for a while; a cached copy must not outlive the fix. Redirects
+        and 304 are left to the route's own rules. Returns True when the header was set.
+        """
+        if response.status_code < 400:
+            return False
+        response.headers["Cache-Control"] = NO_STORE
+        return True
 
     @classmethod
     def _cloudflare_edge_cacheable(cls, response):
