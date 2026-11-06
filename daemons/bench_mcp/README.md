@@ -1205,7 +1205,7 @@ One line per group of functions; each anchor is also on its functions in `src/`.
 
 Both anchors are in `src/link.rs`; `connect` in `src/main.rs` uses them for every scope tool call.
 
-### `bench_mcp_link_tcp_checked`
+### `bench_mcp_link_tcp_checked` [@ANCHOR: bench_mcp_link_tcp_checked]
 
 **Purpose.** Opens a scope link and proves the scope answers before any tool uses it. The Siglent scope serves one SCPI client at a time. After the dev box lost power on 2026-10-29 the scope kept power and, probably, the dead session: it accepted TCP on 5025 and reset every connection on `*IDN?` until it was power-cycled (cause unconfirmed). This function waits and retries, and when the scope still does not answer it reports NO-GO with evidence and the action, instead of a bare "Connection reset by peer".
 
@@ -1233,7 +1233,7 @@ let link = Link::tcp_checked("192.168.10.51", 5025, &waits, &|h, p| Link::scope_
 
 **See also.** `bench_mcp_link_tcp` (one plain connect), `bench_mcp_link_scope_state`, `bench_mcp_main_connect`. Tests: `a_scope_that_resets_the_first_connections_is_waited_out_and_then_answers` and `a_scope_that_never_answers_gives_a_no_go_with_the_evidence_and_the_action` in `src/link.rs` (a fake scope on loopback that resets with linger 0). Follow-up needing the real scope: confirm or refute the stale-session cause if it recurs (wait out its idle timeout before power-cycling).
 
-### `bench_mcp_link_scope_state`
+### `bench_mcp_link_scope_state` [@ANCHOR: bench_mcp_link_scope_state]
 
 **Purpose.** The evidence for a failed scope connection: is the scope on the network, and which of its ports accept TCP.
 

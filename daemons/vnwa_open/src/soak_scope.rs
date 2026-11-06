@@ -35,7 +35,9 @@ pub fn open_checked(
     ))
 }
 
+/// One attempt: connect (5 s limit), send `*IDN?`, read one line (5 s limit); an empty line (the scope closed) is an error.
 fn try_once(addr: &str) -> Result<ScopeStream, String> {
+    // [@ANCHOR: vnwa_open_soak_scope_try_once]
     let sock = addr
         .to_socket_addrs()
         .map_err(|e| e.to_string())?
@@ -79,6 +81,7 @@ pub fn state(addr: &str) -> String {
 }
 
 fn connects(host: &str, port: &str) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_soak_scope_connects]
     let a = format!("{host}:{port}")
         .to_socket_addrs()
         .map_err(|e| e.to_string())?
@@ -120,6 +123,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_soak_scope_open_checked]
+    // Tests [@ANCHOR: vnwa_open_soak_scope_try_once]
     #[test]
     fn a_scope_that_resets_the_first_connections_is_waited_out_and_then_answers() {
         let (addr, server) = stale(2, 3);
@@ -149,6 +153,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_soak_scope_state]
+    // Tests [@ANCHOR: vnwa_open_soak_scope_connects]
     #[test]
     fn the_state_names_an_accepting_port_and_a_refused_one() {
         let live = TcpListener::bind("127.0.0.1:0").unwrap();

@@ -193,7 +193,7 @@ plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that basel
 
 `src/soak_scope.rs` is the soak harness's scope connection; `examples/soak.rs` uses it, and `tools/soak_gonogo.sh` reports its failure. It follows the same rule as bench_mcp's `Link::tcp_checked`: a Siglent scope that still holds a dead single-client SCPI session (after a host power loss, as on 2026-10-29) resets queries, so the harness waits and retries, then says NO-GO with the evidence and the action.
 
-### `vnwa_open_soak_scope_open_checked`
+### `vnwa_open_soak_scope_open_checked` [@ANCHOR: vnwa_open_soak_scope_open_checked]
 
 **Purpose.** Connect to the scope and prove it answers `*IDN?` before the generator step uses it.
 
@@ -214,7 +214,7 @@ pub type ScopeStream = (BufReader<TcpStream>, TcpStream); // reader and writer o
 
 **See also.** `vnwa_open_soak_scope_state`. Tests: the unit tests in `src/soak_scope.rs` (fake scope on loopback that resets the first connections) and `tests/soak_gonogo.rs` (the verdict script on a recorded log).
 
-### `vnwa_open_soak_scope_state`
+### `vnwa_open_soak_scope_state` [@ANCHOR: vnwa_open_soak_scope_state]
 
 **Purpose.** Evidence for the failure report.
 
@@ -229,3 +229,34 @@ pub fn state(addr: &str) -> String
 **Returns.** `ping answers|ping does not answer|ping unavailable, port <p> accepts|port <p>: <error>, port 80 ...`. Never an error. Blocking (about 1 s ping plus 2 s per port); briefly opens TCP connections to the SCPI port and port 80, so call it only after the real attempts failed.
 
 **See also.** `vnwa_open_soak_scope_open_checked`. Test: `the_state_names_an_accepting_port_and_a_refused_one`.
+
+### `vnwa_open_soak_scope_try_once` [@ANCHOR: vnwa_open_soak_scope_try_once]
+
+**Purpose.** One connection attempt for `open_checked`; private.
+
+```rust
+fn try_once(addr: &str) -> Result<ScopeStream, String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `addr` | `&str` | `host:port`, resolved to its first address. |
+
+**Returns.** `Ok(stream)` after a non-empty `*IDN?` reply. `Err` text starting `connect:`, `send:` or `read:` (with the OS error, for example `Connection reset by peer`), or `empty reply to *IDN? (the scope closed the connection)`.
+
+**Special concerns.** Blocking: 5 s connect limit and 5 s read limit. Sends only `*IDN?`. Test: `a_scope_that_resets_the_first_connections_is_waited_out_and_then_answers`.
+
+### `vnwa_open_soak_scope_connects` [@ANCHOR: vnwa_open_soak_scope_connects]
+
+**Purpose.** A single TCP connect probe for `state`; private.
+
+```rust
+fn connects(host: &str, port: &str) -> Result<(), String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `host` | `&str` | Name or address. |
+| `port` | `&str` | Port number as text. |
+
+**Returns.** `Ok(())` if a connection was accepted within 2 s (it is dropped at once); `Err` with the resolver or OS error text otherwise. Blocking, 2 s at most. Test: `the_state_names_an_accepting_port_and_a_refused_one`.
