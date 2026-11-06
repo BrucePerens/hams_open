@@ -260,3 +260,70 @@ fn connects(host: &str, port: &str) -> Result<(), String>
 | `port` | `&str` | Port number as text. |
 
 **Returns.** `Ok(())` if a connection was accepted within 2 s (it is dropped at once); `Err` with the resolver or OS error text otherwise. Blocking, 2 s at most. Test: `the_state_names_an_accepting_port_and_a_refused_one`.
+
+## Soak USB topology check (`soak_topology`)
+
+`src/soak_topology.rs` decides whether the USB tree changed in a way that matters to the unit. Before 2026-11-06 the soak compared the whole `lsusb -t` and recorded a false `usb_topology_changed` whenever an unrelated device (a USB-C dock, 2026-10-29) was unplugged. `examples/soak.rs` calls `compare` after the start, after each scheduled power cycle and after a recovery cycle. The test fixtures `tests/soak_fixtures/lsusb_start.txt` and `lsusb_cycle_2.txt` are the real pair from the second soak.
+
+### `vnwa_open_soak_topology_change` [@ANCHOR: vnwa_open_soak_topology_change]
+
+**Purpose.** The result of comparing two `lsusb -t` texts.
+
+```rust
+pub enum Change { None, OutsideOnly, Unit { first: String, now: String } }
+```
+
+| Variant | Meaning |
+|---|---|
+| `None` | The whole normalised trees are equal. |
+| `OutsideOnly` | Only devices outside the unit's part differ. The soak logs an `INFO` line and records no event. |
+| `Unit { first, now }` | The unit's part differs; `first` and `now` are its normalised subtrees (or `(bus not present)`). The soak records a `usb_topology_changed` event with both as the detail. |
+
+Plain value, `Clone`, created by `compare`, owned by the caller; no serialized form and no shared state.
+
+### `vnwa_open_soak_topology_normalise` [@ANCHOR: vnwa_open_soak_topology_normalise]
+
+**Purpose.** Makes two `lsusb -t` texts comparable by removing the device numbers (`Dev 17,`), which change at every enumeration.
+
+```rust
+pub fn normalise(lsusb_t: &str) -> String
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsusb_t` | `&str` | Output of `lsusb -t`, borrowed. |
+
+**Returns.** The same lines with each `Dev N,` removed (the space after the comma stays, so lines have two spaces there), joined with `\n`. Lines without a device number are unchanged. Pure; never fails.
+
+### `vnwa_open_soak_topology_unit_subtree` [@ANCHOR: vnwa_open_soak_topology_unit_subtree]
+
+**Purpose.** Picks out of `lsusb -t` the lines that belong to the unit: the root hub line of its bus (the controller), every line of each hub on the way down to the switched port, and the device at that port with everything below it (the unit's hub, both codecs and their interfaces, with ids, classes, drivers and speeds).
+
+```rust
+pub fn unit_subtree(lsusb_t: &str, hub: &HubPort) -> Option<String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsusb_t` | `&str` | Output of `lsusb -t`, borrowed. |
+| `hub` | `&HubPort` | The hub in uhubctl's naming (`3-2`, or `3-2.1` for a hub behind a hub) and the switched port (2). The path is the hub's ports plus this port. |
+
+**Returns.** `Some(text)` (normalised, lines joined with `\n`) if the hub's bus is in the output, even when the unit's branch is gone (the text then lacks the branch, so it differs). `None` if the bus is absent or the hub name is not of the form `<bus>-<port>[.<port>...]`. Siblings of the unit's branch, other ports of its hubs, and other buses are left out. Pure; reads nothing from the system.
+
+### `vnwa_open_soak_topology_compare` [@ANCHOR: vnwa_open_soak_topology_compare]
+
+**Purpose.** The soak's single decision: is this a change to report?
+
+```rust
+pub fn compare(first: &str, now: &str, hub: &HubPort) -> Change
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `first` | `&str` | The first `lsusb -t` of the run, raw or normalised. |
+| `now` | `&str` | The current `lsusb -t`. |
+| `hub` | `&HubPort` | As for `unit_subtree`. |
+
+**Returns.** `Change::Unit` if the unit subtrees differ (a codec missing, a different port, a different speed or driver, the bus gone); otherwise `OutsideOnly` if the rest differs; otherwise `None`. Pure.
+
+**See also.** Tests in `src/soak_topology.rs`: the dock removal in the recorded pair is `OutsideOnly`; a missing codec, a changed port, a changed speed and a missing bus are `Unit`. Real-hardware follow-up: none needed for the logic; the next real soak will show whether an `INFO` line appears when a device is unplugged.
