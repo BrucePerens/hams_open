@@ -18,7 +18,7 @@ constant-expression `SELECT 1` health check -- it never reads or writes a
 table, so it needs no privilege beyond `CONNECT` on its target database.
 `hams_shared/tools/infrastructure.py`'s own `provision_environment()` now
 provisions a dedicated `cache_manager_ro` role and writes
-`/opt/hams/etc/keys/cache_manager_db.env` automatically on every run (see
+`/opt/hams/etc/keys/cache_manager/cache_manager_db.env` automatically on every run (see
 `_provision_cache_manager_role`) -- no manual step needed for a deployment
 provisioned that way. A failure in that step is logged as a warning and
 does not stop provisioning, so if the daemon will not start, check that
@@ -28,7 +28,14 @@ were otherwise supplied; there is no fallback to the full-privilege `odoo`
 role. For a Postgres host `infrastructure.py`'s own local-peer-auth
 provisioning can't reach (a separately administered remote database), run
 `../scripts/provision_cache_manager_db_role.py` directly instead -- it
-writes the identical env file (loaded by `cache_manager.py` separately
-from `daemon_key_manager`'s own `cache_manager.env`, which is fully
-replaced, holding only `ODOO_RPC_LOGIN`/`ODOO_RPC_KEY`, on every
-install/upgrade/key rotation).
+writes the identical env file, which you then hand to the daemon's account
+(`chown odoo:hamsd_cache_manager`, `chmod 0640`).
+
+### Account and files
+The daemon runs as its own system account, `hamsd_cache_manager` (hams.com's daemon OS isolation, one account per
+daemon family), not as `odoo`. `_db_env_file()` [@ANCHOR: COMM_cache_manager_db_env_file] picks the login file: the
+family key directory's `keys/cache_manager/cache_manager_db.env` (`odoo:hamsd_cache_manager`, `0640`, in a `0750`
+directory of the same owner and group), or the old flat `keys/cache_manager_db.env` only while a host has not been
+provisioned with the new one. The daemon no longer opens `daemon_key_manager`'s `keys/cache_manager.env`: it never used
+the Odoo login in it, and that `odoo`-only file is unreadable to its own account. Run it by hand as
+`sudo -u hamsd_cache_manager python3 cache_manager.py`, not as `odoo`.

@@ -35,8 +35,8 @@ ODOO_USER = "backup_service_internal"
 # Real bug found 2026-09-28/29 chasing a live production incident (this daemon's own JSON-2 API
 # calls back to Odoo always failed with "401: Invalid apikey", even right after a successful key
 # rotation): this used to read ODOO_SERVICE_PASSWORD, a name nothing ever wrote. Every other
-# daemon in this codebase (zero_sudo/daemon/json_rpc_client.py, distributed_redis_cache's own
-# cache_manager.py) reads ODOO_RPC_KEY, which is what daemon_key_manager's own
+# daemon in this codebase that calls Odoo (zero_sudo/daemon/json_rpc_client.py, for example) reads
+# ODOO_RPC_KEY, which is what daemon_key_manager's own
 # _write_secure_env_file() actually writes to every daemon's env file -- this was the one daemon
 # using a name of its own that nothing produced, so ODOO_PASS was always the empty-string
 # default, silently, regardless of how many times the real key got rotated. This exact gap was

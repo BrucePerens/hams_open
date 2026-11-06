@@ -1,6 +1,7 @@
 # Copyright © Bruce Perens K6BP. AGPL-3.0-or-later.
 # Installed by hams_shared/tools/infrastructure.py's MANIFEST (hams_com), which carries the identical unit text;
-# a hams_com test fails if the two drift apart. Runs the deployed module file with Redis credentials from redis.env.
+# a hams_com test fails if the two drift apart. Runs the deployed module file with Redis credentials from redis.env, as its
+# own account hamsd_cache_manager; the daemon reads its PostgreSQL login from /opt/hams/etc/keys/cache_manager/cache_manager_db.env.
 [Unit]
 Description=Odoo Distributed Cache Manager (PostgreSQL NOTIFY to the Redis invalidation counter)
 After=network.target postgresql.service redis-server.service
@@ -14,12 +15,26 @@ PrivateDevices=true
 NoNewPrivileges=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
+# Its own account, hamsd_cache_manager (DAEMON_OS_ISOLATION_PLAN.md section 5): it writes nothing and reads no other process.
+ProtectProc=invisible
+ProcSubset=pid
+UMask=0027
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native
 Type=simple
-User=odoo
+User=hamsd_cache_manager
+Group=hamsd_cache_manager
 WorkingDirectory=/opt/hams/src/hams_open/distributed_redis_cache/daemons
 
 EnvironmentFile=/opt/hams/etc/redis.env
-EnvironmentFile=-/opt/hams/etc/keys/cache_manager.env
 
 ExecStart=/usr/bin/python3 /opt/hams/src/hams_open/distributed_redis_cache/daemons/cache_manager.py
 
