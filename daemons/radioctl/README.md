@@ -1784,6 +1784,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_service_mode_and_width] (radioctld) The mode and the receive bandwidth in hertz (the mode's typical width when the rig has no
 - [@ANCHOR: radioctl:radioctld_service_mode_fields] (radioctld) The `Mode` and `Passband` answer fields, with the given labels.
 - [@ANCHOR: radioctl:radioctld_service_set_mode] (radioctld) Sets the mode, and the receive bandwidth when one is asked for and the rig has the
+- [@ANCHOR: radioctl:radioctld_service_mode_before] (radioctld) The rig's current mode, or `None` when it cannot be read (the caller then cannot restore it).
 - [@ANCHOR: radioctl:radioctld_service_require_mode] (radioctld) A split transmit mode other than the current one cannot be set: radioctl rigs have one
 - [@ANCHOR: radioctl:radioctld_service_refuse] (radioctld) Counts a refused transmit command and answers with the refusal code.
 - [@ANCHOR: radioctl:radioctld_service_check_transmit] (radioctld) The fail-closed check in front of every command that can put RF on the air: the gate must
