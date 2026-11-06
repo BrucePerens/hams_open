@@ -23,6 +23,7 @@ mod rx888;
 mod sa;
 mod scope;
 mod sdr;
+mod serial_guard;
 mod spectrum;
 mod usb_hub;
 mod vna;

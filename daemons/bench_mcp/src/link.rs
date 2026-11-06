@@ -30,6 +30,8 @@ pub struct Serial {
 impl Serial {
     pub fn open(path: &str, baud: u32) -> Result<Serial, String> {
         // [@ANCHOR: bench_mcp_link_serial_open]
+        // A device on the config's `reserved_serial` list is never opened (nothing is opened before this check).
+        crate::serial_guard::check_reserved_open(path)?;
         let speed = match baud {
             9600 => libc::B9600,
             19200 => libc::B19200,
@@ -146,6 +148,8 @@ impl Link {
     }
 
     pub fn serial(path: &str, baud: u32) -> Result<Link, String> {
+        // A supply is opened by a stable name: see `serial_guard::check_supply`.
+        crate::serial_guard::check_supply_open(path)?;
         Ok(Link::new(Box::new(Serial::open(path, baud)?), "\r\n"))
     }
 

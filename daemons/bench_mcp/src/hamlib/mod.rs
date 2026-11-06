@@ -146,6 +146,8 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
                         }
                     } else if !d.starts_with("/dev/") || d.contains("..") {
                         return Err(format!("device {d:?} must be a path under /dev without .."));
+                    } else {
+                        crate::serial_guard::check_reserved_open(d)?;
                     }
                     Some(d.to_string())
                 }
