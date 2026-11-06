@@ -74,7 +74,7 @@ fn load(path: &Path) -> Result<(Config, Vec<radioctl_core::description::RigDescr
 }
 
 // [@ANCHOR: radioctld_main_run]
-/// Runs the daemon until the process is interrupted.
+/// Runs the daemon until a stop signal arrives (see `stop_signal`), then stops it.
 fn run(cli: &Cli) -> Result<(), String> {
     let (config, descriptions) = load(&cli.config)?;
     if cli.check {
@@ -108,13 +108,42 @@ fn run(cli: &Cli) -> Result<(), String> {
                 served.server.local_addr()
             );
         }
-        tokio::signal::ctrl_c()
-            .await
-            .map_err(|e| format!("cannot wait for ctrl-c: {e}"))?;
-        eprintln!("radioctld: stopping");
+        let signal = stop_signal().await?;
+        eprintln!("radioctld: stopping ({signal})");
         daemon.stop().await;
         Ok(())
     })
+}
+
+// [@ANCHOR: radioctld_main_stop_signal]
+/// Waits for a signal that asks the daemon to stop and names it: SIGINT (ctrl-c), and on Unix also
+/// SIGTERM (`kill`, `systemctl stop`) and SIGHUP (the terminal or SSH session went away). Each one
+/// leads to the orderly stop, which unkeys every rig. Only SIGINT used to be caught, so a SIGTERM
+/// or SIGHUP ended the process at once and left a keyed radio keyed (found on a KX3, 2026-11-05).
+async fn stop_signal() -> Result<&'static str, String> {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut term =
+            signal(SignalKind::terminate()).map_err(|e| format!("cannot wait for SIGTERM: {e}"))?;
+        let mut hup =
+            signal(SignalKind::hangup()).map_err(|e| format!("cannot wait for SIGHUP: {e}"))?;
+        tokio::select! {
+            result = tokio::signal::ctrl_c() => {
+                result.map_err(|e| format!("cannot wait for ctrl-c: {e}"))?;
+                Ok("interrupt")
+            }
+            _ = term.recv() => Ok("terminate"),
+            _ = hup.recv() => Ok("hangup"),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c()
+            .await
+            .map_err(|e| format!("cannot wait for ctrl-c: {e}"))?;
+        Ok("interrupt")
+    }
 }
 
 // [@ANCHOR: radioctld_main]
