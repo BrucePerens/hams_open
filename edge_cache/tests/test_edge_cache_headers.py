@@ -299,3 +299,34 @@ class TestEdgeCacheHeaders(HamsHttpCase):
                 "no-cache, no-store",
                 "A 404 static-asset response must not be cached at the edge for a year.",
             )
+
+    def test_07_error_responses_are_no_store(self):
+        # [@ANCHOR: COMM_test_error_responses_are_no_store]
+        # Tests [@ANCHOR: COMM_cloudflare_error_never_stored]
+        # Tests [@ANCHOR: COMM_ir_http_handle_error_no_store]
+        """Every 4xx/5xx answer carries Cache-Control: no-store, on a public route and a real miss."""
+        for path in (
+            "/definitely-not-a-route-9c4e1b58",
+            "/blog/definitely-not-a-post-9c4e1b58",
+        ):
+            response = self.url_open(path, allow_redirects=False)
+            self.assertGreaterEqual(response.status_code, 400, path)
+            self.assertEqual(
+                response.headers.get("Cache-Control"), "no-store", f"{path} {response.status_code} {dict(response.headers)}"
+            )
+            self.assertEqual(
+                response.headers.get("Cloudflare-CDN-Cache-Control"), "no-cache, no-store", path
+            )
+
+    def test_08_error_helper_replaces_long_max_age_and_spares_success_and_redirects(self):
+        # Tests [@ANCHOR: COMM_cloudflare_error_never_stored]
+        for status in (400, 403, 404, 410, 429, 500, 503):
+            response = Response(status=status)
+            response.headers["Cache-Control"] = "max-age=1800"
+            self.assertTrue(CloudflareIrHttp._cloudflare_error_never_stored(response), status)
+            self.assertEqual(response.headers["Cache-Control"], "no-store", status)
+        for status in (200, 301, 302, 304):
+            response = Response(status=status)
+            response.headers["Cache-Control"] = "max-age=600"
+            self.assertFalse(CloudflareIrHttp._cloudflare_error_never_stored(response), status)
+            self.assertEqual(response.headers["Cache-Control"], "max-age=600", status)

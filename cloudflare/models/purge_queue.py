@@ -7,6 +7,10 @@ from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
 
 _logger = logging.getLogger(__name__)
 
+# Source name of the pager incident that says purges are not reaching Cloudflare.
+PURGE_INCIDENT_SOURCE = "Cloudflare purge queue"
+# A purge that failed on a real API error is tried again once, this long after it failed.
+RETRY_FAILED_AFTER_HOURS = 1
 
 
 class CloudflarePurgeQueue(models.Model):
@@ -133,12 +137,70 @@ class CloudflarePurgeQueue(models.Model):
             self.env["cloudflare.purge.queue"].create(create_vals)
 
     @api.model
+    def _pager_incidents(self):
+        # [@ANCHOR: cloudflare:COMM_purge_pager_incidents]
+        """The pager.incident model as the pager service user, or None when pager_duty is not installed.
+
+        A tenant instance can run this module without pager_duty; there the log line is the only signal.
+        """
+        if "pager.incident" not in self.env:
+            return None
+        return self.env["zero_sudo.security.utils"]._get_service_env(
+            "pager_duty.user_pager_service_internal"
+        )["pager.incident"]
+
+    @api.model
+    def _report_purge_failure(self, website, description, severity):
+        # [@ANCHOR: cloudflare:COMM_report_purge_failure]
+        """Open (or add an occurrence to) the pager incident saying this website's purges are not reaching Cloudflare."""
+        incidents = self._pager_incidents()
+        if incidents is None:
+            return False
+        return incidents.report_incident(
+            {
+                "source": PURGE_INCIDENT_SOURCE,
+                "severity": severity,
+                "description": f"{website.name} (website {website.id}): {description}",
+                "website_id": website.id,
+            }
+        )
+
+    @api.model
+    def _resolve_purge_failure(self, website):
+        # [@ANCHOR: cloudflare:COMM_resolve_purge_failure]
+        """Close the purge incident for this website after a batch of its purges succeeded."""
+        incidents = self._pager_incidents()
+        if incidents is None:
+            return False
+        return incidents.auto_resolve_incidents(PURGE_INCIDENT_SOURCE, website_id=website.id)
+
+    @api.model
+    def requeue_failed(self):
+        # [@ANCHOR: cloudflare:COMM_requeue_failed_purges]
+        """Make one more attempt at purges that failed on an API error at least an hour ago.
+
+        Only for websites that have credentials now; a row that fails again goes back to failed and the
+        pager incident stays open. Returns the number of rows set back to pending.
+        """
+        cutoff = fields.Datetime.subtract(fields.Datetime.now(), hours=RETRY_FAILED_AFTER_HOURS)
+        failed = self.search([("state", "=", "failed"), ("write_date", "<=", cutoff)], limit=1000)
+        requeue = self.browse()
+        for website in failed.mapped("website_id"):
+            token, zone_id = website._get_cloudflare_credentials()
+            if token and zone_id:
+                requeue |= failed.filtered(lambda r: r.website_id == website)
+        requeue.write({"state": "pending"})
+        return len(requeue)
+
+    @api.model
     def process_queue(self):
         # [@ANCHOR: COMM_cf_process_queue_logic]
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_purge"
         )
         self = self.with_user(svc_uid)
+
+        self.requeue_failed()
 
         limit = 30
         max_batches = 10
@@ -169,10 +231,18 @@ class CloudflarePurgeQueue(models.Model):
             )
 
             success = True
+            failure_reason = "a Cloudflare API call failed; the purges are marked failed and retried once an hour"
+            failure_severity = "high"
 
             if not token or not zone_id:
-                # Missing credentials, immediately fail the batch to prevent infinite loops
+                # Missing credentials: these purges can never be sent. Drop them (a growing pile of failed rows
+                # nobody reads is what 7,014 rows on 2026-10-29 was) and raise a pager incident instead.
                 success = False
+                failure_reason = (
+                    "no Cloudflare API token or Zone ID is configured, so cache purges are being dropped; "
+                    "set them in Settings > Cloudflare for this website"
+                )
+                failure_severity = "medium"
                 # Bug fix (bug-hunt, review_tier 1, 2026-09-09, bug class 5):
                 # this previously failed the batch with no signal anywhere --
                 # an admin would only ever see a growing pile of "failed"
@@ -186,7 +256,7 @@ class CloudflarePurgeQueue(models.Model):
                     len(batch_records),
                     first_website.id if first_website else False,
                 )
-                batch_records.write({"state": "failed"})
+                batch_records.unlink()
             else:
                 # If we are purging everything for this website, we can drop all other pending records for it.
                 if everything_records:
@@ -226,6 +296,12 @@ class CloudflarePurgeQueue(models.Model):
                         tag_records.write({"state": "failed"})
                     else:
                         tag_records.unlink()
+
+            if first_website:
+                if success:
+                    self._resolve_purge_failure(first_website)
+                else:
+                    self._report_purge_failure(first_website, failure_reason, failure_severity)
 
             if not success:
                 self.env.cr.commit()

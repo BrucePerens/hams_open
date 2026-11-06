@@ -180,3 +180,110 @@ class TestPurgeQueue(RealTransactionCase):
             3,
             "exists() was called per-record, indicating N+1 filtered pattern",
         )
+
+
+@tagged("post_install", "-at_install")
+class TestPurgeFailureAlerts(RealTransactionCase):
+    """A purge that cannot reach Cloudflare is seen: a pager incident, no pile of unread failed rows."""
+
+    def setUp(self):
+        super().setUp()
+        self.Queue = self.env["cloudflare.purge.queue"]
+        self.Queue.search([], limit=100000).unlink()
+        self.website = self.env["website"].create(
+            {"name": "Purge Alert Site", "domain": "https://purge-alert.example"}
+        )
+        self.incidents = MagicMock()
+        self.safe_patch_object(
+            type(self.Queue), "_pager_incidents", lambda model: self.incidents
+        )
+        self.safe_patch("time.sleep")
+
+    def _reports(self, mock_method):
+        """Calls of a mocked pager method that concern this test's website (other websites' queued purges also run)."""
+        return [c for c in mock_method.call_args_list
+                if (c[0][0].get("website_id") if c[0] and isinstance(c[0][0], dict) else c[1].get("website_id")) == self.website.id]
+
+    def _enqueue(self, n=2):
+        self.Queue.create(
+            [
+                {"target_item": f"https://purge-alert.example/p{i}", "purge_type": "url",
+                 "website_id": self.website.id}
+                for i in range(n)
+            ]
+        )
+
+    def test_01_no_credentials_drops_rows_and_pages_medium(self):
+        # Tests [@ANCHOR: cloudflare:COMM_report_purge_failure]
+        self._enqueue()
+        self.Queue.process_queue()
+        self.assertEqual(
+            self.Queue.search_count([("website_id", "=", self.website.id)]), 0,
+            "unsendable purges must not pile up as failed rows",
+        )
+        reports = self._reports(self.incidents.report_incident)
+        self.assertEqual(len(reports), 1)
+        vals = reports[0][0][0]
+        self.assertEqual(vals["source"], "Cloudflare purge queue")
+        self.assertEqual(vals["severity"], "medium")
+        self.assertEqual(vals["website_id"], self.website.id)
+        self.assertIn("no Cloudflare API token", vals["description"])
+
+    def test_02_api_failure_keeps_rows_failed_and_pages_high(self):
+        # Tests [@ANCHOR: cloudflare:COMM_report_purge_failure]
+        self.website.write({"cloudflare_api_token": "t", "cloudflare_zone_id": "z"})
+        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=False)
+        self._enqueue()
+        self.Queue.process_queue()
+        rows = self.Queue.search([("website_id", "=", self.website.id)])
+        self.assertEqual(set(rows.mapped("state")), {"failed"})
+        self.assertEqual(self._reports(self.incidents.report_incident)[0][0][0]["severity"], "high")
+
+    def test_03_success_resolves_the_incident(self):
+        # Tests [@ANCHOR: cloudflare:COMM_resolve_purge_failure]
+        self.website.write({"cloudflare_api_token": "t", "cloudflare_zone_id": "z"})
+        for name in ("purge_urls", "purge_tags", "purge_everything"):
+            self.safe_patch(f"odoo.addons.cloudflare.models.purge_queue.{name}", return_value=True)
+        self._enqueue()
+        self.Queue.process_queue()
+        self.assertEqual(self._reports(self.incidents.report_incident), [])
+        self.assertEqual(len(self._reports(self.incidents.auto_resolve_incidents)), 1)
+        self.incidents.auto_resolve_incidents.assert_any_call(
+            "Cloudflare purge queue", website_id=self.website.id
+        )
+
+    def test_04_failed_rows_are_retried_once_an_hour_later_with_credentials(self):
+        # Tests [@ANCHOR: cloudflare:COMM_requeue_failed_purges]
+        self.website.write({"cloudflare_api_token": "t", "cloudflare_zone_id": "z"})
+        rows = self.Queue.create(
+            [{"target_item": f"https://purge-alert.example/f{i}", "purge_type": "url",
+              "website_id": self.website.id, "state": "failed"} for i in range(3)]
+        )
+        self.assertEqual(self.Queue.requeue_failed(), 0, "a fresh failure is not retried yet")
+        self.env.cr.execute(  # audit-ignore-sql: test back-dates write_date
+            "UPDATE cloudflare_purge_queue SET write_date = now() at time zone 'utc' - interval '2 hours' WHERE id = ANY(%s)",
+            (rows.ids,),
+        )
+        rows.invalidate_recordset()
+        self.assertEqual(self.Queue.requeue_failed(), 3)
+        self.assertEqual(set(rows.mapped("state")), {"pending"})
+
+    def test_05_failed_rows_without_credentials_are_not_retried(self):
+        # Tests [@ANCHOR: cloudflare:COMM_requeue_failed_purges]
+        row = self.Queue.create(
+            {"target_item": "https://purge-alert.example/x", "purge_type": "url",
+             "website_id": self.website.id, "state": "failed"}
+        )
+        self.env.cr.execute(  # audit-ignore-sql: test back-dates write_date
+            "UPDATE cloudflare_purge_queue SET write_date = now() at time zone 'utc' - interval '2 hours' WHERE id = %s",
+            (row.id,),
+        )
+        row.invalidate_recordset()
+        self.assertEqual(self.Queue.requeue_failed(), 0)
+        self.assertEqual(row.state, "failed")
+
+    def test_06_pager_incidents_is_none_without_pager_duty(self):
+        # Tests [@ANCHOR: cloudflare:COMM_purge_pager_incidents]
+        self.safe_patch_object(type(self.Queue), "_pager_incidents", lambda model: None)
+        self.assertFalse(self.Queue._report_purge_failure(self.website, "x", "high"))
+        self.assertFalse(self.Queue._resolve_purge_failure(self.website))
