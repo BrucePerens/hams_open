@@ -16,6 +16,7 @@ pub mod protocol;
 pub mod reserved;
 pub mod setup;
 pub mod soak_scope;
+pub mod soak_topology;
 pub mod sound_server;
 pub mod spectrum;
 pub mod sweep;

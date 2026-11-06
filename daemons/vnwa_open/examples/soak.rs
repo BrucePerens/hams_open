@@ -11,7 +11,7 @@
 //!
 //! Nothing is silent: every failed attempt behind a recovered point (`RECOVERED` lines, with the error text, raw channel levels and the last
 //! transfers), every power cycle the recovery did, every overrun, every kernel USB disconnect that no power cycle of ours explains, every change of
-//! the USB topology and every out-of-tolerance reading is one line in `events.jsonl` in the run directory (with epoch and ISO time, class,
+//! the unit's part of the USB topology (other USB devices coming and going is an INFO line only) and every out-of-tolerance reading is one line in `events.jsonl` in the run directory (with epoch and ISO time, class,
 //! summary, and the kernel journal for five seconds either side). Side channels in the run directory: `journal.log` (`journalctl -k -f`), `host.log`
 //! (load and temperatures once a minute), `lsusb_*.txt`. A file `PAUSE` in the run directory stops the run after the current round until it is
 //! removed (an investigator may then use the hardware); the run then takes fresh baselines. A file `STOP` ends the run.
@@ -135,43 +135,30 @@ fn event(class: &str, summary: &str, detail: &str, t: f64) {
     log("EVENT", &format!("{class}: {summary}"));
 }
 
-fn lsusb_normalised() -> String {
-    let out = Command::new("lsusb")
-        .arg("-t")
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-        .unwrap_or_default();
-    // Device numbers change at every enumeration; the tree must not.
-    out.lines()
-        .map(|l| match l.find("Dev ") {
-            Some(i) => match l[i..].find(',') {
-                Some(j) => format!("{}{}", &l[..i], &l[i + j + 1..]),
-                None => l.to_string(),
-            },
-            None => l.to_string(),
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// Saves `lsusb -t` as `lsusb_<tag>.txt` and records an event if the tree differs from the first one.
-fn lsusb_check(tag: &str, first: &mut Option<String>) {
-    let tree = lsusb_normalised();
+/// Saves `lsusb -t` as `lsusb_<tag>.txt`. An event `usb_topology_changed` is recorded only if the unit's own part of the tree (its controller, its hubs and the
+/// branch below the switched port) differs from the first one; a difference elsewhere (a dock unplugged) is an INFO line (to-do e6af16bc).
+fn lsusb_check(tag: &str, first: &mut Option<String>, hub: &HubPort) {
     let raw = Command::new("lsusb")
         .arg("-t")
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
         .unwrap_or_default();
-    let _ = std::fs::write(shared().dir.join(format!("lsusb_{tag}.txt")), raw);
+    let _ = std::fs::write(shared().dir.join(format!("lsusb_{tag}.txt")), &raw);
     match first {
-        None => *first = Some(tree),
-        Some(f) if *f != tree => event(
-            "usb_topology_changed",
-            &format!("lsusb -t after {tag} differs from the first"),
-            &format!("first:\n{f}\n\nnow:\n{tree}"),
-            now_f(),
-        ),
-        _ => {}
+        None => *first = Some(raw),
+        Some(f) => match vnwa_open::soak_topology::compare(f, &raw, hub) {
+            vnwa_open::soak_topology::Change::None => {}
+            vnwa_open::soak_topology::Change::OutsideOnly => log(
+                "INFO",
+                &format!("lsusb -t after {tag} differs from the first outside the unit's part of the tree (other USB devices plugged or unplugged); not an event"),
+            ),
+            vnwa_open::soak_topology::Change::Unit { first, now } => event(
+                "usb_topology_changed",
+                &format!("the unit's part of lsusb -t after {tag} differs from the first"),
+                &format!("first:\n{first}\n\nnow:\n{now}"),
+                now_f(),
+            ),
+        },
     }
 }
 
@@ -548,7 +535,7 @@ fn main() -> Result<(), String> {
         ),
     );
     let mut first_tree = None;
-    lsusb_check("start", &mut first_tree);
+    lsusb_check("start", &mut first_tree, &hub);
     let (mut sweeps, mut wrong, mut errors, mut cycles) = (0u32, 0u32, 0u32, 0u32);
     let (mut failures_seen, mut power_seen, mut disc_seen) = (0usize, 0usize, 0usize);
     step(300);
@@ -720,7 +707,11 @@ fn main() -> Result<(), String> {
         }
         if new_cycles > 0 {
             // The recovery cycled the unit: topology check, and a new baseline for the cold unit.
-            lsusb_check(&format!("recovery_cycle_round_{round}"), &mut first_tree);
+            lsusb_check(
+                &format!("recovery_cycle_round_{round}"),
+                &mut first_tree,
+                &hub,
+            );
             step(600);
             t2 = temp(&vna).unwrap_or(0);
             if let Ok(b) = vna.sweep(100e3, 150e6, 60) {
@@ -888,7 +879,7 @@ fn main() -> Result<(), String> {
                         &format!("disconnect lines seen so far {}", shared().disconnects.lock().unwrap().len() - before_lines),
                         now_f(),
                     );
-                    lsusb_check(&format!("cycle_{cycles}"), &mut first_tree);
+                    lsusb_check(&format!("cycle_{cycles}"), &mut first_tree, &hub);
                     log("CYCLE", &format!("cold reset {cycles} done"));
                 }
                 Err(e) => {
