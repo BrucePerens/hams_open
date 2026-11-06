@@ -18,7 +18,7 @@ Opens a channel (SSRC `ssrc_base + 2`) at `freq_hz`. For `kind` iq: two channels
 
 ## Returns
 
-`wav`, `kind`, `mode`, `frequency_hz`, `sample_rate_hz`, `channels`, `frames`, `seconds`, `rtp_packets`, `rtp_lost`, `rtp_out_of_order`, `rtp_skipped`, `gain_db`, `rms_dbfs`, `peak_counts`.
+`wav`, `kind`, `mode`, `frequency_hz`, `sample_rate_hz`, `channels`, `frames`, `seconds`, `rtp_packets`, `rtp_lost`, `rtp_out_of_order`, `rtp_restarts` (the channel's sequence started again: `radiod` re-created it), `rtp_skipped`, `gain_db`, `rms_dbfs`, `peak_counts`.
 
 ## Failure modes
 

@@ -310,7 +310,7 @@ Files: `crates/radioctl-protocols/src/radiod_net.rs` (engine, pure, no I/O), `cr
 
 `Copy` value. `name: &'static str` is the line-protocol name (`usb`, `lsb`, `cw`, `am`, `fm`). `default_width_hz: u64` is the width a mode change brings back: USB and LSB 2950, CW 400, AM 10 000, FM 16 000 (the `radiod_client` modes' own passbands).
 
-`AudioFrame` (fields `samples: Vec<f32>` mono -1..=1, `rate_hz: u32`, `seq: u16`, `timestamp: u32`) and `RadiodStats` (counters `acks`, `ack_timeouts`, `refused`, `audio_frames`, `audio_dropped`, `rtp_lost`, `rtp_bad`, plus the latest `channel` and `front_end` statuses) are plain data returned by the control handle, documented with `take_audio` and `stats` below.
+`AudioFrame` (fields `samples: Vec<f32>` mono -1..=1, `rate_hz: u32`, `seq: u16`, `timestamp: u32`) and `RadiodStats` (counters `acks`, `ack_timeouts`, `refused`, `audio_frames`, `audio_dropped`, `rtp_lost`, `rtp_out_of_order`, `rtp_restarts`, `rtp_stalls`, `rtp_stall_ms`, `rtp_bad`, plus the latest `channel` and `front_end` statuses) are plain data returned by the control handle, documented with `take_audio` and `stats` below.
 
 ##### Engine functions (`radiod_net.rs`)
 
@@ -372,7 +372,9 @@ Files: `crates/radioctl-protocols/src/radiod_net.rs` (engine, pure, no I/O), `cr
 
 **`radioctl_radiod_run_control`** [@ANCHOR: radioctl:radioctl_radiod_run_control] `async run_control(bridge, far, stop)` (private task). Creates the channel, then answers lines and refreshes until the actor closes the stream. It then stops the audio task and removes the channel (lifetime 1).
 
-**`radioctl_radiod_run_audio`** [@ANCHOR: radioctl:radioctl_radiod_run_audio] `async run_audio(rtp, ssrc, shared, tx, stop)` (private task). Reads the data group and keeps packets of `ssrc` whose payload type matches the announced format; others of that SSRC count as `rtp_bad`. It decodes to mono, tracks loss and offers each frame to the queue, until stopped.
+**`radioctl_radiod_run_audio`** [@ANCHOR: radioctl:radioctl_radiod_run_audio] `async run_audio(rtp, ssrc, shared, tx, stop)` (private task). Reads the data group and keeps packets of `ssrc` whose payload type matches the announced format; others of that SSRC count as `rtp_bad`. It decodes to mono, tracks loss and offers each frame to the queue, until stopped. The sequence counters (`radiod_client`'s `SeqTracker`) are copied into `rtp_lost`, `rtp_out_of_order` and `rtp_restarts` after every packet: a channel `radiod` re-created comes back with its sequence a few hundred lower, which is one restart, not a run of late packets (until 2026-11-05 the whole new stream counted as out of order and the outage showed nowhere). Each packet's arrival time feeds `stall`.
+
+**`radioctl_radiod_stall`** [@ANCHOR: radioctl:radioctl_radiod_stall] `stall(previous: Option<Instant>, now: Instant) -> Option<Duration>` (private). The gap since the channel's previous packet when it is at least `STALL_GAP` (250 ms; `radiod` sends a packet every 20 ms), else `None`, and `None` for the first packet. `run_audio` adds one to `rtp_stalls` and the gap to `rtp_stall_ms` for each, so an outage shows even when the sequence does not jump (a squelch-closed channel sends nothing, so its closures count too).
 
 **`radioctl_conformance_radiod_stand_in_feed`** [@ANCHOR: radioctl:radioctl_conformance_radiod_stand_in_feed] `RadiodStandIn::feed(&mut self, bytes: &[u8]) -> Vec<u8>` (conformance, private). Answers the line protocol as the bridge does, with no `radiod`: frequency 10 kHz to 30 MHz, mode with its default width, width 1 to 24 000, and the signal fixed at `S 729`. Used by the shipped transcript `rigs/transcripts/radiod-channel-basic.toml`.
 

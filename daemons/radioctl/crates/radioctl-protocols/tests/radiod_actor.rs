@@ -131,9 +131,15 @@ async fn fake_radiod(sock: UdpSocket, dest: SocketAddrV4, seen: Arc<Mutex<Vec<Se
 }
 
 /// RTP every 20 ms: this channel's PCM, plus another channel's and a wrong payload type to ignore.
+/// At sequence 160 the channel goes quiet for 400 ms and comes back 200 lower, as `radiod` does when the
+/// channel is re-created (RX-888, 2026-11-05).
 async fn fake_rtp(sock: UdpSocket, dest: SocketAddrV4) {
     let mut seq: u16 = 0;
     loop {
+        if seq == 160 {
+            seq = 60;
+            sleep(Duration::from_millis(400)).await;
+        }
         for (ssrc, pt) in [(SSRC, PT), (SSRC + 1, PT), (SSRC, 99)] {
             let mut p = vec![0x80, pt];
             p.extend_from_slice(&seq.to_be_bytes());
@@ -196,6 +202,7 @@ async fn rig(status: Ipv4Addr, data: Ipv4Addr) -> (RigHandle, RadiodControl) {
 // Tests [@ANCHOR: radioctl_radiod_link_validate]
 // Tests [@ANCHOR: radioctl_radiod_run_control]
 // Tests [@ANCHOR: radioctl_radiod_run_audio]
+// Tests [@ANCHOR: radioctl_radiod_stall]
 // Tests [@ANCHOR: radioctl_radiod_bridge_send]
 // Tests [@ANCHOR: radioctl_radiod_bridge_assert]
 // Tests [@ANCHOR: radioctl_radiod_bridge_refresh]
@@ -330,6 +337,22 @@ async fn a_radiod_channel_is_a_receive_only_virtual_rig() {
     }
     let stats = control.stats();
     assert!(stats.acks > 5 && stats.audio_frames > 0, "{stats:?}");
+
+    // The channel restart: counted once per restart, with its outage, and the new stream is in order.
+    eventually("the restart is counted", || {
+        control.stats().rtp_restarts > 0
+    })
+    .await;
+    let stats = control.stats();
+    assert_eq!(
+        (stats.rtp_lost, stats.rtp_out_of_order),
+        (0, 0),
+        "{stats:?}"
+    );
+    assert!(
+        stats.rtp_stalls >= 1 && stats.rtp_stall_ms >= 300,
+        "{stats:?}"
+    );
 
     // The actor goes away: the channel is removed (lifetime 1).
     drop(handle);

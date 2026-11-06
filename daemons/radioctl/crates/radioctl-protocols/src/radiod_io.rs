@@ -25,7 +25,7 @@
 
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::units::Mode;
@@ -43,6 +43,8 @@ use crate::radiod_net::{mode_from_name, signal_raw, ModeSpec};
 const MAX_LINE: usize = 128;
 /// Largest RTP datagram read.
 const MAX_RTP: usize = 9000;
+/// A gap between two of the channel's packets this long or longer is a stall (packets come every 20 ms).
+const STALL_GAP: Duration = Duration::from_millis(250);
 
 /// Where the channel lives and how it is kept. Build with [`RadiodLink::new`] and adjust fields.
 #[derive(Debug, Clone, PartialEq)]
@@ -166,6 +168,16 @@ pub struct RadiodStats {
     pub audio_dropped: u64,
     /// RTP packets missing in sequence.
     pub rtp_lost: u64,
+    /// RTP packets that arrived late (within the reorder window) or duplicated.
+    pub rtp_out_of_order: u64,
+    /// Times the channel's RTP sequence started again (a backward jump beyond the reorder window):
+    /// `radiod` re-created the channel. Not counted in `rtp_lost`.
+    pub rtp_restarts: u64,
+    /// Times this channel's audio stopped arriving for at least `STALL_GAP` (250 ms; packets come every
+    /// 20 ms). A squelch-closed channel sends nothing, so its closures are counted too.
+    pub rtp_stalls: u64,
+    /// Total length of those stalls, ms.
+    pub rtp_stall_ms: u64,
     /// RTP packets of this SSRC that did not decode (wrong payload type or size).
     pub rtp_bad: u64,
     /// The channel's latest status.
@@ -524,6 +536,13 @@ async fn run_control(mut bridge: Bridge, mut far: DuplexStream, stop: watch::Sen
     let _ = bridge.control.request(&remove, bridge.link.ack_wait).await;
 }
 
+// [@ANCHOR: radioctl_radiod_stall]
+/// The gap since the previous packet when it is a stall (at least `STALL_GAP`); `None` for the first packet.
+fn stall(previous: Option<Instant>, now: Instant) -> Option<Duration> {
+    let gap = now.checked_duration_since(previous?)?;
+    (gap >= STALL_GAP).then_some(gap)
+}
+
 // [@ANCHOR: radioctl_radiod_run_audio]
 /// The audio task: decode this channel's RTP packets into the queue until told to stop.
 async fn run_audio(
@@ -536,6 +555,7 @@ async fn run_audio(
     let mut buf = vec![0u8; MAX_RTP];
     let mut seq = SeqTracker::default();
     let mut decoder: Option<(Format, AudioDecoder)> = None;
+    let mut last_arrival: Option<Instant> = None;
     loop {
         let received = tokio::select! {
             _ = stop.changed() => break,
@@ -577,6 +597,9 @@ async fn run_audio(
             continue;
         };
         seq.push(pkt.seq);
+        let now = Instant::now();
+        let stalled = stall(last_arrival, now);
+        last_arrival = Some(now);
         let frame = AudioFrame {
             samples,
             rate_hz: format.rate_hz,
@@ -586,6 +609,13 @@ async fn run_audio(
         let queued = tx.try_send(frame).is_ok();
         let mut stats = lock(&shared.stats);
         stats.rtp_lost = seq.lost;
+        stats.rtp_out_of_order = seq.out_of_order;
+        stats.rtp_restarts = seq.restarts;
+        if let Some(gap) = stalled {
+            stats.rtp_stalls += 1;
+            let ms = u64::try_from(gap.as_millis()).unwrap_or(u64::MAX);
+            stats.rtp_stall_ms = stats.rtp_stall_ms.saturating_add(ms);
+        }
         if queued {
             stats.audio_frames += 1;
         } else {

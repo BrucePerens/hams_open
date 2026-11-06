@@ -207,16 +207,26 @@ impl AudioDecoder {
     }
 }
 
-/// Tracks sequence numbers to count loss and reordering.
+/// How far back a sequence number may jump and still be a late packet of the same stream. Further back
+/// is a stream restart: `radiod` re-creating the channel starts a new sequence (seen 200 lower on the
+/// RX-888, 2026-11-05).
+pub const REORDER_WINDOW: u16 = 32;
+
+/// Tracks sequence numbers to count loss, reordering and stream restarts.
 #[derive(Debug, Default, Clone)]
 pub struct SeqTracker {
     last: Option<u16>,
     /// Packets seen.
     pub received: u64,
-    /// Packets missing in sequence (gaps).
+    /// Packets missing in sequence (forward gaps). A restart adds nothing here: the new numbering says
+    /// nothing about how many packets of the old stream were missed. A restart whose new sequence lands
+    /// ahead of the old one cannot be told from loss by the sequence alone and is counted here.
     pub lost: u64,
-    /// Packets that arrived out of order or duplicated.
+    /// Packets that arrived late (at most [`REORDER_WINDOW`] behind the newest) or duplicated.
     pub out_of_order: u64,
+    /// Backward jumps beyond [`REORDER_WINDOW`]: the stream started again with a new sequence. Tracking
+    /// resynchronises to the new sequence, so the packets after a restart are not out of order.
+    pub restarts: u64,
 }
 
 impl SeqTracker {
@@ -230,10 +240,11 @@ impl SeqTracker {
                 1 => {}
                 0 => self.out_of_order += 1,
                 2..=0x7fff => self.lost += u64::from(d) - 1,
-                _ => {
+                _ if last.wrapping_sub(seq) <= REORDER_WINDOW => {
                     self.out_of_order += 1;
                     return;
                 }
+                _ => self.restarts += 1,
             }
         }
         self.last = Some(seq);
@@ -323,6 +334,43 @@ mod tests {
             t.push(s);
         }
         assert_eq!((t.received, t.lost, t.out_of_order), (7, 2, 1));
+    }
+
+    fn track(seqs: &[u16]) -> SeqTracker {
+        let mut t = SeqTracker::default();
+        for s in seqs {
+            t.push(*s);
+        }
+        t
+    }
+
+    // Tests [@ANCHOR: radiod_client_rtp_seq_push]
+    #[test]
+    fn a_channel_restart_is_counted_once_and_tracking_follows_the_new_sequence() {
+        // The RX-888 run: the re-created channel came back 200 lower and kept counting up.
+        let t = track(&[300, 301, 302, 102, 103, 104, 105]);
+        assert_eq!(
+            (t.received, t.lost, t.out_of_order, t.restarts),
+            (7, 0, 0, 1)
+        );
+        // A gap after the restart is loss in the new stream.
+        let t = track(&[300, 301, 101, 104]);
+        assert_eq!((t.lost, t.out_of_order, t.restarts), (2, 0, 1));
+        // Across the wrap: 5 -> 65000 is 541 back.
+        let t = track(&[4, 5, 65000, 65001]);
+        assert_eq!((t.lost, t.out_of_order, t.restarts), (0, 0, 1));
+    }
+
+    // Tests [@ANCHOR: radiod_client_rtp_seq_push]
+    #[test]
+    fn the_reorder_window_separates_late_packets_from_restarts() {
+        let t = track(&[100, 132, 100]);
+        assert_eq!((t.lost, t.out_of_order, t.restarts), (31, 1, 0));
+        let t = track(&[100, 133, 100, 101]);
+        assert_eq!((t.lost, t.out_of_order, t.restarts), (32, 0, 1));
+        // Exactly half the sequence space back is a restart too, never a 32767-packet loss.
+        let t = track(&[0x8000, 0]);
+        assert_eq!((t.lost, t.out_of_order, t.restarts), (0, 0, 1));
     }
 
     // Tests [@ANCHOR: radiod_client_rtp_encoding_from_radiod]
