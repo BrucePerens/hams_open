@@ -165,7 +165,8 @@ async fn hamlibs_rigctl_drives_a_virtual_kx3_through_radioctld() {
         .get(&Level::AfGain)
         .copied()
         .expect("af");
-    assert_eq!(raw, 128);
+    // The KX3 AF range is 0..60 (hardware-verified, #1228): half is 30.
+    assert_eq!(raw, 30);
     let af: f64 = printed(&rigctl(&daemon, &["l", "AF"]).await)
         .trim()
         .parse()
@@ -195,7 +196,7 @@ async fn hamlibs_client_reads_back_the_capabilities_radioctld_advertises() {
     );
     assert!(caps.contains("Get functions: RIT XIT"), "{caps}");
     assert!(caps.contains("KEYSPD(8..50/1)"), "{caps}");
-    assert!(caps.contains("AF(0.000000..1.000000/0.003922)"), "{caps}");
+    assert!(caps.contains("AF(0.000000..1.000000/0.016667)"), "{caps}");
     assert!(caps.contains("RFPOWER(0.000000..1.000000/"), "{caps}");
     assert!(caps.contains("SWR(0.000000..10.000000/0.100000)"), "{caps}");
     assert!(caps.contains("RAWSTR(0..255/1)"), "{caps}");
