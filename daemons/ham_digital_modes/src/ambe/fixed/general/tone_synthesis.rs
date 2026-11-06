@@ -39,6 +39,7 @@ const DSTAR_LOG2_SLOPE_Q32: i64 = 253_058_036;
 /// sibling's `dstar_tone_amplitude`), evaluated as `3268 * 2^y` with the integer part of `y`
 /// applied as a shift so the very large and very small ends do not saturate `exp2_q16`.
 pub fn dstar_tone_amplitude_q16(volume: u32) -> i64 {
+    // [@ANCHOR: ambe_fixed_dstar_tone_amplitude]
     let y_q32 = (volume as i64 - 180) * DSTAR_LOG2_SLOPE_Q32;
     let y_q16 = (y_q32 + (1 << 15)) >> 16;
     let n = y_q16 >> 16; // floor
@@ -57,6 +58,7 @@ pub fn dstar_tone_amplitude_q16(volume: u32) -> i64 {
 /// units), `round(180 + log2(A / 3268) / DSTAR_LOG2_SLOPE)` clamped to `0..=255`. Port of the float
 /// `dstar_tone_volume_for_amplitude` (the amplitude is floored at 1, like the float).
 pub fn dstar_tone_volume_for_amplitude_q16(amplitude_q16: i64) -> u32 {
+    // [@ANCHOR: ambe_fixed_dstar_tone_volume_for_amplitude]
     let lg = log2_q16_i64(amplitude_q16.max(1 << 16)) as i64 - log2_q16_i64(3268i64 << 16) as i64;
     let steps_q16 = (lg << 32) / DSTAR_LOG2_SLOPE_Q32; // log2 ratio (Q16) / slope (Q32) -> volume steps, Q16
     ((180 * 65536 + steps_q16 + 32768) >> 16).clamp(0, 255) as u32
@@ -106,6 +108,7 @@ impl ToneSynthesizer {
     /// Synthesizes one frame of the given 1 or 2 frequencies (Q16.16 Hz), each at `peak_q16`
     /// amplitude (Q16.16 PCM units). Output samples are Q16.16.
     pub fn synthesize(&mut self, freqs_hz_q16: &[i32], peak_q16: i64) -> [i64; N] {
+        // [@ANCHOR: ambe_fixed_tone_synthesize]
         let mut out = [0i64; N];
         for (slot, &hz_q16) in freqs_hz_q16.iter().take(2).enumerate() {
             let step = phase_step(hz_q16);
@@ -156,6 +159,7 @@ impl Default for ToneSynthesizer {
 mod tests {
     use super::*;
 
+    // Tests [@ANCHOR: ambe_fixed_dstar_tone_amplitude]
     #[test]
     fn dstar_levels_match_the_chip_measurements() {
         // Chip peaks measured at volumes 120/150/180/210: 283, 961, 3268, 11105.
@@ -169,6 +173,8 @@ mod tests {
         assert_eq!(dstar_tone_amplitude_q16(180) >> 16, 3268);
     }
 
+    // Tests [@ANCHOR: ambe_fixed_dstar_tone_amplitude]
+    // Tests [@ANCHOR: ambe_fixed_dstar_tone_volume_for_amplitude]
     #[test]
     fn dstar_tone_volume_inverts_the_amplitude_curve() {
         for v in 60u32..=230 {
@@ -191,6 +197,7 @@ mod tests {
         assert_eq!(ambe_plus_2_single_tone_peak_q16() >> 16, 33941);
     }
 
+    // Tests [@ANCHOR: ambe_fixed_tone_synthesize]
     #[test]
     fn single_tone_has_requested_peak_and_continuous_phase() {
         let mut t = ToneSynthesizer::new();

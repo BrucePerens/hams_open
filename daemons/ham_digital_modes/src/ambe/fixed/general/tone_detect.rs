@@ -52,6 +52,7 @@ pub struct Detection {
 
 /// Best-fit sinusoid of frequency `hz_q16` in `x`: returns `(amplitude_q16, amplitude_squared_q16)`.
 fn fit_sinusoid(x: &[i16], hz_q16: i32) -> (i64, i64) {
+    // [@ANCHOR: ambe_fixed_tone_fit_sinusoid]
     let step = (((hz_q16 as u64) << 16) / 8000) as u32; // turns per sample, 1u32<<32 = one turn
     let (mut sc, mut cc, mut sn, mut xc, mut xs) = (0i64, 0i64, 0i64, 0i64, 0i64);
     for (i, &v) in x.iter().enumerate() {
@@ -86,6 +87,7 @@ fn explained_exceeds(total: i64, p_sum_q16: i64, num: i64, den: i64) -> bool {
 
 /// The level field for a per-tone amplitude (Q16.16): `round(186 + 17*log2(A / 4000))` clamped to `0..=255`.
 pub fn volume_for_amplitude_q16(amplitude_q16: i64) -> u32 {
+    // [@ANCHOR: ambe_fixed_tone_volume_for_amplitude]
     let log2_4000 = log2_q16_i64(4000i64 << 16) as i64;
     let lg = log2_q16_i64(amplitude_q16.max(65536)) as i64;
     let v = 186 * 65536 + 17 * (lg - log2_4000);
@@ -94,6 +96,7 @@ pub fn volume_for_amplitude_q16(amplitude_q16: i64) -> u32 {
 
 /// Detects a tone in one 160-sample frame, or `None` for anything else (speech, silence, noise).
 pub fn detect_tone(frame: &[i16]) -> Option<Detection> {
+    // [@ANCHOR: ambe_fixed_tone_detect]
     if frame.len() != FRAME {
         return None;
     }
@@ -194,6 +197,9 @@ mod tests {
             .collect()
     }
 
+    // Tests [@ANCHOR: ambe_fixed_tone_detect]
+    // Tests [@ANCHOR: ambe_fixed_tone_fit_sinusoid]
+    // Tests [@ANCHOR: ambe_fixed_tone_volume_for_amplitude]
     #[test]
     #[allow(clippy::needless_range_loop)]
     fn detects_every_dtmf_digit_with_the_chip_index_and_level() {
@@ -222,6 +228,9 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: ambe_fixed_tone_detect]
+    // Tests [@ANCHOR: ambe_fixed_tone_fit_sinusoid]
+    // Tests [@ANCHOR: ambe_fixed_tone_volume_for_amplitude]
     #[test]
     fn single_tone_index_and_levels_match_the_chip() {
         for (hz, index) in [(500, 16u32), (1000, 32), (2000, 64), (3800, 122), (400, 13)] {
@@ -237,6 +246,7 @@ mod tests {
         assert_eq!(volume_for_amplitude_q16(12000 << 16), 213);
     }
 
+    // Tests [@ANCHOR: ambe_fixed_tone_detect]
     #[test]
     fn chip_non_detections_are_reproduced_and_speech_like_frames_are_rejected() {
         assert!(detect_tone(&sines(&[100], 4000, 0)).is_none());

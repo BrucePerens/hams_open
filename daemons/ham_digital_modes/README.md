@@ -1289,3 +1289,165 @@ fn round_div_to_u32(numerator: i128, denominator: i128) -> u32
 **Returns.** `numerator / denominator` rounded to nearest, ties away from zero, then truncated (wrapped) to `u32`, which is the modulo-one-turn reduction.
 
 **Special concerns.** Pure; a zero `denominator` would panic, and the only callers pass the constant. Tested through the phase conversions: `radians_from_phase_q16_inverts_phase_from_radians_q16_within_one_count`, `radians_q32_from_phase_recovers_a_bounded_radian_value_and_round_trips_the_phase`.
+
+## AMBE tone detection and tone synthesis (`src/ambe/{float,fixed/general}/tone_detect.rs`, `tone_synthesis.rs`)
+
+The D-STAR and AMBE+2 encoders recognise a DTMF digit or one sustained tone in a 20 ms frame (160 samples at 8 kHz) and send a tone frame in place of
+a speech frame; the decoders turn a tone frame back into PCM. The float versions are the reference; the fixed versions are integer-only ports that
+agree with them (identical decisions on 449 synthetic frames, amplitude within 0.002 percent). Rules matched to the real chip: a DTMF digit has index
+`128 + row + 4 * col`; a single tone has index `round(f / 31.25)` for 400 to 3800 Hz and exactly 200 Hz (index 6, a purer fit required), and none at
+100, 300 or 3900 Hz; the level field is `186 + 17 * log2(A / 4000)` for each tone's peak amplitude `A`. Everything here is pure and non-blocking;
+`ToneSynthesizer` carries phase between calls, so one instance belongs to one stream and is not shared across threads without a lock.
+
+### `ambe_float_tone_fit_sinusoid` [@ANCHOR: ambe_float_tone_fit_sinusoid]
+
+**Purpose.** The amplitude of the best-fit sinusoid at one frequency in a frame (least squares, sine and cosine fitted together, so the phase does not matter); private, the building block of `detect_tone`.
+
+```rust
+fn fit_sinusoid(x: &[f64], hz: f64) -> f64
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `&[f64]` | The frame's samples in PCM units; any length (the detector passes 160). |
+| `hz` | `f64` | The test frequency in hertz at the 8 kHz sample rate. |
+
+**Returns.** The fitted peak amplitude, in PCM units. `0.0` when the normal equations are degenerate (determinant below 1e-9: a frame too short to tell sine from cosine).
+
+**Special concerns.** Pure. Cost is O(`x.len()`); `detect_tone` calls it about 8 times for DTMF plus about 300 for the scan. Tested through `detect_tone`: `detects_every_dtmf_digit_with_the_chip_index_and_level`, `single_tone_index_and_levels_match_the_chip`, `chip_non_detections_are_reproduced_and_speech_like_frames_are_rejected`.
+
+### `ambe_float_tone_explained_fraction` [@ANCHOR: ambe_float_tone_explained_fraction]
+
+**Purpose.** How much of a frame's energy sinusoids at the given frequencies account for; separates a real tone from voiced speech whose fundamental dominates a frame.
+
+```rust
+fn explained_fraction(x: &[f64], hzs: &[f64]) -> (f64, Vec<f64>)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `&[f64]` | Frame samples. |
+| `hzs` | `&[f64]` | Frequencies to fit, each independently (adequate for well separated tones). |
+
+**Returns.** `(fraction, amplitudes)`: the sum of `a * a / 2 * len` over the fits divided by the frame's energy, capped at 1.5, and `0.0` for a silent frame; and each fit's amplitude.
+
+**Special concerns.** Pure. The thresholds applied to it are `0.85` for DTMF, `SINGLE_TONE_MIN_EXPLAINED_FRACTION` (0.99) and, for 200 Hz, `LOW_TONE_MIN_EXPLAINED_FRACTION` (0.999). Tests: as for `fit_sinusoid`.
+
+### `ambe_float_tone_detect` [@ANCHOR: ambe_float_tone_detect]
+
+**Purpose.** Decide whether one frame is a DTMF digit or a single tone, as the chip's tone detector does; the encoders call it for every frame.
+
+```rust
+pub fn detect_tone(frame: &[f64]) -> Option<Detection> // Detection { tone: DetectedTone, amplitude: f64 }
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&[f64]` | Exactly `FRAME` (160) PCM samples. |
+
+**Returns.** `None` for any other length, a frame quieter than a 100-amplitude sine, speech, noise or silence. `Some(Detection)`: `DetectedTone::Dtmf { row, col }` when the strongest row and column tones both exceed 100, are within a factor of 3, and explain over 85 percent of the energy (amplitude: their mean); otherwise `DetectedTone::Single { index, hz }` from a 12.5 Hz coarse scan of 150 to 3900 Hz refined in 1 Hz steps, when the amplitude exceeds 100 and the fit explains over 99 percent, and the index is 13 to 122 or the pure 200 Hz case (index 6, within 3 Hz, over 99.9 percent).
+
+**Special concerns.** Pure, no panic, no state. About 300 frame fits per call, so the cost is a few hundred thousand multiply-adds per frame. Tests: `detects_every_dtmf_digit_with_the_chip_index_and_level`, `single_tone_index_and_levels_match_the_chip`, `chip_non_detections_are_reproduced_and_speech_like_frames_are_rejected`.
+
+### `ambe_fixed_tone_fit_sinusoid` [@ANCHOR: ambe_fixed_tone_fit_sinusoid]
+
+**Purpose.** The fixed-point `ambe_float_tone_fit_sinusoid`: sums `sin`/`cos` products in `i64` and solves the 2x2 normal equations in `i128`; private.
+
+```rust
+fn fit_sinusoid(x: &[i16], hz_q16: i32) -> (i64, i64)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `&[i16]` | Frame samples. |
+| `hz_q16` | `i32` | The test frequency, Q16.16 hertz; the phase step is `hz / 8000` turns as a wrapping `u32`. |
+
+**Returns.** `(amplitude_q16, amplitude_squared_q16)`, Q16.16 in `i64` (two full-scale tones can exceed an `i32` Q16.16). `(0, 0)` for a degenerate determinant. Pure, no panic. Tests: as for `ambe_fixed_tone_detect`.
+
+### `ambe_fixed_tone_volume_for_amplitude` [@ANCHOR: ambe_fixed_tone_volume_for_amplitude]
+
+**Purpose.** The level field of a tone frame for a per-tone amplitude: `round(186 + 17 * log2(A / 4000))`.
+
+```rust
+pub fn volume_for_amplitude_q16(amplitude_q16: i64) -> u32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `amplitude_q16` | `i64` | Per-tone peak amplitude, Q16.16 PCM units; raised to at least 1.0 first. |
+
+**Returns.** The field, clamped to `0..=255` (500 gives 135, 1000 gives 152, 12000 gives 213). Pure, no panic; uses `log2_q16_i64`. Tests: `detects_every_dtmf_digit_with_the_chip_index_and_level`, `single_tone_index_and_levels_match_the_chip`.
+
+### `ambe_fixed_tone_detect` [@ANCHOR: ambe_fixed_tone_detect]
+
+**Purpose.** The fixed-point `ambe_float_tone_detect`, with every threshold decided on squared quantities by cross-multiplication so no division or square root enters a decision.
+
+```rust
+pub fn detect_tone(frame: &[i16]) -> Option<Detection> // Detection { tone: DetectedTone, amplitude_q16: i64 }
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&[i16]` | Exactly `FRAME` (160) samples. |
+
+**Returns.** The same decisions as the float detector (see its entry): `None` for a wrong length, total energy below 800000, or anything that is not a tone; `Dtmf { row, col }` with `amplitude_q16` the mean of the two; `Single { index, hz_q16 }` (the measured frequency, Q16.16 Hz) with the 99 percent, and 99.9 percent at 200 Hz, explained-energy tests. Ties for the strongest row or column resolve to the last, like the float's `max_by`.
+
+**Special concerns.** Pure, no panic, no state; same cost as the float version. Tests: `detects_every_dtmf_digit_with_the_chip_index_and_level`, `single_tone_index_and_levels_match_the_chip`, `chip_non_detections_are_reproduced_and_speech_like_frames_are_rejected`; the cross-check against the float detector is `tests/ambe_fixed_tone_detect.rs`.
+
+### `ambe_float_tone_synthesize` [@ANCHOR: ambe_float_tone_synthesize]
+
+**Purpose.** One 20 ms frame of one or two sinusoids, with the phase kept between frames so a held tone is continuous; `dtmf` calls it with a row and a column.
+
+```rust
+impl ToneSynthesizer { pub fn synthesize(&mut self, freqs_hz: &[f64], peak: f64) -> [f64; N] }
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `freqs_hz` | `&[f64]` | One or two frequencies in hertz; only the first two are used, slot `i` keeps its own phase. |
+| `peak` | `f64` | The amplitude of each tone, PCM units. |
+
+**Returns.** The `N` (160) samples, the sum of the tones. Each slot's phase is reduced modulo 2 pi and stored for the next call; `reset` clears it. Pure apart from that stored phase; no panic. Tests: `single_tone_lands_on_its_frequency_with_requested_peak`, `phase_is_continuous_across_frames`.
+
+### `ambe_fixed_dstar_tone_amplitude` [@ANCHOR: ambe_fixed_dstar_tone_amplitude]
+
+**Purpose.** The per-tone peak amplitude for a D-STAR tone frame's 8-bit volume field: the chip's measured curve `3268 * exp(0.04084 * (volume - 180))`.
+
+```rust
+pub fn dstar_tone_amplitude_q16(volume: u32) -> i64
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `volume` | `u32` | The volume field, 0 to 255. |
+
+**Returns.** The peak in Q16.16 PCM units, clamped to 32767 (the chip saturates near volume 238). Evaluated as `3268 * 2^y` with the integer part of `y` applied as a shift, so the extremes do not saturate `exp2_q16`. Within 4 percent of the chip's measured peaks at volumes 120, 150, 180 and 210, and exactly 3268 at 180. Pure, no panic. Test: `dstar_levels_match_the_chip_measurements`.
+
+### `ambe_fixed_dstar_tone_volume_for_amplitude` [@ANCHOR: ambe_fixed_dstar_tone_volume_for_amplitude]
+
+**Purpose.** The inverse of `dstar_tone_amplitude_q16`: the volume field an encoder writes for a detected tone amplitude.
+
+```rust
+pub fn dstar_tone_volume_for_amplitude_q16(amplitude_q16: i64) -> u32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `amplitude_q16` | `i64` | Per-tone peak, Q16.16 PCM units; values below 1.0 are treated as 1.0. |
+
+**Returns.** `round(180 + log2(A / 3268) / slope)` clamped to `0..=255`. Round-trips every volume from 60 to 230 exactly. Pure, no panic. Test: `dstar_tone_volume_inverts_the_amplitude_curve`.
+
+### `ambe_fixed_tone_synthesize` [@ANCHOR: ambe_fixed_tone_synthesize]
+
+**Purpose.** The fixed-point `ambe_float_tone_synthesize`: the phase accumulator is a wrapping `u32` in turns, so continuity across frames costs nothing.
+
+```rust
+impl ToneSynthesizer { pub fn synthesize(&mut self, freqs_hz_q16: &[i32], peak_q16: i64) -> [i64; N] }
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `freqs_hz_q16` | `&[i32]` | One or two frequencies in Q16.16 hertz (only the first two are used; a negative one is treated as 0). |
+| `peak_q16` | `i64` | Each tone's peak, Q16.16 PCM units. |
+
+**Returns.** The `N` (160) samples in Q16.16 (`i64`), the sum of the tones, each sample rounded to nearest. The stored phases advance by `N` steps. `synthesize_hz` and `dtmf` wrap it. Pure apart from the phase; no panic. Test: `single_tone_has_requested_peak_and_continuous_phase`.

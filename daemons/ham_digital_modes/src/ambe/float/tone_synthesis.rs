@@ -64,6 +64,7 @@ impl ToneSynthesizer {
 
     /// Synthesizes one frame of the given 1 or 2 frequencies, each at `peak` amplitude.
     pub fn synthesize(&mut self, freqs_hz: &[f64], peak: f64) -> [f64; N] {
+        // [@ANCHOR: ambe_float_tone_synthesize]
         let mut out = [0.0; N];
         for (slot, &hz) in freqs_hz.iter().take(2).enumerate() {
             let step = 2.0 * PI * hz / SAMPLE_RATE_HZ;
@@ -138,6 +139,7 @@ mod tests {
         best.0
     }
 
+    // Tests [@ANCHOR: ambe_float_tone_synthesize]
     #[test]
     fn single_tone_lands_on_its_frequency_with_requested_peak() {
         let mut t = ToneSynthesizer::new();
@@ -147,6 +149,7 @@ mod tests {
         assert!((peak - 1000.0).abs() < 60.0, "peak {peak}");
     }
 
+    // Tests [@ANCHOR: ambe_float_tone_synthesize]
     #[test]
     fn phase_is_continuous_across_frames() {
         let mut t = ToneSynthesizer::new();
