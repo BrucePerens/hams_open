@@ -80,6 +80,8 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "anan-10": [],
     "microtelecom-perseus-usb": [],
     "anan-100": [],
+    # A ka9q-radio radiod receive channel (RX-888 and other radiod front ends): no Hamlib model.
+    "radiod-channel": [],
     "alinco-dx-77": [17001],
     "alinco-dx-sr8": [17002],
     "drake-r-8a": [9002],
