@@ -15,7 +15,10 @@ import time
 import re
 import json
 import logging
-import concurrent.futures
+# Bound at import, before the chroot: concurrent.futures loads its .thread submodule lazily, and inside /var/log there
+# is no Python library to load it from (hams1 2026-11-07: ModuleNotFoundError 'concurrent.futures.thread' right after
+# the privilege drop).
+from concurrent.futures import ThreadPoolExecutor
 import ctypes
 import pwd
 import grp
@@ -345,7 +348,7 @@ def main():
             logger.error(f"Invalid regex {p.get('regex')}: {e}")
 
     # Start Tailers
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(target_files) + 1)
+    executor = ThreadPoolExecutor(max_workers=len(target_files) + 1)
     for fp in target_files:
         executor.submit(tail_file, r_client, fp, compiled)
 
