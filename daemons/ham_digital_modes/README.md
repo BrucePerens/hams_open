@@ -1106,7 +1106,7 @@ and searches the spectrum for the strongest bin in the 50 to 400 Hz range, then 
 
 `codec2_3200::Decoder::decode_16k` extends the band above 4 kHz from the decoded spectral envelope, for voiced and
 unvoiced sub-frames alike. The 1600 bit/s decoder and the fixed-point path keep `extrapolate_amplitudes` (voiced only,
-slope fitted to the harmonic amplitudes); a fixed-point port of this is a follow-up. Measured on eleven real 16 kHz
+slope fitted to the harmonic amplitudes); the fixed-point 3200 decoder has its own port (below). Measured on eleven real 16 kHz
 voice recordings (FreeDV project samples), each downsampled to 8 kHz, encoded with `EncoderMbe` and decoded at 16 kHz
 (4474 active 20 ms frames, energy of the 4-8 kHz band against the original; hams_com
 `docs/reviews/M17_CODEC2_WOJCIECH_2026-11-06.md`, section 4):
@@ -1178,6 +1178,68 @@ sequence is untouched). With `enabled` false it gives exactly `synthesize_subfra
 Private. The synthesis both entry points share: places harmonics `1..=l2` in the 1024-point spectrum (decoded ones as
 `phi * a`, added ones voiced or noise phase as above), mirrors it, inverse-transforms, windows, overlap-adds and applies
 the output limiter. `a_ext` must hold `l2` amplitudes; `l2` at most 160.
+
+### The envelope-driven high band, fixed point (`DecoderFixed::decode_16k_fixed`, 2026-11-07)
+
+The integer port of the above, so the 16 kHz decode needs no floating point either (`no_std` with feature
+`codec2_16k_bridge`). Same method in base-2 logarithms. Against the float decode of the same bitstreams (the four
+OSR sentences encoded with `EncoderMbe`), the energy above 4.5 kHz differs by -0.06 to +0.02 dB on average and 0.16
+to 0.32 dB frame by frame (`tests/codec2_3200_16k_fixed_vs_float.rs`); the unvoiced noise phases come from different
+generators, so the waveforms are not compared. The 1600 bit/s fixed decoder keeps `synthesize_subframe_sb_fixed`.
+
+#### `envelope_slope_log2_per_bin_fixed` [@ANCHOR: envelope_slope_log2_per_bin_fixed]
+
+**Purpose.** The integer `envelope_slope_ln_per_hz`.
+
+```rust
+pub(crate) fn envelope_slope_log2_per_bin_fixed(ak_q23: &[i64; LPC_ORD + 1], scratch: &mut FftScratch) -> i64
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ak_q23` | `&[i64; 11]` | The sub-frame's LPC coefficients, Q23 (`lpc::lsp_to_lpc_fixed`). |
+| `scratch` | `&mut FftScratch` | Work buffers for the 512-point transform; overwritten. |
+
+**Returns.** The least-squares slope of `log2(1/|A|)` (computed as `-log2_q23(|A|^2 + 1e-6)/2`) against the bin index
+over bins 128 to 256 (2 to 4 kHz, 15.625 Hz each), as Q23 log2 amplitude per bin, clamped to at most 0; 0 for a
+degenerate fit. Sums in `i128`, so no overflow for any coefficients. **Special concerns.** Integer only; feature
+`codec2_16k_bridge`; one fixed-point FFT, the cost the 16 kHz path adds per sub-frame. Matches the float slope within
+0.025 dB/kHz on 400 decoded envelopes (test: `the_fixed_envelope_slope_matches_the_float_one`).
+
+#### `extrapolate_amplitudes_from_envelope_fixed` [@ANCHOR: extrapolate_amplitudes_from_envelope_fixed]
+
+```rust
+pub(crate) fn extrapolate_amplitudes_from_envelope_fixed(model: &ModelFixed, slope_q23_per_bin: i64, enabled: bool) -> ([i64; MAX_AMP_SB + 1], usize)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&ModelFixed` | The decoded sub-frame: `k_q23` (bins per harmonic, Q23), `l`, `a[1..=l]` (Q23), voiced or not. |
+| `slope_q23_per_bin` | `i64` | From `envelope_slope_log2_per_bin_fixed`; a positive value is treated as 0. |
+| `enabled` | `bool` | `SpectralBridgeStateFixed::enabled`. |
+
+**Returns.** `(a_ext, l2)`: `a_ext[1..=l]` copied, `a_ext[l+1..=l2]` = `exp2_q23(y0 + slope * (m * k_q23 - x0))`, where
+`y0` and `x0` are the mean `log2_q23` amplitude and mean bin position of the top `min(l, 16)` harmonics; `l2 =
+min(2l, 160)`, or `l` when disabled or `l` is 0. Integer only. Within 0.0001 dB of the float version (test:
+`the_fixed_envelope_extrapolation_matches_the_float_one`).
+
+#### `SpectralBridgeStateFixed::synthesize_subframe_sb_from_envelope_fixed` [@ANCHOR: SpectralBridgeStateFixed::synthesize_subframe_sb_from_envelope_fixed]
+
+```rust
+pub(crate) fn synthesize_subframe_sb_from_envelope_fixed(&mut self, model: &ModelFixed, slope_q23_per_bin: i64) -> [i16; N_SAMP_SB]
+```
+
+One 10 ms sub-frame at 16 kHz with the envelope-driven band above 4 kHz; `DecoderFixed::decode_16k_fixed` calls it per
+sub-frame with the slope of that sub-frame's coefficients. `model` must have been through the base synthesis's
+preparation (`prepare_subframe_fixed`), which sets `phi[1..=l]`. With `enabled` false the output equals
+`synthesize_subframe_sb_fixed`'s (tested). Mutates the bridge's overlap-add buffer, phase track and its own random
+generator (`rng`, seeded `0x5B1D6E`), never the base synthesis's.
+
+#### `SpectralBridgeStateFixed::synthesize_extended_fixed` [@ANCHOR: SpectralBridgeStateFixed::synthesize_extended_fixed]
+
+Private. The synthesis both fixed entry points share: decoded harmonics as `phi * a`, added voiced ones with the voiced
+excitation phase (`phi0 * m`), added unvoiced ones with a random phase (`synthesis::next_rand_fixed`), one 1024-point
+sparse inverse transform, Parzen window and overlap-add. `a_ext` must hold `l2` amplitudes, `l2` at most 160.
 
 ## Synthesis internals
 
