@@ -69,6 +69,21 @@ class TestUnsubscribePage(HamsHttpCase):
         self.assertIn(b"You must be logged in to lock out your account", response.content, msg)
         self.assertNotIn(b'action="/unsubscribe/lockout"', response.content, msg)
 
+    def test_option_one_promises_only_what_exists(self):
+        # Tests [@ANCHOR: hams_base:unsubscribe_page_template]
+        # Tests [@ANCHOR: hams_base:email_policy_template]
+        # No per-member, per-kind email preference exists (nothing stores one and no sender reads one), and
+        # /my/account is Odoo's stock name/email/password form. Neither page may offer a mute switch or link
+        # to that form as if it were one.
+        for path in ("/unsubscribe", "/email-policy"):
+            body = self.url_open(path).content.decode()
+            for promise in ("Mute Non-Critical", "mute non-critical", "Manage Email Preferences", "Turn off automated reminders"):
+                self.assertNotIn(promise, body, f"[!] DIAGNOSTIC FOR AI: {path} promises a mute switch that does not exist ({promise!r}).")
+            self.assertNotIn('href="/my/account"', body, f"[!] DIAGNOSTIC FOR AI: {path} links to the stock account form as an email preferences page.")
+        page = self.url_open("/unsubscribe").content.decode()
+        self.assertIn("no separate switch", page)
+        self.assertIn("mailto:admin@hams.com", page)
+
     def test_authenticated_user_sees_lockout_form(self):
         # Tests [@ANCHOR: hams_base:unsubscribe_page_template]
         self.authenticate(self.test_user.login, "unsub_pw")
