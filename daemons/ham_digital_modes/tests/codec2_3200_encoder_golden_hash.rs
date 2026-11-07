@@ -10,6 +10,14 @@
 //! construction (every skipped term is a product with a zero window coefficient), and these
 //! hashes are the proof that it stayed so. A change that alters any encoded bit fails here; if a
 //! change is meant to alter encoder output, re-measure and record why.
+//!
+//! Re-measured 2026-11-07, on purpose: the frame energy is now the prediction error of the predictor
+//! fitted to the uncorrected autocorrelation (`EncoderFixed::lpc_fields`), as in every Codec2
+//! encoder. Before, the white-noise-corrected predictor was used, which overstated the energy of
+//! strongly predictable vowels by up to 6 quantizer steps. Only energy indexes changed (checked:
+//! voicing, pitch and line spectral pair fields of all three encoders are as before on the four
+//! recordings); the energy index now matches the Codec2-mod C encoder on 99.8 to 100 percent of
+//! frames (`tests/codec2_3200_encoder_vs_reference.rs`).
 
 use ham_digital_modes::codec2_3200::{EncoderFixed, BYTES_PER_FRAME, SAMPLES_PER_FRAME};
 
@@ -83,7 +91,7 @@ fn encoder_fixed_bitstream_on_real_speech_and_noise_is_unchanged() {
     let mut enc = EncoderFixed::new();
     let h = hash_with(|f| enc.encode(f));
     assert_eq!(
-        h, 0x409bfe696921e04d,
+        h, 0xb818d7a678909b45,
         "EncoderFixed output changed: hash {h:016x}"
     );
 }
@@ -94,7 +102,7 @@ fn floating_reference_encoder_bitstream_on_real_speech_and_noise_is_unchanged() 
     let mut enc = floating_reference::Encoder::new();
     let h = hash_with(|f| enc.encode(f));
     assert_eq!(
-        h, 0x303e6e9d6a0c85ab,
+        h, 0xc46811af01ba3fe3,
         "floating_reference::Encoder output changed: hash {h:016x}"
     );
 }
@@ -107,7 +115,7 @@ fn encoder_mbe_bitstream_on_real_speech_and_noise_is_unchanged() {
     let mut enc = EncoderMbe::new();
     let h = hash_with(|f| enc.encode(f));
     assert_eq!(
-        h, 0x97aab3dd30272360,
+        h, 0x1313b0d90fd21988,
         "EncoderMbe output changed: hash {h:016x}"
     );
 }

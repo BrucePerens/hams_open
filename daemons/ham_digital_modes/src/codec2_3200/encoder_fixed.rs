@@ -147,12 +147,18 @@ impl EncoderFixed {
         let mut a_q23 = lpc::levinson_durbin_q23_from_integer_r(&r_q_for_levinson);
         profile_mark!(4);
 
-        // lpc_energy: now fixed-point too -- no separate float windowing/
-        // autocorrelate pass needed anymore. Must run before bw_gamma
-        // (matches lpc_energy's own doc comment on real ordering), on
-        // the pre-expansion a_q23 -- hence taking it before the
-        // bandwidth-expansion step below mutates it in place.
-        let e_q23 = lpc::lpc_energy_q23(&a_q23, &r_q);
+        // Frame energy: the prediction error of the predictor fitted to the
+        // UNCORRECTED autocorrelation, as every Codec2 encoder computes it.
+        // Until 2026-11-07 it used the white-noise-corrected predictor above
+        // on the uncorrected R, which is never below the optimum and on
+        // strongly predictable vowels came out up to 6 quantizer steps
+        // (about 10 dB) high: the energy index matched the Codec2-mod C
+        // encoder on 45 to 66 percent of real speech frames. With this
+        // second recursion it matches on 99.8 to 100 percent (four Open
+        // Speech Repository sentences). The corrected predictor still gives
+        // the line spectral pairs, which is what the correction is for.
+        let a_q23_energy = lpc::levinson_durbin_q23_from_integer_r(&r_q);
+        let e_q23 = lpc::lpc_energy_q23(&a_q23_energy, &r_q);
         profile_mark!(5);
 
         // bw_gamma + lpc_to_lsp: now fixed-point too, including the
@@ -351,7 +357,8 @@ mod tests {
             let mut r_q_for_levinson = r_q;
             lpc::apply_white_noise_correction_fixed(&mut r_q_for_levinson);
             let (_ak, mut a_q23) = lpc::levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
-            let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
+            let (_ak_e, a_q23_energy) = lpc::levinson_durbin_fixed_from_integer_r(&r_q);
+            let e = lpc::lpc_energy_fixed(&a_q23_energy, &r_q);
             lpc::apply_bw_gamma_fixed(&mut a_q23);
             let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23)
                 .unwrap_or_else(crate::codec2_3200::fallback_lsp);

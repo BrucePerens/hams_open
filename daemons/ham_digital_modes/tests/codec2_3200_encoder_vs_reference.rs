@@ -12,7 +12,8 @@
 //! this crate's pitch estimator and integer LPC path are its own). What is checked is what a
 //! listener hears: the voicing decision and the pitch index agree with the reference on most
 //! frames. Measured 2026-11-06 (voicing / pitch index exact): 0010 0.977 / 0.616, 0011 0.979 /
-//! 0.646, 0030 0.939 / 0.639, 0031 0.930 / 0.627. `EncoderFixed`, for comparison, agrees on
+//! 0.646, 0030 0.939 / 0.639, 0031 0.930 / 0.627. Since the energy fix of 2026-11-07 the energy
+//! index agrees too (0.998 to 1.000; before it, 0.45 to 0.69). `EncoderFixed`, for comparison, agrees on
 //! voicing on 0.06 to 0.15 of frames and on the pitch index on 0.25 to 0.31.
 
 use ham_digital_modes::codec2_3200::bits::unpack_frame;
@@ -37,6 +38,7 @@ struct Agreement {
     frames: usize,
     voicing: f64,
     wo_exact: f64,
+    energy_exact: f64,
 }
 
 fn compare(n: &str) -> Agreement {
@@ -47,7 +49,7 @@ fn compare(n: &str) -> Agreement {
     ))
     .unwrap();
     let mut enc = EncoderMbe::new();
-    let (mut frames, mut voicing, mut wo) = (0usize, 0usize, 0usize);
+    let (mut frames, mut voicing, mut wo, mut energy) = (0usize, 0usize, 0usize, 0usize);
     for (chunk, want) in pcm
         .chunks_exact(SAMPLES_PER_FRAME)
         .zip(reference.chunks_exact(BYTES_PER_FRAME))
@@ -58,6 +60,7 @@ fn compare(n: &str) -> Agreement {
         frames += 1;
         voicing += (a.voiced0 == b.voiced0 && a.voiced1 == b.voiced1) as usize;
         wo += (a.wo_index == b.wo_index) as usize;
+        energy += (a.e_index == b.e_index) as usize;
     }
     assert_eq!(
         frames,
@@ -68,6 +71,7 @@ fn compare(n: &str) -> Agreement {
         frames,
         voicing: voicing as f64 / frames as f64,
         wo_exact: wo as f64 / frames as f64,
+        energy_exact: energy as f64 / frames as f64,
     }
 }
 
@@ -77,13 +81,20 @@ fn encoder_mbe_voicing_and_pitch_agree_with_the_c_reference_on_real_speech() {
     for n in ["0010", "0011", "0030", "0031"] {
         let a = compare(n);
         println!(
-            "OSR {n}: {} frames, voicing {:.3}, pitch index exact {:.3}",
-            a.frames, a.voicing, a.wo_exact
+            "OSR {n}: {} frames, voicing {:.3}, pitch index exact {:.3}, energy index exact {:.3}",
+            a.frames, a.voicing, a.wo_exact, a.energy_exact
         );
         assert!(
             a.voicing >= 0.90,
             "OSR {n}: voicing agreement {:.3}",
             a.voicing
+        );
+        // The energy is computed as the reference computes it (2026-11-07): it agrees on all but a
+        // handful of frames where the two Levinson-Durbin recursions round across a quantizer step.
+        assert!(
+            a.energy_exact >= 0.99,
+            "OSR {n}: energy index agreement {:.3}",
+            a.energy_exact
         );
         assert!(
             a.wo_exact >= 0.55,

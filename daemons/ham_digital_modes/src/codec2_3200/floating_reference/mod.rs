@@ -124,7 +124,10 @@ impl Encoder {
         let mut r_for_levinson = r;
         lpc::apply_white_noise_correction(&mut r_for_levinson);
         let mut ak = lpc::levinson_durbin(&r_for_levinson);
-        let e = lpc::lpc_energy(&ak, &r);
+        // The energy is the prediction error of the predictor fitted to the
+        // uncorrected R (as in every Codec2 encoder): the corrected predictor
+        // applied to R overstates it on strongly predictable frames.
+        let e = lpc::lpc_energy(&lpc::levinson_durbin(&r), &r);
         for (i, a) in ak.iter_mut().enumerate() {
             *a *= bw_gamma(i);
         }
