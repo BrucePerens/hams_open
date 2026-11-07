@@ -147,18 +147,21 @@ impl EncoderFixed {
         let mut a_q23 = lpc::levinson_durbin_q23_from_integer_r(&r_q_for_levinson);
         profile_mark!(4);
 
-        // Frame energy: the prediction error of the predictor fitted to the
-        // UNCORRECTED autocorrelation, as every Codec2 encoder computes it.
-        // Until 2026-11-07 it used the white-noise-corrected predictor above
-        // on the uncorrected R, which is never below the optimum and on
-        // strongly predictable vowels came out up to 6 quantizer steps
-        // (about 10 dB) high: the energy index matched the Codec2-mod C
-        // encoder on 45 to 66 percent of real speech frames. With this
-        // second recursion it matches on 99.8 to 100 percent (four Open
-        // Speech Repository sentences). The corrected predictor still gives
-        // the line spectral pairs, which is what the correction is for.
-        let a_q23_energy = lpc::levinson_durbin_q23_from_integer_r(&r_q);
-        let e_q23 = lpc::lpc_energy_q23(&a_q23_energy, &r_q);
+        // Frame energy: the prediction error of the white-noise-corrected
+        // model itself (the corrected predictor on the corrected
+        // autocorrelation). The decoder rebuilds loudness from this energy
+        // times the envelope of the transmitted line spectral pairs, which
+        // come from the same corrected predictor, so the two must belong to
+        // one model. Measured 2026-11-07 on the four Open Speech Repository
+        // sentences (decoded frame loudness against the original): this
+        // pairing is the closest of the three tried. The corrected predictor
+        // on the uncorrected R (before) read 0.6 to 1.6 dB quiet on frames
+        // with 20 to 30 dB of prediction gain; the uncorrected minimum error
+        // (what the C reference sends, with its uncorrected envelope) read
+        // 4.6 to 5.6 dB quiet there, because it does not belong to this
+        // envelope. The correction itself is what keeps the recursion away
+        // from the ill-conditioned frames (see `apply_white_noise_correction_fixed`).
+        let e_q23 = lpc::lpc_energy_q23(&a_q23, &r_q_for_levinson);
         profile_mark!(5);
 
         // bw_gamma + lpc_to_lsp: now fixed-point too, including the
@@ -357,8 +360,7 @@ mod tests {
             let mut r_q_for_levinson = r_q;
             lpc::apply_white_noise_correction_fixed(&mut r_q_for_levinson);
             let (_ak, mut a_q23) = lpc::levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
-            let (_ak_e, a_q23_energy) = lpc::levinson_durbin_fixed_from_integer_r(&r_q);
-            let e = lpc::lpc_energy_fixed(&a_q23_energy, &r_q);
+            let e = lpc::lpc_energy_fixed(&a_q23, &r_q_for_levinson);
             lpc::apply_bw_gamma_fixed(&mut a_q23);
             let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23)
                 .unwrap_or_else(crate::codec2_3200::fallback_lsp);

@@ -663,13 +663,17 @@ pub(super) fn lpc_fields(&self) -> (u32, [u32; LPC_ORD])
 ready for `bits::pack_frame`.
 
 **Special concerns.** Pure, integer end to end, no allocation. Windows and correlates only `window::ANALYSIS_SPAN`.
-Runs Levinson-Durbin twice. Once on the autocorrelation with white noise correction (`R[0] * (1 + 1e-3)`), whose
-predictor gives the line spectral pairs (the correction keeps that recursion away from ill-conditioned frames). Once
-on the uncorrected autocorrelation, whose prediction error is the frame energy, as every Codec2 encoder computes
-it. Until 2026-11-07 the energy came from the corrected predictor, which overstates it on strongly predictable
-vowels: the energy index was up to 6 steps (about 10 dB) high and matched the Codec2-mod C encoder on 45 to 66
-percent of real speech frames. It now matches on 99.8 to 100 percent (see hams_com
-`docs/reviews/M17_CODEC2_WOJCIECH_2026-11-06.md`).
+Applies white noise correction (`R[0] * (1 + 1e-3)`) before Levinson-Durbin: without it the recursion divides by a
+prediction error that can come arbitrarily close to zero on strongly predictable frames, and the coefficients diverge
+(`apply_white_noise_correction_fixed`). The line spectral pairs come from that corrected predictor, and so does the
+frame energy: the corrected predictor's error on the corrected autocorrelation. The decoder rebuilds a frame's level
+from the energy times the transmitted envelope, so the two must belong to one model. Measured 2026-11-07 (decoded
+loudness against the original, four Open Speech Repository sentences): -0.5 to -1.0 dB mean with this energy; -0.8 to
+-1.5 dB with the corrected predictor on the uncorrected autocorrelation (used until then); -2.7 to -3.8 dB with the
+uncorrected minimum error, which is what the Codec2 C encoder sends with its own, uncorrected envelope, and which was
+briefly used here on 2026-11-07 until that measurement. So this energy index matches the C encoder's only on 34 to 64
+percent of frames, by design (see hams_com `docs/reviews/M17_CODEC2_WOJCIECH_2026-11-06.md`).
+
 
 **See also.** `analysis_span`, `EncoderMbe::encode`. Test: `encoder_mbe_marks_a_steady_vowel_voiced_and_keeps_the_fixed_encoders_envelope`.
 
