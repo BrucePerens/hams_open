@@ -178,10 +178,12 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
     def test_05_resolve_redis_host_returns_an_address_and_leaves_an_unresolvable_name_alone(self):
         # Tests [@ANCHOR: pager_duty:log_analyzer_resolve_redis_host]
         self.assertEqual(pager_log_analyzer.resolve_redis_host("192.0.2.7"), "192.0.2.7", "an address stays as it is")
-        self.safe_patch_object(
-            pager_log_analyzer.socket, "getaddrinfo",
-            side_effect=lambda host, port, family=0, type=0: [(family, type, 0, "", ("2001:db8::1" if family != 2 else "192.0.2.9", 0))],
-        )
+        def fake_getaddrinfo(host, port, family=0, type=0):
+            if host != "redis":
+                raise pager_log_analyzer.socket.gaierror("unknown host")
+            return [(family, type, 0, "", ("2001:db8::1" if family != pager_log_analyzer.socket.AF_INET else "192.0.2.9", 0))]
+
+        self.safe_patch_object(pager_log_analyzer.socket, "getaddrinfo", side_effect=fake_getaddrinfo)
         self.assertEqual(pager_log_analyzer.resolve_redis_host("redis"), "192.0.2.9", "IPv4 is preferred")
         self.assertEqual(
             pager_log_analyzer.resolve_redis_host("no-such-host.invalid"), "no-such-host.invalid",
