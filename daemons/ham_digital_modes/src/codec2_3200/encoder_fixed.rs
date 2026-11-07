@@ -147,12 +147,21 @@ impl EncoderFixed {
         let mut a_q23 = lpc::levinson_durbin_q23_from_integer_r(&r_q_for_levinson);
         profile_mark!(4);
 
-        // lpc_energy: now fixed-point too -- no separate float windowing/
-        // autocorrelate pass needed anymore. Must run before bw_gamma
-        // (matches lpc_energy's own doc comment on real ordering), on
-        // the pre-expansion a_q23 -- hence taking it before the
-        // bandwidth-expansion step below mutates it in place.
-        let e_q23 = lpc::lpc_energy_q23(&a_q23, &r_q);
+        // Frame energy: the prediction error of the white-noise-corrected
+        // model itself (the corrected predictor on the corrected
+        // autocorrelation). The decoder rebuilds loudness from this energy
+        // times the envelope of the transmitted line spectral pairs, which
+        // come from the same corrected predictor, so the two must belong to
+        // one model. Measured 2026-11-07 on the four Open Speech Repository
+        // sentences (decoded frame loudness against the original): this
+        // pairing is the closest of the three tried. The corrected predictor
+        // on the uncorrected R (before) read 0.6 to 1.6 dB quiet on frames
+        // with 20 to 30 dB of prediction gain; the uncorrected minimum error
+        // (what the C reference sends, with its uncorrected envelope) read
+        // 4.6 to 5.6 dB quiet there, because it does not belong to this
+        // envelope. The correction itself is what keeps the recursion away
+        // from the ill-conditioned frames (see `apply_white_noise_correction_fixed`).
+        let e_q23 = lpc::lpc_energy_q23(&a_q23, &r_q_for_levinson);
         profile_mark!(5);
 
         // bw_gamma + lpc_to_lsp: now fixed-point too, including the
@@ -351,7 +360,7 @@ mod tests {
             let mut r_q_for_levinson = r_q;
             lpc::apply_white_noise_correction_fixed(&mut r_q_for_levinson);
             let (_ak, mut a_q23) = lpc::levinson_durbin_fixed_from_integer_r(&r_q_for_levinson);
-            let e = lpc::lpc_energy_fixed(&a_q23, &r_q);
+            let e = lpc::lpc_energy_fixed(&a_q23, &r_q_for_levinson);
             lpc::apply_bw_gamma_fixed(&mut a_q23);
             let lsp = lpc::lpc_to_lsp_from_integer_ak(&a_q23)
                 .unwrap_or_else(crate::codec2_3200::fallback_lsp);

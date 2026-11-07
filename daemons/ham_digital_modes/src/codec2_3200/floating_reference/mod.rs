@@ -124,7 +124,10 @@ impl Encoder {
         let mut r_for_levinson = r;
         lpc::apply_white_noise_correction(&mut r_for_levinson);
         let mut ak = lpc::levinson_durbin(&r_for_levinson);
-        let e = lpc::lpc_energy(&ak, &r);
+        // The energy is the prediction error of the corrected model itself
+        // (corrected predictor, corrected R), the one the transmitted envelope
+        // belongs to: see `EncoderFixed::lpc_fields`.
+        let e = lpc::lpc_energy(&ak, &r_for_levinson);
         for (i, a) in ak.iter_mut().enumerate() {
             *a *= bw_gamma(i);
         }
