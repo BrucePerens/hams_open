@@ -537,10 +537,17 @@ mod tests {
             1 << 31,
             1 << 40,
             -(1 << 40),
-            (1 << 45) + 12345,
+            (1 << 42) - 12345,
         ];
+        // Inputs stay under 2^42.5 in magnitude: `mag_sq_q23` returns the Q23 power in an `i64`, which
+        // holds only while re^2 + im^2 < 2^86 (each component under about 2^42.5). The real inputs are
+        // a 512-point spectrum of 11 linear-prediction coefficients of a filter with unit-circle roots at
+        // worst: |A| <= sum |a_k| <= 2^10 (binomial bound C(10,5) = 252 per coefficient pair), i.e. under
+        // 2^33 in Q23, ten bits below the limit (and the first, 32-bit path covers everything under 2^31).
+        // A larger value here is not a reachable input; it made `rshift_round_i128` correctly assert.
+        // The old values (2^45, 2^59) were outside that range, on every architecture.
         for _ in 0..3000 {
-            vals.push((next() as i64) >> (next() % 60 + 4));
+            vals.push((next() as i64) >> (next() % 18 + 22));
         }
         for &re in &vals {
             for &im in vals.iter().step_by(37) {
