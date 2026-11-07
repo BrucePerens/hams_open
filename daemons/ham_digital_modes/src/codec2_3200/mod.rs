@@ -545,6 +545,9 @@ impl DecoderFixed {
         let subframes = [(wo0, voiced0, lsps0, e0), (wo1, fields.voiced1, lsps1, e1)];
         for (i, (wo, voiced, lsps, e)) in subframes.into_iter().enumerate() {
             let ak = lpc::lsp_to_lpc_fixed(&lsps);
+            // The envelope's slope above 2 kHz steers the band above 4 kHz (one extra transform;
+            // it uses the scratch buffers before the amplitude estimate overwrites them).
+            let slope = envelope::envelope_slope_log2_per_bin_fixed(&ak, &mut self.synth.scratch);
             let mut model = envelope::ModelFixed::new(wo, voiced);
             let h = envelope::compute_harmonic_amplitudes_fixed(
                 &ak,
@@ -559,7 +562,9 @@ impl DecoderFixed {
             // were never used here (so, as before, do not interleave `decode` and
             // `decode_16k_fixed` on one instance; the 8 kHz overlap-add state is not advanced).
             self.synth.prepare_subframe_fixed(&mut model, &h);
-            let sub_sb = self.spectral_bridge.synthesize_subframe_sb_fixed(&model);
+            let sub_sb = self
+                .spectral_bridge
+                .synthesize_subframe_sb_from_envelope_fixed(&model, slope);
             let n = spectral_bridge::N_SAMP_SB;
             out[i * n..(i + 1) * n].copy_from_slice(&sub_sb);
         }

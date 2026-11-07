@@ -282,6 +282,48 @@ fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1], scratch: &mut FftScratch) {
     );
 }
 
+/// Fixed-point `spectral_bridge::envelope_slope_ln_per_hz`: the decoded envelope's slope across
+/// its upper half (2 to 4 kHz), as Q23 base-2-log amplitude per spectrum bin (15.625 Hz), never
+/// rising. Computes the LPC analysis filter's spectrum of `ak_q23` into `scratch` (one 512-point
+/// integer transform; `scratch` is overwritten) and fits `log2(1/|A|)`, i.e. `-log2_q23(|A|^2)/2`,
+/// against the bin index over bins 128 to 256 by integer least squares. No `f32`: it runs in the
+/// `no_std` build. Used by `DecoderFixed::decode_16k_fixed`; the 8 kHz decode never calls it.
+// [@ANCHOR: envelope_slope_log2_per_bin_fixed]
+#[cfg(feature = "codec2_16k_bridge")]
+pub(crate) fn envelope_slope_log2_per_bin_fixed(
+    ak_q23: &[i64; LPC_ORD + 1],
+    scratch: &mut FftScratch,
+) -> i64 {
+    lpc_spectrum_fixed(ak_q23, scratch);
+    let (mut n, mut sx, mut sy, mut sxx, mut sxy) = (0i128, 0i128, 0i128, 0i128, 0i128);
+    for i in (FFT_ENC / 4)..=(FFT_ENC / 2) {
+        let a2 = mag_sq_q23(ComplexQ23 {
+            re: scratch.re[i],
+            im: scratch.im[i],
+        }) + eps_a2_q23();
+        let x = i as i128;
+        let y = -(log2_q23(a2) as i128) / 2;
+        n += 1;
+        sx += x;
+        sy += y;
+        sxx += x * x;
+        sxy += x * y;
+    }
+    let denom = n * sxx - sx * sx;
+    if denom <= 0 {
+        return 0;
+    }
+    let num = n * sxy - sx * sy;
+    // Round to nearest, then clamp: a rising envelope continues flat.
+    let half = denom / 2;
+    let slope = if num >= 0 {
+        (num + half) / denom
+    } else {
+        (num - half) / denom
+    };
+    (slope as i64).min(0)
+}
+
 /// `1e-6` in Q23 -- the same tiny floor `compute_harmonic_amplitudes`'s
 /// own `a2`/`a2g` construction adds, just enough to keep `log2_q23`'s
 /// positive-input requirement satisfied at a genuinely near-zero bin,

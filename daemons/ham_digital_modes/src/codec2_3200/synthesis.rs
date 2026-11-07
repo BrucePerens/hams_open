@@ -339,7 +339,7 @@ pub(crate) fn phase_increment_q32(wo_q23: i64) -> u32 {
 /// conversion, since a raw xorshift word is already uniform over its
 /// full range.
 // [@ANCHOR: next_rand_fixed]
-fn next_rand_fixed(state: &mut u32) -> u32 {
+pub(crate) fn next_rand_fixed(state: &mut u32) -> u32 {
     *state ^= *state << 13;
     *state ^= *state >> 17;
     *state ^= *state << 5;

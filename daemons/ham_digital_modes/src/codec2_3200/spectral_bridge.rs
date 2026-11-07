@@ -101,8 +101,11 @@
 //! sub-frames too, as noise (`extrapolate_amplitudes_from_envelope`). On
 //! real 16 kHz speech it brings the 4-8 kHz band from 22.6 dB (unvoiced) and
 //! 10.1 dB (voiced) below the original to about 5 dB below (README,
-//! "The envelope-driven high band"). `extrapolate_amplitudes` above, and the
-//! fixed-point path, are unchanged.
+//! "The envelope-driven high band"). `extrapolate_amplitudes` above is
+//! unchanged (the 1600 bit/s decoder uses it). The fixed-point 3200 decoder
+//! has the same method in integer form (`envelope_slope_log2_per_bin_fixed`,
+//! `extrapolate_amplitudes_from_envelope_fixed`,
+//! `synthesize_subframe_sb_from_envelope_fixed`).
 
 #[cfg(feature = "std")]
 use super::envelope::Model;
@@ -561,6 +564,43 @@ pub(crate) fn extrapolate_amplitudes_fixed(
     (a_ext, l2)
 }
 
+/// Fixed-point `extrapolate_amplitudes_from_envelope`: harmonics `l+1 ..= min(2l, MAX_AMP_SB)` for a
+/// voiced or unvoiced sub-frame, their base-2 log amplitude continuing from the mean `log2_q23` of
+/// the top `min(l, 16)` known amplitudes (at their mean bin position, `m * model.k_q23`) along
+/// `slope_q23_per_bin` (`envelope::envelope_slope_log2_per_bin_fixed`, at most 0). Integer only.
+/// Returns the extended Q23 amplitudes (index 0 unused, `1..=l` copied) and the new count; with
+/// `enabled` false, or no room above `l`, the count stays `model.l`.
+// [@ANCHOR: extrapolate_amplitudes_from_envelope_fixed]
+pub(crate) fn extrapolate_amplitudes_from_envelope_fixed(
+    model: &ModelFixed,
+    slope_q23_per_bin: i64,
+    enabled: bool,
+) -> ([i64; MAX_AMP_SB + 1], usize) {
+    let l = model.l;
+    let mut a_ext = [0i64; MAX_AMP_SB + 1];
+    a_ext[1..=l].copy_from_slice(&model.a[1..=l]);
+    let l2 = if enabled { (2 * l).min(MAX_AMP_SB) } else { l };
+    if l2 <= l || l == 0 {
+        return (a_ext, l);
+    }
+    let k = l.min(16);
+    let (mut sx, mut sy) = (0i128, 0i128);
+    for m in (l - k + 1)..=l {
+        sx += m as i128 * model.k_q23 as i128;
+        sy += log2_q23(model.a[m].max(1)) as i128;
+    }
+    let x0 = div_round_i128(sx, k as i128);
+    let y0 = div_round_i128(sy, k as i128);
+    let slope = slope_q23_per_bin.min(0) as i128;
+    #[allow(clippy::needless_range_loop)]
+    for m in (l + 1)..=l2 {
+        let dx_q23 = m as i128 * model.k_q23 as i128 - x0 as i128;
+        let y = y0 + rshift_round_i128(slope * dx_q23, FRAC_BITS);
+        a_ext[m] = exp2_q23(y);
+    }
+    (a_ext, l2)
+}
+
 fn parzen_window_sb_q23() -> &'static [i64; SAMPLES_PER_FRAME_SB] {
     &super::tables::SB_PARZEN_Q23
 }
@@ -575,6 +615,9 @@ pub(crate) struct SpectralBridgeStateFixed {
     pub(crate) enabled: bool,
     sn_: [i64; SAMPLES_PER_FRAME_SB],
     ex_phase_q32: u32,
+    /// Phase source for the unvoiced high band (`synthesize_subframe_sb_from_envelope_fixed`),
+    /// independent of the base synthesis's generator.
+    rng: u32,
     ifft_re: [i64; FFT_ENC_SB],
     ifft_im: [i64; FFT_ENC_SB],
 }
@@ -585,6 +628,7 @@ impl Default for SpectralBridgeStateFixed {
             enabled: true,
             sn_: [0; SAMPLES_PER_FRAME_SB],
             ex_phase_q32: 0,
+            rng: 0x5B_1D6E,
             ifft_re: [0; FFT_ENC_SB],
             ifft_im: [0; FFT_ENC_SB],
         }
@@ -605,7 +649,35 @@ impl SpectralBridgeStateFixed {
     // [@ANCHOR: SpectralBridgeStateFixed::synthesize_subframe_sb_fixed]
     pub(crate) fn synthesize_subframe_sb_fixed(&mut self, model: &ModelFixed) -> [i16; N_SAMP_SB] {
         let (a_ext, l2) = extrapolate_amplitudes_fixed(model, self.enabled);
+        self.synthesize_extended_fixed(model, &a_ext, l2)
+    }
 
+    /// Fixed-point `SpectralBridgeState::synthesize_subframe_sb_from_envelope`: the band above 4 kHz
+    /// follows `slope_q23_per_bin` (`envelope::envelope_slope_log2_per_bin_fixed` of this
+    /// sub-frame's LPC coefficients) from the top harmonics' mean level, for voiced and unvoiced
+    /// sub-frames (random phases for unvoiced). `DecoderFixed::decode_16k_fixed` uses this one.
+    /// Integer only. With `enabled` false it equals `synthesize_subframe_sb_fixed`.
+    // [@ANCHOR: SpectralBridgeStateFixed::synthesize_subframe_sb_from_envelope_fixed]
+    pub(crate) fn synthesize_subframe_sb_from_envelope_fixed(
+        &mut self,
+        model: &ModelFixed,
+        slope_q23_per_bin: i64,
+    ) -> [i16; N_SAMP_SB] {
+        let (a_ext, l2) =
+            extrapolate_amplitudes_from_envelope_fixed(model, slope_q23_per_bin, self.enabled);
+        self.synthesize_extended_fixed(model, &a_ext, l2)
+    }
+
+    /// The synthesis both fixed entry points share: decoded harmonics as `phi * a`, added ones with
+    /// the voiced excitation phase (voiced) or a random phase from `rng` (unvoiced), 1024-point
+    /// inverse transform, Parzen window, overlap-add.
+    // [@ANCHOR: SpectralBridgeStateFixed::synthesize_extended_fixed]
+    fn synthesize_extended_fixed(
+        &mut self,
+        model: &ModelFixed,
+        a_ext: &[i64; MAX_AMP_SB + 1],
+        l2: usize,
+    ) -> [i16; N_SAMP_SB] {
         let increment = phase_increment_q32(model.wo);
         self.ex_phase_q32 = self.ex_phase_q32.wrapping_add(increment);
         let phi0_q32 = self.ex_phase_q32;
@@ -621,13 +693,15 @@ impl SpectralBridgeStateFixed {
                     re: model.a[m],
                     im: 0,
                 })
-            } else {
-                debug_assert!(
-                    model.voiced,
-                    "extrapolated harmonics require a voiced model"
-                );
+            } else if model.voiced {
                 let angle_m_q32 = ((phi0_q32 as u64 * m as u64) & 0xFFFF_FFFF) as u32;
                 sin_cos_q23(angle_m_q32).mul(ComplexQ23 {
+                    re: a_ext[m],
+                    im: 0,
+                })
+            } else {
+                // Unvoiced (only the envelope entry point extends these): noise phases.
+                sin_cos_q23(super::synthesis::next_rand_fixed(&mut self.rng)).mul(ComplexQ23 {
                     re: a_ext[m],
                     im: 0,
                 })
@@ -646,7 +720,13 @@ impl SpectralBridgeStateFixed {
 
 #[cfg(test)]
 mod tests {
+    use super::super::LPC_ORD;
     use super::*;
+
+    /// Set from the measured worst cases with margin (2026-11-07: 0.0248 dB/kHz over 400 decoded
+    /// envelopes; 0.0001 dB over four synthetic models).
+    const SLOPE_TOLERANCE_DB_PER_KHZ: f64 = 0.1;
+    const EXTRAPOLATION_TOLERANCE_DB: f32 = 0.01;
     use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
 
     fn synthetic_model(wo: f32, voiced: bool, tilt_db_per_khz: f32) -> Model {
@@ -1019,6 +1099,138 @@ mod tests {
             assert_eq!(
                 a.synthesize_subframe_sb(&model),
                 b.synthesize_subframe_sb_from_envelope(&model, &aw)
+            );
+        }
+    }
+
+    /// LPC sets as the decoder sees them: decoded from pseudo-random line spectral pair indexes,
+    /// float and Q23 from the same indexes.
+    fn decoded_lpc_sets(count: usize) -> Vec<([f32; LPC_ORD + 1], [i64; LPC_ORD + 1])> {
+        use super::super::{lpc, quantise};
+        let mut seed = 0x1234_5678u32;
+        (0..count)
+            .map(|_| {
+                let idx: [u32; LPC_ORD] = core::array::from_fn(|_| {
+                    seed ^= seed << 13;
+                    seed ^= seed >> 17;
+                    seed ^= seed << 5;
+                    seed % 16
+                });
+                let f = lpc::lsp_to_lpc(&quantise::decode_lsps_delta_scalar(&idx));
+                let q = lpc::lsp_to_lpc_fixed(&quantise::decode_lsps_delta_scalar_fixed(&idx));
+                (f, q)
+            })
+            .collect()
+    }
+
+    /// Float slope (natural log per Hz) as the fixed format (Q23 log2 per 15.625 Hz bin).
+    fn slope_as_q23_per_bin(ln_per_hz: f32) -> f64 {
+        ln_per_hz as f64 * (SAMPLE_RATE as f64 / FFT_ENC as f64) / std::f64::consts::LN_2
+            * (1u64 << FRAC_BITS) as f64
+    }
+
+    // Tests [@ANCHOR: envelope_slope_log2_per_bin_fixed]
+    #[test]
+    fn the_fixed_envelope_slope_matches_the_float_one() {
+        use super::super::envelope::{
+            compute_harmonic_amplitudes, envelope_slope_log2_per_bin_fixed,
+        };
+        use super::super::fixed_fft::FftScratch;
+        let mut scratch = FftScratch::new();
+        let mut worst = 0.0f64;
+        let mut negative = 0;
+        for (ak_f, ak_q) in decoded_lpc_sets(400) {
+            let mut model = Model::new(0.1, true);
+            let aw = compute_harmonic_amplitudes(&ak_f, 1000.0, &mut model);
+            let want = slope_as_q23_per_bin(envelope_slope_ln_per_hz(&aw));
+            let got = envelope_slope_log2_per_bin_fixed(&ak_q, &mut scratch) as f64;
+            assert!(got <= 0.0);
+            negative += (got < 0.0) as usize;
+            // Error in dB per kHz: Q23 log2 per bin -> 20 log10(2) dB per 15.625 Hz.
+            let db_per_khz = |q: f64| q / (1u64 << FRAC_BITS) as f64 * 6.0206 * 64.0;
+            worst = worst.max((db_per_khz(got) - db_per_khz(want)).abs());
+        }
+        println!("fixed vs float envelope slope: worst difference {worst:.4} dB/kHz, {negative} of 400 falling");
+        assert!(negative > 100, "the sets must exercise falling envelopes");
+        assert!(worst < SLOPE_TOLERANCE_DB_PER_KHZ, "worst {worst} dB/kHz");
+    }
+
+    // Tests [@ANCHOR: extrapolate_amplitudes_from_envelope_fixed]
+    #[test]
+    fn the_fixed_envelope_extrapolation_matches_the_float_one() {
+        let mut worst_db = 0.0f32;
+        for (wo, tilt, voiced) in [
+            (0.06, 3.0, true),
+            (0.1, 9.0, false),
+            (0.2, 6.0, true),
+            (0.3, 0.0, false),
+        ] {
+            let fm = synthetic_model(wo, voiced, tilt);
+            let qm = synthetic_model_fixed(wo, voiced, tilt);
+            let slope_ln = -tilt * std::f32::consts::LN_10 / 20.0 / 1000.0;
+            let (af, lf) = extrapolate_amplitudes_from_envelope(&fm, slope_ln, true);
+            let (aq, lq) = extrapolate_amplitudes_from_envelope_fixed(
+                &qm,
+                slope_as_q23_per_bin(slope_ln).round() as i64,
+                true,
+            );
+            assert_eq!(lf, lq, "wo {wo}");
+            assert_eq!(lq, (2 * qm.l).min(MAX_AMP_SB));
+            for m in (qm.l + 1)..=lq {
+                let q = aq[m] as f32 / (1u64 << FRAC_BITS) as f32;
+                worst_db = worst_db.max((20.0 * (q / af[m]).log10()).abs());
+            }
+            let (_, off) = extrapolate_amplitudes_from_envelope_fixed(&qm, -1000, false);
+            assert_eq!(off, qm.l);
+        }
+        println!("fixed vs float envelope extrapolation: worst {worst_db:.4} dB");
+        assert!(worst_db < EXTRAPOLATION_TOLERANCE_DB, "worst {worst_db} dB");
+    }
+
+    // Tests [@ANCHOR: SpectralBridgeStateFixed::synthesize_subframe_sb_from_envelope_fixed]
+    // Tests [@ANCHOR: SpectralBridgeStateFixed::synthesize_extended_fixed]
+    #[test]
+    fn the_fixed_envelope_bridge_extends_unvoiced_frames_and_matches_the_old_one_when_disabled() {
+        let high = |pcm: &[i16]| -> f64 {
+            let mut buf: Vec<Complex32> =
+                pcm.iter().map(|&s| Complex32::new(s as f32, 0.0)).collect();
+            rustfft::FftPlanner::new()
+                .plan_fft_forward(buf.len())
+                .process(&mut buf);
+            let n = buf.len();
+            buf[n * 9 / 32..n / 2]
+                .iter()
+                .map(|c| c.norm_sqr() as f64)
+                .sum()
+        };
+        let slope =
+            slope_as_q23_per_bin(-3.0 * std::f32::consts::LN_10 / 20.0 / 1000.0).round() as i64;
+        let (mut old, mut new) = (
+            SpectralBridgeStateFixed::new(),
+            SpectralBridgeStateFixed::new(),
+        );
+        let (mut out_old, mut out_new) = (Vec::new(), Vec::new());
+        for _ in 0..20 {
+            let mut model = synthetic_model_fixed(0.12, false, 3.0);
+            for m in 1..=model.l {
+                model.phi[m] = sin_cos_q23((m as u32).wrapping_mul(0x4567_89AB));
+            }
+            out_old.extend(old.synthesize_subframe_sb_fixed(&model));
+            out_new.extend(new.synthesize_subframe_sb_from_envelope_fixed(&model, slope));
+        }
+        let (e_old, e_new) = (high(&out_old), high(&out_new));
+        assert!(e_new > 10.0 * e_old.max(1.0), "old {e_old}, new {e_new}");
+        let (mut a, mut b) = (
+            SpectralBridgeStateFixed::new(),
+            SpectralBridgeStateFixed::new(),
+        );
+        a.enabled = false;
+        b.enabled = false;
+        for voiced in [true, false] {
+            let model = synthetic_model_fixed(0.1, voiced, 6.0);
+            assert_eq!(
+                a.synthesize_subframe_sb_fixed(&model),
+                b.synthesize_subframe_sb_from_envelope_fixed(&model, slope)
             );
         }
     }
