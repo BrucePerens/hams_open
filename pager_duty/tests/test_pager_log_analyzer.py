@@ -15,6 +15,7 @@ redis_search_listener() now take r_client as an explicit parameter
 instead of a module-global connection -- what actually makes them
 testable against a real double here.
 """
+import concurrent.futures.thread
 import json
 import os
 import re
@@ -246,7 +247,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             mock_redis_cls = self.safe_patch(module + ".redis.Redis")
             mock_redis_cls.return_value.ping.return_value = True
             self.safe_patch(module + ".os.geteuid", return_value=1000)
-            self.safe_patch(module + ".concurrent.futures.ThreadPoolExecutor")
+            self.safe_patch(module + ".ThreadPoolExecutor")
             self.safe_patch(module + ".redis_search_listener", side_effect=RuntimeError("listener died"))
             mock_exit = self.safe_patch(module + ".os._exit")
             pager_log_analyzer.main()
@@ -274,8 +275,16 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             self.safe_patch(module + ".os.setgroups")
             self.safe_patch(module + ".os.setresgid")
             self.safe_patch(module + ".os.setresuid", side_effect=PermissionError("not allowed"))
-            mock_executor = self.safe_patch(module + ".concurrent.futures.ThreadPoolExecutor")
+            mock_executor = self.safe_patch(module + ".ThreadPoolExecutor")
             with self.assertRaises(SystemExit) as ctx:
                 pager_log_analyzer.main()
             self.assertEqual(ctx.exception.code, 1)
             mock_executor.assert_not_called()
+
+    def test_10_the_thread_pool_class_is_bound_at_import_before_the_chroot(self):
+        # main() builds its ThreadPoolExecutor after chrooting to /var/log, where no Python library can be loaded;
+        # concurrent.futures imports its .thread submodule lazily, so the class must already be bound at import.
+        self.assertIs(pager_log_analyzer.ThreadPoolExecutor, concurrent.futures.thread.ThreadPoolExecutor)
+        with open(pager_log_analyzer.__file__) as f:
+            source = f.read()
+        self.assertNotIn("concurrent.futures.ThreadPoolExecutor(", source)
