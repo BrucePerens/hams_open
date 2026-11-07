@@ -252,9 +252,20 @@ def run_feed(names, max_age, params=None, now=NOW, odoo=None, error=None):
 
 
 class FeedSchemeTests(unittest.TestCase):
-    """Tests [@ANCHOR: pager_duty:freshness_one_feed], [@ANCHOR: pager_duty:freshness_feed] and
-    [@ANCHOR: pager_duty:feed_stamp_epoch]: the `feed:<name>[,<name>]` scheme reads the stamp hams_com's hams_feed_health.py
-    writes into the Odoo parameter `ham_feed.<name>`."""
+    """The `feed:<name>[,<name>]` scheme reads the stamp hams_com's hams_feed_health.py writes into the Odoo parameter
+    `ham_feed.<name>`."""
+
+    def test_a_stamp_is_judged_by_its_last_good(self):
+        # Tests [@ANCHOR: pager_duty:freshness_one_feed]
+        # Tests [@ANCHOR: pager_duty:freshness_feed]
+        self.assertTrue(run_feed("a,b", 100, {"a": stamp(), "b": stamp()})[0])
+        self.assertFalse(run_feed("a", 10, {"a": stamp(last_good=NOW - 11)})[0])
+
+    def test_stamp_times_are_finite_non_negative_numbers(self):
+        # Tests [@ANCHOR: pager_duty:feed_stamp_epoch]
+        self.assertEqual(gm._feed_stamp_epoch(5), 5.0)
+        for bad in (None, True, "5", float("nan"), float("inf"), -1):
+            self.assertIsNone(gm._feed_stamp_epoch(bad), bad)
 
     def test_the_clock_in_a_message_is_utc_to_the_minute(self):
         # Tests [@ANCHOR: pager_duty:feed_clock]
