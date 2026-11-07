@@ -93,6 +93,16 @@
 //! no invented content" mode, not a different code path to maintain.
 //! Extrapolation is also always skipped for unvoiced sub-frames even
 //! when enabled -- see `extrapolate_amplitudes`'s own doc comment.
+//!
+//! **2026-11-07, the envelope-driven high band**: `Decoder::decode_16k`
+//! now calls `synthesize_subframe_sb_from_envelope`, which takes the slope
+//! above 4 kHz from the decoded LPC envelope (`envelope_slope_ln_per_hz`)
+//! instead of the postfiltered harmonic amplitudes, and extends unvoiced
+//! sub-frames too, as noise (`extrapolate_amplitudes_from_envelope`). On
+//! real 16 kHz speech it brings the 4-8 kHz band from 22.6 dB (unvoiced) and
+//! 10.1 dB (voiced) below the original to about 5 dB below (README,
+//! "The envelope-driven high band"). `extrapolate_amplitudes` above, and the
+//! fixed-point path, are unchanged.
 
 #[cfg(feature = "std")]
 use super::envelope::Model;
@@ -232,6 +242,78 @@ pub fn extrapolate_amplitudes(model: &Model, enabled: bool) -> ([f32; MAX_AMP_SB
 }
 
 #[cfg(feature = "std")]
+/// The decoded spectral envelope's slope across its upper half (2 to 4 kHz), in natural-log
+/// amplitude per Hz, never rising: an ordinary least-squares fit of `ln(1/|A(w)|)` against
+/// frequency over the bins of `aw` (the LPC analysis filter's spectrum, `envelope::
+/// compute_harmonic_amplitudes`'s return value, 15.625 Hz per bin) from 2000 Hz to the last
+/// bin. The envelope is smooth where harmonic amplitudes are not (they carry the postfilter's
+/// per-harmonic changes and the quantised envelope's sampling at a few points), so its slope is
+/// a steadier guess for the band above 4 kHz. An `aw` with fewer than two bins above 2 kHz, or
+/// a degenerate fit, gives 0 (flat).
+// [@ANCHOR: envelope_slope_ln_per_hz]
+pub fn envelope_slope_ln_per_hz(aw: &[Complex32]) -> f32 {
+    let hz_per_bin = SAMPLE_RATE as f64 / FFT_ENC as f64;
+    let first = (2000.0 / hz_per_bin).ceil() as usize;
+    if aw.len() < first + 2 {
+        return 0.0;
+    }
+    let (mut n, mut sx, mut sy, mut sxx, mut sxy) = (0.0f64, 0.0, 0.0, 0.0, 0.0);
+    for (i, c) in aw.iter().enumerate().skip(first) {
+        let x = i as f64 * hz_per_bin;
+        let y = -0.5 * ((c.norm_sqr() as f64) + 1e-12).ln();
+        n += 1.0;
+        sx += x;
+        sy += y;
+        sxx += x * x;
+        sxy += x * y;
+    }
+    let denom = n * sxx - sx * sx;
+    if denom.abs() < 1e-9 {
+        return 0.0;
+    }
+    (((n * sxy - sx * sy) / denom) as f32).min(0.0)
+}
+
+#[cfg(feature = "std")]
+/// The high band from the decoded envelope: harmonics `l+1 ..= min(2l, MAX_AMP_SB)` for a voiced
+/// **or unvoiced** sub-frame, their log amplitude continuing from the mean log amplitude of the
+/// top `min(l, 16)` known harmonics (at their mean frequency) with slope `slope_ln_per_hz`
+/// (`envelope_slope_ln_per_hz`, never rising). Returns the extended amplitudes (index 0 unused,
+/// `1..=l` copied from `model.a`) and the new count; with `enabled` false, or no room above `l`,
+/// the count stays `model.l`. Fricatives (s, sh, f), which carry most of their energy above
+/// 4 kHz, get a noise band this way; `extrapolate_amplitudes` (the 1600 bit/s decoder's, and the
+/// fixed-point path's) extends voiced frames only.
+// [@ANCHOR: extrapolate_amplitudes_from_envelope]
+pub fn extrapolate_amplitudes_from_envelope(
+    model: &Model,
+    slope_ln_per_hz: f32,
+    enabled: bool,
+) -> ([f32; MAX_AMP_SB + 1], usize) {
+    let l = model.l;
+    let mut a_ext = [0.0f32; MAX_AMP_SB + 1];
+    a_ext[1..=l].copy_from_slice(&model.a[1..=l]);
+    let l2 = if enabled { (2 * l).min(MAX_AMP_SB) } else { l };
+    if l2 <= l {
+        return (a_ext, l);
+    }
+    let freq_hz =
+        |m: usize| m as f64 * model.wo as f64 * SAMPLE_RATE as f64 / std::f64::consts::TAU;
+    let k = l.min(16);
+    let (mut sx, mut sy) = (0.0f64, 0.0f64);
+    for m in (l - k + 1)..=l {
+        sx += freq_hz(m);
+        sy += (model.a[m].max(1e-6) as f64).ln();
+    }
+    let (x0, y0) = (sx / k as f64, sy / k as f64);
+    let slope = slope_ln_per_hz.min(0.0) as f64;
+    #[allow(clippy::needless_range_loop)]
+    for m in (l + 1)..=l2 {
+        a_ext[m] = (y0 + slope * (freq_hz(m) - x0)).exp() as f32;
+    }
+    (a_ext, l2)
+}
+
+#[cfg(feature = "std")]
 /// Persistent per-decoder Spectral Bridge synthesis state -- parallel
 /// to, and independent of, `synthesis::SynthesisState` (the base 8kHz
 /// path is untouched by this module entirely). `ex_phase` is updated
@@ -247,6 +329,9 @@ pub struct SpectralBridgeState {
     sn_: [f32; SAMPLES_PER_FRAME_SB],
     parzen: [f32; SAMPLES_PER_FRAME_SB],
     ex_phase: f32,
+    /// Phase source for the unvoiced high band (`synthesize_subframe_sb_from_envelope`); its own
+    /// state, never shared with the base synthesis, so the 8 kHz output is unchanged.
+    rng: u32,
     /// `microfft::inverse::ifft_1024` (no stored FFT plan needed) is
     /// normalized (divides by N); `synthesize_subframe_sb` below
     /// multiplies its result by `FFT_ENC_SB` to preserve this module's
@@ -264,6 +349,7 @@ impl Default for SpectralBridgeState {
             sn_: [0.0; SAMPLES_PER_FRAME_SB],
             parzen: make_synthesis_window_sb(),
             ex_phase: 0.0,
+            rng: 0x5B_1D6E,
             ifft_buf: [Complex32::new(0.0, 0.0); FFT_ENC_SB],
         }
     }
@@ -281,7 +367,35 @@ impl SpectralBridgeState {
     // [@ANCHOR: SpectralBridgeState::synthesize_subframe_sb]
     pub fn synthesize_subframe_sb(&mut self, model: &Model) -> [i16; N_SAMP_SB] {
         let (a_ext, l2) = extrapolate_amplitudes(model, self.enabled);
+        self.synthesize_extended(model, &a_ext, l2)
+    }
 
+    /// As `synthesize_subframe_sb`, but the band above 4 kHz follows the decoded envelope's slope
+    /// (`envelope_slope_ln_per_hz` of `aw`, the LPC spectrum `envelope::compute_harmonic_amplitudes`
+    /// returned for this sub-frame) and unvoiced sub-frames get it too, with random phases
+    /// (`extrapolate_amplitudes_from_envelope`). `codec2_3200::Decoder::decode_16k` uses this one.
+    /// Harmonics `1..=l` are the base decode's, unchanged; with `enabled` false the result is the
+    /// same as `synthesize_subframe_sb`'s.
+    // [@ANCHOR: SpectralBridgeState::synthesize_subframe_sb_from_envelope]
+    pub fn synthesize_subframe_sb_from_envelope(
+        &mut self,
+        model: &Model,
+        aw: &[Complex32],
+    ) -> [i16; N_SAMP_SB] {
+        let (a_ext, l2) =
+            extrapolate_amplitudes_from_envelope(model, envelope_slope_ln_per_hz(aw), self.enabled);
+        self.synthesize_extended(model, &a_ext, l2)
+    }
+
+    /// The synthesis shared by both entry points: harmonics `1..=l` as decoded, `l+1..=l2` from
+    /// `a_ext` with the voiced excitation phase (voiced) or a random phase (unvoiced).
+    // [@ANCHOR: SpectralBridgeState::synthesize_extended]
+    fn synthesize_extended(
+        &mut self,
+        model: &Model,
+        a_ext: &[f32; MAX_AMP_SB + 1],
+        l2: usize,
+    ) -> [i16; N_SAMP_SB] {
         self.ex_phase += model.wo * N_SAMP as f32;
         self.ex_phase -=
             std::f32::consts::TAU * (self.ex_phase / std::f32::consts::TAU + 0.5).floor();
@@ -301,18 +415,17 @@ impl SpectralBridgeState {
                 // Reuse the original decode's own already-filtered,
                 // already-postfiltered phase/amplitude unchanged.
                 model.phi[m] * model.a[m]
-            } else {
-                // extrapolate_amplitudes only ever returns l2 > model.l
-                // (reaching this branch at all) when model.voiced is
-                // true -- see its own doc comment. No real envelope
-                // phase exists above 4kHz, only the deterministic
-                // voiced excitation phase (same formula as the base
-                // path's own synthesize_phase).
-                debug_assert!(
-                    model.voiced,
-                    "extrapolated harmonics require a voiced model"
-                );
+            } else if model.voiced {
+                // No real envelope phase exists above 4kHz, only the
+                // deterministic voiced excitation phase (same formula as
+                // the base path's own synthesize_phase).
                 let (s, c) = (phi0 * m as f32).sin_cos();
+                Complex32::new(c, s) * a_ext[m]
+            } else {
+                // Unvoiced (only `extrapolate_amplitudes_from_envelope`
+                // extends these): noise, an independent random phase per
+                // harmonic, as the base path gives unvoiced harmonics.
+                let (s, c) = super::synthesis::next_rand(&mut self.rng).sin_cos();
                 Complex32::new(c, s) * a_ext[m]
             };
         }
@@ -804,6 +917,108 @@ mod tests {
             assert_eq!(
                 a_ext[m], model.a[m],
                 "harmonic {m} was altered when extrapolation is disabled"
+            );
+        }
+    }
+
+    /// An LPC spectrum whose envelope `1/|A|` falls `tilt_db_per_khz` per kHz, 257 bins (0..4 kHz).
+    fn tilted_lpc_spectrum(tilt_db_per_khz: f32) -> Vec<Complex32> {
+        let hz_per_bin = SAMPLE_RATE as f32 / FFT_ENC as f32;
+        (0..=FFT_ENC / 2)
+            .map(|i| {
+                let mag_a = 10f32.powf(tilt_db_per_khz * (i as f32 * hz_per_bin / 1000.0) / 20.0);
+                Complex32::new(mag_a, 0.0)
+            })
+            .collect()
+    }
+
+    // Tests [@ANCHOR: envelope_slope_ln_per_hz]
+    #[test]
+    fn envelope_slope_is_the_envelopes_tilt_and_never_rises() {
+        let slope = envelope_slope_ln_per_hz(&tilted_lpc_spectrum(6.0));
+        let want = -6.0 * std::f32::consts::LN_10 / 20.0 / 1000.0;
+        assert!((slope - want).abs() < 1e-6, "slope {slope}, want {want}");
+        assert!(envelope_slope_ln_per_hz(&tilted_lpc_spectrum(0.0)).abs() < 1e-12);
+        // An envelope that rises toward 4 kHz is continued flat.
+        assert_eq!(envelope_slope_ln_per_hz(&tilted_lpc_spectrum(-6.0)), 0.0);
+        // Too short to fit: flat.
+        assert_eq!(
+            envelope_slope_ln_per_hz(&tilted_lpc_spectrum(6.0)[..100]),
+            0.0
+        );
+    }
+
+    // Tests [@ANCHOR: extrapolate_amplitudes_from_envelope]
+    #[test]
+    fn envelope_extrapolation_continues_voiced_and_unvoiced_frames_from_the_top_harmonics() {
+        let slope = envelope_slope_ln_per_hz(&tilted_lpc_spectrum(6.0));
+        for voiced in [true, false] {
+            let model = synthetic_model(0.1, voiced, 6.0);
+            let l = model.l;
+            let (a, l2) = extrapolate_amplitudes_from_envelope(&model, slope, true);
+            assert_eq!(l2, (2 * l).min(MAX_AMP_SB), "voiced {voiced}");
+            assert_eq!(&a[1..=l], &model.a[1..=l]);
+            // Falling 6 dB per kHz from the top of the known band, never above it.
+            for m in (l + 1)..l2 {
+                assert!(a[m + 1] < a[m] && a[m] <= model.a[l], "m {m}");
+            }
+            let hz = |m: usize| m as f32 * model.wo * SAMPLE_RATE as f32 / std::f32::consts::TAU;
+            let db_per_khz = 20.0 * (a[l2] / a[l + 1]).log10() / ((hz(l2) - hz(l + 1)) / 1000.0);
+            assert!((db_per_khz + 6.0).abs() < 0.05, "{db_per_khz} dB/kHz");
+            let (_, l_off) = extrapolate_amplitudes_from_envelope(&model, slope, false);
+            assert_eq!(l_off, l);
+        }
+    }
+
+    // Tests [@ANCHOR: SpectralBridgeState::synthesize_subframe_sb_from_envelope]
+    // Tests [@ANCHOR: SpectralBridgeState::synthesize_extended]
+    #[test]
+    fn the_envelope_bridge_puts_energy_above_4_khz_for_unvoiced_frames_and_matches_when_disabled() {
+        let aw = tilted_lpc_spectrum(3.0);
+        // Power from 4.5 to 8 kHz of the whole 16 kHz output, by FFT (above the edge, where the
+        // known top harmonics' window leakage sits).
+        let high_band_energy = |pcm: &[i16]| -> f64 {
+            let mut buf: Vec<Complex32> =
+                pcm.iter().map(|&s| Complex32::new(s as f32, 0.0)).collect();
+            rustfft::FftPlanner::new()
+                .plan_fft_forward(buf.len())
+                .process(&mut buf);
+            let n = buf.len();
+            buf[n * 9 / 32..n / 2]
+                .iter()
+                .map(|c| c.norm_sqr() as f64)
+                .sum()
+        };
+        let mut old = SpectralBridgeState::new();
+        let mut new = SpectralBridgeState::new();
+        let (mut out_old, mut out_new) = (Vec::new(), Vec::new());
+        for _ in 0..20 {
+            let mut model = synthetic_model(0.12, false, 3.0);
+            for m in 1..=model.l {
+                model.phi[m] = Complex32::from_polar(1.0, m as f32 * 1.7);
+            }
+            out_old.extend(old.synthesize_subframe_sb(&model));
+            let out = new.synthesize_subframe_sb_from_envelope(&model, &aw);
+            assert!(out.iter().all(|s| s.unsigned_abs() < 32767));
+            out_new.extend(out);
+        }
+        let (e_old, e_new) = (high_band_energy(&out_old), high_band_energy(&out_new));
+        // The old bridge leaves an unvoiced frame's high band empty but for leakage.
+        assert!(
+            e_new > 10.0 * e_old.max(1.0),
+            "unvoiced high band: old {e_old}, new {e_new}"
+        );
+
+        // Disabled: both entry points give the same, harmonics 1..=l only.
+        let mut a = SpectralBridgeState::new();
+        let mut b = SpectralBridgeState::new();
+        a.enabled = false;
+        b.enabled = false;
+        for voiced in [true, false] {
+            let model = synthetic_model(0.1, voiced, 6.0);
+            assert_eq!(
+                a.synthesize_subframe_sb(&model),
+                b.synthesize_subframe_sb_from_envelope(&model, &aw)
             );
         }
     }

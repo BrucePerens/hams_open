@@ -663,10 +663,17 @@ pub(super) fn lpc_fields(&self) -> (u32, [u32; LPC_ORD])
 ready for `bits::pack_frame`.
 
 **Special concerns.** Pure, integer end to end, no allocation. Windows and correlates only `window::ANALYSIS_SPAN`.
-Applies white noise correction (`R[0] * (1 + 1e-3)`) to Levinson-Durbin's input, so on strongly predictable vowels the
-energy index is up to a few steps above the C reference's (measured on real speech: never below it, 0 steps on 63
-percent of frames, 1 step on 16 percent, 2 to 6 steps on the rest; see hams_com
-`docs/reviews/M17_CODEC2_WOJCIECH_2026-11-06.md`).
+Applies white noise correction (`R[0] * (1 + 1e-3)`) before Levinson-Durbin: without it the recursion divides by a
+prediction error that can come arbitrarily close to zero on strongly predictable frames, and the coefficients diverge
+(`apply_white_noise_correction_fixed`). The line spectral pairs come from that corrected predictor, and so does the
+frame energy: the corrected predictor's error on the corrected autocorrelation. The decoder rebuilds a frame's level
+from the energy times the transmitted envelope, so the two must belong to one model. Measured 2026-11-07 (decoded
+loudness against the original, four Open Speech Repository sentences): -0.5 to -1.0 dB mean with this energy; -0.8 to
+-1.5 dB with the corrected predictor on the uncorrected autocorrelation (used until then); -2.7 to -3.8 dB with the
+uncorrected minimum error, which is what the Codec2 C encoder sends with its own, uncorrected envelope, and which was
+briefly used here on 2026-11-07 until that measurement. So this energy index matches the C encoder's only on 34 to 64
+percent of frames, by design (see hams_com `docs/reviews/M17_CODEC2_WOJCIECH_2026-11-06.md`).
+
 
 **See also.** `analysis_span`, `EncoderMbe::encode`. Test: `encoder_mbe_marks_a_steady_vowel_voiced_and_keeps_the_fixed_encoders_envelope`.
 
@@ -1094,6 +1101,83 @@ and searches the spectrum for the strongest bin in the 50 to 400 Hz range, then 
 - `extrapolate_amplitudes_fixed` is the same fit in base-2 logarithms: slope and intercept in Q23 log2
   amplitude, a non-rising clamp, and `exp2_q23` for each new harmonic.
   *(Reference: `[@ANCHOR: extrapolate_amplitudes_fixed]`)*
+
+### The envelope-driven high band (`Decoder::decode_16k`, 2026-11-07)
+
+`codec2_3200::Decoder::decode_16k` extends the band above 4 kHz from the decoded spectral envelope, for voiced and
+unvoiced sub-frames alike. The 1600 bit/s decoder and the fixed-point path keep `extrapolate_amplitudes` (voiced only,
+slope fitted to the harmonic amplitudes); a fixed-point port of this is a follow-up. Measured on eleven real 16 kHz
+voice recordings (FreeDV project samples), each downsampled to 8 kHz, encoded with `EncoderMbe` and decoded at 16 kHz
+(4474 active 20 ms frames, energy of the 4-8 kHz band against the original; hams_com
+`docs/reviews/M17_CODEC2_WOJCIECH_2026-11-06.md`, section 4):
+
+| | Unvoiced frames: band energy error, log spectral distance | Voiced frames: same |
+|---|---|---|
+| Bridge off | -25.0 dB, 48.8 dB | -24.2 dB, 36.2 dB |
+| `extrapolate_amplitudes` | -22.6 dB, 42.6 dB | -10.1 dB, 18.3 dB |
+| Envelope-driven (this) | -5.5 dB, 16.3 dB | -5.0 dB, 16.2 dB |
+
+The remaining 5 dB shortfall is not tuned away here (it would be fitted on the same recordings it is measured on).
+
+#### `envelope_slope_ln_per_hz` [@ANCHOR: envelope_slope_ln_per_hz]
+
+**Purpose.** The slope of the decoded envelope `1/|A(w)|` across 2 to 4 kHz: the guess for how the spectrum continues
+above 4 kHz.
+
+```rust
+pub fn envelope_slope_ln_per_hz(aw: &[Complex32]) -> f32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `aw` | `&[Complex32]` | The LPC analysis filter's spectrum `A(w)`, bins of 15.625 Hz from 0 Hz (`envelope::compute_harmonic_amplitudes` returns 257 of them). Borrowed. |
+
+**Returns.** Natural-log amplitude per Hz: the least-squares slope of `ln(1/|A|)` over the bins from 2000 Hz to the
+last, clamped to at most 0 (a rising envelope continues flat). 0 when fewer than two bins lie above 2 kHz or the fit is
+degenerate. **Special concerns.** Pure, no allocation, `std` only. About 129 bins of arithmetic.
+
+#### `extrapolate_amplitudes_from_envelope` [@ANCHOR: extrapolate_amplitudes_from_envelope]
+
+**Purpose.** The amplitudes of the harmonics added above 4 kHz.
+
+```rust
+pub fn extrapolate_amplitudes_from_envelope(model: &Model, slope_ln_per_hz: f32, enabled: bool) -> ([f32; MAX_AMP_SB + 1], usize)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&Model` | The decoded sub-frame: `wo`, `l`, `a[1..=l]`, `voiced` (either). |
+| `slope_ln_per_hz` | `f32` | From `envelope_slope_ln_per_hz`; a positive value is treated as 0. |
+| `enabled` | `bool` | `SpectralBridgeState::enabled`. |
+
+**Returns.** `(a_ext, l2)`: `a_ext[1..=l]` is `model.a`, `a_ext[l+1..=l2]` continues `ln a` from the mean log amplitude
+of the top `min(l, 16)` harmonics, at their mean frequency, along the slope; `l2 = min(2l, 160)`, or `l` when disabled.
+Never above the anchor level. **Special concerns.** Pure, `std` only.
+
+#### `SpectralBridgeState::synthesize_subframe_sb_from_envelope` [@ANCHOR: SpectralBridgeState::synthesize_subframe_sb_from_envelope]
+
+**Purpose.** One 10 ms sub-frame at 16 kHz with the envelope-driven high band; `Decoder::decode_16k` calls it per
+sub-frame.
+
+```rust
+pub fn synthesize_subframe_sb_from_envelope(&mut self, model: &Model, aw: &[Complex32]) -> [i16; N_SAMP_SB]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&Model` | The base decode's sub-frame, after its own synthesis set `phi[1..=l]` (reused unchanged). |
+| `aw` | `&[Complex32]` | That sub-frame's LPC spectrum. |
+
+**Returns.** 160 samples at 16 kHz. Harmonics `1..=l` are the base decode's; added voiced harmonics follow the voiced
+excitation phase, added unvoiced ones take a random phase from the bridge's own generator (the 8 kHz output's random
+sequence is untouched). With `enabled` false it gives exactly `synthesize_subframe_sb`'s output (tested).
+**Special concerns.** Mutates the bridge's overlap-add buffer, phase track and generator; one 1024-point inverse FFT.
+
+#### `SpectralBridgeState::synthesize_extended` [@ANCHOR: SpectralBridgeState::synthesize_extended]
+
+Private. The synthesis both entry points share: places harmonics `1..=l2` in the 1024-point spectrum (decoded ones as
+`phi * a`, added ones voiced or noise phase as above), mirrors it, inverse-transforms, windows, overlap-adds and applies
+the output limiter. `a_ext` must hold `l2` amplitudes; `l2` at most 160.
 
 ## Synthesis internals
 

@@ -402,7 +402,9 @@ impl Decoder {
             // for harmonics 1..=l) -- discards the 8kHz output itself,
             // this method's own caller wants the 16kHz one instead.
             let _sub = self.synth.synthesize_subframe(&mut model, &aw);
-            let sub_sb = self.spectral_bridge.synthesize_subframe_sb(&model);
+            let sub_sb = self
+                .spectral_bridge
+                .synthesize_subframe_sb_from_envelope(&model, &aw);
             out[i * spectral_bridge::N_SAMP_SB..(i + 1) * spectral_bridge::N_SAMP_SB]
                 .copy_from_slice(&sub_sb);
         }
