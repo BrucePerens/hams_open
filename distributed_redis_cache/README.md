@@ -164,5 +164,6 @@ themselves.
 
 Behaviour worth knowing: every call counts (not idempotent); the transaction is one round trip, and the only blocking is the client's own
 socket timeout; there are no threads or locks in the helper; a crash after the `SET` but before the `INCR` leaves a count of 0 that
-expires on schedule. Tests: `tests/test_expiring_counter.py` (counting and a window the later hits do not extend, a client whose `expire`
-always raises, a legacy key without a TTL, an error reaching the caller).
+expires on schedule. Tests: `tests/test_expiring_counter.py` (counting and a window the later hits do not extend, `redis.Redis.expire`
+patched to always raise, a legacy key without a TTL, an error reaching the caller). A caller's test makes the same failure with
+`self.safe_patch_object(redis.Redis, "expire", side_effect=redis.RedisError("..."))`.
