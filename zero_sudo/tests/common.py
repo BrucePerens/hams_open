@@ -1625,12 +1625,15 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                     except Exception as e:  # audit-ignore-catch-all
                         _logger.warning("Ignored prctl exception: %s", e)
 
+                # pf=ip4: socat 1.8 opens an IPv6 dual-stack socket for a bare OPENSSL-LISTEN, and a kernel without
+                # IPv6 (Claude Code cloud containers) refuses it, so every HamsHttpCase failed setUpClass there
+                # ("socket(10, 1, 6): Address family not supported"). Clients reach the proxy at HOST, 127.0.0.1.
                 cls._socat_proc = subprocess.Popen(
                     [
                         "socat",
                         "-d",
                         "-d",
-                        f"OPENSSL-LISTEN:8443,cert={cert_path},key={key_path},verify=0,fork,reuseaddr",
+                        f"OPENSSL-LISTEN:8443,cert={cert_path},key={key_path},verify=0,fork,reuseaddr,pf=ip4",
                         f"TCP:{HOST}:{target_port}",
                     ],
                     stdout=cls._socat_log_file,
