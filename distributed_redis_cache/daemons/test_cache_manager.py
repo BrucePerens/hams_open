@@ -3,9 +3,7 @@
 # -*- coding: utf-8 -*-
 
 import os
-import shutil
 import sys
-import tempfile
 import unittest
 from unittest.mock import patch, AsyncMock
 
@@ -61,41 +59,21 @@ class RequireDbCredentialsTests(unittest.IsolatedAsyncioTestCase):
 
 
 class DbEnvFileTests(unittest.TestCase):
-    """Tests [@ANCHOR: COMM_cache_manager_db_env_file]
+    """Tests [@ANCHOR: COMM_cache_manager_config]
 
-    The daemon runs as its own account, hamsd_cache_manager, and its PostgreSQL login moved into the family key
-    directory (keys/cache_manager/, odoo:hamsd_cache_manager). The old flat file is read only while a host has not been
-    provisioned with the new one, so deploying the code before the provisioning run does not stop the daemon."""
+    The daemon runs as its own account, hamsd_cache_manager, and reads its PostgreSQL login only from the family key
+    directory (keys/cache_manager/, odoo:hamsd_cache_manager). The old flat keys/cache_manager_db.env was deleted from
+    hams1 on 2026-11-07 and there is no fallback to it: a missing login leaves the credentials empty and the daemon
+    refuses to start (RequireDbCredentialsTests)."""
 
-    def setUp(self):
-        self.tmp = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.tmp)
-        self.new = os.path.join(self.tmp, "cache_manager", "cache_manager_db.env")
-        self.legacy = os.path.join(self.tmp, "cache_manager_db.env")
-
-    def _write(self, path):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("DB_USER=cache_manager_ro\n")
-
-    def test_cache_manager_db_env_file_prefers_the_family_directory(self):
-        self._write(self.new)
-        self._write(self.legacy)
-        self.assertEqual(cache_manager._db_env_file(self.new, self.legacy), self.new)
-
-    def test_the_old_flat_file_is_used_only_when_the_new_one_is_absent(self):
-        self._write(self.legacy)
-        self.assertEqual(cache_manager._db_env_file(self.new, self.legacy), self.legacy)
-
-    def test_neither_file_names_the_new_path(self):
-        self.assertEqual(cache_manager._db_env_file(self.new, self.legacy), self.new)
-
-    def test_the_default_paths_are_the_family_directory_and_the_old_flat_file(self):
-        self.assertEqual(cache_manager.LEGACY_DB_ENV_FILE, "/opt/hams/etc/keys/cache_manager_db.env")
-        self.assertEqual(
-            cache_manager._db_env_file.__defaults__,
-            ("/opt/hams/etc/keys/cache_manager/cache_manager_db.env", "/opt/hams/etc/keys/cache_manager_db.env"),
-        )
+    def test_the_daemon_reads_only_the_family_directory_login(self):
+        self.assertEqual(cache_manager.DB_ENV_FILE, "/opt/hams/etc/keys/cache_manager/cache_manager_db.env")
+        self.assertFalse(hasattr(cache_manager, "LEGACY_DB_ENV_FILE"))
+        self.assertFalse(hasattr(cache_manager, "_db_env_file"))
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_manager.py")
+        with open(path, encoding="utf-8") as f:
+            code = "".join(line for line in f if not line.lstrip().startswith("#"))
+        self.assertNotIn("keys/cache_manager_db.env", code)
 
     def test_the_daemon_never_opens_the_daemon_key_manager_file(self):
         # keys/cache_manager.env is odoo:odoo 0600; as hamsd_cache_manager, load_dotenv() on it would raise at import.
