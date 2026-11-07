@@ -177,8 +177,12 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
 
     def test_05_resolve_redis_host_returns_an_address_and_leaves_an_unresolvable_name_alone(self):
         # Tests [@ANCHOR: pager_duty:log_analyzer_resolve_redis_host]
-        self.assertEqual(pager_log_analyzer.resolve_redis_host("127.0.0.1"), "127.0.0.1")
-        self.assertEqual(pager_log_analyzer.resolve_redis_host("localhost"), "127.0.0.1", "IPv4 is preferred")
+        self.assertEqual(pager_log_analyzer.resolve_redis_host("192.0.2.7"), "192.0.2.7", "an address stays as it is")
+        with patch.object(
+            pager_log_analyzer.socket, "getaddrinfo",
+            side_effect=lambda host, port, family=0, type=0: [(family, type, 0, "", ("2001:db8::1" if family != 2 else "192.0.2.9", 0))],
+        ):
+            self.assertEqual(pager_log_analyzer.resolve_redis_host("redis"), "192.0.2.9", "IPv4 is preferred")
         self.assertEqual(
             pager_log_analyzer.resolve_redis_host("no-such-host.invalid"), "no-such-host.invalid",
             "a name that does not resolve is returned as given so the connection attempt reports the real error",
@@ -235,7 +239,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             config_path = os.path.join(tmpdir, "pager_config.json")
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({"log_analyzer": {"files": ["/var/log/x.log"], "patterns": []}}, f)
-            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_PATH": config_path, "REDIS_HOST": "127.0.0.1"})
+            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_PATH": config_path, "REDIS_HOST": "192.0.2.7"})
             env_patch.start()
             self.addCleanup(env_patch.stop)
             module = "odoo.addons.pager_duty.daemon.pager_log_analyzer"
@@ -247,7 +251,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             mock_exit = self.safe_patch(module + ".os._exit")
             pager_log_analyzer.main()
             mock_exit.assert_called_once_with(1)
-            self.assertEqual(mock_redis_cls.call_args.kwargs["host"], "127.0.0.1", "Redis is connected to by the resolved address")
+            self.assertEqual(mock_redis_cls.call_args.kwargs["host"], "192.0.2.7", "Redis is connected to by the resolved address")
 
     def test_09_main_refuses_to_run_as_root_when_the_privilege_drop_fails(self):
         # Tests [@ANCHOR: pager_duty:log_analyzer_main]
@@ -255,7 +259,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             config_path = os.path.join(tmpdir, "pager_config.json")
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump({"log_analyzer": {"files": ["/var/log/x.log"], "patterns": []}}, f)
-            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_PATH": config_path, "REDIS_HOST": "127.0.0.1"})
+            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_PATH": config_path, "REDIS_HOST": "192.0.2.7"})
             env_patch.start()
             self.addCleanup(env_patch.stop)
             module = "odoo.addons.pager_duty.daemon.pager_log_analyzer"
