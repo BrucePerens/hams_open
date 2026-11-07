@@ -34,24 +34,25 @@ redis_pool = redis.ConnectionPool(
 )
 
 # [@ANCHOR: distributed_redis_cache:expiring_counter]
-def expiring_counter(client, key, window_seconds):
-    """Adds one to the fixed-window counter `key` and returns the new count; the counter always has an expiry.
+def expiring_counter(client, key, window_seconds, amount=1):
+    """Adds `amount` (one by default) to the fixed-window counter `key` and returns the new count; the counter always has an expiry.
 
     The old pattern, `count = client.incr(key)` and then `if count == 1: client.expire(key, window)`, left the key
     with no time to live whenever the worker died or `expire` failed between the two commands: the count then only
     grew, passed the caller's limit, and refused that member or address until someone deleted the key by hand.
-    Here one MULTI/EXEC transaction does `SET key 0 NX EX window`, `INCR key` and `TTL key`, so the key is never
+    Here one MULTI/EXEC transaction does `SET key 0 NX EX window`, `INCRBY key amount` and `TTL key`, so the key is never
     created without its expiry. A key that an older caller already left without one (TTL -1) is given the window
     now, so it heals itself on its next use.
 
     `client` is a `redis.Redis`; `key` the counter's name (the caller includes the database name); `window_seconds`
-    an int of at least 1, the lifetime of a counter that starts now. The window is fixed: it starts at the first
-    hit and later hits do not extend it. Returns the count including this hit (an int, 1 for the first hit).
+    an int of at least 1, the lifetime of a counter that starts now; `amount` a non-negative int, what this hit adds (a caller that
+    weighs its hits, such as the callbook search adding the contact rows it returned, passes it; everyone else leaves it at 1). The window is fixed: it starts at the first
+    hit and later hits do not extend it. Returns the count including this hit's amount (an int, `amount` for the first hit).
     A Redis failure raises `redis.RedisError` unchanged, because each caller decides for itself whether to fail
     open or closed. Not idempotent (every call counts). Nothing blocks beyond the client's own socket timeout."""
     pipe = client.pipeline(transaction=True)
     pipe.set(key, 0, nx=True, ex=window_seconds)
-    pipe.incr(key)
+    pipe.incrby(key, amount)
     pipe.ttl(key)
     _created, count, ttl = pipe.execute()
     if ttl == -1:
