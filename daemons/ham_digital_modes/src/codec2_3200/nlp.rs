@@ -674,8 +674,16 @@ mod tests {
         for _ in 0..20000 {
             vals.push((next() as i64) >> (next() % 64));
         }
+        // `i64::MIN` for both components is the one input outside the range: re^2 + im^2 = 2^127 does not fit
+        // `power_bin`'s signed `i128` (the native kernel panics in a debug build, wraps in release). It cannot
+        // occur: the estimator's bins are under 2^38 (64 inputs of at most a squared `i16` scaled by the
+        // low-pass, see `fft_fixed`). The split kernel still computes it, exactly, as an unsigned 2^127.
+        assert_eq!(power_bin_split(i64::MIN, i64::MIN) as u128, 1u128 << 127);
         for (a, &re) in vals.iter().enumerate() {
             for &im in vals.iter().skip(a % 7).step_by(11) {
+                if re == i64::MIN && im == i64::MIN {
+                    continue;
+                }
                 assert_eq!(
                     power_bin_split(re, im),
                     power_bin_native(re, im),
