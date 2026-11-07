@@ -11,6 +11,8 @@ website still has all of the headers and footer for hams.com. It should not."
 import base64
 import re
 
+import redis
+
 import odoo.http
 from odoo.tests import tagged
 from odoo.tests.common import BaseCase
@@ -458,6 +460,17 @@ class TestOwnerSite(HamsHttpCase):
             self.assertFalse(self.env["website.page"].search([("url", "=", "/ownerone/spam")]))
         finally:
             redis_client.delete(key)
+
+    def test_15b_the_write_rate_limit_counter_always_has_an_expiry(self):
+        # Tests [@ANCHOR: user_websites:owner_rate_limit]
+        # A failing EXPIRE used to leave the counter without one, so the owner was refused for ever.
+        self.authenticate("ownerone", "ownerone")
+        key = f"uw:rl:{self.env.cr.dbname}:write:{self.owner.id}"
+        redis_client.delete(key)
+        self.addCleanup(redis_client.delete, key)
+        self.safe_patch_object(redis.Redis, "expire", side_effect=redis.RedisError("simulated"))
+        self._post("/my/site/ownerone/page/save", title="Ttl", page_slug="ttl", content="<p>x</p>")
+        self.assertTrue(0 < redis_client.ttl(key) <= 60, "the counter must have an expiry")
 
     def test_16_editor_markup_has_no_raw_html_textarea(self):
         # [@ANCHOR: test_owner_page_editor_renders_wysiwyg]

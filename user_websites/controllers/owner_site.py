@@ -45,6 +45,7 @@ from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
 from odoo import fields, http
 from odoo.http import request
 from odoo.addons.edge_routing.utils import slugify
+from odoo.addons.distributed_redis_cache.redis_pool import expiring_counter
 from odoo.addons.user_websites.controllers.main import redis_client, UserWebsitesController
 from odoo.addons.user_websites.models.site_slug import legacy_slug_target
 from odoo.addons.user_websites.models.member_html import (
@@ -249,9 +250,7 @@ class UserWebsitesOwnerController(http.Controller):
         # Verified by [@ANCHOR: test_owner_write_rate_limited]
         key = f"uw:rl:{request.env.cr.dbname}:{bucket}:{request.env.user.id}"
         try:
-            count = redis_client.incr(key)
-            if count == 1:
-                redis_client.expire(key, 60)
+            count = expiring_counter(redis_client, key, 60)
         except redis.exceptions.RedisError as e:
             _logger.error("Owner-site rate limiter unavailable: %s", e)
             raise ServiceUnavailable("The site tools are temporarily unavailable.")

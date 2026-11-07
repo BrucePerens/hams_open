@@ -138,7 +138,7 @@ def force_clear(self):
 * `res.config.settings.set_values()` [@ANCHOR: distributed_redis_cache:res_config_settings_set_values] saves the Redis settings, clears the saving worker's cached connection settings, and sends the `distributed_cache_invalidation` `pg_notify` so the daemon bumps the global counter and every other worker clears theirs too; without that, a saved change would reach each worker only when it was restarted.
 * The cache-manager daemon's `_require_db_credentials()` [@ANCHOR: COMM_cache_manager_require_db_credentials] raises `RuntimeError` at start-up unless both `DB_USER` and `DB_PASS` are set, so it never connects to PostgreSQL without its own scoped role.
 
-### 6. `expiring_counter(client, key, window_seconds)`: a rate-limit counter that always expires
+### 6. `expiring_counter(client, key, window_seconds, amount=1)`: a rate-limit counter that always expires
 
 `from odoo.addons.distributed_redis_cache.redis_pool import expiring_counter, redis_pool` [@ANCHOR: distributed_redis_cache:expiring_counter]
 
@@ -147,7 +147,7 @@ The pattern it replaces, `count = client.incr(key)` followed by `if count == 1: 
 killed between them, or an `expire` that raises `RedisError`, left the key with no time to live. The count then only grew, passed the
 limit, and the member or address was refused for ever until someone deleted the key by hand.
 
-One `MULTI`/`EXEC` transaction now runs `SET key 0 NX EX window`, `INCR key` and `TTL key`, so a counter is never created without its
+One `MULTI`/`EXEC` transaction now runs `SET key 0 NX EX window`, `INCRBY key amount` and `TTL key`, so a counter is never created without its
 expiry. A key an older caller already left without one (TTL -1) is given the window on its next use (one extra `EXPIRE`), so such keys heal
 themselves.
 
@@ -156,14 +156,15 @@ themselves.
 | `client` | `redis.Redis` | The connection, normally `redis.Redis(connection_pool=redis_pool)`. Must support `pipeline(transaction=True)` and `expire`. |
 | `key` | `str` | The counter's name. The caller includes the database name, for example `f"{dbname}:ratelimit:thing:{who}"`. |
 | `window_seconds` | `int`, at least 1 | Lifetime of a counter that starts with this hit. The window is fixed: it starts at the first hit; later hits neither extend nor reset it. |
+| `amount` | `int`, 0 or more, default 1 | What this hit adds (`INCRBY`). A caller that weighs its hits passes it, for example the console's callbook search adds the number of contact rows it returned; a rate limit that counts requests leaves it at 1. |
 
 | Result | Meaning |
 |---|---|
-| `int` | The count including this hit; 1 for the first hit of a window. The caller compares it with its own limit. |
+| `int` | The count including this hit's `amount`; `amount` (1 by default) for the first hit of a window. The caller compares it with its own limit, and may take its own amount back with `DECRBY` when it is over. |
 | `redis.RedisError` (raised) | Any Redis failure, connection errors included, passes through unchanged. The caller chooses to fail open (abuse mitigation where other limits bound the damage) or closed (nothing else bounds the work). The helper makes no choice for it. |
 
 Behaviour worth knowing: every call counts (not idempotent); the transaction is one round trip, and the only blocking is the client's own
 socket timeout; there are no threads or locks in the helper; a crash after the `SET` but before the `INCR` leaves a count of 0 that
 expires on schedule. Tests: `tests/test_expiring_counter.py` (counting and a window the later hits do not extend, `redis.Redis.expire`
-patched to always raise, a legacy key without a TTL, an error reaching the caller). A caller's test makes the same failure with
+patched to always raise, a legacy key without a TTL, an error reaching the caller, an `amount` added in one step). A caller's test makes the same failure with
 `self.safe_patch_object(redis.Redis, "expire", side_effect=redis.RedisError("..."))`.
