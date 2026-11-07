@@ -17,6 +17,13 @@ from odoo.exceptions import AccessError
 TOKEN_EXPIRY_MINUTES = 5
 
 
+# [@ANCHOR: user_websites:COMM_gdpr_token_rejected]
+# Verified by [@ANCHOR: test_gdpr_export_token_unknown_rejected]
+class GdprExportTokenRejected(AccessError):
+    """The export token is unknown, already used or expired. A distinct class (still an AccessError) so the export daemon can
+    tell a bad link from every other failure by the class name in Odoo's JSON-2 error answer, never by message text."""
+
+
 class HamGdprExportToken(models.Model):
     # [@ANCHOR: user_websites:gdpr_export_token]
     _name = "ham.gdpr.export.token"
@@ -109,7 +116,7 @@ class HamGdprExportToken(models.Model):
         )
         row = self.env.cr.fetchone()
         if not row:
-            raise AccessError(_("Invalid or already-used export token."))
+            raise GdprExportTokenRejected(_("Invalid or already-used export token."))
         record_id, user_id, create_date = row
         # Real fix, found running this same pass's own real test suite,
         # not just reasoned about: raw SQL bypasses the ORM's own
@@ -129,7 +136,7 @@ class HamGdprExportToken(models.Model):
         # instead of "expired," which is an equally fail-closed rejection).
         cutoff = fields.Datetime.now() - timedelta(minutes=TOKEN_EXPIRY_MINUTES)
         if create_date < cutoff:
-            raise AccessError(_("Export token has expired."))
+            raise GdprExportTokenRejected(_("Export token has expired."))
         # # Verified by [@ANCHOR: test_gdpr_export_token_single_use]
         return self.env["res.users"].browse(user_id)
 
