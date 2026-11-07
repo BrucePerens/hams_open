@@ -19,11 +19,11 @@
 
                                 <div class="card mt-4 border-info">
                                     <div class="card-body">
-                                        <h4 class="card-title text-info">Option 1: Mute Non-Critical Nudges</h4>
+                                        <h4 class="card-title text-info">Option 1: Fewer Optional Emails</h4>
                                         <p class="card-text">
-                                            Turn off automated reminders for QSOs and club announcements. You will still receive password resets, security alerts, and administrative emails.
+                                            There is no separate switch yet for individual kinds of email, such as QSO reminders or club announcements. To stop optional email without locking your account, write to us and a person will read your request. Password resets, security alerts, and administrative emails are not optional.
                                         </p>
-                                        <a href="/my/account" class="btn btn-outline-info">Manage Email Preferences</a>
+                                        <a href="mailto:admin@hams.com?subject=Fewer%20optional%20emails" class="btn btn-outline-info">Email Us About It</a>
                                     </div>
                                 </div>
 

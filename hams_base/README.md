@@ -24,5 +24,5 @@ The `hams_base` module provides foundational security, compliance, and email tra
 
 ### Website Routes
 * `/email-policy`: public page listing the kinds of email the platform sends.
-* `/unsubscribe`: public page offering a link to email preferences, or (for a logged-in user) a total account lockout.
+* `/unsubscribe`: public page offering an email link to ask a person to stop optional email (there is no per-kind preference switch; nothing stores or reads one), or (for a logged-in user) a total account lockout.
 * `/unsubscribe/lockout` (logged-in users, POST only): deactivates the user's own account through the `zero_sudo.user_lockout_service_internal` service account and logs the user out. Reversing it requires an administrator.

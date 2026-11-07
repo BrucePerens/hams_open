@@ -48,7 +48,8 @@
                                 </p>
                                 <p>
                                     Every non-critical email we send includes an explicit <strong>Unsubscribe</strong> link. 
-                                    When you unsubscribe, you will have the option to either mute non-critical nudges, or perform a 
+                                    There is no separate switch yet for individual kinds of email; the Unsubscribe page offers an email link to a person who
+                                    will read your request, or to perform a
                                     <strong>Total Account Lockout</strong> (which disables your login, stops all emails, and freezes your websites, typically used for Silent Key hams).
                                 </p>
 
