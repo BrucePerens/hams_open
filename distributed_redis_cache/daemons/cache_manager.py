@@ -34,22 +34,10 @@ logger = logging.getLogger("cache_manager")
 # directory, odoo:hamsd_cache_manager 0640. Deliberately not the Daemon Key Manager's file, which
 # key_registry._write_secure_env_file() rewrites with only ODOO_RPC_LOGIN/ODOO_RPC_KEY on every rotation.
 DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager/cache_manager_db.env"
-# Where the file lived while the daemon ran as odoo (odoo:odoo 0600). Read only while a host has not yet
-# been provisioned with the new path; remove once hams1 has the new file (night_shift_todo, daemon OS isolation).
-LEGACY_DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager_db.env"
+# There is no fallback to the old flat keys/cache_manager_db.env (odoo:odoo 0600, deleted from hams1 on 2026-11-07): a missing
+# DB_ENV_FILE leaves DB_USER/DB_PASS empty and _require_db_credentials() stops the daemon at start.
 
 
-# [@ANCHOR: COMM_cache_manager_db_env_file]
-# Verified by [@ANCHOR: test_cache_manager_db_env_file_prefers_the_family_directory]
-def _db_env_file(path=DB_ENV_FILE, legacy_path=LEGACY_DB_ENV_FILE):
-    """The PostgreSQL login file to load: `path`, or `legacy_path` when only the old file exists (a host whose
-    code was deployed before its provisioning ran). `path` when neither exists, so the warning names the new one."""
-    if not os.path.exists(path) and os.path.exists(legacy_path):
-        return legacy_path
-    return path
-
-
-DB_ENV_FILE = _db_env_file()
 if os.path.exists(DB_ENV_FILE):
     # override=True: load_dotenv() defaults to leaving any already-exported
     # OS environment variable alone. If a systemd unit or container already

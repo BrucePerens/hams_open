@@ -33,9 +33,10 @@ writes the identical env file, which you then hand to the daemon's account
 
 ### Account and files
 The daemon runs as its own system account, `hamsd_cache_manager` (hams.com's daemon OS isolation, one account per
-daemon family), not as `odoo`. `_db_env_file()` [@ANCHOR: COMM_cache_manager_db_env_file] picks the login file: the
-family key directory's `keys/cache_manager/cache_manager_db.env` (`odoo:hamsd_cache_manager`, `0640`, in a `0750`
-directory of the same owner and group), or the old flat `keys/cache_manager_db.env` only while a host has not been
-provisioned with the new one. The daemon no longer opens `daemon_key_manager`'s `keys/cache_manager.env`: it never used
+daemon family), not as `odoo`. The daemon reads its login only from the family key directory's
+`keys/cache_manager/cache_manager_db.env` (`DB_ENV_FILE`, [@ANCHOR: COMM_cache_manager_config]; `odoo:hamsd_cache_manager`,
+`0640`, in a `0750` directory of the same owner and group). There is no fallback to the old flat
+`keys/cache_manager_db.env` (deleted from `hams1` on 2026-11-07): without the new file the daemon logs that it is not
+found and refuses to start (`_require_db_credentials()`). The daemon no longer opens `daemon_key_manager`'s `keys/cache_manager.env`: it never used
 the Odoo login in it, and that `odoo`-only file is unreadable to its own account. Run it by hand as
 `sudo -u hamsd_cache_manager python3 cache_manager.py`, not as `odoo`.
