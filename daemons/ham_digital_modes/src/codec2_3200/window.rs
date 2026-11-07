@@ -8,6 +8,18 @@ use super::M_PITCH;
 #[cfg(feature = "std")]
 use super::{FFT_ENC, NW};
 
+/// Where the analysis window is non-zero: the `NW`-sample Hann taper centred in the `M_PITCH`
+/// buffer (`M_PITCH/2 - NW/2 .. M_PITCH/2 - NW/2 + NW`, samples 21 to 299). Every sample outside it
+/// is multiplied by an exact zero, so the windowed signal there is zero and contributes nothing to
+/// the autocorrelation or the frame energy. The encoders window and correlate only this span, which
+/// is bit-exact with the whole buffer (each skipped product is an exact zero; in `f32`, adding `+0.0`
+/// or `-0.0` to a sum leaves it unchanged) and does about 13 percent less multiply-accumulate work.
+/// Codec2-mod made the same change in September 2026 (its `W_START`/`W_END`); this is an independent
+/// implementation of the idea, see `docs/reviews/M17_CODEC2_WOJCIECH_2026-11-06.md` in hams_com.
+// [@ANCHOR: analysis_span]
+pub const ANALYSIS_SPAN: core::ops::Range<usize> =
+    (M_PITCH / 2 - super::NW / 2)..(M_PITCH / 2 - super::NW / 2 + super::NW);
+
 #[cfg(feature = "std")]
 /// Builds the time-domain analysis window (`M_PITCH` samples, mostly
 /// zero outside the centered `NW`-sample Hann taper).
@@ -62,6 +74,18 @@ pub fn make_analysis_window_fixed() -> [i32; M_PITCH] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: analysis_span]
+    #[test]
+    fn both_analysis_windows_are_exactly_zero_outside_the_analysis_span() {
+        assert_eq!(ANALYSIS_SPAN, 21..300);
+        let f = make_analysis_window();
+        let q = make_analysis_window_fixed();
+        for i in (0..M_PITCH).filter(|i| !ANALYSIS_SPAN.contains(i)) {
+            assert_eq!(f[i], 0.0, "float window sample {i}");
+            assert_eq!(q[i], 0, "Q30 window sample {i}");
+        }
+    }
 
     #[test]
     // Tests [@ANCHOR: make_analysis_window]
