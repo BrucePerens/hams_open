@@ -39,3 +39,11 @@ ProtectControlGroups=true
 NoNewPrivileges=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
+# Second tier (hams_com DAEMON_OS_ISOLATION_PLAN.md section 5, 2026-11-07); the reasons are in the MANIFEST copy.
+ProtectKernelLogs=true
+ProtectClock=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallArchitectures=native

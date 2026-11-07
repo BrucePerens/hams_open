@@ -5,6 +5,7 @@ newest record of a feed (or the last successful run of a timer-driven unit) is o
 "active" but wedged is caught. Plain unittest, no Odoo:
     python3 pager_duty/daemon/test_freshness.py
 """
+import json
 import os
 import subprocess
 import sys
@@ -219,6 +220,159 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(gm.parse_systemd_timestamp("Tue 2026-10-20 05:17:00 UTC"), 1792473420.0)
         self.assertIsNone(gm.parse_systemd_timestamp(""))
         self.assertIsNone(gm.parse_systemd_timestamp("n/a"))
+
+
+class FakeOdoo:
+    """Answers ir.config_parameter.get_param from `params`; `error` is raised instead, as the JSON-2 client does."""
+
+    def __init__(self, params=None, error=None):
+        self.params = params or {}
+        self.error = error
+        self.calls = []
+
+    def execute(self, model, method, **kwargs):
+        self.calls.append((model, method, kwargs))
+        if self.error:
+            raise self.error
+        assert (model, method) == ("ir.config_parameter", "get_param")
+        return self.params.get(kwargs["key"], False)
+
+
+def stamp(**fields):
+    base = {"v": 1, "feed": "x", "last_good": NOW - 60, "last_attempt": NOW - 30, "ok": True, "error": "",
+            "failing_since": None, "good_total": 5, "written": NOW - 30}
+    base.update(fields)
+    return json.dumps(base)
+
+
+def run_feed(names, max_age, params=None, now=NOW, odoo=None, error=None):
+    odoo = odoo or FakeOdoo({f"ham_feed.{k}": v for k, v in (params or {}).items()}, error=error)
+    check = {"type": "freshness", "target": f"feed:{names}", "max_age": max_age}
+    return gm.check_freshness(check, now=now, client=odoo)
+
+
+class FeedSchemeTests(unittest.TestCase):
+    """The `feed:<name>[,<name>]` scheme reads the stamp hams_com's hams_feed_health.py writes into the Odoo parameter
+    `ham_feed.<name>`."""
+
+    def test_a_stamp_is_judged_by_its_last_good(self):
+        # Tests [@ANCHOR: pager_duty:freshness_one_feed]
+        # Tests [@ANCHOR: pager_duty:freshness_feed]
+        self.assertTrue(run_feed("a,b", 100, {"a": stamp(), "b": stamp()})[0])
+        self.assertFalse(run_feed("a", 10, {"a": stamp(last_good=NOW - 11)})[0])
+
+    def test_stamp_times_are_finite_non_negative_numbers(self):
+        # Tests [@ANCHOR: pager_duty:feed_stamp_epoch]
+        self.assertEqual(gm._feed_stamp_epoch(5), 5.0)
+        for bad in (None, True, "5", float("nan"), float("inf"), -1):
+            self.assertIsNone(gm._feed_stamp_epoch(bad), bad)
+
+    def test_the_clock_in_a_message_is_utc_to_the_minute(self):
+        # Tests [@ANCHOR: pager_duty:feed_clock]
+        self.assertEqual(gm._feed_clock(NOW), "2027-01-15 08:00 UTC")
+
+    def test_the_scheme_is_listed(self):
+        # Tests [@ANCHOR: pager_duty:freshness_schemes]
+        self.assertIn("feed", gm.FRESHNESS_SCHEMES)
+
+    def test_a_recent_last_good_passes_and_names_the_age(self):
+        odoo = FakeOdoo({"ham_feed.noaa": stamp(last_good=NOW - 90)})
+        ok, msg = run_feed("noaa", 3600, odoo=odoo)
+        self.assertTrue(ok, msg)
+        self.assertIn("90s", msg)
+        self.assertEqual(odoo.calls, [("ir.config_parameter", "get_param", {"key": "ham_feed.noaa"})])
+
+    def test_a_last_good_older_than_the_limit_fails_with_age_and_limit(self):
+        ok, msg = run_feed("noaa", 3600, {"noaa": stamp(last_good=NOW - 3601)})
+        self.assertFalse(ok)
+        self.assertIn("60min ago", msg)
+        self.assertIn("limit 60min", msg)
+
+    def test_exactly_at_the_limit_passes_and_a_future_stamp_is_fresh(self):
+        self.assertTrue(run_feed("a", 100, {"a": stamp(last_good=NOW - 100)})[0])
+        self.assertTrue(run_feed("a", 100, {"a": stamp(last_good=NOW + 5)})[0])
+
+    def test_a_feed_that_never_reported_says_so(self):
+        for missing in (False, "", None):
+            ok, msg = run_feed("noaa", 3600, odoo=FakeOdoo({"ham_feed.noaa": missing}))
+            self.assertFalse(ok)
+            self.assertIn("never reported", msg)
+            self.assertIn("noaa", msg)
+
+    def test_a_failing_feed_with_no_good_data_says_the_last_attempt_failed(self):
+        ok, msg = run_feed("aprs", 900, {"aprs": stamp(
+            last_good=None, ok=False, error="ConnectionResetError", failing_since=NOW - 7200, last_attempt=NOW - 10)})
+        self.assertFalse(ok)
+        self.assertIn("last attempt failed (ConnectionResetError) since 2027-01-15", msg)
+        self.assertNotIn("never reported", msg)
+
+    def test_a_stale_feed_that_is_also_failing_names_both(self):
+        ok, msg = run_feed("aprs", 900, {"aprs": stamp(
+            last_good=NOW - 5000, ok=False, error="TimeoutError", failing_since=NOW - 4000)})
+        self.assertFalse(ok)
+        self.assertIn("last attempt failed (TimeoutError) since", msg)
+        self.assertIn("83min ago", msg)
+
+    def test_a_failing_attempt_inside_the_limit_still_passes(self):
+        # The policy is the operator's limit: one failed poll does not page while last_good is still young.
+        self.assertTrue(run_feed("a", 3600, {"a": stamp(last_good=NOW - 60, ok=False, error="OSError")})[0])
+
+    def test_attempts_that_worked_but_found_nothing_are_not_never_reported(self):
+        ok, msg = run_feed("a", 3600, {"a": stamp(last_good=None, ok=True, last_attempt=NOW - 20)})
+        self.assertFalse(ok)
+        self.assertIn("no good data", msg)
+        self.assertNotIn("never reported", msg)
+
+    def test_the_error_text_shown_is_only_a_class_name(self):
+        ok, msg = run_feed("a", 10, {"a": stamp(
+            last_good=None, ok=False, error="boom https://user:pw@host/\n[x]", failing_since=NOW - 5)})
+        self.assertFalse(ok)
+        self.assertNotIn("pw@host", msg)
+        self.assertIn("last attempt failed (error)", msg)
+
+    def test_several_feeds_report_every_stale_one_in_one_message(self):
+        params = {"a": stamp(last_good=NOW - 5), "b": stamp(last_good=NOW - 9000), "c": False}
+        ok, msg = run_feed("a,b,c", 3600, params)
+        self.assertFalse(ok)
+        self.assertIn("2 of 3 feeds are stale", msg)
+        self.assertIn("b:", msg)
+        self.assertIn("c:", msg)
+        ok, msg = run_feed("a,b", 3600, {"a": stamp(), "b": stamp()})
+        self.assertTrue(ok, msg)
+        self.assertIn("all 2 feeds", msg)
+
+    def test_an_unreadable_stamp_fails_instead_of_passing(self):
+        for bad in ("not json", "[1]", json.dumps({"v": 2, "last_good": NOW}), json.dumps({"v": 1}),
+                    json.dumps({"v": 1, "last_good": "yesterday"}), json.dumps({"v": 1, "last_good": True}),
+                    json.dumps({"v": 1, "last_good": float("nan")}), json.dumps({"v": 1, "last_good": -1})):
+            ok, msg = run_feed("a", 3600, {"a": bad})
+            self.assertFalse(ok, bad)
+            self.assertIn("not a readable stamp", msg)
+
+    def test_a_bad_feed_name_or_an_empty_list_fails(self):
+        for target in ("feed:Bad Name", "feed:../x", "feed:a,,", "feed:,"):
+            ok, msg = gm.check_freshness({"type": "freshness", "target": target, "max_age": 60}, now=NOW, client=FakeOdoo())
+            self.assertFalse(ok, target)
+
+    def test_no_client_or_an_unreachable_odoo_fails_with_the_reason(self):
+        check = {"type": "freshness", "target": "feed:a", "max_age": 60}
+        ok, msg = gm.check_freshness(check, now=NOW)
+        self.assertFalse(ok)
+        self.assertIn("Odoo", msg)
+        ok, msg = run_feed("a", 60, error=Exception("JSON-2 API Error 503: down"))
+        self.assertFalse(ok)
+        self.assertIn("ham_feed.a", msg)
+        self.assertIn("503", msg)
+
+    def test_a_limit_of_zero_is_refused_before_odoo_is_asked(self):
+        odoo = FakeOdoo()
+        ok, msg = run_feed("a", 0, odoo=odoo)
+        self.assertFalse(ok)
+        self.assertEqual(odoo.calls, [])
+
+    def test_execute_check_passes_its_client_to_the_freshness_check(self):
+        odoo = FakeOdoo({"ham_feed.a": stamp()})
+        self.assertTrue(gm.execute_check({"type": "freshness", "target": "feed:a", "max_age": 3600}, client=odoo)[0])
 
 
 class ConfigurationTests(unittest.TestCase):
