@@ -15,6 +15,7 @@ redis_search_listener() now take r_client as an explicit parameter
 instead of a module-global connection -- what actually makes them
 testable against a real double here.
 """
+import concurrent.futures.thread
 import json
 import os
 import re
@@ -283,8 +284,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
     def test_10_the_thread_pool_class_is_bound_at_import_before_the_chroot(self):
         # main() builds its ThreadPoolExecutor after chrooting to /var/log, where no Python library can be loaded;
         # concurrent.futures imports its .thread submodule lazily, so the class must already be bound at import.
-        import concurrent.futures.thread as cft
-        self.assertIs(pager_log_analyzer.ThreadPoolExecutor, cft.ThreadPoolExecutor)
+        self.assertIs(pager_log_analyzer.ThreadPoolExecutor, concurrent.futures.thread.ThreadPoolExecutor)
         with open(pager_log_analyzer.__file__) as f:
             source = f.read()
         self.assertNotIn("concurrent.futures.ThreadPoolExecutor(", source)
