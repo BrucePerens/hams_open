@@ -46,3 +46,12 @@ class TestExpiringCounter(HamsTransactionCase):
         self.safe_patch_object(redis.Redis, "expire", side_effect=redis.RedisError("simulated"))
         with self.assertRaises(redis.RedisError):
             expiring_counter(self.client, self.key, 100)
+
+    def test_05_an_amount_is_added_in_one_step_and_the_key_expires(self):
+        # Tests [@ANCHOR: distributed_redis_cache:expiring_counter]
+        # A caller that counts weighted hits (the callbook search adds the number of rows it returned) passes `amount`.
+        expire = self.safe_patch_object(redis.Redis, "expire", side_effect=redis.RedisError("simulated"))
+        self.assertEqual(expiring_counter(self.client, self.key, 100, amount=7), 7)
+        self.assertEqual(expiring_counter(self.client, self.key, 100, amount=5), 12)
+        expire.assert_not_called()
+        self.assertTrue(0 < self.client.ttl(self.key) <= 100)
