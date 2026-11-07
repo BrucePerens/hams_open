@@ -178,11 +178,11 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
     def test_05_resolve_redis_host_returns_an_address_and_leaves_an_unresolvable_name_alone(self):
         # Tests [@ANCHOR: pager_duty:log_analyzer_resolve_redis_host]
         self.assertEqual(pager_log_analyzer.resolve_redis_host("192.0.2.7"), "192.0.2.7", "an address stays as it is")
-        with patch.object(
+        self.safe_patch_object(
             pager_log_analyzer.socket, "getaddrinfo",
             side_effect=lambda host, port, family=0, type=0: [(family, type, 0, "", ("2001:db8::1" if family != 2 else "192.0.2.9", 0))],
-        ):
-            self.assertEqual(pager_log_analyzer.resolve_redis_host("redis"), "192.0.2.9", "IPv4 is preferred")
+        )
+        self.assertEqual(pager_log_analyzer.resolve_redis_host("redis"), "192.0.2.9", "IPv4 is preferred")
         self.assertEqual(
             pager_log_analyzer.resolve_redis_host("no-such-host.invalid"), "no-such-host.invalid",
             "a name that does not resolve is returned as given so the connection attempt reports the real error",
@@ -190,10 +190,8 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
 
     def test_06_push_anomaly_waits_out_a_redis_outage_instead_of_losing_the_match(self):
         # Tests [@ANCHOR: pager_duty:log_analyzer_push_anomaly]
-        import redis as redis_module
-
         mock_r_client = MagicMock()
-        mock_r_client.lpush.side_effect = [redis_module.ConnectionError("down"), redis_module.ConnectionError("down"), 1]
+        mock_r_client.lpush.side_effect = [pager_log_analyzer.redis.ConnectionError("down"), pager_log_analyzer.redis.ConnectionError("down"), 1]
         payload = {"source": "Log Analyzer: PostgreSQL PANIC", "severity": "critical", "description": "PANIC: x", "website_id": None}
         pager_log_analyzer.push_anomaly(mock_r_client, payload, retry_seconds=0)
         self.assertEqual(mock_r_client.lpush.call_count, 3)
