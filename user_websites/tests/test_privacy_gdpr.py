@@ -5,7 +5,10 @@ import odoo.tests
 from odoo import fields
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
-from odoo.addons.user_websites.models.ham_gdpr_export_token import TOKEN_EXPIRY_MINUTES
+from odoo.addons.user_websites.models.ham_gdpr_export_token import (
+    TOKEN_EXPIRY_MINUTES,
+    GdprExportTokenRejected,
+)
 from odoo.exceptions import AccessError
 from datetime import timedelta
 import json
@@ -212,6 +215,40 @@ class TestPrivacyGDPR(HamsHttpCase):
 
         with self.assertRaises(odoo.exceptions.AccessError):
             Token._consume("an-old-token")
+
+    def test_01d2_every_token_rejection_is_the_distinct_error_the_daemon_matches(self):
+        # Tests [@ANCHOR: user_websites:COMM_gdpr_token_rejected]
+        """The export daemon answers "expired link" only for this class (Odoo's JSON-2 error answer names it), never for the
+        service-account refusal or any other error. Unknown, used and expired tokens must all raise it, and it must still be
+        an AccessError so existing callers that catch that keep working."""
+        env_as_user = self.env(user=self.user_privacy)
+        used = env_as_user["ham.gdpr.export.token"].create_for_current_user()
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_gdpr_export_service"
+        )
+        Token = self.env["ham.gdpr.export.token"].with_user(svc_uid)
+        Token._consume(used)
+        with self.assertRaises(GdprExportTokenRejected):
+            Token._consume(used)
+        with self.assertRaises(GdprExportTokenRejected):
+            Token._consume("not-a-real-token")
+
+        record = Token.create({"user_id": self.user_privacy.id, "token": "an-old-token-2"})
+        stale = fields.Datetime.now() - timedelta(minutes=TOKEN_EXPIRY_MINUTES + 1)
+        self.env.cr.execute(
+            "UPDATE ham_gdpr_export_token SET create_date = %s WHERE id = %s", (stale, record.id)
+        )
+        record.invalidate_recordset(["create_date"])
+        with self.assertRaises(GdprExportTokenRejected):
+            Token._consume("an-old-token-2")
+
+        self.assertTrue(issubclass(GdprExportTokenRejected, AccessError))
+        with self.assertRaises(AccessError) as caught:
+            env_as_user["ham.gdpr.export.token"].consume_and_export("whatever")
+        self.assertNotIsInstance(
+            caught.exception, GdprExportTokenRejected,
+            "The wrong-caller refusal is our fault, not a rejected link: it must not look like a token rejection.",
+        )
 
     def test_01e_consume_and_export_materializes_data_and_streamed_keys(self):
         # Tests [@ANCHOR: user_websites:COMM_gdpr_consume_and_export]
