@@ -617,7 +617,18 @@ def amqp_check(host, port, user, password, vhost="/"):
 #   redis-key:<key>    a string holding epoch seconds or an ISO 8601 time
 #   file:<path>        modification time
 #   unit:<name>.service  end of the last successful run of a timer-driven Type=oneshot unit
-FRESHNESS_SCHEMES = ("redis-zset", "redis-key", "file", "unit")
+#   feed:<name>[,<name>]  the stamp a hams.com daemon keeps in the Odoo parameter ham_feed.<name> (hams_com
+#                      daemons/hams_feed_health.py, schema version 1): fails when its last_good is older than max_age
+# [@ANCHOR: pager_duty:freshness_schemes]
+FRESHNESS_SCHEMES = ("redis-zset", "redis-key", "file", "unit", "feed")
+
+# The Odoo system parameter that holds one feed's stamp is FEED_PARAM_PREFIX + <name>; a name is what hams_feed_health.py
+# accepts (FEED_NAME_REGEX there), so a name the daemon cannot have written is refused here. FEED_STAMP_VERSION is the stamp
+# schema this reader understands.
+FEED_PARAM_PREFIX = "ham_feed."
+FEED_NAME_REGEX = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,63}\Z")
+FEED_STAMP_VERSION = 1
+FEED_ERROR_CLASS_REGEX = re.compile(r"[A-Za-z0-9_.-]{1,64}\Z")
 
 
 def _human_age(seconds):
@@ -744,9 +755,92 @@ def _freshness_unit(units, max_age, now, failing=None):
     return True, f"OK (all {len(names)} units ran successfully within {_human_age(max_age)})"
 
 
+# [@ANCHOR: pager_duty:feed_stamp_epoch]
+def _feed_stamp_epoch(value):
+    """A stamp time as epoch seconds: a finite, non-negative number (not a bool). None for null or anything else."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) and number >= 0 else None
+
+
+# [@ANCHOR: pager_duty:feed_clock]
+def _feed_clock(epoch):
+    return datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+# [@ANCHOR: pager_duty:freshness_one_feed]
+def _freshness_one_feed(name, max_age, now, client):
+    """One feed's stamp (Odoo parameter ham_feed.<name>, written by hams_com daemons/hams_feed_health.py): (ok, message).
+    Fails when last_good is older than `max_age`. The message says "never reported" when no stamp exists, and "last attempt
+    failed (<class>) since <time>" when the daemon's last try failed. Only the exception class name of a stamp is shown."""
+    if not FEED_NAME_REGEX.match(name):
+        return False, f"{name!r} is not a feed name (a-z, 0-9, '_', '.', '-')"
+    key = FEED_PARAM_PREFIX + name
+    raw = client.execute("ir.config_parameter", "get_param", key=key)
+    if not raw:
+        return False, f"{name}: never reported ({key} is not set)"
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        data = None
+    if not isinstance(data, dict) or data.get("v") != FEED_STAMP_VERSION or "last_good" not in data:
+        return False, f"{name}: {key} is not a readable stamp"
+    last_good = data["last_good"]
+    good = _feed_stamp_epoch(last_good)
+    if last_good is not None and good is None:
+        return False, f"{name}: {key} is not a readable stamp"
+    failed = data.get("ok") is False
+    error = data.get("error")
+    error = error if isinstance(error, str) and FEED_ERROR_CLASS_REGEX.match(error) else "error"
+    since = _feed_stamp_epoch(data.get("failing_since"))
+    failure = f"last attempt failed ({error})" + (f" since {_feed_clock(since)}" if since is not None else "")
+    if good is None:
+        if failed:
+            return False, f"{name}: {failure}; it has never delivered good data"
+        attempt = _feed_stamp_epoch(data.get("last_attempt"))
+        when = f"; last attempt {_human_age(now - attempt)} ago" if attempt is not None else ""
+        return False, f"{name}: no good data yet{when}"
+    age = now - good
+    if age > max_age:
+        return False, (
+            f"{name}: last good data {_human_age(age)} ago (limit {_human_age(max_age)})"
+            + (f"; {failure}" if failed else "")
+        )
+    return True, f"{name}: last good data {_human_age(age)} ago"
+
+
+# [@ANCHOR: pager_duty:freshness_feed]
+def _freshness_feed(names, max_age, now, client):
+    """One or several comma-separated feeds sharing a limit; every stale one is named in one message. A name list with an
+    empty entry is refused."""
+    parts = [n.strip() for n in names.split(",")]
+    if not parts or not all(parts):
+        return False, f"feed: needs one or more comma-separated feed names, not {names!r}"
+    if client is None:
+        return False, "feed: freshness needs the Odoo client to read ham_feed.* (none given)"
+    problems, good = [], []
+    for name in parts:
+        try:
+            ok, msg = _freshness_one_feed(name, max_age, now, client)
+        # The JSON-2 OdooClient raises a bare Exception for an HTTP error (a 401 from a stale key, a 503 while Odoo restarts).
+        except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
+            logger.warning("Freshness check feed:%s could not read ham_feed.%s: %s", name, name, e)
+            ok, msg = False, f"{name}: could not read {FEED_PARAM_PREFIX}{name} from Odoo: {e}"
+        (good if ok else problems).append(msg)
+    if not problems:
+        if len(parts) == 1:
+            return True, f"OK ({good[0]}, limit {_human_age(max_age)})"
+        return True, f"OK (all {len(parts)} feeds had good data within {_human_age(max_age)})"
+    if len(parts) == 1:
+        return False, problems[0]
+    return False, f"{len(problems)} of {len(parts)} feeds are stale: " + "; ".join(problems)
+
+
 # [@ANCHOR: pager_duty:check_freshness]
-def check_freshness(check, now=None, redis_factory=None):
-    """Run one freshness check: (ok, message). The message names the source, the age and the limit."""
+def check_freshness(check, now=None, redis_factory=None, client=None):
+    """Run one freshness check: (ok, message). The message names the source, the age and the limit. `client` is the Odoo
+    client, needed only by the `feed:` scheme."""
     now = time.time() if now is None else now
     target = parse_env(check.get("target", "")) or ""
     scheme, _, name = target.partition(":")
@@ -765,6 +859,8 @@ def check_freshness(check, now=None, redis_factory=None):
             if not result[0]:
                 note_failing_units(check, failing)
             return result
+        if scheme == "feed":
+            return _freshness_feed(name, max_age, now, client)
         if scheme == "file":
             try:
                 newest = os.stat(name).st_mtime
@@ -1738,7 +1834,7 @@ def execute_check(check, client=None):
         return True, "OK"
 
     elif ctype == "freshness":
-        return check_freshness(check)
+        return check_freshness(check, client=client)
 
     elif ctype == "systemd":
         if not target:

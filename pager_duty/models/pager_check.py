@@ -139,8 +139,9 @@ class PagerCheck(models.Model):
         default=0,
         help="Freshness checks: the check fails when the newest record, or the last successful run, is older than this. "
         "The target says where to look: redis-zset:<key> (newest score of a sorted set), redis-key:<key> (a stored epoch "
-        "or ISO time), file:<path> (modification time) or unit:<name>.service (end of the last successful run of a "
-        "timer-driven oneshot unit).",
+        "or ISO time), file:<path> (modification time), unit:<name>.service (end of the last successful run of a "
+        "timer-driven oneshot unit) or feed:<name>[,<name>] (the stamp a daemon keeps in the Odoo parameter ham_feed.<name>: "
+        "fails when its last good data is older than this).",
     )
     failure_threshold = fields.Integer(
         string="Failures Before Reporting",
