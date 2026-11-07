@@ -22,7 +22,7 @@ class TestLogMonitoringSeedData(HamsTransactionCase):
         odoo_log = self.env.ref("pager_duty.pager_log_file_odoo")
         self.assertEqual(odoo_log.filepath, "/var/log/odoo/odoo-server.log")
         pg_log = self.env.ref("pager_duty.pager_log_file_postgresql")
-        self.assertEqual(pg_log.filepath, "/var/log/postgresql/postgresql-17-main.log")
+        self.assertEqual(pg_log.filepath, "/var/log/postgresql/postgresql-18-main.log")
 
     def test_02_traceback_pattern_matches_a_real_sample_line(self):
         pattern = self.env.ref("pager_duty.pager_log_pattern_odoo_traceback")
