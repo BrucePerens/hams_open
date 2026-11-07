@@ -104,15 +104,18 @@ impl Encoder {
         // submodules.
         let wo_index = super::quantise::encode_wo(super::nlp::f0_to_wo(f0));
 
+        // Only the window's non-zero span (`window::ANALYSIS_SPAN`); bit-exact with the whole
+        // buffer, since every skipped term is a product with an exact zero.
+        let span = window::ANALYSIS_SPAN;
         let mut windowed = [0.0f32; M_PITCH];
-        for ((w, &s), &win) in windowed
+        for ((w, &s), &win) in windowed[span.clone()]
             .iter_mut()
-            .zip(self.sn.iter())
-            .zip(self.window.iter())
+            .zip(self.sn[span.clone()].iter())
+            .zip(self.window[span.clone()].iter())
         {
             *w = s * win;
         }
-        let r = lpc::autocorrelate(&windowed);
+        let r = lpc::autocorrelate(&windowed[span]);
         // White noise correction (see lpc::apply_white_noise_correction's
         // own doc comment) applies only to Levinson-Durbin's own input --
         // a separate, explicitly-named copy, so lpc_energy below still

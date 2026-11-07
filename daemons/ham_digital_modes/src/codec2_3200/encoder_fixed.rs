@@ -22,7 +22,7 @@
 //! this by reading `encode()` below.
 
 use super::{bits, BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
-use super::{lpc, nlp, quantise, tables, voicing};
+use super::{lpc, nlp, quantise, tables, voicing, window};
 
 pub struct EncoderFixed {
     /// Raw sample history, `i16`-native. The whole encode path is integer:
@@ -30,8 +30,8 @@ pub struct EncoderFixed {
     /// integers (pitch bin, Q23 energy, Q23 radians); no `f32` or `f64` is
     /// touched at run time, and every table is a committed constant in
     /// `tables.rs`.
-    sn: [i16; M_PITCH],
-    nlp_state: nlp::NlpStateFixed,
+    pub(super) sn: [i16; M_PITCH],
+    pub(super) nlp_state: nlp::NlpStateFixed,
     voicing_state: voicing::VoicingStateFixed,
 }
 
@@ -51,7 +51,7 @@ impl EncoderFixed {
     }
 
     // [@ANCHOR: encoder_fixed:shift_in]
-    fn shift_in(&mut self, new_samples: &[i16]) {
+    pub(super) fn shift_in(&mut self, new_samples: &[i16]) {
         self.sn.copy_within(N_SAMP.., 0);
         self.sn[M_PITCH - N_SAMP..].copy_from_slice(new_samples);
     }
@@ -95,6 +95,25 @@ impl EncoderFixed {
         let wo_index = tables::NLP_BIN_WO_INDEX[f0_bin] as u32;
         profile_mark!(2);
 
+        let (e_index, lsp_indexes) = self.lpc_fields();
+
+        let fields = bits::FrameFields {
+            voiced0,
+            voiced1,
+            wo_index,
+            e_index,
+            lsp_indexes,
+        };
+        let packed = bits::pack_frame(&fields, WO_BITS, E_BITS);
+        profile_mark!(8);
+        packed
+    }
+
+    /// The energy and line spectral pair indexes of the frame now in the history buffer: window,
+    /// autocorrelate, Levinson-Durbin, bandwidth expansion, LSPs and their quantizers, integer
+    /// end to end. Shared with `EncoderMbe`, which differs only in pitch and voicing.
+    // [@ANCHOR: EncoderFixed::lpc_fields]
+    pub(super) fn lpc_fields(&self) -> (u32, [u32; super::LPC_ORD]) {
         // Windowing + autocorrelate + Levinson-Durbin: MIGRATED, genuine
         // fixed-point, no f32 anywhere in this block. `wn_q[i] = sn[i] *
         // window_fixed[i]` is naturally Q30 (an integer sample times a
@@ -102,15 +121,21 @@ impl EncoderFixed {
         // `>> 7` brings it to Q8.23, autocorrelate_fixed's own expected
         // input format (see that function's own doc comment for the
         // real measured margin).
+        //
+        // Only the window's non-zero span is windowed and correlated (`window::ANALYSIS_SPAN`):
+        // outside it every windowed sample is an exact zero, so this is bit-exact with the whole
+        // buffer (`tests/codec2_3200_encoder_golden_hash.rs` pins it) and skips about 13 percent of
+        // the multiply-accumulates.
+        let span = window::ANALYSIS_SPAN;
         let mut wn_q = [0i32; M_PITCH];
-        for ((w, &s), &win) in wn_q
+        for ((w, &s), &win) in wn_q[span.clone()]
             .iter_mut()
-            .zip(self.sn.iter())
-            .zip(tables::WINDOW_ANALYSIS_Q30.iter())
+            .zip(self.sn[span.clone()].iter())
+            .zip(tables::WINDOW_ANALYSIS_Q30[span.clone()].iter())
         {
             *w = ((s as i64 * win as i64) >> 7) as i32;
         }
-        let r_q = lpc::autocorrelate_fixed(&wn_q);
+        let r_q = lpc::autocorrelate_fixed(&wn_q[span]);
         profile_mark!(3);
         // White noise correction (fixed point) applies only to
         // Levinson-Durbin's own input -- a separate corrected copy, so
@@ -151,16 +176,7 @@ impl EncoderFixed {
         let lsp_indexes = quantise::encode_lsps_delta_scalar_q23(&lsp_q23);
         profile_mark!(7);
 
-        let fields = bits::FrameFields {
-            voiced0,
-            voiced1,
-            wo_index,
-            e_index,
-            lsp_indexes,
-        };
-        let packed = bits::pack_frame(&fields, WO_BITS, E_BITS);
-        profile_mark!(8);
-        packed
+        (e_index, lsp_indexes)
     }
 }
 
