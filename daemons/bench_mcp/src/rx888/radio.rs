@@ -63,7 +63,10 @@ pub(crate) fn edges(mode: Mode, width: f64) -> (f32, f32) {
         Mode::Usb => (50.0, 50.0 + w),
         Mode::Lsb => (-50.0 - w, -50.0),
         Mode::Cw => (600.0 - w / 2.0, 600.0 + w / 2.0),
-        Mode::Am | Mode::Fm | Mode::Iq => (-w / 2.0, w / 2.0),
+        Mode::Am | Mode::Fm | Mode::Iq | Mode::Sam => (-w / 2.0, w / 2.0),
+        // Synchronous single sideband keeps 100 Hz across the carrier (radioctl's radiod channel).
+        Mode::SamLower => (100.0 - w.max(200.0), 100.0),
+        Mode::SamUpper => (-100.0, w.max(200.0) - 100.0),
     }
 }
 
@@ -588,6 +591,9 @@ mod tests {
         assert_eq!(edges(Mode::Lsb, 2400.0), (-2450.0, -50.0));
         assert_eq!(edges(Mode::Cw, 500.0), (350.0, 850.0));
         assert_eq!(edges(Mode::Am, 6000.0), (-3000.0, 3000.0));
+        assert_eq!(edges(Mode::Sam, 6000.0), (-3000.0, 3000.0));
+        assert_eq!(edges(Mode::SamUpper, 3000.0), (-100.0, 2900.0));
+        assert_eq!(edges(Mode::SamLower, 3000.0), (-2900.0, 100.0));
         assert_eq!(mode_arg(&json!({}), Mode::Am), Ok(Mode::Am));
         assert_eq!(mode_arg(&json!({"mode": "lsb"}), Mode::Am), Ok(Mode::Lsb));
         assert!(mode_arg(&json!({"mode": "iq"}), Mode::Am).is_err());

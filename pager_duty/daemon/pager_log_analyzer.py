@@ -15,11 +15,15 @@ import time
 import re
 import json
 import logging
-import concurrent.futures
+# Bound at import, before the chroot: concurrent.futures loads its .thread submodule lazily, and inside /var/log there
+# is no Python library to load it from (hams1 2026-11-07: ModuleNotFoundError 'concurrent.futures.thread' right after
+# the privilege drop).
+from concurrent.futures import ThreadPoolExecutor
 import ctypes
 import pwd
 import grp
 import collections
+import socket
 import redis
 
 logging.basicConfig(
@@ -44,6 +48,36 @@ def translate_path(fp):
     return fp.removeprefix("/var/log")
 
 
+# --- 3b. Redis helpers ---
+# [@ANCHOR: pager_duty:log_analyzer_resolve_redis_host]
+def resolve_redis_host(host):
+    """The IP address to connect to Redis with. Called before the chroot, because inside /var/log there is no /etc/hosts,
+    resolv.conf or nsswitch.conf, so a later reconnect by the name `redis` would never resolve. Returns `host` unchanged
+    when it is already an address or cannot be resolved (the connection attempt then reports the real error)."""
+    for family in (socket.AF_INET, socket.AF_UNSPEC):  # IPv4 first: Redis on this host listens on the IPv4 loopback
+        try:
+            return socket.getaddrinfo(host, None, family=family, type=socket.SOCK_STREAM)[0][4][0]
+        except (OSError, IndexError):
+            continue
+    return host
+
+
+# [@ANCHOR: pager_duty:log_analyzer_push_anomaly]
+def push_anomaly(r_client, payload, retry_seconds=5):
+    """Queue one anomaly for the monitor on the Redis list `pager_log_anomalies`, waiting out a Redis outage.
+
+    A match must not be lost, and a Redis error must not kill the tailing thread (an uncaught exception ends the thread
+    silently while the daemon looks alive): this retries every `retry_seconds` until the push succeeds. Blocks the calling
+    tailer only; the file keeps growing and is read on afterwards."""
+    while True:
+        try:
+            r_client.lpush("pager_log_anomalies", json.dumps(payload))
+            return
+        except redis.RedisError as e:
+            logger.error(f"Could not queue a log anomaly in Redis, retrying: {e}")
+            time.sleep(retry_seconds)  # audit-ignore-sleep
+
+
 # --- 4. Tailing Engine ---
 # [@ANCHOR: pager_duty:tail_file]
 def tail_file(r_client, fp, compiled_patterns):
@@ -57,13 +91,21 @@ def tail_file(r_client, fp, compiled_patterns):
 
     cur_inode = None
     f = None
+    missing_logged = False
     while True:
         try:
             try:
                 st = os.stat(chroot_path)
                 new_inode = st.st_ino
             except FileNotFoundError:
+                st = None
                 new_inode = None
+
+            # copytruncate rotation (the Odoo logrotate entry): the inode stays, the file shrinks, and the offset is past the
+            # new end, so nothing would be read until the log regrew beyond the old offset.
+            if f and st is not None and new_inode == cur_inode and st.st_size < f.tell():
+                logger.info(f"Log file {chroot_path} was truncated; reading it from the start.")
+                f.seek(0, 0)
 
             if new_inode != cur_inode:
                 if f:
@@ -76,6 +118,7 @@ def tail_file(r_client, fp, compiled_patterns):
                         else:
                             f.seek(0, 2)
                         cur_inode = new_inode
+                        missing_logged = False
                         logger.info(
                             f"Tailing log file {chroot_path} (inode: {cur_inode})"
                         )
@@ -84,9 +127,11 @@ def tail_file(r_client, fp, compiled_patterns):
                         f = None
                         cur_inode = None
                 else:
+                    if cur_inode is not None or not missing_logged:
+                        logger.warning(f"Log file {chroot_path} is missing; waiting for it.")
+                        missing_logged = True
                     f = None
                     cur_inode = None
-                    logger.debug(f"Log file {chroot_path} missing.")
 
             if f:
                 line = f.readline()
@@ -103,7 +148,7 @@ def tail_file(r_client, fp, compiled_patterns):
                             "website_id": pat.get("website_id"),
                         }
                         # Send to generalized monitor via Redis queue to proxy RPC safely
-                        r_client.lpush("pager_log_anomalies", json.dumps(payload))
+                        push_anomaly(r_client, payload)
             else:
                 time.sleep(5)  # audit-ignore-sleep
         except OSError as e:
@@ -222,7 +267,8 @@ def main():
             }
         )
 
-    redis_host = os.getenv("REDIS_HOST") or "redis"
+    # Resolved here, before the chroot: no name service is reachable from inside /var/log (see resolve_redis_host).
+    redis_host = resolve_redis_host(os.getenv("REDIS_HOST") or "redis")
     redis_port = int(os.getenv("REDIS_PORT") or "6379")
     # Real fix, found by an adversarial security review: this used to
     # connect with no password at all, regardless of whether one is
@@ -263,9 +309,11 @@ def main():
         # B. Drop Kernel Capabilities (PR_CAPBSET_DROP = 24)
         try:
             libc = ctypes.CDLL("libc.so.6")
-            for cap in range(40):
-                libc.prctl(24, cap, 0, 0, 0)
-            logger.info("All kernel bounding capabilities successfully dropped.")
+            failed = [cap for cap in range(40) if libc.prctl(24, cap, 0, 0, 0) != 0]
+            if failed:
+                logger.warning(f"Could not drop {len(failed)} bounding capabilities: {failed[:5]}")
+            else:
+                logger.info("All kernel bounding capabilities successfully dropped.")
         except OSError as e:
             logger.warning(f"Could not drop bounding capabilities: {e}")
 
@@ -276,7 +324,9 @@ def main():
             os.setresuid(uid, uid, uid)
             logger.info("Privileges successfully de-escalated to nobody:adm")
         except OSError as e:
-            logger.warning(f"Could not setuid to nobody:adm: {e}")
+            # Still root, inside the chroot: never go on tailing logs with that.
+            logger.critical(f"Could not drop to nobody:adm, refusing to run as root: {e}")
+            sys.exit(1)
 
     if not target_files:
         logger.info("No files configured for log analysis. Exiting.")
@@ -298,12 +348,17 @@ def main():
             logger.error(f"Invalid regex {p.get('regex')}: {e}")
 
     # Start Tailers
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(target_files) + 1)
+    executor = ThreadPoolExecutor(max_workers=len(target_files) + 1)
     for fp in target_files:
         executor.submit(tail_file, r_client, fp, compiled)
 
-    # Start Splunk Listener (Blocks main thread)
-    redis_search_listener(r_client)
+    # Start Splunk Listener (Blocks main thread). If it ends or fails, the whole process must end so systemd restarts it:
+    # the tailer threads loop forever and would otherwise keep a half-dead daemon alive at interpreter shutdown.
+    try:
+        redis_search_listener(r_client)
+    except Exception as e:  # audit-ignore-catch-all
+        logger.critical(f"Search listener failed, exiting so that systemd restarts the daemon: {e}")
+    os._exit(1)
 
 
 if __name__ == "__main__":

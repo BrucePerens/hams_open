@@ -4,8 +4,9 @@
         <!-- ODOO_DB_LOG_CRASH_MONITORING.md: real, provisioned log paths,
              confirmed directly against this dev box's own live files (not
              guessed from the directory names alone); the active systemd
-             logfile target for Odoo, and PostgreSQL 17's active log
-             under its own default logging_collector directory. Global (no
+             logfile target for Odoo, and PostgreSQL 18's active log
+             (the cluster hams1 runs; new installs default to 18, Debian's
+             /var/log/postgresql/postgresql-<major>-main.log). Global (no
              website_id set) since these are server-level logs, not
              per-website content. noupdate="1" since an admin may tune
              these via the UI (log_analyzer_views.xml) after install; this
@@ -17,7 +18,7 @@
         </record>
         <record id="pager_log_file_postgresql" model="pager.log.file">
             <field name="name">PostgreSQL Log</field>
-            <field name="filepath">/var/log/postgresql/postgresql-17-main.log</field>
+            <field name="filepath">/var/log/postgresql/postgresql-18-main.log</field>
         </record>
 
         <!-- Each regex below was checked against real lines pulled from
