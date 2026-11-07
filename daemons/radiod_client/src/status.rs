@@ -96,6 +96,38 @@ pub struct ChannelStatus {
     pub input_samples: Option<u64>,
     /// Front end: samples since the last A/D overrange.
     pub samples_since_over: Option<u64>,
+    /// Linear channel: the carrier PLL is on (synchronous detection).
+    pub pll_enable: Option<bool>,
+    /// Linear channel: the carrier PLL is locked. Meaningful only while `pll_enable` is true.
+    pub pll_lock: Option<bool>,
+    /// Linear channel: the PLL squares in its feedback path (DSB-SC carrier recovery).
+    pub pll_square: Option<bool>,
+    /// Linear channel: PLL loop bandwidth, Hz.
+    pub pll_bw_hz: Option<f32>,
+    /// Linear channel: PLL phase, radians.
+    pub pll_phase_rad: Option<f32>,
+    /// PLL carrier SNR (linear) or signal SNR (FM), dB.
+    pub pll_snr_db: Option<f32>,
+    /// Frequency offset the PLL (linear) or the FM demodulator measured, Hz.
+    pub freq_offset_hz: Option<f32>,
+    /// Linear channel: complete PLL rotations since the channel started.
+    pub pll_wraps: Option<u64>,
+    /// Linear channel: envelope detection on.
+    pub envelope: Option<bool>,
+}
+
+impl ChannelStatus {
+    // [@ANCHOR: radiod_client_status_carrier_lock]
+    /// The carrier lock of a synchronous channel: `Some(locked)` when the status says the PLL is on
+    /// and carries `PLL_LOCK`, `None` when the PLL is off or the status did not say (a front-end
+    /// status, a spectrum channel, or an older `radiod`).
+    pub fn carrier_lock(&self) -> Option<bool> {
+        if self.pll_enable == Some(true) || self.pll_square == Some(true) {
+            self.pll_lock
+        } else {
+            None
+        }
+    }
 }
 
 impl ChannelStatus {
@@ -153,6 +185,15 @@ impl ChannelStatus {
                 ty::AD_BITS_PER_SAMPLE => s.ad_bits = Some(e.uint()?),
                 ty::INPUT_SAMPLES => s.input_samples = Some(e.uint()?),
                 ty::SAMPLES_SINCE_OVER => s.samples_since_over = Some(e.uint()?),
+                ty::PLL_ENABLE => s.pll_enable = Some(e.bool()?),
+                ty::PLL_LOCK => s.pll_lock = Some(e.bool()?),
+                ty::PLL_SQUARE => s.pll_square = Some(e.bool()?),
+                ty::PLL_BW => s.pll_bw_hz = Some(e.f32()?),
+                ty::PLL_PHASE => s.pll_phase_rad = Some(e.f32()?),
+                ty::PLL_SNR => s.pll_snr_db = Some(e.f32()?),
+                ty::FREQ_OFFSET => s.freq_offset_hz = Some(e.f32()?),
+                ty::PLL_WRAPS => s.pll_wraps = Some(e.uint()?),
+                ty::ENVELOPE => s.envelope = Some(e.bool()?),
                 _ => {}
             }
         }
@@ -392,5 +433,60 @@ mod tests {
         assert_eq!(st.output_level_db, Some(-53.0));
         assert_eq!(st.input_samples, Some(35_000_000));
         assert_eq!(st.samples_since_over, Some(16));
+    }
+
+    // Tests [@ANCHOR: radiod_client_status_decode]
+    // Tests [@ANCHOR: radiod_client_status_carrier_lock]
+    #[test]
+    fn decodes_the_pll_fields_and_the_carrier_lock() {
+        let pkt = status(&[
+            (ty::OUTPUT_SSRC, vec![0x10, 0x92]),
+            (ty::PLL_ENABLE, vec![1]),
+            (ty::PLL_LOCK, vec![1]),
+            (ty::PLL_SQUARE, vec![]),
+            (ty::PLL_BW, 100.0f32.to_be_bytes().to_vec()),
+            (ty::PLL_PHASE, 0.25f32.to_be_bytes().to_vec()),
+            (ty::PLL_SNR, 31.5f32.to_be_bytes().to_vec()),
+            (ty::FREQ_OFFSET, (-12.5f32).to_be_bytes().to_vec()),
+            (ty::PLL_WRAPS, vec![0x01, 0x00]),
+            (ty::ENVELOPE, vec![]),
+        ]);
+        let s = ChannelStatus::decode(&pkt)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        assert_eq!(s.ssrc, 0x1092);
+        assert_eq!(s.pll_enable, Some(true));
+        assert_eq!(s.pll_lock, Some(true));
+        assert_eq!(s.pll_square, Some(false));
+        assert_eq!(s.pll_bw_hz, Some(100.0));
+        assert_eq!(s.pll_phase_rad, Some(0.25));
+        assert_eq!(s.pll_snr_db, Some(31.5));
+        assert_eq!(s.freq_offset_hz, Some(-12.5));
+        assert_eq!(s.pll_wraps, Some(256));
+        assert_eq!(s.envelope, Some(false));
+        assert_eq!(s.carrier_lock(), Some(true));
+
+        // Unlocked: the PLL is on and says so.
+        let unlocked = ChannelStatus {
+            pll_lock: Some(false),
+            ..s.clone()
+        };
+        assert_eq!(unlocked.carrier_lock(), Some(false));
+        // The PLL off (plain AM with envelope detection): no lock to report, whatever PLL_LOCK says.
+        let off = ChannelStatus {
+            pll_enable: Some(false),
+            ..s.clone()
+        };
+        assert_eq!(off.carrier_lock(), None);
+        // A status that does not mention the PLL (front end, spectrum, older radiod).
+        assert_eq!(ChannelStatus::default().carrier_lock(), None);
+        // Square-law carrier recovery implies the PLL.
+        let squared = ChannelStatus {
+            pll_enable: None,
+            pll_square: Some(true),
+            ..s
+        };
+        assert_eq!(squared.carrier_lock(), Some(true));
     }
 }

@@ -70,10 +70,24 @@ pub mod ty {
     pub const DEMOD_TYPE: u8 = 48;
     /// Output channels.
     pub const OUTPUT_CHANNELS: u8 = 49;
+    /// Independent sideband (linear); never sent by this crate.
+    pub const INDEPENDENT_SIDEBAND: u8 = 50;
+    /// Carrier phase-locked loop on (linear): synchronous detection, and `radiod`'s carrier squelch.
+    pub const PLL_ENABLE: u8 = 51;
+    /// Status: the linear PLL is locked to a carrier.
+    pub const PLL_LOCK: u8 = 52;
+    /// PLL with a squaring operation in the feedback path (DSB-SC); implies `PLL_ENABLE`.
+    pub const PLL_SQUARE: u8 = 53;
+    /// Status: the linear PLL's phase, radians.
+    pub const PLL_PHASE: u8 = 54;
+    /// PLL loop filter bandwidth, Hz (`radiod`'s default 100).
+    pub const PLL_BW: u8 = 55;
     /// Envelope detection (linear).
     pub const ENVELOPE: u8 = 56;
     /// SNR squelch enable.
     pub const SNR_SQUELCH: u8 = 57;
+    /// Status: SNR of the PLL's carrier (linear) or of the signal (FM), dB.
+    pub const PLL_SNR: u8 = 58;
     /// Frequency offset, Hz.
     pub const FREQ_OFFSET: u8 = 59;
     /// Peak deviation, Hz.
@@ -96,6 +110,10 @@ pub mod ty {
     pub const FILTER_DROPS: u8 = 77;
     /// A/D bits.
     pub const AD_BITS_PER_SAMPLE: u8 = 82;
+    /// Squelch opening threshold, dB SNR. `radiod`'s documentation: -1000 keeps the squelch open.
+    pub const SQUELCH_OPEN: u8 = 83;
+    /// Squelch closing threshold, dB SNR.
+    pub const SQUELCH_CLOSE: u8 = 84;
     /// FM de-emphasis time constant, us.
     pub const DEEMPH_TC: u8 = 86;
     /// FM de-emphasis gain, dB.
@@ -134,6 +152,8 @@ pub mod ty {
     pub const OUTPUT_ENCODING: u8 = 107;
     /// Samples since last overrange.
     pub const SAMPLES_SINCE_OVER: u8 = 108;
+    /// Status: complete rotations of the linear PLL (a carrier offset makes it count).
+    pub const PLL_WRAPS: u8 = 109;
     /// dBm-to-dBFS calibration.
     pub const RF_LEVEL_CAL: u8 = 110;
     /// Byte spectrum step, dB.

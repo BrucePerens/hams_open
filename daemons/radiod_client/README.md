@@ -249,3 +249,98 @@ Returns `Ok(Some(status))` with the front-end fields (`input_samprate`, `ad_over
 one `Control` serves one request at a time. It advances the tag counter once per send. Creates no channel.
 It is safe to call at any rate, but while no channel exists the front end is stopped and `if_power_db`
 reads `-inf`.
+
+## Synchronous AM (2026-11-06)
+
+Synchronous AM for the shared receiver and the `radiod-channel` virtual rig (hams_com to-do
+`synchronous-am-for-sdr-sources-radiod-and-sdrconnect-8e1f4a62`). `radiod`'s linear demodulator has a carrier
+phase-locked loop of its own, so synchronous detection is done by `radiod`, not by the client. The facts come
+from `radiod`'s documentation only (clean room, as for the trial): `docs/ka9q-radio-3.md` at the pinned commit
+(the `pll`, `square`, `pll-bw`, `envelope` and squelch sections), the `[sam]` and `[ame]` entries of
+`share/presets.conf`, and the type numbers of `src/status.h`, compiled to read them (51 to 55, 58, 83, 84,
+109). **Not yet run against a real `radiod`**: no signal source is connected to the RX-888 (bring-up report
+section 8), so lock behaviour on a real carrier is a hardware follow-up.
+
+### Data structures
+
+#### `radiod_client_command_mode` - `Mode` (synchronous variants)
+
+[@ANCHOR: radiod_client:radiod_client_command_mode]
+
+Three variants added to the table above. All are sent as explicit parameters:
+
+| Variant | Passband (Hz from carrier) | Output | Wire parameters |
+|---|---|---|---|
+| `Sam` | -5000 to 5000 | 12 kHz mono | `DEMOD_TYPE` 0, `ENVELOPE` 0, `PLL_ENABLE` 1, `PLL_SQUARE` 0, `SNR_SQUELCH` 0, `SQUELCH_OPEN` and `SQUELCH_CLOSE` -1000 dB, `AGC_ENABLE` 1 |
+| `SamLower` | -5000 to +100 | 12 kHz mono | as `Sam` |
+| `SamUpper` | -100 to +5000 | 12 kHz mono | as `Sam` |
+
+- **Why these values.** `pll = on` makes the PLL track a carrier to 0 Hz, and with envelope detection off the
+  mono output is the in-phase (real) part of the locked baseband, which is synchronous detection. The
+  single-sideband variants keep 100 Hz of the other side so the carrier stays inside the passband (the
+  placement of `radiod`'s `[ame]` preset, mirrored for the lower sideband). The PLL also turns on `radiod`'s
+  carrier squelch; its documentation says an opening threshold of -1000 dB keeps it open, and a listener
+  should hear a fading carrier rather than silence, so both thresholds are sent as -1000 and the SNR squelch
+  is off.
+- **`PLL_BW` is not sent.** The documented default (100 Hz) is used. The wire form of a written `PLL_BW` was
+  not seen in the trial, so the client leaves it alone rather than guess; the status reports it (`pll_bw_hz`).
+- **Every other linear mode now sends `PLL_ENABLE` 0** (`Usb`, `Lsb`, `Cw`, `Am`, `Iq`). `radiod` keeps a
+  channel's parameters between commands, so a channel switched from `Sam` back to `Am` would otherwise keep
+  its PLL (and squelch). `Fm` is not linear and sends no PLL field.
+- **Open question for the hardware run.** The keep-alive of `radioctl`'s bridge re-sends the whole `Audio`
+  command every 2 s; whether re-sending `PLL_ENABLE` 1 to a channel that already has it disturbs the lock is
+  not documented and must be watched on a real carrier (lock should stay steady across refreshes).
+
+#### `radiod_client_command_sam_squelch` - `SAM_SQUELCH_OPEN_DB`
+
+[@ANCHOR: radiod_client:radiod_client_command_sam_squelch]
+
+A compile-time constant (no ownership, no locking): `pub const SAM_SQUELCH_OPEN_DB: f32 = -1000.0`, dB SNR, sent as
+both `SQUELCH_OPEN` (83) and `SQUELCH_CLOSE` (84) with every synchronous `Audio` command.
+
+#### `radiod_client_status_channel_status` - `ChannelStatus` (PLL fields)
+
+[@ANCHOR: radiod_client:radiod_client_status_channel_status]
+
+Fields added on 2026-11-06. Each is `None` when the status does not carry it. All are set only by
+`ChannelStatus::decode`; nobody else writes them.
+
+| Field | Type, unit | Type number | Meaning |
+|---|---|---|---|
+| `pll_enable` | `Option<bool>` | 51 | The linear channel's carrier PLL is on. |
+| `pll_lock` | `Option<bool>` | 52 | The PLL is locked to a carrier. Meaningful only while the PLL is on; read it through `carrier_lock`. |
+| `pll_square` | `Option<bool>` | 53 | Square-law carrier recovery (DSB-SC); implies the PLL. Never sent on by this client. |
+| `pll_bw_hz` | `Option<f32>`, Hz | 55 | PLL loop bandwidth (documented default 100). |
+| `pll_phase_rad` | `Option<f32>`, radians | 54 | PLL phase. |
+| `pll_snr_db` | `Option<f32>`, dB | 58 | SNR of the carrier the PLL sees (linear) or of the signal (FM). |
+| `freq_offset_hz` | `Option<f32>`, Hz | 59 | Carrier offset the PLL measured (linear) or the FM demodulator's offset. |
+| `pll_wraps` | `Option<u64>` | 109 | Complete PLL rotations since the channel started; a carrier offset makes it count. |
+| `envelope` | `Option<bool>` | 56 | Envelope detection on. |
+
+The decode rule is unchanged: a value of impossible length fails the decode with `TlvError`.
+
+### Functions
+
+#### `radiod_client_command_mode_is_synchronous` - `Mode::is_synchronous(self) -> bool`
+
+[@ANCHOR: radiod_client:radiod_client_command_mode_is_synchronous]
+
+True for `Sam`, `SamLower` and `SamUpper`: the modes that turn `radiod`'s carrier PLL on, so the channel's
+status carries a carrier lock. Callers use it to decide whether to report a lock at all (a plain AM channel has
+none). Takes `self` by value (`Mode` is `Copy`); pure, no errors, no allocation.
+
+#### `radiod_client_status_carrier_lock` - `ChannelStatus::carrier_lock(&self) -> Option<bool>`
+
+[@ANCHOR: radiod_client:radiod_client_status_carrier_lock]
+
+The carrier lock of a synchronous channel, for a console's lock indicator.
+
+| Returns | When |
+|---|---|
+| `Some(true)` | the status says the PLL is on (`pll_enable` or `pll_square` true) and `PLL_LOCK` is set |
+| `Some(false)` | the PLL is on and `PLL_LOCK` is clear (or sent as an empty value) |
+| `None` | the PLL is off, or the status says nothing about it (a front-end or spectrum status, an older `radiod`), or the PLL is on but `PLL_LOCK` is absent |
+
+Borrows `self`; pure, no errors. A status is a snapshot: the lock is as fresh as the last status `radiod` sent
+for the channel (one per acknowledged command or poll). See also `radiod_client_status_decode` and the test
+`decodes_the_pll_fields_and_the_carrier_lock`.

@@ -79,3 +79,46 @@ op = { kind = "get-filter-width" }
 tx_text = "GW\n"
 rx_text = "W 10000\n"
 expect = { kind = "filter-width", hz = 10000 }
+
+# Synchronous AM (radiod's carrier PLL): the mode by name, and the mode's own passband after a change.
+[[step]]
+op = { kind = "set-mode", mode = "sam" }
+tx_text = "M sam\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "GM\n"
+rx_text = "M sam\n"
+expect = { kind = "mode", mode = "sam" }
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx_text = "GW\n"
+rx_text = "W 10000\n"
+expect = { kind = "filter-width", hz = 10000 }
+
+[[step]]
+op = { kind = "set-mode", mode = "sam-u" }
+tx_text = "M sam-u\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-filter-width" }
+tx_text = "GW\n"
+rx_text = "W 5100\n"
+expect = { kind = "filter-width", hz = 5100 }
+
+[[step]]
+op = { kind = "set-mode", mode = "sam-l" }
+tx_text = "M sam-l\n"
+rx_text = "OK\n"
+expect = { kind = "ack" }
+
+[[step]]
+op = { kind = "get-mode" }
+tx_text = "GM\n"
+rx_text = "M sam-l\n"
+expect = { kind = "mode", mode = "sam-l" }
