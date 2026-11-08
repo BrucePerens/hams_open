@@ -1,17 +1,17 @@
 /* Member-site chrome: the site's own header and footer, and the editor. Lean on purpose:
    Bootstrap utilities from the frontend bundle do the layout. */
-.uw-skip-link:focus { position: fixed; top: .5rem; left: .5rem; z-index: 2000; background: #fff; color: #0b3d91; padding: .5rem 1rem; border-radius: .25rem; }
+.uw-skip-link:focus { position: fixed; top: .5rem; left: .5rem; z-index: 2000; background: #fff; color: #0b3d91; padding: .5rem 1rem; border-radius: .25rem; } /* cv-ok: the skip link is a white box with its own words; the colour is only its text */
 .uw-owner-toolbar { position: relative; z-index: 1030; }
 .uw-owner-toolbar .btn-outline-light { border-color: #ced4da; }
 .user-websites-navbar .navbar-brand .uw-callsign { letter-spacing: .04em; }
 /* The member site's header is an olive bar with white text (theme_hams paints it the same). It was marked bg-light, which the dark-mode
    token mapping repaints pale, leaving the white links on a pale bar (1.09:1, found by the signed-in contrast scan, 2026-10-29); the bar now
    carries its own fill here too, so it reads the same without the theme. */
-.user-websites-navbar { background-color: #4a5d23; }
+.user-websites-navbar { background-color: #4a5d23; } /* cv-ok: brand colour (Olive Drab), no meaning */
 .user-websites-navbar .navbar-brand, .user-websites-navbar .nav-link { color: #fff; }
 .uw-member-footer a { color: var(--hams-accent, #0b3d91); }
 .uw-editor-area { min-height: 18rem; max-height: 70vh; overflow-y: auto; }
-.uw-editor-area:focus { outline: 3px solid #0b3d91; outline-offset: 1px; }
+.uw-editor-area:focus { outline: 3px solid #0b3d91; outline-offset: 1px; } /* cv-ok: a focus ring is a shape (an outline), not a hue */
 .uw-editor-area img { max-width: 100%; height: auto; }
 .uw-editor-area blockquote, .uw-member-page blockquote { border-left: 4px solid var(--hams-line-strong, #adb5bd); padding-left: 1rem; color: var(--hams-ink-2, #495057); }
 .uw-editor-area pre, .uw-member-page pre { background: var(--hams-surface-2, #f1f3f5); color: var(--hams-ink, inherit); padding: .75rem; border-radius: .25rem; overflow-x: auto; }
