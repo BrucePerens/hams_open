@@ -96,8 +96,17 @@ nice -n 10 cargo test -p radioctl-protocols --features hamlib-oracle --test rigc
 nice -n 10 cargo test -p radioctld --features hamlib-oracle
 ```
 
-Set `RIGCTLD=/path` or `RIGCTL=/path` if the binaries are not on the `PATH`. The tests ran and passed
-for this manual's release. Recorded disagreements at that time: the TS-590 and TS-590SG VFO B frequency
+Set `RIGCTLD=/path` or `RIGCTL=/path` if the binaries are not on the `PATH`.
+
+**How the harness waits.** Hamlib 4.6.2's `rigctld` opens the rig before it answers any client, so
+there is no readiness handshake to wait for: a model it cannot open either drops the client (a
+connection reset) or retries the open forever without answering. Both end as the `NoAnswer` steps the
+`known_*_divergences` lists already record. When `rigctld` is late with an answer, the harness waits one
+more answer timeout for the same answer and does not resend the command (`rigctld` queues a client's
+commands in order, so a late answer to the first would be read as the answer to the second, and every
+later step one late); the wait is counted and printed. A reset or closed connection is never waited on.
+The engine suite last passed with 28 tests in 187 seconds when the harness was changed this way
+(hams_open #1218), with the divergence lists unchanged. Recorded disagreements at that time: the TS-590 and TS-590SG VFO B frequency
 and AF gain; the IC-7610's split flow and VFO B; the IC-9700's VFO B; the Xiegu X108G's final VFO A; for the legacy Yaesu files, Hamlib's reads of frequency and mode fail against the virtual radio (its writes agree, and its FT-817 backend is not run because it sends an EEPROM read no manual documents). The Yaesu newcat files have none. The Flex files are not run through the oracle at all. Each is an open question for a bench check, not a verdict.
 
 ## Property tests and fuzzing
