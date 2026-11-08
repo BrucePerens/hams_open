@@ -36,6 +36,12 @@ The testing facility provides a safe environment.
 
 - **Leak Verification** `[@ANCHOR: zero_sudo:COMM_leak_verification]`: The system compares the final table sizes against the initial snapshots. Any discrepancies (indicative of raw SQL inserts bypassing the ORM) instantly fail the test.
 
+- **Leak Check Fallback Tables** `[@ANCHOR: zero_sudo:COMM_leak_check_fallback_tables]`: `LEAK_CHECK_FALLBACK_TABLES` in `zero_sudo/tests/real_transaction.py`, a module-level `frozenset[str]` of table and view names (no schema, no quoting) that the leak check in the teardown skips regardless of the `zero_sudo.noisy_table` records. Two kinds of name belong in it: tables Odoo itself writes during any test (`bus_bus`, `mail_*`, `ir_cron*`, `http_session`, `ir_config_parameter` and similar) and the `database_management` views over `pg_stat_*` (`database_table_stat`, `database_query_stat`, `database_activity`, `database_index_stat`, `database_index_advisor`, `database_replication_stat`, `database_pg_setting`), whose row count follows server statistics, not test writes. `database_index_advisor` lists tables with more than 100 sequential scans and over 10 MB, so any module's queries can add a row mid-test; that is what failed `cloudflare` `test_content_hook_multi_website` in the 66-module whole-system run (`Leaked records: database_index_advisor (+1)`) while it passed with cloudflare installed alone.
+  - **Fields:** a set, so no fields; each element is a lowercase PostgreSQL relation name in schema `public`. Created at import time, immutable, shared read-only by every `RealTransactionCase`; nothing mutates it.
+  - **Used by:** `RealTransactionCase._real_teardown`, which unions it with the active `zero_sudo.noisy_table` names before comparing final to initial row counts.
+  - **Invariant:** every `public` view whose definition reads `pg_stat_*`, `pg_settings` or `pg_locks` is in the set. Add a new statistics view here in the same change that creates it.
+  - **Verified by:** `zero_sudo:COMM_test_leak_check_fallback_tables` (`test_09_statistics_views_are_never_counted_as_leaks`), which queries `information_schema.views` for the views installed in the database and fails on any that is missing. Related: `zero_sudo:COMM_leak_verification`.
+
 ## Integration Services
 - **Real Transaction Service** `[@ANCHOR: zero_sudo:COMM_user_real_transaction_service]`: Ensures background workers operate against unmocked, durable database states.
 The testing facility provides a safe environment.

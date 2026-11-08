@@ -6,7 +6,7 @@
 
 import logging
 from odoo.tests.common import tagged
-from .real_transaction import RealTransactionCase
+from .real_transaction import LEAK_CHECK_FALLBACK_TABLES, RealTransactionCase
 
 _logger = logging.getLogger(__name__)
 
@@ -23,6 +23,8 @@ class TestRealTransactionFacility(RealTransactionCase):
     # Tests [@ANCHOR: zero_sudo:COMM_automated_cleanup]
     # ---
     # Tests [@ANCHOR: zero_sudo:COMM_leak_verification]
+    # ---
+    # Tests [@ANCHOR: zero_sudo:COMM_leak_check_fallback_tables]
     # ---
     # Tests [@ANCHOR: zero_sudo:COMM_user_real_transaction_service]
     # ---
@@ -242,6 +244,30 @@ class TestRealTransactionFacility(RealTransactionCase):
         val = self.env.cr.fetchone()
         self.assertIsNotNone(val)
         self.assertEqual(val[0], 2)
+
+    def test_09_statistics_views_are_never_counted_as_leaks(self):
+        # [@ANCHOR: zero_sudo:COMM_test_leak_check_fallback_tables]
+        # ---
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_leak_check_fallback_tables]
+        """
+        Every view over the server's statistics catalogs that is installed in this database is exempt from the
+        leak check. database_index_advisor (rows with more than 100 sequential scans on a table over 10 MB) is the
+        one that failed cloudflare's test_content_hook_multi_website in the whole-system run: another module's
+        queries pushed a table over the threshold mid-test and the view gained a row nobody inserted.
+        """
+        self.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_leak_check_fallback_tables] # fmt: skip
+            "SELECT table_name FROM information_schema.views WHERE table_schema = 'public' "
+            "AND view_definition ~ '(pg_stat_|pg_settings|pg_locks)'"
+        )
+        statistics_views = {r[0] for r in self.cr.fetchall() if not r[0].startswith("pg_stat_statements")}
+        self.assertFalse(
+            statistics_views - LEAK_CHECK_FALLBACK_TABLES,
+            "A view over pg_stat_*/pg_settings changes with server activity, not with test writes; "
+            "add it to LEAK_CHECK_FALLBACK_TABLES.",
+        )
+        # The two that exist in a database_management install must be among those checked.
+        for name in ("database_index_advisor", "database_replication_stat"):
+            self.assertIn(name, LEAK_CHECK_FALLBACK_TABLES)
 
     @classmethod
     def tearDownClass(cls):

@@ -21,6 +21,7 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("atm6301", Kind::Psu),
     ("audio", Kind::Audio),
     ("bladerf", Kind::Sdr),
+    ("elad", Kind::Elad),
     ("example", Kind::Example),
     ("glasgow", Kind::Glasgow),
     ("hamlib", Kind::Hamlib),
@@ -77,6 +78,8 @@ pub enum Kind {
     Rotator,
     /// A Siglent SSA3000X spectrum analyzer with tracking generator (`sa` module), SCPI over the LAN.
     Sa,
+    /// An ELAD FDM-DUO, FDM-S2 or FDM-S1 receiver through the `elad_usb` crate (receive only).
+    Elad,
     /// The skeleton instrument (`example` module): an imaginary SCPI signal source, the starting point for a new driver.
     Example,
     /// The procedure runner (`procedure` module): programs that call bench tools in loops, next to the server.
@@ -110,6 +113,7 @@ pub struct Instrument {
     pub audio: crate::audio::Config,
     pub hamlib: crate::hamlib::Config,
     pub rotator: crate::rotator::Config,
+    pub elad: crate::elad::Config,
     pub example: crate::example::Config,
     pub sa: crate::sa::Config,
     pub procedure: crate::procedure::Config,
@@ -315,6 +319,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             audio: module_config!(audio, driver_name, c, name),
             hamlib: module_config!(hamlib, driver_name, c, name),
             rotator: module_config!(rotator, driver_name, c, name),
+            elad: module_config!(elad, driver_name, c, name),
             example: module_config!(example, driver_name, c, name),
             sa: if driver_name == "siglent_ssa" {
                 crate::sa::parse_config(c).map_err(|e| format!("{name}: {e}"))?

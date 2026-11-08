@@ -17,6 +17,7 @@ import xml.etree.ElementTree as ET
 from markupsafe import Markup
 
 from .inbound_spam_filter import inbound_spam_reasons
+from .link_defang import DEFANG_WARNING_TEXT, defang_html
 from .mail_thread_untrusted import stash_for
 from . import untrusted_text as ut
 from .triage_wakeup import write_triage_wakeups
@@ -263,6 +264,20 @@ class HelpdeskTicket(models.Model):
         string="Stall alarm raised", copy=False, readonly=True,
         help="When the stall alarm fired for this ticket (no verdict within the configured time). Set once.",
     )
+    # Phishing links (Bruce, 2026-11-08). The stored text keeps its links (the shared text filter keeps href on purpose); a
+    # ticket whose verdict is phishing shows them as plain text to staff. Both fields are computed on read, never stored, so a
+    # changed verdict or a person's override shows the right form at once. README.md, "Phishing links are defanged for staff".
+    # [@ANCHOR: hams_helpdesk:ticket_links_defanged_fields]
+    links_defanged = fields.Boolean(
+        string="Links shown as text", compute="_compute_links_defanged",
+        help="True when the triage verdict is phishing and no person has moved the ticket out of Spam: the staff view and the "
+        "notification email then show the ticket's links as plain text.",
+    )
+    description_defanged = fields.Html(
+        string="Description (links as text)", compute="_compute_description_defanged", sanitize=False, readonly=True,
+        help="The description as the staff form shows it for a ticket whose links are defanged; the description itself otherwise.",
+    )
+
     # The new-ticket notification (the assignment email, toast, shift CC and customer subscription). "sent" is the
     # ordinary state. "held" waits for the triage review window: the ticket is created with no followers and nothing is
     # mailed until a real or unsure verdict, the end of the window (fail open) or a person releases it. "suppressed"
@@ -1024,6 +1039,47 @@ class HelpdeskTicket(models.Model):
         stays where it is. Unknown words in the setting are ignored."""
         raw = self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_QUARANTINE, _TRIAGE_QUARANTINE_DEFAULT)
         return {word for word in (part.strip() for part in str(raw or "").split(",")) if word in ("spam", "phishing")}
+
+    # [@ANCHOR: hams_helpdesk:triage_links_defanged]
+    def _triage_links_defanged(self):
+        """True when the one ticket in self must show its links as plain text: its triage verdict is ``phishing`` and no person
+        has overridden that by moving it out of the Spam stage (``triage_overridden``). Any other verdict, or no verdict, keeps
+        clickable links. An empty or new (unsaved) record is False. Reads two fields; no side effects."""
+        if len(self) != 1:
+            return False
+        return self.triage_verdict == "phishing" and not self.triage_overridden
+
+    @api.depends("triage_verdict", "triage_overridden")
+    # [@ANCHOR: hams_helpdesk:compute_links_defanged]
+    def _compute_links_defanged(self):
+        for ticket in self:
+            ticket.links_defanged = ticket._triage_links_defanged()
+
+    @api.depends("description", "triage_verdict", "triage_overridden")
+    # [@ANCHOR: hams_helpdesk:compute_description_defanged]
+    def _compute_description_defanged(self):
+        for ticket in self:
+            ticket.description_defanged = defang_html(ticket.description) if ticket._triage_links_defanged() else ticket.description
+
+    # [@ANCHOR: hams_helpdesk:notify_layout_defanged]
+    def _notify_by_email_render_layout(self, message, recipients_group, msg_vals=False, render_values=None):
+        """The notification email of a message on this ticket. For a ticket whose links are defanged (``_triage_links_defanged()``)
+        the message body inside the rendered layout is replaced by ``DEFANG_WARNING_TEXT`` and the defanged body, so the email
+        a person receives has no live link in the ticket's text; the layout's own links (the button to open the ticket) are
+        kept. If the body cannot be found verbatim in the rendered layout, the whole email is defanged instead (the button is
+        lost, no link survives): it fails safe, not open. Any other ticket's email is exactly Odoo's."""
+        mail_body = super()._notify_by_email_render_layout(
+            message, recipients_group, msg_vals=msg_vals, render_values=render_values
+        )
+        if not self._triage_links_defanged():
+            return mail_body
+        body = (msg_vals or {}).get("body") if msg_vals and "body" in msg_vals else message.body
+        warning = Markup("<p><strong>%s</strong></p>") % DEFANG_WARNING_TEXT
+        rendered = str(mail_body)
+        original = str(body or "")
+        if original and original in rendered:
+            return Markup(rendered.replace(original, str(warning + defang_html(original))))
+        return warning + defang_html(rendered)
 
     # [@ANCHOR: hams_helpdesk:triage_record_verdict]
     def _triage_record_verdict(self, verdict, reasons, source):

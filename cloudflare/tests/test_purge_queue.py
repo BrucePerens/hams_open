@@ -193,6 +193,11 @@ class TestPurgeFailureAlerts(RealTransactionCase):
         self.website = self.env["website"].create(
             {"name": "Purge Alert Site", "domain": "https://purge-alert.example"}
         )
+        # Creating a website makes its default pages and menus, and in an install with other website modules every
+        # one of those enqueues a purge for the new site (35 rows in the whole-system run). process_queue pages 30 rows
+        # per batch and raises one alert per batch, so those rows would turn the one alert this test is about into
+        # two. Start from an empty queue for this site: each test enqueues exactly the purges it asserts on.
+        self.Queue.search([("website_id", "=", self.website.id)]).unlink()
         self.incidents = MagicMock()
         self.safe_patch_object(
             type(self.Queue), "_pager_incidents", lambda model: self.incidents
