@@ -425,6 +425,18 @@ fn diff(at: f64, a: &Snaps, b: &Snaps) -> Vec<Value> {
 /// connects per device (a device that connects again and again is flapping).
 pub fn watch(sysfs: &Path, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: usb_hub_watch]
+    watch_with(sysfs, args, &mut |_| false)
+}
+
+/// `watch` with a callback after every snapshot. `after_poll(n)` runs once after the first snapshot (`n` = 0) and after each
+/// later poll (`n` = 1, 2, ...), on the watching thread, and returns true to end the watch early (the report is still built).
+/// The tool passes a callback that never stops; a test uses it as a clock that does not depend on how busy the machine is.
+fn watch_with(
+    sysfs: &Path,
+    args: &Value,
+    after_poll: &mut dyn FnMut(u64) -> bool,
+) -> Result<Value, String> {
+    // [@ANCHOR: usb_hub_watch_with]
     let secs = num(args, "seconds")?.unwrap_or(10.0);
     if !(1.0..=120.0).contains(&secs) {
         return Err("seconds must be 1 to 120".into());
@@ -441,11 +453,15 @@ pub fn watch(sysfs: &Path, args: &Value) -> Result<Value, String> {
         .unwrap_or(0.0);
     let mut prev = snapshot(&Tree::read(sysfs)?);
     let mut events = Vec::new();
-    while start.elapsed().as_secs_f64() < secs {
+    let mut polls = 0;
+    let mut stop = after_poll(polls);
+    while !stop && start.elapsed().as_secs_f64() < secs {
         std::thread::sleep(every);
         let cur = snapshot(&Tree::read(sysfs)?);
         events.extend(diff(start.elapsed().as_secs_f64(), &prev, &cur));
         prev = cur;
+        polls += 1;
+        stop = after_poll(polls);
     }
     let mut appeared: BTreeMap<String, u64> = BTreeMap::new();
     for e in &events {
@@ -661,30 +677,38 @@ mod tests {
         .is_err());
     }
 
-    // Tests [@ANCHOR: usb_hub_watch]
+    // Tests [@ANCHOR: usb_hub_watch_with]
     // Tests [@ANCHOR: bench_mcp_usb_hub_history_diff]
     // Tests [@ANCHOR: bench_mcp_usb_hub_history_snapshot]
     #[test]
     fn a_watch_reports_a_device_leaving_and_returning_with_a_new_number() {
+        // The poll count is the clock: the port goes off after the third snapshot and comes back after the sixth, so the
+        // outage always spans three polls however busy the machine is (fixed sleeps lost it at a load average of 45).
         let (_d, sys) = writable_sys();
         let hub = FakeHub::new(&sys, Behaviour::Switches);
-        let t = std::thread::spawn({
-            let sys = sys.clone();
-            move || watch(&sys, &json!({"seconds": 2, "interval_ms": 50})).unwrap()
-        });
-        std::thread::sleep(Duration::from_millis(400));
-        let off: Vec<String> = ["-N", "-l", "3-2", "-p", "2", "-a", "off"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        hub.run("sudo", &off).unwrap();
-        std::thread::sleep(Duration::from_millis(400));
-        let on: Vec<String> = ["-N", "-l", "3-2", "-p", "2", "-a", "on"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        hub.run("sudo", &on).unwrap();
-        let v = t.join().unwrap();
+        let switch = |state: &str| {
+            let argv: Vec<String> = ["-N", "-l", "3-2", "-p", "2", "-a", state]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+            hub.run("sudo", &argv).unwrap();
+        };
+        let mut polls_seen = Vec::new();
+        let v = watch_with(
+            &sys,
+            &json!({"seconds": 60, "interval_ms": 50}),
+            &mut |n| {
+                polls_seen.push(n);
+                match n {
+                    3 => switch("off"),
+                    6 => switch("on"),
+                    _ => {}
+                }
+                n >= 9
+            },
+        )
+        .unwrap();
+        assert_eq!(polls_seen, (0..=9).collect::<Vec<u64>>(), "after_poll runs once per snapshot, from 0");
         let kinds: Vec<_> = v["events"]
             .as_array()
             .unwrap()
@@ -694,6 +718,18 @@ mod tests {
             .collect();
         assert_eq!(kinds, ["disappeared", "appeared"], "{v}");
         assert_eq!(v["enumerations_per_device"]["3-2.2"], 1);
+        assert!(v["watched_s"].as_f64().unwrap() < 60.0, "stopped early by the callback: {v}");
+    }
+
+    // Tests [@ANCHOR: usb_hub_watch]
+    #[test]
+    fn the_watch_tool_polls_for_its_duration_and_checks_its_arguments() {
+        let (_d, sys) = writable_sys();
+        let v = watch(&sys, &json!({"seconds": 1, "interval_ms": 50})).unwrap();
+        assert_eq!(v["poll_ms"], 50);
+        assert_eq!(v["events"].as_array().unwrap().len(), 0, "{v}");
+        assert!(v["watched_s"].as_f64().unwrap() >= 1.0, "{v}");
         assert!(watch(&sys, &json!({"seconds": 500})).is_err());
+        assert!(watch(&sys, &json!({"seconds": 0.5})).is_err());
     }
 }
