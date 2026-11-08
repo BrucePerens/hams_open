@@ -15,7 +15,7 @@ import logging
 import json
 import asyncpg
 import redis.asyncio as redis
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -38,16 +38,27 @@ DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager/cache_manager_db.env"
 # DB_ENV_FILE leaves DB_USER/DB_PASS empty and _require_db_credentials() stops the daemon at start.
 
 
+# The file's own DB_USER/DB_PASS always win over anything already exported (see below); its DB_HOST/DB_PORT/DB_NAME are only
+# defaults, so a value the caller exported (a test run serving a per-slot database, hams_test_s3, from a file that names the
+# host's hams_test) is kept. On a production host systemd loads the same file through EnvironmentFile=, so the two agree.
+# [@ANCHOR: COMM_cache_manager_db_env_precedence]
+def _apply_db_env_file(path, environ=None):
+    environ = os.environ if environ is None else environ
+    for name, value in dotenv_values(path).items():
+        if value is None:
+            continue
+        # Credentials: the provisioned restricted-role values must override. If a systemd unit or container already
+        # exports DB_USER/DB_PASS (e.g. a leftover/generic "odoo"/"odoo" from before this file existed), leaving
+        # them would silently run the daemon unscoped with no indication anything was wrong, since the warning
+        # below only checks whether this file EXISTS, not whether its values actually took effect.
+        if name in ("DB_USER", "DB_PASS"):
+            environ[name] = value
+        else:
+            environ.setdefault(name, value)
+
+
 if os.path.exists(DB_ENV_FILE):
-    # override=True: load_dotenv() defaults to leaving any already-exported
-    # OS environment variable alone. If a systemd unit or container already
-    # exports DB_USER/DB_PASS (e.g. a leftover/generic "odoo"/"odoo" from
-    # before this file existed), the provisioned restricted-role
-    # credentials below would otherwise be silently ignored -- the daemon
-    # would keep running unscoped with no indication anything was wrong,
-    # since the warning below only checks whether this file EXISTS, not
-    # whether its values actually took effect.
-    load_dotenv(DB_ENV_FILE, override=True)
+    _apply_db_env_file(DB_ENV_FILE)
 
 DB_HOST = os.getenv("DB_HOST", "localhost")  # burn-ignore-env: cache-manager.service runs beside local postgresql.service (Requires=), and provision_cache_manager_db_role.py writes DB_HOST into its env file
 DB_PORT = os.getenv("DB_PORT", "5432")

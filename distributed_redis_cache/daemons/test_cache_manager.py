@@ -84,6 +84,33 @@ class DbEnvFileTests(unittest.TestCase):
         self.assertNotIn("ODOO_RPC", code)
 
 
+class DbEnvFilePrecedenceTests(unittest.TestCase):
+    """Tests [@ANCHOR: COMM_cache_manager_db_env_precedence]
+
+    Found 2026-11-08 in the whole-system gate: the file used to be loaded with override=True for every key, so a test run
+    serving its own slot database (DB_NAME=hams_test_s3) had the daemon LISTEN on the file's hams_test and never see the
+    NOTIFY. The login must still beat a stale exported one."""
+
+    def _apply(self, exported):
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as f:
+            f.write("DB_HOST=localhost\nDB_NAME=hams_test\nDB_USER=cache_manager_ro\nDB_PASS=real\n")
+        self.addCleanup(os.unlink, f.name)
+        environ = dict(exported)
+        cache_manager._apply_db_env_file(f.name, environ)
+        return environ
+
+    def test_an_exported_database_name_is_kept(self):
+        self.assertEqual(self._apply({"DB_NAME": "hams_test_s3"})["DB_NAME"], "hams_test_s3")
+
+    def test_the_file_supplies_the_database_name_when_none_is_exported(self):
+        self.assertEqual(self._apply({})["DB_NAME"], "hams_test")
+
+    def test_the_files_login_beats_an_exported_one(self):
+        environ = self._apply({"DB_USER": "odoo", "DB_PASS": "odoo"})
+        self.assertEqual((environ["DB_USER"], environ["DB_PASS"]), ("cache_manager_ro", "real"))
+
+
 class UnitFileTests(unittest.TestCase):
     """The shipped cache-manager.service must be one that works on a real host: found on hams1,
     2026-10-12, the sample unit pointed at /opt/odoo/addons and loaded no Redis credentials, and no
