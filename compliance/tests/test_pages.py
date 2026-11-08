@@ -107,6 +107,9 @@ class TestCompliancePagesHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 200, msg_status)
         msg_text = "[!] DIAGNOSTIC FOR AI: Page /accessibility should contain boilerplate content. Check the rendering."
         self.assertTrue(bool(re.search(r"Policy|Terms", response.text)), msg_text)
+        # The statement names the display choices and the colour-vision palette (theme_hams, "Display and reading").
+        for phrase in ("Display and Reading Choices", "Colour-vision safe", "protanopia, deuteranopia, tritanopia"):
+            self.assertIn(phrase, response.text, "The accessibility statement should say: %s" % phrase)
 
     def test_generic_site_search_does_not_crash_on_legal_pages(self):
         # Found live 2026-08-29: /website/search?search=forum&order=name+asc
