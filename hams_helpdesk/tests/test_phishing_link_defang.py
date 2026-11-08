@@ -33,7 +33,7 @@ class TestPhishingLinkDefangUnits(HamsTransactionCase):
         # Tests [@ANCHOR: hams_helpdesk:defang_text_node]
         self.assertEqual(
             defang_text_node("go to https://a.example/x or www.b.example, mail mailto:c@d.example. Version 1.2 is fine"),
-            "go to hxxps://a[.]example/x or www[.]b[.]example, mail mailto:c[@]d[.]example. Version 1.2 is fine",
+            "go to hxxps://a[.]example/x or www[.]b[.]example, mail mailto:c[@]d[.]example[.] Version 1.2 is fine",
         )
         self.assertEqual(defang_text_node(""), "")
         self.assertIsNone(defang_text_node(None))

@@ -227,7 +227,7 @@ every element, and for the whole text when a fragment cannot be parsed.
 
 Returns a `str`: each `http://`, `https://`, `ftp://`, `mailto:` or `www.` address (up to the next white space, `<`, `>` or quote) is replaced by
 `defang_url_text()` of it; everything else, including numbers such as `1.2`, is unchanged. A falsy `text` is returned as it is (`""`
-or `None`). Raises nothing, no side effects. Tested by `test_01b_urls_in_plain_text_are_defanged_and_the_rest_is_left_alone`.
+or `None`). A full stop right after an address is taken as part of it and is defanged too (harmless). Raises nothing, no side effects. Tested by `test_01b_urls_in_plain_text_are_defanged_and_the_rest_is_left_alone`.
 
 ### defang_html [@ANCHOR: hams_helpdesk:defang_html]
 
