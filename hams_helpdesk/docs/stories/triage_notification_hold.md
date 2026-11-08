@@ -29,3 +29,15 @@ a real request ever being lost because the agent was slow or down.
    `hams_helpdesk.triage_notify_on_leaving_spam` is 0 `[@ANCHOR: hams_helpdesk:triage_notify_on_leaving_spam]`.
 
 **Status:** Verified by `tests/test_triage_notify_hold.py`.
+
+## The review delay is measured and a stalled review raises an alarm
+
+The agent's verdict records the whole seconds from the ticket's creation to the verdict (`triage_delay_seconds`)
+`[@ANCHOR: hams_helpdesk:triage_record_verdict]`. A cron raises the alarm when a new ticket the agent may see has no verdict
+after `hams_helpdesk.triage_stall_seconds` (0, the default, is off, because the agent is not enabled everywhere)
+`[@ANCHOR: hams_helpdesk:cron_triage_stall_alarm]`: it marks each ticket once and reports the triage unit through the
+server-exception reporter, which opens the one ticket that pages. The agent being down, out of quota or only slow all look the
+same to it, which is the point. Tickets over a day old, suspicious tickets (the agent never reads them) and tickets already
+picked up are not its business.
+
+**Status:** Verified by `tests/test_triage_stall_alarm.py`.

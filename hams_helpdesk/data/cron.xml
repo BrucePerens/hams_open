@@ -12,5 +12,16 @@
             <field name="interval_type">minutes</field>
             <field name="active" eval="True"/>
         </record>
+        <record id="cron_triage_stall_alarm" model="ir.cron">
+            <!-- audit-ignore-cron: Tested by [@ANCHOR: hams_helpdesk:cron_triage_stall_alarm] -->
+            <field name="name">Helpdesk: Alarm when the triage agent has not judged a ticket in time</field>
+            <field name="model_id" ref="model_hams_helpdesk_ticket"/>
+            <field name="user_id" ref="hams_helpdesk.user_helpdesk_service"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_triage_stall_alarm()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+        </record>
     </data>
 </odoo>
