@@ -40,12 +40,22 @@ ifdef CONTAINER_BUILD
 	VERSION_FLAGS := $(VERSION_FLAGS) -X "github.com/cloudflare/cloudflared/metrics.Runtime=virtual"
 endif
 
+# Build and test with exactly the Go version in go.mod. The default GOTOOLCHAIN=auto
+# only upgrades an older local Go and never downgrades a newer one.
+# Leave GOTOOLCHAIN=local alone if an environment sets it in go.env.
+ifneq ($(shell go env GOTOOLCHAIN),local)
+    GO_MOD_VERSION := $(shell go list -m -f "{{.GoVersion}}")
+    ifneq ($(GO_MOD_VERSION),)
+        export GOTOOLCHAIN := go$(GO_MOD_VERSION)
+    endif
+endif
+
 LINK_FLAGS :=
 ifeq ($(FIPS), true)
-	LINK_FLAGS := -linkmode=external -extldflags=-static $(LINK_FLAGS)
-	# Prevent linking with libc regardless of CGO enabled or not.
-	GO_BUILD_TAGS := $(GO_BUILD_TAGS) osusergo netgo fips
+	export GOFIPS140 := latest
 	VERSION_FLAGS := $(VERSION_FLAGS) -X "main.BuildType=FIPS"
+else
+	export GOFIPS140 := off
 endif
 
 LDFLAGS := -ldflags='$(VERSION_FLAGS) $(LINK_FLAGS)'
@@ -105,8 +115,10 @@ endif
 
 ifeq ($(TARGET_OS), windows)
 	EXECUTABLE_PATH=./$(BINARY_NAME).exe
+	BUILT_BINARY_PATH=./cloudflared.exe
 else
 	EXECUTABLE_PATH=./$(BINARY_NAME)
+	BUILT_BINARY_PATH=./cloudflared
 endif
 
 ifeq ($(FLAVOR), centos-7)
@@ -143,21 +155,20 @@ vulncheck:
 
 .PHONY: cloudflared
 cloudflared:
-ifeq ($(FIPS), true)
-	$(info Building cloudflared with go-fips)
-endif
+	$(if $(filter true,$(FIPS)),$(info Building cloudflared with Go's FIPS 140 module))
 	GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) $(ARM_COMMAND) go build -mod=vendor $(GO_BUILD_TAGS) $(LDFLAGS) $(IMPORT_PATH)/cmd/cloudflared
+
 ifeq ($(FIPS), true)
-	./check-fips.sh cloudflared
+	./check-fips.sh $(BUILT_BINARY_PATH)
 endif
 
 .PHONY: container
 container:
 	docker build --build-arg=TARGET_ARCH=$(TARGET_ARCH) --build-arg=TARGET_OS=$(TARGET_OS) -t cloudflare/cloudflared-$(TARGET_OS)-$(TARGET_ARCH):"$(VERSION)" .
 
-.PHONY: container-fips
-container-fips:
-	docker build -f Dockerfile.fips.$(TARGET_ARCH) -t cloudflare/cloudflared-fips-linux-$(TARGET_ARCH):"$(VERSION)" .
+.PHONY: container-internal
+container-internal:
+	docker build -f Dockerfile.internal.$(TARGET_ARCH) -t cloudflare/cloudflared-internal-linux-$(TARGET_ARCH):"$(VERSION)" .
 
 .PHONY: generate-docker-version
 generate-docker-version:
@@ -168,9 +179,13 @@ generate-internal-image-version:
 	echo $(VERSION) > versions-internal
 
 
+# Race detector flag for `make test`. It is cleared for arm64 CI runs because
+# ThreadSanitizer does not support the 47-bit address space on those runners.
+RACE_FLAG ?= -race
+
 .PHONY: test
 test: vet
-	$Q go test -json -v -mod=vendor -race $(LDFLAGS) ./... 2>&1 | tee $(GO_TEST_LOG_OUTPUT)
+	$Q go test -json -v -mod=vendor $(RACE_FLAG) $(LDFLAGS) ./... 2>&1 | tee $(GO_TEST_LOG_OUTPUT)
 ifneq ($(FIPS), true)
 	@go run -mod=readonly github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest -input $(GO_TEST_LOG_OUTPUT)
 endif
@@ -207,6 +222,7 @@ install: cloudflared cloudflared.1
 
 # When we build packages, the package name will be FIPS-aware.
 # But we keep the binary installed by it to be named "cloudflared" regardless.
+# The optional second argument passes extra fpm flags for that package type.
 define build_package
 	mkdir -p $(PACKAGE_DIR)
 	cp cloudflared $(PACKAGE_DIR)/cloudflared
@@ -217,7 +233,7 @@ define build_package
 		--license 'Apache License Version 2.0' \
 		--url 'https://github.com/cloudflare/cloudflared' \
 		-m 'Cloudflare <support@cloudflare.com>' \
-	    -a $(PACKAGE_ARCH) -v $(VERSION) -n $(DEB_PACKAGE_NAME) $(RPM_DIGEST) $(NIGHTLY_FLAGS) --after-install postinst.sh --after-remove postrm.sh \
+	    -a $(PACKAGE_ARCH) -v $(VERSION) -n $(DEB_PACKAGE_NAME) $(RPM_DIGEST) $(NIGHTLY_FLAGS) --after-install postinst.sh --after-remove postrm.sh $(2) \
 		cloudflared=$(INSTALL_BINDIR) cloudflared.1=$(INSTALL_MANDIR)
 endef
 
@@ -225,9 +241,13 @@ endef
 cloudflared-deb: cloudflared cloudflared.1
 	$(call build_package,deb)
 
+# On upgrade, rpm runs the old package's %postun after the new package's %post,
+# and packages released before TUN-11048 delete the symlink and the
+# .installedFromPackageManager file there. Run postinst.sh again in %posttrans,
+# which comes last, to restore them.
 .PHONY: cloudflared-rpm
 cloudflared-rpm: cloudflared cloudflared.1
-	$(call build_package,rpm)
+	$(call build_package,rpm,--rpm-posttrans postinst.sh)
 
 .PHONY: cloudflared-msi
 cloudflared-msi:
@@ -284,6 +304,12 @@ ci-build:
 	@mkdir -p artifacts
 	@mv cloudflared artifacts/cloudflared
 
+.PHONY: ci-build-arm64
+ci-build-arm64:
+	@GOOS=linux GOARCH=arm64 $(MAKE) cloudflared
+	@mkdir -p artifacts
+	@mv cloudflared artifacts/cloudflared-linux-arm64
+
 .PHONY: ci-fips-build
 ci-fips-build:
 	@FIPS=true GOOS=linux GOARCH=amd64 $(MAKE) cloudflared
@@ -292,7 +318,12 @@ ci-fips-build:
 
 .PHONY: ci-test
 ci-test: fmt-check lint test
-	@go run -mod=readonly github.com/jstemmer/go-junit-report/v2@latest -in $(GO_TEST_LOG_OUTPUT) -parser gojson -out report.xml -set-exit-code
+	@go run -mod=vendor github.com/jstemmer/go-junit-report/v2@latest -in $(GO_TEST_LOG_OUTPUT) -parser gojson -out report.xml -set-exit-code
+
+.PHONY: ci-test-arm64
+ci-test-arm64:
+	@RACE_FLAG= $(MAKE) test
+	@go run -mod=vendor github.com/jstemmer/go-junit-report/v2@latest -in $(GO_TEST_LOG_OUTPUT) -parser gojson -out report.xml -set-exit-code
 
 .PHONY: ci-fips-test
 ci-fips-test:
