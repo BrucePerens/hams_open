@@ -311,6 +311,47 @@ class DaemonKeyRegistry(models.Model):
         registry._rotate_key_and_write_file()
         return True
 
+    @api.model
+    def unregister_daemon(self, daemon_name):
+        """
+        API for a module that stops using a daemon key: removes the registry row named
+        `daemon_name` and revokes the API keys it minted for its service account. Returns the
+        number of registry rows removed (0 when there is none, so a migration may run it again).
+        The service account and the key file on disk stay; the file is not this registry's to
+        delete once the row is gone, and an operator removes it.
+        """
+        # [@ANCHOR: daemon_key_manager:unregister_daemon]
+        # Verified by [@ANCHOR: daemon_key_manager:test_unregister_daemon]
+        caller = self.env.user
+        may_unregister = (
+            caller.has_group("daemon_key_manager.group_daemon_key_manager")
+            or caller._is_admin()
+            or caller._is_superuser()
+        )
+        if not may_unregister:
+            msg = _("Only Daemon Key Managers can unregister a daemon.")
+            raise AccessError(msg)
+
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "daemon_key_manager.user_daemon_key_manager_service"
+        )
+        manager = self.with_user(svc_uid)
+        registries = manager.search([("name", "=", daemon_name)])
+        if not registries:
+            return 0
+        # The same key name _rotate_key_and_write_file() gives every key of a registry.
+        revoked = manager.env["res.users.apikeys"].search(
+            [
+                ("user_id", "in", registries.user_id.ids),
+                ("name", "=", f"{daemon_name}_key"),
+            ]
+        )
+        revoked.unlink()
+        count = len(registries)
+        registries.unlink()
+        _logger.info("Unregistered daemon %s and revoked its API key.", daemon_name)
+        return count
+
     @api.constrains("key_lifetime_days", "remote_self_rotation")
     def _check_key_lifetime_days(self):
         for registry in self:

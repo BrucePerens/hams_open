@@ -41,7 +41,7 @@ Because this is a standalone Open Source module that relies on an external Pytho
 4. Start the background sync daemon:
    * Execute `daemons/cache_manager.py` as a systemd service (a unit file is provided at `daemons/cache-manager.service`; it loads `/opt/hams/etc/redis.env`, so a Redis that requires a login works). On hams.com, hams_com's `infrastructure.py` MANIFEST installs the identical unit as `cache-manager.service`, and `devbox_tools/production_readiness_check.py` fails when the unit is not running or the counter key does not exist. Without this daemon the `global_cache_invalidation_counter` key never exists and no worker ever sees another worker's invalidation.
    * The daemon requires `/opt/hams/etc/keys/cache_manager/cache_manager_db.env` (readable by its account, `hamsd_cache_manager`), which holds `DB_USER`/`DB_PASS` for its restricted PostgreSQL role; it refuses to start without those credentials. See `daemons/README.md` for how that file is provisioned.
-   * It does not read `/opt/hams/etc/keys/cache_manager.env`, the Daemon Key Manager's Odoo login for this service: the daemon has no use for an Odoo login.
+   * It does not read `/opt/hams/etc/keys/cache_manager.env`, the Daemon Key Manager's Odoo login for this service: the daemon has no use for an Odoo login. Since version 1.1 the module no longer registers that key at all (see `unregister_cache_manager_key()` below), so a new install never creates the file.
    * The daemon does **not** read the Redis settings saved in Odoo. It takes `REDIS_HOST`, `REDIS_PORT` and `REDIS_PASSWORD` from its own environment, defaulting to `localhost`, 6379 and no password (note that the Odoo side defaults to host `redis`), and `DB_HOST`, `DB_PORT` and `DB_NAME` likewise, defaulting to `localhost`, 5432 and `odoo`. It listens on exactly one database, `DB_NAME`. Set these for the service when your deployment differs from the defaults.
 5. Navigate to **Settings > Technical > Distributed Cache** in Odoo to verify the connection status. The menu is shown to members of the Cache Manager group, which includes the administrator by default. The status check tests only this Odoo server's own Redis connection, not the daemon. [@ANCHOR: COMM_distributed_cache_view]
 
@@ -168,3 +168,30 @@ socket timeout; there are no threads or locks in the helper; a crash after the `
 expires on schedule. Tests: `tests/test_expiring_counter.py` (counting and a window the later hits do not extend, `redis.Redis.expire`
 patched to always raise, a legacy key without a TTL, an error reaching the caller, an `amount` added in one step). A caller's test makes the same failure with
 `self.safe_patch_object(redis.Redis, "expire", side_effect=redis.RedisError("..."))`.
+
+### 7. `unregister_cache_manager_key(env)`: drop the unused Daemon Key Manager registration
+
+`from odoo.addons.distributed_redis_cache.hooks import unregister_cache_manager_key` [@ANCHOR: distributed_redis_cache:unregister_cache_manager_key]
+
+Versions before 1.1 registered the daemon "Redis Cache Manager" with the Daemon Key Manager in a `post_init_hook`, so the registry minted an
+Odoo API key for the service account `distributed_redis_cache.cache_manager_service_internal`, rotated it every 59 days and wrote it to
+`/opt/hams/etc/keys/cache_manager.env`. The cache-manager daemon has no Odoo client and never read that key (its only credential is the
+CONNECT-only PostgreSQL login in `keys/cache_manager/cache_manager_db.env`), so the key was a live credential with no user. Version 1.1
+removes the hook (the manifest has no `post_init_hook`) and `migrations/1.1/post-unregister-cache-manager-key.py` calls this function once
+on an installed database.
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `env` | `odoo.api.Environment` | Any environment of the database. The function switches to the Daemon Key Manager service account (`daemon_key_manager.user_daemon_key_manager_service`) itself; nothing runs as the superuser. |
+
+| Result | Meaning |
+|---|---|
+| `int` | The number of registry rows removed: 1 when the row "Redis Cache Manager" existed, 0 when it did not. |
+| `odoo.exceptions.AccessError` (raised) | The Daemon Key Manager service account does not exist or may not be used; the upgrade stops. |
+
+Behaviour worth knowing: it calls `daemon.key.registry.unregister_daemon` (daemon_key_manager's README) as the Daemon Key Manager service account, which deletes the registry row and the API keys named `Redis Cache Manager_key` of that row's service account, in the
+caller's transaction (nothing commits). Idempotent, so it is safe to run again; a database that never had the row returns 0. It does not
+delete the service account (it stays, with no key and no group beyond its own) and does not delete `keys/cache_manager.env` from disk: the
+registry never removes a key file, so an operator deletes the leftover file by hand. It is not a security gate and takes no lock. Tests:
+`tests/test_hooks.py` (a row registered exactly as version 1.0 did is removed with its key, the second call removes nothing, and the manifest
+declares no `post_init_hook`).

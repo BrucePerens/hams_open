@@ -65,6 +65,13 @@ In containerized/orchestrated environments:
 * **`env_file_path`**: Absolute path where the `.env` file should be written. Must reside within `/opt/hams/etc/keys/`.
 * **Behavior**: Idempotent. Immediately triggers key generation and writes the file. Associates registry with the service account's company.
 
+#### `unregister_daemon(daemon_name)` [@ANCHOR: daemon_key_manager:unregister_daemon]
+* **Use Case**: A module stops using a daemon key (the cache manager's was never used by its daemon). Call it from the module's migration instead of leaving a live credential that is rotated for nobody.
+* **Arguments**: `daemon_name` (`str`): the registry row's name, exactly as given to `register_daemon`. No value is special; a name with no row is not an error.
+* **Returns**: `int`, the number of registry rows removed (0 or 1: names are unique per company). **Raises**: `AccessError` unless the caller is a Daemon Key Manager, an administrator or the superuser (`distributed_redis_cache`'s migration runs as the Daemon Key Manager service account).
+* **Behavior**: Revokes the API keys named `<daemon_name>_key` of the row's service account (the name `_rotate_key_and_write_file` gives them), then deletes the row, in the caller's transaction (nothing commits). Idempotent. It leaves the service account and the key file on disk: the registry never deletes a file once its row is gone, so an operator removes it. Runs as the key manager's service account (`user_daemon_key_manager_service`), not as the superuser. Not asynchronous, takes no lock, and does not rotate any other row.
+* **Tests**: `tests/test_unregister_daemon.py` (a manager removes the row and the key, a second call removes nothing, a service account is refused).
+
 #### `action_rotate_key()`
 * **Use Case**: Manually rotate the key for a specific daemon via UI or code.
 * **Behavior**: Revokes existing key and generates a new one synchronously.
@@ -143,7 +150,7 @@ main (checked 2026-11-05), and every `get_odoo_client()` daemon was restarted at
 | 4 | Ham Radio APRS Sync Service | `aprs_sync/aprs_sync_service_internal.key` | `aprs.is.sync` | simple, `Restart=always` | `get_odoo_client()` at each (re)connect to APRS-IS, held for the connection, reload on 401 | safe: reload | - |
 | 5 | Ham Radio Callbook Australia PII Sync Service | `au_pii/au_pii_sync_service_internal.key` | `au.pii.sync` | oneshot, timer | file at start, reload | safe: one-shot | - |
 | 6 | Backup Worker RabbitMQ Consumer | `backup_worker.env` | `backup.worker` | simple, `Restart=always`; `EnvironmentFile=` only seeds the first key | **was** the environment at start; now `_reload_odoo_key()` re-reads the file after a 401 | **was BUG**, fixed | hams_open #1204 |
-| 7 | Redis Cache Manager | `cache_manager.env` | `cache-manager` | simple, `Restart=always`, running since 2026-10-12 | `EnvironmentFile=-` and `load_dotenv`, but `cache_manager.py` has no HTTP client and never uses `ODOO_RPC_KEY` (only its PostgreSQL login from `cache_manager_db.env`) | safe: unused | - |
+| 7 | Redis Cache Manager | `cache_manager.env` | none (`cache-manager` no longer loads it) | simple, `Restart=always`, running since 2026-10-12 | `cache_manager.py` has no HTTP client and never used `ODOO_RPC_KEY` (only its PostgreSQL login from `cache_manager_db.env`) | safe: unused; **no longer registered** (`distributed_redis_cache` 1.1 migration removes the row and revokes the key) | - |
 | 8 | Ham Radio Callbook Geo-Enrichment Service | `callbook_geo/callbook_geo_service_internal.key` | `callbook.geo.enrich` | oneshot, timer | file at start, reload mid-run | safe: one-shot | - |
 | 9 | Club Crawl Service | `club_crawl/club_crawl_service_internal.key` | `club.crawl` | oneshot, timer | file at start, reload | safe: one-shot | - |
 | 10 | Code Review Sweep Service | `code_review_sweep_service_internal.key` | `code.review.sweep` | oneshot, timer | file at start, reload | safe: one-shot | - |
