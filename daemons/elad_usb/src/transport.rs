@@ -156,3 +156,31 @@ impl Transport for FakeTransport {
         }
     }
 }
+
+/// A boxed transport is a transport, so a caller can pick the real or the fake at run time.
+impl Transport for Box<dyn Transport> {
+    // [@ANCHOR: elad_box_control_in]
+    fn control_in(
+        &mut self,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+    ) -> Result<usize, Error> {
+        (**self).control_in(request, value, index, buf)
+    }
+    // [@ANCHOR: elad_box_control_out]
+    fn control_out(
+        &mut self,
+        request: u8,
+        value: u16,
+        index: u16,
+        data: &[u8],
+    ) -> Result<usize, Error> {
+        (**self).control_out(request, value, index, data)
+    }
+    // [@ANCHOR: elad_box_bulk_in]
+    fn bulk_in(&mut self, buf: &mut [u8], timeout: Duration) -> Result<usize, Error> {
+        (**self).bulk_in(buf, timeout)
+    }
+}

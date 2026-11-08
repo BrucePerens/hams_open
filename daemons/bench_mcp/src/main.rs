@@ -11,6 +11,7 @@ mod audio;
 mod checklist;
 mod config;
 mod dsp;
+mod elad;
 mod example;
 mod hamlib;
 mod link;
@@ -142,6 +143,12 @@ const MODULES: &[Module] = &[
         call: audio::call,
         tool_defs: audio::tool_defs,
         sample: r#""sound":{"driver":"audio","tier":"full"}"#,
+    },
+    Module {
+        prefix: "bench_elad_",
+        call: elad::call,
+        tool_defs: elad::tool_defs,
+        sample: r#""elad":{"driver":"elad","tier":"read_config","capture_dir":"/var/tmp/bench_elad","fpga_loaded":false}"#,
     },
     Module {
         prefix: "bench_example_",

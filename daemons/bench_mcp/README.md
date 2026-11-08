@@ -23,6 +23,7 @@ calibration does not pass through the agent's context step by step. There is als
 | `hamlib` | Radios through Hamlib's `rigctld` (a separate process; LGPL, not linked) | models, get and set, scan, watch, memory, load checks, transmit tests with an attestation and a watchdog | [Hamlib rigs](#hamlib-rigs-hamlib-driver), `docs/HAMLIB_TOOLS.md` |
 | `rotator` | Antenna rotators through `rotctld` | status, point, park, stop | [Rotators](#rotators-rotator-driver) |
 | `procedure` | The procedure runner (Python) | long multi-step Python programs (CPython 3 with numpy and scipy) that call bench tools through the normal dispatcher, with failure reports, safe-state routines and saved examples | [Procedure runner](#procedure-runner-procedure-driver) |
+| `elad` | ELAD FDM-S2, FDM-DUO and FDM-S1 USB receivers through the `elad_usb` crate; identity and calibration verified on an FDM-S2, streaming not yet (FPGA image) | list, identify, spectrum CSV, level at a frequency, cf32 I/Q capture; receive only | [ELAD receivers](#elad-receivers-elad-driver) |
 | `example` | A template instrument with a simulated transport | the skeleton a new driver starts from, checked by the contributor tests | [Template instrument](#template-instrument-example-driver) |
 
 Across all drivers: safety tiers (`read_only`, `read_config`, `full`) with `dry_run`, confirm arguments and a safe-state
@@ -100,6 +101,8 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_sa_sweep`, `bench_sa_marker` | read_config | spectrum analyzer |
 | `bench_sa_tg_on`, `_tg_off`, `_tg_level`, `bench_sa_tg_normalize`, `bench_sa_tg_s21` | read_config (RF out of the tracking generator, 0 dBm at most; off unless a tool turns it on; no confirm flags) | spectrum analyzer |
 | `bench_sdr_capture`, `bench_sdr_survey`, `bench_sdr_coherence` | read_config (they tune the radio; receive only) | SDR |
+| `bench_elad_list`, `bench_elad_identify` | read_only | ELAD receivers |
+| `bench_elad_spectrum`, `bench_elad_level`, `bench_elad_capture` | read_config (writes a file in `capture_dir`; receive only) | ELAD receivers |
 | `bench_rx888_status`, `bench_rx888_frontend` | read_only | RX-888 |
 | `bench_rx888_boot`, `bench_rx888_radiod_start`, `bench_rx888_radiod_stop`, `bench_rx888_tune`, `bench_rx888_spectrum`, `bench_rx888_capture` | read_config (firmware boot re-enumerates the device; radiod and its channels are local; receive only) | RX-888 |
 
@@ -1251,3 +1254,23 @@ Link::scope_state(host: &str, ports: &[u16]) -> String
 **Special concerns.** Blocking, at most about 1 s for ping plus 2 s per port. Runs the system `ping -c 1 -W 1` and opens, then drops, a TCP connection to each port: opening the scope's SCPI port takes its single-client slot briefly, so call it only after the real attempts failed. Reads nothing from the scope.
 
 **See also.** `bench_mcp_link_tcp_checked`. Test: `the_scope_state_reports_an_accepting_and_a_refused_port` in `src/link.rs`.
+
+## ELAD receivers (`elad` driver)
+
+`src/elad/` drives an ELAD FDM-S2, FDM-DUO or FDM-S1 directly over USB through the `elad_usb` crate (`daemons/elad_usb`, AGPL, no vendor library). It is receive only, so none of its five tools is tier `full`. Manual: `instruments/elad`. An example entry: `{"driver": "elad", "tier": "read_config", "capture_dir": "/var/tmp/bench_elad", "fpga_loaded": false, "max_capture_s": 5}`. Verified on an FDM-S2 (USB firmware 3.0, hardware 1.3) on 2026-11-08 for discovery, descriptors, firmware, hardware version and EEPROM calibration; **no I/Q has been received from a real unit**, because an FDM-S1/S2 needs ELAD's FPGA image loaded by ELAD's own loader, which this project neither includes nor runs (set `"fpga_loaded": true` only after loading it yourself). The streaming tools are tested against a fake unit that replays the recorded control replies and serves a synthetic tone; the hardware check is `tests/hil_elad.rs` (`--ignored`).
+
+* The config takes `capture_dir`, `fpga_loaded` and `max_capture_s` and refuses bad values. [@ANCHOR: elad_config]
+* Tools are dispatched by tier and instrument name. [@ANCHOR: bench_mcp_elad_call_with]
+* One instrument is chosen by name, or the only one. [@ANCHOR: bench_mcp_elad_instrument]
+* `bench_elad_list` opens nothing. [@ANCHOR: bench_mcp_elad_list]
+* `bench_elad_identify` sends only read requests. [@ANCHOR: bench_mcp_elad_identify]
+* `bench_elad_capture` writes a cf32 file and a summary. [@ANCHOR: bench_mcp_elad_capture]
+* `bench_elad_spectrum` writes a CSV and finds peaks. [@ANCHOR: bench_mcp_elad_spectrum]
+* `bench_elad_level` returns the level in dBFS with the calibration offset. [@ANCHOR: bench_mcp_elad_level]
+* Numeric arguments must be present or defaulted, finite and in range, naming the cause of the limit. [@ANCHOR: elad_args]
+* A boolean argument may be absent but not anything else. [@ANCHOR: elad_flag]
+* The rate must be one the model streams. [@ANCHOR: elad_rate_arg]
+* The sample count is capped by memory and by the config. [@ANCHOR: elad_target_samples]
+* A file name is checked and an existing file is never overwritten. [@ANCHOR: elad_new_file]
+* The FFT length must be a power of two. [@ANCHOR: elad_fft_len]
+* An acquisition refuses an undeclared FPGA image before streaming, always stops the stream, and reports silence as a missing FPGA image. [@ANCHOR: elad_acquire]

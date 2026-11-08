@@ -83,3 +83,6 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_fake_queue_bulk] Queues a bulk read result on the fake.
 - [@ANCHOR: elad_usb:elad_fake_bulk_in] The fake's bulk IN: serves queued results, a timeout when empty.
 - [@ANCHOR: elad_usb:elad_usb_err] Maps a libusb error to this crate's error, keeping timeouts apart.
+- [@ANCHOR: elad_usb:elad_box_control_in] A boxed transport forwards a control IN to the inner transport.
+- [@ANCHOR: elad_usb:elad_box_control_out] A boxed transport forwards a control OUT.
+- [@ANCHOR: elad_usb:elad_box_bulk_in] A boxed transport forwards a bulk IN.
