@@ -678,7 +678,7 @@ class TestRedirectToSpam(BaseCase):
         cases = {
             "https://www.W9VCL.com/x?y=1": "w9vcl.com", "club.example.org": "example.org", "http://a.b.example.co.uk/": "example.co.uk",
             "https://www.peopletechprocess.com/contact-8": "peopletechprocess.com", "http://192.168.1.5/x": "192.168.1.5",
-            "localhost": "localhost", "": "", None: "",
+            "clubhouse": "clubhouse", "": "", None: "",
         }
         for value, expected in cases.items():
             with self.subTest(value=value):
