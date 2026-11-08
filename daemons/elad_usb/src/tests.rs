@@ -622,3 +622,20 @@ fn radio_internals_are_exercised_through_the_public_calls() {
         Err(Error::Timeout)
     ));
 }
+
+#[test]
+fn a_boxed_transport_forwards_every_call() {
+    // Tests [@ANCHOR: elad_box_control_in]
+    // Tests [@ANCHOR: elad_box_control_out]
+    // Tests [@ANCHOR: elad_box_bulk_in]
+    use crate::transport::Transport;
+    let fake = FakeTransport::new();
+    fake.reply(0x33, 1, vec![5]);
+    fake.queue_bulk(Ok(vec![1, 2]));
+    let mut boxed: Box<dyn Transport> = Box::new(fake.clone());
+    let mut b = [0u8; 4];
+    assert_eq!(boxed.control_in(0x33, 1, 0, &mut b).unwrap(), 1);
+    assert_eq!(boxed.control_out(0x44, 0, 0, &[1]).unwrap(), 1);
+    assert_eq!(boxed.bulk_in(&mut b, Duration::from_millis(1)).unwrap(), 2);
+    assert_eq!(fake.ops().len(), 2, "the calls reached the inner fake");
+}

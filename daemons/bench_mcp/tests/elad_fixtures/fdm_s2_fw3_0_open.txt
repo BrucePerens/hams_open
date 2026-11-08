@@ -1,0 +1,10 @@
+# Control IN replies of a real FDM-S2 (USB 1721:061c, USB firmware v3.0, hardware 1.3) recorded 2026-11-08 by examples/probe.
+# Format: request value reply-bytes-hex. The serial number is replaced by SN-0000; the numbers are the unit's own EEPROM values
+# (rate correction -784 Hz, global -8.0 dB, LP 0.0 dB, ATT 12.5 dB) re-encoded from the decoded values. No samples: the FPGA was not loaded.
+ff 0000 03 00
+a2 4000 53 4e 2d 30 30 30 30 00
+a2 404c 01 03
+a2 4024 f0 fc ff ff
+a2 4028 00 00 00 c1
+a2 402c 00 00 00 00
+a2 4030 00 00 48 41
