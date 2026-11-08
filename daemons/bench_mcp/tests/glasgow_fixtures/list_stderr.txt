@@ -1,0 +1,2 @@
+I: glasgow.hardware.device: found revC3 device with API level 3 (supported API level is 9)
+W: glasgow.hardware.device: please run `glasgow flash` to update firmware of device C3-20200101T000000Z

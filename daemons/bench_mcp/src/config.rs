@@ -23,6 +23,7 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("bladerf", Kind::Sdr),
     ("elad", Kind::Elad),
     ("example", Kind::Example),
+    ("glasgow", Kind::Glasgow),
     ("hamlib", Kind::Hamlib),
     ("limesdr", Kind::Sdr),
     ("nanovna", Kind::Vna),
@@ -85,6 +86,8 @@ pub enum Kind {
     Procedure,
     /// The RX-888 MkII HF receiver through ka9q-radio's `radiod` (`rx888` module), receive only.
     Rx888,
+    /// The Glasgow Interface Explorer (`glasgow` module): digital I/O (UART, I2C, SPI, JTAG, SWD, logic analyzer, GPIO) through the pinned `glasgow` tool.
+    Glasgow,
 }
 
 #[derive(Clone, Debug)]
@@ -115,6 +118,7 @@ pub struct Instrument {
     pub sa: crate::sa::Config,
     pub procedure: crate::procedure::Config,
     pub rx888: crate::rx888::Config,
+    pub glasgow: crate::glasgow::Config,
 }
 
 fn tier_of(s: Option<&str>) -> Result<Tier, String> {
@@ -324,6 +328,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             },
             procedure: module_config!(procedure, driver_name, c, name),
             rx888: module_config!(rx888, driver_name, c, name),
+            glasgow: module_config!(glasgow, driver_name, c, name),
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),

@@ -1,0 +1,3 @@
+I: g.a.i.jtag_probe: discovered 1 TAPs
+I: g.a.i.jtag_probe: TAP #0: IR[5] IDCODE=0x4ba00477
+I: g.a.i.jtag_probe: manufacturer=0x23b (ARM Limited) part=0xba00 version=0x4
