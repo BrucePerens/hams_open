@@ -311,9 +311,14 @@ class TestCompliancePagesHttp(HamsHttpCase):
         # Tests [@ANCHOR: COMM_compliance_terms_of_service_template]
 
         # Tests [@ANCHOR: COMM_story_automatic_legal_pages]
+        # These are the generic templates this module ships, so each is read as the module's own
+        # arch (arch_db), not the combined arch. A site module may legitimately replace the
+        # template's draft notice and date with its own published wording by inheriting the view
+        # (ham_init does, for hams.com's published pages); that must not make this check read
+        # the site's wording instead of the template's.
         # /privacy
         view = self.env.ref("compliance.compliance_privacy_policy_template")
-        arch_node = view._get_combined_arch()
+        arch_node = etree.fromstring(view.arch_db)
         self.assertIsNotNone(arch_node)
         arch_str = etree.tostring(arch_node, encoding="unicode")
         normalized_arch = re.sub(r"\s+", " ", arch_str)
@@ -335,7 +340,7 @@ class TestCompliancePagesHttp(HamsHttpCase):
 
         # /cookie-policy
         view = self.env.ref("compliance.compliance_cookie_policy_template")
-        arch_node = view._get_combined_arch()
+        arch_node = etree.fromstring(view.arch_db)
         self.assertIsNotNone(arch_node)
         arch_str = etree.tostring(arch_node, encoding="unicode")
         normalized_arch = re.sub(r"\s+", " ", arch_str)
@@ -357,7 +362,7 @@ class TestCompliancePagesHttp(HamsHttpCase):
 
         # /terms
         view = self.env.ref("compliance.compliance_terms_of_service_template")
-        arch_node = view._get_combined_arch()
+        arch_node = etree.fromstring(view.arch_db)
         self.assertIsNotNone(arch_node)
         arch_str = etree.tostring(arch_node, encoding="unicode")
         normalized_arch = re.sub(r"\s+", " ", arch_str)
@@ -380,7 +385,7 @@ class TestCompliancePagesHttp(HamsHttpCase):
         # Tests [@ANCHOR: COMM_compliance_accessibility_statement_template]
         # /accessibility
         view = self.env.ref("compliance.compliance_accessibility_statement_template")
-        arch_node = view._get_combined_arch()
+        arch_node = etree.fromstring(view.arch_db)
         self.assertIsNotNone(arch_node)
         arch_str = etree.tostring(arch_node, encoding="unicode")
         normalized_arch = re.sub(r"\s+", " ", arch_str)

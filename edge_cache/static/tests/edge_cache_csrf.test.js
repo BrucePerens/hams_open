@@ -17,6 +17,9 @@ const FORM = `
         <button type="submit">Send</button>
     </form>`;
 
+const WEBSITE_FORM_HTML =
+    '<div class="s_website_form"><a class="s_website_form_send" href="#">Send</a></div>';
+
 function install() {
     const wasWebsiteUser = session.is_website_user;
     session.is_website_user = true;
@@ -30,7 +33,26 @@ function install() {
 describe("edge_cache_csrf", () => {
     describe.current.tags("edge_cache");
 
+    // Tests [@ANCHOR: edge_cache:csrf_startEdgeCacheCsrfRefresh]
+    test("a logged-in visitor gets no listeners and the page is left alone", () => {
+        const wasWebsiteUser = session.is_website_user;
+        session.is_website_user = false;
+        try {
+            expect(startEdgeCacheCsrfRefresh()).toBe(null);
+        } finally {
+            session.is_website_user = wasWebsiteUser;
+        }
+    });
+
     // [@ANCHOR: COMM_test_edge_cache_csrf_token_fetched_again_at_submit]
+    // Tests [@ANCHOR: edge_cache:csrf_applyToken]
+    // Tests [@ANCHOR: edge_cache:csrf_fetchToken]
+    // Tests [@ANCHOR: edge_cache:csrf_refreshCsrfToken]
+    // Tests [@ANCHOR: edge_cache:csrf_tokenForm]
+    // Tests [@ANCHOR: edge_cache:csrf_onEarlyInteraction]
+    // Tests [@ANCHOR: edge_cache:csrf_onSubmit]
+    // Tests [@ANCHOR: edge_cache:csrf_onWebsiteFormSend]
+    // Tests [@ANCHOR: edge_cache:csrf_startEdgeCacheCsrfRefresh]
     test("the submit carries a token fetched at the submit, not the one from the earlier focus", async () => {
         const stop = install();
         const fixture = getFixture();
@@ -49,6 +71,19 @@ describe("edge_cache_csrf", () => {
 
         // The visitor reaches a field: the early fetch gives the form its first token.
         form.querySelector('input[name="note"]').dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+        // A website form's Send pressed while that fetch is still running is held, then pressed once the
+        // token is in (the held press waits on the fetch already running, so it asks the server for nothing).
+        fixture.insertAdjacentHTML("beforeend", WEBSITE_FORM_HTML);
+        const send = fixture.querySelector(".s_website_form_send");
+        let presses = 0;
+        send.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            presses += 1;
+        });
+        send.click();
+        expect(presses).toBe(0);
+        await waitUntil(() => presses === 1, { timeout: 2000 });
+        expect(form.querySelector('input[name="csrf_token"]').value).toBe("token1");
         await waitUntil(() => form.querySelector('input[name="csrf_token"]').value === "token1", { timeout: 2000 });
         // Another field of the same form does not ask again.
         form.querySelector('input[name="note"]').dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
@@ -64,6 +99,7 @@ describe("edge_cache_csrf", () => {
 
     // [@ANCHOR: COMM_test_edge_cache_csrf_works_without_has_selector]
     // Tests [@ANCHOR: COMM_edge_cache_is_token_form]
+    // Tests [@ANCHOR: edge_cache:csrf_tokenForm]
     test("a browser without the :has() selector still gets the token, and nothing throws", async () => {
         // Chrome before 105 throws a SyntaxError from closest() and matches() for :has(); the
         // listeners are capture listeners on document, so one such throw would fire at every focus
@@ -100,6 +136,34 @@ describe("edge_cache_csrf", () => {
             stop();
             Element.prototype.closest = originalClosest;
             Element.prototype.matches = originalMatches;
+        }
+    });
+
+    // Tests [@ANCHOR: edge_cache:csrf_onWebsiteFormSend]
+    // The module keeps "a token was fetched" for the whole page, and the first test above has settled it: a website
+    // form's Send now goes straight through, and a click that is not on a Send button is left alone.
+    test("once a token was fetched a website form's Send is not held and nothing is fetched", () => {
+        const stop = install();
+        try {
+            const fixture = getFixture();
+            fixture.innerHTML = WEBSITE_FORM_HTML;
+            const requests = [];
+            mockFetch((route) => {
+                requests.push(route);
+                return { csrf_token: "unused" };
+            });
+            const send = fixture.querySelector(".s_website_form_send");
+            let presses = 0;
+            send.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                presses += 1;
+            });
+            send.click();
+            expect(presses).toBe(1);
+            fixture.querySelector(".s_website_form").click();
+            expect(requests.length).toBe(0);
+        } finally {
+            stop();
         }
     });
 });

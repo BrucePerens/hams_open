@@ -137,6 +137,7 @@ def force_clear(self):
 * `clear_db_config_cache(dbname)` [@ANCHOR: distributed_redis_cache:clear_db_config_cache] forgets the cached (host, port, password) of one database, so the next `get_redis_connection(env)` reads the current Settings values. It runs when Redis settings are saved (on the saving worker) and from `poll_and_clear_local_cache` (on every other worker).
 * `res.config.settings.set_values()` [@ANCHOR: distributed_redis_cache:res_config_settings_set_values] saves the Redis settings, clears the saving worker's cached connection settings, and sends the `distributed_cache_invalidation` `pg_notify` so the daemon bumps the global counter and every other worker clears theirs too; without that, a saved change would reach each worker only when it was restarted.
 * The cache-manager daemon's `_require_db_credentials()` [@ANCHOR: COMM_cache_manager_require_db_credentials] raises `RuntimeError` at start-up unless both `DB_USER` and `DB_PASS` are set, so it never connects to PostgreSQL without its own scoped role.
+* The daemon applies that login file with `_apply_db_env_file()` [@ANCHOR: COMM_cache_manager_db_env_precedence]: the file's `DB_USER`/`DB_PASS` always replace anything already exported, but its `DB_HOST`/`DB_PORT`/`DB_NAME` are only defaults, so a caller that exports `DB_NAME` (a test run serving its own slot database) is not overridden.
 
 ### 6. `expiring_counter(client, key, window_seconds, amount=1)`: a rate-limit counter that always expires
 
