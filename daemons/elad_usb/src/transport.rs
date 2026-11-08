@@ -74,6 +74,7 @@ impl FakeTransport {
     }
 
     /// Answers control IN `(request, value)` with `bytes`.
+    // [@ANCHOR: elad_fake_reply]
     pub fn reply(&self, request: u8, value: u16, bytes: Vec<u8>) {
         if let Ok(mut m) = self.replies.lock() {
             m.insert((request, value), bytes);
@@ -81,6 +82,7 @@ impl FakeTransport {
     }
 
     /// Queues one bulk read result.
+    // [@ANCHOR: elad_fake_queue_bulk]
     pub fn queue_bulk(&self, chunk: Result<Vec<u8>, Error>) {
         if let Ok(mut q) = self.chunks.lock() {
             q.push_back(chunk);
@@ -94,6 +96,7 @@ impl FakeTransport {
 }
 
 impl Transport for FakeTransport {
+    // [@ANCHOR: elad_fake_control_in]
     fn control_in(
         &mut self,
         request: u8,
@@ -120,6 +123,7 @@ impl Transport for FakeTransport {
         Ok(n)
     }
 
+    // [@ANCHOR: elad_fake_control_out]
     fn control_out(
         &mut self,
         request: u8,
@@ -138,6 +142,7 @@ impl Transport for FakeTransport {
         Ok(data.len())
     }
 
+    // [@ANCHOR: elad_fake_bulk_in]
     fn bulk_in(&mut self, buf: &mut [u8], _timeout: Duration) -> Result<usize, Error> {
         let next = self.chunks.lock().ok().and_then(|mut q| q.pop_front());
         match next {

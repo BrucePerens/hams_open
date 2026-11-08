@@ -60,6 +60,7 @@ impl Model {
     }
 
     /// The model's USB product id.
+    // [@ANCHOR: elad_model_pid]
     pub fn pid(self) -> u16 {
         match self {
             Model::Duo => 0x061a,
@@ -69,6 +70,7 @@ impl Model {
     }
 
     /// Display name.
+    // [@ANCHOR: elad_model_name]
     pub fn name(self) -> &'static str {
         match self {
             Model::Duo => "FDM-DUO",
@@ -78,6 +80,7 @@ impl Model {
     }
 
     /// ADC clock in Hz.
+    // [@ANCHOR: elad_model_adc_clock_hz]
     pub fn adc_clock_hz(self) -> f64 {
         match self {
             Model::S1 => 61_440_000.0,
@@ -91,6 +94,7 @@ impl Model {
     }
 
     /// Receive range in Hz, lowest to highest.
+    // [@ANCHOR: elad_model_rx_range_hz]
     pub fn rx_range_hz(self) -> (u64, u64) {
         match self {
             Model::S1 => (10_000, 30_000_000),
@@ -104,6 +108,7 @@ impl Model {
     }
 
     /// I/Q sample rates in Hz the model streams. The DUO's rate is set by the unit, not by software.
+    // [@ANCHOR: elad_model_sample_rates_hz]
     pub fn sample_rates_hz(self) -> &'static [u32] {
         match self {
             Model::S2 => &[192_000, 384_000, 768_000, 1_536_000, 3_072_000, 6_144_000],

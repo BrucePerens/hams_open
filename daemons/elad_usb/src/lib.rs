@@ -49,6 +49,7 @@ pub enum Error {
 }
 
 impl std::fmt::Display for Error {
+    // [@ANCHOR: elad_error_display]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Error::UnknownDevice { pid } => write!(f, "USB product id {pid:#06x} is not a known ELAD receiver"),

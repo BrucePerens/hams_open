@@ -514,3 +514,111 @@ fn a_real_fdm_s2_recording_opens_and_decodes() {
         (Some(-8.0), Some(0.0), Some(12.5))
     );
 }
+
+#[test]
+fn model_facts_and_format_widths_and_error_text() {
+    // Tests [@ANCHOR: elad_model_adc_clock_hz]
+    assert_eq!(Model::S2.adc_clock_hz(), 122_880_000.0);
+    assert_eq!(Model::S1.adc_clock_hz(), 61_440_000.0);
+    // Tests [@ANCHOR: elad_model_name]
+    assert_eq!(
+        (Model::Duo.name(), Model::S2.name(), Model::S1.name()),
+        ("FDM-DUO", "FDM-S2", "FDM-S1")
+    );
+    // Tests [@ANCHOR: elad_model_pid]
+    for m in [Model::Duo, Model::S2, Model::S1] {
+        assert_eq!(Model::from_pid(m.pid()), Ok(m));
+    }
+    // Tests [@ANCHOR: elad_model_rx_range_hz]
+    assert_eq!(Model::S2.rx_range_hz(), (10_000, 54_000_000));
+    assert_eq!(Model::S1.rx_range_hz(), (10_000, 30_000_000));
+    // Tests [@ANCHOR: elad_model_sample_rates_hz]
+    assert_eq!(Model::S2.sample_rates_hz().last(), Some(&6_144_000));
+    assert_eq!(Model::S1.sample_rates_hz().last(), Some(&3_072_000));
+    // Tests [@ANCHOR: elad_format_component_bytes]
+    assert_eq!(
+        (
+            Format::S32Le.component_bytes(),
+            Format::S16Le.component_bytes()
+        ),
+        (4, 2)
+    );
+    // Tests [@ANCHOR: elad_format_full_scale]
+    assert_eq!(
+        (Format::S32Le.full_scale(), Format::S16Le.full_scale()),
+        (2_147_483_648.0, 32_768.0)
+    );
+    // Tests [@ANCHOR: elad_error_display]
+    assert!(Error::FpgaImageRequired.to_string().contains("FPGA image"));
+    assert!(Error::NotReceiveOnly(0xF1).to_string().contains("0xf1"));
+    assert!(Error::UnknownDevice { pid: 0x1234 }
+        .to_string()
+        .contains("0x1234"));
+}
+
+#[test]
+fn the_fake_transport_records_replies_and_serves_queued_reads() {
+    // Tests [@ANCHOR: elad_fake_reply]
+    // Tests [@ANCHOR: elad_fake_control_in]
+    // Tests [@ANCHOR: elad_fake_control_out]
+    // Tests [@ANCHOR: elad_fake_queue_bulk]
+    // Tests [@ANCHOR: elad_fake_bulk_in]
+    use crate::transport::Transport;
+    let mut t = FakeTransport::new();
+    t.reply(0x11, 5, vec![1, 2, 3]);
+    let mut b = [0u8; 8];
+    assert_eq!(t.control_in(0x11, 5, 0, &mut b).unwrap(), 3);
+    assert_eq!(&b[..3], &[1, 2, 3]);
+    assert_eq!(
+        t.control_in(0x11, 6, 0, &mut b).unwrap(),
+        0,
+        "an unscripted request answers nothing"
+    );
+    assert_eq!(t.control_out(0x22, 1, 2, &[9]).unwrap(), 1);
+    assert_eq!(t.ops().len(), 3);
+    t.queue_bulk(Ok(vec![7; 4]));
+    t.queue_bulk(Err(Error::Usb("x".into())));
+    assert_eq!(t.bulk_in(&mut b, Duration::from_millis(1)).unwrap(), 4);
+    assert!(matches!(
+        t.bulk_in(&mut b, Duration::from_millis(1)),
+        Err(Error::Usb(_))
+    ));
+    assert!(
+        matches!(
+            t.bulk_in(&mut b, Duration::from_millis(1)),
+            Err(Error::Timeout)
+        ),
+        "an empty queue is a timeout"
+    );
+}
+
+#[test]
+fn radio_internals_are_exercised_through_the_public_calls() {
+    // Tests [@ANCHOR: elad_radio_send]
+    // Tests [@ANCHOR: elad_radio_silence]
+    // Tests [@ANCHOR: elad_radio_write_front_end]
+    let t = fake_unit();
+    let mut r = Radio::open(
+        t.clone(),
+        Model::S2,
+        opts(FpgaState::LoadedExternally, 192_000),
+    )
+    .unwrap();
+    r.set_attenuator(true).unwrap();
+    assert!(
+        t.ops().iter().any(|o| matches!(
+            o,
+            Op::Out {
+                request: REQ_FRONT_END,
+                value: 0x0B,
+                ..
+            }
+        )),
+        "front end written, sent through the receive-only filter"
+    );
+    let mut o = Vec::new();
+    assert!(matches!(
+        r.read(&mut o, Duration::from_millis(1)),
+        Err(Error::Timeout)
+    ));
+}

@@ -105,6 +105,7 @@ impl<T: Transport> Radio<T> {
         })
     }
 
+    // [@ANCHOR: elad_radio_send]
     fn send(&mut self, r: &Request) -> Result<(), Error> {
         if !protocol::is_receive_request(r) {
             return Err(Error::NotReceiveOnly(r.request));
@@ -164,6 +165,7 @@ impl<T: Transport> Radio<T> {
         self.write_front_end()
     }
 
+    // [@ANCHOR: elad_radio_write_front_end]
     fn write_front_end(&mut self) -> Result<(), Error> {
         if !self.info.model.has_front_end_switches() {
             return Ok(());
@@ -269,6 +271,7 @@ impl<T: Transport> Radio<T> {
         }
     }
 
+    // [@ANCHOR: elad_radio_silence]
     fn silence(&mut self) -> Result<usize, Error> {
         if self.stats.samples == 0 && self.stats.timeouts + self.stats.empty_reads >= 3 {
             Err(Error::NoSamples)

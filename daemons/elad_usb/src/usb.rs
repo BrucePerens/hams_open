@@ -9,6 +9,7 @@ use std::time::Duration;
 
 const CONTROL_TIMEOUT: Duration = Duration::from_millis(1000);
 
+// [@ANCHOR: elad_usb_err]
 fn err(e: rusb::Error) -> Error {
     match e {
         rusb::Error::Timeout => Error::Timeout,
@@ -103,5 +104,17 @@ impl Transport for UsbTransport {
 
     fn bulk_in(&mut self, buf: &mut [u8], timeout: Duration) -> Result<usize, Error> {
         self.handle.read_bulk(EP_SAMPLES, buf, timeout).map_err(err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_libusb_timeout_stays_a_timeout() {
+        // Tests [@ANCHOR: elad_usb_err]
+        assert_eq!(err(rusb::Error::Timeout), Error::Timeout);
+        assert!(matches!(err(rusb::Error::NoDevice), Error::Usb(_)));
     }
 }

@@ -66,3 +66,20 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_radio_read] Reads one bulk transfer, decodes it, counts it; three silent reads before any sample are `NoSamples`.
 - [@ANCHOR: elad_usb:elad_usb_find] Lists ELAD receivers on the bus without opening them.
 - [@ANCHOR: elad_usb:elad_usb_open] Opens and claims a found receiver (exercised by the hardware run, not by `cargo test`).
+- [@ANCHOR: elad_usb:elad_format_component_bytes] Bytes per I or Q component of a sample format.
+- [@ANCHOR: elad_usb:elad_format_full_scale] The full-scale divisor of a sample format.
+- [@ANCHOR: elad_usb:elad_error_display] The human-readable text of every error, including the FPGA-image and refused-request messages.
+- [@ANCHOR: elad_usb:elad_model_adc_clock_hz] The model's ADC clock in Hz.
+- [@ANCHOR: elad_usb:elad_model_name] The model's display name.
+- [@ANCHOR: elad_usb:elad_model_pid] The model's USB product id.
+- [@ANCHOR: elad_usb:elad_model_rx_range_hz] The model's receive range in Hz.
+- [@ANCHOR: elad_usb:elad_model_sample_rates_hz] The sample rates the model streams.
+- [@ANCHOR: elad_usb:elad_radio_send] Sends a control request only if it is on the receive-only list.
+- [@ANCHOR: elad_usb:elad_radio_silence] Turns repeated silent reads into the no-samples verdict.
+- [@ANCHOR: elad_usb:elad_radio_write_front_end] Writes the S2's filter and attenuator code for the current frequency.
+- [@ANCHOR: elad_usb:elad_fake_reply] Scripts a control reply on the fake transport.
+- [@ANCHOR: elad_usb:elad_fake_control_in] The fake's control IN: records and answers from the script.
+- [@ANCHOR: elad_usb:elad_fake_control_out] The fake's control OUT: records the request.
+- [@ANCHOR: elad_usb:elad_fake_queue_bulk] Queues a bulk read result on the fake.
+- [@ANCHOR: elad_usb:elad_fake_bulk_in] The fake's bulk IN: serves queued results, a timeout when empty.
+- [@ANCHOR: elad_usb:elad_usb_err] Maps a libusb error to this crate's error, keeping timeouts apart.

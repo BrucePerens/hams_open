@@ -24,6 +24,7 @@ impl Format {
     }
 
     /// Bytes per component.
+    // [@ANCHOR: elad_format_component_bytes]
     pub fn component_bytes(self) -> usize {
         match self {
             Format::S32Le => 4,
@@ -32,6 +33,7 @@ impl Format {
     }
 
     /// Full-scale divisor.
+    // [@ANCHOR: elad_format_full_scale]
     pub fn full_scale(self) -> f32 {
         match self {
             Format::S32Le => 2_147_483_648.0,
