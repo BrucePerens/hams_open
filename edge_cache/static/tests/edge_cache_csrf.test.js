@@ -17,6 +17,9 @@ const FORM = `
         <button type="submit">Send</button>
     </form>`;
 
+const WEBSITE_FORM_HTML =
+    '<div class="s_website_form"><a class="s_website_form_send" href="#">Send</a></div>';
+
 function install() {
     const wasWebsiteUser = session.is_website_user;
     session.is_website_user = true;
@@ -37,7 +40,7 @@ describe("edge_cache_csrf", () => {
         const stop = install();
         try {
             const fixture = getFixture();
-            fixture.innerHTML = `<div class="s_website_form"><a class="s_website_form_send" href="#">Send</a></div>`;
+            fixture.innerHTML = WEBSITE_FORM_HTML;
             const send = fixture.querySelector(".s_website_form_send");
             const requests = [];
             mockFetch((route) => {
