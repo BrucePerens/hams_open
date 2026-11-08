@@ -75,7 +75,9 @@ class TestTriageStallAlarm(HamsTransactionCase):
         picked_up.write({"stage": "in_progress"})
         old = self._ticket(3 * 86400, "Older than the lookback")
         suspicious = self._ticket(300, "Hidden content")
-        suspicious.write({"suspicious": True})
+        # write() recomputes the flag from the text, so set it the way the filter does when it finds hidden content.
+        self.env.cr.execute("UPDATE hams_helpdesk_ticket SET suspicious = TRUE WHERE id = %s", (suspicious.id,))
+        suspicious.invalidate_recordset(["suspicious"])
         server_exception = self._ticket(300, "Exception", ticket_type="server_exception")
         self.assertEqual(self.Ticket._cron_triage_stall_alarm(), 0)
         self.assertEqual(self.reports, [])
