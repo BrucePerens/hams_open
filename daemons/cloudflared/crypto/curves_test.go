@@ -115,12 +115,18 @@ func TestSupportedCurvesNegotiation(t *testing.T) {
 		advertisedCurves := runClientServerHandshake(t, curves)
 		require.True(t, slices.Contains(advertisedCurves, tls.CurveP256))
 		require.True(t, slices.Contains(advertisedCurves, tls.X25519MLKEM768))
-		expectedLength := 2
-		if runtime.GOOS == "linux" {
-			// P256Kyber768Draft00 only exists in linux
-			require.True(t, slices.Contains(advertisedCurves, P256Kyber768Draft00))
-			expectedLength = 3
+		// P256Kyber768Draft00 (0xfe32) was only ever implemented by Cloudflare's
+		// Go fork, and only on linux. Stock Go (including the 1.26.0 toolchain
+		// this repository builds with) silently drops a curve it does not
+		// implement from the ClientHello, so on a stock toolchain the list is
+		// exactly the preferences minus that one curve. Either way the curves
+		// that remain must keep the order getCurvePreferences gave them.
+		withoutDraft := slices.DeleteFunc(slices.Clone(advertisedCurves), func(c tls.CurveID) bool {
+			return c == P256Kyber768Draft00
+		})
+		require.Equal(t, []tls.CurveID{tls.X25519MLKEM768, tls.CurveP256}, withoutDraft)
+		if runtime.GOOS != "linux" {
+			require.NotContains(t, advertisedCurves, P256Kyber768Draft00, "the draft curve only exists on linux")
 		}
-		require.Len(t, advertisedCurves, expectedLength)
 	}
 }
