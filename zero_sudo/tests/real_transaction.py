@@ -22,6 +22,50 @@ import unittest.mock
 
 _logger = logging.getLogger(__name__)
 
+# [@ANCHOR: zero_sudo:COMM_leak_check_fallback_tables]
+# Tables the teardown leak check never counts, whatever the zero_sudo.noisy_table records say: tables Odoo writes
+# during any test on its own (bus, mail, cron, sessions) and the database_management views over pg_stat_*, whose
+# row count follows server statistics. Explained in zero_sudo/docs/stories/testing_facility.md. Verified by
+# [@ANCHOR: zero_sudo:COMM_test_leak_check_fallback_tables].
+LEAK_CHECK_FALLBACK_TABLES = frozenset({
+    "bus_bus",
+    "ir_logging",
+    "base_registry_signaling",
+    "ir_cron",
+    "mail_message",
+    "mail_notification",
+    "mail_followers",
+    "mail_tracking_value",
+    "mail_mail",
+    "res_groups_users_rel",
+    "res_company_users_rel",
+    "res_users_log",
+    "http_session",
+    "database_pg_setting",
+    "database_table_stat",
+    "database_query_stat",
+    "database_activity",
+    "database_index_stat",
+    # Views over pg_stat_user_tables / pg_stat_replication: their row count follows the server's
+    # statistics (a table crossing 100 sequential scans adds a row), not anything a test wrote.
+    "database_index_advisor",
+    "database_replication_stat",
+    "ir_attachment",
+    "ir_model_data",
+    "website_visitor",
+    "website_track",
+    "ir_ui_view",
+    "cloudflare_purge_queue",
+    "res_groups_implied_rel",
+    "res_users_apikeys",
+    "ir_cron_progress",
+    "orm_signaling_stable",
+    "ir_config_parameter",
+    "gamification_challenge_users_rel",
+    "gamification_goal",
+    "ir_cron_trigger",
+})
+
 # Store the original create method globally to avoid descriptor binding issues
 _original_create = odoo.models.BaseModel.create
 
@@ -381,40 +425,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             except Exception as e:  # audit-ignore-catch-all
                 _logger.warning("Could not fetch noisy tables during teardown: %s", e)
 
-            fallback_tables = {
-                "bus_bus",
-                "ir_logging",
-                "base_registry_signaling",
-                "ir_cron",
-                "mail_message",
-                "mail_notification",
-                "mail_followers",
-                "mail_tracking_value",
-                "mail_mail",
-                "res_groups_users_rel",
-                "res_company_users_rel",
-                "res_users_log",
-                "http_session",
-                "database_pg_setting",
-                "database_table_stat",
-                "database_query_stat",
-                "database_activity",
-                "database_index_stat",
-                "ir_attachment",
-                "ir_model_data",
-                "website_visitor",
-                "website_track",
-                "ir_ui_view",
-                "cloudflare_purge_queue",
-                "res_groups_implied_rel",
-                "res_users_apikeys",
-                "ir_cron_progress",
-                "orm_signaling_stable",
-                "ir_config_parameter",
-                "gamification_challenge_users_rel",
-                "gamification_goal",
-                "ir_cron_trigger",
-            }
+            fallback_tables = LEAK_CHECK_FALLBACK_TABLES
             noisy_tables.update(fallback_tables)
 
             if self._tables:
