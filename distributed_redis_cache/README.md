@@ -189,7 +189,7 @@ on an installed database.
 | `int` | The number of registry rows removed: 1 when the row "Redis Cache Manager" existed, 0 when it did not. |
 | `odoo.exceptions.AccessError` (raised) | The Daemon Key Manager service account does not exist or may not be used; the upgrade stops. |
 
-Behaviour worth knowing: it deletes the registry row and the API keys named `Redis Cache Manager_key` of that row's service account, in the
+Behaviour worth knowing: it calls `daemon.key.registry.unregister_daemon` (daemon_key_manager's README) as the Daemon Key Manager service account, which deletes the registry row and the API keys named `Redis Cache Manager_key` of that row's service account, in the
 caller's transaction (nothing commits). Idempotent, so it is safe to run again; a database that never had the row returns 0. It does not
 delete the service account (it stays, with no key and no group beyond its own) and does not delete `keys/cache_manager.env` from disk: the
 registry never removes a key file, so an operator deletes the leftover file by hand. It is not a security gate and takes no lock. Tests:
