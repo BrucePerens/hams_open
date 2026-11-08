@@ -57,6 +57,15 @@
                         <field name="suspicion_removed" class="oe_inline"/> hidden characters were removed from
                         this ticket. See the Filter Findings page.
                     </div>
+                    <!-- Phishing verdict: the ticket's links are shown as text (models/link_defang.py, README.md, "Phishing links are
+                         defanged for staff"). [@ANCHOR: hams_helpdesk:view_phishing_banner] -->
+                    <field name="links_defanged" invisible="1"/>
+                    <div class="alert alert-danger o_phishing_banner" role="alert" invisible="not links_defanged">
+                        <strong>Phishing warning:</strong> the triage verdict for this ticket is phishing. The links in its text
+                        are shown as plain text and cannot be clicked: hxxp and hxxps stand for http and https, and [.] stands
+                        for a dot. Do not open them. If you decide the ticket is genuine, move it out of the Spam stage and its
+                        links work again.
+                    </div>
                     <!-- The triage verdict: who judged this ticket, what, and why (models/helpdesk_ticket.py). -->
                     <field name="triage_verdict" invisible="1"/>
                     <div class="alert alert-info" role="status" invisible="not triage_verdict">
@@ -116,7 +125,8 @@
                     </group>
                     <notebook>
                         <page string="Description">
-                            <field name="description"/>
+                            <field name="description" invisible="links_defanged"/>
+                            <field name="description_defanged" invisible="not links_defanged" readonly="1"/>
                         </page>
                         <page string="Filter Findings" groups="hams_helpdesk.group_helpdesk_user"
                               invisible="not suspicion_removed and not suspicion_score and not suspicion_log_ids">

@@ -16,6 +16,7 @@
 
 pub mod convert;
 pub mod fpga;
+pub mod lock;
 pub mod protocol;
 pub mod radio;
 #[cfg(test)]

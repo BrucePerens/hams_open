@@ -152,6 +152,7 @@ fn a_silent_unit_is_reported_as_a_missing_fpga_not_as_an_empty_capture() {
 #[test]
 fn capture_writes_cf32_and_a_summary_that_finds_the_tone() {
     // Tests [@ANCHOR: bench_mcp_elad_capture]
+    // Tests [@ANCHOR: elad_summary]
     // Tests [@ANCHOR: elad_new_file]
     let dir = tmp("cap");
     let b = FakeBench::new(vec![s2()]);

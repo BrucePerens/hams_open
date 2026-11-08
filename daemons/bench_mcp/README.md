@@ -1273,4 +1273,5 @@ Link::scope_state(host: &str, ports: &[u16]) -> String
 * The sample count is capped by memory and by the config. [@ANCHOR: elad_target_samples]
 * A file name is checked and an existing file is never overwritten. [@ANCHOR: elad_new_file]
 * The FFT length must be a power of two. [@ANCHOR: elad_fft_len]
+* The common summary of every streaming tool: samples, measured rate, timeouts, RMS, peak, DC and clipping. [@ANCHOR: elad_summary]
 * An acquisition refuses an undeclared FPGA image before streaming, always stops the stream, and reports silence as a missing FPGA image. [@ANCHOR: elad_acquire]

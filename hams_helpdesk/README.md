@@ -172,6 +172,158 @@ The tickets are titled "Relay exception: ..." or, for a fatal signal, "Relay cra
 owner and operator linked as Reporting members. Wire form, limits, every function and the decisions:
 `docs/stories/relay_exception_reports.md`. After deploying: `odoo -u hams_helpdesk`, then restart Odoo.
 
+## Phishing links are defanged for staff
+
+Bruce, 2026-11-08. A ticket whose triage verdict is `phishing` (the AI triage agent's verdict; see `docs/stories/triage_verdict_and_override.md`)
+shows the links in its text as plain text to staff, with a warning banner, in three places: the ticket form, the chatter, and the
+notification email. Tickets with any other verdict (`spam`, `real`, `unsure`, none) keep clickable links. A person who moves a ticket out
+of the Spam stage overrides the verdict (`triage_overridden`), and the links are live again. The shared text filter (`untrusted_text.py`)
+is not changed: it keeps `href` on purpose and its tests assert it. Nothing is stored in defanged form; the stored description and the
+stored messages keep their links, and the form is chosen each time the text is shown, so a changed verdict or an override takes effect at
+once. Story: `docs/stories/phishing_links_defanged.md`. Tests: `tests/test_phishing_link_defang.py`.
+
+What the staff see: `<a href="https://x.example/a">Verify</a>` becomes the text `Verify (hxxps://x[.]example/a)`. `hxxp` and
+`hxxps` stand for `http` and `https`, `[.]` for a dot and `[@]` for an at sign, so no browser, mail program or chat client makes it a
+link, and a person can still read where it pointed. A URL written out in the text is defanged the same way; `src`, `action` and the other
+URL attributes of non-link elements are removed.
+
+Not covered: the portal view the ticket's own customer sees (a phishing sender reading their own ticket), and emails that do not carry the
+ticket's message text (the assignment notice, the digest, the pager alert). They show no ticket text.
+
+### defang_warning_text [@ANCHOR: hams_helpdesk:defang_warning_text]
+
+The warning shown above a defanged ticket's text in the notification email (`models/link_defang.py`, constant `DEFANG_WARNING_TEXT`, a `str`).
+The form banner in `views/helpdesk_ticket_views.xml` carries the same words (a test compares the key phrases). Written to the ADR-0112
+wording rules: it says what is shown and what to do and promises nothing about privacy.
+
+| Part | Meaning |
+|---|---|
+| "Phishing warning" | Opens the text; the form shows it in bold. |
+| "hxxp and hxxps stand for http and https, and [.] stands for a dot" | Teaches the reader the defanged form. |
+| "Do not open them" | The instruction. |
+| "move it out of the Spam stage and its links work again" | How a person overrides a wrong verdict. |
+
+### defang_url_text [@ANCHOR: hams_helpdesk:defang_url_text]
+
+Purpose: turns one URL (or any string) into inert plain text. Called by `defang_html()` for every address it writes out.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `url` | `str` or falsy | The address. Leading and trailing white space is dropped. Not checked to be a URL. |
+
+Returns a `str`: the scheme `http` becomes `hxxp` (`https` becomes `hxxps`) and `ftp` becomes `fxp` (case is kept for the rest), every `.`
+becomes `[.]`, every `@` becomes `[@]`. A falsy `url` gives `""`. Raises nothing. Pure, no side effects, safe to call from any thread.
+Example: `defang_url_text("https://a.example.com/x")` is `hxxps://a[.]example[.]com/x`. See also `defang_html`; tested by
+`test_01_a_url_becomes_inert_text`.
+
+### defang_text_node [@ANCHOR: hams_helpdesk:defang_text_node]
+
+Purpose: defangs the URLs written out in a piece of plain text; used by `defang_html()` on every text node and on the text after
+every element, and for the whole text when a fragment cannot be parsed.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `text` | `str` or falsy | Plain text. Borrowed, never modified. |
+
+Returns a `str`: each `http://`, `https://`, `ftp://`, `mailto:` or `www.` address (up to the next white space, `<`, `>` or quote) is replaced by
+`defang_url_text()` of it; everything else, including numbers such as `1.2`, is unchanged. A falsy `text` is returned as it is (`""`
+or `None`). A full stop right after an address is taken as part of it and is defanged too (harmless). Raises nothing, no side effects. Tested by `test_01b_urls_in_plain_text_are_defanged_and_the_rest_is_left_alone`.
+
+### defang_html [@ANCHOR: hams_helpdesk:defang_html]
+
+Purpose: the one function that makes a text safe to read next to a phish. Called by the staff form's computed description, by the
+chatter override and by the notification email override below.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `value` | `str`, `Markup`, or falsy | An HTML fragment or plain text. Borrowed, never modified. |
+
+Returns `Markup`, never `None`. A falsy `value` returns `Markup("")`. Order of work: (1) URLs written out in text nodes (`http://`,
+`https://`, `ftp://`, `mailto:`, `www.`) are defanged; (2) each `<a>` or `<area>` becomes `<span class="o_link_defanged">` keeping its own
+content and, when its text does not already show it, followed by the defanged address in parentheses; (3) every other element loses
+`href`, `src`, `action`, `formaction`, `background`, `poster`, `srcset`, `data`, `cite`, `ping`, `xlink:href`. Other markup (bold, lists,
+paragraphs) is kept; the text is not otherwise sanitised, because it already went through the shared filter when it was stored.
+Errors: none raised. If the fragment cannot be parsed (a control character, for example) the whole text is escaped and shown as text,
+with URLs defanged, which has no link either. Pure, one parse of the fragment, no database access. Tested by `test_02` to `test_06` of
+`TestPhishingLinkDefangUnits`.
+
+### ticket_links_defanged_fields [@ANCHOR: hams_helpdesk:ticket_links_defanged_fields]
+
+Two computed, non-stored fields on `hams_helpdesk.ticket` (`models/helpdesk_ticket.py`). Nobody sets them; they are recomputed from the
+verdict and the description each time they are read, so they cannot go stale.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `links_defanged` | Boolean | True when the ticket's links are shown as text (`_triage_links_defanged()`). Drives the banner and which description field the form shows. Depends on `triage_verdict`, `triage_overridden`. |
+| `description_defanged` | Html (not sanitised again; read only) | `defang_html(description)` when `links_defanged`, otherwise the description itself. Depends on `description`, `triage_verdict`, `triage_overridden`. |
+
+Invariant: `description_defanged` contains no `href` when `links_defanged` is true. Concurrency: none; computed per read in the caller's
+transaction. Functions: `_compute_links_defanged`, `_compute_description_defanged`.
+
+### triage_links_defanged [@ANCHOR: hams_helpdesk:triage_links_defanged]
+
+Purpose: the single rule for whether a ticket shows its links as text. `_triage_links_defanged()` on one ticket returns True when
+`triage_verdict == "phishing"` and `triage_overridden` is false. No argument. Returns `bool`. A recordset that is not exactly one ticket
+(empty or several) returns False. Reads two fields; no side effects. The verdict stays `phishing` after a person's override (the pair is
+the labelled example, see `triage_record_override`), which is why the override flag, not the verdict alone, decides. Tested by
+`TestPhishingLinkDefangTickets` `test_01`, `test_02`, `test_05`, `test_06`, `test_07`.
+
+### compute_links_defanged [@ANCHOR: hams_helpdesk:compute_links_defanged]
+
+`_compute_links_defanged(self)`: the compute method of `links_defanged`; sets it to `_triage_links_defanged()` for each ticket in `self`.
+No other arguments or return value, no side effects, cannot fail.
+
+### compute_description_defanged [@ANCHOR: hams_helpdesk:compute_description_defanged]
+
+`_compute_description_defanged(self)`: the compute method of `description_defanged`; sets it to `defang_html(description)` for a ticket
+whose links are defanged, and to the description for every other ticket. No return value, no side effects, cannot fail.
+
+### notify_layout_defanged [@ANCHOR: hams_helpdesk:notify_layout_defanged]
+
+Purpose: the notification email about a message on a phishing ticket has no live link in the ticket's text. Odoo calls
+`_notify_by_email_render_layout()` once per group of recipients for every email about a message on a thread; this override is on
+`hams_helpdesk.ticket`, so it is the one place every email about a ticket's message passes.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `message` | `mail.message` | The message being mailed. |
+| `recipients_group` | `dict` | Odoo's recipient group (passed through). |
+| `msg_vals` | `dict` or `False` | Odoo's message values; its `body`, when present, is the body to find. |
+| `render_values` | `dict` or `None` | Odoo's layout values (passed through). |
+
+Returns the rendered layout (`Markup`). For a ticket whose links are not defanged it is exactly Odoo's. Otherwise the message body inside
+the layout is replaced by the warning (`DEFANG_WARNING_TEXT`) followed by `defang_html(body)`, and the layout's own links (the button that
+opens the ticket) are kept. Fails safe: if the body is not found verbatim in the rendered layout, the whole layout is defanged instead
+(the button is lost, no link survives). Errors: none of its own. Side effects: none; the email is created by Odoo after it returns.
+Tested by `test_08` to `test_11`.
+
+### message_defanged_ticket_ids [@ANCHOR: hams_helpdesk:message_defanged_ticket_ids]
+
+`mail.message._defanged_ticket_ids()` (`models/mail_message_defanged.py`): among the messages in `self`, the ids of the tickets whose links
+are shown as text (`triage_verdict` is `phishing` and `triage_overridden` is false). One search for the whole recordset, run as the
+helpdesk service account (`hams_helpdesk.user_helpdesk_service`) so the answer does not depend on what the reader may see. Returns a `set` of
+`int`; empty when no message is on a ticket. Read only.
+
+### message_to_store_defanged [@ANCHOR: hams_helpdesk:message_to_store_defanged]
+
+Purpose: the chatter. The Odoo web client is sent message data by `mail.message._to_store(store, fields, **kwargs)`; this override changes
+only the `body` of messages on a defanged ticket.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `store` | `Store` | Odoo's response builder (passed through). |
+| `fields` | `list` | The field names asked for. Copied, never changed in place. When it contains `"body"` and a message is on a defanged ticket, `"body"` is replaced by a `Store.Attr` that sends `defang_html(body)` for those messages and the stored body for the others. |
+| `**kwargs` | | `format_reply`, `msg_vals`, `add_followers`, `followers`: passed through. |
+
+Returns what Odoo's returns (`None`). The stored `mail.message.body` is never changed; reads that do not go through the store (a direct
+`read(["body"])`) see the stored text. Tested by `TestPhishingLinkDefangTickets` `test_03` to `test_06`.
+
+### view_phishing_banner [@ANCHOR: hams_helpdesk:view_phishing_banner]
+
+In the ticket form (`views/helpdesk_ticket_views.xml`): a red banner (`o_phishing_banner`, visible when `links_defanged`) with the warning,
+and the Description page shows `description_defanged` (read only) instead of `description` while `links_defanged`. Tested by
+`test_07_the_warning_text_is_in_the_staff_form_banner`.
+
 ## Recent Improvements
 - Verified and linked all semantic anchors for traceability.
 - Added shift handoff verification to operator tours.

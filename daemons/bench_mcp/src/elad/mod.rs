@@ -430,6 +430,7 @@ fn target_samples(
 }
 
 fn summary(a: &Acquired) -> Value {
+    // [@ANCHOR: elad_summary]
     let (rms, peak, dc, clipped) = dsp::stats(&a.samples);
     let measured = a.samples.len() as f64 / a.elapsed_s.max(1e-9);
     json!({

@@ -86,3 +86,9 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_box_control_in] A boxed transport forwards a control IN to the inner transport.
 - [@ANCHOR: elad_usb:elad_box_control_out] A boxed transport forwards a control OUT.
 - [@ANCHOR: elad_usb:elad_box_bulk_in] A boxed transport forwards a bulk IN.
+- [@ANCHOR: elad_lock_acquire] Takes the single-owner lock for one receiver in the lock directory; a second taker is refused naming the holder.
+- [@ANCHOR: elad_lock_acquire_in] The same with the directory given; the lock is an advisory `flock` on `elad-<bus>-<address>.lock`, released on drop or process death, with the holder's pid and name written in.
+- [@ANCHOR: elad_lock_dir] The lock directory: `ELAD_LOCK_DIR`, else `/run/lock`, else the temp directory.
+- [@ANCHOR: elad_lock_file_name] The lock file name for a bus and address.
+- [@ANCHOR: elad_lock_read_holder] Reads who holds a lock, falling back to "another program".
+- [@ANCHOR: elad_lock_error_display] The refusal text: who holds the receiver and what to do.
