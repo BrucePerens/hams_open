@@ -19,12 +19,16 @@ use rustfft::{num_complex::Complex64, FftPlanner};
 fn read_wav(path: &str) -> Vec<f64> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
         .collect()
 }
 fn env(x: &[f64]) -> Vec<f64> {
-    x.chunks_exact(160)
+    x.as_chunks::<160>()
+        .0
+        .iter()
         .map(|c| (c.iter().map(|s| s * s).sum::<f64>() / 160.0).sqrt())
         .collect()
 }

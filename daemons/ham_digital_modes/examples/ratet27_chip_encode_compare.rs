@@ -64,7 +64,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn parse_speech_payload(payload: &[u8]) -> Vec<i16> {
     let count = u16::from_be_bytes([payload[0], payload[1]]) as usize;
     payload[2..2 + count * 2]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_be_bytes([b[0], b[1]]))
         .collect()
 }
@@ -91,7 +93,9 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
         "{path}: not a standard 44-byte-header PCM WAV"
     );
     data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
         .collect()
 }
@@ -167,7 +171,9 @@ fn corr(a: &[f64], b: &[f64]) -> f64 {
     c / (va.sqrt() * vb.sqrt()).max(1e-12)
 }
 fn env(x: &[f64]) -> Vec<f64> {
-    x.chunks_exact(FRAME_SAMPLES)
+    x.as_chunks::<FRAME_SAMPLES>()
+        .0
+        .iter()
         .map(|c| (c.iter().map(|s| s * s).sum::<f64>() / FRAME_SAMPLES as f64).sqrt())
         .collect()
 }

@@ -461,8 +461,8 @@ mod tests {
         let mut mbe = EncoderMbe::new();
         let mut fixed = EncoderFixed::new();
         let mut voiced = 0;
-        for (k, c) in speech.chunks_exact(SAMPLES_PER_FRAME).enumerate() {
-            let frame: &[i16; SAMPLES_PER_FRAME] = c.try_into().unwrap();
+        for (k, c) in speech.as_chunks::<SAMPLES_PER_FRAME>().0.iter().enumerate() {
+            let frame: &[i16; SAMPLES_PER_FRAME] = c;
             let a = bits::unpack_frame(&mbe.encode(frame), WO_BITS, E_BITS);
             let b = bits::unpack_frame(&fixed.encode(frame), WO_BITS, E_BITS);
             // Same history, same integer LPC path: identical energy and spectral envelope.

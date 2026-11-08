@@ -13,7 +13,9 @@ fn read_wav(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[36..40], b"data", "{path}: expected a 44-byte header");
     data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
         .collect()
 }
@@ -52,8 +54,8 @@ fn fixed_and_float_16k_decodes_put_the_same_energy_above_4_khz() {
         let (mut df, mut dq) = (Decoder::new(), DecoderFixed::new());
         let (mut of, mut oq) = (Vec::new(), Vec::new());
         let mut active = Vec::new();
-        for c in pcm.chunks_exact(SAMPLES_PER_FRAME) {
-            let bits = enc.encode(c.try_into().unwrap());
+        for c in pcm.as_chunks::<SAMPLES_PER_FRAME>().0 {
+            let bits = enc.encode(c);
             of.extend_from_slice(&df.decode_16k(&bits));
             oq.extend_from_slice(&dq.decode_16k_fixed(&bits));
             let e = c.iter().map(|&s| (s as f64).powi(2)).sum::<f64>() / c.len() as f64;

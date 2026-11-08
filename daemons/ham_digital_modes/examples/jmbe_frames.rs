@@ -39,7 +39,9 @@ fn main() {
     let seed: u64 = a[6].parse().unwrap();
     let bytes = std::fs::read(wav).unwrap();
     let pcm: Vec<f64> = bytes[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
         .take(n * 160)
         .collect();

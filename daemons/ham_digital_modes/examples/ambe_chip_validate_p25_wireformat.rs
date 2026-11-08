@@ -543,7 +543,7 @@ fn permutation_search(
             "  WARNING: permutation search took over 3 minutes -- see task's speed constraint."
         );
     }
-    hits.sort_by(|a, b| (b.dew4, b.raw4).cmp(&(a.dew4, a.raw4)));
+    hits.sort_by_key(|a| std::cmp::Reverse((a.dew4, a.raw4)));
     hits
 }
 

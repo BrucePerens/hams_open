@@ -12,7 +12,7 @@ fn no_speech_slot_of_the_four_fixtures_is_a_tone() {
     let mut slots = 0;
     for path in common::OSR_FILES {
         let pcm = common::read_wav_mono_i16(path);
-        for (k, slot) in pcm.chunks_exact(160).enumerate() {
+        for (k, slot) in pcm.as_chunks::<160>().0.iter().enumerate() {
             slots += 1;
             assert!(
                 fx::detect_tone(slot).is_none(),

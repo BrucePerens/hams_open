@@ -31,7 +31,9 @@ fn read_wav(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[36..40], b"data", "{path}: expected a 44-byte header");
     data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
         .collect()
 }
@@ -53,12 +55,14 @@ fn compare(n: &str) -> Agreement {
     let mut enc = EncoderMbe::new();
     let (mut frames, mut voicing, mut wo, mut energy) = (0usize, 0usize, 0usize, 0usize);
     for (chunk, want) in pcm
-        .chunks_exact(SAMPLES_PER_FRAME)
-        .zip(reference.chunks_exact(BYTES_PER_FRAME))
+        .as_chunks::<SAMPLES_PER_FRAME>()
+        .0
+        .iter()
+        .zip(reference.as_chunks::<BYTES_PER_FRAME>().0.iter())
     {
-        let got = enc.encode(chunk.try_into().unwrap());
+        let got = enc.encode(chunk);
         let a = unpack_frame(&got, WO_BITS, E_BITS);
-        let b = unpack_frame(want.try_into().unwrap(), WO_BITS, E_BITS);
+        let b = unpack_frame(want, WO_BITS, E_BITS);
         frames += 1;
         voicing += (a.voiced0 == b.voiced0 && a.voiced1 == b.voiced1) as usize;
         wo += (a.wo_index == b.wo_index) as usize;
@@ -125,8 +129,8 @@ fn decoded_loudness_follows_the_original_speech() {
         let mut enc = EncoderMbe::new();
         let mut dec = Decoder::new();
         let mut out = Vec::new();
-        for c in pcm.chunks_exact(SAMPLES_PER_FRAME) {
-            out.extend_from_slice(&dec.decode(&enc.encode(c.try_into().unwrap())));
+        for c in pcm.as_chunks::<SAMPLES_PER_FRAME>().0 {
+            out.extend_from_slice(&dec.decode(&enc.encode(c)));
         }
         let frames = pcm.len() / SAMPLES_PER_FRAME;
         // The codec's own delay, found as the lag with the smallest mean loudness error.
