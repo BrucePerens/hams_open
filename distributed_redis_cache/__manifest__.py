@@ -14,7 +14,7 @@ Distributed Redis Cache
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",
     "category": "Technical",
-    "version": "1.0",
+    "version": "1.1",
     "license": "AGPL-3",
     "external_dependencies": {
         "python": ["redis", "asyncpg", "python-dotenv"],
@@ -39,7 +39,6 @@ Distributed Redis Cache
             "category": "workspace",
         }
     ],
-    "post_init_hook": "post_init_hook",
     "installable": True,
     "application": False,
     "auto_install": False,

@@ -4,4 +4,5 @@
 from . import models
 from . import redis_cache
 from . import redis_pool
-from .hooks import post_init_hook
+# No post_init_hook since 1.1: the unused Daemon Key Manager registration is removed by
+# hooks.unregister_cache_manager_key(), which migrations/1.1 calls.
