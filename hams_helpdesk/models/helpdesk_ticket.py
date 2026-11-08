@@ -35,7 +35,7 @@ _CSAM_TICKET_TYPE = "csam_enticement_trafficking"
 # The fields only _triage_record_verdict() writes (see the triage_verdict field).
 _TRIAGE_FIELDS = (
     "triage_verdict", "triage_verdict_source", "triage_reasons", "triage_verdict_at", "triage_overridden",
-    "triage_overridden_at", "notify_state", "notify_release_at",
+    "triage_overridden_at", "notify_state", "notify_release_at", "triage_delay_seconds", "triage_stalled_at",
 )
 # Bruce's policy settings for the triage verdict are system parameters, read through zero_sudo's whitelist; the code
 # default is the conservative choice and night_shift_questions/open/ticket-triage-policy-settings-*.md asks Bruce.
@@ -43,6 +43,12 @@ _TRIAGE_PARAM_QUARANTINE = "hams_helpdesk.triage_quarantine_verdicts"
 _TRIAGE_QUARANTINE_DEFAULT = "spam,phishing"
 _TRIAGE_PARAM_HOLD = "hams_helpdesk.triage_notify_hold_seconds"
 _TRIAGE_PARAM_ON_LEAVING_SPAM = "hams_helpdesk.triage_notify_on_leaving_spam"
+_TRIAGE_PARAM_STALL = "hams_helpdesk.triage_stall_seconds"
+# A ticket older than this is not the stall alarm's business (it would otherwise alarm for the whole backlog the day the
+# agent is first switched on); the daemon's fallback timer and a person handle those.
+_TRIAGE_STALL_LOOKBACK_SECONDS = 86400
+# The unit the alarm reports as not doing its job: the event-driven triage service (hams_com daemons/ticket_triage_agent).
+_TRIAGE_STALL_UNIT = "ticket.triage.event.service"
 # The longest hold a setting can ask for: a real request must not wait on the review for longer than this.
 _TRIAGE_MAX_HOLD_SECONDS = 300
 # The ticket types the triage agent is allowed to see (rule_helpdesk_ticket_ai_triage_external_allowlist). Only these
@@ -249,6 +255,14 @@ class HelpdeskTicket(models.Model):
         "(a false positive) the rule weights and the agent's prompt are tuned from. No ticket text is kept.",
     )
     triage_overridden_at = fields.Datetime(string="Overridden at", copy=False, readonly=True)
+    triage_delay_seconds = fields.Integer(
+        string="Seconds to verdict", copy=False, readonly=True,
+        help="Whole seconds from the ticket's creation to the AI triage agent's verdict: the review delay the stall alarm watches.",
+    )
+    triage_stalled_at = fields.Datetime(
+        string="Stall alarm raised", copy=False, readonly=True,
+        help="When the stall alarm fired for this ticket (no verdict within the configured time). Set once.",
+    )
     # The new-ticket notification (the assignment email, toast, shift CC and customer subscription). "sent" is the
     # ordinary state. "held" waits for the triage review window: the ticket is created with no followers and nothing is
     # mailed until a real or unsure verdict, the end of the window (fail open) or a person releases it. "suppressed"
@@ -734,6 +748,8 @@ class HelpdeskTicket(models.Model):
                 "triage_verdict_at",
                 "triage_overridden",
                 "triage_overridden_at",
+                "triage_delay_seconds",
+                "triage_stalled_at",
                 "notify_state",
                 "notify_release_at",
                 "user_id",
@@ -910,6 +926,43 @@ class HelpdeskTicket(models.Model):
             self.write({"stage": "closed"})
 
     @api.model
+    # [@ANCHOR: hams_helpdesk:cron_triage_stall_alarm]
+    def _cron_triage_stall_alarm(self):
+        """Raises the alarm for tickets the AI triage agent has not judged within ``hams_helpdesk.triage_stall_seconds``
+        (0, the default, turns the alarm off: the agent is not enabled everywhere). A stalled review must not leave tickets
+        unjudged silently, whether the agent is down, out of quota or only slow. Each such ticket is marked once
+        (``triage_stalled_at``) and the triage unit is reported through the server-exception reporter, which opens (or adds to)
+        the one ticket that pages. Only new tickets of a type the agent may see, created in the last day, that are not
+        suspicious (the agent never reads those) and have no verdict. Returns how many tickets it marked."""
+        raw = str(self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_STALL, "0") or "0").strip()
+        threshold = int(raw) if raw.isdigit() else 0
+        if threshold <= 0:
+            return 0
+        now = fields.Datetime.now()
+        stalled = self.search(
+            [
+                ("stage", "=", "new"),
+                ("ticket_type", "in", list(_TRIAGE_HELD_TYPES)),
+                ("triage_verdict", "=", False),
+                ("triage_stalled_at", "=", False),
+                ("suspicious", "=", False),
+                ("create_date", "<=", fields.Datetime.subtract(now, seconds=threshold)),
+                ("create_date", ">=", fields.Datetime.subtract(now, seconds=_TRIAGE_STALL_LOOKBACK_SECONDS)),
+            ],
+            limit=200,
+        )
+        if not stalled:
+            return 0
+        stalled.write({"triage_stalled_at": now})
+        _logger.error("The triage agent has not judged tickets %s within %s seconds.", stalled.ids, threshold)
+        self.env["hams_helpdesk.exception.fingerprint"]._report_unit_failures(
+            [_TRIAGE_STALL_UNIT],
+            "triage stall alarm",
+            "%s ticket(s) waited more than %s seconds with no triage verdict" % (len(stalled), threshold),
+        )
+        return len(stalled)
+
+    @api.model
     # [@ANCHOR: hams_helpdesk:triage_hold_seconds]
     def _triage_hold_seconds(self):
         """How long (seconds) the new-ticket notification is held for the triage review: the system parameter
@@ -980,14 +1033,17 @@ class HelpdeskTicket(models.Model):
         if verdict not in dict(self._fields["triage_verdict"].selection):
             raise UserError(_("Unknown triage verdict."))
         hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
-        self.with_env(hd_env).write(
-            {
+        now = fields.Datetime.now()
+        for ticket in self.with_env(hd_env):
+            values = {
                 "triage_verdict": verdict,
                 "triage_verdict_source": source,
                 "triage_reasons": (reasons or "")[:2000],
-                "triage_verdict_at": fields.Datetime.now(),
+                "triage_verdict_at": now,
             }
-        )
+            if source == "agent" and ticket.create_date:
+                values["triage_delay_seconds"] = max(0, int((now - ticket.create_date).total_seconds()))
+            ticket.write(values)
 
     # [@ANCHOR: hams_helpdesk:triage_record_override]
     def _triage_record_override(self, tickets):

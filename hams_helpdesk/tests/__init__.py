@@ -29,3 +29,4 @@ from . import test_public_route_fuzz
 from . import test_request_input_errors
 from . import test_triage_verdict
 from . import test_triage_notify_hold
+from . import test_triage_stall_alarm
