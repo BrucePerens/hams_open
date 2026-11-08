@@ -30,8 +30,6 @@ import (
 	"github.com/cloudflare/cloudflared/credentials"
 	"github.com/cloudflare/cloudflared/diagnostic"
 	"github.com/cloudflare/cloudflared/edgediscovery"
-	"github.com/cloudflare/cloudflared/edgediscovery/allregions"
-	"github.com/cloudflare/cloudflared/features"
 	"github.com/cloudflare/cloudflared/ingress"
 	"github.com/cloudflare/cloudflared/logger"
 	"github.com/cloudflare/cloudflared/management"
@@ -420,12 +418,16 @@ func StartServer(
 		return err
 	}
 	connectorID := tunnelConfig.ClientConfig.ConnectorID
+	precheckReports := diagnostic.NewPrecheckReportStore()
 
 	// Run connectivity pre-checks for cloudflared. This runs in a separate
 	// goroutine, as we want to keep initializing cloudflared while prechecks
 	// are running. Prechecks are controlled via DNS flag for remote kill-switch capability.
 	if !tunnelConfig.ClientConfig.ConnectionFeaturesSnapshot().SkipPrechecks && !c.Bool(cfdflags.NoPrechecks) {
-		go runPrechecks(c, log, tunnelConfig.Region, tunnelConfig.ClientConfig.ConnectionFeaturesSnapshot().PostQuantum)
+		go func() {
+			report := runPrechecks(c, log, tunnelConfig)
+			precheckReports.Set(report)
+		}()
 	}
 
 	// Disable ICMP packet routing for quick tunnels
@@ -502,6 +504,7 @@ func StartServer(
 			tracker,
 			cliFlags,
 			sources,
+			diagnostic.WithPrecheckReportStore(precheckReports),
 		)
 		metricsConfig := metrics.Config{
 			ReadyServer:         readinessServer,
@@ -530,21 +533,13 @@ func StartServer(
 
 // runPrechecks executes connectivity pre-checks and logs the results.
 // Pre-checks are diagnostic only and do not gate tunnel startup.
-func runPrechecks(c *cli.Context, log *zerolog.Logger, region string, pqMode features.PostQuantumMode) {
-	ipVersion := allregions.Auto
-	if ipVersionStr := c.String(cfdflags.EdgeIpVersion); ipVersionStr != "" {
-		parsedVersion, err := parseConfigIPVersion(ipVersionStr)
-		if err == nil {
-			ipVersion = parsedVersion
-		} else {
-			log.Warn().Str("edgeIpVersion", ipVersionStr).Err(err).Msg("Invalid edge-ip-version value, using auto")
-		}
-	}
-
+func runPrechecks(c *cli.Context, log *zerolog.Logger, tunnelConfig *supervisor.TunnelConfig) prechecks.Report {
 	cfg := prechecks.Config{
-		Region:           region,
-		IPVersion:        ipVersion,
-		EdgeAddrs:        c.StringSlice(cfdflags.Edge),
+		Region:           tunnelConfig.Region,
+		IPVersion:        tunnelConfig.EdgeIPVersion,
+		EdgeBindAddr:     tunnelConfig.EdgeBindAddr,
+		QUICConfig:       tunnelConfig.QUICConfigOptions(),
+		EdgeAddrs:        tunnelConfig.EdgeAddrs,
 		ProtocolOverride: c.String(cfdflags.Protocol),
 	}
 
@@ -555,6 +550,7 @@ func runPrechecks(c *cli.Context, log *zerolog.Logger, region string, pqMode fea
 		ManagementDialer: &prechecks.NetManagementDialer{Dialer: net.Dialer{}},
 	}
 
+	pqMode := tunnelConfig.ClientConfig.ConnectionFeaturesSnapshot().PostQuantum
 	report := prechecks.Run(c.Context, c.String(cfdflags.CACert), cfg, pqMode, log, dialers)
 
 	// Output the human-readable table
@@ -562,6 +558,7 @@ func runPrechecks(c *cli.Context, log *zerolog.Logger, region string, pqMode fea
 
 	// Also log structured results for log aggregation
 	report.LogEvent(log)
+	return report
 }
 
 func waitToShutdown(wg *sync.WaitGroup,
@@ -583,7 +580,7 @@ func waitToShutdown(wg *sync.WaitGroup,
 			defer ticker.Stop()
 			select {
 			case <-ticker.C:
-			case <-errC:
+			case <-errC: //nolint:errcheck // Only wait for service termination during graceful shutdown.
 			}
 		}
 	}
@@ -596,7 +593,7 @@ func waitToShutdown(wg *sync.WaitGroup,
 	go func() {
 		for {
 			select {
-			case <-errC: // ignore
+			case <-errC: //nolint:errcheck // Discard errors while waiting for clean exit.
 			case <-stopDiscarding:
 				return
 			}
@@ -982,6 +979,14 @@ func configureProxyFlags(shouldHide bool) []cli.Flag {
 			Usage:   legacyTunnelFlag("specify if this tunnel is running as a SOCK5 Server"),
 			EnvVars: []string{"TUNNEL_SOCKS"},
 			Value:   false,
+			Hidden:  shouldHide,
+		}),
+		altsrc.NewBoolFlag(&cli.BoolFlag{
+			Name: cfdflags.DisablePathNormalization,
+			Usage: "Disable URL path normalization before matching ingress rules. Use this setting at your own risk." +
+				"An unnormalized request path could bypass Cloudflare Access rules and reach a protected origin.",
+			EnvVars: []string{"TUNNEL_DISABLE_PATH_NORMALIZATION"},
+			Value:   true,
 			Hidden:  shouldHide,
 		}),
 		altsrc.NewDurationFlag(&cli.DurationFlag{
