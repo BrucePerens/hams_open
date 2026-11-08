@@ -9,6 +9,7 @@ only the process table (`psutil.process_iter`) and the wrapped `TestCursor.execu
 that nothing real is killed and no real database conflict is needed."""
 import concurrent.futures
 import os
+import tempfile
 import threading
 from types import SimpleNamespace
 
@@ -24,8 +25,8 @@ from odoo.tests.common import tagged
 class _FakeProcess:
     """Just enough of psutil.Process for the reaper: `info`, `kill()` and `wait()`."""
 
-    def __init__(self, name, uid, cmdline):
-        self.info = {"pid": 1, "name": name, "uids": SimpleNamespace(real=uid), "cmdline": cmdline}
+    def __init__(self, name, uid, cmdline, pid=1):
+        self.info = {"pid": pid, "name": name, "uids": SimpleNamespace(real=uid), "cmdline": cmdline}
         self.kills = 0
 
     def kill(self):
@@ -70,18 +71,34 @@ class TestHarnessHelpers(HamsTransactionCase):
         self.assertEqual(zero_sudo_tests._monitored_test_execute(object(), "SELECT 1", log_exceptions=False), "rows")
 
     # Tests [@ANCHOR: zero_sudo:kill_all_headless_chrome]
-    def test_only_this_uids_headless_chrome_processes_are_killed(self):
+    # Tests [@ANCHOR: zero_sudo:headless_chrome_of_this_run]
+    def test_only_this_runs_headless_chrome_processes_are_killed(self):
         mine = os.getuid()
-        victim = _FakeProcess("chromium", mine, ["chromium", "--headless=new"])
-        victim_two = _FakeProcess("chrome", mine, ["/opt/chrome", "--remote-debugging-port=0", "--headless"])
-        visible_browser = _FakeProcess("chromium", mine, ["chromium"])
-        someone_elses = _FakeProcess("chromium", mine + 1, ["chromium", "--headless"])
-        not_a_browser = _FakeProcess("python3", mine, ["python3", "--headless"])
-        everything = [victim, victim_two, visible_browser, someone_elses, not_a_browser]
-        self.safe_patch_object(psutil, "process_iter", lambda *_a, **_k: iter(everything))
-        common._kill_all_headless_chrome_for_this_uid()
-        self.assertGreaterEqual(victim.kills, 1)
-        self.assertGreaterEqual(victim_two.kills, 1)
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as profile_dir:
+            leftover_profile = os.path.join(profile_dir, "left_chrome_odoo")
+            os.makedirs(leftover_profile)
+            descendant = _FakeProcess("chromium", mine, ["chromium", "--headless=new"], pid=4101)
+            leftover = _FakeProcess(
+                "chrome", mine, ["/opt/chrome", "--headless", f"--user-data-dir={leftover_profile}"], pid=4102
+            )
+            another_runs = _FakeProcess(
+                "chrome", mine, ["/opt/chrome", "--headless", f"--user-data-dir={profile_dir}/no_such_dir_chrome_odoo"],
+                pid=4103,
+            )
+            no_profile_not_a_child = _FakeProcess("chromium", mine, ["chromium", "--headless"], pid=4104)
+            visible_browser = _FakeProcess("chromium", mine, ["chromium"], pid=4105)
+            someone_elses = _FakeProcess("chromium", mine + 1, ["chromium", "--headless"], pid=4101)
+            not_a_browser = _FakeProcess("python3", mine, ["python3", "--headless"], pid=4101)
+            everything = [descendant, leftover, another_runs, no_profile_not_a_child, visible_browser, someone_elses, not_a_browser]
+            self.safe_patch_object(psutil, "process_iter", lambda *_a, **_k: iter(everything))
+            self.safe_patch_object(
+                psutil, "Process", lambda *_a, **_k: SimpleNamespace(children=lambda recursive=False: [SimpleNamespace(pid=4101)])
+            )
+            common._kill_all_headless_chrome_for_this_uid()
+        self.assertGreaterEqual(descendant.kills, 1, "a descendant of this test process is this run's browser")
+        self.assertGreaterEqual(leftover.kills, 1, "an orphan whose profile directory is here is this run's leftover")
+        self.assertEqual(another_runs.kills, 0, "a browser whose profile directory is not here belongs to another run")
+        self.assertEqual(no_profile_not_a_child.kills, 0, "an unrelated headless browser of the same uid belongs to another run")
         self.assertEqual(visible_browser.kills, 0, "a non-headless browser belongs to a person")
         self.assertEqual(someone_elses.kills, 0, "another uid's process must never be touched")
         self.assertEqual(not_a_browser.kills, 0, "only chrome/chromium by name")
