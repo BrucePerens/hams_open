@@ -32,6 +32,16 @@ _logger = logging.getLogger(__name__)
 # ordinary on-duty routing every other ticket already gets from _automated_routing_and_notification.
 _CSAM_TICKET_TYPE = "csam_enticement_trafficking"
 
+# The fields only _triage_record_verdict() writes (see the triage_verdict field).
+_TRIAGE_FIELDS = (
+    "triage_verdict", "triage_verdict_source", "triage_reasons", "triage_verdict_at", "triage_overridden",
+    "triage_overridden_at",
+)
+# Bruce's policy settings for the triage verdict are system parameters, read through zero_sudo's whitelist; the code
+# default is the conservative choice and night_shift_questions/open/ticket-triage-policy-settings-*.md asks Bruce.
+_TRIAGE_PARAM_QUARANTINE = "hams_helpdesk.triage_quarantine_verdicts"
+_TRIAGE_QUARANTINE_DEFAULT = "spam,phishing"
+
 # ham_communications_consent (hams_com, proprietary) is NOT a dependency of this module --
 # hams_helpdesk lives in hams_open and must remain installable/testable standalone (see
 # pager_duty/models/pager_check.py's own update_lets_encrypt_domains() for the established
@@ -211,6 +221,28 @@ class HelpdeskTicket(models.Model):
         tracking=True,
     )
 
+    # The triage verdict (Bruce, 2026-11-02): every ticket from every route is judged, by the inbound rules at
+    # intake and by the AI triage agent after it. Never caller-settable (create() drops them, write() refuses a
+    # portal caller); written only by _triage_record_verdict() under the helpdesk service account. The reasons are
+    # the agent's or the rules' own words, already filtered; no ticket text is copied here.
+    triage_verdict = fields.Selection(
+        [("spam", "Spam"), ("phishing", "Phishing"), ("real", "A real request"), ("unsure", "Unsure")],
+        string="Triage verdict", copy=False, index=True, readonly=True,
+    )
+    triage_verdict_source = fields.Selection(
+        [("rules", "Inbound mail rules"), ("agent", "AI triage agent")],
+        string="Verdict by", copy=False, readonly=True,
+    )
+    triage_reasons = fields.Text(string="Verdict reasons", copy=False, readonly=True)
+    triage_verdict_at = fields.Datetime(string="Verdict at", copy=False, readonly=True)
+    triage_overridden = fields.Boolean(
+        string="Verdict overridden by a person", copy=False, readonly=True, index=True,
+        help="A person moved the ticket out of the Spam stage after a spam or phishing verdict. The agent never "
+        "judges the ticket again, and the verdict, its source and this flag together are the labelled example "
+        "(a false positive) the rule weights and the agent's prompt are tuned from. No ticket text is kept.",
+    )
+    triage_overridden_at = fields.Datetime(string="Overridden at", copy=False, readonly=True)
+
     priority = fields.Selection(
         [
             ("0", "Low"),
@@ -377,6 +409,9 @@ class HelpdeskTicket(models.Model):
                 on_duty_user_id = on_duty_admin.id
         except Exception as e: # audit-ignore-catch-all
             _logger.warning("Failed to get on_duty_admin: %s", e)
+
+        # The triage verdict is written only by _triage_record_verdict(); nothing a caller sends can set it.
+        vals_list = [{k: v for k, v in vals.items() if k not in _TRIAGE_FIELDS} for vals in vals_list]
 
         # Pre-fetch records
         website_ids = {vals["website_id"] for vals in vals_list if vals.get("website_id")}
@@ -659,6 +694,12 @@ class HelpdeskTicket(models.Model):
                 "suspicion_score",
                 "suspicious",
                 "suspicion_removed",
+                "triage_verdict",
+                "triage_verdict_source",
+                "triage_reasons",
+                "triage_verdict_at",
+                "triage_overridden",
+                "triage_overridden_at",
                 "user_id",
                 "priority",
                 "calendar_event_id",
@@ -726,6 +767,7 @@ class HelpdeskTicket(models.Model):
         leaving_spam = self.filtered(lambda t: t.stage == "spam") if vals.get("stage") not in (None, "spam") else self.browse()
         res = super().write(vals)
         if leaving_spam:
+            self._triage_record_override(leaving_spam)
             # A quarantined ticket has no followers (see create()); a person recovering it makes it an ordinary ticket again, so
             # its assignee and customer follow it like any other. Subscribing sends nothing.
             hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
@@ -823,6 +865,74 @@ class HelpdeskTicket(models.Model):
         if self.stage != "closed":
             self.write({"stage": "closed"})
 
+    @api.model
+    # [@ANCHOR: hams_helpdesk:triage_quarantine_verdicts]
+    def _triage_quarantine_verdicts(self):
+        """The verdicts that move a ticket to the Spam stage and keep every operator email about it from being sent: the
+        system parameter ``hams_helpdesk.triage_quarantine_verdicts`` (comma separated, ``spam,phishing`` by default).
+        Which verdicts count is Bruce's policy, so it is a setting; a verdict outside the set is recorded and the ticket
+        stays where it is. Unknown words in the setting are ignored."""
+        raw = self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_QUARANTINE, _TRIAGE_QUARANTINE_DEFAULT)
+        return {word for word in (part.strip() for part in str(raw or "").split(",")) if word in ("spam", "phishing")}
+
+    # [@ANCHOR: hams_helpdesk:triage_record_verdict]
+    def _triage_record_verdict(self, verdict, reasons, source):
+        """Records ``verdict`` (spam, phishing, real or unsure), its ``reasons`` and who decided (``rules`` or ``agent``) on
+        the tickets in self, as the helpdesk service account. It does not move the ticket or send anything: the stage move
+        and the notification rules are the callers'. The reasons are cut to 2000 characters."""
+        if verdict not in dict(self._fields["triage_verdict"].selection):
+            raise UserError(_("Unknown triage verdict."))
+        hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+        self.with_env(hd_env).write(
+            {
+                "triage_verdict": verdict,
+                "triage_verdict_source": source,
+                "triage_reasons": (reasons or "")[:2000],
+                "triage_verdict_at": fields.Datetime.now(),
+            }
+        )
+
+    # [@ANCHOR: hams_helpdesk:triage_record_override]
+    def _triage_record_override(self, tickets):
+        """A person moved ``tickets`` out of the Spam stage (called from write() with the tickets that were in it). Each one
+        that carried a spam or phishing verdict is marked overridden, with the time: the labelled false positive. Nothing
+        is copied from the ticket. A ticket the agent or the rules never judged is left alone."""
+        judged = tickets.filtered(lambda t: t.triage_verdict in ("spam", "phishing") and not t.triage_overridden)
+        if judged:
+            hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+            judged.with_env(hd_env).write({"triage_overridden": True, "triage_overridden_at": fields.Datetime.now()})
+
+    # [@ANCHOR: hams_helpdesk:mcp_record_verdict]
+    def mcp_record_verdict(self, verdict, reason):
+        """The external-AI triage agent's verdict on a ticket still in "new": spam, phishing, real or unsure, with the reasons
+        recorded on the ticket and as an internal note (filtered like every note the agent writes). A verdict in
+        ``_triage_quarantine_verdicts()`` also moves the ticket to the Spam stage (never deletes it, never mails the sender);
+        any other verdict leaves it where it is. A ticket a person has moved out of the Spam stage is never judged again
+        (the person's decision wins), and neither is one a person already picked up. Same access shape as
+        mcp_mark_spam(): the read runs first under the calling identity so the ir.rule allow-list decides which tickets
+        exist for it, and the writes run as the helpdesk service account."""
+        self.ensure_one()
+        current = self.read(["stage", "triage_overridden"])[0]
+        if current["stage"] != "new":
+            raise UserError(_("Only a ticket in the New stage can be judged by the triage agent."))
+        if current["triage_overridden"]:
+            raise UserError(_("A person moved this ticket out of the Spam stage; the triage agent does not judge it again."))
+        if verdict not in dict(self._fields["triage_verdict"].selection):
+            raise UserError(_("Unknown triage verdict."))
+        visible = ut.sanitize_any(reason or "", 2000, "ai_note").plain
+        text = ut.filter_ai_output(visible).text
+        hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+        ticket = self.with_env(hd_env)
+        ticket._triage_record_verdict(verdict, text, "agent")
+        quarantine = verdict in self._triage_quarantine_verdicts()
+        if quarantine:
+            ticket.write({"stage": "spam"})
+        label = dict(self._fields["triage_verdict"].selection)[verdict]
+        intro = "Marked as spam by the AI triage agent:" if verdict == "spam" and quarantine else "AI triage verdict (%s):" % label
+        body = Markup("<p>%s</p>") % Markup("<br/>").join(Markup.escape(line) for line in (intro + "\n" + text).split("\n"))
+        ticket.message_post(body=body, subtype_xmlid="mail.mt_note")
+        return True
+
     # [@ANCHOR: hams_helpdesk:COMM_mcp_post_internal_note]
     def mcp_post_internal_note(self, note):
         """Posts ``note`` to this ticket's own chatter as an internal
@@ -887,17 +997,7 @@ class HelpdeskTicket(models.Model):
         self.ensure_one()
         if self.read(["stage"])[0]["stage"] != "new":
             raise UserError(_("Only a ticket in the New stage can be marked as spam by the triage agent."))
-        utils = self.env["zero_sudo.security.utils"]
-        hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
-        visible = ut.sanitize_any(reason or "", 2000, "ai_note").plain
-        text = ut.filter_ai_output(visible).text
-        body = Markup("<p>%s</p>") % Markup("<br/>").join(
-            Markup.escape(line) for line in ("Marked as spam by the AI triage agent:\n" + text).split("\n")
-        )
-        ticket = self.with_env(hd_env)
-        ticket.write({"stage": "spam"})
-        ticket.message_post(body=body, subtype_xmlid="mail.mt_note")
-        return True
+        return self.mcp_record_verdict("spam", reason)
 
     def mcp_safe_read(self, max_chars=0):
         """The ONLY ticket view the external-AI triage server reads: for each ticket in self, the
@@ -1068,6 +1168,7 @@ class HelpdeskTicket(models.Model):
             )
         ticket = super().message_new(msg_dict, custom_values=values)
         if spam_reasons:
+            ticket._triage_record_verdict("spam", "; ".join(spam_reasons), "rules")
             ticket.message_post(
                 body=Markup(
                     "<p><strong>Possible spam/phishing</strong> (flagged by the "

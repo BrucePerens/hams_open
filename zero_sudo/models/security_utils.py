@@ -908,6 +908,13 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # (compliance/controllers/main.py). Per-deployment, so they are parameters and not template text.
             "compliance.dmca_registration_number",
             "compliance.dmca_agent_name",
+            # hams_helpdesk triage policy settings (Bruce's decisions, so settings): which verdicts quarantine a ticket,
+            # how long the new-ticket email is held for the review, whether leaving the Spam stage sends the notice,
+            # and the stall alarm threshold. Plain words and numbers.
+            "hams_helpdesk.triage_quarantine_verdicts",
+            "hams_helpdesk.triage_notify_hold_seconds",
+            "hams_helpdesk.triage_notify_on_leaving_spam",
+            "hams_helpdesk.triage_stall_seconds",
         ]
 
     @api.model
