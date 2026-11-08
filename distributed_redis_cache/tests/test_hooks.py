@@ -34,11 +34,12 @@ class TestDistributedRedisCacheHooks(HamsTransactionCase):
             [("name", "=", CACHE_MANAGER_KEY_NAME)]
         )
 
-    def _api_keys(self, user):
-        manager = self.env.ref(KEY_MANAGER_XMLID)
-        return self.env["res.users.apikeys"].with_user(manager).search(
-            [("user_id", "=", user.id), ("name", "=", f"{CACHE_MANAGER_KEY_NAME}_key")]
+    def _api_key_count(self, user):
+        self.env.cr.execute(
+            "SELECT count(*) FROM res_users_apikeys WHERE user_id = %s AND name = %s",
+            (user.id, f"{CACHE_MANAGER_KEY_NAME}_key"),
         )
+        return self.env.cr.fetchone()[0]
 
     def test_unregister_removes_the_row_and_revokes_its_key(self):
         # [@ANCHOR: distributed_redis_cache:test_unregister_cache_manager_key]
@@ -46,13 +47,13 @@ class TestDistributedRedisCacheHooks(HamsTransactionCase):
         user = self.env.ref(LEGACY_USER_XMLID)
         self._register_as_version_1_0_did()
         self.assertEqual(len(self._registries()), 1)
-        self.assertEqual(len(self._api_keys(user)), 1)
+        self.assertEqual(self._api_key_count(user), 1)
 
         removed = unregister_cache_manager_key(self.env)
 
         self.assertEqual(removed, 1)
         self.assertFalse(self._registries())
-        self.assertFalse(self._api_keys(user))
+        self.assertEqual(self._api_key_count(user), 0)
         self.assertTrue(user.exists(), "the service account itself stays")
         self.assertTrue(user.active)
 

@@ -41,22 +41,24 @@ class TestUnregisterDaemon(RealTransactionCase):
     def _rows(self):
         return self.registry_model.search([("name", "=", DAEMON_NAME)])
 
-    def _keys(self):
-        return self.env["res.users.apikeys"].with_user(self.manager).search(
-            [("user_id", "=", self.service_user.id), ("name", "=", f"{DAEMON_NAME}_key")]
+    def _key_count(self):
+        self.env.cr.execute(
+            "SELECT count(*) FROM res_users_apikeys WHERE user_id = %s AND name = %s",
+            (self.service_user.id, f"{DAEMON_NAME}_key"),
         )
+        return self.env.cr.fetchone()[0]
 
     def test_a_manager_removes_the_row_and_revokes_its_key(self):
         # [@ANCHOR: daemon_key_manager:test_unregister_daemon]
         # Tests [@ANCHOR: daemon_key_manager:unregister_daemon]
         self.assertEqual(len(self._rows()), 1)
-        self.assertEqual(len(self._keys()), 1)
+        self.assertEqual(self._key_count(), 1)
 
         removed = self.registry_model.unregister_daemon(DAEMON_NAME)
 
         self.assertEqual(removed, 1)
         self.assertFalse(self._rows())
-        self.assertFalse(self._keys())
+        self.assertEqual(self._key_count(), 0)
         self.assertTrue(self.service_user.exists(), "the service account stays")
         self.assertTrue(os.path.exists(SCRATCH_KEY_FILE), "the key file is left for an operator")
 
