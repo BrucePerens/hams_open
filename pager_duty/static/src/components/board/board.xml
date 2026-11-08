@@ -27,6 +27,7 @@
                     <div class="col-md-8">
                         <h2 class="mb-3 text-light">Active Incidents</h2>
                         <t t-if="state.active_incidents.length === 0">
+                            <!-- cv-ok: the green panel also has a check icon and the words "No active incidents"; the colour is a second cue -->
                             <div class="p-4 rounded shadow-sm" style="background: rgba(25, 135, 84, 0.2); border: 1px solid #198754;">
                                 <i class="fa fa-check-circle me-2 text-success" aria-hidden="true"/> No active incidents. The system is healthy.
                             </div>

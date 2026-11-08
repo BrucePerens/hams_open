@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="pager_duty.LogViewerTemplate" owl="1">
+        <!-- cv-ok: terminal-style log text, decoration; each line is words -->
         <div class="log-viewer p-4" style="background: #121212; min-height: 100vh; color: #33ff00; font-family: monospace;">
             <div class="d-flex justify-content-between align-items-center mb-4 p-3 rounded shadow-sm" style="background: #1e1e1e;">
                 <h2 class="m-0 text-light"><i class="fa fa-terminal me-2" aria-hidden="true"/>NOC Log Search</h2>
