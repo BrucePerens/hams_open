@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 {
     "name": "Hams AI Safety Reporting",
-    "version": "1.0",
+    "version": "1.1",
     "category": "Operations/Helpdesk",
     "summary": "Ticket category and narrow service account for AI safety-classification self-reporting.",
     "description": """
@@ -25,10 +25,11 @@
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",
     "license": "AGPL-3",
-    "depends": ["hams_helpdesk"],
+    "depends": ["hams_helpdesk", "daemon_key_manager", "zero_sudo"],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",
     ],
+    "post_init_hook": "post_init_hook",
     "installable": True,
 }
