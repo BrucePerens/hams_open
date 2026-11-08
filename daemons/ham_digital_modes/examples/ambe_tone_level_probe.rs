@@ -65,7 +65,9 @@ fn parse_packet(data: &[u8]) -> Option<(u8, &[u8])> {
 fn parse_speech_payload(payload: &[u8]) -> Vec<i16> {
     let count = u16::from_be_bytes([payload[0], payload[1]]) as usize;
     payload[2..2 + count * 2]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_be_bytes([b[0], b[1]]))
         .collect()
 }
@@ -88,7 +90,9 @@ fn read_wav_mono_i16(path: &str) -> Vec<i16> {
     assert_eq!(&data[8..12], b"WAVE");
     assert_eq!(&data[36..40], b"data");
     data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
         .collect()
 }

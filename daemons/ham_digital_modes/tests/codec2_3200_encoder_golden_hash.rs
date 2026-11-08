@@ -39,7 +39,9 @@ fn read_wav(path: &str) -> Vec<i16> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     assert_eq!(&data[36..40], b"data", "{path}: expected a 44-byte header");
     data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
         .collect()
 }
@@ -73,9 +75,8 @@ fn hash_with(mut encode: impl FnMut(&[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER
     let mut h = FNV_OFFSET;
     for n in OSR {
         let pcm = read_wav(&osr_path(n));
-        for chunk in pcm.chunks_exact(SAMPLES_PER_FRAME) {
-            let frame: &[i16; SAMPLES_PER_FRAME] = chunk.try_into().unwrap();
-            fnv(&mut h, &encode(frame));
+        for chunk in pcm.as_chunks::<SAMPLES_PER_FRAME>().0 {
+            fnv(&mut h, &encode(chunk));
         }
     }
     for frame in pseudo_random_frames() {

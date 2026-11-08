@@ -12,7 +12,9 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let data = std::fs::read(&args[1]).expect("wav");
     let pcm: Vec<i16> = data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
         .collect();
     let first: usize = args[2].parse().unwrap();

@@ -47,13 +47,12 @@ fn main() {
         .collect();
     let wav = std::fs::read(std::env::temp_dir().join("dstar_chip_decoded.wav")).expect("chip wav");
     let chip: Vec<f64> = wav[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
         .collect();
-    let chip_frames: Vec<[f64; 160]> = chip
-        .chunks_exact(160)
-        .map(|c| c.try_into().unwrap())
-        .collect();
+    let chip_frames: Vec<[f64; 160]> = chip.as_chunks::<160>().0.to_vec();
 
     let mut voiced_by_l = [(0usize, 0usize); 12];
     let mut ml_by_l = [(0.0f64, 0usize); 12];

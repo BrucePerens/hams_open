@@ -9,7 +9,9 @@
 use ham_digital_modes::ambe::float::tia_102_baba::decode::{DecoderState, FrameOutcome};
 
 fn env(x: &[f64]) -> Vec<f64> {
-    x.chunks_exact(160)
+    x.as_chunks::<160>()
+        .0
+        .iter()
         .map(|c| (c.iter().map(|s| s * s).sum::<f64>() / 160.0).sqrt())
         .collect()
 }
@@ -47,7 +49,9 @@ fn main() {
         .collect();
     let chip: Vec<f64> = std::fs::read(format!("{dir}/ratet27_chip.raw"))
         .unwrap()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
         .collect();
     let alphas: Vec<Option<f64>> = std::env::var("L_ALPHAS")

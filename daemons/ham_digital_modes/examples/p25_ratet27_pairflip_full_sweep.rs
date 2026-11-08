@@ -169,7 +169,9 @@ fn main() {
                         let (ptype, payload) = parse_packet(&buf[..n]).expect("valid packet");
                         assert_eq!(ptype, TYPE_SPEECH, "expected a SPEECH (decode) response");
                         return payload[2..]
-                            .chunks_exact(2)
+                            .as_chunks::<2>()
+                            .0
+                            .iter()
                             .map(|b| i16::from_be_bytes([b[0], b[1]]))
                             .collect();
                     }

@@ -903,14 +903,16 @@ mod tests {
         );
         let data = std::fs::read(path).expect("speech fixture");
         let samples: Vec<i16> = data[44..]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| i16::from_le_bytes([c[0], c[1]]))
             .collect();
         let mut a = EncoderFixed::new();
         let mut b = FloatBoundaryEncoderFixed::new();
         let (mut frames, mut differing, mut bytes_differing) = (0usize, 0usize, 0usize);
-        for chunk in samples.chunks_exact(SAMPLES_PER_FRAME) {
-            let frame: [i16; SAMPLES_PER_FRAME] = chunk.try_into().unwrap();
+        for chunk in samples.as_chunks::<SAMPLES_PER_FRAME>().0 {
+            let frame: [i16; SAMPLES_PER_FRAME] = *chunk;
             let x = a.encode(&frame);
             let y = b.encode(&frame);
             frames += 1;

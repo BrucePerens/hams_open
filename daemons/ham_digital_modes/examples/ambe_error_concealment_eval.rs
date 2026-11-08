@@ -203,7 +203,9 @@ fn main() {
     for f in FILES {
         let bytes = std::fs::read(f).unwrap();
         let pcm: Vec<f64> = bytes[44..]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
             .take(n_frames * 160)
             .collect();

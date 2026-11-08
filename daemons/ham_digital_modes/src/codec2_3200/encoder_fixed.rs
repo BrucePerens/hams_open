@@ -378,7 +378,9 @@ mod tests {
     fn read_wav(path: &str) -> Vec<i16> {
         let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
         data[44..]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|b| i16::from_le_bytes([b[0], b[1]]))
             .collect()
     }
@@ -412,8 +414,8 @@ mod tests {
             let samples = read_wav(path.to_str().unwrap());
             let mut prod = EncoderFixed::new();
             let mut oracle = EncoderFixed::new();
-            for chunk in samples.chunks_exact(SAMPLES_PER_FRAME) {
-                let frame: [i16; SAMPLES_PER_FRAME] = chunk.try_into().unwrap();
+            for chunk in samples.as_chunks::<SAMPLES_PER_FRAME>().0 {
+                let frame: [i16; SAMPLES_PER_FRAME] = *chunk;
                 let a = bits::unpack_frame(&prod.encode(&frame), WO_BITS, E_BITS);
                 let b = bits::unpack_frame(
                     &oracle.encode_with_float_boundaries(&frame),

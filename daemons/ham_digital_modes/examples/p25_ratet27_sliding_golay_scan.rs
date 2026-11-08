@@ -165,7 +165,7 @@ fn main() {
             }
         }
     }
-    best.sort_by(|a, b| b.3.cmp(&a.3));
+    best.sort_by_key(|a| std::cmp::Reverse(a.3));
     if best.is_empty() {
         println!("No window position scored above 50% Golay-validity under any hypothesis -- clean negative.");
         // Report the single best score anyway, for context.

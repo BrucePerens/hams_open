@@ -13,7 +13,7 @@ fn speech_frames_are_never_detected_as_tones() {
             "tests/fixtures/osr_speech/OSR_us_000_{name}_8k.wav"
         ));
         let samples: Vec<f64> = pcm.iter().map(|&s| s as f64).collect();
-        for (i, frame) in samples.chunks_exact(160).enumerate() {
+        for (i, frame) in samples.as_chunks::<160>().0.iter().enumerate() {
             assert!(
                 detect_tone(frame).is_none(),
                 "OSR {name}: frame {i} of real speech detected as a tone"

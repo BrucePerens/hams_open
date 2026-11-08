@@ -27,7 +27,9 @@ const FFT_LEN: usize = 8192;
 fn read_wav(path: &str) -> Vec<f64> {
     let data = std::fs::read(path).unwrap_or_else(|e| panic!("{path}: {e}"));
     data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]) as f64)
         .collect()
 }

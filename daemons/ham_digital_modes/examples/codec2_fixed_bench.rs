@@ -10,7 +10,9 @@ fn main() {
     let data = std::fs::read(&args[1]).expect("wav");
     let passes: usize = args.get(2).map_or(5, |s| s.parse().unwrap());
     let samples: Vec<i16> = data[44..]
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|b| i16::from_le_bytes([b[0], b[1]]))
         .collect();
     let n = samples.len() / SAMPLES_PER_FRAME;
