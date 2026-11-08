@@ -57,6 +57,17 @@
                         <field name="suspicion_removed" class="oe_inline"/> hidden characters were removed from
                         this ticket. See the Filter Findings page.
                     </div>
+                    <!-- The triage verdict: who judged this ticket, what, and why (models/helpdesk_ticket.py). -->
+                    <field name="triage_verdict" invisible="1"/>
+                    <div class="alert alert-info" role="status" invisible="not triage_verdict">
+                        <strong>Triage verdict:</strong> <field name="triage_verdict" class="oe_inline"/>
+                        (<field name="triage_verdict_source" class="oe_inline"/>,
+                        <field name="triage_verdict_at" class="oe_inline"/>).
+                        <field name="triage_reasons" class="oe_inline"/>
+                        <span invisible="not triage_overridden">
+                            A person overrode this verdict on <field name="triage_overridden_at" class="oe_inline"/>.
+                        </span>
+                    </div>
                     <group>
                         <group>
                             <!-- The record id is the ticket number everything else quotes
