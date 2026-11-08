@@ -694,21 +694,21 @@ mod tests {
             hub.run("sudo", &argv).unwrap();
         };
         let mut polls_seen = Vec::new();
-        let v = watch_with(
-            &sys,
-            &json!({"seconds": 60, "interval_ms": 50}),
-            &mut |n| {
-                polls_seen.push(n);
-                match n {
-                    3 => switch("off"),
-                    6 => switch("on"),
-                    _ => {}
-                }
-                n >= 9
-            },
-        )
+        let v = watch_with(&sys, &json!({"seconds": 60, "interval_ms": 50}), &mut |n| {
+            polls_seen.push(n);
+            match n {
+                3 => switch("off"),
+                6 => switch("on"),
+                _ => {}
+            }
+            n >= 9
+        })
         .unwrap();
-        assert_eq!(polls_seen, (0..=9).collect::<Vec<u64>>(), "after_poll runs once per snapshot, from 0");
+        assert_eq!(
+            polls_seen,
+            (0..=9).collect::<Vec<u64>>(),
+            "after_poll runs once per snapshot, from 0"
+        );
         let kinds: Vec<_> = v["events"]
             .as_array()
             .unwrap()
@@ -718,7 +718,10 @@ mod tests {
             .collect();
         assert_eq!(kinds, ["disappeared", "appeared"], "{v}");
         assert_eq!(v["enumerations_per_device"]["3-2.2"], 1);
-        assert!(v["watched_s"].as_f64().unwrap() < 60.0, "stopped early by the callback: {v}");
+        assert!(
+            v["watched_s"].as_f64().unwrap() < 60.0,
+            "stopped early by the callback: {v}"
+        );
     }
 
     // Tests [@ANCHOR: usb_hub_watch]
