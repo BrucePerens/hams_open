@@ -1,0 +1,10 @@
+# ELAD FDM-DUO / FDM-S2 / FDM-S1 receivers (USB vendor 1721): let the person at the console use the sample interface.
+# What: tags the three known product ids with "uaccess", which gives the logged-in desktop user an ACL on the device node.
+# Why: elad_usb (and the relay's and bench_mcp's ELAD receivers) open the device with libusb, which needs read/write on /dev/bus/usb.
+# Scope: only these three product ids; nothing else on the bus. Receive only: the software sends no transmit or CAT request.
+# Caveat: a headless relay service account is not a console user: add its group with GROUP="plugdev" (or similar) in a local copy.
+# Remove: delete this file, then run `udevadm control --reload && udevadm trigger`.
+# Added by elad_usb, https://github.com/BrucePerens/hams_open
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1721", ATTR{idProduct}=="061a", TAG+="uaccess"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1721", ATTR{idProduct}=="061c", TAG+="uaccess"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1721", ATTR{idProduct}=="0610", TAG+="uaccess"

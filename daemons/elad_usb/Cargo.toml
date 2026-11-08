@@ -1,0 +1,25 @@
+[package]
+name = "elad_usb"
+version = "0.1.0"
+edition = "2021"
+description = "Receive-only USB driver for ELAD FDM-DUO, FDM-S2 and FDM-S1 receivers: protocol, I/Q conversion, a transport seam with a fake, no vendor code"
+license = "AGPL-3.0-or-later"
+publish = false
+rust-version = "1.98"
+
+[features]
+# The real USB transport (libusb through rusb). Without it the crate is sans-IO and the tests use the fake.
+default = ["usb"]
+usb = ["dep:rusb"]
+
+[dependencies]
+rusb = { version = "0.9", optional = true }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
