@@ -159,9 +159,14 @@ mod tests {
         assert!(holder.contains("relay") && holder.contains(&std::process::id().to_string()));
         assert_eq!(path, first.path());
         let text = err.to_string();
-        assert!(text.contains("in use by pid") && text.contains("relay"), "{text}");
+        assert!(
+            text.contains("in use by pid") && text.contains("relay"),
+            "{text}"
+        );
         // The refused attempt must not have overwritten the holder's note.
-        assert!(std::fs::read_to_string(first.path()).unwrap().contains("relay"));
+        assert!(std::fs::read_to_string(first.path())
+            .unwrap()
+            .contains("relay"));
         drop(first);
         assert!(DeviceLock::acquire_in(&d, 1, 8, "bench_mcp").is_ok());
     }
@@ -179,7 +184,8 @@ mod tests {
     #[test]
     fn an_unwritable_directory_is_an_io_error_not_a_held_lock() {
         // Tests [@ANCHOR: elad_lock_acquire_in]
-        let err = DeviceLock::acquire_in(Path::new("/nonexistent-elad-dir"), 1, 8, "x").unwrap_err();
+        let err =
+            DeviceLock::acquire_in(Path::new("/nonexistent-elad-dir"), 1, 8, "x").unwrap_err();
         assert!(matches!(err, LockError::Io(_)));
         assert!(err.to_string().contains("could not take"));
     }
