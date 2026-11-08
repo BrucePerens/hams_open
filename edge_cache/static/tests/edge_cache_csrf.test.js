@@ -30,7 +30,57 @@ function install() {
 describe("edge_cache_csrf", () => {
     describe.current.tags("edge_cache");
 
+    // Tests [@ANCHOR: edge_cache:csrf_onWebsiteFormSend]
+    // The module keeps its "a token was fetched" state for the whole page, so this test is defined first: it then
+    // sees the hold. Run later it sees the settled path, and the assertions below hold on both paths.
+    test("a website form's send button is held until the token is fetched, then pressed once", async () => {
+        const stop = install();
+        try {
+            const fixture = getFixture();
+            fixture.innerHTML = `<div class="s_website_form"><a class="s_website_form_send" href="#">Send</a></div>`;
+            const send = fixture.querySelector(".s_website_form_send");
+            const requests = [];
+            mockFetch((route) => {
+                requests.push(route);
+                return { csrf_token: "fresh_for_send" };
+            });
+            let presses = 0;
+            send.addEventListener("click", (ev) => {
+                ev.preventDefault();
+                presses += 1;
+            });
+            send.click();
+            await waitUntil(() => presses > 0, { timeout: 2000 });
+            expect(presses).toBe(1);
+            expect(requests.length <= 1).toBe(true);
+            // The token is settled now: the next press goes straight through, nothing is held or fetched.
+            send.click();
+            expect(presses).toBe(2);
+            expect(requests.length <= 1).toBe(true);
+        } finally {
+            stop();
+        }
+    });
+
+    // Tests [@ANCHOR: edge_cache:csrf_startEdgeCacheCsrfRefresh]
+    test("a logged-in visitor gets no listeners and the page is left alone", () => {
+        const wasWebsiteUser = session.is_website_user;
+        session.is_website_user = false;
+        try {
+            expect(startEdgeCacheCsrfRefresh()).toBe(null);
+        } finally {
+            session.is_website_user = wasWebsiteUser;
+        }
+    });
+
     // [@ANCHOR: COMM_test_edge_cache_csrf_token_fetched_again_at_submit]
+    // Tests [@ANCHOR: edge_cache:csrf_applyToken]
+    // Tests [@ANCHOR: edge_cache:csrf_fetchToken]
+    // Tests [@ANCHOR: edge_cache:csrf_refreshCsrfToken]
+    // Tests [@ANCHOR: edge_cache:csrf_tokenForm]
+    // Tests [@ANCHOR: edge_cache:csrf_onEarlyInteraction]
+    // Tests [@ANCHOR: edge_cache:csrf_onSubmit]
+    // Tests [@ANCHOR: edge_cache:csrf_startEdgeCacheCsrfRefresh]
     test("the submit carries a token fetched at the submit, not the one from the earlier focus", async () => {
         const stop = install();
         const fixture = getFixture();
@@ -64,6 +114,7 @@ describe("edge_cache_csrf", () => {
 
     // [@ANCHOR: COMM_test_edge_cache_csrf_works_without_has_selector]
     // Tests [@ANCHOR: COMM_edge_cache_is_token_form]
+    // Tests [@ANCHOR: edge_cache:csrf_tokenForm]
     test("a browser without the :has() selector still gets the token, and nothing throws", async () => {
         // Chrome before 105 throws a SyntaxError from closest() and matches() for :has(); the
         // listeners are capture listeners on document, so one such throw would fire at every focus

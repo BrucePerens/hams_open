@@ -41,3 +41,66 @@ in hams_com. Without the rules the headers do nothing.
 A visitor's own `X-Forwarded-Host` header is removed by `cloudflare/wsgi_proxy_scheme.py`, which needs Redis. A
 tenant instance running `proxy_mode` without the `cloudflare` module still trusts that header; strip it in
 the tunnel before turning HTML caching on for a tenant.
+
+## The CSRF token refresh script (`static/src/js/edge_cache_csrf.js`, ADR 0113)
+
+Runs in the public bundle of every page. Its behaviour is described under Forms above; its functions are below. State shared by all of them lives in module variables:
+`pending` (the one running token request, a `Promise`, or `null`), `settled` (`false` until the first token request has finished, successfully or not; then `true` for the rest
+of the page) and `replaying` (a `WeakSet` of forms whose submit is the replay of one this script held). The constants `TOKEN_URL` (`/cloudflare/csrf_token`), `WEBSITE_FORM`,
+`TOKEN_INPUT` and `WEBSITE_FORM_SEND` are the selectors and the route. Nothing is stored between page loads, nothing is sent except the token request, and no secret is logged.
+Tests: `static/tests/edge_cache_csrf.test.js` (Hoot, tag `edge_cache`), run by `tests/test_edge_cache_csrf_hoot.py`.
+
+### `[@ANCHOR: edge_cache:csrf_applyToken]` `applyToken(token)`
+
+Purpose: puts a fresh CSRF token everywhere the page keeps one, so whichever the form or Odoo's own code reads is the new one. Called only by `fetchToken` after a good answer.
+Argument `token` (string, the value the server returned): written to `odoo.csrf_token` (so `globalThis.odoo` must exist, as it does in every Odoo page), to the `value` of each
+`<meta name="csrf_token">` and to each `<input name="csrf_token">` in the document. No return value. Synchronous, touches the DOM only, idempotent. Throws a `TypeError` if
+`globalThis.odoo` is missing; `fetchToken` then logs it as a failed refresh.
+
+### `[@ANCHOR: edge_cache:csrf_fetchToken]` `fetchToken()`
+
+Purpose: gets a token from `/cloudflare/csrf_token` (which also gives the visitor the session cookie the token is bound to) and applies it. No arguments. Returns a `Promise` that
+always fulfils (never rejects): a failed request (network error, status other than 2xx, a body that is not JSON) is logged with `console.warn` and the form is sent with the token
+the page already carries, so the server's ordinary CSRF error is the worst outcome. While a request is running, further calls return the same `Promise` (one request at a time).
+When it ends it sets `settled = true` and clears `pending`, so the next call starts a new request: a submit therefore always fetches again. Asynchronous (`fetch`, `credentials: "same-origin"`,
+`cache: "no-store"`, `Accept: application/json`); no timeout of its own.
+
+### `[@ANCHOR: edge_cache:csrf_refreshCsrfToken]` `refreshCsrfToken()`
+
+Purpose: the early fetch, started when a visitor first reaches a form, so most visitors have a token before they press Send. No arguments. Returns a `Promise` (never rejects): the
+running request when there is one, an already fulfilled one when a request has finished (`settled`), otherwise the result of `fetchToken()`. It fetches once per page; the fetch at
+submit time is `onSubmit`'s. Exported.
+
+### `[@ANCHOR: edge_cache:csrf_tokenForm]` `tokenForm(target)`
+
+Purpose: finds the form an event belongs to, when it is one this script handles. Argument `target` (any value; normally `event.target`): anything that is not an `Element` gives
+`null`. Walks from `target` up through `parentElement` and returns the first element for which `isTokenForm` is true: a `.s_website_form` element, or an `HTMLFormElement` that
+contains an `input[name="csrf_token"]`. Returns that element or `null`. Uses no `:has()` selector, because a browser without it (Chrome before 105) throws from `closest()` and
+`matches()`, and the listeners are capture listeners on the document (helpdesk tickets 125 and 126). Pure DOM reads.
+
+### `[@ANCHOR: edge_cache:csrf_onEarlyInteraction]` `onEarlyInteraction(ev)`
+
+Purpose: the listener for `focusin` and `pointerdown` (capture, on the document). Argument `ev` (`Event`): when `tokenForm(ev.target)` finds a form it calls `refreshCsrfToken()`
+and ignores the answer. Other events are left alone. Never throws, never prevents the event, returns nothing.
+
+### `[@ANCHOR: edge_cache:csrf_onSubmit]` `onSubmit(ev)`
+
+Purpose: the listener for `submit` (capture, on the document): holds a token-bearing form's submit until a token fetched now is in the form, then sends it. Argument `ev`
+(`SubmitEvent`). It returns at once, touching nothing, when the target is not a form this script handles (`isTokenForm`) or when the form is in `replaying`, which marks the replay
+of a submit it held. Otherwise it calls `preventDefault()` and `stopImmediatePropagation()` (the page's own submit handlers do not see the held event; they see the replay), calls
+`fetchToken()`, then marks the form in `replaying`, calls `form.requestSubmit(submitter)` (the submit button that was pressed, when it belongs to the form) and removes the mark in
+the same turn, even if the form's own validation stops the submit. A failure to resubmit is logged. Asynchronous; returns nothing. The mark is what stops an endless loop.
+
+### `[@ANCHOR: edge_cache:csrf_onWebsiteFormSend]` `onWebsiteFormSend(ev)`
+
+Purpose: the listener for `click` (capture, on the document) for the website-form builder's Send button (`.s_website_form_send`, `.o_website_form_send`), which posts with `fetch` and
+never fires a form `submit`. Argument `ev` (`MouseEvent`). Does nothing when a token has been fetched already (`settled`) or when the click is not on such a button. Otherwise it
+calls `preventDefault()` and `stopImmediatePropagation()`, waits for `refreshCsrfToken()` and clicks the button again; that click finds `settled` true and goes through. Odoo's
+website form checks CSRF only for a logged-in session, so for it this is belt and braces. A failure is logged. Asynchronous; returns nothing.
+
+### `[@ANCHOR: edge_cache:csrf_startEdgeCacheCsrfRefresh]` `startEdgeCacheCsrfRefresh()`
+
+Purpose: installs the four listeners (`focusin`, `pointerdown`, `submit`, `click`, all capture on the document). No arguments. Called once when the module loads and by the tests.
+Returns a function that removes the four listeners, or `null` and installs nothing when `session.is_website_user` (from `@web/session`) is false: a logged-in visitor's pages are never
+edge-cached, so their token is already good. It reads `@web/session` and not `odoo.__session_info__` because that module deletes the global when it loads, before this one runs.
+Calling it twice installs the listeners twice; keep and call the returned remover first.

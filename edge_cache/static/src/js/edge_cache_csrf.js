@@ -41,6 +41,7 @@ let settled = false;
 // Forms whose submit event is the replay of one this script held, after a token was fetched for it.
 const replaying = new WeakSet();
 
+// [@ANCHOR: edge_cache:csrf_applyToken]
 function applyToken(token) {
     globalThis.odoo.csrf_token = token;
     for (const meta of document.querySelectorAll('meta[name="csrf_token"]')) {
@@ -51,6 +52,7 @@ function applyToken(token) {
     }
 }
 
+// [@ANCHOR: edge_cache:csrf_fetchToken]
 function fetchToken() {
     if (!pending) {
         pending = fetch(TOKEN_URL, {
@@ -79,6 +81,7 @@ function fetchToken() {
 }
 
 /** The early fetch: once per page, so a visitor who only focuses a field is not asked again. */
+// [@ANCHOR: edge_cache:csrf_refreshCsrfToken]
 export function refreshCsrfToken() {
     return settled && !pending ? Promise.resolve() : fetchToken();
 }
@@ -97,6 +100,7 @@ function isTokenForm(el) {
     );
 }
 
+// [@ANCHOR: edge_cache:csrf_tokenForm]
 function tokenForm(target) {
     for (let el = target instanceof Element ? target : null; el; el = el.parentElement) {
         if (isTokenForm(el)) {
@@ -106,12 +110,14 @@ function tokenForm(target) {
     return null;
 }
 
+// [@ANCHOR: edge_cache:csrf_onEarlyInteraction]
 function onEarlyInteraction(ev) {
     if (tokenForm(ev.target)) {
         refreshCsrfToken();
     }
 }
 
+// [@ANCHOR: edge_cache:csrf_onSubmit]
 function onSubmit(ev) {
     const form = ev.target;
     if (!(form instanceof HTMLFormElement) || !isTokenForm(form)) {
@@ -138,6 +144,7 @@ function onSubmit(ev) {
         });
 }
 
+// [@ANCHOR: edge_cache:csrf_onWebsiteFormSend]
 function onWebsiteFormSend(ev) {
     const button = ev.target instanceof Element ? ev.target.closest(WEBSITE_FORM_SEND) : null;
     if (settled || !button) {
@@ -153,6 +160,7 @@ function onWebsiteFormSend(ev) {
 }
 
 /** Installs the listeners on an anonymous visitor's page; returns a function that removes them, or null. */
+// [@ANCHOR: edge_cache:csrf_startEdgeCacheCsrfRefresh]
 export function startEdgeCacheCsrfRefresh() {
     // @web/session, not odoo.__session_info__: that module consumes and deletes the global when it
     // loads, which is before this one in the bundle, so the global is gone by the time this runs.
