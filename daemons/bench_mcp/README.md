@@ -102,7 +102,7 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_sa_tg_on`, `_tg_off`, `_tg_level`, `bench_sa_tg_normalize`, `bench_sa_tg_s21` | read_config (RF out of the tracking generator, 0 dBm at most; off unless a tool turns it on; no confirm flags) | spectrum analyzer |
 | `bench_sdr_capture`, `bench_sdr_survey`, `bench_sdr_coherence` | read_config (they tune the radio; receive only) | SDR |
 | `bench_elad_list`, `bench_elad_identify` | read_only | ELAD receivers |
-| `bench_elad_spectrum`, `bench_elad_level`, `bench_elad_capture` | read_config (writes a file in `capture_dir`; receive only) | ELAD receivers |
+| `bench_elad_tune`, `bench_elad_detect`, `bench_elad_sweep`, `bench_elad_spectrum`, `bench_elad_level`, `bench_elad_capture` | read_config (writes a file in `capture_dir`; receive only) | ELAD receivers |
 | `bench_rx888_status`, `bench_rx888_frontend` | read_only | RX-888 |
 | `bench_rx888_boot`, `bench_rx888_radiod_start`, `bench_rx888_radiod_stop`, `bench_rx888_tune`, `bench_rx888_spectrum`, `bench_rx888_capture` | read_config (firmware boot re-enumerates the device; radiod and its channels are local; receive only) | RX-888 |
 
@@ -1273,5 +1273,16 @@ Link::scope_state(host: &str, ports: &[u16]) -> String
 * The sample count is capped by memory and by the config. [@ANCHOR: elad_target_samples]
 * A file name is checked and an existing file is never overwritten. [@ANCHOR: elad_new_file]
 * The FFT length must be a power of two. [@ANCHOR: elad_fft_len]
+* `bench_elad_tune` applies a tuning and front-end state and streams nothing. [@ANCHOR: bench_mcp_elad_tune]
+* `bench_elad_detect` reports peaks over the noise floor with frequency refined below one bin, level and SNR. [@ANCHOR: bench_mcp_elad_detect]
+* `bench_elad_sweep` retunes in steps to a CSV. [@ANCHOR: bench_mcp_elad_sweep]
+* A sweep's steps, running time and range are checked before the receiver is opened. [@ANCHOR: elad_sweep_plan]
+* The sweep's strongest local maxima over the floor, centre bins excluded. [@ANCHOR: elad_sweep_peaks]
+* A peak's frequency refined by a parabola through three bins. [@ANCHOR: elad_refine_peak]
+* A receiver opened and tuned, not streaming. [@ANCHOR: elad_open_tuned]
+* Starting the stream refuses an undeclared FPGA image before anything is sent. [@ANCHOR: elad_start_stream]
+* Reading a started stream until a sample count or a deadline. [@ANCHOR: elad_stream_samples]
+* Taking the single-owner lock for a receiver; a refusal names the holder (the relay or another call). [@ANCHOR: elad_take_lock]
+* A radio over a transport that holds the lock until the radio is dropped. [@ANCHOR: elad_open_locked]
 * The common summary of every streaming tool: samples, measured rate, timeouts, RMS, peak, DC and clipping. [@ANCHOR: elad_summary]
 * An acquisition refuses an undeclared FPGA image before streaming, always stops the stream, and reports silence as a missing FPGA image. [@ANCHOR: elad_acquire]
