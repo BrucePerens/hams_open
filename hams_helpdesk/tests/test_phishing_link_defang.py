@@ -94,7 +94,17 @@ class TestPhishingLinkDefangTickets(HamsTransactionCase):
         self.Ticket = self.env["hams_helpdesk.ticket"]
         self.admin = self.env.ref("base.user_admin")
         self.admin.email = "on-duty-admin@example.org"
+        self.admin.notification_type = "email"
         self.agent_uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_ai_triage_service")
+        self.staff = self.env["res.users"].create(
+            {
+                "name": "Helpdesk reader",
+                "login": "phishing-defang-reader",
+                "email": "reader@example.org",
+                "notification_type": "email",
+                "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+            }
+        )
         self.sender = self.env["res.partner"].create({"name": "Phisher", "email": "phisher@evil.example"})
 
     def _ticket(self, name="Account locked"):
@@ -207,12 +217,14 @@ class TestPhishingLinkDefangTickets(HamsTransactionCase):
         self.assertTrue(ticket.links_defanged)
 
     def _follower_mail(self, ticket, body=BODY):
-        ticket.message_subscribe(partner_ids=[self.admin.partner_id.id])
-        message = ticket.message_post(
-            body=body, message_type="comment", subtype_xmlid="mail.mt_comment", author_id=self.sender.id
+        ticket.message_subscribe(partner_ids=[self.staff.partner_id.id])
+        message = ticket.with_context(mail_notify_force_send=False).message_post(
+            body=body, message_type="comment", subtype_xmlid="mail.mt_comment", author_id=self.sender.id,
+            partner_ids=[self.staff.partner_id.id],
         )
-        mails = self.env["mail.mail"].search([("mail_message_id", "=", message.id)])
-        self.assertTrue(mails, "the control: the follower is mailed about the message")
+        # The mail queue is read as the superuser: the test user is not allowed to read other people's outgoing mail.
+        mails = self.env["mail.mail"].with_user(self.env.ref("base.user_root")).search([("mail_message_id", "=", message.id)])
+        self.assertTrue(mails, "the control: a follower who is a staff user is mailed about the message")
         return "\n".join(mails.mapped("body_html"))
 
     def test_08_the_notification_email_of_a_phishing_ticket_has_no_live_link_and_the_warning(self):

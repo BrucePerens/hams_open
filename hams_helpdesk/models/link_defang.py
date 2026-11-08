@@ -39,7 +39,7 @@ def defang_url_text(url):
     browser or in Odoo's chatter. Text that is not a URL is defanged the same way, which is the point: the caller never has
     to decide whether it is one."""
     text = str(url or "").strip()
-    text = re.sub(r"(?i)^h(tt)(ps?):", lambda m: "hxx" + m.group(2) + ":", text)
+    text = re.sub(r"(?i)^h(tt)(ps?):", lambda m: "hxx" + m.group(2).lower() + ":", text)
     text = re.sub(r"(?i)^ftp:", "fxp:", text)
     return text.replace(".", "[.]").replace("@", "[@]")
 
