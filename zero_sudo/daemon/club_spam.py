@@ -84,6 +84,12 @@ MODES = (MODE_OFF, MODE_DRY_RUN, MODE_ENFORCE)
 
 SITE_PROBLEM_KIND = "site_compromised_spam"
 
+# The persistence basis of a verdict reached from a redirect (a home page that sends visitors to a spam page on another site).
+BASIS_REDIRECT = "redirect"
+MAX_REDIRECT_TEXT_CHARS = 400
+# Second-level labels under a two-letter country code that make the registrable domain three labels (example.co.uk).
+_SECOND_LEVEL_LABELS = frozenset({"co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go", "gob", "nom"})
+
 
 @dataclass(frozen=True)
 class SpamConfig:
@@ -518,13 +524,79 @@ def _join(base_url, href):
 
 
 # --------------------------------------------------------------------------------------------------------------------
+# Redirects: a home page that sends visitors to a spam page on another site
+
+# [@ANCHOR: zero_sudo:club_spam_registrable_domain]
+def registrable_domain(value):
+    """The registrable domain of a host name or URL, lower case and without `www.`: `https://www.W9VCL.com/x` is `w9vcl.com`,
+    `club.example.co.uk` is `example.co.uk`. The standard library has no public-suffix list, so a country-code domain with a
+    common second-level label (co, com, org, net, ac, gov, edu and a few others) keeps three labels and every other host
+    keeps its last two. An IP address, a bare label or something that is not a host is returned as it is (lower case);
+    "" for an empty value. Pure; never raises."""
+    text = str(value or "").strip().lower()
+    if not text:
+        return ""
+    try:
+        host = (urlsplit(text if "//" in text else "//" + text).hostname or "").strip(".")
+    except ValueError:
+        return ""
+    if not host:
+        return ""
+    labels = host.split(".")
+    if len(labels) < 2 or all(label.isdigit() for label in labels):
+        return host
+    keep = 3 if len(labels[-1]) == 2 and len(labels) >= 3 and labels[-2] in _SECOND_LEVEL_LABELS else 2
+    return ".".join(labels[-keep:])
+
+
+# [@ANCHOR: zero_sudo:club_spam_build_redirect]
+def build_redirect(home_url, final_url, markup):
+    """The redirect evidence of a club's home page, for `build_evidence(redirect=...)`: None when the page the fetch ended on
+    is on the same registrable domain as `home_url` (an http to https, www or same-site redirect is not evidence of anything),
+    else {"from": home_url, "to": final_url, "title": the destination page's title, "text": the first
+    MAX_REDIRECT_TEXT_CHARS characters of its visible text}, each bounded. `markup` is the destination's HTML (str or None).
+    No request is made and the destination is never judged here (see `redirect_is_spam`). Pure."""
+    home_url, final_url = str(home_url or ""), str(final_url or "")
+    if not final_url or registrable_domain(final_url) == registrable_domain(home_url):
+        return None
+    markup = markup if isinstance(markup, str) else ""
+    title, text = "", ""
+    if markup:
+        title = " ".join(extract_home_evidence(markup, final_url).get("title", "").split())[:MAX_TITLE_CHARS]
+        body = re.sub(r"(?is)<(script|style|noscript|head)\b.*?</\1>", " ", markup)
+        text = " ".join(html.unescape(re.sub(r"(?s)<[^>]*>", " ", body)).split())
+    return {"from": home_url[:MAX_URL_CHARS], "to": final_url[:MAX_URL_CHARS], "title": title,
+            "text": text[:MAX_REDIRECT_TEXT_CHARS]}
+
+
+# [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]
+def redirect_is_spam(redirect):
+    """True when `redirect` (the dict `build_redirect` makes, untrusted: it comes from the daemon) says the club's address ends on
+    a different registrable domain AND the destination page scores as spam: the same lexicon as every other entry, over the
+    destination's address, title and opening text, ham-radio words counting against it. A redirect to another club's page, to a
+    page of the same registrable domain, or anything malformed is False. No ownership or registration lookup is made: a club
+    site that has changed hands to another legitimate owner is not flagged. Pure; never raises."""
+    if not isinstance(redirect, dict):
+        return False
+    home, final = redirect.get("from"), redirect.get("to")
+    if not isinstance(home, str) or not isinstance(final, str) or not home or not final:
+        return False
+    if registrable_domain(final) == registrable_domain(home):
+        return False
+    title = str(redirect.get("title") or "")[:MAX_TITLE_CHARS]
+    text = str(redirect.get("text") or "")[:MAX_REDIRECT_TEXT_CHARS]
+    return score_entry(final, (title + " " + text).strip()).flagged
+
+
+# --------------------------------------------------------------------------------------------------------------------
 # Evidence: what the daemon sends to Odoo
 
 # [@ANCHOR: zero_sudo:club_spam_build_evidence]
-def build_evidence(home, sitemaps, robots_sitemaps, today, base_url=""):
+def build_evidence(home, sitemaps, robots_sitemaps, today, base_url="", redirect=None):
     """One compact JSON-able dict from the home page's evidence (extract_home_evidence(), or None when the home page was
     not read), the sitemaps read ([{"url", "name", "kind", "entries": [(loc, lastmod)], "total"}]) and the sitemap
-    addresses robots.txt lists. Spam-looking sitemap entries come first and are capped (MAX_FLAGGED_FIRST) so the payload
+    addresses robots.txt lists. `redirect` is `build_redirect()`'s answer for the home page (None: it stayed on the
+    registrable domain); it is carried as the "redirect" key only when present. Spam-looking sitemap entries come first and are capped (MAX_FLAGGED_FIRST) so the payload
     stays small however large the infestation; `known` still counts every URL."""
     home = home or {}
     base_host = (urlsplit(base_url).hostname or "").lower().removeprefix("www.")
@@ -546,7 +618,7 @@ def build_evidence(home, sitemaps, robots_sitemaps, today, base_url=""):
     flagged_total = len(flagged)
     flagged = flagged[:MAX_FLAGGED_FIRST]
     rows = (flagged + other)[:MAX_EVIDENCE_ENTRIES]
-    return {
+    evidence = {
         "v": EVIDENCE_VERSION,
         "flagged_total": flagged_total,
         "wordpress": bool(home.get("wordpress")),
@@ -561,6 +633,9 @@ def build_evidence(home, sitemaps, robots_sitemaps, today, base_url=""):
         "outbound_domains": int(home.get("outbound_domains", 0)),
         "home_read": bool(home),
     }
+    if redirect:
+        evidence["redirect"] = redirect
+    return evidence
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -583,7 +658,9 @@ def evaluate_evidence(evidence, config=None, first_detected_age_days=None):
     became significantly spammed without being clean since (None when never). Returns a verdict dict:
 
     level (clean | suspect | significant | confirmed), flagged, known, fraction, aged_flagged, dated_flagged,
-    on_topic, persisted, basis ("lastmod", "history" or ""), reasons (list of text), sample (up to 15 flagged
+    on_topic, persisted, basis ("lastmod", "history", "redirect" or ""), redirect (True when the verdict is confirmed
+    because `evidence["redirect"]` passes `redirect_is_spam`, whatever the URL counts; head_sample is then the home
+    address alone), reasons (list of text), sample (up to 15 flagged
     {"url", "title", "points", "hits", "age"})."""
     config = config or SpamConfig()
     rows = (evidence or {}).get("entries", []) if isinstance(evidence, dict) else []
@@ -649,8 +726,16 @@ def evaluate_evidence(evidence, config=None, first_detected_age_days=None):
         reasons.append(f"{n_flagged} of {known} known URLs flagged: below the {config.min_flagged}/{config.min_fraction:.0%} bar")
     else:
         level = LEVEL_CLEAN
-    head_sample = pick_head_sample(
-        [(item["row"]["u"], item["age"]) for item in flagged], config.head_sample_size)
+    redirect = evidence.get("redirect") if isinstance(evidence, dict) else None
+    spam_redirect = redirect_is_spam(redirect)
+    if spam_redirect:
+        # The home page sends visitors to a spam page on another site: the site is not the club's any more, whatever the URL
+        # fractions say. Confirmed at once (there is no spam to age) and kept under watch by HEAD on the home address.
+        level, persisted, basis = LEVEL_CONFIRMED, True, BASIS_REDIRECT
+        reasons.append(f"the home page redirects to {redirect['to'][:120]}, a spam page on {registrable_domain(redirect['to'])}")
+    head_sample = (
+        [redirect["from"]] if spam_redirect else
+        pick_head_sample([(item["row"]["u"], item["age"]) for item in flagged], config.head_sample_size))
     flagged.sort(key=lambda item: (-item["score"].points, item["row"]["u"]))
     sample = [
         {
@@ -663,6 +748,7 @@ def evaluate_evidence(evidence, config=None, first_detected_age_days=None):
         "level": level, "flagged": n_flagged, "known": known, "fraction": round(fraction, 4),
         "aged_flagged": len(aged), "dated_flagged": len(dated), "on_topic": on_topic,
         "persisted": persisted, "basis": basis, "reasons": reasons, "sample": sample, "head_sample": head_sample,
+        "redirect": spam_redirect,
         "wordpress": bool(evidence.get("wordpress")) if isinstance(evidence, dict) else False,
     }
 
@@ -721,9 +807,11 @@ def http_date_age(text, today):
 
 
 # [@ANCHOR: zero_sudo:club_spam_evaluate_head_results]
-def evaluate_head_results(results, today, config=None):
+def evaluate_head_results(results, today, config=None, redirect=False):
     """Judges HEAD answers for the sampled spam addresses. Each result: {"u", "status" (int or None for a timeout or error),
-    "etag", "last_modified", "redirect_home" (a redirect to the home page)}. A 2xx answer means the page is still there; 404,
+    "etag", "last_modified", "redirect_home" (a redirect to the home page), "off_domain" (a redirect to another registrable
+    domain)}. With `redirect=True` the sample is the home address of a site judged by its redirect: a 3xx with off_domain is
+    still_spam, a 2xx, 404 or 410 is gone (repaired), any other answer unknown. Otherwise a 2xx answer means the page is still there; 404,
     410 and a redirect to the home page mean it is gone; anything else (405, 403, 5xx, a timeout) is UNKNOWN and is never
     counted as removed. Returns {"result": "still_spam" (at least half answer 2xx), "removed" (more than half are gone) or
     "unknown", "alive", "gone", "unknown", "checked", "old_count" (alive pages whose Last-Modified is age_days or more old),
@@ -736,6 +824,16 @@ def evaluate_head_results(results, today, config=None):
         if not isinstance(item, dict):
             continue
         status = item.get("status")
+        if redirect:
+            is_int = isinstance(status, int) and not isinstance(status, bool)
+            if is_int and 300 <= status < 400 and item.get("off_domain") is True:
+                alive += 1
+            elif is_int and (200 <= status < 300 or status in (404, 410)):
+                gone += 1
+            else:
+                unknown += 1
+                first_unknown = first_unknown or str(item.get("u") or "")
+            continue
         if isinstance(status, int) and not isinstance(status, bool) and 200 <= status < 300:
             alive += 1
             etag, modified = item.get("etag"), item.get("last_modified")

@@ -99,13 +99,63 @@ flags too. Anything that is not a well-formed evidence dict is clean, not an err
 a dropped site after a recheck: restore it when the scan is clean (under 5 percent flagged and under half the significance
 count) and the spam was last seen `clean_days` (30) or more ago; keep it dropped otherwise.
 
+## A Home Page That Redirects to a Spam Page
+
+Found 2026-11-07: `w9vcl.com` answered with a redirect to a togel gambling page on an unrelated domain, and jasperares.org served the
+same page before it went dark. The URL scan knew only three flagged URLs of 77, below the 10 URL / 30 percent bar, so the site stayed
+"suspect". A club home page that leaves its registrable domain for a spam page is not the club's site, whatever its URL counts say.
+
+Bruce's rule: a club site may change owners, so nothing about ownership, registration (RDAP, WHOIS) or hosting is checked. Only
+the destination page is judged, with the lexicon that judges every other entry.
+
+### `registrable_domain(value)` `[@ANCHOR: zero_sudo:club_spam_registrable_domain]`
+
+| Item | Description |
+| --- | --- |
+| Purpose | The domain a site is registered under, to tell "another site" from "another page or name of the same site". |
+| `value` | str: a host name or a URL, any case, with or without `www.`. None or "" gives "". |
+| Returns | `w9vcl.com` for `https://www.W9VCL.com/x`; `example.co.uk` for `club.example.co.uk`. The standard library has no public-suffix list, so a two-letter country-code TLD preceded by one of `co com org net ac gov edu or ne go gob nom` keeps three labels and every other host two. An IP address or single label is returned unchanged. |
+| Errors | None: a malformed value gives "". |
+| Special | Pure, no network, no state, safe from any thread. A TLD outside the heuristic (for example a `.k12.wi.us` school) is treated as its last two labels, which can only make two sites look like one (a missed flag), never one site look like two. |
+
+### `build_redirect(home_url, final_url, markup)` `[@ANCHOR: zero_sudo:club_spam_build_redirect]`
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `home_url` | str | The club's website address, as stored. |
+| `final_url` | str | The address the fetch ended on after every HTTP and meta-refresh redirect. |
+| `markup` | str or None | The HTML of that final page (None or non-str: no title or text). |
+
+Returns None when `final_url` is empty or has the same registrable domain as `home_url` (http to https, `www`, a subdomain: nothing
+to report). Otherwise a dict, the redirect evidence, with every field bounded: `from` (the home address, 300 characters), `to`
+(the final address, 300), `title` (160) and `text` (the first 400 characters of the page's visible text, scripts, styles and
+`<head>` removed, entities decoded). Pure: makes no request and judges nothing. The dict is carried in the evidence as `"redirect"`
+(see `build_evidence`) and is serialized as JSON, evidence version 1 (an older Odoo ignores the key).
+
+### `redirect_is_spam(redirect)` `[@ANCHOR: zero_sudo:club_spam_redirect_is_spam]`
+
+`redirect` is the dict above, untrusted (it arrives from the daemon). True only when `from` and `to` are non-empty strings of
+different registrable domains AND `score_entry(to, title + " " + text)` is flagged, the lexicon and the ham-radio discount that
+score every other entry, so another club's page, or a club page about a "casino night", is not flagged. A redirect inside one
+registrable domain is False even when its text is spam (that is the club's own page, and the URL scan covers it). A value that is
+not a dict, or whose fields are missing or not strings, is False. Pure; raises nothing; no ownership lookup.
+
+`evaluate_evidence()` uses it: a spam redirect makes the verdict `confirmed` at once (`persisted` True, `basis` "redirect", a
+reason naming the destination, `redirect` True) and `head_sample` is the home address alone. There is no spam to age, so the 30 day gate does
+not apply; the site is dropped in enforce mode (`would_drop` in dry run) on the first scan. A repaired site comes back through
+the same HEAD re-check and recheck as any dropped site.
+
 ## Is the Spam Still There? `[@ANCHOR: zero_sudo:club_spam_pick_head_sample]`
 
 `pick_head_sample(flagged, size)` chooses up to ten flagged addresses to re-check with HEAD: the oldest dated first, the rest
-spread evenly. `evaluate_head_results(results, today)` `[@ANCHOR: zero_sudo:club_spam_evaluate_head_results]` judges the answers:
+spread evenly. `evaluate_head_results(results, today, config=None, redirect=False)` `[@ANCHOR: zero_sudo:club_spam_evaluate_head_results]` judges the answers:
 at least half 2xx is `still_spam`, more than half 404/410 (or a redirect to the home page) is `removed`, anything else
 (403, 405, 5xx, a timeout) is `unknown` and is never counted as removed; it also counts the alive pages whose `Last-Modified` is
 `age_days` or older (`http_date_age()` `[@ANCHOR: zero_sudo:club_spam_http_date_age]`) as persistence evidence.
+With `redirect=True` (a site whose verdict basis is "redirect"; its sample is the home address) the question is the redirect, not the
+page: a 3xx whose answer has `off_domain` true is `still_spam`; a 2xx (the home page answers itself again) or a 404/410 is
+`removed`; a 3xx that stays on the domain, 403, 405, 5xx or a timeout is `unknown`, never `removed`. Each result may carry
+`off_domain` (bool: the Location is on another registrable domain), set by the daemon's `PoliteFetcher.head`.
 
 ## Cutting Spam Out of a Page `[@ANCHOR: zero_sudo:club_spam_strip_spam_blocks]`
 

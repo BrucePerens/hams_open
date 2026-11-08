@@ -654,5 +654,96 @@ class TestHeadVerification(BaseCase):
         self.assertEqual(spam.strip_spam_blocks("", HOST + "/"), ("", 0))
 
 
+SPAM_DESTINATION = (
+    "<html><head><title>Kudatogel - Situs Togel Online dan Slot Gacor Terpercaya</title></head><body><h1>Kudatogel</h1>"
+    "<p>Daftar togel online, slot gacor maxwin dan bonus deposit harian untuk member baru.</p></body></html>"
+)
+CLUB_DESTINATION = (
+    "<html><head><title>Sheboygan County Amateur Radio Club</title></head><body><h1>Amateur Radio Club</h1>"
+    "<p>Our repeater on 146.940 MHz carries the weekly net. Join the club, get your ham license and your callsign.</p></body></html>"
+)
+
+
+@tagged("post_install", "-at_install")
+class TestRedirectToSpam(BaseCase):
+    """A club home page that redirects to a spam page on another site (night_shift_todo club-site-redirecting-off-domain...)."""
+
+    def _redirect_evidence(self, final_url, html, home_url="https://w9vcl.com/", sitemaps=()):
+        home = spam.extract_home_evidence(home_html(), home_url)
+        redirect = spam.build_redirect(home_url, final_url, html)
+        return spam.build_evidence(home, list(sitemaps), [], TODAY, home_url, redirect=redirect)
+
+    def test_60_registrable_domain_ignores_www_case_and_subdomains(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_registrable_domain]
+        cases = {
+            "https://www.W9VCL.com/x?y=1": "w9vcl.com", "club.example.org": "example.org", "http://a.b.example.co.uk/": "example.co.uk",
+            "https://www.peopletechprocess.com/contact-8": "peopletechprocess.com", "http://192.168.1.5/x": "192.168.1.5",
+            "localhost": "localhost", "": "", None: "",
+        }
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(spam.registrable_domain(value), expected)
+
+    def test_61_a_home_page_that_redirects_to_a_spam_page_is_confirmed_at_once(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_build_redirect]
+        # Tests [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]
+        # Tests [@ANCHOR: zero_sudo:club_spam_evaluate_evidence]
+        # Tests [@ANCHOR: zero_sudo:club_spam_build_evidence]
+        evidence = self._redirect_evidence("https://www.peopletechprocess.com/contact-8", SPAM_DESTINATION)
+        self.assertEqual(evidence["redirect"]["to"], "https://www.peopletechprocess.com/contact-8")
+        self.assertIn("Kudatogel", evidence["redirect"]["title"])
+        verdict = spam.evaluate_evidence(evidence)
+        self.assertEqual((verdict["level"], verdict["basis"], verdict["persisted"], verdict["redirect"]),
+                         (spam.LEVEL_CONFIRMED, "redirect", True, True), verdict["reasons"])
+        self.assertTrue(any("peopletechprocess.com" in reason for reason in verdict["reasons"]))
+        self.assertEqual(verdict["head_sample"], ["https://w9vcl.com/"])
+
+    def test_62_a_redirect_to_another_clubs_page_is_not_flagged(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]
+        # Tests [@ANCHOR: zero_sudo:club_spam_evaluate_evidence]
+        evidence = self._redirect_evidence("https://sheboygan-arc.org/", CLUB_DESTINATION)
+        self.assertIn("redirect", evidence)
+        verdict = spam.evaluate_evidence(evidence)
+        self.assertEqual((verdict["level"], verdict["redirect"]), (spam.LEVEL_CLEAN, False), verdict["reasons"])
+        # Not even a club page that mentions a casino night.
+        casino_night = CLUB_DESTINATION.replace("weekly net", "weekly net and our casino night fundraiser")
+        self.assertFalse(spam.redirect_is_spam(spam.build_redirect("https://w9vcl.com/", "https://sheboygan-arc.org/", casino_night)))
+
+    def test_63_a_redirect_inside_the_same_registrable_domain_is_not_flagged_even_to_spam_text(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_build_redirect]
+        # Tests [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]
+        for final in ("https://www.w9vcl.com/", "https://club.w9vcl.com/home", "http://W9VCL.com/index"):
+            with self.subTest(final=final):
+                self.assertIsNone(spam.build_redirect("http://w9vcl.com/", final, SPAM_DESTINATION))
+        forged = {"from": "http://w9vcl.com/", "to": "https://www.w9vcl.com/", "title": "Kudatogel slot gacor", "text": "togel"}
+        self.assertFalse(spam.redirect_is_spam(forged))
+        evidence = self._redirect_evidence("https://www.w9vcl.com/", SPAM_DESTINATION, home_url="http://w9vcl.com/")
+        self.assertNotIn("redirect", evidence)
+        self.assertEqual(spam.evaluate_evidence(evidence)["level"], spam.LEVEL_CLEAN)
+
+    def test_64_a_malformed_redirect_from_the_daemon_is_clean_not_an_error(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]
+        for bad in (None, "x", [], {}, {"from": 1, "to": 2}, {"from": "http://a.org/", "to": ""}):
+            with self.subTest(bad=bad):
+                self.assertFalse(spam.redirect_is_spam(bad))
+        evidence = dict(self._redirect_evidence("https://sheboygan-arc.org/", CLUB_DESTINATION), redirect="garbage")
+        self.assertEqual(spam.evaluate_evidence(evidence)["level"], spam.LEVEL_CLEAN)
+
+    def test_65_head_of_a_redirect_sample_judges_the_redirect_not_the_page_being_up(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_evaluate_head_results]
+        def judge(*answers):
+            return spam.evaluate_head_results(list(answers), TODAY, redirect=True)["result"]
+
+        home = "https://w9vcl.com/"
+        self.assertEqual(judge({"u": home, "status": 302, "off_domain": True}), "still_spam")
+        self.assertEqual(judge({"u": home, "status": 200}), "removed")  # repaired: the home page answers itself
+        self.assertEqual(judge({"u": home, "status": 404}), "removed")
+        self.assertEqual(judge({"u": home, "status": 301, "off_domain": False}), "unknown")  # http to https
+        self.assertEqual(judge({"u": home, "status": 405}), "unknown")
+        self.assertEqual(judge({"u": home, "status": None}), "unknown")
+        # Without the flag a 2xx is spam still up, as before.
+        self.assertEqual(spam.evaluate_head_results([{"u": home, "status": 200}], TODAY)["result"], "still_spam")
+
+
 if __name__ == "__main__":
     unittest.main()
