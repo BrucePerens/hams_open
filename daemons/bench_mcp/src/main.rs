@@ -13,6 +13,7 @@ mod config;
 mod dsp;
 mod elad;
 mod example;
+mod gla;
 mod glasgow;
 mod hamlib;
 mod link;
@@ -156,6 +157,12 @@ const MODULES: &[Module] = &[
         call: example::call,
         tool_defs: example::tool_defs,
         sample: r#""example":{"driver":"example","tier":"full","host":"192.0.2.1"}"#,
+    },
+    Module {
+        prefix: "bench_gla_",
+        call: gla::call,
+        tool_defs: gla::tool_defs,
+        sample: r#""glasgow":{"driver":"glasgow","tier":"full"}"#,
     },
     Module {
         prefix: "bench_glasgow_",
