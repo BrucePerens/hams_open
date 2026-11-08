@@ -4,6 +4,12 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests.common import tagged
 
 
+# A /shack-prefixed URL of our own, not "/shack" itself: with ham_shack installed (the whole system) the real
+# /shack route is a 302 to /console/, which Odoo does not serve (the console is served by shack_console_server
+# through the tunnel), so a website.page at "/shack" is shadowed by the controller and the request ends in a 404.
+SHACK_TEST_URL = "/shack-advertising-test"
+
+
 @tagged("post_install", "-at_install")
 class TestAdvertisingLayout(HamsHttpCase):
     def setUp(self):
@@ -36,7 +42,7 @@ class TestAdvertisingLayout(HamsHttpCase):
         self.env["website.page"].create(
             {
                 "is_published": True,
-                "url": "/shack",
+                "url": SHACK_TEST_URL,
                 "website_id": self.website.id,
                 "view_id": shack_view.id,
             }
@@ -96,7 +102,7 @@ class TestAdvertisingLayout(HamsHttpCase):
         # other page, not a special case either way.
         self.website.google_adsense_client_id = "ca-pub-1234567890123456"
         self.website.google_adsense_footer_slot_id = "9876543210"
-        shack_response = self.url_open("/shack")
+        shack_response = self.url_open(SHACK_TEST_URL)
         self.assertEqual(shack_response.status_code, 200)
         self.assertIn(
             "advertising_footer_slot",
@@ -124,7 +130,7 @@ class TestAdvertisingLayout(HamsHttpCase):
         self.assertIn('data-ad-client="ca-pub-1234567890123456"', home_response.text)
         self.assertIn('data-ad-slot="1122334455"', home_response.text)
 
-        shack_response = self.url_open("/shack")
+        shack_response = self.url_open(SHACK_TEST_URL)
         self.assertIn("advertising_sidebar_slot", shack_response.text)
 
     def test_05_consent_mode_default_denies_until_accepted(self):
