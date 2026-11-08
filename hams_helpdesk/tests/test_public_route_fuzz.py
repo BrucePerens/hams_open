@@ -115,6 +115,12 @@ class TestPublicRouteFuzz(HamsHttpCase):
                 except requests.RequestException as error:
                     failures.setdefault(pattern, []).append((url[:120], type(error).__name__))
                     continue
+                if response.status_code == 503 and response.headers.get("Retry-After"):
+                    # A route that answers "not available, retry" for a service this host has not got (the relay CA's
+                    # CRL before the signer has fetched one, the attestation key before the signer has written it)
+                    # catches that itself: it raises nothing and files no ticket. Any other 5xx, and a 503 without
+                    # Retry-After (what an unhandled failure in front of Odoo looks like), still fails.
+                    continue
                 if response.status_code >= 500:
                     failures.setdefault(pattern, []).append((url[:120], response.status_code))
         self._log_summary(len(routes), sent, failures)
