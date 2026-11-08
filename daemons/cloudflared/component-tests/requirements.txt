@@ -5,4 +5,4 @@ pytest-asyncio==1.4.1
 pyyaml==6.0.3
 requests>=2.32.3
 retrying==1.4.2
-websockets==17.3
+websockets==17.4
