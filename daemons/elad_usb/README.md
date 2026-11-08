@@ -83,3 +83,9 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_fake_queue_bulk] Queues a bulk read result on the fake.
 - [@ANCHOR: elad_usb:elad_fake_bulk_in] The fake's bulk IN: serves queued results, a timeout when empty.
 - [@ANCHOR: elad_usb:elad_usb_err] Maps a libusb error to this crate's error, keeping timeouts apart.
+- [@ANCHOR: elad_lock_acquire] Takes the single-owner lock for one receiver in the lock directory; a second taker is refused naming the holder.
+- [@ANCHOR: elad_lock_acquire_in] The same with the directory given; the lock is an advisory `flock` on `elad-<bus>-<address>.lock`, released on drop or process death, with the holder's pid and name written in.
+- [@ANCHOR: elad_lock_dir] The lock directory: `ELAD_LOCK_DIR`, else `/run/lock`, else the temp directory.
+- [@ANCHOR: elad_lock_file_name] The lock file name for a bus and address.
+- [@ANCHOR: elad_lock_read_holder] Reads who holds a lock, falling back to "another program".
+- [@ANCHOR: elad_lock_error_display] The refusal text: who holds the receiver and what to do.
