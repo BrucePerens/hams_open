@@ -51,6 +51,27 @@ full-speed devices report 2.0 in `bcdUSB`.
 The topology and find tools read `/sys/bus/usb/devices` and need no privilege. `bench_usb_hubs` and `bench_usb_port_power` use `sudo -n`; without a NOPASSWD rule, or
 without uhubctl, they fail with a message that says which.
 
+### `usb_hub_watch_with`
+
+`fn watch_with(sysfs: &Path, args: &Value, after_poll: &mut dyn FnMut(u64) -> bool) -> Result<Value, String>` in
+`src/usb_hub/history.rs`. It is the loop behind `bench_usb_watch`; `history::watch(sysfs, args)` calls it with a callback that
+never stops. It is private to the module.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sysfs` | `&Path` | Root of the USB tree to poll (`/sys` in the tool, a writable copy of recorded sysfs in tests). Borrowed, read only. |
+| `args` | `&Value` | `seconds` (1 to 120, default 10; anything else is an error) and `interval_ms` (50 to 5000, default 200, clamped). |
+| `after_poll` | `&mut dyn FnMut(u64) -> bool` | Called on the watching thread once after the first snapshot with 0 and after every later poll with 1, 2, ...; returning true ends the watch early. Borrowed mutably for the call. |
+
+**Returns:** `Ok` with `watched_s`, `started_unix`, `poll_ms`, `events` (appeared, disappeared, re-enumerated and port changes, each
+with its time), `enumerations_per_device`, `flapping` (devices that appeared three times or more) and a `method` note. `Err` with a
+message when `seconds` or `interval_ms` is not a number or `seconds` is out of range, or when the tree cannot be read.
+
+**Concurrency and side effects:** blocking; it sleeps one interval between polls on the calling thread and takes no lock. It only
+reads the tree. A change shorter than the interval can still be missed when the machine is slow, which the `method` note says;
+the kernel journal (`bench_usb_history`) is exact. The callback runs inside the loop, so a callback that changes the tree (the
+test's fake hub) changes what the next poll sees. Test: `a_watch_reports_a_device_leaving_and_returning_with_a_new_number`.
+
 ## Privilege for the middle tier
 
 Resetting, authorizing, binding and autosuspend need root. The tools run `sudo -n <bench_mcp binary> --usb-priv <operation>`; that mode of the same binary accepts only the four

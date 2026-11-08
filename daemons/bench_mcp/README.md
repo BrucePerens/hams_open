@@ -243,7 +243,7 @@ Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`.
 * The root helper accepts only its four operations and refuses every other argument before a write. [@ANCHOR: usb_hub_privileged_ops]
 * The escalation ladder (reset, authorize, driver, autosuspend) goes through the helper, honours protection and dry run. [@ANCHOR: usb_hub_ladder]
 * Kernel journal lines are classified (connect, disconnect, reset, enumeration failure, errno) and counted per device, with flapping detection, against the recorded journal. [@ANCHOR: usb_hub_history_parse]
-* A watch reports a device leaving and returning with a new device number. [@ANCHOR: usb_hub_watch]
+* A watch reports a device leaving and returning with a new device number, and the watch checks its arguments (1 to 120 s) and runs for its duration; a test drives the same loop by poll count instead of by sleeping, so a loaded machine cannot miss the outage. [@ANCHOR: usb_hub_watch] [@ANCHOR: usb_hub_watch_with]
 * Bandwidth: the VNWA's four full-speed devices share one translator and the endpoint arithmetic follows the USB reservation rules. [@ANCHOR: usb_hub_bandwidth]
 * Diagnose: missing, powered-off, deauthorized and journal-backed findings. [@ANCHOR: usb_hub_diagnose]
 * The power budget flags a bus-powered hub asked for more current than it has. [@ANCHOR: usb_hub_power_budget]
