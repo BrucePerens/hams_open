@@ -44,7 +44,10 @@ def defang_url_text(url):
     return text.replace(".", "[.]").replace("@", "[@]")
 
 
-def _defang_text_node(text):
+# [@ANCHOR: hams_helpdesk:defang_text_node]
+def defang_text_node(text):
+    """Returns ``text`` with every URL written out in it (``http://``, ``https://``, ``ftp://``, ``mailto:``, ``www.``) defanged by
+    ``defang_url_text``; a falsy ``text`` comes back unchanged. Plain text in, plain text out (no markup is read or written)."""
     return _URL_IN_TEXT.sub(lambda m: defang_url_text(m.group(0)), text) if text else text
 
 
@@ -63,12 +66,12 @@ def defang_html(value):
     try:
         wrapper = lxml_html.fragment_fromstring(raw, create_parent="div")
     except (etree.LxmlError, ValueError):
-        return Markup(_html.escape(_defang_text_node(raw), quote=False))
+        return Markup(_html.escape(defang_text_node(raw), quote=False))
     elements = [e for e in wrapper.iter() if isinstance(e.tag, str)]
     for element in elements:
-        element.text = _defang_text_node(element.text)
+        element.text = defang_text_node(element.text)
         if element is not wrapper:
-            element.tail = _defang_text_node(element.tail)
+            element.tail = defang_text_node(element.tail)
     for element in elements:
         if element is wrapper:
             continue

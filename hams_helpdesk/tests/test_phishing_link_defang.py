@@ -10,7 +10,7 @@ from odoo.tests.common import tagged
 from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
-from ..models.link_defang import DEFANG_WARNING_TEXT, defang_html, defang_url_text
+from ..models.link_defang import DEFANG_WARNING_TEXT, defang_html, defang_text_node, defang_url_text
 
 PHISH_URL = "https://login-hams-com.evil.example/verify?token=1"
 BODY = '<p>Your account is locked. <a href="%s">Verify now</a> or write to <a href="mailto:help@evil.example">help</a>.</p>' % PHISH_URL
@@ -28,6 +28,15 @@ class TestPhishingLinkDefangUnits(HamsTransactionCase):
         self.assertEqual(defang_url_text("mailto:a@b.example"), "mailto:a[@]b[.]example")
         self.assertEqual(defang_url_text(None), "")
         self.assertEqual(defang_url_text("  "), "")
+
+    def test_01b_urls_in_plain_text_are_defanged_and_the_rest_is_left_alone(self):
+        # Tests [@ANCHOR: hams_helpdesk:defang_text_node]
+        self.assertEqual(
+            defang_text_node("go to https://a.example/x or www.b.example, mail mailto:c@d.example. Version 1.2 is fine"),
+            "go to hxxps://a[.]example/x or www[.]b[.]example, mail mailto:c[@]d[.]example. Version 1.2 is fine",
+        )
+        self.assertEqual(defang_text_node(""), "")
+        self.assertIsNone(defang_text_node(None))
 
     def test_02_a_link_becomes_text_with_its_own_wording_and_the_defanged_address(self):
         # Tests [@ANCHOR: hams_helpdesk:defang_html]

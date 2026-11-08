@@ -216,6 +216,19 @@ becomes `[.]`, every `@` becomes `[@]`. A falsy `url` gives `""`. Raises nothing
 Example: `defang_url_text("https://a.example.com/x")` is `hxxps://a[.]example[.]com/x`. See also `defang_html`; tested by
 `test_01_a_url_becomes_inert_text`.
 
+### defang_text_node [@ANCHOR: hams_helpdesk:defang_text_node]
+
+Purpose: defangs the URLs written out in a piece of plain text; used by `defang_html()` on every text node and on the text after
+every element, and for the whole text when a fragment cannot be parsed.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `text` | `str` or falsy | Plain text. Borrowed, never modified. |
+
+Returns a `str`: each `http://`, `https://`, `ftp://`, `mailto:` or `www.` address (up to the next white space, `<`, `>` or quote) is replaced by
+`defang_url_text()` of it; everything else, including numbers such as `1.2`, is unchanged. A falsy `text` is returned as it is (`""`
+or `None`). Raises nothing, no side effects. Tested by `test_01b_urls_in_plain_text_are_defanged_and_the_rest_is_left_alone`.
+
 ### defang_html [@ANCHOR: hams_helpdesk:defang_html]
 
 Purpose: the one function that makes a text safe to read next to a phish. Called by the staff form's computed description, by the
