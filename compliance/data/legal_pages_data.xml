@@ -209,7 +209,10 @@
                             <h3 class="mt-4">2. Conformance Status</h3>
                             <p>The Web Content Accessibility Guidelines (WCAG) defines requirements for designers and developers to improve accessibility for people with disabilities. It defines three levels of conformance: Level A, Level AA, and Level AAA. This platform is partially conformant with WCAG 2.1 level AA.</p>
 
-                            <h3 class="mt-4">3. Feedback</h3>
+                            <h3 class="mt-4">3. Display and Reading Choices</h3>
+                            <p>The "Display and reading" panel, linked from the footer of every page, lets you change how the site looks: text size up to 200 percent, a reading font (Atkinson Hyperlegible or OpenDyslexic), wide text spacing, higher contrast, reduced motion, underlined links, left-aligned text, bigger click targets, a narrower reading width, Day, Night or Red light colours, and a colour palette. The "Colour-vision safe" palette uses blue for good and red-orange for danger instead of green and red, and other colours chosen so that people with red-green or blue-yellow colour blindness (protanopia, deuteranopia, tritanopia) can tell them apart; the choice is checked by automated tests with simulations of those three conditions. We also use a shape or a word with a colour wherever a colour carries a meaning. The choices are saved with your account when you are signed in, and in this browser when you are not.</p>
+
+                            <h3 class="mt-4">4. Feedback</h3>
                             <p>We welcome your feedback on the accessibility of our website. Please let us know if you encounter accessibility barriers:</p>
                             <ul>
                                 <li>E-mail: <a t-attf-href="mailto:#{res_company.email}"><t t-out="res_company.email or 'admin@example.com'"/></a></li>
