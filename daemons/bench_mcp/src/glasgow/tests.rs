@@ -105,6 +105,27 @@ fn config_has_defaults_and_refuses_bad_values() {
     }
 }
 
+// Tests [@ANCHOR: glasgow_base_args]
+// Tests [@ANCHOR: glasgow_real_ctx]
+#[test]
+fn the_serial_is_passed_on_and_the_real_context_lives_in_the_install() {
+    let v = bench("g_real", r#","venv":"/opt/gx""#);
+    assert_eq!(
+        base_args(&v[0]),
+        vec!["--serial".to_string(), SERIAL.to_string()]
+    );
+    let none = crate::config::parse(r#"{"instruments":{"g":{"driver":"glasgow"}}}"#).unwrap();
+    assert!(base_args(&none[0]).is_empty());
+    let c = real_ctx(&v[0]);
+    assert_eq!(
+        (c.lock_path.clone(), c.sysfs.clone()),
+        (
+            PathBuf::from("/opt/gx/glasgow.lock"),
+            PathBuf::from("/sys/bus/usb/devices")
+        )
+    );
+}
+
 // Tests [@ANCHOR: glasgow_install_dir]
 // Tests [@ANCHOR: glasgow_install_paths]
 #[test]
@@ -126,6 +147,7 @@ fn install_dir_is_configured_or_the_pinned_default() {
 }
 
 // Tests [@ANCHOR: glasgow_parse_voltage_table]
+// Tests [@ANCHOR: glasgow_parse_num]
 #[test]
 fn the_voltage_table_of_a_real_device_parses_and_garbage_does_not() {
     let rows = parse::voltage_table(&fixture("voltage_idle.txt")).unwrap();
@@ -325,6 +347,7 @@ fn rq(args: &[&str], secs: u64) -> Req {
 }
 
 // Tests [@ANCHOR: glasgow_real_runner]
+// Tests [@ANCHOR: glasgow_runner_command]
 #[test]
 fn the_real_runner_captures_output_stops_with_sigint_and_never_kills() {
     let dir = std::env::temp_dir().join(format!("bench_glasgow_runner_{}", std::process::id()));
@@ -884,6 +907,9 @@ fn applet_arguments_are_checked_before_anything_is_sent() {
 }
 
 // Tests [@ANCHOR: glasgow_execute]
+// Tests [@ANCHOR: glasgow_distinct_pins]
+// Tests [@ANCHOR: glasgow_done]
+// Tests [@ANCHOR: glasgow_volt_spec]
 // Tests [@ANCHOR: glasgow_ops_call]
 // Tests [@ANCHOR: glasgow_park]
 #[test]

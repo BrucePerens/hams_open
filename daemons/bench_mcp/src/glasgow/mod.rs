@@ -184,6 +184,7 @@ pub fn install_dir(cfg: &Config) -> PathBuf {
 }
 
 fn real_ctx(inst: &Instrument) -> Ctx {
+    // [@ANCHOR: glasgow_real_ctx]
     let dir = install_dir(&inst.glasgow);
     let (program, cache_dir) = runner::install_paths(&dir);
     Ctx {
@@ -221,6 +222,7 @@ fn with_session<T>(f: impl FnOnce(&mut HashMap<String, Session>) -> T) -> T {
 
 /// The `--serial` option for the instrument, when its entry names the device.
 fn base_args(inst: &Instrument) -> Vec<String> {
+    // [@ANCHOR: glasgow_base_args]
     match &inst.serial {
         Some(s) => vec!["--serial".into(), s.clone()],
         None => vec![],

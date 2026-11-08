@@ -22,6 +22,7 @@ pub struct PortRow {
 }
 
 fn num(field: &str, what: &str) -> Result<f64, String> {
+    // [@ANCHOR: glasgow_parse_num]
     match field.trim().parse::<f64>() {
         Ok(v) if v.is_finite() => Ok(v),
         _ => Err(format!("{what}: {field:?} is not a finite number")),

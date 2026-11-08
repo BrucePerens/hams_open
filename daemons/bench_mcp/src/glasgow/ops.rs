@@ -112,6 +112,7 @@ struct Plan {
 }
 
 fn distinct(pins: &[&String]) -> Result<(), String> {
+    // [@ANCHOR: glasgow_distinct_pins]
     let mut seen = BTreeSet::new();
     for p in pins {
         if !seen.insert(p.as_str()) {
@@ -557,6 +558,7 @@ pub(crate) fn park(
 }
 
 fn volt_spec(inst: &Instrument, ports: &BTreeSet<char>) -> Result<String, String> {
+    // [@ANCHOR: glasgow_volt_spec]
     let rec = with_session(|s| s.get(&inst.name).map(|x| x.ports.clone()));
     let rec = rec.unwrap_or_default();
     let now = Instant::now();
@@ -708,6 +710,7 @@ fn execute(
 }
 
 fn done(mut v: Value, p: &Plan, started: Instant) -> Value {
+    // [@ANCHOR: glasgow_done]
     if let Value::Object(m) = &mut v {
         m.insert("applet".into(), p.applet.into());
         m.insert("pins".into(), json!(p.pins));

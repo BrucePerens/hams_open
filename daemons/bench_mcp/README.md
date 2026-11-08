@@ -206,6 +206,13 @@ The Glasgow Interface Explorer (USB 20b7:9db1; UART, I2C, SPI, JTAG, SWD, logic 
 * The device and its link speed are read from sysfs, so a full-speed link is known without opening it. [@ANCHOR: glasgow_usb_device]
 * A VCD capture is summarised per pin: transitions, fraction high, pulse widths, edge frequency, overrun marker. [@ANCHOR: glasgow_vcd_summary]
 * After max_on_s a watchdog switches the ports off by itself. [@ANCHOR: glasgow_watchdog]
+* The serial of the config is passed to every command, so one of several devices is chosen. [@ANCHOR: glasgow_base_args]
+* The real context puts the lock, the program and the cache in the install and reads the kernel's USB tree. [@ANCHOR: glasgow_real_ctx]
+* One pin never fills two roles. [@ANCHOR: glasgow_distinct_pins]
+* A tool's answer says its pins are parked, that the rail is still on and how long the call took. [@ANCHOR: glasgow_done]
+* The I/O voltage of a call is the recorded one, or the call is refused (and an expired port is switched off). [@ANCHOR: glasgow_volt_spec]
+* A number in the voltage table must be finite. [@ANCHOR: glasgow_parse_num]
+* The process runner gives glasgow its own cache and a clean environment. [@ANCHOR: glasgow_runner_command]
 
 ## Checks this crate makes for the SDRs (anchors)
 

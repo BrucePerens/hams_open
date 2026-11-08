@@ -50,6 +50,7 @@ pub struct RealRunner {
 
 impl RealRunner {
     fn command(&self, req: &Req) -> Command {
+        // [@ANCHOR: glasgow_runner_command]
         let mut c = if req.nice {
             let mut c = Command::new("nice");
             c.args(["-n", "10"]).arg(&self.program);
