@@ -150,19 +150,22 @@ class TestTriageNotifyHold(HamsTransactionCase):
         self.assertEqual(ticket.notify_state, "suppressed")
         self._assert_silent(watch, "nothing for a ticket in the Spam stage")
 
+    def _spam_from_both_routes_mails_nobody(self, hold, subject):
+        self._hold(hold)
+        watch = NotificationWatch(self)
+        created = self._new_ticket("Form or API spam %s" % hold, stage="spam")
+        self.assertEqual(created.notify_state, "suppressed")
+        self._ingest(raw_message("support@hams.com", subject, headers=SES_PASS_HEADERS + BULK_HEADERS))
+        mailed = self.Ticket.search([("name", "=", subject)], order="id desc", limit=1)
+        self.assertEqual((mailed.stage, mailed.notify_state), ("spam", "suppressed"))
+        self._assert_silent(watch, "spam through either route mails nobody (hold %s)" % hold)
+
     def test_08_a_spam_ticket_from_each_route_mails_nobody(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_triage_notification_state_on_create]
-        # Routes: a form or API create into the Spam stage (both end in create()), and inbound mail the rules flag.
-        for hold in (0, 20):
-            self._hold(hold)
-            watch = NotificationWatch(self)
-            created = self._new_ticket("Form or API spam %s" % hold, stage="spam")
-            self.assertEqual(created.notify_state, "suppressed")
-            subject = REAL_MISSED_SPAM_NAMES[hold // 20]
-            self._ingest(raw_message("support@hams.com", subject, headers=SES_PASS_HEADERS + BULK_HEADERS))
-            mailed = self.Ticket.search([("name", "=", subject)], order="id desc", limit=1)
-            self.assertEqual((mailed.stage, mailed.notify_state), ("spam", "suppressed"))
-            self._assert_silent(watch, "spam through either route mails nobody (hold %s)" % hold)
+        # Routes: a form or API create into the Spam stage (both end in create()), and inbound mail the rules flag; with no
+        # hold window and with one.
+        self._spam_from_both_routes_mails_nobody(0, REAL_MISSED_SPAM_NAMES[0])
+        self._spam_from_both_routes_mails_nobody(20, REAL_MISSED_SPAM_NAMES[1])
 
     def test_09_a_real_inbound_mail_is_held_and_then_sent_after_the_window(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_triage_notification_state_on_create]
