@@ -28,6 +28,8 @@ def register_ai_safety_reporting_key(env):
     )
 
 
+# [@ANCHOR: hams_ai_safety_reporting:post_init_hook]
+# Verified by [@ANCHOR: hams_ai_safety_reporting:test_register_ai_safety_reporting_key]
 def post_init_hook(env):
     """Registers the key on a fresh install; ``migrations/1.1`` does it for installed databases."""
     register_ai_safety_reporting_key(env)

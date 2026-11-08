@@ -35,3 +35,24 @@ The file is written `odoo:odoo` mode `0600` because both units still run as `odo
 family key directory, `os_group`) is a later step of `docs/proposals/DAEMON_OS_ISOLATION_PLAN.md`. No data is read from a ticket. Tests:
 `tests/test_ai_safety_reporting_key.py` (the row, the key, the file mode and content, a second call, and a hand-made row under another
 name).
+
+## `post_init_hook(env)`: registering the key on a fresh install
+
+`hooks.post_init_hook`, named in the manifest [@ANCHOR: hams_ai_safety_reporting:post_init_hook]
+
+Odoo calls it once, after the module's data has loaded on a **fresh install** (never on an upgrade; `migrations/1.1` covers an installed
+database). It does one thing: it calls `register_ai_safety_reporting_key(env)` (above), so a new site has the key the bots and the
+observer file safety tickets with, from the moment the module is installed.
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `env` | `odoo.api.Environment` | The installing environment Odoo passes; any user. Nothing runs as the superuser. |
+
+| Result | Meaning |
+|---|---|
+| `None` | The key row was registered and the key file written, exactly as `register_ai_safety_reporting_key` returns. |
+| any exception from `register_ai_safety_reporting_key` | Passes through unchanged, so the install fails loudly instead of leaving the bots without a key. |
+
+Behaviour worth knowing: it writes `/opt/hams/etc/keys/ai_safety_reporting_service_internal.env` as a side effect, so a test host that
+installs the module gets that file (the same is true of every module that registers a daemon key). It is not idempotent in effect (each
+call mints a new key) but it runs only once per install. Tests: `tests/test_ai_safety_reporting_key.py`.

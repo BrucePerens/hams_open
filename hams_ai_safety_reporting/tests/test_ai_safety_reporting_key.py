@@ -40,6 +40,7 @@ class TestAiSafetyReportingKey(RealTransactionCase):
     def test_registering_issues_the_key_for_the_create_only_account_and_is_idempotent(self):
         # [@ANCHOR: hams_ai_safety_reporting:test_register_ai_safety_reporting_key]
         # Tests [@ANCHOR: hams_ai_safety_reporting:register_ai_safety_reporting_key]
+        # Tests [@ANCHOR: hams_ai_safety_reporting:post_init_hook]
         service_uid = self.env["zero_sudo.security.utils"]._get_service_uid(hooks.SERVICE_XMLID)
 
         hooks.post_init_hook(self.env)
