@@ -21,7 +21,7 @@ import re
 import signal
 import threading
 import sys
-# import tempfile
+import tempfile
 import traceback
 
 import time
@@ -293,52 +293,67 @@ def _kill_browser_tree(proc, where):
         _logger.info("Ignored exception: %s", e)
 
 
-# [@ANCHOR: zero_sudo:kill_all_headless_chrome]
-def _kill_all_headless_chrome_for_this_uid():
-    """Unconditionally SIGKILLs every headless chrome/chromium process owned by
-    the current uid, system-wide -- not scoped to this instance's own process
-    tree. Reinstated 2026-09-09 per Bruce's own direct instruction, called both
-    before spawning a new Chrome (_patched_spawn_chrome) and at the end of every
-    test (HamsHttpCase.tearDown) so leaked memory from an incompletely-torn-down
-    tour is reclaimed as promptly as possible, not left for the next spawn to
-    clean up lazily. Safe to run this aggressively now that test.py's own
-    single-instance lock (see hams_shared/tools/test.py's main()) guarantees only
-    one test.py process runs on this box at a time -- anything still matching
-    here belongs to THIS run (a leaked prior tour) or is a genuine orphan, never
-    a concurrently-running sibling session's own in-flight tour."""
+_CHROME_NAMES = ("chrome", "chromium", "chromium-browser")
+
+
+# [@ANCHOR: zero_sudo:headless_chrome_of_this_run]
+def _headless_chrome_of_this_run():
+    """The headless chrome/chromium processes of the current uid that belong to THIS test process, as psutil.Process objects.
+
+    One that is a descendant of this process, or an orphan whose `--user-data-dir` is a directory under this process's
+    `tempfile.gettempdir()` that exists in this process's own view of the filesystem (what is left of a tour whose
+    parent died). Not "every headless chrome of this uid": several test runs share the machine (ADR 0116, test slots), a run
+    in its own PID namespace is visible in the host's process table, and reaping by uid killed the browsers of the other
+    runs, whose tours then died with exit code 9, `CancelledError` in `Page.navigate`, or a stalled step. A browser started by a person (not
+    headless), another uid's process, and a process that is not one of the three browsers are never returned."""
     my_uid = os.getuid()
+    temp_root = os.path.realpath(tempfile.gettempdir()) + os.sep
+    try:
+        own_pids = {child.pid for child in psutil.Process().children(recursive=True)}
+    except psutil.Error as e:
+        _logger.warning("Could not list this process's children: %s", e)
+        own_pids = set()
+    found = []
     for p in psutil.process_iter(["pid", "name", "uids", "cmdline"]):
         try:
             cmdline = p.info.get("cmdline") or []
-            is_headless = any("--headless" in str(arg) for arg in cmdline)
-            if (
-                p.info.get("name") in ("chrome", "chromium", "chromium-browser")
+            if not (
+                p.info.get("name") in _CHROME_NAMES
                 and p.info.get("uids")
                 and p.info["uids"].real == my_uid
-                and is_headless
+                and any("--headless" in str(arg) for arg in cmdline)
             ):
-                p.kill()
-        except (
-            psutil.NoSuchProcess,
-            psutil.AccessDenied,
-            psutil.ZombieProcess,
-            KeyError,
-        ) as e:
+                continue
+            profiles = [str(a).split("=", 1)[1] for a in cmdline if str(a).startswith("--user-data-dir=")]
+            is_leftover = any(
+                os.path.realpath(profile).startswith(temp_root) and os.path.isdir(profile) for profile in profiles
+            )
+            if p.info["pid"] in own_pids or is_leftover:
+                found.append(p)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, KeyError) as e:
+            _logger.warning("Failed process inspection: %s", e)
+    return found
+
+
+# [@ANCHOR: zero_sudo:kill_all_headless_chrome]
+def _kill_all_headless_chrome_for_this_uid():
+    """SIGKILLs every headless chrome/chromium of this test process (`_headless_chrome_of_this_run`): its descendants and the
+    orphans whose profile directory is in its own temporary directory. The name is historical: until 2026-11-08 this killed
+    every headless chrome of the uid on the machine, which was safe only while test.py allowed one run per machine
+    (the reinstated 2026-09-09 behaviour) and killed other runs' browsers once test slots allowed several (ADR 0116).
+    Called before a new Chrome is spawned (_patched_spawn_chrome) and at the end of every test (HamsHttpCase.tearDown), so memory
+    held by an incompletely torn-down tour is reclaimed at once."""
+    for p in _headless_chrome_of_this_run():
+        try:
+            p.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, KeyError) as e:
             _logger.warning("Failed process kill: %s", e)
 
     time.sleep(0.5)  # audit-ignore-sleep: Wait for processes to terminate
-    for p in psutil.process_iter(["pid", "name", "uids", "cmdline"]):
+    for p in _headless_chrome_of_this_run():
         try:
-            cmdline = p.info.get("cmdline") or []
-            is_headless = any("--headless" in str(arg) for arg in cmdline)
-            if (
-                p.info.get("name") in ("chrome", "chromium", "chromium-browser")
-                and p.info.get("uids")
-                and p.info["uids"].real == my_uid
-                and is_headless
-            ):
-                p.kill()  # Ensure it's dead
-                p.wait(timeout=1.0)
+            p.kill()  # Ensure it's dead
+            p.wait(timeout=1.0)
         except (
             psutil.NoSuchProcess,
             psutil.AccessDenied,
@@ -1964,11 +1979,11 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                         )
 
             # Reinstated 2026-09-09 per Bruce's own direct instruction: reap
-            # ALL headless chrome for this uid, unconditionally, at the end of
+            # every leaked headless chrome of THIS test process at the end of
             # every test -- not just the targeted per-instance cleanup above,
-            # and not lazily deferred to the next spawn. Safe now that
-            # test.py's own single-instance lock guarantees this is never a
-            # concurrent sibling session's own in-flight tour.
+            # and not lazily deferred to the next spawn. Scoped to this run's own
+            # browsers since 2026-11-08: concurrent runs (test slots) share the
+            # machine, and a reap by uid killed their in-flight tours.
             try:
                 _kill_all_headless_chrome_for_this_uid()
             except Exception as e:  # audit-ignore-catch-all
