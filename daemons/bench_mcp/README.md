@@ -18,6 +18,7 @@ calibration does not pass through the agent's context step by step. There is als
 | `vnwa_open` (VNA) | DG8SAQ VNWA 3E vector network analyser through the `vnwa_open` crate, no vendor software | S11/S21 sweeps, calibration (open, short, load, through), generator (CW, level, AM, FM), frequency meter, spectrum analyser, firmware and temperature, reliability ladder with hub power cycle | [The VNA's functions](#the-vnas-functions-as-tools-2026-10-28) |
 | `bladerf`, `limesdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers) | capture, survey, coherence; receive only | [Tools](#tools) |
 | `rx888` | RX-888 MkII direct-sampling HF receiver (0 to 30 MHz) through ka9q-radio's `radiod` on loopback; verified on the unit with no antenna | firmware boot, radiod start and stop, front end (overrange, RF gain, attenuation), channel level and SNR, spectrum CSV, I/Q or audio WAV; receive only | [RX-888](#rx-888-receiver-rx888-driver) |
+| `glasgow` | Glasgow Interface Explorer (1BitSquared, USB 20b7:9db1) FPGA digital multi-tool through a pinned `glasgow` install; identify and port-voltage readback measured on a revC3, everything that drives pins fixtures only | list, status, port voltage set with limit and watchdog, I2C scan/read/write, SPI flash ID, UART transact and sniff, logic capture to VCD with summary, GPIO, pattern generator, JTAG scan, SWD DPIDR; parks all pins after each call | [Glasgow](#glasgow-interface-explorer-glasgow-driver), `manual/instruments/glasgow` |
 | `usb_hub` | USB topology and hub port power (uhubctl) | topology, find, diagnose, bandwidth, watch, history, port power (verified cold reset), protection of devices | [USB hub tools](#usb-hub-tools-usb_hub-driver), `docs/USB_HUB_TOOLS.md` |
 | `audio` | Sound devices, with discovery by signature | play, record, meter, loopback, speak, alert, verify, synthesizers; never the system default device; `dry_run` and a safe state | [Audio tools](#audio-tools-audio-driver), `docs/AUDIO_TOOLS.md` |
 | `hamlib` | Radios through Hamlib's `rigctld` (a separate process; LGPL, not linked) | models, get and set, scan, watch, memory, load checks, transmit tests with an attestation and a watchdog | [Hamlib rigs](#hamlib-rigs-hamlib-driver), `docs/HAMLIB_TOOLS.md` |
@@ -56,6 +57,7 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
                 "driver_library": "/usr/local/lib/ka9q-radio/rx888.so", "boot": "/usr/local/sbin/rx888_boot",
                 "firmware": "/usr/local/share/ka9q-radio/W1EUJ_0.1.0_FX3.img", "presets": "/usr/local/share/ka9q-radio/presets.conf",
                 "status_group": "239.88.8.1", "data_group": "239.88.8.2"},
+      "glasgow": {"driver": "glasgow", "tier": "full", "serial": "<serial from bench_glasgow_list>", "max_volts": 3.6, "max_on_s": 300, "max_trip_a": 0.1, "max_capture_s": 30, "max_capture_mb": 64},
       "rig":   {"driver": "hamlib", "tier": "read_only", "model": 1},
       "rotor": {"driver": "rotator", "tier": "read_config", "rotctld_port": 4533, "min_az": 0, "max_az": 360}}}
 
@@ -156,6 +158,54 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 * A sweep is written as a CSV with a header and one row per point; calibrated values go to a second CSV. [@ANCHOR: bench_mcp_vna_csv] [@ANCHOR: bench_mcp_vna_calibrated_csv]
 * A `nanovna` entry reads its settings, parses the shell's replies (echo, prompt, partial reads, garbage, unknown commands, timeouts), reads identity and limits from `version`, `info` and `help`, checks sweep arguments against the unit's limits, sweeps by `scan` or by `sweep`/`data` and restores the range, and returns typed errors for what it cannot do. [@ANCHOR: bench_nanovna_parse_config] [@ANCHOR: bench_nanovna_parse_reply] [@ANCHOR: bench_nanovna_command] [@ANCHOR: bench_nanovna_identify] [@ANCHOR: bench_nanovna_limits] [@ANCHOR: bench_nanovna_parse_sweep_query] [@ANCHOR: bench_nanovna_parse_columns] [@ANCHOR: bench_nanovna_check_range] [@ANCHOR: bench_nanovna_measure] [@ANCHOR: bench_nanovna_sweep_args] [@ANCHOR: bench_nanovna_call] [@ANCHOR: bench_nanovna_error_display] [@ANCHOR: bench_nanovna_scan_points] [@ANCHOR: bench_nanovna_sweep_and_read] [@ANCHOR: bench_nanovna_open_shell] [@ANCHOR: bench_nanovna_sweep_tool] [@ANCHOR: bench_nanovna_power_cycle] [@ANCHOR: bench_nanovna_calibrate_measure]
 * Calibration standards are stored, and a calibration applied, for any instrument. [@ANCHOR: bench_vna_tools_measure_names] [@ANCHOR: bench_vna_tools_store_standard] [@ANCHOR: bench_vna_tools_apply_setup]
+
+## Glasgow Interface Explorer (`glasgow` driver)
+
+The Glasgow Interface Explorer (USB 20b7:9db1; UART, I2C, SPI, JTAG, SWD, logic analyzer, GPIO and pattern generator) through the `glasgow` command line of a pinned, isolated venv made by `glasgow/install_glasgow.py` (`glasgow/requirements.txt` with hashes; `glasgow/DEPENDENCIES.md` records what was installed and its licences). Manual: `instruments/glasgow`. Tests use a simulated device (`src/glasgow/testkit.rs`) and run the real helper script `src/glasgow/ops.py`; real-hardware status is on the manual pages.
+
+## Checks this crate makes for the Glasgow (anchors)
+
+* The applet table lists every tool's applet and what is never provided. [@ANCHOR: glasgow_applets]
+* A tool above the tier or unknown is refused before any command. [@ANCHOR: glasgow_call_with]
+* The `glasgow` entry is read with its limits, and a bad value, a relative venv path, a bad serial or a max_volts above 5.5 is refused when the file is read. [@ANCHOR: glasgow_config]
+* A file lock in the install keeps a second process out of the device while a call runs. [@ANCHOR: glasgow_device_lock]
+* The one path of every pin tool: port set by this server, device read back, link speed checked, run, parked. [@ANCHOR: glasgow_execute]
+* Any disagreement or failure switches every port off, proves it, and says so. [@ANCHOR: glasgow_fail_closed]
+* A flag argument is true, false or absent, nothing else. [@ANCHOR: glasgow_flag]
+* The install directory is the config's `venv` or the pinned default under `~/.local/share/bench_mcp`. [@ANCHOR: glasgow_install_dir]
+* The program and the bitstream cache are inside the install directory. [@ANCHOR: glasgow_install_paths]
+* An instrument is picked by name or implicitly when exactly one fits. [@ANCHOR: glasgow_instrument]
+* The list tool reports the device, revision, link speed and install without driving anything. [@ANCHOR: glasgow_list]
+* A number argument is finite and within a range whose source the error names. [@ANCHOR: glasgow_number]
+* Driving tools need confirm, results are structured, a failed run still ends with the pins parked. [@ANCHOR: glasgow_ops_call]
+* After a pin tool every used port is parked: all pins inputs, pulls released. [@ANCHOR: glasgow_park]
+* The serials in `glasgow list` are separated from its log lines. [@ANCHOR: glasgow_parse_device_list]
+* Hex text becomes bytes or an error. [@ANCHOR: glasgow_parse_hex_bytes]
+* The TAPs of a JTAG scan are parsed with their IDCODE fields. [@ANCHOR: glasgow_parse_jtag_taps]
+* Warnings and errors of the glasgow log are passed on to the caller. [@ANCHOR: glasgow_parse_log_problems]
+* Pin specs expand to ports A and B, 16 pins at most, no duplicates. [@ANCHOR: glasgow_parse_pins]
+* The helper script's single result line is found, and its absence is an error. [@ANCHOR: glasgow_parse_result_line]
+* The voltage table of a real device parses, a short or fault row is flagged, and an unreadable table is an error. [@ANCHOR: glasgow_parse_voltage_table]
+* A pin argument is one pin of port A or B, with a default from the applet's role table. [@ANCHOR: glasgow_pin_arg]
+* Every applet tool's arguments are checked and turned into a plan before anything is sent. [@ANCHOR: glasgow_plan]
+* A port is set only with confirm, within the config and revision limits, limit register first when raising, supply first when lowering, pins made inputs beforehand, and verified by readback. [@ANCHOR: glasgow_port_set]
+* The gateware of a tool's applet is built into the cache without a device or a voltage. [@ANCHOR: glasgow_prepare]
+* `glasgow voltage` is read and parsed; a failure names the udev rule when permissions are missing. [@ANCHOR: glasgow_read_ports]
+* The real runner starts the pinned `glasgow` as a child with its own cache, captures both streams, ends it by SIGINT then SIGTERM only, and never signals a process it did not start or sends SIGKILL. [@ANCHOR: glasgow_real_runner]
+* The hardware revision comes from the configured serial or the single listed device. [@ANCHOR: glasgow_revision]
+* The revision and the port voltage range come from the serial. [@ANCHOR: glasgow_revision_limits]
+* A child that did not end, or that the runner had to interrupt, is an error that says what to do. [@ANCHOR: glasgow_run]
+* `glasgow safe` is followed by a readback that must show 0 V on every port, and the session record is cleared first. [@ANCHOR: glasgow_safe]
+* The safe-state tool proves 0 V or says to unplug the USB cable. [@ANCHOR: glasgow_safe_state]
+* A Glasgow serial has Glasgow's own pattern. [@ANCHOR: glasgow_serial_ok]
+* The server records which ports a person set, to what voltage, and until when. [@ANCHOR: glasgow_sessions]
+* When the server stops, every port it powered is switched off. [@ANCHOR: glasgow_shutdown]
+* The status tool reports the device's own port readings and the server's record. [@ANCHOR: glasgow_status]
+* Tools are listed by the configured tier. [@ANCHOR: glasgow_tool_defs]
+* A uart-analyzer CSV is summarised per channel with error counts and a cut-off. [@ANCHOR: glasgow_uart_csv_summary]
+* The device and its link speed are read from sysfs, so a full-speed link is known without opening it. [@ANCHOR: glasgow_usb_device]
+* A VCD capture is summarised per pin: transitions, fraction high, pulse widths, edge frequency, overrun marker. [@ANCHOR: glasgow_vcd_summary]
+* After max_on_s a watchdog switches the ports off by itself. [@ANCHOR: glasgow_watchdog]
 
 ## Checks this crate makes for the SDRs (anchors)
 

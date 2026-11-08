@@ -11,9 +11,11 @@
 //! * After every tool that drove pins, the used ports are parked (all pins inputs, pulls released) and the answer says so.
 //! * One session at a time: calls to one instrument are serialised by the server, and an `flock` on the install's lock file keeps a second
 //!   server process or a stray `glasgow` of this user's out of the device while a call runs.
-//! * Fail closed: a failed or unparsable readback, a timeout, a device that is not at high speed (for the tools that need bulk
-//!   transfers), a child that does not end: all end with the ports off and an error that says what to do.
+//! * Fail closed: a failed or unparsable readback, a changed voltage, a failed park, a failed `safe`: the ports are switched off, proved at
+//!   0 V, and the error says what to do. A timeout or an applet failure parks the pins and reports. A link that is not at high speed refuses
+//!   the bulk-transfer tools before running anything (the ports stay as set).
 //! * No tool takes a command string, firmware, `flash`, `factory` or any applet outside the allow-list in `ops.rs`.
+//!
 //! `bench_glasgow_safe_state` is the safe-state companion; the server also runs it when it stops.
 
 mod ops;
@@ -57,7 +59,14 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Config {
-        Config { venv: None, max_capture_s: 30.0, max_capture_mb: 64, op_timeout_s: 120, build_timeout_s: 600, max_trip_a: 0.1 }
+        Config {
+            venv: None,
+            max_capture_s: 30.0,
+            max_capture_mb: 64,
+            op_timeout_s: 120,
+            build_timeout_s: 600,
+            max_trip_a: 0.1,
+        }
     }
 }
 
@@ -103,12 +112,16 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     if let Some(s) = c.get("serial") {
         let s = s.as_str().ok_or("serial must be a string")?;
         if !parse::serial_ok(s) {
-            return Err(format!("serial {s:?} is not a Glasgow serial such as C3-20240904T183337Z"));
+            return Err(format!(
+                "serial {s:?} is not a Glasgow serial such as C3-20240904T183337Z"
+            ));
         }
     }
     if let Some(v) = c.get("max_volts").and_then(|v| v.as_f64()) {
         if v > 5.5 {
-            return Err(format!("max_volts {v} is above the 5.5 V the hardware allows"));
+            return Err(format!(
+                "max_volts {v} is above the 5.5 V the hardware allows"
+            ));
         }
     }
     Ok(cfg)
@@ -142,11 +155,11 @@ pub const SPECS: &[Spec] = &[
         props: props!(r#""instrument":{"type":"string"}"#), required: &[] },
     Spec { name: "bench_glasgow_port_set", tier: Tier::Full,
         desc: "GLASGOW, DRIVES A SUPPLY RAIL: sets one port's I/O voltage `volts_v` (0 switches it off; otherwise 1.65 to 5.0 V on revisions A to C, 0.9 to 5.5 V on revision D, and never above the config's max_volts) with a supply current trip of `trip_current_a` (default 0.1 A, at most the config's max_trip_a). The hardware voltage limit is set to the same value first. Every pin tool uses exactly this voltage and refuses a port that was not set here. `confirm` must be true, from the person at the bench who has checked the target's I/O voltage. The port switches itself off after the config's max_on_s. `dry_run` returns the plan.",
-        props: props!(r#""instrument":{"type":"string"},"port":{"type":"string","enum":["A","B"]},"volts_v":{"type":"number","description":"port I/O voltage in volts; 0 = off"},"trip_current_a":{"type":"number","description":"supply current trip, amperes, default 0.1"},"confirm":{"type":"boolean","description":"true: the person at the bench agrees this port may be powered at volts_v"},"dry_run":{"type":"boolean"}"#),
+        props: props!(r#""instrument":{"type":"string"},"port":{"type":"string","enum":["A","B"],"description":"A or B"},"volts_v":{"type":"number","description":"port I/O voltage in volts; 0 = off"},"trip_current_a":{"type":"number","description":"supply current trip, amperes, default 0.1"},"confirm":{"type":"boolean","description":"true: the person at the bench agrees this port may be powered at volts_v"},"dry_run":{"type":"boolean","description":"true: return the plan and send nothing"}"#),
         required: &["port", "volts_v"] },
     Spec { name: "bench_glasgow_prepare", tier: Tier::ReadConfig,
         desc: "GLASGOW: builds (and caches) the gateware for a tool's applet with the pins you will use, so the first real call does not spend 5 to 20 s building and cannot time out. Needs no device and drives nothing: it only runs the pinned yosys and nextpnr at low priority. `tool` names the applet tool (i2c, uart, uart_sniff, spi, logic, gpio, pattern, jtag, swd); pass the same pin arguments you will pass to it. Returns the build time and the cache size.",
-        props: props!(r#""instrument":{"type":"string"},"tool":{"type":"string","enum":["i2c","uart","uart_sniff","spi","logic","gpio","pattern","jtag","swd"]},"revision":{"type":"string","description":"hardware revision such as C3; default: from the device serial"},"pins":{"type":"string","description":"gpio, pattern, logic: the pin spec such as A0:3"},"scl":{"type":"string"},"sda":{"type":"string"},"rx":{"type":"string"},"tx":{"type":"string"},"cs":{"type":"string"},"sck":{"type":"string"},"copi":{"type":"string"},"cipo":{"type":"string"},"tck":{"type":"string"},"tms":{"type":"string"},"tdi":{"type":"string"},"tdo":{"type":"string"},"swclk":{"type":"string"},"swdio":{"type":"string"},"parity":{"type":"string","enum":["none","even","odd","zero","one"]},"stop_bits":{"type":"integer"}"#),
+        props: props!(r#""instrument":{"type":"string"},"tool":{"type":"string","enum":["i2c","uart","uart_sniff","spi","logic","gpio","pattern","jtag","swd"],"description":"the tool whose applet to build"},"revision":{"type":"string","description":"hardware revision such as C3; default: from the device serial"},"pins":{"type":"string","description":"gpio, pattern, logic: the pin spec such as A0:3"},"scl":{"type":"string","description":"pin, default A0"},"sda":{"type":"string","description":"pin, default A1"},"rx":{"type":"string","description":"pin, default A0"},"tx":{"type":"string","description":"pin, default A1"},"cs":{"type":"string","description":"pin, default A0"},"sck":{"type":"string","description":"pin, default A1"},"copi":{"type":"string","description":"pin, default A2"},"cipo":{"type":"string","description":"pin, default A3"},"tck":{"type":"string","description":"pin, default A0"},"tms":{"type":"string","description":"pin, default A1"},"tdi":{"type":"string","description":"pin, default A2"},"tdo":{"type":"string","description":"pin, default A3"},"swclk":{"type":"string","description":"pin, default A0"},"swdio":{"type":"string","description":"pin, default A1"},"parity":{"type":"string","enum":["none","even","odd","zero","one"],"description":"none, even, odd, zero or one; default none"},"stop_bits":{"type":"integer","description":"1 to 8, default 1"}"#),
         required: &["tool"] },
 ];
 
@@ -227,7 +240,12 @@ fn device_lock(path: &Path) -> Result<DeviceLock, String> {
     if let Some(d) = path.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    let f = std::fs::OpenOptions::new().create(true).write(true).truncate(false).open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let f = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
     // Waits up to two seconds: a lock another process is just letting go of (or a forked child that has not yet exec'd) is not a second session.
     let until = Instant::now() + Duration::from_secs(2);
     loop {
@@ -257,13 +275,23 @@ fn run(ctx: &Ctx, req: Req, what: &str) -> Result<Out, String> {
         return Err(out.stderr);
     }
     if out.timed_out {
-        return Err(next_step(&format!("{what} did not finish within {} s and was interrupted ({})", req.timeout.as_secs(), tail(&out.stderr, 3))));
+        return Err(next_step(&format!(
+            "{what} did not finish within {} s and was interrupted ({})",
+            req.timeout.as_secs(),
+            tail(&out.stderr, 3)
+        )));
     }
     Ok(out)
 }
 
 fn req(args: Vec<String>, secs: u64) -> Req {
-    Req { args, timeout: Duration::from_secs(secs), stop_after: None, watch: None, nice: false }
+    Req {
+        args,
+        timeout: Duration::from_secs(secs),
+        stop_after: None,
+        watch: None,
+        nice: false,
+    }
 }
 
 /// `glasgow voltage`: every port's row. A non-zero exit or an unreadable table is an error with the permission hint.
@@ -278,7 +306,10 @@ fn read_ports(ctx: &Ctx, inst: &Instrument) -> Result<(Vec<PortRow>, Vec<String>
         } else {
             ""
         };
-        return Err(next_step(&format!("glasgow voltage failed ({}){hint}", tail(&out.stderr, 3))));
+        return Err(next_step(&format!(
+            "glasgow voltage failed ({}){hint}",
+            tail(&out.stderr, 3)
+        )));
     }
     let rows = parse::voltage_table(&out.stdout).map_err(|e| next_step(&e))?;
     Ok((rows, parse::log_problems(&out.stderr)))
@@ -294,13 +325,23 @@ pub fn safe(ctx: &Ctx, inst: &Instrument) -> Result<Value, String> {
     let manual = "SAFE STATE NOT CONFIRMED: a port may still be powered or a pin driven. Do this now: unplug the Glasgow's USB cable (every output goes off), and do not use it again until the owner has looked at the target.";
     let out = ran.map_err(|e| format!("{manual} ({e})"))?;
     if out.code != Some(0) {
-        return Err(format!("{manual} (glasgow safe exited {:?}: {})", out.code, tail(&out.stderr, 3)));
+        return Err(format!(
+            "{manual} (glasgow safe exited {:?}: {})",
+            out.code,
+            tail(&out.stderr, 3)
+        ));
     }
-    let (rows, _) = read_ports(ctx, inst).map_err(|e| format!("{manual} (readback failed: {e})"))?;
+    let (rows, _) =
+        read_ports(ctx, inst).map_err(|e| format!("{manual} (readback failed: {e})"))?;
     if let Some(r) = rows.iter().find(|r| r.vsupply_v.abs() > 0.05) {
-        return Err(format!("{manual} (port {} still reads {:.3} V)", r.port, r.vsupply_v));
+        return Err(format!(
+            "{manual} (port {} still reads {:.3} V)",
+            r.port, r.vsupply_v
+        ));
     }
-    Ok(json!({"outputs_enabled": false, "verified": true, "ports": rows.iter().map(|r| json!({"port": r.port, "vsupply_v": r.vsupply_v, "vsense_v": r.vsense_v})).collect::<Vec<_>>()}))
+    Ok(
+        json!({"outputs_enabled": false, "verified": true, "ports": rows.iter().map(|r| json!({"port": r.port, "vsupply_v": r.vsupply_v, "vsense_v": r.vsense_v})).collect::<Vec<_>>()}),
+    )
 }
 
 fn row_json(r: &PortRow) -> Value {
@@ -334,11 +375,17 @@ pub fn list(ctx: &Ctx, inst: &Instrument) -> Result<Value, String> {
             return Err(format!("{} Glasgow devices are connected ({}); set \"serial\" in this instrument's config entry so one is chosen", serials.len(), serials.join(", ")));
         }
     }
-    let slow = usb.as_ref().and_then(|u| u.get("high_speed")).and_then(|h| h.as_bool()) == Some(false);
-    Ok(json!({"installed": installed, "install_dir": dir.display().to_string(), "pinned_glasgow_commit": PINNED_COMMIT, "install": version,
+    let slow = usb
+        .as_ref()
+        .and_then(|u| u.get("high_speed"))
+        .and_then(|h| h.as_bool())
+        == Some(false);
+    Ok(
+        json!({"installed": installed, "install_dir": dir.display().to_string(), "pinned_glasgow_commit": PINNED_COMMIT, "install": version,
         "gateware_cache_present": cache.join("GlasgowEmbedded/bitstreams").is_dir(),
         "usb": usb, "devices": devices, "log_problems": problems,
-        "warning": if slow { Some("the device linked at full speed (12 Mb/s), not high speed (480 Mb/s): the Linux kernel cannot use its 512-byte bulk endpoints, so every applet that streams data fails. Try a short data-rated USB 2.0 cable and another port; see manual instruments/glasgow/troubleshooting") } else { None }}))
+        "warning": if slow { Some("the device linked at full speed (12 Mb/s), not high speed (480 Mb/s): the Linux kernel cannot use its 512-byte bulk endpoints, so every applet that streams data fails. Try a short data-rated USB 2.0 cable and another port; see manual instruments/glasgow/troubleshooting") } else { None }}),
+    )
 }
 
 /// The tool `bench_glasgow_status`.
@@ -374,11 +421,20 @@ fn flag(args: &Value, key: &str) -> Result<bool, String> {
 }
 
 /// A number argument within `lo..=hi`; the error names the range and its source. `default` makes it optional.
-pub(crate) fn number(args: &Value, key: &str, lo: f64, hi: f64, why: &str, default: Option<f64>) -> Result<f64, String> {
+pub(crate) fn number(
+    args: &Value,
+    key: &str,
+    lo: f64,
+    hi: f64,
+    why: &str,
+    default: Option<f64>,
+) -> Result<f64, String> {
     // [@ANCHOR: glasgow_number]
     let v = match (args.get(key), default) {
         (None | Some(Value::Null), Some(d)) => d,
-        (v, _) => v.and_then(|v| v.as_f64()).ok_or_else(|| format!("{key} is required and must be a number"))?,
+        (v, _) => v
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| format!("{key} is required and must be a number"))?,
     };
     if v.is_finite() && (lo..=hi).contains(&v) {
         Ok(v)
@@ -390,18 +446,22 @@ pub(crate) fn number(args: &Value, key: &str, lo: f64, hi: f64, why: &str, defau
 /// The device's revision, from the serial in the config or, with one device attached, the one `glasgow list` shows.
 pub(crate) fn revision(ctx: &Ctx, inst: &Instrument) -> Result<(String, f64, f64), String> {
     // [@ANCHOR: glasgow_revision]
-    let serial = match &inst.serial {
-        Some(s) => s.clone(),
-        None => {
-            let out = run(ctx, req(vec!["list".into()], 30), "glasgow list")?;
-            let l = parse::device_list(&out.stdout);
-            match l.as_slice() {
-                [one] => one.clone(),
-                [] => return Err(next_step("no Glasgow device is listed")),
-                _ => return Err("several Glasgow devices are connected; set \"serial\" in the config entry".into()),
+    let serial =
+        match &inst.serial {
+            Some(s) => s.clone(),
+            None => {
+                let out = run(ctx, req(vec!["list".into()], 30), "glasgow list")?;
+                let l = parse::device_list(&out.stdout);
+                match l.as_slice() {
+                    [one] => one.clone(),
+                    [] => return Err(next_step("no Glasgow device is listed")),
+                    _ => return Err(
+                        "several Glasgow devices are connected; set \"serial\" in the config entry"
+                            .into(),
+                    ),
+                }
             }
-        }
-    };
+        };
     parse::revision_limits(&serial).ok_or_else(|| format!("{serial:?} is not a Glasgow serial"))
 }
 
@@ -417,9 +477,27 @@ pub(crate) fn fail_closed(ctx: &Ctx, inst: &Instrument, why: String) -> String {
 /// The tool `bench_glasgow_port_set`.
 pub fn port_set(ctx: &Ctx, inst: &Instrument, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: glasgow_port_set]
-    let port = args.get("port").and_then(|p| p.as_str()).filter(|p| matches!(*p, "A" | "B")).ok_or("port is required: \"A\" or \"B\"")?;
-    let volts = number(args, "volts_v", 0.0, inst.max_volts, "the max_volts of this instrument's config", None)?;
-    let trip = number(args, "trip_current_a", 0.0, inst.glasgow.max_trip_a.min(0.325), "the config's max_trip_a, hardware limit 0.325 A", Some(0.1f64.min(inst.glasgow.max_trip_a)))?;
+    let port = args
+        .get("port")
+        .and_then(|p| p.as_str())
+        .filter(|p| matches!(*p, "A" | "B"))
+        .ok_or("port is required: \"A\" or \"B\"")?;
+    let volts = number(
+        args,
+        "volts_v",
+        0.0,
+        inst.max_volts,
+        "the max_volts of this instrument's config",
+        None,
+    )?;
+    let trip = number(
+        args,
+        "trip_current_a",
+        0.0,
+        inst.glasgow.max_trip_a.min(0.325),
+        "the config's max_trip_a, hardware limit 0.325 A",
+        Some(0.1f64.min(inst.glasgow.max_trip_a)),
+    )?;
     let dry = flag(args, "dry_run")?;
     let confirm = flag(args, "confirm")?;
     let (rev, lo, hi) = revision(ctx, inst)?;
@@ -427,12 +505,16 @@ pub fn port_set(ctx: &Ctx, inst: &Instrument, args: &Value) -> Result<Value, Str
         return Err(format!("volts_v {volts} is outside {lo}..={hi} V (the range of a revision {rev} Glasgow); 0 switches the port off"));
     }
     let v = format!("{volts:.2}");
-    let mut plan = vec![format!("glasgow run control-gpio --pins {port}0:7  (loads an all-inputs gateware first)")];
+    let mut plan = vec![format!(
+        "glasgow run control-gpio --pins {port}0:7  (loads an all-inputs gateware first)"
+    )];
     plan.push(format!("glasgow voltage-limit {port} {v}"));
     plan.push(format!("glasgow voltage {port} {v} {trip:.3}"));
     plan.push("glasgow voltage (readback; both Vsupply and Vlimit must equal the setting)".into());
     if dry {
-        return Ok(json!({"dry_run": true, "sent": [], "would": plan, "revision": rev, "note": "nothing was sent to the device"}));
+        return Ok(
+            json!({"dry_run": true, "sent": [], "would": plan, "revision": rev, "note": "nothing was sent to the device"}),
+        );
     }
     if volts != 0.0 && !confirm {
         return Err(format!("bench_glasgow_port_set powers port {port} at {volts} V; call it with confirm: true only when the person at the bench has said this port may be powered at that voltage (dry_run: true shows the plan)"));
@@ -442,19 +524,30 @@ pub fn port_set(ctx: &Ctx, inst: &Instrument, args: &Value) -> Result<Value, Str
     // The pins are made inputs while the rail is still off, so nothing a previous gateware drove is connected when the rail comes up.
     ops::park(ctx, inst, ch, false)?;
     let (rows, _) = read_ports(ctx, inst)?;
-    let cur = rows.iter().find(|r| r.port == port).ok_or_else(|| format!("the device has no port {port}"))?;
+    let cur = rows
+        .iter()
+        .find(|r| r.port == port)
+        .ok_or_else(|| format!("the device has no port {port}"))?;
     let b = base_args(inst);
     let step = |cmd: &[&str]| -> Result<(), String> {
         let mut a = b.clone();
         a.extend(cmd.iter().map(|s| s.to_string()));
         let o = run(ctx, req(a, 30), "glasgow voltage")?;
         if o.code != Some(0) {
-            return Err(format!("glasgow {} exited {:?}: {}", cmd[0], o.code, tail(&o.stderr, 3)));
+            return Err(format!(
+                "glasgow {} exited {:?}: {}",
+                cmd[0],
+                o.code,
+                tail(&o.stderr, 3)
+            ));
         }
         Ok(())
     };
     let go = || -> Result<(), String> {
-        let (lim, sup) = (["voltage-limit", port, v.as_str()], ["voltage", port, v.as_str(), &format!("{trip:.3}")]);
+        let (lim, sup) = (
+            ["voltage-limit", port, v.as_str()],
+            ["voltage", port, v.as_str(), &format!("{trip:.3}")],
+        );
         // Lowering: the supply first, then the limit. Raising: the limit first, so the hardware never has less limit than supply.
         if volts < cur.vsupply_v {
             step(&sup)?;
@@ -466,18 +559,54 @@ pub fn port_set(ctx: &Ctx, inst: &Instrument, args: &Value) -> Result<Value, Str
         Ok(())
     };
     if let Err(e) = go() {
-        return Err(fail_closed(ctx, inst, format!("setting port {port} failed ({e})")));
+        return Err(fail_closed(
+            ctx,
+            inst,
+            format!("setting port {port} failed ({e})"),
+        ));
     }
-    let (after, _) = read_ports(ctx, inst).map_err(|e| fail_closed(ctx, inst, format!("the readback after setting port {port} failed ({e})")))?;
-    let row = after.iter().find(|r| r.port == port).ok_or_else(|| fail_closed(ctx, inst, "the readback has no such port".into()))?;
+    let (after, _) = read_ports(ctx, inst).map_err(|e| {
+        fail_closed(
+            ctx,
+            inst,
+            format!("the readback after setting port {port} failed ({e})"),
+        )
+    })?;
+    let row = after
+        .iter()
+        .find(|r| r.port == port)
+        .ok_or_else(|| fail_closed(ctx, inst, "the readback has no such port".into()))?;
     let tol = VOLT_TOLERANCE_V.max(volts * 0.05);
-    if (row.vsupply_v - volts).abs() > tol || (volts > 0.0 && (row.vlimit_v - volts).abs() > 0.05) || row.fault || row.short {
-        return Err(fail_closed(ctx, inst, format!("port {port} reads supply {:.3} V, limit {:.3} V{}{} after setting {volts} V", row.vsupply_v, row.vlimit_v, if row.fault { ", FAULT" } else { "" }, if row.short { ", SHORT" } else { "" })));
+    if (row.vsupply_v - volts).abs() > tol
+        || (volts > 0.0 && (row.vlimit_v - volts).abs() > 0.05)
+        || row.fault
+        || row.short
+    {
+        return Err(fail_closed(
+            ctx,
+            inst,
+            format!(
+                "port {port} reads supply {:.3} V, limit {:.3} V{}{} after setting {volts} V",
+                row.vsupply_v,
+                row.vlimit_v,
+                if row.fault { ", FAULT" } else { "" },
+                if row.short { ", SHORT" } else { "" }
+            ),
+        ));
     }
     let deadline = Instant::now() + Duration::from_secs_f64(inst.max_on_s);
-    let (name, runner, serial, tmo) = (inst.name.clone(), ctx.runner.clone(), inst.serial.clone(), Duration::from_secs_f64(inst.max_on_s));
+    let (runner, serial, tmo) = (
+        ctx.runner.clone(),
+        inst.serial.clone(),
+        Duration::from_secs_f64(inst.max_on_s),
+    );
     with_session(|s| {
-        let e = s.entry(inst.name.clone()).or_insert_with(|| Session { ports: BTreeMap::new(), runner: runner.clone(), serial, timeout: tmo });
+        let e = s.entry(inst.name.clone()).or_insert_with(|| Session {
+            ports: BTreeMap::new(),
+            runner: runner.clone(),
+            serial,
+            timeout: tmo,
+        });
         e.runner = runner;
         if volts == 0.0 {
             e.ports.remove(&ch);
@@ -489,14 +618,30 @@ pub fn port_set(ctx: &Ctx, inst: &Instrument, args: &Value) -> Result<Value, Str
         }
     });
     if volts != 0.0 {
-        spawn_watchdog(inst.clone(), ctx.lock_path.clone(), ctx.runner.clone(), ctx.sysfs.clone(), ctx.out_dir.clone(), deadline);
+        spawn_watchdog(
+            inst.clone(),
+            ctx.lock_path.clone(),
+            ctx.runner.clone(),
+            ctx.sysfs.clone(),
+            ctx.out_dir.clone(),
+            deadline,
+        );
     }
-    Ok(json!({"port": port, "set_v": volts, "limit_v": row.vlimit_v, "measured_v": row.vsense_v, "trip_current_a": trip, "outputs_enabled": volts != 0.0,
-        "pins": "inputs (parked)", "switches_off_in_s": if volts != 0.0 { Some(inst.max_on_s) } else { None }, "ports": after.iter().map(row_json).collect::<Vec<_>>()}))
+    Ok(
+        json!({"port": port, "set_v": volts, "limit_v": row.vlimit_v, "measured_v": row.vsense_v, "trip_current_a": trip, "outputs_enabled": volts != 0.0,
+        "pins": "inputs (parked)", "switches_off_in_s": if volts != 0.0 { Some(inst.max_on_s) } else { None }, "ports": after.iter().map(row_json).collect::<Vec<_>>()}),
+    )
 }
 
 /// After `deadline` (the config's `max_on_s`), switches every port off unless the port was set again meanwhile.
-fn spawn_watchdog(inst: Instrument, lock_path: PathBuf, runner: Arc<dyn Runner>, sysfs: PathBuf, out_dir: PathBuf, deadline: Instant) {
+fn spawn_watchdog(
+    inst: Instrument,
+    lock_path: PathBuf,
+    runner: Arc<dyn Runner>,
+    sysfs: PathBuf,
+    out_dir: PathBuf,
+    deadline: Instant,
+) {
     // [@ANCHOR: glasgow_watchdog]
     std::thread::spawn(move || loop {
         let now = Instant::now();
@@ -506,9 +651,17 @@ fn spawn_watchdog(inst: Instrument, lock_path: PathBuf, runner: Arc<dyn Runner>,
         }
         let guard = crate::instrument_lock(&inst.name);
         let _held = guard.lock().unwrap_or_else(|p| p.into_inner());
-        let due = with_session(|s| s.get(&inst.name).map(|x| x.ports.values().any(|p| p.deadline <= Instant::now())));
+        let due = with_session(|s| {
+            s.get(&inst.name)
+                .map(|x| x.ports.values().any(|p| p.deadline <= Instant::now()))
+        });
         if due == Some(true) {
-            let ctx = Ctx { runner: runner.clone(), sysfs: sysfs.clone(), out_dir: out_dir.clone(), lock_path: lock_path.clone() };
+            let ctx = Ctx {
+                runner: runner.clone(),
+                sysfs: sysfs.clone(),
+                out_dir: out_dir.clone(),
+                lock_path: lock_path.clone(),
+            };
             match device_lock(&lock_path) {
                 Ok(_l) => {
                     if let Err(e) = safe(&ctx, &inst) {
@@ -530,10 +683,20 @@ pub fn shutdown() {
 /// The same for the instruments whose names start with `prefix` (the tests use their own names; production uses the empty prefix).
 pub fn shutdown_prefix(prefix: &str) {
     // [@ANCHOR: glasgow_shutdown]
-    let names: Vec<String> = with_session(|s| s.keys().filter(|k| k.starts_with(prefix)).cloned().collect());
+    let names: Vec<String> = with_session(|s| {
+        s.keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect()
+    });
     for n in names {
-        let rec = with_session(|s| s.get(&n).map(|x| (x.runner.clone(), x.serial.clone(), x.timeout)));
-        let Some((runner, serial, _)) = rec else { continue };
+        let rec = with_session(|s| {
+            s.get(&n)
+                .map(|x| (x.runner.clone(), x.serial.clone(), x.timeout))
+        });
+        let Some((runner, serial, _)) = rec else {
+            continue;
+        };
         let mut a = vec![];
         if let Some(s) = serial {
             a.extend(["--serial".to_string(), s]);
@@ -551,12 +714,22 @@ fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrumen
     // [@ANCHOR: glasgow_instrument]
     let ours: Vec<&Instrument> = insts.iter().filter(|i| i.kind == Kind::Glasgow).collect();
     if let Some(n) = args.get("instrument").and_then(|n| n.as_str()) {
-        return ours.iter().copied().find(|i| i.name == n).ok_or_else(|| format!("no glasgow instrument named {n:?}"));
+        return ours
+            .iter()
+            .copied()
+            .find(|i| i.name == n)
+            .ok_or_else(|| format!("no glasgow instrument named {n:?}"));
     }
     match ours.as_slice() {
         [one] => Ok(one),
         [] => Err("no glasgow instrument is configured".into()),
-        many => Err(format!("name the instrument: {}", many.iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join(", "))),
+        many => Err(format!(
+            "name the instrument: {}",
+            many.iter()
+                .map(|i| i.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
     }
 }
 
@@ -581,12 +754,24 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
 }
 
 /// `call` with the way to reach the device given, so the tests run the whole path (tier check, argument checks, the dialect).
-pub fn call_with(ctx: &Ctx, insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String> {
+pub fn call_with(
+    ctx: &Ctx,
+    insts: &[Instrument],
+    name: &str,
+    args: &Value,
+) -> Result<Value, String> {
     // [@ANCHOR: glasgow_call_with]
-    let spec = SPECS.iter().chain(ops::SPECS.iter()).find(|s| s.name == name).ok_or_else(|| format!("unknown tool {name}"))?;
+    let spec = SPECS
+        .iter()
+        .chain(ops::SPECS.iter())
+        .find(|s| s.name == name)
+        .ok_or_else(|| format!("unknown tool {name}"))?;
     let inst = instrument(insts, args)?;
     if inst.tier < spec.tier {
-        return Err(format!("{name} needs tier {:?}; {:?} is configured at {:?}", spec.tier, inst.name, inst.tier));
+        return Err(format!(
+            "{name} needs tier {:?}; {:?} is configured at {:?}",
+            spec.tier, inst.name, inst.tier
+        ));
     }
     match name {
         "bench_glasgow_list" => list(ctx, inst),

@@ -101,10 +101,11 @@ impl Runner for RealRunner {
                 break Some(s);
             }
             let now = Instant::now();
-            let over_size = req
-                .watch
-                .as_ref()
-                .is_some_and(|(p, max)| std::fs::metadata(p).map(|m| m.len() > *max).unwrap_or(false));
+            let over_size = req.watch.as_ref().is_some_and(|(p, max)| {
+                std::fs::metadata(p)
+                    .map(|m| m.len() > *max)
+                    .unwrap_or(false)
+            });
             if sent_int.is_none()
                 && (over_size || req.stop_after.is_some_and(|d| now - started >= d))
             {

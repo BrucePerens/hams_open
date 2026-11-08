@@ -45,7 +45,8 @@ pub struct Sim {
 const FIX: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/glasgow_fixtures/");
 
 pub fn fixture(name: &str) -> String {
-    std::fs::read_to_string(format!("{FIX}{name}")).unwrap_or_else(|e| panic!("fixture {name}: {e}"))
+    std::fs::read_to_string(format!("{FIX}{name}"))
+        .unwrap_or_else(|e| panic!("fixture {name}: {e}"))
 }
 
 impl Sim {
@@ -58,18 +59,29 @@ impl Sim {
         st.jtag_log = fixture("jtag_scan_log.txt");
         st.spi_reply = "ffef4018".into();
         st.i2c_devices = r#"{"32":"a5","80":"0102030405"}"#.into();
-        Sim { st: Mutex::new(st), tmp }
+        Sim {
+            st: Mutex::new(st),
+            tmp,
+        }
     }
 
     pub fn calls(&self) -> Vec<String> {
-        self.st.lock().unwrap().calls.iter().map(|c| c.join(" ").replace(&format!("--serial {SERIAL} "), "")).collect()
+        self.st
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .map(|c| c.join(" ").replace(&format!("--serial {SERIAL} "), ""))
+            .collect()
     }
 
     fn table(st: &State) -> String {
         let mut s = String::from("Port\tVsupply\tVlimit\tIsupply\tIalert\tVsense\tVsense(alert)\n");
         for (p, (v, l, t)) in &st.ports {
             let shown = st.lie_supply.unwrap_or(*v);
-            s.push_str(&format!("{p}\t{shown:.3}\t{l:.3}\t0.000\t{t:.3}\t{shown:.3}\t0.000-0.000\t\n"));
+            s.push_str(&format!(
+                "{p}\t{shown:.3}\t{l:.3}\t0.000\t{t:.3}\t{shown:.3}\t0.000-0.000\t\n"
+            ));
         }
         if st.garbage_voltage {
             return "Port\tVsupply\nA\tnot-a-number\n".into();
@@ -79,7 +91,12 @@ impl Sim {
 }
 
 fn ok(stdout: &str, stderr: &str) -> Result<Out, String> {
-    Ok(Out { code: Some(0), stdout: stdout.into(), stderr: stderr.into(), ..Out::default() })
+    Ok(Out {
+        code: Some(0),
+        stdout: stdout.into(),
+        stderr: stderr.into(),
+        ..Out::default()
+    })
 }
 
 impl Runner for Sim {
@@ -96,13 +113,21 @@ impl Runner for Sim {
         }
         let cmd = a.first().cloned().unwrap_or_default();
         if st.fail_command.as_deref() == Some(cmd.as_str()) {
-            return Ok(Out { code: Some(1), stderr: format!("E: simulated failure of {cmd}\n"), ..Out::default() });
+            return Ok(Out {
+                code: Some(1),
+                stderr: format!("E: simulated failure of {cmd}\n"),
+                ..Out::default()
+            });
         }
         match cmd.as_str() {
             "list" => ok(&fixture("list.txt"), &fixture("list_stderr.txt")),
             "safe" => {
                 if st.fail_safe {
-                    return Ok(Out { code: Some(1), stderr: "E: cannot talk to the device\n".into(), ..Out::default() });
+                    return Ok(Out {
+                        code: Some(1),
+                        stderr: "E: cannot talk to the device\n".into(),
+                        ..Out::default()
+                    });
                 }
                 for v in st.ports.values_mut() {
                     v.0 = 0.0;
@@ -115,7 +140,10 @@ impl Runner for Sim {
                 if a.len() >= 3 {
                     let v: f64 = a[2].parse().unwrap();
                     let limit = st.ports[&a[1]].1;
-                    assert!(v <= limit + 1e-9, "the device refuses a voltage above its limit: {v} > {limit}");
+                    assert!(
+                        v <= limit + 1e-9,
+                        "the device refuses a voltage above its limit: {v} > {limit}"
+                    );
                     let e = st.ports.get_mut(&a[1]).unwrap();
                     e.0 = v;
                     if let Some(t) = a.get(3) {
@@ -134,32 +162,65 @@ impl Runner for Sim {
                 let f = &a[a.iter().position(|x| x == "-f").unwrap() + 1];
                 std::fs::write(f, b"bitstream").unwrap();
                 let rev = &a[a.iter().position(|x| x == "--rev").unwrap() + 1];
-                ok("", &format!("I: glasgow.cli: generating bitstream for applet {:?} (rev {rev})\n", a.last().unwrap()))
+                ok(
+                    "",
+                    &format!(
+                        "I: glasgow.cli: generating bitstream for applet {:?} (rev {rev})\n",
+                        a.last().unwrap()
+                    ),
+                )
             }
             "run" | "script" => {
                 if st.hang_applet && a[1] != "control-gpio" {
-                    return Ok(Out { timed_out: true, stderr: "I: running\n".into(), ..Out::default() });
+                    return Ok(Out {
+                        timed_out: true,
+                        stderr: "I: running\n".into(),
+                        ..Out::default()
+                    });
                 }
                 if st.applet_exit != 0 && a[1] != "control-gpio" {
-                    return Ok(Out { code: Some(st.applet_exit), stderr: st.applet_stderr.clone(), ..Out::default() });
+                    return Ok(Out {
+                        code: Some(st.applet_exit),
+                        stderr: st.applet_stderr.clone(),
+                        ..Out::default()
+                    });
                 }
-                let applet = if cmd == "run" { a[1].clone() } else { a[2].clone() };
+                let applet = if cmd == "run" {
+                    a[1].clone()
+                } else {
+                    a[2].clone()
+                };
                 match (cmd.as_str(), applet.as_str()) {
                     ("run", "control-gpio") => {
                         st.parks += 1;
                         st.driven = a.iter().any(|x| x.ends_with("=1") || x.ends_with("=0"));
-                        let reads: String = a.iter().filter(|x| x.len() == 2 && x.starts_with(['A', 'B'])).map(|x| format!("{x}=1\n")).collect();
-                        ok(&reads, "I: glasgow.cli: running handler for applet 'control-gpio'\n")
+                        let reads: String = a
+                            .iter()
+                            .filter(|x| x.len() == 2 && x.starts_with(['A', 'B']))
+                            .map(|x| format!("{x}=1\n"))
+                            .collect();
+                        ok(
+                            &reads,
+                            "I: glasgow.cli: running handler for applet 'control-gpio'\n",
+                        )
                     }
                     ("run", "spi-controller") => ok(&format!("{}\n", st.spi_reply), ""),
                     ("run", "jtag-probe") => ok("", &st.jtag_log.clone()),
                     ("run", "analyzer") => {
                         std::fs::write(a.last().unwrap(), &st.vcd).unwrap();
-                        Ok(Out { code: Some(0), stopped: req.stop_after.is_some(), ..Out::default() })
+                        Ok(Out {
+                            code: Some(0),
+                            stopped: req.stop_after.is_some(),
+                            ..Out::default()
+                        })
                     }
                     ("run", "uart-analyzer") => {
                         std::fs::write(a.last().unwrap(), &st.uart_csv).unwrap();
-                        Ok(Out { code: Some(0), stopped: req.stop_after.is_some(), ..Out::default() })
+                        Ok(Out {
+                            code: Some(0),
+                            stopped: req.stop_after.is_some(),
+                            ..Out::default()
+                        })
                     }
                     ("script", _) => {
                         let released = self.tmp.join("released.txt");
@@ -179,7 +240,12 @@ impl Runner for Sim {
                             .output()
                             .map_err(|e| e.to_string())?;
                         st.driven = false;
-                        Ok(Out { code: out.status.code(), stdout: String::from_utf8_lossy(&out.stdout).into(), stderr: String::from_utf8_lossy(&out.stderr).into(), ..Out::default() })
+                        Ok(Out {
+                            code: out.status.code(),
+                            stdout: String::from_utf8_lossy(&out.stdout).into(),
+                            stderr: String::from_utf8_lossy(&out.stderr).into(),
+                            ..Out::default()
+                        })
                     }
                     (c, ap) => Err(format!("the simulator has no answer for {c} {ap}: {a:?}")),
                 }

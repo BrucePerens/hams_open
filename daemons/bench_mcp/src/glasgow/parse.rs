@@ -35,7 +35,9 @@ pub fn voltage_table(text: &str) -> Result<Vec<PortRow>, String> {
     let mut rows = Vec::new();
     for line in text.lines() {
         let f: Vec<&str> = line.split('\t').collect();
-        if f.first().is_some_and(|p| matches!(*p, "A" | "B" | "C" | "D")) {
+        if f.first()
+            .is_some_and(|p| matches!(*p, "A" | "B" | "C" | "D"))
+        {
             if f.len() < 3 {
                 return Err(format!("voltage table row {line:?} has too few columns"));
             }
@@ -63,7 +65,10 @@ pub fn voltage_table(text: &str) -> Result<Vec<PortRow>, String> {
         }
     }
     if rows.is_empty() {
-        return Err(format!("no port rows in the voltage output: {:?}", text.chars().take(200).collect::<String>()));
+        return Err(format!(
+            "no port rows in the voltage output: {:?}",
+            text.chars().take(200).collect::<String>()
+        ));
     }
     Ok(rows)
 }
@@ -112,18 +117,32 @@ pub fn revision_limits(serial: &str) -> Option<(String, f64, f64)> {
         return None;
     }
     let rev = &serial[..2];
-    let (lo, hi) = if rev.starts_with('D') { (0.9, 5.5) } else { (1.65, 5.0) };
+    let (lo, hi) = if rev.starts_with('D') {
+        (0.9, 5.5)
+    } else {
+        (1.65, 5.0)
+    };
     Some((rev.to_string(), lo, hi))
 }
 
 /// The Glasgow as the kernel lists it (sysfs `idVendor` 20b7, `idProduct` 9db1), with the link speed. `root` is `/sys/bus/usb/devices`.
 pub fn usb_device(root: &Path) -> Option<Value> {
     // [@ANCHOR: glasgow_usb_device]
-    let read = |d: &Path, f: &str| std::fs::read_to_string(d.join(f)).ok().map(|s| s.trim().to_string());
-    let mut names: Vec<_> = std::fs::read_dir(root).ok()?.flatten().map(|e| e.path()).collect();
+    let read = |d: &Path, f: &str| {
+        std::fs::read_to_string(d.join(f))
+            .ok()
+            .map(|s| s.trim().to_string())
+    };
+    let mut names: Vec<_> = std::fs::read_dir(root)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .collect();
     names.sort();
     for d in names {
-        if read(&d, "idVendor").as_deref() == Some("20b7") && read(&d, "idProduct").as_deref() == Some("9db1") {
+        if read(&d, "idVendor").as_deref() == Some("20b7")
+            && read(&d, "idProduct").as_deref() == Some("9db1")
+        {
             let speed = read(&d, "speed").and_then(|s| s.parse::<f64>().ok());
             return Some(json!({
                 "sysfs": d.file_name().and_then(|n| n.to_str()),
@@ -179,9 +198,15 @@ pub fn jtag_taps(stderr: &str) -> Vec<Value> {
     // [@ANCHOR: glasgow_parse_jtag_taps]
     let mut taps = Vec::new();
     for l in stderr.lines() {
-        let Some(rest) = l.split("TAP #").nth(1) else { continue };
+        let Some(rest) = l.split("TAP #").nth(1) else {
+            continue;
+        };
         let index: Option<u32> = rest.split(':').next().and_then(|n| n.trim().parse().ok());
-        let ir = rest.split("IR[").nth(1).and_then(|s| s.split(']').next()).map(String::from);
+        let ir = rest
+            .split("IR[")
+            .nth(1)
+            .and_then(|s| s.split(']').next())
+            .map(String::from);
         let idcode = rest
             .split("IDCODE=0x")
             .nth(1)
@@ -201,17 +226,26 @@ pub fn result_line(stdout: &str) -> Result<Value, String> {
         .rev()
         .find_map(|l| l.strip_prefix("BENCH_GLASGOW_RESULT "))
         .ok_or("the helper script printed no result line (it did not finish)")?;
-    serde_json::from_str(line).map_err(|e| format!("the helper script's result line is not JSON: {e}"))
+    serde_json::from_str(line)
+        .map_err(|e| format!("the helper script's result line is not JSON: {e}"))
 }
 
 /// Bytes from hex text (`48 65`, `4865`, `0x48,0x65`); an odd digit count or a non-hex character is an error.
 pub fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
     // [@ANCHOR: glasgow_parse_hex_bytes]
-    let clean: String = s.chars().filter(|c| !c.is_whitespace() && *c != ',').collect::<String>().replace("0x", "");
-    if clean.len() % 2 != 0 || !clean.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(format!("{s:?} is not hex bytes (an even number of hex digits)"));
+    let clean: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != ',')
+        .collect::<String>()
+        .replace("0x", "");
+    if !clean.len().is_multiple_of(2) || !clean.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(format!(
+            "{s:?} is not hex bytes (an even number of hex digits)"
+        ));
     }
-    Ok((0..clean.len() / 2).map(|i| u8::from_str_radix(&clean[2 * i..2 * i + 2], 16).unwrap_or(0)).collect())
+    Ok((0..clean.len() / 2)
+        .map(|i| u8::from_str_radix(&clean[2 * i..2 * i + 2], 16).unwrap_or(0))
+        .collect())
 }
 
 /// A summary of a VCD file written by `glasgow run analyzer`: the duration, and for each pin its transitions, the fraction of time
@@ -261,7 +295,16 @@ pub fn vcd_summary(text: &str) -> Result<Value, String> {
         let id = l[1..].trim().to_string();
         let Some(name) = names.get(&id) else { continue };
         let c = c.to_ascii_lowercase();
-        let a = acc.entry(name.clone()).or_insert(Acc { transitions: 0, high_ns: 0, min_ns: None, max_ns: 0, rises: vec![], first: None, last: c, x: 0 });
+        let a = acc.entry(name.clone()).or_insert(Acc {
+            transitions: 0,
+            high_ns: 0,
+            min_ns: None,
+            max_ns: 0,
+            rises: vec![],
+            first: None,
+            last: c,
+            x: 0,
+        });
         if c == 'x' {
             a.x += 1;
         }
@@ -291,7 +334,12 @@ pub fn vcd_summary(text: &str) -> Result<Value, String> {
     let mut pins = serde_json::Map::new();
     for (name, a) in acc {
         let (last_c, since) = state.get(&name).copied().unwrap_or(('0', now));
-        let high = a.high_ns + if last_c == '1' { now.saturating_sub(since) } else { 0 };
+        let high = a.high_ns
+            + if last_c == '1' {
+                now.saturating_sub(since)
+            } else {
+                0
+            };
         let freq = if a.rises.len() >= 3 {
             let span = (a.rises[a.rises.len() - 1] - a.rises[0]) as f64;
             (span > 0.0).then(|| 1e9 * (a.rises.len() - 1) as f64 / span)
@@ -314,7 +362,9 @@ pub fn uart_csv_summary(text: &str, keep: usize) -> Result<Value, String> {
     // [@ANCHOR: glasgow_uart_csv_summary]
     let mut ch: BTreeMap<String, (Vec<u8>, u64, u64)> = BTreeMap::new();
     for line in text.lines().filter(|l| !l.trim().is_empty()) {
-        let (c, rest) = line.split_once(',').ok_or_else(|| format!("bad uart-analyzer line {line:?}"))?;
+        let (c, rest) = line
+            .split_once(',')
+            .ok_or_else(|| format!("bad uart-analyzer line {line:?}"))?;
         if c != "rx" && c != "tx" {
             return Err(format!("bad uart-analyzer channel in {line:?}"));
         }
