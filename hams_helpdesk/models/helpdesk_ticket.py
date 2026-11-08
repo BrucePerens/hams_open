@@ -35,12 +35,19 @@ _CSAM_TICKET_TYPE = "csam_enticement_trafficking"
 # The fields only _triage_record_verdict() writes (see the triage_verdict field).
 _TRIAGE_FIELDS = (
     "triage_verdict", "triage_verdict_source", "triage_reasons", "triage_verdict_at", "triage_overridden",
-    "triage_overridden_at",
+    "triage_overridden_at", "notify_state", "notify_release_at",
 )
 # Bruce's policy settings for the triage verdict are system parameters, read through zero_sudo's whitelist; the code
 # default is the conservative choice and night_shift_questions/open/ticket-triage-policy-settings-*.md asks Bruce.
 _TRIAGE_PARAM_QUARANTINE = "hams_helpdesk.triage_quarantine_verdicts"
 _TRIAGE_QUARANTINE_DEFAULT = "spam,phishing"
+_TRIAGE_PARAM_HOLD = "hams_helpdesk.triage_notify_hold_seconds"
+_TRIAGE_PARAM_ON_LEAVING_SPAM = "hams_helpdesk.triage_notify_on_leaving_spam"
+# The longest hold a setting can ask for: a real request must not wait on the review for longer than this.
+_TRIAGE_MAX_HOLD_SECONDS = 300
+# The ticket types the triage agent is allowed to see (rule_helpdesk_ticket_ai_triage_external_allowlist). Only these
+# can be held for its review; a type it cannot judge is never delayed.
+_TRIAGE_HELD_TYPES = ("general", "hams_local_relay")
 
 # ham_communications_consent (hams_com, proprietary) is NOT a dependency of this module --
 # hams_helpdesk lives in hams_open and must remain installable/testable standalone (see
@@ -242,6 +249,15 @@ class HelpdeskTicket(models.Model):
         "(a false positive) the rule weights and the agent's prompt are tuned from. No ticket text is kept.",
     )
     triage_overridden_at = fields.Datetime(string="Overridden at", copy=False, readonly=True)
+    # The new-ticket notification (the assignment email, toast, shift CC and customer subscription). "sent" is the
+    # ordinary state. "held" waits for the triage review window: the ticket is created with no followers and nothing is
+    # mailed until a real or unsure verdict, the end of the window (fail open) or a person releases it. "suppressed"
+    # is a ticket in the Spam stage: nothing is mailed unless a person moves it out (see _triage_release_notification).
+    notify_state = fields.Selection(
+        [("sent", "Notification sent"), ("held", "Held for triage review"), ("suppressed", "Suppressed (spam)")],
+        string="Notification", default="sent", copy=False, readonly=True, index=True, required=True,
+    )
+    notify_release_at = fields.Datetime(string="Hold ends", copy=False, readonly=True, index=True)
 
     priority = fields.Selection(
         [
@@ -413,6 +429,8 @@ class HelpdeskTicket(models.Model):
         # The triage verdict is written only by _triage_record_verdict(); nothing a caller sends can set it.
         vals_list = [{k: v for k, v in vals.items() if k not in _TRIAGE_FIELDS} for vals in vals_list]
 
+        hold_seconds = self._triage_hold_seconds()
+
         # Pre-fetch records
         website_ids = {vals["website_id"] for vals in vals_list if vals.get("website_id")}
         if self.env.context.get("website_id"):
@@ -435,6 +453,19 @@ class HelpdeskTicket(models.Model):
                     vals["callsign"] = partner.callsign
             if on_duty_user_id and not vals.get("user_id"):
                 vals["user_id"] = on_duty_user_id
+            # [@ANCHOR: hams_helpdesk:COMM_triage_notification_state_on_create]
+            # A ticket born in the Spam stage never notifies anyone ("suppressed"). With a hold window configured, a new
+            # ticket of a type the triage agent can judge is "held": nothing is mailed until the review finishes, the window
+            # ends (fail open) or a person releases it. Anything else notifies as it always did.
+            if vals.get("stage") == "spam":
+                vals["notify_state"] = "suppressed"
+            elif (
+                hold_seconds
+                and (vals.get("stage") or "new") == "new"
+                and (vals.get("ticket_type") or "general") in _TRIAGE_HELD_TYPES
+            ):
+                vals["notify_state"] = "held"
+                vals["notify_release_at"] = fields.Datetime.add(fields.Datetime.now(), seconds=hold_seconds)
             # [@ANCHOR: hams_helpdesk:COMM_ncmec_force_priority]
             # "distinct, faster-SLA... routing" (section G / Phase 8): forced unconditionally,
             # not just defaulted, so a caller can't under-prioritize a mandatory-report ticket
@@ -443,11 +474,12 @@ class HelpdeskTicket(models.Model):
                 vals["priority"] = "3"
 
         # [@ANCHOR: hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail]
-        # A ticket created in the spam quarantine mails nobody. Odoo's own "you have been assigned" email is sent when create()
+        # A ticket created in the spam quarantine, or held for the triage review (notify_state), mails nobody. Odoo's own "you have been assigned" email is sent when create()
         # auto-subscribes the user_id assignee, so it is switched off for those tickets (the custom notice, the Shift CC note
         # and the toast are gated in _automated_routing_and_notification()). A batch that mixes spam with real tickets is
         # created in two calls so the real tickets keep their assignment email; the result keeps the order of vals_list.
-        spam_flags = [vals.get("stage") == "spam" for vals in vals_list]
+        # A held ticket is created the same way; _triage_release_notification() subscribes and notifies when the hold ends.
+        spam_flags = [vals.get("notify_state", "sent") != "sent" for vals in vals_list]
         if any(spam_flags) and not all(spam_flags):
             ticket_model = self.env["hams_helpdesk.ticket"]
             by_flag = {
@@ -567,6 +599,8 @@ class HelpdeskTicket(models.Model):
         for ticket in self:
             # Switch to service account and ensure company context is correct for each ticket
             ticket_service = ticket.with_env(hd_env).with_company(ticket.company_id)
+            if ticket_service.notify_state == "held":
+                continue  # nothing is sent until the triage review ends; _triage_release_notification() runs this again
             
             # Since assignment is now handled in create(), we only check if it was assigned
             facility_env = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
@@ -700,6 +734,8 @@ class HelpdeskTicket(models.Model):
                 "triage_verdict_at",
                 "triage_overridden",
                 "triage_overridden_at",
+                "notify_state",
+                "notify_release_at",
                 "user_id",
                 "priority",
                 "calendar_event_id",
@@ -765,7 +801,13 @@ class HelpdeskTicket(models.Model):
                 )
 
         leaving_spam = self.filtered(lambda t: t.stage == "spam") if vals.get("stage") not in (None, "spam") else self.browse()
+        entering_spam = self.filtered(lambda t: t.notify_state == "held") if vals.get("stage") == "spam" else self.browse()
         res = super().write(vals)
+        if entering_spam:
+            # A held ticket a person (or the agent) puts in the Spam stage is not announced, now or when the hold would end.
+            entering_spam.with_env(
+                self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+            ).write({"notify_state": "suppressed", "notify_release_at": False})
         if leaving_spam:
             self._triage_record_override(leaving_spam)
             # A quarantined ticket has no followers (see create()); a person recovering it makes it an ordinary ticket again, so
@@ -775,6 +817,8 @@ class HelpdeskTicket(models.Model):
                 follower_partners = ticket.user_id.partner_id + ticket.partner_id
                 if follower_partners:
                     ticket.message_subscribe(partner_ids=follower_partners.ids)
+            if self._triage_notify_on_leaving_spam():
+                leaving_spam._triage_release_notification()
         # Mail-back facility on state change
         # [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]
         # Not when the ticket is being quarantined as spam: the "customer"
@@ -866,6 +910,59 @@ class HelpdeskTicket(models.Model):
             self.write({"stage": "closed"})
 
     @api.model
+    # [@ANCHOR: hams_helpdesk:triage_hold_seconds]
+    def _triage_hold_seconds(self):
+        """How long (seconds) the new-ticket notification is held for the triage review: the system parameter
+        ``hams_helpdesk.triage_notify_hold_seconds``. 0 (the default, and anything that is not a whole number) holds nothing, so
+        nothing changes until Bruce picks a window; a value over 300 is cut to 300, so a real request is never held for long."""
+        raw = str(self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_HOLD, "0") or "0").strip()
+        return min(int(raw), _TRIAGE_MAX_HOLD_SECONDS) if raw.isdigit() else 0
+
+    @api.model
+    # [@ANCHOR: hams_helpdesk:triage_notify_on_leaving_spam]
+    def _triage_notify_on_leaving_spam(self):
+        """Whether a person moving a ticket out of the Spam stage sends the notification that was never sent (Bruce,
+        2026-11-02: "If a ticket is later moved out of spam, send the notification then"): the system parameter
+        ``hams_helpdesk.triage_notify_on_leaving_spam``, on unless set to 0, false or no."""
+        raw = str(self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_ON_LEAVING_SPAM, "1") or "1")
+        return raw.strip().lower() not in ("0", "false", "no", "off")
+
+    # [@ANCHOR: hams_helpdesk:triage_release_notification]
+    def _triage_release_notification(self):
+        """Sends the new-ticket notification of the tickets in self that are held or suppressed and are not in the Spam stage:
+        the assignee follows the ticket, then the same routing and notification a ticket gets at creation runs (assignment
+        email and toast, shift CC, customer subscription). Tickets already "sent" and tickets in the Spam stage are left alone,
+        so it is safe to call twice."""
+        hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+        due = self.with_env(hd_env).filtered(lambda t: t.notify_state != "sent" and t.stage != "spam")
+        if not due:
+            return
+        due.write({"notify_state": "sent", "notify_release_at": False})
+        for ticket in due:
+            if ticket.user_id:
+                ticket.message_subscribe(partner_ids=ticket.user_id.partner_id.ids)
+        due._automated_routing_and_notification()
+
+    @api.model
+    # [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
+    def _cron_release_held_notifications(self):
+        """The end of the hold window, run every minute by the helpdesk service account. A held ticket whose window has
+        ended is released whatever the agent did (fail open: the agent may be down, and a real request must not be lost);
+        one that has meanwhile been put in the Spam stage is suppressed instead. Returns the number released."""
+        held = self.search(
+            [("notify_state", "=", "held"), ("notify_release_at", "<=", fields.Datetime.now())], limit=500
+        )
+        in_spam = held.filtered(lambda t: t.stage == "spam")
+        in_spam.write({"notify_state": "suppressed", "notify_release_at": False})
+        due = held - in_spam
+        if due:
+            _logger.warning(
+                "Triage review window ended without a verdict for tickets %s: sending their notifications anyway.", due.ids
+            )
+            due._triage_release_notification()
+        return len(due)
+
+    @api.model
     # [@ANCHOR: hams_helpdesk:triage_quarantine_verdicts]
     def _triage_quarantine_verdicts(self):
         """The verdicts that move a ticket to the Spam stage and keep every operator email about it from being sent: the
@@ -927,6 +1024,10 @@ class HelpdeskTicket(models.Model):
         quarantine = verdict in self._triage_quarantine_verdicts()
         if quarantine:
             ticket.write({"stage": "spam"})
+            # A verdict that arrives after the notice went out stops any further mail about the ticket: nobody follows it.
+            ticket.message_unsubscribe(partner_ids=ticket.message_partner_ids.ids)
+        else:
+            ticket._triage_release_notification()
         label = dict(self._fields["triage_verdict"].selection)[verdict]
         intro = "Marked as spam by the AI triage agent:" if verdict == "spam" and quarantine else "AI triage verdict (%s):" % label
         body = Markup("<p>%s</p>") % Markup("<br/>").join(Markup.escape(line) for line in (intro + "\n" + text).split("\n"))

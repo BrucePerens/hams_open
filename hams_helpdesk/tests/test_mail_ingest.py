@@ -407,13 +407,14 @@ class TestMailIngest(HamsTransactionCase):
         )
         self.assertEqual(watch.bus, [], "no bus message or toast was sent")
         self.assertFalse(ticket.message_partner_ids, "a quarantined ticket has no followers, so nothing posted on it is mailed")
-        # Recovering a false positive makes it an ordinary ticket: its assignee follows it again, and nothing is sent by that.
+        # Recovering a false positive makes it an ordinary ticket: its assignee follows it again, and (Bruce, 2026-11-02: "if a
+        # ticket is later moved out of spam, send the notification then") the notification that was never sent goes out now.
+        # Tests [@ANCHOR: hams_helpdesk:triage_notify_on_leaving_spam]
         before = watch.count()
         ticket.write({"stage": "new"})
         self.assertIn(admin.partner_id, ticket.message_partner_ids)
-        self.assertEqual(len(watch.mails()), 0)
-        self.assertEqual(watch.bus, [])
-        self.assertGreaterEqual(watch.count(), before)
+        self.assertTrue(any(kind == "simple_notification" for _target, kind in watch.bus), "the held-back toast is sent on recovery")
+        self.assertGreater(watch.count(), before)
 
     def test_13_the_control_an_ordinary_ticket_does_notify_the_assignee(self):
         # The test above proves nothing unless the same harness sees the notice for a real ticket.

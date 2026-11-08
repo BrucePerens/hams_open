@@ -23,6 +23,7 @@
         "security/ir.model.access.csv",
         "data/mail_alias_data.xml",
         "data/ncmec_report_data.xml",
+        "data/cron.xml",
         "views/helpdesk_ticket_views.xml",
         "views/shift_handoff_views.xml",
         "views/exception_fingerprint_views.xml",
