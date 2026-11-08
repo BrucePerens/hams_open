@@ -44,6 +44,7 @@ A feature is called implemented only if this manual's author found it in the cod
 | [13. Roadmap and open items](13-roadmap.md) | find what is planned and what is known to be missing |
 | [14. The station: power, switches, rotators, amplifiers](14-station.md) | use `radioctl-station`: the radio manager over real actors, Home Assistant, amplifier channels, rotators |
 | [15. Transmit power and meters](15-power.md) | read power in watts from a rig or an external wattmeter, calibrate a rig's meter, show a power |
+| [16. Verifying a description](16-verification.md) | run the self-test, understand the report and upload, use the bench runner, and see how a fact becomes `hardware-verified` |
 | [Appendix A. Capability matrix](A-capability-matrix.md) | summary of the generated Hamlib 4.6.2 matrix and the radioctl rigs |
 | [Appendix B. Glossary](B-glossary.md) | terms and abbreviations |
 | [Rig support list](../RIG_SUPPORT.md), [coverage plan](../RIG_COVERAGE_PLAN.md), [volunteer testing](../VOLUNTEER_TESTING.md) | see which of Hamlib's <!--count:models-->313<!--/count--> models have a description and which are verified, what is planned, and how to test your radio with the read-only `radioctl-selftest` (it uploads its report to hams.com) |
