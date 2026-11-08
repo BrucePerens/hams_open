@@ -56,6 +56,7 @@ fn calls(requests: &[(&str, &str)]) -> Vec<String> {
 #[test]
 #[ignore]
 fn identity_is_read_without_streaming_or_changing_anything() {
+    // Tests [@ANCHOR: bench_mcp_elad_usb_open]
     let r = calls(&[
         ("bench_elad_list", "{}"),
         ("bench_elad_identify", "{}"),

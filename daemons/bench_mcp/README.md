@@ -1283,6 +1283,7 @@ Link::scope_state(host: &str, ports: &[u16]) -> String
 * Starting the stream refuses an undeclared FPGA image before anything is sent. [@ANCHOR: elad_start_stream]
 * Reading a started stream until a sample count or a deadline. [@ANCHOR: elad_stream_samples]
 * Taking the single-owner lock for a receiver; a refusal names the holder (the relay or another call). [@ANCHOR: elad_take_lock]
+* The real bus opens a receiver only after taking its lock; exercised by the hardware run in `tests/hil_elad.rs`, not by `cargo test`. [@ANCHOR: bench_mcp_elad_usb_open]
 * A radio over a transport that holds the lock until the radio is dropped. [@ANCHOR: elad_open_locked]
 * The common summary of every streaming tool: samples, measured rate, timeouts, RMS, peak, DC and clipping. [@ANCHOR: elad_summary]
 * An acquisition refuses an undeclared FPGA image before streaming, always stops the stream, and reports silence as a missing FPGA image. [@ANCHOR: elad_acquire]

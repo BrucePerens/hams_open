@@ -186,6 +186,7 @@ impl Bench for Usb {
         elad_usb::usb::find().map_err(|e| next_step(&e.to_string()))
     }
     fn open(&self, found: &Found, opts: OpenOptions) -> Result<Radio<Box<dyn Transport>>, String> {
+        // [@ANCHOR: bench_mcp_elad_usb_open]
         let lock = take_lock_in(&elad_usb::lock::lock_dir(), found)?;
         let t = elad_usb::usb::UsbTransport::open(found).map_err(|e| {
             next_step(&format!(
@@ -434,9 +435,9 @@ fn stream_samples(
         buf.clear();
         match radio.read(&mut buf, READ_TIMEOUT) {
             Ok(_) => {
-                for p in buf.chunks_exact(2) {
+                for [i, q] in buf.as_chunks::<2>().0 {
                     if samples.len() < target {
-                        samples.push((p[0], p[1]));
+                        samples.push((*i, *q));
                     }
                 }
             }
