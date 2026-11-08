@@ -7,38 +7,27 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
     url: "/odoo?debug=1&action=base.action_res_users",
     steps: () => [
         {
-            content: "Remove facet if needed and find the specific test user row by polling",
-            trigger: 'body',
-            run: function () {
-                return new Promise((resolve) => {
-                    let clickedFacet = false;
-                    let logged = false;
-                    const interval = setInterval(() => {
-                        if (!logged) {
-                            console.log("BODY HTML: ", document.body.innerHTML);
-                            logged = true;
-                        }
-                        if (!clickedFacet) {
-                            const facet = document.querySelector('.o_facet_remove');
-                            if (facet) {
-                                facet.click();
-                                clickedFacet = true;
-                                return; // wait for reload
-                            }
-                        }
-                        
-                        const cells = document.querySelectorAll('.o_data_row .o_data_cell[name="name"], .o_kanban_record');
-                        for (const cell of cells) {
-                            if (cell.textContent.includes("SEO UI Test User")) {
-                                clearInterval(interval);
-                                cell.click();
-                                resolve();
-                                return;
-                            }
-                        }
-                    }, 250);
-                });
-            }
+            // The action defaults to the "Internal Users" facet, which hides the portal test user.
+            content: "Remove the default Internal Users facet",
+            trigger: '.o_searchview .o_facet_remove',
+            run: 'click',
+        },
+        {
+            // Search for the test user rather than looking for the row on the first page: the users
+            // list shows 80, and on a database with more users than that the new one can sort past them.
+            content: "Search for the test user by name",
+            trigger: '.o_searchview_input',
+            run: 'edit SEO UI Test User',
+        },
+        {
+            content: "Run the search",
+            trigger: '.o_searchview_input',
+            run: 'press Enter',
+        },
+        {
+            content: "Open the test user's row",
+            trigger: '.o_data_row:has(.o_data_cell[name="name"]:contains("SEO UI Test User")) .o_data_cell[name="name"]',
+            run: 'click',
         },
         {
             content: "Click the SEO Metadata notebook tab injected by our module",
