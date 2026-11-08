@@ -12,6 +12,7 @@ mod checklist;
 mod config;
 mod dsp;
 mod example;
+mod glasgow;
 mod hamlib;
 mod link;
 mod manual;
@@ -148,6 +149,12 @@ const MODULES: &[Module] = &[
         call: example::call,
         tool_defs: example::tool_defs,
         sample: r#""example":{"driver":"example","tier":"full","host":"192.0.2.1"}"#,
+    },
+    Module {
+        prefix: "bench_glasgow_",
+        call: glasgow::call,
+        tool_defs: glasgow::tool_defs,
+        sample: r#""glasgow":{"driver":"glasgow","tier":"full"}"#,
     },
     Module {
         prefix: "bench_hamlib_",
@@ -619,6 +626,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = tokio::task::spawn_blocking(|| {
             procedure::shutdown();
             hamlib::shutdown();
+            glasgow::shutdown();
         })
         .await;
         std::process::exit(143);
@@ -632,6 +640,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Whatever way the connection ended, stop what this server started.
     procedure::shutdown();
     hamlib::shutdown();
+    glasgow::shutdown();
     ended?;
     Ok(())
 }

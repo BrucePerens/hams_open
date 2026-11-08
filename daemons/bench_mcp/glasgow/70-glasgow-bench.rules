@@ -1,0 +1,9 @@
+# Added by bench_mcp (https://github.com/BrucePerens/hams_open).
+# What: lets members of the group "plugdev" (and the user at the console, through the uaccess tag) open the Glasgow Interface
+#       Explorer (USB 20b7:9db1) without root, and keeps ModemManager and similar from probing it.
+# Why:  the bench_glasgow_* tools run the `glasgow` command line as the user that runs the bench server; a re-enumerating
+#       device (the Glasgow does it after every firmware load) otherwise loses a hand-set ACL each time.
+# Scope: only the device with vendor 20b7 and product 9db1; no other USB device and no other permission.
+# Caveat: anyone in plugdev can then reconfigure that device and, once a port voltage is set, drive its pins.
+# Remove: delete this file and run `sudo udevadm control --reload` (the tools then report "missing permissions").
+SUBSYSTEM=="usb", ATTRS{idVendor}=="20b7", ATTRS{idProduct}=="9db1", TAG+="uaccess", GROUP="plugdev", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1"
