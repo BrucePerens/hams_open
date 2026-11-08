@@ -110,11 +110,17 @@ class TestPagerDutyHooks(HamsTransactionCase):
             )
         self.env["mail.alias"].search([("alias_name", "=", "info")]).unlink()
         sales_team.write({"alias_name": "info"})
+        claim = self.env["mail.alias"].search([("alias_name", "=", "info")])
+        # crm.team._alias_get_creation_values() points the alias at crm.lead (the model the mail
+        # creates), while the alias's *parent* is the crm.team record that owns it. The hook
+        # detects crm's claim by that parent, so that is the premise the setup must reproduce.
         self.assertEqual(
-            self.env["mail.alias"].search([("alias_name", "=", "info")]).alias_model_id,
-            self.env.ref("crm.model_crm_team"),
+            claim.alias_model_id,
+            self.env["ir.model"]._get("crm.lead"),
             "the test setup itself must reproduce crm's real claim before reclaiming it",
         )
+        self.assertEqual(claim.alias_parent_model_id, self.env.ref("crm.model_crm_team"))
+        self.assertEqual(claim.alias_parent_thread_id, sales_team.id)
 
         _claim_info_alias(self.env)
 
