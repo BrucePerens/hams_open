@@ -23,6 +23,28 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
 - Rig descriptions: <!--count:description_files-->291<!--/count--> files in `rigs/`, <!--count:described-->283<!--/count--> of the <!--count:real_radios-->283<!--/count--> real radios among the <!--count:models-->313<!--/count--> models Hamlib 4.6.2 lists (<!--count:not_applicable-->30<!--/count--> are not radios or have no transport radioctl speaks). The numbers are marked in the text and `python3 tools/doc_counts.py --check` (and its test) fails when they drift from `docs/RIG_SUPPORT.md`, the generated list. <!--count:hardware_verified-->1<!--/count--> description is `hardware-verified`: the Elecraft KX3 (MCU 3.02 / DSP 1.52, bench run with transmit into a dummy load, 2026-11-05); every fact the run exercised says what ran, and front-panel auto-information and the virtual-rig defaults stay unverified. Every other fact is `unverified` or `manual-checked` until a volunteer confirms it with `docs/VOLUNTEER_TESTING.md`.
 - Transmit: only the KX3 bench run (a dummy load, the gate opened for it) has keyed real hardware. Anything that can transmit must fail closed behind an explicit capability gate.
 
+## Getting started
+
+- **Toolchain.** `rust-toolchain.toml` pins Rust 1.98.1 (with rustfmt and clippy); the workspace declares
+  `rust-version = "1.98"`.
+- **Build.** From `daemons/radioctl`: `cargo build --release -p radioctld` builds the two programs of that crate,
+  `radioctld` (the `rigctld`-compatible server) and `radioctl-selftest` (the volunteer test tool). Cargo features
+  (all off unless said): `usb` on `radioctld` and `radioctl-core` (direct libusb access for USB boards and
+  dongles; needs libusb-1.0), `hamlib-oracle` on `radioctld` and `radioctl-protocols` (differential tests
+  against Hamlib's own binaries), `owned-runtime` on `radioctl-core` (a runtime of the library's own, for
+  non-tokio programs; `radioctl-capi` turns it on), and `tokio-io` on `radioctl-protocols` (on by default).
+- **Try it with no radio.** `cargo run -p radioctld --example quickstart` drives a virtual KX3 in a dozen lines
+  using the prelude (`use radioctl_protocols::prelude::*;`); the code is in chapter 2 of the manual and is
+  the same file. `radioctld` serves a virtual radio from [`radioctld.example.toml`](radioctld.example.toml).
+- **Test.** `cargo test --all-features --no-fail-fast` runs everything, including the manual's own check
+  (`cargo test -p radioctld --test manual`); the Hamlib oracle needs Hamlib 4.6.2's `rigctld` and `rigctl`.
+  The Python tools have tests of their own: `python3 -m pytest tools/`. Details: manual chapter 11.
+- **Read next.** The [programmer's manual](docs/manual/README.md); the generated
+  [rig support list](docs/RIG_SUPPORT.md); the [volunteer testing guide](docs/VOLUNTEER_TESTING.md) (run
+  `radioctl-selftest` on your radio, read-only); the [recommended hardware](docs/RECOMMENDED_HARDWARE.md); the
+  [bench runbook](docs/BENCH_VERIFICATION.md) for the maintainers' hardware checks.
+- **Licence.** AGPL-3.0-or-later; the SPDX header is on every Rust file.
+
 ## Layout
 
 ```
