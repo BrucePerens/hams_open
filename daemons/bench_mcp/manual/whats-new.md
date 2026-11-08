@@ -10,6 +10,13 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/glasgow/logic-analyzer: how the bench_gla tools work on the revision C analyzer (host-side trigger, pre-trigger window and sample rate), the USB link limits with the full-speed rate measured on the unit
+- instruments/glasgow/logic-bench-session: the wiring to verify the logic analyzer and the pattern generator on real hardware (no capture has run yet)
+- tools/bench_gla_limits: bytes per edge and edges per second the link can carry, as a model
+- tools/bench_gla_analyze: trigger window, sample rate, summary, glitch report, VCD, CSV and sigrok files and UART, I2C and SPI decode of a VCD file
+- tools/bench_gla_capture: bench_glasgow_logic_capture plus the same analysis
+- tools/bench_gla_pattern: square wave, PWM, pulse train and bit pattern planner on top of bench_glasgow_pattern
+- tools/bench_gla_safe_state: the Glasgow's safe state, companion of bench_gla_pattern
 - instruments/glasgow: the Glasgow Interface Explorer through the pinned glasgow software (all pages plus bench-session) and the 17 tools bench_glasgow_list, _status, _applets, _safe_state, _prepare, _port_set, _i2c_scan, _i2c_read, _i2c_write, _spi_jedec_id, _uart_transact, _uart_sniff, _logic_capture, _gpio, _pattern, _jtag_scan, _swd_idcode; revC3 identify and voltage readback measured on the unit, everything that drives pins fixtures only
 - instruments/elad: the ELAD FDM-S2, FDM-DUO and FDM-S1 receivers (overview, setup, operation, limits, troubleshooting, protocol) and tools bench_elad_list, bench_elad_identify, bench_elad_capture, bench_elad_spectrum and bench_elad_level
 - instruments/rx888: the RX-888 MkII receiver through ka9q-radio's radiod (all seven pages) and the tools bench_rx888_status, bench_rx888_frontend, bench_rx888_boot, bench_rx888_radiod_start, bench_rx888_radiod_stop, bench_rx888_tune, bench_rx888_spectrum, bench_rx888_capture; receive only, verified on the unit with no antenna

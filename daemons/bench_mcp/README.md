@@ -19,6 +19,7 @@ calibration does not pass through the agent's context step by step. There is als
 | `bladerf`, `limesdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers) | capture, survey, coherence; receive only | [Tools](#tools) |
 | `rx888` | RX-888 MkII direct-sampling HF receiver (0 to 30 MHz) through ka9q-radio's `radiod` on loopback; verified on the unit with no antenna | firmware boot, radiod start and stop, front end (overrange, RF gain, attenuation), channel level and SNR, spectrum CSV, I/Q or audio WAV; receive only | [RX-888](#rx-888-receiver-rx888-driver) |
 | `glasgow` | Glasgow Interface Explorer (1BitSquared, USB 20b7:9db1) FPGA digital multi-tool through a pinned `glasgow` install; identify and port-voltage readback measured on a revC3, everything that drives pins fixtures only | list, status, port voltage set with limit and watchdog, I2C scan/read/write, SPI flash ID, UART transact and sniff, logic capture to VCD with summary, GPIO, pattern generator, JTAG scan, SWD DPIDR; parks all pins after each call | [Glasgow](#glasgow-interface-explorer-glasgow-driver), `manual/instruments/glasgow` |
+| `glasgow` (logic analyzer) | The `bench_gla_*` tools on the Glasgow driver: host-side trigger, pre-trigger window, sample rate, VCD, CSV and sigrok `.sr` files, glitch report, UART, I2C and SPI decode, and a bounded pattern generator; the unit links at 12 Mb/s so no capture has run on it; fixtures only | limits, analyze (a VCD file, no device), capture, pattern, safe state | [Logic analyzer tools](#glasgow-logic-analyzer-and-pattern-generator-bench_gla-tools), `docs/GLASGOW_LOGIC_TOOLS.md` |
 | `usb_hub` | USB topology and hub port power (uhubctl) | topology, find, diagnose, bandwidth, watch, history, port power (verified cold reset), protection of devices | [USB hub tools](#usb-hub-tools-usb_hub-driver), `docs/USB_HUB_TOOLS.md` |
 | `audio` | Sound devices, with discovery by signature | play, record, meter, loopback, speak, alert, verify, synthesizers; never the system default device; `dry_run` and a safe state | [Audio tools](#audio-tools-audio-driver), `docs/AUDIO_TOOLS.md` |
 | `hamlib` | Radios through Hamlib's `rigctld` (a separate process; LGPL, not linked) | models, get and set, scan, watch, memory, load checks, transmit tests with an attestation and a watchdog | [Hamlib rigs](#hamlib-rigs-hamlib-driver), `docs/HAMLIB_TOOLS.md` |
@@ -1341,3 +1342,54 @@ Link::scope_state(host: &str, ports: &[u16]) -> String
 * The FFT length must be a power of two. [@ANCHOR: elad_fft_len]
 * The common summary of every streaming tool: samples, measured rate, timeouts, RMS, peak, DC and clipping. [@ANCHOR: elad_summary]
 * An acquisition refuses an undeclared FPGA image before streaming, always stops the stream, and reports silence as a missing FPGA image. [@ANCHOR: elad_acquire]
+
+## Glasgow logic analyzer and pattern generator (`bench_gla_*` tools)
+
+Four tools plus a safe-state companion on top of the Glasgow driver (`src/gla/`, entries for every function and data structure in `docs/GLASGOW_LOGIC_TOOLS.md`, manual `instruments/glasgow/logic-analyzer`). The revision C analyzer records every pin change with a 48 MHz timestamp and has no trigger or rate setting; the trigger, pre-trigger window, sample rate, statistics, files and UART, I2C and SPI decoding are done on the host. Capture needs the 480 Mb/s link; at 12 Mb/s the backend refuses. Tests are hardware-free: known waveforms, frames and a simulated Glasgow.
+
+* [@ANCHOR: gla_analyze]
+* [@ANCHOR: gla_auto_rate]
+* [@ANCHOR: gla_backend_trait]
+* [@ANCHOR: gla_call]
+* [@ANCHOR: gla_capture]
+* [@ANCHOR: gla_crc32]
+* [@ANCHOR: gla_ctx_struct]
+* [@ANCHOR: gla_decode_i2c]
+* [@ANCHOR: gla_decode_run]
+* [@ANCHOR: gla_decode_spi]
+* [@ANCHOR: gla_decode_uart]
+* [@ANCHOR: gla_describe]
+* [@ANCHOR: gla_inside]
+* [@ANCHOR: gla_instrument]
+* [@ANCHOR: gla_limits]
+* [@ANCHOR: gla_parse_vcd]
+* [@ANCHOR: gla_pattern_backend_args]
+* [@ANCHOR: gla_pattern_hold]
+* [@ANCHOR: gla_pattern_num]
+* [@ANCHOR: gla_pattern_plan]
+* [@ANCHOR: gla_pattern_plan_struct]
+* [@ANCHOR: gla_pattern_quantize]
+* [@ANCHOR: gla_pattern_tool]
+* [@ANCHOR: gla_pin_names]
+* [@ANCHOR: gla_process]
+* [@ANCHOR: gla_rate_text]
+* [@ANCHOR: gla_read_wave]
+* [@ANCHOR: gla_real_backend]
+* [@ANCHOR: gla_resample]
+* [@ANCHOR: gla_sampled_struct]
+* [@ANCHOR: gla_summarize]
+* [@ANCHOR: gla_tool_defs]
+* [@ANCHOR: gla_trigger_apply]
+* [@ANCHOR: gla_trigger_enum]
+* [@ANCHOR: gla_trigger_find]
+* [@ANCHOR: gla_trigger_find_state]
+* [@ANCHOR: gla_trigger_parse]
+* [@ANCHOR: gla_wave_pin_index]
+* [@ANCHOR: gla_wave_struct]
+* [@ANCHOR: gla_wave_value_at]
+* [@ANCHOR: gla_wave_value_before]
+* [@ANCHOR: gla_window]
+* [@ANCHOR: gla_write_csv]
+* [@ANCHOR: gla_write_sr]
+* [@ANCHOR: gla_write_vcd]
+* [@ANCHOR: gla_zip_store]

@@ -55,6 +55,7 @@ const SAFE_STATE_COMPANION: &[(&str, &str)] = &[
     ("bench_audio_set_volume", "bench_audio_safe_state"),
     ("bench_audio_discover", "bench_audio_safe_state"),
     ("bench_example_pulse", "bench_example_safe_state"),
+    ("bench_gla_pattern", "bench_gla_safe_state"),
     ("bench_glasgow_port_set", "bench_glasgow_safe_state"),
     ("bench_glasgow_i2c_scan", "bench_glasgow_safe_state"),
     ("bench_glasgow_i2c_read", "bench_glasgow_safe_state"),
