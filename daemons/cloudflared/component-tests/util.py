@@ -91,7 +91,7 @@ def fips_enabled():
     return env_fips is not None and env_fips != "0"
 
 nofips = pytest.mark.skipif(
-        fips_enabled(), reason=f"Only runs without FIPS (COMPONENT_TESTS_FIPS=0)")
+        fips_enabled(), reason="Only runs without FIPS (COMPONENT_TESTS_FIPS=0)")
 
 def skip_on_ci(reason):
     env_ci = os.getenv("CI")
