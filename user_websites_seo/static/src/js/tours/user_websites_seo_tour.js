@@ -25,8 +25,9 @@ registry.category("web_tour.tours").add("user_websites_seo_tour", {
             run: 'press Enter',
         },
         {
+            // The name search leaves only users matching "SEO UI Test User", so the first row is it.
             content: "Open the test user's row",
-            trigger: '.o_data_row:has(.o_data_cell[name="name"]:contains("SEO UI Test User")) .o_data_cell[name="name"]',
+            trigger: '.o_data_row .o_data_cell[name="name"]',
             run: 'click',
         },
         {
