@@ -5,9 +5,11 @@ server (`radioctld`) that speaks Hamlib's `rigctld` text protocol and a protocol
 several programs share one radio. This manual is for a Rust programmer who wants to use the library,
 run the daemon, add a radio, or understand how the design keeps a transmitter safe.
 
-Manual status: written 2026-10-30 against `main` of `daemons/radioctl` at commit `f54256f4` (Phase 0/1 foundation). The
-crate's own overview is [`../../README.md`](../../README.md) and the design decisions are in
-[`../DESIGN.md`](../DESIGN.md); this manual explains them and does not replace them.
+Manual status: first written 2026-10-30; brought up to date with `main` of `daemons/radioctl` on 2026-11-08 (commit `e4758218`).
+The crate's own overview is [`../../README.md`](../../README.md) and the design decisions are in
+[`../DESIGN.md`](../DESIGN.md); this manual explains them and does not replace them. Numbers that can
+drift from the data (how many radios are described, how many verified) are marked in the text and
+checked against [`../RIG_SUPPORT.md`](../RIG_SUPPORT.md) by `tools/doc_counts.py --check`.
 
 ## How to read the status labels
 
@@ -17,7 +19,7 @@ where it is not obvious.
 | Label | Meaning |
 |---|---|
 | **Implemented** | The code is on `main` and has tests. |
-| **Unverified** | The code exists, but no real radio has ever been used to check it. At the time of writing this applies to every radio description: all 233 facts in the 23 files in `rigs/` are in the `unverified` state, and none is `hardware-verified`. |
+| **Unverified** | The code exists, but no real radio has ever been used to check it. At the time of writing this applies to nearly every radio description: of the <!--count:facts-->2519<!--/count--> facts in the <!--count:description_files-->291<!--/count--> files in `rigs/`, only those the Elecraft KX3 bench run of 2026-11-05 exercised are `hardware-verified` (<!--count:hardware_verified-->1<!--/count--> description); the rest are `unverified` or `manual-checked`. [Chapter 6](06-rig-descriptions.md) has the states and [`RIG_SUPPORT.md`](../RIG_SUPPORT.md) the list. |
 | **Planned** | Described in a proposal (`hams_com/docs/proposals/`, not a public document), not in the code. Never rely on it. |
 
 A feature is called implemented only if this manual's author found it in the code. Chapter
@@ -41,9 +43,11 @@ A feature is called implemented only if this manual's author found it in the cod
 | [12. Provenance and licensing](12-provenance-and-licensing.md) | see where facts about radios came from and what is licensed how |
 | [13. Roadmap and open items](13-roadmap.md) | find what is planned and what is known to be missing |
 | [14. The station: power, switches, rotators, amplifiers](14-station.md) | use `radioctl-station`: the radio manager over real actors, Home Assistant, amplifier channels, rotators |
+| [15. Transmit power and meters](15-power.md) | read power in watts from a rig or an external wattmeter, calibrate a rig's meter, show a power |
+| [16. Verifying a description](16-verification.md) | run the self-test, understand the report and upload, use the bench runner, and see how a fact becomes `hardware-verified` |
 | [Appendix A. Capability matrix](A-capability-matrix.md) | summary of the generated Hamlib 4.6.2 matrix and the radioctl rigs |
 | [Appendix B. Glossary](B-glossary.md) | terms and abbreviations |
-| [Rig support list](../RIG_SUPPORT.md), [coverage plan](../RIG_COVERAGE_PLAN.md), [volunteer testing](../VOLUNTEER_TESTING.md) | see which of Hamlib's 313 models have a description and which are verified, what is planned, and how to test your radio with the read-only `radioctl-selftest` (it uploads its report to hams.com) |
+| [Rig support list](../RIG_SUPPORT.md), [coverage plan](../RIG_COVERAGE_PLAN.md), [volunteer testing](../VOLUNTEER_TESTING.md) | see which of Hamlib's <!--count:models-->313<!--/count--> models have a description and which are verified, what is planned, and how to test your radio with the read-only `radioctl-selftest` (it uploads its report to hams.com) |
 | [Appendix C. radioctld command reference](C-radioctld-command-reference.md) | every command, response format and error code |
 
 ## Which chapters for which goal

@@ -49,7 +49,7 @@ An `ErrorKind` maps as: `Rejected`, `TransmitGateClosed` and `TransmitFrequencyU
 |---|---|---|---|---|
 | `f` | `get_freq` | [vfo] | `Frequency` | Hz. Answers from the cache if newer than `cache_max_age_ms`. |
 | `F` | `set_freq` | [vfo] freq | | |
-| `m` | `get_mode` | [vfo] | `Mode`, `Passband` | Hamlib mode names: `AM CW USB LSB RTTY FM WFM CWR RTTYR PKTLSB PKTUSB`. The two data modes are `PKTUSB` and `PKTLSB`. The passband is the mode's typical width when the rig has no filter control. |
+| `m` | `get_mode` | [vfo] | `Mode`, `Passband` | Hamlib mode names: `AM CW USB LSB RTTY FM WFM CWR RTTYR PKTLSB PKTUSB SAM SAL SAH D-STAR`. The two data modes are `PKTUSB` and `PKTLSB`; `SAM`, `SAL` and `SAH` are synchronous AM (both sidebands, lower, upper). The passband is the mode's typical width when the rig has no filter control. |
 | `M` | `set_mode` | [vfo] mode passband | | A passband of 0 or -1 keeps the rig's own. |
 | `v` | `get_vfo` | | `VFO` | radioctld's own selection, not the radio's. |
 | `V` | `set_vfo` | vfo | | `VFOB` needs `second-vfo`. |

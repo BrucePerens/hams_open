@@ -11,8 +11,8 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
 
 ## Status
 
-- Phase 0/1 foundation. Nothing here has been used with real hardware; treat every item below as
-  `unverified` unless it says otherwise.
+- Phase 0/1 foundation. One radio, the Elecraft KX3, has been used on a bench (below); everything else
+  has never been used with real hardware. Treat every item below as `unverified` unless it says otherwise.
 - Implemented (tests on `main`, no radio):
   - Vocabulary, sans-IO protocol engines and virtual rigs.
   - Rig actor with queue, cache, polling, events and the transmit gate.
@@ -20,8 +20,30 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - USB SDR boards and dongles (Si570 kits, FiFi-SDR, FUNcube, Digital World Traveller) over a USB link: request/reply frames, a `UsbBackend` trait with a fake and a libusb backend (cargo feature `usb`, off by default), hot-plug reconnect and the same unkey-on-reopen rule. All unverified on hardware.
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
 - Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect and the handheld/mobile family), Elecraft, Yaesu newcat and the legacy block protocols, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V), the receiver families (AOR, Uniden, JRC, Icom PCR and marine, Rohde and Schwarz), about thirty small serial-vendor engines (Ten-Tec, Racal, Drake, Barrett, CODAN, MDS, MICOM, WJ, Paragon, XG3, Transfox and others), a UDP control frame (HiQSDR) and USB SDR boards.
-- Rig descriptions: 287 files in `rigs/`, 281 of the 284 real radios Hamlib 4.6.2 lists (counts in `docs/RIG_SUPPORT.md`). All facts are `unverified` until a volunteer confirms them with `docs/VOLUNTEER_TESTING.md`. The one `hardware-verified` description is the Elecraft KX3 (MCU 3.02 / DSP 1.52, bench run with transmit into a dummy load, 2026-11-05): every fact the run exercised says what ran; front-panel auto-information and the virtual-rig defaults stay unverified.
-- Transmit: no transmit path to real hardware has been run. Anything that can transmit must fail closed behind an explicit capability gate.
+- Rig descriptions: <!--count:description_files-->291<!--/count--> files in `rigs/`, <!--count:described-->283<!--/count--> of the <!--count:real_radios-->283<!--/count--> real radios among the <!--count:models-->313<!--/count--> models Hamlib 4.6.2 lists (<!--count:not_applicable-->30<!--/count--> are not radios or have no transport radioctl speaks). The numbers are marked in the text and `python3 tools/doc_counts.py --check` (and its test) fails when they drift from `docs/RIG_SUPPORT.md`, the generated list. <!--count:hardware_verified-->1<!--/count--> description is `hardware-verified`: the Elecraft KX3 (MCU 3.02 / DSP 1.52, bench run with transmit into a dummy load, 2026-11-05); every fact the run exercised says what ran, and front-panel auto-information and the virtual-rig defaults stay unverified. Every other fact is `unverified` or `manual-checked` until a volunteer confirms it with `docs/VOLUNTEER_TESTING.md`.
+- Transmit: only the KX3 bench run (a dummy load, the gate opened for it) has keyed real hardware. Anything that can transmit must fail closed behind an explicit capability gate.
+
+## Getting started
+
+- **Toolchain.** `rust-toolchain.toml` pins Rust 1.98.1 (with rustfmt and clippy); the workspace declares
+  `rust-version = "1.98"`.
+- **Build.** From `daemons/radioctl`: `cargo build --release -p radioctld` builds the two programs of that crate,
+  `radioctld` (the `rigctld`-compatible server) and `radioctl-selftest` (the volunteer test tool). Cargo features
+  (all off unless said): `usb` on `radioctld` and `radioctl-core` (direct libusb access for USB boards and
+  dongles; needs libusb-1.0), `hamlib-oracle` on `radioctld` and `radioctl-protocols` (differential tests
+  against Hamlib's own binaries), `owned-runtime` on `radioctl-core` (a runtime of the library's own, for
+  non-tokio programs; `radioctl-capi` turns it on), and `tokio-io` on `radioctl-protocols` (on by default).
+- **Try it with no radio.** `cargo run -p radioctld --example quickstart` drives a virtual KX3 in a dozen lines
+  using the prelude (`use radioctl_protocols::prelude::*;`); the code is in chapter 2 of the manual and is
+  the same file. `radioctld` serves a virtual radio from [`radioctld.example.toml`](radioctld.example.toml).
+- **Test.** `cargo test --all-features --no-fail-fast` runs everything, including the manual's own check
+  (`cargo test -p radioctld --test manual`); the Hamlib oracle needs Hamlib 4.6.2's `rigctld` and `rigctl`.
+  The Python tools have tests of their own: `python3 -m pytest tools/`. Details: manual chapter 11.
+- **Read next.** The [programmer's manual](docs/manual/README.md); the generated
+  [rig support list](docs/RIG_SUPPORT.md); the [volunteer testing guide](docs/VOLUNTEER_TESTING.md) (run
+  `radioctl-selftest` on your radio, read-only); the [recommended hardware](docs/RECOMMENDED_HARDWARE.md); the
+  [bench runbook](docs/BENCH_VERIFICATION.md) for the maintainers' hardware checks.
+- **Licence.** AGPL-3.0-or-later; the SPDX header is on every Rust file.
 
 ## Layout
 
@@ -41,6 +63,7 @@ daemons/radioctl/
   docs/manual/            programmer's manual, one file per chapter (start at docs/manual/README.md)
   tools/hamlib_caps_matrix.py   Tier 1 generator (rigctl --dump-caps -> matrix)
   tools/rig_support_matrix.py   writes docs/RIG_SUPPORT.md (Hamlib models vs. descriptions vs. verification)
+  tools/doc_counts.py           keeps the marked numbers in this README and the manual equal to docs/RIG_SUPPORT.md and rigs/ (--check fails on drift)
   tools/wire_to_transcript.py   turns a bench_console --wire capture and its --log into a transcript fixture
   data/hamlib-<version>/  generated capability_matrix.json and HAMLIB_DIFFERENCES.md
 ```
@@ -1758,6 +1781,11 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_support_render] (tools) The RIG_SUPPORT.md text.
 - [@ANCHOR: radioctl:radioctl_support_generate] (tools) The Markdown for the repository as it is now.
 - [@ANCHOR: radioctl:radioctl_support_main] (tools) Writes docs/RIG_SUPPORT.md or checks it with --check.
+- [@ANCHOR: radioctl:radioctl_doc_counts_compute] (tools) The numbers a doc marker may name (models, not applicable, real radios, described, description files, hardware-verified, facts), read from docs/RIG_SUPPORT.md and rigs/*.toml.
+- [@ANCHOR: radioctl:radioctl_doc_counts_pages] (tools) The pages that may carry markers: this README and every manual chapter.
+- [@ANCHOR: radioctl:radioctl_doc_counts_check] (tools) One message per marker (`<!--count:NAME-->N<!--/count-->`) that is stale or names an unknown count.
+- [@ANCHOR: radioctl:radioctl_doc_counts_rewrite] (tools) Corrects every stale marked number in place.
+- [@ANCHOR: radioctl:radioctl_doc_counts_main] (tools) Rewrites the markers, or with --check exits 1 naming the stale ones.
 - [@ANCHOR: radioctl:radioctl_wire_parse_wire] (tools) Parses the `SECONDS tx|rx HEX` lines of a bench_console `--wire` file.
 - [@ANCHOR: radioctl:radioctl_wire_parse_log] (tools) Parses the commands and result lines of a `--log` file.
 - [@ANCHOR: radioctl:radioctl_wire_exchanges] (tools) Pairs each `tx` frame with the `rx` bytes after it; `rx` before any `tx` is unsolicited.

@@ -239,14 +239,23 @@ memories, functions such as noise blanker, tuner and amplifier control, and powe
 
 - Frequencies are integer hertz in `Hz(pub u64)`. `Hz::from_khz` refuses overflow; `as_mhz` is for
   display only. There is no floating point on any wire path.
-- `Mode` has eleven values: `Lsb`, `Usb`, `Am`, `Cw`, `CwR`, `Rtty`, `RttyR`, `Fm`, `Wfm`, `Data`,
-  `DataR`. Wire codes live in the rig description, not in the enum.
+- `Mode` has fifteen values: `Lsb`, `Usb`, `Am`, `Cw`, `CwR`, `Rtty`, `RttyR`, `Fm`, `Wfm`, `Data`,
+  `DataR`, `DStar` (D-STAR digital voice, the D-STAR models only) and the synchronous AM modes `Sam`
+  (both sidebands), `SamL` (lower sideband only) and `SamU` (upper sideband only), in which the
+  receiver locks to the carrier. Wire codes live in the rig description, not in the enum. The
+  synchronous modes are Hamlib's SAM, SAL and SAH (bits 16, 17 and 18 of its mode mask), and a
+  description lists the ones the model has: the IC-R9500 lists all three (CI-V `06` sub-modes
+  11, 14 and 15), the FlexRadio descriptions and the Perseus CI-V description list `sam` only, and the
+  radiod receive channel lists all three, where the receiver's carrier phase-locked loop does the
+  locking.
 - `Vfo` is `A` or `B`. Only the VFOs a description lists are usable (`second-vfo` for B).
 - Other quantities are plain integers whose unit is in the `Op`/`Observation` documentation, not in
   a type: the S-meter and power meter are raw units (`u16`); SWR is tenths of a unit (10 is 1.0:1);
   RIT/XIT offset is hertz (`i16`); firmware is `(major, minor)`; levels are in the rig's own units
-  (`radioctld` rescales them, chapter [9](09-radioctld.md)). Calibrated dB and watts are **planned**:
-  calibration tables are per-model measurements that the descriptions do not yet hold.
+  (`radioctld` rescales them, chapter [9](09-radioctld.md)). Transmit power is the exception: a
+  description with a `[power_meter]` calibration lets radioctl report watts, and `Power` is the one
+  unit (chapter [15](15-power.md)). The other meters stay raw; calibrated dB for them is **planned**,
+  because those tables are per-model measurements the descriptions do not yet hold.
 
 ## Freshness and the state cache
 

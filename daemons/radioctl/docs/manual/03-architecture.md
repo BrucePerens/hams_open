@@ -151,6 +151,15 @@ once when it starts with the link up, the second after a link loss, before it se
 The Icom PCR engine uses both to send `H101` (power on) and `G300` (no automatic updates), as
 Hamlib does when it opens the rig.
 
+`encode_lines` is the third hook, for a radio that has no byte stream. A receiver such as the
+SAT-Schneider DRT1 is tuned by clocking a DDS chip through the serial RTS and DTR lines and break. For
+such an op the engine returns a list of steps (`LineStep`: the line, whether it is asserted, and how
+long to hold before the next step) instead of bytes. The actor drives them through
+`RigOptions::control_lines` (a `ControlLines` implementation, whose `set_control` a serial link provides)
+and the command is complete with the last step. Break is a `ControlLine` of its own and never a `KeyLine`,
+so the keyer cannot key on it; the actor refuses an op that transmits, a missing line handle and a
+passed deadline, and the gate is not the engine's business (design decision 25).
+
 `Inbound` is what an engine decodes from received bytes: an `Observation` (a value, asked for or not),
 `Ack` or `Nak` (the radio accepted or refused the last command), `Unrecognised(bytes)` (bytes that formed no
 known frame), or a `ScopeFrame` (one complete spectrum sweep, which the actor publishes on the scope stream

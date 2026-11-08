@@ -63,21 +63,29 @@ A [glossary](B-glossary.md) covers the ham-radio terms (VFO, split, RIT, CI-V an
 Phase 0/1 foundation, as the crate README says. What is implemented:
 
 - **Implemented:** the rig actor with a priority queue, deadlines, cache with age, adaptive polling,
-  status event stream, a derived `active_tx_frequency` (Hamlib issue 138), Icom scope operations with a sweep stream, a transmit watchdog
-  in the actor (maximum transmit time, optional caller heartbeat, alarm events), and a fail-closed unkey
-  when a transmit command goes unanswered or the last handle is dropped; engines for Icom CI-V (also used for Xiegu), Kenwood ASCII, Elecraft ASCII,
-  Yaesu newcat ASCII, Yaesu legacy five-byte CAT, the FlexRadio SmartSDR control plane and the OpenHPSDR (ANAN) control plane; virtual rigs; serial, USB-serial-by-id and TCP transports
-  with reconnect for serial; the splitter; `radioctld`; the rig description format with provenance;
-  transcript replay; differential tests against Hamlib's own binaries.
-- **Unverified:** all of the above against real radios. No radio description has a single
-  `hardware-verified` fact. The Icom files were read from Hamlib's source, not Icom's manuals
-  ([chapter 12](12-provenance-and-licensing.md) says why), and every transcript is hand-written from
-  a manual or from our own simulator (the FlexRadio and ANAN files have none). A passing test means the description, the engine and the virtual
-  rig agree with each other, not that they agree with a radio.
-- **Planned, not in the code:** unkey on link loss, ownership modes, scope for non-Icom radios,
-  FlexRadio streams (meters, spectrum, audio) and discovery on the wire, the OpenHPSDR data plane (I/Q) and
-  the Kenwood and Icom LAN radios, the rest of the C ABI, and external-switch hardware. [Chapter 13](13-roadmap.md) is the complete list.
+  a status event stream (the only status-change API; there are no callbacks), a derived
+  `active_tx_frequency` (Hamlib issue 138), Icom scope operations with a sweep stream, a transmit
+  watchdog in the actor (maximum transmit time, optional caller heartbeat, alarm events), and a
+  fail-closed unkey when a transmit command goes unanswered, when the last handle is dropped and when a
+  link comes back; engines for Icom CI-V (also used for Xiegu), Kenwood ASCII, Elecraft ASCII, Yaesu
+  newcat ASCII, Yaesu legacy five-byte CAT, the FlexRadio SmartSDR control plane, the OpenHPSDR (ANAN)
+  control plane, the receiver families, a radiod receive channel, about thirty small vendor engines and
+  USB devices; virtual rigs; serial, USB-serial-by-id, TCP/UDP and USB-device transports with reconnect;
+  the splitter; `radioctld`; the station layer; the rig description format with provenance and
+  verification states; transcript replay; differential tests against Hamlib's own binaries; and the
+  self-test a volunteer runs on a radio. The number of radios with a description is in
+  [`RIG_SUPPORT.md`](../RIG_SUPPORT.md): <!--count:described-->283<!--/count--> of the
+  <!--count:real_radios-->283<!--/count--> real radios among Hamlib 4.6.2's <!--count:models-->313<!--/count--> models.
+- **Unverified:** nearly all of the above against real radios. Exactly <!--count:hardware_verified-->1<!--/count-->
+  description has `hardware-verified` facts: the Elecraft KX3, bench run on 2026-11-05 including a keyed
+  transmission into a dummy load. The Icom files were read from Hamlib's source or from manuals found on
+  public mirrors, not from Icom's own downloads ([chapter 12](12-provenance-and-licensing.md) says why),
+  and most transcripts are hand-written from a manual or from our own simulator. A passing test means the description, the engine and the virtual rig agree with each
+  other, not that they agree with a radio.
+- **Planned, not in the code:** ownership modes, scope for non-Icom radios, FlexRadio streams (meters,
+  spectrum, audio) and discovery on the wire, the OpenHPSDR data plane (I/Q) and the Kenwood (other than
+  the TS-890S session) and Icom LAN radios, the rest of the C ABI, and the remaining items of [chapter 13](13-roadmap.md), which is the
+  complete list.
 
-There is no transmit path to real hardware that has been exercised. Everything that can transmit
-fails closed behind the gate ([chapter 10](10-safety.md)), and no test in the repository keys a
-transmitter.
+Only the KX3 bench run has keyed a real transmitter. Everything that can transmit fails closed behind
+the gate ([chapter 10](10-safety.md)), and no test in the repository keys a transmitter.

@@ -3,16 +3,22 @@
 "CI-V and CAT" are several protocols, not two. radioctl has one sans-IO engine per family in
 `radioctl-protocols`; the description's `family` field picks it (`conformance::engine_for`). This chapter
 says what each covers and, as important, what it does not and what nobody has checked. All engines are
-**unverified**: none has talked to a real radio. Every engine is also covered by property tests that
+**unverified** except the Elecraft one, which has talked to one real radio (a KX3, bench run 2026-11-05; the
+facts that run exercised are `hardware-verified` in `rigs/elecraft-kx3.toml`). No other engine has talked to a real radio. Every engine is also covered by property tests that
 feed it arbitrary bytes (chapter [11](11-testing.md)); reply parsing is the attack surface, so all
 byte access is checked (`get`, never indexing), and no engine may panic.
+
+The table lists the first radios of each family; the complete list of every described radio, with the family
+and the engine of each, is the generated [`RIG_SUPPORT.md`](../RIG_SUPPORT.md) (chapter [6](06-rig-descriptions.md) has
+the file families). Families added since the table was written (the small serial-vendor engines, `kenwood-hh`,
+`usb-device`, `radiod-channel`) are described there and in the sections below.
 
 | Family | Engine | Radios with a description | Protocol |
 |---|---|---|---|
 | `icom-civ` | `civ::CivEngine` | IC-7300, IC-705, IC-7610, IC-9700; Xiegu G90, X6100, X6200, X108G, X5105 | binary frames, BCD numbers |
 | `kenwood-ascii` | `kenwood::KenwoodEngine` | TS-2000, TS-590S, TS-590SG | ASCII commands ending in `;` |
 | `kenwood-ascii`, `dialect = "ts890"` | `kenwood_ts890::Ts890Engine` | TS-890S | the same framing, its own command set |
-| `elecraft-ascii` | `elecraft::ElecraftEngine` | KX3 (K3 and KX2 share the protocol; no description yet) | ASCII, Kenwood-like with its own replies |
+| `elecraft-ascii` | `elecraft::ElecraftEngine` | KX3, KX2, K2, K3, K3S, K4 | ASCII, Kenwood-like with its own replies |
 | `yaesu-newcat` | `yaesu::YaesuEngine` | FT-991A, FTDX10, FTDX101D | ASCII, Kenwood-like with different widths |
 | `receiver` (`aor`) | `aor::AorEngine` (a `receiver::LineEngine`) | AR8000, AR8200, AR8600, AR5000, AR5000A, AR2700, SR2200 | ASCII lines ended by CR (`RF`, `RX`, `MD`, `LM`); a setting is acknowledged by an empty line, `?` refuses |
 | `receiver` (`uniden`) | `uniden::UnidenEngine` | BC245XLT, BC250D, BC780XLT, BC895XLT, BC898T | ASCII lines ended by CR (`RF`, `RM`, `SG`), `OK` or `NG`/`ERR` |
@@ -24,7 +30,7 @@ byte access is checked (`get`, never indexing), and no engine may panic.
 | `flex-smartsdr` | `flex::FlexEngine` | FLEX-6300, 6400, 6600, 6700 | SmartSDR line text over TCP (control plane only) |
 | `hpsdr-network` | `hpsdr_net::HpsdrEngine` | ANAN-10, ANAN-100 | a small line protocol to a bridge over the `hpsdr` crate (control plane only) |
 
-**Planned, not on `main` when this was written:** K3/K4 descriptions, the
+**Planned, not on `main`:** the
 FlexRadio streams and the 8000 series, the OpenHPSDR I/Q data plane and the
 Kenwood and Icom LAN protocols.
 
@@ -178,8 +184,9 @@ response formats are used and the extension modes (`K2n;`, `K3n;`) are never sen
   (the manual says its value is ignored).
 - **Does not cover:** the `KY` buffer GET, `TB` text reads, menus, switch emulation, the `$` forms for
   the sub-receiver and VFO B, memories and DSP commands.
-- **The first physical radio** for radioctl is a KX3 (roadmap decision, 2026-10-30). Its bench run has
-  not happened.
+- **The first physical radio** for radioctl was a KX3 (roadmap decision, 2026-10-30). Its bench run took
+  place on 2026-11-05; chapter [6](06-rig-descriptions.md) and `rigs/reports/verified.toml` say what was
+  verified.
 
 ## Yaesu newcat (`yaesu.rs`)
 

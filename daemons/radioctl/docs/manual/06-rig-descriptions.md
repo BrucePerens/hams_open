@@ -8,10 +8,11 @@ normative text.
 
 A description is deliberately small. It is **data** for the parts that vary between models of one
 family (addresses, identifiers, mode codes, timing, which capabilities exist). Command layouts live in
-the engine of the family (chapter [7](07-protocol-engines.md)). **Planned:** the proposal also wants a
-command table, meter scaling, per-firmware differences and an overridable per-model trait for odd
-cases; none of that is in the format. Today a model that needs a different command is an engine
-change.
+the engine of the family (chapter [7](07-protocol-engines.md)). The one measurement the format holds is
+the power meter's calibration to watts (`[power_meter]`, below; chapter [15](15-power.md)). **Planned:** the proposal
+also wants a command table, other meter scaling, per-firmware differences and an overridable per-model
+trait for odd cases; none of that is in the format. Today a model that needs a different command is an
+engine change.
 
 ## The format, field by field
 
@@ -22,18 +23,24 @@ Schema version 1 is the only one the reader accepts. Unknown fields and unknown 
 |---|---|
 | `schema` | Must be `1`. |
 | `capabilities` | A non-empty list of capability names (appendix [A](A-capability-matrix.md)), without duplicates. |
-| `[rig]` `id`, `name`, `family` | A stable id (`icom-ic-7300`), a display name, and the family: `icom-civ`, `kenwood-ascii`, `elecraft-ascii`, `yaesu-newcat`, `yaesu-legacy`, `flex-smartsdr`, `hpsdr-network` or `receiver`. The id and name are our own labels. |
-| `[civ]` | Required for `icom-civ`, forbidden for others: `address` (the rig's CI-V address), `controller` (the software's, conventionally `0xE0`), `model_id` (what the read-ID command returns), `echo` (true if the bus echoes every frame back, as a single-wire interface does). |
-| `[kenwood]`, `[elecraft]`, `[yaesu]` | `model_id`, the number `ID;` returns. Exactly the block of the family. `[kenwood]` also takes `dialect`: `classic` (the default; TS-2000, TS-590) or `ts890` (needs a `kenwood.dialect` fact). `[yaesu]` also takes `frequency_digits`, 8 or 9 (the default; 8 needs a `yaesu.frequency_digits` fact). |
+| `[rig]` `id`, `name`, `family` | A stable id (`icom-ic-7300`), a display name, and the family: `icom-civ`, `kenwood-ascii`, `elecraft-ascii`, `yaesu-newcat`, `yaesu-legacy`, `flex-smartsdr`, `hpsdr-network`, `radiod-channel`, `kenwood-hh`, `serial-vendor`, `receiver` or `usb-device`. The id and name are our own labels. Exactly the block of the family may be present (the reader refuses a file whose block does not match `family`); `radiod-channel` has none. |
+| `[civ]` | Required for `icom-civ`, forbidden for others: `address` (the rig's CI-V address), `controller` (the software's, conventionally `0xE0`), `model_id` (what the read-ID command returns), `echo` (true if the bus echoes every frame back, as a single-wire interface does), and optionally `frequency_bytes` (4, 5 or 6; 5 when absent: the IC-735 uses 4, the IC-905 5 or 6) and `command_set` (`standard`, or `f8101` for the IC-F8101's `1A 34` to `36` frequency and mode commands). |
+| `[kenwood]`, `[elecraft]`, `[yaesu]` | `model_id`, the number `ID;` returns. Exactly the block of the family. `[kenwood]` also takes `dialect`: `classic` (the default; TS-2000, TS-590), `ts890`, `ts440`, `ts450`, `ts990`, `r5000` or `trc80` (anything but `classic` needs a `kenwood.dialect` fact). `[yaesu]` also takes `frequency_digits`, 8 or 9 (the default; 8 needs a `yaesu.frequency_digits` fact). |
 | `[receiver]` | `receiver` only (AOR, Uniden, JRC, Rohde and Schwarz, Icom PCR and marine): `protocol` (`aor`, ...), `dialect` (the model's command set inside the protocol), `address` (marine and JRC models that have one), and the serial line `baud` (the daemon takes the baud from its own configuration), `data_bits`, `parity` (`N`, `E`, `O`), `stop_bits`, `flow` (`none`, `xonxoff`, `rtscts`). |
-| `[yaesu_legacy]` | `yaesu-legacy` only: `stop_bits` (2 on the FT-817, FT-857 and FT-897). |
-| `[flex]` | `flex-smartsdr` only: `model` (the name the radio reports) and `scus` (spectrum capture units, 1 or 2). |
+| `[kenwood.ky]` | Optional, inside `[kenwood]`: how the model takes `KY` (send CW text), as its own manual documents it (chapter [10](10-safety.md)). `form` (`undocumented`, `padded` or `variable`), `width`, `lowercase`, `at_sign` and `stop` (`none`, `ky0` or `blank`). Without it, send-CW-text is refused as unsupported. |
+| `[elecraft]` `levels` | Optional table `level-name = [min, max]`: the model's own level ranges, so `radioctld` scales them correctly. |
+| `[yaesu_legacy]` | `yaesu-legacy` only: `stop_bits` (2 on the FT-817, FT-857 and FT-897), and the model's block commands: `set_frequency`, `set_mode`, `ptt_on`, `ptt_off`, `split_on`, `split_off`, `reads` (a request, a length, and where in the answer the frequency, mode, PTT, split and VFO flags are), `status_modes`, `high_band_flag`, `echo`. |
+| `[kenwood_hh]` | `kenwood-hh` only (the handheld and mobile family): `dialect`, one of `th`, `tm710`, `th72`, `th74`. |
+| `[vendor]` | `serial-vendor` only: `protocol` (the small vendor engine, for example `tentec`, `drake`, `racal`, `barrett`, `codan`, `mds`, `micom`, `wj`, `hiqsdr`, `drt1`, `anytone`; `VendorProtocol::from_name` in `radioctl-core/src/description.rs` is the full list), `dialect`, and the serial line `data_bits` (8), `parity` (`N`), `stop_bits` (1) and `flow` (`none`) when they differ. |
+| `[usb]` | `usb-device` only (chapter [5](05-transports.md#usb-devices)): `protocol` (`si570`, `fifisdr`, `funcube`, `elektor507`, `dwt` or `perseus`), `vendor_id`, `product_id`, `manufacturer` and `product` (the strings that tell V-USB boards apart; empty when unused) and `multiplier` (the Si570 multiplier, 2 or 4; 0 for a device without one). |
+| `[flex]` | `flex-smartsdr` only: `model` (the name the radio reports), `scus` (spectrum capture units, 1 or 2) and `slice` (the slice receiver the description's VFO A is; 0 is slice A, so the SmartSDR slice A to H models are 0 to 7). |
 | `[hpsdr]` | `hpsdr-network` only: `model` (`ANAN-100`), `protocol` (1 or 2) and `anan10` (true for the ANAN-10 power calibration constant). |
 | `[scope]` | Optional, `icom-civ` only: `receivers` (1 or 2), `line_length`, `samples_per_frame`, `amplitude_max`, `spans_hz`. The capability `scope` is listed separately (the IC-7300 and IC-7610 do). |
-| `[levels]` | Optional: `attenuator_db` (the decibels of each attenuator step, ascending, at most nine; step 0 is off), `attenuator_any_up_to_db` (instead of a list, for an attenuator that takes any whole number of decibels up to this, 31 on an ANAN; 0 otherwise) and `preamp_steps` (0 to 3 stages above off). All three keys are required when the block is present and each needs a fact (`levels.*`). Without the block the model has neither level and the engines refuse them. |
+| `[levels]` | Optional: `attenuator_db` (the decibels of each attenuator step, ascending, at most nine; step 0 is off), `attenuator_any_up_to_db` (instead of a list, for an attenuator that takes any whole number of decibels up to this, 31 on an ANAN; 0 otherwise) and `preamp_steps` (0 to 3 stages above off). `absent` (optional) lists levels the model does not have. The first three keys are required when the block is present and each needs a fact (`levels.*`). Without the block the model has neither level and the engines refuse them. |
 | `[timing]` | `timeout_ms` (wait for a reply), `retries` (extra attempts after a timeout; a transmit command is never repeated), `inter_command_ms` (minimum gap between writes). |
+| `[power_meter]` | Optional: `raw_to_milliwatts`, at least two `[raw, milliwatts]` points, ascending in raw value and not falling in power. It is the rig's own power meter calibration, one `[[facts]]` entry (`power_meter.raw_to_milliwatts`) with provenance; without it the rig's power reads as a relative bar and never as watts (chapter [15](15-power.md)). |
 | `[defaults]` | `frequency_hz` and `mode` of a virtual rig of this model at start. They say nothing about the radio. |
-| `[[modes]]` | One per supported mode: `mode` (a name from the `Mode` list in chapter [4](04-api.md): `lsb`, `usb`, `am`, `cw`, `cw-r`, `rtty`, `rtty-r`, `fm`, `wfm`, `data`, `data-r`) and `code`, either a byte (`0x01`) or a one-character string (`"1"`, for an ASCII mode digit). A mode appears once; a code appears once, except that `data` may share the code of `usb` and `data-r` that of `lsb`, listed after them (CI-V: the data mode is the sideband's code plus the DATA flag of command `26`, and a code read back without the flag is the plain mode). |
+| `[[modes]]` | One per supported mode: `mode` (a name from the `Mode` list in chapter [4](04-api.md): `lsb`, `usb`, `am`, `cw`, `cw-r`, `rtty`, `rtty-r`, `fm`, `wfm`, `data`, `data-r`, `d-star`, `sam`, `sam-l`, `sam-u`) and `code`, either a byte (`0x01`) or a one-character string (`"1"`, for an ASCII mode digit). A mode appears once; a code appears once, except that `data` may share the code of `usb` and `data-r` that of `lsb`, listed after them (CI-V: the data mode is the sideband's code plus the DATA flag of command `26`, and a code read back without the flag is the plain mode). |
 | `[[facts]]` | Provenance and verification records; see below. |
 
 ## Provenance and `verified`
@@ -66,7 +73,7 @@ verified = { state = "unverified" }
 
 | State | Needs | Means |
 |---|---|---|
-| `unverified` | nothing | never checked. Every fact in every shipped file is in this state today. |
+| `unverified` | nothing | never checked. This is the state of most facts in the shipped files; only the facts a bench run exercised are higher (the count of `hardware-verified` descriptions is in [`RIG_SUPPORT.md`](../RIG_SUPPORT.md)). |
 | `manual-checked` | `reference` | compared with a vendor manual |
 | `transcript-checked` | `reference` (the transcript) | replayed against a recorded transcript |
 | `hardware-verified` | `radio`, `firmware`, `date` (`YYYY-MM-DD`), `tested` | run on a real radio; `tested` says exactly what, with which firmware |
@@ -77,7 +84,7 @@ is not an acceptable reference, and review will ask for them.
 
 ## The shipped descriptions
 
-The table below was written when there were forty-six files; `rigs/` holds 287 on November 1, 2026 and the second table lists the families added since. All are unverified until a volunteer confirms them (`docs/VOLUNTEER_TESTING.md`); the Icom batch of October 31, 2026 is best-effort coverage of Hamlib's models, not a claim that the radios were tried. Every family has a hand-written transcript for at least one file
+The table below was written when there were forty-six files; `rigs/` now holds <!--count:description_files-->291<!--/count--> description files covering <!--count:described-->283<!--/count--> of the <!--count:real_radios-->283<!--/count--> real radios among Hamlib 4.6.2's <!--count:models-->313<!--/count--> models, and the second table lists the families added since. The generated list of what is described and what is verified is [`RIG_SUPPORT.md`](../RIG_SUPPORT.md); <!--count:hardware_verified-->1<!--/count--> description is `hardware-verified` (the Elecraft KX3, bench run 2026-11-05) and the rest are unverified or manual-checked until a volunteer confirms them (`docs/VOLUNTEER_TESTING.md`); the Icom batch of October 31, 2026 is best-effort coverage of Hamlib's models, not a claim that the radios were tried. Every family has a hand-written transcript for at least one file
 (twenty-three transcripts). The FlexRadio and ANAN ones are of a different kind and say so in their
 `origin`: `flex-6400-basic.toml` is the SmartSDR text protocol as radioctl's virtual FLEX-6400 speaks it
 (it opens with the radio's prologue step, `V` and `H` lines, and the first command carries the engine's
@@ -126,9 +133,10 @@ their sources are in each file, the plan and the reasons for what is left in
 | `serial-vendor` (modules, kits, small radios) | `guohe-pmr-171`, `dorji-dra818u`, `dorji-dra818v`, `mds-4710`, `mds-9710`, `commradio-ctx-10`, `gomspace-gs100`, `philips-prm8060`, `rft-ekd-500`, `sat-schneider-drt1`, `adat-adt-200a`, `hobbypcb-rs-hfiq`, `elecraft-xg3`, `sigfox-transfox`, `n2adr-hiqsdr` | Hamlib 4.6.2 facts; the XG3 and the DRA818U are `manual-checked` against their documents. The HiQSDR is a UDP control frame. |
 | `usb-device` | `ae9rb-peaberry-v1`, `ae9rb-peaberry-v2`, `funkamateur-fa-sdr`, `kth-si570-pic-usb`, `softrock-si570-avr-usb`, `amsat-uk-funcube-dongle`, `amsat-uk-funcube-dongle-pro-plus`, `fifi-sdr`, `elektor-sdr-usb`, `digital-world-traveller` | Hamlib 4.6.2 facts; USB transport with a fake and a libusb backend (feature `usb`). |
 
-Not described, with the reason: Winradio (vendor driver only), the 29 not-applicable models of
-RIG_SUPPORT.md, and three odd devices (AnyTone D578A, SAT-Schneider DRT1, TAPR DSP-10;
-see the plan).
+Not described: the <!--count:not_applicable-->30<!--/count--> models [`RIG_SUPPORT.md`](../RIG_SUPPORT.md) marks
+*not applicable* (not a radio, or no transport radioctl has), each with its reason there. Among them is the
+TAPR DSP-10, whose Hamlib backend does not work and for which no command document was found. Every
+other Hamlib model has a description.
 
 `microtelecom-perseus` (Hamlib 3074) uses the Icom CI-V family too: it describes the CAT port of the vendor's Windows application (address `0xE1`), not the receiver board, which speaks no CI-V. The board itself is `microtelecom-perseus-usb` (`usb-device`, protocol `perseus`, no Hamlib model): radioctld opens it through the USB transport (build with the `usb` feature), loads *your* firmware when it opens the board (and again after an unplug), and then sets frequency, attenuator (`ATT` 0/10/20/30), preamplifier (`PREAMP` 0/1) and, through the radioctl API, ADC dither and the preselector. Put `fx2.hex` (Intel HEX) and `fpga.rbs` (raw FPGA bitstream) in `RADIOCTL_PERSEUS_FIRMWARE_DIR`, the transport's `firmware_dir`, or `~/.config/radioctl/firmware/perseus`; Microtelecom's open `libperseus-sdr` repository (LGPL-3.0) publishes the FPGA images and FX2 firmware records, and radioctl ships none of them. A missing file stops the start and the error names the path. The board is receive only: no PTT or CW exists and the transmit gate is never usable. Only one program can own the board, so use either this description or the vendor application's CAT port, not both.
 
