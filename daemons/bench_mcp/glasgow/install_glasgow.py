@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def sha256(path):
+    # [@ANCHOR: glasgow_install_sha256]
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for block in iter(lambda: f.read(1 << 20), b""):
@@ -43,16 +44,18 @@ def sha256(path):
 
 
 def run(cmd, **kw):
+    # [@ANCHOR: glasgow_install_run]
     print("+", " ".join(map(str, cmd)), flush=True)
     subprocess.run(cmd, check=True, **kw)
 
 
-def main():
+def main(argv=None):
+    # [@ANCHOR: glasgow_install_main]
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dest", required=True, type=Path, help="directory to create (must not exist)")
     ap.add_argument("--python", default=sys.executable, help="a Python 3.13+ interpreter")
     ap.add_argument("--archive", type=Path, help="a copy of the source archive already on disk (still checked against its sha256)")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     dest = a.dest.expanduser().resolve()
     if dest.exists():
         sys.exit(f"{dest} exists; remove it first (this script never reuses or modifies an existing environment)")
@@ -61,9 +64,6 @@ def main():
     except OSError:
         pass
     dest.mkdir(parents=True)
-    run([a.python, "-m", "venv", str(dest / "venv")])
-    pip = [str(dest / "venv/bin/python"), "-m", "pip", "--disable-pip-version-check"]
-    run(pip + ["install", "--require-hashes", "--only-binary=:all:", "-r", str(HERE / "requirements.txt")])
     archive = a.archive
     if archive is None:
         archive = dest / "glasgow.tar.gz"
@@ -72,8 +72,12 @@ def main():
             shutil.copyfileobj(r, f)
     got = sha256(archive)
     if got != ARCHIVE_SHA256:
+        shutil.rmtree(dest, ignore_errors=True)
         sys.exit(f"REFUSED: {archive} has sha256 {got}, expected {ARCHIVE_SHA256}. Nothing from it was installed. "
                  "GitHub does not promise stable archive bytes: a person must re-verify the commit and update the pin.")
+    run([a.python, "-m", "venv", str(dest / "venv")])
+    pip = [str(dest / "venv/bin/python"), "-m", "pip", "--disable-pip-version-check"]
+    run(pip + ["install", "--require-hashes", "--only-binary=:all:", "-r", str(HERE / "requirements.txt")])
     src = dest / "src"
     with tarfile.open(archive) as t:
         t.extractall(src, filter="data")

@@ -34,7 +34,7 @@ The Glasgow re-enumerates after every firmware load, so a hand-set ACL on its de
 "glasgow": {"driver": "glasgow", "tier": "full", "serial": "<serial from bench_glasgow_list>",
             "max_volts": 3.6, "max_on_s": 300, "max_trip_a": 0.1,
             "max_capture_s": 30, "max_capture_mb": 64, "op_timeout_s": 120, "build_timeout_s": 600,
-            "venv": "/home/USER/.local/share/bench_mcp/glasgow-70cb38c9"}
+            "venv": "<install dir from step 1>"}
 ```
 
 Everything but `driver` is optional. `serial` (the device's own serial, see `bench_glasgow_list`) is required when more than one Glasgow is attached. `max_volts` is the highest port voltage any tool may set (default 5.5; the revision's own range still applies). `max_on_s` is how long a port may stay powered after it was set (default 600). `max_trip_a` caps the supply current trip (0.01 to 0.325). Use `tier: read_config` to forbid driving pins altogether: then only the read and passive tools exist (and no port can be powered, so the passive tools cannot run).

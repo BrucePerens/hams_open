@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Test harness for ops.py: evaluates the helper the way `glasgow script` does (top-level await allowed, a context of names) but with
-# fake interface objects, so the real helper code is what the tests run. Usage: harness.py HELPER APPLET OP JSON (SIM_CFG in the environment).
+# Test harness for ops.py: evaluates the entry script the way `glasgow script` does (top-level await allowed, a context of names) but with
+# fake interface objects, so the real helper code is what the tests run. Usage: harness.py ENTRY APPLET OP JSON (SIM_CFG in the environment).
 import ast
 import asyncio
 import json
@@ -25,8 +25,6 @@ class FakeI2C:
         return a in self.devices
 
     def transaction(self):
-        outer = self
-
         class T:
             async def __aenter__(self):
                 return None

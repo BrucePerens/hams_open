@@ -1,15 +1,19 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # The helper script of the bench_glasgow_* tools. bench_mcp runs it with the pinned install's own command line:
 #     glasgow script ops.py <applet> <applet options> -- <op> '<json payload>'
-# Glasgow evaluates it inside the applet's context, which supplies `args` (the parsed command line), `asyncio`, `device`, `self` and
-# the applet's interface object (`i2c_iface`, `uart_iface`, `gpio_iface`, `swd_iface`). The script prints exactly one line,
+# Glasgow evaluates a one-line entry script (written by bench_mcp next to this file) inside the applet's context; the entry loads this module
+# and calls `main(globals())`, so `ns` below holds `args` (the parsed command line), `device`, `self` and the applet's interface object
+# (`i2c_iface`, `uart_iface`, `gpio_iface`, `swd_iface`). The helper prints exactly one line,
 # `BENCH_GLASGOW_RESULT {json}`; a script that raises, or that ends without printing it, is a failed call (the Rust side checks).
 # Nothing here reads a file, opens a socket or calls another program. Every wait is bounded by the payload's own limits.
+import asyncio
 import json
 import time
 
 
-async def _i2c_scan(p):
+async def _i2c_scan(ns, p):
+    # [@ANCHOR: glasgow_ops_i2c_scan]
+    i2c_iface = ns["i2c_iface"]
     found = []
     for addr in range(p["lo"], p["hi"] + 1):
         if await i2c_iface.ping(addr):
@@ -17,7 +21,9 @@ async def _i2c_scan(p):
     return {"addresses": found, "addresses_hex": ["0x%02x" % a for a in found], "range": ["0x%02x" % p["lo"], "0x%02x" % p["hi"]]}
 
 
-async def _i2c_read(p):
+async def _i2c_read(ns, p):
+    # [@ANCHOR: glasgow_ops_i2c_read]
+    i2c_iface = ns["i2c_iface"]
     try:
         async with i2c_iface.transaction():
             if p["register"]:
@@ -28,7 +34,9 @@ async def _i2c_read(p):
     return {"acknowledged": True, "hex": bytes(data).hex(), "count": len(data)}
 
 
-async def _i2c_write(p):
+async def _i2c_write(ns, p):
+    # [@ANCHOR: glasgow_ops_i2c_write]
+    i2c_iface = ns["i2c_iface"]
     try:
         await i2c_iface.write(p["address"], bytes(p["data"]))
     except Exception as e:
@@ -36,7 +44,9 @@ async def _i2c_write(p):
     return {"acknowledged": True, "written": len(p["data"])}
 
 
-async def _uart_transact(p):
+async def _uart_transact(ns, p):
+    # [@ANCHOR: glasgow_ops_uart_transact]
+    uart_iface = ns["uart_iface"]
     t0 = time.monotonic()
     if p["send"]:
         await uart_iface.write(bytes(p["send"]), flush=True)
@@ -71,7 +81,9 @@ async def _uart_transact(p):
             "elapsed_s": round(time.monotonic() - t0, 4), "baud_measured": await uart_iface.get_baud()}
 
 
-async def _gpio_pattern(p):
+async def _gpio_pattern(ns, p):
+    # [@ANCHOR: glasgow_ops_gpio_pattern]
+    gpio_iface = ns["gpio_iface"]
     n = gpio_iface.count
     stamps = []
     try:
@@ -94,7 +106,9 @@ async def _gpio_pattern(p):
             "note": "levels are set from the host: timing is accurate to about a millisecond, not to the FPGA clock"}
 
 
-async def _swd_idcode(p):
+async def _swd_idcode(ns, p):
+    # [@ANCHOR: glasgow_ops_swd_idcode]
+    swd_iface = ns["swd_iface"]
     d = await swd_iface.initialize()
     return {"dpidr": "0x%08x" % d.to_int(), "version": int(d.VERSION), "min": bool(d.MIN), "designer": int(d.DESIGNER),
             "partno": int(d.PARTNO), "revision": int(d.REVISION)}
@@ -104,10 +118,8 @@ _OPS = {"i2c_scan": _i2c_scan, "i2c_read": _i2c_read, "i2c_write": _i2c_write, "
         "gpio_pattern": _gpio_pattern, "swd_idcode": _swd_idcode}
 
 
-async def _main():
-    op, payload = args.script_args[0], json.loads(args.script_args[1])
-    result = await _OPS[op](payload)
+async def main(ns):
+    # [@ANCHOR: glasgow_ops_main]
+    op, payload = ns["args"].script_args[0], json.loads(ns["args"].script_args[1])
+    result = await _OPS[op](ns, payload)
     print("BENCH_GLASGOW_RESULT " + json.dumps(result), flush=True)
-
-
-await _main()

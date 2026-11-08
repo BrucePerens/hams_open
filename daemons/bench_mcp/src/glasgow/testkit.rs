@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! A simulated Glasgow behind the `Runner` trait. It answers the command lines the module sends with the real output formats (the
 //! voltage table was recorded from a revC3), keeps the port voltages and limits as the device does, writes capture files, and runs the
-//! real helper script `ops.py` under a Python harness with fake interface objects (`testkit_harness.py`). Faults are switches.
+//! real helper script `ops.py` under a Python harness with fake interface objects (`test_ops_harness.py`). Faults are switches.
 
 use super::runner::{Out, Req, Runner};
 use std::collections::BTreeMap;
@@ -225,7 +225,7 @@ impl Runner for Sim {
                     ("script", _) => {
                         let released = self.tmp.join("released.txt");
                         let harness = self.tmp.join("harness.py");
-                        std::fs::write(&harness, include_str!("testkit_harness.py")).unwrap();
+                        std::fs::write(&harness, include_str!("test_ops_harness.py")).unwrap();
                         let dd = a.iter().position(|x| x == "--").unwrap();
                         let cfg = serde_json::json!({"i2c_devices": serde_json::from_str::<serde_json::Value>(&st.i2c_devices).unwrap(), "uart_reply": st.uart_reply, "gpio_count": 4, "fail_on_set": st.fail_pattern});
                         let out = std::process::Command::new("python3")

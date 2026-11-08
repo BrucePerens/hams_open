@@ -1304,6 +1304,77 @@ fn a_hung_or_failed_applet_ends_with_the_pins_parked() {
     );
 }
 
+// Tests [@ANCHOR: glasgow_ops_main]
+// Tests [@ANCHOR: glasgow_ops_i2c_scan]
+// Tests [@ANCHOR: glasgow_ops_i2c_read]
+// Tests [@ANCHOR: glasgow_ops_i2c_write]
+// Tests [@ANCHOR: glasgow_ops_uart_transact]
+// Tests [@ANCHOR: glasgow_ops_gpio_pattern]
+// Tests [@ANCHOR: glasgow_ops_swd_idcode]
+#[test]
+fn the_helper_script_runs_through_its_entry_in_every_applet_context() {
+    let r = rig("g_helper", "");
+    r.set_port("A", 3.3);
+    r.sim.st.lock().unwrap().uart_reply = "6869".into();
+    assert_eq!(
+        r.call(
+            "bench_glasgow_i2c_scan",
+            json!({"from_address": 0x20, "to_address": 0x30})
+        )
+        .unwrap()["addresses"],
+        json!([32])
+    );
+    assert_eq!(
+        r.call("bench_glasgow_i2c_read", json!({"address": 80, "count": 2}))
+            .unwrap()["hex"],
+        json!("0102")
+    );
+    assert_eq!(
+        r.call(
+            "bench_glasgow_i2c_write",
+            json!({"address": 80, "data_hex": "01", "confirm": true})
+        )
+        .unwrap()["written"],
+        json!(1)
+    );
+    assert_eq!(
+        r.call(
+            "bench_glasgow_uart_transact",
+            json!({"timeout_s": 1, "idle_ms": 50})
+        )
+        .unwrap()["hex"],
+        json!("6869")
+    );
+    assert_eq!(
+        r.call(
+            "bench_glasgow_pattern",
+            json!({"pins": "A0", "steps": [{"value": 1, "hold_ms": 1}], "confirm": true})
+        )
+        .unwrap()["steps_run"],
+        json!(1)
+    );
+    assert!(r.call("bench_glasgow_swd_idcode", json!({})).unwrap()["dpidr"].is_string());
+    let entry = std::fs::read_to_string(r.dir.join("out/glasgow_entry.py")).unwrap();
+    assert!(entry.contains("await _m.main(globals())") && entry.contains("bench_glasgow_ops.py"));
+    assert!(r.dir.join("out/bench_glasgow_ops.py").exists());
+}
+
+#[test]
+fn the_installer_and_pin_tools_pass_their_own_tests() {
+    let out = std::process::Command::new("python3")
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/glasgow/test_glasgow_tools.py"
+        ))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 // Tests [@ANCHOR: glasgow_prepare]
 #[test]
 fn prepare_builds_the_gateware_without_the_device_or_a_voltage() {

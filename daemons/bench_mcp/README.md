@@ -213,6 +213,15 @@ The Glasgow Interface Explorer (USB 20b7:9db1; UART, I2C, SPI, JTAG, SWD, logic 
 * The I/O voltage of a call is the recorded one, or the call is refused (and an expired port is switched off). [@ANCHOR: glasgow_volt_spec]
 * A number in the voltage table must be finite. [@ANCHOR: glasgow_parse_num]
 * The process runner gives glasgow its own cache and a clean environment. [@ANCHOR: glasgow_runner_command]
+* The helper script runs inside the applet's context through a one-line entry, prints one result line, and reports a device that does not acknowledge as a result, not a crash. [@ANCHOR: glasgow_ops_main]
+* An I2C scan probes each address of the range with an empty write. [@ANCHOR: glasgow_ops_i2c_scan]
+* An I2C read writes the register bytes and reads in one transaction (repeated start). [@ANCHOR: glasgow_ops_i2c_read]
+* An I2C write reports acknowledgement and the number of bytes written. [@ANCHOR: glasgow_ops_i2c_write]
+* A UART transaction sends, then collects until the terminator, silence, the byte limit or the time limit, and says which. [@ANCHOR: glasgow_ops_uart_transact]
+* A pattern is timed from the host, bounded in time, and releases every pin even when it fails. [@ANCHOR: glasgow_ops_gpio_pattern]
+* The SWD tool reads DPIDR and its fields and nothing else. [@ANCHOR: glasgow_ops_swd_idcode]
+* The installer refuses a source archive whose sha256 is not the pinned one before creating any venv, never reuses a directory, and hashes files in blocks. [@ANCHOR: glasgow_install_main] [@ANCHOR: glasgow_install_sha256] [@ANCHOR: glasgow_install_run]
+* The pin generator keeps only Linux wheels and sdists, with their sha256, and prints every pinned package. [@ANCHOR: glasgow_pin_hashes] [@ANCHOR: glasgow_pin_main]
 
 ## Checks this crate makes for the SDRs (anchors)
 

@@ -666,11 +666,19 @@ fn execute(
             }
         }
     }
-    let helper = ctx.out_dir.join("glasgow_ops.py");
+    let helper = ctx.out_dir.join("glasgow_entry.py");
     if p.script.is_some() {
+        // The helper module and a one-line entry that loads it into the applet's context (`glasgow script` evaluates the entry).
         let _ = std::fs::create_dir_all(&ctx.out_dir);
-        if std::fs::read_to_string(&helper).ok().as_deref() != Some(HELPER) {
-            std::fs::write(&helper, HELPER).map_err(|e| format!("{}: {e}", helper.display()))?;
+        let module = ctx.out_dir.join("bench_glasgow_ops.py");
+        let entry = format!(
+            "import importlib.util as _u\n_s = _u.spec_from_file_location(\"bench_glasgow_ops\", {})\n_m = _u.module_from_spec(_s)\n_s.loader.exec_module(_m)\nawait _m.main(globals())\n",
+            serde_json::Value::String(module.display().to_string())
+        );
+        for (path, text) in [(&module, HELPER), (&helper, entry.as_str())] {
+            if std::fs::read_to_string(path).ok().as_deref() != Some(text) {
+                std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+            }
         }
     }
     let mut args = build_args(&volts);
