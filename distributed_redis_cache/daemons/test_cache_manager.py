@@ -85,7 +85,7 @@ class DbEnvFileTests(unittest.TestCase):
 
 
 class DbEnvFilePrecedenceTests(unittest.TestCase):
-    """Tests [@ANCHOR: COMM_cache_manager_config]
+    """Tests [@ANCHOR: COMM_cache_manager_db_env_precedence]
 
     Found 2026-11-08 in the whole-system gate: the file used to be loaded with override=True for every key, so a test run
     serving its own slot database (DB_NAME=hams_test_s3) had the daemon LISTEN on the file's hams_test and never see the

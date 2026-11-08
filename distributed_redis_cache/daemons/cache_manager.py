@@ -41,6 +41,7 @@ DB_ENV_FILE = "/opt/hams/etc/keys/cache_manager/cache_manager_db.env"
 # The file's own DB_USER/DB_PASS always win over anything already exported (see below); its DB_HOST/DB_PORT/DB_NAME are only
 # defaults, so a value the caller exported (a test run serving a per-slot database, hams_test_s3, from a file that names the
 # host's hams_test) is kept. On a production host systemd loads the same file through EnvironmentFile=, so the two agree.
+# [@ANCHOR: COMM_cache_manager_db_env_precedence]
 def _apply_db_env_file(path, environ=None):
     environ = os.environ if environ is None else environ
     for name, value in dotenv_values(path).items():
