@@ -12,6 +12,12 @@
 //! | `bench_elad_capture` | read_config | a short I/Q recording to a cf32 file with a summary |
 //! | `bench_elad_spectrum` | read_config | a spectrum snapshot as a CSV with peaks |
 //! | `bench_elad_level` | read_config | the level at a frequency |
+//! | `bench_elad_tune` | read_config | applies a tuning and front-end state, streams nothing |
+//! | `bench_elad_detect` | read_config | signals near a frequency: refined frequency, level, SNR |
+//! | `bench_elad_sweep` | read_config | a band, retuned step by step, to a CSV |
+//!
+//! The receiver is single-owner: every open takes a lock file (`elad_usb::lock`) shared with the relay, so a second program is refused
+//! with the holder's name.
 //!
 //! An FDM-S1/S2 streams nothing until its FPGA image has been loaded by ELAD's own loader, which this server neither includes
 //! nor runs. The owner says it was loaded with `"fpga_loaded": true`; without it those units are identified but not streamed.
@@ -19,6 +25,7 @@
 //! The config entry: `{"driver": "elad", "tier": "read_config", "capture_dir": "/var/tmp/bench_elad", "fpga_loaded": false,
 //!   "max_capture_s": 5}`.
 
+mod measure;
 #[cfg(test)]
 pub mod testkit;
 
@@ -120,6 +127,27 @@ pub const SPECS: &[Spec] = &[
         required: &[],
     },
     Spec {
+        name: "bench_elad_tune",
+        tier: Tier::ReadConfig,
+        desc: "ELAD receiver, RECEIVE ONLY: applies `freq_hz` (within the receiver's range), the S2's `filters` and `attenuator` and reports the tuning word and the calibration offset for that state. Streams nothing (works on an FDM-S1/S2 with no FPGA image). The receiver keeps no tuning between calls, so this checks that the receiver accepts the state; the streaming tools take the same arguments.",
+        props: props!(r#"{COMMON}"#),
+        required: &["freq_hz"],
+    },
+    Spec {
+        name: "bench_elad_detect",
+        tier: Tier::ReadConfig,
+        desc: "ELAD receiver, RECEIVE ONLY: looks for signals around `freq_hz`: peaks at least `threshold_db` (default 10) over the noise floor, each with a frequency refined below one bin, its level in dBFS and its SNR in one bin. `detected` is false when nothing stands out. Peaks outside the usable 80 % of the span and the DC bins are ignored.",
+        props: props!(r#"{COMMON},"threshold_db":{"type":"number","description":"margin over the noise floor, 3 to 60 dB, default 10"},"fft_len":{"type":"integer","description":"FFT length, a power of two, 256 to 65536, default 4096"},"max_peaks":{"type":"integer","description":"1 to 20, default 5"}"#),
+        required: &["freq_hz"],
+    },
+    Spec {
+        name: "bench_elad_sweep",
+        tier: Tier::ReadConfig,
+        desc: "ELAD receiver, RECEIVE ONLY: sweeps `start_hz` to `stop_hz` by retuning in steps (default 40 % of the sample rate, at most 80 %), keeping the bins around each centre, and writes freq_hz,power_dbfs to a new CSV in capture_dir. Returns the noise floor and the strongest signals. At most 400 steps and 6 times the config's max_capture_s of running time; refused beforehand if more.",
+        props: props!(r#""instrument":{"type":"string"},"start_hz":{"type":"number","description":"lower edge of the band in Hz, within the receiver's range"},"stop_hz":{"type":"number","description":"upper edge of the band in Hz, above start_hz"},"step_hz":{"type":"number","description":"1 Hz to 80 % of rate_hz, default 40 %"},"rate_hz":{"type":"integer","description":"I/Q sample rate, default 192000"},"filters":{"type":"boolean","description":"FDM-S2 band filters in (default true)"},"attenuator":{"type":"boolean","description":"FDM-S2 attenuator on (default false)"},"name":{"type":"string","description":"CSV file name, must not exist"}"#),
+        required: &["start_hz", "stop_hz", "name"],
+    },
+    Spec {
         name: "bench_elad_capture",
         tier: Tier::ReadConfig,
         desc: "ELAD receiver, RECEIVE ONLY: tunes to `freq_hz`, streams `seconds` of I/Q at `rate_hz` and writes it to a new file `name` (interleaved little-endian 32-bit float I,Q: cf32) in the configured capture_dir. Returns the sample count, the measured rate against the asked one, bulk timeouts, RMS, peak, DC offset and clipped samples. An FDM-S1/S2 whose FPGA is not declared loaded is refused with the reason.",
@@ -158,14 +186,36 @@ impl Bench for Usb {
         elad_usb::usb::find().map_err(|e| next_step(&e.to_string()))
     }
     fn open(&self, found: &Found, opts: OpenOptions) -> Result<Radio<Box<dyn Transport>>, String> {
+        // [@ANCHOR: bench_mcp_elad_usb_open]
+        let lock = take_lock_in(&elad_usb::lock::lock_dir(), found)?;
         let t = elad_usb::usb::UsbTransport::open(found).map_err(|e| {
             next_step(&format!(
                 "could not open the receiver ({e}); on Linux the device node needs permission: install elad_usb/udev/70-elad-fdm.rules or grant an ACL on it"
             ))
         })?;
-        Radio::open(Box::new(t) as Box<dyn Transport>, found.model, opts)
-            .map_err(|e| next_step(&e.to_string()))
+        open_locked(lock, Box::new(t), found, opts)
     }
+}
+
+/// Takes the single-owner lock for `found`, so the relay (or another bench call) and this one never stream from one receiver at once.
+/// The refusal names the holder.
+fn take_lock_in(dir: &Path, found: &Found) -> Result<elad_usb::lock::DeviceLock, String> {
+    // [@ANCHOR: elad_take_lock]
+    elad_usb::lock::DeviceLock::acquire_in(dir, found.bus, found.address, "bench_mcp")
+        .map_err(|e| e.to_string())
+}
+
+/// A radio over `t` that holds `lock` until it is dropped.
+fn open_locked(
+    lock: elad_usb::lock::DeviceLock,
+    t: Box<dyn Transport>,
+    found: &Found,
+    opts: OpenOptions,
+) -> Result<Radio<Box<dyn Transport>>, String> {
+    // [@ANCHOR: elad_open_locked]
+    let t = elad_usb::lock::Locked::new(t, lock);
+    Radio::open(Box::new(t) as Box<dyn Transport>, found.model, opts)
+        .map_err(|e| next_step(&e.to_string()))
 }
 
 fn instrument<'a>(insts: &'a [Instrument], args: &Value) -> Result<&'a Instrument, String> {
@@ -309,16 +359,16 @@ struct Acquired {
     model: &'static str,
 }
 
-/// Opens the first receiver, tunes it, streams until `target` samples or `deadline_s`, stops, and returns the samples.
-/// Refuses an FDM-S1/S2 whose FPGA is not declared loaded before anything is sent.
-fn acquire(
-    bench: &dyn Bench,
-    cfg: &Config,
-    args: &Value,
-    target: usize,
-    deadline_s: f64,
-) -> Result<Acquired, String> {
-    // [@ANCHOR: elad_acquire]
+/// A receiver opened and tuned, not streaming.
+struct Tuned {
+    radio: Radio<Box<dyn Transport>>,
+    found: Found,
+    rate: u32,
+}
+
+/// Opens the first receiver at the asked rate and applies `freq_hz`, `filters` and `attenuator`. Nothing is started.
+fn open_tuned(bench: &dyn Bench, cfg: &Config, args: &Value) -> Result<Tuned, String> {
+    // [@ANCHOR: elad_open_tuned]
     let found = bench
         .find()?
         .into_iter()
@@ -358,44 +408,76 @@ fn acquire(
     } else if !filters || att {
         return Err(format!("the {} has no switchable filters or attenuator; leave `filters` and `attenuator` at their defaults", found.model.name()));
     }
+    Ok(Tuned { radio, found, rate })
+}
+
+/// Starts the stream; an FDM-S1/S2 whose FPGA is not declared loaded is refused before anything is sent.
+fn start_stream(radio: &mut Radio<Box<dyn Transport>>) -> Result<(), String> {
+    // [@ANCHOR: elad_start_stream]
     radio.start().map_err(|e| match e {
         ElError::FpgaImageRequired => format!("{e}. Nothing was sent to the receiver beyond identification and tuning. To stream, see the elad setup page and set \"fpga_loaded\": true only after the image really was loaded."),
         other => next_step(&other.to_string()),
-    })?;
+    })
+}
+
+/// Reads from a started stream until `target` samples or `deadline_s` seconds; returns the samples and the time taken. The caller stops
+/// the stream whatever the result.
+fn stream_samples(
+    radio: &mut Radio<Box<dyn Transport>>,
+    target: usize,
+    deadline_s: f64,
+) -> Result<(Vec<Iq>, f64), String> {
+    // [@ANCHOR: elad_stream_samples]
     let begin = Instant::now();
     let mut buf: Vec<f32> = Vec::new();
     let mut samples: Vec<Iq> = Vec::with_capacity(target.min(1 << 20));
-    let mut failure: Option<String> = None;
     while samples.len() < target && begin.elapsed().as_secs_f64() < deadline_s {
         buf.clear();
         match radio.read(&mut buf, READ_TIMEOUT) {
             Ok(_) => {
-                for p in buf.as_chunks::<2>().0 {
+                for [i, q] in buf.as_chunks::<2>().0 {
                     if samples.len() < target {
-                        samples.push((p[0], p[1]));
+                        samples.push((*i, *q));
                     }
                 }
             }
             Err(ElError::Timeout) => {}
             Err(e) => {
-                failure = Some(match e {
+                return Err(next_step(&match e {
                     ElError::NoSamples => format!("{e}. The FPGA image is probably not loaded (or was lost at power-up or at a rate change); the receiver was stopped"),
                     other => other.to_string(),
-                });
-                break;
+                }));
             }
         }
     }
     let elapsed_s = begin.elapsed().as_secs_f64();
-    let _ = radio.stop();
-    if let Some(f) = failure {
-        return Err(next_step(&f));
-    }
     if samples.is_empty() {
         return Err(next_step(
             "the receiver delivered no samples before the deadline",
         ));
     }
+    Ok((samples, elapsed_s))
+}
+
+/// Opens the first receiver, tunes it, streams until `target` samples or `deadline_s`, stops, and returns the samples.
+/// Refuses an FDM-S1/S2 whose FPGA is not declared loaded before anything is sent.
+fn acquire(
+    bench: &dyn Bench,
+    cfg: &Config,
+    args: &Value,
+    target: usize,
+    deadline_s: f64,
+) -> Result<Acquired, String> {
+    // [@ANCHOR: elad_acquire]
+    let Tuned {
+        mut radio,
+        found,
+        rate,
+    } = open_tuned(bench, cfg, args)?;
+    start_stream(&mut radio)?;
+    let got = stream_samples(&mut radio, target, deadline_s);
+    let _ = radio.stop();
+    let (samples, elapsed_s) = got?;
     Ok(Acquired {
         samples,
         rate_hz: rate,
@@ -660,6 +742,9 @@ pub fn call_with(
         "bench_elad_capture" => capture(bench, cfg, args),
         "bench_elad_spectrum" => spectrum(bench, cfg, args),
         "bench_elad_level" => level(bench, cfg, args),
+        "bench_elad_tune" => measure::tune(bench, cfg, args),
+        "bench_elad_detect" => measure::detect(bench, cfg, args),
+        "bench_elad_sweep" => measure::sweep(bench, cfg, args),
         _ => Err(format!("{name} does not apply to {:?}", inst.name)),
     }
 }

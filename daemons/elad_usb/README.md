@@ -92,3 +92,7 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_lock_file_name] The lock file name for a bus and address.
 - [@ANCHOR: elad_lock_read_holder] Reads who holds a lock, falling back to "another program".
 - [@ANCHOR: elad_lock_error_display] The refusal text: who holds the receiver and what to do.
+- [@ANCHOR: elad_locked_new] Ties a lock to a transport so the lock lives as long as the transport.
+- [@ANCHOR: elad_locked_control_in] A locked transport's control IN: passed through.
+- [@ANCHOR: elad_locked_control_out] A locked transport's control OUT: passed through.
+- [@ANCHOR: elad_locked_bulk_in] A locked transport's bulk IN: passed through.

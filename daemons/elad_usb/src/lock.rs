@@ -7,9 +7,12 @@
 //! The holder writes its pid and name into the file so the refusal can say who has the receiver. libusb's interface claim is a
 //! second, kernel-level guard against a program that does not use this lock.
 
+use crate::transport::Transport;
+use crate::Error;
 use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 /// Why a lock was not taken.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,6 +138,48 @@ fn read_holder(file: &mut File) -> String {
     }
 }
 
+/// A transport that owns the receiver's lock: the lock lives exactly as long as the transport, so a `Radio` built on it keeps the
+/// receiver to itself until it is dropped.
+pub struct Locked<T: Transport> {
+    inner: T,
+    _lock: DeviceLock,
+}
+
+impl<T: Transport> Locked<T> {
+    /// Ties `lock` to `inner`.
+    // [@ANCHOR: elad_locked_new]
+    pub fn new(inner: T, lock: DeviceLock) -> Locked<T> {
+        Locked { inner, _lock: lock }
+    }
+}
+
+impl<T: Transport> Transport for Locked<T> {
+    // [@ANCHOR: elad_locked_control_in]
+    fn control_in(
+        &mut self,
+        request: u8,
+        value: u16,
+        index: u16,
+        buf: &mut [u8],
+    ) -> Result<usize, Error> {
+        self.inner.control_in(request, value, index, buf)
+    }
+    // [@ANCHOR: elad_locked_control_out]
+    fn control_out(
+        &mut self,
+        request: u8,
+        value: u16,
+        index: u16,
+        data: &[u8],
+    ) -> Result<usize, Error> {
+        self.inner.control_out(request, value, index, data)
+    }
+    // [@ANCHOR: elad_locked_bulk_in]
+    fn bulk_in(&mut self, buf: &mut [u8], timeout: Duration) -> Result<usize, Error> {
+        self.inner.bulk_in(buf, timeout)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,5 +248,36 @@ mod tests {
         std::env::remove_var("ELAD_LOCK_DIR");
         let fallback = lock_dir();
         assert!(fallback == Path::new("/run/lock") || fallback == std::env::temp_dir());
+    }
+
+    #[test]
+    fn a_locked_transport_keeps_the_lock_until_it_is_dropped_and_passes_requests_through() {
+        // Tests [@ANCHOR: elad_locked_new]
+        // Tests [@ANCHOR: elad_locked_control_in]
+        // Tests [@ANCHOR: elad_locked_control_out]
+        // Tests [@ANCHOR: elad_locked_bulk_in]
+        use crate::transport::{FakeTransport, Op};
+        let d = dir("locked");
+        let fake = FakeTransport::new();
+        fake.reply(0xFF, 0, vec![3, 0]);
+        fake.queue_bulk(Ok(vec![1, 2, 3]));
+        let mut t = Locked::new(
+            fake.clone(),
+            DeviceLock::acquire_in(&d, 5, 6, "bench").unwrap(),
+        );
+        assert!(matches!(
+            DeviceLock::acquire_in(&d, 5, 6, "relay"),
+            Err(LockError::Held { .. })
+        ));
+        let mut b = [0u8; 2];
+        assert_eq!(t.control_in(0xFF, 0, 0, &mut b).unwrap(), 2);
+        assert_eq!(b, [3, 0]);
+        assert_eq!(t.control_out(0xF2, 1, 2, &[9]).unwrap(), 1);
+        let mut buf = [0u8; 8];
+        assert_eq!(t.bulk_in(&mut buf, Duration::from_millis(1)).unwrap(), 3);
+        assert_eq!(fake.ops().len(), 2);
+        assert!(matches!(fake.ops()[1], Op::Out { request: 0xF2, .. }));
+        drop(t);
+        assert!(DeviceLock::acquire_in(&d, 5, 6, "relay").is_ok());
     }
 }
