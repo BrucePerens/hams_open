@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 """Regression guards for pager_duty.user_pager_incident_creator's narrowed grant.
 
-Service-account privilege audit, 2026-09-14 (bug-hunt): this account is the identity
+Service-account privilege scope: this account is the identity
 report_incident(), _raise_trend_incident() and message_new() elevate to -- reachable from any
 daemon's report, any inbound email to the info@/postmaster@ aliases, and ham_relay_bridge's
 theft-case intake. It used to hold group_pager_service, byte-for-byte the same group list as

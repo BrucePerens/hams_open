@@ -92,7 +92,7 @@ class TestPagerDutyHooks(HamsTransactionCase):
 
     def test_reclaims_info_alias_from_crms_default_sales_team(self):
         # Tests [@ANCHOR: pager_duty_info_alias_claim]
-        # Real bug found live on hams1, 2026-09-22: crm was installed before
+        # Real failure mode on a production host: crm was installed before
         # this hook ever got a chance to run (post_init_hook only fires on a
         # fresh module install), so crm's own default Sales Team claimed
         # "info" first and the old "skip if anything already has it" logic

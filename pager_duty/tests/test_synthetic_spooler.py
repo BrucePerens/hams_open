@@ -57,7 +57,7 @@ class TestSyntheticSpooler(HamsTransactionCase):
         )
 
     def test_02b_sandbox_downloads_rejects_a_loopback_target(self):
-        # Bug-hunt fix, 2026-09-11: sandbox_downloads' own fetch runs in
+        # sandbox_downloads' own fetch runs in
         # this daemon's parent process, BEFORE the bwrap sandboxing
         # test_02_real_network_block above exercises is ever applied --
         # sandbox_network_access="loopback" (the default) only restricts
@@ -98,7 +98,7 @@ class TestSyntheticSpooler(HamsTransactionCase):
 
     def test_02d_sandbox_downloads_aborts_on_a_response_exceeding_the_size_cap(self):
         # Tests [@ANCHOR: synthetic_i18n]
-        # Bug-hunt fix, 2026-09-14: `response.read()` used to be called with
+        # `response.read()` must not be called with
         # no size bound at all, reading a whole HTTP response into memory in
         # one call -- since sandbox_downloads is re-fetched on every
         # `interval`, an oversized (compromised, misconfigured, or simply
