@@ -133,6 +133,19 @@ class TestWrapper(GuardCase, HamsTransactionCase):
         with self.assertLogs(policy._logger, "WARNING"), self.assertRaises(AccessError):
             service_model.get_public_method(model, "search_read")  # not in this daemon's entry
 
+    def test_a_portal_type_service_account_is_a_daemon_not_a_portal_visitor(self):
+        """Found by running the backup module's tests with the guard installed: the backup worker's service account is a
+        portal-type user, as most service accounts are, and was refused as a strict portal user."""
+        self._as_rpc()
+        daemon = build_persona(self.env, "portal_member")
+        self.safe_patch_object(type(self.env["ir.http"]), "_is_service_account_cached", new=lambda cls, uid: uid == daemon.user.id)
+        self.declared.clients[daemon.user.login] = {("res.partner", "read")}
+        model = daemon.env["res.partner"]
+        self.assertTrue(callable(service_model.get_public_method(model, "read")))
+        with self.assertLogs(policy._logger, "WARNING"), self.assertRaises(AccessError):
+            service_model.get_public_method(model, "search_read")
+        self.assertIn(("enforce", "service", "res.partner.search_read", "client-not-listed"), policy.verdict_counts())
+
     def test_a_certificate_subject_is_believed_only_from_a_trusted_proxy(self):
         # Tests [@ANCHOR: hams_rpc_guard:certificate_identity]
         utils = self.env["zero_sudo.security.utils"]

@@ -60,10 +60,11 @@ def describe_call(model, name, authors, exposure, cert=""):
     user = env.user
     if user._is_public():
         user_class, login = policy.USER_PUBLIC, ""
+    elif env["ir.http"]._is_service_account_cached(user.id):
+        # Before the portal test: on hams.com most service accounts are portal-type users (not in the internal group).
+        user_class, login = policy.USER_SERVICE, user.login
     elif not user._is_internal():
         user_class, login = policy.USER_PORTAL, ""
-    elif env["ir.http"]._is_service_account_cached(user.id):
-        user_class, login = policy.USER_SERVICE, user.login
     else:
         user_class, login = policy.USER_INTERNAL, ""
     defining = [cls for cls in type(model).mro() if name in cls.__dict__]
