@@ -12,6 +12,7 @@ import datetime
 import importlib.util
 import os
 import sys
+import time
 import unittest
 
 from odoo.tests.common import BaseCase, tagged
@@ -720,6 +721,33 @@ class TestRedirectToSpam(BaseCase):
         evidence = self._redirect_evidence("https://www.w9vcl.com/", SPAM_DESTINATION, home_url="http://w9vcl.com/")
         self.assertNotIn("redirect", evidence)
         self.assertEqual(spam.evaluate_evidence(evidence)["level"], spam.LEVEL_CLEAN)
+
+    def test_65_visible_text_keeps_the_visible_words_and_drops_hidden_elements(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_visible_text]
+        markup = ("<HEAD><title>T</title></head><p>one <b>two</b></p><Script type=x>var a = '<p>no</p>';</SCRIPT>"
+                  "<style>p{}</style><noscript>nojs</noscript> three <script>never closed <i>four</i> 1 < 2")
+        self.assertEqual(" ".join(spam._visible_text(markup).split()), "one two three never closed four 1 < 2")
+
+    def test_66_build_redirect_cost_is_linear_on_hostile_markup(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_visible_text]
+        # Tests [@ANCHOR: zero_sudo:club_spam_build_redirect]
+        # 100 kB of an unclosed opening tag took 7 to 10 s (every one rescanned to the end of the page). Linear code does
+        # it in a few hundredths of a second; the limit is 100 times that, so a loaded machine does not make it flaky but
+        # the quadratic code (seconds) fails. The scaling check (4x the input costs far less than 16x) fails it too.
+        for piece in ("<script ", "<head ", "<style ", "<noscript ", "<"):
+            with self.subTest(piece=piece):
+                costs = []
+                for size in (100_000, 400_000):
+                    markup = piece * (size // len(piece))
+                    started = time.perf_counter()
+                    redirect = spam.build_redirect("https://w9vcl.com/", "https://other.example.org/", markup)
+                    costs.append(time.perf_counter() - started)
+                    self.assertEqual(redirect["to"], "https://other.example.org/")
+                self.assertLess(costs[0], 2.0)
+                self.assertLess(costs[1], max(costs[0], 0.05) * 10)
+        started = time.perf_counter()
+        spam.build_redirect("https://w9vcl.com/", "https://other.example.org/", "<script " * 1_000_000)  # over the cap: cut
+        self.assertLess(time.perf_counter() - started, 5.0)
 
     def test_64_a_malformed_redirect_from_the_daemon_is_clean_not_an_error(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]

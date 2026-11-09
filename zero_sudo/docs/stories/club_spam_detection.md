@@ -132,6 +132,16 @@ to report). Otherwise a dict, the redirect evidence, with every field bounded: `
 `<head>` removed, entities decoded). Pure: makes no request and judges nothing. The dict is carried in the evidence as `"redirect"`
 (see `build_evidence`) and is serialized as JSON, evidence version 1 (an older Odoo ignores the key).
 
+### `_visible_text(markup)` `[@ANCHOR: zero_sudo:club_spam_visible_text]`
+
+| Item | Description |
+| --- | --- |
+| Purpose | The page text `build_redirect` judges: the destination's HTML with the script, style, noscript and head elements and every other tag blanked. The destination is an untrusted site, so the cost must not depend on how hostile its markup is. |
+| `markup` | str: the destination's HTML. Cut to `_MAX_MARKUP_CHARS` (2,500,000) characters first; the crawler's fetcher already caps a page at 2 MiB. |
+| Returns | str: the markup with each `<script ...>...</script>` (also style, noscript, head; any case) replaced by one space, then each `<...>` replaced by one space. Entities are not decoded here (`build_redirect` does that). An element whose closing tag never comes stays in place and is stripped as an ordinary tag, and a `<` with no `>` after it stays as text. |
+| Errors | None. |
+| Special | Pure, no network, no state, safe from any thread. Linear in the length of the input: two regular expressions did this before and each rescanned to the end of the page from every unclosed `<script ` or bare `<`, taking 7 to 10 seconds on 100 kB of repeated `<script ` or `<head `. A closing tag that is absent once is absent for every later opening tag of that name, which is what keeps it linear. Tests: `test_65`, `test_66`. |
+
 ### `redirect_is_spam(redirect)` `[@ANCHOR: zero_sudo:club_spam_redirect_is_spam]`
 
 `redirect` is the dict above, untrusted (it arrives from the daemon). True only when `from` and `to` are non-empty strings of
