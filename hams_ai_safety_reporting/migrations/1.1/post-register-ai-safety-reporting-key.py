@@ -15,6 +15,7 @@ from odoo.addons.hams_ai_safety_reporting.hooks import (
 )
 
 
+# [@ANCHOR: hams_ai_safety_reporting:migrate]
 def migrate(cr, version):
     if not version:
         return
