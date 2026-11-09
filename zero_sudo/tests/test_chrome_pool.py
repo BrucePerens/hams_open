@@ -183,6 +183,7 @@ class TestPooledChromeIsolation(HamsHttpCase):
             browser.navigate_to(self.base_url() + "/web/login", wait_stop=True)
 
     # Tests [@ANCHOR: zero_sudo:pooled_chrome_start]
+    # Tests [@ANCHOR: zero_sudo:start_pooled_chrome]
     # Tests [@ANCHOR: zero_sudo:patched_open_websocket]
     # Tests [@ANCHOR: zero_sudo:patched_read_log]
     def test_01_a_test_leaves_state_in_its_own_context(self):
