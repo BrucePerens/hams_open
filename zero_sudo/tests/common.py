@@ -346,7 +346,10 @@ def _kill_all_headless_chrome_for_this_uid():
     (the reinstated 2026-09-09 behaviour) and killed other runs' browsers once test slots allowed several (ADR 0116).
     Called before a new Chrome is spawned (_patched_spawn_chrome) and at the end of every test (HamsHttpCase.tearDown), so memory
     held by an incompletely torn-down tour is reclaimed at once."""
-    for p in _headless_chrome_of_this_run():
+    found = _headless_chrome_of_this_run()
+    if not found:
+        return  # nothing to reap: no reason to pay the half-second wait below (every test's tearDown comes through here)
+    for p in found:
         try:
             p.kill()
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, KeyError) as e:
@@ -1720,9 +1723,10 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
         super().setUp()
         self.opener.verify = False
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        # Initialize CDP hook after super() creates self.browser
-        # Start Chrome
-        self.start_hams_browser()
+        # No Chrome is started here. Until 2026-11-08 every test of every HamsHttpCase class started one, although
+        # most never use it (a url_open test, a model test in an HTTP class), and a tour's own `browser_js()` builds
+        # a second browser, whose spawn reaps the first. A test that needs a browser outside a tour asks for it
+        # (`start_hams_browser()`, `navigate_and_screenshot()`); `self.browser` stays None until then, as in core.
 
     # [@ANCHOR: zero_sudo:hams_http_case_start_hams_browser]
     def start_hams_browser(self):

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from odoo.tests.common import HOST, tagged
+from . import common
 from .common import HamsHttpCase, HamsTransactionCase, _patched_handle_request_paused
 
 
@@ -104,6 +105,20 @@ class TestZeroSudoViews(HamsHttpCase):
         """Verify that the security.log views compile and render correctly."""
         self.env["zero_sudo.security.log"].get_view(view_type="form")
         self.env["zero_sudo.security.log"].get_view(view_type="list")
+
+    def test_05_no_browser_is_started_until_a_test_asks_for_one(self):
+        # Tests [@ANCHOR: zero_sudo:hams_http_case_setup]
+        # Tests [@ANCHOR: zero_sudo:hams_http_case_start_hams_browser]
+        # (setUp used to start a headless Chrome for every test of the class, tours included, whose browser_js() then
+        # reaped it and built its own)
+        self.assertIsNone(self.browser, "setUp must not start a Chrome")
+        started = self.safe_patch_object(common, "ChromeBrowser")
+        try:
+            first = self.start_hams_browser()
+            self.assertIs(self.start_hams_browser(), first, "a second request reuses the test's browser")
+            started.assert_called_once_with(self, headless=True)
+        finally:
+            self.browser = None  # a mock must not reach tearDown's process clean-up
 
 
 @tagged("post_install", "-at_install")
