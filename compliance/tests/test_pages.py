@@ -106,9 +106,9 @@ class TestCompliancePagesHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 200, msg_status)
         msg_text = "[!] DIAGNOSTIC FOR AI: Page /accessibility should contain boilerplate content. Check the rendering."
         self.assertTrue(bool(re.search(r"Policy|Terms", response.text)), msg_text)
-        # The statement names the display choices and the colour-vision palette (theme_hams, "Display and reading").
-        for phrase in ("Display and Reading Choices", "Colour-vision safe", "protanopia, deuteranopia, tritanopia"):
-            self.assertIn(phrase, response.text, "The accessibility statement should say: %s" % phrase)
+        # The display and reading choices section is supplied by a theme that has the panel (theme_hams; tested there), so
+        # compliance itself only promises the contact section.
+        self.assertIn("Feedback", response.text, "The accessibility statement should say how to send feedback")
 
     def test_generic_site_search_does_not_crash_on_legal_pages(self):
         # /website/search?search=forum&order=name+asc
@@ -422,3 +422,18 @@ class TestCookiesBarName(HamsHttpCase):
         self.assertEqual(len(bars), 1, "setup sanity check: the cookie bar must be on the page.")
         self.assertEqual(bars[0].get("role"), "dialog")
         self.assertEqual(bars[0].get("aria-label"), "Cookie preferences")
+
+
+@tagged("post_install", "-at_install")
+class TestAccessibilityStatementPanelSlot(HamsTransactionCase):
+    def test_statement_itself_does_not_describe_a_panel_it_cannot_provide(self):
+        # [@ANCHOR: COMM_test_accessibility_statement_has_no_theme_only_panel_text]
+        # Tests [@ANCHOR: COMM_compliance_accessibility_display_slot]
+        # The panel exists only in theme_hams, so compliance's own template (before any inheriting view) leaves an empty
+        # slot for it. A site without that theme must not be told about a "Display and reading" panel.
+        view = self.env.ref("compliance.compliance_accessibility_statement_template")
+        arch = view.arch_db
+        self.assertNotIn("Display and reading", arch)
+        self.assertNotIn("Display and Reading", arch)
+        self.assertIn('id="accessibility_display_choices"', arch)
+        self.assertIn("3. Feedback", arch)
