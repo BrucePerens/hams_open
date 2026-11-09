@@ -47,9 +47,9 @@ class TestIsSsrfSafePublicIp(HamsTransactionCase):
 @tagged("post_install", "-at_install")
 class TestSafeResponseGeturl(HamsTransactionCase):
     # Tests [@ANCHOR: binary_utils_safe_response_geturl]
-    # Bug-hunt fix, 2026-09-11: was inline `getattr(response, "geturl", lambda: None)()`
+    # Replaces an inline `getattr(response, "geturl", lambda: None)()`
     # (a 3-argument getattr(), forbidden by check_burn_list.py's own
-    # CRITICAL AI LAZINESS rule) -- extracted into this one, tested, centralized helper,
+    # CRITICAL AI LAZINESS rule) with this one, tested, centralized helper,
     # identity-gated in the linter by file path + function name, matching the
     # try_enable_line_buffering() precedent in ingest/daemon_utils.py.
 
@@ -97,8 +97,8 @@ class TestBinaryManifest(HamsTransactionCase):
             "binary_downloader.user_binary_downloader_service"
         )
 
-        # Bug-hunt fix, 2026-09-09 (binary_utils_assert_host_is_ssrf_safe):
-        # _download_and_extract() now does a real DNS lookup (via
+        # (binary_utils_assert_host_is_ssrf_safe)
+        # _download_and_extract() does a real DNS lookup (via
         # socket.getaddrinfo) on the download URL's hostname before making
         # any request, to reject SSRF-style targets (loopback/link-local/
         # private-use addresses, and a redirect landing on one). Every test
@@ -769,11 +769,11 @@ class TestBinaryManifest(HamsTransactionCase):
 
     def test_21_unlink_batch_deletes_the_file_when_every_sharing_record_is_removed_together(self):
         # Tests [@ANCHOR: binary_manifest_unlink]
-        # Bug-hunt fix, 2026-09-09: unlink()'s own reference-counting used
-        # a GLOBAL count of every manifest/version sharing a checksum,
-        # taken before any deletion -- so unlinking two records sharing a
+        # unlink()'s own reference-counting must not rely solely on a
+        # GLOBAL count of every manifest/version sharing a checksum,
+        # taken before any deletion -- otherwise unlinking two records sharing a
         # checksum in the SAME call (e.g. multi-select delete in the UI)
-        # saw count=2 for BOTH of them and skipped deletion of both,
+        # would see count=2 for BOTH of them and skip deletion of both,
         # leaking their on-disk files forever even though nothing outside
         # this exact call referenced that checksum. Two distinct names
         # sharing a checksum still map to two distinct physical files
@@ -835,8 +835,8 @@ class TestBinaryManifest(HamsTransactionCase):
     def test_22_interrupted_archive_extraction_never_leaves_a_partial_file_at_the_final_path(self):
         # Tests [@ANCHOR: binary_utils_download_and_extract]
         # Tests [@ANCHOR: binary_utils_atomic_write_target]
-        # Bug-hunt fix, 2026-09-09: tar.gz/zip member extraction used to
-        # write straight to `open(target_bin, "wb")` -- not atomic. If the
+        # tar.gz/zip member extraction must not write straight to
+        # `open(target_bin, "wb")` -- not atomic. If the
         # process were interrupted mid-write, a truncated file would be
         # left sitting exactly at target_bin's own path, and
         # _download_and_extract's own "already installed" fast path
@@ -952,7 +952,7 @@ class TestBinaryManifest(HamsTransactionCase):
 
 @tagged("post_install", "-at_install", "standard")
 class TestBinarySsrfProtection(HamsTransactionCase):
-    # Bug-hunt fix, 2026-09-09 (binary_utils_assert_host_is_ssrf_safe):
+    # (binary_utils_assert_host_is_ssrf_safe)
     # exercises the real SSRF-safety check end to end. Deliberately its own
     # class, with none of TestBinaryManifest's blanket mock of this exact
     # method -- every case here uses a literal IP address so nothing needs
