@@ -152,10 +152,9 @@ def get_odoo_client(logger, config):
     # into the key file it provisions for every daemon (keys/pager_duty.env on hams1), so a unit that loads that file works
     # without a translation step. The own names win when both are set.
     user = os.environ.get("ODOO_USER") or os.environ.get("ODOO_RPC_LOGIN") or "pager_service_internal"
-    # Real bug, found by bug-hunt review (tier 1): this used to silently
-    # fall back to an empty-string password when ODOO_PASSWORD wasn't set
-    # (e.g. a typo'd var name or a missing line in /etc/pager_daemons.env),
-    # instead of failing loudly -- the exact anti-pattern
+    # Never silently fall back to an empty-string password when ODOO_PASSWORD
+    # isn't set (e.g. a typo'd var name or a missing line in
+    # /etc/pager_daemons.env); fail loudly instead -- the exact anti-pattern
     # pager_mcp_server.py's own _get_client() explicitly calls out and
     # avoids for this same credential category ("a missing key must fail
     # loudly, not silently degrade to an unauthenticated ... call"). This
@@ -260,10 +259,9 @@ def verify_and_install_dependencies(client, checks):
                 time.sleep(10)  # audit-ignore-sleep
 
             if not success:
-                # Real bug, found by bug-hunt review (tier 1): the
-                # report-incident-and-exit block below used to be at this
-                # same indentation level as this `if not success:` guard
-                # (a sibling, not nested inside it) -- so it ran
+                # The report-incident-and-exit block below must stay nested
+                # inside this `if not success:` guard. As a sibling at the
+                # same indentation level it would run
                 # unconditionally, even when the retry loop above *did*
                 # eventually provision the dependency (success=True). On
                 # the success path `msg` was never assigned, so the
@@ -2197,7 +2195,7 @@ def log_tail_thread(client, check):
                         )
             else:
                 time.sleep(1)  # audit-ignore-sleep
-        # Widened from FileNotFoundError alone (bug-hunt review, tier 1):
+        # Catches more than FileNotFoundError:
         # a rotated-away log file can also raise PermissionError or other
         # OSError subclasses during os.stat()/open() (e.g. a logrotate
         # permissions hiccup), which used to be uncaught here and would
@@ -2283,7 +2281,7 @@ if __name__ == "__main__":
 
     verify_and_install_dependencies(client, checks)
 
-    # Bug-hunt fix (2026-09-13): this pool submits one infinite-loop task
+    # Pool sizing: this pool submits one infinite-loop task
     # per check PLUS 2 always-on proxy threads (log_anomaly_proxy,
     # log_search_proxy, submitted below before the per-check loop) --
     # len(checks) + 2 tasks total, not len(checks) + 1. Since every task
@@ -2313,9 +2311,8 @@ if __name__ == "__main__":
             password=REDIS_PASS,
             decode_responses=True,
         )
-        # Bug-hunt fix (2026-09-13): this thread was never covered by the
-        # THREAD_HEARTBEATS watchdog below (main_loop.md's own claim
-        # flagged this) -- a Redis connection that accepts the TCP
+        # This thread must be covered by the THREAD_HEARTBEATS watchdog
+        # below -- a Redis connection that accepts the TCP
         # handshake but never responds would hang here with blpop's own
         # 5s timeout never firing (some intermediary proxy), and the
         # watchdog would never notice since this thread never appeared as
@@ -2363,7 +2360,7 @@ if __name__ == "__main__":
             password=REDIS_PASS,
             decode_responses=True,
         )
-        # Bug-hunt fix (2026-09-13): same watchdog-coverage gap and fix as
+        # Same watchdog coverage requirement as
         # log_anomaly_proxy above -- see its own comment, including why
         # this uses the file's own 300s floor rather than a tighter bound.
         THREAD_TIMEOUTS["log_search_proxy"] = 300

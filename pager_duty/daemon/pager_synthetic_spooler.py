@@ -17,7 +17,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Bug-hunt fix, 2026-09-14: the SSRF classification predicate + the
+# The SSRF classification predicate + the
 # resolve-and-pin fetch mechanism used to be duplicated here in pure-stdlib
 # form (see the "Ported from binary_downloader" note below, kept for
 # history) because this file has no Odoo import at all (it's a real,
@@ -51,8 +51,8 @@ from ssrf_safe_fetch import (  # noqa: E402
 
 # Ported from binary_downloader/models/binary_utils.py's own
 # _is_ssrf_safe_public_ip/_assert_host_is_ssrf_safe (that module's own
-# 2026-09-09 bug-hunt fix for the identical shape of bug in a different
-# download path) rather than reinventing the check -- as of 2026-09-14 both
+# SSRF guard for the identical shape of bug in a different
+# download path) rather than reinventing the check -- both
 # this function and _assert_host_is_ssrf_safe below are thin wrappers
 # around the shared zero_sudo.daemon.ssrf_safe_fetch implementation
 # (imported above), not a fresh duplicate -- kept as real functions (not a
@@ -79,7 +79,7 @@ def _assert_host_is_ssrf_safe(hostname, context):
 # convention.
 SPOOL_FILE = os.environ.get("HAMS_SYNTHETIC_SPOOL_PATH") or "/var/log/pager_synthetic_spool.json"
 
-# Bug-hunt fix, 2026-09-14: hard ceiling on a single sandbox_downloads fetch.
+# Hard ceiling on a single sandbox_downloads fetch.
 # Module-level (not a local constant) so a test can override it without a
 # multi-hundred-MB fixture. A `pager.check` whose `sandbox_downloads` target
 # is compromised, misconfigured, or simply serves an unexpectedly large
@@ -121,7 +121,7 @@ def execute_check(check):
                             headers={"User-Agent": "Pager-Synthetic-Spooler/1.0 (+https://crawler.hams.com)"}
                         )
                         try:
-                            # Bug-hunt fix, 2026-09-14: _urlopen_ssrf_safe()
+                            # _urlopen_ssrf_safe()
                             # (not plain urllib.request.urlopen()) resolves
                             # + validates + pins the real connection to the
                             # validated address on every hop (this request
@@ -140,7 +140,7 @@ def execute_check(check):
                                 final_url = getattr(response, "geturl", lambda: None)()
                                 if isinstance(final_url, str) and final_url:
                                     _assert_host_is_ssrf_safe(urlparse(final_url).hostname, name)
-                                # Bug-hunt fix, 2026-09-14: stream in bounded
+                                # Stream in bounded
                                 # chunks and enforce MAX_SANDBOX_DOWNLOAD_BYTES
                                 # as we go (not via a trusted, attacker-
                                 # controlled Content-Length header, which a
@@ -331,11 +331,10 @@ def execute_check(check):
     except (OSError, subprocess.SubprocessError) as e:
         logger.warning("Execution error: %s", e)
         res["error"] = str(e)
-    # Real bug, found by bug-hunt review (tier 1): the `raise ValueError(...)`
-    # (bad sandbox_downloads URL scheme) and `raise Exception(...)` (checksum
-    # mismatch) a few lines above are neither OSError nor
-    # subprocess.SubprocessError, so they used to escape this function
-    # entirely uncaught. main() submits execute_check() per check via a
+    # The `raise ValueError(...)` (bad sandbox_downloads URL scheme) and
+    # `raise Exception(...)` (checksum mismatch) a few lines above are
+    # neither OSError nor subprocess.SubprocessError, so they would escape
+    # this function entirely uncaught without this handler. main() submits execute_check() per check via a
     # ThreadPoolExecutor and calls future.result() inside a try that only
     # catches concurrent.futures.CancelledError -- so one check with a bad
     # download URL or a flaky/replaced download (checksum mismatch) would
@@ -359,11 +358,10 @@ def execute_check(check):
 def main():
     config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
     if not os.path.exists(config_path):
-        # Real bug, found by bug-hunt review (tier 1): this branch used to
-        # return 1 with no log line at all, and the `if __name__ ==
-        # "__main__":` guard below called `main()` without `sys.exit(...)`,
-        # so a missing config file made the process exit cleanly (code 0)
-        # having logged nothing whatsoever -- under
+        # This branch must log before returning 1: with no log line, and
+        # with the `if __name__ == "__main__":` guard below calling `main()`
+        # without `sys.exit(...)`, a missing config file would make the
+        # process exit cleanly (code 0) having logged nothing whatsoever -- under
         # pager-synthetic-spooler.service's `Restart=always`/`RestartSec=10`
         # that's a completely silent crash-loop (systemd restarts on ANY
         # exit under Restart=always, clean or not) instead of the loud,
@@ -417,8 +415,7 @@ def main():
 
 
 if __name__ == "__main__":
-    # Real bug, found by bug-hunt review (tier 1): this used to call
-    # main() without sys.exit(...), so main()'s own `return 1` on a
-    # missing/unparseable config was silently discarded -- the process
-    # always exited 0 regardless of whether it actually did anything.
+    # Always pass main()'s result to sys.exit(...): otherwise main()'s own
+    # `return 1` on a missing/unparseable config is silently discarded and
+    # the process always exits 0 regardless of whether it did anything.
     sys.exit(main())

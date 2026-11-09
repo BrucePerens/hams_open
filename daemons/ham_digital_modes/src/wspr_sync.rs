@@ -2810,7 +2810,7 @@ mod tests {
         // correction to a global noise_stddev can fix that. This is
         // consistent with, and sharpens, this file's earlier "decoder
         // algorithm capability gap" conclusion (see the top-level
-        // doc-comment history and night_shift_todo.md) -- but the gap is
+        // doc-comment history) -- but the gap is
         // now precisely located: a per-symbol (not global-scalar)
         // reliability/confidence model is what `wsprd`'s real decoder
         // has and this one doesn't, not a vaguer "the search algorithm
@@ -2844,7 +2844,7 @@ mod tests {
         );
     }
 
-    /// Same bug class, the other trigger named in `find_sync()`'s own
+    /// Same class of failure, the other trigger named in `find_sync()`'s own
     /// doc comment: `freq_hi_hz = f64::INFINITY` used to overflow the
     /// `bin_hi = ... as usize + 3` addition and panic with "attempt to
     /// add with overflow" (Rust's float-to-int cast saturates infinity
@@ -2955,7 +2955,7 @@ mod tests {
     /// Confirms the fix didn't tighten the valid range: a `base_hz`
     /// exactly at (or safely under) the Nyquist frequency, and a
     /// `freq_hi_hz` exactly at Nyquist, must still work exactly as
-    /// before -- this bug-hunt pass's fix is a new lower/upper bound
+    /// before -- the guard is a lower/upper bound
     /// check, not a change to the values that were already valid.
     #[test]
     fn nyquist_boundary_frequencies_still_work_normally() {

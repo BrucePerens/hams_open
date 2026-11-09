@@ -15,10 +15,9 @@ REMOTE_ADDR genuinely is one of Cloudflare's published ranges. Without this, a s
 in that topology had no way to let Odoo trust CF-* headers at all -- the existing loopback-only
 check can never match a real network peer.
 
-Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-ranges-
-on-tunnel-only-deployments-7d2b8f14.md): the effective list used to default to Cloudflare's own
-published ranges unconditionally, on every install, Tunnel-only or not. That is backwards for a
-Tunnel-only deployment: its origin is never reachable from Cloudflare's ranges at all (the only
+The effective list must NOT default to Cloudflare's own published ranges on every install,
+Tunnel-only or not. That would be backwards for a Tunnel-only deployment: its origin is never
+reachable from Cloudflare's ranges at all (the only
 peer that can ever connect is loopback), so seeding the trust set with them added trust the
 deployment did not need -- "a peer in Cloudflare's ranges" does not mean "this site's Cloudflare
 zone", it means "any Cloudflare customer's zone", so if an origin port were ever exposed directly

@@ -110,7 +110,7 @@ class CloudflareTunnel(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_check_tunnel_caller_authorized]
     def _check_tunnel_caller_authorized(self):
-        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): same shape as
+        # Same shape as
         # cloudflare.config.manager's own _check_waf_caller_authorized --
         # action_sync_tunnels is a public (non-underscore-prefixed)
         # @api.model method, directly dispatchable via /web/dataset/call_kw
@@ -245,17 +245,15 @@ class CloudflareTunnel(models.Model):
             if not success:
                 raise UserError(_("Failed to push configuration: %s") % msg)
 
-        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): this notification
-        # return used to live INSIDE the `for tunnel in self:` loop above,
-        # at the same indent as the `payload =`/`update_cfd_tunnel_
-        # configuration(...)` lines -- so calling this action on more than
-        # one selected tunnel (the normal multi-select list-view case)
-        # pushed configuration to only the first tunnel in the batch and
-        # returned immediately, silently skipping every other tunnel in
+        # This notification return must live OUTSIDE the `for tunnel in self:`
+        # loop above. Returning from inside it (at the same indent as the
+        # `payload =`/`update_cfd_tunnel_configuration(...)` lines) would, for
+        # more than one selected tunnel (the normal multi-select list-view
+        # case), push configuration to only the first tunnel in the batch and
+        # return immediately, silently skipping every other tunnel in
         # `self` while still showing "Successfully pushed configuration"
-        # as if the whole batch succeeded. Moved outside the loop so every
-        # tunnel in `self` is actually processed before the one summary
-        # notification is returned.
+        # as if the whole batch succeeded. Every tunnel in `self` is processed
+        # before the one summary notification is returned.
         # Simple notification since mail.thread isn't used
         if warn_tunnels:
             return {
@@ -289,28 +287,18 @@ class CloudflareTunnel(models.Model):
         # [@ANCHOR: COMM_cf_delete_tunnel]
 
         # # Verified by [@ANCHOR: COMM_test_cf_delete_tunnel]
-        # Bug fix (bug-hunt, review_tier 1, 2026-09-09), corrected same
-        # day after an advisor review caught the first version of this
-        # fix was transactionally inert: this used to collect every
-        # successfully-remote-deleted tunnel into `tunnels_to_unlink` and
-        # unlink them all in one batch AFTER the loop, with a `raise
-        # UserError` on any tunnel's failure INSIDE the loop -- so a later
-        # tunnel's failure aborted before that batched unlink() ever ran.
-        # A first fix attempt moved the unlink() to run immediately after
-        # each success, still inside the loop, still followed by `raise
-        # UserError` on a later failure -- but a single Odoo RPC request
-        # is one DB transaction that only commits at the very end; an
-        # uncaught exception ANYWHERE in the request rolls the whole
-        # transaction back, including every unlink() already executed
-        # earlier in the same Python call, regardless of when in the
-        # function they ran. That first fix was therefore transactionally
-        # identical to the original bug -- verified by re-reading Odoo's
-        # own request-dispatch/commit model, not assumed. The real fix:
-        # stop raising when a partial success has already happened, since
-        # raising is what discards it. Failures are now collected instead
-        # of raised immediately; each successful remote delete is unlinked
-        # locally as it happens; and only THEN does the method decide how
-        # to report failures:
+        # A single Odoo RPC request is one DB transaction that only commits
+        # at the very end; an uncaught exception ANYWHERE in the request
+        # rolls the whole transaction back, including every unlink() already
+        # executed earlier in the same Python call, regardless of when in the
+        # function they ran. So neither batching the local unlink() after the
+        # loop nor unlinking right after each remote success preserves partial
+        # progress if a later tunnel's failure is reported with `raise
+        # UserError` inside the loop: raising is what discards the partial
+        # success. Instead, failures are collected rather than raised
+        # immediately; each successful remote delete is unlinked locally as
+        # it happens; and only THEN does the method decide how to report
+        # failures:
         failures = []
         for tunnel in self:
             token, _zone = tunnel.website_id._get_cloudflare_credentials()
@@ -325,13 +313,12 @@ class CloudflareTunnel(models.Model):
 
             success, msg = delete_cfd_tunnel(account_id, token, tunnel.cf_tunnel_id)
             if success:
-                # 2026-09-26: now that a tunnel's cloudflared instance is a real, persistent
-                # systemd --user unit (Restart=always, survives Odoo restarts) rather than an
-                # in-process Python loop that quietly stopped existing once its own worker
-                # process ended, deleting the tunnel record here without also stopping that
+                # A tunnel's cloudflared instance is a real, persistent
+                # systemd --user unit (Restart=always, survives Odoo restarts), not an
+                # in-process Python loop that stops once its own worker process ends,
+                # so deleting the tunnel record here without also stopping that
                 # unit would leave it running forever against a Cloudflare-side tunnel that
-                # was JUST deleted above -- a real, permanent orphan this refactor makes newly
-                # possible, not a pre-existing gap being left alone.
+                # was JUST deleted above -- a permanent orphan.
                 stop_tunnel_daemon(tunnel.cf_tunnel_id)
                 # ADR-0001: Headless Mutation Context
                 tunnel.unlink()
@@ -375,11 +362,11 @@ class CloudflareTunnel(models.Model):
         websites = self.env["website"].search([], limit=1000)
         for website in websites:
             # We sync synchronously because this is called via cron or manually, and we don't have queue_job.
-            # Bug-hunt fix, 2026-09-11: an uncaught exception from any one website's sync (a
-            # Cloudflare API failure, a malformed response, a DB constraint violation) used to
-            # propagate straight out of this loop, aborting the sync for every OTHER website in
-            # the same cron/manual run -- a transient failure on one customer's tunnels silently
-            # starved every other website's sync until the next scheduled run. Isolating each
+            # An uncaught exception from any one website's sync (a
+            # Cloudflare API failure, a malformed response, a DB constraint violation) must not
+            # propagate out of this loop, which would abort the sync for every OTHER website in
+            # the same cron/manual run -- a transient failure on one customer's tunnels would silently
+            # starve every other website's sync until the next scheduled run. Isolating each
             # website's sync in its own savepoint (not just a bare try/except) matters
             # specifically for a DB-level failure: once a query raises inside a transaction,
             # Postgres marks the whole transaction aborted and refuses every further query on

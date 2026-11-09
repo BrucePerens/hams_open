@@ -148,7 +148,7 @@ class TestPagerSecurity(HamsTransactionCase):
             self.env["pager.check"].with_user(self.user_std).rpc_ensure_executable("ping")
 
     def test_02c_rpc_ensure_executable_rejects_an_unrelated_service_account(self):
-        # Bug-hunt refresh, 2026-09-27: the caller gate added by test_02b also accepted a bare
+        # The caller gate added by test_02b also accepted a bare
         # `user.is_service_account`, i.e. EVERY service account in the database, not just the
         # groups ir.model.access.csv actually grants pager.check access to. The clearest
         # counterexample is this module's own pager_incident_creator account, whose group

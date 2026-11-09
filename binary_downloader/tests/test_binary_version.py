@@ -78,9 +78,8 @@ class TestBinaryVersion(HamsTransactionCase):
             )
             self.env.flush_all()
 
-        # Bug-hunt fix, 2026-09-11: binary_manifest.py's own sibling check
-        # (_check_name_no_slashes) already blocks bare "."/".." in addition to slashes --
-        # this constraint didn't, until now.
+        # binary_manifest.py's own sibling check (_check_name_no_slashes)
+        # blocks bare "."/".." in addition to slashes -- this constraint must too.
         for bad_version in (".", ".."):
             with self.assertRaises(
                 ValidationError,

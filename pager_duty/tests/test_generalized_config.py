@@ -165,7 +165,7 @@ class TestGeneralizedConfig(HamsTransactionCase):
         0o600. The os.open(..., 0o600) mode argument only applies on CREATION, so every
         export after the first one (and any file left behind by a pre-fix export) kept the
         old permissive mode while this method writes plaintext dbpass/SMTP credentials into
-        it -- Known Bug Class 11."""
+        it (credential file permissions)."""
         # Tests [@ANCHOR: generalized_pager_config]
         check_model = self.env["pager.check"].with_user(self.admin)
         with tempfile.TemporaryDirectory() as tmp:

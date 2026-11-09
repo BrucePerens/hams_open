@@ -36,12 +36,11 @@ _logger = logging.getLogger(__name__)
 MAX_DOWNLOAD_SIZE_BYTES = 1024 * 1024 * 1024
 
 
-# Bug-hunt finding, 2026-09-09 (binary_utils_download_and_extract, bug class
-# 26-shaped): this module's own https-only/URL-scheme checks are real
-# protection against ONE thing (a non-HTTP(S) scheme), but nothing here
-# validated *where* an https:// URL actually points, or where it could be
-# redirected to. An https:// manifest/version URL an admin or the
-# binary_downloader manager group controls could 302-redirect to a
+# SSRF protection (binary_utils_download_and_extract): this module's own
+# https-only/URL-scheme checks protect against ONE thing (a non-HTTP(S)
+# scheme); they do not validate *where* an https:// URL actually points, or
+# where it could be redirected to. An https:// manifest/version URL an
+# admin or the binary_downloader manager group controls could 302-redirect to a
 # loopback/link-local/private-use address (the classic
 # http://169.254.169.254/... cloud-metadata target, or any other
 # internal-only service reachable from the Odoo host) and urllib's default
@@ -51,18 +50,17 @@ MAX_DOWNLOAD_SIZE_BYTES = 1024 * 1024 * 1024
 # the fetched bytes ever pass the checksum check that gates actual
 # extraction/installation.
 #
-# Bug-hunt fix, 2026-09-14 (binary_utils_is_ssrf_safe_public_ip /
-# binary_utils_assert_host_is_ssrf_safe): the classification predicate and
-# the resolve+pin mechanism both now live in
+# (binary_utils_is_ssrf_safe_public_ip / binary_utils_assert_host_is_ssrf_safe):
+# the classification predicate and the resolve+pin mechanism both live in
 # `zero_sudo.daemon.ssrf_safe_fetch` (imported above), shared with
 # `pager_duty/daemon/pager_synthetic_spooler.py`'s own independently-
 # duplicated copy of this exact check -- see that module's own docstring for
 # why `zero_sudo` (a module both `binary_downloader` and `pager_duty` already
-# depend on) is the shared home, and why this used to be a real
-# DNS-rebinding TOCTOU (this predicate's own hostname validation and the
-# actual `urlopen()` connection used to be two separate, independently-timed
-# DNS lookups; the real fix pins the connection to the exact address this
-# predicate already validated, rather than trusting a second lookup). Kept
+# depend on) is the shared home, and why a separate hostname validation and
+# `urlopen()` connection would be a DNS-rebinding TOCTOU (two separate,
+# independently-timed DNS lookups; the connection is instead pinned to the
+# exact address this predicate already validated, rather than trusting a
+# second lookup). Kept
 # as a real, thin, anchored wrapper (not a bare re-export) so this anchor
 # stays attached to a real function span for `check_claims_freshness.py`'s
 # own AST-based hashing, and every existing caller/test of
@@ -111,13 +109,14 @@ class BinaryDownloaderMixin(models.AbstractModel):
                 _("Auto-install of %s is only supported on Linux x86_64/aarch64/armv7l. Please install manually.") % cmd_name
             )
         
-        # Bug-hunt fix, 2026-09-09: was "http:// and https://" here, weaker
-        # than the https-only constraint binary.manifest/binary.version
+        # https:// only here (not "http:// and https://"): the same
+        # https-only constraint binary.manifest/binary.version
         # already enforce (_check_url_scheme) on every real caller of this
-        # mixin method. Harmless in practice today only because both real
-        # callers pre-validate at the ORM layer before ever reaching this
-        # code -- but a shared mixin method shouldn't offer a future caller
-        # a weaker guarantee than its own module's stated security policy.
+        # mixin method. A weaker check here would be harmless today only
+        # because both real callers pre-validate at the ORM layer before
+        # ever reaching this code -- but a shared mixin method shouldn't
+        # offer a future caller a weaker guarantee than its own module's
+        # stated security policy.
         if not url.startswith("https://"):
             raise UserError(_("Only https:// URLs are allowed."))
 
@@ -165,7 +164,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
             except OSError as e:
                 _logger.warning("Failed to check existing binary %s: %s", target_bin, e)
 
-        # Bug-hunt fix, 2026-09-09: only reached once every cache-hit fast
+        # Only reached once every cache-hit fast
         # path above has already returned -- an already-installed binary
         # (the overwhelmingly common case once a manifest has been used
         # once) never needs its URL resolved or reached at all, so this
@@ -179,14 +178,14 @@ class BinaryDownloaderMixin(models.AbstractModel):
                 url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"}, method="HEAD"
             )
             try:
-                # Bug-hunt fix, 2026-09-14: _urlopen_ssrf_safe() (not plain
+                # _urlopen_ssrf_safe() (not plain
                 # urllib.request.urlopen()) resolves + validates + pins the
                 # real connection to the validated address on every hop
                 # (this request and any redirect it follows) -- see
                 # zero_sudo/daemon/ssrf_safe_fetch.py's own docstring for
                 # the DNS-rebinding TOCTOU this closes that the manual
                 # _assert_host_is_ssrf_safe() pre-check above, by itself,
-                # never could (it validates a hostname; urlopen() used to
+                # cannot (it validates a hostname; a plain urlopen() would
                 # re-resolve the SAME hostname separately, moments later,
                 # to actually connect).
                 with _urlopen_ssrf_safe(head_req, cmd_name, https_only=True, timeout=15):
@@ -200,7 +199,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
             tmp_path = None
             try:
                 with _urlopen_ssrf_safe(get_req, cmd_name, https_only=True, timeout=15) as response:
-                    # Bug-hunt fix, 2026-09-09: the pre-check above only
+                    # The pre-check above only
                     # validates the URL as *given*; urllib's default opener
                     # follows HTTP redirects on its own, with nothing
                     # re-validating where a redirect actually landed. An
@@ -213,7 +212,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                     # `response.geturl()` is only a plain string on a real
                     # urllib response; _safe_response_geturl() (above) guards
                     # against a test double that doesn't model it at all
-                    # (confirmed live: several of this module's own tests
+                    # (several of this module's own tests
                     # mock urlopen() with plain io.BytesIO-based response
                     # doubles carrying no `geturl` attribute whatsoever) or
                     # returns a non-string, so neither can break this check.
@@ -341,21 +340,20 @@ class BinaryDownloaderMixin(models.AbstractModel):
         platform.*() instead of the test suite needing live DNS/network
         access to run.
 
-        Bug-hunt fix, 2026-09-14: delegates to the shared, tested
+        Delegates to the shared, tested
         `zero_sudo.daemon.ssrf_safe_fetch.resolve_ssrf_safe_addresses()` (see
         that module's own docstring for the full DNS-rebinding TOCTOU
         writeup). This method, by itself, only ever validates a hostname --
         it cannot guarantee the connection `_download_and_extract()` makes a
         moment later actually goes to one of the addresses just checked here
-        (that used to require a second, independently-timed
-        `socket.getaddrinfo()` call inside `urlopen()` itself, which a
-        DNS-rebinding attacker could answer differently). The real fix is
+        (a plain `urlopen()` makes a second, independently-timed
+        `socket.getaddrinfo()` call itself, which a DNS-rebinding attacker
+        could answer differently). The protection is
         `_download_and_extract()` calling `_urlopen_ssrf_safe()` instead of
         `urllib.request.urlopen()` directly, which pins the actual connection
         to the exact address this method validates; this method's own
         contract (raise `UserError` for a falsy/unresolvable/unsafe hostname,
-        do nothing otherwise) is unchanged, so every existing caller and test
-        of it keeps working exactly as before.
+        do nothing otherwise) stays stable for every caller and test of it.
         """
         try:
             _resolve_ssrf_safe_addresses(hostname, cmd_name)
@@ -369,10 +367,10 @@ class BinaryDownloaderMixin(models.AbstractModel):
         Writes source_fileobj's bytes to target_bin without ever exposing a
         partially-written file at that final path.
 
-        Bug-hunt fix, 2026-09-09 (binary_utils_download_and_extract): before
-        this, tar.gz/zip member extraction and the raw-binary copy both
-        wrote directly to `open(target_bin, "wb")` / `shutil.copy2(...,
-        target_bin)` -- not atomic. A process interrupted mid-write (an
+        (binary_utils_download_and_extract) Writing tar.gz/zip member
+        extraction or the raw-binary copy directly to `open(target_bin,
+        "wb")` / `shutil.copy2(..., target_bin)` is not atomic. A process
+        interrupted mid-write (an
         OOM kill, a container restart, `kill -9` during a slow install) could
         leave a truncated/corrupt file sitting at exactly target_bin's own
         path. For the tar.gz/zip case specifically, _download_and_extract's
@@ -385,7 +383,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
         private temp file in the same directory (so the final os.replace is
         an atomic rename on the same filesystem) and only replacing
         target_bin once the write completes without error closes this: a
-        target_bin that exists at all is now guaranteed to be the complete,
+        target_bin that exists at all is guaranteed to be the complete,
         untouched output of one successful extraction that already passed
         the whole-archive checksum check, not a partial write left by an
         interrupted attempt.

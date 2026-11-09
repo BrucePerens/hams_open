@@ -11,8 +11,7 @@ _logger = logging.getLogger(__name__)
 
 # The stage value a flagged inbound email's mirrored hams_helpdesk.ticket
 # is routed to instead of the default "new" -- per Bruce's own decision
-# (night_shift_questions/answered/inbound-spam-filter-location-and-signal-
-# e14a6f8b.md): filter at mail-ingestion time, in this adapter, but never
+# (inbound-spam-filter location and signal): filter at mail-ingestion time, in this adapter, but never
 # silently drop a message -- a flagged ticket still exists, still shows up
 # in the ordinary Tickets list, and a human can move it straight back to
 # "new" (the stage field is a clickable statusbar) to recover a false
@@ -51,7 +50,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
     # [@ANCHOR: pager_duty:incident_ticket_adapter_create]
     def create(self, vals_list):
         records = super().create(vals_list)
-        # Bug-hunt fix: this used to call action_generate_helpdesk_ticket()
+        # Do not call action_generate_helpdesk_ticket()
         # on every newly created incident regardless of severity, silently
         # defeating incident.py's own trend-detection design -- its
         # TREND_TRACKED_SEVERITIES gate deliberately does NOT page on_duty
@@ -87,7 +86,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
             "pager_duty.helpdesk_model", default="hams_helpdesk.ticket"
         )
 
-        # Bug-hunt fix: get_current_on_duty_admin() resolves against
+        # get_current_on_duty_admin() resolves against
         # env.context["website_id"] (falling back to the ambient "current
         # website" otherwise -- see schedule.py), so a single lookup for
         # the WHOLE batch used to assign every incident in a mixed-website
@@ -240,7 +239,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         Executes a direct SMTP page if the Helpdesk integration fails or is unreachable.
         """
         if not assignee_id:
-            # Bug-hunt fix: scope to this incident's own website, same
+            # Scope to this incident's own website, same
             # reasoning as action_generate_helpdesk_ticket() above -- an
             # unscoped lookup can resolve to the wrong website's on-duty
             # admin (or none) rather than this specific incident's own.

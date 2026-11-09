@@ -9,9 +9,8 @@
 //! Runs the float and fixed decoders in the same pass against the same captured chip channel
 //! payloads (not two separate runs), so the three-way comparison (chip/float/fixed) comes from one
 //! capture and one lag search, and reports fixed-vs-chip envelope correlation directly alongside
-//! float-vs-chip's own already-established `~0.63` -- see `night_shift_todo/medium/
-//! ambe-fixed-point-port-f0c555a5.md` in hams_com for that number's own history and the two-separate-
-//! passes-not-interleaved reasoning this harness's own encode/decode packet ordering follows.
+//! float-vs-chip's own already-established `~0.63` ; this harness's own encode/decode packet ordering follows the
+//! two-separate-passes-not-interleaved reasoning.
 //!
 //! **Result, first real run against the live chip (200 real frames, `OSR_us_000_0010_8k.wav`)**:
 //! `chip-vs-fixed` frame-level RMS envelope correlation is `0.6293`, matching `chip-vs-float`'s own
@@ -402,7 +401,7 @@ fn main() {
     );
 
     // Frame-level RMS envelope correlation (phase-insensitive, no fine lag applied) -- the acceptance
-    // criterion `night_shift_todo/medium/ambe-fixed-point-port-f0c555a5.md` established: fixed should
+    // criterion for the fixed-point port: fixed should
     // land at the same `~0.63` float already achieves.
     let chip_envelope = frame_rms(&chip_pcm);
     let float_envelope = frame_rms(&float_pcm);
