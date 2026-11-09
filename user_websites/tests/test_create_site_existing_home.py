@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """create_site never meets the unique page address: it reuses the owner's existing home.
 
-Bruce, 2026-10-29, on hams.com/k6bp/create_site: "The page URL must be unique per website!". His
+Symptom on hams.com/k6bp/create_site: "The page URL must be unique per website!". The owner's
 home page existed at /k6bp but unpublished, so the public page (which looked only for a published
 page) offered "Create your site" while the owner's dashboard (which lists every page) did not, and
 the button then tried to create a second page at the same address.

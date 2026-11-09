@@ -186,13 +186,13 @@ class TestAppealsAndViews(RealTransactionCase):
 
         # Tests [@ANCHOR: user_websites:COMM_appeal_action_reject]
         """
-        Bug-hunt regression (2026-09-09): action_approve/action_reject had
-        no server-side guard against being invoked on an already-resolved
-        appeal -- only a view's own invisible attribute. Re-approving an
-        already-approved appeal re-ran the pardon and duplicated audit
-        messages; re-rejecting an already-approved appeal overwrote state
-        back to 'rejected' and posted a message that was false the moment
-        it was made. Prove both now raise instead.
+        action_approve/action_reject must have a
+        server-side guard against being invoked on an already-resolved
+        appeal, not only a view's own invisible attribute. Re-approving an
+        already-approved appeal would re-run the pardon and duplicate audit
+        messages; re-rejecting an already-approved appeal would overwrite state
+        back to 'rejected' and post a message that is false the moment
+        it is made. Prove both raise instead.
         """
         self.user_public.is_suspended_from_websites = True
         self.env.cr.commit()

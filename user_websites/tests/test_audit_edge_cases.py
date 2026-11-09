@@ -101,12 +101,12 @@ class TestAuditEdgeCases(RealTransactionCase):
         # "last_digest_id" -- so this reset was silently a no-op and the
         # test only worked because the very next lines immediately
         # overwrite the real key anyway.)
-        # Bug-hunt fix (docs/bug_hunt_claims/.../acl_svc_infra_models.md):
-        # blog_post.py itself no longer writes ir.config_parameter directly
-        # under the service account (access_ir_config_parameter_svc was
-        # removed as an over-broad ACL grant), so this fixture must go
+        # See docs/bug_hunt_claims/.../acl_svc_infra_models.md.
+        # blog_post.py itself does not write ir.config_parameter directly
+        # under the service account (access_ir_config_parameter_svc is
+        # not granted, being an over-broad ACL), so this fixture must go
         # through the same mediated, whitelisted path production code now
-        # uses, or it would raise AccessError once the raw ACL is gone.
+        # uses, or it would raise AccessError without the raw ACL.
         self.env["zero_sudo.security.utils"]._set_system_param(
             "user_websites.last_digest_id", "0"
         )
@@ -424,13 +424,13 @@ class TestAuditEdgeCases(RealTransactionCase):
     def test_09_cron_pending_reports_ignores_out_of_scope_company(self):
         # Tests [@ANCHOR: user_websites:cron_notify_pending_reports]
         """
-        Bug-hunt regression (2026-09-09): the cron used to iterate EVERY
-        company in the database (res.company.search([], limit=10000))
-        rather than the service account's own granted company_ids, so a
-        second, unrelated company in the DB made it call .with_company()
+        The cron must iterate the service account's own granted company_ids,
+        not EVERY company in the database (res.company.search([], limit=10000)),
+        since a
+        second, unrelated company in the DB would make it call .with_company()
         into a company the account has no access to -- raising an uncaught
         AccessError and aborting the whole run, including base.main_company's
-        own already-processed notification. Prove the fix: a second company
+        own already-processed notification. Prove that a second company
         the service account is NOT scoped to must not crash the cron, and
         base.main_company's own pending-report notification must still fire.
         """
@@ -481,14 +481,14 @@ class TestAuditEdgeCases(RealTransactionCase):
     def test_10_cron_pending_report_count_does_not_leak_across_companies(self):
         # Tests [@ANCHOR: user_websites:cron_notify_pending_reports]
         """
-        Bug-hunt regression (2026-09-09): content_violation_report_admin_rule
-        used to grant the service account an unconditional [(1, '=', 1)]
-        domain (shared with the Administrator group), which OR-dominated
+        content_violation_report_admin_rule must not
+        grant the service account an unconditional [(1, '=', 1)]
+        domain (shared with the Administrator group), which would OR-dominate
         content_violation_report_multi_company_rule's own company_id
         scoping. So a per-company .with_company(company) count() call meant
-        to see only THAT company's "new" reports actually counted every
+        to see only THAT company's "new" reports would actually count every
         company's reports, regardless of which one was named. Prove the
-        service account's own count is now genuinely company-scoped.
+        service account's own count is genuinely company-scoped.
         """
         other_company = self.env["res.company"].create({"name": "Unrelated Co 2"})
         self.env["content.violation.report"].create(
@@ -525,20 +525,20 @@ class TestAuditEdgeCases(RealTransactionCase):
 
     def test_11_portal_user_cannot_read_another_companys_website_group(self):
         """
-        Bug-hunt fix (docs/bug_hunt_claims/.../acl_user_websites_group.md,
-        2026-09-12): user_websites_group_multi_company_rule only listed
-        base.group_user in its `groups`, even though base.group_portal and
+        See docs/bug_hunt_claims/.../acl_user_websites_group.md:
+        user_websites_group_multi_company_rule must list
+        more than base.group_user in its `groups`, since base.group_portal and
         base.group_public each carry their own read-only ACL row on this
         model (access_user_websites_group_user/_public). Per Odoo's "no
-        matching group rule = fully unrestricted" default, that left both
+        matching group rule = fully unrestricted" default, that would leave both
         groups with unscoped, cross-company read of every user.websites.group
         record platform-wide -- including violation_strike_count and
         is_suspended_from_websites, internal moderation data, not just the
-        public-directory-like name/slug. Confirmed live for portal: any
+        public-directory-like name/slug. For portal: any
         authenticated portal user (a suspended website owner, an unrelated
-        customer) could read another company's group data via an ordinary,
+        customer) could otherwise read another company's group data via an ordinary,
         already-reachable RPC call. Prove a plain portal user, a member of
-        no group at all, can see only their own company's groups now.
+        no group at all, can see only their own company's groups.
         """
         other_company = self.env["res.company"].create({"name": "Unrelated Co 3"})
         # Pass company_id explicitly rather than using with_company(other_company):

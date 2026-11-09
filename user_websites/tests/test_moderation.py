@@ -323,13 +323,13 @@ class TestModeration(RealTransactionCase):
     def test_06_repeat_strike_on_already_processed_report_is_a_no_op(self):
         # Tests [@ANCHOR: action_take_action_and_strike]
         """
-        Bug-hunt regression (2026-09-09): website_page.py's own automated
+        website_page.py's own automated
         SSTI/XSS-strip hook looks up an existing report by
         (target_url, reported_by_user_id) only, and the unique constraint on
         that pair means a second detection for the same URL/reporter reuses
         the SAME report row -- re-invoking action_take_action_and_strike()
-        on a report already in state 'action_taken' used to re-strike and
-        re-suspend every time. Prove it's now a no-op.
+        on a report already in state 'action_taken' must not re-strike and
+        re-suspend every time. Prove it's a no-op.
         """
         report = self.env["content.violation.report"].create(
             {
@@ -361,10 +361,10 @@ class TestModeration(RealTransactionCase):
 
         # Tests [@ANCHOR: user_websites:COMM_report_action_dismiss]
         """
-        Bug-hunt regression (2026-09-09): action_mark_under_review and
-        action_dismiss had no server-side guard against being invoked on an
-        already-resolved report -- only a view's own invisible attribute.
-        Prove both now raise rather than silently reprocessing.
+        action_mark_under_review and
+        action_dismiss need a server-side guard against being invoked on an
+        already-resolved report, not only a view's own invisible attribute.
+        Prove both raise rather than silently reprocessing.
         """
         report = self.env["content.violation.report"].create(
             {
