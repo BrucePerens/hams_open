@@ -27,6 +27,7 @@ import time
 
 import psutil
 import requests
+from odoo.tests.common import HOST, websocket
 
 _logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ class ChromePoolError(Exception):
 class PooledChrome:
     """One live Chrome of the pool: its Popen object, DevTools port, profile directory and who it was started for."""
 
+    # [@ANCHOR: zero_sudo:pooled_chrome_init]
     def __init__(self, proc, devtools_port, user_data_dir, stop, owner, touch_enabled):
         self.proc = proc
         self.devtools_port = devtools_port
@@ -58,7 +60,7 @@ class PooledChrome:
         if self.proc.poll() is not None:
             return False
         try:
-            return requests.get(f"http://127.0.0.1:{self.devtools_port}/json/version", timeout=3).ok
+            return requests.get(f"http://{HOST}:{self.devtools_port}/json/version", timeout=3).ok
         except requests.RequestException:
             return False
 
@@ -92,11 +94,9 @@ class PooledChrome:
     # [@ANCHOR: zero_sudo:pooled_chrome_command]
     def command(self, method, params=None, timeout=10.0):
         """Runs one DevTools command on the browser itself (not on a page) over a short-lived websocket and returns its result."""
-        import odoo.tests.common as odoo_common  # a late import: the websocket module is optional in core
-
-        version = requests.get(f"http://127.0.0.1:{self.devtools_port}/json/version", timeout=3)
+        version = requests.get(f"http://{HOST}:{self.devtools_port}/json/version", timeout=3)
         version.raise_for_status()
-        ws = odoo_common.websocket.create_connection(
+        ws = websocket.create_connection(
             version.json()["webSocketDebuggerUrl"], timeout=timeout, suppress_origin=True
         )
         try:
@@ -130,6 +130,7 @@ class ChromePool:
 
     `start(touch_enabled)` returns `(proc, devtools_port, user_data_dir, stop)` for a new headless Chrome."""
 
+    # [@ANCHOR: zero_sudo:chrome_pool_init]
     def __init__(self, start, max_uses=MAX_USES):
         self._start = start
         self._max_uses = max_uses
@@ -138,6 +139,7 @@ class ChromePool:
         self.starts = 0  # Chromes started so far: what the tests and the log use to show how much was reused
 
     @property
+    # [@ANCHOR: zero_sudo:chrome_pool_chrome]
     def chrome(self):
         return self._chrome
 
@@ -176,7 +178,7 @@ class ChromePool:
         except ChromePoolError:
             self._dispose_context(chrome, context_id)
             raise
-        return context_id, f"ws://127.0.0.1:{chrome.devtools_port}/devtools/page/{target_id}"
+        return context_id, f"ws://{HOST}:{chrome.devtools_port}/devtools/page/{target_id}"
 
     @staticmethod
     # [@ANCHOR: zero_sudo:chrome_pool_dispose_context]

@@ -10,6 +10,7 @@ import logging
 import os
 import tempfile
 import time
+from concurrent.futures import Future
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -106,7 +107,10 @@ class TestChromePoolLogic(HamsTransactionCase):
         self.assertIs(self.pool.chrome, new)
 
     # Tests [@ANCHOR: zero_sudo:chrome_pool]
+    # Tests [@ANCHOR: zero_sudo:chrome_pool_init]
+    # Tests [@ANCHOR: zero_sudo:chrome_pool_chrome]
     # Tests [@ANCHOR: zero_sudo:pooled_chrome]
+    # Tests [@ANCHOR: zero_sudo:pooled_chrome_init]
     # Tests [@ANCHOR: zero_sudo:chrome_pool_owned_pids]
     # Tests [@ANCHOR: zero_sudo:chrome_pool_owns_profile]
     # Tests [@ANCHOR: zero_sudo:chrome_pool_close]
@@ -132,8 +136,6 @@ class TestChromePoolLogic(HamsTransactionCase):
 
     # Tests [@ANCHOR: zero_sudo:pooled_test_was_clean]
     def test_a_test_is_clean_only_without_failure_signs(self):
-        from concurrent.futures import Future
-
         self.assertTrue(common._pooled_test_was_clean(SimpleNamespace()))
         self.assertFalse(common._pooled_test_was_clean(SimpleNamespace(_hams_page_ok=False)))
         self.assertFalse(common._pooled_test_was_clean(SimpleNamespace(had_failure=True)))

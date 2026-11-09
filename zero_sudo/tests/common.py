@@ -344,6 +344,7 @@ def _headless_chrome_of_this_run():
     return [p for p in found if p.info["pid"] not in pooled and not any(_chrome_pool.owns_profile(prof) for prof in _profiles_of(p))]
 
 
+# [@ANCHOR: zero_sudo:profiles_of]
 def _profiles_of(process):
     """The `--user-data-dir` values on a process's command line."""
     return [str(a).split("=", 1)[1] for a in (process.info.get("cmdline") or []) if str(a).startswith("--user-data-dir=")]
@@ -1137,6 +1138,7 @@ ChromeBrowser._chrome_start = _patched_chrome_start
 # One headless Chrome per test class (hams_open zero_sudo/tests/chrome_pool.py has the design and the isolation argument):
 # each browser test still builds its own `ChromeBrowser`, but over a fresh browser context of the class's shared Chrome.
 # HAMS_CHROME_POOL=0 restores one Chrome per browser.
+# [@ANCHOR: zero_sudo:start_pooled_chrome]
 def _start_pooled_chrome(touch_enabled):
     """Starts a headless Chrome the way every test browser is started (`_patched_chrome_start`: own process group, PID
     namespace, reaper protections) on a stand-in `ChromeBrowser` that carries only what that start-up reads, and returns
@@ -1150,11 +1152,13 @@ def _start_pooled_chrome(touch_enabled):
     manager = _patched_chrome_start(
         stand_in, user_data_dir=stand_in.user_data_dir, touch_enabled=touch_enabled, headless=True, debug=False
     )
+    started = False
     try:
         proc, devtools_port = manager.__enter__()
-    except BaseException:
-        shutil.rmtree(stand_in.user_data_dir, ignore_errors=True)
-        raise
+        started = True
+    finally:
+        if not started:
+            shutil.rmtree(stand_in.user_data_dir, ignore_errors=True)
     return proc, devtools_port, stand_in.user_data_dir, lambda: manager.__exit__(None, None, None)
 
 
@@ -1198,12 +1202,13 @@ def _pooled_chrome_start(self, touch_enabled):
     self._hams_chrome = chrome
     self._hams_log_offset = chrome.log_size()
     self._hams_page_ok = True
+    raised = True
     try:
         yield chrome.proc, chrome.devtools_port
-    except BaseException:
-        self._hams_page_ok = False
-        raise
+        raised = False
     finally:
+        if raised:
+            self._hams_page_ok = False  # an exception left the browser's start-up or body
         _chrome_pool.release(chrome, clean=_pooled_test_was_clean(self))
 
 
@@ -1212,15 +1217,16 @@ original_open_websocket = ChromeBrowser._open_websocket
 
 @contextlib.contextmanager
 # [@ANCHOR: zero_sudo:patched_open_websocket]
-def _patched_open_websocket(self):
+def _patched_open_websocket(self, *args, **kwargs):
     """Core finds the one blank page of a Chrome of its own. A pooled browser gets a new page in a new browser context
     instead (nothing of an earlier test is visible in it) and destroys the context when the test ends."""
     chrome = getattr(self, "_hams_chrome", None)  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
     if chrome is None:
-        with original_open_websocket(self) as ws:
+        with original_open_websocket(self, *args, **kwargs) as ws:
             yield ws
         return
     context_id = None
+    opened = False
     try:
         context_id, ws_url = _chrome_pool.new_page(chrome)
         self._logger.info("Websocket url found: %s", ws_url)
@@ -1228,11 +1234,12 @@ def _patched_open_websocket(self):
         if ws.getstatus() != 101:
             raise unittest.SkipTest("Cannot connect to chrome dev tools")
         ws.settimeout(0.01)
-    except BaseException:
-        self._hams_page_ok = False
-        if context_id is not None:
-            _chrome_pool.end_page(chrome, context_id)
-        raise
+        opened = True
+    finally:
+        if not opened:
+            self._hams_page_ok = False
+            if context_id is not None:
+                _chrome_pool.end_page(chrome, context_id)
     try:
         yield ws
     finally:
@@ -1249,11 +1256,11 @@ original_websocket_request = ChromeBrowser._websocket_request
 
 
 # [@ANCHOR: zero_sudo:patched_websocket_request]
-def _patched_websocket_request(self, method, **kwargs):
+def _patched_websocket_request(self, method, *args, **kwargs):
     """`Browser.close` is core's last step of a browser's shutdown; on a pooled browser it would end the class's Chrome."""
     if method == "Browser.close" and getattr(self, "_hams_chrome", None) is not None:  # burn-ignore-introspection
         return None
-    return original_websocket_request(self, method, **kwargs)
+    return original_websocket_request(self, method, *args, **kwargs)
 
 
 ChromeBrowser._open_websocket = _patched_open_websocket
@@ -1263,11 +1270,11 @@ original_read_log = ChromeBrowser.read_log
 
 
 # [@ANCHOR: zero_sudo:patched_read_log]
-def _patched_read_log(self):
+def _patched_read_log(self, *args, **kwargs):
     """A pooled browser's share of the Chrome's log: what it wrote since the test's lease began."""
     chrome = getattr(self, "_hams_chrome", None)  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
     if chrome is None:
-        return original_read_log(self)
+        return original_read_log(self, *args, **kwargs)
     return chrome.log_since(self._hams_log_offset)
 
 
