@@ -323,23 +323,39 @@ impl Response {
     }
 
     // [@ANCHOR: relay_broker_response_encode]
-    /// The body bytes (no frame header). Device lists are cut at `MAX_DEVICES`.
+    /// The body bytes (no frame header). Device lists are cut at `MAX_DEVICES`, or earlier at the
+    /// last entry that still fits in `MAX_FRAME`.
     pub fn encode(&self) -> Vec<u8> {
         let mut out = vec![VERSION];
         match self {
             Response::Devices(devs) => {
                 out.push(Status::Ok as u8);
                 out.push(1);
-                let n = devs.len().min(MAX_DEVICES);
-                out.extend_from_slice(&(n as u16).to_be_bytes());
-                for d in devs.iter().take(n) {
-                    out.push(d.class as u8);
-                    put_string(&mut out, &d.path);
-                    out.extend_from_slice(&d.vid.to_be_bytes());
-                    out.extend_from_slice(&d.pid.to_be_bytes());
-                    put_string(&mut out, &d.product);
-                    put_string(&mut out, &d.manufacturer);
+                // Whole entries only, as many as fit in one frame (and `MAX_DEVICES`): cutting
+                // the body at `MAX_FRAME` in the middle of an entry would make the client's
+                // decode fail and lose the entire list instead of its tail.
+                let header_len = out.len().saturating_add(2);
+                let mut entries: Vec<u8> = Vec::new();
+                let mut n = 0usize;
+                for d in devs.iter().take(MAX_DEVICES) {
+                    let mut entry = vec![d.class as u8];
+                    put_string(&mut entry, &d.path);
+                    entry.extend_from_slice(&d.vid.to_be_bytes());
+                    entry.extend_from_slice(&d.pid.to_be_bytes());
+                    put_string(&mut entry, &d.product);
+                    put_string(&mut entry, &d.manufacturer);
+                    if header_len
+                        .saturating_add(entries.len())
+                        .saturating_add(entry.len())
+                        > MAX_FRAME
+                    {
+                        break;
+                    }
+                    entries.extend_from_slice(&entry);
+                    n = n.saturating_add(1);
                 }
+                out.extend_from_slice(&(n as u16).to_be_bytes());
+                out.extend_from_slice(&entries);
             }
             Response::Opened => {
                 out.push(Status::Ok as u8);
@@ -543,6 +559,34 @@ mod tests {
         assert_eq!(
             Response::decode(&[1, 0, 1, 0xff, 0xff]),
             Err(WireError::TooMany)
+        );
+    }
+
+    // Tests [@ANCHOR: relay_broker_response_encode]
+    // Tests [@ANCHOR: relay_broker_response_decode]
+    // Tests [@ANCHOR: relay_broker_frame_encode]
+    #[test]
+    fn a_device_list_too_big_for_one_frame_loses_its_tail_not_the_whole_list() {
+        let dev = |i: usize| DeviceDescriptor {
+            class: DeviceClass::Serial,
+            path: format!("/dev/ttyUSB{i}"),
+            vid: 0x0403,
+            pid: 0x6001,
+            product: "P".repeat(200),
+            manufacturer: "M".repeat(200),
+        };
+        let all: Vec<_> = (0..MAX_DEVICES).map(dev).collect();
+        let body = Response::Devices(all.clone()).encode();
+        assert!(body.len() <= MAX_FRAME, "{} bytes", body.len());
+        let Ok(Response::Devices(got)) = Response::decode(&body) else {
+            panic!("the client could not parse the list");
+        };
+        assert!(!got.is_empty() && got.len() < all.len());
+        assert_eq!(got.as_slice(), &all[..got.len()], "a prefix, whole entries");
+        assert_eq!(
+            frame_encode(&body).len(),
+            body.len() + 4,
+            "frame_encode cuts nothing"
         );
     }
 

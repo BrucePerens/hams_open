@@ -7,8 +7,10 @@ OnFailure unit waits out an Odoo restart instead of exiting 1 and leaving a fail
 import io
 import os
 import sys
+import threading
 import unittest
 import urllib.error
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from contextlib import redirect_stderr
 from unittest import mock
 
@@ -84,7 +86,7 @@ class ReportUnitWaitTests(unittest.TestCase):
 
 class PostReportErrorClassTests(unittest.TestCase):
     def post(self, error):
-        with mock.patch.object(er, "load_key", return_value="k"), mock.patch.object(er.urllib.request, "urlopen", side_effect=error):
+        with mock.patch.object(er, "load_key", return_value="k"), mock.patch.object(er._OPENER, "open", side_effect=error):
             with self.assertRaises(er.ReportError) as caught:
                 er.post_report({"unit": "a.service"}, url="http://odoo:8069")
         return caught.exception
@@ -109,3 +111,73 @@ class PostReportErrorClassTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _RedirectProbe:
+    """Two real local servers: `url` answers every request with a 302 to the second, `sink`, which records the headers of
+    whatever reaches it. A credential header that follows the redirect shows up in `sink_headers`; `first_headers` holds
+    what the first server received, which proves the request did carry the credential."""
+
+    def __init__(self):
+        outer = self
+        self.first_headers: list[dict[str, str]] = []
+        self.sink_headers: list[dict[str, str]] = []
+
+        class Sink(BaseHTTPRequestHandler):
+            def _answer(self):
+                outer.sink_headers.append({k.lower(): v for k, v in self.headers.items()})
+                body = b"{}"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            do_GET = do_POST = do_PUT = do_PATCH = _answer
+
+            def log_message(self, *args):
+                pass
+
+        self.sink = HTTPServer(("127.0.0.1", 0), Sink)  # burn-ignore-test-local-server: hermetic stand-in for the host a redirect points at
+        sink_url = f"http://127.0.0.1:{self.sink.server_port}/elsewhere"  # burn-ignore-test-local-server: hermetic stand-in for the host a redirect points at
+
+        class First(BaseHTTPRequestHandler):
+            def _answer(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                if length:
+                    self.rfile.read(length)
+                outer.first_headers.append({k.lower(): v for k, v in self.headers.items()})
+                self.send_response(302)
+                self.send_header("Location", sink_url)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            do_GET = do_POST = do_PUT = do_PATCH = _answer
+
+            def log_message(self, *args):
+                pass
+
+        self.first = HTTPServer(("127.0.0.1", 0), First)  # burn-ignore-test-local-server: hermetic stand-in for the credentialed API that answers with a redirect
+        self.url = f"http://127.0.0.1:{self.first.server_port}"  # burn-ignore-test-local-server: hermetic stand-in for the credentialed API
+        self._threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in (self.sink, self.first)]  # burn-ignore-test-daemon-thread: two daemon threads of a hermetic fixture, both shut down in __exit__
+
+    def __enter__(self):
+        for thread in self._threads:
+            thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        for server in (self.first, self.sink):
+            server.shutdown()
+            server.server_close()
+
+
+class PostReportRefusesARedirectTests(unittest.TestCase):
+    def test_a_redirect_from_odoo_is_refused_and_the_key_never_reaches_the_second_host(self):
+        # Tests [@ANCHOR: hams_helpdesk:daemon_no_redirect]
+        # Tests [@ANCHOR: hams_helpdesk:daemon_post_report]
+        with _RedirectProbe() as probe, mock.patch.object(er, "load_key", return_value="reporter-key"):
+            with self.assertRaises(er.ReportError) as raised:
+                er.post_report({"unit": "a.service"}, url=probe.url, database="db")
+        self.assertIn("302", str(raised.exception))
+        self.assertEqual(probe.first_headers[0]["authorization"], "Bearer reporter-key")
+        self.assertEqual(probe.sink_headers, [], "the redirect target must never be asked")

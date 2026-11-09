@@ -46,7 +46,20 @@ if _DAEMON_DIR not in sys.path:
     sys.path.insert(0, _DAEMON_DIR)
 from generalized_monitor import severity_for_days_left  # noqa: E402
 
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
+    points; a refused redirect surfaces as the HTTPError of the 3xx status."""
+
+    # [@ANCHOR: pager_duty:no_redirect_github_pat_expiry]
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
 DEFAULT_TOKEN_PATH = "/opt/hams/etc/keys/github_pat_ticket_triage.token"
+GITHUB_USER_URL = "https://api.github.com/user"  # a module constant so a test can point it at a local server
 
 
 # [@ANCHOR: pager_duty:read_github_pat]
@@ -61,10 +74,10 @@ def _fetch_expiry_header(token):
     expiry, not anything about the account, so this works identically for any fine-grained PAT
     regardless of its granted repository/permission scope."""
     req = urllib.request.Request(
-        "https://api.github.com/user",
+        GITHUB_USER_URL,
         headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with _OPENER.open(req, timeout=10) as resp:
         return resp.headers.get("github-authentication-token-expiration")
 
 
