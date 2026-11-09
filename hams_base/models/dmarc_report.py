@@ -33,6 +33,8 @@ def _safe_int(text, default=0):
 _MAX_REPORT_EPOCH = 4_102_444_800  # 2100-01-01
 
 
+# [@ANCHOR: hams_base:epoch_to_naive_utc]
+# Verified by [@ANCHOR: test_a_date_range_outside_the_supported_years_is_dropped_not_a_crash]
 def _epoch_to_naive_utc(seconds):
     """The naive UTC datetime Odoo stores for `seconds` since the epoch, or False when there is none: 0, negative, or past
     2100. <begin>/<end> come from a mail attachment anyone can send; a huge number would raise OverflowError, OSError or

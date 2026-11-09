@@ -56,7 +56,9 @@ class TestDmarcParser(common.TransactionCase):
         self.assertEqual(record.count, 5)
         self.assertEqual(record.dkim_alignment, "pass")
 
+    # [@ANCHOR: test_a_date_range_outside_the_supported_years_is_dropped_not_a_crash]
     def test_a_date_range_outside_the_supported_years_is_dropped_not_a_crash(self):
+        # Tests [@ANCHOR: hams_base:epoch_to_naive_utc]
         # <begin>/<end> come from a mail attachment anyone can send. A huge or negative number used to raise
         # OverflowError/OSError/ValueError out of datetime.fromtimestamp and lose the whole report.
         for index, bad in enumerate(("99999999999999999999", "4611686018427387904", "-4611686018427387904", "4102444801")):
