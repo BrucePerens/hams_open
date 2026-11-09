@@ -72,6 +72,7 @@ class TestHarnessHelpers(HamsTransactionCase):
 
     # Tests [@ANCHOR: zero_sudo:kill_all_headless_chrome]
     # Tests [@ANCHOR: zero_sudo:headless_chrome_of_this_run]
+    # Tests [@ANCHOR: zero_sudo:profiles_of]
     def test_only_this_runs_headless_chrome_processes_are_killed(self):
         mine = os.getuid()
         with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as profile_dir:
