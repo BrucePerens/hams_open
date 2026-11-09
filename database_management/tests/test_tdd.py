@@ -77,7 +77,7 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
             wizard.action_generate()
 
     def test_tdd_pg_config_yaml_injection_via_password(self):
-        # Bug-hunt fix (2026-09-09): `replication_pass` is interpolated
+        # `replication_pass` is interpolated
         # unescaped into the generated Patroni YAML the same way `cluster_name`
         # is (see test_tdd_pg_config_yaml_injection above), but was never
         # validated for characters that break YAML's plain-scalar syntax --
@@ -120,9 +120,9 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
                 wizard.action_generate()
 
     def test_tdd_pg_config_yaml_injection_via_etcd_hosts(self):
-        # Bug-hunt fix (2026-09-09): `etcd_hosts` had no validation at all
-        # before this fix, despite being interpolated unescaped into the same
-        # generated YAML (`etcd: {etcd_config}`) -- the identical injection
+        # `etcd_hosts` must be validated because it is interpolated unescaped
+        # into the same generated YAML (`etcd: {etcd_config}`) -- the identical
+        # injection
         # class as cluster_name/replication_pass above.
         admin = self.env.ref("base.user_admin")
         wizard = self.env["pg.ha.wizard"].with_user(admin).create({
