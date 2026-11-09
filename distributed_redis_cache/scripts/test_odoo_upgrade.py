@@ -51,6 +51,16 @@ class TestOdooUpgrade(unittest.TestCase):
         self.assertIn("--unit=odoo-upgrade", out)  # fixed name: no second concurrent upgrade, and `systemctl is-active` can see it
         self.assertNotIn(SECRET, out)
 
+    def test_install_adds_dash_i_to_the_same_run_and_is_validated(self):
+        rc, out = self._run(["--db", "hams_prod", "--modules", "all", "--install", "ham_spreadsheet_csp,x_y", "--dry-run"])
+        self.assertEqual(rc, 0)
+        self.assertIn("-d hams_prod -i ham_spreadsheet_csp,x_y -u all --stop-after-init", out)
+        rc, out = self._run(["--db", "hams_prod", "--modules", "all", "--dry-run"])
+        self.assertNotIn(" -i ", out)  # no --install: the command is what it always was
+        for bad in ("a b", "a_b\n", ",", "A;rm", "a,b\n"):
+            with self.subTest(install=bad), self.assertRaisesRegex(u.UpgradeError, "invalid --install"):
+                self._run(["--db", "hams_prod", "--modules", "all", "--install", bad])
+
     def test_refuses_when_no_environment_file_defines_the_redis_password(self):
         files = dict(FILES, **{"/opt/hams/etc/redis.env": "REDIS_USERNAME=u\n"})
         with self.assertRaisesRegex(u.UpgradeError, "REDIS_PASSWORD"):
