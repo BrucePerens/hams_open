@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Production lockdown of Odoo's database-manager routes and of JSON error bodies.
 
-hams1 readiness audit 2026-10-04, row 15: `/web/database/manager` and `/web/database/selector` answered 200 to
+A readiness audit found that `/web/database/manager` and `/web/database/selector` answered 200 to
 anyone (inert only because `list_db` is off and no `admin_passwd` is set), and a malformed JSON-RPC POST returned
 the full Python traceback, with file paths and line numbers, in `error.data.debug`.
 

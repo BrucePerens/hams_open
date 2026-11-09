@@ -10,7 +10,7 @@ from odoo.addons.portal.controllers.portal import CustomerPortal, pager as porta
 # other reason to import that model's Python module, and the two already drift-check against
 # each other structurally: this set is a subset of the model's own real selection values,
 # re-validated against it below, so a stale/renamed value here would simply stop being offered
-# rather than silently breaking). Found live during this same phase's own review: portal_
+# rather than silently breaking). portal_
 # ticket_new/portal_ticket_submit below validate an untrusted ticket_type only by checking
 # membership in the model's FULL selection list -- with no exclusion, any logged-in portal user
 # could pick this category from the public /my/tickets/new dropdown (or POST it directly,
@@ -153,17 +153,16 @@ class HelpdeskPortal(CustomerPortal):
     @http.route(["/my/tickets/new"], type="http", auth="user", website=True)
     # [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
     def portal_ticket_new(self, **kw):
-        # Found live 2026-08-29 as a Prospective Ham/SWL persona (a real,
-        # site-offered signup option specifically for users studying for
-        # their license, i.e. by definition without a callsign yet): this
-        # used to raise a raw 400 Bad Request ("Callsign is required.")
-        # for any user without one, with no way back. That contradicted
-        # the rest of this same flow -- the form template's own callsign
+        # A Prospective Ham/SWL user (a real, site-offered signup option
+        # specifically for users studying for their license, i.e. by
+        # definition without a callsign yet) must not get a raw 400 Bad
+        # Request ("Callsign is required.") with no way back. That would
+        # contradict the rest of this same flow -- the form template's own callsign
         # field is labeled "Your callsign (if applicable)", and
         # portal_ticket_submit()/helpdesk_ticket.create() both already
         # handle a missing callsign gracefully (fall back to empty, no
         # required=True on the model field). Nothing downstream needed
-        # this check; just stopped enforcing it.
+        # this check, so it is not enforced.
         callsign = request.env.user.partner_id.callsign
         # A caller (e.g. ham_shack/data/local_relay_guide.html's own "report a bug" link)
         # can deep-link straight into a specific category via ?ticket_type=hams_local_relay.
@@ -245,8 +244,8 @@ class HelpdeskPortal(CustomerPortal):
         # [@ANCHOR: hams_helpdesk:portal_submit_service_default_env]
         # Odoo 19's Many2many.write_real() re-runs the res.partner "read" check on mail.message.partner_ids
         # as transaction.default_env.uid -- here the submitting member, who cannot read the assigned
-        # agent's partner -- and ignores the with_user() above. Found live 2026-10-17 (KU0HN, user 311:
-        # "Failed to write field mail.message.partner_ids"); see security/mail_ingest_security.xml for the
+        # agent's partner -- and ignores the with_user() above. The failure is
+        # "Failed to write field mail.message.partner_ids"; see security/mail_ingest_security.xml for the
         # mechanism. The ticket's notification recipients are chosen by the helpdesk service routing, never
         # by the submitter, so for the duration of this one create the transaction's default env is the
         # helpdesk service account (what the RPC dispatcher does for service callers). Restored in finally.

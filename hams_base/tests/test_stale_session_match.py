@@ -10,7 +10,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 class TestStaleSessionBeforeWebsiteMatch(HamsHttpCase):
     """A session whose user no longer exists must be served as the public user.
 
-    Reproduces the hams.com production 403 of 2026-09-23/24
+    Reproduces a hams.com production 403
     ("Access Denied by ACLs for operation: read, uid: 99, model: website" on
     ``GET /``), where ``uid: 99`` had no ``res_users`` row.
     """

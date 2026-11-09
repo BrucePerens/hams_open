@@ -2,9 +2,7 @@
 
 # -*- coding: utf-8 -*-
 """Real, explainable spam/phishing heuristic for inbound mail, applied at
-mail-ingestion time -- per Bruce's own decision recorded in
-night_shift_questions/answered/inbound-spam-filter-location-and-signal-
-e14a6f8b.md ("Filter at mail-ingestion time"), not as a post-hoc
+mail-ingestion time, not as a post-hoc
 hams_helpdesk.ticket stage/tag and not left to the ticket-triage AI pass.
 
 Inbound mail reaches a helpdesk ticket by two separate routes, and both
@@ -24,17 +22,16 @@ It lives in hams_helpdesk (a pure-Python module, no ORM use) because
 pager_duty depends on hams_helpdesk, not the other way round, so this is
 the one place both callers can import it from.
 
-Deliberately NOT a machine-learning classifier (per the to-do's own "start
-simple and defensible" instruction) -- every signal below is a plain,
+Deliberately NOT a machine-learning classifier (simple and defensible
+by design) -- every signal below is a plain,
 auditable rule with its own human-readable reason string, so a reviewer
 (or a future session) can see exactly why a message was flagged, not just
-an opaque score. The bulk/marketing signals added 2026-11-03 are the one place
+an opaque score. The bulk/marketing signals are the one place
 a sum is used: each weak signal is its own rule with its own reason and weight,
 and the message is flagged only when the weights reach BULK_SCORE_THRESHOLD, so
 one innocent feature of a real message (a List-Id, an "unsubscribe" link in a
-vendor reply) can never flag it alone. See night_shift_todo/high/inbound-mail-ticket-ingestion-
-has-no-spam-phishing-filter-e3a8f612.md for the real, live spam/phishing
-examples this was built from.
+vendor reply) can never flag it alone. The rules were built from
+real, live spam/phishing examples.
 
 False positives are the named risk, not false negatives: this module only
 ever classifies, it never deletes or drops anything -- the caller is
@@ -50,8 +47,7 @@ from urllib.parse import urlsplit
 _logger = logging.getLogger(__name__)
 
 # Known commercial-spam / scare-lure subject-line patterns, taken directly
-# from the real "new"-stage tickets found live 2026-10-01 (see the to-do
-# file referenced above for the full table). Each pattern carries its own
+# from real "new"-stage tickets. Each pattern carries its own
 # plain-English reason so a flagged ticket's note says exactly why.
 SPAM_SUBJECT_PATTERNS = [
     (
@@ -93,7 +89,7 @@ SPAM_SUBJECT_PATTERNS = [
         re.compile(r"negative\s+(feedback|review)", re.IGNORECASE),
         "negative-review scare phishing",
     ),
-    # Added 2026-11-03 from production tickets 113, 115 and 122 (names only).
+    # From production tickets 113, 115 and 122 (names only).
     (
         re.compile(r"\bsubscription\s+renews?\s+soon", re.IGNORECASE),
         "fake subscription-renewal lure",
@@ -108,7 +104,7 @@ SPAM_SUBJECT_PATTERNS = [
     ),
 ]
 
-# Convention housing solicitations (found live 2026-11-03, ticket 141: "Hotel Booking Team" mailing "Dear Exhibitor, Hotel
+# Convention housing solicitations (production ticket 141: "Hotel Booking Team" mailing "Dear Exhibitor, Hotel
 # options for HamCation 2027 are now available ... View Hotel Options" from a third-party domain, to the admin@ alias).
 # Both halves must be present, so a message that merely mentions a hotel, or greets an exhibitor, is not flagged.
 # [@ANCHOR: hams_helpdesk:inbound_housing_solicitation]
@@ -119,7 +115,7 @@ HOUSING_OFFER_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
-# Brands actually impersonated in the real phishing tickets found live
+# Brands actually impersonated in the real phishing tickets
 # (ticket #13: QuickBooks/Intuit via a click.sleadtrack.com redirect to a
 # non-Intuit domain; ticket #15: a ShareFile-branded "Secure document" /
 # NDA lure) plus a few other commonly-impersonated brands, so the same
@@ -230,7 +226,7 @@ def detect_inbound_spam_signals(subject, body_html):
     # Checking the sender's domain too (an earlier version of this
     # function did) flagged ordinary legitimate mail as a false positive
     # whenever it merely named a brand from a non-brand address -- exactly
-    # the risk the to-do calls out -- so it was dropped in favor of this
+    # the false-positive risk -- so it was dropped in favor of this
     # narrower, link-only check.
     if not link_domains:
         return reasons
@@ -264,7 +260,7 @@ def detect_inbound_spam_signals(subject, body_html):
 # Amazon SES scans mail when the receipt rule has ScanEnabled (hams.com's does) and writes the result into the
 # stored message as X-SES-Spam-Verdict and X-SES-Virus-Verdict, each PASS, FAIL, GRAY or PROCESSING_FAILED.
 # Only a FAIL is used: GRAY and PROCESSING_FAILED mean SES could not decide. The authentication results (DKIM, SPF,
-# DMARC) are NOT strong signals: mailing lists and forwarders legitimately fail them. Since 2026-11-03 a DMARC, SPF
+# DMARC) are NOT strong signals: mailing lists and forwarders legitimately fail them. A DMARC, SPF
 # or DKIM failure is a weak, weighted bulk signal (see bulk_mail_findings), never a reason by itself.
 _SES_VERDICT_HEADERS = (
     ("spam", "X-SES-Spam-Verdict"),
@@ -295,7 +291,7 @@ def ses_verdict_reasons(verdicts):
 
 
 # ----------------------------------------------------------------------------------------------------------------
-# Bulk / marketing mail (2026-11-03). Production tickets 113-140 were HTML marketing newsletters that matched no
+# Bulk / marketing mail. Production tickets 113-140 were HTML marketing newsletters that matched no
 # subject pattern. Each signal below is its own plain rule with its own reason; the weights add up and the message
 # is flagged only at BULK_SCORE_THRESHOLD, so no single weak signal can quarantine a message. The inputs are the
 # facts mail_signals() reads from the raw MIME message in mail.thread.message_parse() (the sanitised ticket body

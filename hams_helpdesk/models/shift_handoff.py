@@ -42,15 +42,15 @@ class ShiftHandoffWizard(models.TransientModel):
         body += markupsafe.Markup("<b>Accepted By:</b> {}<br/>").format(self.new_user_id.name)
         body += markupsafe.Markup("<b>Operator Briefing:</b><br/><i>{}</i>").format(self.handoff_notes or "")
 
-        # Bug-hunt fix (2026-09-09): this operator briefing (who relinquished/
+        # This operator briefing (who relinquished/
         # accepted the ticket, plus the free-text handoff_notes an agent
-        # writes for the *next* internal operator) was posted with no
-        # subtype_xmlid, which defaults to mail.mt_comment -- a
+        # writes for the *next* internal operator) needs an explicit
+        # subtype_xmlid: the default is mail.mt_comment, a
         # customer-visible subtype. portal/controllers/portal_thread.py's
         # own /mail/chatter_fetch route ("All users in the portal see only
         # non-internal messages") only excludes messages whose subtype is
         # internal (mail.mt_note), so every shift handoff -- including any
-        # internal-only operational context in handoff_notes -- was showing
+        # internal-only operational context in handoff_notes -- would show
         # up verbatim in the customer's own /my/ticket/<id> "Communication
         # History". mail.mt_note keeps this posted (and the new assignee
         # still gets notified via partner_ids) while excluding it from the

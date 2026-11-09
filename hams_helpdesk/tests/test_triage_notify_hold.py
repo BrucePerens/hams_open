@@ -1,8 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # -*- coding: utf-8 -*-
-"""The operator notification held for the triage review (Bruce, 2026-11-02, night_shift_todo ticket-triage-agent-reviews-
-tickets-on-submission-and-marks-spam, item 3): no email, toast or assignment notice for a spam ticket; a new ticket's
+"""The operator notification held for the triage review: no email, toast or assignment notice for a spam ticket; a new ticket's
 notification waits out a short review window and is then sent (fail open); moving a ticket out of Spam sends it."""
 import base64
 from datetime import timedelta

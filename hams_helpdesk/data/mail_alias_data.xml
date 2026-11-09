@@ -17,8 +17,8 @@
              resolves the recipient against these aliases exactly as it does for
              the mail.hams.com SMTP path. See docs/proposals/EMAIL_SEND_RECEIVE.md.
 
-             info@ and postmaster@ are NOT created here: per Bruce's own direction,
-             both now route to pager_duty (pager.incident), not hams_helpdesk.ticket.
+             info@ and postmaster@ are NOT created here: both
+             route to pager_duty (pager.incident), not hams_helpdesk.ticket.
              See pager_duty/hooks.py's info@ claim and
              pager_duty/data/mail_alias_data.xml's postmaster@ record. -->
         <record id="mail_alias_support_helpdesk" model="mail.alias">

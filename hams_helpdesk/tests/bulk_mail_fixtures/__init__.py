@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-"""Raw inbound messages shaped like the production tickets of 2026-10-28 to 2026-11-03, shared by the helpdesk and
+"""Raw inbound messages shaped like the production tickets, shared by the helpdesk and
 pager_duty tests. Only the shape of the real mail (HTML marketing newsletter: nested layout tables, images, a
 tracking pixel, "view in browser" and "unsubscribe" footers, bulk-mailer headers, no plain-text alternative) and the
 real ticket names are reproduced; the text is invented and none of it comes from a real message."""

@@ -24,7 +24,7 @@ class MailThread(models.AbstractModel):
         subject = message_dict.get('subject', '').lower()
         body = message_dict.get('body', '').lower()
 
-        # bug-hunt (2026-09-09): `to_emails` is the raw "To" header text,
+        # `to_emails` is the raw "To" header text,
         # which can legitimately carry multiple comma-separated recipients
         # (each with its own display name). A bare `alias in to_emails`
         # substring test matches any recipient whose LOCAL PART, DOMAIN, OR

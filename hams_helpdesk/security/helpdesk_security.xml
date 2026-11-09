@@ -22,12 +22,10 @@
         </record>
 
         <record id="group_ai_triage_external_service" model="res.groups">
-            <!-- External-AI ticket-triage allow-list, 2026-09-23. Full reasoning:
+            <!-- External-AI ticket-triage allow-list. Full reasoning:
             hams_com's docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md section G
             ("External-AI visibility into hams_helpdesk tickets is allow-listed, not
-            ban-listed") and the to-do this closes,
-            night_shift_todo/medium/duplicate-service-account-privilege-helpdesk-security-af9e1c30.md
-            (both in hams_com).
+            ban-listed") (in hams_com).
 
             Why this group exists at all: user_ai_triage_service's real backend is Google's
             Gemini API (via the `agy` CLI / daemons/hams_ticket_triage_mcp in hams_com), a
@@ -85,7 +83,7 @@
         </record>
 
         <record id="group_github_webhook_service" model="res.groups">
-            <!-- GitHub webhook ticket creation, 2026-09-24 (controllers/github_webhook_api.py):
+            <!-- GitHub webhook ticket creation (controllers/github_webhook_api.py):
             GitHub's own dependabot_alert/workflow_run webhook POSTs, for both hams_com
             (private) and hams_open (public) repos, land on a public, unauthenticated HTTP
             route (GitHub itself can authenticate no other way) and create an ordinary
@@ -187,16 +185,15 @@
             <field name="group_ids" eval="[(6, 0, [ref('group_helpdesk_manager')])]"/>
         </record>
 
-        <!-- AI Ticket Triage Service Account, 2026-09-22: a dedicated, single-purpose account for
+        <!-- AI Ticket Triage Service Account: a dedicated, single-purpose account for
         the AI-context MCP server that reads new tickets and posts an internal (admin-only, mail.mt_note)
         note with its analysis, not user_helpdesk_service, matching this codebase's own convention of
         one narrow service account per feature (see docs/proposals/GENERALIZED_AI_CONTEXT_MCP_SERVER.md,
         in hams_com).
 
-        Revised 2026-09-23: was group_helpdesk_manager (identical to user_helpdesk_service's own
-        grant, the duplicate-service-account-privilege finding check_burn_list.py flagged; see
-        night_shift_todo/medium/duplicate-service-account-privilege-helpdesk-security-af9e1c30.md
-        in hams_com). This account's real backend is Google's Gemini API, a genuine external/cloud
+        It is not in group_helpdesk_manager (that would duplicate user_helpdesk_service's own
+        grant, which check_burn_list.py flags as a duplicate-service-account-privilege).
+        This account's real backend is Google's Gemini API, a genuine external/cloud
         AI, so it now gets group_ai_triage_external_service instead; see that group's own long
         comment above for the full allow-list rationale. base.group_user is listed directly here
         (not via implied_ids on the group itself) to match pager_duty.user_pager_mcp_triage_service's
@@ -216,7 +213,7 @@
             <field name="group_ids" eval="[(6, 0, [ref('group_ai_triage_external_service'), ref('base.group_user')])]"/>
         </record>
 
-        <!-- GitHub Webhook Service Account, 2026-09-24: a dedicated, single-purpose account for
+        <!-- GitHub Webhook Service Account: a dedicated, single-purpose account for
         controllers/github_webhook_api.py's own public /webhook/github route — see
         group_github_webhook_service's own comment above for the full least-privilege
         reasoning. base.group_user is listed directly here (not via implied_ids on the group

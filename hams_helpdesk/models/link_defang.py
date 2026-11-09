@@ -1,6 +1,6 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Defanged links for tickets whose triage verdict is phishing (Bruce, 2026-11-08).
+"""Defanged links for tickets whose triage verdict is phishing.
 
 The shared text filter (untrusted_text.py) keeps ``<a href>`` on purpose and its tests assert it, so a link in the stored
 text of a phishing ticket is live. Staff reading such a ticket must not be one click from the phish. This module turns the

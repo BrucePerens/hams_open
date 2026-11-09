@@ -1,8 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # -*- coding: utf-8 -*-
-"""The triage review delay is measured, and a review that stalls raises an alarm (Bruce, 2026-11-02, night_shift_todo
-ticket-triage-agent-reviews-tickets-on-submission-and-marks-spam, item 1): a stalled review must not leave tickets
+"""The triage review delay is measured, and a review that stalls raises an alarm: a stalled review must not leave tickets
 unjudged silently."""
 from datetime import timedelta
 

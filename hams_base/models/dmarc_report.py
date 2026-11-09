@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 _logger = logging.getLogger(__name__)
 
-# Adversarial security review, 2026-09-03: this whole parsing chain is
+# This whole parsing chain is
 # reachable by any unauthenticated external sender (DMARC's own rua=
 # address, by design, must be publicly published in DNS), so it must fail
 # closed (log and return False) on any malformed input, never raise out
@@ -90,18 +90,17 @@ class DmarcReport(models.Model):
         """
         Parses a DMARC XML report (could be raw XML, ZIP, or GZIP).
 
-        Adversarial security review, 2026-09-03: attachment_data is the
+        attachment_data is the
         real, already-MIME-decoded content Odoo's own mail gateway
         delivers (confirmed directly against mail_thread.py's own
         _message_parse_extract_payload: content = part.get_content(), the
         genuinely decoded payload -- str for text parts, bytes for binary
-        ones) -- NOT base64-encoded text. The unconditional
-        base64.b64decode() this used to open with raised an uncaught
-        binascii.Error for virtually every real report (binary zip/gzip
-        content essentially never validates as base64), crashing
-        message_new() with no try/except around it at all -- reachable by
+        ones) -- NOT base64-encoded text. An unconditional
+        base64.b64decode() would raise an uncaught binascii.Error for
+        virtually every real report (binary zip/gzip content essentially
+        never validates as base64), crashing message_new() -- reachable by
         any unauthenticated external sender, since DMARC's own rua=
-        address must be publicly published in DNS. Now handles both real
+        address must be publicly published in DNS. So this handles both real
         input shapes and never raises past this method.
         """
         xml_content = None
@@ -117,7 +116,7 @@ class DmarcReport(models.Model):
                 with zipfile.ZipFile(io.BytesIO(raw_data)) as z:  # audit-ignore-path
                     for info in z.infolist():
                         if info.filename.endswith('.xml'):
-                            # bug-hunt (2026-09-09): `info.file_size` is the
+                            # `info.file_size` is the
                             # UNCOMPRESSED size declared in the archive's own
                             # central directory -- attacker-controlled
                             # metadata, not a real bound on what
@@ -192,7 +191,7 @@ class DmarcReport(models.Model):
 
         # Check if report already exists
         #
-        # Bug-hunt fix (2026-09-13): only dedup on a genuine report_id.
+        # Only dedup on a genuine report_id.
         # findtext() returns None for a missing <report_id> element, and
         # Odoo's domain evaluator treats ('report_id', '=', None) as
         # IS NULL, which would match ANY prior report also missing a

@@ -57,12 +57,12 @@ class TestDmarcParser(common.TransactionCase):
         self.assertEqual(record.dkim_alignment, "pass")
 
     def test_two_reports_missing_report_id_are_not_deduplicated_against_each_other(self):
-        # Bug-hunt fix (2026-09-13): findtext("report_id") returns None for
+        # findtext("report_id") returns None for
         # a report with no <report_id> element, and Odoo's domain evaluator
         # treats ('report_id', '=', None) as IS NULL -- so a second,
-        # genuinely different malformed report used to be silently dropped
-        # as a false "already exists" match against the first one instead
-        # of being parsed into its own record.
+        # genuinely different malformed report must not be silently dropped
+        # as a false "already exists" match against the first one; it is
+        # parsed into its own record.
         xml_no_id_a = self.sample_xml.replace("<report_id>12345</report_id>", "")
         xml_no_id_b = xml_no_id_a.replace(
             "<org_name>google.com</org_name>", "<org_name>yahoo.com</org_name>"
@@ -79,16 +79,15 @@ class TestDmarcParser(common.TransactionCase):
         # Tests [@ANCHOR: hams_base:COMM_dmarc_message_new]
 
         # Tests [@ANCHOR: hams_base:COMM_process_dmarc_attachment]
-        # Adversarial security review, 2026-09-03: attachment_data is the
+        # attachment_data is the
         # real, already-MIME-decoded content Odoo's own mail gateway
         # delivers (raw bytes for a binary attachment like this zip),
         # never base64-encoded text -- confirmed directly against
         # mail_thread.py's own _message_parse_extract_payload (content =
-        # part.get_content()). This test used to base64-encode the data
-        # before calling message_new(), which doesn't match how Odoo
-        # actually invokes it, masking a real bug (process_dmarc_
-        # attachment's own unconditional base64.b64decode() crashed
-        # uncaught on real input).
+        # part.get_content()). So this test passes the raw data to message_new()
+        # rather than base64-encoding it, matching how Odoo actually invokes
+        # it (an unconditional base64.b64decode() in process_dmarc_
+        # attachment would crash uncaught on real input).
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w') as z:  # audit-ignore-path
             z.writestr('report.xml', self.sample_xml)

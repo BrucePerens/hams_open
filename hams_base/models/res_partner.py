@@ -35,7 +35,7 @@ class ResPartner(models.Model):
         # Attempt to find club relationships if ham_club_management is installed
         # In ham_club_management, partners might have a club_id or club_membership_ids
         try:
-            # bug-hunt (2026-09-09): savepoint is load-bearing, not
+            # The savepoint is load-bearing, not
             # decorative -- _get_service_uid()'s own SQL-backed uid lookup
             # does a real Postgres `RAISE EXCEPTION`
             # (zero_sudo_get_service_uid() in
@@ -69,16 +69,15 @@ class ResPartner(models.Model):
                 elif partner_sudo.parent_id and partner_sudo.parent_id.is_company:
                     clubs_to_notify = partner_sudo.parent_id
         except Exception as e:  # audit-ignore-catch-all
-            # bug-hunt (2026-09-09): this function's own docstring already
-            # documents one real, previously-uncaught AccessError from
-            # club.message_post() under the old (wrong) service account --
-            # fixed by switching to zero_sudo.mail_service_internal, but the
-            # except clause here was never widened to match. AccessError is
-            # still not a KeyError/ValueError, so if the service account's
-            # own ACLs ever regress, or _get_service_uid()/the SQL-backed
-            # uid lookup fails for any other reason, this would again be an
-            # uncaught crash in production bounce processing instead of a
-            # logged, skipped notification. Class 20.
+            # This function's own docstring documents a real AccessError from
+            # club.message_post() under the wrong service account (hence
+            # zero_sudo.mail_service_internal), so the except clause is broad.
+            # AccessError is not a KeyError/ValueError, so if the service
+            # account's own ACLs ever regress, or _get_service_uid()/the
+            # SQL-backed uid lookup fails for any other reason, a narrower
+            # clause would crash production bounce processing instead of
+            # logging and skipping the notification (the except below logs the
+            # traceback and returns without notifying any club).
             _logger.exception("Failed to resolve clubs to notify of bounce for %s: %s", email, e)
             return
 
@@ -87,12 +86,11 @@ class ResPartner(models.Model):
             if club.email == email:
                 continue
 
-            # Adversarial security review, 2026-09-03: partner.name is
-            # a normal user-editable field, and this body reaches
-            # club.message_post() -- a backend chatter message any
-            # club officer sees. Escaping before interpolation, same
+            # partner.name is a normal user-editable field, and this body
+            # reaches club.message_post() -- a backend chatter message any
+            # club officer sees. Escape before interpolation, same
             # defense-in-depth convention as event_sync's own scraped-
-            # field fix earlier tonight, rather than trusting
+            # field escaping, rather than trusting
             # message_post()'s own HTML sanitization to always catch
             # a raw '%'-interpolated payload.
             message = _(
@@ -102,37 +100,36 @@ class ResPartner(models.Model):
             ) % {'name': html.escape(partner.name or ''), 'email': html.escape(email or '')}
 
             try:
-                # bug-hunt (2026-09-09): savepoint scoped per-club, not just
+                # Savepoint scoped per-club, not just
                 # a bare try -- `message_post()` runs several DB statements
                 # (mail.message insert, followers, notifications); a
                 # failure partway through one club's post could otherwise
                 # leave the transaction poisoned for the NEXT club's own
                 # `message_post()` in this same loop, turning one club's
                 # failure into every subsequent club's failure too (the
-                # same cascading-isolation risk fixed in
+                # same cascading-isolation risk handled in
                 # `hams_base:res_users_write`).
                 with self.env.cr.savepoint():
                     club.message_post(
                         body=message,
-                        # bug-hunt (2026-09-09): this function's own comment
-                        # above already escapes partner.name/email in `body`
-                        # for defense-in-depth against a user-editable name
-                        # reaching chatter; `subject` interpolated the same
-                        # partner.name raw, three lines below that explicit
-                        # review -- inconsistent within the same function.
-                        # Escaped for the same reason, even though mail.message
-                        # 'subject' is an ordinary Char (not Html) field.
+                        # This function's own comment above escapes
+                        # partner.name/email in `body` for defense-in-depth
+                        # against a user-editable name reaching chatter;
+                        # `subject` interpolates the same partner.name, so it
+                        # is escaped for the same reason, even though
+                        # mail.message 'subject' is an ordinary Char (not
+                        # Html) field.
                         subject=_("Bounce Alert: %(name)s") % {'name': html.escape(partner.name or '')},
                         message_type='notification',
                         subtype_xmlid='mail.mt_comment',
                     )
             except Exception as e:  # audit-ignore-catch-all
-                # bug-hunt (2026-09-09): the try/except used to wrap the
-                # WHOLE for-loop, not each club's own post -- one club's
-                # message_post() failure (a bad attachment, a transient
-                # DB issue on that specific club record, etc.) aborted the
-                # loop entirely, silently skipping the notification for
-                # every OTHER club in the same batch, not just the one
-                # that failed. Scoped per-club so one club's failure can't
-                # suppress another club's real notification.
+                # The try/except wraps each club's own post, not the WHOLE
+                # for-loop: one club's message_post() failure (a bad
+                # attachment, a transient DB issue on that specific club
+                # record, etc.) must not abort the loop and silently skip
+                # the notification for every OTHER club in the same batch.
+                # Scoped per-club so one club's failure can't suppress
+                # another club's real notification; the failure is logged
+                # with the club id and the bounced address.
                 _logger.exception("Failed to notify club %s of bounce for %s: %s", club.id, email, e)

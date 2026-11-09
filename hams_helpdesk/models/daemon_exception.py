@@ -42,7 +42,7 @@ QUOTA_SERVICE = "claude-plan"
 def quota_key_parts():
     """The fingerprint inputs of EVERY ``quota_exhausted`` report, whichever unit sends it: the one service whose quota
     is used up (``QUOTA_SERVICE``), apart from any unit's failures (``unit_key_parts``), so "the AI service is out of
-    quota" is one ticket that counts its occurrences (Bruce 2026-11-05: "one ticket when the account is out of quota").
+    quota" is one ticket that counts its occurrences (one ticket when the account is out of quota).
     The reporting unit is not part of the key; it is in the sample trace."""
     return ("daemon.quota_exhausted", QUOTA_SERVICE, "quota", f"service:{QUOTA_SERVICE}")
 

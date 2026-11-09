@@ -32,9 +32,8 @@ class ResConfigSettings(models.TransientModel):
                 domain = domain.split("://")[1].split("/")[0]
             
             record.dns_spf_record = "v=spf1 include:mailgun.org ~all  (replace include with your actual provider)"
-            # Bug-hunt fix, 2026-09-18 (night_shift_questions/answered/
-            # hams-base-dmarc-pipeline-unwired-and-poisoned-alias-310b7a4f.md): this used to
-            # suggest not-read@, which mail_thread.py's own message_route override drops before
+            # Do not suggest not-read@ as the rua= address: mail_thread.py's own message_route
+            # override (this module) drops anything sent to it before
             # Odoo's alias dispatch ever runs (not a bounce/unsubscribe/vacation-reply, so it hits
             # the "elif is_not_read_route: return []" branch) -- a real DMARC report sent there
             # would never reach hams_base.dmarc.report even with an alias wired to it. Point at

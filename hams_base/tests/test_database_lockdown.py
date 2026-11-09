@@ -163,7 +163,7 @@ class TestJsonRpcErrorBody(HamsHttpCase):
 
 @tagged("post_install", "-at_install")
 class TestXmlrpcFaultsCarryNoTraceback(HamsHttpCase):
-    """QA pass 2: `/xmlrpc/2/<service>` put the whole Python traceback in the fault string. Tests
+    """`/xmlrpc/2/<service>` must not put the whole Python traceback in the fault string. Tests
     [@ANCHOR: hams_base:xmlrpc_fault_scrub]"""
 
     def _post(self, route, body):

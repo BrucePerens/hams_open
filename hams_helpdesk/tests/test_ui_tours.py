@@ -178,17 +178,15 @@ class TestHelpdeskTours(HamsHttpCase):
 
     def test_portal_ticket_new_renders_without_callsign(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
-        # Found live 2026-08-29 as a Prospective Ham/SWL persona (a real
+        # A Prospective Ham/SWL user (a real
         # signup option for users studying for their license, i.e. by
-        # definition without a callsign yet): /my/tickets/new used to raise
-        # a raw 400 for any user without a callsign, with no way back. The
+        # definition without a callsign yet) must not get
+        # a raw 400 on /my/tickets/new, with no way back. The
         # form template's own callsign field is labeled "Your callsign (if
         # applicable)", and both portal_ticket_submit() and
         # helpdesk_ticket.create() already handle a missing callsign
-        # gracefully -- the 400 was inconsistent with the rest of this same
-        # flow, not an intentional requirement. This was
-        # test_portal_ticket_new_callsign_validation, asserting the old
-        # (wrong) 400 behavior; now asserts the fixed one.
+        # gracefully -- a 400 would be inconsistent with the rest of this same
+        # flow, not an intentional requirement.
         self.portal_user.partner_id.callsign = False
         self.authenticate("portal_cust_tour", "password")
 
@@ -219,7 +217,7 @@ class TestHelpdeskTours(HamsHttpCase):
 
     def test_portal_member_can_submit_ticket_assigned_to_an_agent(self):
         # Tests [@ANCHOR: hams_helpdesk:portal_submit_service_default_env]
-        """Regression, found live 2026-10-17 (KU0HN, user 311): a plain member submitting a ticket got
+        """Regression: a plain member submitting a ticket got
         "Failed to write field mail.message.partner_ids ... doesn't have 'read' access to: Contact
         (res.partner)". Odoo 19 checks that Many2many link as the request's own user, and only the
         branch where the ticket is routed to an on-duty agent (message_post with partner_ids) trips
@@ -251,8 +249,8 @@ class TestHelpdeskTours(HamsHttpCase):
 
     def test_portal_ticket_new_deep_link_preselects_a_real_category(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
-        # Bruce's own direct instruction, 2026-09-15: "Bugs and security intake for
-        # hams_local_relay should be via hams_helpdesk." ham_shack/data/
+        # Bugs and security intake for hams_local_relay goes through hams_helpdesk.
+        # ham_shack/data/
         # local_relay_guide.html links to /my/tickets/new?ticket_type=hams_local_relay
         # so a ham reporting a relay bug lands with the right category already selected.
         self.authenticate("portal_cust_tour", "password")
@@ -394,13 +392,13 @@ class TestHelpdeskTours(HamsHttpCase):
 
     def test_tickets_card_visible_on_my_account_with_zero_tickets(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_prepare_home_portal_values]
-        # Found live 2026-08-29 as a Prospective Ham persona looking for
+        # A Prospective Ham user looking for
         # support: portal.portal_docs_entry hides a counter-gated card
         # until the session's cached portal_counters already has a nonzero
         # count -- populated only by a JS call made after the page loads,
         # and only once ticket_count is nonzero. A user with zero tickets
         # could never see the card that would let them create their first
-        # one. Fixed by setting config_card=True on the card, matching the
+        # one. The card sets config_card=True, matching the
         # base portal's own "Addresses"/"Connection & Security" cards.
         self.authenticate("portal_cust_tour", "password")
         self.assertEqual(

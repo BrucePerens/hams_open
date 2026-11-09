@@ -2,9 +2,7 @@
 
 # -*- coding: utf-8 -*-
 """Real, testable coverage for hams_helpdesk/models/inbound_spam_filter.py --
-built directly from the live spam/phishing tickets found 2026-10-01 (see
-night_shift_todo/high/inbound-mail-ticket-ingestion-has-no-spam-phishing-
-filter-e3a8f612.md) so this proves the actual reported patterns are
+built directly from real spam/phishing tickets so this proves the actual reported patterns are
 caught, not synthetic lookalikes, alongside clearly-legitimate fixtures
 proving the heuristic does not flag ordinary support requests."""
 from odoo.tests.common import tagged
@@ -40,7 +38,7 @@ from .bulk_mail_fixtures import (
 class TestInboundSpamFilter(HamsTransactionCase):
     # ------------------------------------------------------------------
     # Real spam/phishing fixtures (tickets #4/#5/#7, #13, #15 from the
-    # to-do's own table).
+    # the table of real tickets).
     # ------------------------------------------------------------------
 
     def test_01_domain_expiring_spam_is_flagged(self):
@@ -82,7 +80,7 @@ class TestInboundSpamFilter(HamsTransactionCase):
         # Ticket #13: a QuickBooks-impersonation "negative review" scare
         # email whose actual link goes through a redirect tracker to a
         # non-Intuit domain -- the exact click.sleadtrack.com -> non-Intuit
-        # redirect described in the to-do.
+        # redirect seen in the real ticket.
         body = (
             "<p>A customer has provided negative feedback about your "
             "QuickBooks account. "
@@ -122,8 +120,8 @@ class TestInboundSpamFilter(HamsTransactionCase):
 
     # ------------------------------------------------------------------
     # Legitimate-ticket fixtures: a genuine human inquiry must NEVER be
-    # flagged -- this is the false-positive-risk coverage the to-do calls
-    # for explicitly.
+    # flagged -- this is the false-positive-risk coverage the
+    # design requires explicitly.
     # ------------------------------------------------------------------
 
     def test_07_genuine_membership_question_is_not_flagged(self):
@@ -380,7 +378,7 @@ class TestBulkMailSignals(HamsTransactionCase):
 
     def test_31_a_convention_hotel_booking_offer_to_exhibitors_is_flagged(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_housing_solicitation]
-        # Real ticket 141 (2026-11-03): "Hotel Booking Team" mail to the admin@ alias.
+        # Real ticket 141: "Hotel Booking Team" mail to the admin@ alias.
         offer = (
             "<html><body><h2>HamCation 2027</h2><p>Dear Exhibitor , Hotel options for HamCation 2027 - February 12-14, "
             "2027 , are now available. We have selected several hotels near the event venue to suit your stay.</p>"

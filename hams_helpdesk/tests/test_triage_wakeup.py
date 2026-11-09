@@ -1,7 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # -*- coding: utf-8 -*-
-"""The Odoo half of the event-driven AI ticket triage (NIGHT_PLAN decision 222): a created ticket
+"""The Odoo half of the event-driven AI ticket triage: a created ticket
 leaves a wake-up spool file after commit, and that is all. The daemon half (debounce, caps, lock, kill
 switch, daemon-down) is tested in hams_com daemons/ticket_triage_agent/test_ticket_triage_agent.py."""
 import base64

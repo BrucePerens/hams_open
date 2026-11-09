@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """The XML-RPC endpoints never put a traceback or an unexpected exception's text in a reply.
 
-QA pass 2 (2026-10-14): `database_lockdown` scrubs the JSON-RPC and JSON-2 error bodies, but Odoo's `/xmlrpc/<service>` and
+`database_lockdown` scrubs the JSON-RPC and JSON-2 error bodies, but Odoo's `/xmlrpc/<service>` and
 `/xmlrpc/2/<service>` answer an unexpected exception with the whole Python traceback as the fault string, to anyone, signed
 in or not: a malformed request body returned library and source paths and line numbers. Expected errors (UserError,
 AccessError, AccessDenied, MissingError, RedirectWarning) keep their message, which is written for the caller; everything

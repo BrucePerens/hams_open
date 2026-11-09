@@ -1,6 +1,6 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Malformed input on a public page route is a 404, not a 500 and a ticket (Bruce, 2026-10-19)."""
+"""Malformed input on a public page route is a 404, not a 500 and a ticket."""
 
 import linecache
 import logging
@@ -160,7 +160,7 @@ class TestUnbuildableErrorPage(HamsHttpCase):
         self.assertFalse(_error_page_failed_on_the_url(TypeError("Dot segments are not allowed")))
 
     def test_the_paths_scanners_send_are_a_404_and_no_ticket(self):
-        # The production 500s of 2026-10-17/18: /.//.env and /@fs/..%252f..%252fproc/self/environ?raw??
+        # Paths that gave production 500s: /.//.env and /@fs/..%252f..%252fproc/self/environ?raw??
         before = self.env["hams_helpdesk.exception.fingerprint"].search_count([])
         for path in ("/.//.env", "/@fs/..%252f..%252f..%252fproc/self/environ?raw??", "/a/%2e%2e/%2e%2e/etc/passwd"):
             response = self.url_open(path, allow_redirects=False)
@@ -229,7 +229,7 @@ def _fake_odoo_controller():
 class TestOdooParameterParsing(HamsTransactionCase):
     """Odoo's own controllers parse some parameters themselves; their refusal of what the caller sent is the caller's.
 
-    Ticket 103 (2026-10-25): /web/content/1297/<file>.pdf?download=514750499 raised
+    Ticket 103: /web/content/1297/<file>.pdf?download=514750499 raised
     ValueError("Use 0/1/yes/no/true/false/on/off") in str2bool, called by content_common for ?download=. The message
     quotes nothing, so only the sent value's identity pointed at the caller, and that evidence is absent for an empty or
     one-letter value (CPython shares those string objects)."""
@@ -273,7 +273,7 @@ class TestOdooParameterParsing(HamsTransactionCase):
         self.assertTrue(classify_request_input_error(error, params))
 
     def test_an_odoo_controller_asserting_on_a_value_built_from_a_parameter_is_the_callers(self):
-        # This was a negative test ("url is built by the handler, not sent") until the fuzz run of 2026-10-25 found
+        # This was a negative test ("url is built by the handler, not sent") until a fuzz run found
         # stock content_assets answering 500 to /web/assets/<x>/..%252f..%252fetc%252fpasswd: its `assert not '%' in
         # url` fails because url is built from the caller's own filename. A text local that contains a value sent (three
         # characters or more) is now evidence too.

@@ -114,11 +114,8 @@ class TestMailThread(HamsTransactionCase):
             )
 
     def test_dmarc_reports_alias_is_wired_and_routes_to_the_real_model(self):
-        """Bug-hunt fix, 2026-09-18, per Bruce's own answer in
-        night_shift_questions/answered/
-        hams-base-dmarc-pipeline-unwired-and-poisoned-alias-310b7a4f.md: no mail.alias used to
-        route anything to hams_base.dmarc.report, so a real DMARC aggregate report had no path
-        to ever reach the handler. Unlike the postmaster test above (which relies on a
+        """A mail.alias must route to hams_base.dmarc.report, or a real DMARC
+        aggregate report has no path to reach the handler. Unlike the postmaster test above (which relies on a
         DIFFERENT module's alias and isn't installed in this module's own isolated test
         environment), hams_base now ships its own dmarc-reports@ alias directly
         (data/mail_alias_data.xml) -- this test proves it for real, not just that routing
