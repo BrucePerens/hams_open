@@ -83,6 +83,7 @@ struct Setup {
 
 impl Setup {
     fn new(name: &str) -> Setup {
+        // temp-dir-helper: `Setup` removes the directory in its Drop, also while a failing test unwinds
         let dir =
             std::env::temp_dir().join(format!("selftest-update-{name}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");

@@ -154,6 +154,7 @@ mod tests {
     struct Tmp(PathBuf);
     impl Tmp {
         fn new(tag: &str) -> Tmp {
+            // temp-dir-helper: `Tmp` removes the tree in its Drop, also while a failing test unwinds
             let p =
                 std::env::temp_dir().join(format!("rsp_open_kernel_{}_{tag}", std::process::id()));
             let _ = std::fs::remove_dir_all(&p);
