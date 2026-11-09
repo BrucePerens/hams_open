@@ -13,7 +13,7 @@ class TestViolationBatchWrite(RealTransactionCase):
     """Strike attribution for a website.page.write() carrying a stripped-malicious arch.
 
     Tests [@ANCHOR: user_websites:COMM_trigger_malicious_arch_violation]
-    Bruce's decision: one strike per distinct owner/group in a batch; a
+    Design decision: one strike per distinct owner/group in a batch; a
     multi-owner batch with a modified arch is refused by write().
     """
 

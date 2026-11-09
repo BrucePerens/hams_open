@@ -4,8 +4,8 @@
 # -*- coding: utf-8 -*-
 """One site per member: a slug rename re-homes the site, a retired slug redirects, the policy hook.
 
-Bruce, 2026-10-13: "hams1 publishes two web sites for the user. One is bruce-perens-k6bp, and one
-is k6bp" and "The 'edit' and 'unpublish' button on bruce-perens-k6bp get a 404".
+Reported problem: a deployment published two web sites for one user (bruce-perens-k6bp and
+k6bp), and the 'edit' and 'unpublish' buttons on bruce-perens-k6bp returned 404.
 """
 import odoo.http
 from odoo.exceptions import ValidationError

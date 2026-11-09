@@ -2,13 +2,12 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
 """Regression guards for user_websites.group_user_websites_ownership_bypass.
 
-Service-account privilege audit, 2026-09-14 (bug-hunt): UserWebsitesOwnedMixin's two ownership
-checks used to treat membership in user_websites.group_user_websites_service_account -- the full
+UserWebsitesOwnedMixin's two ownership checks key on a capability-only group,
+not on membership in user_websites.group_user_websites_service_account -- the full
 provisioning group, carrying create/write/unlink on res.groups, ir.ui.view, website.rewrite,
 mail.followers, discuss.channel.member and more -- as their "may bypass the ownership rules"
-flag. Four or five functionally unrelated service accounts in other modules had joined that group
-purely to get the one boolean, silently inheriting the whole ACL. The bypass is now its own
-capability-only group. These tests pin down the three properties that make the split real:
+flag. Functionally unrelated service accounts in other modules need only that one boolean
+and must not inherit the whole ACL. These tests pin down the three properties that make the split real:
 
 1. the bypass group has NO grants of its own, anywhere (no ir.model.access, no ir.rule, no
    implied groups) -- the moment someone adds one, it stops being a pure capability and this

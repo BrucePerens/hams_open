@@ -151,7 +151,7 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
 
     def test_05_owner_can_create_blog_post(self):
         # Tests [@ANCHOR: user_websites:COMM_create_blog_post]
-        # Real gap found live 2026-09-29: blog_index's own template offered no way at all to add a
+        # blog_index's own template must offer a way to add a
         # post to an existing, empty blog, even for the owner (see create_blog_post()'s own
         # comment). self.blog/self.post_a already exist for user_a from setUp, so this proves the
         # route works for an owner who already has content too, not just a first-post case.
@@ -180,12 +180,11 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
             self.env["blog.post"].search_count([("blog_id", "=", self.blog.id)]),
             before_count + 1,
         )
-        # night_shift_todo/high/personal-blog-owner-cannot-actually-edit-or-publish-their-own-
-        # new-post-0c44e7eb.md: this redirect used to go straight into website_blog's own
-        # generic post-view route, relying on a generic website-builder editor toolbar that
+        # This redirect must not go straight into website_blog's own
+        # generic post-view route, which relies on a generic website-builder editor toolbar that
         # never actually renders for this module's real target user (see
         # blog_post_edit()'s own comment, controllers/main.py). It now redirects into this
-        # module's own dedicated, ownership-scoped edit form instead, so the owner lands
+        # module's own dedicated, ownership-scoped edit form, so the owner lands
         # somewhere they can actually title, write and publish the post they just created.
         self.assertTrue(
             response.url.rstrip("/").endswith(f"/blog_post/edit/{new_posts.id}"),
@@ -221,10 +220,8 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
         # Tests [@ANCHOR: user_websites:COMM_blog_post_edit_submit]
 
         # Tests [@ANCHOR: user_websites:UX_BLOG_POST_EDIT_FORM]
-        """The actual fix for night_shift_todo/high/
-        personal-blog-owner-cannot-actually-edit-or-publish-their-own-new-post-0c44e7eb.md: a
-        real, dedicated edit form the owner can reach without the generic website-builder
-        editor toolbar (which never renders for this persona -- see the parent to-do)."""
+        """A real, dedicated edit form the owner can reach without the generic website-builder
+        editor toolbar (which never renders for this persona)."""
         self.authenticate(self.user_a.login, self.user_a.login)
 
         get_response = self.url_open(f"/blog_post/edit/{self.post_a.id}")

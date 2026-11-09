@@ -4,9 +4,9 @@
 # -*- coding: utf-8 -*-
 """The site owner's interface, the standalone member-site layout, and the editor's server path.
 
-Bruce, 2026-10-12: "I am on my own 'K6BP' website through user websites and I don't see any
-interface for creating anything", "members must NOT type raw HTML", and "the hams.com/<k6bp>
-website still has all of the headers and footer for hams.com. It should not."
+Requirements: an owner on their own member site needs an interface for creating anything,
+members must NOT type raw HTML, and the standalone member site (hams.com/<slug>) must not carry
+the hams.com headers and footer.
 """
 import base64
 import re
@@ -164,7 +164,7 @@ class TestOwnerSite(HamsHttpCase):
                 for login, groups in (
                     ("ownerone", [portal, uw_user]),
                     ("ownertwo", [portal, uw_user]),
-                    # The K6BP case: Bruce is an internal administrator with a member site.
+                    # An internal administrator who also has a member site.
                     ("internalowner", [self.env.ref("base.group_user").id, uw_user]),
                 )
             ]

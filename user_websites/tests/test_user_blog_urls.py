@@ -4,8 +4,8 @@
 # -*- coding: utf-8 -*-
 """A member's blog is at /<callsign>/blog and its posts at /<callsign>/blog/<post-slug>.
 
-Bruce, 2026-10-29: "the blog slug must be /<callsign>/blog". His blog was named "Bruce Perens
-(K6BP)'s Blog" and its address was Odoo's /blog/<that name, slugged>-<id>.
+Requirement: "the blog slug must be /<callsign>/blog". A blog named "Bruce Perens
+(K6BP)'s Blog" had the address Odoo's /blog/<that name, slugged>-<id>.
 """
 import re
 

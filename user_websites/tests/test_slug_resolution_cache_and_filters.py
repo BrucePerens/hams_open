@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Regression tests for `_get_user_id_by_slug()` and the content routing view.
 
-The function's bug-hunt claim recorded two gaps as *latent*, on the strength
+The function's claim recorded two gaps as *latent*, on the strength
 of a grep that covered `hams_open` only: a stale slug -> user-id mapping after
 a rename, and a view that filtered on `active` alone. `hams_com`'s public
 logbook and profile widget routes call the function on every request
 (`ham_logbook/controllers/widget_api.py`, `website_logbook.py`,
-`ham_profile/controllers/widget_api.py`), so both were live. These tests pin
-the fixed behaviour.
+`ham_profile/controllers/widget_api.py`), so both are live. These tests pin
+the expected behaviour.
 """
 
 from odoo.tests import tagged

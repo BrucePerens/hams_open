@@ -166,9 +166,9 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
         """A filled website_honeypot field (a form-filling bot, since the field is hidden and
         unreachable for a real visitor) must be discarded with no content.violation.report row
         created, and no error surfaced -- a rejection error is itself useful feedback a bot could
-        adapt to. Real bug found live 2026-09-28/29: the honeypot field existed in the template
-        but this controller never read it at all, so five real spam submissions became real rows
-        and emailed Bruce over five days before this was caught."""
+        adapt to. The honeypot field exists in the template
+        and this controller must read it: otherwise spam submissions become real rows
+        and are emailed to the administrator."""
         self.authenticate(None, None)
 
         response = self.url_open(
