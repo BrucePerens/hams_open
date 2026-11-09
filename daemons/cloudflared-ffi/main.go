@@ -28,14 +28,12 @@ import (
 var simulatorServer *http.Server
 var simulatorListener net.Listener
 
-// Bug fix (2026-09-22): StartTunnel/StopTunnel below used to be a stub -- it set
-// os.Args in a background goroutine and returned immediately without ever calling
-// anything that actually starts a tunnel, so every caller (cloudflare_daemon.py's
-// run_tunnel() loop) saw it return near-instantly forever, logged "exited
-// unexpectedly, restarting immediately", and looped at ~1 call/second without ever
-// establishing a real Cloudflare connection. Found live on hams1 2026-09-22 when
-// this crash-looped for two different tunnels (hams.com's and an unrelated site's)
-// simultaneously.
+// StartTunnel/StopTunnel below must not be a stub that sets os.Args in a background
+// goroutine and returns without ever calling anything that starts a tunnel: every
+// caller (cloudflare_daemon.py's run_tunnel() loop) would then see it return
+// near-instantly forever, log "exited unexpectedly, restarting immediately", and loop
+// at ~1 call/second without ever establishing a real Cloudflare connection, for every
+// tunnel at once.
 //
 // The vendored daemons/cloudflared/cmd/cloudflared tree (the real, full cloudflared
 // CLI source) DOES have a correct implementation of the actual tunnel-running logic

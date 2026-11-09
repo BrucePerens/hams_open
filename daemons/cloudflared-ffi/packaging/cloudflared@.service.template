@@ -2,9 +2,7 @@
 #
 # Templated per Cloudflare Tunnel: %i is the tunnel's own Cloudflare tunnel id (an opaque,
 # non-secret identifier, safe to log and to name a unit instance after -- see
-# cloudflare/utils/cloudflare_systemd.py for the Odoo-side half of this design, and
-# night_shift_questions/answered/cloudflare-tunnel-supervisor-architecture-a4e8f1c3.md for the
-# full "why" writeup).
+# cloudflare/utils/cloudflare_systemd.py for the Odoo-side half of this design).
 #
 # The literal text "{cloudflared_bin}" below is filled in by cloudflare_systemd.py at write time
 # via a plain string .replace() (systemd does not expand environment variables in the ExecStart

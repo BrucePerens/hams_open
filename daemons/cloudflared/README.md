@@ -114,7 +114,7 @@ until the rollback: watch `journalctl` for the unit (as `odoo`, `--user`) while 
 The three Python scripts in this directory are Cloudflare's own release pipeline, kept because the vendored `Makefile`
 calls them (`github_release.py` from `github-release-dryrun` and `github-release`, `github_message.py` from
 `github-release`, `release_pkgs.py` from `r2-linux-release` and `r2-next-linux-release`). hams.com does not run them: production is built with `build_hams.sh`
-(above). They were reviewed and fixed in the bug hunt of 2026-09-09 (commit `8242d8fa`), and their tests run with
+(above). They were hardened in commit `8242d8fa`, and their tests run with
 `python3 -m pytest daemons/cloudflared/test_github_message.py daemons/cloudflared/test_github_release.py
 daemons/cloudflared/test_release_pkgs.py`. The tests replace PyGithub, boto3, python-gnupg, `reprepro`, `rpm` and
 `go version -m` with mocks (`release_script_testing.py` supplies stand-in modules for the packages that are not
