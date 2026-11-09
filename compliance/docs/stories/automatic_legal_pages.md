@@ -17,6 +17,7 @@ Alice is worried about legal compliance but doesn't have the budget for a lawyer
    - **Terms of Service** (`/terms`) [@ANCHOR: COMM_compliance_terms_of_service_template]
 
    - **Accessibility Statement** (`/accessibility`) [@ANCHOR: COMM_compliance_accessibility_statement_template]
+     The statement leaves an empty slot [@ANCHOR: COMM_compliance_accessibility_display_slot] where a theme that offers display and reading choices describes them; with no such theme the statement says nothing about a panel the site does not have.
    
    - **Compliance Index** (`/compliance`) [@ANCHOR: COMM_compliance_index_route]
 4. Alice visits her website and sees these links already active and populated with relevant content that covers her use of Odoo features.
