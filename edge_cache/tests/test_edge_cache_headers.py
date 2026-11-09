@@ -239,12 +239,11 @@ class TestEdgeCacheHeaders(HamsHttpCase):
 
     def test_06_error_response_is_not_pinned_at_the_edge(self):
         # Tests [@ANCHOR: COMM_ir_http_post_dispatch_headers]
-        """Bug-hunt fix, 2026-09-11 (Fable review of the ir.http hot path):
-        a transient 500/404 used to get the same long-TTL edge caching as a
-        genuinely successful response, on both the static-asset branch
-        (max-age=31536000) and the semi-static-page branch (max-age=86400)
-        -- pinning the error at Cloudflare's edge long after origin recovers.
-        Both branches must now fall back to no-cache on a non-200/304 status."""
+        """A transient 500/404 must not get the same long-TTL edge caching as a
+        genuinely successful response, on either the static-asset branch
+        (max-age=31536000) or the semi-static-page branch (max-age=86400)
+        -- that would pin the error at Cloudflare's edge long after origin recovers.
+        Both branches must fall back to no-cache on a non-200/304 status."""
 
         class DummyBase:
             @classmethod

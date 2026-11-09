@@ -509,9 +509,9 @@ class TestKeyRegistry(RealTransactionCase):
         # [@ANCHOR: COMM_test_force_provisioning_partial_failure]
 
         # Tests [@ANCHOR: COMM_force_provision_error_handling]
-        # Found live on hams1, 2026-09-23: one daemon's failure raised UserError at the end, which rolled back the whole
+        # One daemon's failure must not raise UserError at the end: that would roll back the whole
         # transaction, including the API keys of the daemons that HAD succeeded -- whose key files were already
-        # written. Files and database then disagreed and those daemons were refused for days.
+        # written. Files and database would then disagree and those daemons would be refused.
         good_path = "/opt/hams/etc/keys/partial_ok.env"
         bad_path = "/opt/hams/etc/keys/partial_bad.env"
         self.test_env_paths.extend([good_path, bad_path])

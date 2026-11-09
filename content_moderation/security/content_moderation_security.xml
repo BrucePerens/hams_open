@@ -75,9 +75,7 @@
             <field name="perm_unlink" eval="True"/>
         </record>
 
-        <!-- Bug-hunt fix, carried over from user_websites (2026-09-09, fixed
-             there before this extraction, preserved here rather than
-             re-introduced): the service account must NOT share the
+        <!-- Carried over from user_websites: the service account must NOT share the
              moderator's own unconditional [(1,'=',1)] rule above: Odoo
              OR-combines same-model group-matching rule domains, so sharing
              it would OR-dominate content_violation_report_multi_company_rule's

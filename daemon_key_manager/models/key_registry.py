@@ -138,10 +138,10 @@ class DaemonKeyRegistry(models.Model):
     _chk_path = "CHECK(LENGTH(TRIM(env_file_path)) > 0)"
     _path_not_empty = models.Constraint(_chk_path, _err_path)
 
-    # Adversarial security review, 2026-09-03: register_daemon()'s own
-    # authorization check only verified the CALLER is the target service
-    # account being registered -- it never verified env_file_path itself
-    # was unique. A caller could register_daemon() under a brand-new,
+    # register_daemon()'s own
+    # authorization check only verifies the CALLER is the target service
+    # account being registered; uniqueness of env_file_path is enforced by
+    # this constraint. Without it, a caller could register_daemon() under a brand-new,
     # never-used daemon_name while setting env_file_path to point at a
     # DIFFERENT, already-registered daemon's real credential file --
     # register_daemon() would create a new registry row and immediately
@@ -421,26 +421,25 @@ class DaemonKeyRegistry(models.Model):
         Grants `group_daemon_key_usage` (the 90-day API-key-duration group) to `user`
         if it doesn't already have it.
 
-        Real bug found 2026-09-28/29 while chasing a live production incident
-        (`backup_worker` unable to rotate its own key, `ValidationError: You cannot
-        exceed 1.0 days` from `res.users._check_expiration_date()`, despite this exact
-        group having been granted once already): every daemon service account this
+        Without this, a daemon (`backup_worker`, say) fails to rotate its own key with
+        `ValidationError: You cannot exceed 1.0 days` from
+        `res.users._check_expiration_date()`, despite this exact group having been
+        granted once already: every daemon service account this
         codebase defines declares its OWN `group_ids` as a static `(6, 0, [...])` eval
         in a `noupdate="0"` XML record -- intentionally, so upgrading a daemon module
         can revoke a group it no longer wants the account to hold (see
-        `backup_management/security/security.xml`'s own 2026-09-14 comment on exactly
+        `backup_management/security/security.xml`'s own comment on exactly
         this mechanism). But `group_daemon_key_usage` was never one of the groups any
         of those per-module `(6, 0, [...])` lists statically declared -- it was only
         ever granted dynamically, here, via the raw-SQL insert below, the first time
         `register_daemon()` ran for that account. A `(6, 0, [...])` eval *replaces* the
         full group set, so the next ordinary module upgrade after that first
-        registration silently wiped this dynamically-granted membership back out
-        again, with no error anywhere -- confirmed against every `is_service_account`
-        XML record in this codebase as of this date: not one statically includes this
-        group. `register_daemon()` alone re-granting it (the only call site before this
-        fix) doesn't help, since `register_daemon()` isn't what runs on a later,
+        registration silently wipes this dynamically-granted membership back out
+        again, with no error anywhere -- no `is_service_account`
+        XML record in this codebase statically includes this
+        group. `register_daemon()` alone re-granting it doesn't help, since `register_daemon()` isn't what runs on a later,
         ordinary key rotation -- `action_rotate_key()` and the nightly
-        `cron_rotate_all_keys()` are, and neither of them re-checked this. Calling this
+        `cron_rotate_all_keys()` are, and neither of them re-checks it. Calling this
         from `_rotate_key_and_write_file()` itself (this method's own real caller,
         reached by all three of `register_daemon()`, `action_rotate_key()`, and the
         cron) makes every rotation path self-healing regardless of what an
@@ -559,10 +558,10 @@ class DaemonKeyRegistry(models.Model):
                 failures.append(reg.name)
 
         if failures:
-            # Return, do not raise. Raising here used to roll back the whole transaction, including the rotations
+            # Return, do not raise. Raising here would roll back the whole transaction, including the rotations
             # that had succeeded -- but their new keys were already written to their key files, so the files and the
-            # database disagreed and those daemons were refused (found live on hams1, 2026-09-23: the event and
-            # AI-triage services stayed unauthorised for days after one unrelated daemon failed). A failure is
+            # database would disagree and those daemons would be refused (one unrelated daemon's failure
+            # would leave the others unauthorised until the next successful run). A failure is
             # reported in the result instead, and the caller commits what succeeded. The systemd bootstrap script
             # turns a non-success result into a failed unit.
             msg = _(
@@ -818,9 +817,8 @@ class DaemonKeyRegistry(models.Model):
         if pre_fetched_keys is not None:
             # exists() first: the batch callers fetch every registry's keys once, and an
             # earlier registry in the same run has already unlinked its own. Reading a
-            # field on those deleted records raised MissingError, which failed every
-            # registry after the first one that actually revoked something (found on
-            # hams_prod 2026-10-03, once the key manager could see service-account keys).
+            # field on those deleted records raises MissingError, which would fail every
+            # registry after the first one that actually revoked something.
             old_keys = pre_fetched_keys.exists().filtered(
                 lambda k: k.user_id.id == self.user_id.id and k.name == key_name
             )

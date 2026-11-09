@@ -48,13 +48,11 @@
         <record id="daemon_key_manager_read_service_accounts_rule" model="ir.rule">
             <field name="name">Daemon Key Manager can read Service Accounts</field>
             <field name="model_id" ref="base.model_res_users"/>
-            <!-- Bug-hunt finding: this domain used to be unconditionally
-                 true ([(1, '=', 1)]), granting cross-company read on EVERY
-                 res.users record: every human employee too, not just
-                 service accounts, despite this rule's own name and its
+            <!-- This domain is scoped to service accounts: an unconditionally
+                 true domain ([(1, '=', 1)]) would grant cross-company read on EVERY
+                 res.users record, every human employee too, although this rule's
                  only real caller (register_daemon()'s cross-company login
-                 lookup) only ever needing to find service accounts. Scoped
-                 to match the rule's own stated purpose; a Manager still
+                 lookup) only ever needs to find service accounts. A Manager still
                  gets the cross-company reach they need over the accounts
                  they actually manage. -->
             <field name="domain_force">[('is_service_account', '=', True)]</field>

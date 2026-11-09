@@ -14,7 +14,7 @@ EDGE_CACHEABLE_MARKER = "X-Cloudflare-Edge-Cacheable"
 NO_EDGE_CACHE = "no-cache, no-store"
 # Browser/shared-cache directive for any error answer. Cloudflare-CDN-Cache-Control is only the edge's
 # own opt-out; a zone rule, Automatic Platform Optimization or Browser Cache TTL can still store an
-# answer that carries no Cache-Control of its own (perens.com held a 404 for 30 minutes, 2026-10-29).
+# answer that carries no Cache-Control of its own (a 404 was once held for 30 minutes).
 NO_STORE = "no-store"
 PUBLIC_PAGE_EDGE_CACHE = "max-age=86400"
 # Cookies Odoo sets on a first anonymous visit that carry nothing per-visitor when the conditions
@@ -116,8 +116,7 @@ class IrHttp(models.AbstractModel):
             return res
 
         # 3. Public HTML: uncached unless the page opted in AND nothing about this exchange is
-        #    per-visitor. Design: night_shift_todo/medium/cloudflare-html-caching-prereqs
-        #    (hams_com) -- a response Cloudflare caches is replayed to every later visitor, Set-Cookie
+        #    per-visitor. A response Cloudflare caches is replayed to every later visitor, Set-Cookie
         #    included, so "cacheable" and "sets a cookie" must never both be true.
         if not (opted_in and cls._cloudflare_edge_cacheable(response)):
             response.headers["Cloudflare-CDN-Cache-Control"] = NO_EDGE_CACHE

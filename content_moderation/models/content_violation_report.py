@@ -77,8 +77,7 @@ class ContentViolationReport(models.Model):
 
     # --- Moderation Action Methods ---
     #
-    # Server-side state guards (bug class 18, found in user_websites before
-    # this extraction): the client-rendered form's own
+    # Server-side state guards: the client-rendered form's own
     # `invisible="state != 'new'"`-style attributes were the ONLY thing
     # preventing these from being invoked on an already-resolved report --
     # a direct RPC, a stale concurrent admin tab, or (for
