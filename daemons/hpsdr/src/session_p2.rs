@@ -478,7 +478,9 @@ impl Radio2 {
     }
 
     // [@ANCHOR: hpsdr_session_p2_stop]
-    /// Unkey, send a High Priority packet with the run bit clear, and end the session task.
+    /// Unkey, send a High Priority packet with the run bit clear, and end the session task. The task
+    /// is ended and awaited before that packet is sent, so a transmit packet the task was building
+    /// on another worker thread cannot follow (and undo) the unkey.
     pub async fn stop(self) -> Result<(), HpsdrError> {
         {
             let mut tx = lock(&self.shared.tx);
@@ -486,7 +488,9 @@ impl Radio2 {
             tx.drive = 0;
             tx.iq.clear();
         }
-        self.task.abort();
+        let mut task = self.task;
+        task.abort();
+        let _ = (&mut task).await;
         let cfg = lock(&self.shared.cfg).0.clone();
         let d = p2::encode_high_priority_rx(u32::MAX, &hp_rx(&cfg, &self.target, false))?;
         self.sock

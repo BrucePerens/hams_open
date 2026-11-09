@@ -67,6 +67,11 @@ pub struct Policy {
     pub deny_paths: Vec<PathBuf>,
 }
 
+/// The character-device major shared by the virtual consoles and the legacy serial ports.
+const VT_MAJOR: u32 = 4;
+/// First minor of major 4 that is a serial port; the minors below it are virtual consoles.
+const VT_MINOR_END: u32 = 64;
+
 /// The VNWA's USB codec: never a radio, and opening it disturbs the instrument.
 pub const VNWA_CODEC: (u16, u16) = (0x08bb, 0x29c0);
 
@@ -139,8 +144,12 @@ impl Policy {
     /// Accepts a node kind only when it is a character device of `class`.
     pub fn check_kind(&self, kind: NodeKind, class: DeviceClass) -> Result<(), Denial> {
         match kind {
-            NodeKind::Char { major, .. } => {
-                if self.class_of_major(major) == Some(class) {
+            NodeKind::Char { major, minor } => {
+                // Major 4 is shared: minors 0..=63 are the kernel's virtual consoles
+                // (`/dev/tty0`..`/dev/tty63`, the local keyboard and screen), minors 64 and up
+                // are the legacy serial ports (`ttyS0`...). A console is never a serial port.
+                let virtual_console = major == VT_MAJOR && minor < VT_MINOR_END;
+                if !virtual_console && self.class_of_major(major) == Some(class) {
                     Ok(())
                 } else {
                     Err(Denial::WrongClass)
@@ -277,6 +286,32 @@ mod tests {
         assert_eq!(p.class_of_major(166), Some(DeviceClass::Serial));
         assert_eq!(p.class_of_major(116), Some(DeviceClass::Audio));
         assert_eq!(p.class_of_major(8), None);
+    }
+
+    // Tests [@ANCHOR: relay_broker_policy_check_kind]
+    // Tests [@ANCHOR: relay_broker_policy_check_fd]
+    #[test]
+    fn virtual_consoles_share_the_serial_major_but_are_never_handed_out() {
+        let p = Policy::default();
+        let on_major_4 = |minor| NodeKind::Char { major: 4, minor };
+        for minor in [0, 1, 7, 63] {
+            assert_eq!(
+                p.check_kind(on_major_4(minor), DeviceClass::Serial),
+                Err(Denial::WrongClass),
+                "/dev/tty{minor} is a virtual console, not a serial port"
+            );
+            assert_eq!(
+                p.check_fd(on_major_4(minor), DeviceClass::Serial),
+                Err(Denial::WrongClass)
+            );
+        }
+        for minor in [64, 65, 255] {
+            assert_eq!(
+                p.check_kind(on_major_4(minor), DeviceClass::Serial),
+                Ok(()),
+                "minor {minor} is a legacy ttyS port"
+            );
+        }
     }
 
     // Tests [@ANCHOR: relay_broker_policy_check_node]
