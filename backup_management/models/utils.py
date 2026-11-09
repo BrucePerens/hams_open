@@ -30,45 +30,40 @@ def validate_backup_path(path):
         "/var/backups/global",
         "/opt/hams/backup",
         "/mnt/backup",
-        # Bug-hunt fix (2026-09-09, tier-1 pass): this is the ONLY base under
+        # This is the ONLY base under
         # which daemon/main.py's own, independent allowlist
         # (BACKUP_WORKER_SCRIPTS_DIR, default
         # "/opt/hams/daemons/backup_worker/scripts") will actually execute a
         # restore_drill_script -- none of the bases above satisfy the
         # daemon's own `abs_script_path.startswith(allowed_base + "/")`
-        # check. Without this entry, this Odoo-side constraint accepted
+        # check. Without this entry, this Odoo-side constraint would accept
         # restore_drill_script values (e.g. under /tmp or /opt/hams/backup)
-        # that the daemon would always refuse to run, and rejected the one
+        # that the daemon would always refuse to run, and reject the one
         # path the daemon would accept -- a config that looked valid in the
-        # UI could never actually run a drill. Class 6 (cross-section
-        # self-contradiction between two independent allowlists for the same
-        # field's value).
+        # UI could never actually run a drill. The two independent allowlists
+        # for the same field's value must agree.
         "/opt/hams/daemons/backup_worker/scripts",
     ]
-    # Bug-hunt fix (2026-09-09, tier-1 pass): "/opt/hams/etc/keys" was
-    # previously in this list. No backup.config in this codebase (or its
+    # "/opt/hams/etc/keys" is deliberately NOT in this list. No backup.config in this codebase (or its
     # tests) ever targets that directory -- it's this daemon's OWN
     # credential-file directory (see hooks.py's
     # env_file_path="/opt/hams/etc/keys/backup_worker.env"), not a
     # legitimate backup repository, restore destination, or drill-script
-    # location. Allowing it here meant a backup admin could type
+    # location. Allowing it here would let a backup admin type
     # "/opt/hams/etc/keys" as a kopia restore_target_path and have the
     # daemon overwrite backup_worker.env (and any other daemon's credential
     # file living in that same directory) with the contents of a kopia
     # snapshot -- a real credential/privilege-compromise path, not just a
-    # scoping papercut. Removed; nothing in this module needs it.
+    # scoping papercut. Nothing in this module needs it.
     #
-    # Bug-hunt fix (2026-09-11): "/tmp" was also previously in this list --
-    # confirmed by grepping this entire module (code, tests, docs) that
-    # nothing legitimately targets it; the only reference anywhere was this
-    # allowlist entry itself. A world-writable directory (mode 1777) has no
+    # "/tmp" is likewise deliberately NOT in this list: nothing in this
+    # module (code, tests, docs) legitimately targets it. A world-writable directory (mode 1777) has no
     # business being an allowed KOPIA_RESTORE_TARGET_PATH: any local user
     # could pre-stage a symlink there, or a restore into a predictable
     # /tmp path could plant/overwrite a file some OTHER privileged process
-    # later reads trusting its own location. Same bug class, same fix
-    # shape as the "/opt/hams/etc/keys" removal above -- a shared
-    # allowlist function accepting a base directory nothing actually needs,
-    # purely because it was convenient at some point. Removed.
+    # later reads trusting its own location. As with "/opt/hams/etc/keys"
+    # above, a shared allowlist function must not accept a base directory
+    # nothing actually needs, purely because it was convenient at some point.
 
     if not any(abs_path == base or abs_path.startswith(base + "/") for base in allowed_bases):
         raise UserError(
