@@ -836,6 +836,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # Launch audit J5-9: plain text shown on /email-policy and /unsubscribe while outgoing email is limited
             # (hams_base/controllers). Empty by default; not a secret.
             "hams_base.email_delivery_notice",
+            # hams_rpc_guard/endpoint_gate.py: who may reach Odoo's /xmlrpc, /jsonrpc and /json/2 endpoints
+            # ("loopback", "any" or "none"). A policy word, not a secret.
+            "hams_rpc_guard.legacy_access",
+            "hams_rpc_guard.json2_access",
+            "hams_rpc_guard.trusted_proxies",
             # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8: the
             # NCMEC CyberTipline mandatory-reporting workflow (hams_helpdesk/models/
             # helpdesk_ticket.py). Same category as pager_duty.domain_api_identity above --
