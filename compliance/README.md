@@ -56,7 +56,7 @@ If you already had a page at `/privacy` before installing this module, we won't 
 To run the tests for this module:
 
 ```bash
-sudo -u odoo env HAMS_ISOLATED_NS=1 python3 hams_shared/tools/test.py -u compliance
+python3 hams_shared/tools/test.py --wait -u compliance
 ```
 
 ## 🛠️ Installation
