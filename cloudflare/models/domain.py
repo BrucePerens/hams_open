@@ -141,8 +141,7 @@ class CloudflareRoutingDomain(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_action_sync_ssl_status]
     def action_sync_ssl_status(self):
-        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): edge.routing.domain
-        # grants perm_read=1 to base.group_public/base.group_portal/
+        # edge.routing.domain grants perm_read=1 to base.group_public/base.group_portal/
         # base.group_user (ir.model.access.csv rows from edge_routing), so
         # this public (non-underscore-prefixed) method is reachable via
         # /web/dataset/call_kw by literally any site visitor who can name
@@ -158,9 +157,9 @@ class CloudflareRoutingDomain(models.Model):
         # caller can trigger a real, credentialed Cloudflare API call for
         # any domain record merely by knowing its id -- the exact same
         # "network-exposed handler with weaker access restriction than its
-        # own purpose implies" shape already found and fixed for
-        # action_pull_waf_rules/action_push_waf_rules and
-        # cloudflare.waf.ban_ip. Gating on the same permission the
+        # own purpose implies" shape that action_pull_waf_rules/
+        # action_push_waf_rules and cloudflare.waf.ban_ip are also gated
+        # against. Gating on the same permission the
         # eventual write already requires closes it before the network
         # call, not just before the local side effect.
         if not (

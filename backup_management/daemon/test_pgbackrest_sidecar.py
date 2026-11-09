@@ -210,7 +210,7 @@ class TestProcessOne(unittest.TestCase):
     def test_a_failure_writing_the_result_renames_the_request_instead_of_looping(
         self, mock_run, mock_chmod
     ):
-        # Advisor-caught gap, 2026-10-01: if writing/finishing the result
+        # If writing/finishing the result
         # file fails for any reason, the request file must stop matching
         # PathExistsGlob=request-*.json -- otherwise hams-pgbackrest-backup.path
         # re-triggers this same request immediately, forever, until

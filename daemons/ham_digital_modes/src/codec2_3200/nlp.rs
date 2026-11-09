@@ -387,9 +387,8 @@ const fn window_fits_i32(w: &[i64]) -> bool {
 // this function now runs on, whose size-specialised entry points the
 // envelope/synthesis/spectral_bridge stages use). A bare
 // `fft_fixed` anchor here would silently collide with that one in any
-// repo-wide anchor index (per this crate's own documented, previously-hit
-// collision class -- see `hams_com/agents/skills/bug-hunt/SKILL.md`'s
-// "same-named functions in sibling files" caveat), even though today's
+// repo-wide anchor index (per this crate's own documented
+// collision class: same-named functions in sibling files), even though today's
 // `.py`-only `check_claims_freshness.py`/`check_claims.py` don't scan
 // `.rs` files yet and so don't currently exploit it.
 fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE]) {

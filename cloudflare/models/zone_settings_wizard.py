@@ -172,24 +172,23 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
             if not success:
                 errors.append(f"Security Header (HSTS): {msg}")
 
-        # Bug fix (bug-hunt, review_tier 1, 2026-09-09): `is not False` was a
-        # vacuous/dead check (bug class 1) -- Odoo's Integer field never
+        # Use a truthy check, not `is not False`, which is a
+        # vacuous/dead check -- Odoo's Integer field never
         # caches or returns Python `False`, only a real int with 0 as its own
         # falsy value (odoo/orm/fields_numeric.py: `falsy_value = 0`,
-        # `convert_to_cache` always does `int(value or 0)`). So this branch
-        # was unconditionally True on every call, and every "Apply" click
-        # force-set browser_cache_ttl to 0 ("respect existing headers")
+        # `convert_to_cache` always does `int(value or 0)`). So an `is not False`
+        # branch would be unconditionally True on every call, and every "Apply" click
+        # would force-set browser_cache_ttl to 0 ("respect existing headers")
         # whenever `default_get` hadn't pre-populated a live value (missing
         # token/zone, a failed `get_zone_settings` call, or the setting id
         # simply absent from Cloudflare's response) -- silently discarding
         # whatever TTL was actually configured, even when the admin only
-        # meant to change security_level or development_mode. Switched to a
-        # truthy check, matching security_level/development_mode's own
+        # meant to change security_level or development_mode. The truthy check matches security_level/development_mode's own
         # convention just above: this only applies browser_cache_ttl when
         # non-zero. Trade-off: this wizard can no longer be used to
         # explicitly (re-)set the TTL to literal 0 -- a dedicated tri-state
         # (e.g. a separate "apply TTL" checkbox) would be needed to support
-        # that without ambiguity; left as a follow-up, not done here.
+        # that without ambiguity; not implemented.
         if self.browser_cache_ttl:
             success, msg = update_zone_setting(
                 "browser_cache_ttl", self.browser_cache_ttl, token, zone_id

@@ -167,14 +167,12 @@ class TestBatch2Fixes(HamsTransactionCase):
         self.assertIn("exclude_patterns", payload)
 
     def test_region_field_reaches_the_published_payload(self):
-        # night_shift_todo/low/backup-config-no-region-field-6e8c1a4f.md:
-        # backup.config used to have no `region` field at all, so the
-        # pgbackrest daemon's own real `config.get('region') or
+        # The pgbackrest daemon's own real `config.get('region') or
         # 'us-east-1'` override (daemon/main.py's
         # _pgbackrest_s3_repo_args(), tested there by
-        # test_03_region_override_honored) was dead capability -- there was
-        # no way for an admin to actually populate it. This proves the
-        # model-side half of the fix: a non-default region set on the
+        # test_03_region_override_honored) is only usable if backup.config
+        # has a `region` field an admin can populate. This proves the
+        # model-side half: a non-default region set on the
         # config is carried through to the exact payload key
         # (config["region"]) the daemon's override reads.
         config = self.env["backup.config"].create({
@@ -211,15 +209,14 @@ class TestBatch2Fixes(HamsTransactionCase):
         self.assertFalse(payload.get("region"))
 
     def test_kopia_restore_destination_ignores_free_text_target_path(self):
-        # Bug-hunt fix (2026-09-13): action_restore's kopia branch used to
-        # build the real filesystem restore destination straight from
+        # action_restore's kopia branch must not build the real filesystem restore destination straight from
         # restore_target_path, a free-text field the ir.rule multi-tenant
         # scoping on backup.snapshot/backup.config never touches. A backup
         # admin scoped to only their own website's snapshots could type
         # another tenant's own target_path basename here, and since Kopia's
         # `restore` writes INTO the given directory, this could clobber
-        # another tenant's real backup repository. The fix derives the
-        # destination from backup.job's own database-assigned id instead
+        # another tenant's real backup repository. The destination is
+        # derived from backup.job's own database-assigned id instead
         # (immune to injection/traversal by construction), leaving
         # restore_target_path's own field/validation in place but unused
         # for kopia. This asserts the *actual* cmd_args sent to the worker
@@ -258,15 +255,14 @@ class TestBatch2Fixes(HamsTransactionCase):
         self.assertIn(expected_dest, job.output_log)
 
     def test_restore_payload_carries_the_s3_b2_storage_routing_fields(self):
-        # Bug-hunt fix (2026-09-27, tier-1 pass): producer/consumer payload-schema
-        # drift. daemon/main.py's kopia branch is keyed on cmd[0] == "kopia" AND
+        # Producer/consumer payload-schema contract. daemon/main.py's kopia branch is keyed on cmd[0] == "kopia" AND
         # config.get("storage_type") in ("s3", "b2") -- that is what sets
         # KOPIA_CONFIG_PATH to this backup.config's OWN per-config repository.config
         # and calls _ensure_kopia_s3_repository() before running the command. It
-        # covers restore_cmd jobs by design, but action_restore's payload never
-        # carried storage_type/bucket_name/endpoint_url/access_key/secret_key at
-        # all, so storage_type came back absent, defaulted to "local", and every
-        # restore of an off-site S3/B2 backup ran against kopia's single GLOBAL
+        # covers restore_cmd jobs by design, so action_restore's payload must
+        # carry storage_type/bucket_name/endpoint_url/access_key/secret_key;
+        # otherwise storage_type is absent, defaults to "local", and every
+        # restore of an off-site S3/B2 backup runs against kopia's single GLOBAL
         # default config instead of the bucket the snapshot actually lives in.
         # Asserts on the real payload dict sent to RabbitMQ, so it fails if any of
         # the five fields goes missing again.

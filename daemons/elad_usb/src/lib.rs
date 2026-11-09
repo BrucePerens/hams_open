@@ -8,7 +8,7 @@
 //! * **No vendor code and no blob.** An FDM-S1 or FDM-S2 needs its FPGA loaded by a vendor image before it
 //!   sends samples. This crate never loads one: [`fpga::FpgaState`] says so and [`radio::Radio::open`]
 //!   refuses such a unit until the caller states that the FPGA is already loaded
-//!   (`hams_com/night_shift_questions/open/elad-fpga-image-for-fdm-s1-s2-*.md`).
+//!   (an FDM-S1/S2 FPGA image is not available to this crate).
 //! * **Sans-IO core.** [`protocol`] and [`convert`] build and parse bytes; [`transport::Transport`] is the one
 //!   seam to the device, with [`transport::FakeTransport`] for tests and `usb::UsbTransport` (feature `usb`).
 //! * **Everything is `verified=unverified`** until it has run against a real unit (see README.md).

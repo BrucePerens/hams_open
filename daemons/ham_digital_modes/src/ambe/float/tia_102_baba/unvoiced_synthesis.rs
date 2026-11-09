@@ -235,8 +235,7 @@ fn unvoiced_scaling_coefficient_uncached() -> f64 {
 /// `(l_hat + 0.5) * omega0_tilde > pi`. This *is* reachable from a hand-constructed, physically
 /// invalid `(l_hat, omega0_tilde)` pair (the mistake a synthetic test made while building the
 /// fixed-point port's own orchestration tests, `l_hat=40` with `omega0_tilde` from `b0=90` -- see
-/// `night_shift_todo/high/unvoiced-spectrum-panic-on-invalid-l-hat-omega0-pair-a1c9e3f7.md` in
-/// hams_com for that history), but every real caller in this codebase gets `l_hat` from `voiced.len()`
+/// an earlier panic on that pair), but every real caller in this codebase gets `l_hat` from `voiced.len()`
 /// alone (this function never receives `l_hat` as its own separate argument), and every real
 /// production caller builds `voiced` with exactly `vuv::harmonics_count(omega0_tilde)` elements for
 /// the *same* `omega0_tilde` passed in -- `decode.rs`'s own `decode_parameters` (`let l_hat =

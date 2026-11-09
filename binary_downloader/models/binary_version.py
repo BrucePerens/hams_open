@@ -54,9 +54,9 @@ class BinaryVersion(models.Model):
     @api.constrains("version_number")
     # [@ANCHOR: binary_version_check_version_no_slashes]
     def _check_version_no_slashes(self):
-        # Bug-hunt fix, 2026-09-11: this sibling of binary_manifest.py's own
-        # _check_name_no_slashes blocked "/"/"\\" but not the bare "." or ".."
-        # segments that check does -- version_number is never actually used as a raw
+        # Matches its sibling, binary_manifest.py's own
+        # _check_name_no_slashes: blocks "/"/"\\" and also the bare "." or ".."
+        # segments -- version_number is never actually used as a raw
         # filesystem path component today (only hashed into an advisory-lock id via
         # _get_deterministic_hash, see action_download_to_pool), so this isn't a
         # confirmed live path-traversal bug, but a future call site treating it like

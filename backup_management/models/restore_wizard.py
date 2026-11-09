@@ -36,10 +36,9 @@ class BackupRestoreWizard(models.TransientModel):
             )
 
         # [@ANCHOR: backup_management:restore_wizard_refuses_pgbackrest]
-        # Fail-fast fix, found live 2026-10-01 while manually verifying a real pgBackRest
-        # restore: this wizard's own pgbackrest path was never actually wired through
-        # daemon/main.py's privileged sidecar (_PGBACKREST_PRIVILEGED_OPS only ever listed
-        # "backup", never "restore") -- clicking "Restore" here queues a job that the ordinary,
+        # Fail fast: this wizard's own pgbackrest path is not wired through
+        # daemon/main.py's privileged sidecar (_PGBACKREST_PRIVILEGED_OPS only lists
+        # "backup", not "restore") -- clicking "Restore" here queues a job that the ordinary,
         # sandboxed backup_worker.service then tries to run directly, with no permission to
         # write PostgreSQL's real data directory and no forced-safe restore-target override.
         # The real fix (routing restore through a hardened sidecar extension, the restore
@@ -71,15 +70,14 @@ class BackupRestoreWizard(models.TransientModel):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "backup_management.user_backup_service_internal"
         )
-        # Bug-hunt fix (2026-09-09, tier-1 pass): do NOT .with_company() to
-        # the snapshot's own company here -- see the identical fix and full
-        # explanation in backup_config.py's _publish_to_worker. svc_uid's
+        # Do NOT .with_company() to the snapshot's own company here -- see the
+        # full explanation in backup_config.py's _publish_to_worker. svc_uid's
         # real company_ids is [main_company] only, so .with_company() to any
-        # other tenant's company raised AccessError immediately for every
+        # other tenant's company raises AccessError immediately for every
         # restore of a non-main-company backup. backup.job's company_id is
         # a related(store=True) field that computes correctly regardless of
         # env.company; cross-tenant create/read access for this service
-        # account now comes from rule_backup_job_multi_tenant_svc instead.
+        # account comes from rule_backup_job_multi_tenant_svc instead.
         jobs = self.env["backup.job"].with_user(svc_uid)
         job = jobs.create(
             {
@@ -93,9 +91,9 @@ class BackupRestoreWizard(models.TransientModel):
 
         cmd_args = []
         if self.snapshot_id.config_id.engine == "kopia":
-            # Bug-hunt fix (2026-09-13): same root cause as the pgbackrest
-            # stanza fix below -- the real Kopia restore destination used to
-            # come straight from self.restore_target_path, a free-text field
+            # Same root cause as the pgbackrest stanza derivation below -- the
+            # real Kopia restore destination must not come straight from
+            # self.restore_target_path, a free-text field
             # the ir.rule multi-tenant scoping on backup.snapshot/
             # backup.config never touches (it's typed by the user, not
             # looked up). A backup admin scoped to only their own website's
@@ -105,9 +103,9 @@ class BackupRestoreWizard(models.TransientModel):
             # `restore` writes INTO the given directory, so this could
             # clobber/corrupt another tenant's real backup repository.
             #
-            # Considered (and rejected) deriving this from
+            # Deriving this from
             # self.snapshot_id.snapshot_id, matching backup_snapshot.py's
-            # own `restore_command` display convention literally -- but
+            # own `restore_command` display convention literally, was rejected:
             # `snapshot_id` (Char, "Snapshot ID / Label") has NO format
             # constraint of its own (unlike backup.config.target_path,
             # which _check_security_paths enforces as strict
@@ -116,7 +114,7 @@ class BackupRestoreWizard(models.TransientModel):
             # (ir.model.access.csv: 1,1,1,1) -- using it here would let an
             # admin plant `../../etc/cron.d/evil`-shaped content into a real
             # filesystem destination, trading one path-control bug for
-            # another. Used `job.id` instead: `backup.job`'s own real,
+            # another. `job.id` is used instead: `backup.job`'s own real,
             # database-assigned auto-increment integer, created a few lines
             # above -- immune to injection/traversal by construction, and
             # unique per restore invocation (not just per snapshot label),
@@ -164,10 +162,9 @@ class BackupRestoreWizard(models.TransientModel):
             # "What to build" section describes -- the stanza-derivation logic below is still
             # correct and still the right approach once restore is actually routed through a
             # privileged sidecar that can use it safely.
-            # Bug-hunt fix (2026-09-09, tier-1 pass): the stanza that gets
-            # restored (and therefore which tenant's live PostgreSQL data
-            # directory pgbackrest.conf points that stanza at) used to come
-            # straight from self.restore_target_path -- a free-text field
+            # The stanza that gets restored (and therefore which tenant's live
+            # PostgreSQL data directory pgbackrest.conf points that stanza at)
+            # must not come straight from self.restore_target_path -- a free-text field
             # the ir.rule multi-tenant scoping never touches, because it's
             # typed by the user, not looked up. A backup admin scoped (via
             # rule_backup_config_multi_tenant) to only their own
@@ -201,22 +198,20 @@ class BackupRestoreWizard(models.TransientModel):
                 # restore -- previously never included, so every restore of
                 # a password-protected Kopia snapshot ran with no password.
                 "kopia_password": self.snapshot_id.config_id.kopia_password,
-                # Bug-hunt fix (2026-09-27, tier-1 pass): producer/consumer
-                # payload-schema drift, the same shape already fixed once for
-                # this module in 932a3ebd. When real S3/B2 support landed in
-                # the worker (959a7c4e), daemon/main.py's kopia branch became
+                # Producer/consumer payload-schema contract (the same shape as
+                # 932a3ebd for this module). Since real S3/B2 support landed in
+                # the worker (959a7c4e), daemon/main.py's kopia branch is
                 # keyed on `config.get("storage_type")`: for an s3/b2 config it
                 # sets KOPIA_CONFIG_PATH to that backup.config's OWN per-config
                 # repository.config and calls _ensure_kopia_s3_repository()
                 # before running the command. That branch is keyed on
                 # `cmd[0] == "kopia"`, so it covers restore_cmd jobs too -- but
-                # ONLY if the payload actually carries the storage fields, and
-                # this restore payload never did. `storage_type` came back
-                # absent, defaulted to "local", and every restore of an S3/B2
-                # backup ran against kopia's single GLOBAL default config
-                # instead of the bucket the snapshot actually lives in (in
-                # practice: "repository not connected", i.e. off-site restore
-                # simply did not work). Same five fields _publish_to_worker()
+                # ONLY if the payload actually carries the storage fields.
+                # Without them `storage_type` is absent, defaults to "local",
+                # and every restore of an S3/B2 backup runs against kopia's
+                # single GLOBAL default config instead of the bucket the
+                # snapshot actually lives in (in practice: "repository not
+                # connected", i.e. off-site restore does not work). Same five fields _publish_to_worker()
                 # already sends for a backup job, and _redact_payload() in the
                 # daemon already covers access_key/secret_key in its own logs.
                 "storage_type": self.snapshot_id.config_id.storage_type,

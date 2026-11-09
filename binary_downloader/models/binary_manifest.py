@@ -194,7 +194,7 @@ class BinaryManifest(models.Model):
         # includes every record in `self`; subtract how many of `self`'s own rows map to the same
         # file, so unlinking several records that share one file in a SINGLE call (e.g. a
         # multi-select delete) still removes it once nothing outside this call references it
-        # (bug-hunt fix, 2026-09-09).
+        # (see test_21_unlink_batch_deletes_the_file_when_every_sharing_record_is_removed_together).
         keys = [(r.name, r.checksum) for r in self if r.name and r.checksum]
         file_counts = mixin._count_binary_file_references(keys)
         self_counts = Counter(keys)

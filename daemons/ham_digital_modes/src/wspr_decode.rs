@@ -134,7 +134,7 @@ impl Ord for StackNode {
 ///
 /// Computed via a log-sum-exp (max-subtraction) reformulation rather than
 /// forming `p_r_given_hyp / p_r` from two raw `exp()` calls directly --
-/// found and fixed 2026-09-09 during a bug-hunt pass, not a stylistic
+/// a numerical-stability requirement, not a stylistic
 /// preference. For a `r` far from BOTH `+amplitude` and `-amplitude` (a
 /// real, reachable condition on a real receiver: an RFI spike, a fading
 /// dropout that briefly invalidates the caller's own per-symbol amplitude/
