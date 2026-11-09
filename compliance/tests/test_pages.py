@@ -423,3 +423,18 @@ class TestCookiesBarName(HamsHttpCase):
         self.assertEqual(len(bars), 1, "setup sanity check: the cookie bar must be on the page.")
         self.assertEqual(bars[0].get("role"), "dialog")
         self.assertEqual(bars[0].get("aria-label"), "Cookie preferences")
+
+
+@tagged("post_install", "-at_install")
+class TestAccessibilityStatementPanelSlot(HamsTransactionCase):
+    def test_statement_itself_does_not_describe_a_panel_it_cannot_provide(self):
+        # [@ANCHOR: COMM_test_accessibility_statement_has_no_theme_only_panel_text]
+        # Tests [@ANCHOR: COMM_compliance_accessibility_statement_template]
+        # The panel exists only in theme_hams, so compliance's own template (before any inheriting view) leaves an empty
+        # slot for it. A site without that theme must not be told about a "Display and reading" panel.
+        view = self.env.ref("compliance.compliance_accessibility_statement_template")
+        arch = view.arch_db
+        self.assertNotIn("Display and reading", arch)
+        self.assertNotIn("Display and Reading", arch)
+        self.assertIn('id="accessibility_display_choices"', arch)
+        self.assertIn("3. Feedback", arch)
