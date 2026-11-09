@@ -53,6 +53,12 @@ pub fn find() -> Result<Vec<Found>, Error> {
     Ok(out)
 }
 
+/// Whether a device with these USB ids is the receiver `found` names.
+// [@ANCHOR: elad_usb_is_found]
+fn is_found(vendor_id: u16, product_id: u16, found: &Found) -> bool {
+    vendor_id == VENDOR_ID && product_id == found.pid
+}
+
 /// An open, claimed receiver.
 pub struct UsbTransport {
     handle: rusb::DeviceHandle<rusb::Context>,
@@ -65,6 +71,13 @@ impl UsbTransport {
         let ctx = rusb::Context::new().map_err(err)?;
         for d in ctx.devices().map_err(err)?.iter() {
             if d.bus_number() == found.bus && d.address() == found.address {
+                // The address can be reused after an unplug: only the receiver `find` listed there is opened and claimed.
+                let desc = d.device_descriptor().map_err(err)?;
+                if !is_found(desc.vendor_id(), desc.product_id(), found) {
+                    return Err(Error::Usb(
+                        "the device at that bus address is no longer the receiver that was found there".into(),
+                    ));
+                }
                 let handle = d.open().map_err(err)?;
                 let _ = handle.set_auto_detach_kernel_driver(true);
                 handle.claim_interface(0).map_err(err)?;
@@ -110,6 +123,21 @@ impl Transport for UsbTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_receiver_that_was_found_matches() {
+        // Tests [@ANCHOR: elad_usb_is_found]
+        let found = Found {
+            bus: 1,
+            address: 8,
+            pid: Model::S2.pid(),
+            model: Model::S2,
+        };
+        assert!(is_found(VENDOR_ID, Model::S2.pid(), &found));
+        assert!(!is_found(VENDOR_ID, Model::Duo.pid(), &found));
+        assert!(!is_found(0x20b7, Model::S2.pid(), &found));
+        assert!(!is_found(0x20b7, 0x9db1, &found));
+    }
 
     #[test]
     fn a_libusb_timeout_stays_a_timeout() {
