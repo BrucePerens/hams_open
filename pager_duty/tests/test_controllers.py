@@ -223,7 +223,6 @@ class TestPagerControllers(HamsHttpCase):
 
     def test_06b_update_domains_does_not_touch_ham_dns_even_when_it_is_installed(self):
         # Tests [@ANCHOR: pager_duty:update_lets_encrypt_domains]
-        # night_shift_todo/medium/pager-check-lets-encrypt-dns-access-error-7c4e17ae.md:
         # update_lets_encrypt_domains() used to also try to auto-create a ham.dns.record as
         # user_pager_service_internal, which has no ACL grant on that model -- an uncaught
         # AccessError whenever ham_dns happened to be installed alongside pager_duty. The

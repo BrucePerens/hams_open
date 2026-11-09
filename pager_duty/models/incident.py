@@ -185,8 +185,8 @@ class PagerIncident(models.Model):
         now = fields.Datetime.now()
         target_status = vals.get("status")
 
-        # Bug-hunt fix (class 18: state-machine guard exists only in
-        # client-rendered UI): the board's own "Acknowledge" button is the
+        # Server-side state-machine guard (a guard that exists only in
+        # client-rendered UI is not enforced): the board's own "Acknowledge" button is the
         # ONLY place this transition was ever guarded (see
         # static/src/components/board/board.xml's `t-if="inc.status ===
         # 'open'"`) -- there was no server-side check here at all, so a
@@ -279,8 +279,8 @@ class PagerIncident(models.Model):
             ).mapped("partner_id")
 
             if not partners:
-                # Bug-hunt fix (class 17: iteration domain broader than
-                # granted scope): this used to fall back to EVERY member of
+                # Scope guard (iteration domain must not exceed the granted
+                # scope): do not fall back to EVERY member of
                 # group_pager_admin, including admins scoped (via
                 # pager_incident_website_company_rule) to a DIFFERENT
                 # website/company than this incident -- someone who can't

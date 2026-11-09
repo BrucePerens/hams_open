@@ -35,8 +35,8 @@ class PagerLogAPI(http.Controller):
         if real_path != base_dir and not real_path.startswith(base_dir + os.path.sep):
             raise AccessError(_("Illegal path traversal detected."))
 
-        # Bug-hunt fix (class 17: iteration/reach broader than granted
-        # scope): being under /var/log was the ONLY check on file_path --
+        # Scope guard (reach must not exceed the granted scope): being under
+        # /var/log was the ONLY check on file_path --
         # any group_pager_admin member could search ANY file under
         # /var/log, including another tenant's own log files sharing this
         # host, not just files their own website/company actually
@@ -108,10 +108,10 @@ class PagerLogAPI(http.Controller):
             # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
             raise AccessError(_("Access Denied."))
 
-        # Bug-hunt fix (class 17): this used to elevate to the pager_duty
+        # Scope guard: do not elevate to the pager_duty
         # service account -- whose own pager_log_file_website_rule_svc
         # ir.rule is deliberately unrestricted, domain [(1,'=',1)] -- to
-        # list files, which handed EVERY tenant's registered log file
+        # list files: that would hand EVERY tenant's registered log file
         # paths to any group_pager_admin member, not just the caller's
         # own website/company. Using the caller's own env (no with_user
         # elevation) applies pager_log_file_website_company_rule instead,

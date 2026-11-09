@@ -310,7 +310,7 @@ class PagerCheck(models.Model):
         # grants real access to `pager.check` itself (group_pager_admin, group_pager_service),
         # matching this model's own established access scope rather than inventing a new one.
         #
-        # Bug-hunt refresh, 2026-09-27: the gate above used to also accept a bare
+        # The gate above must not also accept a bare
         # `user.is_service_account`, which does NOT match the scope the comment claims. That
         # flag is set on EVERY service account in the whole database (caching, cloudflare,
         # backup_management, compliance, daemon_key_manager, binary_downloader,
@@ -637,8 +637,7 @@ class PagerCheck(models.Model):
         write_error = None
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            # Bug-hunt fix (class 11: credential handled with a permission
-            # gap): this file embeds plaintext dbpass/SMTP credentials for
+            # Credential file permissions: this file embeds plaintext dbpass/SMTP credentials for
             # every configured check (see the dbpass field above and its
             # `check_dict["password"]` write in this same method). A plain
             # open(path, "w") creates the file at the umask-default mode
@@ -651,7 +650,7 @@ class PagerCheck(models.Model):
             # entirely: the file is never briefly (or permanently)
             # world-readable.
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            # Bug-hunt refresh, 2026-09-27: the 0o600 mode argument above only applies when
+            # The 0o600 mode argument above only applies when
             # os.open() actually CREATES the file. Re-exporting over a pager_config.json
             # that already exists -- the overwhelmingly common case, since every
             # action_push_to_json() after the first one does exactly that, and any file
@@ -943,8 +942,7 @@ class PagerCheck(models.Model):
         else:
             certbot_checks.write({"target": ",".join(domains)})
 
-        # night_shift_todo/medium/pager-check-lets-encrypt-dns-access-error-7c4e17ae.md: this
-        # method used to also soft-depend on ham_dns to auto-create a matching A record when
+        # This method used to also soft-depend on ham_dns to auto-create a matching A record when
         # ham_dns happened to be installed. Removed rather than fixed: the calling account
         # (user_pager_service_internal) had no ACL grant on ham.dns.record, the except clause
         # didn't even catch the resulting AccessError, and the create() itself was missing two
