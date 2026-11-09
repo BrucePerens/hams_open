@@ -67,6 +67,9 @@ def defang_html(value):
         wrapper = lxml_html.fragment_fromstring(raw, create_parent="div")
     except (etree.LxmlError, ValueError):
         return Markup(_html.escape(defang_text_node(raw), quote=False))
+    # A comment or processing instruction is not shown, but the text after it is: dropping it joins the text on both sides, so a
+    # URL written out after one is defanged like any other.
+    etree.strip_tags(wrapper, etree.Comment, etree.ProcessingInstruction)
     elements = [e for e in wrapper.iter() if isinstance(e.tag, str)]
     for element in elements:
         element.text = defang_text_node(element.text)

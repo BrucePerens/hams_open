@@ -950,7 +950,7 @@ class HelpdeskTicket(models.Model):
         the one ticket that pages. Only new tickets of a type the agent may see, created in the last day, that are not
         suspicious (the agent never reads those) and have no verdict. Returns how many tickets it marked."""
         raw = str(self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_STALL, "0") or "0").strip()
-        threshold = int(raw) if raw.isdigit() else 0
+        threshold = int(raw) if raw.isascii() and raw.isdigit() else 0
         if threshold <= 0:
             return 0
         now = fields.Datetime.now()
@@ -984,7 +984,7 @@ class HelpdeskTicket(models.Model):
         ``hams_helpdesk.triage_notify_hold_seconds``. 0 (the default, and anything that is not a whole number) holds nothing, so
         nothing changes until Bruce picks a window; a value over 300 is cut to 300, so a real request is never held for long."""
         raw = str(self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_HOLD, "0") or "0").strip()
-        return min(int(raw), _TRIAGE_MAX_HOLD_SECONDS) if raw.isdigit() else 0
+        return min(int(raw), _TRIAGE_MAX_HOLD_SECONDS) if raw.isascii() and raw.isdigit() else 0
 
     @api.model
     # [@ANCHOR: hams_helpdesk:triage_notify_on_leaving_spam]
@@ -1111,6 +1111,18 @@ class HelpdeskTicket(models.Model):
             hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
             judged.with_env(hd_env).write({"triage_overridden": True, "triage_overridden_at": fields.Datetime.now()})
 
+    def _require_triage_caller(self):
+        """Raises AccessError unless the calling user is the external-AI triage account or helpdesk staff. The ``mcp_*`` methods
+        are public (callable over RPC by any signed-in user), and a customer can read their own ticket, so the read they start
+        with does not by itself keep a customer out."""
+        user = self.env.user
+        if not (
+            user.has_group("hams_helpdesk.group_ai_triage_external_service")
+            or user.has_group("hams_helpdesk.group_helpdesk_user")
+            or user._is_superuser()
+        ):
+            raise AccessError(_("Only the triage service and helpdesk staff can do this."))
+
     # [@ANCHOR: hams_helpdesk:mcp_record_verdict]
     def mcp_record_verdict(self, verdict, reason):
         """The external-AI triage agent's verdict on a ticket still in "new": spam, phishing, real or unsure, with the reasons
@@ -1121,6 +1133,7 @@ class HelpdeskTicket(models.Model):
         mcp_mark_spam(): the read runs first under the calling identity so the ir.rule allow-list decides which tickets
         exist for it, and the writes run as the helpdesk service account."""
         self.ensure_one()
+        self._require_triage_caller()
         current = self.read(["stage", "triage_overridden"])[0]
         if current["stage"] != "new":
             raise UserError(_("Only a ticket in the New stage can be judged by the triage agent."))
@@ -1178,6 +1191,7 @@ class HelpdeskTicket(models.Model):
         """
         # [@ANCHOR: hams_helpdesk:mcp_post_internal_note]
         self.ensure_one()
+        self._require_triage_caller()
         self.read(["ticket_type"])
         utils = self.env["zero_sudo.security.utils"]
         hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")

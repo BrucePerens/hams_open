@@ -158,6 +158,30 @@ class TestTriageVerdict(HamsTransactionCase):
         with self.assertRaises(AccessError):
             forged.with_user(portal).write({"triage_verdict": "real"})
 
+    def test_08b_a_customer_cannot_record_a_verdict_or_post_a_note_on_their_own_ticket(self):
+        # Tests [@ANCHOR: hams_helpdesk:mcp_record_verdict]
+        # Tests [@ANCHOR: hams_helpdesk:mcp_post_internal_note]
+        portal = self.env["res.users"].create(
+            {
+                "name": "Portal verdict caller",
+                "login": "portal_verdict_caller",
+                "email": "portal_verdict_caller@example.org",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        ticket = self.Ticket.create(
+            {"name": "Own ticket", "description": "<p>x</p>", "ticket_type": "general", "partner_id": portal.partner_id.id}
+        )
+        self.assertTrue(ticket.with_user(portal).read(["stage"]), "the customer can read their own ticket")
+        with self.assertRaises(AccessError):
+            ticket.with_user(portal).mcp_record_verdict("real", "A genuine request")
+        with self.assertRaises(AccessError):
+            ticket.with_user(portal).mcp_mark_spam("hide me")
+        with self.assertRaises(AccessError):
+            ticket.with_user(portal).mcp_post_internal_note("note planted by a customer")
+        self.assertFalse(ticket.triage_verdict)
+        self.assertEqual(ticket.stage, "new")
+
     def test_09_the_setting_keys_are_readable_through_zero_sudo_with_the_documented_default(self):
         # Tests [@ANCHOR: hams_helpdesk:triage_quarantine_verdicts]
         utils = self.env["zero_sudo.security.utils"]

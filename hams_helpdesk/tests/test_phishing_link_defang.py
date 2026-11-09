@@ -78,6 +78,13 @@ class TestPhishingLinkDefangUnits(HamsTransactionCase):
         self.assertNotIn("<a", out)
         self.assertIn("hxxp://e[.]example/x", out)
 
+    def test_05b_a_url_after_an_html_comment_is_defanged(self):
+        # Tests [@ANCHOR: hams_helpdesk:defang_html]
+        out = str(defang_html('<p>a</p><!-- x -->https://e.example/a and www.e.example<?php x ?>mailto:m@e.example'))
+        for live in ("https://", "http://", "www.", "mailto:m@", "<!--"):
+            self.assertNotIn(live, out)
+        self.assertIn("hxxps://e[.]example/a", out)
+
     def test_06_markup_in_the_text_stays_text_not_markup(self):
         # Tests [@ANCHOR: hams_helpdesk:defang_html]
         out = defang_html("a &lt;script&gt;alert(1)&lt;/script&gt; b <b>bold</b>")

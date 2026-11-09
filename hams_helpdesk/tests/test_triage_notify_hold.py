@@ -82,7 +82,7 @@ class TestTriageNotifyHold(HamsTransactionCase):
 
     def test_02_the_hold_window_setting_is_bounded_and_ignores_nonsense(self):
         # Tests [@ANCHOR: hams_helpdesk:triage_hold_seconds]
-        for raw, expected in (("20", 20), ("0", 0), ("", 0), ("soon", 0), ("-5", 0), ("99999", 300), (" 30 ", 30)):
+        for raw, expected in (("20", 20), ("0", 0), ("", 0), ("soon", 0), ("-5", 0), ("99999", 300), (" 30 ", 30), ("\u00b2", 0), ("\u0663", 0)):
             self.settings["hams_helpdesk.triage_notify_hold_seconds"] = raw
             self.assertEqual(self.Ticket._triage_hold_seconds(), expected, repr(raw))
 
