@@ -4,6 +4,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch, AsyncMock
 
@@ -68,8 +69,8 @@ class DbEnvFileTests(unittest.TestCase):
 
     def test_the_daemon_reads_only_the_family_directory_login(self):
         self.assertEqual(cache_manager.DB_ENV_FILE, "/opt/hams/etc/keys/cache_manager/cache_manager_db.env")
-        self.assertFalse(hasattr(cache_manager, "LEGACY_DB_ENV_FILE"))
-        self.assertFalse(hasattr(cache_manager, "_db_env_file"))
+        self.assertNotIn("LEGACY_DB_ENV_FILE", vars(cache_manager))
+        self.assertNotIn("_db_env_file", vars(cache_manager))
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_manager.py")
         with open(path, encoding="utf-8") as f:
             code = "".join(line for line in f if not line.lstrip().startswith("#"))
@@ -92,9 +93,8 @@ class DbEnvFilePrecedenceTests(unittest.TestCase):
     NOTIFY. The login must still beat a stale exported one."""
 
     def _apply(self, exported):
-        import tempfile
         with tempfile.NamedTemporaryFile("w", suffix=".env", delete=False) as f:
-            f.write("DB_HOST=localhost\nDB_NAME=hams_test\nDB_USER=cache_manager_ro\nDB_PASS=real\n")
+            f.write("DB_HOST=db\nDB_NAME=hams_test\nDB_USER=cache_manager_ro\nDB_PASS=real\n")
         self.addCleanup(os.unlink, f.name)
         environ = dict(exported)
         cache_manager._apply_db_env_file(f.name, environ)
