@@ -148,7 +148,12 @@ mod tests {
         assert!(e.starts_with("NO-GO: scope"), "{e}");
         assert!(e.contains("3 attempts"), "{e}");
         assert!(e.contains("attempt 1:") && e.contains("attempt 3:"), "{e}");
-        assert!(e.contains("ping ") && e.contains("port 80: "), "{e}");
+        // The report names port 80's state whichever way it goes: a host with a web server on loopback port 80 (this test's scope is 127.0.0.1) says
+        // "accepts", one with nothing there says "port 80: <error>".
+        assert!(
+            e.contains("ping ") && (e.contains("port 80: ") || e.contains("port 80 accepts")),
+            "{e}"
+        );
         assert!(e.contains("power-cycle the scope"), "{e}");
     }
 
