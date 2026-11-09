@@ -4,7 +4,7 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
 """A member's or group's blog is at /<callsign>/blog and its posts at /<callsign>/blog/<post-slug>.
 
-Bruce, 2026-10-29: "the blog slug must be /<callsign>/blog". Odoo's own blog addresses are
+Requirement: "the blog slug must be /<callsign>/blog". Odoo's own blog addresses are
 /blog/<name-slug>-<id> and /blog/<blog>/<post>, and the blog's name (here "Bruce Perens (K6BP)'s
 Blog") was in them. This module gives member and group blogs one address built from the site's
 slug, and answers a permanent redirect at every stock address of such a blog, so old links, feed

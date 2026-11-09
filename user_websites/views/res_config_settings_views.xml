@@ -4,11 +4,10 @@
     <!-- Verified by [@ANCHOR: test_dropzone_settings] -->
 
     <!--
-        night_shift_todo.md "saving ANY Settings page can crash with an
-        AccessError": the "Select users who can manage all user sites and
-        violation reports" many2many field that used to live in this block
-        wrote group_user_websites_administrator.user_ids as a side effect of
-        every Settings save. It has been removed, see
+        A "Select users who can manage all user sites and violation reports"
+        many2many field is deliberately not in this block: it would write
+        group_user_websites_administrator.user_ids as a side effect of
+        every Settings save, see
         res_config_settings.py's own comment for the full reasoning. This
         button replaces it with a direct link to Odoo's own, already
         correctly scoped ("Groups", base.action_res_groups,

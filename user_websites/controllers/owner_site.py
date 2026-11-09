@@ -3,8 +3,8 @@
 # -*- coding: utf-8 -*-
 """The site owner's own interface: dashboard, page editor, image upload, publish toggles.
 
-Bruce, 2026-10-12: "I am on my own 'K6BP' website through user websites and I don't see any
-interface for creating anything." The models and a bare blog-post form existed; nothing on the
+Reported problem: an owner on their own member site saw no interface for creating anything.
+The models and a bare blog-post form existed; nothing on the
 site itself led to them. This controller is the missing owner-only interface:
 
 * /my/site/<slug>                      dashboard: pages, posts, images, settings

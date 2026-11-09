@@ -307,8 +307,8 @@
                 <t t-set="entity_name" t-value="profile_user.name if profile_user else (profile_group.name if profile_group else '')"/>
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h1 class="mb-0"><t t-out="entity_name"/>'s Blog</h1>
-                    <!-- Real gap found live 2026-09-29: this page never had any way for the
-                         owner to add a post, see create_blog_post()'s own comment
+                    <!-- The owner needs a way to add a post from this page, see
+                         create_blog_post()'s own comment
                          (controllers/main.py) for the full story. -->
                     <t t-if="is_owner">
                         <div class="d-flex align-items-center">
@@ -338,9 +338,7 @@
                                 <p class="text-muted" t-if="post.subtitle" t-out="post.subtitle"/>
                                 <span t-if="is_owner and not post.is_published" class="badge bg-warning text-dark ms-1">Draft</span>
                                 <a t-att-href="post.website_url" class="btn btn-outline-primary mt-2">Read Post</a>
-                                <!-- Real gap found live 2026-10-01 (night_shift_todo/high/
-                                     personal-blog-owner-cannot-actually-edit-or-publish-their-own-new-post-0c44e7eb.md):
-                                     the generic website-builder "Edit" toolbar never renders for this
+                                <!-- The generic website-builder "Edit" toolbar never renders for this
                                      module's real target user (it's gated on website.group_website_designer,
                                      a global permission personal-site owners don't and structurally
                                      can't hold), so blog_post_edit() is this module's own, ownership-scoped
