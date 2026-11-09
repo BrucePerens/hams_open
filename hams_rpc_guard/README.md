@@ -149,3 +149,116 @@ Side effects: a per-worker counter and a log line at powers of ten. No database 
 **Purpose.** Installs the module's documentation article (`data/documentation.html`) through the knowledge module.
 Takes the environment; returns nothing; sets no system parameter, so an operator's choice is never overwritten and
 the safe defaults are the ones in code. **Test:** `test_endpoint_gate.TestPostInitHook`.
+
+## The method whitelist
+
+Odoo core refuses an RPC call to a method whose name starts with `_` and to one marked `@api.private`. Everything else
+public is callable by any signed-in user over `/web/dataset/call_kw`. This module adds a listing: a method of one of
+*our* addons is callable over RPC only if it is declared. See
+[`docs/stories/rpc_methods_need_a_listing.md`](docs/stories/rpc_methods_need_a_listing.md) for the rules and the anchors.
+
+### Parameters
+
+| Parameter | Values | Default | Meaning |
+|---|---|---|---|
+| `hams_rpc_guard.mode` | `enforce`, `report`, `off` | `enforce` | `enforce` refuses a call the rules deny. `report` serves it and counts it (the log shows `would deny`, per `model.method`, at the first and every power of ten). `off` judges nothing. An unreadable or unknown value is `enforce`. |
+| `hams_rpc_guard.strict_stock` | `1`/`true`/`yes`/`on` | off | Internal users must also have stock methods declared (`stock` or `internal`). |
+| `hams_rpc_guard.client_cert_header` | a header name | empty (off) | The header in which a trusted proxy puts the verified client-certificate subject; becomes the identity `cert:<subject>`. Believed only from a peer listed in `hams_rpc_guard.trusted_proxies`. |
+| `hams_rpc_guard.managed_authors` | comma-separated | `Bruce Perens, Hams, HAMS` | A manifest whose author contains one of these, or an addon that ships `rpc_exposure.json`, is "ours". An installer with other addons adds the author name, or ships a file. |
+
+**Rolling out on an existing site: set `hams_rpc_guard.mode` to `report` first**, run for a few days of real traffic,
+read the log for `RPC guard (report)` lines, declare what is legitimate, then set `enforce`. A fresh install enforces.
+
+### `rpc_exposure.json`
+
+```json
+{
+  "internal": {"model.name": ["method"]},
+  "portal":   {"model.name": ["method"]},
+  "stock":    {"model.name": ["method"]},
+  "clients":  {"service_login": {"sources": ["addon/daemon/main.py"], "allow": {"model.name": ["method"]}}}
+}
+```
+
+| Section | Meaning |
+|---|---|
+| `internal` | Methods of this addon's models that signed-in internal users may call. Generated; shrinks as methods become private. |
+| `portal` | Pairs a portal or public user may call. Everything else is refused to them, stock models included. This module ships the baseline the hams.com members' browsers use today (found in the access logs and the static JavaScript). |
+| `stock` | With `strict_stock`: stock methods internal users may call. |
+| `clients` | Per daemon: its service account's login, the daemon source files, and the pairs it may call. A listed daemon is refused every other pair. A service account with no entry is judged as an internal user and shows as `unmapped-client-...` in the report. |
+
+`@public_rpc`, `@public_rpc(portal=True)` and `@public_rpc(clients=("login",))` declare the same thing in code.
+
+### Per-daemon identity (mutual TLS for off-box daemons)
+
+nginx in front of Odoo: `ssl_verify_client on; ssl_client_certificate <operator CA>;` and
+`proxy_set_header X-Client-Cert-Subject $ssl_client_s_dn;` (nginx overwrites any value the client sent). Then set
+`hams_rpc_guard.client_cert_header = X-Client-Cert-Subject` and `hams_rpc_guard.trusted_proxies = 127.0.0.1`, and give
+the daemon an entry under `"cert:<subject DN>"` in a `clients` section. The subject can only narrow a daemon that also
+has a login entry: both lists must allow the pair.
+
+### Per-daemon identity (on the host)
+
+The identity of a daemon on the Odoo host is its service account, which it already authenticates as (an API key). That
+needs no new key or transport. For a daemon on another machine, use mutual TLS in front of Odoo and a per-daemon
+service account; the certificate then proves which machine, the account says which daemon. This module creates and
+stores no key or certificate.
+
+### Lint
+
+`hams_shared/tools/check_private_by_default.py` counts, per module, the public methods of our models that are neither
+listed nor marked. It reports first; the per-module renames to leading-underscore names are scheduled for a quiet
+merge queue (night_shift_todo medium).
+
+## Anchor entries (whitelist)
+
+Every anchor of the whitelist has its entry here and in the story. In brief, the call interface of the ones a caller uses:
+
+### `hams_rpc_guard:public_rpc`
+
+**Purpose.** Decorator declaring a model method callable over RPC. **Call interface.** `public_rpc(func=None, *,
+portal=False, clients=())`; bare or with arguments; returns the function itself, unchanged but for one attribute.
+`portal` (`bool`) also admits portal and public users; `clients` (tuple of `str` logins) also admits those service
+accounts. **Special concerns.** Pure; no I/O; put it directly above the `def` or below `@api.model`. **Test:**
+`test_exposure.TestDecorator`.
+
+### `hams_rpc_guard:decide`
+
+**Purpose.** The decision table. **Call interface.** `decide(call, exposure, strict_stock=False)` with a `policy.Call`
+and an `exposure.Exposure`; returns `(policy.ALLOW | policy.DENY, reason)`, `reason` one of `portal-listed`,
+`strict-portal`, `strict-public`, `client-listed`, `client-not-listed`, `listed`, `managed-not-listed`, `core`,
+`stock-listed`, `strict-stock`, or those prefixed `unmapped-client-`. **Errors.** None. **Concurrency.** Pure.
+**Test:** `test_policy.TestDecision`.
+
+### `hams_rpc_guard:check_rpc_call`
+
+**Purpose.** Judge one RPC call: read the parameters, build the `Call`, decide, count and refuse. **Call interface.**
+`check_rpc_call(model, name)`; `model` a recordset (its `env.user` is the caller), `name` the method name; returns
+nothing; raises `AccessError` in enforce mode when denied. **Special concerns.** Reads three parameters through
+`zero_sudo.security.utils._get_system_param` (cached) and one cursor query per registry; a parameter read failure is
+logged and read as the strict value. **Test:** `test_guard.TestWrapper`.
+
+### `hams_rpc_guard:install` and `hams_rpc_guard:post_load_hook`
+
+**Purpose.** Wrap `odoo.service.model.get_public_method`, `execute_cr` and `odoo.addons.rpc.controllers.json2.get_public_method`
+exactly once. **Call interface.** No arguments, no return value; idempotent. **Special concerns.** Runs at module load,
+before the first request; swaps module-level names, not Odoo source files. **Test:** `test_guard.TestWrapper`.
+
+### `hams_rpc_guard:load_exposure`, `hams_rpc_guard:scan_main` and the other scanner anchors
+
+`load_exposure(cr, registry)` returns the merged declarations of the installed addons, read once per registry.
+`exposure_scan.py` is the generator and checker of the transitional lists (command line above); `scan_source`,
+`scan_addon`, `scan_model_of_class`, `scan_render`, `scan_managed_addons`, `scan_orm_names` and `scan_daemon_pairs` are
+its steps. All are pure functions of source text. Tests: `test_exposure.TestScanner`, `test_repository`.
+
+### `hams_rpc_guard:certificate_identity`
+
+**Purpose.** The mutual-TLS identity of the request. **Call interface.** `certificate_identity(utils)`; `utils` a
+`zero_sudo.security.utils` recordset; returns `"cert:<subject>"` or `""`. **Special concerns.** Reads two parameters;
+believes the header only from a loopback peer inside `trusted_proxies`; never widens (see `policy.decide`). **Test:**
+`test_guard.TestWrapper`.
+
+### `hams_rpc_guard:peer_is_trusted`
+
+**Purpose.** Whether the socket peer is a loopback address inside the trusted-proxy networks. **Call interface.**
+`peer_is_trusted(environ, trusted_proxies)`; returns `bool`; pure. **Test:** `test_endpoint_gate.TestPolicy`.

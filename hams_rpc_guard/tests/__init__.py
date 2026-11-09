@@ -1,3 +1,7 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from . import test_endpoint_gate
+from . import test_policy
+from . import test_exposure
+from . import test_repository
+from . import test_guard

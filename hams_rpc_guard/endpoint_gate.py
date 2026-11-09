@@ -139,6 +139,18 @@ def _client_addresses(headers):
     return found
 
 
+# [@ANCHOR: hams_rpc_guard:peer_is_trusted]
+def peer_is_trusted(environ, trusted_proxies):
+    """True when the socket peer of the request (as `origin_is_local` reads it) is a loopback address inside one of the
+    `trusted_proxies` networks: the one condition under which a header that a proxy sets (such as the verified client
+    certificate subject) may be believed."""
+    original = environ.get("werkzeug.proxy_fix.orig") or {}
+    peer = _parse_address(original.get("REMOTE_ADDR", environ.get("REMOTE_ADDR")) or "")
+    if peer is None or not peer.is_loopback:
+        return False
+    return any(peer in network for network in trusted_proxies if network.version == peer.version)
+
+
 # [@ANCHOR: hams_rpc_guard:origin_is_local]
 def origin_is_local(environ, headers, trusted_proxies=()):
     """True when the true client of the request is on this machine.
@@ -186,7 +198,7 @@ def note_denial(family, policy):
     with _denied_lock:
         _denied[family] += 1
         count = _denied[family]
-    if _is_power_of_ten(count):
+    if is_power_of_ten(count):
         _logger.warning(
             "Refused %s request(s) to the %s endpoints (%s=%s); the count is per worker since it started. "
             "An operator who needs them sets that system parameter to 'any' or 'loopback'.",
@@ -203,7 +215,7 @@ def denial_counts():
 
 
 # [@ANCHOR: hams_rpc_guard:is_power_of_ten]
-def _is_power_of_ten(count):
+def is_power_of_ten(count):
     while count >= 10 and count % 10 == 0:
         count //= 10
     return count == 1

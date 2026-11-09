@@ -132,6 +132,16 @@ class TestPolicy(HamsTransactionCase):
             self.assertIn(gate.LEGACY_PARAM, line)
         gate._denied.clear()
 
+    def test_peer_is_trusted_needs_a_loopback_peer_inside_the_list(self):
+        # Tests [@ANCHOR: hams_rpc_guard:peer_is_trusted]
+        networks = gate.parse_trusted_proxies(LOOPBACK_NET)
+        self.assertTrue(gate.peer_is_trusted({"REMOTE_ADDR": LOOPBACK}, networks))
+        self.assertTrue(gate.peer_is_trusted({"REMOTE_ADDR": "x", "werkzeug.proxy_fix.orig": {"REMOTE_ADDR": LOOPBACK}}, networks))
+        self.assertFalse(gate.peer_is_trusted({"REMOTE_ADDR": LOOPBACK}, []))
+        self.assertFalse(gate.peer_is_trusted({"REMOTE_ADDR": "203.0.113.9"}, gate.parse_trusted_proxies("203.0.113.0/24")))
+        self.assertFalse(gate.peer_is_trusted({"REMOTE_ADDR": "x", "werkzeug.proxy_fix.orig": {"REMOTE_ADDR": "203.0.113.9"}}, networks))
+        self.assertFalse(gate.peer_is_trusted({}, networks))
+
     def test_the_policy_words_are_readable_through_the_zero_sudo_whitelist(self):
         utils = self.env["zero_sudo.security.utils"]
         for key in (gate.LEGACY_PARAM, gate.JSON2_PARAM, gate.TRUSTED_PROXIES_PARAM):
