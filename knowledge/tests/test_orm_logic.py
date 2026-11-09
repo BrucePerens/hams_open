@@ -101,7 +101,7 @@ class TestManualORMLogic(HamsTransactionCase):
 
         # Tests [@ANCHOR: manual_compute_breadcrumbs]
         """
-        Bug-hunt regression (2026-09-09): _compute_breadcrumb_article_ids's
+        _compute_breadcrumb_article_ids's
         recursive ancestor lookup is raw SQL against the table directly, so
         it saw an archived (active=False) parent regardless of the
         `active` flag -- the compute method must re-derive which ancestor
@@ -131,7 +131,7 @@ class TestManualORMLogic(HamsTransactionCase):
 
         # Tests [@ANCHOR: manual_compute_breadcrumbs]
         """
-        Bug-hunt regression (2026-09-09): a published child article whose
+        A published child article whose
         parent chain includes a private, unpublished ancestor must not
         expose (or crash on) that ancestor's id in its own
         breadcrumb_article_ids when computed for a low-privilege viewer --

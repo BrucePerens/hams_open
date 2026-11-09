@@ -205,8 +205,7 @@ class KnowledgeArticle(models.Model):
             """
             self.env.cr.execute(query, (valid_ids,))
             rows = self.env.cr.fetchall()
-            # Bug-hunt fix (2026-09-09): the recursive CTE above is raw SQL
-            # against the table directly -- it sees every ancestor row
+            # The recursive CTE above is raw SQL against the table directly -- it sees every ancestor row
             # regardless of the `active` flag or any `ir.rule` the current
             # user is actually bound by. Left unfiltered, that produced two
             # distinct real failures once these ids were rendered as
@@ -352,21 +351,18 @@ class KnowledgeArticle(models.Model):
     # --- Website Search ---
     # [@ANCHOR: knowledge:COMM_search_get_detail]
     def _search_get_detail(self, website, order, options):
-        # Found live 2026-08-29: three separate hams_com usability-audit
-        # personas independently confirmed the site's own search never
-        # covers knowledge articles at all, only products/blog/pages,
-        # so a genuinely public, published manual article was completely
-        # unfindable by anyone who didn't already know its exact URL.
-        # This registers knowledge.article with website's own search
-        # dispatch, matching the same pattern website_blog uses for
+        # Website search does not cover knowledge articles by default (only
+        # products/blog/pages), so a genuinely public, published manual
+        # article would be unfindable by anyone who didn't already know its
+        # exact URL. This registers knowledge.article with website's own
+        # search dispatch, matching the same pattern website_blog uses for
         # blog.post (see _search_get_detail there for the base shape).
         with_description = options["displayDescription"]
         # Matches the visibility rule controllers/main.py's own listing
         # endpoints use: published member manuals, or articles this user is
-        # specifically a member of. Found live 2026-08-29: the first version
-        # checked is_published only, so a logged-in member searching for their
-        # own member-only article got zero results here even though the same
-        # article is directly visible to them everywhere else on the site.
+        # specifically a member of. Checking is_published alone would give
+        # a logged-in member searching for their own member-only article
+        # zero results here even though the same article is directly visible to them everywhere else on the site.
         # Site search is for readers, never a back door to internal
         # documentation: only member manuals (plus articles explicitly
         # shared with this user) are searched, whoever is asking.

@@ -56,12 +56,11 @@ class TestKnowledgeArticleWebsiteSearch(HamsHttpCase):
         # Tests [@ANCHOR: knowledge:COMM_search_get_detail]
 
         # Tests [@ANCHOR: knowledge:COMM_website_search_get_details]
-        # Found live 2026-08-29 across three separate hams_com usability-audit
-        # personas: the site's own search never covered knowledge articles at
+        # The site's own search used not to cover knowledge articles at
         # all, only products/blog/pages -- a genuinely public, published
-        # manual article was completely unfindable through search. This
-        # verifies the fix (knowledge.article now registers itself with
-        # website's search dispatch) actually works end to end through the
+        # manual article was unfindable through search. This verifies
+        # knowledge.article registers itself with website's search dispatch
+        # and that it works end to end through the
         # real /website/search route, not just at the model level.
         response = self.url_open("/website/search?search=Xyzzyplugh")
         self.assertEqual(response.status_code, 200)

@@ -21,7 +21,7 @@ class TestZeroSudoDocInstaller(common.HamsTransactionCase):
         # default to is_published=False. A prior bug forced every ingested doc
         # to is_published=True unconditionally, leaking internal engineering
         # documentation (e.g. "Zero-Sudo Security Core") into the public
-        # website's anonymous help sidebar. See night_shift_todo.md.
+        # website's anonymous help sidebar.
         #
         # zero_sudo's own __manifest__.py deliberately does NOT depend on
         # `knowledge` (`_bootstrap_knowledge_docs` gracefully no-ops when it isn't
@@ -130,7 +130,7 @@ class TestZeroSudoDocInstaller(common.HamsTransactionCase):
 
     def test_install_single_doc_does_not_collide_across_modules_sharing_a_name(self):
         # Tests [@ANCHOR: zero_sudo:install_single_doc]
-        # Regression test for a real 2026-09-13 bug-hunt finding: the
+        # Regression test: the
         # "does an article for this doc already exist" lookup used to be
         # `Article.search([("name", "=", name)], limit=1)` (or the
         # equivalent `article_by_name` bulk map) -- scoped ONLY by the
@@ -167,7 +167,7 @@ class TestZeroSudoDocInstaller(common.HamsTransactionCase):
         # Simulate one real bulk batch: both entries share one pre-loaded
         # (empty) existing_hashes/existing_article_ids snapshot, exactly as
         # _bootstrap_knowledge_docs builds once up front for the whole
-        # batch before dispatching per-doc.
+        # batch before processing each doc.
         empty_hashes = {}
         empty_article_ids = {}
         Module._install_single_doc(
