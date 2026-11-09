@@ -2034,7 +2034,10 @@ mod tests {
         assert!(rx.set_gain(20, 1).is_err());
         fail.store(false, SeqCst);
         let after = rx.settings().clone();
-        assert!(!after.bias_t, "bias-T must not stay on after a failed write");
+        assert!(
+            !after.bias_t,
+            "bias-T must not stay on after a failed write"
+        );
         assert_eq!(
             (
                 after.bias_t,
