@@ -350,6 +350,10 @@ def _profiles_of(process):
     return [str(a).split("=", 1)[1] for a in (process.info.get("cmdline") or []) if str(a).startswith("--user-data-dir=")]
 
 
+_CHROME_REAP_CAP_SECONDS = 60.0
+_CHROME_REAP_POLL_SECONDS = 0.05
+
+
 # [@ANCHOR: zero_sudo:kill_all_headless_chrome]
 def _kill_all_headless_chrome_for_this_uid():
     """SIGKILLs every headless chrome/chromium of this test process (`_headless_chrome_of_this_run`): its descendants and the
@@ -358,28 +362,27 @@ def _kill_all_headless_chrome_for_this_uid():
     (the reinstated 2026-09-09 behaviour) and killed other runs' browsers once test slots allowed several (ADR 0116).
     Called before a new Chrome is spawned (_patched_spawn_chrome) and at the end of every test (HamsHttpCase.tearDown), so memory
     held by an incompletely torn-down tour is reclaimed at once."""
-    found = _headless_chrome_of_this_run()
-    if not found:
-        return  # nothing to reap: no reason to pay the half-second wait below (every test's tearDown comes through here)
-    for p in found:
-        try:
-            p.kill()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, KeyError) as e:
-            _logger.warning("Failed process kill: %s", e)
-
-    time.sleep(0.5)  # audit-ignore-sleep: Wait for processes to terminate
-    for p in _headless_chrome_of_this_run():
-        try:
-            p.kill()  # Ensure it's dead
-            p.wait(timeout=1.0)
-        except (
-            psutil.NoSuchProcess,
-            psutil.AccessDenied,
-            psutil.ZombieProcess,
-            psutil.TimeoutExpired,
-            KeyError,
-        ) as e:
-            _logger.warning("Failed wait: %s", e)
+    # Kill, rescan, repeat until a scan finds nothing: no fixed sleep and no fixed wait. A Chrome that was starting can spawn a
+    # child after a scan, and under a load of 50 to 100 a SIGKILLed browser takes seconds to leave the process table, which the
+    # old 0.5 s sleep plus one 1 s wait did not cover. The caller pays nothing when there is nothing to kill (every test's
+    # tearDown comes through here). The cap is a safety net: a process that outlives it is logged and left.
+    deadline = time.monotonic() + _CHROME_REAP_CAP_SECONDS
+    while True:
+        found = _headless_chrome_of_this_run()
+        if not found:
+            return
+        for p in found:
+            try:
+                p.kill()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, KeyError) as e:
+                _logger.warning("Failed process kill: %s", e)
+        if time.monotonic() >= deadline:
+            _logger.warning(
+                "Headless chrome processes %s are still present %.0f s after SIGKILL",
+                [p.info.get("pid") for p in found], _CHROME_REAP_CAP_SECONDS,
+            )
+            return
+        time.sleep(_CHROME_REAP_POLL_SECONDS)  # audit-ignore-sleep: poll the process table until the killed browsers are gone
 
 
 # [@ANCHOR: zero_sudo:patched_spawn_chrome]

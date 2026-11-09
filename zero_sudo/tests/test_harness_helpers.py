@@ -113,13 +113,28 @@ class TestHarnessHelpers(HamsTransactionCase):
         sleeps.assert_not_called()
 
     # Tests [@ANCHOR: zero_sudo:kill_all_headless_chrome]
-    def test_the_reaper_still_waits_and_rechecks_after_killing_a_chrome(self):
+    def test_the_reaper_kills_and_rescans_until_a_scan_finds_nothing(self):
         victim = _FakeProcess("chrome", os.getuid(), ["chrome", "--headless"], pid=4201)
-        self.safe_patch_object(common, "_headless_chrome_of_this_run", side_effect=[[victim], [victim]])
+        late_child = _FakeProcess("chrome", os.getuid(), ["chrome", "--headless"], pid=4202)
+        self.safe_patch_object(
+            common, "_headless_chrome_of_this_run", side_effect=[[victim], [victim, late_child], [late_child], []]
+        )
         sleeps = self.safe_patch_object(common.time, "sleep")
         common._kill_all_headless_chrome_for_this_uid()
-        self.assertEqual(victim.kills, 2, "killed once, then killed again by the re-check")
-        sleeps.assert_called_once_with(0.5)
+        self.assertGreaterEqual(victim.kills, 1)
+        self.assertGreaterEqual(late_child.kills, 1, "a child that appeared after the first scan is killed too")
+        self.assertEqual(sleeps.call_count, 3, "a short poll after each scan that found something, none after the empty one")
+
+    # Tests [@ANCHOR: zero_sudo:kill_all_headless_chrome]
+    def test_the_reaper_gives_up_at_its_cap_and_logs_the_survivor(self):
+        stubborn = _FakeProcess("chrome", os.getuid(), ["chrome", "--headless"], pid=4301)
+        self.safe_patch_object(common, "_headless_chrome_of_this_run", return_value=[stubborn])
+        self.safe_patch_object(common.time, "sleep")
+        self.safe_patch_object(common, "_CHROME_REAP_CAP_SECONDS", 0.0)
+        with self.assertLogs(common._logger, "WARNING") as logs:
+            common._kill_all_headless_chrome_for_this_uid()
+        self.assertEqual(stubborn.kills, 1, "killed once, then given up on at the (zero) cap")
+        self.assertTrue(any("4301" in line and "still present" in line for line in logs.output))
 
     # Tests [@ANCHOR: zero_sudo:tracked_threadpool_submit]
     # Tests [@ANCHOR: zero_sudo:wait_for_background_futures]
