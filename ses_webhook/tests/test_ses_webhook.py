@@ -39,9 +39,8 @@ _TEST_SIGNING_CERT_URL = (
 def _make_self_signed_cert(private_key, not_before=None, not_after=None):
     """Builds a real, self-signed X.509 certificate for `private_key`, standing in for the
     Amazon-issued cert a real SigningCertURL would serve. Deliberately NOT a mock of the
-    verification function itself (that would be a vacuous test per this project's own bug-hunt
-    Known Bug Class 2) -- this is a real certificate, real key, real signature, checked by the
-    real `cryptography` verification path in webhook_api.py."""
+    verification function itself (that would be a vacuous test) -- this is a real certificate,
+    real key, real signature, checked by the real `cryptography` verification path in webhook_api.py."""
     now = datetime.now(timezone.utc)
     not_before = not_before or (now - timedelta(days=1))
     not_after = not_after or (now + timedelta(days=365))
@@ -419,10 +418,10 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(len(self.env['mail.blacklist'].search([('email', '=', 'mailboxfull@example.com')])), 0)
 
     # ------------------------------------------------------------------
-    # AWS SNS message-signature verification (bug-hunt fix, 2026-09-09):
+    # AWS SNS message-signature verification:
     # a leaked per-domain token alone must no longer be sufficient to
-    # forge a notification -- see receive_sns_webhook.md's claim and
-    # night_shift_todo.md's own entry for the full finding this closes.
+    # forge a notification -- see receive_sns_webhook.md's claim for the
+    # full rationale.
     # ------------------------------------------------------------------
 
     def test_25_signature_valid_notification_accepted(self):
@@ -702,12 +701,10 @@ class TestSesWebhook(HamsHttpCase):
         # MagicMock's built-in context-manager support means `.return_value.__enter__` is
         # already a real, callable magic method; only its own return needs configuring.
         #
-        # Bug-hunt fix (2026-09-13): this used to feed back plain
-        # `b'fake-cert-bytes'` -- fine before the fix, but the fix now
-        # parses the response as a real x509 certificate before returning
-        # it (to avoid caching a malformed 200 response forever, see the
-        # function's own docstring), so this must be real, parseable PEM
-        # bytes or this test itself would raise. Reuses the same
+        # The code under test parses the response as a real x509
+        # certificate before returning it (to avoid caching a malformed 200
+        # response forever, see the function's own docstring), so this must
+        # be real, parseable PEM bytes or this test itself would raise. Reuses the same
         # self-signed cert fixture other tests already sign against.
         mock_urlopen.return_value.__enter__.return_value.read.return_value = self._sns_cert_pem
 
@@ -733,8 +730,7 @@ class TestSesWebhook(HamsHttpCase):
 
     def test_33b_fetch_sns_signing_cert_does_not_cache_a_malformed_response(self):
         # Tests [@ANCHOR: ses_webhook:COMM_fetch_sns_signing_cert]
-        """Bug-hunt fix (2026-09-13): a 200 response with a body that isn't a parseable PEM
-        certificate (e.g. a proxy/CDN error page served with HTTP 200) must not be cached --
+        """A 200 response with a body that isn't a parseable PEM certificate (e.g. a proxy/CDN error page served with HTTP 200) must not be cached --
         lru_cache never memoizes a raised exception, so if the parse happens INSIDE this cached
         function, a transient bad response is retried (and can succeed) on the very next call for
         the same URL, rather than permanently poisoning the cache for the process's lifetime."""

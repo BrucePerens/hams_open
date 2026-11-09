@@ -34,14 +34,13 @@ _SNS_SUBSCRIBE_URL_RE = re.compile(
     rf"^https://{_SNS_HOST_PATTERN}/", re.IGNORECASE
 )
 
-# Bug-hunt finding, 2026-09-09 (receive_sns_webhook.md, bug class 26): the
-# SubscribeURL host check above closed the SSRF sub-vector, but nothing
-# verified the request actually came from AWS SNS at all -- the entire
-# trust boundary was one opaque per-domain token, leakable via a plain
+# The SubscribeURL host check above closes the SSRF sub-vector, but on its
+# own nothing verifies the request actually came from AWS SNS at all -- the
+# trust boundary would be one opaque per-domain token, leakable via a plain
 # query-string URL. Real AWS SNS notifications are signed
 # (Signature/SigningCertURL/SignatureVersion, verifiable against an
-# Amazon-issued X.509 cert); this closes that gap as a second,
-# independent layer on top of the token, not a replacement for it.
+# Amazon-issued X.509 cert); this check is a second, independent layer on
+# top of the token, not a replacement for it.
 #
 # AWS's real SigningCertURL is always of the shape
 # https://sns.<region>.amazonaws.com/SimpleNotificationService-<hex>.pem --
@@ -79,12 +78,12 @@ _SNS_SIGNING_CERT_URL_RE = re.compile(
 _NOTIFICATION_SIGNED_FIELDS = ('Message', 'MessageId', 'Subject', 'Timestamp', 'TopicArn', 'Type')
 _SUBSCRIBE_SIGNED_FIELDS = ('Message', 'MessageId', 'SubscribeURL', 'Timestamp', 'Token', 'TopicArn', 'Type')
 
-# Night-shift audit follow-up, 2026-09-14 (night_shift_todo.md, "genuinely still open" list):
-# a captured, previously-valid signed SNS payload could otherwise be replayed indefinitely, since
-# nothing checked the signed `Timestamp` field's own freshness -- the signature alone proves AWS
-# signed it at SOME point, not that this delivery is the original one. AWS's own SNS docs recommend
-# validating message freshness for exactly this reason. 15 minutes is generous versus SNS's actual
-# end-to-end delivery latency (seconds, occasionally low minutes under retry) while still bounding
+# Replay protection: a captured, previously-valid signed SNS payload could
+# otherwise be replayed indefinitely, since the signature alone proves AWS
+# signed it at SOME point, not that this delivery is the original one, so the
+# signed `Timestamp` field's freshness is checked too. AWS's own SNS docs
+# recommend validating message freshness for exactly this reason. 15 minutes is
+# generous versus SNS's actual end-to-end delivery latency (seconds, occasionally low minutes under retry) while still bounding
 # how long a captured payload stays replayable; it does not need to match SNS's own multi-day retry
 # window for UNDELIVERED messages, since a delivered-and-replayed message is what this defends
 # against, not a legitimate late first delivery.
@@ -93,15 +92,13 @@ _MAX_SNS_MESSAGE_AGE = timedelta(minutes=15)
 # The only payload_type values ses.webhook.log's own Selection field
 # accepts -- anything else attacker-controlled in the JSON body's "Type"
 # must be coerced to 'Unknown' before ever reaching a log create() call.
-# Found in passing while adding the signature-rejection log path below:
-# the pre-existing code wrote payload.get('Type', 'Unknown') into
-# log_vals['payload_type'] completely unclamped, so an attacker-supplied
-# Type of anything outside the four known values would make the
-# `finally` block's own log create() raise ValueError on an invalid
-# Selection value -- the exact "unconstrained attacker string into a
-# Selection field" shape test_03b already found and fixed once for
-# 'status' (rejected_subscribe_url); this is the same bug class in the
-# sibling field, closed the same way.
+# The log write below must not put an unclamped attacker-supplied string
+# into a Selection field: writing payload.get('Type', 'Unknown') directly
+# into log_vals['payload_type'] would make a Type outside the four known
+# values raise ValueError inside the `finally` block's own log create().
+# This is the same "unconstrained attacker string into a Selection field"
+# shape that test_03b covers for 'status' (rejected_subscribe_url), handled
+# the same way in the sibling field.
 _KNOWN_PAYLOAD_TYPES = {'Notification', 'SubscriptionConfirmation', 'UnsubscribeConfirmation'}
 
 
@@ -148,15 +145,15 @@ def _fetch_sns_signing_cert(signing_cert_url):
     `lru_cache` does not memoize a raised exception -- a transient fetch failure is retried on the
     next call rather than being "stuck" returning a cached error forever.
 
-    Bug-hunt fix (2026-09-13): this used to return whatever bytes came back from a 200 response
-    with no validation, so a 200 response with a non-certificate body (e.g. a proxy/CDN error page
-    served with HTTP 200 for the cert URL) got cached here as if it were a valid cert, and every
-    subsequent message reusing this same SigningCertURL would then fail
-    `x509.load_pem_x509_certificate` in the caller for the remainder of the process's lifetime,
-    instead of retrying the fetch on the next message. Now parses (and discards the result) here,
-    before returning, so a malformed response raises before this function ever returns -- `lru_cache`
-    never caches a raised exception. Still returns the raw PEM bytes (not the parsed certificate)
-    to keep this function's return type unchanged for existing callers/tests
+    A 200 response with a non-certificate body (e.g. a proxy/CDN error page
+    served with HTTP 200 for the cert URL) must not be cached as if it were a
+    valid cert: every subsequent message reusing this same SigningCertURL would
+    then fail `x509.load_pem_x509_certificate` in the caller for the remainder
+    of the process's lifetime, instead of retrying the fetch on the next
+    message. So the response is parsed (and the result discarded) here, before
+    returning, so a malformed response raises before this function ever returns
+    -- `lru_cache` never caches a raised exception. Still returns the raw PEM
+    bytes (not the parsed certificate) to keep this function's return type unchanged for existing callers/tests
     (test_33_fetch_sns_signing_cert_caches_by_url asserts on the raw bytes directly); the caller
     parses again, which is cheap and keeps this function's own job purely "fetch a valid cert."
     """
@@ -321,7 +318,7 @@ class SesWebhookController(http.Controller):
         # independent layer on top of the per-domain token above (neither
         # replaces the other; see the module-level comment on
         # _verify_sns_signature). Deliberately checked BEFORE any
-        # processing/dispatch below, and logged with its own distinct
+        # processing below, and logged with its own distinct
         # 'rejected_signature' status so a real forgery attempt against a
         # known-valid token is forensically visible, not silently 403'd
         # with no trace the way a plain bad-token request is.
@@ -354,15 +351,13 @@ class SesWebhookController(http.Controller):
             if payload_type == 'SubscriptionConfirmation':
                 subscribe_url = payload.get('SubscribeURL')
                 if subscribe_url and _SNS_SUBSCRIBE_URL_RE.match(subscribe_url):
-                    # Adversarial security review, 2026-09-03: real, explicit
-                    # timeout -- the old call had none at all, so a
+                    # Real, explicit timeout -- without one, a
                     # SubscribeURL pointing at a server that accepts the
-                    # connection and never responds hung this worker
-                    # indefinitely (the same unbounded-hang bug class fixed
-                    # in several other daemons this session).
+                    # connection and never responds would hang this worker
+                    # indefinitely (every outbound call needs a timeout).
                     # The regex fixes the host name, not the address it resolves to; this fetch also refuses a private or
-                    # loopback address and re-checks every redirect hop. `with` closes the response, which the plain
-                    # urlopen() call here used to leave open.
+                    # loopback address and re-checks every redirect hop. `with` closes the response, which a plain
+                    # urlopen() call would leave open.
                     with urlopen_ssrf_safe(subscribe_url, "ses_webhook_sns_subscribe", https_only=True, timeout=10):
                         pass
                     _logger.info("Successfully confirmed SNS subscription for domain %s.", domain.name)
@@ -420,24 +415,17 @@ class SesWebhookController(http.Controller):
                     # of "the sender" matches message_process()'s own
                     # exactly rather than a second, subtly different parse.
                     #
-                    # Real privilege-boundary fix, 2026-09-12 (asked and
-                    # confirmed with Bruce: prefer a narrow service account
-                    # over .sudo(), matching the standing zero-sudo
-                    # philosophy): this used to call
-                    # .sudo().message_parse(...) here, on the claim that
-                    # message_parse() reads mail.alias.domain internally
-                    # with no ACL for this route's own service account.
-                    # Checked empirically rather than trusting that claim a
-                    # second time -- Odoo core's own message_parse()
+                    # Privilege boundary: a narrow service account is preferred over
+                    # .sudo() (the standing zero-sudo philosophy), so
+                    # message_parse() runs under with_user(svc_uid). That is
+                    # sufficient: Odoo core's own message_parse()
                     # (mail/models/mail_thread.py) already calls
                     # self.env['mail.alias.domain'].sudo()._find_aliases(...)
                     # INTERNALLY, so the caller's own privilege on
-                    # mail.alias.domain was never actually relevant. Real
-                    # test run (test.py -u ses_webhook, 0 failed/0 error(s)
-                    # of 40 tests) confirms message_parse() succeeds under
-                    # plain with_user(svc_uid) on a real, unmocked raw
-                    # email (test_04/test_05's own fixtures) -- no .sudo()
-                    # and no new service account needed at all here.
+                    # mail.alias.domain is not relevant. message_parse()
+                    # succeeds under plain with_user(svc_uid) on a real,
+                    # unmocked raw email (test_04/test_05's own fixtures) --
+                    # no .sudo() and no new service account needed at all here.
                     parsed_message = email.message_from_bytes(email_bytes, policy=email.policy.SMTP)
                     msg_dict = request.env['mail.thread'].with_user(svc_uid).message_parse(parsed_message)
                     email_from = msg_dict.get('email_from')
@@ -507,9 +495,8 @@ class SesWebhookController(http.Controller):
                 _logger.info("Received UnsubscribeConfirmation for domain %s.", domain.name)
                 log_vals.update({'status': 'ignored'})
             else:
-                # Bug-hunt note, 2026-09-09: this branch is currently
-                # unreachable in practice. _verify_sns_signature (called
-                # above, before this dispatch) rejects with 403 for any
+                # This branch is currently unreachable in practice. _verify_sns_signature (called
+                # above, before this branch) rejects with 403 for any
                 # Type outside the three signed types (SignatureChecker
                 # can't build a string-to-sign for one), so payload_type
                 # can no longer actually be 'Unknown' by the time this
@@ -518,7 +505,7 @@ class SesWebhookController(http.Controller):
                 # ordering/scope would silently reopen this path, and it
                 # costs nothing to keep a sane fallback for that case.
                 # See receive_sns_webhook.md's own claim for the full
-                # analysis (bug-hunt Known Bug Class 1).
+                # analysis.
                 log_vals.update({'status': 'ignored', 'error_message': 'Unknown payload type'})
                 
         # Must return 200 to AWS regardless of what fails inside (a

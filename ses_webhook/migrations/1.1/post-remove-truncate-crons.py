@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Remove the ses_webhook log and pending-submission truncation crons.
 
-Bruce, 2026-10-11: "We retain data forever" / "We make no promises to delete anything."
+Policy: "We retain data forever" / "We make no promises to delete anything."
 
 ses_webhook 1.0 shipped two daily crons that deleted ses.webhook.log rows older than 30 days and
 ses.webhook.pending_submission rows older than 7 days. ses_webhook 1.1 keeps both forever.
