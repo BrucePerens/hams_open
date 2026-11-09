@@ -249,6 +249,7 @@ the USB-level ones are exercised by the hardware tests in `tests/hil.rs`.
 - [@ANCHOR: rsp_open:rsp_device_rsp_write_gain] The gain write (r1, then the model's board bytes).
 - [@ANCHOR: rsp_open:rsp_device_rsp_set_dab_notch] RSP1A DAB notch (port B, then the gain write).
 - [@ANCHOR: rsp_open:rsp_device_rsp_set_bandwidth] IF bandwidth (RSP2pro r0 only; RSP1A the API's bandwidth sequence).
+- [@ANCHOR: rsp_open:rsp_device_rsp_write_bandwidth] The bandwidth writes themselves; `set_bandwidth` restores the cached bandwidth when they fail. The other setters (`set_gain`, `select_antenna`, `set_notch`, `set_dab_notch`, `set_bias_t`, `set_ext_ref_out`) likewise restore the cached value when their write fails, as `set_frequency` and `set_ppm` do, so a later full tune never builds port B (the bias-T bit included) from a value the hardware did not accept.
 - [@ANCHOR: rsp_open:rsp_device_rsp2_init] The open sequence, in the order SDRplay's API uses.
 - [@ANCHOR: rsp_open:rsp_device_rsp2_full_tune] The full tune sequence used on band, port and gain-table changes.
 - [@ANCHOR: rsp_open:rsp_device_rsp2_set_frequency] Tunes (r3/r2 only inside a band, full sequence across bands), clamping the LNA state to the new band.
