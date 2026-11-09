@@ -370,9 +370,9 @@ def invalidate_model_cache(env, model_name, local_only=False):
                     r.delete(*keys)
             except redis.AuthenticationError as e:
                 # [@ANCHOR: distributed_redis_cache:COMM_invalidation_auth_failure_aborts_upgrade]
-                # Found 2026-10-12: a hand-run `odoo -u` on production lacked the service's Redis credentials
-                # (REDIS_USERNAME/REDIS_PASSWORD, /opt/hams/etc/redis.env). 2394 invalidations failed as
-                # WARNINGs, the upgrade "succeeded" and Redis kept every pre-upgrade entry for 24 hours.
+                # A hand-run `odoo -u` on production without the service's Redis credentials
+                # (REDIS_USERNAME/REDIS_PASSWORD, /opt/hams/etc/redis.env) would see every invalidation fail as a
+                # WARNING, the upgrade "succeed" and Redis keep every pre-upgrade entry for 24 hours.
                 # While the registry is still loading (install/upgrade) that must stop the run at the first
                 # failure; a serving worker keeps degrading to its local cache as before.
                 if not env.registry.ready:

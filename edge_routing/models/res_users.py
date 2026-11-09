@@ -17,9 +17,9 @@ class ResUsersEdgeRouting(models.Model):
     _name = "res.users"
     _inherit = ["res.users", "edge.routing.mixin"]
 
-    # get_record_by_slug() used to be overridden here to add a fallback
-    # that matched the URL slug against res.users.login when no
-    # website_slug matched. Removed (2026-09-24): every real human
+    # get_record_by_slug() is deliberately not overridden here to add a fallback
+    # that matches the URL slug against res.users.login when no
+    # website_slug matches: every real human
     # account's login is now an email address (see git history for
     # "invite flow must set login=email"), which turned that fallback
     # into a live PII exposure -- a public, unauthenticated route that

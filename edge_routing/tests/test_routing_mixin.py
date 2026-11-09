@@ -135,7 +135,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         # for a slug that later matched a changed/new login would have
         # gone stale for the full 24h Redis TTL.
         #
-        # The login-fallback override was removed (2026-09-24): every real
+        # There is no login-fallback override: every real
         # human account's login is now an email address, which made that
         # fallback a live PII exposure (probing hams.com/<email>), and it
         # never protected SWL accounts anyway since they have no

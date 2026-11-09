@@ -6,7 +6,7 @@
     sudo python3 odoo_upgrade.py --db hams_prod --modules hams_helpdesk --dry-run     # print the command, run nothing
     sudo python3 odoo_upgrade.py --db hams_prod --modules all --install ham_spreadsheet_csp   # also install a NEW module
 
-Why it exists (found 2026-10-12): `sudo -u odoo odoo -u ...` gives the upgrade none of the `EnvironmentFile=`
+Why it exists: `sudo -u odoo odoo -u ...` gives the upgrade none of the `EnvironmentFile=`
 settings of the service (REDIS_USERNAME/REDIS_PASSWORD from /opt/hams/etc/redis.env, the broker and database
 credentials, ...). Production Redis refuses unauthenticated clients, so every cache invalidation of the upgrade
 failed ("Authentication required", a WARNING) and the Redis cache kept all its pre-upgrade entries.
@@ -19,7 +19,7 @@ What it does:
   * fails before starting if the service has no EnvironmentFile that defines REDIS_PASSWORD, or the file cannot be
     read (only the NAMES of the variables are looked at, never printed);
   * `--install a,b` adds `-i a,b` to the same run, for a module that is new on this database. `-u all` does NOT install a module
-    that is new and `auto_install` (found by the 2026-11-08 rehearsal on a restored hams_prod: ham_spreadsheet_csp stayed
+    that is new and `auto_install` (seen in a rehearsal on a restored hams_prod: ham_spreadsheet_csp stayed
     `uninstalled` with both of its dependencies installed), so a deploy that adds a module names it here;
   * refuses to run while the odoo service is active (stop it first; the upgrade rewrites tables the live workers use);
   * `distributed_redis_cache`'s invalidate_model_cache independently aborts a install/upgrade at the first cache
@@ -28,14 +28,14 @@ What it does:
   * after a successful upgrade, BEFORE odoo is started again, compiles every stylesheet bundle (check_asset_bundles_shell.py,
     piped into `odoo shell` in the same environment; nothing is written). If any fails it exits 4 and prints how to roll back.
     Odoo answers HTTP 200 with a "css error" stub stylesheet when a module's SCSS does not compile, and the whole site is
-    unstyled (hams.com, ~16 minutes after the deploy of 2026-10-14, hams_com #1699), so the check is made while the site is
+    unstyled (hams.com, after a deploy, hams_com #1699), so the check is made while the site is
     still down for the upgrade. `--no-css-check` skips it (do not, except to recover from a broken checker).
     The HTTPS check of the live site (`production_readiness_check.py --site-css-only`, run from the dev box) is still the
     mandatory last step after odoo is started: it also catches a stale cached stylesheet.
 
 The run is the transient systemd unit `odoo-upgrade` (`systemctl is-active odoo-upgrade`). While it runs it holds odoo's HTTP port, so a
-`systemctl restart odoo` (or the tool's own `Restart=on-failure`) fails with "Address already in use" until it ends -- 8 failed starts on
-2026-10-12 23:07 when a restart was issued under a running upgrade. That collision is also the only thing that stops a full odoo from
+`systemctl restart odoo` (or the tool's own `Restart=on-failure`) fails with "Address already in use" until it ends (a restart issued under a running upgrade failed 8 times).
+That collision is also the only thing that stops a full odoo from
 starting on top of tables being rewritten, so do not restart odoo until the unit is inactive.
 
 It does not stop or start odoo and does not set the pagerduty maintenance flag: wrap it in the usual

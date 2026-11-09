@@ -177,14 +177,13 @@ class EdgeRoutingDomain(models.Model):
 
     # [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
     def _trigger_pager_duty_sync(self):
-        # 2026-09-16: this used to also notify a distributed-cache invalidation for
-        # get_target_slug_by_domain() (a @distributed_cache()-decorated lookup this method fed
-        # on every create()/write()/unlink()) -- deleted along with that method once a repo-wide
-        # grep confirmed its only callers left were its own tests (real custom-domain traffic is
-        # routed by Odoo core's website.domain, and push_all_to_pager_duty() below, the real
-        # consumer of this table, doesn't call it either). Only the PagerDuty sync trigger
-        # remains; the `names` parameter existed solely for the cache-invalidation call, so it's
-        # dropped too.
+        # This does not notify a distributed-cache invalidation for
+        # get_target_slug_by_domain() (a @distributed_cache()-decorated lookup that no longer
+        # exists; a repo-wide grep showed its only callers were its own tests, real custom-domain
+        # traffic is routed by Odoo core's website.domain, and push_all_to_pager_duty() below, the
+        # real consumer of this table, doesn't call it either). Only the PagerDuty sync trigger
+        # is needed; there is no `names` parameter because it served solely the
+        # cache-invalidation call.
         try:
             # Trigger cron to run asynchronously, avoiding thread exhaustion and batching O(N) fetches
             cron = self.env.ref('edge_routing.ir_cron_push_pager_duty', raise_if_not_found=False)

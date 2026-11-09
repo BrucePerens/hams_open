@@ -57,7 +57,8 @@ class TestCachingTour(HamsHttpCase):
         deploy that bumped CACHE_NAME would silently wipe out every OTHER
         Service Worker's cache sharing this origin's CacheStorage,
         including ham_shack's shack_sw.js offline QSO-logging cache.
-        Deletion is scoped to CACHE_NAME_PREFIX; this proves a differently-prefixed (foreign) cache survives
+        Deletion is scoped to CACHE_NAME_PREFIX; this proves a
+        differently-prefixed (foreign) cache survives
         cleanup while a genuinely stale same-prefix one does not."""
         self.start_tour("/?debug=1", "caching_sw_cache_isolation_check", login="admin")
 

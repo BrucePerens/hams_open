@@ -18,7 +18,8 @@ class RequireDbCredentialsTests(unittest.IsolatedAsyncioTestCase):
 
     DB_USER/DB_PASS must not default to the literal "odoo"/"odoo" whenever DB_ENV_FILE is
     absent (the normal case on a deployment where infrastructure.py's own provisioning has not
-    written it; see infrastructure.py's _provision_cache_manager_role). An unset DB_USER/DB_PASS pair must now
+    written it; see infrastructure.py's _provision_cache_manager_role). An unset DB_USER/DB_PASS
+    pair must now
     stop main() before it ever reaches Redis or PostgreSQL, not silently connect as a
     full-privilege role with a guessable literal password.
     """
@@ -86,7 +87,7 @@ class DbEnvFileTests(unittest.TestCase):
 class DbEnvFilePrecedenceTests(unittest.TestCase):
     """Tests [@ANCHOR: COMM_cache_manager_db_env_precedence]
 
-    Found 2026-11-08 in the whole-system gate: the file used to be loaded with override=True for every key, so a test run
+    The file must not be loaded with override=True for every key: a test run
     serving its own slot database (DB_NAME=hams_test_s3) had the daemon LISTEN on the file's hams_test and never see the
     NOTIFY. The login must still beat a stale exported one."""
 
@@ -111,9 +112,9 @@ class DbEnvFilePrecedenceTests(unittest.TestCase):
 
 
 class UnitFileTests(unittest.TestCase):
-    """The shipped cache-manager.service must be one that works on a real host: found on hams1,
-    2026-10-12, the sample unit pointed at /opt/odoo/addons and loaded no Redis credentials, and no
-    deployment installed it, so the global_cache_invalidation_counter never existed."""
+    """The shipped cache-manager.service must be one that works on a real host: a sample unit that
+    points at /opt/odoo/addons and loads no Redis credentials, and that no deployment installs, leaves
+    the global_cache_invalidation_counter nonexistent."""
 
     def setUp(self):
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache-manager.service")

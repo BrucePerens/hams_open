@@ -5,8 +5,8 @@
 
 Why: Odoo compiles a bundle's SCSS as one source. When the compiler raises (a bare `min(22rem, calc(100vw - 16px))`, an
 undefined variable), Odoo does not fail anything: it serves HTTP 200 with a stub stylesheet (`css_error_message`, a red
-"A css error occured" banner) and the whole site is unstyled. hams.com was unstyled for ~16 minutes after the deploy of
-2026-10-14 (hams_com #1699), and earlier on 2026-10-11/12. This runs on the server after `odoo -u` and BEFORE odoo is started, so
+"A css error occured" banner) and the whole site is unstyled. hams.com has been left unstyled that way after a deploy
+(hams_com #1699). This runs on the server after `odoo -u` and BEFORE odoo is started, so
 the site never serves the stub.
 
 It calls only `AssetsBundle.preprocess_css()`, the step `css()` runs before it decides on the stub, which compiles in memory and

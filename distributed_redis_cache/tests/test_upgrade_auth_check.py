@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 """A module install/upgrade whose Redis credentials are rejected must stop at the first cache invalidation.
 
-Found 2026-10-12: a hand-run `odoo -u` on production lacked the service's Redis credentials, 2394 cache
-invalidations failed as WARNINGs and the upgrade "succeeded" with every pre-upgrade entry still in Redis.
+A hand-run `odoo -u` on production without the service's Redis credentials would see every cache
+invalidation fail as a WARNING and the upgrade "succeed" with every pre-upgrade entry still in Redis.
 """
 # Tests [@ANCHOR: distributed_redis_cache:COMM_invalidation_auth_failure_aborts_upgrade]
 
