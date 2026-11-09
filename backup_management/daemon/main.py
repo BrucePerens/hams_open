@@ -264,6 +264,7 @@ def _pgbackrest_s3_repo_args(config, target_path):
     return args
 
 
+# [@ANCHOR: backup_management:_pgbackrest_repo_number]
 def _pgbackrest_repo_number(config):
     """
     The pgBackRest repository number (repoN) this backup.config selects from
@@ -278,6 +279,8 @@ def _pgbackrest_repo_number(config):
     configured (https://pgbackrest.org/user-guide.html#multi-repo).
     """
     raw = config.get("pgbackrest_repo") or 0
+    if isinstance(raw, bool) or (isinstance(raw, float) and not raw.is_integer()):
+        raise ValueError(f"Invalid pgbackrest_repo: {raw!r}")
     try:
         number = int(raw)
     except (TypeError, ValueError):

@@ -754,15 +754,18 @@ class TestPgbackrestRepoNumber(unittest.TestCase):
     # flags; pgBackRest requires --repo for backup once two repositories are configured.
 
     def test_number_defaults_to_zero(self):
+        # Tests [@ANCHOR: backup_management:_pgbackrest_repo_number]
         self.assertEqual(backup_worker._pgbackrest_repo_number({}), 0)
         self.assertEqual(backup_worker._pgbackrest_repo_number({"pgbackrest_repo": 0}), 0)
         self.assertEqual(backup_worker._pgbackrest_repo_number({"pgbackrest_repo": None}), 0)
 
     def test_number_accepts_a_valid_repo(self):
+        # Tests [@ANCHOR: backup_management:_pgbackrest_repo_number]
         self.assertEqual(backup_worker._pgbackrest_repo_number({"pgbackrest_repo": 2}), 2)
 
     def test_number_rejects_garbage(self):
-        for bad in ("x; rm", -1, 257, [2]):
+        # Tests [@ANCHOR: backup_management:_pgbackrest_repo_number]
+        for bad in ("x; rm", -1, 257, [2], True, 2.5, "2.5"):
             with self.assertRaises(ValueError):
                 backup_worker._pgbackrest_repo_number({"pgbackrest_repo": bad})
 
