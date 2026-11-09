@@ -97,8 +97,9 @@ impl Vnwa {
                 Err(TransferError::Transient(m)) => {
                     self.remember(what, &format!("{m} (transient, try {})", n + 1));
                     last = m;
-                    self.resends.fetch_add(1, Ordering::Relaxed);
+                    // Only a try that is followed by another one is a resend.
                     if n < TRANSFER_RETRIES {
+                        self.resends.fetch_add(1, Ordering::Relaxed);
                         std::thread::sleep(RETRY_PAUSE);
                     }
                 }
@@ -155,9 +156,10 @@ impl Vnwa {
                 }
                 Err(TransferError::Transient(m)) => {
                     self.remember(&what, &format!("{m} (transient, try {})", n + 1));
-                    self.resends.fetch_add(1, Ordering::Relaxed);
                     last = m;
+                    // Only a try that is followed by another one is a resend.
                     if let Some(p) = pauses_ms.get(n) {
+                        self.resends.fetch_add(1, Ordering::Relaxed);
                         std::thread::sleep(Duration::from_millis(*p));
                     }
                 }
@@ -255,12 +257,15 @@ mod tests {
         assert_eq!(u.recent_transfers().len(), TRANSFER_LOG);
     }
 
+    // Tests [@ANCHOR: vnwa_open_transfer_retry]
     #[test]
     fn a_transfer_that_keeps_failing_is_a_clear_error_after_the_bound() {
         let (u, s) = unit((0..10).map(|_| eproto()).collect());
         let e = u.read(0x58, 0, 0, 64).unwrap_err();
         assert!(e.contains("still failing after 3 resends"), "{e}");
         assert_eq!(s.seen().len(), 1 + TRANSFER_RETRIES as usize);
+        // The error says 3 resends, so the counter says 3: the last failed try was not followed by another.
+        assert_eq!(u.resends(), TRANSFER_RETRIES);
     }
 
     // Tests [@ANCHOR: vnwa_open_patient_read]
@@ -288,6 +293,7 @@ mod tests {
         let e = u.read_patient(0x0d, 0x0303, 0, 64, &[1, 1]).unwrap_err();
         assert!(e.contains("still failing after 2 resends"), "{e}");
         assert_eq!(s.seen().len(), 3);
+        assert_eq!(u.resends(), 2, "the failed patient read adds its two resends only");
     }
 
     // Tests [@ANCHOR: vnwa_open_transfer_error_text]

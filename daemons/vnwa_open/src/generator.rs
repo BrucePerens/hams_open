@@ -3,7 +3,7 @@
 //! `sg_freq`, `sg_atten`, `sg off`). The sequences below are the control transfers seen in a usbmon capture of that program
 //! (2026-10-26, `docs/PROTOCOL.md`, "Signal generator"). The generator needs neither the codecs nor the reference channels.
 
-use crate::protocol::generator_frequency;
+use crate::protocol::{generator_frequency, DDS_CLOCK_HZ as RF_DDS_CLOCK_HZ};
 use crate::usb::Vnwa;
 
 /// Largest 14-bit amplitude; the generator's attenuation is relative to it.
@@ -28,6 +28,22 @@ pub fn level_for_attenuation(db: f64) -> Result<u16, String> {
         ));
     }
     Ok((FULL_SCALE * 10f64.powf(db / 20.0)).round() as u16)
+}
+
+/// Refuses a generator frequency whose DDS tuning word cannot be represented: not finite, zero or negative, or at or above the DDS clock (360 MHz).
+/// `protocol::tuning_word` saturates such a value to a word that is a different frequency (NaN and negative give 0 Hz, 500 MHz gives the
+/// largest word, about 360 MHz), so the unit would put out a tone at a frequency other than the one asked for with no error. Between 180 MHz
+/// (the Nyquist frequency of the DDS) and the clock the word is valid and the output is the image, which has not been measured on the unit.
+pub fn check_frequency(freq_hz: f64) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_generator_check_frequency]
+    let word = freq_hz * 4_294_967_296.0 / RF_DDS_CLOCK_HZ;
+    if freq_hz.is_finite() && freq_hz > 0.0 && word.round() <= f64::from(u32::MAX) {
+        Ok(())
+    } else {
+        Err(format!(
+            "generator frequency {freq_hz} Hz is outside 0 Hz (exclusive) to {RF_DDS_CLOCK_HZ} Hz (the DDS clock): the tuning word would not fit"
+        ))
+    }
 }
 
 /// The reads that switch the generator mode on, before the first frequency (vendor order).
@@ -85,6 +101,7 @@ fn run(usb: &Vnwa, reads: &[Read]) -> Result<(), String> {
 /// Sets the generator frequency (the unit must be in generator mode): read 0x0e, write 0x4c, read 0x04.
 fn set_frequency(usb: &Vnwa, freq_hz: f64, first: bool) -> Result<(), String> {
     // [@ANCHOR: vnwa_open_generator_set_frequency]
+    check_frequency(freq_hz)?;
     usb.read(0x0e, 0, 0, 64)?;
     usb.send(&generator_frequency(
         freq_hz,
@@ -103,6 +120,7 @@ fn set_level(usb: &Vnwa, attenuation_db: f64) -> Result<(), String> {
 /// Switches the generator on at a frequency and an attenuation (0 to -50 dB below full scale) and leaves it running.
 pub fn on(usb: &Vnwa, freq_hz: f64, attenuation_db: f64) -> Result<(), String> {
     // [@ANCHOR: vnwa_open_generator_on]
+    check_frequency(freq_hz)?;
     level_for_attenuation(attenuation_db)?;
     run(usb, &ENTER)?;
     set_frequency(usb, freq_hz, true)?;
@@ -259,6 +277,7 @@ pub fn modulate(
     m: Modulation,
 ) -> Result<(), String> {
     // [@ANCHOR: vnwa_open_generator_modulate]
+    check_frequency(carrier_hz)?;
     let level = level_for_attenuation(attenuation_db)?;
     let seq = modulation_reads(level, m)?;
     let last = seq.len() - 1;
@@ -404,6 +423,71 @@ mod tests {
         // A unit that stays stalled (the reopen gives a stalled one again) is reported with the advice.
         let e = end_modulation_with(unit(true), || Ok(unit(true)), 4, pause).unwrap_err();
         assert!(e.contains("needs a power cycle"), "{e}");
+    }
+
+    // Tests [@ANCHOR: vnwa_open_generator_check_frequency]
+    // Tests [@ANCHOR: vnwa_open_generator_on]
+    // Tests [@ANCHOR: vnwa_open_generator_modulate]
+    // Tests [@ANCHOR: vnwa_open_generator_set_frequency]
+    #[test]
+    fn a_frequency_whose_tuning_word_does_not_fit_is_refused_before_anything_is_sent() {
+        use crate::transport::Scripted;
+        use std::sync::Arc;
+        struct Shared(Arc<Scripted>);
+        impl crate::transport::Transport for Shared {
+            fn reset(&self) -> Result<(), crate::transport::TransferError> {
+                self.0.reset()
+            }
+            fn write(
+                &self,
+                t: u8,
+                r: u8,
+                v: u16,
+                i: u16,
+                d: &[u8],
+            ) -> Result<usize, crate::transport::TransferError> {
+                self.0.write(t, r, v, i, d)
+            }
+            fn read(
+                &self,
+                r: u8,
+                v: u16,
+                i: u16,
+                b: &mut [u8],
+            ) -> Result<usize, crate::transport::TransferError> {
+                self.0.read(r, v, i, b)
+            }
+        }
+        for f in [
+            f64::NAN,
+            f64::INFINITY,
+            -1.0e6,
+            0.0,
+            360.0e6,
+            500.0e6,
+            1.3e9,
+        ] {
+            assert!(check_frequency(f).is_err(), "{f}");
+        }
+        for f in [1.0, 10.0e6, 100.0e6, 180.0e6, 359.0e6] {
+            assert!(check_frequency(f).is_ok(), "{f}");
+        }
+        let s = Arc::new(Scripted::new(vec![]));
+        let usb = Vnwa::with_transport(Box::new(Shared(s.clone())));
+        assert!(on(&usb, 500.0e6, -20.0).is_err());
+        assert!(retune(&usb, f64::NAN).is_err());
+        assert!(modulate(
+            &usb,
+            1.3e9,
+            -20.0,
+            Modulation::Am {
+                mod_hz: 500.0,
+                depth_pct: 100.0
+            }
+        )
+        .is_err());
+        assert!(s.seen().is_empty(), "nothing reached the unit");
+        assert!(on(&usb, 10.0e6, -20.0).is_ok());
     }
 
     // Tests [@ANCHOR: vnwa_open_am_fields]
