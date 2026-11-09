@@ -81,9 +81,8 @@ class BackupConfig(models.Model):
         help="0 (default): the daemon describes repository 1 from the storage fields "
         "above. A number N from 1 up: use repositoryN as defined in "
         "/etc/pgbackrest/pgbackrest.conf on the database host (backups and snapshot "
-        "listings run with --repo=N). Use this for a repository defined on the host, "
-        "such as hams.com's plaintext repository 3; if that repository is encrypted, "
-        "its passphrase belongs only in that file and is never stored in Odoo. Required "
+        "listings run with --repo=N). Use this for an encrypted repository, whose "
+        "passphrase belongs only in that file and is never stored in Odoo. Required "
         "by pgBackRest for backups when more than one repository is configured.",
     )
     access_key = fields.Char(string="Access Key", groups=_SECRET_FIELD_GROUPS)

@@ -283,9 +283,8 @@ def _pgbackrest_repo_number(config):
     daemon describes repo1 itself from the config's own bucket/path fields).
 
     A non-zero number means the repository is defined only in pgbackrest.conf
-    on the host (a plaintext repository 3 is used this way;
-    an encrypted one would be too, its cipher passphrase must never travel on a
-    command line or in this payload).
+    on the host (this is how an encrypted repository is used: its cipher
+    passphrase must never travel on a command line or in this payload).
     pgBackRest requires --repo for `backup` when more than one repository is
     configured (https://pgbackrest.org/user-guide.html#multi-repo).
     """
