@@ -31,12 +31,17 @@
              data/content_moderation_data.xml on 2026-09-23 (the model it's
              keyed to moved there too). -->
 
+        <!-- [@ANCHOR: user_websites:mail_sender_fallback] The three mail templates below never fall back to a made-up
+             address. The sender is the company email, then the mail server's own default from address
+             (its `email_from` option); with neither set it is empty, and Odoo refuses to send that mail and records why on it.
+             The abuse report recipient is the `user_websites.company_abuse_email` setting, then the company email, then
+             empty (no mail is sent to nobody). Tested by test_mail_sender_fallback.py. -->
         <record id="email_template_content_violation" model="mail.template">
             <field name="name">Content Violation Report</field>
             <field name="model_id" ref="content_moderation.model_content_violation_report"/>
             <field name="subject">Content Violation Report: {{ object.target_url }}</field>
             <field name="email_from">{{ (object.reported_by_user_id.email or object.reported_by_email) }}</field>
-            <field name="email_to">{{ object.env['zero_sudo.security.utils']._get_system_param('user_websites.company_abuse_email') or user.company_id.email or 'abuse@yourcompany.com' }}</field>
+            <field name="email_to">{{ object.env['zero_sudo.security.utils']._get_system_param('user_websites.company_abuse_email') or user.company_id.email or '' }}</field>
             <field name="body_html" type="html">
                 <div style="margin: 0px; padding: 0px;">
                     <p>A new content violation has been reported:</p>
@@ -52,7 +57,7 @@
             <field name="name">User Websites: Pending Violations Summary</field>
             <field name="model_id" ref="base.model_res_company"/>
             <field name="subject">Action Required: {{ ctx.get('pending_count') }} Pending Violation Reports</field>
-            <field name="email_from">{{ object.email or 'noreply@yourcompany.com' }}</field>
+            <field name="email_from">{{ object.email or object.env['ir.mail_server']._get_default_from_address() or '' }}</field>
             <field name="email_to">{{ ctx.get('email_to') }}</field>
             <field name="body_html" type="html">
                 <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif;">
@@ -96,7 +101,7 @@
             <field name="name">User Websites: Weekly Digest</field>
             <field name="model_id" ref="website_blog.model_blog_post"/>
             <field name="subject">Weekly Update from {{ ctx.get('author_name') }}</field>
-            <field name="email_from">{{ user.company_id.email or 'noreply@yourcompany.com' }}</field>
+            <field name="email_from">{{ user.company_id.email or object.env['ir.mail_server']._get_default_from_address() or '' }}</field>
             <field name="email_to">{{ ctx.get('email_to') }}</field>
             <field name="body_html" type="html">
                 <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif;">
