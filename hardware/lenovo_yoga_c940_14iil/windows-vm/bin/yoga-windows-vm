@@ -6,6 +6,8 @@ SHARE=${YWV_SHARE:-/usr/share/yoga-windows-vm}
 VIRSH="virsh -c qemu:///system"
 as_root() { [ "$(id -u)" = 0 ] || exec sudo -- "$0" "$@"; }
 state() { local s; s=$($VIRSH domstate "$DOMAIN" 2>/dev/null) || s=undefined; echo "$s"; }
+# A guest that still has a QEMU process: "running", or already sent the ACPI shutdown ("in shutdown").
+busy_p() { case "$(state)" in running|"in shutdown") return 0 ;; *) return 1 ;; esac; }
 off_p() { case "$(state)" in "shut off"|undefined) return 0 ;; *) return 1 ;; esac; }
 
 usage() { cat <<U
@@ -130,11 +132,11 @@ cmd_launch() {
     cmd_view
 }
 cmd_stop() {
-    if [ "$(state)" != running ]; then echo "not running"; return 0; fi
+    if ! busy_p; then echo "not running"; return 0; fi
     $VIRSH shutdown "$DOMAIN" >/dev/null
     local i
     for ((i=0; i<SHUTDOWN_WAIT; i++)); do
-        if [ "$(state)" != running ]; then echo "shut down cleanly"; return 0; fi
+        if ! busy_p; then echo "shut down cleanly"; return 0; fi
         sleep 1
     done
     log "no clean shutdown after ${SHUTDOWN_WAIT}s: destroying (LAST RESORT)"

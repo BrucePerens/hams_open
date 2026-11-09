@@ -165,5 +165,43 @@ class HookSafety(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
 
 
+class StopWaitsForShutdownInProgress(unittest.TestCase):
+    """`yoga-windows-vm stop` (the systemd ExecStop) must not return while the guest is still shutting down:
+    systemd would go on to stop libvirt and power the host off under a Windows that is still writing."""
+
+    def run_stop(self, state):
+        with tempfile.TemporaryDirectory() as d:
+            bindir = os.path.join(d, "bin")
+            os.mkdir(bindir)
+            log = os.path.join(d, "log")
+            st = os.path.join(d, "state")
+            put(st, state + "\n")
+            write_exe(os.path.join(bindir, "virsh"),
+                      "case $3 in domstate) cat %s;; shutdown) echo shutdown >> %s; echo 'shut off' > %s;; "
+                      "destroy) echo destroy >> %s;; esac" % (st, log, st, log))
+            conf = os.path.join(d, "c.conf")
+            put(conf, "MODE=overlay\nWIN_PARTUUID=u\nWIN_MOUNT=/w\nDATA_DIR=%s\nSHUTDOWN_WAIT=3\n" % d)
+            env = dict(os.environ, PATH=bindir + ":" + os.environ["PATH"], YWV_CONF=conf,
+                       YWV_LIB=os.path.join(VM, "lib"))
+            r = subprocess.run([os.path.join(VM, "bin/yoga-windows-vm"), "stop"], env=env,
+                               capture_output=True, text=True, timeout=60)
+            return r, (get(log).split() if os.path.exists(log) else [])
+
+    def test_running_guest_gets_acpi_shutdown(self):
+        r, log = self.run_stop("running")
+        self.assertEqual(log, ["shutdown"])
+        self.assertIn("shut down cleanly", r.stdout)
+
+    def test_guest_already_in_shutdown_is_waited_for(self):
+        r, log = self.run_stop("in shutdown")
+        self.assertIn("shutdown", log)
+        self.assertNotIn("not running", r.stdout)
+
+    def test_shut_off_guest_is_left_alone(self):
+        r, log = self.run_stop("shut off")
+        self.assertEqual(log, [])
+        self.assertIn("not running", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
