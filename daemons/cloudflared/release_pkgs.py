@@ -108,12 +108,12 @@ class PkgCreator:
 
     # [@ANCHOR: release_pkgs:PkgCreator::create_deb_pkgs]
     def create_deb_pkgs(self, release, deb_file):
-        # Bug fix (bug-hunt, 2026-09-09): the bare `raise` below is not inside an `except` block,
+        # The bare `raise` below is not inside an `except` block,
         # so it has no "currently handled exception" to re-raise -- confirmed empirically (a bare
         # `raise` outside `except` raises `RuntimeError: No active exception to reraise`), which
         # discarded the real return code/stderr from the exception object itself, even though
-        # both were already computed right there and printed. Same bug found and fixed
-        # identically in create_rpm_pkgs/_sign_rpms/_sign_repomd/import_rpm_key below.
+        # both were already computed right there and printed. The same applies
+        # to create_rpm_pkgs/_sign_rpms/_sign_repomd/import_rpm_key below.
         print(f"creating deb pkgs: {release} : {deb_file}")
         p = Popen(["reprepro", "includedeb", release, deb_file], stdout=PIPE, stderr=PIPE)
         out, err = p.communicate()
@@ -266,16 +266,16 @@ class PkgCreator:
 # [@ANCHOR: release_pkgs:upload_from_directories]
 def upload_from_directories(pkg_uploader, directory, release, binary):
     """
-    Bug fix (bug-hunt, 2026-09-09): this used to catch a failed R2 upload, log it, and `return`
+    This used to catch a failed R2 upload, log it, and `return`
     -- silently abandoning the rest of the walk (every remaining file in `directory` never gets
     uploaded) with no exception propagating to the top-level `__main__` block, which has no
     try/except of its own around this call at all. That let a partially-published apt/yum
     repository (e.g. a signed InRelease file present with some or all of its referenced .deb
     packages missing) look like a fully successful release from the process's own exit code
-    (0), matching this project's own silent-failure-gate bug class. Fixed to let the failure
+    (0), matching this project's own silent-failure-gate rule. The failure must
     propagate -- `upload_pkg_to_r2` already re-raises `ClientError` itself, so simply not
     catching it here is enough for the process to fail loudly and non-zero, consistent with
-    every other failure path in this same file (the bare-`raise` fixes above) and in the sibling
+    every other failure path in this same file (the bare-`raise` handling above) and in the sibling
     github_release.py/github_message.py scripts.
     """
     for root, _, files in os.walk(directory):
@@ -320,7 +320,7 @@ def create_deb_packaging(pkg_creator, pkg_uploader, releases, primary_gpg_key_id
         sign_with_ids)
 
     # create deb pkgs
-    # Bug fix (bug-hunt, 2026-09-09): this hardcoded the literal "cloudflared" in the artifact
+    # This hardcoded the literal "cloudflared" in the artifact
     # filename instead of using this function's own `binary_name` parameter -- every other file
     # path built in this module (create_rpm_packaging, _setup_rpm_pkg_directories,
     # create_repo_file) is correctly parameterized by binary_name/artifacts_path, so this only
@@ -355,7 +355,7 @@ def create_rpm_packaging(
         gpg_key_url,
         upload_repo_file=False,
 ):
-    print(f"creating rpm pkgs...")
+    print("creating rpm pkgs...")
     pkg_creator.create_rpm_pkgs(artifacts_path, gpg_key_name)
     repo_file = pkg_creator.create_repo_file(artifacts_path, binary_name, base_url, gpg_key_url)
 
@@ -440,13 +440,13 @@ def parse_args():
     )
     args = parser.parse_args()
 
-    # Bug fix (bug-hunt, 2026-09-09): unlike its two sibling scripts (github_message.py and
+    # Unlike its two sibling scripts (github_message.py and
     # github_release.py's own parse_args, both of which validate every required argument up
     # front with a clear "Missing X" message), this one previously returned unconditionally with
     # no validation at all. A misconfigured CI invocation (e.g. R2_ACCOUNT_ID unset) failed deep
     # inside boto3/GPG with a confusing, hard-to-diagnose low-level error (e.g. a DNS failure
     # resolving "https://None.r2.cloudflarestorage.com") instead of a clear message naming the
-    # actual missing input. Fixed to match the sibling scripts' own established convention.
+    # actual missing input. Matches the sibling scripts' own established convention.
     is_valid = True
     if not args.bucket:
         logging.error("Missing R2 bucket name")

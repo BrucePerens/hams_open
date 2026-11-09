@@ -25,7 +25,7 @@ def _raise_for_kv_error(response, action):
     """
     Raises a clear exception describing a failed Workers KV HTTP call.
 
-    Bug fix (bug-hunt, 2026-09-09): the three call sites that used to inline this check only
+    The three call sites that used to inline this check only
     raised when the response body's own "errors" array was both present AND non-empty --  a
     non-200 response with an empty/missing "errors" key (a different error shape, an HTML error
     page, or a malformed body) silently fell through instead of raising at all, letting the
@@ -79,7 +79,7 @@ def update_or_add_message(msg, name, sha):
     updates or builds the github version message for each new asset's sha256.
     Searches the existing message string to update or create.
 
-    Bug fix (bug-hunt, 2026-09-09): this used to search for `name` as a bare substring anywhere
+    This used to search for `name` as a bare substring anywhere
     in `msg` (`msg.find(name)`), which conflates an asset's own checksum line with any OTHER
     line that merely contains `name` as a substring -- e.g. "cloudflared-linux-amd64" is a
     literal substring of "cloudflared-linux-amd64-fips" or any other name sharing the same
@@ -87,7 +87,7 @@ def update_or_add_message(msg, name, sha):
     list-keys response always being returned in strict lexicographic order (never independently
     verified against Cloudflare's own API contract in this codebase) -- an unverified external
     ordering assumption is exactly the kind of thing that should not be load-bearing for data
-    integrity. Fixed to match only a real "name: " entry anchored to the start of a line,
+    integrity. Match only a real "name: " entry anchored to the start of a line,
     independent of processing order.
     """
     new_text = '{0}: {1}\n'.format(name, sha)
@@ -177,7 +177,7 @@ def main():
         repo = client.get_repo(CLOUDFLARED_REPO)
         release = get_release(repo, args.release_version)
         if release is None and not args.dry_run:
-            # Minor robustness fix (bug-hunt, 2026-09-09): previously this fell through and let
+            # Previously this fell through and let
             # `release.update_release(...)` below raise an opaque AttributeError on a NoneType
             # instead of a clear, actionable message.
             raise Exception(f"Release {args.release_version} not found; cannot update message")

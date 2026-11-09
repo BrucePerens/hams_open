@@ -11,8 +11,7 @@ import hashlib
 import requests
 import tarfile
 from os import listdir
-from os.path import isfile, join, splitext
-import re
+from os.path import isfile, join
 import subprocess
 from urllib.parse import quote
 
@@ -49,7 +48,7 @@ def send_hash(pkg_hash, name, version, account, namespace, api_token):
             data=pkg_hash
     )
 
-    # Bug fix (bug-hunt, 2026-09-09): the original check only raised when the error body's
+    # The original check only raised when the error body's
     # "errors" array was both present AND non-empty -- a non-200 response with an empty/missing
     # "errors" key (or a body that isn't JSON at all, which would previously have raised an
     # unrelated ValueError from response.json() instead of the intended message) silently fell
@@ -68,16 +67,16 @@ def send_hash(pkg_hash, name, version, account, namespace, api_token):
 # [@ANCHOR: github_release:assert_tag_exists]
 def assert_tag_exists(repo, version):
     """ Raise exception if repo does not contain a tag matching version """
-    # Bug fix (bug-hunt, 2026-09-09): confirmed directly against PyGithub 2.10.0's
+    # Confirmed directly against PyGithub 2.10.0's
     # PaginatedList/PaginatedListBase source (github/PaginatedList.py) -- neither class defines
     # __bool__ or __len__, so `not tags` on a PaginatedList is ALWAYS False, even when the repo
     # genuinely has zero tags (Python falls back to default object truthiness, which is always
-    # True). That made the emptiness check dead code (bug class 1): a repo with no tags at all
+    # True). That made the emptiness check dead code: a repo with no tags at all
     # would instead crash on `tags[0]` with an unrelated, un-caught IndexError. Separately,
     # checking only `tags[0].name` assumed GitHub's tag-list ordering always puts the release's
     # own tag first -- an ordering guarantee this codebase never independently verified -- so a
     # real, existing tag that merely isn't first in the list was wrongly reported "not found."
-    # Fixed to search every tag for an exact name match instead of trusting position 0.
+    # Search every tag for an exact name match instead of trusting position 0.
     for tag in repo.get_tags():
         if tag.name == version:
             return
@@ -200,13 +199,13 @@ def parse_args():
 # [@ANCHOR: github_release:upload_asset]
 def upload_asset(release, filepath, filename, release_version, kv_account_id, namespace_id, kv_api_token):
     """
-    Bug fix (bug-hunt, 2026-09-09): this used to `return` immediately once an asset was found
+    This used to `return` immediately once an asset was found
     already uploaded, which also skipped computing and sending its sha256 checksum to Workers KV
     every single time. That's harmless on a clean run (checksum was already sent alongside the
     original upload), but a re-run after a crash between `release.upload_asset()` and
     `send_hash()` (network blip, killed CI job, etc.) would permanently skip sending that
     binary's checksum on every retry, since the asset now always shows up as "already uploaded."
-    Fixed so only the re-upload itself is skipped -- the checksum is always (re)computed and
+    Only the re-upload itself is skipped -- the checksum is always (re)computed and
     (re)sent.
     """
     logging.info("Uploading asset: %s", filename)
@@ -267,7 +266,7 @@ def get_binary_version(binary_path):
     This function parses the above output to retrieve the following substring 2024.8.3-6-gec072691.
     To do this a start and end indexes are computed and the a slice is extracted from the output using them.
 
-    Bug fix (bug-hunt, 2026-09-09): if `needle` isn't found at all (`go version -m` output format
+    If `needle` isn't found at all (`go version -m` output format
     changed, `go` failed and printed something else to stdout, or the binary has no embedded
     version info), `needle_index` is -1 and the subsequent index arithmetic
     (`version_info[needle_index:]`, `needle_index + len(needle)`, etc.) silently produced a
@@ -338,11 +337,10 @@ def main():
                     logging.info("binary: " + binary_path)
                     assert_asset_version(binary_path, args.release_version)
             elif os.path.isfile(args.path):
-                # Bug fix (bug-hunt, 2026-09-09): this referenced `binary_path`, which is only
-                # ever assigned inside the sibling `if os.path.isdir(...)` branch above -- on
-                # every single-file dry run this raised an unconditional NameError instead of
-                # doing anything useful, and even if it hadn't, it never called
-                # `assert_asset_version` the way the directory branch does. Fixed to behave like
+                # `binary_path` is only ever assigned inside the sibling
+                # `if os.path.isdir(...)` branch above, so referencing it here would raise
+                # an unconditional NameError on every single-file dry run; this branch must
+                # also call `assert_asset_version` the way the directory branch does. Behave like
                 # the directory branch for the one file it was given.
                 binary_path = args.path
                 logging.info("binary: " + binary_path)
