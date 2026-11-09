@@ -48,61 +48,33 @@ register_hams_profile()  # the one Hypothesis profile of every property test in 
 
 _test_callsign_counter = itertools.count(1)
 
-# night_shift_todo/low/flaky-httpcase-shared-callsign-counter-9e4c7a2b.md
-# investigated 2026-10-02 (hams_com night-shift session) whether this
-# single, monotonic, process-wide counter can hand out the SAME callsign
-# twice within one `test.py` run, via a hypothesized mechanism: an
-# HamsHttpCase test's real HTTP writes supposedly "commit for real" and
-# survive into a later test, which then collides with a separately-
-# memoized `get_callsign()` value landing on the same counter integer.
-# Investigated and ruled out, not fixed -- both halves of the hypothesis
-# are structurally impossible as this code is actually written and as
-# Odoo 19 (19.0.20260927, the version installed here) actually behaves:
-#   1. `itertools.count` is strictly monotonic and never resets within a
-#      process. `test.py`'s default "standard" mode runs every requested
-#      module's tests inside ONE Odoo process (confirmed via `ps aux`
-#      against a live run), so every FRESH call to
-#      next(_test_callsign_counter) -- from any test class, any key --
-#      returns a value no other fresh call can ever repeat. The only way
-#      to get the same string twice is a cache hit on the SAME (class,
-#      key) pair in get_callsign() below, which is the intended,
-#      deliberate behavior (give one test class's methods a stable,
-#      reusable callsign), not a collision.
-#   2. Even if an HamsHttpCase test's real_transaction were to "survive,"
-#      that surviving row still carries whichever single integer the
-#      counter already issued it -- per point 1, no other call can ever
-#      draw that same integer again. But the premise itself is false in
-#      this Odoo version anyway: HttpCase.setUpClass() calls
-#      registry_enter_test_mode_cls(), which monkeypatches
-#      `Registry.cursor` for the whole class so EVERY cursor obtained
-#      during the test (including one opened from inside a live HTTP
-#      request the test drives via url_open()/start_tour()) is a
-#      TestCursor wrapping the class's own savepoint-based transaction,
-#      not a second, independently-committing connection (confirmed by
-#      reading /usr/lib/python3/dist-packages/odoo/tests/common.py and
-#      odoo/sql_db.py's TestCursor directly). TestCursor.commit() only
-#      releases a savepoint; nothing here reaches a real COMMIT, and the
-#      whole thing rolls back together when the test (or class) tears
-#      down. This matches an unrelated, independently-recorded finding
-#      in this same codebase (night_shift_history.md, 2026-09-23: "a
-#      TransactionCase/HttpCase test's transaction begins as superuser
-#      too... HamsHttpCase's TestCursor silently never runs postcommit
-#      callbacks"). The one case that DOES use a real, separately-
-#      committing cursor is RealTransactionCase
-#      (zero_sudo/tests/real_transaction.py), and it comes with its own
-#      ORM-create tracking and leak-detection teardown specifically to
-#      stop exactly this kind of survival -- and even a real leak there
-#      still can't produce a repeated VALUE, by point 1.
-# A genuinely more plausible mechanism for the original 2026-08-31
-# UniqueViolation this to-do traces back to would be two actual, separate
-# OS processes (not two test CLASSES) racing against the shared
-# `hams_test` database, each with its OWN fresh counter starting at 1 --
-# e.g. if the systemwide test-runner lock (`/tmp/hams_odoo_test_runner.
-# lock`) were ever bypassed or raced. That is a lock/concurrency question,
-# not a scoping question about this counter or get_callsign()'s per-class
-# memoization, and was not independently confirmed either -- flagged here
-# only so a future session doesn't waste time re-deriving this analysis
-# from scratch, not as a new open item.
+# This single, monotonic, process-wide counter cannot hand out the SAME callsign twice within
+# one `test.py` run, for two structural reasons:
+#   1. `itertools.count` is strictly monotonic and never resets within a process. `test.py`'s
+#      default "standard" mode runs every requested module's tests inside ONE Odoo process, so
+#      every FRESH call to next(_test_callsign_counter) -- from any test class, any key --
+#      returns a value no other fresh call can ever repeat. The only way to get the same
+#      string twice is a cache hit on the SAME (class, key) pair in get_callsign() below,
+#      which is the intended behavior (give one test class's methods a stable, reusable
+#      callsign), not a collision.
+#   2. An HamsHttpCase test's writes do not survive into a later test. HttpCase.setUpClass()
+#      calls registry_enter_test_mode_cls(), which monkeypatches `Registry.cursor` for the
+#      whole class so EVERY cursor obtained during the test (including one opened from inside
+#      a live HTTP request the test drives via url_open()/start_tour()) is a TestCursor
+#      wrapping the class's own savepoint-based transaction, not a second, independently-
+#      committing connection (odoo/tests/common.py and odoo/sql_db.py's TestCursor).
+#      TestCursor.commit() only releases a savepoint; nothing here reaches a real COMMIT, and
+#      the whole thing rolls back together when the test (or class) tears down. (This also
+#      means HamsHttpCase's TestCursor never runs postcommit callbacks.) The one case that
+#      DOES use a real, separately-committing cursor is RealTransactionCase
+#      (zero_sudo/tests/real_transaction.py), and it has its own ORM-create tracking and
+#      leak-detection teardown to stop exactly this kind of survival -- and even a real leak
+#      there still cannot produce a repeated VALUE, by point 1.
+# A UniqueViolation on a callsign therefore points at two actual, separate OS processes (not two
+# test CLASSES) racing against the shared `hams_test` database, each with its OWN fresh counter
+# starting at 1 -- e.g. if the systemwide test-runner lock (`/tmp/hams_odoo_test_runner.lock`)
+# were ever bypassed or raced. That is a lock/concurrency question, not a scoping question
+# about this counter or get_callsign()'s per-class memoization.
 
 
 # [@ANCHOR: zero_sudo:generate_test_callsign]
@@ -141,9 +113,9 @@ _original_handle_request_paused = odoo.tests.common.ChromeBrowser._handle_reques
 
 odoo.tests.common.HttpCase.fetch_proxy = None
 
-# Real bug found live 2026-09-12 (ham_shack's own test_03_shack_relay_confirm_claim_tour, which
-# needs to prove a real fetch() round trip against a fake relay that is NOT this test server's own
-# host, per LOCAL_RELAY_ZERO_TOUCH_ONBOARDING.md's "different LAN host" scenario): the safety net
+# ham_shack's test_03_shack_relay_confirm_claim_tour, for example, needs to prove a real fetch()
+# round trip against a fake relay that is NOT this test server's own host (see
+# LOCAL_RELAY_ZERO_TOUCH_ONBOARDING.md's "different LAN host" scenario). The safety net
 # below -- allowing only `HOST` ("127.0.0.1") through to a real network fetch, so a test can never
 # accidentally make an unbounded real external request -- has NO opt-in for a test that
 # deliberately needs a real HTTP round trip against a genuinely different host/address (a plain
@@ -151,8 +123,8 @@ odoo.tests.common.HttpCase.fetch_proxy = None
 # JSON-parsing pipeline, not just a pre-decided canned response). This is a purely additive,
 # default-off extension point: a test case sets `self.extra_allowed_fetch_hosts` to a tuple of
 # additional literal hostnames it has independently verified are safe, hermetic, and under its own
-# control (e.g. a fake HTTPServer this same test spins up and tears down) -- every existing test,
-# with nothing set, behaves identically to before this change.
+# control (e.g. a fake HTTPServer this same test spins up and tears down) -- every test with
+# nothing set gets the default behavior.
 # [@ANCHOR: zero_sudo:extra_allowed_fetch_hosts]
 # Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_default_is_unchanged]
 # Verified by [@ANCHOR: zero_sudo:test_extra_allowed_fetch_hosts_opt_in]
@@ -259,7 +231,7 @@ def _protected_pids():
 
 def _kill_browser_tree(proc, where):
     """SIGKILLs a test browser (a subprocess.Popen) and its descendants, and its process group only when that group is
-    its own. Two runs (2026-10-24, PID namespace) died with -9 in this clean-up right after tearDown's /odoo/health
+    its own. Runs in a separate PID namespace have died with -9 in this clean-up right after tearDown's /odoo/health
     poll, so this logs pid, pgid and our own group first, and refuses to signal anything that could be the test server:
     no killpg of our own group (the socat clean-up's guard), nothing <= 1, and no descendant that is this process or an
     ancestor of it. A browser already reaped (`poll()` is not None) is skipped: its pid number may belong to someone
@@ -357,9 +329,9 @@ _CHROME_REAP_POLL_SECONDS = 0.05
 # [@ANCHOR: zero_sudo:kill_all_headless_chrome]
 def _kill_all_headless_chrome_for_this_uid():
     """SIGKILLs every headless chrome/chromium of this test process (`_headless_chrome_of_this_run`): its descendants and the
-    orphans whose profile directory is in its own temporary directory. The name is historical: until 2026-11-08 this killed
+    orphans whose profile directory is in its own temporary directory. The name is historical: it once killed
     every headless chrome of the uid on the machine, which was safe only while test.py allowed one run per machine
-    (the reinstated 2026-09-09 behaviour) and killed other runs' browsers once test slots allowed several (ADR 0116).
+    and would kill other runs' browsers once test slots allow several (ADR 0116).
     Called before a new Chrome is spawned (_patched_spawn_chrome) and at the end of every test (HamsHttpCase.tearDown), so memory
     held by an incompletely torn-down tour is reclaimed at once."""
     # Kill, rescan, repeat until a scan finds nothing: no fixed sleep and no fixed wait. A Chrome that was starting can spawn a
@@ -541,12 +513,10 @@ _original_threadpool_submit = concurrent.futures.ThreadPoolExecutor.submit
 
 # [@ANCHOR: zero_sudo:tracked_threadpool_submit]
 def _tracked_threadpool_submit(self, fn, *args, **kwargs):
-    # night_shift_todo/medium/test-harness-lingering-http-transaction-teardown-
-    # serialization-fd450979.md root cause: the real conflicting writer behind
-    # "could not serialize access due to concurrent update" was never an HTTP/werkzeug
-    # thread at all -- a live repro (HAMS_TRACE_PG_THREADS=1) showed
-    # `_active_werkzeug_threads` was EMPTY at every one of test_04's teardowns
-    # (`wait_for_werkzeug_threads`'s own entry/exit trace, `still_active=[]` throughout).
+    # The real conflicting writer behind "could not serialize access due to concurrent update"
+    # at teardown is not an HTTP/werkzeug thread: with HAMS_TRACE_PG_THREADS=1,
+    # `_active_werkzeug_threads` is EMPTY at every teardown
+    # (`wait_for_werkzeug_threads`'s own entry/exit trace, `still_active=[]`).
     # The actual writer is production code:
     # `user_websites.models.res_users_moderation.action_suspend_user_websites()`
     # unconditionally defers `_async_unpublish_content` to `self.env.cr.postcommit`,
@@ -556,9 +526,9 @@ def _tracked_threadpool_submit(self, fn, *args, **kwargs):
     # `registry.cursor()` (a genuinely separate connection/backend, since
     # RealTransactionCase.setUp() replaces `self.registry.cursor` for the whole shared
     # Registry singleton) and commits `website_published = False` to the exact
-    # `website_page` row the test's own teardown then tries to DELETE. No mechanism
-    # anywhere waited for that background job before the leak-check's cleanup ran --
-    # this is that mechanism, generic to ANY ThreadPoolExecutor-submitted background
+    # `website_page` row the test's own teardown then tries to DELETE. This tracking exists
+    # so wait_for_background_futures() can wait for that background job before the
+    # leak-check's cleanup runs; it is generic to ANY ThreadPoolExecutor-submitted background
     # work anywhere in the codebase, not just this one call site.
     future = _original_threadpool_submit(self, fn, *args, **kwargs)
     with _pending_background_futures_lock:
@@ -639,15 +609,15 @@ def _patched_save_test_file(
 
         # Prevent Permission Denied by forcing relative paths like 'chrome_logs' into host_tmp
         if directory and not os.path.isabs(directory):
-            # bug-hunt (2026-09-27): a bare `.startswith(base)` matches by
+            # A bare `.startswith(base)` matches by
             # string PREFIX with no path-separator boundary, so a relative
             # `directory` of "../test_evil" resolves to "/opt/hams/test_evil",
-            # which starts with "/opt/hams/test" and sailed through the guard
+            # which starts with "/opt/hams/test" and would pass a bare-prefix guard
             # that exists to stop exactly that. This module already has the
             # correct shape and a unit test for it -- see
-            # `zero_sudo.ir.module.module._is_path_within_module_dir`, written
-            # by this same campaign on 2026-09-13 against the identical
-            # "<base>_evil sibling directory" bug; this is that check.
+            # `zero_sudo.ir.module.module._is_path_within_module_dir`, which
+            # guards against the identical "<base>_evil sibling directory"
+            # case; this uses the same check.
             base_dir = os.path.abspath(host_tmp)
             directory = os.path.abspath(os.path.join(base_dir, directory))
             if not (
@@ -737,16 +707,16 @@ def _js_coverage_start(browser):
         # in, first out, so this runs before the websocket is closed.
         browser.cleanup.callback(_js_coverage_write, browser)
         _logger.info("JS coverage: precise coverage started")
-    # bug-hunt (2026-09-27): `ChromeBrowserException` belongs in this tuple.
+    # `ChromeBrowserException` belongs in this tuple.
     # `_websocket_request()` hands back a Future whose exception the receiver
     # thread sets with `f.set_exception(ChromeBrowserException(res["error"]
-    # ["message"]))` for ANY CDP error reply (confirmed in odoo/tests/
-    # common.py's own `_receive`), so an error from `Profiler.enable`,
-    # `Debugger.enable` or `Profiler.startPreciseCoverage` escaped this
-    # handler entirely -- contradicting this helper's own documented contract
+    # ["message"]))` for ANY CDP error reply (odoo/tests/common.py's own
+    # `_receive`), so an error from `Profiler.enable`,
+    # `Debugger.enable` or `Profiler.startPreciseCoverage` would escape this
+    # handler -- contradicting this helper's own documented contract
     # ("Coverage is best effort: a failure logs a warning and never fails the
     # test") and, worse, landing in `_patched_chrome_init`'s `except
-    # Exception`, which then retried `original_chrome_init` on an already
+    # Exception`, which would retry `original_chrome_init` on an already
     # fully-constructed `self` (see that function's own claim for the
     # orphaned-ExitStack/receiver-thread race that retry path opens).
     except (TimeoutError, OSError, AttributeError, ChromeBrowserException) as e:
@@ -893,23 +863,20 @@ def _install_navigator_overrides(browser):
 # [@ANCHOR: zero_sudo:patched_chrome_init]
 def _patched_chrome_init(self, *args, **kwargs):
     if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
-        # night_shift_todo/low/zero-sudo-pause-on-fail-pins-cdp-port-9222-
-        # process-wide-624bd3a2.md -- this USED to write
-        # `self.__class__.remote_debugging_port`, Core's class attribute
-        # (default sentinel `0`, meaning "let Chrome pick an ephemeral
-        # port"). That pinned every `ChromeBrowser` built afterwards in the
-        # same process to port 9222, including ones constructed after
-        # `HAMS_PAUSE_ON_FAIL` was unset again, because nothing ever
-        # restored the class default. Writing the INSTANCE attribute
-        # instead keeps the feature's own point -- every browser built
+        # This writes the INSTANCE attribute, not
+        # `self.__class__.remote_debugging_port` (Core's class attribute,
+        # default sentinel `0`, meaning "let Chrome pick an ephemeral
+        # port"). A class write would pin every `ChromeBrowser` built afterwards
+        # in the same process to port 9222, including ones constructed after
+        # `HAMS_PAUSE_ON_FAIL` was unset again, because nothing would
+        # restore the class default. The instance attribute keeps the feature's own point -- every browser built
         # while the env var is "1" still gets the known, fixed port
         # `_patched_browser_js`'s pause message hardcodes -- without
         # leaking that pin onto `ChromeBrowser` itself, so a later
         # instance built with the var unset (or never set) still gets
         # Core's ephemeral-port default. Two browsers alive at once *both*
         # built under `HAMS_PAUSE_ON_FAIL=1` would still collide on the
-        # same fixed port; that is a separate, pre-existing limitation the
-        # todo explicitly left as a product decision, not fixed here.
+        # same fixed port; that is a known limitation of this feature.
         self.remote_debugging_port = 9222
 
     retries = 3
@@ -928,15 +895,15 @@ def _patched_chrome_init(self, *args, **kwargs):
                 raise e
             time.sleep(2)  # audit-ignore-sleep
             continue
-        # bug-hunt (2026-09-27): Chrome is up; this is deliberately OUTSIDE
-        # the try above. `_js_coverage_start` used to sit inside it, so any
+        # Chrome is up; this is deliberately OUTSIDE
+        # the try above. If `_js_coverage_start` sat inside it, any
         # exception it raised (see its own note on `ChromeBrowserException`)
-        # was read as "Chrome failed to start" and re-ran
+        # would be read as "Chrome failed to start" and re-run
         # `original_chrome_init` on this SAME, already fully-constructed
-        # `self` -- reassigning `self.cleanup` to a fresh empty `ExitStack`
+        # `self`, reassigning `self.cleanup` to a fresh empty `ExitStack`
         # and orphaning the live Chrome process and the running `_receiver`
         # thread the first pass had registered in the old one. That thread
-        # keeps reading the dead websocket and eventually runs core's own
+        # would keep reading the dead websocket and eventually run core's own
         # `del self.ws` against the attribute the SUCCEEDING attempt just
         # wrote, after which every guarded `_websocket_send`/
         # `_websocket_request` silently returns `None` for the rest of that
@@ -956,10 +923,9 @@ original_chrome_stop = ChromeBrowser.stop
 # [@ANCHOR: zero_sudo:patched_chrome_stop]
 def _patched_chrome_stop(self, *args, **kwargs):
 
-    # Bug-hunt fix (2026-09-09): "_process"/"chrome_process" never existed on
-    # ChromeBrowser -- the real attribute is `.chrome` (verified against
-    # odoo/tests/common.py's own ChromeBrowser.__init__). This lookup silently
-    # found nothing and skipped this whole block on every prior run.
+    # ChromeBrowser has no "_process"/"chrome_process" attribute -- the real attribute is
+    # `.chrome` (odoo/tests/common.py's own ChromeBrowser.__init__); looking up the others
+    # silently finds nothing and skips this whole block.
     proc = getattr(self, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
     if getattr(self, "_hams_chrome", None) is not None:  # burn-ignore-introspection
         proc = None  # a pooled browser's Chrome belongs to the pool, which stops it
@@ -1660,13 +1626,12 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
     server = None
     browser = None
     _socat_proc = None
-    # night_shift_todo/high/test-runner-hangs-before-any-tour-starts-9a60a362.md's own root
-    # cause: odoo/tests/suite.py's TestSuite.run() sets odoo.modules.module.current_test to a
+    # Why these class-level defaults exist: odoo/tests/suite.py's TestSuite.run() sets odoo.modules.module.current_test to a
     # freshly-constructed (but not yet setUp()'d) test instance BEFORE running this class's own
     # setUpClass(), and setUpClass() can take real wall-clock time (crypto key generation,
     # patching, in RealTransactionCase's sibling case a real committed INSERT). Any external
     # HTTP request landing during that whole window -- an /odoo/health poll from this project's
-    # own test harness, confirmed live -- hits Odoo core's assertCanOpenTestCursor(), which reads
+    # own test harness -- hits Odoo core's assertCanOpenTestCursor(), which reads
     # self.http_request_allow_all. That attribute is normally set only in BaseCase.setUp()
     # (instance-level, once per TEST METHOD), which hasn't run yet for a class-level health-check
     # request -- crashing with AttributeError, which _serve_db silently swallows and serves the
@@ -1901,10 +1866,9 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
     # [@ANCHOR: zero_sudo:hams_http_case_start_hams_browser]
     def start_hams_browser(self):
         if not self.browser:
-            # Real bug found and fixed 2026-09-07, chasing an unrelated tour
-            # failure: this used to launch non-headless (`headless=not
-            # HAMS_PAUSE_ON_FAIL`) specifically so --pause-on-fail could
-            # freeze a *visible* browser -- but the debugging_with_antigravity
+            # The browser is always headless. A non-headless launch
+            # (`headless=not HAMS_PAUSE_ON_FAIL`) would let --pause-on-fail
+            # freeze a *visible* browser, but the debugging_with_antigravity
             # skill's own docs describe the intended workflow as attaching
             # DevTools to "a frozen, headless Chrome instance", and the
             # freeze logic (_patched_browser_js) and fixed CDP port
@@ -1914,8 +1878,8 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
             # test.py's own DISPLAY-forwarding comment was written for) to
             # Wayland at some point since, and the `odoo` service account
             # this test runs as has no access to the interactive user's own
-            # live Wayland session -- confirmed directly: 3/3 launch retries
-            # failed with "Failed to connect to Wayland display: Permission
+            # live Wayland session -- non-headless launch retries
+            # fail with "Failed to connect to Wayland display: Permission
             # denied" and "Failed to connect to the bus: Permission denied",
             # before ever reaching a tour or the freeze-on-fail logic at all.
             # Headless mode needs no display server, sidesteps this
@@ -2015,16 +1979,15 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                     ):
                         _logger.error("TRACING: Native teardown failed or hung: %s", e)
                 finally:
-                    # Bug-hunt finding (2026-09-09), NOT fixed here, deliberately: `cls.browser`
+                    # Known limitation, deliberately left as-is: `cls.browser`
                     # is always None -- `browser = None` (line ~730) is a class-level default,
                     # and the only assignment anywhere in this file is `self.browser = ...`
                     # (an INSTANCE attribute, in start_hams_browser/setUp). This whole block is
-                    # dead on every run. Left as-is rather than rewritten blind: whether this
+                    # dead on every run. Whether this
                     # class-level "catch anything tearDown() missed" backstop is even a coherent
                     # concept (tearDown() already runs per-instance after every test, success or
                     # failure, per unittest's own guarantee) is a real design question, not just
-                    # an attribute-name typo like the ones fixed just below -- see
-                    # night_shift_todo.md's tour-hang investigation for the fuller writeup.
+                    # an attribute-name typo like the ones handled just below.
                     if cls.browser:
                         try:
                             cleanup_stack = vars(cls.browser).get("cleanup")
@@ -2032,14 +1995,12 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                                 cleanup_stack.close()
                         except Exception as e:  # audit-ignore-catch-all
                             _logger.warning("Ignored cleanup close error: %s", e)
-                        # Bug-hunt fix (2026-09-09): this used to look up
-                        # "_process"/"chrome_process", neither of which
-                        # exists on Odoo core's own ChromeBrowser -- the
-                        # real attribute is `.chrome` (verified directly
-                        # against odoo/tests/common.py's own
-                        # ChromeBrowser.__init__). Silently found nothing
-                        # and skipped this whole force-kill block on every
-                        # run, every test, ever.
+                        # Odoo core's ChromeBrowser has no
+                        # "_process"/"chrome_process" attribute -- the
+                        # real attribute is `.chrome` (see
+                        # odoo/tests/common.py's own ChromeBrowser.__init__);
+                        # looking up the others silently finds nothing and
+                        # skips this whole force-kill block.
                         proc = getattr(cls.browser, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                         if proc:
                             _kill_browser_tree(proc, "HamsHttpCase.tearDownClass")
@@ -2059,10 +2020,9 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                                     repr(kill_e),
                                 )
 
-                        # Bug-hunt fix (2026-09-09): the real attribute is
-                        # `._receiver` (verified against ChromeBrowser's
-                        # own __init__) -- "_websocket_thread" never
-                        # existed, so this neutering never ran.
+                        # The real attribute is `._receiver` (see ChromeBrowser's
+                        # own __init__); "_websocket_thread" does not exist, so
+                        # looking it up would skip this neutering.
                         ws_thread = getattr(cls.browser, "_receiver", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                         if ws_thread:
                             ws_thread.join = lambda *args, **kwargs: None
@@ -2114,11 +2074,10 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                         cleanup_stack.close()
                 except Exception as e:  # audit-ignore-catch-all
                     _logger.warning("Ignored cleanup close error: %s", e)
-                # Bug-hunt fix (2026-09-09): "_process"/"chrome_process"
-                # never existed on ChromeBrowser -- the real attribute is
-                # `.chrome` (verified against odoo/tests/common.py's own
-                # ChromeBrowser.__init__). This force-kill block was dead
-                # on every run before this fix.
+                # ChromeBrowser has no "_process"/"chrome_process" attribute --
+                # the real attribute is `.chrome` (see odoo/tests/common.py's own
+                # ChromeBrowser.__init__); looking up the others would leave
+                # this force-kill block dead.
                 proc = getattr(self.browser, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                 if getattr(self.browser, "_hams_chrome", None) is not None:  # burn-ignore-introspection
                     proc = None  # a pooled browser's Chrome belongs to the pool
@@ -2140,9 +2099,8 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                             repr(kill_e),
                         )
 
-                # Bug-hunt fix (2026-09-09): the real attribute is
-                # `._receiver` -- "_websocket_thread" never existed, so
-                # this neutering never ran.
+                # The real attribute is `._receiver`; "_websocket_thread" does
+                # not exist, so looking it up would skip this neutering.
                 ws_thread = getattr(self.browser, "_receiver", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
                 if ws_thread:
                     ws_thread.join = lambda *args, **kwargs: None
@@ -2158,11 +2116,11 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                             repr(trunc_e),
                         )
 
-            # Reinstated 2026-09-09 per Bruce's own direct instruction: reap
+            # Reap
             # every leaked headless chrome of THIS test process at the end of
             # every test -- not just the targeted per-instance cleanup above,
             # and not lazily deferred to the next spawn. Scoped to this run's own
-            # browsers since 2026-11-08: concurrent runs (test slots) share the
+            # browsers: concurrent runs (test slots) share the
             # machine, and a reap by uid killed their in-flight tours.
             try:
                 _kill_all_headless_chrome_for_this_uid()
@@ -2304,20 +2262,19 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                 true;
             """
 
-            # Real bug found and fixed this session: this snippet is a bare
+            # This snippet is a bare
             # `if (...) { ... }` statement block, not an expression -- when
             # concatenated ahead of an empty/default caller `ready` string
             # (a legitimate request for "no extra ready check, just Odoo
             # core's own document.readyState default"), the combined script
             # had no trailing expression at all, so Runtime.evaluate's
-            # completion value was always undefined/falsy and _wait_ready()
-            # always timed out -- even when the page, and everything the
-            # caller actually cared about, was completely fine. Every prior
-            # caller in this codebase went through start_tour(), which
-            # always supplies its own non-empty tour-completion ready code
-            # as the trailing statement, so this exact path was never hit
-            # until the first direct browser_js() caller (ham_shack's hoot
-            # unit-test runner) used an empty ready string. The trailing
+            # completion value would always be undefined/falsy and _wait_ready()
+            # would always time out -- even when the page, and everything the
+            # caller actually cared about, was completely fine. Callers going
+            # through start_tour() always supply their own non-empty
+            # tour-completion ready code as the trailing statement; a direct
+            # browser_js() caller (ham_shack's hoot unit-test runner) can use
+            # an empty ready string. The trailing
             # `true;` above makes the watchdog block's own completion value
             # true when nothing else follows it, while a caller-supplied
             # ready check appended after it (see below) still correctly
@@ -2343,16 +2300,13 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                 if (
                     "socket is already closed" in str(current_exc)
                     or "BrokenPipeError" in type(current_exc).__name__
-                    # Real bug found and fixed this session (see
-                    # night_shift_todo.md's "browser_js()/start_tour()
-                    # Python tour tests are hanging environment-wide"
-                    # entry): the two checks above only match the LATE,
+                    # The two checks above only match the LATE,
                     # secondary symptom -- the literal
                     # WebSocketConnectionClosedException("socket is
                     # already closed") that Odoo core's own ChromeBrowser
                     # cleanup raises when it later tries to use an
-                    # already-dead connection. They never matched the
-                    # actual, confirmed, environment-wide failure: a bare
+                    # already-dead connection. They do not match the
+                    # primary failure: a bare
                     # `TimeoutError` raised by core's own
                     # `_websocket_request()` (odoo/tests/common.py) when a
                     # single CDP command -- here, the Runtime.evaluate
@@ -2361,15 +2315,13 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                     # response at all within its allotted window. That
                     # TimeoutError's own __context__ chain bottoms out at
                     # a bare `concurrent.futures.TimeoutError` (message
-                    # usually empty), so the walk above found nothing to
-                    # match and fell through to `raise e from None`,
+                    # usually empty), so the walk above would find nothing to
+                    # match and fall through to `raise e from None`,
                     # reporting a raw, uncleaned TimeoutError as a test
-                    # ERROR (not the intended clean AssertionError) --
-                    # matching the todo's own "0 failed, 1 error(s)"
-                    # observation exactly (an AssertionError would show as
-                    # a FAILURE). `_websocket_request()` raises this exact
-                    # TimeoutError type/shape (confirmed by reading its
-                    # source directly) for every CDP call it makes --
+                    # ERROR (not the intended clean AssertionError; an
+                    # AssertionError would show as a FAILURE).
+                    # `_websocket_request()` raises this exact
+                    # TimeoutError type/shape for every CDP call it makes --
                     # Runtime.evaluate, Page.navigate, Network.setCookie,
                     # Page.captureScreenshot, etc. -- and ONLY for a
                     # command that got no response in time; a merely-false
@@ -2379,19 +2331,16 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                     # odoo/tests/common.py), so treating a bare
                     # TimeoutError here as "the browser/CDP connection
                     # stopped responding" is precise, not overbroad.
-                    # Confirmed on this box that concurrent.futures.
+                    # concurrent.futures.
                     # TimeoutError/socket.timeout/TimeoutError are all the
                     # same class (Python 3.13 unified them), so a plain
                     # isinstance check catches the real exception without
                     # a fragile string match. This does not explain WHY
                     # the CDP connection stops answering in the first
-                    # place (that root cause is still open -- see the
-                    # todo entry and this claim's own notes on Odoo core's
-                    # `_receive()` thread as the leading suspect); it only
-                    # makes the already-intended "known watchdog failure"
-                    # handling actually fire for the failure mode that
-                    # motivated writing it, instead of being dead code for
-                    # it.
+                    # place (the leading suspect is Odoo core's
+                    # `_receive()` thread); it only makes the intended
+                    # "known watchdog failure" handling fire for this
+                    # failure mode.
                     or isinstance(current_exc, TimeoutError)
                 ):
                     is_watchdog = True

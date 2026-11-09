@@ -569,7 +569,7 @@ class TestEvidenceAndDecision(BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestHeadVerification(BaseCase):
-    """Bruce's refinement: a handful of flagged addresses are re-checked with HEAD to see whether the spam is still there."""
+    """A handful of flagged addresses are re-checked with HEAD to see whether the spam is still there."""
 
     def _flagged_evidence(self, n=40):
         rows = [{"u": f"{HOST}/best-online-casino-bonus-{i}/", "t": "", "d": 400 - i * 5, "s": "core"} for i in range(n)]
@@ -666,7 +666,7 @@ CLUB_DESTINATION = (
 
 @tagged("post_install", "-at_install")
 class TestRedirectToSpam(BaseCase):
-    """A club home page that redirects to a spam page on another site (night_shift_todo club-site-redirecting-off-domain...)."""
+    """A club home page that redirects to a spam page on another site (a club site redirecting off its own domain)."""
 
     def _redirect_evidence(self, final_url, html, home_url="https://w9vcl.com/", sitemaps=()):
         home = spam.extract_home_evidence(home_html(), home_url)

@@ -60,7 +60,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         host = os.environ.get("ODOO_HOST", "odoo")
         self.assertEqual(call_args[0], f"http://{host}:8069/json/2/res.users/search")
         payload = call_kwargs["json"]
-        # bug-hunt (2026-09-13): Odoo's real JSON-2 route
+        # Odoo's real JSON-2 route
         # (odoo.http.Json2Dispatcher.dispatch) merges the JSON body's own
         # top-level keys straight into the endpoint's keyword arguments --
         # there is no generic "args" envelope. A caller sends `ids` (the
@@ -71,14 +71,14 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         self.assertNotIn("args", payload)
 
     def test_call_sends_a_real_bearer_authorization_header(self):
-        # bug-hunt (2026-09-13): the route is declared auth='bearer'
-        # (odoo/addons/rpc/controllers/json2.py) -- confirmed by reading
-        # ir_http.py's own _auth_method_bearer, it requires a real
+        # The route is declared auth='bearer'
+        # (odoo/addons/rpc/controllers/json2.py); ir_http.py's
+        # _auth_method_bearer requires a real
         # "Authorization: Bearer <api_key>" header checked against
-        # res.users.apikeys, and nothing else. The client used to send only
-        # a home-grown X-Auth-Signature/X-Auth-Nonce scheme that no
-        # server-side code anywhere validates, so it never authenticated at
-        # all against the real endpoint.
+        # res.users.apikeys, and nothing else. A custom
+        # X-Auth-Signature/X-Auth-Nonce scheme is validated by no
+        # server-side code, so it would never authenticate against the
+        # real endpoint.
         mock_session_class = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.Session")
         mock_session = MagicMock()
         mock_session_class.return_value = mock_session
@@ -128,7 +128,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         self.assertEqual(result, "healed")
         self.assertEqual(mock_session.post.call_count, 2)
 
-        # bug-hunt (2026-09-13): prove the retry actually re-authenticates
+        # Prove the retry actually re-authenticates
         # with the freshly-reloaded key, not just a blind resend of the
         # identical (still-stale) request.
         _first_args, first_kwargs = mock_session.post.call_args_list[0]
@@ -137,15 +137,14 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         self.assertEqual(retry_kwargs["headers"]["Authorization"], "Bearer rotated_key")
 
     def test_call_does_not_retry_on_unrelated_error_mentioning_access_words(self):
-        # bug-hunt (2026-09-13): regression test for a real false-positive
-        # risk in the retry-trigger check -- a 422 ValidationError (a
-        # business error a credential reload could never fix) whose own
-        # message text happens to contain the word "AccessError" used to
-        # also trigger the self-healing retry, via a bare substring match
-        # against the whole stringified error object. Odoo's own exception
-        # hierarchy (odoo/exceptions.py) already guarantees every failure a
-        # credential reload COULD fix surfaces as a real HTTP 401/403, so
-        # the substring match was pure risk with no real coverage -- this
+        # False-positive guard for the retry-trigger check -- a 422
+        # ValidationError (a business error a credential reload could never
+        # fix) whose own message text happens to contain the word
+        # "AccessError" must not trigger the self-healing retry (as a bare
+        # substring match against the whole stringified error object
+        # would). Odoo's own exception hierarchy (odoo/exceptions.py)
+        # guarantees every failure a credential reload COULD fix surfaces as
+        # a real HTTP 401/403, so a substring match is pure risk -- this
         # locks in that a 422 with access-flavored TEXT makes exactly one
         # call, not two.
         mock_session_class = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.Session")

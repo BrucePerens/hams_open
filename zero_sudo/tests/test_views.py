@@ -124,14 +124,14 @@ class TestZeroSudoViews(HamsHttpCase):
 @tagged("post_install", "-at_install")
 class TestFetchInterceptExtraAllowedHosts(HamsTransactionCase):
     """Direct unit coverage for `_patched_handle_request_paused`'s
-    `extra_allowed_fetch_hosts` opt-in (added 2026-09-12) -- no real
+    `extra_allowed_fetch_hosts` opt-in -- no real
     ChromeBrowser/websocket needed, since the function under test is pure
-    Python logic dispatching on a URL string. Real bug this opt-in fixes:
+    Python logic dispatching on a URL string. This opt-in exists because
     ham_shack's test_03_shack_relay_confirm_claim_tour needs a real fetch()
     round trip against a fake relay that is deliberately NOT this test
     server's own host (per LOCAL_RELAY_ZERO_TOUCH_ONBOARDING.md's "different
-    LAN host" scenario) -- before this opt-in, this safety net's hardcoded
-    `HOST`-only allowlist left no way to do that without either a
+    LAN host" scenario) -- this safety net's hardcoded
+    `HOST`-only allowlist otherwise leaves no way to do that without either a
     self.fetch_proxy() mock (defeating the whole point of a real HTTP round
     trip) or disabling the safety net outright.
     """

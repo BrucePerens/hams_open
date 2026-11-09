@@ -77,13 +77,12 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
     exactly like a live production environment.
     """
 
-    # night_shift_todo/high/test-runner-hangs-before-any-tour-starts-9a60a362.md's own root
-    # cause: odoo/tests/suite.py's TestSuite.run() sets odoo.modules.module.current_test to a
+    # Why these class-level defaults exist: odoo/tests/suite.py's TestSuite.run() sets odoo.modules.module.current_test to a
     # freshly-constructed (but not yet setUp()'d) test instance BEFORE this class's own
     # setUpClass() runs -- and setUpClass() below does a real committed INSERT, real wall-clock
     # time. Any external HTTP request landing during that whole window (an /odoo/health poll from
-    # this project's own test harness, confirmed live -- this is the exact class
-    # TestSettingsAndCache, a real subclass, was caught mid-setUpClass() in) hits Odoo core's
+    # this project's own test harness, as seen with the real subclass
+    # TestSettingsAndCache mid-setUpClass()) hits Odoo core's
     # assertCanOpenTestCursor(), which reads self.http_request_allow_all -- normally set only in
     # BaseCase.setUp() (instance-level, once per TEST METHOD), which hasn't run yet for a
     # class-level health-check request. That crashes with AttributeError, which _serve_db
@@ -103,7 +102,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         Signing in records a login-log row that references the user, and the transaction that inserted it stays open for the rest
         of the test, holding a key-share lock on the user's row. A browser tour that later rewrites that user's login (an account
         erasure does; `login` is a unique column, so that is a key update) then waits on the lock for the full thirty seconds
-        and the confirmation page never loads in time. Found 2026-09-28 in `user_websites`' GDPR privacy tour, which failed only
+        and the confirmation page never loads in time. This showed up in `user_websites`' GDPR privacy tour, which failed only
         when the full set of modules was installed (an extra module inserts on login); committing here releases the lock for
         every real-transaction test that signs in, not just that one."""
         session = super().authenticate(user, password, *args, **kwargs)
@@ -117,19 +116,18 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # CLASS level (before setUp()'s own _real_cursor_factory monkeypatch
         # ever runs) to hand out TestCursor savepoint proxies over one shared,
         # never-really-committed suite transaction. cls.registry.cursor()
-        # here used to be exactly that -- its own "commit" was a savepoint
-        # RELEASE, not a real COMMIT, so the insert below was invisible to
+        # here would be exactly that -- its own "commit" is a savepoint
+        # RELEASE, not a real COMMIT, so the insert below would be invisible to
         # every later real connection (self.cr, opened via db_connect() in
         # setUp()'s _real_cursor_factory) for the rest of the class's tests.
-        # Root-caused 2026-09-17 by comparing txid_current() before/after:
-        # the "post-commit" reread reported the SAME txid as before the
-        # insert -- proof no real transaction boundary had been crossed.
+        # (Comparing txid_current() before/after shows it: the "post-commit"
+        # reread reports the SAME txid as before the insert, so no real
+        # transaction boundary has been crossed.)
         # db_connect(...).cursor() bypasses the mock entirely, matching how
         # _real_cursor_factory itself gets a real cursor.
         #
-        # night_shift_todo/high/test-runner-hangs-before-any-tour-starts-9a60a362.md's own
-        # root cause, source-traced against Odoo core: this block USED to run AFTER
-        # super().setUpClass(), which resolves to HttpCase.setUpClass()
+        # This block must run BEFORE super().setUpClass() (traced against Odoo core).
+        # super() resolves to HttpCase.setUpClass()
         # (odoo/tests/common.py:2220-2228). That method sets cls.cr = cls.registry.cursor()
         # (a real, unpatched cursor -- the TestCursor mock is only installed a few lines
         # later by registry_enter_test_mode_cls(), so cls.cr itself is never a savepoint
@@ -137,15 +135,15 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # real UPDATE of this exact row through cls.cr and never commits it (a
         # TransactionCase's cls.cr is deliberately rolled back, not committed, at class
         # teardown -- that is the whole point of the isolation it provides). That UPDATE's
-        # row lock therefore sat held for the rest of the class's setUpClass() window. The
-        # second, separate db_connect() connection below then tried to UPSERT the SAME row
-        # and blocked on that lock forever -- a class deadlocking against its own parent's
-        # write, one statement after another, in the same call stack (confirmed live via
-        # py-spy + pg_stat_activity: the blocked backend's own in-flight query was this
-        # exact INSERT, and the row-locking backend was cls.cr's connection, "idle in
-        # transaction" on its own uncommitted UPDATE of the same id).
+        # row lock would therefore stay held for the rest of the class's setUpClass() window. A
+        # second, separate db_connect() connection that then tried to UPSERT the SAME row
+        # would block on that lock forever -- a class deadlocking against its own parent's
+        # write, one statement after another, in the same call stack (pg_stat_activity shows
+        # the blocked backend's in-flight query is this exact INSERT, and the row-locking
+        # backend is cls.cr's connection, "idle in transaction" on its own uncommitted
+        # UPDATE of the same id).
         #
-        # The fix is this reordering. This db_connect() cursor is a genuinely SEPARATE,
+        # Hence the ordering. This db_connect() cursor is a genuinely SEPARATE,
         # short-lived connection: it opens, writes, commits for real, and closes -- all
         # inside this "with" block, before cls.cr / cls.registry / cls.env exist at all
         # (get_db_name() needs none of them; setUp() below already calls it the same way).
@@ -153,17 +151,14 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # real UPDATE of this row through cls.cr, this connection has already committed and
         # gone -- there is no longer a second, concurrent connection for it to collide with.
         # The two writes still happen, in this order, but sequentially in wall-clock time on
-        # non-overlapping connections, not concurrently on the same locked row. (Reordering
-        # alone was considered and dismissed once already in this same to-do, on the
-        # assumption that HttpCase.setUpClass()'s own write would still race a still-open
-        # competing connection regardless of order -- that assumption didn't account for
-        # this connection being transient and already closed by the time HttpCase's write
-        # runs, which is what actually eliminates the collision.)
+        # non-overlapping connections, not concurrently on the same locked row. (The ordering
+        # alone is enough because this connection is transient and already closed by the
+        # time HttpCase's write runs, which is what eliminates the collision.)
         #
         # This does NOT make HttpCase's own HTTP/tour machinery see the wrong host: url_open(),
         # browser_js() and xmlrpc_url all build requests from cls.base_url() directly in
         # Python (HOST + cls.http_port()), never by reading the 'web.base.url' ICP value back
-        # out of the database -- confirmed by reading HttpCase's own source. So it is safe for
+        # out of the database (see HttpCase's own source). So it is safe for
         # the real, cross-connection-committed value of 'web.base.url' to differ from
         # cls.base_url() for the rest of the class's life; nothing in Odoo core's own request
         # mechanics depends on them matching. Only zero_sudo:test_07_common_setup_class_sql
@@ -288,9 +283,8 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # Wait for any lingering backend HTTP threads to finish, preventing teardown serialization failures.
         wait_for_werkzeug_threads(timeout=5.0)
 
-        # night_shift_todo/medium/test-harness-lingering-http-transaction-teardown-
-        # serialization-fd450979.md fix: the real conflicting writer is not an HTTP
-        # thread at all (active=[] at every teardown, confirmed live -- see
+        # The real conflicting writer is not an HTTP
+        # thread at all (active=[] at every teardown; see
         # wait_for_background_futures()'s own docstring in common.py). It is production
         # code's own Cursor.postcommit -> ThreadPoolExecutor.submit() pattern
         # (action_suspend_user_websites() -> _async_unpublish_content, triggered by this
@@ -301,8 +295,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         # background commit instead of racing it.
         wait_for_background_futures(timeout=10.0)
 
-        # night_shift_todo/medium/test-harness-lingering-http-transaction-teardown-
-        # serialization-fd450979.md diagnostic pass: right before the unlink/cleanup loop
+        # Diagnostic: right before the unlink/cleanup loop
         # (which is where the "could not serialize access due to concurrent update" has
         # been observed), log a one-shot snapshot of every OTHER backend on this database
         # that is idle-in-transaction, and how long it has been open. Gated behind
@@ -371,13 +364,13 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
                                     e,
                                 )
                                 try:
-                                    # bug-hunt (2026-09-13): this raw SQL DELETE used to
-                                    # run with no savepoint of its own. When it failed
+                                    # This raw SQL DELETE runs inside its own savepoint.
+                                    # Without one, when it failed
                                     # too (e.g. still FK-blocked), the resulting
                                     # psycopg2 error left the WHOLE cursor's transaction
                                     # aborted for the rest of this teardown -- every
                                     # OTHER tracked model still queued for cleanup in
-                                    # this same last-attempt pass would then also fail
+                                    # this same last-attempt pass would also fail
                                     # (via a confusing InFailedSqlTransaction rather
                                     # than its own real error), and the eventual
                                     # self.env.cr.commit() below would silently discard
