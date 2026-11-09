@@ -162,8 +162,7 @@ class HamGdprExportToken(models.Model):
         generators to support real batched RPC pulls would take."""
         # # Verified by [@ANCHOR: test_gdpr_consume_and_export_payload]
         #
-        # Hardening, 2026-09-10 (Bruce approved "harden both" after the
-        # ses_webhook/GDPR-token-handoff review): this is a public
+        # Hardening: this is a public
         # (non-underscore) @api.model method, reachable via the /json/2
         # bearer-token RPC endpoint by ANY authenticated user holding a
         # valid API key for hams.com, not just the gdpr_csv_export daemon's

@@ -130,7 +130,7 @@ def _async_unpublish_group_content(db_name, group_ids):
                     # exactly as before this per-company isolation was added.
                     raise
                 except Exception:  # audit-ignore-catch-all: one company's unrelated failure (e.g. a future ir.rule AccessError) must not abort every other company's unpublish in the same batch -- see the logged justification below.
-                    # Found in bug-hunt review: before this try/except, one
+                    # Without this try/except, one
                     # company raising here (e.g. a future ir.rule change
                     # scoping website.page/blog.post by company would make
                     # `allowed_company_ids=[company_id]` raise AccessError
@@ -296,8 +296,7 @@ class UserWebsitesGroup(models.Model):
                 if privilege_id:
                     group_vals["privilege_id"] = privilege_id
                 elif category_id:
-                    # BUG (found in bug-hunt review): this used to assign
-                    # `category_id` here too -- but `category_id` is an
+                    # `category_id` must not be assigned here: `category_id` is an
                     # `ir.module.category` record id (looked up above from
                     # 'module_category_user_websites'), while
                     # `res.groups.privilege_id` is a Many2one to the
@@ -349,12 +348,11 @@ class UserWebsitesGroup(models.Model):
             with self.env.cr.savepoint():
                 result = super(UserWebsitesGroup, self).write(vals)
         except IntegrityError as e:
-            # BUG (found in bug-hunt review): this used to catch every
-            # IntegrityError from the whole write() -- not just website_slug
-            # ones -- and always re-raised the same "slug must be unique"
-            # message. `vals` can carry any field (e.g. a bad `odoo_group_id`
+            # Catching every IntegrityError from the whole write() -- not just website_slug
+            # ones -- and always re-raising the same "slug must be unique"
+            # message would be wrong. `vals` can carry any field (e.g. a bad `odoo_group_id`
             # FK, or some other constraint entirely), so a completely
-            # unrelated integrity failure was being mislabeled as a slug
+            # unrelated integrity failure would be mislabeled as a slug
             # problem, hiding the real cause from whoever has to debug it.
             # Only relabel the error when the violated constraint is
             # actually one of the two website_slug constraints declared on
@@ -436,10 +434,9 @@ class UserWebsitesGroup(models.Model):
 
         if not is_test:
             db_name = self.env.cr.dbname
-            # Bug-hunt fix, 2026-09-09: defer via postcommit, matching the
-            # identical fix already applied to res_users_moderation.py's
-            # action_suspend_user_websites for the same class of function.
-            # Firing this immediately let the per-group suspension loop
+            # Defer via postcommit, matching res_users_moderation.py's
+            # action_suspend_user_websites.
+            # Firing this immediately would let the per-group suspension loop
             # below still raise (e.g. message_post() failing for one group
             # in a multi-group batch) and roll back this whole transaction
             # -- including every is_suspended_from_websites write and audit

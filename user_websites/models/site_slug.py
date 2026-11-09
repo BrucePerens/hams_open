@@ -10,7 +10,7 @@ A site is every website.page whose url is /<slug> or /<slug>/..., plus the blog 
 A slug rename used to add a 301 from /<old> to /<new> and leave the pages at /<old>. Odoo serves a
 published page before it looks at website.rewrite, so /<old> kept answering 200 as a second site, and
 the owner's toolbar (which links by the CURRENT slug) pointed at pages whose url is not under that
-slug: every "Edit this page" and "Unpublish" answered 404 (Bruce, 2026-10-13, K6BP).
+slug: every "Edit this page" and "Unpublish" answered 404.
 rehome_site() runs on every rename, for members and groups alike: it moves the pages and menu items
 to the new slug, keeps a page that would collide (unpublished, content retained), flattens redirect
 chains and removes any redirect that would now shadow the new site.

@@ -320,10 +320,10 @@ class ResUsers(models.Model):
             with self.env.cr.savepoint():
                 result = super(ResUsers, self).write(vals)
         except IntegrityError as e:
-            # Same bug class already fixed in user_websites_groups.py's write():
-            # this used to catch every IntegrityError from the whole write(),
-            # not just website_slug ones, and always re-raised the same
-            # "slug must be unique" message -- mislabeling unrelated
+            # Same handling as user_websites_groups.py's write():
+            # Catching every IntegrityError from the whole write(),
+            # not just website_slug ones, and always re-raising the same
+            # "slug must be unique" message would mislabel unrelated
             # constraint failures (e.g. a bad FK) as a slug problem. Only
             # relabel when the violated constraint is actually one of the
             # website_slug constraints declared on `edge.routing.mixin`.
@@ -343,8 +343,8 @@ class ResUsers(models.Model):
         # [@ANCHOR: user_websites:COMM_content_routing_view_init]). Nothing
         # invalidated that cache when any of them changed.
         #
-        # This was recorded as latent in the function's own bug-hunt claim
-        # ("no production caller today"), which had grepped hams_open only.
+        # The function's own claim records this as latent
+        # ("no production caller today"), based on hams_open only.
         # hams_com's public logbook and profile widget routes call it on
         # every request, so each gap is live:
         #

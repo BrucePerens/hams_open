@@ -7,15 +7,14 @@ from odoo import models, fields
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
-    # night_shift_todo.md "saving ANY Settings page can crash with an
-    # AccessError" (2026-09-13), full design writeup and investigation in the
-    # follow-up section right after it: this module used to also carry a
-    # `user_websites_administrators_ids` Many2many(res.users) field here,
-    # with get_values()/set_values() overrides that read/wrote
-    # `group_user_websites_administrator.user_ids` directly on every single
+    # This model deliberately carries no field with get_values()/set_values()
+    # overrides that read/write
+    # `group_user_websites_administrator.user_ids` directly (a
+    # `user_websites_administrators_ids` Many2many(res.users), labeled "Select
+    # users who can manage all user sites and violation reports", was removed).
+    # Such a field would run on every single
     # Settings save, company-wide, regardless of which page's fields
-    # actually changed. That was removed entirely, not patched, because the
-    # investigation converged on it being the wrong mechanism twice over:
+    # actually changed, and is the wrong mechanism twice over:
     # (1) `res.config.settings` is one TransientModel Odoo's own MRO chains
     # through unconditionally on every installed module's own
     # get_values()/set_values() on every save -- writing a *security group's
@@ -36,7 +35,7 @@ class ResConfigSettings(models.TransientModel):
     # own form, no code required) -- neither of which is wired through
     # `set_values()`'s "fires on every unrelated save" contract, so neither
     # can reproduce this crash. Reusing that existing mechanism, instead of
-    # re-inventing a narrower one inside Settings, was the actual fix.
+    # re-inventing a narrower one inside Settings, is the right approach.
     #
     # This also closed a second, independently real security gap the
     # investigation surfaced: `user_websites/security/ir.model.access.csv`

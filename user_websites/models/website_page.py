@@ -74,15 +74,15 @@ class WebsitePage(models.Model):
             if not self.env.user._is_admin():
                 db_name = self.env.cr.dbname
                 redis_client.incr(f"views:{db_name}:page:{self.id}")
-        # Bug-hunt fix (bug class 20, 2026-09-09): a Redis connection
+        # A Redis connection
         # failure/timeout from `redis_client.incr()` raises
         # `redis.exceptions.RedisError` (e.g. `ConnectionError`), never
         # `KeyError`/`ValueError` -- this file's own
         # `_flush_redis_view_counters()` already catches
         # `redis.exceptions.RedisError` correctly for the equivalent Redis
         # call a few hundred lines down, so the two were inconsistent with
-        # each other. With the old, too-narrow catch, a Redis outage meant
-        # every non-admin page view raised uncaught out of `_serve_page()`,
+        # each other. With a too-narrow catch, a Redis outage would mean
+        # every non-admin page view raising uncaught out of `_serve_page()`,
         # turning an optional, "privacy-friendly" view counter into a hard
         # 500 for every real visitor whenever Redis was unreachable.
         except (KeyError, ValueError, redis.exceptions.RedisError):  # audit-ignore-catch-all
@@ -92,25 +92,22 @@ class WebsitePage(models.Model):
     # [@ANCHOR: user_websites:COMM_page_invalidate_cloudflare_cache]
     def _invalidate_cloudflare_cache(self):
         """Soft-dependency hook to purge the global Cache-Tag at the edge."""
-        # Bug-hunt fix (bug class 1, 2026-09-09): `cloudflare` is a hard
+        # `cloudflare` is a hard
         # `depends` entry in this module's own __manifest__.py, so
-        # `self.env["cloudflare.purge.queue"]` always resolves -- the
-        # previous `purge_queue = self.env["cloudflare.purge.queue"]` /
-        # `if purge_queue:` gate here didn't check "is this model
-        # registered", it checked "is this bare, freshly-instantiated,
+        # `self.env["cloudflare.purge.queue"]` always resolves, so a
+        # `purge_queue = self.env["cloudflare.purge.queue"]` /
+        # `if purge_queue:` gate would not check "is this model
+        # registered", it would check "is this bare, freshly-instantiated,
         # zero-id recordset non-empty" (`bool(recordset)` is
         # `bool(self._ids)` per odoo/orm/models.py's own `__bool__`), which
         # is ALWAYS False for `self.env["any.model"]` with no search/browse
-        # applied. The whole cache-purge body below was therefore
+        # applied. The whole cache-purge body below would therefore be
         # unconditionally dead code: no website.page create/write/unlink
-        # ever actually purged the Cloudflare edge cache, so an
+        # would ever actually purge the Cloudflare edge cache, so an
         # unpublished/deleted/edited page could keep serving its stale,
-        # previously-cached content from the CDN edge indefinitely. A prior
-        # commit (be741fa9, 2026-08-26) already suspected this exact branch
-        # was a no-op while fixing an unrelated dead `is_test` guard here,
-        # but left the outer gate itself in place ("low-stakes... no
-        # behavior change") rather than removing it -- this makes that
-        # deferred fix real. See the `create`/`write`/`unlink` claims for
+        # previously-cached content from the CDN edge indefinitely. (Commit
+        # be741fa9 already noted this gate as a no-op; the gate is therefore
+        # not kept.) See the `create`/`write`/`unlink` claims for
         # confirmation that `cloudflare.user_cloudflare_purge` (the service
         # account referenced below) and `enqueue_tags()` (a same-transaction
         # DB insert into `cloudflare.purge.queue`, not an external HTTP
@@ -531,41 +528,40 @@ class WebsitePage(models.Model):
                     vals["name"] = view.name
 
         # 1. Enforce Mixin Security
-        # Bug-hunt fix (2026-09-09, new class -- "enforcement/attribution
-        # logic runs before a downstream step backfills the field it
-        # reads"): this ownership check -- which back-fills a missing
+        # Ordering matters here: attribution logic must run after the step that
+        # backfills the field it reads. This ownership check -- which back-fills a missing
         # `owner_user_id` to the acting user (see
         # `_check_proxy_ownership_create`'s own ADR-0082 auto-assign) --
-        # used to run AFTER step 0's arch sanitization below. Step 0 calls
+        # runs BEFORE step 0's arch sanitization below. Step 0 calls
         # `_trigger_malicious_arch_violation(vals)` (no `records` argument)
         # the moment it strips malicious content, reading
         # `vals.get("owner_user_id")`/`vals.get("user_websites_group_id")`
         # directly. For the extremely common case of a caller that omits
         # both (relying on this exact auto-assign, e.g. stock website's own
         # "Add Page" controller), those were both still unset at that
-        # point, so the automated violation report was created with
+        # point, so the automated violation report would be created with
         # `content_owner_id=False` AND `content_group_id=False`.
         # `ContentViolationReport.action_take_action_and_strike()` only
         # strikes `if report.content_owner_id: ... elif
         # report.content_group_id: ...` -- with both False, NEITHER branch
         # runs, so a user who injects SSTI/XSS into a brand-new page they
         # create (as opposed to editing an existing one, where `write()`
-        # already passes `records=self` and this bug doesn't occur) is
+        # already passes `records=self` and this does not occur) is
         # never actually struck, even though the payload is correctly
         # stripped and `reported_by_user_id` correctly names them. Running
         # ownership enforcement (and its auto-assign backfill) before
-        # sanitization fixes the ordering with no loss of safety: nothing
+        # sanitization avoids this with no loss of safety: nothing
         # is persisted by either step until 3.'s `super().create()` below,
         # and ownership validation happening first is if anything the more
         # correct order (validate the request is legitimate before
         # spending effort sanitizing its content).
 
-        # Bug-hunt fix (docs/bug_hunt_claims/.../acl_website_page.md): unlike
-        # write()/unlink() below, this method never enforced the real
-        # ir.model.access perm_create against the actual caller -- only the
-        # ownership-plausibility check above ran, then creation proceeded via
-        # the service account (which always has create=1). That let a
-        # base.group_public caller create a page owned by the shared public
+        # See docs/bug_hunt_claims/.../acl_website_page.md. Unlike
+        # write()/unlink() below, this method must enforce the real
+        # ir.model.access perm_create against the actual caller, not only the
+        # ownership-plausibility check above, since creation proceeds via
+        # the service account (which always has create=1). Otherwise a
+        # base.group_public caller could create a page owned by the shared public
         # user account by explicitly passing owner_user_id equal to their own
         # (public) user id, bypassing access_website_page_public's
         # perm_create=0. self.check_access("create") mirrors write()/
@@ -606,23 +602,23 @@ class WebsitePage(models.Model):
                 "user_websites.group_user_websites_service_account"
             )
         ):
-            # Bug-hunt fix, 2026-09-10 (night_shift_todo.md's "website_page
-            # owner can opt their own page out of multi-website tenant
-            # isolation"): `website_id` used to be in this whitelist, so a
+            # `website_id` is deliberately not in this whitelist, so that an owner
+            # cannot opt their own page out of multi-website tenant
+            # isolation: otherwise a
             # non-admin caller could set/clear it directly via RPC
             # (`write({"website_id": False})`) -- Odoo core's own
             # `website.website_domain()` treats `website_id = False` as
             # "visible on every website in this instance," letting an
             # otherwise site-scoped page become resolvable under any other
-            # website hosted by the same Odoo instance. Confirmed (per
-            # Bruce directly) there is no legitimate case where a
+            # website hosted by the same Odoo instance. There is
+            # no legitimate case where a
             # user_websites page needs to be visible across multiple
             # websites/companies, and the only two legitimate setters of
             # `website_id` (`controllers/main.py`'s `create_site`/
             # `create_blog`) both call `create()`/`write()` via the
             # `user_websites_service_account` service account's own env,
             # which this check (see the group added above) now recognizes
-            # as admin -- so removing `website_id` here only ever affects a
+            # as admin -- so excluding `website_id` here only affects a
             # non-admin, non-service-account caller, who had no legitimate
             # reason to set it in the first place.
             allowed = {
@@ -684,13 +680,13 @@ class WebsitePage(models.Model):
                     "SELECT id FROM res_users WHERE login = 'sys_provisioner'"
                 )
                 row = self.env.cr.fetchone()
-                # Bug-hunt fix (2026-09-09): this fallback assigned its
-                # result to `svc_id`, but `page_counts` a few lines below
+                # This fallback must assign its
+                # result to `svc_uid`: `page_counts` a few lines below
                 # (and every other reference in this block) reads `svc_uid`
                 # -- the name the `try` branch's own (never-executed-in-
-                # this-path) assignment used. Every real call into this
-                # `except` branch would have raised `UnboundLocalError`
-                # immediately, meaning this fallback has never actually run
+                # this-path) assignment uses. Assigning a different name would make every real call into this
+                # `except` branch raise `UnboundLocalError`
+                # immediately, so the fallback could never run
                 # successfully; see the `create` claim for why the
                 # triggering condition (`_get_service_uid` failing with
                 # `AccessError`) doesn't match that helper's real failure
@@ -863,10 +859,10 @@ class WebsitePage(models.Model):
                 "user_websites.group_user_websites_service_account"
             )
         ):
-            # See create()'s own identical fix for the full explanation:
-            # `website_id` removed from this whitelist (night_shift_todo.md's
-            # "website_page owner can opt their own page out of multi-website
-            # tenant isolation"), and the service-account group added above
+            # See create()'s own identical handling for the full explanation:
+            # `website_id` is excluded from this whitelist (an owner must not be
+            # able to opt their own page out of multi-website
+            # tenant isolation), and the service-account group is included above
             # so the two legitimate callers that DO set it stay unaffected.
             allowed = {
                 "name",
@@ -1125,7 +1121,7 @@ class WebsitePage(models.Model):
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.commit()
-            # Bug-hunt fix (bug class 20, 2026-09-09): the real failure modes here are `del_pipe.execute()` raising
+            # The real failure modes here are
             # `redis.exceptions.RedisError` (a dropped Redis connection) and `self.env.cr.execute(...)` raising a
             # `psycopg2.Error` (e.g. the stored procedure itself failing); both are logged, rolled back, and the
             # cron picks up the rest on its next scheduled run.
