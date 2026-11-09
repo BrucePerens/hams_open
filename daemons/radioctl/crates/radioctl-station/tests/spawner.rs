@@ -143,6 +143,7 @@ impl Drop for World {
 }
 
 fn world(name: &str, spawner: Arc<dyn RigSpawner>) -> World {
+    // temp-dir-helper: `World` removes the file in its Drop, also while a failing test unwinds
     let path = std::env::temp_dir().join(format!("rs-spawner-{name}-{}.json", std::process::id()));
     let _ = std::fs::remove_file(&path);
     let def = StationDef::from_toml(DEF).unwrap();
