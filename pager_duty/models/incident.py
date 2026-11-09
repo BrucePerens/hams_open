@@ -4,6 +4,7 @@
 import datetime
 import logging
 from odoo import models, fields, api, _
+from odoo.exceptions import AccessError
 from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
 from odoo.addons.hams_helpdesk.models import untrusted_text as ut
 from odoo.addons.hams_helpdesk.models.inbound_spam_filter import HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY, inbound_spam_reasons
@@ -232,6 +233,7 @@ class PagerIncident(models.Model):
 
         return res
 
+    @api.private
     @api.model
     def action_escalate_unacknowledged(self):
         """
@@ -604,6 +606,10 @@ class PagerIncident(models.Model):
     @api.model
     def auto_resolve_incidents(self, source, website_id=None):
         # [@ANCHOR: auto_resolve_incidents]
+        # Public, so /web/dataset/call_kw reaches it: closing incidents is for the pager daemon and the other modules' service
+        # accounts (is_service_account), the superuser environment and pager administrators, not for any signed-in member.
+        if not (self.env.su or self.env.user.is_service_account or self.env.user.has_group("pager_duty.group_pager_admin")):
+            raise AccessError(_("Only a service account or a pager administrator can resolve incidents."))
         website_id = website_id or self.env.context.get("website_id")
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "pager_duty.user_pager_service_internal"

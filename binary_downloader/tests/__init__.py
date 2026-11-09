@@ -9,3 +9,4 @@ from . import test_binary_manifest_integration
 from . import test_binary_tenant_link
 from . import test_binary_version
 from . import test_ui_tours_api
+from . import test_rpc_exposure

@@ -105,13 +105,13 @@ def run_subprocess(cmd, cmd_name, logger, timeout=SINGLE_CASE_TIMEOUT, **kargs):
     kargs["timeout"] = timeout
     try:
         result = subprocess.run(cmd, **kargs)
-        logger.debug(f"{cmd} log: {result.stdout}", extra={"cmd": cmd_name})
+        logger.debug(f"{cmd_name} log: {result.stdout}", extra={"cmd": cmd_name})
         return result
     except subprocess.CalledProcessError as e:
-        err = f"{cmd} return exit code {e.returncode}, stderr" + e.stderr.decode("utf-8")
+        err = f"{cmd_name} return exit code {e.returncode}, stderr" + e.stderr.decode("utf-8")
         logger.error(err, extra={"cmd": cmd_name, "return_code": e.returncode})
         raise SubprocessError(cmd[0], e.returncode, e)
     except subprocess.TimeoutExpired as e:
-        err = f"{cmd} timeout after {e.timeout} seconds, stdout: {e.stdout}, stderr: {e.stderr}"
+        err = f"{cmd_name} timeout after {e.timeout} seconds, stdout: {e.stdout}, stderr: {e.stderr}"
         logger.error(err, extra={"cmd": cmd_name, "return_code": "timeout"})
         raise e

@@ -22,6 +22,16 @@ import main as backup_worker  # noqa: E402
 import pgbackrest_sidecar  # noqa: E402
 
 
+class TestCommandLineIsNeverLogged(unittest.TestCase):
+    def test_describe_command_gives_the_program_and_an_argument_count_only(self):
+        text = backup_worker._describe_command(["/usr/bin/kopia", "repository", "connect", "--password=hunter2"])
+        self.assertEqual(text, "kopia with 3 argument(s)")
+        self.assertNotIn("hunter2", text)
+
+    def test_describe_command_of_a_bare_program(self):
+        self.assertEqual(backup_worker._describe_command(["pgbackrest"]), "pgbackrest with 0 argument(s)")
+
+
 class TestRabbitMQCredentialFailFast(unittest.TestCase):
     def test_01_missing_both_raises(self):
         with patch.object(backup_worker, "RMQ_USER", None), patch.object(

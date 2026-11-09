@@ -16,3 +16,4 @@ from . import test_batch_2
 from . import test_tdd_batch1
 from . import test_tdd_batch2
 from . import test_hooks
+from . import test_rpc_exposure

@@ -9,3 +9,4 @@ from . import test_domain_push
 from . import test_routing_mixin
 from . import test_utils
 from . import test_utils_slugify_properties
+from . import test_rpc_exposure

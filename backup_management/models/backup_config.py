@@ -683,6 +683,7 @@ class BackupConfig(models.Model):
             )
         return problems
 
+    @api.private
     @api.model
     def cron_sync_all_backups(self):
         # [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
@@ -731,6 +732,7 @@ class BackupConfig(models.Model):
                 if delta_drill > (7 * 24 * 60 * 60):  # 7 Days
                     conf._execute_restore_drill()
 
+    @api.private
     @api.model
     def cron_trigger_scheduled_backups(self):
         """Creates a real backup for every `backup.config`, on this cron's own daily schedule

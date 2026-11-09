@@ -79,6 +79,7 @@ class ResUsersSiteEligibility(models.Model):
 
     # [@ANCHOR: user_websites:COMM_reconcile_website_eligibility]
     # Verified by [@ANCHOR: test_site_eligibility_hook]
+    @api.private
     @api.model
     def reconcile_website_eligibility(self, user_ids=None):
         """Bring hidden content and website_ineligible in line with the live answer. Returns

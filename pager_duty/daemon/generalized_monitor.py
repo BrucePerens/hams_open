@@ -230,7 +230,7 @@ def verify_and_install_dependencies(client, checks):
 
     for cmd in required_cmds:
         if not shutil.which(cmd):
-            logger.info(f"Dependency '{cmd}' missing. Polling Odoo...")
+            logger.info(f"Dependency '{cmd}' missing. Polling Odoo...")  # boundary-hazard-ignore: argv-log: cmd is one binary name from a fixed table, not a command line
             success = False
             for attempt in range(12):
                 try:
@@ -239,7 +239,7 @@ def verify_and_install_dependencies(client, checks):
                     )
                     if res and res.get("status") == "ok":
                         bin_path = res.get("path")
-                        logger.info(f"Provisioned {cmd} at {bin_path}")
+                        logger.info(f"Provisioned {cmd} at {bin_path}")  # boundary-hazard-ignore: argv-log: cmd is one binary name from a fixed table, not a command line
                         bin_dir = os.path.dirname(bin_path)
                         if bin_dir not in os.environ["PATH"]:
                             os.environ["PATH"] = (

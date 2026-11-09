@@ -2,3 +2,4 @@
 
 from . import test_res_config_settings
 from . import test_hooks
+from . import test_rpc_exposure

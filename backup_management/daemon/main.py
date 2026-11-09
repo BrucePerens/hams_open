@@ -300,6 +300,12 @@ def _pgbackrest_repo_number(config):
 _PGBACKREST_PRIVILEGED_OPS = ("backup", "info")
 
 
+def _describe_command(cmd):
+    """What a log line says about a command: the program's base name and how many arguments it has, never the arguments (a
+    command line can carry a secret and the log outlives the process)."""
+    return f"{os.path.basename(str(cmd[0]))} with {len(cmd) - 1} argument(s)"
+
+
 def _pgbackrest_requires_sidecar(cmd):
     # [@ANCHOR: backup_management:COMM_pgbackrest_requires_sidecar]
     # Verified by [@ANCHOR: backup_management:COMM_test_pgbackrest_requires_sidecar]
@@ -783,9 +789,10 @@ def execute_job(ch, method, properties, body):
             # own output before this call returns), so the whole result
             # lands in one append_log call below instead of the throttled
             # per-chunk updates the direct-subprocess path uses.
+            command_summary = _describe_command(cmd)
             logger.info(
                 "Delegating to privileged pgbackrest sidecar: %s",
-                " ".join(shlex.quote(c) for c in cmd),
+                command_summary,
             )
             # Acknowledge BEFORE the long wait. RabbitMQ closes the channel of a consumer that holds
             # a delivery unacknowledged for longer than consumer_timeout (30 minutes by default),
@@ -813,7 +820,8 @@ def execute_job(ch, method, properties, body):
                 err_msg = f"""Binary {cmd[0]} not found in PATH."""
                 raise OSError(err_msg)
 
-            logger.info("Executing: %s", " ".join(shlex.quote(c) for c in cmd))
+            command_summary = _describe_command(cmd)
+            logger.info("Executing: %s", command_summary)
 
             proc = subprocess.Popen(
                 cmd,
