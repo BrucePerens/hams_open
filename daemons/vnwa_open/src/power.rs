@@ -266,7 +266,9 @@ mod tests {
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let s2 = seen.clone();
         let hook: CycleHook = Box::new(move |p, ladder| {
-            s2.lock().unwrap().push((p.hub.clone(), p.port, ladder.to_vec()));
+            s2.lock()
+                .unwrap()
+                .push((p.hub.clone(), p.port, ladder.to_vec()));
             Ok(())
         });
         let port = HubPort {

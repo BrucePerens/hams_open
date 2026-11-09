@@ -293,7 +293,11 @@ mod tests {
         let e = u.read_patient(0x0d, 0x0303, 0, 64, &[1, 1]).unwrap_err();
         assert!(e.contains("still failing after 2 resends"), "{e}");
         assert_eq!(s.seen().len(), 3);
-        assert_eq!(u.resends(), 2, "the failed patient read adds its two resends only");
+        assert_eq!(
+            u.resends(),
+            2,
+            "the failed patient read adds its two resends only"
+        );
     }
 
     // Tests [@ANCHOR: vnwa_open_transfer_error_text]

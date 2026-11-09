@@ -398,7 +398,9 @@ impl Transport for UsbTransport {
             Ok(t) => (Some(t), None),
             Err(e) => (
                 None,
-                Some(Error::InvalidArgument(format!("cannot start USB thread: {e}"))),
+                Some(Error::InvalidArgument(format!(
+                    "cannot start USB thread: {e}"
+                ))),
             ),
         };
         self.stream = Some(IsoStream {
