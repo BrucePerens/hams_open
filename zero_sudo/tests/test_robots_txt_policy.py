@@ -108,3 +108,21 @@ class TestRobotsTxtPolicy(HamsTransactionCase):
         body = b"User-agent: *\nDisallow: /\n"
         self.assertIs(policy.robots_txt_verdict("http://[bad", _UA, body=body), False)
         self.assertIs(policy.longest_match_verdict("User-agent: *\nDisallow: /\n", None, _UA), False)
+
+    def test_the_helpers_of_the_longest_match_parser(self):
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_product_token]
+        self.assertEqual(policy._product_token("ExampleCrawler/1.0 (+https://x.example)"), "examplecrawler")
+        self.assertEqual(policy._product_token(""), "")
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_normalise]
+        self.assertEqual(policy._normalise("/a%7eb"), policy._normalise("/a~b"))
+        self.assertEqual(policy._normalise("/a%2fb"), "/a%2Fb")
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_target]
+        self.assertEqual(policy._target("https://h.example/p/q?x=1#frag"), "/p/q?x=1")
+        self.assertEqual(policy._target("https://h.example"), "/")
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_pattern_matches]
+        self.assertTrue(policy._pattern_matches("/a*c$", "/abc"))
+        self.assertFalse(policy._pattern_matches("/a*c$", "/abcd"))
+        self.assertTrue(policy._pattern_matches("/ab", "/abcd"))
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_groups]
+        groups = policy._groups("User-agent: a\nUser-agent: b\nDisallow: /x\nUser-agent: c\nAllow: /y\nDisallow: /z\n")
+        self.assertEqual(groups, [(["a", "b"], [("disallow", "/x")]), (["c"], [("allow", "/y"), ("disallow", "/z")])])

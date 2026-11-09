@@ -46,12 +46,14 @@ _PERCENT_ESCAPE = re.compile(r"%([0-9A-Fa-f]{2})")
 _LITERAL_SAFE = "/%:@!$&'()*+,;=~-._?"
 
 
+# [@ANCHOR: zero_sudo:robots_txt_policy_product_token]
 def _product_token(user_agent):
     """The lower-cased product token of a User-Agent or `User-agent:` value: the text before the first "/" or space."""
     text = (user_agent or "").strip()
     return re.split(r"[/\s]", text, maxsplit=1)[0].strip().lower() if text else ""
 
 
+# [@ANCHOR: zero_sudo:robots_txt_policy_normalise]
 def _normalise(text):
     """Percent-escape normal form, so "/a%7Eb", "/a~b" and "/a%7eb" agree."""
 
@@ -62,6 +64,7 @@ def _normalise(text):
     return _PERCENT_ESCAPE.sub(fix, quote(text, safe=_LITERAL_SAFE))
 
 
+# [@ANCHOR: zero_sudo:robots_txt_policy_target]
 def _target(url):
     """The path plus "?query" the rules are matched against ("/" for an empty path; the fragment is dropped)."""
     try:
@@ -71,6 +74,7 @@ def _target(url):
     return _normalise((parts.path or "/") + ("?" + parts.query if parts.query else ""))[:MAX_TARGET_CHARS]
 
 
+# [@ANCHOR: zero_sudo:robots_txt_policy_pattern_matches]
 def _pattern_matches(pattern, target):
     """RFC 9309 path match: a prefix match in which `*` is any run of characters and a final `$` anchors the end.
     A linear scan with leftmost matching of each literal piece (no regular expression, so no backtracking blow-up)."""
@@ -93,6 +97,7 @@ def _pattern_matches(pattern, target):
     return target.find(tail, position) >= 0
 
 
+# [@ANCHOR: zero_sudo:robots_txt_policy_groups]
 def _groups(text):
     """[(agents, rules)] for every user-agent group: consecutive `User-agent:` lines form one group, a `User-agent:`
     line after a rule starts a new one, a rule before any `User-agent:` is ignored. `rules` holds (kind, pattern)."""
