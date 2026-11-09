@@ -11,11 +11,9 @@ class CloudflareTunnelWizard(models.TransientModel):
     # [@ANCHOR: cloudflare:COMM_tunnel_wizard_command_not_persisted]
     # `command` embeds a real, one-time Cloudflare tunnel install token
     # (see action_generate_tunnel_command() in res_config_settings.py).
-    # Previously this was a plain stored fields.Text written via
-    # create(), so the token landed verbatim in this model's own DB
-    # column at rest, with no redaction or expiry
-    # (night_shift_todo/low/cloudflare-tunnel-token-persisted-plaintext-
-    # 3f7c9a2b.md). Fixed by never writing it to a stored column at
+    # A plain stored fields.Text written via create() would land the
+    # token verbatim in this model's own DB column at rest, with no
+    # redaction or expiry (a plaintext secret at rest). So it is never written to a stored column at
     # all: this field is computed on the fly, purely from the
     # "install_command" key of the *action's own context* -- never a
     # DB write. The one-time token therefore only ever exists in the

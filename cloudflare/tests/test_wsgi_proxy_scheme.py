@@ -67,7 +67,7 @@ class TestWsgiProxyScheme(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix_call]
     def test_02_non_loopback_peer_forged_cf_visitor_is_ignored(self):
-        """Bug-hunt-shaped case, matching cloudflare/models/edge_context.py's own
+        """Matches cloudflare/models/edge_context.py's own
         loopback trust check: a direct, non-tunneled connection could send any
         CF-Visitor value it likes -- it must not be trusted."""
         environ = {
@@ -137,11 +137,9 @@ class TestWsgiProxyScheme(HamsTransactionCase):
         self.assertEqual(result["wsgi.url_scheme"], "http")
         self.assertNotIn("HTTP_X_FORWARDED_PROTO", result)
 
-    # Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-
-    # ranges-on-tunnel-only-deployments-7d2b8f14.md): Redis being unreachable with no prior
+    # Redis being unreachable with no prior
     # successful read (cold start, or a Tunnel-only deployment that never needed Redis for this
-    # at all) must NOT fall back to trusting Cloudflare's full published-range snapshot -- that
-    # was the bug. It must stay loopback-only, the correct default.
+    # at all) must NOT fall back to trusting Cloudflare's full published-range snapshot. It must stay loopback-only, the correct default.
     def test_05d_redis_unavailable_with_no_prior_cache_stays_loopback_only(self):
         self.safe_patch(
             "odoo.addons.cloudflare.wsgi_proxy_scheme.get_redis_connection",

@@ -243,9 +243,8 @@ class CloudflarePurgeQueue(models.Model):
                     "set them in Settings > Cloudflare for this website"
                 )
                 failure_severity = "medium"
-                # Bug fix (bug-hunt, review_tier 1, 2026-09-09, bug class 5):
-                # this previously failed the batch with no signal anywhere --
-                # an admin would only ever see a growing pile of "failed"
+                # Log the failure: failing the batch with no signal anywhere
+                # would leave an admin seeing only a growing pile of "failed"
                 # purge.queue rows with no indication of *why* (no website
                 # resolved at all, or that website's own credentials were
                 # never configured). Log it so it's diagnosable without

@@ -4,9 +4,8 @@
 [@ANCHOR: cloudflare:wsgi_proxy_scheme_fix]
 Verified by [@ANCHOR: test_wsgi_proxy_scheme_fix_sets_https_for_trusted_cf_visitor]
 
-night_shift_todo's own "Session cookie has no Secure attribute" investigation found the real,
-complete root cause: `request.httprequest.scheme` never reports "https" behind this deployment's
-real edge (Cloudflare Tunnel), because Cloudflare sends `CF-Visitor: {"scheme":"https"}` on the
+The cause of a "Session cookie has no Secure attribute" symptom: `request.httprequest.scheme`
+never reports "https" behind this deployment's real edge (Cloudflare Tunnel), because Cloudflare sends `CF-Visitor: {"scheme":"https"}` on the
 origin request, not the `X-Forwarded-Proto` header Odoo's own `proxy_mode`/`ProxyFix` handling
 actually reads (confirmed against real cloudflared source, `RELEASE_NOTES:951`/TUN-5744: cloudflared
 has no config option to send a custom `X-Forwarded-Proto` header at all, by design). Every place in
@@ -45,12 +44,11 @@ instead checked against `cloudflare.trusted_ip_ranges`'s admin-configurable allo
 Cloudflare), read from Redis with no `env` needed (see that module's own docstring for why) since
 no Odoo `env`/cursor exists yet at this point in the request.
 
-Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-ranges-
-on-tunnel-only-deployments-7d2b8f14.md): this used to fall back to Cloudflare's own baked-in
-published-range snapshot whenever Redis was unreachable, regardless of whether an admin had ever
-turned the non-Tunnel allow-list on. That is wrong for a Tunnel-only deployment -- its origin is
-never reachable from Cloudflare's ranges at all, so there was never a reason to trust them, Redis
-up or down. The cache below now starts empty (loopback-only, correct for a Tunnel-only deployment
+This must not fall back to Cloudflare's own baked-in published-range snapshot whenever Redis is
+unreachable, regardless of whether an admin had ever turned the non-Tunnel allow-list on. That
+would be wrong for a Tunnel-only deployment -- its origin is never reachable from Cloudflare's
+ranges at all, so there is never a reason to trust them, Redis up or down. The cache below starts
+empty (loopback-only, correct for a Tunnel-only deployment
 and for any Tunnel-only self-hoster who has never touched this setting) and, once a real admin-
 published list has been read from Redis at least once, keeps serving that last-known-good list
 across a later Redis outage instead of reverting to the Cloudflare-wide snapshot -- this hook never

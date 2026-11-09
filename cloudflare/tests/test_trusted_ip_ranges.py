@@ -26,9 +26,7 @@ class TestTrustedIpRanges(HamsTransactionCase):
     # the one helper it calls directly.
     # Tests [@ANCHOR: cloudflare:trusted_ip_ranges]
     # Tests [@ANCHOR: cloudflare:get_effective_trusted_ip_ranges]
-    # Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-
-    # ranges-on-tunnel-only-deployments-7d2b8f14.md): "Done when" requires a test that the default
-    # list on a Tunnel deployment contains no Cloudflare range.
+    # The default list on a Tunnel deployment must contain no Cloudflare range.
     def test_00_effective_ranges_are_empty_by_default_tunnel_only_deployment(self):
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
         self._icp().set_param("cloudflare.trusted_ip_ranges_custom", "")
@@ -87,7 +85,7 @@ class TestTrustedIpRanges(HamsTransactionCase):
         self.assertTrue(self._utils()._is_trusted_cf_peer("::ffff:203.0.113.55"))
 
     def test_04b_is_trusted_cf_peer_false_for_a_cloudflare_range_ip_when_mode_is_off(self):
-        """The core of this bug-hunt fix: a real Cloudflare-published address is NOT a trusted
+        """The core of the Tunnel-only default: a real Cloudflare-published address is NOT a trusted
         peer on a Tunnel-only deployment (the default) even though it is a genuine Cloudflare
         edge IP -- this deployment's origin can never actually be reached from it."""
         self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
