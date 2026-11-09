@@ -88,6 +88,15 @@ class FixWorktreeTests(unittest.TestCase):
         # The setting is the worktree's own: the main checkout still has git's default.
         self.assertEqual(subprocess.run(GIT + ["config", "fetch.recurseSubmodules"], cwd=self.main, capture_output=True, text=True).stdout, "")
 
+    def test_a_worktree_linked_by_an_earlier_run_is_healed_by_running_again(self):
+        # Tests [@ANCHOR: fix_worktree_symlinks:fix_worktree]
+        self._add_origin()
+        fws.fix_worktree(self.worktree)
+        run(["config", "--worktree", "--unset", "fetch.recurseSubmodules"], self.worktree)  # state an older fixer left
+        fixed, _ = fws.fix_worktree(self.worktree)
+        self.assertEqual(fixed, 0)
+        run(["fetch", "origin"], self.worktree)
+
     def test_without_the_setting_a_fetch_into_the_symlinked_submodule_fails(self):
         # The reason the setting exists: undo it and git refuses, so the test above cannot pass by accident.
         self._add_origin()

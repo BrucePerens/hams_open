@@ -115,8 +115,12 @@ def fix_worktree(this_root):
         here_path = os.path.join(this_root, rel_path)
         main_path = os.path.join(main_root, rel_path)
         if mode == GITLINK_MODE:
-            if not (_is_empty_dir(here_path) or (os.path.islink(here_path) and not os.path.exists(here_path))):
-                continue  # populated, or already linked to something that works
+            if os.path.islink(here_path) and os.path.exists(here_path):
+                # Linked by an earlier run (before it set this): heal the worktree so its git fetch works.
+                _stop_submodule_recursion(this_root)
+                continue
+            if not (_is_empty_dir(here_path) or os.path.islink(here_path)):
+                continue  # populated by `git submodule update`
             if not _is_populated_checkout(main_path):
                 messages.append(f"Skipping {rel_path}: the main checkout's {main_path} is not a populated submodule.")
                 continue
