@@ -366,7 +366,7 @@ impl Transport for UsbTransport {
         let ctx = CtxPtr(self.ctx.0);
         let sh = shared.clone();
         let _keep = self.ctx.clone();
-        let thread = std::thread::Builder::new()
+        let spawned = std::thread::Builder::new()
             .name("rsp_open-usb".into())
             .spawn(move || {
                 let ctx = ctx;
@@ -390,14 +390,29 @@ impl Transport for UsbTransport {
                         ffi::libusb_handle_events_timeout_completed(ctx.0, &tv, ptr::null_mut())
                     };
                 }
-            })
-            .map_err(|e| Error::InvalidArgument(format!("cannot start USB thread: {e}")))?;
+            });
+        // With no event thread, nothing finishes the transfers that were already submitted. Record
+        // the stream first either way, so that `stop_iso` cancels them and, when libusb still owns
+        // them, leaks their buffers instead of freeing memory the kernel may write to.
+        let (thread, spawn_err) = match spawned {
+            Ok(t) => (Some(t), None),
+            Err(e) => (
+                None,
+                Some(Error::InvalidArgument(format!(
+                    "cannot start USB thread: {e}"
+                ))),
+            ),
+        };
         self.stream = Some(IsoStream {
             shared,
             transfers,
             _buffers: buffers,
-            thread: Some(thread),
+            thread,
         });
+        if let Some(e) = spawn_err {
+            let _ = self.stop_iso();
+            return Err(e);
+        }
         if let Some(e) = submit_err {
             let _ = self.stop_iso();
             return Err(e);

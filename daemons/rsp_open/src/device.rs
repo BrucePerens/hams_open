@@ -775,7 +775,13 @@ impl<T: Transport> Rsp<T> {
             c.parser.stats = stats;
         }
         self.t.start_iso(Self::sink_for(core))?;
-        self.t.vendor_out(REQ_START, 0, 0)?;
+        if let Err(e) = self.t.vendor_out(REQ_START, 0, 0) {
+            // The transfers are already submitted. `streaming` stays false, so `stop_stream` would
+            // do nothing and the next `start_stream` would fail with "stream already running".
+            // Cancel them here so a failed start leaves the receiver as it was before the call.
+            let _ = self.t.stop_iso();
+            return Err(e);
+        }
         self.streaming = true;
         Ok(())
     }
@@ -1813,6 +1819,66 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_restart_stream]
+    // Tests [@ANCHOR: rsp_device_rsp2_start_stream]
+    fn a_failed_start_request_cancels_the_transfers_and_allows_a_retry() {
+        /// Fails the first START request (0x43), then behaves like the mock.
+        struct FailStart {
+            inner: MockTransport,
+            failed: bool,
+        }
+        impl Transport for FailStart {
+            fn vendor_out(&mut self, request: u8, value: u16, index: u16) -> Result<(), Error> {
+                if request == REQ_START && !self.failed {
+                    self.failed = true;
+                    return Err(Error::Stream("injected START failure".into()));
+                }
+                self.inner.vendor_out(request, value, index)
+            }
+            fn vendor_in(
+                &mut self,
+                request: u8,
+                value: u16,
+                index: u16,
+                buf: &mut [u8],
+            ) -> Result<usize, Error> {
+                self.inner.vendor_in(request, value, index, buf)
+            }
+            fn set_alt(&mut self, alt: u8) -> Result<(), Error> {
+                self.inner.set_alt(alt)
+            }
+            fn start_iso(&mut self, sink: PacketSink) -> Result<(), Error> {
+                self.inner.start_iso(sink)
+            }
+            fn stop_iso(&mut self) -> Result<(), Error> {
+                self.inner.stop_iso()
+            }
+            fn release(&mut self) -> Result<(), Error> {
+                self.inner.release()
+            }
+        }
+        let m = MockTransport::new();
+        let mut rx = Rsp2::with_transport(
+            FailStart {
+                inner: m.clone(),
+                failed: false,
+            },
+            Settings::default(),
+            Duration::ZERO,
+        )
+        .unwrap();
+        m.clear();
+        assert!(rx.start_stream(|_, _| {}).is_err());
+        assert!(!rx.is_streaming());
+        // The isochronous transfers that start_iso submitted were cancelled again.
+        assert_eq!(m.ops(), vec![Op::IsoStart, Op::IsoStop]);
+        // The receiver is usable: a second start goes through.
+        rx.start_stream(|_, _| {}).unwrap();
+        assert!(rx.is_streaming());
+        rx.stop_stream().unwrap();
     }
 
     #[test]

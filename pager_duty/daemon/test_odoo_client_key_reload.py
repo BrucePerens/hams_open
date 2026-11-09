@@ -27,7 +27,7 @@ class TestOdooClientReloadsARotatedKey(unittest.TestCase):
         patcher = mock.patch.object(gm, "ODOO_KEY_ENV_FILE", self.env_file)
         patcher.start()
         self.addCleanup(patcher.stop)
-        patcher = mock.patch.object(gm.urllib.request, "urlopen", side_effect=self._odoo)
+        patcher = mock.patch.object(gm._OPENER, "open", side_effect=self._odoo)
         patcher.start()
         self.addCleanup(patcher.stop)
         self.client = gm.OdooClient("http://odoo:8069", "db", "pager_service_internal", self.OLD)

@@ -30,6 +30,18 @@ import traceback
 import urllib.error
 import urllib.request
 
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
+    points; a refused redirect surfaces as the HTTPError of the 3xx status."""
+
+    # [@ANCHOR: hams_helpdesk:daemon_no_redirect]
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
 DEFAULT_URL = "http://odoo:8069"
 DEFAULT_KEY_FILE = "/opt/hams/etc/keys/exception_reporter.env"
 USER_AGENT = "hams.com-daemon-client/1.0"
@@ -92,7 +104,7 @@ def post_report(payload, url=None, database=None, key_file=None, timeout=15):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with _OPENER.open(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         if error.code in UNAVAILABLE_HTTP_CODES:

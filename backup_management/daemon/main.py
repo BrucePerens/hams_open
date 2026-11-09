@@ -12,7 +12,6 @@ import subprocess
 import urllib.request
 import urllib.error
 import logging
-import shlex
 import re
 
 # Reports an uncaught exception to the Odoo exception tickets (Helpdesk > Server Exceptions) and raises it again.
@@ -21,6 +20,18 @@ import re
 # deployment fault and stops the worker at start (the burn-list linter forbids a soft ImportError fallback); the helper
 # itself never lets a reporting failure stop the worker.
 from exception_reporter import reporting_failures
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
+    points; a refused redirect surfaces as the HTTPError of the 3xx status."""
+
+    # [@ANCHOR: backup_management:no_redirect]
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
 
 
 logging.basicConfig(
@@ -300,6 +311,14 @@ def _pgbackrest_repo_number(config):
 _PGBACKREST_PRIVILEGED_OPS = ("backup", "info")
 
 
+# [@ANCHOR: backup_management:describe_command]
+# Verified by [@ANCHOR: backup_management:test_describe_command_gives_the_program_and_an_argument_count_only]
+def _describe_command(cmd):
+    """What a log line says about a command: the program's base name and how many arguments it has, never the arguments (a
+    command line can carry a secret and the log outlives the process)."""
+    return f"{os.path.basename(str(cmd[0]))} with {len(cmd) - 1} argument(s)"
+
+
 def _pgbackrest_requires_sidecar(cmd):
     # [@ANCHOR: backup_management:COMM_pgbackrest_requires_sidecar]
     # Verified by [@ANCHOR: backup_management:COMM_test_pgbackrest_requires_sidecar]
@@ -519,7 +538,7 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=15) as response:
+            with _OPENER.open(req, timeout=15) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
                 if isinstance(res_data, dict) and res_data.get("error"):
                     raise OdooAPIError(f"Odoo Error: {res_data['error']}")
@@ -783,9 +802,10 @@ def execute_job(ch, method, properties, body):
             # own output before this call returns), so the whole result
             # lands in one append_log call below instead of the throttled
             # per-chunk updates the direct-subprocess path uses.
+            command_summary = _describe_command(cmd)
             logger.info(
                 "Delegating to privileged pgbackrest sidecar: %s",
-                " ".join(shlex.quote(c) for c in cmd),
+                command_summary,
             )
             # Acknowledge BEFORE the long wait. RabbitMQ closes the channel of a consumer that holds
             # a delivery unacknowledged for longer than consumer_timeout (30 minutes by default),
@@ -813,7 +833,8 @@ def execute_job(ch, method, properties, body):
                 err_msg = f"""Binary {cmd[0]} not found in PATH."""
                 raise OSError(err_msg)
 
-            logger.info("Executing: %s", " ".join(shlex.quote(c) for c in cmd))
+            command_summary = _describe_command(cmd)
+            logger.info("Executing: %s", command_summary)
 
             proc = subprocess.Popen(
                 cmd,

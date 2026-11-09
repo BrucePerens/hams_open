@@ -241,7 +241,7 @@ class TestPagerMcpServerModule(HamsTransactionCase):
         mock_response = MagicMock()
         mock_response.read.return_value = json.dumps({"id": 7}).encode("utf-8")
         mock_urlopen = self.safe_patch(
-            "odoo.addons.pager_duty.daemon.pager_mcp_server.urllib.request.urlopen"
+            "odoo.addons.pager_duty.daemon.pager_mcp_server._OPENER.open"
         )
         mock_urlopen.return_value.__enter__.return_value = mock_response
 

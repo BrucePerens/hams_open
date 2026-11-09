@@ -168,21 +168,31 @@ fn cycle_with(
     }
 }
 
-/// The production cold reset: `sudo -n uhubctl` through the hub, then wait for the unit and its codecs; if the unit does not come back,
-/// once more with a longer power-off.
+/// The production cold reset: through the program's installed power-cycle implementation if it set one (`set_cycle_hook`), else `sudo -n uhubctl`
+/// through the hub, then wait for the unit and its codecs; if the unit does not come back, once more with a longer power-off.
 pub fn cold_reset(port: &HubPort) -> Result<(), String> {
     // [@ANCHOR: vnwa_open_power_cold_reset]
-    power_cycle_escalating(
-        &ProcessRunner,
-        port,
-        &[
-            (OFF_TIME, Duration::from_secs(25)),
-            (LONG_OFF_TIME, BACK_TIMEOUT),
-        ],
-        unit_present,
-    )?;
+    cold_reset_via(HOOK.get(), port, Duration::from_secs(8))
+}
+
+/// The ladder of `cold_reset`: 3 s off and up to 25 s for the unit, then 12 s off and up to `BACK_TIMEOUT`.
+fn cold_reset_ladder() -> [(Duration, Duration); 2] {
+    [
+        (OFF_TIME, Duration::from_secs(25)),
+        (LONG_OFF_TIME, BACK_TIMEOUT),
+    ]
+}
+
+/// `cold_reset` with the hook and the pause after the unit is back given (tests pass a recording hook and no pause).
+fn cold_reset_via(
+    hook: Option<&CycleHook>,
+    port: &HubPort,
+    settle: Duration,
+) -> Result<(), String> {
+    // [@ANCHOR: vnwa_open_power_cold_reset_via]
+    cycle_with(hook, port, &cold_reset_ladder())?;
     // The unit and its codecs are listed before they answer reliably (a request sent 3 s after enumeration stalled); give them time.
-    std::thread::sleep(Duration::from_secs(8));
+    std::thread::sleep(settle);
     Ok(())
 }
 
@@ -246,6 +256,35 @@ mod tests {
         assert!(
             HOOK.get().is_none(),
             "no test installs the process-wide hook"
+        );
+    }
+
+    // Tests [@ANCHOR: vnwa_open_power_cold_reset]
+    // Tests [@ANCHOR: vnwa_open_power_cold_reset_via]
+    #[test]
+    fn the_production_cold_reset_goes_through_an_installed_cycle_implementation() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let s2 = seen.clone();
+        let hook: CycleHook = Box::new(move |p, ladder| {
+            s2.lock()
+                .unwrap()
+                .push((p.hub.clone(), p.port, ladder.to_vec()));
+            Ok(())
+        });
+        let port = HubPort {
+            hub: "3-2".into(),
+            port: 2,
+        };
+        cold_reset_via(Some(&hook), &port, Duration::ZERO).unwrap();
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec![("3-2".to_string(), 2u8, cold_reset_ladder().to_vec())]
+        );
+        // A refusal by the hook's own rules is the cold reset's error.
+        let refuse: CycleHook = Box::new(|_, _| Err("hub protection says no".into()));
+        assert_eq!(
+            cold_reset_via(Some(&refuse), &port, Duration::ZERO),
+            Err("hub protection says no".to_string())
         );
     }
 

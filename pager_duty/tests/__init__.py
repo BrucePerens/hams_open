@@ -29,7 +29,9 @@ from . import test_ui_tours
 from . import test_hooks
 from . import test_never_run_and_monitor_hardening
 from . import test_check_github_pat_expiry
+from . import test_credential_redirect
 from . import test_check_auth_cert_expiry
 from . import test_check_recordings_disk_usage
 from . import test_amqp_check
 from . import test_unit_ticket_dedup
+from . import test_rpc_exposure

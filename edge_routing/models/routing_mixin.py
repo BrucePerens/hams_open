@@ -139,6 +139,7 @@ class EdgeRoutingMixin(models.AbstractModel):
     # [@ANCHOR: edge_routing:COMM_mixin_get_record_by_slug]
     # (real coverage: see edge_routing:COMM_mixin_get_record_by_slug's own claim)
     # # Verified by [@ANCHOR: user_websites:test_group_site_routing]
+    @api.private
     @api.model
     @distributed_cache()
     def get_record_by_slug(self, slug):
@@ -150,9 +151,10 @@ class EdgeRoutingMixin(models.AbstractModel):
             return False
         slug = str(slug).lower()
 
-        # This method is public (no leading underscore), so it's directly
-        # callable via /web/dataset/call_kw by any authenticated session.
-        # It therefore takes no caller-supplied `override_svc_uid`:
+        # This method has no leading underscore, so without @api.private it
+        # would be directly callable via /web/dataset/call_kw by any
+        # authenticated session (the decorator above closes that: only
+        # Python callers reach it now). It still takes no caller-supplied `override_svc_uid`:
         # self.with_user(override_svc_uid).env with zero validation
         # would let any authenticated caller pick an arbitrary uid (real
         # service account or not) to run this search as, bypassing whatever

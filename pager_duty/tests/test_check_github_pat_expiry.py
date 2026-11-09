@@ -60,7 +60,7 @@ class TestGithubPatExpiryCheck(HamsTransactionCase):
 
     def _patch_urlopen(self, expiration_header):
         mock_urlopen = self.safe_patch(
-            "odoo.addons.pager_duty.daemon.check_github_pat_expiry.urllib.request.urlopen"
+            "odoo.addons.pager_duty.daemon.check_github_pat_expiry._OPENER.open"
         )
         mock_urlopen.return_value.__enter__.return_value = _mock_response(expiration_header)
         return mock_urlopen

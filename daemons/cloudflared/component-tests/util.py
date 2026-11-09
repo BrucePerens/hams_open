@@ -131,7 +131,9 @@ def cloudflared_cmd(config, config_path, cfd_args, cfd_pre_args, root):
         cmd += ["--config", str(config_path)]
 
     cmd += cfd_args
-    LOGGER.info(f"Run cmd {cmd} with config {config}")
+    # The arguments can carry a tunnel token; log the program and how many arguments, not the command line.
+    argument_count = len(cmd) - 1
+    LOGGER.info(f"Run cloudflared with {argument_count} argument(s) and config {config}")
     return cmd
 
 @contextmanager

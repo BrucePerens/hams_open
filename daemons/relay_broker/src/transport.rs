@@ -7,7 +7,7 @@
 
 use std::io::{self, IoSlice, IoSliceMut};
 use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use nix::sys::socket::{
     cmsg_space, recvmsg, sendmsg, setsockopt, sockopt, ControlMessage, ControlMessageOwned,
@@ -59,10 +59,31 @@ pub fn send_frame(
 
 // [@ANCHOR: relay_broker_recv_exact]
 /// Fills `buf` with `recvmsg`, appending any passed descriptors to `fds`. Descriptors beyond
-/// the first four are closed on the spot, never leaked.
-fn recv_exact(socket: BorrowedFd<'_>, buf: &mut [u8], fds: &mut Vec<OwnedFd>) -> io::Result<()> {
+/// the first four are closed on the spot, never leaked. The whole fill must finish by
+/// `deadline`: the socket's own receive timeout restarts on every byte, so alone it would let a
+/// peer that sends one byte just inside each timeout hold the (single-threaded) broker for
+/// hours. Before each `recvmsg` the socket timeout is cut to the time that remains.
+fn recv_exact(
+    socket: BorrowedFd<'_>,
+    buf: &mut [u8],
+    fds: &mut Vec<OwnedFd>,
+    deadline: Instant,
+) -> io::Result<()> {
     let mut filled = 0usize;
     while filled < buf.len() {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(io::Error::from(io::ErrorKind::TimedOut));
+        }
+        // A zero timeval means "wait forever", so the value never goes below one microsecond.
+        let secs = i64::try_from(remaining.as_secs()).unwrap_or(i64::MAX);
+        let micros = i64::from(remaining.subsec_micros()).max(i64::from(secs == 0));
+        setsockopt(
+            &socket,
+            sockopt::ReceiveTimeout,
+            &TimeVal::new(secs, micros),
+        )
+        .map_err(io::Error::from)?;
         let mut space = vec![0u8; cmsg_space::<[RawFd; 4]>()];
         let mut iov = [IoSliceMut::new(buf.get_mut(filled..).unwrap_or_default())];
         let msg = recvmsg::<()>(
@@ -106,17 +127,19 @@ fn adopt_received_fd(raw: RawFd) -> OwnedFd {
 // [@ANCHOR: relay_broker_recv_frame]
 /// Reads one frame: the body bytes and any descriptors passed with it. The announced length is
 /// checked against `MAX_FRAME` before the body is read, so an oversize frame costs the peer a
-/// closed connection and the broker four bytes.
+/// closed connection and the broker four bytes. The whole frame, header and body together, must
+/// arrive within `IO_TIMEOUT`, however the peer paces its bytes.
 pub fn recv_frame(socket: BorrowedFd<'_>) -> io::Result<(Vec<u8>, Vec<OwnedFd>)> {
+    let deadline = Instant::now() + IO_TIMEOUT;
     let mut fds = Vec::new();
     let mut header = [0u8; 4];
-    recv_exact(socket, &mut header, &mut fds)?;
+    recv_exact(socket, &mut header, &mut fds, deadline)?;
     let len = frame_body_len(header).map_err(|e: WireError| {
         io::Error::new(io::ErrorKind::InvalidData, format!("frame length: {e:?}"))
     })?;
     debug_assert!(len <= MAX_FRAME);
     let mut body = vec![0u8; len];
-    recv_exact(socket, &mut body, &mut fds)?;
+    recv_exact(socket, &mut body, &mut fds, deadline)?;
     Ok((body, fds))
 }
 
@@ -170,5 +193,42 @@ mod tests {
         raw_w.write_all(&[0, 0, 0, 5, 1, 2]).unwrap();
         drop(raw_w);
         assert!(recv_frame(raw_r.as_fd()).is_err(), "truncated body");
+    }
+
+    // Tests [@ANCHOR: relay_broker_recv_frame]
+    // Tests [@ANCHOR: relay_broker_recv_exact]
+    #[test]
+    fn a_peer_dribbling_one_byte_per_second_cannot_outlast_the_whole_frame_deadline() {
+        use std::time::Instant;
+        let (mut raw_w, raw_r) = UnixStream::pair().unwrap();
+        // Announces a 100-byte body, then sends one byte a second: each byte lands inside the
+        // 5 s socket timeout, so only a deadline on the whole frame can stop it.
+        let feeder = std::thread::spawn(move || {
+            for byte in [0u8, 0, 0, 100]
+                .into_iter()
+                .chain(std::iter::repeat_n(1u8, 20))
+            {
+                if raw_w.write_all(&[byte]).is_err() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        });
+        let started = Instant::now();
+        let err = recv_frame(raw_r.as_fd()).unwrap_err();
+        let waited = started.elapsed();
+        assert!(
+            matches!(
+                err.kind(),
+                io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+            ),
+            "{err:?}"
+        );
+        assert!(
+            waited < IO_TIMEOUT + Duration::from_secs(2),
+            "held for {waited:?}; the frame has {IO_TIMEOUT:?} in total"
+        );
+        drop(raw_r);
+        feeder.join().unwrap();
     }
 }

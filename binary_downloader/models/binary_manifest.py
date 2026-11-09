@@ -134,6 +134,7 @@ class BinaryManifest(models.Model):
             },
         }
 
+    @api.private
     @api.model
     def ensure_executable(self, cmd_name):
         # [@ANCHOR: binary_ensure_executable]

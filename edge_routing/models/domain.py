@@ -38,6 +38,7 @@ class EdgeRoutingDomain(models.Model):
                 )
 
     # [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
+    @api.private
     @api.model
     def push_all_to_pager_duty(self):
         """

@@ -185,6 +185,8 @@ through it.
 | `**kwargs` | JSON values | The method's named arguments, sent as the JSON body. |
 | returns | decoded JSON | The method's result. |
 
+**Redirects are refused** (`_OPENER` is built with `_NoRedirect`, whose `redirect_request` `[@ANCHOR: backup_management:no_redirect]` takes the request, the response, the status, the headers and the target address and returns `None` for every redirect, so urllib raises the 3xx as an `HTTPError`): urllib would copy the bearer key to whatever host a 3xx answer names, so a 3xx surfaces as an HTTP error (`OdooAPIError`, code 3xx). Tested by `TestJson2CallRefusesARedirect` with two real local servers.
+
 Errors: `OdooAPIError` for an HTTP error (the message starts `JSON-2 API HTTP Error <code>:`), a connection or parse failure, or an `error` member in the answer.
 
 **Special concerns.** Blocking, 15 second timeout, no retry except one: after an HTTP 401 it calls `_reload_odoo_key()` and repeats the call once with the new key when the
@@ -192,3 +194,19 @@ key changed. The retry is safe for the calls this daemon makes because a 401 mea
 
 **See also.** `test_json2_call_reloads_a_rotated_key` in `daemon/test_main.py`.
 
+
+### `[@ANCHOR: backup_management:describe_command]` `_describe_command(cmd)`
+
+**Purpose.** The backup worker logs what it is about to run. A command line can carry a secret and a log file outlives the process, so the log line gets this
+summary instead of the command: the program's base name and the number of arguments. Called by `execute_job` (the "Executing" line) and by
+`_run_pgbackrest_via_sidecar` (the "Delegating" line) in `daemon/main.py`.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `cmd` | non-empty `list[str]` | The argv about to be run; borrowed, not changed. `cmd[0]` is the program. |
+| returns | `str` | `"<basename of cmd[0]> with <N> argument(s)"`, where N is `len(cmd) - 1`. |
+
+Errors: `IndexError` for an empty list (callers have already checked `cmd[0]` with `shutil.which`). **Special concerns.** Pure: no I/O, no locks, safe to retry. Never
+include an argument in the result.
+
+**See also.** `test_describe_command_gives_the_program_and_an_argument_count_only` in `daemon/test_main.py`.

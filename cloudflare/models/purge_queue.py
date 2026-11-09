@@ -192,6 +192,7 @@ class CloudflarePurgeQueue(models.Model):
         requeue.write({"state": "pending"})
         return len(requeue)
 
+    @api.private
     @api.model
     def process_queue(self):
         # [@ANCHOR: COMM_cf_process_queue_logic]

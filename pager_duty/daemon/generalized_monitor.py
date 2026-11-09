@@ -41,6 +41,18 @@ import redis as redis_lib
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pagerduty_maintenance  # noqa: E402
 
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
+    points; a refused redirect surfaces as the HTTPError of the 3xx status."""
+
+    # [@ANCHOR: pager_duty:no_redirect_monitor]
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
 # Real fix, found by an adversarial security review: this module's own
 # internal Redis connections (log_anomaly_proxy/log_search_proxy below)
 # used to construct bare redis.Redis(host=..., port=..., db=0) with no
@@ -111,7 +123,7 @@ class OdooClient:
                 method="POST",
             )
             try:
-                with urllib.request.urlopen(req, timeout=15) as response:
+                with _OPENER.open(req, timeout=15) as response:
                     return json.loads(response.read().decode("utf-8"))
             except urllib.error.HTTPError as e:
                 if e.code == 401 and attempt == 1 and self.reload_key():
@@ -230,7 +242,7 @@ def verify_and_install_dependencies(client, checks):
 
     for cmd in required_cmds:
         if not shutil.which(cmd):
-            logger.info(f"Dependency '{cmd}' missing. Polling Odoo...")
+            logger.info(f"Dependency '{cmd}' missing. Polling Odoo...")  # boundary-hazard-ignore: argv-log: cmd is one binary name from a fixed table, not a command line
             success = False
             for attempt in range(12):
                 try:
@@ -239,7 +251,7 @@ def verify_and_install_dependencies(client, checks):
                     )
                     if res and res.get("status") == "ok":
                         bin_path = res.get("path")
-                        logger.info(f"Provisioned {cmd} at {bin_path}")
+                        logger.info(f"Provisioned {cmd} at {bin_path}")  # boundary-hazard-ignore: argv-log: cmd is one binary name from a fixed table, not a command line
                         bin_dir = os.path.dirname(bin_path)
                         if bin_dir not in os.environ["PATH"]:
                             os.environ["PATH"] = (

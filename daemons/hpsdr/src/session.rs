@@ -295,17 +295,32 @@ impl Radio {
     }
 
     // [@ANCHOR: hpsdr_session_stop]
-    /// Unkey, send Stop, and end the session task.
+    /// Unkey, send Stop, and end the session task. The sender task is ended and awaited first, so no
+    /// transmit datagram can follow; then one receive datagram (MOX clear, drive zero) is sent so a
+    /// radio that was keyed is told to unkey explicitly, whatever it does on Stop. The Stop packet is
+    /// sent even if that datagram could not be.
     pub async fn stop(self) -> Result<(), HpsdrError> {
-        {
+        let cfg = {
             let mut tx = lock(&self.shared.tx);
             tx.ptt = false;
             tx.drive = 0;
             tx.iq.clear();
-        }
-        self.task.abort();
+            lock(&self.shared.cfg).clone()
+        };
+        let mut task = self.task;
+        task.abort();
+        let _ = (&mut task).await;
+        let unkeyed = match Ep2Builder::new().build_rx(&cfg) {
+            Ok(d) => self
+                .sock
+                .send(&d)
+                .await
+                .map(|_| ())
+                .map_err(HpsdrError::from),
+            Err(e) => Err(e),
+        };
         self.sock.send(&p1::stop_packet()).await?;
-        Ok(())
+        unkeyed
     }
 }
 
@@ -636,6 +651,72 @@ mod tests {
         assert_eq!(radio.request_ptt(true, 100), Err(HpsdrError::GateClosed));
         radio.stop().await.expect("stop");
         emu.stop();
+    }
+
+    #[tokio::test]
+    async fn stop_while_keyed_sends_a_mox_clear_datagram_before_the_stop_packet() {
+        // Tests [@ANCHOR: hpsdr_session_stop]
+        // A bare UDP socket plays the radio so the whole datagram sequence is visible.
+        let fake = UdpSocket::bind("127.0.0.1:0").await.expect("bind");
+        let d = Discovered {
+            protocol: Protocol::P1,
+            addr: fake.local_addr().expect("addr"),
+            mac: [0; 6],
+            board: crate::types::Board::Hermes,
+            code_version: 0,
+            busy: false,
+            protocol_version: None,
+            num_ddcs: None,
+            phase_word: false,
+        };
+        let gate = TxGate::new();
+        let radio = Radio::start(
+            &Handle::current(),
+            &d,
+            P1Config::default(),
+            gate.clone(),
+            SessionOptions::default(),
+        )
+        .await
+        .expect("start");
+        assert!(gate.open_until(Instant::now() + Duration::from_secs(60)));
+        assert_eq!(radio.request_ptt(true, 100), Ok(()));
+        let mut buf = vec![0u8; 2048];
+        let mox = |d: &[u8]| {
+            d.len() == p1::DATAGRAM_LEN
+                && p1::parse_ep2(d).is_ok_and(|e| e.cc.iter().any(|cc| cc[0] & 1 == 1))
+        };
+        let keyed = tokio::time::timeout(WAIT, async {
+            loop {
+                let n = fake.recv(&mut buf).await.expect("recv");
+                if mox(&buf[..n]) {
+                    return;
+                }
+            }
+        })
+        .await;
+        assert!(keyed.is_ok(), "the radio was never keyed");
+        radio.stop().await.expect("stop");
+        let mut after = Vec::new();
+        while let Ok(Ok(n)) =
+            tokio::time::timeout(Duration::from_millis(300), fake.recv(&mut buf)).await
+        {
+            after.push(buf[..n].to_vec());
+        }
+        assert_eq!(
+            after.last().map(Vec::as_slice),
+            Some(p1::stop_packet().as_slice()),
+            "the Stop packet is last"
+        );
+        let last_ep2 = after
+            .iter()
+            .rev()
+            .find(|d| d.len() == p1::DATAGRAM_LEN)
+            .expect("an EP2 datagram before Stop");
+        assert!(
+            !mox(last_ep2),
+            "the last EP2 datagram still keyed the radio"
+        );
     }
 
     #[tokio::test]

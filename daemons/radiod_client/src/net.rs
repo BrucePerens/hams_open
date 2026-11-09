@@ -232,7 +232,8 @@ impl Control {
 
     // [@ANCHOR: radiod_client_net_control_request]
     /// Send `cmd` and wait for the status carrying its tag (the only acknowledgement `radiod`
-    /// gives). Repeats the send every 200 ms up to `wait`; sends are idempotent.
+    /// gives). Repeats the send every 200 ms up to `wait`; sends are idempotent, so a reply to any
+    /// of the tags sent by this call (not only the newest) acknowledges it.
     pub async fn request(
         &mut self,
         cmd: &Command,
@@ -240,13 +241,16 @@ impl Control {
     ) -> Result<Option<ChannelStatus>, NetError> {
         let deadline = Instant::now() + wait;
         let want = cmd.ssrc().get();
+        // Every tag this call has sent: the reply to an earlier send is the answer too (the sends
+        // are idempotent), and a reply slower than the retry interval must not be discarded.
+        let mut sent: Vec<u32> = Vec::new();
         while Instant::now() < deadline {
-            let tag = self.send(cmd).await?;
+            sent.push(self.send(cmd).await?);
             let retry = Instant::now() + RETRY_INTERVAL;
             while Instant::now() < retry {
                 let left = retry.saturating_duration_since(Instant::now());
                 if let Some(status) = self.recv_status(left).await? {
-                    if is_ack(&status, want, tag) {
+                    if sent.iter().any(|tag| is_ack(&status, want, *tag)) {
                         return Ok(Some(status));
                     }
                 }
@@ -523,6 +527,61 @@ mod tests {
         let status = ack.ok().flatten();
         assert_eq!(status.as_ref().map(|s| s.ssrc), Some(42));
         assert_eq!(status.and_then(|s| s.tag), Some(1));
+
+        responder.abort();
+    }
+
+    // Tests [@ANCHOR: radiod_client_net_control_request]
+    #[tokio::test]
+    async fn a_reply_slower_than_the_retry_interval_still_acknowledges() {
+        let handle = Handle::current();
+        let (g, port) = (group(6), test_port(5));
+        let opened = open_group(g, port, LOOPBACK).and_then(|s| register(&handle, s));
+        assert!(opened.is_ok(), "multicast on loopback: {opened:?}");
+        let Ok(peer) = opened else { return };
+        let control = Control::open_on_port(&handle, g, port, LOOPBACK, Policy::default());
+        assert!(control.is_ok(), "{control:?}");
+        let Ok(mut control) = control else { return };
+
+        // A radiod that takes 300 ms to answer each command: longer than the 200 ms retry
+        // interval, so the reply to a send arrives after the next send went out.
+        let responder = tokio::spawn(async move {
+            let dest = SocketAddrV4::new(g, port);
+            while let Some(pkt) = next_datagram(&peer, Duration::from_secs(3)).await {
+                let Ok((Kind::Command, entries)) = parse(&pkt) else {
+                    continue;
+                };
+                let uint = |t: u8| {
+                    entries
+                        .iter()
+                        .find(|e| e.ty == t)
+                        .and_then(|e| e.uint().ok())
+                        .unwrap_or(0)
+                };
+                let (ssrc, tag) = (uint(ty::OUTPUT_SSRC) as u8, uint(ty::COMMAND_TAG) as u8);
+                let reply = [
+                    0u8,
+                    ty::OUTPUT_SSRC,
+                    1,
+                    ssrc,
+                    ty::COMMAND_TAG,
+                    1,
+                    tag,
+                    ty::EOL,
+                ];
+                let out = peer.send_to(&reply, dest);
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                let _ = out.await;
+            }
+        });
+
+        let poll = Command::Poll {
+            ssrc: ssrc(42),
+            lifetime_frames: 50,
+        };
+        let ack = control.request(&poll, Duration::from_secs(3)).await;
+        let status = ack.ok().flatten();
+        assert_eq!(status.as_ref().map(|s| s.ssrc), Some(42));
 
         responder.abort();
     }
