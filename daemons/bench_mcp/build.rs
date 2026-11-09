@@ -34,11 +34,12 @@ fn main() {
     let mut files = Vec::new();
     walk(&root, &root, &mut files);
     let mut src = String::from("pub const FILES: &[(&str, &str)] = &[\n");
-    for (rel, abs) in &files {
+    // The generated file names each page relative to the crate (`concat!(env!("CARGO_MANIFEST_DIR"), ...)`), never by an absolute
+    // path: a shared CARGO_TARGET_DIR reuses this output from another worktree, and an absolute path would then name a removed one.
+    for (rel, _abs) in &files {
         writeln!(
             src,
-            "    ({rel:?}, include_str!({:?})),",
-            abs.to_string_lossy()
+            "    ({rel:?}, include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/manual/\", {rel:?}))),",
         )
         .unwrap();
     }

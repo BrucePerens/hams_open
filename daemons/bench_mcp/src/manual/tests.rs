@@ -892,3 +892,23 @@ fn a_resource_text_starts_with_the_title_summary_and_verification() {
     );
     assert!(t.ends_with(m().rendered(&page.path).unwrap()), "{t}");
 }
+
+// Tests [@ANCHOR: bench_mcp_manual_embedded_paths]
+#[test]
+fn the_generated_page_table_names_no_absolute_path() {
+    let generated = include_str!(concat!(env!("OUT_DIR"), "/manual_files.rs"));
+    assert!(
+        generated.contains(
+            "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/manual/\", \"index.md\"))"
+        ),
+        "pages are included relative to CARGO_MANIFEST_DIR"
+    );
+    assert!(
+        !generated.contains(env!("CARGO_MANIFEST_DIR")),
+        "the generated table must not contain this checkout's absolute path"
+    );
+    assert_eq!(
+        generated.matches("include_str!").count(),
+        embedded::FILES.len()
+    );
+}

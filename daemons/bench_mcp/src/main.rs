@@ -210,9 +210,17 @@ const MODULES: &[Module] = &[
 
 pub(crate) fn out_dir() -> PathBuf {
     // [@ANCHOR: bench_mcp_main_out_dir]
-    let d = std::env::var("BENCH_MCP_OUT")
+    out_dir_for(std::env::var_os("BENCH_MCP_OUT"))
+}
+
+/// The output directory for a given `BENCH_MCP_OUT` value (`None`: not set): that path, or `bench_mcp` under the system temp
+/// directory, created if missing. `out_dir` passes the environment's value; tests pass their own, so none has to set the
+/// process-wide variable that every other test reads.
+fn out_dir_for(configured: Option<std::ffi::OsString>) -> PathBuf {
+    // [@ANCHOR: bench_mcp_main_out_dir_for]
+    let d = configured
         .map(PathBuf::from)
-        .unwrap_or_else(|_| std::env::temp_dir().join("bench_mcp"));
+        .unwrap_or_else(|| std::env::temp_dir().join("bench_mcp"));
     let _ = std::fs::create_dir_all(&d);
     d
 }
@@ -1193,16 +1201,16 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_main_out_dir]
+    // Tests [@ANCHOR: bench_mcp_main_out_dir_for]
     #[test]
-    fn the_output_directory_is_the_environments_or_a_default_and_is_created() {
+    fn the_output_directory_is_the_configured_one_or_a_default_and_is_created() {
+        // Never sets BENCH_MCP_OUT: the sa tests read it concurrently (this test used to set and remove it).
         let dir = std::env::temp_dir().join(format!("bench_mcp_out_{}", std::process::id()));
         let sub = dir.join("nested");
-        std::env::set_var("BENCH_MCP_OUT", &sub);
-        let got = out_dir();
-        std::env::remove_var("BENCH_MCP_OUT");
+        let got = out_dir_for(Some(sub.clone().into_os_string()));
         assert_eq!(got, sub);
         assert!(sub.is_dir());
         std::fs::remove_dir_all(&dir).ok();
-        assert_eq!(out_dir(), std::env::temp_dir().join("bench_mcp"));
+        assert_eq!(out_dir_for(None), std::env::temp_dir().join("bench_mcp"));
     }
 }
