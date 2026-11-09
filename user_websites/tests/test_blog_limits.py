@@ -125,10 +125,10 @@ class TestBlogLimits(RealTransactionCase):
             self.env.flush_all()
 
     def test_04_portal_owner_cannot_set_website_id_to_opt_out_of_isolation(self):
-        # bug-hunt (2026-09-13): website_page.py's own write()/create() already
-        # had this exact class of bug found and fixed (see its own comment,
+        # website_page.py's own write()/create() already handle
+        # this exact class of issue (see its own comment,
         # "website_page owner can opt their own page out of multi-website
-        # tenant isolation") -- website_id was removed from THAT model's
+        # tenant isolation") -- website_id is excluded from THAT model's
         # allowlist because a non-admin caller could set/clear it via RPC,
         # and stock Odoo's own website_domain() (`Domain('website_id', 'in',
         # [False, *self.ids])`) treats website_id=False as "visible on every

@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """A member site's home is /<slug>, and /<slug>/home is a permanent redirect to it.
 
-Bruce, 2026-10-12: "make all of the user websites be hams.com/<callsign> without 'home'."
+Requirement: all user websites are served at hams.com/<callsign> without "home".
 """
 import importlib.util
 import os

@@ -79,12 +79,12 @@ class TestORMSecurity(RealTransactionCase):
 
     def test_01b_prevent_public_user_create_via_self_ownership(self):
         """
-        Bug-hunt fix (docs/bug_hunt_claims/hams_open/user_websites/security/
+        See docs/bug_hunt_claims/hams_open/user_websites/security/
         claims/acl_website_page.md and its blog_post/blog_blog sibling):
-        create() on website.page/blog.post/blog.blog never called
-        self.check_access("create") against the real caller -- unlike
-        write()/unlink() below, which do. That meant access_website_page_
-        public/portal's perm_create=0 was never actually enforced for
+        create() on website.page/blog.post/blog.blog must call
+        self.check_access("create") against the real caller -- like
+        write()/unlink() below. Otherwise access_website_page_
+        public/portal's perm_create=0 would not be enforced for
         create(): a base.group_public caller could pass the mixin's own
         ownership-plausibility check (`_check_proxy_ownership_create`) by
         explicitly setting owner_user_id equal to their own (public) user

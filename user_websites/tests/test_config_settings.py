@@ -10,22 +10,21 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 @tagged("post_install", "-at_install")
 class TestConfigSettings(HamsTransactionCase):
     """
-    night_shift_todo.md "saving ANY Settings page can crash with an
-    AccessError", full design writeup right after that entry: this file used
-    to test a `user_websites_administrators_ids` Many2many field on
+    Saving ANY Settings page must not crash with an AccessError: this file
+    guards against a `user_websites_administrators_ids` Many2many field on
     res.config.settings whose get_values()/set_values() overrides read/wrote
     group_user_websites_administrator.user_ids directly, on every single
-    Settings save, company-wide. That field and its overrides have been
-    removed entirely (see res_config_settings.py's own comment for the full
-    reasoning) rather than patched, because managing an arbitrary
-    res.groups record's membership from inside res.config.settings was the
+    Settings save, company-wide. That field and its overrides do not exist
+    (see res_config_settings.py's own comment for the full
+    reasoning), because managing an arbitrary
+    res.groups record's membership from inside res.config.settings is the
     wrong mechanism twice over: it fires unconditionally on every unrelated
     Settings save (the actual crash mechanism), and it required granting
     group_user_websites_administrator -- a content-moderation-tier role that
     does not imply base.group_system -- model-level access to the ENTIRE
     shared res.config.settings model to make the field reachable at all,
     which handed that role read/write on every OTHER module's settings too
-    (proven concretely in test_04 below). These tests now guard the
+    (proven concretely in test_04 below). These tests guard the
     replacement design instead: group membership is managed through Odoo's
     own already-correctly-scoped Groups UI, and res.config.settings grants
     nothing beyond base.group_system.

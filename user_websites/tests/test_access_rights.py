@@ -76,20 +76,18 @@ class TestAccessRights(HamsTransactionCase):
 
     def test_03_websites_admin_cannot_access_settings(self):
         """
-        night_shift_todo.md "saving ANY Settings page can crash with an
-        AccessError", full design writeup: this test used to assert the
-        OPPOSITE of what it asserts now -- that group_user_websites_
+        Saving ANY Settings page must not hit an AccessError: group_user_websites_
         administrator (a content-moderation-tier role; it does not imply
-        base.group_system) DID have write access to the whole shared
-        res.config.settings model, treating a real privilege-escalation
-        hole as a feature. `ir.model.access.csv` grants are per (model,
-        group), never per field, so that access was never actually scoped
+        base.group_system) must NOT have write access to the whole shared
+        res.config.settings model (a real privilege-escalation
+        hole). `ir.model.access.csv` grants are per (model,
+        group), never per field, so that access would never be scoped
         to this module's own fields -- it covered every field any installed
         module merges onto this one TransientModel (see test_config_
         settings.py's test_04 for the concrete cross-module proof: this
         role could read/write distributed_redis_cache's redis_password and
-        cloudflare's cloudflare_api_token). The access-csv row that granted
-        this (`access_res_config_settings_admin`) has been deleted; this
+        cloudflare's cloudflare_api_token). The access-csv row that would grant
+        this (`access_res_config_settings_admin`) does not exist; this
         role now has no access to res.config.settings at all, matching
         every other non-base.group_system group in both repos.
         """

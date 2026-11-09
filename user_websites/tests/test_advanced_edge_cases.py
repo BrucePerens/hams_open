@@ -196,13 +196,13 @@ class TestAdvancedEdgeCases(HamsHttpCase):
 
     def test_04b_blog_blog_published_read_rule_excludes_inactive(self):
         """
-        Bug-hunt fix (docs/bug_hunt_claims/.../published_read_rules.md):
-        blog_blog_published_read_rule's own domain used to be the
-        unconditional [(1, '=', 1)], which OR-defeated stock Odoo's own
+        See docs/bug_hunt_claims/.../published_read_rules.md.
+        blog_blog_published_read_rule's own domain must not be the
+        unconditional [(1, '=', 1)], which would OR-defeat stock Odoo's own
         website_blog_public rule ([('active', '=', True)], same model, same
         base.group_public/base.group_portal groups). Odoo OR-combines
         same-model group-scoped rule domains, so the combined domain
-        optimized to the broader (1,'=',1) -- any public or portal caller
+        would optimize to the broader (1,'=',1) -- any public or portal caller
         could read every blog.blog record regardless of its active flag,
         including archived ones stock's own rule exists specifically to
         hide. active_test=False bypasses the ORM's own automatic active-field
@@ -232,15 +232,15 @@ class TestAdvancedEdgeCases(HamsHttpCase):
 
     def test_04c_blog_post_published_read_rule_scopes_by_website(self):
         """
-        Bug-hunt fix (docs/bug_hunt_claims/.../published_read_rules.md):
-        blog_post_published_read_rule's own domain used to filter on
-        is_published rather than website_published (a computed field:
+        See docs/bug_hunt_claims/.../published_read_rules.md.
+        blog_post_published_read_rule's own domain must filter on
+        website_published rather than is_published (a computed field:
         is_published AND (no website_id OR website_id matches the current
-        website)) -- OR-defeating stock Odoo's own website_blog_post_public
+        website)) -- is_published alone would OR-defeat stock Odoo's own website_blog_post_public
         rule, which uses website_published. In a multi-website deployment (a
         real, provisioned configuration here: the service account holds
         website.group_multi_website), a blog.post published on one website
-        became readable by a visitor whose request context named a different
+        become readable by a visitor whose request context named a different
         one. Prove a post explicitly bound to Website A is not readable by a
         portal user whose context names Website B, but remains readable from
         Website A itself.
