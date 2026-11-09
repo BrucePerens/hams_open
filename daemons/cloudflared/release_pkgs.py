@@ -355,7 +355,7 @@ def create_rpm_packaging(
         gpg_key_url,
         upload_repo_file=False,
 ):
-    print(f"creating rpm pkgs...")
+    print("creating rpm pkgs...")
     pkg_creator.create_rpm_pkgs(artifacts_path, gpg_key_name)
     repo_file = pkg_creator.create_repo_file(artifacts_path, binary_name, base_url, gpg_key_url)
 

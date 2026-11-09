@@ -11,8 +11,7 @@ import hashlib
 import requests
 import tarfile
 from os import listdir
-from os.path import isfile, join, splitext
-import re
+from os.path import isfile, join
 import subprocess
 from urllib.parse import quote
 
