@@ -15,12 +15,13 @@ class TestKnowledgeHomeNavbarLink(HamsHttpCase):
         self.env["ir.config_parameter"].set_param("auth_signup.invitation_scope", "b2c")
 
     def test_01_site_nav_links_to_knowledge_home(self):
-        # Found live 2026-08-29 across three separate hams_com usability-audit
-        # personas: /knowledge/home is a real, working manual index, but
-        # nothing on the site linked to it, and the site's own search never
-        # indexes article content either -- a newcomer with no prior context
-        # had no way to discover it. Same bug shape as the hams_com nav-link
-        # gaps fixed the same night (QSL Designer, Logbook Anomalies,
+        # /knowledge/home is a real, working manual index listing every
+        # published article (found missing by the screen_reader_user,
+        # satellite_and_propagation and newcomer_technician usability-audit
+        # personas), but the site navigation must link to it: the site's own search does not index
+        # article content either, so a newcomer with no prior context would
+        # otherwise have no way to discover it. The same applies to the
+        # other nav-link checks (QSL Designer, Logbook Anomalies,
         # Propagation Maps, Club Apply).
         response = self.url_open("/knowledge/home")
         self.assertEqual(response.status_code, 200)

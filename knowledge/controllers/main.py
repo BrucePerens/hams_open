@@ -105,15 +105,14 @@ class ManualLibraryController(http.Controller):
                     _md_cache[cache_key] = res
                 return res
             except (KeyError, ValueError, RecursionError) as e:
-                # bug-hunt (2026-09-13): this claim's own residual-risk note flagged
-                # that `except (KeyError, ValueError)` was never checked against every
-                # exception type markdown.markdown() can actually raise for malformed
-                # input. Confirmed empirically: ordinary, trivially-typeable text whose
-                # plain-text content is a long run of "- " list markers (no exploit
-                # tooling needed) drives python-markdown's list parser past Python's
-                # recursion limit, raising RecursionError -- uncaught here, this 500'd
-                # the whole article page on every single view (no surrounding guard in
-                # the caller either). Regression test:
+                # `except (KeyError, ValueError)` alone does not cover every
+                # exception type markdown.markdown() can raise for malformed
+                # input. Ordinary, trivially-typeable text whose plain-text
+                # content is a long run of "- " list markers (no exploit
+                # tooling needed) drives python-markdown's list parser past
+                # Python's recursion limit, raising RecursionError -- uncaught
+                # here, this 500'd the whole article page on every single view
+                # (no surrounding guard in the caller either). Regression test:
                 # test_09_markdown_compiler_deeply_nested_list_falls_back_gracefully
                 # in tests/test_robustness.py.
                 _logger.warning("Markdown compilation failed: %s", e)
@@ -400,30 +399,25 @@ class ManualLibraryController(http.Controller):
     def knowledge_home_alias(self, search="", **kwargs):
         """
         Alias for Odoo-Knowledge-module URL familiarity (/knowledge/home?search=...),
-        added 2026-08-28 at Bruce's direction: found live that "Help" links across
-        roughly a dozen modules were written assuming this URL shape (presumably
-        matching muscle memory from Odoo's own real, proprietary Knowledge module),
-        but this module -- a deliberate from-scratch work-alike, not a wrapper around
-        Odoo's real one -- only ever implemented /manual/search and
-        /manual/by_name/<name>, so every one of those links 404'd. Rather than
-        rewrite every call site (this module's own knowledge_docs manifest name
-        doesn't always match the search string a caller happened to write -- e.g.
-        "Ham Events" vs the real "Ham Events & Nets Manual" -- found while fixing
-        four of these by hand before Bruce redirected to this approach), alias the
-        URL Odoo users already expect onto manual_article_by_name's own exact-match
-        lookup by calling it directly (not reimplementing its domain query here --
-        an earlier draft of this alias duplicated that logic inline, which Bruce
-        flagged as a real DRY risk: the two copies could silently drift apart the
-        next time one gets edited), so a caller's #anchor fragment still lands on
-        the right heading with zero extra clicks. Falls through to the broader
-        ilike-substring search-results page (manual_search) only when
-        manual_article_by_name itself finds no exact match -- e.g. because the
-        caller's search string was imprecise (this module's own knowledge_docs
-        manifest name doesn't always match the search string a caller happened to
-        write -- e.g. "Ham Events" vs the real "Ham Events & Nets Manual", found
-        while fixing four of these links by hand before Bruce redirected to this
-        approach) -- which still finds the right article (ilike is substring, not
-        exact), just one click further away instead of a 404.
+        "Help" links across roughly a dozen modules are written assuming this
+        URL shape (presumably matching Odoo's own real, proprietary Knowledge
+        module), but this module -- a deliberate from-scratch work-alike, not a
+        wrapper around Odoo's real one -- only implements /manual/search and
+        /manual/by_name/<name>, so without this alias every one of those links
+        would 404. Rather than rewrite every call site (this module's own
+        knowledge_docs manifest name doesn't always match the search string a
+        caller happened to write -- e.g. "Ham Events" vs the real "Ham Events &
+        Nets Manual"), alias the URL Odoo users already expect onto
+        manual_article_by_name's own exact-match lookup by calling it directly
+        (not reimplementing its domain query here -- a duplicate copy could
+        silently drift apart the next time one gets edited), so a caller's
+        #anchor fragment still lands on the right heading with zero extra
+        clicks. Falls through to the broader ilike-substring search-results
+        page (manual_search) only when manual_article_by_name itself finds no
+        exact match -- e.g. because the caller's search string was imprecise
+        (see the manifest-name example above) -- which still finds the right
+        article (ilike is substring, not exact), just one click further away
+        instead of a 404.
 
         Deliberately a direct method call, not an HTTP redirect to /manual/search
         or /manual/by_name/<name>: a redirect to by_name would still 404 on every
@@ -447,12 +441,11 @@ class ManualLibraryController(http.Controller):
     @http.route(["/manual/by_name/<string:name>"], type="http", auth="public", website=True)
     def manual_article_by_name(self, name, **kwargs):
         normalized_name = name.replace("+", " ")
-        # Bug-hunt fix (2026-09-09): `normalized_name` is a raw,
-        # attacker/visitor-controlled URL path segment. Odoo's `=ilike`
-        # operator (unlike bare `ilike`) passes its operand to SQL `ILIKE`
+        # `normalized_name` is a raw, attacker/visitor-controlled URL path
+        # segment. Odoo's `=ilike` operator (unlike bare `ilike`) passes its operand to SQL `ILIKE`
         # verbatim -- no wildcard-wrapping AND no escaping of `%`/`_`
-        # (same root cause already found and fixed this session in
-        # edge_routing/models/res_users.py and routing_mixin.py). A
+        # (the same applies in edge_routing/models/res_users.py and
+        # routing_mixin.py). A
         # request for `/manual/by_name/%25` (URL-decoded to a bare "%")
         # would match every article's `name` instead of failing to find
         # an exact match, defeating this endpoint's whole "exact name"

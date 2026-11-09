@@ -182,12 +182,12 @@ class TestManualControllers(HamsHttpCase):
         # Tests [@ANCHOR: knowledge:COMM_knowledge_home_alias]
 
         # Tests [@ANCHOR: knowledge:COMM_manual_article_by_name]
-        # Found live 2026-08-28: roughly a dozen "Help" links across other modules were
-        # written assuming Odoo's real Knowledge module's /knowledge/home?search=...
-        # URL shape, but this module -- a deliberate from-scratch work-alike, not a
-        # wrapper around Odoo's real one -- never implemented that route at all, so
-        # every one of those links 404'd. /knowledge/home is the alias added to fix
-        # that without rewriting every call site.
+        # Roughly a dozen "Help" links across other modules assume Odoo's real
+        # Knowledge module's /knowledge/home?search=... URL shape, but this
+        # module -- a deliberate from-scratch work-alike, not a wrapper around
+        # Odoo's real one -- does not implement that route natively, so
+        # /knowledge/home is an alias that keeps those links working without
+        # rewriting every call site.
         self.authenticate(None, None)
         response = self.url_open(
             "/knowledge/home?search=Public+Root+API", allow_redirects=False
@@ -202,7 +202,7 @@ class TestManualControllers(HamsHttpCase):
 
     def test_08_knowledge_home_alias_falls_back_to_search_results_on_no_exact_match(self):
         # A caller's search string doesn't always exactly match the real article
-        # name (found live: "Ham Events" vs the real "Ham Events & Nets Manual") --
+        # name (e.g. "Ham Events" vs the real "Ham Events & Nets Manual") --
         # must not 404 in that case, just show the same substring-search results
         # page /manual/search already renders.
         self.authenticate(None, None)
@@ -221,7 +221,7 @@ class TestManualControllers(HamsHttpCase):
 
     def test_10_manual_article_by_name_does_not_treat_percent_as_a_wildcard(self):
         # Tests [@ANCHOR: knowledge:COMM_manual_article_by_name]
-        # Bug-hunt regression (2026-09-09): manual_article_by_name built its
+        # manual_article_by_name builds its
         # domain with Odoo's `=ilike` operator directly against a raw,
         # visitor-controlled URL path segment. `=ilike` passes its operand
         # to SQL ILIKE verbatim -- no escaping of `%`/`_` -- so a request

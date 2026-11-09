@@ -13,9 +13,9 @@ def _hoot_unit_test_error_checker(message):
 
 @tagged("post_install", "-at_install")
 class TestKnowledgeHoot(HamsHttpCase):
-    # manual_toc.test.js had real coverage but no tests/test_*.py runner
-    # executing it via browser_js() -- night_shift_todo/medium/hoot-
-    # runner-coverage-13-modules-d5b7c88b.md's own tracked gap.
+    # Runs manual_toc.test.js (Hoot tag knowledge_manual_toc) via
+    # browser_js(), so that suite is executed by the regular
+    # tests/test_*.py runner instead of only by hand in the browser.
     def test_manual_toc_hoot_suite_passes(self):
         self.browser_js(
             "/web/tests?headless&loglevel=2&preset=desktop&timeout=15000&tag=knowledge_manual_toc",

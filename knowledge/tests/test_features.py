@@ -132,5 +132,5 @@ class TestManualFeatures(HamsHttpCase):
         # this guide describes backend authoring workflow ("Go to the Manuals
         # app in your Odoo dashboard") aimed at staff, not public site visitors,
         # and its manifest entry does not opt in with "public": True. See the
-        # zero_sudo internal-doc-exposure fix, night_shift_todo.md.
+        # zero_sudo internal-doc-exposure guard.
         self.assertFalse(article.is_published)
