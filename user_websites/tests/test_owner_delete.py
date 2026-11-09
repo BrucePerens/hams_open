@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """Delete and Restore for the owner's pages and blog posts.
 
-Bruce, 2026-10-13: "There is no 'delete' button on web pages or blog posts." The platform retains
+Owners need a delete button on web pages and blog posts. The platform retains
 data, so Delete archives the record and hides it everywhere; it is restorable; the home page stays.
 """
 import odoo.http

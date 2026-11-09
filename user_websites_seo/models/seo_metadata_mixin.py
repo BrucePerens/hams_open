@@ -37,14 +37,14 @@ class SEOMetadataMixin(models.AbstractModel):
         seo_vals = {k: v for k, v in vals.items() if k in seo_fields}
         other_vals = {k: v for k, v in vals.items() if k not in seo_fields}
 
-        # bug-hunt (2026-09-09): permission for `seo_vals` must be checked
+        # Permission for `seo_vals` must be checked
         # BEFORE `other_vals` is written, not after. This mixin's own
         # `_check_seo_write_permission()` override can be STRICTER than the
         # model's normal write ACL (res.users: self-only; user.websites.group:
         # member-only) -- so a caller with genuine write access to the
         # record (e.g. a real Odoo admin not in the
         # user_websites_administrator convenience-bypass group above) but
-        # who fails the mixin's own extra check could previously get a
+        # who fails the mixin's own extra check could otherwise get a
         # single write(vals) call that partially applies: `other_vals`
         # already persisted via super().write() by the time
         # _check_seo_write_permission() raises on the seo_vals half,

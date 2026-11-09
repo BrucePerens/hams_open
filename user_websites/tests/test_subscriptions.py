@@ -188,14 +188,14 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
             template.send_mail(test_post.id, force_send=False)   # audit-ignore-mail: model_id verified against user_websites_data.xml (website_blog.model_blog_post, matches blog.post) -- Tested by [@ANCHOR: COMM_test_weekly_digest_mail_template]
 
     def test_01b_weekly_digest_view_excludes_a_post_older_than_7_days_in_real_utc_terms(self):
-        # bug-hunt (2026-09-13): user_websites_weekly_digest_view.md's own Finding 2 --
+        # user_websites_weekly_digest_view.md, finding 2:
         # `create_date >= now() - interval '7 days'` compared a naive (UTC-per-Odoo-
         # convention) timestamp column against `now()` (timestamptz), which forces
         # PostgreSQL to implicitly reinterpret the naive value in the SESSION's own
-        # TimeZone GUC (confirmed America/Los_Angeles on this dev box) rather than as
+        # TimeZone GUC (e.g. America/Los_Angeles) rather than as
         # UTC -- widening the effective window by up to the session's own UTC offset
         # (7-8 hours). A post genuinely more than 7 days old in real UTC terms (here,
-        # 7 days + 3 hours) was incorrectly still included. Fixed by converting `now()`
+        # 7 days + 3 hours) must not be included. This is done by converting `now()`
         # to a naive UTC timestamp via `AT TIME ZONE 'UTC'` before subtracting, making
         # both sides of the comparison naive (no implicit session-timezone cast).
         # Tests [@ANCHOR: user_websites:COMM_weekly_digest_view_init]
@@ -224,13 +224,13 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
             )
 
     def test_01c_weekly_digest_view_ids_are_stable_across_repeated_queries(self):
-        # bug-hunt (2026-09-13): user_websites_weekly_digest_view.md's own Finding 1 --
+        # user_websites_weekly_digest_view.md, finding 1:
         # `row_number() OVER ()` (no ORDER BY inside the window) numbered rows in
         # whatever order Postgres's hash-aggregate happened to produce, which is not
         # guaranteed stable across independent executions of the same view SQL -- and
         # since this is a plain (non-materialized) VIEW, `search()` and the later
         # `_read()` triggered by the first field access are each a SEPARATE execution.
-        # Fixed by adding `ORDER BY f.partner_id, u.partner_id` (and the group branch's
+        # The view adds `ORDER BY f.partner_id, u.partner_id` (and the group branch's
         # `f.partner_id, g.id`) inside the window function, making the id assignment a
         # deterministic function of the GROUP BY key rather than of aggregation
         # internals. This test creates a second, independent digest row (a second

@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 """The eligibility extension point: open to everyone by default, hides without deleting when narrowed.
 
-Bruce, 2026-10-13: hams.com offers a website and blog only to a verified licensed amateur who has
+Policy: hams.com offers a website
 accepted the agreement and done the $1 verification. This module only provides the hook.
 """
 import odoo.http

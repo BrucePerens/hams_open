@@ -236,16 +236,14 @@ class TestSDKExtensibility(RealTransactionCase):
         # Tests [@ANCHOR: mixin_proxy_ownership_create]
         """Verify a public/anonymous user cannot create an orphaned, unowned record.
 
-        Correction (docs/bug_hunt_claims/.../acl_website_page.md): this
-        docstring used to claim "website.page's own ACL already denies
-        base.group_public any create right at all, so this path can't be
-        reached through create() as a real anonymous visitor" -- that was
-        false. create() never called self.check_access("create") against
-        the real caller (unlike write()/unlink()), so
-        access_website_page_public's perm_create=0 was never actually
+        See docs/bug_hunt_claims/.../acl_website_page.md. website.page's own ACL
+        does not make this path unreachable through create() for a real anonymous
+        visitor: create() calls self.check_access("create") against the real
+        caller (like write()/unlink()), because otherwise
+        access_website_page_public's perm_create=0 would not be
         enforced; a public user could reach create() and pass this exact
         mixin guard by explicitly setting owner_user_id to their own
-        (public) user id. That gap is now closed directly in create()
+        (public) user id. That is prevented directly in create()
         (see website_page.py's own create(), and
         test_orm_security.py's test_01b_prevent_public_user_create_via_
         self_ownership, which exercises the real create() path rather than

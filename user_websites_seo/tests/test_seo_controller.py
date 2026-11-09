@@ -35,22 +35,21 @@ class TestSEOController(HamsTransactionCase):
         ADR-0078 -- not merely that it returns *some* object bound to
         whatever env it started with.
 
-        bug-hunt (2026-09-11, non-discriminating-test / bug class 2): the
-        original version of this test never installed an
-        `odoo.http.request` at all. `odoo.http.request` is a werkzeug
+        This test installs a mock `odoo.http.request`; without one it would be non-discriminating:
+        `odoo.http.request` is a werkzeug
         `LocalProxy` over an empty `LocalStack` outside a real HTTP
-        dispatch (confirmed by reading `_request_stack`/`LocalProxy.__bool__`
+        dispatch (see `_request_stack`/`LocalProxy.__bool__`
         in `werkzeug/local.py`: an unbound proxy's `__bool__` uses the
         `fallback=lambda self: False` path, i.e. `bool(request)` is
         `False`, not an exception), so `HamsTransactionCase` -- a plain
         `TransactionCase`, not an `HttpCase` -- never has one bound. The
-        controller's own `if request and request.env:` guard therefore
-        short-circuited on the FIRST operand and the de-elevation line
-        (`user = user.with_user(request.env.user)`) never ran. The old
-        assertion (`main_obj.env.uid == self.regular_user.env.uid`) was
-        then comparing `self.regular_user`'s own env against itself,
+        controller's own `if request and request.env:` guard would therefore
+        short-circuit on the FIRST operand and the de-elevation line
+        (`user = user.with_user(request.env.user)`) would never run. An
+        assertion (`main_obj.env.uid == self.regular_user.env.uid`) would be
+        comparing `self.regular_user`'s own env against itself,
         unmodified -- true whether de-elevation fires, is broken, or is
-        deleted outright. Fixed by actually installing a mock `request`
+        deleted outright. So this test installs a mock `request`
         (matching this repo's own `cloudflare/tests/test_cloudflare_headers.py`
         pattern for mocking `odoo.http.request` in a non-HttpCase test) whose
         `.env.user` is a THIRD user, distinct from both `self.regular_user`

@@ -87,8 +87,7 @@ class TestSEOModels(RealTransactionCase):
     def test_check_access_rule_res_users_seo_self_write_survives_a_non_main_company(self):
         # Tests [@ANCHOR: COMM_res_users_seo_write_elevation]
 
-        # night_shift_todo/medium/seo-mixin-res-users-multi-company-elevation-4765a849.md
-        # theorized (from reading the code, not from running it) that a
+        # A possible concern (from reading the code, not from running it) is that a
         # portal user outside the SEO service account's company_ids
         # (user_websites/data/user_websites_data.xml: [base.main_company]
         # only) would be wrongly denied writing their own SEO fields, since
@@ -96,7 +95,7 @@ class TestSEOModels(RealTransactionCase):
         # subject to Odoo core's global res_users_rule
         # (['|', ('share','=',False), ('company_ids','in',company_ids)]).
         #
-        # Built a real second res.company and a portal user scoped to it
+        # This test builds a real second res.company and a portal user scoped to it
         # to check that theory against real behavior, not just the code.
         # It does not reproduce: res.users.write() (odoo/addons/base/
         # models/res_users.py) has its OWN, earlier self-write bypass --
@@ -186,7 +185,7 @@ class TestSEOModels(RealTransactionCase):
     def test_check_access_rule_user_websites_group_seo_self_write_denied_for_a_non_main_company(self):
         # Tests [@ANCHOR: COMM_user_websites_group_seo_write_elevation]
 
-        # night_shift_todo/medium/seo-mixin-group-company-elevation-b12c2366.md: the narrower,
+        # The narrower,
         # not-yet-confirmed sibling of
         # test_check_access_rule_res_users_seo_self_write_survives_a_non_main_company above.
         # That test found res.users' own self-write is SHIELDED from
