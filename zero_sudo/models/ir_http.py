@@ -13,13 +13,11 @@ from odoo.exceptions import AccessError
 from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache
 
 # [@ANCHOR: zero_sudo:hardened_cookie_names]
-# night_shift_todo's own "session-cookie-missing-secure-and-samesite-attributes"
-# finding, 2026-09-22: Odoo's own session_id cookie (the real authentication
+# Odoo's own session_id cookie (the real authentication
 # token) and frontend_lang carry HttpOnly but neither Secure nor SameSite, even
 # when the request genuinely arrived over HTTPS via the reverse proxy
 # (X-Forwarded-Proto correctly reflected through proxy_mode). Scoped to exactly
-# these two cookie names, matching that investigation's own documented scope --
-# a cookie set explicitly elsewhere with its own deliberate flags (e.g.
+# these two cookie names -- a cookie set explicitly elsewhere with its own deliberate flags (e.g.
 # gdpr_export_token, set by user_websites' privacy_export_zip() with its own
 # explicit secure=/httponly=/samesite= already) is left untouched here.
 _HARDENED_COOKIE_NAMES = {"session_id", "frontend_lang"}
@@ -72,15 +70,13 @@ class IrHttp(models.AbstractModel):
             return res
         hardened = [_harden_cookie_header(h, is_https) for h in cookie_headers]
         if hardened != cookie_headers:
-            # Real bug found live in production, 2026-09-23: `del
+            # `del
             # response.headers["Set-Cookie"]` raises `AttributeError:
             # __delitem__` on this runtime's actual response.headers object
             # (Response.headers goes through this codebase's own
             # odoo/tools/facade.py wrapping, which doesn't forward the
             # dunder `__delitem__` the way plain attribute access forwards
-            # ordinary methods) -- confirmed directly in a real `odoo shell`
-            # against a real odoo.http.Response object, reproducing the
-            # exact site-wide 500 this caused on every single page (every
+            # ordinary methods), which would 500 every single page (every
             # response carries a session_id cookie). setlist() replaces the
             # whole header in one call and has no such gap.
             response.headers.setlist("Set-Cookie", hardened)
@@ -100,17 +96,16 @@ class IrHttp(models.AbstractModel):
     @api.model
     # [@ANCHOR: zero_sudo:is_rpc_path_exempt_from_service_account_block]
     def _is_rpc_path_exempt_from_service_account_block(self, path):
-        # bug-hunt (2026-09-13): a bare .startswith('/jsonrpc') /
-        # .startswith('/xmlrpc') matched by PREFIX with no delimiter
+        # A bare .startswith('/jsonrpc') / .startswith('/xmlrpc') would
+        # match by PREFIX with no delimiter
         # boundary, so a hypothetical future route sharing that prefix
         # without actually being one of Odoo's two real RPC endpoints
         # (exactly '/jsonrpc', or '/xmlrpc/...') would silently bypass this
         # check. Confirmed against odoo/addons/rpc/controllers/
         # {jsonrpc,xmlrpc}.py: the real routes are the exact path '/jsonrpc'
-        # and the '/xmlrpc/' prefix (with a trailing separator) -- no
-        # currently-defined route in this codebase collides today (grepped
-        # repo-wide), so this was latent, not live, but cheap to close
-        # outright. Split out as its own small, pure, directly-unit-testable
+        # and the '/xmlrpc/' prefix (with a trailing separator). No
+        # currently-defined route in this codebase collides, so the risk is
+        # latent. Split out as its own small, pure, directly-unit-testable
         # method rather than inlined string logic buried inside
         # `_authenticate` (which needs a real HTTP request context to
         # exercise at all).

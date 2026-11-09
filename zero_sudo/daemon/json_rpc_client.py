@@ -52,26 +52,16 @@ Missing LOGIN or KEY.
             raise ValueError(err_msg)
 
     def call(self, model, method, ids=(), **kwargs):
-        # bug-hunt (2026-09-13): this used to send a positional `args` list
-        # wrapped inside the JSON body, and authenticated with a home-grown
-        # X-Auth-Signature/X-Auth-Nonce HMAC scheme instead of a real
-        # Authorization header. Neither matches Odoo's actual JSON-2 wire
-        # protocol: odoo.http.Json2Dispatcher.dispatch() merges the JSON
-        # body's own top-level keys straight into the endpoint's keyword
-        # arguments (confirmed by reading odoo/http.py directly), so a
-        # caller must send `ids` plus the target method's own real keyword
-        # arguments (e.g. `domain=[...]` for search()) -- there is no
-        # generic "args" envelope Odoo's route ever reads. And the route
-        # itself is declared `auth='bearer'` (odoo/addons/rpc/controllers/
-        # json2.py), which requires a real `Authorization: Bearer <api_key>`
-        # header verified against res.users.apikeys -- confirmed by reading
-        # ir_http.py's own _auth_method_bearer, no server-side code anywhere
-        # in this codebase ever validated the old X-Auth-Signature headers.
-        # This client was therefore non-functional against the real
-        # endpoint from the start; grep confirms it has zero production
-        # callers today (only its own tests, which mocked out
-        # requests.Session entirely and so never caught either defect).
-        # Fixed to match the real protocol and the already-working
+        # Odoo's JSON-2 wire protocol: odoo.http.Json2Dispatcher.dispatch()
+        # merges the JSON body's own top-level keys straight into the
+        # endpoint's keyword arguments, so a caller must send `ids` plus the
+        # target method's own real keyword arguments (e.g. `domain=[...]`
+        # for search()) -- there is no generic "args" envelope Odoo's route
+        # ever reads. The route itself is declared `auth='bearer'`
+        # (odoo/addons/rpc/controllers/json2.py), which requires a real
+        # `Authorization: Bearer <api_key>` header verified against
+        # res.users.apikeys (ir_http.py's _auth_method_bearer); no
+        # server-side code validates custom signature headers. Matches the
         # reference implementation in backup_management/daemon/main.py's
         # _json2_call().
         url = f"{self.base_url}/json/2/{model}/{method}"
@@ -94,23 +84,19 @@ Failed to decode JSON response: {e}
 """.strip()
             raise RuntimeError(err_msg)
 
-        # bug-hunt (2026-09-13): the previous version of this check also
-        # OR'd in a bare substring match ("AccessError"/"AccessDenied" in
-        # str(err_obj)) against the whole, unstructured error object --
-        # confirmed unnecessary AND risky by reading odoo/exceptions.py and
-        # Json2Dispatcher.handle_error directly: EVERY failure a credential
-        # reload could ever fix already surfaces as a real HTTP 401
-        # (werkzeug Unauthorized, from _auth_method_bearer on a rejected/
-        # stale bearer token) or 403 (AccessDenied/AccessError, both
-        # UserError subclasses with http_status = 403) -- the status-code
-        # check below is already complete and structurally guaranteed, not
-        # a guess. The substring match added no real coverage and could
-        # misfire on an UNRELATED business error (e.g. a 422
-        # ValidationError whose own message text happens to contain the
-        # word "AccessError") that a credential reload could never fix --
-        # triggering a needless duplicate retry (a real risk for a
-        # non-idempotent call: create/write, not just search) instead of
-        # surfacing the real error immediately.
+        # The status-code check below is deliberately the only test: every
+        # failure a credential reload could fix already surfaces as a real
+        # HTTP 401 (werkzeug Unauthorized, from _auth_method_bearer on a
+        # rejected/stale bearer token) or 403 (AccessDenied/AccessError,
+        # both UserError subclasses with http_status = 403)
+        # (odoo/exceptions.py, Json2Dispatcher.handle_error). A bare
+        # substring match ("AccessError"/"AccessDenied" in str(err_obj))
+        # would add no coverage and could misfire on an UNRELATED business
+        # error (e.g. a 422 ValidationError whose own message text happens
+        # to contain the word "AccessError") that a credential reload could
+        # never fix -- triggering a needless duplicate retry (a real risk
+        # for a non-idempotent call: create/write, not just search) instead
+        # of surfacing the real error immediately.
         if response.status_code in (401, 403):
             # [@ANCHOR: COMM_json_rpc_self_healing_retry]
             warn_msg = """

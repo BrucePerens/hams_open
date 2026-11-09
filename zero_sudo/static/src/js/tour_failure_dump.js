@@ -161,8 +161,8 @@ const originalFetch = window.fetch;
 // A test that deliberately makes its own server unreachable (ham_shack's offline tour, run under
 // tools/test.py --offline-isolation) must see the real network failure: both rewrites below exist
 // to hide backend-teardown noise, and during such a test they would turn the very condition under
-// test into a fake HTTP 200 (found 2026-10-03: the offline tour's "the server is unreachable" check
-// got `{}` with status 200 from a server that was refusing connections). The test opts in by
+// test into a fake HTTP 200 (the offline tour's "the server is unreachable" check
+// would get `{}` with status 200 from a server that was refusing connections). The test opts in by
 // setting sessionStorage "hams_real_network_failures" to "1"; sessionStorage survives the page
 // navigations inside one browser tab, and the flag is read on every call, so setting it takes
 // effect at once. Anything unreadable counts as "not requested", the default behaviour.
@@ -194,14 +194,12 @@ window.fetch = async function(...args) {
             // unrelated local service (e.g. the local relay daemon on a
             // different port) is NOT reachable -- got silently rewritten
             // into a fake HTTP 200 too, so the tour observed "reachable"
-            // no matter what actually happened. Confirmed via a real
-            // diagnostic during a real test run, not assumed -- see
-            // night_shift_todo.md's writeup of the offline-page relay
-            // probe this broke. Narrowed to same-origin only, which
-            // preserves the original backend-RPC-teardown behavior
-            // exactly (this bug only ever affected other origins) and
-            // checked directly against every hardcoded-origin fetch()
-            // call in both repos before landing this, not guessed at.
+            // no matter what actually happened (the offline-page relay probe
+            // depends on seeing the real failure). The suppression is
+            // therefore limited to same-origin requests, which preserves the
+            // backend-RPC-teardown behavior (other origins were never
+            // affected by teardown noise); every hardcoded-origin fetch()
+            // call in both repos was checked against this scoping.
             let requestUrl = "";
             try {
                 requestUrl = typeof args[0] === "string" ? args[0] : (args[0] && args[0].url) || "";

@@ -171,9 +171,7 @@ class Module(models.Model):
         # `knowledge.article` search: two different modules can plausibly
         # pick the same doc `name` ("Getting Started", "Overview", ...), and
         # a shared-`name` article lookup would let the second module's
-        # bootstrap pass silently overwrite the first module's article. See
-        # night_shift_todo.md and the install_single_doc bug-hunt claim for
-        # the full history of this fix.
+        # bootstrap pass silently overwrite the first module's article.
         env_svc = utils._get_service_env("zero_sudo.odoo_facility_service_internal")
         all_kv_keys = hash_keys + article_id_keys
         records = env_svc["zero_sudo.kv"].search([("key", "in", all_kv_keys)], limit=len(all_kv_keys))
@@ -214,7 +212,7 @@ class Module(models.Model):
     @api.model
     # [@ANCHOR: zero_sudo:is_path_within_module_dir]
     def _is_path_within_module_dir(self, base_dir, resolved_path):
-        # bug-hunt (2026-09-13): a bare .startswith(base_dir) matches by
+        # A bare .startswith(base_dir) matches by
         # PREFIX with no path-separator boundary -- e.g. base_dir
         # ".../addons/zero_sudo" is a plain string-prefix of a sibling
         # directory ".../addons/zero_sudo_evil", so a resolved path escaping
@@ -307,12 +305,11 @@ class Module(models.Model):
         if isinstance(sequence, int) and not isinstance(sequence, bool):
             vals["sequence"] = sequence
 
-        # bug-hunt (2026-09-13): article identity is looked up by this
+        # Article identity is looked up by this
         # module's OWN previously-recorded article id, never by searching
-        # `knowledge.article` on the shared, collision-prone `name` field --
-        # see the module-level docstring on the caller and the
-        # install_single_doc bug-hunt claim for the full "two modules pick
-        # the same doc name" scenario this closes. The id is stored in a KV
+        # `knowledge.article` on the shared, collision-prone `name` field
+        # (two modules can pick the same doc name; see the comment at the
+        # caller). The id is stored in a KV
         # entry keyed the same way as the content hash (module_name, name),
         # so it can never resolve to a DIFFERENT module's article even if
         # both chose an identical display name.

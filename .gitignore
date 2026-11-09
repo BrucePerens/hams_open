@@ -1,5 +1,5 @@
 # Claude Code agent worktrees -- created locally per-session for isolated
-# subagent dispatches (Agent tool, isolation: "worktree"), never meant to be
+# agent sessions (isolation: "worktree"), never meant to be
 # committed; a stray one otherwise shows up as untracked noise in every
 # `git status` for the rest of the session.
 .claude/worktrees/
@@ -48,8 +48,7 @@ task_workspace_*/
 # Stage 2 coverage instrumentation output (ADR 0090 / ANCHOR_COVERAGE_AND_REMEDIATION_PLAN.md)
 coverage_report/
 
-# Bug-hunt finding (pager_duty models/pager_check.py's _get_config_path claim, 2026-09-09):
-# this is action_push_to_json()'s dev-environment fallback output path, used when
+# This is action_push_to_json()'s dev-environment fallback output path, used when
 # /opt/hams/etc isn't writable. It can carry plaintext dbpass/SMTP credentials for
 # every monitored check -- it must never be a git-tracked file in this PUBLIC repo.
 # A generated copy with no real secrets was already committed before this rule existed
