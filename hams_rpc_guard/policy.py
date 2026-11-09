@@ -6,7 +6,8 @@
 The decision is a pure function of facts about the call (`Call`) and the declarations (`exposure.Exposure`), so it is
 tested without a database. `patch.py` gathers the facts from a live request and applies the verdict.
 
-Rules, in order, for a call that arrives over `/web/dataset/call_kw`, `/web/dataset/call_button` or an external RPC
+A service account (`zero_sudo` `is_service_account`) is classified before the portal test, because most service
+accounts are portal-type users. Rules, in order, for a call that arrives over `/web/dataset/call_kw`, `/web/dataset/call_button` or an external RPC
 endpoint:
 
 1. A **public or portal** user (strict mode): allowed only if the pair is declared `portal`. This covers stock models too:

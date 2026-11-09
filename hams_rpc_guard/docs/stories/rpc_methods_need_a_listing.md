@@ -27,6 +27,8 @@ A call from Python code (a cron, a daemon's own model code, a test) has no such 
    `[@ANCHOR: hams_rpc_guard:call_init]` `[@ANCHOR: hams_rpc_guard:module_is_managed]`
    `[@ANCHOR: hams_rpc_guard:check_rpc_call]`
 4. The decision follows fixed rules, in order. `[@ANCHOR: hams_rpc_guard:decide]` `[@ANCHOR: hams_rpc_guard:declared]`
+   * (A service account is recognised first: most of ours are portal-type users, and a daemon must never be judged as a
+     portal visitor.)
    * A portal or public user may call only a pair declared `portal` (or a method marked `@public_rpc(portal=True)`).
      This applies to stock models too.
    * A service account with a `clients` entry may call only the pairs in its entry, so a compromised daemon cannot call
