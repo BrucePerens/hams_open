@@ -62,7 +62,7 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                 try:
                     os.killpg(os.getpgid(process.pid), signal.SIGTERM)
                 except ProcessLookupError:
-                    # bug-hunt (2026-09-13): process.poll() above only proves
+                    # process.poll() above only proves
                     # the process was still alive at THAT instant -- it can
                     # exit on its own (or be reaped by something else) in the
                     # window between that check and this os.getpgid() call,
@@ -93,17 +93,15 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
     @api.model
     def _poll_health_check(self, url, timeout=30, interval=1):
         """Polls a URL until it returns 200 OK or times out."""
-        # bug-hunt (2026-09-13): urllib.request.urlopen() honors whatever
+        # urllib.request.urlopen() honors whatever
         # scheme the URL names, including file:// -- with no restriction
         # here, a caller that ever builds `url` from anything less trusted
         # than a hardcoded localhost string (this method's own real callers
-        # today are all test-only, per a repo-wide grep, so this was latent
-        # not live) could turn this health check into an arbitrary local
+        # are all test-only, so this is latent) could turn this health check into an arbitrary local
         # file read or a request against an unintended internal endpoint.
         # This method is already private (RPC-unreachable, per
         # test_daemon_utils_rpc_security's own "prevent SSRF via RPC"
-        # assertion), so this is defense-in-depth, not a fix for a live
-        # exploit.
+        # assertion), so this is defense-in-depth.
         parsed_scheme = urllib.parse.urlsplit(url).scheme
         if parsed_scheme not in ("http", "https"):
             raise UserError(
@@ -129,13 +127,13 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
                     if response.status == 200:
                         _logger.info("Health check %s passed.", url)
                         return True
-            # bug-hunt (2026-09-27): `urllib.error.URLError` alone does NOT
+            # `urllib.error.URLError` alone does NOT
             # cover the two failure modes a daemon that is still starting up
-            # produces most often, so this retry-until-healthy loop used to
-            # abort on the first one and propagate a raw, unwrapped exception
-            # instead of polling on and then failing with this method's own
-            # `UserError`. Confirmed empirically against a real loopback
-            # socket, not reasoned from the docs: `urllib.request`'s
+            # produces most often; without the wider tuple the
+            # retry-until-healthy loop would abort on the first one and
+            # propagate a raw, unwrapped exception instead of polling on and
+            # then failing with this method's own `UserError`.
+            # Observed against a real loopback socket: `urllib.request`'s
             # `AbstractHTTPHandler.do_open` wraps only `h.request(...)` in its
             # `except OSError: raise URLError(err)`; the following
             # `r = h.getresponse()` is OUTSIDE that wrapper, so

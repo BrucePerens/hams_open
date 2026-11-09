@@ -48,9 +48,8 @@ class ZeroSudoHome(Home):
                 # Log the blocked attempt before logging out
                 # We assume the facility account context for logging
                 #
-                # bug-hunt (2026-09-27): the IP recorded here is
-                # `_get_trusted_client_ip()`, not the raw
-                # `request.httprequest.remote_addr` this used to pass.
+                # The IP recorded here is `_get_trusted_client_ip()`, not the
+                # raw `request.httprequest.remote_addr`.
                 # This deployment is Cloudflare-Tunnel-only, with
                 # cloudflared on the same host as the Odoo HTTP server, so
                 # the transport peer of a real external request is
@@ -59,8 +58,7 @@ class ZeroSudoHome(Home):
                 # log this module maintains unable to answer the only
                 # question it exists to answer. `zero_sudo.security.utils`
                 # -- already instantiated on the line above for the service
-                # env -- has carried the correct resolver for this since
-                # 2026-09-11; it was simply never wired up here. It
+                # env -- provides the correct resolver. It
                 # degrades to exactly `remote_addr` whenever the peer is
                 # NOT loopback, so this is never worse than what it
                 # replaces.
@@ -90,7 +88,7 @@ class ZeroSudoSession(Session):
     # [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
     # ---
     # # Verified by [@ANCHOR: zero_sudo:COMM_test_json_session_authenticate_interceptor]
-    # bug-hunt (2026-09-13): `/web/login` (ZeroSudoHome.web_login above) is
+    # `/web/login` (ZeroSudoHome.web_login above) is
     # NOT the only real session-establishing login endpoint -- Odoo's own
     # web client (and any third-party JSON client) logs in via this exact
     # JSON-RPC route (odoo/addons/web/controllers/session.py's
@@ -109,29 +107,26 @@ class ZeroSudoSession(Session):
     # login_blocking.md's own "Even if a service account somehow already
     # has a live session... _authenticate() re-checks on every single
     # authenticated request dispatch" claim for this one specific request.
-    # (bug-hunt (2026-09-13), second pass: this used to `raise AccessDenied`
-    # here instead of returning. Confirmed by reading odoo/service/model.py's
-    # `retrying()` line by line: it only calls `env.cr.commit()` AFTER
+    # (This returns instead of raising `AccessDenied`. In
+    # odoo/service/model.py's `retrying()`, it only calls `env.cr.commit()` AFTER
     # `func()` (this whole dispatch, our override included) returns without
     # raising -- any exception takes the `except Exception: ...; raise`
     # branch instead, which resets the transaction and re-raises WITHOUT
     # ever committing, and `_serve_db()`'s own `finally: cr.close()` then
     # rolls back via `Cursor.close()` -> `_close(False)` -> `self.
-    # rollback()` (also confirmed directly, `odoo/sql_db.py`). Raising
-    # therefore silently discarded the very `zero_sudo.security.log` row
-    # this override exists to create -- the audit trail this whole
-    # interceptor is supposed to add would never actually have persisted.
-    # Fixed to mirror Odoo core's own real precedent for "don't complete
+    # rollback()` (`odoo/sql_db.py`). Raising
+    # would therefore silently discard the very `zero_sudo.security.log` row
+    # this override exists to create, so the audit trail would never
+    # persist. This mirrors Odoo core's own precedent for "don't complete
     # this login" in this exact function: `super().authenticate()`'s own
     # MFA-mismatch branch above already returns `{"uid": None}` rather than
     # raising, for the identical reason -- a normal return commits the
     # transaction (the log row persists for real) and lets
     # Dispatcher.post_dispatch() run (so `request.session.logout()` below
-    # is now actually load-bearing -- the rotated/logged-out session gets
-    # saved -- not defense-in-depth-only as an earlier draft of this
-    # comment claimed).)
+    # is load-bearing -- the rotated/logged-out session gets
+    # saved -- not defense-in-depth only.)
     #
-    # 2026-09-16: `super().authenticate()` itself builds and returns the
+    # `super().authenticate()` itself builds and returns the
     # `session_info()` payload before this method ever sees the result, and
     # `session_info()` reads `web.max_file_upload_size` via `ir_config_parameter.
     # get_param()`. `ham_base`'s get_param() refuses any key not on its
@@ -154,7 +149,7 @@ class ZeroSudoSession(Session):
             )
             res = request.env.cr.fetchone()
             if res and res[1]:
-                # bug-hunt (2026-09-27): verify the credential through Odoo
+                # Verify the credential through Odoo
                 # core's OWN authentication path -- `Session.authenticate()`
                 # in odoo/http.py, which is exactly what
                 # `super().authenticate()` calls, including
@@ -163,28 +158,28 @@ class ZeroSudoSession(Session):
                 #
                 # This is deliberately NOT `super().authenticate()`: super()
                 # goes on to build `session_info()`, which is the entire
-                # reason the 2026-09-16 pre-check above exists (see that
+                # reason the pre-check above exists (see that
                 # note). Calling the session-level primitive directly gets
                 # the credential check without ever reaching session_info().
                 #
                 # Why this matters: `/web/session/authenticate` is
-                # `auth="none"`. The 2026-09-16 revision returned
-                # `{"uid": None}` (and wrote a committed
-                # `zero_sudo.security.log` row) purely on a LOGIN match,
-                # with the password never examined. Every service-account
-                # login in this project is declared in public XML in this
+                # `auth="none"`. Returning
+                # `{"uid": None}` (and writing a committed
+                # `zero_sudo.security.log` row) on a LOGIN match alone, with
+                # the password never examined, would be abusable. Every
+                # service-account login in this project is declared in public XML in this
                 # very repository, so any anonymous caller could name one
                 # and drive an unlimited number of committed audit rows --
                 # unthrottled, because returning before super() also skips
                 # core's own login cooldown, and retained forever (nothing
-                # purges `zero_sudo.security.log`). It also destroyed the
-                # row's meaning: `service_account_blocked` stopped implying
-                # "someone actually held this account's credentials" and
-                # started meaning "someone typed this name," so a real
-                # credential compromise became indistinguishable from a
+                # purges `zero_sudo.security.log`). It would also destroy the
+                # row's meaning: `service_account_blocked` must imply
+                # "someone actually held this account's credentials", not
+                # "someone typed this name", or a real
+                # credential compromise becomes indistinguishable from a
                 # background scan in the one log built to tell them apart.
                 #
-                # A wrong password now raises core's own `AccessDenied` from
+                # A wrong password raises core's own `AccessDenied` from
                 # inside `session.authenticate()`, exactly as an unmatched
                 # login already does, which `retrying()` rolls back -- no
                 # row, no commit. A CORRECT password lands here, which is
@@ -220,7 +215,7 @@ class ZeroSudoSession(Session):
             res = request.env.cr.fetchone()
             if res and res[0]:
                 blocked_uid = request.session.uid
-                # bug-hunt (2026-09-27): real client IP, not the tunnel's
+                # Real client IP, not the tunnel's
                 # loopback peer -- see ZeroSudoHome.web_login's own note.
                 utils = request.env["zero_sudo.security.utils"]
                 facility_env = utils._get_service_env(

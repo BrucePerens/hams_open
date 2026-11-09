@@ -271,28 +271,15 @@ export const TourUtils = {
      * dev mode); each App's root ComponentNode links down through
      * .children (a plain object keyed by an internal parentKey, not an
      * array) to every mounted component's real instance via .component.
-     * Confirmed against this Odoo version's actual bundled owl.js source
-     * (web/static/lib/owl/owl.js) rather than assumed -- OWL's internals
-     * are undocumented/unstable API, and no precedent for this technique
-     * existed anywhere in this codebase before this helper. Real bug
-     * found and fixed 2026-09-01, once the OOM-watchdog memory ceiling
-     * (hams_shared commit c8f8735) and a missing web.assets_tests
-     * manifest entry (ham_shack's voice_command_help_tour.js was written
-     * but never wired into the bundle at all -- see night_shift_todo.md's
-     * write-up of that same night) had both been separately fixed,
-     * finally letting this function actually run against a live page for
-     * the first time: the page's real content App
-     * (as opposed to Odoo's own MainComponentsContainer utility App) does
-     * NOT mount its content on `app.root` at all in this Odoo/OWL version
-     * -- confirmed via a temporary diagnostic dump of a live App's own
-     * property keys and values, not assumed. `app.root` was `undefined`
-     * while `app.subRoots` (a `Map` from an internal numeric key to a
-     * `ComponentNode`) held the real content root -- WebShack itself,
-     * for `/shack`. Walking only `app.root`, as this function originally
-     * did, silently found nothing on every real page, which is exactly
-     * why this had "never successfully completed a live tour run end to
-     * end" -- the technique's core traversal was wrong, not the specific
-     * caller. Fixed by also walking every `app.subRoots` entry.
+     * Written against this Odoo version's bundled owl.js source
+     * (web/static/lib/owl/owl.js): OWL's internals are
+     * undocumented/unstable API. The page's real content App (as opposed to
+     * Odoo's own MainComponentsContainer utility App) does NOT mount its
+     * content on `app.root` in this Odoo/OWL version: `app.root` is
+     * `undefined` while `app.subRoots` (a `Map` from an internal numeric
+     * key to a `ComponentNode`) holds the real content root -- WebShack
+     * itself, for `/shack`. The traversal therefore walks every
+     * `app.subRoots` entry as well as `app.root`.
      *
      * Takes a predicate, not a class name: assets can be served minified
      * (assetsbundle.py's is_debug_assets gate, independent of plain

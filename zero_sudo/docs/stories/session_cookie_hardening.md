@@ -11,8 +11,8 @@ a plain-HTTP connection or rides along on an unrelated cross-site request.
 
 ## Background
 
-Found 2026-09-22: Odoo's own `session_id` cookie (the real authentication token) and
-`frontend_lang` carried `HttpOnly` but neither `Secure` nor `SameSite`, even when the request
+Odoo's own `session_id` cookie (the real authentication token) and
+`frontend_lang` carry `HttpOnly` but neither `Secure` nor `SameSite`, even when the request
 genuinely arrived over HTTPS via this deployment's reverse proxy.
 
 ## The Process

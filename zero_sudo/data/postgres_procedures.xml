@@ -14,14 +14,14 @@
             <field name="code">
 # Procedure for optimized service account resolution and security verification
 #
-# Split into two halves, 2026-09-13 (Bruce's own direct instruction: "Change the initialization
-# software to load the service user-IDs into a hash-table at start-up"): zero_sudo_resolve_
+# Split into two halves so the service user-IDs can be loaded into a hash table at start-up:
+# zero_sudo_resolve_
 # service_xmlid() is the pure ir_model_data lookup -- genuinely immutable once a noupdate="1"
 # data record installs, safe to cache in-process -- and zero_sudo_verify_service_uid() is the
 # LIVE safety verdict (active / is_service_account / no privilege-escalation), which must never
 # be cached since any of those three can change at runtime (an admin disabling a compromised
 # account, a group grant changing). zero_sudo_get_service_uid() itself is kept as a thin
-# combination of both, byte-for-byte behaviorally identical to its old single-function form, so
+# combination of both, byte-for-byte behaviorally identical to a single combined function, so
 # every existing direct SQL caller (and every existing test asserting its exact exception
 # messages) keeps working unchanged. security_utils.py's own _get_service_uid() is what actually
 # calls the two halves separately to skip the ir_model_data resolution on a cache hit -- see its
@@ -69,18 +69,18 @@ BEGIN
         RAISE EXCEPTION 'Security Alert: % is a human user, not a Service Account.', p_xml_id;
     END IF;
 
-    -- Bug-hunt fix: checking res_groups_users_rel alone only sees DIRECT
+    -- Checking res_groups_users_rel alone only sees DIRECT
     -- group membership. Odoo's own group hierarchy also grants a user
     -- everything a directly-held group's own implied_ids chain reaches
     -- (res_groups_implied_rel: gid -> hid means "membership in gid implies
     -- membership in hid"), and Odoo's own has_group()/all_group_ids checks
-    -- that full transitive closure, not just direct rows -- confirmed by
-    -- reading odoo/addons/base/models/res_users.py's own _has_group(),
-    -- which checks all_group_ids (computed from group_ids.all_implied_ids),
+    -- that full transitive closure, not just direct rows
+    -- (odoo/addons/base/models/res_users.py's _has_group()
+    -- checks all_group_ids (computed from group_ids.all_implied_ids),
     -- never a raw membership-table query. A service account holding
     -- base.group_system/base.group_erp_manager only via an IMPLIED chain
     -- (member of some other group X whose own implied_ids reaches one of
-    -- these, directly or through several hops) previously passed this
+    -- these, directly or through several hops) would pass a direct-only
     -- check silently, defeating the entire Zero-Sudo mandate this function
     -- exists to enforce. The recursive CTE below walks that same implied
     -- closure from the user's directly-held groups before checking for

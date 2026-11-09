@@ -33,10 +33,9 @@ _logger = logging.getLogger(__name__)
 # ever added (at startup, and rarely again on a genuine post-startup cache-miss -- see
 # _get_service_uid()).
 #
-# Keyed by (dbname, xml_id), not bare xml_id -- bug-hunt fix, 2026-09-13: this deployment is
-# single-database today (db_name = hams_dev in /etc/odoo/odoo.conf, confirmed independently via
-# this project's own night_shift_todo.md/night_shift_history.md, not merely trusted from this
-# file's own docstring), so a bare xml_id key happens to be safe right now -- but this dict is
+# Keyed by (dbname, xml_id), not bare xml_id: this deployment is
+# single-database today (db_name set in /etc/odoo/odoo.conf), so a bare xml_id key would happen
+# to be safe right now -- but this dict is
 # process-wide and module-level, shared by every registry any worker in this process ever builds.
 # If this ever became a multi-database deployment (odoo-bin -d db1,db2, or a dbfilter routing
 # multiple real databases through the same worker pool), two different databases' own service
@@ -46,8 +45,8 @@ _logger = logging.getLogger(__name__)
 # WRONG numeric uid for another database's own service account -- a cross-tenant privilege
 # mix-up, not merely a wrong-answer bug. `ham_base/models/ir_config_parameter.py` already keys
 # its own, structurally identical service-uid cache by db_name for exactly this reason (see its
-# own `_SERVICE_UID_CACHE[db_name] = ...`) -- this fix copies that already-established, in-repo
-# pattern rather than inventing a new one. No behavior change for the current single-db
+# own `_SERVICE_UID_CACHE[db_name] = ...`); this follows that in-repo
+# pattern. No behavior change for the current single-db
 # deployment: `self.env.cr.dbname` is the same constant on every call in that shape.
 _SERVICE_UID_CACHE = {}
 
@@ -69,21 +68,18 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     def _preload_service_uid_cache(self):
         # [@ANCHOR: zero_sudo:preload_service_uid_cache]
         """
-        Bruce's own direct instruction (2026-09-12/13): "Change the initialization software to
-        load the service user-IDs into a hash-table at start-up. Make sure database
-        initialization saves them before the program even starts."
+        Design requirement: load the service user-IDs into a hash table at start-up, with
+        database initialization saving them before the program even starts.
 
         `_register_hook()` runs exactly once per registry build (see `odoo/modules/loading.py`'s
-        own STEP 9, `for model in env.values(): model._register_hook()`) -- confirmed directly
-        that this fires for an AbstractModel like this one, not just concrete models (`env.values()`
+        own STEP 9, `for model in env.values(): model._register_hook()`) ; this fires for
+        an AbstractModel like this one, not just concrete models (`env.values()`
         iterates every registered model regardless of kind). On this deployment specifically
         (`db_name` set in `/etc/odoo/odoo.conf`, real prefork `workers`), that registry build
         happens once in the master process via `preload_registries()` BEFORE any worker forks and
-        starts accepting connections -- confirmed live by checking the actual running server's
-        command line and config, not assumed -- so this cache really is populated "before the
-        program" (in the sense of "before it starts serving traffic") "even starts", matching
-        Bruce's own wording, and every forked worker inherits the already-populated dict for free
-        via fork() copy-on-write. The "database initialization" half of his instruction is
+        starts accepting connections, so this cache is populated before the server starts serving
+        traffic, and every forked worker inherits the already-populated dict for free
+        via fork() copy-on-write. The "database initialization" half of the requirement is
         already structurally guaranteed by Odoo's own module-loading order: every service
         account's `res.users` row and its `ir.model.data` xml_id come from a module's own
         `noupdate="1"` XML data, loaded during that same module's install/update, which always
@@ -167,7 +163,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # ---
         # # Verified by [@ANCHOR: zero_sudo:COMM_test_privilege_escalation_block_sql]
 
-        # Bug-hunt fix (2026-09-09): `zero_sudo_get_service_uid()`/`zero_sudo_verify_service_uid()`
+        # `zero_sudo_get_service_uid()`/`zero_sudo_verify_service_uid()`
         # (the SQL procedures below) do a real Postgres `RAISE EXCEPTION` when the requested
         # account genuinely doesn't exist, is disabled, or isn't a service account -- that
         # propagates through `odoo/sql_db.py`'s `Cursor.execute()` (which logs and
@@ -175,12 +171,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # RaiseException`, NOT `odoo.exceptions.AccessError`. Every caller
         # across this codebase that wraps a `_get_service_uid()` call in
         # `except AccessError` (written to handle exactly this "service
-        # account not found/misconfigured" case) was catching the wrong
-        # type for it -- confirmed independently by this module's own
-        # `zero_sudo/tests/test_security_utils.py`, which has to catch
+        # account not found/misconfigured" case) would be catching the wrong
+        # type for it (`zero_sudo/tests/test_security_utils.py` has to catch
         # `(AccessError, UserError, psycopg2.errors.RaiseException)` around
-        # calls into this exact helper. Fixing it here, once, means every
-        # existing `except AccessError` call site starts working correctly
+        # calls into this exact helper). Translating it here, once, makes
+        # every existing `except AccessError` call site work correctly
         # without touching each one individually. The `with
         # self.env.cr.savepoint():` is load-bearing, not decorative: a raw
         # `RAISE EXCEPTION` aborts the whole current transaction, not just
@@ -190,10 +185,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # query, or anything else in the same transaction) would then
         # raise `InFailedSqlTransaction` uncaught.
         #
-        # Cache-hit/miss split, 2026-09-13 (see _preload_service_uid_cache()'s own docstring for
+        # Cache-hit/miss split (see _preload_service_uid_cache()'s own docstring for
         # the full "why"): a cache hit skips straight to the live safety-verify half
         # (zero_sudo_verify_service_uid), keyed on the already-known uid -- the SAME live check
-        # as before, just without re-resolving the xml_id via ir_model_data first. A cache miss
+        # as on a miss, just without re-resolving the xml_id via ir_model_data first. A cache miss
         # (a service account that didn't exist yet when this worker's own registry loaded --
         # e.g. a module installed without a restart) falls back to the original, unchanged,
         # full resolve-and-verify function, and deliberately does NOT write the result back into
@@ -202,7 +197,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # into every subsequent call in this same worker process. A genuine miss is rare enough
         # that paying the full resolve cost again next time is the safe trade.
         # Keyed by (dbname, xml_id) -- see _SERVICE_UID_CACHE's own module-level comment
-        # (bug-hunt fix, 2026-09-13: a bare xml_id key would collide across databases in a
+        # (a bare xml_id key would collide across databases in a
         # multi-database deployment).
         uid = _SERVICE_UID_CACHE.get((self.env.cr.dbname, xml_id))
         try:
@@ -239,10 +234,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """
         uid = self._get_service_uid(xml_id)
         service_record = self.with_user(uid)
-        # ADR-0083 fix (2026-09-18, per Bruce's own answer in
-        # night_shift_questions/answered/
-        # zero-sudo-get-service-env-company-context-carryover-a133d1a3.md):
-        # with_user() swaps the acting uid but otherwise inherits whatever
+        # ADR-0083: with_user() swaps the acting uid but otherwise inherits whatever
         # allowed_company_ids the CALLER's own ambient context already had --
         # which can mismatch this service account's own company scope (every
         # service account here is scoped to base.main_company only, while
@@ -323,9 +315,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         erasure account deliberately holding base.group_user for one documented,
         unrelated reason can incidentally match some other module's "your own
         records only" rule on base.group_user, and never see anyone else's data.
-        Found live in ham_relay_bridge: this silently made GDPR erasure of relay
-        nodes a permanent no-op, with zero errors anywhere, until a test happened
-        to check the actual outcome instead of just that the call didn't raise.
+        Seen in ham_relay_bridge: this silently made GDPR erasure of relay
+        nodes a permanent no-op, with zero errors anywhere, unless a test checks
+        the actual outcome instead of just that the call didn't raise.
 
         Raises AccessError instead of silently deleting a partial (or empty)
         subset -- for GDPR erasure specifically, silently under-deleting is a
@@ -390,11 +382,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         ONLY when the request's actual transport-level peer is loopback.
 
         This deployment is Cloudflare-Tunnel-only (cloudflared and the Odoo
-        HTTP server always run on the same host, per Bruce's own
-        confirmation 2026-09-11 -- see
-        docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md,
-        which flagged this exact trust boundary as an open architectural
-        question until that answer): a loopback remote_addr IS the tunnel,
+        HTTP server always run on the same host; see
+        docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md
+        for this trust boundary): a loopback remote_addr IS the tunnel,
         so its injected headers are genuine. Any other remote_addr means
         the request did NOT arrive via the tunnel -- these headers are then
         attacker-controlled (any client can set them on a raw request) and
@@ -638,24 +628,22 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
                     % model_name
                 )
 
-        # Bug-hunt fix (2026-09-13): this used to escalate to a dedicated
-        # "zero_sudo.cache_invalidation_service_internal" service account
-        # purely to call `env_svc.registry.clear_cache()` -- a call that (a)
-        # needs no privileged uid at all (it's a pure in-process operation,
-        # no ORM access check anywhere in it), and (b) with no arguments
-        # clears only Odoo's own 'default' `tools.ormcache` bucket for EVERY
-        # model in the registry, not `model_name` specifically -- so the
-        # access check two lines up (write access to ONE model) never
-        # actually matched the real blast radius (a full-registry cache
-        # clear). This function's own name and docstring promise a
-        # model-SCOPED invalidation; `invalidate_model_cache()` (imported
-        # above, from distributed_redis_cache.redis_cache) is the real,
-        # already-existing, already-correctly-used-elsewhere-in-this-file
-        # (see _set_kv() below) mechanism for that -- it clears exactly
-        # this worker's own Redis + local-fallback entries for
-        # `model_name` alone. `_notify_cache_invalidation()` below (also
-        # fixed this same pass -- see its own docstring) is what extends
-        # that to every OTHER worker.
+        # This deliberately does not escalate to a dedicated
+        # "zero_sudo.cache_invalidation_service_internal" service account to
+        # call `env_svc.registry.clear_cache()`: that call (a) needs no
+        # privileged uid at all (it's a pure in-process operation, no ORM
+        # access check anywhere in it), and (b) with no arguments clears only
+        # Odoo's own 'default' `tools.ormcache` bucket for EVERY model in the
+        # registry, not `model_name` specifically -- so the access check
+        # above (write access to ONE model) would never match the real blast
+        # radius (a full-registry cache clear). This function's name and
+        # docstring promise a model-SCOPED invalidation;
+        # `invalidate_model_cache()` (imported above, from
+        # distributed_redis_cache.redis_cache; also used by _set_kv() below)
+        # provides that: it clears exactly this worker's own Redis +
+        # local-fallback entries for `model_name` alone.
+        # `_notify_cache_invalidation()` below is what extends that to every
+        # OTHER worker.
         invalidate_model_cache(self.env, model_name)
         self._notify_cache_invalidation(model_name, "CLEAR_ALL")
 
@@ -682,57 +670,37 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         Signals every OTHER worker process (not just this one) that
         `model_name`'s own cached entries are stale, via Postgres NOTIFY.
 
-        Bug-hunt fix (2026-09-13) -- this was a REAL, live, previously
-        undiscovered defect, not merely a latent one: this function sent
-        `pg_notify("cache_invalidation", f"{model_name}:{key_value}")` (a
-        plain colon-joined string, batched via `unnest()` for a list of
-        keys) -- but the actual, only real listener,
-        `distributed_redis_cache/daemons/cache_manager.py`, LISTENs on a
-        DIFFERENT channel entirely (`"distributed_cache_invalidation"`,
-        confirmed by reading its own `PG_CHANNEL` constant) and expects a
-        JSON payload (`json.loads(payload)` immediately on receipt, then
-        publishes it to Redis pub/sub verbatim) -- a plain string payload
-        would fail that `json.loads()` and be logged as "Malformed JSON
-        payload from Postgres", never reaching Redis. Confirmed via grep
-        that NOTHING in either repo LISTENs on the plain "cache_invalidation"
-        channel this file was sending to -- every real call to this
-        function was a pure no-op for cross-worker purposes, silently,
-        since the channel/format mismatch raised nothing locally (pg_notify
-        itself always "succeeds" from the sender's perspective regardless
-        of whether anyone is listening).
+        It delegates to `notify_model_invalidation()` (imported above, from
+        distributed_redis_cache.redis_cache), which uses the channel and
+        payload the real listener expects: the only listener,
+        `distributed_redis_cache/daemons/cache_manager.py`, LISTENs on the
+        channel named by its `PG_CHANNEL` constant
+        (`"distributed_cache_invalidation"`) and expects a JSON payload
+        (`{"model": ..., "dbname": ...}`; it calls `json.loads(payload)`
+        immediately on receipt, then publishes it to Redis pub/sub
+        verbatim). A plain colon-joined string on a different channel (for
+        example `pg_notify("cache_invalidation", f"{model_name}:{key_value}")`)
+        would be a silent no-op for cross-worker purposes: nothing LISTENs on
+        that channel, and pg_notify itself always "succeeds" from the
+        sender's perspective regardless of whether anyone is listening.
 
-        Real, LIVE consequence (not merely latent): `blog_post.py` (3 call
-        sites) and `edge_routing/{domain,routing_mixin}.py` (3 call sites)
-        call ONLY this function for their own cross-worker cache
-        coherency, with no other invalidation signal alongside it -- for
-        those, a blog post's URL/publish-state change or a
-        custom-domain/routing change was never actually propagated to any
-        OTHER worker process's own in-memory L1 cache
+        Callers such as `blog_post.py` and `edge_routing/{domain,routing_mixin}.py`
+        rely on this function alone for cross-worker cache coherency, so a
+        blog post's URL/publish-state change or a custom-domain/routing
+        change must reach every OTHER worker process's in-memory L1 cache
         (`distributed_redis_cache/redis_cache.py`'s `_local_cache`, checked
-        BEFORE Redis on every `@distributed_cache()` read), which would
-        keep serving stale content until that worker's own 24h Redis TTL
-        boundary or a restart. `user_websites/models/website_page.py`'s two
-        call sites happened to be harmless in practice: each one calls this
-        (broken) function immediately followed by a correct, manually
-        inlined `notify_model_invalidation(self.env, self._name)` +
-        matching `pg_notify(..., "distributed_cache_invalidation", ...)`
-        pair -- real cross-worker invalidation for `website.page` already
-        works via that sibling call, making this function's own call there
-        redundant rather than load-bearing. That duplication in
-        website_page.py is a separate, lower-priority cleanup outside this
-        file's own edit scope -- see night_shift_todo.md.
+        BEFORE Redis on every `@distributed_cache()` read); otherwise that
+        worker would keep serving stale content until its own 24h Redis TTL
+        boundary or a restart. `user_websites/models/website_page.py`
+        additionally calls `notify_model_invalidation()` and `pg_notify`
+        inline right after this function; that duplication is redundant
+        rather than load-bearing and could be removed there.
 
-        Fix: delegate to `notify_model_invalidation()` (imported above,
-        from distributed_redis_cache.redis_cache) -- the real, already-
-        correct, already-tested implementation of exactly this "signal
-        every worker, including this one, that a model's cache is stale"
-        contract (correct channel, correct JSON payload shape
-        `{"model": ..., "dbname": ...}`, and its own `model_name not in
-        env` validation this file's version never had at all). The
-        previous per-key/per-batch granularity (`key_value`, chunked via
-        `unnest()` for a list) was never actually consumed by anything
-        downstream -- the real daemon+Redis pipeline only ever operates at
-        MODEL granularity -- so collapsing to one whole-model signal loses
+        `notify_model_invalidation()` also validates `model_name not in env`.
+        The previous per-key/per-batch granularity (`key_value`, chunked via
+        `unnest()` for a list) was never consumed downstream -- the real
+        daemon+Redis pipeline only operates at MODEL granularity -- so a
+        single whole-model signal loses
         no real capability; `key_value` is kept as a required argument
         (still enforced as "don't fire for a falsy invalidation target")
         purely to avoid changing every real call site's own signature.
@@ -751,11 +719,11 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # tests, never on a real production host -- for whether
             # sw.js/shack_sw.js serve their TEST_*/postMessage-driven test
             # hooks at all. Deliberately NOT keyed off Odoo's own
-            # test_enable flag: Bruce banned exactly that shape of
-            # automatic test/prod behavior branching after an LLM coding
-            # agent exploited an earlier instance of it to fake passing
-            # tests (see ham_repeater_dir/models/ham_repeater_import.py's
-            # own comment on the same ban) -- this is instead an explicit,
+            # test_enable flag: the project forbids automatic test/prod
+            # behavior branching, because it lets code pass tests by taking a
+            # different path than production does (see
+            # ham_repeater_dir/models/ham_repeater_import.py's own comment on
+            # the same rule) -- this is instead an explicit,
             # human-set config value, the same pattern as any other
             # deployment-scoped feature flag, not something that silently
             # differs just because a test happens to be running.
@@ -769,9 +737,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "ham_dns.base_domain",
             # The real stored key (see res_config_settings.py's
             # pdns_default_ip field, config_parameter="ham_dns.default_a_record_ip")
-            # -- this used to say "ham_dns.default_ip", a key nothing
-            # actually reads or writes anywhere, so the real caller in
-            # models/res_users.py always got the AccessError/default instead.
+            # -- not "ham_dns.default_ip", a key nothing reads or writes.
             "ham_dns.default_a_record_ip",
             "content_security_policy.report_uri",
             "backup_management.rmq_host",
@@ -883,7 +849,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "hams_helpdesk.ncmec_api_username",
             "hams_helpdesk.ncmec_api_password",
             # Not secrets -- hams.com's own designated NCMEC reporting-contact info
-            # (admin@hams.com / +1 510-473-7367, per Bruce's own answer, "for now"), seeded by
+            # (admin@hams.com / +1 510-473-7367, for now), seeded by
             # hams_helpdesk/data/ncmec_report_data.xml and read at report-packet-assembly time
             # so it can be updated later without a code change.
             "hams_helpdesk.ncmec_contact_email",
@@ -900,15 +866,15 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # established "unset by default, warn and no-op" shape.
             "hams_helpdesk.github_webhook_secret",
             # Not a secret either -- where action_ncmec_report emails the assembled packet while
-            # no real NCMEC API credentials exist (Bruce's own 2026-09-24 instruction to keep
-            # the report action working now rather than block on that). Defaults to his own
+            # no real NCMEC API credentials exist (so the report action keeps working rather
+            # than blocking on that). Defaults to the site owner's own
             # address in code; listed here so it can be reconfigured later without a code change.
             "hams_helpdesk.ncmec_fallback_report_email",
             # Public by nature: the DMCA designated-agent registration number and legal entity name shown on /compliance/dmca
             # (compliance/controllers/main.py). Per-deployment, so they are parameters and not template text.
             "compliance.dmca_registration_number",
             "compliance.dmca_agent_name",
-            # hams_helpdesk triage policy settings (Bruce's decisions, so settings): which verdicts quarantine a ticket,
+            # hams_helpdesk triage policy settings (operator decisions, so settings): which verdicts quarantine a ticket,
             # how long the new-ticket email is held for the review, whether leaving the Spam stage sends the notice,
             # and the stall alarm threshold. Plain words and numbers.
             "hams_helpdesk.triage_quarantine_verdicts",
@@ -1066,12 +1032,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         self.env["zero_sudo.kv"].invalidate_model()
         # `invalidate_model_cache()` clears THIS worker's own Redis + local-fallback entries
         # immediately (so a same-transaction `_set_kv()` followed by `_get_kv()` never sees a
-        # stale value). Bug-hunt fix (2026-09-13): that alone never reached any OTHER worker
-        # process's own in-memory cache -- nothing here ever signalled them. `notify_model_
-        # invalidation()` (added this pass) sends the real, correctly-addressed cross-worker
-        # pg_notify signal (see _notify_cache_invalidation()'s own docstring for the full story
-        # on why the channel this file used to send on was never actually being listened to);
-        # its own local invalidation is deferred to postcommit, which is why the immediate call
+        # stale value). That alone never reaches any OTHER worker
+        # process's own in-memory cache, so `notify_model_invalidation()` also sends the
+        # cross-worker pg_notify signal (see _notify_cache_invalidation()'s own docstring for
+        # the channel the listener uses); its own local invalidation is deferred to postcommit, which is why the immediate call
         # above is kept rather than replaced by this one.
         invalidate_model_cache(self.env, "zero_sudo.security.utils")
         notify_model_invalidation(self.env, "zero_sudo.security.utils")

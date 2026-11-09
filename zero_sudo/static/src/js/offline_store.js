@@ -14,7 +14,7 @@
  * storage -- the disk is full, or this site's storage quota is used up. Chrome and the spec
  * raise a DOMException named "QuotaExceededError" (legacy code 22); Firefox has also used
  * "NS_ERROR_DOM_QUOTA_REACHED" (code 1014). Callers use this to tell the operator "Disk Full"
- * rather than a generic or misleading error (2026-09-15: a full disk used to lose offline QSOs
+ * rather than a generic or misleading error (a full disk would otherwise lose offline QSOs
  * silently, or show "Network Error").
  */
 // [@ANCHOR: is_storage_full_error]
@@ -137,7 +137,7 @@ export class OfflineStore {
                 reject(event.target.error);
             };
 
-            // Same hang-bug class as saveLog()'s own transaction.onabort:
+            // Same hang hazard as saveLog()'s own transaction.onabort:
             // without this, a transaction that aborts without the
             // request's own onerror firing leaves this Promise
             // permanently unsettled.
