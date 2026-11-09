@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Every public page route, called with the garbage scanners send, never answers 500.
 
-Bruce, 2026-10-19: "Let's make external APIs like /blog robust against bad data, because things will be probing our
-site continually." A 500 is a server-exception ticket, so a public route that raises on bad input is a ticket per
+External APIs like /blog must be robust against bad data, because things will be probing the
+site continually. A 500 is a server-exception ticket, so a public route that raises on bad input is a ticket per
 probe. The routes are not listed here: they are read from the routing map of whatever modules are installed, so a
 route added tomorrow is covered tomorrow. Run with the full module set installed for the whole site; with only
 hams_helpdesk's dependencies it covers those.

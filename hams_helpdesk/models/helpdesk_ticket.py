@@ -39,7 +39,7 @@ _TRIAGE_FIELDS = (
     "triage_overridden_at", "notify_state", "notify_release_at", "triage_delay_seconds", "triage_stalled_at",
 )
 # Bruce's policy settings for the triage verdict are system parameters, read through zero_sudo's whitelist; the code
-# default is the conservative choice and night_shift_questions/open/ticket-triage-policy-settings-*.md asks Bruce.
+# default is the conservative choice.
 _TRIAGE_PARAM_QUARANTINE = "hams_helpdesk.triage_quarantine_verdicts"
 _TRIAGE_QUARANTINE_DEFAULT = "spam,phishing"
 _TRIAGE_PARAM_HOLD = "hams_helpdesk.triage_notify_hold_seconds"
@@ -78,19 +78,18 @@ _NCMEC_PARAM_USERNAME = "hams_helpdesk.ncmec_api_username"
 _NCMEC_PARAM_PASSWORD = "hams_helpdesk.ncmec_api_password"
 _NCMEC_PARAM_CONTACT_EMAIL = "hams_helpdesk.ncmec_contact_email"
 _NCMEC_PARAM_CONTACT_PHONE = "hams_helpdesk.ncmec_contact_phone"
-# Bruce's own explicit instruction, 2026-09-24: override the "legal review blocks launch" gate
+# The "legal review blocks launch" gate that
 # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md's Implementation Phase 9 otherwise
-# states ("we will modify the software as required by legal review but we need it working
-# now"). Real, unreviewed API credentials still don't exist (see the comment block below), so
+# states is overridden (the software is to work now and be modified as legal review requires). Real, unreviewed API credentials still don't exist (see the comment block below), so
 # action_ncmec_report's fallback -- instead of just blocking an admin with an error -- emails
 # the assembled packet to this address so the report is actually, functionally routed to a
 # human who can act on it today. Configurable rather than a hardcoded literal, matching every
-# other NCMEC_PARAM here; defaults to Bruce's own address since he is, as of this writing, the
+# other NCMEC_PARAM here; defaults to the owner's address, the
 # only admin.
 _NCMEC_PARAM_FALLBACK_EMAIL = "hams_helpdesk.ncmec_fallback_report_email"
 
 # NCMEC's real CyberTipline Reporting API (confirmed directly against NCMEC's own published
-# technical documentation, https://report.cybertip.org/ispws/documentation, 2026-09-23): HTTP
+# technical documentation, https://report.cybertip.org/ispws/documentation): HTTP
 # Basic Auth over HTTPS, XML payloads, credentials "must be requested from and supplied by NCMEC"
 # (no self-service registration found) -- hams.com does not have real credentials as of this
 # writing (docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md's own "Answered, this pass"
@@ -120,7 +119,7 @@ class HelpdeskTicket(models.Model):
 
     # [@ANCHOR: COMM_helpdesk_ticket_lifecycle]
 
-    # Prompt-injection defence (night_shift_todo/critical/tickets-must-not-carry-hidden-ai-prompts):
+    # Prompt-injection defence:
     # create()/write()/message_post() filter every untrusted field through models/untrusted_text.py
     # (see models/untrusted_mixin.py). These record what was removed and are never caller-settable.
     suspicion_score = fields.Integer(string="Suspicion score", default=0, copy=False, index=True)
@@ -140,14 +139,14 @@ class HelpdeskTicket(models.Model):
     ticket_type = fields.Selection(
         selection=[
             ("general", "General Inquiry"),
-            # Bruce's own direct instruction, 2026-09-15: "Bugs and security intake for
-            # hams_local_relay should be via hams_helpdesk." hams_local_relay is the
+            # Bugs and security intake for hams_local_relay goes through hams_helpdesk.
+            # hams_local_relay is the
             # local-relay daemon (daemons/hams_local_relay in hams_com) -- this category
             # exists so the guide/UI at ham_shack/data/local_relay_guide.html has a real,
             # concrete place to send a ham reporting a bug or a security issue, rather
             # than the unfilled placeholder that prove-my-language's own audit found
             # rendering verbatim to real users. One category covers both bug reports and
-            # security issues deliberately (per Bruce's own singular "a category," not
+            # security issues deliberately (a single category, not
             # two) -- the description prompt on the portal form (see portal_templates.xml)
             # tells the reporter to say which kind it is; splitting this into two selection
             # values isn't needed for that.
@@ -211,10 +210,7 @@ class HelpdeskTicket(models.Model):
             ("in_progress", "In Progress"),
             ("resolved", "Resolved"),
             ("closed", "Closed"),
-            # Added per night_shift_todo/high/inbound-mail-ticket-ingestion-
-            # has-no-spam-phishing-filter-e3a8f612.md and Bruce's own answer
-            # in night_shift_questions/answered/inbound-spam-filter-location-
-            # and-signal-e14a6f8b.md: a message the mail-ingestion filter
+            # A message the mail-ingestion filter
             # (hams_helpdesk/models/inbound_spam_filter.py, applied both in
             # pager_duty's incident_ticket_adapter.py and in this model's
             # own message_new() below) flags as likely spam/phishing is
@@ -235,7 +231,7 @@ class HelpdeskTicket(models.Model):
         tracking=True,
     )
 
-    # The triage verdict (Bruce, 2026-11-02): every ticket from every route is judged, by the inbound rules at
+    # The triage verdict: every ticket from every route is judged, by the inbound rules at
     # intake and by the AI triage agent after it. Never caller-settable (create() drops them, write() refuses a
     # portal caller); written only by _triage_record_verdict() under the helpdesk service account. The reasons are
     # the agent's or the rules' own words, already filtered; no ticket text is copied here.
@@ -264,7 +260,7 @@ class HelpdeskTicket(models.Model):
         string="Stall alarm raised", copy=False, readonly=True,
         help="When the stall alarm fired for this ticket (no verdict within the configured time). Set once.",
     )
-    # Phishing links (Bruce, 2026-11-08). The stored text keeps its links (the shared text filter keeps href on purpose); a
+    # Phishing links. The stored text keeps its links (the shared text filter keeps href on purpose); a
     # ticket whose verdict is phishing shows them as plain text to staff. Both fields are computed on read, never stored, so a
     # changed verdict or a person's override shows the right form at once. README.md, "Phishing links are defanged for staff".
     # [@ANCHOR: hams_helpdesk:ticket_links_defanged_fields]
@@ -380,12 +376,11 @@ class HelpdeskTicket(models.Model):
     ncmec_report_state = fields.Selection(
         [
             ("not_reported", "Not Reported"),
-            # Real bug caught in review, 2026-09-24: this used to be conflated with
-            # report_submitted (the state a REAL NCMEC filing produces), which permanently
-            # blocked action_ncmec_report/action_ncmec_mark_report_filed_manually from ever
-            # running again -- meaning once the email fallback fired, there was no path left to
+            # Kept distinct from report_submitted (the state a REAL NCMEC filing produces): conflating
+            # them would permanently block action_ncmec_report/action_ncmec_mark_report_filed_manually from ever
+            # running again, so once the email fallback fired, there was no path left to
             # record that the incident was ALSO actually, really filed with NCMEC. A distinct,
-            # non-terminal state fixes that: see the double-filing guard comments on both of
+            # non-terminal state avoids that: see the double-filing guard comments on both of
             # those methods below for exactly what each state still allows.
             ("emailed_fallback", "Emailed To Reporting Contact (Not Yet Filed With NCMEC)"),
             ("report_submitted", "Report Submitted"),
@@ -522,7 +517,7 @@ class HelpdeskTicket(models.Model):
             self = self.with_context(mail_auto_subscribe_no_notify=True)
         tickets = super().create(vals_list)
         if all_spam:
-            # Found by the route test 2026-11-03: the assignee is auto-subscribed by create(), and the inbound message that Odoo's
+            # The assignee is auto-subscribed by create(), and the inbound message that Odoo's
             # mail gateway then posts on the new ticket is mailed to every follower: the spam itself reached the on-duty admin.
             # A quarantined ticket has no followers until a person moves it out of the quarantine (see write()).
             hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
@@ -530,7 +525,7 @@ class HelpdeskTicket(models.Model):
             quarantined.message_unsubscribe(partner_ids=quarantined.message_partner_ids.ids)
 
         # [@ANCHOR: hams_helpdesk:COMM_triage_wakeup_on_create]
-        # Event-driven AI triage (NIGHT_PLAN decision 222): tell the triage daemon a ticket exists,
+        # Event-driven AI triage: tell the triage daemon a ticket exists,
         # after commit, fire-and-forget. Only "new"-stage tickets: a ticket created straight into the
         # spam quarantine (inbound mail the filter flagged sets stage="spam" before create() runs) or
         # into any other stage is never offered to the model, so it must not wake the daemon either.
@@ -558,12 +553,12 @@ class HelpdeskTicket(models.Model):
         # super().create() returns cannot change tickets' own length/order/contents contract.
         #
         # _ncmec_assemble_report_packet() runs under the elevated hams_helpdesk.user_helpdesk_
-        # service identity, not create()'s own ambient caller -- found live, 2026-09-24, while
+        # service identity, not create()'s own ambient caller -- needed when
         # standing up Phase 7's narrow, create-only ai_safety_reporting_service_internal account
         # (docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md section G): every prior caller
         # of create() for this ticket_type already happened to hold broad write access, so this
         # method's own self.write() (purely ticket fields -- see its own docstring) never failed
-        # before. A genuinely create-only account has no write access at all, so without this
+        # for them. A genuinely create-only account has no write access at all, so without this
         # elevation a CSAM ticket from bot self-reporting or the Official Observer would raise
         # here, inside create() itself, which is far worse than a merely-incomplete packet.
         # _ncmec_apply_recording_legal_hold_best_effort() is NOT elevated the same way here --
@@ -644,15 +639,15 @@ class HelpdeskTicket(models.Model):
             quiet = quiet or ticket_service.stage == "spam"
             if ticket_service.user_id and not quiet:
                 # Email Notification
-                # Bug-hunt fix (2026-09-09): this internal-only assignment
-                # notice had no subtype_xmlid, so it defaulted to the
+                # This internal-only assignment notice sets subtype_xmlid;
+                # without it the message would default to the
                 # customer-visible mail.mt_comment subtype -- the same class
-                # of leak fixed in shift_handoff.py's action_confirm_handoff
-                # the same day -- and showed up in the customer's own portal
+                # of leak avoided in shift_handoff.py's action_confirm_handoff
+                # -- and show up in the customer's own portal
                 # ticket thread even though its only intended audience is
                 # the newly-assigned agent. The sibling "Shift CC" message
-                # a few lines below already got this right
-                # (subtype_xmlid="mail.mt_note"); this one didn't.
+                # a few lines below does the same
+                # (subtype_xmlid="mail.mt_note").
                 ticket_service.message_post(
                     body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id
                     + self._silent_exception_note(),
@@ -772,14 +767,13 @@ class HelpdeskTicket(models.Model):
                 "calendar_event_id",
                 "website_id",
                 "company_id",
-                # bug-hunt (2026-09-13): partner_id was missing from this set, and carries no
+                # partner_id belongs in this set, and carries no
                 # field-level `groups=` restriction of its own either. ir.rule's write-time
                 # access check validates the domain against the record's CURRENT (pre-write)
                 # state, so a portal caller whose own partner_id matches the rule today could
                 # write partner_id to an arbitrary OTHER partner's id -- removing the ticket
                 # from their own portal view and, if that partner is also a portal user,
-                # inserting it (with its full history) into a stranger's. Confirmed exploitable
-                # via a real probe test before this fix, converted below into
+                # inserting it (with its full history) into a stranger's. Covered by
                 # test_05b_portal_cannot_reassign_partner_id.
                 "partner_id",
                 # NCMEC mandatory-reporting fields (section G / Phase 8): a portal user must
@@ -788,7 +782,7 @@ class HelpdeskTicket(models.Model):
                 # ncmec_legal_hold_applied (defeating the 2258A preservation hold).
                 "ncmec_report_state",
                 "ncmec_legal_hold_applied",
-                # bug-hunt (2026-09-27, tier-1 pass): ticket_type was missing, and it is the
+                # ticket_type belongs in this set, and it is the
                 # field the WHOLE _CSAM_TICKET_TYPE workflow keys off. controllers/portal.py's
                 # own _PORTAL_EXCLUDED_TICKET_TYPES keeps a portal user from *creating* a
                 # csam_enticement_trafficking ticket, but that guard lives in the HTTP
@@ -904,15 +898,15 @@ class HelpdeskTicket(models.Model):
             self.with_env(hd_env).message_post(body=_("Ticket closed by customer."))
 
     # [@ANCHOR: hams_helpdesk:COMM_helpdesk_action_close]
-    # Real bug found live, 2026-09-30: the backend form's own `stage` field is a clickable
+    # The backend form's own `stage` field is a clickable
     # statusbar (`view_hams_helpdesk_ticket_form`'s header), which technically can reach
-    # "Closed" -- but with no button-shaped affordance next to it, a real admin reached for
+    # "Closed" -- but with no button-shaped affordance next to it, an admin may reach for
     # unlink() instead to get a resolved ticket out of the way, which is a destructive action
-    # with no undo, rather than a reversible stage change. Worse: `group_helpdesk_user` (an
+    # with no undo, rather than a reversible stage change. Also: `group_helpdesk_user` (an
     # ordinary staff agent, not a manager) has NO unlink access at all on this model
     # (security/ir.model.access.csv: access_hams_helpdesk_ticket_user's own unlink column is
-    # 0) -- for that whole class of user, the statusbar click was the ONLY way to close a
-    # ticket before this button existed, and it's considerably less discoverable than an
+    # 0) -- for that whole class of user, the statusbar click would be the ONLY way to close a
+    # ticket without this button, and it's considerably less discoverable than an
     # explicit "Close Ticket" button sitting next to Shift Handoff in the same header.
     #
     # No portal-ownership gate (unlike action_portal_close() above): this button only ever
@@ -989,8 +983,8 @@ class HelpdeskTicket(models.Model):
     @api.model
     # [@ANCHOR: hams_helpdesk:triage_notify_on_leaving_spam]
     def _triage_notify_on_leaving_spam(self):
-        """Whether a person moving a ticket out of the Spam stage sends the notification that was never sent (Bruce,
-        2026-11-02: "If a ticket is later moved out of spam, send the notification then"): the system parameter
+        """Whether a person moving a ticket out of the Spam stage sends the notification that was never sent (a ticket
+        later moved out of spam gets the notification then): the system parameter
         ``hams_helpdesk.triage_notify_on_leaving_spam``, on unless set to 0, false or no."""
         raw = str(self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_ON_LEAVING_SPAM, "1") or "1")
         return raw.strip().lower() not in ("0", "false", "no", "off")
@@ -1209,8 +1203,8 @@ class HelpdeskTicket(models.Model):
     def mcp_mark_spam(self, reason):
         """Moves this ticket from "new" to the "spam" quarantine stage and records ``reason`` as an
         internal note, for the external-AI ticket-triage MCP server's mark_spam tool
-        (daemons/hams_ticket_triage_mcp/main.py in hams_com). Bruce, 2026-10-26: "have it close spam
-        tickets". "Close" here is the existing quarantine stage, not "closed": that stage is a plain
+        (daemons/hams_ticket_triage_mcp/main.py in hams_com). The tool is meant to close spam
+        tickets. "Close" here is the existing quarantine stage, not "closed": that stage is a plain
         reversible stage change a human can undo, it never mails the sender (see
         COMM_helpdesk_no_mailback_on_spam_stage in write()), and the filter's own flagged mail already
         lands in it. Nothing is deleted.
@@ -1268,8 +1262,8 @@ class HelpdeskTicket(models.Model):
         "attachments_notice"}, ...]}`` for tickets with at least one customer-written message after that
         time: filtered visible text of at most 2000 characters inside the random-delimiter untrusted block
         (never raw), at most three messages, oldest first. A message with hidden or injected content is
-        withheld, and attachments are never read. Decided by the coordinator on Bruce's instruction,
-        2026-10-05 (one extra draft note per ticket on a customer follow-up).
+        withheld, and attachments are never read. This costs
+        one extra draft note per ticket on a customer follow-up.
 
         What counts as the customer: a message of type email or comment with a non-internal subtype
         whose author is not an internal (staff) user. The agent's own notes (mail.mt_note, posted by
@@ -1348,10 +1342,10 @@ class HelpdeskTicket(models.Model):
         linked to the sending customer, the same way a ticket created via
         the portal or the backend already is.
 
-        Bug-hunt fix (2026-09-09): mail.thread.message_new()'s own default
+        mail.thread.message_new()'s own default
         implementation only auto-populates a field via
         _mail_get_primary_email_field(), and hams_helpdesk.ticket has no
-        such field (no email_from/email Char) -- so partner_id was always
+        such field (no email_from/email Char) -- so without this partner_id would always be
         False on an email-ingested ticket, even when message_route() had
         already resolved the sender's address to an existing partner
         (msg_dict['author_id']). With partner_id unset: the customer's own
@@ -1815,8 +1809,7 @@ class HelpdeskTicket(models.Model):
         if not base_url:
             # No real API credentials configured -- see this module's own top-of-file comment
             # on NCMEC's real CyberTipline Reporting API for why (credentials must be requested
-            # from NCMEC directly; hams.com does not have them yet), and on Bruce's own
-            # 2026-09-24 instruction to keep this working regardless. Email the already-assembled
+            # from NCMEC directly; hams.com does not have them yet), and on the requirement to keep this working regardless. Email the already-assembled
             # packet to a real human (_NCMEC_PARAM_FALLBACK_EMAIL) rather than just blocking the
             # admin with an error -- the packet is also still shown read-only on the form either
             # way, so a portal-paste is always available as a manual alternative too, and
@@ -1847,7 +1840,7 @@ class HelpdeskTicket(models.Model):
         # ncmec_report_packet is built from plain Char/Text fields (ticket name, callsign, etc.)
         # that are not HTML-escaped at the source -- interpolating it into body_html unescaped
         # would be a stored-HTML-injection path into an outbound email carrying sensitive
-        # child-safety content (caught in review, 2026-09-24: any internal user with ticket-create
+        # child-safety content (any internal user with ticket-create
         # rights can set an arbitrary ticket name/type via backend or RPC, not just the portal
         # controller, which is the only caller that restricts the CSAM category). html.escape()
         # first, same stdlib convention ham_base/models/res_users_impersonate.py already uses.

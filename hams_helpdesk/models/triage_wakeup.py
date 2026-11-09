@@ -1,7 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The Odoo half of the event-driven ticket-triage trigger (Bruce, NIGHT_PLAN decision 222: "Can we get
-a notification of an incoming ticket from Odoo and run it immediately?").
+"""The Odoo half of the event-driven ticket-triage trigger: a notification of an incoming ticket from Odoo
+that runs triage immediately.
 
 After a ticket is created and the transaction has committed, drop a tiny spool file
 `ticket-<id>.json` into the triage spool directory. The `ticket.triage.path` systemd unit

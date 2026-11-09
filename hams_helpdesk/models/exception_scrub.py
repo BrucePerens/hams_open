@@ -300,7 +300,7 @@ def mail_failure_class(reason):
 
 
 # "quota_exhausted": a paid service the daemon depends on (the Claude plan of the AI service accounts) has used up its
-# quota. Not a crash; one ticket per reporting unit (Bruce 2026-11-05: "one ticket when the account is out of quota").
+# quota. Not a crash; one ticket per reporting unit (one ticket when the account is out of quota).
 DAEMON_KINDS = ("unit_failed", "consumer_exception", "quota_exhausted")
 DAEMON_RESULTS = frozenset(
     ("exit-code", "signal", "core-dump", "timeout", "watchdog", "start-limit-hit", "resources", "oom-kill")

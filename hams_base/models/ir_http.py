@@ -27,7 +27,7 @@ class IrHttp(models.AbstractModel):
         (``Access Denied by ACLs ... uid: <deleted id>, model: website``) and
         the visitor gets a bare 403 on every frontend page, instead of being
         logged out and served as the public user. Seen on hams.com production
-        2026-09-23/24 as 35 hits for a nonexistent ``uid: 99``.
+        as repeated hits for a nonexistent ``uid: 99``.
 
         This runs the same check ``_authenticate_explicit`` runs, earlier.
         ``request`` is deliberately not passed to ``check_session``: the
@@ -93,7 +93,7 @@ class IrHttp(models.AbstractModel):
         ``..`` after percent-decoding. ``_url_for`` resolves a plain ``/a/../b`` itself but leaves a double-encoded
         ``/@fs/%2e%2e/x`` (the request path is decoded once, so ``%252e%252e`` arrives as ``%2e%2e``) alone, so a
         scanner's probe made the 404 page, and then the generic error page, raise: a 500 and an exception ticket
-        (ticket 74, ``/@fs/.../self/environ``, 2026-10-16 to 2026-10-21). ``_url_localized`` (above) covers the
+        (ticket 74, ``/@fs/.../self/environ``). ``_url_localized`` (above) covers the
         canonical ``<link>``; this covers the OpenGraph URL. A local URL with a dot segment has no honest value,
         so it becomes the site root; absolute URLs are left alone.
         """

@@ -146,7 +146,7 @@ export function isIgnorable(typeName, message, error, supportsHas = true) {
 
 // [@ANCHOR: hams_helpdesk:js_unwrap_owl_error]
 // Owl wraps an error thrown while a component renders or runs a hook in an OwlError whose own stack is Owl's
-// handler (the "error in the owl lifecycle" ticket 95, 2026-10-23, had nothing but Owl's frames) and keeps the real
+// handler (the "error in the owl lifecycle" ticket 95, had nothing but Owl's frames) and keeps the real
 // error in `cause`. Returns the innermost cause of such a wrapper, at most MAX_CAUSE_DEPTH levels down, else `error`.
 export function unwrapOwlError(error) {
     let current = error;

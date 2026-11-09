@@ -59,7 +59,7 @@ class ResUsers(models.Model):
                 if old_email and new_email and old_email.lower() != new_email.lower():
                     # Send an email to the OLD address warning them of the change
                     try:
-                        # bug-hunt (2026-09-09): the whole block below runs
+                        # The whole block below runs
                         # inside `self.env.cr.savepoint()`, not just a bare
                         # try -- load-bearing, not decorative. This is a
                         # `for user in self:` loop: `_get_service_uid()`'s
@@ -67,7 +67,7 @@ class ResUsers(models.Model):
                         # `RAISE EXCEPTION` on a missing/disabled/non-service
                         # account (zero_sudo_get_service_uid() in
                         # zero_sudo/data/postgres_procedures.xml), which
-                        # aborts the CURRENT transaction. Before this fix,
+                        # aborts the CURRENT transaction.
                         # `except Exception` alone would catch that for THIS
                         # user, but leave the transaction poisoned -- the
                         # NEXT user's own `mail.mail.create(...)` call (a
@@ -79,14 +79,13 @@ class ResUsers(models.Model):
                         # failure. The savepoint isolates each user's own
                         # attempt so one failure can't poison the next.
                         with self.env.cr.savepoint():
-                            # Adversarial security review, 2026-09-03: user.name/
-                            # old_email/new_email interpolated raw into HTML sent
+                            # user.name/old_email/new_email interpolated raw into HTML sent
                             # via mail.mail directly (not through message_post's
                             # own chatter-sanitization pipeline). Low real value
                             # to an attacker (only reaches the account's own old
                             # email address, a self-XSS shape), but escaped for
                             # the same defense-in-depth reason as the bounce
-                            # notification fix above.
+                            # notification in res_partner.py.
                             mail_values = {
                                 'subject': _('Security Alert: Your HAMS Email Address was Changed'),
                                 'body_html': _(
@@ -108,17 +107,16 @@ class ResUsers(models.Model):
                             mail = self.env['mail.mail'].with_user(svc_uid).create(mail_values)
                             mail.send()
                     except Exception as e:  # audit-ignore-catch-all
-                        # bug-hunt (2026-09-09): mail.mail.send() can raise
+                        # mail.mail.send() can raise
                         # a variety of delivery exceptions (SMTP errors,
                         # socket/connection failures, Odoo's own
                         # MailDeliveryException) -- none of which are
                         # KeyError/ValueError -- and _get_service_uid() can
-                        # raise AccessError. A real send failure here used
-                        # to propagate uncaught out of write(), meaning a
-                        # transient mail-server outage would abort an
+                        # raise AccessError. A real send failure here must
+                        # not propagate out of write(): a transient
+                        # mail-server outage would otherwise abort an
                         # otherwise-successful email/login change instead of
                         # just skipping the best-effort security notice.
-                        # Class 20.
                         _logger.exception("Failed to send security warning to old email %s: %s", old_email, e)
 
         return res

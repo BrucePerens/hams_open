@@ -316,9 +316,8 @@ class TestNcmecReport(HamsTransactionCase):
 
     def test_action_ncmec_report_without_credentials_emails_the_fallback_contact(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
-        # Real behavior change, 2026-09-24, per Bruce's own instruction to override the "legal
-        # review blocks launch" gate and keep filing working now: this used to just raise a
-        # UserError telling an admin to paste the packet into NCMEC's portal by hand. Now it
+        # The "legal review blocks launch" gate is overridden so filing works now: rather than just raising a
+        # UserError telling an admin to paste the packet into NCMEC's portal by hand, it
         # actually emails the packet -- hams_helpdesk.ncmec_api_base_url is unset by default
         # (never seeded by this module's own data XML, on purpose), so this is the real,
         # no-patching-needed behavior a fresh deployment gets today.
@@ -327,8 +326,8 @@ class TestNcmecReport(HamsTransactionCase):
         ticket.with_user(self.system_user).action_ncmec_report()
         ticket.invalidate_recordset()
         # emailed_fallback, NOT report_submitted -- that state is reserved for a real NCMEC
-        # filing (real API call or action_ncmec_mark_report_filed_manually). Real bug caught in
-        # review, 2026-09-24: reusing report_submitted here made this permanently terminal,
+        # filing (real API call or action_ncmec_mark_report_filed_manually). Reusing
+        # report_submitted here would make this permanently terminal,
         # with no path left to ever record a real filing afterward. See the next two tests.
         self.assertEqual(ticket.ncmec_report_state, "emailed_fallback")
         self.assertIn("bruce@perens.com", ticket.ncmec_report_reference)
@@ -342,7 +341,7 @@ class TestNcmecReport(HamsTransactionCase):
 
     def test_action_ncmec_report_email_fallback_is_not_terminal(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
-        # Real bug caught in review, 2026-09-24: the email fallback must NOT permanently block
+        # The email fallback must NOT permanently block
         # the normal "Report"/"Mark Filed Manually" actions the way a real NCMEC filing does --
         # an admin who was emailed the packet still needs to be able to actually file it (or
         # have the system do so, once real API credentials exist) afterward.
@@ -365,7 +364,7 @@ class TestNcmecReport(HamsTransactionCase):
 
     def test_action_ncmec_report_email_fallback_escapes_html_in_the_packet(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
-        # Real stored-HTML-injection vector caught in review, 2026-09-24: ncmec_report_packet is
+        # Stored-HTML-injection vector: ncmec_report_packet is
         # built from plain, unescaped Char/Text fields (ticket name, callsign, etc.), any of
         # which an internal user with ticket-create rights can set via backend/RPC (not just the
         # portal controller, which is the only caller that restricts the CSAM category) -- so a

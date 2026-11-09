@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # -*- coding: utf-8 -*-
 """hams_helpdesk.ticket.mcp_customer_followups(): the read-only lookup the AI triage agent uses to find a
-ticket it already noted whose customer wrote again (decided by the coordinator on Bruce's instruction,
-2026-10-05). The daemon half is tested in hams_com daemons/hams_ticket_triage_mcp."""
+ticket it already noted whose customer wrote again (one extra draft note per customer follow-up). The daemon half is tested in hams_com daemons/hams_ticket_triage_mcp."""
 from datetime import timedelta
 
 from markupsafe import Markup

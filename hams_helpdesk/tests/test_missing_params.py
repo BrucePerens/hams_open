@@ -6,7 +6,7 @@ import werkzeug.exceptions
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
-# The six public GETs of docs/qa/QA_PASS_2026-10-13.md QA-014 that answered 500 with no parameters. A route whose
+# The six public GETs (docs/qa/QA_PASS_2026-10-13.md QA-014) that answered 500 with no parameters. A route whose
 # module is not installed in the test database is skipped; /scoped_app (web) always exists.
 QA_014_ROUTES = (
     "/forum/get_tags",
@@ -59,7 +59,7 @@ class TestMissingRequiredParams(HamsHttpCase):
         self.url_open("/scoped_app", allow_redirects=False)
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
 
-    # -- QA pass 2 (2026-10-14): the same 400 for a JSON-RPC route, and for a NUL byte --
+    # -- the same 400 for a JSON-RPC route, and for a NUL byte --
 
     def _rpc(self, route, params):
         return self.opener.post(
@@ -75,7 +75,7 @@ class TestMissingRequiredParams(HamsHttpCase):
         body = self._rpc("/web/session/authenticate", {}).json()
         self.assertIn("error", body)
         # Odoo's JSON-RPC dispatcher puts 0 in error.code for every exception but NotFound and a session
-        # expiry (the nightly of 2026-10-18 says "we don't care of this code"); the 400 is the exception's own
+        # expiry (its code is not meaningful to clients); the 400 is the exception's own
         # class and message in error.data.
         self.assertEqual(body["error"]["data"]["name"], "werkzeug.exceptions.BadRequest", body)
         self.assertIn("400 Bad Request", body["error"]["data"]["message"])
@@ -128,7 +128,7 @@ class TestMissingRequiredParams(HamsHttpCase):
     def test_text_where_a_blog_wants_a_date_is_a_400_not_a_500(self):
         # Tests [@ANCHOR: hams_helpdesk:bad_date_is_400]
         # Tests [@ANCHOR: hams_helpdesk:error_is_unreadable_date]
-        # 2026-10-16: /blog?...&date_begin=ijyM&date_end=pNOE and /blog/<blog>?... were 500s and tickets (72, 73)
+        # /blog?...&date_begin=ijyM&date_end=pNOE and /blog/<blog>?... were 500s and tickets (72, 73)
         # for a scanner. /blog redirects to the blog itself when only one exists, as the date is read only when
         # there are several (production has two), so the test makes two.
         self.assertTrue(self._installed("/blog"), "stock /blog (website_blog) must be installed")

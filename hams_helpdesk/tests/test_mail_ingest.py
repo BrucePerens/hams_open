@@ -84,14 +84,13 @@ class TestMailIngest(HamsTransactionCase):
 
     def test_04_ingest_links_existing_customer_partner(self):
         # Tests [@ANCHOR: COMM_helpdesk_message_new]
-        # Bug-hunt regression (2026-09-09): before message_new() was
-        # overridden, an email-ingested ticket's partner_id was always
+        # Without the message_new() override, an email-ingested ticket's partner_id is always
         # False even when the sender's address matched an existing
         # customer -- message_route() had already resolved the sender to
         # a real partner (msg_dict['author_id']), but mail.thread's own
-        # default message_new() never used it, since hams_helpdesk.ticket
+        # default message_new() never uses it, since hams_helpdesk.ticket
         # has no email_from-style field for _mail_get_primary_email_field()
-        # to auto-populate. That silently orphaned every emailed-in ticket
+        # to auto-populate. That would silently orphan every emailed-in ticket
         # from the customer.partner_id-based portal listing
         # (/my/tickets), the write() stage-change mail-back, and the
         # automated "ensure customer is subscribed" step.
@@ -141,7 +140,7 @@ class TestMailIngest(HamsTransactionCase):
 
     def test_06_partner_ids_check_runs_as_the_request_user(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
-        """Regression for the 2026-09-27 production incident: every inbound
+        """Regression for a production incident: every inbound
         mail to info@hams.com died with "Failed to write field
         mail.message.partner_ids / not allowed to access res.partner",
         reported against the ingest service account's own uid even though
@@ -244,7 +243,7 @@ class TestMailIngest(HamsTransactionCase):
 
     def test_03c_mail_to_a_local_part_with_no_alias_is_reported_unroutable_not_raised(self):
         # Tests [@ANCHOR: COMM_helpdesk_mail_ingest]
-        # Production, 2026-10-05..12: spam and backscatter to random local parts made message_route() raise
+        # In production, spam and backscatter to random local parts made message_route() raise
         # "No possible route found", which became an HTTP 500 and an ERROR traceback, three times per message.
         # It is deterministic, so the entrypoint now answers with a status the daemon moves to failed/ on.
         tickets_before = self.env["hams_helpdesk.ticket"].search_count([])
@@ -407,8 +406,8 @@ class TestMailIngest(HamsTransactionCase):
         )
         self.assertEqual(watch.bus, [], "no bus message or toast was sent")
         self.assertFalse(ticket.message_partner_ids, "a quarantined ticket has no followers, so nothing posted on it is mailed")
-        # Recovering a false positive makes it an ordinary ticket: its assignee follows it again, and (Bruce, 2026-11-02: "if a
-        # ticket is later moved out of spam, send the notification then") the notification that was never sent goes out now.
+        # Recovering a false positive makes it an ordinary ticket: its assignee follows it again, and (a
+        # ticket later moved out of spam gets the notification then) the notification that was never sent goes out now.
         # Tests [@ANCHOR: hams_helpdesk:triage_notify_on_leaving_spam]
         before = watch.count()
         ticket.write({"stage": "new"})

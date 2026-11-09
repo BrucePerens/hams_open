@@ -9,14 +9,12 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 @tagged("post_install", "-at_install", "standard")
 class TestHelpdeskAiTriageExternalAllowlist(HamsTransactionCase):
-    """Coverage for the external-AI ticket-triage allow-list added
-    2026-09-23 -- group_ai_triage_external_service,
+    """Coverage for the external-AI ticket-triage allow-list --
+    group_ai_triage_external_service,
     rule_helpdesk_ticket_ai_triage_external_allowlist, and
     hams_helpdesk.ticket.mcp_post_internal_note() -- per
     hams_com's docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md
-    section G and night_shift_todo/medium/
-    duplicate-service-account-privilege-helpdesk-security-af9e1c30.md
-    (both in hams_com). See security/helpdesk_security.xml's own
+    section G (in hams_com). See security/helpdesk_security.xml's own
     group_ai_triage_external_service comment for the full design
     rationale this test suite is verifying."""
 
@@ -169,9 +167,8 @@ class TestHelpdeskAiTriageExternalAllowlist(HamsTransactionCase):
         last_message = self.general_ticket.message_ids.sorted(key=lambda m: m.id)[-1]
         self.assertIn("AI triage analysis: looks routine", last_message.body)
         # mail.mt_note, not mail.mt_comment: an internal note must never be
-        # customer-visible (same class of leak fixed in
-        # _automated_routing_and_notification's own 2026-09-09 bug-hunt
-        # comment on this exact model).
+        # customer-visible (same class of leak avoided in
+        # _automated_routing_and_notification, see its comment on this exact model).
         self.assertTrue(last_message.subtype_id.internal)
 
     def test_06_mcp_post_internal_note_enforces_allowlist_before_elevating(self):

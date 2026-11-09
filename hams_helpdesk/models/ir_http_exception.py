@@ -91,7 +91,7 @@ _CALLED_WITH_REQUEST_PARAMS = ("http", "json", "jsonrpc")
 def _contains_nul(value):
     """True when a string anywhere inside `value` (a parameter dict, a list, a nested JSON body) holds a NUL
     byte. PostgreSQL cannot store or compare one, so a handler that reached the database with it raised
-    ValueError and answered 500 (QA pass 2: /member/<callsign>, /repeaters?search=, /<slug>, ...)."""
+    ValueError and answered 500 (e.g. /member/<callsign>, /repeaters?search=, /<slug>, ...)."""
     stack = [value]
     while stack:
         item = stack.pop()
@@ -136,7 +136,7 @@ def _missing_required_params(endpoint):
 def _request_has_nul_byte():
     """True when the path or any text parameter of this request holds a NUL byte (%00), at any depth of a JSON body.
     PostgreSQL refuses such a string, so every route that searched with it answered 500 and filed a
-    server-exception ticket (QA pass 2, 2026-10-14: /%00, /member/%00, /repeaters?search=%00, /event?search=%00,
+    server-exception ticket (e.g. /%00, /member/%00, /repeaters?search=%00, /event?search=%00,
     /forum/help-1?search=%00 ...)."""
     return "\x00" in request.httprequest.path or _contains_nul(request.params)
 
@@ -192,7 +192,7 @@ class IrHttpExceptionReport(models.AbstractModel):
 
         A NUL anywhere in the parameters (query, form or JSON body) is refused first (see _request_has_nul_byte).
         The same 400 now covers JSON-RPC routes: a call that left out a required argument raised TypeError
-        inside the handler, a server-exception ticket per call (QA pass 2: 18 member routes under
+        inside the handler, a server-exception ticket per call (18 member routes under
         /repeaters, /event, /api/v1/ham_shack, /api/v1/training and /api/v1/auxcomm).
 
         A page route called without a parameter its handler cannot do without is a 400, not a 500.
@@ -200,7 +200,7 @@ class IrHttpExceptionReport(models.AbstractModel):
         Stock handlers declare such parameters as required positionals (``def scoped_app(self, app_id, ...)``,
         ``def payment_confirm(self, tx_id, access_token, ...)``). Odoo calls the handler with whatever the
         request carries, so a bare GET from a scanner or a stale link raised TypeError and was a 500 and a
-        server-exception ticket (QA-014, 2026-10-13: /payment/confirmation, /profile/validate_email,
+        server-exception ticket (e.g. /payment/confirmation, /profile/validate_email,
         /scoped_app, /scoped_app_icon_png, /shop/pricelist; /forum/get_tags earlier, ticket #67). This is the
         client's mistake: the reply is a 400 naming the missing parameter names (never a value)."""
         if _request_has_nul_byte():
@@ -214,7 +214,7 @@ class IrHttpExceptionReport(models.AbstractModel):
             route_name = request.httprequest.environ.get(ROUTE_RULE_KEY) or request.httprequest.path
             if isinstance(error, ValueError):
                 # A handler that turns a request parameter into a number with int() or float() and gets text raises
-                # ValueError("invalid literal for int() ..."): the sender's mistake, not a server fault (QA pass 2:
+                # ValueError("invalid literal for int() ..."): the sender's mistake, not a server fault (e.g.
                 # /club/apply/submit?club_id=abc, /my/identity/street-quiz/submit?quiz_id=abc and the like, a 500 and
                 # a ticket each). Answered 400; logged at warning so a handler that really has this bug stays visible.
                 if str(error).startswith(_NOT_A_NUMBER_MESSAGES):
@@ -223,8 +223,7 @@ class IrHttpExceptionReport(models.AbstractModel):
                 # [@ANCHOR: hams_helpdesk:bad_date_is_400]
                 # Text where a date belongs: stock /blog passes ?date_begin= and ?date_end= straight into a search
                 # domain, and the ORM raises ValueError while optimizing it. A scanner's /blog and /blog/<blog>
-                # requests with date_begin=ijyM were 45 x 500 and server-exception tickets 72 and 73 (2026-10-16
-                # 00:34-00:35 UTC). The sender's mistake: 400, logged at warning so a handler that builds a bad date
+                # requests with date_begin=ijyM were 500s with server-exception tickets 72 and 73. The sender's mistake: 400, logged at warning so a handler that builds a bad date
                 # itself stays visible.
                 if _error_is_unreadable_date(
                     error, [value for value in request.params.values() if isinstance(value, str)]
@@ -233,13 +232,12 @@ class IrHttpExceptionReport(models.AbstractModel):
                     raise werkzeug.exceptions.BadRequest("A request parameter is not a date.") from error
             # [@ANCHOR: hams_helpdesk:malformed_input_is_404]
             # Everything else that the caller's own input caused on a public page route is a 404: the address or
-            # value does not name anything. Bruce's decision, 2026-10-19 ("things will be probing our site
-            # continually"). Only an exception with positive evidence of the caller's input is converted, see
+            # value does not name anything. Probing of the site is continual, so only an exception with positive evidence of the caller's input is converted, see
             # request_input_errors.py; every other exception is raised unchanged and stays a 500 with a ticket.
             # Logged at INFO with the route and class only (no traceback, no value) so the volume of probes is
             # visible without filling the log; a handler that really has the bug is the one route that repeats.
             # This includes Odoo's own parsing of a parameter refusing what was sent: str2bool on /web/content's
-            # ?download=514750499 was ticket 103 (2026-10-25), and content_assets asserts ?assets_params= is a dict.
+            # ?download=514750499 was ticket 103, and content_assets asserts ?assets_params= is a dict.
             if _input_errors_are_the_callers(endpoint.routing):
                 reason = classify_request_input_error(error, request.params)
                 if reason:
@@ -259,7 +257,7 @@ class IrHttpExceptionReport(models.AbstractModel):
         ValueError for a path with dot segments (/.//.env, /@fs/..%252f..%252fproc/self/environ) or an absolute URL
         in the path. The 404 page for such a path therefore failed to render, so did the plain error template Odoo
         falls back to, and the visitor got a 500 and an "Exception during request handling" log entry for a request
-        whose first answer was a correct 404 (21 of 24 such 500s in the production log of 2026-10-17/18). The
+        whose first answer was a correct 404 (most such 500s in the production log). The
         answer is then werkzeug's own bare page for the original status, which needs no database or template. A
         failure to render for any other reason is raised as before."""
         report_request_exception(exception)

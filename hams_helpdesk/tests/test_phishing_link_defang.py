@@ -1,7 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # -*- coding: utf-8 -*-
-"""Phishing links are defanged for staff (Bruce, 2026-11-08): in a ticket whose triage verdict is phishing the staff form,
+"""Phishing links are defanged for staff: in a ticket whose triage verdict is phishing the staff form,
 the chatter and the notification email show links as plain text; tickets with any other verdict keep clickable links; the
 stored text and the shared text filter are unchanged; a changed verdict or a person's override shows the right form at once."""
 from markupsafe import Markup

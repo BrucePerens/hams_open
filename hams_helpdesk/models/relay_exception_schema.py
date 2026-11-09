@@ -48,7 +48,7 @@ KEYS = frozenset(
     )
 )
 OPTIONAL_KEYS = frozenset(("unsymbolised",))
-# The ticket title prefixes (Bruce, 2026-11-03: "Relay"). One constant each, used by the pipeline and the tests.
+# The ticket title prefixes ("Relay"). One constant each, used by the pipeline and the tests.
 TITLE_PREFIX_EXCEPTION = "Relay exception: "
 TITLE_PREFIX_CRASH = "Relay crash: "
 SOURCE = "relay"

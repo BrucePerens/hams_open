@@ -1,8 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # -*- coding: utf-8 -*-
-"""The triage verdict recorded on every ticket (Bruce, 2026-11-02, night_shift_todo ticket-triage-agent-reviews-tickets-
-on-submission-and-marks-spam): the agent's and the inbound rules' verdict with reasons, the quarantine verdicts as a
+"""The triage verdict recorded on every ticket: the agent's and the inbound rules' verdict with reasons, the quarantine verdicts as a
 setting, and a person's move out of the Spam stage as the override and the labelled example."""
 import base64
 

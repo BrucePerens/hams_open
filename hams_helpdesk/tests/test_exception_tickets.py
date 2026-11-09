@@ -426,7 +426,7 @@ class TestExceptionWriterUnderReadOnlyTestCursor(ExceptionTicketCase):
     def test_a_read_only_test_cursor_means_no_write_and_no_error_log(self):
         # Odoo refuses to open a read/write test cursor above a read-only one with a plain Exception; the
         # reporter used to log that as an ERROR traceback, which the test harness charged to the module
-        # under test (ham_club_management, 2026-11-06). Now the write is skipped quietly.
+        # under test (ham_club_management). The write is skipped quietly.
         exc = self.caught(raise_attribute_error)
         readonly_cursor = types.SimpleNamespace(readonly=True, _savepoint=object())
         self.safe_patch_object(reporter._TestCursor, "_cursors_stack", new=[readonly_cursor])
@@ -925,7 +925,7 @@ class TestDaemonFailureReports(ExceptionTicketCase):
         self.assertEqual(len(self.daemon_rows()), 1)
 
     def test_quota_exhausted_is_one_ticket_for_every_unit_apart_from_failures(self):
-        # Bruce 2026-11-05: "one ticket when the account is out of quota", from any unit that finds it out.
+        # One ticket when the account is out of quota, from any unit that finds it out.
         self.env.flush_all()
         service = self.as_reporter()
         first = service.report_daemon_failure(
@@ -1186,7 +1186,7 @@ class TestExceptionHooks(RealTransactionCase):
         self.assertFalse(self.rows())
 
     def test_a_report_from_a_request_with_no_valid_user_still_reaches_the_on_duty_admin(self):
-        # The 2026-10-12 production failure: the assignment email is rendered while the failed request
+        # A production failure to guard against: the assignment email is rendered while the failed request
         # is still the ambient one, and QWeb helpers that read request.env.user got an empty user and
         # raised "Expected singleton: res.users()", so the ticket was lost. Every exception class is
         # forced through (SessionExpiredException is filtered now) with a session that has no user.

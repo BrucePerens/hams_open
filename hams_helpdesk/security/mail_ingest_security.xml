@@ -9,8 +9,8 @@
         </record>
 
         <!-- ir.model.access.csv's access_res_partner_mail_ingest row (res.partner, read-only)
-             exists because of a real production failure on 2026-09-27 (12 occurrences, every
-             inbound mail to info@hams.com, hams1 odoo-server.log 15:35-15:40 UTC):
+             exists because of a real production failure (every
+             inbound mail to info@hams.com failed in the hams1 odoo-server.log):
              "AccessError: Failed to write field mail.message.partner_ids / You are not allowed
              to access 'Contact' (res.partner) records", reported against THIS account's uid even
              though the failing message_post() ran under hams_helpdesk.user_helpdesk_service via

@@ -1,7 +1,7 @@
 # Copyright © Bruce Perens K6BP. AGPL-3.0.
 """Hostile corpus for the shared untrusted-text filter (models/untrusted_text.py).
 
-One crafted input per vector in night_shift_todo/critical/tickets-must-not-carry-hidden-ai-prompts. The
+One crafted input per vector of hidden-AI-prompt content in tickets. The
 corpus is also the regression suite for every future filter change: add a case here for every new
 trick. Two kinds of case:
 

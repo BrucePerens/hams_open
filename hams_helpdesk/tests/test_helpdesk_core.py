@@ -319,12 +319,11 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     def test_05b_portal_cannot_reassign_partner_id(self):
         # Tests [@ANCHOR: helpdesk_micro_privilege]
-        # bug-hunt (2026-09-13): partner_id was missing from write()'s restricted_fields set,
+        # partner_id belongs in write()'s restricted_fields set,
         # and carries no field-level groups= restriction either. ir.rule's write-time access
         # check validates the domain against the record's CURRENT (pre-write) state, so a
-        # portal caller could write partner_id to an arbitrary OTHER partner's id -- confirmed
-        # exploitable via a real probe before this fix (0 errors, the write silently succeeded).
-        # Removing the ticket from their own portal view and, if that partner is also a portal
+        # portal caller could write partner_id to an arbitrary OTHER partner's id -- the write
+        # silently succeeds otherwise (0 errors), removing the ticket from their own portal view and, if that partner is also a portal
         # user, inserting it (with its full history) into a stranger's.
         ticket = self.env["hams_helpdesk.ticket"].create(
             {
@@ -343,8 +342,8 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     def test_05c_portal_cannot_change_ticket_type_or_ncmec_fields(self):
         # Tests [@ANCHOR: helpdesk_micro_privilege]
-        # bug-hunt (2026-09-27, tier-1 pass): ticket_type, active, and every ncmec_* field
-        # except ncmec_report_state/ncmec_legal_hold_applied were missing from write()'s
+        # ticket_type, active, and every ncmec_* field
+        # except ncmec_report_state/ncmec_legal_hold_applied belong in write()'s
         # restricted_fields, with no field-level groups= of their own. controllers/portal.py's
         # _PORTAL_EXCLUDED_TICKET_TYPES only guards the CREATE path (an HTTP controller, not the
         # model), so an ordinary portal user could submit a normal ticket through the form and
@@ -470,13 +469,13 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     def test_07_shift_handoff_note_is_internal_not_portal_visible(self):
         # Tests [@ANCHOR: COMM_helpdesk_handoff_execution]
-        """Bug-hunt regression (2026-09-09): action_confirm_handoff() used to
-        post the operator briefing (relinquished-by/accepted-by/handoff_notes)
-        with no subtype_xmlid, which defaults to the customer-visible
+        """action_confirm_handoff() must not post the operator briefing
+        (relinquished-by/accepted-by/handoff_notes) without a subtype_xmlid,
+        which defaults to the customer-visible
         mail.mt_comment subtype. portal/controllers/portal_thread.py's own
         /mail/chatter_fetch route only excludes messages whose subtype is
         internal, so the briefing -- including any internal-only operator
-        context in handoff_notes -- was visible in the customer's own
+        context in handoff_notes -- would be visible in the customer's own
         /my/ticket/<id> "Communication History".
         """
         ticket = self.env["hams_helpdesk.ticket"].create(
@@ -523,11 +522,11 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     def test_08_assignment_notice_is_internal_not_portal_visible(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
-        """Bug-hunt regression (2026-09-09): the "assigned to you" notice
-        posted by _automated_routing_and_notification() had no subtype_xmlid
-        either, and defaulted to the same customer-visible subtype -- unlike
-        its own sibling "Shift CC" message a few lines later, which already
-        used mail.mt_note correctly.
+        """The "assigned to you" notice
+        posted by _automated_routing_and_notification() needs a subtype_xmlid
+        too, or it defaults to the same customer-visible subtype -- unlike
+        its own sibling "Shift CC" message a few lines later, which
+        uses mail.mt_note.
         """
         ticket = self.env["hams_helpdesk.ticket"].create(
             {
@@ -676,12 +675,11 @@ class TestHelpdeskCore(HamsTransactionCase):
         x = 1 + 1
         self.assertEqual(x, 2)
 
-    # Real bug found live, 2026-09-30: a real admin reached for unlink() to get a ticket out
-    # of the way, with no button-shaped alternative -- and group_helpdesk_user (an ordinary
+    # An admin may reach for unlink() to get a ticket out
+    # of the way when there is no button-shaped alternative -- and group_helpdesk_user (an ordinary
     # staff agent) has no unlink access on this model at all, so for that whole class of
-    # caller the stage statusbar click was the ONLY way to close a ticket before action_close()
-    # existed. Uses a staff_user with ONLY group_helpdesk_user (not manager) specifically to
-    # prove the fix reaches the caller who actually lacked unlink rights, not just an admin who
+    # caller the stage statusbar click would be the ONLY way to close a ticket without action_close(). Uses a staff_user with ONLY group_helpdesk_user (not manager) specifically to
+    # prove action_close() reaches the caller who actually lacked unlink rights, not just an admin who
     # already had another way out.
     # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_action_close]
     def test_action_close_sets_stage_and_is_usable_by_non_manager_staff(self):
