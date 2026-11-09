@@ -189,8 +189,7 @@ class ResConfigSettings(models.TransientModel):
         command = f"cloudflared service install {token_val}"
 
         # ADR-0001: Headless Mutation Context
-        # Bug-hunt fix (night_shift_todo/low/cloudflare-tunnel-token-
-        # persisted-plaintext-3f7c9a2b.md): `command` embeds a real,
+        # `command` embeds a real,
         # one-time Cloudflare tunnel install token. It is deliberately
         # NOT passed to create() -- cloudflare.tunnel.wizard.command is
         # a non-stored field computed from this action's own context,

@@ -100,9 +100,8 @@ fn nearest<const N: usize>(
 /// by `f64::max(1e-6)` below (`f64::max` returns its other argument when one side is NaN) and quantized
 /// into a confident-looking speech frame instead of failing loudly, matching
 /// [`super::dstar::quantize::quantize_pitch`]/[`super::ambe_plus_2::quantize::quantize_pitch`]'s own
-/// finiteness check on the pitch half of this same encode path (bug-hunt 2026-09-19, claims
-/// `mbe_quantize_speech.md`/`float_quantize_pitch_and_tables.md`; the pitch half was fixed the same
-/// day in `d1bc1ea4`, this amplitude half was not).
+/// finiteness check on the pitch half of this same encode path (the pitch half
+/// was guarded in `d1bc1ea4`; this amplitude half needs the same guard).
 pub fn quantize_speech(
     target: &SpeechTarget,
     prev: &PrevState,

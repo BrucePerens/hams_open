@@ -193,8 +193,7 @@ impl Encoder {
         // `EncoderFixed::shift_in`'s own `copy_from_slice` already fails
         // loudly on a length mismatch; this float sibling's `zip`-based
         // loop wouldn't have -- it would silently truncate/pad instead
-        // (see this function's own claim in the bug-hunt store for the
-        // full trace of why that's worth guarding even though every
+        // (that is worth guarding even though every
         // current call site already passes exactly `N_SAMP` samples).
         assert_eq!(
             new_samples.len(),
@@ -1007,15 +1006,14 @@ mod tests {
         assert!(max_abs > 0, "decoded audio is all zero");
     }
 
-    /// Bug-hunt regression, 2026-09-10: `codec2_3200::lpc`'s own
+    /// Regression test: `codec2_3200::lpc`'s own
     /// `r0_normalize_fixed`/`levinson_durbin_fixed_from_integer_r` used to
     /// panic (`attempt to divide by zero`, in BOTH debug and release
     /// builds) on a real, all-silent `i16` frame -- a squelched receiver,
     /// muted mic, or comfort-noise padding, not a contrived input -- since
     /// this crate has no upstream voice-activity gate before LPC analysis.
-    /// That bug was found and fixed upstream in `codec2_3200::lpc`
-    /// (`r0_normalize_fixed.md`/`levinson_durbin_fixed_core_from_r_norm.md`
-    /// in the centralized claims store), but `analyse_lsps_and_energy_fixed`
+    /// That is guarded in `codec2_3200::lpc`
+    /// (`r0_normalize_fixed`/`levinson_durbin_fixed_core_from_r_norm`), but `analyse_lsps_and_energy_fixed`
     /// (this module's own fixed-point LPC analysis pass) calls straight
     /// into that exact shared function
     /// (`lpc::levinson_durbin_fixed_from_integer_r`) -- this regression
@@ -1063,10 +1061,9 @@ mod tests {
         );
     }
 
-    /// Bug-hunt regression, 2026-09-10, for `Encoder::shift_in`'s own
-    /// defensive length check (see this module's `mod.rs` bug-hunt claim
-    /// for the full trace): before the fix, calling `shift_in` with the
-    /// wrong number of samples would silently zip-truncate/leave stale
+    /// Regression test for `Encoder::shift_in`'s own
+    /// defensive length check: calling `shift_in` with the
+    /// wrong number of samples must not silently zip-truncate/leave stale
     /// history in place instead of failing loudly, an asymmetry with
     /// `EncoderFixed::shift_in`'s own `copy_from_slice`, which already
     /// panics on any length mismatch. Not reachable from any real call

@@ -308,10 +308,10 @@ class TestRunPgbackrestViaSidecar(unittest.TestCase):
 
     def test_a_real_channel_is_serviced_during_the_wait_not_just_slept_through(self):
         # Tests [@ANCHOR: backup_management:COMM_pgbackrest_privileged_sidecar]
-        # Real production bug, 2026-10-01: a bare time.sleep() here never let pika
-        # process heartbeats during a multi-minute wait, so RabbitMQ reset the
-        # connection and the worker reprocessed an already-succeeded job forever
-        # (see this function's own docstring). This proves the fix: when a real
+        # A bare time.sleep() here never lets pika process heartbeats during a
+        # multi-minute wait, so RabbitMQ resets the connection and the worker
+        # reprocesses an already-succeeded job forever (see this function's own
+        # docstring). This proves that, when a real
         # channel is passed, the wait goes through channel.connection.
         # process_data_events() instead of a bare sleep.
         def fake_sidecar():
@@ -604,7 +604,7 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         self.assertEqual(config["access_key"], "b2keyid")
         self.assertEqual(config["secret_key"], "b2applicationkey")
         # The real channel must reach the sidecar call -- see this function's
-        # own 2026-10-01 fix: without it, the polling wait falls back to a
+        # own docstring: without it, the polling wait falls back to a
         # bare time.sleep() that starves the RabbitMQ heartbeat during a
         # real, multi-minute backup.
         self.assertIs(mock_sidecar.call_args.kwargs.get("channel"), ch)
@@ -612,13 +612,13 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
     @patch("main._json2_call")
     @patch("main._run_pgbackrest_via_sidecar")
     def test_02b_sidecar_output_is_logged_exactly_once(self, mock_sidecar, mock_json2):
-        # Advisor-caught bug, 2026-10-01: the sidecar branch used to send
-        # sidecar_output via an early append_log call, then the shared
-        # "write final state" block below unconditionally appended it to
-        # unsent_buffer and sent it again -- every sidecar backup's own
-        # output landed in the job log twice. A bare, call-count-blind mock
-        # (the shape every other test in this class already used) couldn't
-        # catch this; this test exists specifically to.
+        # The sidecar branch must not send sidecar_output via an early
+        # append_log call, because the shared "write final state" block
+        # below unconditionally appends it to unsent_buffer and sends it
+        # again -- every sidecar backup's own output would land in the job
+        # log twice. A bare, call-count-blind mock (the shape every other
+        # test in this class uses) cannot catch this; this test exists
+        # specifically to.
         mock_sidecar.return_value = (0, "backup complete: full backup size = 1.2GB")
         ch, method = self._make_ch_method()
         payload = {

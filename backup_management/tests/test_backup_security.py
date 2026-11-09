@@ -170,10 +170,9 @@ class TestBackupSecurity(RealTransactionCase):
         # Note: In Odoo, 'groups' on fields are enforced at the view and RPC level.
         # We check if the field has the group attribute set.
 
-        # Exactly these two groups and no others (2026-09-14 service-account
-        # privilege audit): the human admin group, plus the backup service
-        # account's OWN group, which replaced that account's former membership
-        # in the admin group. Anything else showing up here is a real widening.
+        # Exactly these two groups and no others: the human admin group, plus
+        # the backup service account's OWN group (the service account is not a
+        # member of the admin group). Anything else showing up here is a real widening.
         expected = {
             "backup_management.group_backup_admin",
             "backup_management.group_backup_service_account",
@@ -187,7 +186,7 @@ class TestBackupSecurity(RealTransactionCase):
 
     def test_service_account_not_in_human_admin_group(self):
         # Tests [@ANCHOR: backup_management:COMM_publish_to_worker]
-        # 2026-09-14 service-account privilege audit: user_backup_service_internal
+        # Service-account privilege scoping: user_backup_service_internal
         # must not share the human-facing Backup Administrator group (any future
         # admin-UI grant would otherwise be silently inherited by a daemon-key-
         # bound account), yet must still get through _publish_to_worker()'s own

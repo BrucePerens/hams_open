@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Diagnoses the residual `~0.63` chip-vs-float envelope correlation gap RATET(27) synthesis has
-//! against the real DVSI chip (`night_shift_todo/medium/ambe-fixed-point-port-f0c555a5.md` in
-//! hams_com has the full history). One concrete hypothesis under test, from a direct question: does
+//! against the real DVSI chip (a known gap tracked for the fixed-point port). One concrete hypothesis under test, from a direct question: does
 //! the chip's own synthesis extend harmonic content beyond `L_hat` (spectral/harmonic bandwidth
 //! extension), which this crate's from-spec synthesis never does?
 //!

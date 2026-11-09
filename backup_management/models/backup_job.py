@@ -107,11 +107,11 @@ class BackupJob(models.Model):
         """
         Mark jobs still 'pending' after PENDING_TIMEOUT_HOURS as failed, with the reason in the log.
 
-        Found on hams1 2026-10-12: eight jobs (ids 5, 6, 143, 218-222) read "Queued in RabbitMQ..."
-        for a week. 218-222 were consumed while the worker's Odoo API key was rejected (HTTP 401),
-        so the worker could neither mark them "processing" nor report the failure, and acked them;
-        the others' messages were gone from the queue. Nothing ever moved them out of 'pending',
-        and the worker only ever updates a job it receives. This is the Odoo-side backstop.
+        Jobs can read "Queued in RabbitMQ..." indefinitely: one consumed while the worker's Odoo
+        API key was rejected (HTTP 401) can be neither marked "processing" nor reported as failed
+        by the worker, which acks it; a job whose message is gone from the queue never reaches the
+        worker at all. Nothing else moves such a job out of 'pending', and the worker only ever
+        updates a job it receives. This is the Odoo-side backstop.
         A job a worker did pick up is 'processing' and is not touched here.
         """
         limit = fields.Datetime.now() - datetime.timedelta(hours=self.PENDING_TIMEOUT_HOURS)

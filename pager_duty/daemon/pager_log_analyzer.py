@@ -38,7 +38,7 @@ def translate_path(fp):
     """Maps absolute paths to the chrooted filesystem view."""
     # Because we chrooted to /var/log, /var/log/syslog is now just /syslog
     #
-    # Bug-hunt fix (2026-09-13): a plain fp.replace("/var/log", "") stripped
+    # A plain fp.replace("/var/log", "") would strip
     # every occurrence of the substring anywhere in fp, not just a leading
     # "/var/log" prefix -- e.g. translate_path("/srv/var/log/x") silently
     # returned "/srv/x" instead of leaving the unexpected prefix alone.
@@ -195,8 +195,8 @@ def redis_search_listener(r_client):
                 # Push results back to queue for Asynchronous Bastion Pattern
                 res_payload = {"matches": matches}
                 r_client.lpush("pager_log_search_res_queue", json.dumps({"uuid": uuid_str, "payload": res_payload}))
-            # Widened from (OSError, json.JSONDecodeError, KeyError) (bug-hunt
-            # review, tier 1): a message that parses as valid JSON but isn't a
+            # Catches more than (OSError, json.JSONDecodeError, KeyError): a
+            # message that parses as valid JSON but isn't a
             # dict (e.g. a JSON array/string) makes `req["uuid"]` raise
             # TypeError, not KeyError -- previously uncaught, which crashed this
             # whole listener (and, since it's the only thing blocking main(),

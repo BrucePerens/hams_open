@@ -2497,11 +2497,10 @@ mod levinson_durbin_fixed_tests {
         }
     }
 
-    /// Regression coverage for a real bug found and fixed in this
-    /// bug-hunt pass, 2026-09-10: `r0_normalize_fixed` used to only
+    /// Regression coverage: `r0_normalize_fixed` must not only
     /// `debug_assert!` its `r0_q > 0` precondition and then divide
     /// anyway -- in a release build (where `debug_assert!` compiles
-    /// out) that meant a real, unconditional Rust integer
+    /// out) that is a real, unconditional Rust integer
     /// divide-by-zero panic for any all-zero autocorrelation, which a
     /// real production encoder can genuinely receive (a squelched
     /// receiver, a muted mic, or comfort-noise padding all hand real
@@ -2596,14 +2595,13 @@ mod levinson_durbin_fixed_tests {
         }
     }
 
-    /// Regression coverage for a SECOND, distinct real bug found and
-    /// fixed in this same bug-hunt pass, 2026-09-10, inside
+    /// Regression coverage for a SECOND, distinct failure inside
     /// `levinson_durbin_fixed_core_from_r_norm` itself (the recursion
     /// shared by BOTH `levinson_durbin_fixed_core` -- the "historical"
     /// f32-normalized entry point -- and `levinson_durbin_fixed_core_
     /// from_r_norm`'s real production caller, `levinson_durbin_fixed_
-    /// from_integer_r`, so this fix protects both). Unlike the
-    /// `r0_normalize_fixed` bug above (a zero *input*), this one is
+    /// from_integer_r`, so the guard protects both). Unlike the
+    /// `r0_normalize_fixed` case above (a zero *input*), this one is
     /// entirely internal to the recursion: a reflection coefficient
     /// `k_q` landing EXACTLY on this format's representable boundary
     /// (`|k_q| == 1<<LEVINSON_FRAC_BITS`, i.e. a reflection coefficient
@@ -2611,8 +2609,8 @@ mod levinson_durbin_fixed_tests {
     /// only fires on strictly `>`, matching the float reference's own
     /// `k.abs() > 1.0` exactly) that zeroes `one_minus_ksq_q` and, one
     /// iteration later, `e_q` -- and the next iteration's division by
-    /// that exact-zero `e_q` panicked with `attempt to divide by zero`
-    /// before this fix, in both debug and `--release` builds. See
+    /// that exact-zero `e_q` panics with `attempt to divide by zero`
+    /// without the guard, in both debug and `--release` builds. See
     /// `levinson_durbin_fixed_core_from_r_norm`'s own doc comment for
     /// the full derivation, including why this is a deliberate,
     /// narrow exception to "match the float reference's clamp

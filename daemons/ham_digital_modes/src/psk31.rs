@@ -249,9 +249,8 @@ pub fn psk31_decode_bits(bits: &[bool]) -> String {
         // the accumulator run unbounded; the very next "00" still
         // starts a fresh, correctly-bounded accumulation.
         //
-        // Real bug found 2026-09-11 (see night_shift_todo.md for the full
-        // investigation): this threshold used to be bare
-        // `MAX_VARICODE_BITS`, which silently dropped every one of the 10
+        // This threshold must not be bare
+        // `MAX_VARICODE_BITS`, which would silently drop every one of the 10
         // real printable-ASCII characters whose codeword is exactly
         // MAX_VARICODE_BITS (10) bits long -- '%', '&', '?', '@', 'Z',
         // '^', '`', '{', '}', '~' -- whenever one was immediately

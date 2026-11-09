@@ -691,7 +691,7 @@ pub(crate) mod tests {
         );
     }
 
-    /// Adversarial regression test, bug-hunt pass 2026-09-10: every one of
+    /// Adversarial regression test: every one of
     /// this module's real ENCODE-side entry points, fed the exact
     /// degenerate values a genuinely all-silent/digitally-muted audio
     /// frame drives through the real production pipeline -- `Wo` at its
@@ -705,8 +705,8 @@ pub(crate) mod tests {
     /// other entry from below -- the real value `EncoderFixed::encode`
     /// substitutes on an LPC-to-LSP conversion failure, itself a real,
     /// already-confirmed-reachable outcome on all-silent audio per
-    /// `lpc.rs`'s own `r0_normalize_fixed` bug-hunt fix this same pass).
-    /// This crate has already been shown (this same campaign, several
+    /// `lpc.rs`'s own `r0_normalize_fixed` guard).
+    /// This crate has already been shown (in several
     /// sibling files) to mishandle exactly this "all-silent frame" input
     /// class via unguarded preconditions reachable only at a value range
     /// nothing else in the file's own test suite happens to exercise --

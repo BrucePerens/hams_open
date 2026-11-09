@@ -34,7 +34,7 @@
              level; a blanket match on that level alone would page on
              expected behavior, exactly the "noise vs. crash" problem this
              proposal's own text warns about. The narrower odoo.sql_db
-             pattern below targets a real malformed-query bug class
+             pattern below targets a real class of malformed-query bugs
              instead of user-input validation. -->
         <record id="pager_log_pattern_odoo_traceback" model="pager.log.pattern">
             <field name="name">Odoo Python Traceback</field>

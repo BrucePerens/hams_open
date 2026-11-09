@@ -23,9 +23,8 @@ class PagerSchedule(models.Model):
         "website", string="Website", ondelete="cascade", index=True
     )
 
-    # The overlapping-shift tiebreak below is Bruce's own decision, answered 2026-09-19 in
-    # hams_com/night_shift_questions/answered/
-    # pager-schedule-overlapping-on-duty-shifts-winner-rule-a018f28d.md ("Most recent wins.").
+    # Overlapping-shift tiebreak (a deliberate product decision): when two shifts
+    # cover the same moment, the most recently created one wins.
     ON_DUTY_SHIFT_ORDER = "create_date desc, id desc"
 
     @api.model

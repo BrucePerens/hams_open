@@ -328,7 +328,7 @@ mod tests {
         }
     }
 
-    // Regression coverage for a real bug found in this bug-hunt pass:
+    // Regression coverage for NULL buffer arguments:
     // codec2_encode/codec2_decode_ber checked codec2_state for NULL but
     // dereferenced their buffer pointers (speech_in/bytes/speech_out)
     // with no check at all, so a NULL buffer argument hit a raw pointer

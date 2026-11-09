@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! The first real chip-PCM-vs-synthesized-PCM comparison for RATET(27) -- a gap `night_shift_todo/
-//! medium/ambe-fixed-point-port-f0c555a5.md` explicitly flagged as open: no example or test in this
+//! The first real chip-PCM-vs-synthesized-PCM comparison for RATET(27) -- a gap in the fixed-point
+//! port's validation: no example or test in this
 //! codebase had ever compared this crate's own synthesized PCM against the *chip's own* decoded PCM,
 //! only against the *input* recording (`tests/ambe_real_speech_round_trip.rs`'s own sanity check).
 //!
@@ -41,8 +41,7 @@
 //! crate's own encode/decode round-trip self-consistent) moved the best alignment from a nonsensical
 //! `lag=-318` samples (`-39.75ms`) to `lag=-4` samples (`-0.5ms`), and frame-level envelope
 //! correlation from `~0.45` to `~0.63`. A smaller, real amplitude-scale gap remains (float PCM still
-//! runs several times louder than the chip's own) -- see `night_shift_todo/medium/
-//! ambe-fixed-point-port-f0c555a5.md` in hams_com for the current state of that follow-up.
+//! runs several times louder than the chip's own) (a follow-up for the fixed-point port).
 //!
 //! Usage: `cargo run --release --example ambe_chip_pcm_vs_float_synthesis_ratet27 -- <host:port>`
 

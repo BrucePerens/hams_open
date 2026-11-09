@@ -26,18 +26,18 @@
             <field name="company_ids" eval="[(4, ref('base.main_company'))]"/>
             <field name="notification_type">email</field>
             <field name="is_service_account" eval="True"/>
-            <!-- Service-account privilege audit, 2026-09-14 (bug-hunt): this
-                 account used to ALSO hold group_backup_admin, the human-facing
-                 "Backup Administrator" group, purely for that group's CRUD rows
-                 on backup.config/backup.job. Sharing the human group meant every
+            <!-- Service-account privilege scoping: this account must NOT hold
+                 group_backup_admin, the human-facing "Backup Administrator"
+                 group, merely for that group's CRUD rows on
+                 backup.config/backup.job. Sharing the human group would mean every
                  future admin-UI grant (the restore wizard, the latest-snapshot
                  board, field-level secrets, any new ir.rule) was silently
-                 inherited by a daemon-key-bound account too. It now holds only
+                 inherited by a daemon-key-bound account too. It holds only
                  its own group_backup_service_account, which carries exactly the
                  grants its real callers exercise, see ir.model.access.csv's
                  *_backup_svc rows and backup_config.py's field-level groups=. A
                  (6, 0, ...) set, so upgrading an existing database actively drops
-                 the old admin membership. -->
+                 any old admin membership. -->
             <field name="group_ids" eval="[(6, 0, [ref('backup_management.group_backup_service_account'), ref('zero_sudo.group_mail_service')])]"/>
         </record>
 
@@ -71,8 +71,7 @@
             <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
         </record>
 
-        <!-- Bug-hunt fix (2026-09-09, tier-1 pass): user_backup_service_internal
-             is a member of group_backup_admin (needed for that group's own
+        <!-- user_backup_service_internal is a member of group_backup_admin (needed for that group's own
              ir.model.access.csv CRUD grant), so without a rule of its own the
              four multi-tenant rules above (which AND a strict company_id
              match with no company_id=False bypass, unlike every other
@@ -81,7 +80,7 @@
              company_ids is (and always will be, for any single named
              account) just [main_company], cron_sync_all_backups() and
              _auto_refresh_status() (both run as this account, both search
-             with no explicit domain) silently returned only main-company,
+             with no explicit domain) would silently return only main-company,
              website_id=False configs/jobs: every per-website or
              non-main-company backup was skipped with no error, no log line,
              nothing. Matches the pager_duty precedent exactly: OR in an
@@ -89,8 +88,8 @@
              account is *also* a member of, so the ORed-together result is
              permissive per ir_rule.py's own group-OR-combination semantics.
              This does not, by itself, fix the account's real company_ids
-             membership; see the .with_company() removal in
-             backup_config.py/restore_wizard.py for that half of the bug. -->
+             membership; see the .with_company() notes in
+             backup_config.py/restore_wizard.py for that half of the problem. -->
         <record id="rule_backup_config_multi_tenant_svc" model="ir.rule">
             <field name="name">Backup Config Multi-Tenant Service</field>
             <field name="model_id" ref="model_backup_config"/>

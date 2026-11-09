@@ -184,7 +184,7 @@ def _claim_info_alias(env):
     or crm's default Sales Team) per Bruce's own direction -- hams_helpdesk
     no longer claims it.
 
-    Real bug found live on hams1, 2026-09-22: crm was installed before
+    Real failure mode on a production host: crm was installed before
     this hook ever ran (post_init_hook only fires on a fresh module
     install, so an already-installed pager_duty never got a second
     chance), so crm's own team_sales_department claimed "info" first and

@@ -43,7 +43,7 @@ class BackupConfig(models.Model):
     # daemon (daemon/main.py, authenticated as user_backup_service_internal)
     # and _publish_to_worker() below both have to read these to build the job
     # payload, and that account no longer holds group_backup_admin (see
-    # security/security.xml, 2026-09-14 service-account privilege audit).
+    # security/security.xml).
     _SECRET_FIELD_GROUPS = (
         "backup_management.group_backup_admin,"
         "backup_management.group_backup_service_account"
@@ -144,13 +144,12 @@ class BackupConfig(models.Model):
                 # Reading back an existing secret with no key configured, or
                 # nothing to encrypt at all -- nothing new to warn about.
                 return False
-            # Bug-hunt fix (2026-09-09, tier-1 pass): previously fell through
-            # to the shared "not f or not value: return False" branch below,
-            # silently discarding the admin's typed plaintext (Kopia
-            # password / S3-B2 secret key) with zero indication -- the field
-            # would appear saved in the UI, but kopia_password_crypt/
-            # secret_key_crypt was actually written to False. Fail loudly
-            # instead, per this project's fail-fast philosophy: a credential
+            # Do not fall through to the shared "not f or not value: return
+            # False" branch below: that would silently discard the admin's
+            # typed plaintext (Kopia password / S3-B2 secret key) with zero
+            # indication -- the field would appear saved in the UI, but
+            # kopia_password_crypt/secret_key_crypt would be written as False.
+            # Fail loudly instead, per this project's fail-fast philosophy: a credential
             # that looks saved but silently wasn't is a data-durability and
             # confidentiality risk (e.g. a Kopia repo silently created with
             # no password), not just a UX papercut.
@@ -170,13 +169,12 @@ class BackupConfig(models.Model):
             else:
                 return f.encrypt(value.encode("utf-8")).decode("utf-8")
         except (ValueError, InvalidToken) as e:
-            # Bug-hunt fix (2026-09-09, tier-1 pass): Fernet.decrypt's real
-            # failure mode for a wrong/rotated key or corrupted ciphertext is
-            # cryptography.fernet.InvalidToken, which subclasses Exception
-            # directly, NOT ValueError -- the old `except ValueError` never
-            # actually caught it, so a bad decrypt crashed the whole record
-            # read instead of degrading to the "***ERROR***" placeholder
-            # this except clause exists to show. ValueError is kept too: a
+            # Fernet.decrypt's real failure mode for a wrong/rotated key or
+            # corrupted ciphertext is cryptography.fernet.InvalidToken, which
+            # subclasses Exception directly, NOT ValueError -- catching only
+            # ValueError would let a bad decrypt crash the whole record read
+            # instead of degrading to the "***ERROR***" placeholder this
+            # except clause exists to show. ValueError is caught too: a
             # malformed (non-base64) stored value still raises binascii.Error,
             # which does subclass ValueError.
             logging.getLogger(__name__).warning("Encryption/Decryption error: %s", e)
@@ -283,10 +281,9 @@ class BackupConfig(models.Model):
         # reaches here from cron_sync_all_backups() (data/cron.xml runs that
         # cron as the service account) via action_sync_snapshots() and
         # _execute_restore_drill(). The service account used to pass this gate
-        # only because it ALSO held group_backup_admin; since the 2026-09-14
-        # service-account privilege audit it holds only its own group, so that
-        # group is named here explicitly -- the set of actors allowed through
-        # is exactly what it was before, minus nothing and plus nothing.
+        # only because it ALSO held group_backup_admin; it now holds only its
+        # own group, so that group is named here explicitly -- the set of actors
+        # allowed through is the human admins plus this service account.
         if not self.env.su and not self.env.user.has_groups(
             "backup_management.group_backup_admin,"
             "backup_management.group_backup_service_account"
@@ -304,16 +301,16 @@ class BackupConfig(models.Model):
         for rec in self:
             if rec.engine == "kopia" and rec.storage_type == "local":
                 validate_backup_path(rec.target_path)
-            # Bug-hunt fix (2026-09-09, tier-1 pass): do NOT .with_company()
-            # to rec.company_id here. user_backup_service_internal's own
+            # Do NOT .with_company() to rec.company_id here.
+            # user_backup_service_internal's own
             # real company_ids (security.xml) is [main_company] only, same
             # as every other service account in this codebase -- .with_company()
             # to any other company raises AccessError immediately from
             # Environment.companies's own getter (odoo/orm/environments.py),
             # before any query runs, since that check is against the acting
             # user's REAL company membership and is completely unaffected by
-            # ir.rule permissiveness. That made every backup/restore/policy
-            # action on a non-main-company config crash outright. company_id
+            # ir.rule permissiveness. Doing so would make every backup/restore/
+            # policy action on a non-main-company config crash outright. company_id
             # on backup.job is a related(store=True) field computed from
             # config_id.company_id regardless of env.company, so no
             # .with_company() is needed to get it right; cross-tenant read
@@ -399,9 +396,9 @@ class BackupConfig(models.Model):
         # Verified by [@ANCHOR: backup_management:COMM_test_apply_policies]
         # Use Service ID for security & audit trails (moved to _publish_to_worker)
         for rec in self:
-            # Bug-hunt fix, 2026-09-18: policies are a Kopia-only concept -- the daemon's
-            # kopia_policy branch always builds a `kopia policy set` command regardless of
-            # config_engine, so applying this to a pgbackrest config queued an always-failing
+            # Policies are a Kopia-only concept -- the daemon's kopia_policy branch
+            # always builds a `kopia policy set` command regardless of config_engine,
+            # so applying this to a pgbackrest config would queue an always-failing
             # no-op against the wrong tool (harmless, just confusing -- see
             # docs/bug_hunt_claims/hams_open/backup_management/models/backup_config/claims/
             # action_apply_policies.md).
@@ -569,21 +566,20 @@ class BackupConfig(models.Model):
     def action_process_snapshot_data(self, data, engine):
         # [@ANCHOR: backup_management:COMM_action_process_snapshot_data]
         #
-        # Bug-hunt fix (2026-09-09, tier-1 pass): this public wrapper did not
-        # exist. daemon/main.py's execute_job() called
+        # This public wrapper must exist separately from the private
+        # _process_snapshot_data below. daemon/main.py's execute_job() calls
         # backup.config.action_process_snapshot_data(...) over the JSON-2 API
-        # after every successful sync_snapshots job, but the only method
-        # that ever existed was the private _process_snapshot_data below --
+        # after every successful sync_snapshots job, and
         # odoo.service.model.get_public_method() unconditionally rejects any
         # RPC method name starting with "_" ("Private methods ... cannot be
-        # called remotely"), and the name didn't even match besides. Every
-        # real sync_snapshots job therefore failed at the ingestion step
-        # (loudly -- execute_job's outer except re-flips the job to "failed"
-        # and calls report_backup_failure), and no snapshot was EVER recorded
-        # into backup_snapshot via the normal daemon-driven flow: the board's
-        # "latest snapshot" view, the minimum-size anomaly check below, and
-        # the staleness check in cron_sync_all_backups all silently saw an
-        # empty/stale snapshot history for every config, forever.
+        # called remotely"). Without the public name every sync_snapshots job
+        # would fail at the ingestion step (loudly -- execute_job's outer
+        # except re-flips the job to "failed" and calls report_backup_failure),
+        # and no snapshot would ever be recorded into backup_snapshot via the
+        # normal daemon-driven flow: the board's "latest snapshot" view, the
+        # minimum-size anomaly check below, and the staleness check in
+        # cron_sync_all_backups would all silently see an empty/stale snapshot
+        # history for every config.
         self.ensure_one()
         return self._process_snapshot_data(data, engine)
 
@@ -741,21 +737,13 @@ class BackupConfig(models.Model):
         (matching the `keep_daily` retention field's own name/intent -- one full backup per day,
         retained `keep_daily` days; see `cron.xml`'s own record for the schedule itself).
 
-        Closes a real, previously-undiscovered gap found 2026-10-01 while verifying the
-        heartbeat-starvation backup fix (`night_shift_todo/high/production-database-has-zero-
-        backup-config-ever-configured-a82c2eb8.md`): `action_trigger_backup()` -- the method that
-        actually runs `pgbackrest backup`/`kopia snapshot create` -- had no caller anywhere in
-        this codebase except the "Run Backup Now" UI button and this module's own tests. The 25
-        real `backup.snapshot` records that to-do's own closure cited as proof the pipeline
-        worked were all created by that to-do's own session repeatedly calling
-        `action_trigger_backup()` by hand while testing the fix, not by any real, ongoing
-        schedule -- `cron_sync_all_backups()` above only ever SYNCS/lists existing snapshots
-        (`pgbackrest info`/`kopia snapshot list`), it never creates a new one. The moment manual
-        triggering stopped (confirmed directly: `backup.snapshot`'s own last real row is
-        11:26:53 UTC, matching almost exactly when `backup.worker.service` was last restarted to
-        deploy that session's own fix), real backups silently stopped too -- production would
-        have gone right back to having no fresh backups at all, the same risk the original to-do
-        existed to close, just with a time-delayed trigger instead of an immediate one."""
+        `action_trigger_backup()` -- the method that actually runs
+        `pgbackrest backup`/`kopia snapshot create` -- would otherwise have no caller anywhere in
+        this codebase except the "Run Backup Now" UI button and this module's own tests.
+        `cron_sync_all_backups()` above only ever SYNCS/lists existing snapshots
+        (`pgbackrest info`/`kopia snapshot list`), it never creates a new one. Without a scheduled
+        caller, real backups would silently stop the moment manual triggering stopped, and
+        production would have no fresh backups at all."""
         # [@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]
 
         # Verified by [@ANCHOR: backup_management:COMM_test_cron_trigger_scheduled_backups]

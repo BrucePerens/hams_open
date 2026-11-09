@@ -170,8 +170,8 @@ def _process_one(request_path):
         os.chmod(result_path, 0o644)  # readable back by backup_worker (odoo), which owns the spool dir
         os.remove(request_path)  # shortens the S3/B2 secret's lifetime on disk
     except OSError:
-        # Advisor-caught gap, 2026-10-01: a bare, unwrapped os.remove() here
-        # meant that if writing/renaming the result itself failed (full
+        # A bare, unwrapped os.remove() here would mean that if
+        # writing/renaming the result itself failed (full
         # disk, an odd permission problem), the request file would still
         # be sitting there afterward -- still matching
         # PathExistsGlob=request-*.json, so hams-pgbackrest-backup.path

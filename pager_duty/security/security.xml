@@ -41,7 +41,7 @@
             <!-- Verified by [@ANCHOR: test_incident_creator_holds_only_its_own_group] -->
             <!-- Verified by [@ANCHOR: test_incident_creator_group_grant_is_exactly_pager_incident] -->
             <!-- Verified by [@ANCHOR: test_incident_creator_cannot_reach_pager_check] -->
-            <!-- Service-account privilege audit, 2026-09-14 (bug-hunt):
+            <!-- Service-account privilege scope:
                  user_pager_incident_creator is the identity report_incident(),
                  _raise_trend_incident() and message_new() (the inbound-email
                  gateway path) elevate to, i.e. the account reachable from
