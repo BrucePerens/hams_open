@@ -4,7 +4,7 @@
 [@ANCHOR: user_websites:migrate_home_url_to_slug]
 Verified by [@ANCHOR: test_migration_home_url_to_slug]
 
-Bruce, 2026-10-12: "make all of the user websites be hams.com/<callsign> without 'home'."
+Requirement: all user websites are served at hams.com/<callsign> without "home".
 A member site's home is now served at /<slug> by controllers/main.py's user_home_fallback(),
 and /<slug>/home answers a permanent 301 to /<slug> (user_home_legacy_redirect()), so existing
 links, bookmarks and search-engine entries keep working without a stored redirect row.

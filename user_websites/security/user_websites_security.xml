@@ -48,20 +48,19 @@
             <field name="user_ids" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
         </record>
 
-        <!-- Service-account privilege audit, 2026-09-14 (bug-hunt): a
-             capability-only group carrying NO ir.model.access rows and NO
+        <!-- A capability-only group carrying NO ir.model.access rows and NO
              ir.rule of its own, anywhere. Its one and only meaning is the
              boolean UserWebsitesOwnedMixin checks in
              _check_proxy_ownership_create()/_check_proxy_ownership_write():
              "this actor may create a record owned by someone else / with no
              owner, and may change owner_user_id/user_websites_group_id after
-             creation." Before this group existed, the only way for a service
+             creation." Without this group, the only way for a service
              account in another module (GDPR erasure, DNS zone provisioning,
              public event-issue and repeater-report intake) to get that one
-             bypass was to join group_user_websites_service_account below,
+             bypass would be to join group_user_websites_service_account below,
              which also carries full create/write/unlink on res.groups,
              ir.ui.view, website.rewrite, mail.followers, discuss.channel.member
-             and more (see ir.model.access.csv). Those accounts now hold this
+             and more (see ir.model.access.csv). Those accounts hold this
              group instead. test_ownership_bypass_group.py enforces the
              "no grants of its own" invariant mechanically. -->
         <!-- [@ANCHOR: user_websites:ownership_bypass_group] -->
@@ -219,18 +218,18 @@
             <field name="perm_unlink" eval="False"/>
         </record>
 
-        <!-- Bug-hunt fix (docs/bug_hunt_claims/.../published_read_rules.md, 2026-09-12): this
-             rule's domain used to be [('is_published', '=', True)], a different field from stock
+        <!-- See docs/bug_hunt_claims/.../published_read_rules.md. This
+             rule's domain is deliberately not [('is_published', '=', True)], a different field from stock
              Odoo's own website_blog_post_public rule ([('website_published', '=', True)],
              website_blog/security/website_blog_security.xml), which also matches
              base.group_public/base.group_portal on this same model. Since Odoo OR-combines
              same-model group-scoped rule domains, and website_published (a computed field:
              is_published AND (no website_id OR website_id matches the current website)) implies
-             is_published but not the reverse, the OR-combined domain optimized to the broader
-             is_published alone: silently stripping stock's own current-website scoping. In a
+             is_published but not the reverse, the OR-combined domain would optimize to the broader
+             is_published alone, silently stripping stock's own current-website scoping. In a
              multi-website deployment (a real, provisioned configuration here: the service account
-             holds website.group_multi_website), a blog.post published on one website became
-             readable by a visitor browsing a different one. Fixed by matching stock's own field
+             holds website.group_multi_website), a blog.post published on one website would become
+             readable by a visitor browsing a different one. This rule matches stock's own field
              exactly, keeping this rule's broader group list (it also covers
              group_user_websites_user, which stock's rule doesn't). -->
         <record id="blog_post_published_read_rule" model="ir.rule">
@@ -244,14 +243,14 @@
             <field name="perm_unlink" eval="False"/>
         </record>
 
-        <!-- Bug-hunt fix (docs/bug_hunt_claims/.../published_read_rules.md, 2026-09-12): this
-             rule's domain used to be [(1, '=', 1)] (unconditional), while stock Odoo's own
+        <!-- See docs/bug_hunt_claims/.../published_read_rules.md. This
+             rule's domain is not [(1, '=', 1)] (unconditional), because stock Odoo's own
              website_blog_public rule (same model, same base.group_public/base.group_portal
              groups) restricts to [('active', '=', True)]. Odoo OR-combines same-model
              group-scoped rule domains, so [('active','=',True)] OR (1,'=',1) optimizes to
-             (1,'=',1): this module's own rule silently nullified stock's own archived/
+             (1,'=',1): this module's own rule would silently nullify stock's own archived/
              soft-deleted-record filter, letting any public or portal caller read every blog.blog
-             record regardless of its active flag. Fixed by matching stock's own domain exactly,
+             record regardless of its active flag. The domain therefore matches stock's own exactly,
              keeping this rule's broader group list (it also covers group_user_websites_user,
              which stock's rule doesn't). -->
         <record id="blog_blog_published_read_rule" model="ir.rule">
@@ -320,9 +319,9 @@
             <field name="perm_unlink" eval="True"/>
         </record>
 
-        <!-- Bug-hunt fix (2026-09-12): mirrors content_violation_report_service_account_rule's
-             own 2026-09-09 fix above, exactly the same shape and same root cause: the service
-             account used to share the Administrator's own unconditional [(1,'=',1)] rule, which
+        <!-- Mirrors content_violation_report_service_account_rule's own earlier
+             handling above, exactly the same shape and same root cause: the service
+             account must not share the Administrator's own unconditional [(1,'=',1)] rule, which
              OR dominates content_violation_appeal_multi_company_rule's own company_id scoping
              (Odoo combines same-model group-matching rule domains with OR). No current caller
              does a with_company(company)-scoped count()/search() against content.violation.appeal
@@ -355,17 +354,17 @@
             <field name="perm_unlink" eval="True"/>
         </record>
 
-        <!-- Bug-hunt fix (docs/bug_hunt_claims/.../acl_user_websites_group.md, 2026-09-12):
+        <!-- See docs/bug_hunt_claims/.../acl_user_websites_group.md.
              base.group_portal and base.group_public each have their own read-only ACL row on this
              model (access_user_websites_group_user/_public), but neither group matched the rule
              above (base.group_user only): per the "no matching group rule = fully unrestricted"
              mechanism, that left both groups with unscoped, cross-company read of every
              user.websites.group record platform-wide, including violation_strike_count and
              is_suspended_from_websites, which read as internal moderation data rather than public-
-             directory data. Confirmed live for portal (a real, password-authenticated login that
+             directory data. Exploitable for portal (a real, password-authenticated login that
              can call /web/dataset/call_kw directly); the public row is latent in practice (the
              generic RPC endpoint requires an authenticated session, which an anonymous website
-             visitor's request never has), but fixed for both since the mechanism is identical and
+             visitor's request never has), but covered for both since the mechanism is identical and
              perm_write/create/unlink stay 0 for both groups regardless of this rule's own
              all-True perm flags (ir.rule can only narrow which records are visible, never grant an
              operation the ACL itself doesn't already allow). -->

@@ -356,18 +356,18 @@ class UserWebsitesController(http.Controller):
         # report_violation_modal (user_websites_templates.xml) already ships a hidden
         # "website_honeypot" field (d-none, aria-hidden, tabindex="-1" -- invisible and
         # unreachable for a real visitor, but many form-filling bots populate every input
-        # regardless of CSS). Found live 2026-09-28/29: the field existed but this controller
-        # never actually read it, so it caught nothing -- five near-identical spam submissions
-        # ("Hi, I wanted to know your price," the same template in five different languages)
-        # landed as real content.violation.report rows and emailed Bruce, over five days, while
-        # the honeypot sat there doing nothing. Pretend success rather than surfacing an error:
+        # regardless of CSS). The controller must actually read the field: if it
+        # does not, the honeypot catches nothing and near-identical spam
+        # submissions ("Hi, I wanted to know your price," the same template
+        # in several languages) land as real content.violation.report rows and
+        # are emailed to the administrator. Pretend success rather than surfacing an error:
         # a bot that gets useful rejection feedback learns to stop filling the field, which
         # defeats the whole mechanism; a real visitor never sees or fills this field at all, so
         # this branch never fires for one.
         #
-        # The honeypot alone was not enough: reports 7 and 8 (2026-10-12 and 10-14) arrived
-        # after it was fixed, from programs that left it empty. The form_shield module's
-        # checks now run first (proof of work or question, a second honeypot, time-to-submit,
+        # The honeypot alone is not enough: some programs leave it empty. The
+        # form_shield module's checks run first (proof of work or question, a
+        # second honeypot, time-to-submit,
         # rate limits); see [@ANCHOR: user_websites:report_violation_shield].
         if website_honeypot:
             _logger.info("report_violation: honeypot triggered, discarding silently")
@@ -537,17 +537,17 @@ class UserWebsitesController(http.Controller):
             else [("user_websites_group_id", "=", profile_group.id)]
         )
         blogs = env_svc["blog.blog"].search(domain, limit=100)
-        # [!] SECURITY FIX (bug-hunt, 2026-09-09): env_svc runs as the
+        # [!] SECURITY: env_svc runs as the
         # user_websites service account, whose own blog_post_svc_rule
         # ir.rule grants it an unconditional [(1,'=',1)] read domain (see
         # security/user_websites_security.xml) -- it does NOT get the
         # is_published-scoped rule that base.group_public/group_portal get.
         # A bare `env_svc["blog.post"].search(domain, ...)` therefore
-        # returned every post (including unpublished drafts) to ANY visitor,
+        # would return every post (including unpublished drafts) to ANY visitor,
         # not just the profile's own owner -- the exact class of bug this
         # file's own user_home_fallback() already defends against for
         # website.page (see its explicit `("website_published", "=", True)`
-        # filter a few methods below). Restore that same defense here: only
+        # filter a few methods below). The same defense applies here: only
         # the profile's own owner gets to see unpublished drafts in this
         # listing; everyone else is scoped to published posts only, decided
         # in the controller rather than relying on the service account's
@@ -598,7 +598,7 @@ class UserWebsitesController(http.Controller):
     def user_home_legacy_redirect(self, website_slug, **kwargs):
         """Permanent redirect from the old /<slug>/home address to /<slug>.
 
-        Every member and group site's home is /<slug> (Bruce, 2026-10-12). Existing links,
+        Every member and group site's home is /<slug>. Existing links,
         bookmarks and search-engine entries for /<slug>/home keep working through this 301.
         The target is built from the slug as stored in the database (lower-case, limited to
         [a-z0-9-] by a database constraint) and quoted, never from the raw request path, so it is
@@ -898,11 +898,11 @@ class UserWebsitesController(http.Controller):
     )
     # [@ANCHOR: user_websites:COMM_create_blog_post]
     def create_blog_post(self, website_slug, **kwargs):
-        # Real gap found live 2026-09-29: create_blog() (immediately above) lets an owner create
-        # their own blog CONTAINER, but nothing ever let them add a POST to it -- blog_index's own
+        # create_blog() (immediately above) lets an owner create
+        # their own blog CONTAINER; this lets them add a POST to it -- blog_index's own
         # template (user_websites_templates.xml) renders "No posts available yet." with no button
-        # at all, even for the owner, once a blog exists. A user who had just created their first
-        # blog had no way to add its first post. This mirrors create_blog()'s own ownership checks
+        # at all, even for the owner, once a blog exists, so a user who has just created their first
+        # blog needs a way to add its first post. This mirrors create_blog()'s own ownership checks
         # exactly, then creates a blank blog.post in the caller's own blog and redirects straight
         # into it via website_blog's own standard post-edit route -- the same route blog_index's
         # own "Read Post" links already use (/blog/<blog_id>/post/<post_id>), so the normal website
@@ -980,12 +980,8 @@ class UserWebsitesController(http.Controller):
             create_vals["author_id"] = user.partner_id.id
 
         post = env_svc["blog.post"].create(create_vals)
-        # Real gap found live 2026-10-01 (night_shift_todo/high/
-        # personal-blog-owner-cannot-actually-edit-or-publish-their-own-new-post-0c44e7eb.md):
-        # this used to redirect straight into website_blog's own generic post-view route
-        # (/blog/<blog_id>/post/<post_id>), on the comment-stated assumption that "the normal
-        # website builder's editor toolbar (Edit/New) works on it exactly as it does on any
-        # other blog post." That assumption is false for this module's real target user --
+        # The editor toolbar (Edit/New) on website_blog's generic post-view route
+        # (/blog/<blog_id>/post/<post_id>) does not work for this module's real target user --
         # Odoo core's own website/models/ir_http.py gates that whole toolbar on
         # website.group_website_designer, a GLOBAL, sitewide website-editing permission a
         # personal-site owner (base.group_portal + group_user_websites_user) does not and
@@ -1246,9 +1242,7 @@ class UserWebsitesController(http.Controller):
         # time this export costs on the redirect path.
         token = request.env["ham.gdpr.export.token"].create_for_current_user()
         response = request.redirect("/api/v1/gdpr_export/download")
-        # Hardening, 2026-09-10 (Bruce approved "harden both" during the
-        # ses_webhook/GDPR-token-handoff review): the token used to travel
-        # in the redirect URL's own query string, where it would land in
+        # Hardening: the token must not travel in the redirect URL's own query string, where it would land in
         # this worker's and the daemon's own HTTP access logs, the
         # browser's history, and any Referer header sent onward from the
         # download page. A short-lived, HttpOnly, SameSite=Strict cookie
