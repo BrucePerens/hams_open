@@ -66,6 +66,7 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_radio_read] Reads one bulk transfer, decodes it, counts it; three silent reads before any sample are `NoSamples`.
 - [@ANCHOR: elad_usb:elad_usb_find] Lists ELAD receivers on the bus without opening them.
 - [@ANCHOR: elad_usb:elad_usb_open] Opens and claims a found receiver (exercised by the hardware run, not by `cargo test`).
+- [@ANCHOR: elad_usb:elad_usb_is_found] Whether a device's USB vendor and product id are those of the receiver `find` listed; `open` refuses any other device at that bus address.
 - [@ANCHOR: elad_usb:elad_format_component_bytes] Bytes per I or Q component of a sample format.
 - [@ANCHOR: elad_usb:elad_format_full_scale] The full-scale divisor of a sample format.
 - [@ANCHOR: elad_usb:elad_error_display] The human-readable text of every error, including the FPGA-image and refused-request messages.
