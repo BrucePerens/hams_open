@@ -21,6 +21,7 @@ VERSION_CALL = '<?xml version="1.0"?><methodCall><methodName>version</methodName
 FROM_A_VISITOR = {"X-Forwarded-For": "203.0.113.9", "CF-Connecting-IP": "203.0.113.9"}
 
 
+@tagged("post_install", "-at_install")
 class TestEndpointFamily(HamsTransactionCase):
     """Tests [@ANCHOR: hams_rpc_guard:endpoint_family]"""
 
@@ -36,8 +37,10 @@ class TestEndpointFamily(HamsTransactionCase):
             self.assertIsNone(gate.endpoint_family(path), path)
 
 
+@tagged("post_install", "-at_install")
 class TestOriginIsLocal(HamsTransactionCase):
-    """Tests [@ANCHOR: hams_rpc_guard:origin_is_local]"""
+    """Tests [@ANCHOR: hams_rpc_guard:origin_is_local], [@ANCHOR: hams_rpc_guard:parse_address],
+    [@ANCHOR: hams_rpc_guard:parse_trusted_proxies] and [@ANCHOR: hams_rpc_guard:client_addresses]"""
 
     def _local(self, peer=None, orig_peer=None, headers=None, trusted=LOOPBACK):
         environ = {}
@@ -89,8 +92,11 @@ class TestOriginIsLocal(HamsTransactionCase):
                 self.assertFalse(self._local(LOOPBACK, headers={name.lower(): "x"}, trusted=""))
 
 
+@tagged("post_install", "-at_install")
 class TestPolicy(HamsTransactionCase):
-    """Tests [@ANCHOR: hams_rpc_guard:policy_allows]"""
+    """Tests [@ANCHOR: hams_rpc_guard:policy_allows], [@ANCHOR: hams_rpc_guard:normalise_policy],
+    [@ANCHOR: hams_rpc_guard:note_denial], [@ANCHOR: hams_rpc_guard:denial_counts] and
+    [@ANCHOR: hams_rpc_guard:is_power_of_ten]"""
 
     def test_the_three_policies(self):
         self.assertTrue(gate.policy_allows(gate.POLICY_ANY, False))
@@ -128,7 +134,7 @@ class TestPolicy(HamsTransactionCase):
 
 @tagged("post_install", "-at_install")
 class TestRpcEndpointGate(HamsHttpCase):
-    """Tests [@ANCHOR: hams_rpc_guard:endpoint_gate]: a real HTTP request, from this machine, with and without the
+    """Tests [@ANCHOR: hams_rpc_guard:endpoint_gate] and [@ANCHOR: hams_rpc_guard:refuse_endpoint_when_closed]: a real HTTP request, from this machine, with and without the
     headers a proxy adds."""
 
     def setUp(self):

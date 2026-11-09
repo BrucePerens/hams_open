@@ -92,6 +92,7 @@ ADDRESS_HEADERS = ("X-Forwarded-For", "Forwarded", "CF-Connecting-IP", "X-Real-I
 _FORWARDED_FOR = re.compile(r'for="?\[?([^;,\]"]+)', re.IGNORECASE)
 
 
+# [@ANCHOR: hams_rpc_guard:parse_address]
 def _parse_address(text):
     """The `ipaddress` object of `text` (an IPv4-mapped IPv6 address becomes IPv4), or None when it is not an address."""
     text = str(text).strip().strip('"')
@@ -108,6 +109,7 @@ def _parse_address(text):
     return address
 
 
+# [@ANCHOR: hams_rpc_guard:parse_trusted_proxies]
 def parse_trusted_proxies(value):
     """The list of `ipaddress` networks in the comma-separated parameter; entries that are not addresses are dropped."""
     networks = []
@@ -121,6 +123,7 @@ def parse_trusted_proxies(value):
     return networks
 
 
+# [@ANCHOR: hams_rpc_guard:client_addresses]
 def _client_addresses(headers):
     """Every client address the forwarding headers carry (None for one that is not an address), in no order."""
     found = []
@@ -168,6 +171,7 @@ def policy_allows(policy, local):
     return bool(local)
 
 
+# [@ANCHOR: hams_rpc_guard:normalise_policy]
 def normalise_policy(value, default):
     """`value` when it is a known policy, `default` when it is unset, `loopback` (fail closed) when it is junk."""
     if value in (None, False, ""):
@@ -176,6 +180,7 @@ def normalise_policy(value, default):
     return value if value in POLICIES else POLICY_LOOPBACK
 
 
+# [@ANCHOR: hams_rpc_guard:note_denial]
 def note_denial(family, policy):
     """Count a refusal and say so in the log at the first one and at every power of ten. Returns the count."""
     with _denied_lock:
@@ -190,12 +195,14 @@ def note_denial(family, policy):
     return count
 
 
+# [@ANCHOR: hams_rpc_guard:denial_counts]
 def denial_counts():
     """A copy of the per-family refusal counts of this worker."""
     with _denied_lock:
         return dict(_denied)
 
 
+# [@ANCHOR: hams_rpc_guard:is_power_of_ten]
 def _is_power_of_ten(count):
     while count >= 10 and count % 10 == 0:
         count //= 10

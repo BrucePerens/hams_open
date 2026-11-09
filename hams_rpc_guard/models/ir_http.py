@@ -27,6 +27,7 @@ class IrHttp(models.AbstractModel):
         return super()._authenticate(endpoint)
 
     @classmethod
+    # [@ANCHOR: hams_rpc_guard:refuse_endpoint_when_closed]
     def _refuse_rpc_endpoint_when_closed(cls):
         family = gate.endpoint_family(request.httprequest.path)
         if family is None:
