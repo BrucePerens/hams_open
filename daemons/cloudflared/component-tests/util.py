@@ -157,11 +157,13 @@ def get_quicktunnel_url():
         return f"https://{hostname}"
 
 
+# [@ANCHOR: cloudflared:wait_quicktunnel_ready]
 def wait_quicktunnel_ready(url):
     LOGGER.debug(f"Waiting {DNS_BACKOFF_SECS} seconds for quick tunnel DNS propagation...")
     sleep(DNS_BACKOFF_SECS)
     _wait_quicktunnel_ready(url)
 
+# [@ANCHOR: cloudflared:_wait_quicktunnel_ready]
 @retry(stop_max_attempt_number=MAX_RETRIES, wait_fixed=BACKOFF_SECS * 1000)
 def _wait_quicktunnel_ready(url):
     with requests.Session() as s:
