@@ -572,8 +572,11 @@ fn a_sweep_is_bounded_and_range_checked_before_the_receiver_is_opened() {
         call(json!({"start_hz": 7e6, "stop_hz": 7.3e6, "step_hz": 1e6, "name": "a"}))
             .contains("step_hz")
     );
-    assert!(call(json!({"start_hz": 7e6, "stop_hz": 60e6, "step_hz": 150000, "rate_hz": 192000, "name": "a"}))
-        .len() > 0);
+    // a band that passes the step and time limits is still refused when it ends above the receiver's range
+    assert!(call(
+        json!({"start_hz": 7e6, "stop_hz": 60e6, "step_hz": 150000, "rate_hz": 192000, "name": "a"})
+    )
+    .contains("is outside the"));
     assert!(call(
         json!({"start_hz": 10, "stop_hz": 100000, "name": "a", "rate_hz": 6144000, "step_hz": 100})
     )

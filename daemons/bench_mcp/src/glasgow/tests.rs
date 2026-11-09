@@ -274,6 +274,14 @@ fn applet_log_lines_result_lines_and_hex_parse() {
     );
     assert!(parse::hex_bytes("abc").is_err() && parse::hex_bytes("zz").is_err());
     assert!(parse::hex_bytes("").unwrap().is_empty());
+    // `0x` only at the start of a group: inside one it is not hex and is refused, not deleted (a0x0 used to become the byte a0)
+    assert_eq!(
+        parse::hex_bytes("0x0a,0xff 0x00").unwrap(),
+        vec![0x0a, 0xff, 0x00]
+    );
+    assert!(parse::hex_bytes("a0x0").is_err());
+    assert!(parse::hex_bytes("00x1").is_err());
+    assert!(parse::hex_bytes("1 0x0x2").is_err());
 }
 
 // Tests [@ANCHOR: glasgow_vcd_summary]

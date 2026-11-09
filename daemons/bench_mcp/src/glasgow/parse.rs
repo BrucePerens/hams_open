@@ -234,11 +234,12 @@ pub fn result_line(stdout: &str) -> Result<Value, String> {
 /// Bytes from hex text (`48 65`, `4865`, `0x48,0x65`); an odd digit count or a non-hex character is an error.
 pub fn hex_bytes(s: &str) -> Result<Vec<u8>, String> {
     // [@ANCHOR: glasgow_parse_hex_bytes]
+    // `0x` is a prefix of one byte group, so it is dropped only at the start of a group (separated by whitespace or commas); a `0x` inside
+    // a group is not hex and is refused below, not silently deleted.
     let clean: String = s
-        .chars()
-        .filter(|c| !c.is_whitespace() && *c != ',')
-        .collect::<String>()
-        .replace("0x", "");
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .map(|group| group.strip_prefix("0x").unwrap_or(group))
+        .collect();
     if !clean.len().is_multiple_of(2) || !clean.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(format!(
             "{s:?} is not hex bytes (an even number of hex digits)"
