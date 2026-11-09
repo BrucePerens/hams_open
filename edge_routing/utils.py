@@ -31,7 +31,7 @@ RESERVED_SLUGS = {
     "arrl",
     "repeaters",
     "elmers",
-    # Added 2026-10-12 with the move of every member site's home from /<slug>/home to /<slug>:
+    # Every member site's home is /<slug> (not /<slug>/home):
     # a member site now owns the single path segment, so any word that is already the first
     # segment of a platform route (static routes win over the /<slug> converter route and would
     # silently shadow the member's site) or a word that is a reserved sub-path of a member site
@@ -43,7 +43,7 @@ RESERVED_SLUGS = {
     "api",
     "aboutus",
     "auxcomm",
-    # 2026-10-13: the training area moved from /auxcomm/... to /training/... (the old words stay reserved: they redirect).
+    # The training area lives at /training/... (it was /auxcomm/...; the old words stay reserved: they redirect).
     "training",
     "backup",
     "bus",
@@ -128,8 +128,8 @@ RESERVED_SLUGS = {
     "terms",
     "websocket",
     "xmlrpc",
-    # Added 2026-10-13: first segments of platform routes that this list lacked (found by the guard test in
-    # a run with the hams_com modules loaded, and by listing hams_prod's live routing map). A member who
+    # First segments of platform routes that the guard test (run with the hams_com modules loaded) and the
+    # live routing map showed this list must cover. A member who
     # had claimed one would own a site nobody could reach. reserved_slug_words() now also reads the live
     # routing map, so a route added later is covered even before it is written here.
     "calendar",

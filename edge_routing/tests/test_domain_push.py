@@ -113,15 +113,14 @@ class TestDomainPush(HamsTransactionCase):
 
     def test_push_all_to_pager_duty_sends_the_configured_api_identity(self):
         # Tests [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
-        # Regression for the bug-hunt finding of 2026-09-27: this POST used to
-        # carry only {"domains": [...]} and no `api_identity` at all, so
+        # This POST must carry an `api_identity`, not only {"domains": [...]}: without it
         # pager_duty's own auth="public" + hmac.compare_digest gate
-        # (the pager_duty:update_domains anchor) refused every single sync.
+        # (the pager_duty:update_domains anchor) refuses every single sync.
         # The refusal arrives inside an HTTP 200 JSON-RPC envelope, so neither
         # raise_for_status() nor the surrounding "don't fail the cron" except
-        # noticed -- the domain list silently never reached
+        # notices -- the domain list silently never reaches
         # pager.check.update_lets_encrypt_domains(). test_push_all_to_pager_
-        # duty_batching above could not catch this: it asserts only the
+        # duty_batching above cannot catch this: it asserts only the
         # `domains` key of a fully mocked requests.post, which is identical
         # whether or not the receiving endpoint would accept the call.
         domain_model = self.env["edge.routing.domain"].with_user(
@@ -204,8 +203,8 @@ class TestDomainPush(HamsTransactionCase):
         # running anything. ir.model.access.csv deliberately keeps this
         # service account read-only on that model (push_all_to_pager_duty()
         # only ever reads domain rows to push externally, never writes them
-        # back) -- found live: the cron 500'd/failed with "Forbidden server
-        # action" on every scheduled run until group_ids was set on the
+        # back) -- without it the cron fails with "Forbidden server
+        # action" on every scheduled run, so group_ids is set on the
         # action itself, authorizing it without broadening the model's
         # actual write ACL.
         self._configure_api_identity()

@@ -161,8 +161,8 @@ function cleanupStaleCaches() {
 }
 
 // True when an older version of THIS worker left its cache behind, i.e. this activation is an update.
-// QA pass 2026-10-13: the activate handler told every open page "NEW_VERSION_INSTALLED" on the very first
-// install too, so every first-time visitor saw "Update Available: a new version of this app is available".
+// The activate handler must not tell open pages "NEW_VERSION_INSTALLED" on the very first install, or
+// every first-time visitor would see "Update Available: a new version of this app is available".
 function previousVersionCacheExists() {
     return caches.keys().then((names) => names.some((n) => n.startsWith(CACHE_NAME_PREFIX) && n !== CACHE_NAME));
 }

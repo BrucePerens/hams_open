@@ -85,12 +85,11 @@ class EdgeRoutingMixin(models.AbstractModel):
                             "edge_routing.edge_routing_service_account"
                         )
                 except Exception as e:  # audit-ignore-catch-all
-                    # bug-hunt (2026-09-09): _get_service_env() raises
+                    # _get_service_env() raises
                     # AccessError (not KeyError/ValueError) on a bad xml_id,
                     # plus a possible psycopg2 error from the SQL-backed uid
-                    # lookup -- narrowed to the wrong types, this fallback
-                    # never actually caught a real resolution failure.
-                    # Class 20.
+                    # lookup -- a narrower except would make this fallback
+                    # miss a real resolution failure.
                     _logger.warning("Error: %s", e)
                     env_svc = self.env
             else:
@@ -151,20 +150,18 @@ class EdgeRoutingMixin(models.AbstractModel):
             return False
         slug = str(slug).lower()
 
-        # Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid, 2026-09-12):
-        # this method is public (no leading underscore), so it's directly
+        # This method is public (no leading underscore), so it's directly
         # callable via /web/dataset/call_kw by any authenticated session.
-        # It used to accept a caller-supplied `override_svc_uid` and do
-        # self.with_user(override_svc_uid).env with zero validation --
-        # letting any authenticated caller pick an arbitrary uid (real
+        # It therefore takes no caller-supplied `override_svc_uid`:
+        # self.with_user(override_svc_uid).env with zero validation
+        # would let any authenticated caller pick an arbitrary uid (real
         # service account or not) to run this search as, bypassing whatever
-        # ir.rule scoping would normally apply to them. Confirmed no real
+        # ir.rule scoping would normally apply to them. No real
         # caller anywhere in the codebase (Python or tests) ever passed this
         # parameter -- every actual call site relies on the default
-        # service-account resolution below -- so removing it entirely
-        # closes the gap with no loss of real functionality, matching the
-        # fix already applied once to this exact shape
-        # (cloudflare.waf.ban_ip(), pre-2026-09-03).
+        # service-account resolution below -- so omitting it entirely
+        # closes the gap with no loss of real functionality, matching
+        # cloudflare.waf.ban_ip(), which has no such parameter either.
         if self.env.registry.loaded:
             self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
             if self.env.cr.fetchone():
@@ -174,12 +171,11 @@ class EdgeRoutingMixin(models.AbstractModel):
                             "edge_routing.edge_routing_service_account"
                         )
                 except Exception as e:  # audit-ignore-catch-all
-                    # bug-hunt (2026-09-09): _get_service_env() raises
+                    # _get_service_env() raises
                     # AccessError (not KeyError/ValueError) on a bad
                     # xml_id, plus a possible psycopg2 error from the
-                    # SQL-backed uid lookup -- narrowed to the wrong
-                    # types, this fallback never actually caught a real
-                    # resolution failure. Class 20.
+                    # SQL-backed uid lookup -- a narrower except would
+                    # make this fallback miss a real resolution failure.
                     _logger.warning("Failed to get service env: %s", e)
                     target_env = self.env
             else:
@@ -187,7 +183,7 @@ class EdgeRoutingMixin(models.AbstractModel):
         else:
             target_env = self.env
 
-        # bug-hunt (2026-09-09): was `("website_slug", "=ilike", slug)`.
+        # The domain uses plain `=`, not `=ilike`.
         # Odoo's `=ilike` (unlike bare `ilike`) passes its operand through
         # to SQL `ILIKE` verbatim, with NO wildcard-wrapping AND NO
         # escaping of `%`/`_` (confirmed directly against
@@ -199,13 +195,13 @@ class EdgeRoutingMixin(models.AbstractModel):
         # `website_slug` starts with "a" instead of failing to find an
         # exact match, letting a visitor land on -- or probe for the
         # existence of -- a slug that isn't the one they typed (`_` is
-        # similarly a single-character wildcard). Plain `=` is a safe,
-        # behavior-preserving fix here specifically because `website_slug`
+        # similarly a single-character wildcard). Plain `=` is safe
+        # here specifically because `website_slug`
         # is DB-constrained to `^[a-z0-9\-]+$` (see this mixin's own
         # `_website_slug_format` CHECK constraint) and `slug` is already
         # lowercased above -- no legitimate stored value can differ from
         # `slug` only by case or contain `%`/`_`, so `=` and `=ilike`
-        # return identical results for every real slug while closing the
+        # return identical results for every real slug, and `=` closes the
         # wildcard-injection surface entirely.
         record = (
             target_env[self._name]
@@ -270,13 +266,13 @@ class EdgeRoutingMixin(models.AbstractModel):
                         self._name, all_slugs_to_invalidate
                     )
                 except Exception as e:  # audit-ignore-catch-all
-                    # bug-hunt (2026-09-09): _notify_cache_invalidation()
+                    # _notify_cache_invalidation()
                     # issues a raw `self.env.cr.execute("SELECT
                     # pg_notify(...)")`; any DB/connection-level failure
                     # there raises a psycopg2 error, not KeyError/ValueError.
                     # A transient DB hiccup during this best-effort cache
-                    # ping would have propagated uncaught out of write(),
-                    # aborting the whole record update. Class 20.
+                    # ping would otherwise propagate out of write(),
+                    # aborting the whole record update.
                     _logger.warning("Failed to notify cache invalidation for %s: %s", all_slugs_to_invalidate, e)
                     
             # Handle the batch write edge case for missing slugs when name is updated
@@ -316,9 +312,8 @@ class EdgeRoutingMixin(models.AbstractModel):
                     self._name, slugs
                 )
             except Exception as e:  # audit-ignore-catch-all
-                # bug-hunt (2026-09-09): same root cause as the write() and
-                # domain.py cache-invalidation guards -- pg_notify() raises
-                # a psycopg2 error, not KeyError/ValueError, on a DB/
-                # connection failure. Class 20.
+                # Same reason as the write() and domain.py cache-invalidation
+                # guards -- pg_notify() raises a psycopg2 error, not
+                # KeyError/ValueError, on a DB/connection failure.
                 _logger.warning("Failed to notify local cache invalidation on unlink for %s: %s", slugs, e)
         return res

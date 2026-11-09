@@ -135,7 +135,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         # for a slug that later matched a changed/new login would have
         # gone stale for the full 24h Redis TTL.
         #
-        # The login-fallback override was removed (2026-09-24): every real
+        # There is no login-fallback override: every real
         # human account's login is now an email address, which made that
         # fallback a live PII exposure (probing hams.com/<email>), and it
         # never protected SWL accounts anyway since they have no
@@ -156,15 +156,13 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
 
     def test_get_record_by_slug_no_longer_accepts_a_caller_supplied_service_uid(self):
         """
-        Bug-hunt fix (docs/bug_hunt_claims/.../override_svc_uid, 2026-09-12):
-        get_record_by_slug() (and the since-deleted get_record_by_domain()/
-        get_target_slug_by_domain()) used to accept a caller-supplied
+        get_record_by_slug() must not accept a caller-supplied
         `override_svc_uid` and run self.with_user(override_svc_uid).env
         with zero validation -- any authenticated RPC caller (this method
         is public, no leading underscore) could pick an arbitrary uid to
         search under, bypassing whatever ir.rule scoping would normally
         apply to them. No real caller anywhere in the codebase ever passed
-        this parameter, so it was removed entirely rather than validated.
+        this parameter, so it is omitted entirely rather than validated.
         Prove the parameter is genuinely gone, not just unused -- a
         TypeError here is exactly what protects against the RPC path,
         since Odoo's own dispatch passes kwargs straight through to the

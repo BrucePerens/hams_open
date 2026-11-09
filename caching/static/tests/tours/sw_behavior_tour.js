@@ -535,13 +535,13 @@ registry.category("web_tour.tours").add("caching_sw_offline_fallback_check", {
     ],
 });
 
-// Bug found 2026-09-11: activate()'s own cache-cleanup used to delete ANY
-// cache not equal to its own CACHE_NAME -- with no prefix scoping, that
-// means every time a caching-module deploy bumps CACHE_NAME (any asset
-// mtime or website.caching_invalidation_version change), it silently wiped
-// out every OTHER Service Worker's cache sharing this same origin's
-// CacheStorage, including shack_sw.js's entire offline QSO-logging cache.
-// Fixed by scoping deletion to CACHE_NAME_PREFIX. This tour proves it by
+// activate()'s own cache-cleanup must not delete ANY cache not equal to its
+// own CACHE_NAME: without prefix scoping, every time a caching-module deploy
+// bumps CACHE_NAME (any asset mtime or website.caching_invalidation_version
+// change), it would silently wipe out every OTHER Service Worker's cache
+// sharing this same origin's CacheStorage, including shack_sw.js's entire
+// offline QSO-logging cache. Deletion is therefore scoped to
+// CACHE_NAME_PREFIX. This tour proves it by
 // seeding a foreign, differently-prefixed cache alongside a genuinely
 // stale same-prefix one, then asserting cleanupStaleCaches() (driven here
 // via TEST_RUN_CACHE_CLEANUP, see sendTestMessageToSW's own comment above)

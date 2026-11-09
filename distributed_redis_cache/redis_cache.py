@@ -40,8 +40,7 @@ def poll_and_clear_local_cache(env):
     """Poll Redis's global invalidation counter and clear the process-local L1
     cache if it changed since the last poll from any call site.
 
-    This is the ONLY thing that ever clears `_local_cache`, and (see
-    `night_shift_todo/low/misc-small-relay-and-infra-cleanups-1487fd74.md`) the
+    This is the ONLY thing that ever clears `_local_cache`, and the
     ONLY thing that clears `redis_pool._db_configs` on a worker OTHER than the
     one that saved new Redis settings -- `res_config_settings.set_values()`
     bumps this same counter via `pg_notify`/`cache_manager.py` for exactly this
@@ -240,17 +239,17 @@ def distributed_cache():
             # Multi-Tenant awareness: Include website_id and company_id in cache key
             website_id = self.env.context.get("website_id") or 0
 
-            # bug-hunt (2026-09-09): this used to fall back to a fixed
-            # literal "0" whenever "allowed_company_ids" was absent from
-            # context -- which it is for the overwhelming majority of
-            # calls (any backend RPC, cron job, or controller call that
-            # didn't go through the web client's own company switcher).
+            # Do not fall back to a fixed literal "0" when
+            # "allowed_company_ids" is absent from context -- which it is
+            # for the overwhelming majority of calls (any backend RPC, cron
+            # job, or controller call that didn't go through the web
+            # client's own company switcher).
             # THE REAL active company scope in that case is NOT "company
             # 0" (no such company exists) -- Environment.companies
             # (odoo/orm/environments.py) falls back to
             # self.user._get_company_ids() precisely when
-            # "allowed_company_ids" isn't in context. Using a constant
-            # instead meant two different users in two different
+            # "allowed_company_ids" isn't in context. A constant would mean
+            # two different users in two different
             # companies, both calling the same @distributed_cache()'d
             # method with no explicit company context, got the exact
             # same cache key suffix regardless of which company either
@@ -268,8 +267,8 @@ def distributed_cache():
             # the real fallback from Environment.companies (sorted, so
             # [1,2] and [2,1] hash identically) instead of a dummy
             # constant; also sort the explicit-context path for the same
-            # reason (unsorted, [1,2] and [2,1] context values previously
-            # produced two different cache keys for the same real scope).
+            # reason (unsorted, [1,2] and [2,1] context values would
+            # produce two different cache keys for the same real scope).
             allowed_company_ids = self.env.context.get("allowed_company_ids")
             if allowed_company_ids:
                 company_ids_str = ",".join(map(str, sorted(allowed_company_ids)))
@@ -371,9 +370,9 @@ def invalidate_model_cache(env, model_name, local_only=False):
                     r.delete(*keys)
             except redis.AuthenticationError as e:
                 # [@ANCHOR: distributed_redis_cache:COMM_invalidation_auth_failure_aborts_upgrade]
-                # Found 2026-10-12: a hand-run `odoo -u` on production lacked the service's Redis credentials
-                # (REDIS_USERNAME/REDIS_PASSWORD, /opt/hams/etc/redis.env). 2394 invalidations failed as
-                # WARNINGs, the upgrade "succeeded" and Redis kept every pre-upgrade entry for 24 hours.
+                # A hand-run `odoo -u` on production without the service's Redis credentials
+                # (REDIS_USERNAME/REDIS_PASSWORD, /opt/hams/etc/redis.env) would see every invalidation fail as a
+                # WARNING, the upgrade "succeed" and Redis keep every pre-upgrade entry for 24 hours.
                 # While the registry is still loading (install/upgrade) that must stop the run at the first
                 # failure; a serving worker keeps degrading to its local cache as before.
                 if not env.registry.ready:

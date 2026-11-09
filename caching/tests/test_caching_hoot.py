@@ -11,9 +11,9 @@ def _hoot_unit_test_error_checker(message):
 
 @tagged("post_install", "-at_install")
 class TestCachingHoot(HamsHttpCase):
-    # toast.test.js had real coverage but no tests/test_*.py runner
-    # executing it via browser_js() -- night_shift_todo/medium/hoot-
-    # runner-coverage-13-modules-d5b7c88b.md's own tracked gap.
+    # toast.test.js has real coverage, and this class is the tests/test_*.py
+    # runner that executes it via browser_js(), so the Hoot suite runs with
+    # the rest of this module's tests.
     def test_toast_hoot_suite_passes(self):
         self.browser_js(
             "/web/tests?headless&loglevel=2&preset=desktop&timeout=15000&tag=caching_toast",
