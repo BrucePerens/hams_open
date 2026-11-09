@@ -424,6 +424,40 @@ pub fn on(usb: &Vnwa, freq_hz: f64, attenuation_db: f64) -> Result<(), String>
 
 **See also.** `vnwa_open_generator_level`, `vnwa_open_generator_run`, `vnwa_open_generator_set_frequency`. Test: `switching_the_generator_on_sends_the_vendor_sequence_and_a_bad_level_sends_nothing`.
 
+### `vnwa_open_generator_check_frequency` [@ANCHOR: vnwa_open_generator_check_frequency]
+
+**Purpose.** Refuse a generator frequency the unit's DDS cannot be programmed with, before anything is sent. `protocol::tuning_word` converts with a saturating cast, so without this check a NaN or negative frequency became 0 Hz and 360 MHz or more became the largest word, a tone at a frequency other than the one asked for and no error.
+
+```rust
+pub fn check_frequency(freq_hz: f64) -> Result<(), String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `freq_hz` | `f64` | The requested output frequency in hertz. |
+
+**Returns.** `Ok(())` when `freq_hz` is finite, above 0 and its tuning word `round(f * 2^32 / 360 MHz)` is at most `u32::MAX`. Otherwise `Err` naming the frequency and the 360 MHz DDS clock.
+
+**Special concerns.** Pure and non-blocking, no side effects. Called first by `on`, `set_frequency` (so `retune`) and `modulate`, so a refused frequency sends no transfer. Between 180 MHz (the DDS Nyquist frequency) and 360 MHz the word is valid and the output is the spectral image; that range has not been measured and is not refused. It limits a signal at the unit's own low output level, not a transmitter. Test: `a_frequency_whose_tuning_word_does_not_fit_is_refused_before_anything_is_sent`.
+
+### `vnwa_open_power_cold_reset_via` [@ANCHOR: vnwa_open_power_cold_reset_via]
+
+**Purpose.** The body of `cold_reset`: cycle the unit's hub port through the program's installed power-cycle implementation (`set_cycle_hook`, the bench's hub module with its protection rules) when there is one, else through `sudo -n uhubctl`, using the two-step ladder (3 s off with 25 s for the unit, then 12 s off with 45 s), then pause so the unit and its codecs answer reliably.
+
+```rust
+fn cold_reset_via(hook: Option<&CycleHook>, port: &HubPort, settle: Duration) -> Result<(), String>
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `hook` | `Option<&CycleHook>` | The installed implementation, or `None` for the built-in one. |
+| `port` | `&HubPort` | The hub and port to cycle. |
+| `settle` | `Duration` | The pause after the unit is back (8 s in production, zero in tests). |
+
+**Returns.** `Ok(())` once the unit is back and `settle` has passed; otherwise the error of the hook or the failures of every rung of the ladder.
+
+**Special concerns.** Blocking for up to about a minute. Removes and restores power on the hub port, so every setting the unit held is lost. Not idempotent in effect, but safe to repeat. Test: `the_production_cold_reset_goes_through_an_installed_cycle_implementation`.
+
 ### `vnwa_open_audio_analysis_span` [@ANCHOR: vnwa_open_audio_analysis_span]
 
 **Purpose.** Choose which part of one point's audio to analyse: a whole number of IF periods, so the DFT of the tone has no leakage. Called by `measure_point`.

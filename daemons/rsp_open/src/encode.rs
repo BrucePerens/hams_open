@@ -434,7 +434,9 @@ pub fn pll(lo_hz: u64, div: u64, ppb: i64) -> Result<Pll, Error> {
         return Err(Error::InvalidArgument("ppm correction out of range".into()));
     }
     let den = den_i as u128;
-    let q = num.div_ceil(den) - 1;
+    // A zero first-LO frequency gives a zero quotient; the range check below then refuses it
+    // (a plain `- 1` would underflow and panic in a debug build).
+    let q = num.div_ceil(den).saturating_sub(1);
     let units = q / PLL_SUB as u128;
     let sub = (q % PLL_SUB as u128) as u32;
     let n = (units / PLL_MOD as u128) as u32;
@@ -1196,5 +1198,13 @@ mod tests {
         assert_eq!(gain_table(&am_down, Antenna::HiZ), GainTable::Am);
         let vhf = band_for(100_000_000).unwrap();
         assert_eq!(gain_table(&vhf, Antenna::B), GainTable::Vhf);
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_encode_pll]
+    fn a_zero_lo_frequency_is_refused_not_a_panic() {
+        for div in [2, 4, 16, 32] {
+            assert!(matches!(pll(0, div, 0), Err(Error::InvalidArgument(_))));
+        }
     }
 }
