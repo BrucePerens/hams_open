@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Tests of the installer and the pin generator without a network and without installing anything. Run by `cargo test` (src/glasgow/tests.rs)
 or by hand: python3 glasgow/test_glasgow_tools.py"""
+import asyncio
 import contextlib
+import importlib.util
 import io
 import json
 import os
@@ -90,6 +92,72 @@ class PinTests(unittest.TestCase):
         self.assertTrue(lines[0].startswith("# Generated"))
         self.assertEqual(sum(1 for line in lines if "==" in line), len(pin_requirements.PINS))
         self.assertTrue(all("--hash=sha256:" in line for line in lines if line.startswith("    ")))
+
+
+def _load_ops():
+    spec = importlib.util.spec_from_file_location("glasgow_ops", Path(__file__).resolve().parent.parent / "src" / "glasgow" / "ops.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class _FakeUart:
+    """A fake UART object (no device): returns one byte every `period` seconds, or never when `period` is None."""
+
+    def __init__(self, period):
+        self.period = period
+
+    async def write(self, data, flush=False):
+        pass
+
+    async def read_all(self, flush=True):
+        if self.period is None:
+            await asyncio.sleep(3600)
+        await asyncio.sleep(self.period)
+        return b"x"
+
+    async def get_baud(self):
+        return 9600.0
+
+
+class OpsTests(unittest.TestCase):
+    def _transact(self, period, **payload):
+        ops = _load_ops()
+        base = {"send": [], "until": [], "timeout_s": 0.4, "idle_ms": 200, "max_bytes": 65536}
+        base.update(payload)
+        return asyncio.run(ops._uart_transact({"uart_iface": _FakeUart(period)}, base))
+
+    # Tests [@ANCHOR: glasgow_ops_uart_transact]
+    def test_a_device_still_sending_at_the_deadline_ends_by_timeout_not_idle(self):
+        result = self._transact(0.05)
+        self.assertEqual(result["ended_by"], "timeout")
+        self.assertGreater(result["received"], 0)
+
+    # Tests [@ANCHOR: glasgow_ops_uart_transact]
+    def test_a_device_that_goes_quiet_ends_by_idle(self):
+        result = self._transact(0.01, timeout_s=3, idle_ms=100, max_bytes=2)
+        self.assertEqual(result["ended_by"], "max_bytes")
+        ops = _load_ops()
+
+        class Burst(_FakeUart):
+            sent = 0
+
+            async def read_all(self, flush=True):
+                Burst.sent += 1
+                if Burst.sent > 2:
+                    await asyncio.sleep(3600)
+                return b"y"
+
+        idle = asyncio.run(
+            ops._uart_transact({"uart_iface": Burst(None)}, {"send": [], "until": [], "timeout_s": 3, "idle_ms": 100, "max_bytes": 65536})
+        )
+        self.assertEqual((idle["ended_by"], idle["received"]), ("idle", 2))
+
+    # Tests [@ANCHOR: glasgow_ops_uart_transact]
+    def test_a_silent_device_ends_by_timeout_with_nothing_received(self):
+        result = self._transact(None)
+        self.assertEqual((result["ended_by"], result["received"]), ("timeout", 0))
 
 
 if __name__ == "__main__":
