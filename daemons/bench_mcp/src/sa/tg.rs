@@ -622,8 +622,6 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sa_with_defaults]
     #[test]
     fn s21_is_relative_to_the_stored_through_with_the_generator_on_only_during_the_sweep() {
-        let d = std::env::temp_dir().join(format!("bench_mcp_sa_test_{}", std::process::id()));
-        std::env::set_var("BENCH_MCP_OUT", &d);
         let sim = Sim::default();
         let loss = sim.dut_db.clone();
         let dev = FakeDevice::sim(sim);
@@ -777,10 +775,6 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sa_sweep]
     #[test]
     fn a_sweep_with_tg_off_after_switches_it_off_and_proves_it() {
-        std::env::set_var(
-            "BENCH_MCP_OUT",
-            std::env::temp_dir().join(format!("bench_mcp_sa_test_{}", std::process::id())),
-        );
         let dev = FakeDevice::sim(Sim {
             on: true,
             ..Sim::default()

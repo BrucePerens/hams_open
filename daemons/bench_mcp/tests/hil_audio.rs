@@ -7,6 +7,10 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
+#[allow(dead_code)]
+#[path = "../src/testdir.rs"]
+mod testdir;
+
 const INIT: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"hil","version":"1"}}}"#;
 const INITIALIZED: &str = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
 
@@ -130,9 +134,7 @@ fn call(cfg: &Path, out: &Path, name: &str, args: &str) -> (bool, serde_json::Va
 }
 
 fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("bench-audio-hil-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let d = testdir::scratch(&format!("bench-audio-hil-{tag}"));
     d
 }
 

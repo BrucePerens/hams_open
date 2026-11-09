@@ -481,10 +481,9 @@ mod tests {
     use super::super::*;
     use super::*;
 
+    /// Where the tools under test write: the output directory every test of this process shares (removed when the process exits).
     fn out() -> PathBuf {
-        let d = std::env::temp_dir().join(format!("bench_mcp_sa_test_{}", std::process::id()));
-        std::env::set_var("BENCH_MCP_OUT", &d);
-        d
+        crate::out_dir()
     }
 
     // Tests [@ANCHOR: bench_mcp_sa_sweep_args]

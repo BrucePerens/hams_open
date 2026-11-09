@@ -479,7 +479,7 @@ mod tests {
         sim.ptt = true;
         sim.rfpower = 0.6;
         let (fake, shared) = serve_sim(sim);
-        let dir = std::env::temp_dir().join(format!("bench_mcp-keyed-drop-{}", std::process::id()));
+        let dir = crate::testdir::TestDir::new("bench_mcp-keyed-drop");
         let spawner = ThreadSpawner {
             events: Arc::new(Mutex::new(vec![])),
         };
@@ -536,7 +536,7 @@ mod tests {
         let mut sim = Sim::new();
         sim.ptt = true;
         let (fake, shared) = serve_sim(sim);
-        let dir = std::env::temp_dir().join(format!("bench_mcp-keyed-ok-{}", std::process::id()));
+        let dir = crate::testdir::TestDir::new("bench_mcp-keyed-ok");
         let spawner = ThreadSpawner {
             events: Arc::new(Mutex::new(vec![])),
         };

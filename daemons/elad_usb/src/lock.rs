@@ -184,10 +184,30 @@ impl<T: Transport> Transport for Locked<T> {
 mod tests {
     use super::*;
 
-    fn dir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("elad-lock-test-{tag}-{}", std::process::id()));
-        std::fs::create_dir_all(&d).unwrap_or(());
-        d
+    /// A scratch directory that removes itself when dropped, also while a failing test unwinds.
+    struct Scratch(PathBuf);
+
+    impl std::ops::Deref for Scratch {
+        type Target = Path;
+        fn deref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn dir(tag: &str) -> Scratch {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // temp-dir-helper: the Drop of Scratch removes it
+        let d =
+            std::env::temp_dir().join(format!("elad-lock-test-{tag}-{}-{n}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        Scratch(d)
     }
 
     #[test]
@@ -240,8 +260,8 @@ mod tests {
         // Tests [@ANCHOR: elad_lock_dir]
         // Tests [@ANCHOR: elad_lock_acquire]
         let d = dir("env");
-        std::env::set_var("ELAD_LOCK_DIR", &d);
-        assert_eq!(lock_dir(), d);
+        std::env::set_var("ELAD_LOCK_DIR", d.as_os_str());
+        assert_eq!(lock_dir(), d.to_path_buf());
         let l = DeviceLock::acquire(3, 4, "t").unwrap();
         assert_eq!(l.path(), d.join("elad-3-4.lock"));
         drop(l);

@@ -504,9 +504,7 @@ mod tests {
     use super::*;
 
     fn tmp(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("bench_vt_{tag}_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
+        let d = crate::testdir::scratch(&format!("bench_vt_{tag}"));
         d
     }
 

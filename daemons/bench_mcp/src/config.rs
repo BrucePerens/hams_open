@@ -504,9 +504,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_config_load]
     #[test]
     fn the_config_is_read_from_the_file_named_by_the_environment() {
-        let dir =
-            std::env::temp_dir().join(format!("bench_mcp_config_load_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("bench_mcp_config_load");
         let file = dir.join("bench.json");
         std::fs::write(
             &file,

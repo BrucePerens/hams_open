@@ -29,8 +29,7 @@ impl Drop for Bench {
 pub fn bench_with(runner_tier: &str, procs_extra: &str) -> Bench {
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("bench_proc_test_{}_{n}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::testdir::scratch(&format!("bench_proc_test__{n}"));
     let gen = FakeDevice::sim(Sim::default());
     let dmm = FakeDevice::sim(Sim::default());
     let sep = if procs_extra.is_empty() { "" } else { "," };
@@ -656,7 +655,7 @@ fn the_wall_clock_budget_stops_a_run_and_a_program_that_ignores_the_request_is_k
 fn the_audit_hook_blocks_processes_sockets_devices_and_writes_outside_scratch_and_allows_bench_call(
 ) {
     let b = bench();
-    let outside = std::env::temp_dir().join(format!("proc_hook_outside_{}", std::process::id()));
+    let outside = crate::testdir::scratch("proc_hook_outside").join("blocked_write");
     let source = format!(
         r#"
 import os, socket, subprocess
@@ -1790,9 +1789,7 @@ pub fn coupled_bench() -> Coupled {
         }
         _ => Reply::Silent,
     });
-    let n = std::process::id();
-    let dir = std::env::temp_dir().join(format!("bench_proc_coupled_{n}_{}", gen.port()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::testdir::scratch(&format!("bench_proc_coupled_{}", gen.port()));
     let text = format!(
         r#"{{"instruments":{{
         "gen":{{"driver":"example","tier":"full","host":"127.0.0.1","port":{}}},

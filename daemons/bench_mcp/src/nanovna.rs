@@ -1162,8 +1162,7 @@ mod tests {
     // Tests [@ANCHOR: bench_nanovna_power_cycle]
     #[test]
     fn tools_work_over_a_pty_and_unsupported_ones_and_a_missing_unit_are_typed_errors() {
-        let dir = std::env::temp_dir().join(format!("bench_nano_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("bench_nano");
         let pty = PtyServer::start(Fake::new());
         let text = |serial: &str| config_for(serial);
         let insts = text(&pty.path);
@@ -1321,8 +1320,7 @@ mod tests {
     // Tests [@ANCHOR: bench_nanovna_calibrate_measure]
     #[test]
     fn the_shared_calibration_machinery_corrects_nanovna_sweeps() {
-        let dir = std::env::temp_dir().join(format!("bench_nano_cal_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("bench_nano_cal");
         let pty = PtyServer::start(Fake::new());
         let insts = config_for(&pty.path);
         let range =

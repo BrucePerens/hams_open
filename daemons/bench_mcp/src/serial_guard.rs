@@ -150,7 +150,7 @@ mod tests {
 
     /// A fake /dev and /sys: `ttyUSB0` on usb 1-4.2 and `ttyUSB1` on usb 1-4.3, by-id names for ttyUSB0 only.
     fn tree(tag: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
-        let root = std::env::temp_dir().join(format!("bench_guard_{tag}_{}", std::process::id()));
+        let root = crate::testdir::scratch(&format!("bench_guard_{tag}"));
         std::fs::remove_dir_all(&root).ok();
         let dev = root.join("dev");
         let by_id = dev.join("serial/by-id");
