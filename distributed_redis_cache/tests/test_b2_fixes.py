@@ -66,20 +66,20 @@ class TestB2Fixes(HamsTransactionCase):
         self.assertEqual(len(keys), 2, "Cache keys should differentiate between different secondary companies")
 
     def test_b2_2b_cache_key_company_fallback_without_context(self):
-        # bug-hunt (2026-09-09): test_b2_2 above only covers the case
+        # test_b2_2 above only covers the case
         # where "allowed_company_ids" IS explicitly set in context -- the
         # overwhelming majority of real calls (any backend RPC, cron job,
         # or controller call that doesn't go through the web client's own
         # company switcher) never set it at all. The decorator's own
         # "[!] SECURITY: Multi-tenant isolation is enforced via ...
-        # company_id in the cache key" comment used to be false for
-        # exactly that majority case: with no "allowed_company_ids" in
-        # context, the old code fell back to a hardcoded "0" regardless
-        # of which company was actually active, so two different users in
+        # company_id in the cache key" comment would be false for
+        # exactly that majority case if, with no "allowed_company_ids" in
+        # context, the key fell back to a hardcoded "0" regardless
+        # of which company was actually active: two different users in
         # two different companies calling the same method with the same
-        # arguments and no explicit company context got the IDENTICAL
-        # cache key. Prove the fix: the real fallback (self.env.companies)
-        # now differentiates them.
+        # arguments and no explicit company context would get the IDENTICAL
+        # cache key. Prove the real fallback (self.env.companies)
+        # differentiates them.
         @redis_cache.distributed_cache()
         def dummy_method(self):
             return "ok"
@@ -163,9 +163,9 @@ class TestB2Fixes(HamsTransactionCase):
         )
 
     def test_b2_3_banned_local_imports(self):
-        # bug-hunt (2026-09-15): ir_http.py's _authenticate no longer imports
+        # ir_http.py's _authenticate does not import
         # _local_cache/LRU_LOCK directly -- both call sites (ir.http and
-        # ir.cron, see COMM_cron_cache_interceptor) now share one
+        # ir.cron, see COMM_cron_cache_interceptor) share one
         # poll_and_clear_local_cache() helper in redis_cache.py instead of
         # duplicating the poll-and-clear logic. The anti-pattern this test
         # guards against (an import placed inside a function body rather
@@ -220,7 +220,7 @@ class TestB2Fixes(HamsTransactionCase):
                 self.env = type("Env", (), {
                     "context": {},
                     "cr": type("cr", (), {"dbname": "test"}),
-                    # bug-hunt (2026-09-09): distributed_cache()'s
+                    # distributed_cache()'s
                     # company-id fallback reads self.env.companies when
                     # "allowed_company_ids" is absent from context.
                     "companies": type("companies", (), {"ids": []})(),
@@ -288,11 +288,11 @@ class TestB2Fixes(HamsTransactionCase):
 
     def test_b2_10_settings_save_invalidates_the_redis_pool_cache(self):
         # Tests [@ANCHOR: distributed_redis_cache:res_config_settings_set_values]
-        # bug-hunt (2026-09-09): get_redis_connection() caches the
-        # resolved (host, port, password) tuple in `_db_configs` forever,
-        # with nothing ever invalidating it -- before this fix, saving new
-        # Redis settings from Settings > Technical had zero effect on an
-        # already-running worker (including the "Check Redis Status"
+        # get_redis_connection() caches the
+        # resolved (host, port, password) tuple in `_db_configs`, and nothing
+        # else invalidates it -- so saving new Redis settings from
+        # Settings > Technical would have no effect on an already-running
+        # worker (including the "Check Redis Status"
         # button, whose entire purpose is to verify the config an admin
         # just changed) until that worker was restarted. Prove
         # ResConfigSettings.set_values() now pops this worker's own
@@ -319,10 +319,8 @@ class TestB2Fixes(HamsTransactionCase):
 
     def test_b2_11_settings_save_also_notifies_other_workers(self):
         # Tests [@ANCHOR: distributed_redis_cache:res_config_settings_set_values]
-        # night_shift_todo/low/misc-small-relay-and-infra-cleanups-1487fd74.md: test_b2_10 above
-        # only proves the SAME worker's own _db_configs entry is cleared. Before this fix, that
-        # was the entire effect -- every OTHER worker process kept the stale tuple until it
-        # happened to be restarted. Proves set_values() also fires the real cross-worker
+        # test_b2_10 above only proves the SAME worker's own _db_configs entry is cleared; every
+        # OTHER worker process would keep the stale tuple until restarted. Proves set_values() also fires the real cross-worker
         # invalidation signal (pg_notify on the same "distributed_cache_invalidation" channel
         # notify_model_invalidation() uses for real model-cache invalidation, relayed by the real
         # cache_manager.py daemon -- proven end to end in test_cache_manager_real.py, not
@@ -357,8 +355,7 @@ class TestB2Fixes(HamsTransactionCase):
 
     def test_b2_12_poll_and_clear_local_cache_also_clears_another_workers_stale_db_config(self):
         # Tests [@ANCHOR: distributed_redis_cache:COMM_poll_and_clear_local_cache]
-        # night_shift_todo/low/misc-small-relay-and-infra-cleanups-1487fd74.md: the OTHER half of
-        # the cross-worker fix -- once the invalidation signal above reaches Redis (via the real
+        # The OTHER half of the cross-worker invalidation -- once the invalidation signal above reaches Redis (via the real
         # daemon, proven separately), every OTHER worker's own next poll_and_clear_local_cache()
         # call (already running on every request/cron dispatch) must notice the counter changed
         # and clear ITS OWN stale _db_configs entry too, not just _local_cache. Uses a fake Redis

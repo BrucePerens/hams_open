@@ -33,7 +33,7 @@ Usage:
         --admin-user postgres --target-db odoo
     (prompts for the admin password interactively; set
     CACHE_MANAGER_DB_ADMIN_PASSWORD instead for non-interactive/scripted
-    runs -- see the "adversarial security review" note on --admin-password
+    runs -- see the note on --admin-password
     below for why this isn't a plain CLI flag.)
 
 Requires network/socket access to Postgres as a role that can CREATE ROLE
@@ -59,12 +59,12 @@ def parse_args():
     parser.add_argument("--admin-host", required=True, help="Postgres host/DNS name (no default -- a loopback address resolves to this script's own container, not necessarily where Postgres runs).")
     parser.add_argument("--admin-port", default="5432")
     parser.add_argument("--admin-user", required=True, help="A Postgres role that can CREATE ROLE and GRANT CONNECT (e.g. the superuser).")
-    # Adversarial security review, 2026-09-03: this used to be a plain
-    # required=True CLI flag -- a superuser-capable credential sitting in
+    # The admin password is deliberately not a CLI flag: a
+    # superuser-capable credential sitting in
     # argv is visible to any other local user on the host for this
     # process's lifetime (ps aux, /proc/<pid>/cmdline) and typically lands
     # in shell history. This is a one-off, interactively-run provisioning
-    # tool (not a service with a long-lived argv), so the fix matches
+    # tool (not a service with a long-lived argv), so this matches
     # common CLI convention (psql's own -W/PGPASSWORD shape): no CLI flag
     # at all -- read from CACHE_MANAGER_DB_ADMIN_PASSWORD for scripted runs,
     # otherwise prompt interactively via getpass (never echoed, never in

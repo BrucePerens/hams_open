@@ -70,11 +70,10 @@ DB_NAME = os.getenv("DB_NAME", "odoo")
 # systemd unit uses EnvironmentFile=-, which tolerates that) must stop the
 # daemon, not quietly log in as the full-privilege "odoo" superuser role
 # with a guessable literal password -- see _require_db_credentials().
-# infrastructure.py's own provision_environment() now provisions this
-# role and writes DB_ENV_FILE automatically on every run (night_shift_todo/
-# low/cache-manager-odoo-password-fallback-0ea55461.md: confirmed no prior
-# automated flow ever called scripts/provision_cache_manager_db_role.py,
-# so this file's own absence was the normal case on every deployment,
+# infrastructure.py's own provision_environment() provisions this
+# role and writes DB_ENV_FILE automatically on every run (without that,
+# nothing would call scripts/provision_cache_manager_db_role.py,
+# so this file's own absence would be the normal case on every deployment,
 # not an edge case); scripts/provision_cache_manager_db_role.py remains
 # available for a remote/manually-administered Postgres host that
 # infrastructure.py's own local-peer-auth provisioning can't reach.
@@ -165,9 +164,8 @@ async def main():
 
     # 1. Connect to Redis
     #
-    # Adversarial security review, 2026-09-03: no socket_timeout/
-    # socket_connect_timeout was set, and this client is created once and
-    # never re-verified after the initial ping() -- if Redis becomes
+    # socket_timeout/socket_connect_timeout are required: this client is
+    # created once and never re-verified after the initial ping() -- if Redis becomes
     # unresponsive later (CPU-pegged, a blocking command from another
     # client, a partial network partition), pipe.execute() in
     # broadcast_to_redis() below could hang indefinitely. Since
@@ -243,15 +241,14 @@ async def main():
                 
             # Perform periodic health check on all connections
             #
-            # Adversarial security review, 2026-09-03: this used to call
-            # execute() with no timeout. asyncpg.connect()'s own `timeout`
+            # execute() needs a timeout. asyncpg.connect()'s own `timeout`
             # kwarg only bounds the initial TCP/auth handshake -- it says
             # nothing about later calls. If the TCP session goes into a
             # real "blackhole" state after connecting (a NAT/firewall/
             # routing change silently dropping packets, an overloaded
             # Postgres backend that accepts the socket but never replies --
-            # a realistic infra failure, not an exotic attack), this
-            # execute() call blocked forever, inside the main loop, before
+            # a realistic infra failure, not an exotic attack), an
+            # execute() call without a timeout would block forever, inside the main loop, before
             # ever reaching the except/reconnect branch below -- the daemon
             # looked "up" while silently no longer noticing its own
             # connection was dead, for as long as the OS TCP retransmit

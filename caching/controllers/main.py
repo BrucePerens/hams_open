@@ -22,18 +22,17 @@ class ServiceWorkerController(http.Controller):
         """
         # Use Redis for JS content cache.
         #
-        # Bug-hunt fix (2026-09-27, tier-1 pass): both Redis calls below used to
-        # be unguarded. Redis here is a CACHE in front of a file on disk that is
-        # the real source of truth -- every other get_redis_connection() call
-        # site in this codebase (redis_cache.py's @distributed_cache read and
-        # write, invalidate_model_cache, poll_and_clear_local_cache,
-        # distributed_cache_config.check_redis_status) wraps its Redis call in
-        # `except redis.RedisError` and degrades to the local/disk path. This
-        # one did not, so an unreachable Redis turned the site's public,
-        # unauthenticated, root-scope /sw.js into an HTTP 500 for every visitor
-        # -- while the rest of the site kept serving normally, which is exactly
-        # the inconsistency that makes it hard to diagnose. Degrade the same way
-        # the siblings do: serve the template straight off disk, skip the cache
+        # Both Redis calls below are guarded. Redis here is a CACHE in front of
+        # a file on disk that is the real source of truth -- every other
+        # get_redis_connection() call site in this codebase (redis_cache.py's
+        # @distributed_cache read and write, invalidate_model_cache,
+        # poll_and_clear_local_cache, distributed_cache_config.check_redis_status)
+        # wraps its Redis call in `except redis.RedisError` and degrades to the
+        # local/disk path. An unguarded call here would turn an unreachable Redis
+        # into an HTTP 500 on the site's public, unauthenticated, root-scope
+        # /sw.js for every visitor while the rest of the site kept serving
+        # normally, which is hard to diagnose. So degrade the same way the
+        # siblings do: serve the template straight off disk, skip the cache
         # write, log it once per request at warning level.
         content = None
         r = get_redis_connection(request.env)

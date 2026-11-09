@@ -69,7 +69,7 @@ class EdgeRoutingDomain(models.Model):
 
             if "ham.dns.zone" in env_svc:
                 try:
-                    # bug-hunt (2026-09-09): savepoint is load-bearing, not
+                    # The savepoint is load-bearing, not
                     # decorative. _get_service_env()'s
                     # own SQL-backed uid lookup can raise a real Postgres
                     # `RAISE EXCEPTION`, which aborts the transaction; the
@@ -91,35 +91,32 @@ class EdgeRoutingDomain(models.Model):
                             all_domains.extend(dns_batch.mapped("name"))
                             last_id = dns_batch[-1].id
                 except Exception as e:  # audit-ignore-catch-all
-                    # bug-hunt (2026-09-09): this used to catch only
-                    # (KeyError, ValueError) -- but _get_service_env() ->
-                    # _get_service_uid() raises AccessError on a bad/missing
-                    # xml_id, and the underlying SQL-backed uid resolution
-                    # can raise a psycopg2 error, neither of which is a
-                    # KeyError/ValueError. A real DNS-zone lookup failure of
-                    # either kind would have propagated uncaught out of this
-                    # explicitly-labeled "soft dependency" block, crashing
-                    # the whole cron run instead of just skipping the DNS
-                    # domains. Class 20 (try/except narrower than the real
-                    # failure mode).
+                    # Catch broadly, not just (KeyError, ValueError):
+                    # _get_service_env() -> _get_service_uid() raises
+                    # AccessError on a bad/missing xml_id, and the underlying
+                    # SQL-backed uid resolution can raise a psycopg2 error,
+                    # neither of which is a KeyError/ValueError. A real
+                    # DNS-zone lookup failure of either kind would otherwise
+                    # propagate out of this explicitly-labeled "soft
+                    # dependency" block, crashing the whole cron run instead
+                    # of just skipping the DNS domains.
                     _logger.warning("Soft dependency ham.dns.zone failed: %s", e)
 
             unique_domains = list(set(all_domains))
 
-            # bug-hunt (2026-09-27, review_tier 1): this POST never carried an
-            # `api_identity` at all, so EVERY sync since pager_duty's own
-            # shared-secret gate went in was refused. The receiving route
+            # This POST must carry an `api_identity`: without it EVERY sync is
+            # refused by pager_duty's shared-secret gate. The receiving route
             # (pager_duty/controllers/domain_api.py,
             # the pager_duty:update_domains anchor) is `auth="public"` and
             # gated solely on `hmac.compare_digest(api_identity,
             # <pager_duty.domain_api_identity>)`; with the field absent it
             # returns {"status": "error", "message": "Unauthorized"} -- and
             # because that is a `type="jsonrpc"` route, the refusal arrives
-            # inside an HTTP *200* envelope, so `raise_for_status()` below saw
-            # nothing wrong and the broad `except` never fired. The domain
-            # list therefore never reached `pager.check.
-            # update_lets_encrypt_domains()`, silently, on every scheduled
-            # run and every domain create/write/unlink trigger.
+            # inside an HTTP *200* envelope, so `raise_for_status()` below sees
+            # nothing wrong and the broad `except` never fires. The domain
+            # list would then silently never reach `pager.check.
+            # update_lets_encrypt_domains()`, on every scheduled run and
+            # every domain create/write/unlink trigger.
             api_identity = env_svc["zero_sudo.security.utils"]._get_system_param(
                 "pager_duty.domain_api_identity"
             )
@@ -169,14 +166,13 @@ class EdgeRoutingDomain(models.Model):
                     % (result.get("status"), result.get("message"))
                 )
         except Exception as e:  # audit-ignore-catch-all
-            # bug-hunt (2026-09-09): requests.post()/raise_for_status() raise
+            # requests.post()/raise_for_status() raise
             # requests.exceptions.* (ConnectionError, Timeout, HTTPError) on
             # any real network/HTTP failure -- none of those are KeyError or
-            # ValueError, so a genuinely offline PagerDuty endpoint used to
+            # ValueError, so a genuinely offline PagerDuty endpoint would
             # crash this cron job with an uncaught exception instead of
             # logging and returning, defeating the whole point of wrapping
             # an external HTTP call in a broad "don't fail the cron" guard.
-            # Class 20 (try/except narrower than the real failure mode).
             _logger.warning("Failed to sync domains to PagerDuty: %s", e)
 
     # [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
@@ -195,9 +191,9 @@ class EdgeRoutingDomain(models.Model):
             if cron:
                 cron._trigger()
         except Exception as e:  # audit-ignore-catch-all
-            # bug-hunt (2026-09-09): cron._trigger() is a DB write (ir.cron.trigger)
+            # cron._trigger() is a DB write (ir.cron.trigger)
             # that can fail for reasons beyond KeyError/ValueError; this path
-            # is explicitly "best effort, don't block the CRUD op." Class 20.
+            # is explicitly "best effort, don't block the CRUD op."
             _logger.warning("Failed to trigger PagerDuty sync cron: %s", e)
 
     # [@ANCHOR: edge_routing:COMM_domain_create]

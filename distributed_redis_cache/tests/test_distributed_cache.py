@@ -113,8 +113,8 @@ class TestDistributedCacheTour(HamsHttpCase):
             def __init__(self):
                 self.cr = type("cr", (), {"dbname": "test"})()
                 self.context = {}
-                # bug-hunt (2026-09-09): the decorator's company-id fallback
-                # now reads self.env.companies when "allowed_company_ids" is
+                # The decorator's company-id fallback
+                # reads self.env.companies when "allowed_company_ids" is
                 # absent from context (see redis_cache.py's own comment) --
                 # a bare `context = {}` mock with no `companies` attribute
                 # would raise AttributeError the moment that fallback runs.

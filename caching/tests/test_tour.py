@@ -44,21 +44,20 @@ class TestCachingTour(HamsHttpCase):
         self.start_tour("/?debug=1", "caching_sw_idb_error_check", login="admin")
 
     def test_caching_sw_offline_fallback_tour(self):
-        """Bug found 2026-09-11: caches.match('/offline') resolving to
-        undefined (the precache entry evicted, or install-time precache
-        itself failed) made respondWith(undefined) a hard network error
-        instead of a usable offline page. Fixed with a synthesized
-        offlineFallbackResponse(); had zero test coverage before this."""
+        """caches.match('/offline') can resolve to undefined (the precache
+        entry evicted, or install-time precache itself failed), and
+        respondWith(undefined) is a hard network error instead of a usable
+        offline page. A synthesized offlineFallbackResponse() covers that
+        case; this tour exercises it."""
         self.start_tour("/?debug=1", "caching_sw_offline_fallback_check", login="admin")
 
     def test_caching_sw_cache_isolation_tour(self):
-        """Bug found 2026-09-11: activate()'s own cache cleanup deleted ANY
-        cache not equal to its own CACHE_NAME, no prefix scoping -- every
-        caching-module deploy that bumped CACHE_NAME silently wiped out
-        every OTHER Service Worker's cache sharing this origin's
-        CacheStorage, including ham_shack's shack_sw.js offline
-        QSO-logging cache. Fixed by scoping deletion to CACHE_NAME_PREFIX;
-        this proves a differently-prefixed (foreign) cache survives
+        """activate()'s own cache cleanup must not delete ANY cache not equal
+        to its own CACHE_NAME: without prefix scoping, every caching-module
+        deploy that bumped CACHE_NAME would silently wipe out every OTHER
+        Service Worker's cache sharing this origin's CacheStorage,
+        including ham_shack's shack_sw.js offline QSO-logging cache.
+        Deletion is scoped to CACHE_NAME_PREFIX; this proves a differently-prefixed (foreign) cache survives
         cleanup while a genuinely stale same-prefix one does not."""
         self.start_tour("/?debug=1", "caching_sw_cache_isolation_check", login="admin")
 

@@ -50,9 +50,8 @@ class TestCustomDomains(HamsTransactionCase):
 
         # Tests [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
 
-        # 2026-09-16: this used to also verify get_target_slug_by_domain() resolution around
-        # each CRUD step -- deleted along with that method once a repo-wide grep confirmed it
-        # had no production caller left (see night_shift_history.md). Real custom-domain
+        # This does not verify get_target_slug_by_domain() resolution around each CRUD step:
+        # that method was deleted because it had no production caller left. Real custom-domain
         # traffic is routed by Odoo core's website.domain, not this table's own lookup.
         domain = self.domain_model.create(
             {"name": "WWW.TESTCLUB.ORG ", "target_slug": "testclub"}

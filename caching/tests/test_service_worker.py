@@ -59,12 +59,12 @@ class TestServiceWorker(HamsHttpCase):
     def test_01b_sw_still_serves_when_redis_is_unreachable(self):
         # Tests [@ANCHOR: COMM_caching_sw_serve_route]
         #
-        # Bug-hunt fix (2026-09-27, tier-1 pass): this route's two Redis calls
-        # (r.get / r.setex) were the ONLY unguarded get_redis_connection() call
-        # site in the codebase -- every other one (redis_cache.py's
-        # @distributed_cache read and write, invalidate_model_cache,
-        # poll_and_clear_local_cache, distributed_cache_config.check_redis_status)
-        # catches redis.RedisError and degrades. Redis here is a cache in front of
+        # This route's two Redis calls (r.get / r.setex) must be guarded like
+        # every other get_redis_connection() call site in the codebase
+        # (redis_cache.py's @distributed_cache read and write,
+        # invalidate_model_cache, poll_and_clear_local_cache,
+        # distributed_cache_config.check_redis_status), which catch
+        # redis.RedisError and degrade. Redis here is a cache in front of
         # a file on disk that is the real source of truth, so an unreachable Redis
         # must not turn the site's public, unauthenticated, root-scope /sw.js into
         # a 500 for every visitor while the rest of the site keeps serving.

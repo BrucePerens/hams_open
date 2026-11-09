@@ -33,14 +33,14 @@ export class SWToast extends Component {
     }
 
     // [@ANCHOR: caching:toast_deferred_while_modal_open]
-    // Bug fix (2026-09-24, found live during usability-audit testing): this toast is a real
-    // website.published-multi-mixin `main_components` component, so it renders on every page --
+    // This toast is a real website.published-multi-mixin `main_components` component, so it
+    // renders on every page --
     // including the very first page a brand-new visitor ever loads, at the same moment Odoo's own
     // cookie-consent bar is up. Both are fixed-position and both anchor to the bottom of the
     // viewport; this toast's own z-index (9999, well above Bootstrap's default
     // `$zindex-modal: 1055`) then sits directly on top of the consent bar's buttons and eats every
-    // click meant for them (confirmed live: a real Playwright click on "Only essentials" failed
-    // outright, `<div class="toast-body">...intercepts pointer events`). A fixed reposition
+    // click meant for them (a real Playwright click on "Only essentials" fails outright with
+    // `<div class="toast-body">...intercepts pointer events`). A fixed reposition
     // (top-right instead of bottom-right, say) would only trade one hardcoded, breakpoint-fragile
     // collision for another -- this defers the toast's own reveal instead, until no Bootstrap
     // modal is currently open, which is correct regardless of viewport size and generalizes to any

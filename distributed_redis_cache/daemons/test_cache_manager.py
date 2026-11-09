@@ -16,10 +16,9 @@ import cache_manager  # noqa: E402
 class RequireDbCredentialsTests(unittest.IsolatedAsyncioTestCase):
     """Tests [@ANCHOR: COMM_cache_manager_require_db_credentials]
 
-    night_shift_todo/low/cache-manager-odoo-password-fallback-0ea55461.md: DB_USER/DB_PASS used to
-    default to the literal "odoo"/"odoo" whenever DB_ENV_FILE was absent -- the normal case on
-    every deployment before infrastructure.py's own provisioning learned to write it (see
-    infrastructure.py's _provision_cache_manager_role). An unset DB_USER/DB_PASS pair must now
+    DB_USER/DB_PASS must not default to the literal "odoo"/"odoo" whenever DB_ENV_FILE is
+    absent (the normal case on a deployment where infrastructure.py's own provisioning has not
+    written it; see infrastructure.py's _provision_cache_manager_role). An unset DB_USER/DB_PASS pair must now
     stop main() before it ever reaches Redis or PostgreSQL, not silently connect as a
     full-privilege role with a guessable literal password.
     """

@@ -26,8 +26,8 @@ class DummyModel:
             def __init__(self):
                 self.cr = Cr()
                 self.context = {}
-                # bug-hunt (2026-09-09): distributed_cache()'s company-id
-                # fallback now reads self.env.companies when
+                # distributed_cache()'s company-id
+                # fallback reads self.env.companies when
                 # "allowed_company_ids" is absent from context -- this mock
                 # needs the attribute or that fallback raises AttributeError.
                 self.companies = type("companies", (), {"ids": []})()
@@ -308,18 +308,11 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
             async def aclose(self):
                 pass
 
-        # Adversarial security review, 2026-09-03: this test used to set up
-        # mocks and then never call main() at all -- no assertions, no
-        # exercised code path, and a dead mock_reconnect() helper
-        # referencing cm.main_db_conns, an attribute that has never existed
-        # (the real state, db_conns, is a local variable inside main()).
-        # The trailing comment claimed "structural verification is done by
-        # direct source code inspection in test_b2_fixes.py" -- confirmed
-        # false: that file has no reference to cache_manager at all. This
-        # now actually calls main() and drives it through the exact
+        # This test calls main() and drives it through the exact
         # `execute()`-raises path the health check hits, asserting the real
         # documented behavior (connection closed, db_conns cleared) rather
-        # than trusting a comment.
+        # than trusting a comment. (The real state, db_conns, is a local
+        # variable inside main(), so there is no attribute to mock.)
         mock_asyncpg = self.safe_patch('odoo.addons.distributed_redis_cache.daemons.cache_manager.asyncpg')
 
         async def mock_connect(*args, **kwargs):
@@ -354,12 +347,10 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
 
     def test_cache_manager_reconnect_failure_does_not_crash_the_daemon(self):
         # [@ANCHOR: COMM_test_cache_manager_reconnect_failure]
-        # Adversarial security review, 2026-09-03: _reconnect()'s own
-        # except block (line ~185, "Could not connect to database") was
-        # annotated "Tested by COMM_test_cache_manager_exception_handling"
-        # but that test only exercises broadcast_to_redis()'s own Redis-
-        # publish failure -- confirmed by reading it, this path had no real
-        # coverage at all. A daemon that can never reach Postgres in the
+        # _reconnect()'s own except block ("Could not connect to database")
+        # is not covered by COMM_test_cache_manager_exception_handling,
+        # which only exercises broadcast_to_redis()'s own Redis-publish
+        # failure, so this test covers it. A daemon that can never reach Postgres in the
         # first place (a real, realistic startup-ordering condition, not
         # just an attack) must log and keep retrying, not crash.
         class FakeRedisClient:

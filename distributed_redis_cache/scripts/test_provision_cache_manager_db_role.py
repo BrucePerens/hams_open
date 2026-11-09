@@ -217,11 +217,10 @@ class ProvisionTests(unittest.TestCase):
 
 
 class ParseArgsPasswordSourcingTests(unittest.TestCase):
-    # Adversarial security review, 2026-09-03: --admin-password used to be
-    # a plain, required CLI flag -- a superuser-capable credential visible
-    # in `ps aux`/`/proc/<pid>/cmdline` for the process's lifetime, and
-    # typically left behind in shell history. Real tests for the two
-    # replacement sourcing paths, not just the removed flag's absence.
+    # --admin-password is not a CLI flag, since a superuser-capable credential
+    # would be visible in `ps aux`/`/proc/<pid>/cmdline` for the process's
+    # lifetime, and typically left behind in shell history. Real tests for the
+    # two sourcing paths, not just the flag's absence.
 
     _BASE_ARGV = [
         "provision_cache_manager_db_role.py",
