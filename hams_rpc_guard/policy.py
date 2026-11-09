@@ -12,7 +12,8 @@ endpoint:
 
 1. A **public or portal** user (strict mode): allowed only if the pair is declared `portal`. This covers stock models too:
    a portal visitor's browser has no business calling an arbitrary stock method.
-2. A **service account whose login (or verified client-certificate subject, `cert:<subject>`) has a `clients` entry**
+2. A **service account whose login (or verified client-certificate subject `cert:<subject>`, or Unix-socket user
+   `unix:<user>`) has a `clients` entry**
    (a daemon): allowed only if the pair is in that entry, or in both when both have one. A daemon therefore cannot
    call the methods of another daemon's family. A service account without an entry is
    treated as an internal user (and counted as `unmapped-client` in the report so it can be given one).

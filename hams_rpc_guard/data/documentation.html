@@ -2,19 +2,28 @@
     <h1>RPC Guard</h1>
     <p>
         Odoo can be called by other programs through three generic interfaces: XML-RPC (<code>/xmlrpc</code>),
-        JSON-RPC (<code>/jsonrpc</code>) and JSON-2 (<code>/json/2</code>). <strong>RPC Guard</strong> makes the first
-        two answer only programs running on the same computer as Odoo, and lets you do the same for JSON-2.
+        JSON-RPC (<code>/jsonrpc</code>) and JSON-2 (<code>/json/2</code>). <strong>RPC Guard</strong> makes them answer
+        only programs on networks you allow, by default only programs running on the same computer as Odoo.
     </p>
     <h2>Settings</h2>
-    <p>Open <strong>Settings, Technical, System Parameters</strong>. Nothing needs to be set: the defaults are the safe ones.</p>
+    <p>Open <strong>Settings, Technical, System Parameters</strong>. Nothing needs to be set: the defaults are the safe ones.
+    A value that is not valid cannot be saved.</p>
     <ul>
-        <li><code>hams_rpc_guard.legacy_access</code>: <code>loopback</code> (default), <code>any</code> or <code>none</code>. Controls XML-RPC and JSON-RPC.</li>
-        <li><code>hams_rpc_guard.json2_access</code>: <code>any</code> (default), <code>loopback</code> or <code>none</code>. Controls JSON-2. Set it to <code>loopback</code> when every program that calls Odoo runs on this computer.</li>
-        <li><code>hams_rpc_guard.trusted_proxies</code>: addresses of a reverse proxy on this computer that may pass on requests from local programs. Usually empty.</li>
+        <li><code>hams_rpc_guard.allowed_networks</code>: the networks whose programs may call Odoo, for example
+            <code>127.0.0.0/8,::1/128,10.99.0.0/24</code>. Default: this computer only.</li>
+        <li><code>hams_rpc_guard.legacy_access</code>: <code>none</code> switches XML-RPC and JSON-RPC off entirely.</li>
+        <li><code>hams_rpc_guard.trusted_proxies</code> and <code>hams_rpc_guard.client_address_header</code>: a reverse
+            proxy you run, and the header it sets to the caller's address. Usually empty.</li>
+        <li><code>hams_rpc_guard.rpc_transport</code>: <code>tcp</code> (default), <code>unix</code> (only through the
+            local socket) or <code>both</code>; <code>hams_rpc_guard.unix_peers</code> lists the computer accounts that may
+            use the socket. The socket itself is set up in the server configuration file (see the module's README).</li>
+        <li><code>hams_rpc_guard.mode</code>: <code>report</code> refuses nothing and only counts what would be refused.</li>
     </ul>
     <h2>What a refused caller sees</h2>
-    <p>A plain "not found" page, as if the interface did not exist. The server log counts refusals (never addresses or request contents).</p>
+    <p>A plain "not found" page, as if the interface did not exist. The server log counts refusals by kind of network
+    (never addresses or request contents).</p>
     <h2>Your own programs</h2>
     <p>A program on this computer that calls <code>http://127.0.0.1:8069</code> directly keeps working. A program that
-    goes out through your public address, and so through your web proxy, is treated as a visitor.</p>
+    goes out through your public address, and so through your web proxy, is treated as a visitor. Your browser's own
+    use of Odoo is not affected.</p>
 </div>

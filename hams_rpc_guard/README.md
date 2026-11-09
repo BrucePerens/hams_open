@@ -4,30 +4,37 @@
 SPDX-License-Identifier: AGPL-3.0-or-later
 
 Odoo's generic RPC endpoints let anyone who holds a login, a password or an API key call any public method of any
-model. This module makes them answer only the machine Odoo runs on, unless the operator opens them. It works on a
-stock Odoo 19 Community server (it needs only core Odoo, `rpc`, `zero_sudo` and `knowledge`), and its defaults are the
-safe ones with no configuration.
+model. This module makes them answer only callers on networks the operator allows (by default: the machine Odoo runs
+on), optionally only on a Unix socket whose callers the kernel identifies, and limits which methods each caller may use.
+It works on a stock Odoo 19 Community server (it needs only core Odoo, `rpc`, `zero_sudo` and `knowledge`), and its
+defaults are the safe ones with no configuration.
 
 ## Contents
 
 1. [What it does](#what-it-does)
 2. [Settings](#settings)
-3. [How "on this machine" is decided](#how-on-this-machine-is-decided)
-4. [Operators: nginx or Cloudflare instead, or as well](#operators-nginx-or-cloudflare-instead-or-as-well)
-5. [Transport and identity: unix socket, TLS and mutual TLS](#transport-and-identity)
-6. [Anchor entries](#anchor-entries)
+3. [Who the true client is](#who-the-true-client-is)
+4. [Operators: a reverse proxy for another network](#operators-a-reverse-proxy-for-another-network)
+5. [Operators: nginx or Cloudflare instead, or as well](#operators-nginx-or-cloudflare-instead-or-as-well)
+6. [Unix socket](#unix-socket)
+7. [Transport and identity: recommendation](#transport-and-identity)
+8. [Anchor entries](#anchor-entries)
 
 ## What it does
 
-| Endpoint | Family | Default | Why |
-|---|---|---|---|
-| `/xmlrpc/<service>`, `/xmlrpc/2/<service>`, `/jsonrpc` | `legacy-rpc` | `loopback` | Deprecated in Odoo 19, removal scheduled for 22. The body carries a login and password, so each is a brute-force target. Nothing of ours calls them from off the box. |
-| `/json/2/<model>/<method>` | `json2` | `any` | The supported API for a daemon on another machine (bearer API key). Production's FCC sync runs off the Odoo host, so closing it by default would break working installs. An operator whose daemons are all on the host sets it to `loopback`. |
+| Endpoint | Family | Default |
+|---|---|---|
+| `/xmlrpc/<service>`, `/xmlrpc/2/<service>`, `/jsonrpc` | `legacy-rpc` | callers on `allowed_networks` (loopback); `legacy_access = none` closes them |
+| `/json/2/<model>/<method>` | `json2` | callers on `allowed_networks` (loopback) |
 
 A refused request receives a plain 404, as if the route did not exist. The refusal runs before Odoo checks the
 credentials, so a refused JSON-2 request never has its bearer key looked at. `/web/dataset/call_kw` and
-`/web/dataset/call_button` (the browser's own calls) are **not** touched by the endpoint guard; browsers cannot be
-limited to localhost.
+`/web/dataset/call_button` (the browser's own calls) are **not** external RPC endpoints: the endpoint gate does not
+touch them, and they stay on TCP in every transport setting. Browsers cannot be limited by network; their calls are
+limited by the method whitelist below.
+
+`hams_rpc_guard.mode` (see the whitelist's parameters) governs both halves: `enforce` (default) refuses, `report`
+serves every request and call but counts and logs what would have been refused, `off` is stock Odoo.
 
 The public (anonymous) visitor cannot use `call_kw` or `call_button` at all: Odoo registers both routes `auth="user"`
 and answers the public user with "session expired". `tests/test_endpoint_gate.py` pins that, so a future route or
@@ -36,36 +43,74 @@ and answers the public user with "session expired". `tests/test_endpoint_gate.py
 ## Settings
 
 System parameters (Settings, Technical, System Parameters). None is created by the module; unset means the default.
+A value that does not parse is refused when it is saved (a `ValidationError` naming the setting); one that reaches the
+database anyway (SQL, an import) is logged at ERROR on every request and read as its closed value, never as open.
 
-| Parameter | Values | Default | Meaning |
-|---|---|---|---|
-| `hams_rpc_guard.legacy_access` | `loopback`, `any`, `none` | `loopback` | Who may use `/xmlrpc...` and `/jsonrpc`. |
-| `hams_rpc_guard.json2_access` | `loopback`, `any`, `none` | `any` | Who may use `/json/2/...`. |
-| `hams_rpc_guard.trusted_proxies` | comma-separated loopback addresses or networks | empty | A reverse proxy on this machine that may forward a request whose true client is also on this machine. |
+| Parameter | Values | Default | Closed value | Meaning |
+|---|---|---|---|---|
+| `hams_rpc_guard.allowed_networks` | comma-separated IPv4/IPv6 networks (CIDR) or host addresses, or `none` | `127.0.0.0/8,::1/128` | `none` | Callers on these networks may use the endpoints over TCP. |
+| `hams_rpc_guard.legacy_access` | `networks`, `none` | `networks` | `none` | `none` closes `/xmlrpc...` and `/jsonrpc` everywhere (TCP and socket). |
+| `hams_rpc_guard.trusted_proxies` | comma-separated networks | empty | empty | Reverse proxies whose client-address header is believed. |
+| `hams_rpc_guard.client_address_header` | `CF-Connecting-IP`, `X-Real-IP` or `True-Client-IP` | empty | empty | The header a trusted proxy *sets* (overwriting the client's) to the true client address. `X-Forwarded-For` is refused: the client writes its first entries. |
+| `hams_rpc_guard.rpc_transport` | `tcp`, `unix`, `both` | `tcp` | no transport | Where the endpoints are served. `unix` refuses them on TCP entirely. |
+| `hams_rpc_guard.unix_peers` | comma-separated `WHO[=LOGIN\|LOGIN...]` | empty (no one) | no one | Local users admitted on the Unix socket, and the Odoo logins each may act as. |
 
-`loopback` admits only a request whose true client is on this machine, `any` is the stock Odoo behaviour, `none`
-refuses everything. A value that is not one of the three is read as `loopback` (fail closed), and so is a
-parameter that cannot be read. Refusals are counted per worker and logged at the first and at every power of ten
-(family and count only: never an address, login, model, method, header or body).
+Server configuration file options (`odoo.conf`, `[options]`; read once at start; Odoo logs each as "unknown option ...
+stored as-is", which is expected):
 
-## How "on this machine" is decided
+| Option | Default | Meaning |
+|---|---|---|
+| `hams_rpc_guard_socket` | unset (no socket) | Absolute path of the Unix socket, for example `/run/odoo/rpc.sock`. |
+| `hams_rpc_guard_socket_mode` | `0660` | `0600` (only the Odoo user) or `0660` (also the group). Anything else is a start-up error. |
+| `hams_rpc_guard_socket_group` | the Odoo user's group | The group that may connect (the Odoo user must be a member). |
+| `hams_rpc_guard_socket_owner` | the Odoo user | Another owner needs Odoo to start as root; normally leave unset. |
 
-Behind nginx or Cloudflare Tunnel the TCP peer of every request is `127.0.0.1`, so the peer alone proves nothing.
-A request is local when both hold:
+Requests are counted per worker by endpoint family, network class (`loopback`, `private`, `link-local`, `public`,
+`unknown`, `unix`) and outcome; refusals are logged at the first and at every power of ten: never an address, login,
+model, method, header or body.
 
-1. the socket peer is a loopback address (the peer is read from werkzeug's ProxyFix record `werkzeug.proxy_fix.orig`
-   when `proxy_mode` has rewritten `REMOTE_ADDR`), or there is no peer address (a Unix socket); and
-2. it carries none of `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Server`, `X-Real-IP`,
-   `Forwarded`, `Via`, `CF-Connecting-IP`, `CF-Ray`, `True-Client-IP`.
+## Who the true client is
 
-If forwarding headers are present the request is refused, except when the peer is in `hams_rpc_guard.trusted_proxies`
-and every client address the proxy supplied (`X-Forwarded-For`, `Forwarded`, `CF-Connecting-IP`, `X-Real-IP`,
-`True-Client-IP`) is itself a loopback address and at least one was supplied. A visitor cannot take a header away
-that nginx or Cloudflare adds; a visitor can forge `X-Forwarded-For: 127.0.0.1`, which is why a forwarding header is
-a refusal and the trusted-proxy rule requires the *proxy* (not the header) to be trusted.
+Behind nginx or Cloudflare Tunnel the TCP peer of every request is a loopback address, so the peer alone proves
+nothing. `resolve_client` decides:
 
-Limitation: a reverse proxy configured to add no forwarding header at all cannot be told apart from a daemon.
-Odoo's deployment guide requires `proxy_mode` and the `X-Forwarded-*` headers; do that.
+1. The socket peer is read from werkzeug's ProxyFix record `werkzeug.proxy_fix.orig` when `proxy_mode` has rewritten
+   `REMOTE_ADDR` (the rewritten value came from a header the client controls).
+2. A request with none of `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Server`,
+   `X-Real-IP`, `Forwarded`, `Via`, `CF-Connecting-IP`, `CF-Ray`, `True-Client-IP` is direct: the peer is the client.
+3. A request with any of them, from a peer inside `trusted_proxies`, has as its client the single address in
+   `client_address_header`; missing, sent twice, a list, or not an address: unknown.
+4. Any other request with a forwarding header: unknown. Unknown is on no network, so it is refused.
+
+A visitor can add `X-Real-IP: 127.0.0.1` but cannot become a trusted proxy. The proxy that is trusted must set the
+header on every request it forwards (nginx `proxy_set_header` replaces what the client sent), and no untrusted path may
+reach Odoo from the trusted proxy's address. Limitation: a proxy that adds no forwarding header cannot be told from a
+direct caller, which is why Odoo's deployment guide requires `proxy_mode` and the `X-Forwarded-*` headers.
+
+## Operators: a reverse proxy for another network
+
+Example: daemons on a WireGuard network `10.99.0.0/24` reach Odoo (bound to `127.0.0.1:8069`) through nginx on the
+WireGuard address, while the public site arrives through another nginx or Cloudflare Tunnel on the same host. The
+WireGuard nginx connects to Odoo from its own loopback source address, so it is the only trusted proxy:
+
+```nginx
+server {
+    listen 10.99.0.1:8070;                      # the WireGuard address only
+    location ~ ^/(json/2/|jsonrpc$|xmlrpc/) {
+        proxy_bind 127.0.0.2;                   # the trusted proxy's own source address
+        proxy_set_header X-Real-IP $remote_addr;              # overwrites whatever the client sent
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host $host;
+        proxy_pass http://127.0.0.1:8069;
+    }
+    location / { return 404; }
+}
+```
+
+and `allowed_networks = 127.0.0.0/8,::1/128,10.99.0.0/24`, `trusted_proxies = 127.0.0.2/32`,
+`client_address_header = X-Real-IP`. A visitor through the public proxy (peer `127.0.0.1`, not trusted, with forwarding
+headers) is unknown and refused, whatever headers it forges.
 
 ## Operators: nginx or Cloudflare instead, or as well
 
@@ -79,76 +124,257 @@ On Cloudflare, a WAF custom rule `(starts_with(http.request.uri.path, "/xmlrpc/"
 with action Block (the `cloudflare` module's default WAF rules already block `/xmlrpc`). Both are stopgaps in the
 sense of the project's security rule: they protect only the hosts that have them; the module is what protects everyone.
 
+## Unix socket
+
+Odoo 19's own HTTP server creates only TCP sockets, but it is a WSGI application behind a small accept loop, so the
+module adds a second listener of its own (`unix_listener.py`) that hands each connection to the same application and
+puts the kernel-verified credentials of the connecting process (`SO_PEERCRED`: pid, uid, gid) in the request. Only the
+external RPC endpoints are served on it (every other path answers 404 there), forwarding headers are dropped, and
+`REMOTE_ADDR` is the loopback address so Odoo code that parses it keeps working; the gate keys on the credentials.
+
+How it fits each Odoo run mode (verified on Odoo 19, see `tools/prefork_unix_check.py`):
+
+| Run mode | Where the listener lives | Limits |
+|---|---|---|
+| prefork (`--workers N`) | Created in the master before the first worker is forked (`PreforkServer.start`, or `process_spawn` when the module was loaded while preloading `db_name`); every HTTP worker inherits the descriptor and waits on it beside Odoo's TCP socket in its own `select`, one request per loop. | The worker's watchdog (`limit_time_real`), CPU limit (`limit_time_cpu`), memory limits and `limit_request` apply exactly as to TCP requests; a 2-second socket timeout as Odoo's own. Cron workers close the descriptor. A `SIGHUP` reload hands it to the new master (`HAMS_RPC_GUARD_SOCKET_FD`). |
+| threaded (no `--workers`) | A werkzeug threaded server in a daemon thread beside Odoo's `odoo.service.httpd`. | As Odoo's threaded server. |
+| gevent (websocket process) | None: that process serves websockets only, and it does not inherit the descriptor. | |
+| `odoo shell`, `--stop-after-init` | None. | |
+
+The module must be loaded in the prefork master: add it to `server_wide_modules` (for example
+`server_wide_modules = base,rpc,web,hams_rpc_guard`), or set `db_name` so the registry is preloaded there. If it is
+first loaded in a worker, an ERROR says so and no socket is created (with `rpc_transport = unix` the endpoints then
+answer no one: closed, not open). A live socket at the path (another server) or a path that is not a socket stops the
+listener with an ERROR; a stale socket file is replaced; the file is created under umask `0177`.
+
+**Permissions.** Two gates: the filesystem (owner, group, mode: only members of the socket's group can connect at all)
+and `hams_rpc_guard.unix_peers`. `WHO` is a user name, a numeric uid, `@group` or `@gid` (the peer's *primary* group:
+`SO_PEERCRED` carries no supplementary groups); `=LOGIN|LOGIN` binds it to those Odoo logins (a call authenticated as
+any other account is refused with an access error). Example for systemd:
+
+```ini
+# odoo.service
+[Service]
+RuntimeDirectory=odoo
+RuntimeDirectoryMode=0750
+SupplementaryGroups=hamsd
+```
+
+```ini
+# odoo.conf
+hams_rpc_guard_socket = /run/odoo/rpc.sock
+hams_rpc_guard_socket_group = hamsd
+hams_rpc_guard_socket_mode = 0660
+```
+
+and `hams_rpc_guard.unix_peers = hamsd_backup=backup_service, hamsd_pager=pager_service`,
+`hams_rpc_guard.rpc_transport = unix`. The directory must let the daemon users traverse it (group `hamsd`, mode 0750).
+The identity `unix:<user>` can also be given a `clients` entry in `rpc_exposure.json`, which narrows the daemon like a
+certificate subject (both lists must allow a pair).
+
+**Client.** `zero_sudo/daemon/odoo_rpc_client.py` (`OdooRpcClient("unix:///run/odoo/rpc.sock", api_key, db)`,
+standard library only) speaks JSON-2 over the socket or over TCP. The API key is still required: the socket proves which
+local user is calling, the key which Odoo account.
+
 ## Transport and identity
 
-**Unix socket.** Odoo 19 cannot listen on a Unix socket: its HTTP server creates `AF_INET`/`AF_INET6` sockets
-(`odoo/service/server.py`, threaded and prefork servers, and the systemd socket-activation path). A `SO_PEERCRED`
-identity (the connecting process's uid and gid, read from the kernel) therefore cannot be had from Odoo directly. The
-supported on-box route is a daemon talking to `127.0.0.1:8069` with no forwarding headers, which this module admits.
+**On the Odoo host**: the Unix socket with `rpc_transport = unix` and a `unix_peers` entry per daemon user bound to its
+service login. A process of another local user cannot connect (filesystem) or is refused (`unix_peers`), even with a
+stolen key; nothing answers the endpoints on TCP.
 
-**TLS on loopback.** Encrypting loopback traffic adds little against a local attacker: a process that can read
-the daemon's memory or the loopback interface already has the daemon's API key. It adds something only if each daemon
-has its own client key, because the certificate then gives a per-daemon identity (below), not because of the
-encryption.
+**Off the host**: a private network (WireGuard) and the reverse-proxy pattern above, or mutual TLS at nginx
+(`hams_rpc_guard.client_cert_header`, below). Never a public network on `allowed_networks`.
 
-**Mutual TLS, off-box clients only.** For a daemon on another machine (production's FCC sync is one), terminate TLS at
-nginx with `ssl_verify_client on;` and a CA the operator controls, one client certificate per daemon, and map the
-verified subject to the per-client allowlist (a later change in this module series). This module neither creates nor
-stores any key or certificate: key material is provisioning, and nothing here touches a backup key.
-
-**Recommendation.** On the Odoo host: a daemon calls `127.0.0.1` with its own service-account API key (the account is
-its identity; the per-client allowlist in the next change keys on it). Off the host: mutual TLS in front of Odoo, and
-`hams_rpc_guard.json2_access = any` only for those. Do not run daemons as root or as the `odoo` user.
+**TLS on loopback** adds little against a local attacker: a process that can read a daemon's memory already has its key.
+The socket's kernel identity is the stronger on-box control. This module creates and stores no key or certificate;
+nothing here touches a backup key. Do not run daemons as root or as the `odoo` user (the Odoo user can always connect).
 
 ## Anchor entries
+
+### `hams_rpc_guard:gate_parameters`
+
+**Purpose.** The names and words of the endpoint gate, in `endpoint_gate.py`: the six parameter names, the default
+network list `DEFAULT_ALLOWED_NETWORKS`, the words `none`/`networks`, the transports `tcp`/`unix`/`both` and the
+internal `closed`, `CLIENT_ADDRESS_HEADERS`, the families `legacy-rpc`/`json2`, the network classes, the environ keys
+`UNIX_PEER_ENVIRON_KEY` (set by the listener to the peer's credentials dict) and `UNIX_LOGINS_ENVIRON_KEY` (set by the
+gate to the bound logins), and `FORWARDING_HEADERS`. Constants; read by the gate, the listener, the parameter check
+and the tests. The environ keys have no `HTTP_` prefix, so no request header can produce them.
 
 ### `hams_rpc_guard:endpoint_family`
 
 **Purpose.** Classifies a request path as one of the two guarded endpoint families, or neither. Called for every
-request by `ir.http._authenticate` (below).
+request by `ir.http._authenticate` and by the Unix-socket application.
 
 | Argument | Type | Meaning |
 |---|---|---|
 | `path` | `str` | The request path without the query string. Anything that is not a `str` is "neither". |
 
 **Returns.** `"legacy-rpc"` for exactly `/jsonrpc` and anything under `/xmlrpc/`; `"json2"` for `/json/2` and anything
-under `/json/2/`; `None` otherwise. `/xmlrpc.php` (the WordPress probe scanners send), `/jsonrpc/`, `/json/21`,
-`/json/version`, `/web/version` and the web client's `/web/dataset/...` are `None`. **Errors.** None. **Concurrency.**
-Pure. **Test:** `test_endpoint_gate.TestEndpointFamily`.
+under `/json/2/`; `None` otherwise (`/xmlrpc.php`, `/jsonrpc/`, `/json/21`, `/json/version`, `/web/dataset/...`).
+**Errors.** None. **Concurrency.** Pure. **Test:** `test_endpoint_gate.TestEndpointFamily`.
 
-### `hams_rpc_guard:origin_is_local`
+### `hams_rpc_guard:parse_address`
 
-**Purpose.** Decides whether the true client of a request is on this machine (rules above).
+**Purpose.** One header token or peer string to an address. `_parse_address(text)`: `text` any value (plain address,
+`host:port`, `[v6]:port`, with a `%zone`); returns an `IPv4Address`/`IPv6Address` (an IPv4-mapped IPv6 address becomes
+IPv4) or `None`. Pure. **Test:** `test_endpoint_gate.TestResolveClient`.
+
+### `hams_rpc_guard:parse_networks`, `parse_trusted_proxies`, `parse_client_address_header`, `parse_legacy_access`, `parse_transport`
+
+**Purpose.** Parse one setting each; used when a value is written (`check_gate_parameters`) and when it is read
+(`read_settings`).
+
+| Function | Argument | Returns | Raises `ConfigError` when |
+|---|---|---|---|
+| `parse_networks(value, param=ALLOWED_NETWORKS_PARAM, default="")` | the text; `param` names the setting in the message; `default` replaces unset/blank | tuple of `ip_network` (`none`: empty) | any entry is not an address or CIDR network |
+| `parse_trusted_proxies(value)` | the text | tuple of `ip_network` (unset: empty) | as above |
+| `parse_client_address_header(value)` | the text | canonical header name or `""` | not one of `CLIENT_ADDRESS_HEADERS` |
+| `parse_legacy_access(value)` | the text | `networks` or `none` | anything else |
+| `parse_transport(value)` | the text | `tcp`, `unix` or `both` | anything else |
+
+All are pure and case-insensitive for the words. `ConfigError` is a `ValueError`. **Test:**
+`test_endpoint_gate.TestSettings`.
+
+### `hams_rpc_guard:peer`, `peer_rule`, `peer_rules`, `parse_peer_rules`
+
+**Purpose.** The Unix-socket identity and its admission rules (`endpoint_gate.py`).
+
+| Structure | Fields |
+|---|---|
+| `Peer` | `pid`, `uid`, `gid` (int, from `SO_PEERCRED`), `user`, `group` (names, `""` when none). `as_dict()` gives the environ form. Created per connection by `unix_listener.peer_of`. |
+| `PeerRule` | `kind` (`user`, `uid`, `group`, `gid`), `value` (name or int), `logins` (frozenset; empty = any). `matches(peer)` compares one field. |
+| `PeerRules` | `rules` (tuple of `PeerRule`, in the written order); `match(peer)` returns the first matching rule or `None`. |
+
+`parse_peer_rules(value)` reads `hams_rpc_guard.unix_peers`: comma-separated `WHO[=LOGIN|LOGIN...]`, `WHO` a user
+name, uid, `@group` or `@gid`. Unset or blank: no rule (everyone refused). Raises `ConfigError` on an empty `WHO`, a
+name with characters other than letters, digits, `_ . -` (and a trailing `$`), or an empty/malformed login list.
+Names are not looked up when parsing (the user may not exist yet on this host). Pure. **Test:**
+`test_unix_listener.TestPeerRules`.
+
+### `hams_rpc_guard:gate_settings` and `hams_rpc_guard:read_settings`
+
+**Purpose.** `GateSettings` holds one database's parsed settings: `allowed_networks`, `trusted_proxies` (tuples of
+networks), `client_address_header` (str), `legacy` (`networks`/`none`), `transport` (`tcp`/`unix`/`both`/`closed`),
+`unix_peers` (`PeerRules`, or `None`: no peer admitted). Built per request; never shared or mutated after.
+`read_settings(get_param)` builds it from `get_param(key, default)` (the zero_sudo parameter reader, cached). Every
+value that does not parse is logged at ERROR and replaced by its closed value; a reader that raises propagates (the
+gate then fails closed). **Test:** `test_endpoint_gate.TestSettings`.
+
+### `hams_rpc_guard:socket_peer` and `hams_rpc_guard:resolve_client`
+
+**Purpose.** The true client of a TCP request (rules in [Who the true client is](#who-the-true-client-is)).
 
 | Argument | Type | Meaning |
 |---|---|---|
-| `environ` | `dict` | The WSGI environment (`REMOTE_ADDR`, `werkzeug.proxy_fix.orig`). |
-| `headers` | `Headers` | The request headers; lookups are case-insensitive. |
-| `trusted_proxies` | list of `ip_network` | From `parse_trusted_proxies`; default `()`. |
+| `environ` | `dict` | WSGI environ (`REMOTE_ADDR`, `werkzeug.proxy_fix.orig`). |
+| `headers` | werkzeug `Headers`/`EnvironHeaders` | Case-insensitive; `getlist` is used to catch a header sent twice. |
+| `trusted_proxies` | tuple of `ip_network` | From the setting. |
+| `client_address_header` | `str` | Canonical name or `""`. |
 
-**Returns.** `True` only when the rules hold; any unparseable address is `False`. **Errors.** None. **Concurrency.**
-Pure. **Security.** Never trusts a header's value for admission unless the peer itself is trusted. **Test:**
-`test_endpoint_gate.TestOriginIsLocal`.
+**Returns.** `socket_peer(environ)`: the peer address or `None`. `resolve_client(...)`: the client address or `None`
+(unknown). **Errors.** None. **Concurrency.** Pure. **Security.** A header value is believed only from a trusted
+proxy, only from the one configured header, only as a single address. **Test:** `test_endpoint_gate.TestResolveClient`,
+`TestRpcEndpointGate`.
 
-### `hams_rpc_guard:policy_allows`
+### `hams_rpc_guard:network_class`
 
-**Purpose.** The policy table: `any` admits everyone, `none` admits no one, `loopback` (and anything else) admits a
-local request. Arguments: `policy` (`str`), `local` (`bool`). Returns `bool`. Pure. **Test:**
-`test_endpoint_gate.TestPolicy`.
+`network_class(address)` returns the counter class: `loopback`, `link-local`, `private` (RFC 1918, ULA, and the
+documentation ranges Python counts as private), `public`, or `unknown` for `None`. Pure. **Test:**
+`test_endpoint_gate.TestJudgement`.
 
-### `hams_rpc_guard:endpoint_gate`
+### `hams_rpc_guard:judge_tcp` and `hams_rpc_guard:judge_unix`
 
-**Purpose.** `ir.http._authenticate`, extended: before the core authenticates, a guarded family whose policy refuses
-this request raises werkzeug `NotFound` (HTTP 404). Reads the three parameters through
-`zero_sudo.security.utils._get_system_param` (whitelisted there); a read failure is logged and read as `loopback`.
-Side effects: a per-worker counter and a log line at powers of ten. No database write. **Test:**
-`test_endpoint_gate.TestRpcEndpointGate`, `TestPublicVisitorCannotUseTheWebClientRpc`.
+**Purpose.** The decision. `judge_tcp(family, settings, client)` returns `(allowed, reason)`: refused with `transport`
+when the transport is not `tcp`/`both`, `legacy-closed` for a legacy family under `legacy_access = none`, `network` when
+the client is unknown or on no allowed network. `judge_unix(family, settings, peer)` returns `(allowed, reason,
+logins)`: `transport` unless `unix`/`both`, `legacy-closed`, `peer` when no rule matches or the rules could not be read;
+`logins` is the matching rule's frozenset. Pure. **Test:** `test_endpoint_gate.TestJudgement`,
+`test_unix_listener.TestPeerRules`.
+
+### `hams_rpc_guard:note_request`, `hams_rpc_guard:request_counts`, `hams_rpc_guard:is_power_of_ten`
+
+**Purpose.** Counters. `note_request(family, client_class, allowed, reason, served=None)` counts under
+`(family, class, "allowed" | "refused:<reason>" | "would-refuse:<reason>")` (`served` defaults to `allowed`; in report
+mode a refusal is served) and logs a refusal at counts 1, 10, 100, ...; returns the count. `request_counts()` returns a
+copy. Per worker process, under a lock; never persisted. **Test:** `test_endpoint_gate.TestJudgement`.
+
+### `hams_rpc_guard:endpoint_gate` and `hams_rpc_guard:refuse_endpoint_when_closed`
+
+**Purpose.** `ir.http._authenticate`, extended: before the core authenticates, a guarded family is judged. Reads
+`hams_rpc_guard.mode` and the settings through `zero_sudo.security.utils._get_system_param`; `off` skips the gate; a Unix
+request (environ entry set by the listener) is judged by `judge_unix` and, when admitted, gets its bound logins in the
+environ; a TCP request by `resolve_client` and `judge_tcp`. A refusal raises werkzeug `NotFound` (404) in `enforce`
+mode and is only counted in `report` mode. A parameter read failure is logged and read as closed. No database write.
+**Test:** `test_endpoint_gate.TestRpcEndpointGate`, `TestPublicVisitorCannotUseTheWebClientRpc`,
+`test_unix_listener.TestUnixSocketEndToEnd`.
+
+### `hams_rpc_guard:check_gate_parameters` and `hams_rpc_guard:parameter_parsers`
+
+**Purpose.** `ir.config_parameter`, extended with a constraint on `key`/`value`: a record whose key is in `PARSERS`
+(the six gate settings, each mapped to its parser) must parse, or the create/write raises `ValidationError` naming the
+setting. Other keys are untouched. **Test:** `test_endpoint_gate.TestSettings.test_a_bad_value_cannot_be_written`.
+
+### `hams_rpc_guard:listener_options` and `hams_rpc_guard:listener_config`
+
+**Purpose.** The server-file options (`OPTION_PATH`, `OPTION_MODE`, `OPTION_GROUP`, `OPTION_OWNER`; constants
+`DEFAULT_MODE` 0660, `INHERITED_FD_ENV`, `BACKLOG` 64, `SOCKET_TIMEOUT` 2 s, `LOOPBACK_ADDRESS`).
+`listener_config(config)`: `config` is `odoo.tools.config` or a mapping with `get`; returns `None` (no path) or
+`{"path", "mode", "group", "owner"}`; raises `ListenerError` for a relative path or a mode other than 0600/0660. Pure.
+**Test:** `test_unix_listener.TestListenerSocket`.
+
+### `hams_rpc_guard:open_listener`
+
+**Purpose.** Create the listening socket. `open_listener(path, mode=0o660, group="", owner="", backlog=64)` returns a
+non-blocking `AF_UNIX` listening socket. **Errors.** `ListenerError` when the path exists and is not a socket, when
+another server accepts on it, when the directory is missing or not writable, for an unknown owner/group, or when
+chown/chmod fails (the file is then removed). A stale socket file is unlinked first. **Side effects.** Creates the file
+under umask 0177, then chown and chmod. **Test:** `test_unix_listener.TestListenerSocket`.
+
+### `hams_rpc_guard:peer_of`
+
+`peer_of(connection)`: the `Peer` of an accepted `AF_UNIX` connection (`SO_PEERCRED`; names from the whole passwd and
+group databases, `""` when absent). **Test:** `test_unix_listener.TestListenerSocket`.
+
+### `hams_rpc_guard:rpc_only_app`, `unix_request_handler`, `unix_wsgi_server`, `serve_unix_connection`
+
+**Purpose.** Serving a socket connection. `rpc_only_app(app)` wraps a WSGI app: 404 for any path that is not an
+endpoint family, forwarding headers dropped. `UnixRequestHandler` (werkzeug's handler): HTTP/1.0, one request per
+connection, 2 s per socket operation, `REMOTE_ADDR` loopback, the `Peer` dict in the environ.
+`make_wsgi_server(sock, app, threaded=False)` returns a werkzeug `BaseWSGIServer` (prefork: `process_request` per
+connection) or `ThreadedWSGIServer` (`serve_forever` in a thread) on a duplicate of `sock`.
+`serve_unix_connection(server, connection)` serves one accepted connection, blocking, close-on-exec, `EPIPE` tolerated.
+**Test:** `test_unix_listener.TestUnixSocketEndToEnd`.
+
+### `hams_rpc_guard:listener_socket`, `hams_rpc_guard:ensure_listener`, `hams_rpc_guard:install_server_patches`
+
+**Purpose.** Process wiring (table in [Unix socket](#unix-socket)). `listener_socket()` returns this process's socket
+or `None`. `ensure_listener(config)` opens it once per process (or adopts the descriptor from `HAMS_RPC_GUARD_SOCKET_FD`
+after a reload) and returns it, or `None` with an ERROR when it cannot; takes a lock. `install_server_patches()` wraps
+`PreforkServer.start`, `process_spawn`, `fork_and_reload`, `WorkerHTTP.start`, `sleep`, `process_work`,
+`WorkerCron.start` and `ThreadedServer.http_spawn` once (idempotent); called from `post_load_hook`. Opens nothing unless
+`hams_rpc_guard_socket` is set. **Test:** `test_unix_listener.TestListenerSocket`, `tools/prefork_unix_check.py`.
+
+### `hams_rpc_guard:unix_identity`
+
+`unix_identity()` returns `("unix:<user>" or "unix:uid:<n>", bound logins)` for a call admitted on the socket, else
+`("", None)`. `check_rpc_call` uses the identity like a certificate subject and refuses (reason
+`unix-login-not-bound`) a call authenticated as a login the peer is not bound to. **Test:**
+`test_unix_listener.TestUnixLoginBinding`.
 
 ### `hams_rpc_guard:post_init_hook`
 
 **Purpose.** Installs the module's documentation article (`data/documentation.html`) through the knowledge module.
 Takes the environment; returns nothing; sets no system parameter, so an operator's choice is never overwritten and
 the safe defaults are the ones in code. **Test:** `test_endpoint_gate.TestPostInitHook`.
+
+### `zero_sudo:odoo_rpc_client`, `zero_sudo:odoo_rpc_client_call`, `zero_sudo:unix_http_connection`
+
+**Purpose.** The daemon client (`zero_sudo/daemon/odoo_rpc_client.py`). `OdooRpcClient(url, api_key, database,
+timeout=30)`: `url` `unix:///abs/path`, `http://` or `https://` (else `ValueError`). `call(model, method, **params)`
+POSTs JSON to `/json/2/<model>/<method>` with `Authorization: Bearer` and `X-Odoo-Database`, returns the decoded
+answer, raises `OdooRpcError(status, body)` for any status but 200 (404: refused by the guard or no such route) and
+`OSError` when unreachable. Blocking; one connection per call; never logs the key. `UnixHTTPConnection(path, timeout)`
+is `http.client.HTTPConnection` over `AF_UNIX`. **Test:** `test_unix_listener.TestUnixSocketEndToEnd`.
 
 ## The method whitelist
 
@@ -261,4 +487,5 @@ believes the header only from a loopback peer inside `trusted_proxies`; never wi
 ### `hams_rpc_guard:peer_is_trusted`
 
 **Purpose.** Whether the socket peer is a loopback address inside the trusted-proxy networks. **Call interface.**
-`peer_is_trusted(environ, trusted_proxies)`; returns `bool`; pure. **Test:** `test_endpoint_gate.TestPolicy`.
+`peer_is_trusted(environ, trusted_proxies)`; returns `bool`; pure. Stricter than `resolve_client`: the peer must also
+be a loopback address. **Test:** `test_endpoint_gate.TestResolveClient`, `test_guard.TestWrapper` (certificate identity).

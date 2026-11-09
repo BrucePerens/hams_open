@@ -5,3 +5,4 @@ from . import test_policy
 from . import test_exposure
 from . import test_repository
 from . import test_guard
+from . import test_unix_listener

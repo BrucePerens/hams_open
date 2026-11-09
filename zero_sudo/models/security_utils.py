@@ -837,10 +837,13 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             # (hams_base/controllers). Empty by default; not a secret.
             "hams_base.email_delivery_notice",
             # hams_rpc_guard/endpoint_gate.py: who may reach Odoo's /xmlrpc, /jsonrpc and /json/2 endpoints
-            # ("loopback", "any" or "none"). A policy word, not a secret.
+            # (networks, a header name, policy words, local user names). Configuration, not secrets.
+            "hams_rpc_guard.allowed_networks",
             "hams_rpc_guard.legacy_access",
-            "hams_rpc_guard.json2_access",
             "hams_rpc_guard.trusted_proxies",
+            "hams_rpc_guard.client_address_header",
+            "hams_rpc_guard.rpc_transport",
+            "hams_rpc_guard.unix_peers",
             "hams_rpc_guard.mode",
             "hams_rpc_guard.strict_stock",
             "hams_rpc_guard.managed_authors",
