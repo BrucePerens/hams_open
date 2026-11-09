@@ -23,7 +23,6 @@ class TestMailSenderFallback(HamsTransactionCase):
         self.report = self.env["content.violation.report"].create(
             {"target_url": "/sender-fallback", "description": "Test", "reported_by_email": "reporter@example.org"}
         )
-        self.env["ir.config_parameter"].sudo().set_param("user_websites.company_abuse_email", "")
 
     def _default_from(self, value):
         self.safe_patch_object(type(self.env["ir.mail_server"]), "_get_default_from_address", lambda _self: value)

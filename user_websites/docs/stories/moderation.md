@@ -39,3 +39,7 @@ As a **Site Visitor** or **Administrator**, I want a way to report and manage co
   `/`, and never to an attacker-controlled off-site host -- only the path portion of the
   submitted URL is ever trusted) ([@ANCHOR: user_websites:report_violation_redirect_target]).
   Verified by `[@ANCHOR: test_report_violation_redirects_back_to_reported_page]`.
+
+## Mail sender and recipient fallbacks
+
+As an **Administrator**, I want the site's own mail templates (the content violation report, the pending-violations summary and the weekly digest) never to use a made-up address, so a site with no company email does not send mail from, or abuse reports to, a domain that is not theirs. The sender is the company email, then the mail server's default from address; with neither set it is empty and Odoo refuses to send the mail and records why on it. The abuse report goes to the `user_websites.company_abuse_email` setting, then the company email, then nowhere. `[@ANCHOR: mail_sender_fallback]`
