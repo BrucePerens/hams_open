@@ -35,9 +35,12 @@ from unittest.mock import MagicMock, patch
 from cryptography.fernet import Fernet
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser, ChromeBrowserException, HOST, BaseCase
 from .test_persona_support import PersonaMixin
+from .hypothesis_profile import register_hams_profile
 import odoo.tests.common
 import odoo
 from odoo import fields
+
+register_hams_profile()  # the one Hypothesis profile of every property test in an Odoo process
 
 _test_callsign_counter = itertools.count(1)
 
