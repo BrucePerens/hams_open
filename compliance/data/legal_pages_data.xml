@@ -25,6 +25,7 @@
                             <p>The Web Content Accessibility Guidelines (WCAG) defines requirements for designers and developers to improve accessibility for people with disabilities. It defines three levels of conformance: Level A, Level AA, and Level AAA. This platform is partially conformant with WCAG 2.1 level AA.</p>
 
                             <!-- Empty slot: a theme that offers display and reading choices (theme_hams) replaces it with its own section. Without such a theme there is no panel to describe. -->
+                            <!-- [@ANCHOR: COMM_compliance_accessibility_display_slot] Verified by [@ANCHOR: COMM_test_accessibility_statement_has_no_theme_only_panel_text] -->
                             <div id="accessibility_display_choices"/>
 
                             <h3 class="mt-4">3. Feedback</h3>
