@@ -50,6 +50,7 @@ from . import test_owner_delete
 from . import test_user_blog_urls
 from . import test_owner_site
 from . import test_report_shield
+from . import test_mail_sender_fallback
 
 from .open_source_defaults import pin_package
 

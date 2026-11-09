@@ -44,7 +44,7 @@
                             <field name="global_website_page_limit"/>
                         </setting>
                         <setting help="Email address where content violation reports will be sent.">
-                            <field name="company_abuse_email" placeholder="abuse@yourcompany.com"/>
+                            <field name="company_abuse_email" placeholder="Leave empty to use the company email"/>
                         </setting>
                     </block>
                 </app>
