@@ -57,11 +57,13 @@ async def _uart_transact(ns, p):
     ended = "timeout"
     while True:
         now = time.monotonic()
-        remaining = deadline - now
-        idle_left = None if last is None else p["idle_ms"] / 1000.0 - (now - last)
-        # The idle limit ends the call only when it comes before the deadline: a device still sending at the deadline did not go quiet.
-        idle_first = idle_left is not None and idle_left < remaining
-        wait = idle_left if idle_first else remaining
+        wait = deadline - now
+        idle_first = False
+        if last is not None:
+            idle_left = p["idle_ms"] / 1000.0 - (now - last)
+            # The idle limit ends the call only when it comes before the deadline: a device still sending at the deadline did not go quiet.
+            if idle_left < wait:
+                idle_first, wait = True, idle_left
         if wait <= 0:
             ended = "idle" if idle_first else "timeout"
             break
