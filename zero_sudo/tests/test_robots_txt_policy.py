@@ -80,3 +80,49 @@ class TestRobotsTxtPolicy(HamsTransactionCase):
             policy.robots_txt_verdict(_URL, _UA)
         with self.assertRaises(ValueError):
             policy.robots_txt_verdict(_URL, _UA, body=b"", http_status=404)
+
+    def test_the_longest_matching_rule_wins_whatever_the_file_order(self):
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_longest_match]
+        # urllib.robotparser took the first matching rule on older Pythons and the longest on 3.13.
+        for name, body, expected in (
+            ("a longer Allow after a Disallow", b"User-agent: *\nDisallow: /\nAllow: /events/\n", True),
+            ("the same file with the Allow first", b"User-agent: *\nAllow: /events/\nDisallow: /\n", True),
+            ("a longer Disallow beats a shorter Allow", b"User-agent: *\nAllow: /events/\nDisallow: /events/hamfest\n", False),
+            ("equal length: the Allow wins", b"User-agent: *\nDisallow: /events/\nAllow: /events/\n", True),
+            ("a star in the pattern", b"User-agent: *\nDisallow: /*.html$\n", False),
+            ("a dollar anchors the end", b"User-agent: *\nDisallow: /*.htm$\n", True),
+            ("an empty Disallow allows everything", b"User-agent: *\nDisallow:\n", True),
+            ("our own group replaces the wildcard group", b"User-agent: *\nDisallow: /\n\nUser-agent: ExampleCrawler\nAllow: /events/\n", True),
+            ("our own group with no matching rule does not fall back to the wildcard", b"User-agent: *\nDisallow: /\n\nUser-agent: ExampleCrawler\nDisallow: /private/\n", True),
+            ("the token is matched exactly, not by substring", b"User-agent: Example\nDisallow: /\n", True),
+            ("consecutive User-agent lines share one group", b"User-agent: Other\nUser-agent: ExampleCrawler\nDisallow: /\n", False),
+            ("percent escapes are normalised", b"User-agent: *\nDisallow: /events/ham%66est.html\n", False),
+            ("a byte-order mark and CRLF line ends are read", b"\xef\xbb\xbfUser-agent: *\r\nDisallow: /\r\n", False),
+            ("binary garbage allows", b"\x00\x01\x02: \x03\nUser-agent\n:::\n", True),
+        ):
+            with self.subTest(name):
+                self.assertIs(policy.robots_txt_verdict(_URL, _UA, body=body), expected)
+
+    def test_the_verdict_never_raises_on_odd_urls(self):
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_longest_match]
+        body = b"User-agent: *\nDisallow: /\n"
+        self.assertIs(policy.robots_txt_verdict("http://[bad", _UA, body=body), False)
+        self.assertIs(policy.longest_match_verdict("User-agent: *\nDisallow: /\n", None, _UA), False)
+
+    def test_the_helpers_of_the_longest_match_parser(self):
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_product_token]
+        self.assertEqual(policy._product_token("ExampleCrawler/1.0 (+https://x.example)"), "examplecrawler")
+        self.assertEqual(policy._product_token(""), "")
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_normalise]
+        self.assertEqual(policy._normalise("/a%7eb"), policy._normalise("/a~b"))
+        self.assertEqual(policy._normalise("/a%2fb"), "/a%2Fb")
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_target]
+        self.assertEqual(policy._target("https://h.example/p/q?x=1#frag"), "/p/q?x=1")
+        self.assertEqual(policy._target("https://h.example"), "/")
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_pattern_matches]
+        self.assertTrue(policy._pattern_matches("/a*c$", "/abc"))
+        self.assertFalse(policy._pattern_matches("/a*c$", "/abcd"))
+        self.assertTrue(policy._pattern_matches("/ab", "/abcd"))
+        # Tests [@ANCHOR: zero_sudo:robots_txt_policy_groups]
+        groups = policy._groups("User-agent: a\nUser-agent: b\nDisallow: /x\nUser-agent: c\nAllow: /y\nDisallow: /z\n")
+        self.assertEqual(groups, [(["a", "b"], [("disallow", "/x")]), (["c"], [("allow", "/y"), ("disallow", "/z")])])
