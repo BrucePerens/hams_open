@@ -161,6 +161,7 @@ class TestTriageVerdict(HamsTransactionCase):
     def test_08b_a_customer_cannot_record_a_verdict_or_post_a_note_on_their_own_ticket(self):
         # Tests [@ANCHOR: hams_helpdesk:mcp_record_verdict]
         # Tests [@ANCHOR: hams_helpdesk:mcp_post_internal_note]
+        # Tests [@ANCHOR: hams_helpdesk:require_triage_caller]
         portal = self.env["res.users"].create(
             {
                 "name": "Portal verdict caller",

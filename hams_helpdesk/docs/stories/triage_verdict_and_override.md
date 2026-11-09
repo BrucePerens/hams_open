@@ -9,7 +9,7 @@ whom and why, so that I can trust the Spam stage, correct it, and have my correc
    rule hits) and the AI triage agent after it (`mcp_record_verdict()`, source `agent`, the reasons are the agent's words,
    filtered like every note it writes) `[@ANCHOR: hams_helpdesk:mcp_record_verdict]`. Both go through one writer that runs as
    the helpdesk service account, validates the verdict and cuts the reasons to 2000 characters
-   `[@ANCHOR: hams_helpdesk:triage_record_verdict]`. No caller can set the fields through `create()` or `write()`.
+   `[@ANCHOR: hams_helpdesk:triage_record_verdict]`. No caller can set the fields through `create()` or `write()`, and only the triage service account, helpdesk staff and the superuser may call `mcp_record_verdict()`, `mcp_mark_spam()` or `mcp_post_internal_note()`; any other signed-in user, a customer who owns the ticket included, is refused `[@ANCHOR: hams_helpdesk:require_triage_caller]`.
 2. Which verdicts move a ticket to the Spam stage is a setting, `hams_helpdesk.triage_quarantine_verdicts` (comma separated,
    default `spam,phishing`) `[@ANCHOR: hams_helpdesk:triage_quarantine_verdicts]`. A verdict outside the set is recorded and
    the ticket stays where it is. Nothing is ever deleted and the sender is never mailed.

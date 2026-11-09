@@ -1111,6 +1111,7 @@ class HelpdeskTicket(models.Model):
             hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
             judged.with_env(hd_env).write({"triage_overridden": True, "triage_overridden_at": fields.Datetime.now()})
 
+    # [@ANCHOR: hams_helpdesk:require_triage_caller]
     def _require_triage_caller(self):
         """Raises AccessError unless the calling user is the external-AI triage account or helpdesk staff. The ``mcp_*`` methods
         are public (callable over RPC by any signed-in user), and a customer can read their own ticket, so the read they start
