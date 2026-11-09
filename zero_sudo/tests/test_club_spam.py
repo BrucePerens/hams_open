@@ -12,6 +12,7 @@ import datetime
 import importlib.util
 import os
 import sys
+import time
 import unittest
 
 from odoo.tests.common import BaseCase, tagged
@@ -733,7 +734,6 @@ class TestRedirectToSpam(BaseCase):
         # 100 kB of an unclosed opening tag took 7 to 10 s (every one rescanned to the end of the page). Linear code does
         # it in a few hundredths of a second; the limit is 100 times that, so a loaded machine does not make it flaky but
         # the quadratic code (seconds) fails. The scaling check (4x the input costs far less than 16x) fails it too.
-        import time
         for piece in ("<script ", "<head ", "<style ", "<noscript ", "<"):
             with self.subTest(piece=piece):
                 costs = []
