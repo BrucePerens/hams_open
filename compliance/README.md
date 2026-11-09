@@ -141,6 +141,14 @@ A non-interactive configuration module that enforces baseline regulatory complia
   data block, and the 1.2 pre-migration clears the `noupdate` flag its existing `ir_model_data` row still carried, before the
   same update reloads the data files. Nothing is changed on a fresh install. `[@ANCHOR: compliance:clear_stale_ca_template_noupdate_flag]`
 
+* **The accessibility statement reaches installed databases too.** Its template (`compliance_accessibility_statement_template`) sat in a
+  `noupdate="1"` block, so after the 2026-11 rewrite ("Display and Reading Choices") a module update left the old text in place; a
+  rehearsal of the production upgrade on a restored copy of `hams_prod` found it. The template now sits in an ordinary data block
+  (the page record stays in the noupdate block), and the 1.3 pre-migration clears the `noupdate` flag its existing `ir_model_data` row
+  still carried, before the same update reloads the data files. Argument: `cr` (the migration cursor) and `version` (the installed
+  version, empty on a fresh install, where nothing is changed). It is plain SQL, touches only the one listed xmlid, and is
+  idempotent. `[@ANCHOR: compliance:clear_stale_accessibility_template_noupdate_flag]`
+
 * **Accessible cookie banner.** Odoo's stock cookie bar is a `role="dialog"` with no name, so a screen reader announced only
   "dialog" (axe-core `aria-dialog-name`, serious, on every page). The module's inherited template gives it the accessible name
   "Cookie preferences". `[@ANCHOR: compliance:COMM_compliance_cookies_bar_name]`
