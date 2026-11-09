@@ -23,6 +23,15 @@ the same way, so that the rules cannot drift between two hand-written copies.
 `urlopen_ssrf_safe()` (the fetch helper, which refuses non-public addresses) and the shared verdict
 function (`robots_txt_verdict()`) are described in [daemon/README.md](../../daemon/README.md).
 
+The parser behind that verdict reads a robots.txt the way RFC 9309 does, in small steps, each with its own test:
+the product token of a User-Agent is the text before the first `/` or space, lower-cased
+`[@ANCHOR: zero_sudo:robots_txt_policy_product_token]`; a path or pattern is put in percent-escape normal form so
+`%7E` and `~` agree `[@ANCHOR: zero_sudo:robots_txt_policy_normalise]`; the URL is reduced to the path and query that
+rules match `[@ANCHOR: zero_sudo:robots_txt_policy_target]`; a pattern is a prefix in which `*` is any run of
+characters and a final `$` anchors the end, matched without a regular expression so a hostile file cannot make it slow
+`[@ANCHOR: zero_sudo:robots_txt_policy_pattern_matches]`; and consecutive `User-agent:` lines form one group that
+shares the rules after them `[@ANCHOR: zero_sudo:robots_txt_policy_groups]`.
+
 ## Verification
 
 `zero_sudo/tests/test_robots_txt_policy.py` covers each body and status-code case.
