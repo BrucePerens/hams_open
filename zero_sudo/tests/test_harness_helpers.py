@@ -103,6 +103,23 @@ class TestHarnessHelpers(HamsTransactionCase):
         self.assertEqual(someone_elses.kills, 0, "another uid's process must never be touched")
         self.assertEqual(not_a_browser.kills, 0, "only chrome/chromium by name")
 
+    # Tests [@ANCHOR: zero_sudo:kill_all_headless_chrome]
+    def test_the_reaper_does_not_wait_when_there_is_no_chrome_to_reap(self):
+        """Every HamsHttpCase test's tearDown calls the reaper, nearly always with nothing to kill: it must not sleep then."""
+        self.safe_patch_object(common, "_headless_chrome_of_this_run", return_value=[])
+        sleeps = self.safe_patch_object(common.time, "sleep")
+        common._kill_all_headless_chrome_for_this_uid()
+        sleeps.assert_not_called()
+
+    # Tests [@ANCHOR: zero_sudo:kill_all_headless_chrome]
+    def test_the_reaper_still_waits_and_rechecks_after_killing_a_chrome(self):
+        victim = _FakeProcess("chrome", os.getuid(), ["chrome", "--headless"], pid=4201)
+        self.safe_patch_object(common, "_headless_chrome_of_this_run", side_effect=[[victim], [victim]])
+        sleeps = self.safe_patch_object(common.time, "sleep")
+        common._kill_all_headless_chrome_for_this_uid()
+        self.assertEqual(victim.kills, 2, "killed once, then killed again by the re-check")
+        sleeps.assert_called_once_with(0.5)
+
     # Tests [@ANCHOR: zero_sudo:tracked_threadpool_submit]
     # Tests [@ANCHOR: zero_sudo:wait_for_background_futures]
     def test_a_submitted_background_job_is_tracked_until_it_finishes_and_a_stall_is_logged(self):
