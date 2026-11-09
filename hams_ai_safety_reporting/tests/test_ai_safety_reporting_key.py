@@ -7,6 +7,7 @@ The Simulated Band bots and the Official Observer file a safety ticket with a ke
 key file are all real) against a scratch file name inside the real key directory, so a developer box's
 own key file is never overwritten.
 """
+import importlib.util
 import os
 import stat
 
@@ -16,6 +17,9 @@ from odoo.addons.hams_ai_safety_reporting import hooks
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 SCRATCH_KEY_FILE = "/opt/hams/etc/keys/test_ai_safety_reporting_key.env"
+MIGRATION_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations", "1.1", "post-register-ai-safety-reporting-key.py"
+)
 
 
 @tagged("post_install", "-at_install", "security")
@@ -78,3 +82,20 @@ class TestAiSafetyReportingKey(RealTransactionCase):
         self.assertEqual(len(registry), 1)
         self.assertEqual(registry.name, "Hand Made Safety Row")
         self.assertTrue(os.path.exists(SCRATCH_KEY_FILE), "the key was minted and written")
+
+    def test_the_migration_registers_the_key_on_an_installed_database_only(self):
+        # Tests [@ANCHOR: hams_ai_safety_reporting:migrate]
+        spec = importlib.util.spec_from_file_location("hams_ai_safety_reporting_migration_1_1", MIGRATION_FILE)
+        migration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(migration)
+
+        migration.migrate(self.env.cr, None)  # a fresh install has no version: post_init_hook does the work
+        self.assertFalse(self._registries())
+
+        migration.migrate(self.env.cr, "1.0")  # an installed database registers the key now
+        registry = self._registries()
+        self.assertEqual(len(registry), 1)
+        self.assertTrue(os.path.exists(SCRATCH_KEY_FILE), "the key was minted and written")
+
+        migration.migrate(self.env.cr, "1.0")  # running it again updates the same row
+        self.assertEqual(self._registries(), registry)

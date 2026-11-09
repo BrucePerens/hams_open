@@ -15,7 +15,7 @@ The daemons that file a safety ticket authenticate as the service account with a
 registry row was added by hand on hams.com, so a new install never had the key and a flagged contact could not become a ticket. This
 function registers the row, so the key is issued and rotated like every other daemon key (every 59 days; the bots read the file again
 for each ticket, so a rotation costs them nothing). `post_init_hook` calls it on a fresh install and `migrations/1.1` calls it once on
-an installed database.
+an installed database (the migration's `migrate(cr, version)` does nothing when there is no version, and raises `ValueError` when the service account is missing) [@ANCHOR: hams_ai_safety_reporting:migrate].
 
 | Argument | Type and range | Meaning |
 |---|---|---|
