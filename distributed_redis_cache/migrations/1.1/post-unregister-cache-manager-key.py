@@ -14,6 +14,7 @@ from odoo.addons.distributed_redis_cache.hooks import (
 )
 
 
+# [@ANCHOR: distributed_redis_cache:migrate]
 def migrate(cr, version):
     if not version:
         return
