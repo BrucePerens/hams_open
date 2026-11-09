@@ -582,9 +582,16 @@ impl<T: Transport> Rsp<T> {
                 "LNA state {lna_state} >= {n} for this band"
             )));
         }
+        let (old_gr, old_lna) = (self.s.if_gr_db, self.s.lna_state);
         self.s.if_gr_db = if_gr_db;
         self.s.lna_state = lna_state;
-        self.write_gain()
+        let res = self.write_gain();
+        if res.is_err() {
+            // The cache must keep describing what was last written: a later full tune rebuilds the board bytes from it.
+            self.s.if_gr_db = old_gr;
+            self.s.lna_state = old_lna;
+        }
+        res
     }
 
     /// Number of LNA states in the current band and port.
@@ -602,9 +609,10 @@ impl<T: Transport> Rsp<T> {
             return Ok(());
         }
         self.need_board("antenna selection")?;
+        let old_lna = self.s.lna_state;
         self.s.antenna = ant;
         let hiz_change = (old == Antenna::HiZ) != (ant == Antenna::HiZ);
-        if hiz_change {
+        let res = if hiz_change {
             let n = self.table().len() as u8;
             if self.s.lna_state >= n {
                 self.s.lna_state = n - 1;
@@ -612,15 +620,25 @@ impl<T: Transport> Rsp<T> {
             self.full_tune()
         } else {
             self.board(MCP_GPIOA, self.band_byte())
+        };
+        if res.is_err() {
+            self.s.antenna = old;
+            self.s.lna_state = old_lna;
         }
+        res
     }
 
     /// Broadcast (MW/FM) notch (RSP2pro), FM/MW notch (RSP1A). Port B only.
     pub fn set_notch(&mut self, on: bool) -> Result<(), Error> {
         // [@ANCHOR: rsp_device_rsp_set_notch]
         self.need_board("the notch")?;
+        let old = self.s.notch;
         self.s.notch = on;
-        self.board(MCP_GPIOB, self.front_byte())
+        let res = self.board(MCP_GPIOB, self.front_byte());
+        if res.is_err() {
+            self.s.notch = old;
+        }
+        res
     }
 
     /// DAB notch (RSP1A only): port B, then the gain write, as the API does (2.7).
@@ -633,17 +651,29 @@ impl<T: Transport> Rsp<T> {
                 self.model.name()
             )));
         }
+        let old = self.s.dab_notch;
         self.s.dab_notch = on;
-        self.board(MCP_GPIOB, self.front_byte())?;
-        self.write_gain()
+        let res = self
+            .board(MCP_GPIOB, self.front_byte())
+            .and_then(|()| self.write_gain());
+        if res.is_err() {
+            self.s.dab_notch = old;
+        }
+        res
     }
 
     /// Bias-T (DC power on the antenna port). Off unless explicitly enabled.
     pub fn set_bias_t(&mut self, on: bool) -> Result<(), Error> {
         // [@ANCHOR: rsp_device_rsp_set_bias_t]
         self.need_board("the bias-T")?;
+        let old = self.s.bias_t;
         self.s.bias_t = on;
-        self.board(MCP_GPIOB, self.front_byte())
+        let res = self.board(MCP_GPIOB, self.front_byte());
+        if res.is_err() {
+            // A failed write must not leave the flag set: the next full tune builds port B from it and would switch DC onto the antenna port.
+            self.s.bias_t = old;
+        }
+        res
     }
 
     /// 24 MHz reference clock output (RSP2pro only).
@@ -655,15 +685,30 @@ impl<T: Transport> Rsp<T> {
                 "the RSP1A has no reference output".into(),
             ));
         }
+        let old = self.s.ext_ref_out;
         self.s.ext_ref_out = on;
-        self.board(MCP_GPIOA, self.band_byte())
+        let res = self.board(MCP_GPIOA, self.band_byte());
+        if res.is_err() {
+            self.s.ext_ref_out = old;
+        }
+        res
     }
 
     /// Tuner IF bandwidth. RSP2pro: r0 only (the sequence verified on hardware). RSP1A: the
     /// API's bandwidth sequence, a full tune without r13/r14 (2.9).
     pub fn set_bandwidth(&mut self, bw: Bandwidth) -> Result<(), Error> {
         // [@ANCHOR: rsp_device_rsp_set_bandwidth]
+        let old = self.s.bandwidth;
         self.s.bandwidth = bw;
+        let res = self.write_bandwidth();
+        if res.is_err() {
+            self.s.bandwidth = old;
+        }
+        res
+    }
+
+    fn write_bandwidth(&mut self) -> Result<(), Error> {
+        // [@ANCHOR: rsp_device_rsp_write_bandwidth]
         if !self.is_1a() {
             return self.tuner(self.r0_word());
         }
@@ -1902,5 +1947,146 @@ mod tests {
             Err(Error::InvalidArgument(_))
         ));
         assert_eq!(rx.settings().rf_hz, 100_000_000);
+    }
+    /// A transport whose vendor requests fail while `fail` is set; everything else is the mock.
+    struct FailOut {
+        inner: MockTransport,
+        fail: Arc<std::sync::atomic::AtomicBool>,
+    }
+    impl Transport for FailOut {
+        fn vendor_out(&mut self, request: u8, value: u16, index: u16) -> Result<(), Error> {
+            if self.fail.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(Error::Stream("injected write failure".into()));
+            }
+            self.inner.vendor_out(request, value, index)
+        }
+        fn vendor_in(
+            &mut self,
+            request: u8,
+            value: u16,
+            index: u16,
+            buf: &mut [u8],
+        ) -> Result<usize, Error> {
+            self.inner.vendor_in(request, value, index, buf)
+        }
+        fn set_alt(&mut self, alt: u8) -> Result<(), Error> {
+            self.inner.set_alt(alt)
+        }
+        fn start_iso(&mut self, sink: PacketSink) -> Result<(), Error> {
+            self.inner.start_iso(sink)
+        }
+        fn stop_iso(&mut self) -> Result<(), Error> {
+            self.inner.stop_iso()
+        }
+        fn release(&mut self) -> Result<(), Error> {
+            self.inner.release()
+        }
+    }
+
+    /// Opens a receiver of `model` on a transport that can be made to fail; returns it, the mock log and the failure switch.
+    fn open_failing(
+        model: Model,
+    ) -> (
+        Rsp<FailOut>,
+        MockTransport,
+        Arc<std::sync::atomic::AtomicBool>,
+    ) {
+        let m = MockTransport::new();
+        let fail = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let rx = Rsp::with_transport_model(
+            FailOut {
+                inner: m.clone(),
+                fail: fail.clone(),
+            },
+            model,
+            Settings::default(),
+            Duration::ZERO,
+        )
+        .unwrap();
+        (rx, m, fail)
+    }
+
+    /// Every board and tuner write a retune to `hz` makes (a band change, so a full tune that rebuilds port B from the cache), on a
+    /// receiver whose earlier calls failed or never happened.
+    fn retune_ops(rx: &mut Rsp<FailOut>, m: &MockTransport, hz: u64) -> Vec<Op> {
+        m.clear();
+        rx.set_frequency(hz).unwrap();
+        m.ops()
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp_set_bias_t]
+    // Tests [@ANCHOR: rsp_device_rsp_set_notch]
+    // Tests [@ANCHOR: rsp_device_rsp_set_ext_ref_out]
+    // Tests [@ANCHOR: rsp_device_rsp2_select_antenna]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_gain]
+    fn a_failed_board_write_leaves_the_cached_settings_unchanged_on_the_rsp2() {
+        use std::sync::atomic::Ordering::SeqCst;
+        let (mut rx, m, fail) = open_failing(Model::Rsp2);
+        rx.set_frequency(7_074_000).unwrap();
+        let before = rx.settings().clone();
+        fail.store(true, SeqCst);
+        assert!(rx.set_bias_t(true).is_err());
+        assert!(rx.set_notch(true).is_err());
+        assert!(rx.set_ext_ref_out(true).is_err());
+        assert!(rx.select_antenna(Antenna::B).is_err());
+        assert!(rx.select_antenna(Antenna::HiZ).is_err());
+        assert!(rx.set_gain(20, 1).is_err());
+        fail.store(false, SeqCst);
+        let after = rx.settings().clone();
+        assert!(
+            !after.bias_t,
+            "bias-T must not stay on after a failed write"
+        );
+        assert_eq!(
+            (
+                after.bias_t,
+                after.notch,
+                after.ext_ref_out,
+                after.antenna,
+                after.if_gr_db,
+                after.lna_state
+            ),
+            (
+                before.bias_t,
+                before.notch,
+                before.ext_ref_out,
+                before.antenna,
+                before.if_gr_db,
+                before.lna_state
+            )
+        );
+        // The next full tune writes exactly what an untouched receiver writes: no bias-T, notch, reference or antenna change leaks in.
+        let (mut fresh, fm, _) = open_failing(Model::Rsp2);
+        fresh.set_frequency(7_074_000).unwrap();
+        assert_eq!(
+            retune_ops(&mut rx, &m, 100_000_000),
+            retune_ops(&mut fresh, &fm, 100_000_000)
+        );
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp_set_dab_notch]
+    // Tests [@ANCHOR: rsp_device_rsp_set_bandwidth]
+    // Tests [@ANCHOR: rsp_device_rsp_write_bandwidth]
+    fn a_failed_write_leaves_the_dab_notch_and_bandwidth_unchanged_on_the_rsp1a() {
+        use std::sync::atomic::Ordering::SeqCst;
+        let (mut rx, m, fail) = open_failing(Model::Rsp1a);
+        let before = rx.settings().clone();
+        fail.store(true, SeqCst);
+        assert!(rx.set_dab_notch(true).is_err());
+        assert!(rx.set_bias_t(true).is_err());
+        assert!(rx.set_bandwidth(Bandwidth::M8).is_err());
+        fail.store(false, SeqCst);
+        let after = rx.settings().clone();
+        assert_eq!(
+            (after.dab_notch, after.bias_t, after.bandwidth),
+            (before.dab_notch, before.bias_t, before.bandwidth)
+        );
+        let (mut fresh, fm, _) = open_failing(Model::Rsp1a);
+        assert_eq!(
+            retune_ops(&mut rx, &m, 7_074_000),
+            retune_ops(&mut fresh, &fm, 7_074_000)
+        );
     }
 }
