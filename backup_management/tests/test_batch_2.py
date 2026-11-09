@@ -120,7 +120,7 @@ class TestBatch2Fixes(HamsTransactionCase):
         self.config_pg._process_snapshot_data(data_pg, "pgbackrest")
         snaps = self.env["backup.snapshot"].search([("snapshot_id", "like", "snap_bad_time_")])
         self.assertEqual(len(snaps), len(bad))
-        self.assertFalse(snaps.mapped("start_time"))
+        self.assertEqual(snaps.mapped("start_time"), [False] * len(bad))
         good = self.env["backup.snapshot"].search([("snapshot_id", "=", "snap_good_time")])
         self.assertEqual(len(good), 1)
         self.assertEqual(str(good.start_time), "2023-11-14 22:13:20")
