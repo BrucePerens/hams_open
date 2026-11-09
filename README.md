@@ -117,5 +117,8 @@ Empower users while maintaining legal compliance and moderation capabilities.
 `hams_shared` is a git submodule, and `git worktree add` leaves it as an EMPTY directory, so inside a worktree
 `agents/`, `tools/`, `docs/` and `AGENTS.md` dangle and a test run fails on `import site_monitor` and the like.
 Run `python3 fix_worktree_symlinks.py` at the worktree root: it links `hams_shared` to the main checkout's, locally
-and marked `skip-worktree` so it cannot be committed (tests: `python3 -m unittest test_fix_worktree_symlinks`).
-Anchors for its steps: `[@ANCHOR: fix_worktree_symlinks:git]`, `[@ANCHOR: fix_worktree_symlinks:main_checkout_root]`, `[@ANCHOR: fix_worktree_symlinks:is_empty_dir]`, `[@ANCHOR: fix_worktree_symlinks:is_populated_checkout]`, `[@ANCHOR: fix_worktree_symlinks:link]`, `[@ANCHOR: fix_worktree_symlinks:recorded_sha]`, `[@ANCHOR: fix_worktree_symlinks:fix_worktree]`, `[@ANCHOR: fix_worktree_symlinks:main]`.
+and marked `skip-worktree` so it cannot be committed. It also sets `fetch.recurseSubmodules=false` in the worktree's own
+config (`extensions.worktreeConfig`; the main checkout and other worktrees keep git's default), because git refuses to
+fetch into a submodule path that is a symlink: without it every `git fetch`, `git pull` and prmerge.sh run in the worktree
+failed with "expected submodule path 'hams_shared' not to be a symbolic link" (tests: `python3 -m unittest test_fix_worktree_symlinks`).
+Anchors for its steps: `[@ANCHOR: fix_worktree_symlinks:git]`, `[@ANCHOR: fix_worktree_symlinks:main_checkout_root]`, `[@ANCHOR: fix_worktree_symlinks:is_empty_dir]`, `[@ANCHOR: fix_worktree_symlinks:is_populated_checkout]`, `[@ANCHOR: fix_worktree_symlinks:link]`, `[@ANCHOR: fix_worktree_symlinks:stop_submodule_recursion]`, `[@ANCHOR: fix_worktree_symlinks:recorded_sha]`, `[@ANCHOR: fix_worktree_symlinks:fix_worktree]`, `[@ANCHOR: fix_worktree_symlinks:main]`.

@@ -65,6 +65,38 @@ class FixWorktreeTests(unittest.TestCase):
         self.assertEqual(os.path.realpath(link), os.path.realpath(os.path.join(self.main, "hams_shared")))
         self.assertTrue(os.path.isfile(os.path.join(self.worktree, "tools", "test.py")))  # tools -> hams_shared/tools
 
+    def _add_origin(self):
+        """A real remote with a new commit to fetch, as the worktree's `origin` has in production."""
+        bare = os.path.join(self.tmp, "open_origin.git")
+        run(["clone", "-q", "--bare", self.main, bare], self.tmp)
+        run(["remote", "add", "origin", bare], self.main)
+        other = os.path.join(self.tmp, "other_clone")
+        run(["clone", "-q", bare, other], self.tmp)
+        with open(os.path.join(other, "README.md"), "a") as handle:
+            handle.write("more\n")
+        run(["commit", "-q", "-a", "-m", "more"], other)
+        run(["push", "-q", "origin", "HEAD:main"], other)
+
+    def test_git_fetch_in_a_fixed_worktree_works_and_other_trees_keep_the_default(self):
+        # Tests [@ANCHOR: fix_worktree_symlinks:stop_submodule_recursion]
+        self._add_origin()
+        fws.fix_worktree(self.worktree)
+        self.assertTrue(os.path.islink(os.path.join(self.worktree, "hams_shared")))
+        run(["fetch", "origin"], self.worktree)  # raised "expected submodule path 'hams_shared' not to be a symbolic link"
+        run(["fetch", "origin", "main"], self.worktree)
+        self.assertEqual(run(["config", "--worktree", "fetch.recurseSubmodules"], self.worktree), "false")
+        # The setting is the worktree's own: the main checkout still has git's default.
+        self.assertEqual(subprocess.run(GIT + ["config", "fetch.recurseSubmodules"], cwd=self.main, capture_output=True, text=True).stdout, "")
+
+    def test_without_the_setting_a_fetch_into_the_symlinked_submodule_fails(self):
+        # The reason the setting exists: undo it and git refuses, so the test above cannot pass by accident.
+        self._add_origin()
+        fws.fix_worktree(self.worktree)
+        run(["config", "--worktree", "--unset", "fetch.recurseSubmodules"], self.worktree)
+        failed = subprocess.run(GIT + ["fetch", "origin"], cwd=self.worktree, capture_output=True, text=True)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("not to be a symbolic link", failed.stderr)
+
     def test_the_link_is_skip_worktree_so_it_cannot_be_committed(self):
         fws.fix_worktree(self.worktree)
         self.assertTrue(run(["ls-files", "-v", "hams_shared"], self.worktree).startswith("S "))
