@@ -186,7 +186,7 @@ class PgHaWizard(models.TransientModel):
             raise UserError(
                 _("Replication Password must be at least 8 characters long.")
             )
-        # Bug-hunt fix (2026-09-09): `action_generate()` below interpolates
+        # YAML-injection guard: `action_generate()` below interpolates
         # `replication_pass` unescaped into the generated Patroni YAML (twice,
         # under `authentication.replication.password` and
         # `authentication.superuser.password`) via a plain f-string, exactly
@@ -250,9 +250,9 @@ class PgHaWizard(models.TransientModel):
         if not self.replication_user or not alnum_pattern.match(self.replication_user):
             raise UserError(_("Invalid replication user name. Must be alphanumeric."))
 
-        # Bug-hunt fix (2026-09-09): `etcd_hosts` is interpolated unescaped
-        # into the same generated YAML (`etcd: {etcd_config}`) with NO
-        # validation at all prior to this fix -- the same injection class as
+        # YAML-injection guard: `etcd_hosts` is interpolated unescaped
+        # into the same generated YAML (`etcd: {etcd_config}`), so it must be
+        # validated -- the same injection class as
         # replication_pass above, just on a field with no length/complexity
         # check to even partially mask the gap. Restrict to the documented
         # format (comma-separated host:port pairs, per the field's own help
