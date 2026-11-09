@@ -120,7 +120,7 @@ def _run_systemctl(*args):
             env=_systemctl_env(),
         )
     except (OSError, subprocess.TimeoutExpired) as e:
-        _logger.error("systemctl --user %s failed to run: %s", " ".join(args), e)
+        _logger.error("systemctl --user %s failed to run: %s", " ".join(args), e)  # boundary-hazard-ignore: argv-log: args are a systemctl verb and a unit name chosen by this module, never a secret
         return False, str(e)
     if result.returncode != 0:
         return False, (result.stderr or result.stdout).strip()

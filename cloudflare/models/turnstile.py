@@ -9,6 +9,7 @@ class CloudflareTurnstile(models.AbstractModel):
     _description = "Cloudflare Turnstile Interface"
     name = fields.Char(string="Name", default=lambda self: self._description)
 
+    @api.private
     @api.model
     def verify_token(self, token, remote_ip=None, website_id=None):
         # [@ANCHOR: COMM_cf_turnstile_verify]

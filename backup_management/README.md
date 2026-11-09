@@ -194,3 +194,19 @@ key changed. The retry is safe for the calls this daemon makes because a 401 mea
 
 **See also.** `test_json2_call_reloads_a_rotated_key` in `daemon/test_main.py`.
 
+
+### `[@ANCHOR: backup_management:describe_command]` `_describe_command(cmd)`
+
+**Purpose.** The backup worker logs what it is about to run. A command line can carry a secret and a log file outlives the process, so the log line gets this
+summary instead of the command: the program's base name and the number of arguments. Called by `execute_job` (the "Executing" line) and by
+`_run_pgbackrest_via_sidecar` (the "Delegating" line) in `daemon/main.py`.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `cmd` | non-empty `list[str]` | The argv about to be run; borrowed, not changed. `cmd[0]` is the program. |
+| returns | `str` | `"<basename of cmd[0]> with <N> argument(s)"`, where N is `len(cmd) - 1`. |
+
+Errors: `IndexError` for an empty list (callers have already checked `cmd[0]` with `shutil.which`). **Special concerns.** Pure: no I/O, no locks, safe to retry. Never
+include an argument in the result.
+
+**See also.** `test_describe_command_gives_the_program_and_an_argument_count_only` in `daemon/test_main.py`.

@@ -66,6 +66,7 @@ class ResConfigSettings(models.TransientModel):
         for rec in self:
             rec.hams_s3_oca_installed = 'storage.backend' in self.env  # burn-ignore-optional-oca-dep
 
+    @api.private
     @api.model
     def get_values(self):
         # [@ANCHOR: hams_s3_get_values]

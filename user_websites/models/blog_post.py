@@ -449,6 +449,7 @@ class BlogPost(models.Model):
 
         return res
 
+    @api.private
     @api.model
     def send_weekly_digest(self):
         # [@ANCHOR: send_weekly_digest]

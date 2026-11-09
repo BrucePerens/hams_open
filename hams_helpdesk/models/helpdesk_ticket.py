@@ -1252,7 +1252,7 @@ class HelpdeskTicket(models.Model):
         return rows
 
     @api.model
-    def mcp_customer_followups(self, cutoffs):
+    def mcp_customer_followups(self, cutoffs):  # boundary-hazard-ignore: rpc-service-identity: the ticket search runs as the caller, so the ir.rule allow-list decides what it can see; the service environment only reads messages of those tickets
         """Read-only lookup for the external-AI ticket-triage MCP server
         (daemons/hams_ticket_triage_mcp in hams_com): which of the tickets it already
         wrote a note on has the CUSTOMER written again since it last looked?

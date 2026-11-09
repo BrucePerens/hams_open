@@ -43,7 +43,9 @@ class ZeroSudoDaemonUtils(models.AbstractModel):
         if env_vars:
             env.update(env_vars)
 
-        _logger.info("Starting daemon: %s", " ".join(cmd))
+        # Program and argument count only: an argument can be a secret and the log outlives the process.
+        program, argument_count = os.path.basename(str(cmd[0])), len(cmd) - 1
+        _logger.info("Starting daemon: %s, %d argument(s) not logged", program, argument_count)
         process = subprocess.Popen(
             cmd,
             env=env,

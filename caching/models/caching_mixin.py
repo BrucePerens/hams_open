@@ -16,6 +16,7 @@ class CachingMixin(models.AbstractModel):
     _description = 'Caching Utilities'
     name = fields.Char(string="Name", default="Caching Mixin")
 
+    @api.private
     @api.model
     @distributed_cache()
     def get_fs_stats(self, override_svc_uid=None):
@@ -82,6 +83,7 @@ class CachingMixin(models.AbstractModel):
         file_sizes.sort(reverse=True)
         return (max_mtime, file_sizes)
 
+    @api.private
     @api.model
     @distributed_cache()
     def get_global_static_info(self, quota_mb, override_svc_uid=None):
