@@ -16,7 +16,9 @@ from hypothesis import given, settings, strategies as st
 from odoo.tests.common import BaseCase
 from odoo.tests import tagged
 from odoo.addons.edge_routing.utils import slugify
+from odoo.addons.zero_sudo.tests.hypothesis_profile import register_hams_profile
 
+register_hams_profile()  # before _SETTINGS: a settings object inherits what it does not name from the loaded profile
 _SETTINGS = settings(max_examples=200, deadline=None)
 
 # Printable text, including non-ASCII, matching the kind of user-entered

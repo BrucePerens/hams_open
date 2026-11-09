@@ -10,6 +10,8 @@ import psycopg2
 from odoo.tests.test_cursor import TestCursor
 
 from . import real_transaction
+from . import hypothesis_profile
+from . import test_hypothesis_profile
 from . import test_integration
 from . import test_json_rpc_client
 from . import test_cron_service_access
