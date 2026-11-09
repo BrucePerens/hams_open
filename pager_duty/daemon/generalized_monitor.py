@@ -46,6 +46,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
     points; a refused redirect surfaces as the HTTPError of the 3xx status."""
 
+    # [@ANCHOR: pager_duty:no_redirect_monitor]
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 

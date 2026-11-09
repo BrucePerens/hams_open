@@ -22,8 +22,8 @@ class _RedirectProbe:
 
     def __init__(self):
         outer = self
-        self.first_headers = []
-        self.sink_headers = []
+        self.first_headers: list[dict[str, str]] = []
+        self.sink_headers: list[dict[str, str]] = []
 
         class Sink(BaseHTTPRequestHandler):
             def _answer(self):
@@ -60,7 +60,7 @@ class _RedirectProbe:
 
         self.first = HTTPServer(("127.0.0.1", 0), First)  # burn-ignore-test-local-server: hermetic stand-in for the credentialed API that answers with a redirect
         self.url = f"http://127.0.0.1:{self.first.server_port}"  # burn-ignore-test-local-server: hermetic stand-in for the credentialed API
-        self._threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in (self.sink, self.first)]
+        self._threads = [threading.Thread(target=s.serve_forever, daemon=True) for s in (self.sink, self.first)]  # burn-ignore-test-daemon-thread: two daemon threads of a hermetic fixture, both shut down in __exit__
 
     def __enter__(self):
         for thread in self._threads:
@@ -76,6 +76,7 @@ class _RedirectProbe:
 @tagged("post_install", "-at_install")
 class TestPagerDaemonsRefuseRedirects(HamsTransactionCase):
     def test_the_monitor_odoo_client_refuses_a_redirect(self):
+        # Tests [@ANCHOR: pager_duty:no_redirect_monitor]
         # Tests [@ANCHOR: pager_duty:odoo_client_execute]
         with _RedirectProbe() as probe:
             client = generalized_monitor.OdooClient(probe.url, "db", "pager_service_internal", "monitor-key")
@@ -86,6 +87,7 @@ class TestPagerDaemonsRefuseRedirects(HamsTransactionCase):
         self.assertEqual(probe.sink_headers, [], "the redirect target must never be asked")
 
     def test_the_mcp_odoo_client_refuses_a_redirect(self):
+        # Tests [@ANCHOR: pager_duty:no_redirect_mcp]
         # Tests [@ANCHOR: pager_duty:mcp_odoo_client_execute]
         pager_mcp_server = importlib.import_module("odoo.addons.pager_duty.daemon.pager_mcp_server")
         with _RedirectProbe() as probe:
@@ -97,6 +99,7 @@ class TestPagerDaemonsRefuseRedirects(HamsTransactionCase):
         self.assertEqual(probe.sink_headers, [], "the redirect target must never be asked")
 
     def test_the_github_pat_expiry_check_refuses_a_redirect(self):
+        # Tests [@ANCHOR: pager_duty:no_redirect_github_pat_expiry]
         # Tests [@ANCHOR: pager_duty:fetch_github_pat_expiry]
         with _RedirectProbe() as probe:
             self.safe_patch("odoo.addons.pager_duty.daemon.check_github_pat_expiry.GITHUB_USER_URL", probe.url + "/user")

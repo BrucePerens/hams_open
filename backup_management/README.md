@@ -185,7 +185,7 @@ through it.
 | `**kwargs` | JSON values | The method's named arguments, sent as the JSON body. |
 | returns | decoded JSON | The method's result. |
 
-**Redirects are refused** (`_OPENER` is built with a handler whose `redirect_request` returns `None`): urllib would copy the bearer key to whatever host a 3xx answer names, so a 3xx surfaces as an HTTP error (`OdooAPIError`, code 3xx). Tested by `TestJson2CallRefusesARedirect` with two real local servers.
+**Redirects are refused** (`_OPENER` is built with `_NoRedirect`, whose `redirect_request` `[@ANCHOR: backup_management:no_redirect]` takes the request, the response, the status, the headers and the target address and returns `None` for every redirect, so urllib raises the 3xx as an `HTTPError`): urllib would copy the bearer key to whatever host a 3xx answer names, so a 3xx surfaces as an HTTP error (`OdooAPIError`, code 3xx). Tested by `TestJson2CallRefusesARedirect` with two real local servers.
 
 Errors: `OdooAPIError` for an HTTP error (the message starts `JSON-2 API HTTP Error <code>:`), a connection or parse failure, or an `error` member in the answer.
 
