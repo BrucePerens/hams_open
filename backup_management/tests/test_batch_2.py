@@ -110,6 +110,21 @@ class TestBatch2Fixes(HamsTransactionCase):
         self.assertEqual(len(snap), 1)
         self.assertEqual(snap.name, "snap_false")
 
+    def test_pgbackrest_start_time_outside_the_supported_years_is_no_time_not_a_crash(self):
+        # pgbackrest's JSON is parsed as is: a start of 2**62, 1e18 or -1e18 raised out of datetime.fromtimestamp
+        # (OverflowError/OSError/ValueError) and no snapshot of that run was recorded. The snapshot is kept with no time.
+        bad = [2 ** 62, 10 ** 18, -(10 ** 18), 1e999, "soon"]
+        data_pg = [{"backup": [
+            {"label": f"snap_bad_time_{i}", "timestamp": {"start": value}, "info": {"size": 1}} for i, value in enumerate(bad)
+        ] + [{"label": "snap_good_time", "timestamp": {"start": 1_700_000_000}, "info": {"size": 2}}]}]
+        self.config_pg._process_snapshot_data(data_pg, "pgbackrest")
+        snaps = self.env["backup.snapshot"].search([("snapshot_id", "like", "snap_bad_time_")])
+        self.assertEqual(len(snaps), len(bad))
+        self.assertEqual(snaps.mapped("start_time"), [False] * len(bad))
+        good = self.env["backup.snapshot"].search([("snapshot_id", "=", "snap_good_time")])
+        self.assertEqual(len(good), 1)
+        self.assertEqual(str(good.start_time), "2023-11-14 22:13:20")
+
     def test_restore_wizard_validation(self):
         # Tests [@ANCHOR: backup_management:restore_wizard_refuses_pgbackrest]
         # Tests [@ANCHOR: backup_management:restore_wizard_engine]

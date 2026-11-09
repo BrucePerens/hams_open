@@ -56,6 +56,22 @@ class TestDmarcParser(common.TransactionCase):
         self.assertEqual(record.count, 5)
         self.assertEqual(record.dkim_alignment, "pass")
 
+    # [@ANCHOR: test_a_date_range_outside_the_supported_years_is_dropped_not_a_crash]
+    def test_a_date_range_outside_the_supported_years_is_dropped_not_a_crash(self):
+        # Tests [@ANCHOR: hams_base:epoch_to_naive_utc]
+        # <begin>/<end> come from a mail attachment anyone can send. A huge or negative number used to raise
+        # OverflowError/OSError/ValueError out of datetime.fromtimestamp and lose the whole report.
+        for index, bad in enumerate(("99999999999999999999", "4611686018427387904", "-4611686018427387904", "4102444801")):
+            xml = self.sample_xml.replace("<begin>1700000000</begin>", f"<begin>{bad}</begin>").replace(
+                "<end>1700086400</end>", f"<end>{bad}</end>").replace("<report_id>12345</report_id>", f"<report_id>range{index}</report_id>")
+            report = self.DmarcReport._parse_dmarc_xml(xml)
+            self.assertTrue(report, bad)
+            self.assertFalse(report.date_range_begin, bad)
+            self.assertFalse(report.date_range_end, bad)
+        # A normal range is still stored (the positive case).
+        report = self.DmarcReport._parse_dmarc_xml(self.sample_xml.replace("12345", "normal-range"))
+        self.assertEqual(str(report.date_range_begin), "2023-11-14 22:13:20")
+
     def test_two_reports_missing_report_id_are_not_deduplicated_against_each_other(self):
         # findtext("report_id") returns None for
         # a report with no <report_id> element, and Odoo's domain evaluator

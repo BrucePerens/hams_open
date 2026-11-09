@@ -767,16 +767,17 @@ def _freshness_unit(units, max_age, now, failing=None):
 
 # [@ANCHOR: pager_duty:feed_stamp_epoch]
 def _feed_stamp_epoch(value):
-    """A stamp time as epoch seconds: a finite, non-negative number (not a bool). None for null or anything else."""
+    """A stamp time as epoch seconds: a finite number from 0 to 2100-01-01 (not a bool). None for null or anything else
+    (a larger number is no time anyone wrote, and `_feed_clock` cannot print it)."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     number = float(value)
-    return number if math.isfinite(number) and number >= 0 else None
+    return number if math.isfinite(number) and 0 <= number <= 4_102_444_800 else None
 
 
 # [@ANCHOR: pager_duty:feed_clock]
 def _feed_clock(epoch):
-    return datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")  # boundary-hazard-ignore: timestamp-range: every caller passes a _feed_stamp_epoch value (0..4102444800)
 
 
 # [@ANCHOR: pager_duty:freshness_one_feed]

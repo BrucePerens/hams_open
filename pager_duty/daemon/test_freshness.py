@@ -266,6 +266,10 @@ class FeedSchemeTests(unittest.TestCase):
         self.assertEqual(gm._feed_stamp_epoch(5), 5.0)
         for bad in (None, True, "5", float("nan"), float("inf"), -1):
             self.assertIsNone(gm._feed_stamp_epoch(bad), bad)
+        # Past 2100 is no stamp anyone wrote, and _feed_clock could not print it (OverflowError/ValueError).
+        for bad in (1e999, -1e999, 1e18, 2 ** 62, 4_102_444_801):
+            self.assertIsNone(gm._feed_stamp_epoch(bad), bad)
+        self.assertEqual(gm._feed_stamp_epoch(4_102_444_800), 4_102_444_800.0)
 
     def test_the_clock_in_a_message_is_utc_to_the_minute(self):
         # Tests [@ANCHOR: pager_duty:feed_clock]
