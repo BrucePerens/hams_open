@@ -179,7 +179,7 @@ Odoo API key for the service account `distributed_redis_cache.cache_manager_serv
 `/opt/hams/etc/keys/cache_manager.env`. The cache-manager daemon has no Odoo client and never read that key (its only credential is the
 CONNECT-only PostgreSQL login in `keys/cache_manager/cache_manager_db.env`), so the key was a live credential with no user. Version 1.1
 removes the hook (the manifest has no `post_init_hook`) and `migrations/1.1/post-unregister-cache-manager-key.py` calls this function once
-on an installed database.
+on an installed database (its `migrate(cr, version)` does nothing for a fresh install, which has no version, and raises `ValueError` when the Daemon Key Manager service account is missing) [@ANCHOR: distributed_redis_cache:migrate].
 
 | Argument | Type and range | Meaning |
 |---|---|---|
