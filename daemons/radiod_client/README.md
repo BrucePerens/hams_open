@@ -51,6 +51,8 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 - [@ANCHOR: radiod_client:radiod_client_command_ssrc] (command) The channel this command addresses.
 - [@ANCHOR: radiod_client:radiod_client_command_validate] (command) Check the command against the site policy.
 - [@ANCHOR: radiod_client:radiod_client_command_encode] (command) Validate and build the datagram.
+- [@ANCHOR: radiod_client:radiod_client_command_audio_bandwidth] (command) `AudioChannel::bandwidth_hz`: the audio passband width, or `None` for the mode's own.
+- [@ANCHOR: radiod_client:radiod_client_command_mode_passband] (command) `Mode::passband`: the `(low, high)` edges sent for a mode and an optional width.
 - [@ANCHOR: radiod_client:radiod_client_net_error_fmt] (net) Display text of a network or protocol failure.
 - [@ANCHOR: radiod_client:radiod_client_net_error_from_io] (net) Wraps an I/O error as a network failure.
 - [@ANCHOR: radiod_client:radiod_client_net_next_tag] (net) The tag after `tag`: it increments and never becomes 0 (a zero tag is an empty integer on the wire and cannot be told from an absent one).
@@ -97,8 +99,8 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 Written against the RX-888 MkII on `radiod` 8c50dbbe on loopback (bring-up report:
 `hams_com/docs/reviews/RX888_BRINGUP_2026-11-05.md`). Every fact marked "observed" below was seen on that
 hardware with no antenna connected. The additions keep the schema closed: nothing here can name a
-destination or a TTL, or change the front end's RF gain, attenuation or tuner. They are additive: the
-existing `AudioChannel`, `SpectrumChannel` and `ChannelStatus` literals of other crates still compile.
+destination or a TTL, or change the front end's RF gain, attenuation or tuner. They are additive (except `AudioChannel::bandwidth_hz`, below): the
+existing `SpectrumChannel` and `ChannelStatus` literals of other crates still compile; `AudioChannel` literals must name the new field.
 Every function below is synchronous and pure unless marked async. The async ones run on the caller's
 tokio runtime (the one whose `Handle` opened the socket) and never spawn a task.
 
@@ -161,6 +163,7 @@ Why a command was refused; nothing was sent. New variants:
 |---|---|---|
 | `Filter(f32, f32)` | the low and high edges asked for | an edge is not finite or is beyond `MAX_FILTER_EDGE_HZ`, or low is not below high |
 | `Gain(f32)` | the gain asked for, dB | not finite, or outside `GAIN_RANGE_DB` |
+| `Bandwidth(u32)` | the width asked for, Hz | outside `MIN_BANDWIDTH_HZ` to `MAX_BANDWIDTH_HZ`, or the mode's computed edge is past `MAX_FILTER_EDGE_HZ` |
 
 `Display` prints the `Debug` form (`Filter(1.0, 0.0)`).
 
@@ -204,6 +207,39 @@ already have the front end's RF gain removed. Observed: the channel noise densit
 
 Crate-private. The `Command::Filter` edge rule: both edges finite with magnitude at most
 `MAX_FILTER_EDGE_HZ`, and `low < high`. Returns `Err(CommandError::Filter(low, high))` otherwise. Pure.
+
+#### `radiod_client_command_audio_bandwidth` - `AudioChannel::bandwidth_hz: Option<u32>`
+
+[@ANCHOR: radiod_client:radiod_client_command_audio_bandwidth]
+
+The width of an audio channel's passband in Hz. `None` (what every earlier caller meant) sends the mode's own
+passband from the `Mode` table. `Some(width)` sends edges from `Mode::passband`, so the gateway can pass a
+listener's chosen bandwidth to `radiod` instead of only using it as a sharing key. `Command::validate` and
+`encode` refuse a width below `MIN_BANDWIDTH_HZ` (100) or above `MAX_BANDWIDTH_HZ` (24,000), or one whose
+computed edge is past `MAX_FILTER_EDGE_HZ` for the mode (for example `Cw` wider than 22,800 Hz), with
+`CommandError::Bandwidth(width)`. Nothing is sent when it is refused. A later `Command::Filter` still overrides
+the passband of an existing channel, and the next `Audio` command puts back the one named here. Other crates'
+`AudioChannel` literals must now name the field (`bandwidth_hz: None` keeps the old behaviour).
+
+#### `radiod_client_command_mode_passband` - `Mode::passband(self, bandwidth_hz: Option<u32>) -> (f32, f32)`
+
+[@ANCHOR: radiod_client:radiod_client_command_mode_passband]
+
+The `(low, high)` passband edges, Hz from the carrier, that `Command::encode` writes as `LOW_EDGE` and
+`HIGH_EDGE`. Pure; takes `self` by value (`Mode` is `Copy`); no errors (the range check is
+`Command::validate`'s). With `None` it returns the table on `Mode`. With `Some(width)`:
+
+| Mode | Edges for `Some(width)` |
+|---|---|
+| `Usb` | `50` to `width` (a 50 Hz guard by the carrier; the far edge is `width` from the carrier, never beyond it) |
+| `Lsb` | `-width` to `-50` |
+| `Cw` | `600 - width/2` to `600 + width/2` (centred on the 600 Hz offset the default 400 to 800 uses) |
+| `SamLower` | `-width` to `100` (the carrier stays inside so the PLL tracks) |
+| `SamUpper` | `-100` to `width` |
+| `Am`, `Fm`, `Iq`, `Sam` | `-width/2` to `width/2` |
+
+See also `radiod_client_command_check_filter` and the test
+`a_bandwidth_sets_the_sent_passband_and_none_keeps_the_mode_default`.
 
 #### `radiod_client_command_encode_front_end_poll` - `encode_front_end_poll(tag: u32) -> Vec<u8>`
 

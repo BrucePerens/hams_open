@@ -122,6 +122,7 @@ pub fn tune(inst: &Instrument, args: &Value) -> Result<Value, String> {
         frequency_hz: freq,
         encoding: Encoding::Pcm16Be,
         lifetime_frames: LIFETIME,
+        bandwidth_hz: None,
     });
     let result = (|| {
         ask(&rt, &mut c, &open, OPEN_ACK)?;
@@ -388,6 +389,7 @@ pub fn capture(inst: &Instrument, args: &Value) -> Result<Value, String> {
         frequency_hz: freq,
         encoding: Encoding::Pcm16Be,
         lifetime_frames: LIFETIME,
+        bandwidth_hz: None,
     });
     let result = (|| {
         let mut st = ask(&rt, &mut c, &open, OPEN_ACK)?;

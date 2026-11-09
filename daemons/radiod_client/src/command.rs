@@ -23,6 +23,11 @@ pub const MAX_BYTE_BINS: u32 = 60_000;
 /// An edge beyond the output Nyquist frequency only narrows the passband (`radiod` cannot pass
 /// what its output rate cannot carry), so this bound loses nothing.
 pub const MAX_FILTER_EDGE_HZ: f32 = 12_000.0;
+/// Narrowest audio passband an [`AudioChannel`] may ask for, Hz. The sideband modes keep a 50 Hz guard
+/// next to the carrier, so a narrower passband has no room.
+pub const MIN_BANDWIDTH_HZ: u32 = 100;
+/// Widest audio passband an [`AudioChannel`] may ask for, Hz: two filter edges at [`MAX_FILTER_EDGE_HZ`].
+pub const MAX_BANDWIDTH_HZ: u32 = 24_000;
 /// Channel (audio) gain range for a fixed-gain channel, dB. The RX-888 bring-up (2026-11-05) saw
 /// about 61 dB under AGC on an AM channel and needed about 100 dB for I/Q noise to reach -35 dBFS.
 pub const GAIN_RANGE_DB: (f32, f32) = (-20.0, 160.0);
@@ -85,6 +90,36 @@ pub enum Mode {
 pub const SAM_SQUELCH_OPEN_DB: f32 = -1000.0;
 
 impl Mode {
+    // [@ANCHOR: radiod_client_command_mode_passband]
+    /// The `(low, high)` passband edges, Hz from the carrier, sent for this mode. `None` is the mode's own
+    /// passband (the table on [`Mode`]). `Some(width)` keeps the mode's placement and sets the width:
+    /// `Usb` runs 50 Hz to `width` and `Lsb` runs `-width` to -50 Hz (so the far edge is `width` from the
+    /// carrier and never past what the caller classified), `Cw` is centred on its 600 Hz offset, `SamLower`
+    /// and `SamUpper` keep the carrier inside (+100 Hz, -100 Hz), and `Am`, `Fm`, `Iq` and `Sam` are
+    /// centred on the carrier.
+    pub fn passband(self, bandwidth_hz: Option<u32>) -> (f32, f32) {
+        let Some(bw) = bandwidth_hz else {
+            return match self {
+                Mode::Usb => (50.0, 3000.0),
+                Mode::Lsb => (-3000.0, -50.0),
+                Mode::Cw => (400.0, 800.0),
+                Mode::Fm => (-8000.0, 8000.0),
+                Mode::SamLower => (-5000.0, 100.0),
+                Mode::SamUpper => (-100.0, 5000.0),
+                Mode::Am | Mode::Iq | Mode::Sam => (-5000.0, 5000.0),
+            };
+        };
+        let w = bw as f32;
+        match self {
+            Mode::Usb => (50.0, w),
+            Mode::Lsb => (-w, -50.0),
+            Mode::Cw => (600.0 - w / 2.0, 600.0 + w / 2.0),
+            Mode::SamLower => (-w, 100.0),
+            Mode::SamUpper => (-100.0, w),
+            Mode::Am | Mode::Fm | Mode::Iq | Mode::Sam => (-w / 2.0, w / 2.0),
+        }
+    }
+
     // [@ANCHOR: radiod_client_command_mode_is_synchronous]
     /// True for the synchronous AM modes (`Sam`, `SamLower`, `SamUpper`): the ones that turn on
     /// `radiod`'s carrier PLL, so their status carries a carrier lock.
@@ -118,6 +153,10 @@ pub struct AudioChannel {
     pub encoding: Encoding,
     /// Frames (20 ms each at the default block time) before an unrefreshed channel is removed.
     pub lifetime_frames: u32,
+    /// Audio passband width, Hz, placed by [`Mode::passband`]; `None` keeps the mode's own passband.
+    /// Refused outside [`MIN_BANDWIDTH_HZ`]..=[`MAX_BANDWIDTH_HZ`].
+    // [@ANCHOR: radiod_client_command_audio_bandwidth]
+    pub bandwidth_hz: Option<u32>,
 }
 
 /// A spectrum (panadapter) channel.
@@ -239,6 +278,9 @@ pub enum CommandError {
     Filter(f32, f32),
     /// Fixed gain not finite or outside [`GAIN_RANGE_DB`].
     Gain(f32),
+    /// Audio bandwidth outside [`MIN_BANDWIDTH_HZ`]..=[`MAX_BANDWIDTH_HZ`], or one whose passband
+    /// puts an edge beyond [`MAX_FILTER_EDGE_HZ`] for the mode.
+    Bandwidth(u32),
 }
 
 impl fmt::Display for CommandError {
@@ -345,6 +387,14 @@ impl Command {
                         return Err(CommandError::Bitrate(bitrate));
                     }
                 }
+                if let Some(bw) = a.bandwidth_hz {
+                    let (lo, hi) = a.mode.passband(Some(bw));
+                    if !(MIN_BANDWIDTH_HZ..=MAX_BANDWIDTH_HZ).contains(&bw)
+                        || check_filter(lo, hi).is_err()
+                    {
+                        return Err(CommandError::Bandwidth(bw));
+                    }
+                }
                 Ok(())
             }
             Self::Spectrum(s) => {
@@ -431,43 +481,33 @@ impl Command {
             }
             Self::Audio(a) => {
                 w.uint(ty::LIFETIME, u64::from(a.lifetime_frames));
+                let (low_edge, high_edge) = a.mode.passband(a.bandwidth_hz);
                 w.f64(ty::RADIO_FREQUENCY, a.frequency_hz);
                 w.uint(ty::OUTPUT_CHANNELS, if a.mode == Mode::Iq { 2 } else { 1 });
                 match a.mode {
                     Mode::Iq => {
                         w.uint(ty::DEMOD_TYPE, 0);
                         w.uint(ty::OUTPUT_SAMPRATE, 12_000);
-                        w.f32(ty::LOW_EDGE, -5000.0);
-                        w.f32(ty::HIGH_EDGE, 5000.0);
+                        w.f32(ty::LOW_EDGE, low_edge);
+                        w.f32(ty::HIGH_EDGE, high_edge);
                         w.bool(ty::ENVELOPE, false);
                         w.bool(ty::PLL_ENABLE, false);
                         w.bool(ty::AGC_ENABLE, true);
                     }
                     Mode::Usb | Mode::Lsb | Mode::Cw | Mode::Am => {
-                        let (lo, hi) = match a.mode {
-                            Mode::Usb => (50.0, 3000.0),
-                            Mode::Lsb => (-3000.0, -50.0),
-                            Mode::Cw => (400.0, 800.0),
-                            _ => (-5000.0, 5000.0),
-                        };
                         w.uint(ty::DEMOD_TYPE, 0);
                         w.uint(ty::OUTPUT_SAMPRATE, 12_000);
-                        w.f32(ty::LOW_EDGE, lo);
-                        w.f32(ty::HIGH_EDGE, hi);
+                        w.f32(ty::LOW_EDGE, low_edge);
+                        w.f32(ty::HIGH_EDGE, high_edge);
                         w.bool(ty::ENVELOPE, a.mode == Mode::Am);
                         w.bool(ty::PLL_ENABLE, false);
                         w.bool(ty::AGC_ENABLE, true);
                     }
                     Mode::Sam | Mode::SamLower | Mode::SamUpper => {
-                        let (lo, hi) = match a.mode {
-                            Mode::SamLower => (-5000.0, 100.0),
-                            Mode::SamUpper => (-100.0, 5000.0),
-                            _ => (-5000.0, 5000.0),
-                        };
                         w.uint(ty::DEMOD_TYPE, 0);
                         w.uint(ty::OUTPUT_SAMPRATE, 12_000);
-                        w.f32(ty::LOW_EDGE, lo);
-                        w.f32(ty::HIGH_EDGE, hi);
+                        w.f32(ty::LOW_EDGE, low_edge);
+                        w.f32(ty::HIGH_EDGE, high_edge);
                         w.bool(ty::ENVELOPE, false);
                         w.bool(ty::PLL_ENABLE, true);
                         w.bool(ty::PLL_SQUARE, false);
@@ -479,8 +519,8 @@ impl Command {
                     Mode::Fm => {
                         w.uint(ty::DEMOD_TYPE, 1);
                         w.uint(ty::OUTPUT_SAMPRATE, 24_000);
-                        w.f32(ty::LOW_EDGE, -8000.0);
-                        w.f32(ty::HIGH_EDGE, 8000.0);
+                        w.f32(ty::LOW_EDGE, low_edge);
+                        w.f32(ty::HIGH_EDGE, high_edge);
                         w.bool(ty::THRESH_EXTEND, true);
                         w.f32(ty::DEEMPH_TC, 530.5);
                         w.f32(ty::DEEMPH_GAIN, 12.0);
@@ -524,6 +564,7 @@ mod tests {
             frequency_hz: freq,
             encoding: Encoding::Pcm16Be,
             lifetime_frames: life,
+            bandwidth_hz: None,
         })
     }
 
@@ -602,6 +643,7 @@ mod tests {
             frequency_hz: 7.0e6,
             encoding: Encoding::Pcm16Be,
             lifetime_frames: 10,
+            bandwidth_hz: None,
         }
     }
 
@@ -671,6 +713,82 @@ mod tests {
             assert!(e
                 .iter()
                 .any(|x| x.ty == ty::COMMAND_TAG && x.uint() == Ok(7)));
+        }
+    }
+
+    fn edges(pkt: &[u8]) -> (f32, f32) {
+        let e = entries(pkt);
+        let get = |t| e.iter().find(|x| x.ty == t).and_then(|x| x.f32().ok());
+        (
+            get(ty::LOW_EDGE).unwrap_or(f32::NAN),
+            get(ty::HIGH_EDGE).unwrap_or(f32::NAN),
+        )
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_mode_passband]
+    // Tests [@ANCHOR: radiod_client_command_audio_bandwidth]
+    // Tests [@ANCHOR: radiod_client_command_encode]
+    #[test]
+    fn a_bandwidth_sets_the_sent_passband_and_none_keeps_the_mode_default() {
+        let p = Policy::default();
+        let sent = |mode, bandwidth_hz| {
+            let cmd = Command::Audio(AudioChannel {
+                mode,
+                bandwidth_hz,
+                ..base_audio()
+            });
+            edges(&cmd.encode(&p, 3).unwrap_or_default())
+        };
+        // None is the mode's own passband, as before this field existed.
+        assert_eq!(sent(Mode::Usb, None), (50.0, 3000.0));
+        assert_eq!(sent(Mode::Lsb, None), (-3000.0, -50.0));
+        assert_eq!(sent(Mode::Cw, None), (400.0, 800.0));
+        assert_eq!(sent(Mode::Fm, None), (-8000.0, 8000.0));
+        assert_eq!(sent(Mode::Sam, None), (-5000.0, 5000.0));
+        assert_eq!(sent(Mode::SamLower, None), (-5000.0, 100.0));
+        assert_eq!(sent(Mode::SamUpper, None), (-100.0, 5000.0));
+        // Some(width) keeps the placement and sets the width.
+        assert_eq!(sent(Mode::Usb, Some(2_400)), (50.0, 2_400.0));
+        assert_eq!(sent(Mode::Lsb, Some(2_400)), (-2_400.0, -50.0));
+        assert_eq!(sent(Mode::Cw, Some(500)), (350.0, 850.0));
+        assert_eq!(sent(Mode::Am, Some(6_000)), (-3_000.0, 3_000.0));
+        assert_eq!(sent(Mode::Fm, Some(12_000)), (-6_000.0, 6_000.0));
+        assert_eq!(sent(Mode::Iq, Some(8_000)), (-4_000.0, 4_000.0));
+        assert_eq!(sent(Mode::SamLower, Some(4_000)), (-4_000.0, 100.0));
+        assert_eq!(sent(Mode::SamUpper, Some(4_000)), (-100.0, 4_000.0));
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_audio_bandwidth]
+    // Tests [@ANCHOR: radiod_client_command_validate]
+    #[test]
+    fn a_bandwidth_outside_the_limits_is_refused_before_the_wire() {
+        let p = Policy::default();
+        let with = |mode, bw| {
+            Command::Audio(AudioChannel {
+                mode,
+                bandwidth_hz: Some(bw),
+                ..base_audio()
+            })
+        };
+        for bad in [
+            (Mode::Usb, 0),
+            (Mode::Usb, MIN_BANDWIDTH_HZ - 1),
+            (Mode::Am, MAX_BANDWIDTH_HZ + 1),
+            (Mode::Usb, MAX_FILTER_EDGE_HZ as u32 + 1),
+            (Mode::Cw, 23_000),
+            (Mode::Am, u32::MAX),
+        ] {
+            let cmd = with(bad.0, bad.1);
+            assert_eq!(cmd.validate(&p), Err(CommandError::Bandwidth(bad.1)));
+            assert!(cmd.encode(&p, 1).is_err(), "{bad:?}");
+        }
+        for ok in [
+            (Mode::Usb, MIN_BANDWIDTH_HZ),
+            (Mode::Usb, 12_000),
+            (Mode::Am, MAX_BANDWIDTH_HZ),
+            (Mode::Cw, 22_800),
+        ] {
+            assert_eq!(with(ok.0, ok.1).validate(&p), Ok(()), "{ok:?}");
         }
     }
 

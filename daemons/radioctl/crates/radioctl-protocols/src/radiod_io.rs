@@ -289,6 +289,7 @@ impl State {
             frequency_hz: self.freq as f64,
             encoding: Encoding::Pcm16Be,
             lifetime_frames: lifetime,
+            bandwidth_hz: None,
         })];
         if let Some(w) = self.width {
             let (low_hz, high_hz) = ModeSpec::of(self.mode).edges(w);

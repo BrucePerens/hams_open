@@ -432,6 +432,7 @@ mod tests {
                 frequency_hz: 1.0e12,
                 encoding: Encoding::Pcm16Be,
                 lifetime_frames: 10,
+                bandwidth_hz: None,
             }),
         ];
         for cmd in &refused {
