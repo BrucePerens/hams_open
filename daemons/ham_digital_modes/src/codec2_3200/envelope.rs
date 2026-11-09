@@ -329,7 +329,7 @@ pub(crate) fn envelope_slope_log2_per_bin_fixed(
 /// positive-input requirement satisfied at a genuinely near-zero bin,
 /// not a value whose own precision matters. Computed via `f32_to_q_
 /// exact_round` rather than a hand-typed literal -- this port's own
-/// `BW_GAMMA_Q23` doc comment records a real bug class (an
+/// `BW_GAMMA_Q23` doc comment records a real class of mistakes (an
 /// independently-computed constant disagreeing with Rust's own real
 /// rounding) that hand arithmetic on Q23 literals repeats every time.
 fn eps_a2_q23() -> i64 {

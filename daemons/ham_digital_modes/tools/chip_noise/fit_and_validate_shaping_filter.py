@@ -2,8 +2,8 @@
 """Fits the 81-tap FIR shaping filter that maps the identified LCG (`s[n+1] = 173*s[n] + 13849 mod
 65536`) onto the chip's actual muted/comfort-noise output (`table_65536.i16`), and validates it with
 a proper held-out split -- addressing `docs/references/AMBE_CHIP_NOISE_GENERATOR.md`'s own note that
-the original fit "was fitted on the same table, not validated on a separate capture" (also tracked
-in hams_com's `night_shift_todo/high/ambe-...-3c8f1d2e.md`, "noise-shaping filter validation").
+the original fit "was fitted on the same table, not validated on a separate capture" (noise-shaping
+filter validation).
 
 Why a held-out split within the SAME table, rather than a fresh chip capture: the muted/comfort-noise
 path is a deterministic, full-period (65,536-state) generator. Every possible capture of it, no matter

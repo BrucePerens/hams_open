@@ -43,7 +43,7 @@ pub enum Family {
     Receiver,
     /// USB radios and SDR boards that speak vendor control requests or HID reports (Si570 kits,
     /// FUNcube, FiFi-SDR, ...). Described, but without an engine: radioctl has no USB control or
-    /// HID transport yet (`night_shift_todo/medium/radioctl-usb-hid-transport.md`).
+    /// HID transport yet.
     UsbDevice,
 }
 
