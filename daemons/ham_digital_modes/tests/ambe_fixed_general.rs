@@ -250,9 +250,16 @@ fn mul_q16_rounds_to_nearest_and_tracks_f64() {
     assert_eq!(mul_q16(1, 32768), 1); // 0.5 LSB rounds up
     assert_eq!(mul_q16(-1, 32768), -1); // and away from zero when negative
     assert_eq!(mul_q16(1, 32767), 0); // just under half an LSB rounds down
-                                      // A negative product is biased down by up to one count (`(p - half) >> 16` floors): see the to-do
-                                      // `ambe-fixed-mul-q16-negative-rounding-bias-*`. The bound below is today's behaviour, not the ideal.
-    assert!((mul_q16(65536, -65536) + 65536).abs() <= 1);
+                                      // A negative product rounds like a positive one (half away from zero): exact, not one count low.
+    assert_eq!(mul_q16(65536, -65536), -65536);
+    assert_eq!(mul_q16(-65536, 65536), -65536);
+    assert_eq!(mul_q16(-1, 32767), 0);
+    assert_eq!(mul_q16(-3, 32768), -2); // -1.5 counts rounds to -2
+    for a in (-200_000..200_000).step_by(7919) {
+        for b in (-200_000..200_000).step_by(6007) {
+            assert_eq!(mul_q16(a, b), -mul_q16(-a, b), "sign symmetry {a} * {b}");
+        }
+    }
     assert_eq!(mul_q16(65536, 65536), 65536);
     for a in (-200_000..200_000).step_by(7919) {
         for b in (-200_000..200_000).step_by(6007) {
@@ -289,17 +296,15 @@ fn mul_q16_i64_keeps_a_product_that_overflows_i64_and_rounds_like_mul_q16() {
         i64::MAX,
         i64::MIN + 1,
     ] {
-        // Times 1.0; a negative `a` can come out one count low (the same floor bias as `mul_q16`).
-        assert!((mul_q16_i64(a, 65536) - a).abs() <= 1, "a = {a}");
-        if a >= 0 {
-            assert_eq!(mul_q16_i64(a, 65536), a, "a = {a}");
-        }
+        // Times 1.0 is exact for either sign.
+        assert_eq!(mul_q16_i64(a, 65536), a, "a = {a}");
         if a.unsigned_abs() < (1 << 62) {
             assert!((mul_q16_i64(a, 131072) - a * 2).abs() <= 1, "a = {a}");
         }
     }
     assert_eq!(mul_q16_i64(1, 32768), 1);
-    assert!((mul_q16_i64(-1, 32768) + 1).abs() <= 1);
+    assert_eq!(mul_q16_i64(-1, 32768), -1);
+    assert_eq!(mul_q16_i64(-1, 32767), 0);
     assert_eq!(mul_q16_i64(1, 32767), 0);
     // a * b alone is 2^66, above i64::MAX, but the result 2^66 / 2^16 = 2^50 fits.
     assert_eq!(mul_q16_i64(1 << 62, 1 << 4), 1 << 50);
