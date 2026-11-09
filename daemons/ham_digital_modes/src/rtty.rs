@@ -566,7 +566,9 @@ const PERSIST_RATIO_THRESHOLD_DB: f64 = 4.0;
 /// should expect to find often. Missing history (an edge at or near the very start of the
 /// buffered stream) passes automatically -- there is no "before" to fail on, matching this
 /// module's own fixed warmup-veto bug (a real signal starting the instant a receiver begins
-/// listening must not be penalized for looking unfamiliar).
+/// listening must not be penalized for looking unfamiliar), while the history that does exist is
+/// still checked, so a candidate edge that lies inside the first character's own SPACE bits is
+/// rejected.
 // [@ANCHOR: pre_is_persistently_mark]
 fn pre_is_persistently_mark(
     samples: &[i16],
@@ -575,11 +577,14 @@ fn pre_is_persistently_mark(
     trig: &TrigTables,
 ) -> bool {
     let w = geo.window_len;
-    if edge_pos < w {
-        return true;
-    }
     let sub_len = (w / PERSIST_SUBWINDOWS).max(1);
-    let region_start = edge_pos - w;
+    // Near the start of the buffer there is less than one full bit of history: check the part that
+    // exists (whole sub-windows only; none fit when the edge is within `sub_len` of the start, which
+    // passes as before). Passing every near-start candidate unchecked let the position refinement
+    // slide a first character whose first data bit equals its start bit (SPACE, SPACE) up to half a
+    // bit late, because the later position scored higher and nothing before it vetoed it; the data
+    // windows then straddled bit boundaries and misread (a lone `C` decoded as `U`).
+    let region_start = edge_pos.saturating_sub(w);
     let mut pos = region_start;
     while pos + sub_len <= edge_pos {
         match trig.signed_ratio_db(samples, pos, sub_len) {
@@ -1772,6 +1777,31 @@ mod tests {
             "a real signal present from the very first window must not be lost to the \
              presence gate's own warmup period"
         );
+    }
+
+    /// Found by the `rtty_round_trip` fuzz target (2026-11-09): a one-character message with no leading
+    /// idle audio, whose character starts with a SPACE data bit (`C`, `G`, `M`, `P`), decoded as another
+    /// character (`C` as `U`) or as nothing. The start bit and the first data bit were both SPACE, there
+    /// was no earlier MARK to veto a later edge, and the refinement slid the edge half a bit late.
+    #[test]
+    fn a_lone_first_character_with_no_leading_idle_decodes_whatever_its_first_data_bit() {
+        let sample_rate = 48000u32;
+        for &c in LTRS_CHARS.iter().chain(FIGS_CHARS.iter()).filter(|&&c| c != '\0') {
+            let text = c.to_string();
+            let mut mono = rtty_modulate(&text, RTTY_DEFAULT_MARK_HZ, sample_rate);
+            mono.extend(idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.05));
+            assert_eq!(
+                rtty_demodulate(&mono, RTTY_DEFAULT_MARK_HZ, sample_rate),
+                text,
+                "whole-buffer decode of a lone {c:?} with no leading idle"
+            );
+            let mut decoder = RttyDecoder::new(RTTY_DEFAULT_MARK_HZ, sample_rate);
+            let mut got = String::new();
+            for chunk in mono.chunks(977) {
+                got.push_str(&decoder.feed(chunk));
+            }
+            assert_eq!(got, text, "streamed decode of a lone {c:?} with no leading idle");
+        }
     }
 
     #[test]
