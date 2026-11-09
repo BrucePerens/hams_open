@@ -26,6 +26,7 @@ Odoo 19 Community server: nothing but Odoo core and zero_sudo is needed.
         }
     ],
     "post_init_hook": "post_init_hook",
+    "post_load": "post_load_hook",
     "installable": True,
     "application": False,
     "auto_install": False,

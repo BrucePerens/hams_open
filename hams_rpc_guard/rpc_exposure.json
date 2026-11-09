@@ -1,0 +1,41 @@
+{
+  "comment": "Calls a portal or public user's browser makes over call_kw today: found in the 2026-10-26 to 11-09 hams.com access logs and in the static JavaScript of hams_com and hams_open (docs/audits/GENERIC_RPC_USAGE_2026-11-09.md). Everything else is refused to those users. Extend it per installation with the addon's own rpc_exposure.json.",
+  "portal": {
+    "ham.dx.spot": [
+      "get_recent_spots",
+      "needed_marks"
+    ],
+    "ham.world.map.settings": [
+      "get_map_config"
+    ],
+    "ham.map.settings": [
+      "get_user_settings"
+    ],
+    "res.users": [
+      "action_create_passkey",
+      "action_revoke_all_devices",
+      "action_totp_enable_wizard",
+      "read",
+      "write"
+    ],
+    "res.users.identitycheck": [
+      "write",
+      "run_check"
+    ],
+    "auth.passkey.key.create": [
+      "create",
+      "make_key"
+    ],
+    "auth_totp.wizard": [
+      "read",
+      "enable"
+    ],
+    "event.event": [
+      "action_secure_all_participants",
+      "action_handoff_ncs"
+    ],
+    "event.registration": [
+      "create"
+    ]
+  }
+}

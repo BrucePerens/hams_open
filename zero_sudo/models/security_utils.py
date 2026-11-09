@@ -841,6 +841,10 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             "hams_rpc_guard.legacy_access",
             "hams_rpc_guard.json2_access",
             "hams_rpc_guard.trusted_proxies",
+            "hams_rpc_guard.mode",
+            "hams_rpc_guard.strict_stock",
+            "hams_rpc_guard.managed_authors",
+            "hams_rpc_guard.client_cert_header",
             # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8: the
             # NCMEC CyberTipline mandatory-reporting workflow (hams_helpdesk/models/
             # helpdesk_ticket.py). Same category as pager_duty.domain_api_identity above --
