@@ -224,15 +224,12 @@ class TestSecurityUtils(HamsTransactionCase):
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_story_cache_signaling]
         """
-        Bug-hunt fix, 2026-09-13: this test used to assert the exact shape of a
-        `pg_notify("cache_invalidation", "test.model:test_key")` call -- which locked in a real
-        bug (the real listener, `distributed_redis_cache/daemons/cache_manager.py`, LISTENs on
-        `"distributed_cache_invalidation"`, not `"cache_invalidation"`, and expects a JSON
-        payload, not a plain colon-joined string) rather than catching it, a bug class 2
-        (non-discriminating test) instance -- it "passed" whether the signal actually reached
-        the real daemon or not, since it only checked what THIS function sent, never what the
-        real consumer requires. Rewritten to assert the actual, corrected contract:
-        `_notify_cache_invalidation` must delegate to the real
+        Asserts the contract the real consumer requires, not the shape of one particular call:
+        the real listener, `distributed_redis_cache/daemons/cache_manager.py`, LISTENs on
+        `"distributed_cache_invalidation"` (not `"cache_invalidation"`) and expects a JSON
+        payload, not a plain colon-joined string. An assertion on what THIS function sends
+        would pass whether or not the signal reached the real daemon, so it would not
+        discriminate. `_notify_cache_invalidation` must delegate to the real
         `distributed_cache_invalidation` channel with a JSON-decodable `{"model": ...}` payload.
         "test.model" is intentionally replaced with a real model name ("res.partner") --
         `notify_model_invalidation()` (the delegate) silently no-ops for any string that isn't a
@@ -324,13 +321,13 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_04b_privilege_escalation_block_enforcement_via_implied_group(self):
         # Tests [@ANCHOR: zero_sudo:COMM_privilege_escalation_block_sql]
 
-        # Bug-hunt fix: the SQL mandate check in postgres_procedures.xml
-        # used to query res_groups_users_rel alone, which only sees DIRECT
+        # The SQL mandate check in postgres_procedures.xml must not query
+        # res_groups_users_rel alone, which only sees DIRECT
         # group membership. Odoo's own has_group() checks the full
         # transitive implied-group closure (group_ids.all_implied_ids), so
         # a service account that holds base.group_system only via an
         # IMPLIED chain -- member of some OTHER group whose own
-        # implied_ids reaches group_system -- previously passed this check
+        # implied_ids reaches group_system -- would pass a direct-only check
         # silently, defeating the mandate. This is the same test as
         # test_04_privilege_escalation_block_enforcement above, except the
         # rogue account is a member of a brand-new group that IMPLIES
@@ -388,15 +385,12 @@ class TestSecurityUtils(HamsTransactionCase):
         Test _notify_cache_invalidation with a list payload (the "batch" call shape used by
         real callers like blog_post.py/website_page.py, which pass a list of URLs).
 
-        Bug-hunt fix, 2026-09-13: this test previously asserted the exact `unnest()`-based
-        chunking SQL the old, broken implementation used to send multiple per-key payloads on
-        the WRONG channel (see test_03's own updated docstring for the full story on why that
-        channel was never actually listened to) -- itself a non-discriminating test (bug class
-        2), since it verified the shape of a signal nothing downstream ever consumed. The real
-        daemon+Redis pipeline only ever operates at whole-MODEL granularity, never per-key, so
-        there is nothing left to chunk: rewritten to assert that a list of keys still results in
-        exactly ONE correctly-addressed notify for the model (not one per key), matching the
-        real, corrected, delegated behavior.
+        The real daemon+Redis pipeline only ever operates at whole-MODEL granularity, never
+        per-key (see test_03's docstring for the channel the listener uses), so there is
+        nothing to chunk: this asserts that a list of keys results in exactly ONE
+        correctly-addressed notify for the model (not one per key). Asserting the shape of
+        per-key payloads on another channel would verify a signal nothing downstream
+        consumes.
         """
         utils = self.env["zero_sudo.security.utils"]
 
@@ -552,11 +546,8 @@ class TestSecurityUtils(HamsTransactionCase):
         self.assertTrue(env_svc.context.get("mail_notrack"))
 
     def test_10b_get_service_env_resets_company_context_not_caller_leak(self):
-        """Bug-hunt fix, 2026-09-18, per Bruce's own answer in
-        night_shift_questions/answered/
-        zero-sudo-get-service-env-company-context-carryover-a133d1a3.md: _get_service_env
-        used to inherit whatever allowed_company_ids the CALLER's own ambient context had
-        (via with_user() alone), rather than resetting to the impersonated service
+        """_get_service_env must not inherit whatever allowed_company_ids the CALLER's own
+        ambient context has (via with_user() alone); it resets to the impersonated service
         account's own default company (ADR-0083 decision 1: .with_company() is the
         architecturally mandated abstraction). A caller acting under a child company must
         not leak that company into the returned service env."""
@@ -678,15 +669,13 @@ class TestSecurityUtils(HamsTransactionCase):
     def test_13_service_uid_error_paths(self):
         """Audit all rejection branches within the service account lookup logic.
 
-        Bug-hunt re-verification, 2026-09-18 (night_shift_todo/medium/get-service-uid-raise-
-        exception-uncaught-across-callsites-e94d940f.md): this used to tolerate a raw
-        psycopg2.errors.RaiseException here too, which would have let a regression of the
-        2026-09-09 fix below pass silently -- every caller across both repos writes `except
-        AccessError` around _get_service_uid() specifically because it's documented to always
-        raise that, never the raw Postgres exception (see _get_service_uid's own
-        `except psycopg2.errors.RaiseException as e: raise AccessError(...) from e` -- confirmed
-        still present and correct by reading the current source directly, not assumed from this
-        test alone). Asserting only AccessError here is what actually proves that promise holds."""
+        This must not tolerate a raw psycopg2.errors.RaiseException, which would let a
+        regression of the AccessError translation pass silently -- every caller across both
+        repos writes `except AccessError` around _get_service_uid() specifically because it's
+        documented to always raise that, never the raw Postgres exception (see
+        _get_service_uid's own `except psycopg2.errors.RaiseException as e: raise
+        AccessError(...) from e`). Asserting only AccessError here is what proves that
+        promise holds."""
         utils = self.env["zero_sudo.security.utils"]
 
         # 1. Invalid XML ID Format
@@ -789,15 +778,11 @@ class TestSecurityUtils(HamsTransactionCase):
         """
         Verify secure record-level cache invalidation for specific models.
 
-        Bug-hunt fix, 2026-09-13: this test used to patch `self.env.registry.clear_cache` and
-        assert IT was called -- which is exactly the mechanism this pass found to be the real
-        bug (`registry.clear_cache()` with no arguments clears the whole 'default' ormcache
-        bucket for EVERY model, not `model_name`, contradicting this function's own name and
-        docstring). A passing assertion on the buggy mechanism is itself a bug class 2
-        (non-discriminating test) instance -- it couldn't have told the difference between the
-        real, model-scoped `invalidate_model_cache()` and the old, unscoped
-        `registry.clear_cache()`. Rewritten to assert the corrected mechanism directly: the
-        model-scoped `invalidate_model_cache()` (imported at the top of this file) is called
+        `registry.clear_cache()` with no arguments clears the whole 'default' ormcache bucket
+        for EVERY model, not `model_name`, contradicting this function's own name and
+        docstring, so asserting that IT was called would not discriminate between the
+        model-scoped `invalidate_model_cache()` and the unscoped `registry.clear_cache()`.
+        This asserts the mechanism directly: the model-scoped `invalidate_model_cache()` (imported at the top of this file) is called
         with `model_name`, and `registry.clear_cache()` is NOT called at all (there is no
         remaining reason for this function to touch the registry-wide ormcache bucket).
         """
@@ -884,12 +869,9 @@ class TestSecurityUtils(HamsTransactionCase):
         happens to be inside, regardless of what code actually made the
         call.
 
-        Regression test for a real bug found during 2026-09-08 patent-
-        disclosure Fable reviews (disclosure 19): before the fix, this
-        method joined a pseudo-frame's filename with cwd without first
-        checking whether it was a real file, so an interactive-shell
-        caller was attributed to the cwd's module instead of being
-        rejected as indeterminate.
+        Joining a pseudo-frame's filename with cwd without first
+        checking whether it is a real file would attribute an interactive-shell
+        caller to the cwd's module instead of rejecting it as indeterminate.
         """
         utils = self.env["zero_sudo.security.utils"]
 
@@ -1035,7 +1017,7 @@ class TestSecurityUtils(HamsTransactionCase):
 
     def test_23_erase_via_service_account_raises_when_visibility_is_restricted(self):
         # Tests [@ANCHOR: zero_sudo:ground_truth_ids]
-        # Reproduces the exact bug class found live in ham_relay_bridge: a
+        # Reproduces the failure mode seen in ham_relay_bridge: a
         # service account has real ir.model.access.csv rights on the model,
         # but its own group membership ALSO matches an unrelated, restrictive
         # ir.rule -- so its own search() silently sees fewer records than
@@ -1135,8 +1117,7 @@ class TestSecurityUtils(HamsTransactionCase):
 
     def test_28_get_trusted_client_ip_trusts_cf_header_from_loopback(self):
         # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
-        """This deployment is Cloudflare-Tunnel-only (confirmed by Bruce
-        2026-09-11) -- cloudflared and Odoo run on the same host, so a
+        """This deployment is Cloudflare-Tunnel-only -- cloudflared and Odoo run on the same host, so a
         loopback remote_addr IS the tunnel, and its CF-Connecting-IP
         header is genuine."""
         utils = self.env["zero_sudo.security.utils"]
@@ -1184,7 +1165,7 @@ class TestSecurityUtils(HamsTransactionCase):
 
     def test_28c_get_trusted_client_ip_ignores_forged_headers_from_a_non_loopback_peer(self):
         # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
-        """Bug-hunt fix, 2026-09-11: a request whose real transport peer is
+        """A request whose real transport peer is
         NOT the local Tunnel must never trust CF-Connecting-IP/
         X-Forwarded-For -- they're attacker-controlled on any path that
         doesn't go through cloudflared. The real peer address must be
@@ -1214,19 +1195,15 @@ class TestSecurityUtils(HamsTransactionCase):
 
     def test_29_preload_service_uid_cache_populates_known_service_accounts_only(self):
         # Tests [@ANCHOR: zero_sudo:preload_service_uid_cache]
-        """Bruce's own direct instruction (2026-09-12/13): "load the service user-IDs into a
-        hash-table at start-up." _register_hook() (which every real server startup already
+        """The service user-IDs are loaded into a hash table at start-up. _register_hook() (which every real server startup already
         calls once per registry build, before this test even ran) should have already populated
         the cache -- this proves it actually contains a real, known service account's xml_id
         mapped to its real uid, and does NOT contain a real human admin's xml_id (base.user_admin
         is never is_service_account=True, so the preload query's own WHERE clause must exclude
         it)."""
-        # Bug-hunt fix, 2026-09-13: _SERVICE_UID_CACHE was re-keyed from bare xml_id to
-        # (dbname, xml_id) in the same-day security_utils.py bug-hunt pass (see
-        # _preload_service_uid_cache's own module-level comment for the cross-database
-        # collision this closes), but this test's own assertions were never updated to match --
-        # confirmed live: this assertion started failing the moment that fix landed, looking up
-        # a bare-string key against a dict now keyed by 2-tuples.
+        # _SERVICE_UID_CACHE is keyed by (dbname, xml_id), not bare xml_id (see
+        # security_utils.py's module-level comment for the cross-database collision this
+        # avoids), so the lookups below use 2-tuple keys.
         dbname = self.env.cr.dbname
         utils = self.env["zero_sudo.security.utils"]
         real_uid = utils._get_service_uid("zero_sudo.mail_service_internal")
@@ -1271,8 +1248,7 @@ class TestSecurityUtils(HamsTransactionCase):
         uid -- proving the split into zero_sudo_resolve_service_xmlid()/
         zero_sudo_verify_service_uid() didn't change the outward-facing result for the common
         case, only which SQL function actually runs underneath."""
-        # Bug-hunt fix, 2026-09-13: same tuple-key mismatch as test_29's own fix above -- see
-        # that test's comment for the full story.
+        # Same (dbname, xml_id) tuple key as test_29 -- see that test's comment.
         utils = self.env["zero_sudo.security.utils"]
         xml_id = "zero_sudo.mail_service_internal"
         self.assertIn(
@@ -1324,12 +1300,11 @@ class TestSecurityUtils(HamsTransactionCase):
         # Simulate "this account was already valid and cached at this worker's own startup" --
         # a real preload never sees a freshly-created record like this one, so the cache has to
         # be seeded directly to reproduce the precondition this test is about.
-        # Bug-hunt fix, 2026-09-13: keyed by bare xml_id before this fix -- since
-        # _SERVICE_UID_CACHE was re-keyed to (dbname, xml_id) the same day, a seed under the old
-        # bare-string shape was silently invisible to the real _get_service_uid() lookup, so this
-        # test was actually exercising the live-resolve fallback path the whole time, not the
-        # cache-hit-then-disabled precondition it claims to (both happen to raise for the disabled
-        # account either way, which is why this didn't show up as an outright failure).
+        # The seed must use the (dbname, xml_id) tuple key: a seed under a bare-string key would
+        # be silently invisible to the real _get_service_uid() lookup, so this test would
+        # exercise the live-resolve fallback path instead of the cache-hit-then-disabled
+        # precondition it claims to (both happen to raise for the disabled account either way,
+        # so the mistake would not show up as an outright failure).
         cache_key = (self.env.cr.dbname, xml_id)
         security_utils_module._SERVICE_UID_CACHE[cache_key] = fresh_user.id
         try:
@@ -1383,10 +1358,9 @@ class TestSecurityUtils(HamsTransactionCase):
             }
         )
         full_xml_id = f"test_module.{xml_id_name}"
-        # Bug-hunt fix, 2026-09-13: same tuple-key mismatch as test_29/31's own fixes above --
-        # checking a bare-string key here would always trivially pass (real entries are keyed by
-        # (dbname, xml_id) since the same-day _SERVICE_UID_CACHE re-keying), silently testing
-        # nothing about the real cache shape.
+        # Same (dbname, xml_id) tuple key as test_29/31 -- checking a bare-string key here
+        # would always trivially pass (real entries are keyed by (dbname, xml_id)), silently
+        # testing nothing about the real cache shape.
         cache_key = (self.env.cr.dbname, full_xml_id)
         self.assertNotIn(
             cache_key,

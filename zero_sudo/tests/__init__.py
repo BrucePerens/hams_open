@@ -52,15 +52,13 @@ _logger = logging.getLogger(__name__)
 # the resulting thread-locking or savepoint-bypass will throw specific psycopg2 errors.
 # We catch these and emit a highly visible AI/Developer hint to instantly halt debugging.
 
-# bug-hunt (2026-09-13): this used to be gated by `if test_cursor_cls:`, where
-# `test_cursor_cls = TestCursor` (line 10's own `from odoo.tests.test_cursor import
-# TestCursor` already raises ImportError immediately if that class doesn't exist) --
-# a class object is always truthy, so the guard could never actually be False, and
-# had the further side effect of hiding `_monitored_test_execute` from
+# The patch is applied unconditionally rather than behind an `if` on the TestCursor class:
+# the `from odoo.tests.test_cursor import TestCursor` above already raises ImportError
+# immediately if that class doesn't exist, and a class object is always truthy, so such a
+# guard could never be False. A guard would also hide `_monitored_test_execute` from
 # check_function_test_anchors.py/check_claims_freshness.py's own anchor-coverage
 # scan (`_direct_functions` recurses into a nested ClassDef but not an `if` block,
-# so a function defined inside one is invisible to that tooling entirely). Removed
-# the dead guard -- same behavior (this always ran), now visible to the anchor tools.
+# so a function defined inside one is invisible to that tooling entirely).
 _original_test_cursor_execute = TestCursor.execute
 
 

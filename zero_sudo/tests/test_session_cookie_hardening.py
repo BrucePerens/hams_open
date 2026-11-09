@@ -11,9 +11,8 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 
 # Tests [@ANCHOR: zero_sudo:harden_cookie_header]
-# night_shift_todo's own "session-cookie-missing-secure-and-samesite-attributes"
-# finding, 2026-09-22: session_id (the real auth token) and frontend_lang had
-# neither Secure nor SameSite even over a real HTTPS connection through the
+# session_id (the real auth token) and frontend_lang carry neither Secure nor
+# SameSite from Odoo itself, even over a real HTTPS connection through the
 # reverse proxy.
 @tagged("post_install", "-at_install")
 class TestHardenCookieHeader(BaseCase):
@@ -67,10 +66,9 @@ class TestPostDispatchCookieHardening(HamsHttpCase):
         # Only asserts SameSite here, not Secure: whether this test harness's
         # own werkzeug stack actually trusts X-Forwarded-Proto the same way
         # the real production reverse-proxy chain does is a separate,
-        # environment-specific concern (see night_shift_todo's own updated
-        # finding -- confirmed live that request.httprequest.scheme does not
+        # environment-specific concern (request.httprequest.scheme does not
         # report "https" even behind the real Cloudflare Tunnel in
-        # production today). The Secure-vs-is_https branch itself is already
+        # production). The Secure-vs-is_https branch itself is already
         # covered precisely, without that ambiguity, by
         # TestHardenCookieHeader's pure-function tests above.
         response = self.url_open("/web/login")

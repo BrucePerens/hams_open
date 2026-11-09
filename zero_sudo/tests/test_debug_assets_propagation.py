@@ -5,19 +5,18 @@
 JS coverage (`HAMS_JS_COVERAGE_DIR` + `HAMS_TOUR_TOUR_DEBUG=assets`, see
 `_js_coverage_start` in common.py and hams_shared/tools/run_js_coverage.py)
 maps V8 block ranges back to source lines through the `Filepath:` headers
-that only the non-minified `debug=assets` bundles carry. The live records
-from 2026-09-20 (`-u pager_duty`, tour URL rewritten to
-`/odoo?debug=assets`) show both `web.assets_web` and `web.assets_tests`
+that only the non-minified `debug=assets` bundles carry. Live records
+from a tour run with the URL rewritten to
+`/odoo?debug=assets` show both `web.assets_web` and `web.assets_tests`
 served as `/web/assets/<hash>/<bundle>.min.js` from the same page render,
 so `values["debug"]` lacked "assets" when `web.webclient_bootstrap` was
 rendered. No hams module overrides `_handle_debug`, `session.debug`, the
-`/odoo` route or the asset-link generation (checked 2026-10-02 in all
+`/odoo` route or the asset-link generation (checked across all
 three repositories), so this test pins the server half of the path:
 the same authenticated `/odoo?debug=assets` request a tour starts with,
 over the real HTTP stack, and the follow-up request without the query
 parameter that a page navigation inside the tour makes. If both pass,
 the cause is on the browser/tour side, not in request handling.
-hams_com night_shift_todo/low/js-coverage-live-v8-collection-hook-aa0f3a74.md
 """
 import re
 

@@ -169,16 +169,15 @@ class TestZeroSudoControllers(RealTransactionCase):
 
     def test_03_json_session_authenticate_blocks_service_account(self):
         # Tests [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
-        """Regression test for a real 2026-09-13 bug-hunt finding:
-        /web/login (test_01 above) is NOT the only real session-establishing
+        """/web/login (test_01 above) is NOT the only real session-establishing
         login endpoint -- Odoo's own web client (and any third-party JSON
         client) actually logs in via /web/session/authenticate, a separate
         JSON-RPC route this module never covered. Because ir_http.py's
         _authenticate() dispatch guard (test_02 above) only ever sees
         request.session.uid as it stood BEFORE the CURRENT request's own
         login logic runs, it cannot catch a service account authenticating
-        on this exact request either -- before this fix, this endpoint
-        would have returned a real, live session_info() payload (uid, name,
+        on this exact request either -- without the interceptor, this endpoint
+        would return a real, live session_info() payload (uid, name,
         allowed companies, etc.) straight to the caller for a service
         account's own credentials, with no audit trail at all, exactly the
         interactive-web-UI access this module exists to deny."""
@@ -237,19 +236,16 @@ class TestZeroSudoControllers(RealTransactionCase):
 
     def test_04_json_session_authenticate_wrong_password_writes_no_log_row(self):
         # Tests [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
-        """Regression test for a real 2026-09-27 bug-hunt finding.
-
-        `/web/session/authenticate` is `auth="none"`. Between 2026-09-16 and
-        this fix, the interceptor's pre-`super()` branch short-circuited on a
-        LOGIN match alone -- the password was never examined -- and on that
-        path it created a COMMITTED `zero_sudo.security.log` row and returned
-        `{"uid": None}`. Every service-account login in this project is
+        """`/web/session/authenticate` is `auth="none"`. An interceptor
+        pre-`super()` branch that short-circuited on a LOGIN match alone (the
+        password never examined) would create a COMMITTED
+        `zero_sudo.security.log` row and return `{"uid": None}`. Every service-account login in this project is
         declared in public XML in this same repository, so any anonymous
         caller could name one and drive unlimited audit rows into the
         production database, unthrottled (returning before `super()` also
         skips `res.users._assert_can_auth`'s per-IP login cooldown) and
-        retained forever (nothing purges `zero_sudo.security.log`). It also
-        destroyed the row's meaning: a real credential compromise became
+        retained forever (nothing purges `zero_sudo.security.log`). It would
+        also destroy the row's meaning: a real credential compromise would be
         indistinguishable from a background scan.
 
         This asserts the discriminating half: a service-account login with a
@@ -309,19 +305,19 @@ class TestZeroSudoControllers(RealTransactionCase):
         # Tests [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
         # ---
         # Tests [@ANCHOR: zero_sudo:COMM_web_login_interceptor]
-        """Regression test for a real 2026-09-27 bug-hunt finding: both
-        interceptors recorded `request.httprequest.remote_addr` as the audit
-        log's `ip_address`. This deployment is Cloudflare-Tunnel-only with
+        """Both interceptors must record the real client IP, not
+        `request.httprequest.remote_addr`, as the audit log's `ip_address`.
+        This deployment is Cloudflare-Tunnel-only with
         cloudflared on the same host as the Odoo HTTP server, so the real
-        transport peer of every external request is loopback -- the column
-        recorded `127.0.0.1` for every attacker, and the one audit log this
+        transport peer of every external request is loopback -- `remote_addr`
+        would record `127.0.0.1` for every attacker, and the one audit log this
         module maintains could not answer the only question it exists to
         answer. `zero_sudo.security.utils._get_trusted_client_ip()` (already
-        instantiated on the line above each of these `create()` calls) has
-        resolved this correctly since 2026-09-11; it was never wired up here.
+        instantiated on the line above each of these `create()` calls) resolves
+        this correctly.
 
         Discriminating: the request below comes from loopback (the test
-        client IS local), so the pre-fix code would record `127.0.0.1` and
+        client IS local), so code using `remote_addr` would record `127.0.0.1` and
         this assertion would fail.
         """
         login = "test_service_json_client_ip"

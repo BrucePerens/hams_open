@@ -59,10 +59,8 @@ class TestChromeInitRetryTeardown(HamsTransactionCase):
 
     # Tests [@ANCHOR: zero_sudo:patched_chrome_init]
     def test_pause_on_fail_pins_only_the_instance_not_the_class(self):
-        """night_shift_todo/low/zero-sudo-pause-on-fail-pins-cdp-port-9222-process-wide-624bd3a2.md.
-
-        HAMS_PAUSE_ON_FAIL=1 must pin remote_debugging_port on the one browser built while it's
-        set, never on ChromeBrowser itself -- a class-attribute write used to leak the pin onto
+        """HAMS_PAUSE_ON_FAIL=1 must pin remote_debugging_port on the one browser built while it's
+        set, never on ChromeBrowser itself -- a class-attribute write would leak the pin onto
         every later browser built in the same process, including ones built after the var is
         unset again."""
         self.safe_patch_object(common, "original_chrome_init", self._fake_init(fail_times=0))

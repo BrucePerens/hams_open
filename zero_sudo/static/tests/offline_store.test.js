@@ -1,17 +1,14 @@
 /** @odoo-module **/
 /* Copyright © HAMS project. AGPL-3.0-or-later. */
 
-// OfflineStore had zero test coverage before this -- the 2026-09-11 Service Worker reliability
-// review found a real durability bug here (saveLog() used to resolve on the individual IDB
-// request's own onsuccess rather than transaction.oncomplete, so a QuotaExceededError abort
-// after that onsuccess fired told the caller a QSO log was safely queued when it had actually
-// been rolled back and lost -- see night_shift_todo.md's own writeup). Forcing a real
+// saveLog() must resolve on transaction.oncomplete, not on the individual IDB request's own
+// onsuccess: otherwise a QuotaExceededError abort after that onsuccess fired would tell the
+// caller a QSO log was safely queued when it had actually been rolled back and lost. Forcing a real
 // QuotaExceededError reliably inside a hoot browser test is impractical (it depends on the
 // browser's actual storage quota, not something this suite can control), so this covers the
 // real, always-exercised round-trip behavior instead: save, list, and delete against a real
 // IndexedDB in a real browser (hoot runs in real Chrome, not a mock DOM) -- proving the
-// oncomplete-based Promise settlement actually resolves/rejects correctly on the happy path,
-// which is the one thing that had never been directly exercised at all.
+// oncomplete-based Promise settlement actually resolves/rejects correctly on the happy path.
 import { afterEach, describe, expect, test } from "@odoo/hoot";
 import { isStorageFullError, OfflineStore } from "@zero_sudo/js/offline_store";
 

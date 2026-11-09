@@ -78,12 +78,12 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_write_password_as_a_non_system_service_account_splits_by_flag(self):
         # Tests [@ANCHOR: zero_sudo:res_users_write]
-        # Real bug, found 2026-09-16: the password branch of write() used
-        # self.filtered("is_service_account"), and that field is
+        # The password branch of write() must not use
+        # self.filtered("is_service_account"), because that field is
         # groups="base.group_system". A narrow service account with res.users
         # write access but no system group (ham_base.user_manager_service, doing
-        # ham_onboarding's since-removed certificate account takeover) got AccessError on every
-        # password write. The split must work for such a caller, and still
+        # ham_onboarding's since-removed certificate account takeover) would get AccessError on
+        # every password write. The split must work for such a caller, and still
         # keep the given password away from service accounts.
         writer_group = self.env["res.groups"].create({"name": "Test Narrow res.users Writer"})
         self.env["ir.model.access"].create({
@@ -177,11 +177,11 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
     def test_write_invalidates_the_is_service_account_cache(self):
         # Tests [@ANCHOR: zero_sudo:res_users_write]
 
-        # Bug-hunt fix, 2026-09-13: `ir.http._is_service_account_cached` is
+        # `ir.http._is_service_account_cached` is
         # `@distributed_cache()`-decorated -- an L1, process-lifetime cache
-        # checked BEFORE Redis's own 24h TTL is ever consulted. Before this
-        # fix, write() never invalidated it, so a worker that had already
-        # cached a uid's OLD is_service_account value kept serving that
+        # checked BEFORE Redis's own 24h TTL is ever consulted. write() must
+        # invalidate it; otherwise a worker that had already
+        # cached a uid's OLD is_service_account value keeps serving that
         # stale verdict indefinitely, not just for up to 24h. This is the
         # exact incident-response scenario the flag exists for: promoting a
         # compromised user to a service account (to block their interactive
@@ -382,11 +382,10 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_rpc_path_exemption_requires_exact_or_delimited_prefix(self):
         # Tests [@ANCHOR: zero_sudo:is_rpc_path_exempt_from_service_account_block]
-        # Regression test for a real 2026-09-13 bug-hunt finding: the old
-        # bare .startswith('/jsonrpc')/.startswith('/xmlrpc') check would
-        # have exempted ANY path sharing that prefix, not just Odoo's own
-        # two real RPC endpoints. Latent (no colliding route exists in this
-        # codebase today), but this test locks in the tightened boundary so
+        # A bare .startswith('/jsonrpc')/.startswith('/xmlrpc') check would
+        # exempt ANY path sharing that prefix, not just Odoo's own
+        # two real RPC endpoints. The risk is latent (no colliding route exists in this
+        # codebase), but this test locks in the delimited boundary so
         # a future route can't silently reopen it.
         ir_http = self.env["ir.http"]
         exempt = ir_http._is_rpc_path_exempt_from_service_account_block
@@ -405,9 +404,8 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_install_single_doc_rejects_sibling_prefix_traversal(self):
         # Tests [@ANCHOR: zero_sudo:is_path_within_module_dir]
-        # Regression test for a real 2026-09-13 bug-hunt finding: a bare
-        # `resolved_path.startswith(base_dir)` (no separator) would have
-        # treated a sibling directory that merely shares base_dir as a
+        # A bare `resolved_path.startswith(base_dir)` (no separator) would
+        # treat a sibling directory that merely shares base_dir as a
         # string PREFIX (e.g. ".../addons/zero_sudo_evil" starting with
         # ".../addons/zero_sudo") as "inside" the module directory.
         ir_module = self.env["ir.module.module"]
@@ -425,7 +423,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_poll_health_check_rejects_non_http_scheme(self):
         # Tests [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
-        # Regression test for a real 2026-09-13 bug-hunt finding: urlopen()
+        # urlopen()
         # honors whatever scheme it's given, including file://, which would
         # let a caller building this URL from anything less trusted than a
         # hardcoded test string turn a health check into an arbitrary local
@@ -444,21 +442,20 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_poll_health_check_retries_a_daemon_that_is_not_answering_yet(self):
         # Tests [@ANCHOR: zero_sudo:COMM_test_poll_health_check]
-        # Regression test for a real 2026-09-27 bug-hunt finding: this loop
-        # only caught `urllib.error.URLError`, which covers "connection
+        # A loop that only caught `urllib.error.URLError` would cover "connection
         # refused" (the daemon has not bound its port yet) but NOT the two
         # things a daemon that HAS bound its port but is still initialising
-        # actually does. Confirmed empirically against a real loopback
-        # socket: `urllib.request`'s `do_open` wraps only `h.request(...)` in
+        # actually does. Against a real loopback
+        # socket, `urllib.request`'s `do_open` wraps only `h.request(...)` in
         # its `except OSError: raise URLError(err)`, while the following
         # `h.getresponse()` is outside it -- so "accepted the connection and
         # never answered" surfaces as a bare `TimeoutError` and "accepted the
         # connection then closed it" as `http.client.RemoteDisconnected`,
-        # neither of which is a `URLError`. The poller aborted on the first
-        # one and propagated a raw exception instead of polling on.
+        # neither of which is a `URLError`. A poller catching only `URLError` aborts on the first
+        # one and propagates a raw exception instead of polling on.
         #
         # Discriminating in both directions: each scenario raises the
-        # transient error ONCE and then succeeds, so the pre-fix code fails
+        # transient error ONCE and then succeeds, so a `URLError`-only poller fails
         # with the raw exception, and code that swallowed errors without
         # retrying would never see the 200 either.
         daemon_utils = self.env["zero_sudo.daemon.utils"]
@@ -510,11 +507,10 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
     def test_stop_daemon_process_survives_toctou_exit(self):
         # Tests [@ANCHOR: zero_sudo:stop_daemon_process]
-        # Regression test for a real 2026-09-13 bug-hunt finding: process.
-        # poll() only proves the process was alive at that instant -- if it
-        # exits between that check and os.getpgid(pid), the old code let a
-        # bare ProcessLookupError propagate uncaught instead of treating
-        # "already exited" as the success it actually is.
+        # process.poll() only proves the process was alive at that instant --
+        # if it exits between that check and os.getpgid(pid), a bare
+        # ProcessLookupError must not propagate uncaught; "already exited"
+        # is the success the method is trying to reach.
         daemon_utils = self.env["zero_sudo.daemon.utils"]
 
         class FakeProcess:

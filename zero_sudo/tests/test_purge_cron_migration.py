@@ -23,7 +23,7 @@ def _load_migration():
 
 @tagged("post_install", "-at_install")
 class TestPurgeCronMigration(HamsTransactionCase):
-    """Bruce, 2026-10-11: "We retain data forever." The deletion crons are gone: the 1.1
+    """The platform retains data forever, so the deletion crons are gone: the 1.1
     migration unlinks the ones an installed database still holds, by xmlid."""
 
     def _make_cron(self, xmlid_name, model_name):

@@ -21,7 +21,7 @@ DELIBERATE_STRICT = {
 OPEN_FINDINGS = {
     # A portal member with no website (all 143 in production) sees only their own tickets that have no website either.
     "hams_helpdesk.rule_helpdesk_ticket_portal": ["website_id"],
-    # Found by the first run of this sweep over every module, 2026-10-26; not reviewed. Each compares a record's website
+    # Found by running this sweep over every module; not yet reviewed. Each compares a record's website
     # with user.website_id.id for a backup administrator, a portal user or a link owner who has no website.
     "backup_management.rule_backup_config_multi_tenant": ["website_id"],
     "backup_management.rule_backup_job_multi_tenant": ["website_id"],
