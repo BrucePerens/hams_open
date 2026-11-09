@@ -70,7 +70,7 @@ is still loading (module install/upgrade; [@ANCHOR: distributed_redis_cache:COMM
 so a hand-run upgrade fails at its first cache invalidation instead of logging thousands of warnings. After a successful upgrade, and before odoo is started, it
 compiles every stylesheet bundle (`scripts/check_asset_bundles_shell.py` piped into `odoo shell --no-http` in the unit `odoo-upgrade-css-check`, same environment, nothing written) and
 exits 4, printing the compiler's message and the rollback steps, if one fails: Odoo otherwise serves HTTP 200 with a "css error" stub stylesheet and the whole site is unstyled (hams.com, 2026-10-14). A run without a verdict line counts as a failure;
-`--no-css-check` skips it. A serving worker
+`--install a,b` adds `-i a,b` to the same run (argument: comma-separated module names, each `[a-z0-9_]+`; refused otherwise, exit 2) for a module that is new on the database: `-u all` leaves a new `auto_install` module `uninstalled` (the 2026-11-08 rehearsal on a restored `hams_prod` saw `ham_spreadsheet_csp` stay uninstalled with its dependencies installed). `--no-css-check` skips it. A serving worker
 still only logs a warning and falls back to its local cache. If an upgrade did run unauthenticated: delete the `<db>:distributed_cache:*` keys with `SCAN`+`DEL` (never
 `FLUSHALL`) and restart odoo. A restart alone does not help: it clears only each worker's in-memory L1, not Redis.
 

@@ -4,6 +4,7 @@
 
     sudo python3 odoo_upgrade.py --db hams_prod --modules hams_helpdesk,ham_relay_bridge [--log /tmp/upgrade.log]
     sudo python3 odoo_upgrade.py --db hams_prod --modules hams_helpdesk --dry-run     # print the command, run nothing
+    sudo python3 odoo_upgrade.py --db hams_prod --modules all --install ham_spreadsheet_csp   # also install a NEW module
 
 Why it exists (found 2026-10-12): `sudo -u odoo odoo -u ...` gives the upgrade none of the `EnvironmentFile=`
 settings of the service (REDIS_USERNAME/REDIS_PASSWORD from /opt/hams/etc/redis.env, the broker and database
@@ -17,6 +18,9 @@ What it does:
     process's output, argv or the log;
   * fails before starting if the service has no EnvironmentFile that defines REDIS_PASSWORD, or the file cannot be
     read (only the NAMES of the variables are looked at, never printed);
+  * `--install a,b` adds `-i a,b` to the same run, for a module that is new on this database. `-u all` does NOT install a module
+    that is new and `auto_install` (found by the 2026-11-08 rehearsal on a restored hams_prod: ham_spreadsheet_csp stayed
+    `uninstalled` with both of its dependencies installed), so a deploy that adds a module names it here;
   * refuses to run while the odoo service is active (stop it first; the upgrade rewrites tables the live workers use);
   * `distributed_redis_cache`'s invalidate_model_cache independently aborts a install/upgrade at the first cache
     invalidation Redis rejects, so a run that bypasses this tool still fails fast (but only after that point);
@@ -112,7 +116,7 @@ def require_redis_credentials(service, read_text):
                        "production Redis would reject the upgrade's cache invalidations")
 
 
-def build_command(service, db, modules):
+def build_command(service, db, modules, install=()):
     """The systemd-run command line. Environment files are passed by PATH, so systemd (root) reads them."""
     if not service["user"]:
         raise UpgradeError(f"cannot determine the {SERVICE} service's User=")
@@ -124,7 +128,8 @@ def build_command(service, db, modules):
         cmd += ["-p", f"EnvironmentFile={'-' if optional else ''}{path}"]
     for assignment in service["env"]:
         cmd += ["-E", assignment]
-    return cmd + [ODOO_BIN, "--config", ODOO_CONF, "-d", db, "-u", ",".join(modules), "--stop-after-init"]
+    install_args = ["-i", ",".join(install)] if install else []
+    return cmd + [ODOO_BIN, "--config", ODOO_CONF, "-d", db] + install_args + ["-u", ",".join(modules), "--stop-after-init"]
 
 
 def build_css_check_command(service, db):
@@ -164,6 +169,9 @@ def run(argv, show=None, read_text=None, execute=None, is_active=None, out=None,
     bad = [m for m in modules if not MODULE_NAME.match(m)]
     if not modules or bad:
         raise UpgradeError(f"invalid --modules {args.modules!r}")
+    install = [m for m in (args.install or "").split(",") if m]
+    if any(not MODULE_NAME.match(m) for m in install) or (args.install and not install):
+        raise UpgradeError(f"invalid --install {args.install!r}")
     if not re.match(r"^[A-Za-z0-9_]+\Z", args.db):
         raise UpgradeError(f"invalid --db {args.db!r}")
     show = show or (lambda: subprocess.run(
@@ -175,7 +183,7 @@ def run(argv, show=None, read_text=None, execute=None, is_active=None, out=None,
     require_redis_credentials(service, read_text)
     if not args.dry_run and is_active():
         raise UpgradeError(f"the {SERVICE} service is running; `systemctl stop {SERVICE}` first (and wrap in pagerduty-maintenance)")
-    cmd = build_command(service, args.db, modules)
+    cmd = build_command(service, args.db, modules, install)
     print("running: " + shlex.join(cmd), file=out)
     check_cmd = build_css_check_command(service, args.db)
     if args.dry_run:
@@ -233,6 +241,8 @@ def parse_args(argv):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--db", required=True)
     p.add_argument("--modules", required=True, help="comma-separated module names")
+    p.add_argument("--install", help="comma-separated modules to install in the same run (-i), for a module that is new on this "
+                   "database: `-u all` does not install a new auto_install module")
     p.add_argument("--log", help="write odoo's output here instead of stdout")
     p.add_argument("--dry-run", action="store_true", help="print the command and exit")
     p.add_argument("--no-css-check", action="store_true",
