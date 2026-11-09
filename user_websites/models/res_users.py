@@ -339,7 +339,7 @@ class ResUsers(models.Model):
         # _get_user_id_by_slug() is @distributed_cache()-decorated: an
         # unbounded-lifetime L1 process cache consulted before Redis's own
         # 24h TTL. Its answer is the content routing view's answer, which
-        # depends on exactly these four columns (see
+        # depends on exactly these five columns (see
         # [@ANCHOR: user_websites:COMM_content_routing_view_init]). Nothing
         # invalidated that cache when any of them changed.
         #
@@ -359,6 +359,11 @@ class ResUsers(models.Model):
         #    believes the account is locked down and it is not" shape
         #    zero_sudo's own is_service_account write() fixed for
         #    ir.http._is_service_account_cached.
+        #  * reconcile_website_eligibility() flips website_ineligible (a
+        #    member who stops meeting the site-eligibility gaps); the view
+        #    drops the row, but a worker that had resolved the slug kept
+        #    serving the id to the logbook and profile routes until the
+        #    cache entry expired.
         #
         # Placed after a successful super().write() (not before, and not on
         # vals alone) so a write that the ACLs rejected, or that a later
@@ -372,6 +377,7 @@ class ResUsers(models.Model):
                 "active",
                 "is_suspended_from_websites",
                 "is_service_account",
+                "website_ineligible",
             )
         ):
             notify_model_invalidation(self.env, "res.users")

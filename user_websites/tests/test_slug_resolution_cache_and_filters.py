@@ -13,6 +13,7 @@ the expected behaviour.
 """
 
 from odoo.tests import tagged
+from odoo.addons.user_websites.models.site_eligibility import ResUsersSiteEligibility
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
@@ -113,6 +114,35 @@ class TestSlugResolutionCacheAndFilters(RealTransactionCase):
             self.users._get_user_id_by_slug("slug-cache-renamed"),
             user.id,
             "The new slug must resolve to the same user.",
+        )
+
+    # Tests [@ANCHOR: user_websites:COMM_res_users_write]
+    # Tests [@ANCHOR: user_websites:COMM_get_user_id_by_slug]
+    # Tests [@ANCHOR: user_websites:COMM_reconcile_website_eligibility]
+    def test_01b_newly_ineligible_member_stops_resolving_from_the_cache(self):
+        """reconcile_website_eligibility() flips website_ineligible, which the
+        content routing view filters on. The cached slug -> user answer must be
+        evicted by that write, or a member who just lost eligibility keeps
+        resolving to the logbook and profile routes until the entry expires.
+        Same three-step shape as test_01: proven cached, then proven evicted."""
+        user = self._make_user("slugcache_inelig", "slug-cache-inelig")
+        self.assertEqual(self.users._get_user_id_by_slug("slug-cache-inelig"), user.id)
+
+        gap = [{"code": "need_x", "message": "m", "url": "/u"}]
+        with self.safe_patch_object_cm(ResUsersSiteEligibility, "_website_eligibility_gaps", lambda s: list(gap)):
+            changed = self.env["res.users"].reconcile_website_eligibility([user.id])
+        self.assertEqual(changed, {user.id: "hidden"})
+        self.env.flush_all()
+
+        self.assertEqual(
+            self.users._get_user_id_by_slug("slug-cache-inelig"),
+            user.id,
+            "Precondition: before invalidation runs the stale entry is still served.",
+        )
+        self.env.cr.postcommit.run()
+        self.assertFalse(
+            self.users._get_user_id_by_slug("slug-cache-inelig"),
+            "A newly ineligible member must stop resolving once the write commits.",
         )
 
     # Tests [@ANCHOR: user_websites:COMM_res_users_write]
