@@ -7,6 +7,7 @@
 import psutil
 from odoo.addons.distributed_redis_cache.redis_cache import _local_cache, invalidate_model_cache
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
+import atexit
 import concurrent.futures
 import contextlib
 import ctypes
@@ -28,12 +29,15 @@ import time
 import urllib.request
 import urllib3
 import werkzeug.serving
+import shutil
 import subprocess
 import fcntl
+import unittest
 import socket
 from unittest.mock import MagicMock, patch
 from cryptography.fernet import Fernet
 from odoo.tests.common import HttpCase, TransactionCase, ChromeBrowser, ChromeBrowserException, HOST, BaseCase
+from .chrome_pool import ChromePool
 from .test_persona_support import PersonaMixin
 from .hypothesis_profile import register_hams_profile
 import odoo.tests.common
@@ -335,7 +339,14 @@ def _headless_chrome_of_this_run():
                 found.append(p)
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, KeyError) as e:
             _logger.warning("Failed process inspection: %s", e)
-    return found
+    # The pooled Chrome (see `_chrome_pool`) lives across tests: its own processes are not leftovers.
+    pooled = _chrome_pool.owned_pids()
+    return [p for p in found if p.info["pid"] not in pooled and not any(_chrome_pool.owns_profile(prof) for prof in _profiles_of(p))]
+
+
+def _profiles_of(process):
+    """The `--user-data-dir` values on a process's command line."""
+    return [str(a).split("=", 1)[1] for a in (process.info.get("cmdline") or []) if str(a).startswith("--user-data-dir=")]
 
 
 # [@ANCHOR: zero_sudo:kill_all_headless_chrome]
@@ -946,6 +957,8 @@ def _patched_chrome_stop(self, *args, **kwargs):
     # odoo/tests/common.py's own ChromeBrowser.__init__). This lookup silently
     # found nothing and skipped this whole block on every prior run.
     proc = getattr(self, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
+    if getattr(self, "_hams_chrome", None) is not None:  # burn-ignore-introspection
+        proc = None  # a pooled browser's Chrome belongs to the pool, which stops it
     if proc and proc.poll() is None and proc.pid and proc.pid > 1:
         protected = _protected_pids()
         try:
@@ -1045,6 +1058,13 @@ original_chrome_start = ChromeBrowser._chrome_start
 @contextlib.contextmanager
 # [@ANCHOR: zero_sudo:patched_chrome_start]
 def _patched_chrome_start(self, *args, **kwargs):
+    if _pool_applies(self, kwargs):
+        with _pooled_chrome_start(self, kwargs["touch_enabled"]) as pooled:
+            yield pooled
+        return
+    if not getattr(self, "_hams_unpooled", False):  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
+        # A browser of its own spawns a Chrome and the spawn reaps every browser of this run: nothing may be left in the pool.
+        _chrome_pool.close()
     proc_obj = None
     children_to_kill = []
     try:
@@ -1112,6 +1132,146 @@ def _patched_chrome_start(self, *args, **kwargs):
 
 
 ChromeBrowser._chrome_start = _patched_chrome_start
+
+
+# One headless Chrome per test class (hams_open zero_sudo/tests/chrome_pool.py has the design and the isolation argument):
+# each browser test still builds its own `ChromeBrowser`, but over a fresh browser context of the class's shared Chrome.
+# HAMS_CHROME_POOL=0 restores one Chrome per browser.
+def _start_pooled_chrome(touch_enabled):
+    """Starts a headless Chrome the way every test browser is started (`_patched_chrome_start`: own process group, PID
+    namespace, reaper protections) on a stand-in `ChromeBrowser` that carries only what that start-up reads, and returns
+    `(proc, devtools_port, user_data_dir, stop)` for the pool."""
+    stand_in = ChromeBrowser.__new__(ChromeBrowser)
+    stand_in._logger = _logger
+    stand_in._hams_unpooled = True
+    stand_in.chrome_log_level = logging.INFO
+    stand_in.cleanup = contextlib.ExitStack()
+    stand_in.user_data_dir = tempfile.mkdtemp(suffix="_chrome_odoo")
+    manager = _patched_chrome_start(
+        stand_in, user_data_dir=stand_in.user_data_dir, touch_enabled=touch_enabled, headless=True, debug=False
+    )
+    try:
+        proc, devtools_port = manager.__enter__()
+    except BaseException:
+        shutil.rmtree(stand_in.user_data_dir, ignore_errors=True)
+        raise
+    return proc, devtools_port, stand_in.user_data_dir, lambda: manager.__exit__(None, None, None)
+
+
+_chrome_pool = ChromePool(_start_pooled_chrome)
+atexit.register(_chrome_pool.close)
+
+
+# [@ANCHOR: zero_sudo:pool_applies]
+def _pool_applies(browser, launch_kwargs):
+    """Whether this browser may share the class's Chrome: not the pool's own start-up, not a visible or debugging browser,
+    not a --pause-on-fail run (fixed DevTools port 9222), not a --offline-isolation run (a Chrome in its own network
+    namespace), and not with HAMS_CHROME_POOL=0."""
+    return (
+        not getattr(browser, "_hams_unpooled", False)  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
+        and os.environ.get("HAMS_CHROME_POOL", "1") != "0"
+        and os.environ.get("HAMS_PAUSE_ON_FAIL") != "1"
+        and not os.environ.get("HAMS_OFFLINE_NS_CTL")
+        and launch_kwargs.get("headless", True)
+        and launch_kwargs.get("debug", False) is False
+    )
+
+
+# [@ANCHOR: zero_sudo:pooled_test_was_clean]
+def _pooled_test_was_clean(browser):
+    """True when a pooled browser's test ended without any sign of trouble: no exception left its start-up or body, no
+    reported JavaScript failure, no failed result, and its context was disposed. Anything else makes the Chrome be replaced."""
+    if not getattr(browser, "_hams_page_ok", True):  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
+        return False
+    if getattr(browser, "had_failure", False):  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
+        return False
+    result = getattr(browser, "_result", None)  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
+    return not (result is not None and result.done() and not result.cancelled() and result.exception() is not None)
+
+
+@contextlib.contextmanager
+# [@ANCHOR: zero_sudo:pooled_chrome_start]
+def _pooled_chrome_start(self, touch_enabled):
+    """Core's `_chrome_start` for a pooled browser: leases the class's Chrome instead of spawning one, and gives it back (or has
+    it replaced, after an unclean test) instead of terminating it."""
+    chrome = _chrome_pool.acquire(type(self.test_case), touch_enabled)
+    self._hams_chrome = chrome
+    self._hams_log_offset = chrome.log_size()
+    self._hams_page_ok = True
+    try:
+        yield chrome.proc, chrome.devtools_port
+    except BaseException:
+        self._hams_page_ok = False
+        raise
+    finally:
+        _chrome_pool.release(chrome, clean=_pooled_test_was_clean(self))
+
+
+original_open_websocket = ChromeBrowser._open_websocket
+
+
+@contextlib.contextmanager
+# [@ANCHOR: zero_sudo:patched_open_websocket]
+def _patched_open_websocket(self):
+    """Core finds the one blank page of a Chrome of its own. A pooled browser gets a new page in a new browser context
+    instead (nothing of an earlier test is visible in it) and destroys the context when the test ends."""
+    chrome = getattr(self, "_hams_chrome", None)  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
+    if chrome is None:
+        with original_open_websocket(self) as ws:
+            yield ws
+        return
+    context_id = None
+    try:
+        context_id, ws_url = _chrome_pool.new_page(chrome)
+        self._logger.info("Websocket url found: %s", ws_url)
+        ws = odoo.tests.common.websocket.create_connection(ws_url, enable_multithread=True, suppress_origin=True)
+        if ws.getstatus() != 101:
+            raise unittest.SkipTest("Cannot connect to chrome dev tools")
+        ws.settimeout(0.01)
+    except BaseException:
+        self._hams_page_ok = False
+        if context_id is not None:
+            _chrome_pool.end_page(chrome, context_id)
+        raise
+    try:
+        yield ws
+    finally:
+        self._logger.info("Closing websocket connection")
+        try:
+            ws.close()
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.info("Ignored exception closing a pooled test's websocket: %s", e)
+        if not _chrome_pool.end_page(chrome, context_id):
+            self._hams_page_ok = False
+
+
+original_websocket_request = ChromeBrowser._websocket_request
+
+
+# [@ANCHOR: zero_sudo:patched_websocket_request]
+def _patched_websocket_request(self, method, **kwargs):
+    """`Browser.close` is core's last step of a browser's shutdown; on a pooled browser it would end the class's Chrome."""
+    if method == "Browser.close" and getattr(self, "_hams_chrome", None) is not None:  # burn-ignore-introspection
+        return None
+    return original_websocket_request(self, method, **kwargs)
+
+
+ChromeBrowser._open_websocket = _patched_open_websocket
+ChromeBrowser._websocket_request = _patched_websocket_request
+
+original_read_log = ChromeBrowser.read_log
+
+
+# [@ANCHOR: zero_sudo:patched_read_log]
+def _patched_read_log(self):
+    """A pooled browser's share of the Chrome's log: what it wrote since the test's lease began."""
+    chrome = getattr(self, "_hams_chrome", None)  # burn-ignore-introspection: attribute of Odoo core's ChromeBrowser
+    if chrome is None:
+        return original_read_log(self)
+    return chrome.log_since(self._hams_log_offset)
+
+
+ChromeBrowser.read_log = _patched_read_log
 
 # 🚨 NATIVE CHROME PAUSE ON FAIL 🚨
 original_browser_js = HttpCase.browser_js
@@ -1775,6 +1935,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
     @classmethod
     # [@ANCHOR: zero_sudo:hams_http_case_teardown_class]
     def tearDownClass(cls):
+        _chrome_pool.close()  # the class's shared Chrome (see `_chrome_pool`) ends with the class
         cls._crypto_patcher.stop()
         cls._crypto_patcher_res_users.stop()
         _logger.info("TRACING: Entering HamsHttpCase.tearDownClass.")
@@ -1949,6 +2110,8 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
                 # ChromeBrowser.__init__). This force-kill block was dead
                 # on every run before this fix.
                 proc = getattr(self.browser, "chrome", None)  # burn-ignore-introspection: Odoo core's ChromeBrowser internal, not a hams model field
+                if getattr(self.browser, "_hams_chrome", None) is not None:  # burn-ignore-introspection
+                    proc = None  # a pooled browser's Chrome belongs to the pool
                 if proc:
                     _kill_browser_tree(proc, "HamsHttpCase.tearDown")
                     try:
