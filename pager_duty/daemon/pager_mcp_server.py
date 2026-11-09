@@ -34,6 +34,18 @@ import urllib.request
 
 from mcp.server.mcpserver import MCPServer
 
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
+    points; a refused redirect surfaces as the HTTPError of the 3xx status."""
+
+    # [@ANCHOR: pager_duty:no_redirect_mcp]
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
 )
@@ -73,7 +85,7 @@ class OdooClient:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=15) as response:
+            with _OPENER.open(req, timeout=15) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8")
