@@ -549,6 +549,48 @@ def registrable_domain(value):
     return ".".join(labels[-keep:])
 
 
+_OPEN_HIDDEN_RE = re.compile(r"(?i)<(script|style|noscript|head)\b")
+_MAX_MARKUP_CHARS = 2_500_000  # the crawler's fetcher caps a page at 2 MiB; nothing larger is real
+
+
+# [@ANCHOR: zero_sudo:club_spam_visible_text]
+def _visible_text(markup):
+    """`markup` with the script, style, noscript and head elements and every other tag replaced by a space (entities are not
+    decoded). Linear in the length of `markup` (cut to _MAX_MARKUP_CHARS first): it used to be two regular expressions that
+    rescanned to the end of the page from every unclosed `<script ` or bare `<`, which took seconds on hostile markup. An
+    element whose closing tag never comes is left in place, as the regex left it, and its tag is then stripped like any other.
+    Pure; never raises."""
+    markup = markup[:_MAX_MARKUP_CHARS]
+    lower = markup.lower()
+    pieces, pos, no_close = [], 0, set()
+    while True:
+        opened = _OPEN_HIDDEN_RE.search(markup, pos)
+        if not opened:
+            break
+        name = opened.group(1).lower()
+        close = -1 if name in no_close else lower.find("</" + name + ">", opened.end())
+        if close < 0:
+            no_close.add(name)  # no closing tag exists past here, so no later opening tag of this name can be closed either
+            pieces.append(markup[pos:opened.end()])
+            pos = opened.end()
+            continue
+        pieces.append(markup[pos:opened.start()] + " ")
+        pos = close + len(name) + 3
+    pieces.append(markup[pos:])
+    rest = "".join(pieces)
+    out, pos = [], 0
+    while True:
+        lt = rest.find("<", pos)
+        gt = rest.find(">", lt + 1) if lt >= 0 else -1
+        if gt < 0:  # no tag can close after this point: the remainder is text
+            break
+        out.append(rest[pos:lt])
+        out.append(" ")
+        pos = gt + 1
+    out.append(rest[pos:])
+    return "".join(out)
+
+
 # [@ANCHOR: zero_sudo:club_spam_build_redirect]
 def build_redirect(home_url, final_url, markup):
     """The redirect evidence of a club's home page, for `build_evidence(redirect=...)`: None when the page the fetch ended on
@@ -563,8 +605,7 @@ def build_redirect(home_url, final_url, markup):
     title, text = "", ""
     if markup:
         title = " ".join(extract_home_evidence(markup, final_url).get("title", "").split())[:MAX_TITLE_CHARS]
-        body = re.sub(r"(?is)<(script|style|noscript|head)\b.*?</\1>", " ", markup)
-        text = " ".join(html.unescape(re.sub(r"(?s)<[^>]*>", " ", body)).split())
+        text = " ".join(html.unescape(_visible_text(markup)).split())
     return {"from": home_url[:MAX_URL_CHARS], "to": final_url[:MAX_URL_CHARS], "title": title,
             "text": text[:MAX_REDIRECT_TEXT_CHARS]}
 
