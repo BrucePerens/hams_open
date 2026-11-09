@@ -19,7 +19,9 @@ checkout.
 
 The change is deliberately LOCAL and UNCOMMITTED. The entry is marked `skip-worktree`, so
 `git commit -a` / `git add -A` can never turn the submodule into a machine-specific symlink and
-commit it (`git update-index --no-skip-worktree hams_shared` undoes it). `git status` may still show
+commit it (`git update-index --no-skip-worktree hams_shared` undoes it). The worktree's own config also gets
+`fetch.recurseSubmodules=false`: git refuses to fetch into a submodule path that is a symlink, so without it every
+`git fetch`, `git pull` and prmerge.sh in the worktree failed. `git status` may still show
 `hams_shared` as changed; do not commit it.
 
 Because the link points at the main checkout's working tree, the worktree sees whatever commit that
@@ -39,9 +41,9 @@ SYMLINK_MODE = "120000"
 
 
 # [@ANCHOR: fix_worktree_symlinks:git]
-def _git(args, cwd):
+def _git(args, cwd, check=True):
     return subprocess.run(
-        ["git"] + args, cwd=cwd, capture_output=True, text=True, check=True
+        ["git"] + args, cwd=cwd, capture_output=True, text=True, check=check
     ).stdout.strip()
 
 
@@ -78,6 +80,20 @@ def _link(this_root, rel_path, target):
     _git(["update-index", "--skip-worktree", rel_path], this_root)
 
 
+# [@ANCHOR: fix_worktree_symlinks:stop_submodule_recursion]
+def _stop_submodule_recursion(this_root):
+    """Makes `git fetch` / `git pull` in this worktree skip the submodule it just replaced with a symlink.
+
+    Git's default `fetch.recurseSubmodules=on-demand` walks every gitlink after a fetch and refuses a path that is a
+    symlink ("expected submodule path 'hams_shared' not to be a symbolic link"), so once the fixer linked `hams_shared`
+    every `git fetch` (and `git pull`, and prmerge.sh, which fetches) in the worktree exited non-zero. The setting goes
+    in the worktree's own config (`config.worktree`), so the main checkout and other worktrees keep git's default;
+    `extensions.worktreeConfig` is what makes a per-worktree file exist, and is turned on here when it is not yet."""
+    if _git(["config", "--type=bool", "--get", "extensions.worktreeConfig"], this_root, check=False) != "true":
+        _git(["config", "extensions.worktreeConfig", "true"], this_root)
+    _git(["config", "--worktree", "fetch.recurseSubmodules", "false"], this_root)
+
+
 # [@ANCHOR: fix_worktree_symlinks:recorded_sha]
 def _recorded_sha(entry_meta):
     return entry_meta.split()[1]
@@ -99,15 +115,20 @@ def fix_worktree(this_root):
         here_path = os.path.join(this_root, rel_path)
         main_path = os.path.join(main_root, rel_path)
         if mode == GITLINK_MODE:
-            if not (_is_empty_dir(here_path) or (os.path.islink(here_path) and not os.path.exists(here_path))):
-                continue  # populated, or already linked to something that works
+            if os.path.islink(here_path) and os.path.exists(here_path):
+                # Linked by an earlier run (before it set this): heal the worktree so its git fetch works.
+                _stop_submodule_recursion(this_root)
+                continue
+            if not (_is_empty_dir(here_path) or os.path.islink(here_path)):
+                continue  # populated by `git submodule update`
             if not _is_populated_checkout(main_path):
                 messages.append(f"Skipping {rel_path}: the main checkout's {main_path} is not a populated submodule.")
                 continue
             real_target = os.path.realpath(main_path)
             _link(this_root, rel_path, real_target)
+            _stop_submodule_recursion(this_root)
             fixed += 1
-            messages.append(f"Fixed {rel_path} -> {real_target} (skip-worktree set)")
+            messages.append(f"Fixed {rel_path} -> {real_target} (skip-worktree set, fetch.recurseSubmodules=false for this worktree)")
             try:
                 main_sha = _git(["rev-parse", "HEAD"], real_target)
             except subprocess.CalledProcessError:
