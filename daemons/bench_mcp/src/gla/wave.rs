@@ -174,7 +174,10 @@ pub fn parse_vcd(text: &str) -> Result<Wave, String> {
             t = nt;
             continue;
         }
-        let (val, id) = tok.split_at(1);
+        // A token that starts with a multi-byte character is not a value change; `split_at(1)` would panic inside it.
+        let Some((val, id)) = tok.split_at_checked(1) else {
+            return Err(format!("VCD change {tok:?} does not start with a value"));
+        };
         let Some(&(_, bit)) = ids.iter().find(|(i, _)| i == id) else {
             return Err(format!("VCD change {tok:?} names an unknown id"));
         };

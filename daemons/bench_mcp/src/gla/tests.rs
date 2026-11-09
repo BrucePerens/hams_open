@@ -119,6 +119,8 @@ fn vcd_is_parsed_with_initial_state_coalesced_changes_and_the_overrun_marker() {
         ]
     );
     assert_eq!(w.end_ns, 400);
+    // a change token that starts with a multi-byte character is an error, not a panic
+    assert!(wave::parse_vcd(&format!("{VCD}#500\n\u{e9}!\n")).is_err());
     let x = wave::parse_vcd(&format!("{VCD}#500\nx!\n")).unwrap();
     assert_eq!(x.overrun_ns, Some(500));
     // a timescale of 1 us scales the times; a wide wire and missing wires are refused
