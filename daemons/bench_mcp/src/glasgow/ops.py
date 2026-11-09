@@ -57,16 +57,18 @@ async def _uart_transact(ns, p):
     ended = "timeout"
     while True:
         now = time.monotonic()
-        wait = deadline - now
-        if last is not None:
-            wait = min(wait, p["idle_ms"] / 1000.0 - (now - last))
+        remaining = deadline - now
+        idle_left = None if last is None else p["idle_ms"] / 1000.0 - (now - last)
+        # The idle limit ends the call only when it comes before the deadline: a device still sending at the deadline did not go quiet.
+        idle_first = idle_left is not None and idle_left < remaining
+        wait = idle_left if idle_first else remaining
         if wait <= 0:
-            ended = "idle" if last is not None else "timeout"
+            ended = "idle" if idle_first else "timeout"
             break
         try:
             chunk = await asyncio.wait_for(uart_iface.read_all(flush=False), wait)
         except asyncio.TimeoutError:
-            ended = "idle" if last is not None else "timeout"
+            ended = "idle" if idle_first else "timeout"
             break
         got += bytes(chunk)
         last = time.monotonic()
