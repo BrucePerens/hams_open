@@ -385,10 +385,10 @@ fn log2_q23_split32(x_q23: i64) -> i64 {
         x_q23 >= 0,
         "log2_q23: x_q23 must be non-negative, got {x_q23}"
     );
-    // Bug-hunt fix, 2026-09-11: x_q23 == 0 is a legitimate saturated value from a real
+    // x_q23 == 0 is a legitimate saturated value from a real
     // signal condition (exp2_q23 underflowing a very negative y to exactly zero, or a
     // genuinely silent LPC/energy bin) -- not a caller bug the way a truly negative x_q23
-    // would be. The old `debug_assert!(x_q23 > 0, ...)` only caught this in debug builds;
+    // would be. A `debug_assert!(x_q23 > 0, ...)` only catches this in debug builds;
     // in a release build, x_q23 == 0 fed straight into the leading_zeros()/shift arithmetic
     // below, where leading_zeros(0) == 64 drives `shift` very negative and
     // mantissa_frac_q23's `as u64` cast of a negative i64 wraps to a huge value -- silently
@@ -1064,8 +1064,8 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: log2_q23]
     fn log2_q23_of_zero_does_not_produce_garbage_in_a_release_build() {
-        // Bug-hunt fix, 2026-09-11: the old precondition was `debug_assert!(x_q23 > 0, ...)`
-        // only -- a release build fed x_q23 == 0 straight into leading_zeros()/shift
+        // A precondition of `debug_assert!(x_q23 > 0, ...)`
+        // alone is not enough -- a release build fed x_q23 == 0 straight into leading_zeros()/shift
         // arithmetic (leading_zeros(0) == 64 drives shift very negative, and the
         // mantissa_frac_q23 `as u64` cast of a negative i64 wraps to a huge value),
         // silently corrupting the result. x_q23 == 0 is a real, legitimate input in

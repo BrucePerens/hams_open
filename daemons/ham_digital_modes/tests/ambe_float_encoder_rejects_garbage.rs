@@ -26,9 +26,9 @@ fn dstar_pitch_quantizer_rejects_nan() {
     dstar_quantize_pitch(f64::NAN);
 }
 
-/// The amplitude half of the same 2026-09-19 bug-hunt finding (`mbe_quantize_speech.md`): the pitch
-/// half (`quantize_pitch`) was fixed the same day (`d1bc1ea4`), but `quantize_speech` itself still
-/// silently floored a NaN amplitude to `1e-6` via `f64::max` until this test's own fix.
+/// The amplitude half of the pitch check: the pitch half (`quantize_pitch`) is guarded by
+/// `d1bc1ea4`; `quantize_speech` itself must not silently floor a NaN amplitude to `1e-6` via
+/// `f64::max`.
 #[test]
 #[should_panic(expected = "must be finite")]
 fn dstar_speech_quantizer_rejects_nan_amplitude() {

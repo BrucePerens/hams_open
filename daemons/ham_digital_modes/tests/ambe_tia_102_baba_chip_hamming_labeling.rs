@@ -58,7 +58,7 @@ fn clean_chip_frames_report_zero_corrected_errors_in_float_and_fixed_decoders() 
 }
 
 /// The chip pitch map spans b0 0..=255, whose Eq. 47 harmonic count leaves Annex F/G's 9..=56 range at both ends; the
-/// decoder must clamp instead of panicking (bug-hunt finding F1).
+/// decoder must clamp instead of panicking.
 #[test]
 fn chip_pitch_map_decoder_never_panics_on_any_b0() {
     let mut state = 0x1234_5678_9abc_def0u64;

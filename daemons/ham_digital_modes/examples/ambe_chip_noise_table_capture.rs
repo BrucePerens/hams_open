@@ -2,7 +2,7 @@
 //! Captures a fresh, independent copy of the chip's deterministic muted/comfort-noise table
 //! (`docs/references/AMBE_CHIP_NOISE_GENERATOR.md`), for validating the 81-tap shaping filter that
 //! was fitted on `tools/chip_noise/table_65536.i16` but never checked against a separate capture --
-//! see `night_shift_todo/high/ambe-...-3c8f1d2e.md` (hams_com), "noise-shaping filter validation".
+//! (noise-shaping filter validation).
 //!
 //! Sends `PKT_INIT` with the decoder flag (synchronizes the noise generator, per the doc's finding
 //! 1), then an invalid AMBE+2 pitch code (`b0 = 124`, one of the reserved codes 120..127 the chip
