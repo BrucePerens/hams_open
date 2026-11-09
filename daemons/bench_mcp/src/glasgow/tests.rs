@@ -24,9 +24,7 @@ struct Rig {
 }
 
 fn rig(name: &str, extra: &str) -> Rig {
-    let dir =
-        std::env::temp_dir().join(format!("bench_glasgow_test_{name}_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::testdir::scratch(&format!("bench_glasgow_test_{name}"));
     std::fs::create_dir_all(dir.join("sys/1-1")).unwrap();
     std::fs::create_dir_all(dir.join("out")).unwrap();
     for (f, v) in [
@@ -350,7 +348,7 @@ fn rq(args: &[&str], secs: u64) -> Req {
 // Tests [@ANCHOR: glasgow_runner_command]
 #[test]
 fn the_real_runner_captures_output_stops_with_sigint_and_never_kills() {
-    let dir = std::env::temp_dir().join(format!("bench_glasgow_runner_{}", std::process::id()));
+    let dir = crate::testdir::scratch("bench_glasgow_runner");
     let prog = script(
         &dir,
         r#"case "$1" in
@@ -498,7 +496,7 @@ fn a_tool_above_the_tier_or_unknown_is_refused_before_any_command() {
 // Tests [@ANCHOR: glasgow_device_lock]
 #[test]
 fn list_reports_the_device_the_link_and_the_install() {
-    let dir = std::env::temp_dir().join(format!("bench_glasgow_install_{}", std::process::id()));
+    let dir = crate::testdir::scratch("bench_glasgow_install");
     std::fs::create_dir_all(dir.join("venv/bin")).unwrap();
     std::fs::create_dir_all(dir.join("cache/GlasgowEmbedded/bitstreams")).unwrap();
     std::fs::write(dir.join("venv/bin/glasgow"), "").unwrap();

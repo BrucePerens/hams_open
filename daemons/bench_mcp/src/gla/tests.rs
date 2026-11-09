@@ -1058,9 +1058,7 @@ impl Backend for Fake {
 }
 
 fn dir(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("gla_tests_{name}_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let d = crate::testdir::scratch(&format!("gla_tests_{name}"));
     d
 }
 
@@ -1349,8 +1347,7 @@ impl Backend for Stack {
 }
 
 fn stack(name: &str, speed: &str) -> Stack {
-    let dir = std::env::temp_dir().join(format!("gla_stack_{name}_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::testdir::scratch(&format!("gla_stack_{name}"));
     std::fs::create_dir_all(dir.join("sys/1-1")).unwrap();
     std::fs::create_dir_all(dir.join("out")).unwrap();
     for (f, v) in [

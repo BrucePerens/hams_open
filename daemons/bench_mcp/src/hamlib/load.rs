@@ -695,8 +695,7 @@ mod tests {
     // Tests [@ANCHOR: hamlib_baseline_load]
     #[test]
     fn a_baseline_is_stored_per_range_and_read_back_exactly_and_damage_is_an_error() {
-        let d = std::env::temp_dir().join(format!("bench_mcp-baseline-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
+        let d = crate::testdir::TestDir::new("bench_mcp-baseline");
         assert_eq!(load_baseline(&d, "rig", (7e6, 7.01e6)).unwrap(), None);
         let mut a = r("tx", -54.2, 1.5);
         a.audio = audio(-61.5, false, &[1200.0, 800.0]);

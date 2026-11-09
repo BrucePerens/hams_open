@@ -471,9 +471,7 @@ mod tests {
     // Tests [@ANCHOR: audio_reserved_by_topology]
     #[test]
     fn a_dongle_with_the_codec_id_is_reserved_only_beside_the_vnwa_control_chip() {
-        let root =
-            std::env::temp_dir().join(format!("bench_audio_topology_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = crate::testdir::TestDir::new("bench_audio_topology");
         for (name, v, p) in [
             ("3-2.2.1", "20a0", "4118"),
             ("3-2.2.2", "08bb", "29c0"),

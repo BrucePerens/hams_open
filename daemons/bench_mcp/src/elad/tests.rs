@@ -11,9 +11,7 @@ fn bench_cfg(dir: &Path, extra: &str) -> Vec<Instrument> {
 }
 
 fn tmp(name: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("bench_elad_{name}_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let d = crate::testdir::scratch(&format!("bench_elad_{name}"));
     d
 }
 

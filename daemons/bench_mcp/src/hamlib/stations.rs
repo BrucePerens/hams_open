@@ -426,9 +426,7 @@ mod tests {
     use super::*;
 
     fn dir(tag: &str) -> PathBuf {
-        let d =
-            std::env::temp_dir().join(format!("bench_mcp-stations-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
+        let d = crate::testdir::scratch(&format!("bench_mcp-stations-{tag}"));
         d
     }
 

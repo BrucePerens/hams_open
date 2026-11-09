@@ -609,8 +609,7 @@ mod tests {
         let e = Serial::open("/nonexistent/ttyUSB9", 9600).err().unwrap();
         assert!(e.starts_with("open /nonexistent/ttyUSB9"), "{e}");
         // A regular file opens but is not a terminal.
-        let dir = std::env::temp_dir().join(format!("bench_link_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("bench_link");
         let file = dir.join("plain");
         std::fs::write(&file, b"x").unwrap();
         let e = Serial::open(file.to_str().unwrap(), 9600).err().unwrap();

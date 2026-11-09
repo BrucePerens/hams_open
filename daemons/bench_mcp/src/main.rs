@@ -28,6 +28,8 @@ mod scope;
 mod sdr;
 mod serial_guard;
 mod spectrum;
+#[cfg(test)]
+mod testdir;
 mod usb_hub;
 mod vna;
 mod vna_tools;
@@ -220,9 +222,29 @@ fn out_dir_for(configured: Option<std::ffi::OsString>) -> PathBuf {
     // [@ANCHOR: bench_mcp_main_out_dir_for]
     let d = configured
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir().join("bench_mcp"));
+        .unwrap_or_else(default_out_dir);
     let _ = std::fs::create_dir_all(&d);
     d
+}
+
+/// The output directory when nothing configures one: `bench_mcp` under the system temp directory.
+fn product_default_out_dir() -> PathBuf {
+    // [@ANCHOR: bench_mcp_main_product_default_out_dir]
+    std::env::temp_dir().join("bench_mcp")
+}
+
+/// What `out_dir_for(None)` returns: the product default, except in the tests, which share one directory that is removed when the test
+/// process exits (so no test run leaves files in the temp directory).
+fn default_out_dir() -> PathBuf {
+    // [@ANCHOR: bench_mcp_main_default_out_dir]
+    #[cfg(test)]
+    {
+        testdir::process_dir().to_path_buf()
+    }
+    #[cfg(not(test))]
+    {
+        product_default_out_dir()
+    }
 }
 
 /// The instrument a call is for: the named one, or the only one the tool applies to.
@@ -896,8 +918,7 @@ mod tests {
         .contains("unique"));
         let e = p(r#""n1":{"driver":"nanovna","serial":"/dev/null"},"psu":{"driver":"atm6301","serial":"/dev/null"}"#).unwrap_err();
         assert!(e.contains("both claim the serial port"), "{e}");
-        let dir = std::env::temp_dir().join(format!("bench_alias_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("bench_alias");
         let alias = dir.join("alias");
         let _ = std::fs::remove_file(&alias);
         std::os::unix::fs::symlink("/dev/null", &alias).unwrap();
@@ -1205,12 +1226,17 @@ mod tests {
     #[test]
     fn the_output_directory_is_the_configured_one_or_a_default_and_is_created() {
         // Never sets BENCH_MCP_OUT: the sa tests read it concurrently (this test used to set and remove it).
-        let dir = std::env::temp_dir().join(format!("bench_mcp_out_{}", std::process::id()));
+        let dir = crate::testdir::TestDir::new("bench_mcp_out");
         let sub = dir.join("nested");
         let got = out_dir_for(Some(sub.clone().into_os_string()));
         assert_eq!(got, sub);
         assert!(sub.is_dir());
         std::fs::remove_dir_all(&dir).ok();
-        assert_eq!(out_dir_for(None), std::env::temp_dir().join("bench_mcp"));
+        // Tests [@ANCHOR: bench_mcp_main_product_default_out_dir]
+        // Tests [@ANCHOR: bench_mcp_main_default_out_dir]
+        let product = product_default_out_dir();
+        assert_eq!(product.parent(), Some(std::env::temp_dir().as_path()));
+        assert_eq!(product.file_name().unwrap(), "bench_mcp");
+        assert_eq!(out_dir_for(None), testdir::process_dir());
     }
 }

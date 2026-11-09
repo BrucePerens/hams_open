@@ -14,11 +14,7 @@ pub struct Dir(pub std::path::PathBuf);
 impl Dir {
     #[cfg(test)]
     pub fn new(tag: &str) -> Dir {
-        let d = std::env::temp_dir().join(format!(
-            "bench_mcp-hamlib-test-{tag}-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&d).unwrap();
+        let d = crate::testdir::scratch(&format!("bench_mcp-hamlib-test-{tag}"));
         Dir(d)
     }
 }

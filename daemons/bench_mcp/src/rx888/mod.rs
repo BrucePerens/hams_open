@@ -881,10 +881,7 @@ mod tests {
             pub fn new() -> Dir {
                 static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
                 let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                let p =
-                    std::env::temp_dir().join(format!("bench_rx888_{}_{n}", std::process::id()));
-                let _ = std::fs::remove_dir_all(&p);
-                std::fs::create_dir_all(&p).unwrap();
+                let p = crate::testdir::scratch(&format!("bench_rx888__{n}"));
                 Dir(p)
             }
         }

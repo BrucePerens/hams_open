@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[allow(dead_code)]
+#[path = "../src/testdir.rs"]
+mod testdir;
+
 struct Bench {
     dir: PathBuf,
     config: PathBuf,
@@ -19,9 +23,7 @@ struct Bench {
 
 impl Bench {
     fn new(tag: &str) -> Bench {
-        let dir = std::env::temp_dir().join(format!("bench_mcp-e2e-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = testdir::scratch(&format!("bench_mcp-e2e-{tag}"));
         let config = dir.join("config.json");
         let cfg = json!({"instruments": {"dr": {
             "driver": "hamlib", "tier": "full", "model": 1, "managed_dir": dir.join("hamlib"),

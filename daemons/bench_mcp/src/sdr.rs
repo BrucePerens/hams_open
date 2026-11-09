@@ -923,8 +923,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sdr_write_iq]
     #[test]
     fn raw_iq_is_written_as_little_endian_f32_pairs_and_a_bad_path_is_an_error() {
-        let dir = std::env::temp_dir().join(format!("bench_sdr_iq_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("bench_sdr_iq");
         let f = dir.join("x.iq");
         write_iq(&f, &[(1.0, -2.0), (0.5, 0.25)]).unwrap();
         let b = std::fs::read(&f).unwrap();

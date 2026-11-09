@@ -416,8 +416,7 @@ mod spectrum_tests {
     fn the_spectrum_tool_finds_the_tone_and_its_harmonic_through_a_scope_link() {
         let port = fake_scope();
         let mut link = Link::tcp("127.0.0.1", port).unwrap();
-        let dir = std::env::temp_dir().join(format!("bench_spec_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::scratch("bench_spec");
         let r = spectrum(
             &mut link,
             &json!({"channel": 1, "window": "hanning", "points": 131072, "peaks": 4}),
@@ -505,8 +504,7 @@ mod tool_tests {
     }
 
     fn out_dir(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("bench_scope_{name}_{}", std::process::id()));
-        std::fs::create_dir_all(&d).unwrap();
+        let d = crate::testdir::scratch(&format!("bench_scope_{name}"));
         d
     }
 

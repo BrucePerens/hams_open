@@ -917,8 +917,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_audio_discover_save]
     #[test]
     fn the_stored_result_round_trips_with_its_selection() {
-        let dir = std::env::temp_dir().join(format!("audio-disc-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = crate::testdir::TestDir::new("audio-disc");
         let v = json!({"at_epoch": 5, "fingerprint": ["output|a|-"], "selection": {"alert_output": "a", "verify_input": null}});
         save(&dir, &v).unwrap();
         let st = load(&dir).unwrap();

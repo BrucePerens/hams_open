@@ -1405,3 +1405,16 @@ Four tools plus a safe-state companion on top of the Glasgow driver (`src/gla/`,
 * [@ANCHOR: gla_write_sr]
 * [@ANCHOR: gla_write_vcd]
 * [@ANCHOR: gla_zip_store]
+
+## Scratch directories in tests
+
+Every test that needs a scratch directory makes it through `src/testdir.rs` (the integration tests under `tests/` include the same file), never by building a path under the temporary directory by hand: a hand-built directory is not removed when the test fails, and the temporary directory may be memory. The lint step `check_test_temp_dirs` fails a new `temp_dir().join(` in test code.
+
+* `TestDir::new(tag)` is a fresh empty directory that removes itself, also while a failing test unwinds. [@ANCHOR: bench_mcp_test_dir_new]
+* `TestDir::path`, its `Deref` and `AsRef` give the path. [@ANCHOR: bench_mcp_test_dir_path] [@ANCHOR: bench_mcp_test_dir_deref] [@ANCHOR: bench_mcp_test_dir_as_ref]
+* Dropping a `TestDir` removes the tree, read-only subdirectories included. [@ANCHOR: bench_mcp_test_dir_drop]
+* `scratch(tag)` is a directory inside the process directory for helpers and structs that pass a `PathBuf` around; it is removed when the test process exits, failing or not. [@ANCHOR: bench_mcp_test_scratch]
+* `process_dir()` is the one directory the whole test process shares, and what `out_dir()` returns in the tests when `BENCH_MCP_OUT` is not set (so no test writes into the real default output directory). [@ANCHOR: bench_mcp_test_process_dir]
+* `default_out_dir()` is the product default outside the tests and the process directory inside them. [@ANCHOR: bench_mcp_main_default_out_dir]
+* `product_default_out_dir()` is the product default, `bench_mcp` under the temporary directory. [@ANCHOR: bench_mcp_main_product_default_out_dir]
+

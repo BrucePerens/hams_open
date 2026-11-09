@@ -12,6 +12,10 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+#[allow(dead_code)]
+#[path = "../src/testdir.rs"]
+mod testdir;
+
 struct Fake {
     port: u16,
     seen: Arc<Mutex<Vec<String>>>,
@@ -77,10 +81,7 @@ struct Bench {
 
 impl Bench {
     fn new(tag: &str, port: u16) -> Bench {
-        let dir =
-            std::env::temp_dir().join(format!("bench_mcp-proc-e2e-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = testdir::scratch(&format!("bench_mcp-proc-e2e-{tag}"));
         let config = dir.join("config.json");
         let cfg = json!({"instruments": {
             "gen": {"driver": "example", "tier": "full", "host": "127.0.0.1", "port": port},

@@ -86,9 +86,7 @@ pub fn fake_programs() -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
     FAKES
         .get_or_init(|| {
-            let dir = std::env::temp_dir().join(format!("audio-fakes-{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&dir);
-            std::fs::create_dir_all(&dir).unwrap();
+            let dir = crate::testdir::scratch("audio-fakes");
             let d = dir.display();
             let scripts = [
                 (
@@ -126,8 +124,6 @@ pub fn fake_programs() -> PathBuf {
 
 /// A scratch directory unique to the test process and `tag`.
 pub fn scratch(tag: &str) -> PathBuf {
-    let d = std::env::temp_dir().join(format!("audio-test-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    std::fs::create_dir_all(&d).unwrap();
+    let d = crate::testdir::scratch(&format!("audio-test-{tag}"));
     d
 }
