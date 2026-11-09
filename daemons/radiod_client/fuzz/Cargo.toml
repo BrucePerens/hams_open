@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# libFuzzer targets for radiod_client's untrusted-input parsers (radiod multicast status/RTP datagrams). NOT part of the
+# crate's workspace (the empty [workspace] table makes this its own root) so normal builds and CI never compile it.
+# Build/run without nightly: see fuzz/README.md.
+[package]
+name = "radiod_client-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-or-later"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+radiod_client = { path = "..", default-features = false }
+
+[workspace]
+
+[[bin]]
+name = "tlv_parse"
+path = "fuzz_targets/tlv_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "status_decode"
+path = "fuzz_targets/status_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rtp_decode"
+path = "fuzz_targets/rtp_decode.rs"
+test = false
+doc = false
+bench = false

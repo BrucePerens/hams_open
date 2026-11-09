@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# libFuzzer targets for relay_broker's untrusted-input parsers (the wire format a local client sends to the privileged
+# broker, and the config file). NOT part of the crate's workspace (own root) so normal builds and CI never compile it.
+[package]
+name = "relay_broker-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "AGPL-3.0-or-later"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+relay_broker = { path = ".." }
+
+[workspace]
+
+[[bin]]
+name = "wire_request"
+path = "fuzz_targets/wire_request.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wire_response"
+path = "fuzz_targets/wire_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "config_parse"
+path = "fuzz_targets/config_parse.rs"
+test = false
+doc = false
+bench = false
