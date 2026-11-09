@@ -32,8 +32,9 @@
              keyed to moved there too). -->
 
         <!-- [@ANCHOR: user_websites:mail_sender_fallback] The three mail templates below never fall back to a made-up
-             address. The sender is the company email, then the mail server's own default from address
-             (its `email_from` option); with neither set it is empty, and Odoo refuses to send that mail and records why on it.
+             address. The sender of the Pending Violations Summary and the Weekly Digest is the company email, then the mail
+             server's own default from address (its `email_from` option); with neither set it is empty, and Odoo refuses to send
+             that mail and records why on it. The Content Violation Report is sent from the reporter's own address.
              The abuse report recipient is the `user_websites.company_abuse_email` setting, then the company email, then
              empty (no mail is sent to nobody). Tested by test_mail_sender_fallback.py. -->
         <record id="email_template_content_violation" model="mail.template">
