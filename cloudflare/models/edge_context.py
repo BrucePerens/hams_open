@@ -39,12 +39,12 @@ class CloudflareUtils(models.AbstractModel):
         Parses Cloudflare-specific geographic and threat headers injected at the edge.
         Returns a dictionary to be used by proprietary modules for default routing.
 
-        Bug-hunt fix, 2026-09-11 (see
-        docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md):
-        this used to trust every CF-* header unconditionally, with no check
-        that the request actually transited Cloudflare's edge -- forgeable
-        by any direct request to the origin. On this deployment (Tunnel-only,
-        confirmed by Bruce 2026-09-11) that means the request's real transport
+        CF-* headers are trusted only when the request actually transited
+        Cloudflare's edge (see
+        docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md);
+        trusting them unconditionally would be forgeable
+        by any direct request to the origin. On this deployment (Tunnel-only)
+        that means the request's real transport
         peer is loopback (cloudflared and Odoo run on the same host); a
         self-hosted admin running Cloudflare WITHOUT Tunnel instead trusts
         peers in `cloudflare.trusted_ip_utils`'s admin-configurable allow-list

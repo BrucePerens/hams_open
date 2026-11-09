@@ -46,12 +46,12 @@ class TestRequestContext(HamsHttpCase):
 
     def test_01b_get_request_context_from_a_non_loopback_peer_ignores_forged_cf_headers(self):
         # Tests [@ANCHOR: COMM_cf_get_request_context]
-        """Bug-hunt fix, 2026-09-11: a request whose real transport peer is
+        """A request whose real transport peer is
         NOT the local Tunnel (a direct connection to origin, bypassing
         Cloudflare) must NOT trust any CF-* header -- they're
-        attacker-controlled on that path. This is the exact scenario the
-        pre-fix code got wrong: it trusted CF-Connecting-IP unconditionally,
-        letting a direct caller forge any IP/geo/threat data it wanted."""
+        attacker-controlled on that path. Trusting CF-Connecting-IP
+        unconditionally would let a direct caller forge any IP/geo/threat
+        data it wanted."""
 
         headers = {
             "CF-Connecting-IP": "1.2.3.4",
@@ -105,8 +105,7 @@ class TestRequestContext(HamsHttpCase):
         context = self.env["cloudflare.utils"].get_request_context()
         self.assertEqual(context["country"], "US")
 
-    # Bug-hunt fix (night_shift_todo/low/cloudflare-trusted-ip-allow-list-defaults-to-cloudflare-
-    # ranges-on-tunnel-only-deployments-7d2b8f14.md): adding a custom range is not by itself an
+    # Adding a custom range is not by itself an
     # opt-in -- the explicit non-Tunnel-mode toggle is, and it defaults off.
     def test_01d_custom_range_alone_without_non_tunnel_mode_still_ignores_cf_headers(self):
         # Tests [@ANCHOR: COMM_cf_get_request_context]

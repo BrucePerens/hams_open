@@ -6,8 +6,7 @@
     fresh install, never on an upgrade).
 
     Republishes the trusted-peer allow-list to Redis from the current settings. Needed once for the
-    upgrade that made the allow-list opt-in (night_shift_todo/low/cloudflare-trusted-ip-allow-list-
-    defaults-to-cloudflare-ranges-on-tunnel-only-deployments-7d2b8f14.md): before it, Redis held
+    upgrade that made the allow-list opt-in: before it, Redis held
     Cloudflare's full published ranges on every install, and wsgi_proxy_scheme.py now keeps the last
     list it read across a missing key, so without this a worker could pick up that stale, wider list
     and keep it until the next daily refresh cron. Harmless on every later upgrade: it publishes the

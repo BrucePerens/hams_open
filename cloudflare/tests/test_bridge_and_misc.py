@@ -106,10 +106,9 @@ class TestBridgeAndMisc(RealTransactionCase):
     def test_blog_post_unlink_enqueues_a_purge(self):
         # Tests [@ANCHOR: cloudflare:COMM_blog_post_unlink]
 
-        # Bug-hunt fix, 2026-09-11: BlogPost had no unlink() override at
-        # all (write() was covered, so archiving via active=False purged
-        # correctly, but a real hard delete left the now-404 URL cached at
-        # Cloudflare's edge forever).
+        # BlogPost needs an unlink() override (write() is covered, so
+        # archiving via active=False purges correctly, but a real hard delete
+        # would leave the now-404 URL cached at Cloudflare's edge forever).
         blog = self.env["blog.blog"].create({"name": "Bridge Test Blog Unlink"})
         post = self.env["blog.post"].create(
             {"name": "Bridge Test Post Unlink", "blog_id": blog.id}
@@ -127,8 +126,7 @@ class TestBridgeAndMisc(RealTransactionCase):
     def test_product_template_unlink_enqueues_a_purge(self):
         # Tests [@ANCHOR: cloudflare:COMM_product_unlink]
 
-        # Bug-hunt fix, 2026-09-11: same missing-purge-on-hard-delete gap
-        # as BlogPost.unlink() above.
+        # Purge on hard delete too, same as BlogPost.unlink() above.
         product = self.env["product.template"].create(
             {"name": "Bridge Test Product Unlink"}
         )
@@ -245,13 +243,12 @@ class TestBridgeAndMisc(RealTransactionCase):
         )
 
     def test_get_cloudflare_credentials_treats_a_decrypt_error_sentinel_as_no_token(self):
-        # bug-hunt (2026-09-13): crypt_field.md's own "not fixed here" design note --
-        # on a genuine decrypt failure, _crypt_field() returns the literal string
+        # On a genuine decrypt failure, _crypt_field() returns the literal string
         # "***ERROR***" (a deliberate, established cross-module UI convention, not
         # changed here), but every real caller of _get_cloudflare_credentials()
         # gates on plain truthiness (`if token and zone_id:`, `if not token:` --
         # confirmed directly in domain.py/tunnel.py/purge_wizard.py and others).
-        # "***ERROR***" is truthy, so without a fix those callers would proceed to
+        # "***ERROR***" is truthy, so without filtering those callers would proceed to
         # call the real Cloudflare API with the literal string "***ERROR***" as the
         # bearer token instead of failing fast locally. Mocking the compute method
         # directly (not orchestrating a real key-rotation/InvalidToken scenario,

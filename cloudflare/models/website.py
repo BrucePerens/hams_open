@@ -144,15 +144,14 @@ class WebsiteCloudflare(models.Model):
             else:
                 return f.encrypt(value.encode("utf-8")).decode("utf-8")
         except (ValueError, InvalidToken) as e:
-            # Bug fix (bug-hunt, review_tier 1, 2026-09-09, bug class 20): the
-            # actual, only exception Fernet.decrypt() raises for a corrupted/
+            # The actual, only exception Fernet.decrypt() raises for a corrupted/
             # tampered/wrong-key ciphertext is `cryptography.fernet.
             # InvalidToken`, a direct Exception subclass -- NOT a ValueError
             # (independently confirmed against the installed `cryptography`
             # package: decrypt() on malformed/garbage/empty input always
-            # raises InvalidToken, never ValueError). The original
-            # `except ValueError` here never caught the real failure mode it
-            # exists to handle -- e.g. after rotating the shared
+            # raises InvalidToken, never ValueError). Catching only
+            # `ValueError` here would miss the real failure mode this handler
+            # exists for -- e.g. after rotating the shared
             # `daemon.key.registry` "cloudflare_encryption_key" value, every
             # previously-encrypted token would raise InvalidToken uncaught
             # straight out of a compute field (_compute_cf_api_token /
@@ -200,7 +199,7 @@ class WebsiteCloudflare(models.Model):
         self.ensure_one()
         token = self.cloudflare_api_token
         zone = self.cloudflare_zone_id
-        # bug-hunt (2026-09-13): on a genuine decrypt failure, _crypt_field()
+        # On a genuine decrypt failure, _crypt_field()
         # returns the literal string "***ERROR***" -- a truthy value, and a
         # deliberate, established cross-module UI convention (backup_
         # management's own crypt fields use the identical sentinel), not

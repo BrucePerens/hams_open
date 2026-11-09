@@ -63,17 +63,13 @@ class TestDomainCustomHostname(RealTransactionCase):
     def test_create_with_no_matching_website_skips_provisioning_not_raise(self):
         # Tests [@ANCHOR: cloudflare:COMM_create_custom_hostname_batch]
 
-        # Bug-hunt fix, 2026-09-11: this test predates
-        # _create_cloudflare_custom_hostname_batch()'s own documented
-        # design change (see that method's comment) -- edge.routing.domain
+        # See _create_cloudflare_custom_hostname_batch()'s own documented
+        # design (that method's comment) -- edge.routing.domain
         # is a generic domain->slug->record mapping used for non-website
         # targets too, so a create() with no matching website is a real,
         # normal case that must succeed (custom-hostname provisioning is
-        # just skipped), not something that raises. This test went dark
-        # (never imported by tests/__init__.py) before that design change
-        # landed, so it kept asserting the OLD behavior undetected. Updated
-        # to match the current, intentional behavior instead of reverting
-        # the design change to make a stale assertion pass again.
+        # just skipped), not something that raises. This test asserts that
+        # current, intentional behavior.
         domain = self.env["edge.routing.domain"].create(
             {
                 "name": "https://no-such-website.example",
