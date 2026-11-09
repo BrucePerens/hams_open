@@ -24,6 +24,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, OnceLock};
 
 mod embedded {
+    // [@ANCHOR: bench_mcp_manual_embedded_paths]
+    // build.rs writes every page as `include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/manual/", <path>))`, never an absolute path.
     include!(concat!(env!("OUT_DIR"), "/manual_files.rs"));
 }
 

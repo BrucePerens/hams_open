@@ -34,7 +34,6 @@ fn main() {
     let mut files = Vec::new();
     walk(&root, &root, &mut files);
     let mut src = String::from("pub const FILES: &[(&str, &str)] = &[\n");
-    // [@ANCHOR: bench_mcp_manual_embedded_paths]
     // The generated file names each page relative to the crate (`concat!(env!("CARGO_MANIFEST_DIR"), ...)`), never by an absolute
     // path: a shared CARGO_TARGET_DIR reuses this output from another worktree, and an absolute path would then name a removed one.
     for (rel, _abs) in &files {
