@@ -30,6 +30,21 @@ def _safe_int(text, default=0):
     except (TypeError, ValueError):
         return default
 
+_MAX_REPORT_EPOCH = 4_102_444_800  # 2100-01-01
+
+
+def _epoch_to_naive_utc(seconds):
+    """The naive UTC datetime Odoo stores for `seconds` since the epoch, or False when there is none: 0, negative, or past
+    2100. <begin>/<end> come from a mail attachment anyone can send; a huge number would raise OverflowError, OSError or
+    ValueError out of fromtimestamp and lose the whole report."""
+    if not 0 < seconds <= _MAX_REPORT_EPOCH:
+        return False
+    try:
+        return datetime.fromtimestamp(seconds, tz=timezone.utc).replace(tzinfo=None)
+    except (OverflowError, OSError, ValueError):
+        return False
+
+
 class DmarcReport(models.Model):
     _name = "hams_base.dmarc.report"
     _description = "DMARC RUA Report"
@@ -214,8 +229,8 @@ class DmarcReport(models.Model):
             # fields.Datetime has no from_timestamp() -- Odoo stores naive
             # UTC datetimes, so convert via the standard library and drop
             # the tzinfo rather than pass an aware datetime straight through.
-            "date_range_begin": datetime.fromtimestamp(begin, tz=timezone.utc).replace(tzinfo=None) if begin else False,
-            "date_range_end": datetime.fromtimestamp(end, tz=timezone.utc).replace(tzinfo=None) if end else False,
+            "date_range_begin": _epoch_to_naive_utc(begin),
+            "date_range_end": _epoch_to_naive_utc(end),
             "domain": domain,
             "adkim": policy_published.findtext("adkim"),
             "aspf": policy_published.findtext("aspf"),

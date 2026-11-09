@@ -37,6 +37,7 @@ DEFAULT_MINUTES = 20
 MAX_MINUTES = 120
 MAX_SECONDS = MAX_MINUTES * 60
 CLOCK_SKEW_SECONDS = 300
+MAX_EPOCH = 4_102_444_800  # 2100-01-01: a flag time outside 1970..2100 is malformed, and gmtime cannot print it
 
 ACTIVE, EXPIRED, ABSENT, MALFORMED = "active", "expired", "absent", "malformed"
 
@@ -64,6 +65,8 @@ def read_flag(path=None, now=None):
         until = float(data["until"])
         if not (math.isfinite(set_at) and math.isfinite(until)):
             raise ValueError("not a finite number")
+        if not (0 <= set_at <= MAX_EPOCH and 0 <= until <= MAX_EPOCH):
+            raise ValueError("outside 1970..2100")
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         return {"state": MALFORMED, "error": f"{path}: needs numeric set_at and until ({exc!r})"}
     if set_at > now + CLOCK_SKEW_SECONDS:
@@ -129,7 +132,7 @@ def clear_flag(path=None):
 
 # [@ANCHOR: pager_duty:maintenance_fmt_time]
 def _fmt_time(epoch):
-    return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(epoch))
+    return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(epoch))  # boundary-hazard-ignore: timestamp-range: epoch is `until` from read_flag, which refuses a flag outside 0..MAX_EPOCH
 
 
 # [@ANCHOR: pager_duty:maintenance_fmt_remaining]

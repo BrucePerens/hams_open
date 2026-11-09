@@ -253,7 +253,7 @@ def build_report(data, relay_id="unknown", now=None):
     verb = {"panic": "panic", "signal": signal, "error": "error"}[kind]
     name = f"{verb} in {function}"[:200]
     message = scrub_line(data["message"], STORED_MESSAGE_CHARS)
-    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(min(data["occurred_at"], int(now or time.time()) + 86400)))
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(min(data["occurred_at"], int(now or time.time()) + 86400)))  # boundary-hazard-ignore: timestamp-range: validate_report above requires 0 < occurred_at <= MAX_TIME
     frames = [scrub.scrub_text(_clean(f), strict=False)[:MAX_FRAME_CHARS] for f in data["frames"]]
     lines = [scrub_line(line, MAX_LOG_CHARS) for line in data["log_tail"]]
     header = [

@@ -62,7 +62,10 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
         self._write(set_at=NOW, until=NOW + 86400)
         self.assertEqual(pm.read_flag(self.path, NOW + 7199)["state"], "active", "capped at 2 hours...")
         self.assertEqual(pm.read_flag(self.path, NOW + 7200)["state"], "expired", "...after it was set")
-        for content in ("not json", "[]", '{"until": 5}', '{"set_at": "x", "until": 9}', '{"set_at": 1e999, "until": 2e999}'):
+        for content in ("not json", "[]", '{"until": 5}', '{"set_at": "x", "until": 9}', '{"set_at": 1e999, "until": 2e999}',
+                        # outside 1970..2100: _fmt_time (time.gmtime) could not print it
+                        '{"set_at": -1e18, "until": -1e18}', '{"set_at": 1, "until": -1e300}', '{"set_at": 1, "until": 1e18}',
+                        '{"set_at": 4611686018427387904, "until": 4611686018427387904}'):
             with open(self.path, "w") as handle:
                 handle.write(content)
             self.assertEqual(pm.read_flag(self.path, NOW)["state"], "malformed", content)

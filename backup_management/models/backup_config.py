@@ -607,14 +607,17 @@ class BackupConfig(models.Model):
                     sid = snap.get("label")
                     if sid:
                         ts = snap.get("timestamp", {}).get("start", 0)
-                        dt = (
-                            datetime.datetime.fromtimestamp(
-                                ts,
-                                tz=datetime.timezone.utc,
-                            ).strftime("%Y-%m-%d %H:%M:%S")
-                            if ts
-                            else None
-                        )
+                        try:
+                            dt = (
+                                datetime.datetime.fromtimestamp(
+                                    ts,
+                                    tz=datetime.timezone.utc,
+                                ).strftime("%Y-%m-%d %H:%M:%S")
+                                if ts
+                                else None
+                            )
+                        except (OverflowError, OSError, TypeError, ValueError):
+                            dt = None  # a start time outside the supported years is no time at all
                         snapshot_list.append(
                             {
                                 "snapshot_id": sid,
