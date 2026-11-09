@@ -19,10 +19,10 @@
         </record>
         <record id="cron_trigger_scheduled_backups" model="ir.cron">
             <!-- audit-ignore-cron: Tested by [@ANCHOR: backup_management:COMM_test_cron_trigger_scheduled_backups] -->
-            <!-- Closes a real gap found 2026-10-01: cron_sync_backups above only ever SYNCS
-                 existing snapshots, it never creates a new one. action_trigger_backup() (the
-                 method that actually runs a real backup) had no scheduled caller anywhere in this
-                 codebase before this record, only the "Run Backup Now" UI button. Daily, matching
+            <!-- cron_sync_backups above only ever SYNCS existing snapshots, it never
+                 creates a new one. action_trigger_backup() (the method that actually runs a
+                 real backup) needs this record as its scheduled caller; otherwise only the
+                 "Run Backup Now" UI button calls it. Daily, matching
                  backup.config.keep_daily's own name/intent (one full backup per day, retained
                  keep_daily days); see cron_trigger_scheduled_backups()'s own docstring. -->
             <field name="name">Backup Management: Scheduled Backup Run</field>

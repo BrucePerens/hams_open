@@ -80,9 +80,7 @@ class TestBackupCrypto(HamsTransactionCase):
     def test_no_crypto_key_configured_raises_rather_than_silently_discarding(self):
         # Tests [@ANCHOR: backup_management:COMM_crypt_field]
 
-        # Bug-hunt fix, 2026-09-11: this test went dark (never imported by
-        # tests/__init__.py, confirmed by grepping it) before TWO real,
-        # separate problems with it were ever caught.
+        # Two details of this test matter.
         #
         # First, `del os.environ["ODOO_BACKUP_CRYPTO_KEY"]` doesn't actually
         # achieve "no crypto key configured": `_get_fernet()` falls back to
@@ -98,16 +96,15 @@ class TestBackupCrypto(HamsTransactionCase):
         # suite has already done to the process environment.
         #
         # Second, and more importantly: this test's own name and assertion
-        # described behavior `_crypt_field()` no longer has. Its own
-        # 2026-09-09 bug-hunt fix (see that method's comment) deliberately
-        # replaced "no key configured -> silently return False, discarding
-        # the admin's typed plaintext" with "raise UserError instead," per
-        # this project's fail-fast philosophy -- a credential that looks
-        # saved but silently wasn't is a confidentiality/durability risk.
-        # This test predates that fix (or was never updated for it) and so
-        # kept asserting the OLD, since-reverted behavior undetected.
-        # Updated to assert the current, intentional behavior instead of
-        # reverting the fail-fast fix to make a stale assertion pass again.
+        # described behavior `_crypt_field()` does not have. It deliberately
+        # does not "silently return False, discarding the admin's typed
+        # plaintext" when no key is configured (see that method's comment);
+        # it raises UserError, per this project's fail-fast philosophy -- a
+        # credential that looks saved but silently wasn't is a
+        # confidentiality/durability risk. This test asserts that current,
+        # intentional behavior, rather than the older "silently return False"
+        # behavior a stale assertion would expect. It must also be listed in
+        # tests/__init__.py, or it never runs at all.
         self.safe_patch_object(
             type(self.env["backup.config"]), "_get_fernet", return_value=None
         )

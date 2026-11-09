@@ -140,9 +140,9 @@ class TestBackupManagement(RealTransactionCase):
         # Tests [@ANCHOR: backup_management:COMM_test_cron_trigger_scheduled_backups]
 
         # Tests [@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]
-        # Closes a real gap found 2026-10-01: action_trigger_backup() (the method that actually
-        # runs a real backup) previously had no scheduled caller at all -- only the "Run Backup
-        # Now" UI button and this module's own tests ever called it. cron_sync_all_backups()
+        # action_trigger_backup() (the method that actually runs a real backup) needs a
+        # scheduled caller; otherwise only the "Run Backup Now" UI button and this module's own
+        # tests would ever call it. cron_sync_all_backups()
         # (test_04 above) only ever SYNCS existing snapshots; it never creates a new one. This
         # confirms the new daily cron's own code method actually creates a real, pending
         # backup.job for every configured backup.config, not just that the method runs clean.
@@ -243,8 +243,8 @@ class TestBackupManagement(RealTransactionCase):
 
     def test_08b_apply_policies_skips_non_kopia_configs(self):
         # Tests [@ANCHOR: backup_management:COMM_backup_apply_policies]
-        # Bug-hunt fix, 2026-09-18: policies are a Kopia-only concept -- applying them to a
-        # pgbackrest config used to queue an always-failing kopia_policy job against the wrong
+        # Policies are a Kopia-only concept -- applying them to a pgbackrest config
+        # would queue an always-failing kopia_policy job against the wrong
         # tool. No job should be queued for a non-kopia config at all.
         job_count_before = self.env["backup.job"].search_count(
             [("config_id", "=", self.config_pg.id)]

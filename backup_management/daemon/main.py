@@ -32,9 +32,9 @@ ODOO_HOST = os.environ.get("ODOO_HOST", "odoo")
 ODOO_URL = os.environ.get("ODOO_URL", f"http://{ODOO_HOST}:8069").rstrip("/")
 ODOO_DB = os.environ.get("DB_NAME", "odoo")
 ODOO_USER = "backup_service_internal"
-# Real bug found 2026-09-28/29 chasing a live production incident (this daemon's own JSON-2 API
-# calls back to Odoo always failed with "401: Invalid apikey", even right after a successful key
-# rotation): this used to read ODOO_SERVICE_PASSWORD, a name nothing ever wrote. Every other
+# This must read ODOO_RPC_KEY, not ODOO_SERVICE_PASSWORD, which is a name nothing ever writes
+# (reading it left this daemon's own JSON-2 API calls back to Odoo always failing with
+# "401: Invalid apikey", even right after a successful key rotation). Every other
 # daemon in this codebase that calls Odoo (zero_sudo/daemon/json_rpc_client.py, for example) reads
 # ODOO_RPC_KEY, which is what daemon_key_manager's own
 # _write_secure_env_file() actually writes to every daemon's env file -- this was the one daemon
@@ -44,7 +44,7 @@ ODOO_USER = "backup_service_internal"
 # real ODOO_RPC_KEY= line out of the env file and translated it into ODOO_SERVICE_PASSWORD before
 # injecting it into the subprocess's environment -- a compensating step in the tests, not
 # something main.py itself ever did. Matches the RMQ_USER/RMQ_PASS fix immediately above this
-# constant, the same bug class found and fixed once already in this exact file.
+# constant, the same pattern as the RMQ_USER/RMQ_PASS names above.
 ODOO_PASS = os.environ.get("ODOO_RPC_KEY", "")  # Tested by [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 
 RABBITMQ_HOST = os.environ.get("RABBITMQ_HOST", "rabbitmq")
@@ -57,7 +57,7 @@ RMQ_PASS = os.environ.get("RMQ_PASS")  # Tested by [@ANCHOR: backup_management:C
 
 # This daemon's own systemd unit (backup.worker.service) runs as `odoo` with
 # NoNewPrivileges=true and ProtectSystem=strict (MASTER_01 ADR, "OS-Level
-# Daemon Restriction") -- confirmed live on hams1, 2026-10-01. NoNewPrivileges
+# Daemon Restriction") -- as deployed on hams1. NoNewPrivileges
 # makes an in-process `sudo`/setuid escalation to `postgres` mechanically
 # impossible (that is exactly what the directive exists to block), and
 # PostgreSQL's own data directory is 0700 postgres:postgres, so a real
@@ -321,7 +321,7 @@ def _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=None):
 
     backup.worker.service runs as `odoo` with NoNewPrivileges=true and
     ProtectSystem=strict (MASTER_01 ADR section 6, "OS-Level Daemon
-    Restriction") -- confirmed live on hams1, 2026-10-01
+    Restriction") -- as deployed on hams1
     (`systemctl cat backup.worker.service`). NoNewPrivileges blocks any
     setuid-gaining escalation from inside this process, including `sudo`,
     and PostgreSQL's own data directory is 0700 postgres:postgres, so a real
@@ -347,17 +347,16 @@ def _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=None):
     directory, and deletes the request (shortening the secret's lifetime on
     disk). This function polls for that result.
 
-    **Real production bug found and fixed, 2026-10-01**: a real backup
-    (several minutes of wall-clock time) was completing successfully in the
-    sidecar every single time, but `execute_job()`'s own RabbitMQ connection
-    kept dying with `pika.exceptions.StreamLostError` moments after each
-    completion -- the worker never got to report success back to Odoo, so
-    the job was reprocessed from scratch on reconnect, over and over,
-    producing a real, successful, duplicate full backup upload roughly
-    every 14-15 minutes forever, with `backup.snapshot` staying empty the
-    whole time. Root cause, confirmed directly: the polling loop below used
-    to be a bare `time.sleep(PGBACKREST_SIDECAR_POLL_INTERVAL)`, which never
-    calls back into pika at all -- `BlockingConnection`'s own heartbeat
+    **Heartbeats must be serviced during the wait.** A real backup
+    (several minutes of wall-clock time) completes successfully in the
+    sidecar, but if `execute_job()`'s own RabbitMQ connection dies with
+    `pika.exceptions.StreamLostError` meanwhile, the worker never gets to
+    report success back to Odoo, so the job is reprocessed from scratch on
+    reconnect, over and over, producing a duplicate full backup upload every
+    14-15 minutes, with `backup.snapshot` staying empty the whole time. That
+    is what a bare `time.sleep(PGBACKREST_SIDECAR_POLL_INTERVAL)` in the
+    polling loop below does, because it never calls back into pika at all --
+    `BlockingConnection`'s own heartbeat
     processing happens only between `on_message_callback` invocations, not
     during one, so a callback that blocks for minutes (this one, waiting on
     a multi-minute backup) starves the connection's heartbeat and the
@@ -387,8 +386,8 @@ def _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=None):
     # Only the legacy mode, where this daemon describes repo1 itself from the config row, needs the
     # key in the environment. A host-defined repository (pgbackrest_repo != 0) keeps its own key in
     # pgbackrest.conf; forwarding PGBACKREST_REPO1_S3_KEY there makes pgBackRest see a repo1 that
-    # the file does not define and refuse --repo=2 ("key '2' is not valid for 'repo' option"), found
-    # 2026-10-12 right after repo1 was removed from hams1's pgbackrest.conf.
+    # the file does not define and refuse --repo=2 ("key '2' is not valid for 'repo' option"), which
+    # happens once repo1 is removed from pgbackrest.conf.
     if config.get("storage_type") in ("s3", "b2") and not _pgbackrest_repo_number(config):
         if config.get("access_key"):
             secret_env["PGBACKREST_REPO1_S3_KEY"] = config["access_key"]
@@ -454,14 +453,12 @@ def _redact_payload(payload):
     # [@ANCHOR: backup_management:COMM_redact_payload]
     # Verified by [@ANCHOR: backup_management:COMM_test_redact_payload]
     #
-    # Bug-hunt fix (2026-09-09, tier-1 pass): execute_job()'s "missing
-    # job_id or engine" branch used to log the raw payload dict with
-    # `logger.error(..., payload)` -- but that payload is exactly the flat
-    # dict _publish_to_worker() builds, which carries kopia_password,
-    # secret_key, and access_key in plaintext (see the "config = payload"
-    # comment above). Any malformed/incomplete message landing in this
-    # branch would write live backup-storage and repository credentials
-    # straight into this daemon's own log file. Redact before logging
+    # execute_job()'s "missing job_id or engine" branch logs the payload dict,
+    # and that payload is exactly the flat dict _publish_to_worker() builds,
+    # which carries kopia_password, secret_key, and access_key in plaintext
+    # (see the "config = payload" comment above). Logging it raw would write
+    # live backup-storage and repository credentials into this daemon's own
+    # log file for any malformed/incomplete message, so redact before logging
     # anything that might be this shape.
     if not isinstance(payload, dict):
         return payload
@@ -793,17 +790,16 @@ def execute_job(ch, method, properties, body):
             # Acknowledge BEFORE the long wait. RabbitMQ closes the channel of a consumer that holds
             # a delivery unacknowledged for longer than consumer_timeout (30 minutes by default),
             # and the broker then redelivers the message. A full backup of production takes 37 to
-            # 53 minutes, so without this every backup was redelivered and run again, forever
-            # (found 2026-10-04: a second and third full backup started the moment the first one
-            # finished, and the earlier hourly-looking full backups in repo1 were the same loop).
+            # 53 minutes, so without this every backup would be redelivered and run again, forever
+            # (a second and third full backup would start the moment the first one finished).
             # The job row in Odoo, not the broker, tracks this job from here, and the request file
             # in the spool directory is the durable hand-off to the sidecar.
             ack()
             return_code, sidecar_output = _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=ch)
-            # Don't send sidecar_output here -- advisor-caught bug, 2026-10-01: the
+            # Don't send sidecar_output here: the
             # shared "Write final state and send any remaining buffer" block just
             # below unconditionally appends it to unsent_buffer and sends it again,
-            # so an early send here would have put every sidecar backup's full
+            # so an early send here would put every sidecar backup's full
             # output into the job log twice. The direct-Popen path's own loop
             # clears unsent_buffer = "" after each throttled send specifically to
             # avoid this; this branch has nothing to clear because it never sends
