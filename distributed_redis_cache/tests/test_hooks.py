@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import importlib.util
+import os
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests import tagged
 
@@ -10,6 +12,9 @@ from odoo.addons.distributed_redis_cache.hooks import (
     unregister_cache_manager_key,
 )
 
+MIGRATION_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations", "1.1", "post-unregister-cache-manager-key.py"
+)
 LEGACY_USER_XMLID = "distributed_redis_cache.cache_manager_service_internal"
 LEGACY_KEY_FILE = "/opt/hams/etc/keys/cache_manager.env"
 
@@ -70,3 +75,26 @@ class TestDistributedRedisCacheHooks(HamsTransactionCase):
         # filled by a database installed before 1.1, which the migration cleans).
         manifest = self.env["ir.module.module"].get_module_info("distributed_redis_cache")
         self.assertFalse(manifest.get("post_init_hook"))
+
+    def _migration(self):
+        spec = importlib.util.spec_from_file_location("distributed_redis_cache_migration_1_1", MIGRATION_FILE)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_migration_removes_the_registration_of_an_installed_database_only(self):
+        # Tests [@ANCHOR: distributed_redis_cache:migrate]
+        user = self.env.ref(LEGACY_USER_XMLID)
+        self._register_as_version_1_0_did()
+        migration = self._migration()
+
+        migration.migrate(self.env.cr, None)  # a fresh install has no version: nothing is removed
+        self.assertEqual(len(self._registries()), 1)
+        self.assertEqual(self._api_key_count(user), 1)
+
+        migration.migrate(self.env.cr, "1.0")  # an installed database drops the row and the key
+        self.assertFalse(self._registries())
+        self.assertEqual(self._api_key_count(user), 0)
+
+        migration.migrate(self.env.cr, "1.0")  # and the migration may run again
+        self.assertFalse(self._registries())
