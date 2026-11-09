@@ -49,3 +49,7 @@ Running with `-o log_cli=true` outputs logging to CLI as the tests are. By defau
 `--log-cli-level` control logging level.
 For example, to log at info level, run `pytest -o log_cli=true --log-cli-level=INFO`.
 See https://docs.pytest.org/en/latest/logging.html#live-logs for more documentation on logging.
+
+# Quick tunnel readiness
+
+A quick tunnel's hostname is not reachable the moment cloudflared prints it. `wait_quicktunnel_ready(url)` in `util.py` [@ANCHOR: cloudflared:wait_quicktunnel_ready] waits for DNS to propagate and then calls `_wait_quicktunnel_ready(url)` [@ANCHOR: cloudflared:_wait_quicktunnel_ready], which requests the URL up to `MAX_RETRIES` times and fails unless it answers 200.
