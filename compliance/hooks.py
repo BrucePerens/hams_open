@@ -80,10 +80,10 @@ def post_init_hook(env):
         with env_svc.cr.savepoint():
             env_svc.cr.execute(sql)
     except Exception:  # audit-ignore-catch-all: logged with full traceback then re-raised, see below
-        # Bug-hunt finding (class 5, silent-failure gate): this used to log
-        # and swallow, letting module install/upgrade complete
-        # "successfully" while the cookie-consent/legal-page enforcement
-        # this hook exists for silently never ran -- a real compliance
+        # Log and re-raise rather than swallow: swallowing would let module
+        # install/upgrade complete "successfully" while the
+        # cookie-consent/legal-page enforcement this hook exists for
+        # silently never ran -- a real compliance
         # obligation (GDPR/CCPA cookie consent) failing loudly here is
         # much safer than shipping a site with the banner off and nobody
         # aware of it. The savepoint above already rolled back this
@@ -102,7 +102,7 @@ def post_init_hook(env):
         with env_svc.cr.savepoint():
             env_svc.cr.execute("SELECT compliance_enforce_protection()")
     except Exception:  # audit-ignore-catch-all: logged with full traceback then re-raised, see above
-        # Same bug-hunt finding as the DDL block above: don't silently
+        # Same reasoning as the DDL block above: don't silently
         # swallow a failure to actually enforce cookie-bar/legal-page
         # compliance -- fail the install/upgrade loudly instead.
         _logger.exception("Failed to call compliance_enforce_protection()")

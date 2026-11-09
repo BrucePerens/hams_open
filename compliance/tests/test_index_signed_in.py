@@ -8,8 +8,8 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 @tagged("post_install", "-at_install")
 class TestComplianceIndexSignedIn(HamsHttpCase):
     def test_a_signed_in_member_sees_the_compliance_directory(self):
-        # Found live 2026-10-05: /compliance answered 403 to a signed-in member, because only
-        # base.group_public could read compliance.document and a portal or internal user is not in it.
+        # /compliance must not answer 403 to a signed-in member: a portal or internal user is not
+        # in base.group_public, so it needs its own read access to compliance.document.
         # Tests [@ANCHOR: COMM_compliance_index_route]
         user = self.env["res.users"].create({
             "name": "Compliance Reader", "login": "compliance_reader", "email": "compliance_reader@example.com",

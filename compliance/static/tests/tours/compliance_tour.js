@@ -6,21 +6,18 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // Tests [@ANCHOR: COMM_test_compliance_ui_tour]
-// Real bug found live 2026-09-29 running the full test suite: this tour used to reimplement its
-// own cookie-bar removal (removing #website_cookies_bar by id, on a MutationObserver), instead of
-// the shared TourUtils.dismissCookiesBar() macro every other tour in this codebase already uses.
-// That local version missed the actual failure mode -- #website_cookies_bar's own Bootstrap modal
+// This tour uses the shared TourUtils.dismissCookiesBar() macro rather than its own cookie-bar
+// removal (removing #website_cookies_bar by id, on a MutationObserver), because the id-based
+// removal misses the actual failure mode -- #website_cookies_bar's own Bootstrap modal
 // is a nested, id-less `.modal.o_cookies_discrete` child that gets reparented directly under
 // <body>, independent of its wrapper, non-deterministically relative to page load (more installed
-// modules -> more JS -> more likely to trigger it; this tour alone never reproduced it, but it did
-// reliably once other modules were also in the mix). Removing only the wrapper by id does nothing
+// modules -> more JS -> more likely to trigger it; it reproduces reliably only with other
+// modules installed). Removing only the wrapper by id does nothing
 // for the already-reparented inner element once that happens, so web_tour's own "last visible
 // modal" safety check then refuses every subsequent step ("not allowed to do action on an element
 // that's below a modal"). TourUtils.dismissCookiesBar() (zero_sudo/static/src/js/tour_utils.js)
 // already handles exactly this -- watching for and removing the reparented element specifically,
-// not just the wrapper -- and was already adopted by every other tour in this codebase after being
-// independently rediscovered on ham_propagation's and ham_testing's own tours. This tour was the
-// one holdout still using its own, incomplete, reimplementation.
+// not just the wrapper -- and is used by every other tour in this codebase.
 registry.category("web_tour.tours").add("compliance_tour", {
     url: "/en_US/privacy?debug=1",
     steps: () => [

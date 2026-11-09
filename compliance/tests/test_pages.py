@@ -28,8 +28,7 @@ class TestCompliancePages(HamsTransactionCase):
             msg = f"[!] DIAGNOSTIC FOR AI: Page for {url} should exist in \'website.page\'. Check compliance/data/legal_pages_data.xml for missing records."
             self.assertIn(url, found_urls, msg)
 
-        # Found live 2026-08-29 via a usability audit persona: legal_pages_data.xml
-        # created these website.page records without a "name" field. Odoo's own
+        # These website.page records need a "name" field (legal_pages_data.xml must set one). Odoo's own
         # generic site search (website/controllers/main.py's autocomplete, when
         # search_type='all') sorts combined results with `r.get('name', '')`,
         # which crashes with a TypeError ('<' not supported between 'bool' and
@@ -112,15 +111,15 @@ class TestCompliancePagesHttp(HamsHttpCase):
             self.assertIn(phrase, response.text, "The accessibility statement should say: %s" % phrase)
 
     def test_generic_site_search_does_not_crash_on_legal_pages(self):
-        # Found live 2026-08-29: /website/search?search=forum&order=name+asc
-        # (Odoo's generic site search, search_type='all') threw an unhandled
+        # /website/search?search=forum&order=name+asc
+        # (Odoo's generic site search, search_type='all') throws an unhandled
         # 500 -- TypeError: '<' not supported between instances of 'bool' and
         # 'str' -- in odoo/addons/website/controllers/main.py's autocomplete,
         # sorting combined results by `r.get('name', '')`. Root cause: the
         # /privacy, /cookie-policy, /terms, and /accessibility website.page
-        # records had no `name` set, so they sorted as name=False against
+        # records without a `name` sort as name=False against
         # every other result's string name. Reproduces the exact request path
-        # that crashed, using search terms that should surface these pages.
+        # that crashes then, using search terms that should surface these pages.
         for term in ("privacy", "terms", "cookie", "accessibility"):
             response = self.url_open(f"/website/search?search={term}&order=name+asc")
             msg = f"[!] DIAGNOSTIC FOR AI: Generic site search for '{term}' returned {response.status_code}, expected 200. A website.page (or any other searchable record) with an unset name field crashes this route's sort."

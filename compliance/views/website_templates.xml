@@ -9,8 +9,8 @@
 
         <!-- audit-ignore-xpath: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
         <xpath expr="//div[hasclass('o_footer_copyright')]" position="inside">
-            <!-- QA pass 2026-10-13: the row sat directly in the full-width footer strip, so the links touched the
-                 left edge of the window (x=0) while everything above them is inset by the page container. -->
+            <!-- The container keeps the links inset like the rest of the page: a row placed directly in the
+                 full-width footer strip would touch the left edge of the window (x=0). -->
             <div class="container"><div class="row"><div class="col-sm text-center text-sm-start small">
                 <a href="/privacy" class="me-3 o_tour_footer_privacy">Privacy Policy</a>
                 <a href="/cookie-policy" class="me-3 o_tour_footer_cookie_policy">Cookie Policy</a>
