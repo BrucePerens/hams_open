@@ -51,8 +51,8 @@ from . import test_user_blog_urls
 from . import test_owner_site
 from . import test_report_shield
 from . import test_mail_sender_fallback
+from . import test_rpc_exposure
 
 from .open_source_defaults import pin_package
 
 pin_package(__name__)
-from . import test_rpc_exposure

@@ -24,6 +24,8 @@ import pgbackrest_sidecar  # noqa: E402
 
 class TestCommandLineIsNeverLogged(unittest.TestCase):
     def test_describe_command_gives_the_program_and_an_argument_count_only(self):
+        # Tests [@ANCHOR: backup_management:describe_command]
+        # [@ANCHOR: backup_management:test_describe_command_gives_the_program_and_an_argument_count_only]
         text = backup_worker._describe_command(["/usr/bin/kopia", "repository", "connect", "--password=hunter2"])
         self.assertEqual(text, "kopia with 3 argument(s)")
         self.assertNotIn("hunter2", text)

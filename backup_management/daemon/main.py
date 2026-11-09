@@ -12,7 +12,6 @@ import subprocess
 import urllib.request
 import urllib.error
 import logging
-import shlex
 import re
 
 # Reports an uncaught exception to the Odoo exception tickets (Helpdesk > Server Exceptions) and raises it again.
@@ -300,6 +299,8 @@ def _pgbackrest_repo_number(config):
 _PGBACKREST_PRIVILEGED_OPS = ("backup", "info")
 
 
+# [@ANCHOR: backup_management:describe_command]
+# Verified by [@ANCHOR: backup_management:test_describe_command_gives_the_program_and_an_argument_count_only]
 def _describe_command(cmd):
     """What a log line says about a command: the program's base name and how many arguments it has, never the arguments (a
     command line can carry a secret and the log outlives the process)."""
