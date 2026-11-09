@@ -13,17 +13,18 @@ pub const PI_Q16_16: i32 = 205887;
 /// carrying `PI_Q16_16`'s own rounding error doubled.
 pub const TWO_PI_Q16_16: i32 = 411775;
 
-/// `a * b` for two Q16.16 values, rounding to nearest rather than truncating (adds half an LSB
-/// before the final shift, the same idiom [`super::explog::exp2_q16`] uses).
+/// `a * b` for two Q16.16 values, rounding to nearest, halves away from zero, rather than truncating. The half
+/// LSB is added to the magnitude and the sign put back, so a negative product rounds like a positive one
+/// (a plain add-then-arithmetic-shift floors a negative product and biases it low: `-1.0 * 1.0` came out one
+/// count short).
 pub fn mul_q16(a: i32, b: i32) -> i32 {
     // [@ANCHOR: ambe_fixed_mul_q16]
     let product = (a as i64) * (b as i64);
-    let rounded = if product >= 0 {
-        product + (1 << 15)
+    if product >= 0 {
+        ((product + (1 << 15)) >> 16) as i32
     } else {
-        product - (1 << 15)
-    };
-    (rounded >> 16) as i32
+        (-((-product + (1 << 15)) >> 16)) as i32
+    }
 }
 
 /// `a / b` for two Q16.16 values, returning a Q16.16 result. Saturates to `i32::MAX`/`i32::MIN`
@@ -50,12 +51,11 @@ pub fn div_q16(a: i32, b: i32) -> i32 {
 pub fn mul_q16_i64(a: i64, b_q16: i32) -> i64 {
     // [@ANCHOR: ambe_fixed_mul_q16_i64]
     let product = (a as i128) * (b_q16 as i128);
-    let rounded = if product >= 0 {
-        product + (1i128 << 15)
+    if product >= 0 {
+        ((product + (1i128 << 15)) >> 16) as i64
     } else {
-        product - (1i128 << 15)
-    };
-    (rounded >> 16) as i64
+        (-((-product + (1i128 << 15)) >> 16)) as i64
+    }
 }
 
 /// `a / b` for two `i64` values sharing the same 16-fractional-bit convention [`mul_q16_i64`]/
