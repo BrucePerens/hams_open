@@ -154,8 +154,8 @@ class TestWrapper(GuardCase, HamsTransactionCase):
         class Broken(dict):
             def get(self, key, default=None):
                 raise RuntimeError("cache down")
+        staff = build_persona(self.env, "internal_staff").env["res.partner"]  # other addons read parameters while creating a user
         self.values = Broken()
-        staff = build_persona(self.env, "internal_staff").env["res.partner"]
         with self.assertLogs(guard._logger, "ERROR"), self.assertLogs(policy._logger, "WARNING"), self.assertRaises(AccessError):
             service_model.get_public_method(staff, self.METHOD)
 
