@@ -12,7 +12,9 @@ the same way, so that the rules cannot drift between two hand-written copies.
 
 1. Each crawler fetches robots.txt itself through `urlopen_ssrf_safe()`, keeping its own SSRF
    label, timeout and size cap, then hands the outcome to one shared, Odoo-free verdict function.
-   A successful fetch is parsed as UTF-8 (undecodable bytes replaced); HTTP 401/403 disallows
+   A successful fetch is parsed as UTF-8 (undecodable bytes replaced) and judged by RFC 9309 longest match
+   `[@ANCHOR: zero_sudo:robots_txt_policy_longest_match]` (the longest matching rule wins, an Allow wins a tie,
+   a named group replaces the `*` group), not by `urllib.robotparser`, whose rule order differs between Python releases; HTTP 401/403 disallows
    everything; any other 4xx allows; a 5xx also allows, deliberately unlike the stdlib's
    `RobotFileParser.read()`, because a transient server error is not a confirmed disallow. A fetch
    that never completes is handled by the caller as "allowed"
