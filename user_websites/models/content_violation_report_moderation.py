@@ -57,18 +57,17 @@ class ContentViolationReportModeration(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_websites_service_account"
         )
-        # Bug-hunt fix (bug class 17, 2026-09-09): this used to iterate
+        # Iterate the service account's own company_ids rather than
         # res.company.search([], limit=10000) -- every company in the whole
         # database, not just the ones this service account is actually
-        # scoped to. That reached toward (and crashed on, via an uncaught
+        # scoped to. That would reach toward (and crash on, via an uncaught
         # AccessError) every company outside the account's own company_ids
         # (data/user_websites_data.xml scopes it to base.main_company only;
         # this module doesn't dynamically provision per-tenant companies of
         # its own today, so that's genuinely the account's real, intended
         # scope, not an under-provisioning bug -- see ADR 0083). Iterating
-        # the account's own company_ids instead means an out-of-scope
-        # company is never in the loop to begin with, matching this claim's
-        # own corrected root-cause fix (see
+        # the account's own company_ids means an out-of-scope
+        # company is never in the loop to begin with (see
         # hams_com/docs/bug_hunt_interim_claims/hams_open/user_websites/
         # claims/cron_notify_pending_reports.md): if this cron is ever meant
         # to serve additional companies, that's a real provisioning change

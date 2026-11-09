@@ -70,7 +70,7 @@ class ContentViolationAppeal(models.Model):
         # Verified by [@ANCHOR: user_websites:test_tour_moderation_appeal]
         """Approves the appeal and pardons the user or group.
 
-        Server-side state guard (bug class 18): the form's own
+        Server-side state guard: the form's own
         `invisible="not id or state != 'new'"` was the only thing preventing
         this from being re-invoked on an already-approved/rejected appeal --
         a direct RPC or a stale concurrent tab could re-run the pardon and
@@ -107,9 +107,9 @@ class ContentViolationAppeal(models.Model):
     def action_reject(self):
         """Rejects the appeal.
 
-        Server-side state guard (bug class 18): without this, rejecting an
-        already-approved appeal overwrote `state` back to "rejected" and
-        posted a "remains suspended" message that was false at that moment
+        Server-side state guard: without it, rejecting an
+        already-approved appeal would overwrite `state` back to "rejected" and
+        post a "remains suspended" message that is false at that moment
         (the user/group was already pardoned), with no server-side check
         preventing it.
         """

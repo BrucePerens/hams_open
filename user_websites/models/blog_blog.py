@@ -44,17 +44,17 @@ class BlogBlog(models.Model):
         owner_ids = [
             vals.get("owner_user_id") for vals in vals_list if vals.get("owner_user_id")
         ]
-        # Bug-hunt fix, 2026-09-09: this check used to be keyed purely on
-        # owner_user_id, exactly like website.page's own check it was
-        # modeled on -- so a batch that sets user_websites_group_id
+        # This check must not be keyed purely on owner_user_id (as
+        # website.page's own check it was modeled on is): a batch that sets
+        # user_websites_group_id
         # instead (every group-owned blog, reachable both from
         # controllers/main.py's create_blog route and, since
         # group_user_websites_user holds full 1,1,1,1 ir.model.access on
         # blog.blog, from direct RPC with an arbitrary distinct `name` per
-        # call) hit `if not owner_ids: return` and skipped quota
+        # call) would hit `if not owner_ids: return` and skip quota
         # entirely -- the exact "any authenticated user can create
         # unbounded blogs via direct RPC" hole this function exists to
-        # close, just reopened through the other of the mixin's two
+        # close, reopened through the other of the mixin's two
         # mutually-exclusive ownership fields. See
         # docs/bug_hunt_claims/hams_open/user_websites/claims/
         # user_websites_blog_quota_check.md in hams_com for the full
@@ -135,13 +135,13 @@ class BlogBlog(models.Model):
     # [@ANCHOR: user_websites:COMM_blog_blog_create]
     @api.model_create_multi
     def create(self, vals_list):
-        # Bug-hunt fix (docs/bug_hunt_claims/.../acl_blog_post_and_blog_blog.md):
-        # unlike write()/unlink() below, this method never enforced the real
-        # ir.model.access perm_create against the actual caller -- only
-        # _check_proxy_ownership_create's own ownership-plausibility check ran,
-        # then creation proceeded via the service account (which always has
-        # create=1). That let a base.group_public caller create a blog owned
-        # by the shared public user account by explicitly passing
+        # See docs/bug_hunt_claims/.../acl_blog_post_and_blog_blog.md.
+        # Unlike write()/unlink() below, create() must enforce the real
+        # ir.model.access perm_create against the actual caller, not only
+        # _check_proxy_ownership_create's own ownership-plausibility check:
+        # creation proceeds via the service account (which always has
+        # create=1), so without this a base.group_public caller could create
+        # a blog owned by the shared public user account by explicitly passing
         # owner_user_id equal to their own (public) user id, bypassing
         # access_blog_blog_public's perm_create=0. self.check_access("create")
         # mirrors write()/unlink()'s own existing calls and is a no-op for
@@ -160,9 +160,9 @@ class BlogBlog(models.Model):
                 "user_websites.group_user_websites_service_account"
             )
         ):
-            # bug-hunt (2026-09-13): website_id used to be in this whitelist, the same
-            # "owner can opt their own record out of multi-website tenant isolation" gap
-            # already found and fixed in website_page.py's own create()/write() -- stock
+            # website_id is deliberately not in this whitelist: allowing it would let an
+            # owner opt their own record out of multi-website tenant isolation (the same
+            # gap closed in website_page.py's own create()/write()) -- stock
             # Odoo's website_domain() (`Domain('website_id', 'in', [False, *self.ids])`)
             # treats website_id=False as "visible on every website in the install," and
             # unlike blog.post's own website_id (related='blog_id.website_id',
@@ -250,8 +250,8 @@ class BlogBlog(models.Model):
                 "user_websites.group_user_websites_service_account"
             )
         ):
-            # bug-hunt (2026-09-13): see create()'s own comment above -- same
-            # multi-website-isolation-opt-out fix, applied here too. No legitimate write()
+            # See create()'s own comment above -- same
+            # multi-website-isolation-opt-out closure, applied here too. No legitimate write()
             # caller in this codebase sets website_id on an existing blog (grepped
             # controllers/main.py: both real writers of this field are create_vals
             # dicts passed to create(), never a write() call), so this is a pure

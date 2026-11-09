@@ -45,20 +45,20 @@ class BlogPost(models.Model):
     # [@ANCHOR: user_websites:COMM_blog_post_invalidate_cloudflare_cache]
     def _invalidate_cloudflare_cache(self):
         """Purge the global Cache-Tag at the edge."""
-        # Bug-hunt fix, 2026-09-09: `self.env["cloudflare.purge.queue"]` is
+        # `self.env["cloudflare.purge.queue"]` is
         # a plain model accessor -- an always-empty recordset, truthy only
         # after an actual search/browse returns rows, and it raises
         # KeyError immediately (before reaching this line at all) if the
         # model were unregistered. `cloudflare` is also a hard dependency
         # of this module's own __manifest__.py, so that KeyError case
-        # can't happen here anyway. The old `if not purge_queue: return`
-        # was therefore always true and always returned -- this whole
-        # method, including the enqueue_tags() call below, was dead code
-        # that never actually purged anything. (test_audit_edge_cases.py's
+        # can't happen here anyway. A guard like `if not purge_queue: return`
+        # would therefore always be true and always return -- this whole
+        # method, including the enqueue_tags() call below, would be dead code
+        # that never actually purges anything. (test_audit_edge_cases.py's
         # setUp() already mocks CloudflarePurgeQueue.enqueue_tags/
         # enqueue_urls "to prevent Cloudflare cache purge hooks from
         # leaking queue records during tests" -- confirming the intent
-        # was always for this call to actually fire.) See
+        # is for this call to actually fire.) See
         # docs/bug_hunt_claims/hams_open/user_websites/claims/
         # invalidate_cloudflare_cache.md in hams_com for the full writeup.
 
@@ -134,16 +134,16 @@ class BlogPost(models.Model):
         owner_ids = [
             vals.get("owner_user_id") for vals in vals_list if vals.get("owner_user_id")
         ]
-        # Bug-hunt fix, 2026-09-09: this check used to be keyed purely on
-        # owner_user_id, exactly like website.page's own check it was
-        # modeled on -- so a batch that sets user_websites_group_id
+        # This check must not be keyed purely on owner_user_id (as
+        # website.page's own check it was modeled on is): a batch that sets
+        # user_websites_group_id
         # instead (every group-owned post, reachable from a group member
         # via direct RPC since group_user_websites_user holds full
-        # 1,1,1,1 ir.model.access on blog.post) hit `if not owner_ids:
-        # return` and skipped quota entirely -- the exact "any
+        # 1,1,1,1 ir.model.access on blog.post) would hit `if not owner_ids:
+        # return` and skip quota entirely -- the exact "any
         # authenticated user can create unbounded posts via direct RPC,
         # each one enqueuing a real Cloudflare purge" hole this function
-        # exists to close, just reopened through the other of the
+        # exists to close, reopened through the other of the
         # mixin's two mutually-exclusive ownership fields. See
         # docs/bug_hunt_claims/hams_open/user_websites/claims/
         # user_websites_blog_post_quota_check.md in hams_com for the full
@@ -243,13 +243,13 @@ class BlogPost(models.Model):
 
         # # Tested by [@ANCHOR: user_websites:test_tour_create_blog]
 
-        # Bug-hunt fix (docs/bug_hunt_claims/.../acl_blog_post_and_blog_blog.md):
-        # unlike write()/unlink() below, this method never enforced the real
-        # ir.model.access perm_create against the actual caller -- only
-        # _check_proxy_ownership_create's own ownership-plausibility check ran,
-        # then creation proceeded via the service account (which always has
-        # create=1). That let a base.group_public caller create a post owned
-        # by the shared public user account by explicitly passing
+        # See docs/bug_hunt_claims/.../acl_blog_post_and_blog_blog.md.
+        # Unlike write()/unlink() below, create() must enforce the real
+        # ir.model.access perm_create against the actual caller, not only
+        # _check_proxy_ownership_create's own ownership-plausibility check:
+        # creation proceeds via the service account (which always has
+        # create=1), so without this a base.group_public caller could create
+        # a post owned by the shared public user account by explicitly passing
         # owner_user_id equal to their own (public) user id, bypassing
         # access_blog_post_public's perm_create=0. self.check_access("create")
         # mirrors write()/unlink()'s own existing calls and is a no-op for
@@ -399,13 +399,13 @@ class BlogPost(models.Model):
         except AccessError:
             res = super(BlogPost, self).write(vals)
 
-        # Bug-hunt fix, 2026-09-09: "owner_user_id"/"user_websites_group_id"
-        # added -- an (admin/service-account-only, per
+        # "owner_user_id"/"user_websites_group_id" are included: an
+        # (admin/service-account-only, per
         # _check_proxy_ownership_write) ownership transfer moves this post
         # from one owner/group's blog index to another's without touching
-        # is_published/name/content at all, so the pre-fix condition never
-        # invalidated either the old or the new blog index's distributed
-        # cache entry for a pure ownership-transfer write. urls_to_invalidate
+        # is_published/name/content at all, so without them a pure
+        # ownership-transfer write would invalidate neither the old nor the new blog index's distributed
+        # cache entry. urls_to_invalidate
         # (captured before the write, above) already holds the pre-transfer
         # URL; _get_blog_urls() below now naturally picks up the
         # post-transfer one via self's refreshed owner_user_id/
@@ -481,9 +481,9 @@ class BlogPost(models.Model):
         )
 
         if not digests:
-            # Bug-hunt fix (docs/bug_hunt_claims/.../acl_svc_infra_models.md):
-            # this used to write via the raw ir.config_parameter model under
-            # the service account, which requires access_ir_config_parameter_svc
+            # See docs/bug_hunt_claims/.../acl_svc_infra_models.md.
+            # Writing via the raw ir.config_parameter model under
+            # the service account would require access_ir_config_parameter_svc
             # -- a broad, unscoped ACL grant to EVERY system parameter in the
             # instance, entirely bypassing the whitelist mechanism
             # (_get_param_write_whitelist) this codebase built specifically to
@@ -527,21 +527,19 @@ class BlogPost(models.Model):
             unsub_url = f"{base_url}/website/unsubscribe/{digest.owner_model}/{digest.owner_record_id}/{partner.id}/{timestamp}/{token}"
 
             headers = {
-                # Bug-hunt fix, 2026-09-09: this was "<<{unsub_url}>>" --
-                # double angle brackets. RFC 2369/8058 require the URI
-                # wrapped in a SINGLE pair (`<https://.../unsub>`); a
+                # The URI must be wrapped in a SINGLE pair of angle brackets
+                # (`<https://.../unsub>`) per RFC 2369/8058, not doubled
+                # ("<<{unsub_url}>>"); a
                 # lenient `<([^>]+)>`-style header parser matches the
                 # first "<" through the first ">" and so extracts
                 # "<https://.../unsub" (a leading stray "<" still
                 # attached, an invalid URL) instead of the real one,
                 # breaking RFC 8058 one-click unsubscribe compliance for
-                # any mail client/provider that parses strictly. The
-                # existing regression test
-                # (test_01_weekly_digest_and_unsubscribe_headers) never
-                # caught this because it recovers the URL with
-                # `.strip("<>")`, which strips an arbitrary run of
-                # matching characters from both ends and tolerates the
-                # extra brackets either way.
+                # any mail client/provider that parses strictly. Note that
+                # test_01_weekly_digest_and_unsubscribe_headers recovers the URL
+                # with `.strip("<>")`, which strips an arbitrary run of
+                # matching characters from both ends and so tolerates extra
+                # brackets either way; it does not check bracket count.
                 "List-Unsubscribe": f"<{unsub_url}>",
                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             }
