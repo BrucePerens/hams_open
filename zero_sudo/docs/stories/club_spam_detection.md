@@ -145,8 +145,8 @@ to report). Otherwise a dict, the redirect evidence, with every field bounded: `
 ### `redirect_is_spam(redirect)` `[@ANCHOR: zero_sudo:club_spam_redirect_is_spam]`
 
 `redirect` is the dict above, untrusted (it arrives from the daemon). True only when `from` and `to` are non-empty strings of
-different registrable domains AND `score_entry(to, title + " " + text)` is flagged, the lexicon and the ham-radio discount that
-score every other entry, so another club's page, or a club page about a "casino night", is not flagged. A redirect inside one
+different registrable domains AND `score_entry(to, title)` is flagged, the lexicon and the ham-radio discount that
+score every other entry, over the destination's address and title only (the page text is carried as evidence but not scored: body prose flagged an ordinary club page mentioning a casino night, and a non-English page with one lexicon word), so another club's page, or a club page about a "casino night", is not flagged. A redirect inside one
 registrable domain is False even when its text is spam (that is the club's own page, and the URL scan covers it). A value that is
 not a dict, or whose fields are missing or not strings, is False. Pure; raises nothing; no ownership lookup.
 
