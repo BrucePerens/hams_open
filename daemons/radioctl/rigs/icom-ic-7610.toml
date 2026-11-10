@@ -3,7 +3,7 @@
 # download terms forbid reuse of its data); the facts come from Hamlib 4.6.2 source, read for facts only,
 # with the file and function named in each fact below. Gaps are listed in crates/radioctl-protocols/src/civ.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "scope"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "scope", "read-meters"]
 
 [rig]
 id = "icom-ic-7610"
@@ -132,4 +132,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 07 CW-R, 08 RTTY-R)", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's mode vocabulary (D-STAR 17, DD 22, PSK 12 and 13) are not listed. The model's own mode list is in `rigctl -m 3078 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-meters"
+provenance = { kind = "manual", reference = "Icom IC-7610 CI-V Reference Guide (IC-7610_ENG_CI-V_4.pdf, sha256 708675dd8adae67e53e4acd919e293c0fe6c710b90db69b52aadeead8128d9ff), command 15 table, PDF page 5: 15 11 to 15 16 (Po, SWR, ALC, COMP, Vd, Id meter levels, 0000 to 0255)", note = "Obtained under Icom's download terms (individual use, accepted on the owner's instruction 2026-11-10). Per-model scale points are in radioctld meter_cal; facts only, nothing copied." }
 verified = { state = "unverified" }

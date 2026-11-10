@@ -503,7 +503,7 @@ impl RigService {
             }
             LevelSource::Swr if !self.description.capabilities.has(Capability::ReadSwr) => {
                 let ratio = self.meter(Meter::Swr).await?;
-                fmt_float(crate::meter_cal::swr_ratio(ratio))
+                fmt_float(crate::meter_cal::swr_ratio(crate::meter_cal::for_rig(&self.description.id), ratio))
             }
             LevelSource::PowerWatts => {
                 let cal = self
@@ -519,13 +519,20 @@ impl RigService {
                 let raw = self.power_raw().await?;
                 let fraction = match self.description.power_meter.as_ref().and_then(|p| p.cal()) {
                     Some(cal) => crate::meter_cal::power_fraction_cal(&cal, raw),
-                    None => crate::meter_cal::power_fraction(raw),
+                    None => crate::meter_cal::power_fraction(
+                        crate::meter_cal::for_rig(&self.description.id),
+                        raw,
+                    ),
                 };
                 fmt_float(fraction)
             }
             LevelSource::Meter(meter) => {
                 let raw = self.meter(meter).await?;
-                fmt_float(crate::meter_cal::level(meter, raw))
+                fmt_float(crate::meter_cal::level(
+                    crate::meter_cal::for_rig(&self.description.id),
+                    meter,
+                    raw,
+                ))
             }
             LevelSource::Swr => {
                 let Observation::Swr(tenths) = self.read(Field::Swr, Op::GetSwr).await? else {

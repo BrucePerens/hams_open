@@ -1788,6 +1788,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_meter_cal_level] (radioctld) The `rigctl` value of a meter for a raw deflection: SWR ratio, ALC fraction, COMP decibels, Vd volts, Id amperes. Unverified estimate.
 - [@ANCHOR: radioctl:radioctld_meter_cal_range] (radioctld) The largest value `rigctl` is told for a meter (the top of its advertised range).
 - [@ANCHOR: radioctl:radioctld_meter_cal_vd_volts] (radioctld) Supply voltage in volts (0 to 16) for a raw Vd meter deflection. Unverified estimate.
+- [@ANCHOR: radioctl:radioctld_meter_cal_for_rig] (radioctld) The meter scale points of a rig description (IC-9100, IC-7300, IC-7610, IC-705 from their CI-V tables, a default for the rest). Unverified estimate.
 - [@ANCHOR: radioctl:radioctld_meter_cal_swr_ratio] (radioctld) The SWR ratio (1.0 or more) for a raw 0 to 255 SWR meter deflection. Unverified estimate.
 - [@ANCHOR: radioctl:radioctld_meter_cal_alc_fraction] (radioctld) The ALC level as a 0 to 1 fraction for a raw 0 to 255 ALC meter deflection. Unverified estimate.
 - [@ANCHOR: radioctl:radioctld_cli_stdin_lines_from] (radioctld) Lines from `rx` as a [`BufRead`], and a poll that is true once a line was waiting (and
