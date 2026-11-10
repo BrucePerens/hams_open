@@ -125,6 +125,22 @@ class TestSecretBrokerPolicy(BaseCase):
     def _ask(self, broker, op, **args):
         return broker.handle(json.dumps({"v": 1, "op": op, "args": args}).encode(), self.os_uid)
 
+    def test_a_secret_that_has_gone_or_a_nested_request_gets_an_error_reply(self):
+        # Tests [@ANCHOR: zero_sudo:secret_broker_handle]
+        broker = self._broker()
+        os.unlink(os.path.join(self.tmp, "stripe.webhook_secret"))
+        self.assertEqual(
+            self._ask(broker, "hmac_sign", name="stripe.webhook_secret", payload="p"),
+            {"ok": False, "error": "secret_unavailable"},
+        )
+        os.chmod(os.path.join(self.tmp, "stripe.secret_key"), 0o404)
+        self.assertEqual(
+            self._ask(broker, "https_request", name="stripe.secret_key", method="GET", path="/v1/x"),
+            {"ok": False, "error": "secret_unavailable"},
+        )
+        nested = b'{"v": 1, "op": "hmac_sign", "args": ' + b"[" * 100000 + b"]" * 100000 + b"}"
+        self.assertEqual(broker.handle(nested, self.os_uid), {"ok": False, "error": "bad_request"})
+
     def test_config_validation(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_validate_config]
         # Tests [@ANCHOR: zero_sudo:secret_broker_validate_https]
