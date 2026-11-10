@@ -25,15 +25,18 @@ READ_ONLY_FIELDS = ("version", "last_updated", "categories")
 COMPARED_FIELDS = ("action", "action_parameters", "expression", "description", "enabled")
 
 
+# [@ANCHOR: cloudflare:COMM_cache_plan_clean]
 def clean(rule):
     """A remote rule as it can be sent back unchanged."""
     return {k: v for k, v in rule.items() if k not in READ_ONLY_FIELDS}
 
 
+# [@ANCHOR: cloudflare:COMM_cache_plan_view]
 def _view(rule):
     return {k: rule.get(k) for k in COMPARED_FIELDS}
 
 
+# [@ANCHOR: cloudflare:COMM_cache_plan_merge]
 def merge(remote_rules, desired, managed_names):
     """Merge Odoo's rules into the zone's current rules.
 
@@ -87,6 +90,7 @@ def merge(remote_rules, desired, managed_names):
     return {"rules": merged, "entries": entries, "problems": problems, "hash": plan_hash(merged, remote_rules)}
 
 
+# [@ANCHOR: cloudflare:COMM_cache_plan_summary]
 def _summary(rule):
     params = rule.get("action_parameters") or {}
     if params.get("cache") is False:
@@ -99,6 +103,7 @@ def _summary(rule):
     return f"{what} when {rule.get('expression')}"
 
 
+# [@ANCHOR: cloudflare:COMM_cache_plan_hash]
 def plan_hash(merged, remote_rules):
     """A digest of what Apply would write and what it was computed from, so applying insists on the reviewed plan."""
     body = [merged, [clean(r) for r in remote_rules]]
