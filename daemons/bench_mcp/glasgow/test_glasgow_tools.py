@@ -33,6 +33,33 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 install_glasgow.run(["false"])
 
+    # Tests [@ANCHOR: glasgow_install_copy_bounded]
+    # Tests [@ANCHOR: glasgow_install_main]
+    def test_the_archive_is_copied_into_dest_and_the_copy_is_what_is_extracted_and_a_huge_one_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "x.tar.gz"
+            src.write_bytes(b"first")
+            dest = Path(d) / "install"
+            seen = {}
+
+            def fake_sha(p):
+                seen["path"] = Path(p)
+                seen["bytes"] = Path(p).read_bytes()
+                src.write_bytes(b"changed after the check")  # a writer of the original after the hash
+                return "0" * 64
+
+            with self.assertRaises(SystemExit), mock.patch.object(install_glasgow, "sha256", fake_sha), mock.patch.object(install_glasgow, "run"):
+                install_glasgow.main(["--dest", str(dest), "--archive", str(src)])
+            self.assertEqual(seen["path"], dest.resolve() / "glasgow.tar.gz")
+            self.assertEqual(seen["bytes"], b"first")
+            out = Path(d) / "copy"
+            with mock.patch.object(install_glasgow, "ARCHIVE_BYTES", 10):
+                with self.assertRaises(SystemExit) as e:
+                    install_glasgow.copy_bounded(io.BytesIO(b"x" * (10 + (1 << 20) + 1)), out)
+                self.assertIn("larger than", str(e.exception))
+                install_glasgow.copy_bounded(io.BytesIO(b"ok"), out)
+            self.assertEqual(out.read_bytes(), b"ok")
+
     # Tests [@ANCHOR: glasgow_install_main]
     def test_an_archive_with_the_wrong_hash_is_refused_before_anything_is_installed(self):
         with tempfile.TemporaryDirectory() as d:

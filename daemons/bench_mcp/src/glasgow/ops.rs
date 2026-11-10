@@ -41,10 +41,10 @@ pub const SPECS: &[Spec] = &[
         desc: "GLASGOW, PASSIVE: listens on two UART lines (both inputs; the pin only says which channel the bytes belong to) for `duration_s` (at most the config's max_capture_s), writes the capture to a CSV file in the output directory and returns the bytes per channel as hex and text with frame and parity error counts. Needs the port set (it fixes the logic threshold).",
         props: props!(r#""instrument":{"type":"string"},"rx":{"type":"string","description":"default A0"},"tx":{"type":"string","description":"default A1"},"baud":{"type":"integer","description":"default 115200"},"parity":{"type":"string","enum":["none","even","odd","zero","one"],"description":"none, even, odd, zero or one; default none"},"duration_s":{"type":"number","description":"1 up to the config's max_capture_s, default 5"}"#), required: &[] },
     Spec { name: "bench_glasgow_logic_capture", tier: Tier::ReadConfig,
-        desc: "GLASGOW, PASSIVE: records 1 to 16 pins (`pins`, e.g. A0:3) as a logic analyzer for `duration_s` (at most the config's max_capture_s; also stopped at the config's max_capture_mb), saves a VCD waveform file in the output directory and returns a summary per pin: transitions, fraction of time high, shortest and longest pulse, rising-edge frequency, first and last level, and whether the FIFO overran. `pull` enables weak pull-ups or pull-downs on every pin. Needs the port set.",
-        props: props!(r#""instrument":{"type":"string"},"pins":{"type":"string","description":"pin spec, e.g. A0:3 or A0:1,B0; default A0:3"},"duration_s":{"type":"number","description":"default 2"},"pull":{"type":"string","enum":["none","up","down"]},"names":{"type":"string","description":"comma separated pin names for the VCD"}"#), required: &[] },
+        desc: "GLASGOW, PASSIVE: records 1 to 16 pins (`pins`, e.g. A0:3) as a logic analyzer for `duration_s` (at most the config's max_capture_s; also stopped at the config's max_capture_mb), saves a VCD waveform file in the output directory and returns a summary per pin: transitions, fraction of time high, shortest and longest pulse, rising-edge frequency, first and last level, and whether the FIFO overran. `pull` enables weak pull-ups or pull-downs on every pin, which puts a level on the target and needs `confirm: true`. Needs the port set.",
+        props: props!(r#""instrument":{"type":"string"},"pins":{"type":"string","description":"pin spec, e.g. A0:3 or A0:1,B0; default A0:3"},"duration_s":{"type":"number","description":"default 2"},"pull":{"type":"string","enum":["none","up","down"]},"confirm":{"type":"boolean","description":"true: required with pull up or down; the person at the bench agrees weak pulls may be put on the target's pins"},"names":{"type":"string","description":"comma separated pin names for the VCD"}"#), required: &[] },
     Spec { name: "bench_glasgow_gpio", tier: Tier::Full,
-        desc: "GLASGOW, DRIVES PINS: applies `actions` to pins in order: `A0=1` or `A0=0` drive strongly, `A1=H` or `A1=L` pull weakly, `A2=Z` release, `A3` reads. The levels are held for `hold_s` (0 to 30), then every pin is released again (parked as inputs) and the answer says so. Returns each read. Driving a level needs `confirm: true`. `dry_run` returns the plan.",
+        desc: "GLASGOW, DRIVES PINS: applies `actions` to pins in order: `A0=1` or `A0=0` drive strongly, `A1=H` or `A1=L` pull weakly, `A2=Z` release, `A3` reads. The levels are held for `hold_s` (0 to 30), then every pin is released again (parked as inputs) and the answer says so. Returns each read. Driving or pulling a level needs `confirm: true`. `dry_run` returns the plan.",
         props: props!(r#""instrument":{"type":"string"},"pins":{"type":"string","description":"the pins the applet owns, e.g. A0:3"},"actions":{"type":"array","items":{"type":"string"},"description":"pin actions in order, e.g. A0=1, A1=L, A2=Z, A3"},"hold_s":{"type":"number"},"confirm":{"type":"boolean","description":"true: the person at the bench agrees"},"dry_run":{"type":"boolean","description":"true: return the plan and send nothing"}"#), required: &["pins", "actions"] },
     Spec { name: "bench_glasgow_pattern", tier: Tier::Full,
         desc: "GLASGOW, DRIVES PINS: a pattern or pulse generator timed from the host (about a millisecond, not the FPGA clock): `steps` is a list of {value, hold_ms}; `value` is a bit mask over `pins` (bit 0 = the first pin), `hold_ms` 0.5 to 5000. Repeated `repeat` times (1 to 100000); the whole run is at most the config's max_capture_s. All pins are driven during the run and released at the end, even on failure. `confirm` must be true. `dry_run` returns the plan.",
@@ -756,11 +756,16 @@ pub fn call(ctx: &Ctx, inst: &Instrument, name: &str, args: &Value) -> Result<Va
         "bench_glasgow_gpio" => p
             .tail
             .iter()
-            .any(|a| a.ends_with("=0") || a.ends_with("=1")),
+            .any(|a| ["=0", "=1", "=H", "=L"].iter().any(|d| a.ends_with(d))),
+        // Weak pulls on every captured pin put a level on the target too.
+        "bench_glasgow_logic_capture" => !matches!(
+            args.get("pull").and_then(|v| v.as_str()),
+            None | Some("none")
+        ),
         _ => false,
     };
     if drives && !confirm && !dry {
-        return Err(format!("{name} drives pins or writes to the target; call it with confirm: true only when the person at the bench has agreed (dry_run: true shows the plan)"));
+        return Err(format!("{name} drives pins, pulls them weakly or writes to the target; call it with confirm: true only when the person at the bench has agreed (dry_run: true shows the plan)"));
     }
     let started = Instant::now();
     let (out, _args) = match execute(ctx, inst, &p, dry)? {

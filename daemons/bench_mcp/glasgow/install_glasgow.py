@@ -43,6 +43,20 @@ def sha256(path):
     return h.hexdigest()
 
 
+def copy_bounded(src, dst_path):
+    # [@ANCHOR: glasgow_install_copy_bounded]
+    """Copies at most ARCHIVE_BYTES + 1 MiB from the open binary file `src` into `dst_path`; a longer stream is refused. The caller then
+    hashes and extracts the copy, so a later change to the original (or an endless download) cannot get past the check."""
+    limit = ARCHIVE_BYTES + (1 << 20)
+    n = 0
+    with open(dst_path, "wb") as f:
+        while block := src.read(1 << 20):
+            n += len(block)
+            if n > limit:
+                raise SystemExit(f"REFUSED: the archive is larger than {limit} bytes ({ARCHIVE_BYTES} expected). Nothing from it was installed.")
+            f.write(block)
+
+
 def run(cmd, **kw):
     # [@ANCHOR: glasgow_install_run]
     print("+", " ".join(map(str, cmd)), flush=True)
@@ -54,7 +68,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dest", required=True, type=Path, help="directory to create (must not exist)")
     ap.add_argument("--python", default=sys.executable, help="a Python 3.13+ interpreter")
-    ap.add_argument("--archive", type=Path, help="a copy of the source archive already on disk (still checked against its sha256)")
+    ap.add_argument("--archive", type=Path, help="a copy of the source archive already on disk (copied into DEST, then checked against its sha256 and installed from the copy)")
     a = ap.parse_args(argv)
     dest = a.dest.expanduser().resolve()
     if dest.exists():
@@ -64,12 +78,19 @@ def main(argv=None):
     except OSError:
         pass
     dest.mkdir(parents=True)
-    archive = a.archive
-    if archive is None:
-        archive = dest / "glasgow.tar.gz"
-        print(f"downloading {ARCHIVE_URL} ({ARCHIVE_BYTES} bytes expected)", flush=True)
-        with urllib.request.urlopen(ARCHIVE_URL, timeout=300) as r, open(archive, "wb") as f:
-            shutil.copyfileobj(r, f)
+    # Always work on a private copy inside DEST: it is the copy that is hashed and later extracted, never the path the person passed.
+    archive = dest / "glasgow.tar.gz"
+    try:
+        if a.archive is None:
+            print(f"downloading {ARCHIVE_URL} ({ARCHIVE_BYTES} bytes expected)", flush=True)
+            with urllib.request.urlopen(ARCHIVE_URL, timeout=300) as r:
+                copy_bounded(r, archive)
+        else:
+            with open(a.archive, "rb") as r:
+                copy_bounded(r, archive)
+    except SystemExit:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise
     got = sha256(archive)
     if got != ARCHIVE_SHA256:
         shutil.rmtree(dest, ignore_errors=True)
