@@ -396,3 +396,23 @@ class TestB2Fixes(HamsTransactionCase):
         # A database with no cached entry is not an error.
         redis_pool.clear_db_config_cache("never_cached")
 
+
+
+@tagged("post_install", "-at_install")
+class TestRedisPasswordMask(HamsTransactionCase):
+    def test_settings_mask_the_stored_redis_password(self):
+        # Tests [@ANCHOR: distributed_redis_cache:res_config_settings_get_values_masks_password]
+        params = self.env["ir.config_parameter"]
+        param = "distributed_redis_cache.redis_password"
+        params.set_param(param, "STORED_REDIS_SECRET")
+        settings = self.env["res.config.settings"]
+        values = settings.default_get(list(settings._fields))
+        self.assertEqual(values["redis_password"], "********")
+        self.assertNotIn("STORED_REDIS_SECRET", str(values))
+        # Saving with the mask untouched keeps the stored password; a new value replaces it; blank clears it.
+        settings.create({"redis_password": "********"}).set_values()
+        self.assertEqual(params.get_param(param), "STORED_REDIS_SECRET")
+        settings.create({"redis_password": "NEW_PASS"}).set_values()
+        self.assertEqual(params.get_param(param), "NEW_PASS")
+        settings.create({"redis_password": False}).set_values()
+        self.assertFalse(params.get_param(param))

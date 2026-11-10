@@ -2,9 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 
-from odoo import fields, models
+from odoo import api, fields, models
 
 from odoo.addons.distributed_redis_cache import redis_pool as _redis_pool_module
+
+
+SECRET_MASK = "********"
+REDIS_PASSWORD_PARAM = "distributed_redis_cache.redis_password"
 
 
 class ResConfigSettings(models.TransientModel):
@@ -24,6 +28,16 @@ class ResConfigSettings(models.TransientModel):
         string="Redis Password",
         config_parameter="distributed_redis_cache.redis_password",
     )
+
+    @api.private
+    @api.model
+    def get_values(self):
+        # [@ANCHOR: distributed_redis_cache:res_config_settings_get_values_masks_password]
+        # The stock get_values (and every default_get) would hand the stored Redis password to any caller.
+        res = super().get_values()
+        if self.env["ir.config_parameter"].get_param(REDIS_PASSWORD_PARAM):
+            res["redis_password"] = SECRET_MASK
+        return res
 
     # [@ANCHOR: distributed_redis_cache:res_config_settings_set_values]
     # Verified by [@ANCHOR: test_b2_10_settings_save_invalidates_the_redis_pool_cache]
@@ -50,6 +64,10 @@ class ResConfigSettings(models.TransientModel):
         # instead. `poll_and_clear_local_cache()` (redis_cache.py) is what every OTHER worker
         # already runs on every request/cron dispatch to notice the counter changed; it also
         # clears `_db_configs` there, not just `_local_cache`.
+        # A password still showing the mask was not edited: keep the stored value; a blank field clears it.
+        for rec in self:
+            if rec.redis_password == SECRET_MASK:
+                rec.redis_password = self.env["ir.config_parameter"].get_param(REDIS_PASSWORD_PARAM) or False
         res = super().set_values()
         dbname = self.env.cr.dbname
         _redis_pool_module.clear_db_config_cache(dbname)
