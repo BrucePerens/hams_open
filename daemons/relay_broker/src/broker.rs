@@ -30,6 +30,8 @@ pub struct Broker {
     pub bind_udp_ports: Vec<u16>,
     /// Whether the hub requests are served at all (default: refused).
     pub hub_enabled: bool,
+    /// Whether `update_package` is served (default: refused).
+    pub update_package: bool,
     rate: RateLimiter,
     audit: AuditLog,
     os: Box<dyn Os + Send>,
@@ -45,6 +47,7 @@ impl Broker {
             apply_groups: config.apply_groups,
             bind_udp_ports: config.bind_udp_ports.clone(),
             hub_enabled: config.hub_enabled,
+            update_package: config.update_package,
             rate: RateLimiter::new(config.rate_per_minute),
             audit,
             os,
@@ -88,6 +91,7 @@ impl Broker {
             Request::HubStart(_) => "hub_start",
             Request::HubStop => "hub_stop",
             Request::HubStatus => "hub_status",
+            Request::UpdatePackage => "update_package",
         };
         if !self.rate.allow(peer.uid, now) {
             self.log(peer, action, "rate_limited", String::new());
@@ -119,6 +123,34 @@ impl Broker {
             Request::HubStart(settings) => self.hub_start(peer, settings),
             Request::HubStop => self.hub_stop(peer),
             Request::HubStatus => self.hub_status(peer),
+            Request::UpdatePackage => self.update_package(peer),
+        }
+    }
+
+    /// The package update action: one fixed command (`apt-get install --only-upgrade hams-local-relay`, or the `dnf` equivalent) that the
+    /// caller cannot add to or change, so a verified-signature repository the owner configured is the only source of what installs.
+    fn update_package(&mut self, peer: Peer) -> (Response, Option<OwnedFd>) {
+        if !self.update_package {
+            self.log(
+                peer,
+                "update_package",
+                "denied",
+                "updates not enabled".into(),
+            );
+            return (Response::error(Status::Denied, "updates not enabled"), None);
+        }
+        match self.os.update_package() {
+            Ok(()) => {
+                self.log(peer, "update_package", "allowed", String::new());
+                (Response::Updated, None)
+            }
+            Err(e) => {
+                self.log(peer, "update_package", "failed", e.to_string());
+                (
+                    Response::error(Status::Failed, format!("update: {e}")),
+                    None,
+                )
+            }
         }
     }
 

@@ -26,6 +26,7 @@ fn any_request() -> impl Strategy<Value = Request> {
         prop_oneof![Just(Group::Dialout), Just(Group::Audio)]
             .prop_map(|group| Request::GrantGroup { group }),
         Just(Request::ProvisionGroups),
+        Just(Request::UpdatePackage),
     ]
 }
 

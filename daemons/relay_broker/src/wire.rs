@@ -107,6 +107,8 @@ pub enum Request {
     HubStop,
     /// Whether the hub's two programs are running.
     HubStatus,
+    /// Upgrade the installed relay package through the system package manager (a fixed command, no arguments from the caller; only with `update_package = true`).
+    UpdatePackage,
 }
 
 /// One enumerated device.
@@ -166,6 +168,8 @@ pub enum Response {
         /// The DHCP/DNS server (`dnsmasq`) is running.
         dhcp: bool,
     },
+    /// Answer to `UpdatePackage`: the package manager ran and exited successfully.
+    Updated,
     /// Any non-`Ok` status with a short reason.
     Error {
         /// The status.
@@ -334,6 +338,7 @@ impl Request {
             }
             Request::HubStop => out.push(7),
             Request::HubStatus => out.push(8),
+            Request::UpdatePackage => out.push(9),
         }
         out
     }
@@ -402,6 +407,7 @@ impl Request {
             }
             7 => Request::HubStop,
             8 => Request::HubStatus,
+            9 => Request::UpdatePackage,
             other => return Err(WireError::BadTag(other)),
         };
         r.finish()?;
@@ -478,6 +484,10 @@ impl Response {
                 out.push(4);
                 out.push(u8::from(*access_point));
                 out.push(u8::from(*dhcp));
+            }
+            Response::Updated => {
+                out.push(Status::Ok as u8);
+                out.push(5);
             }
             Response::Error { status, reason } => {
                 out.push(*status as u8);
@@ -557,6 +567,7 @@ impl Response {
                         groups,
                     }
                 }
+                5 => Response::Updated,
                 4 => Response::Hub {
                     access_point: r.bool()?,
                     dhcp: r.bool()?,
@@ -623,6 +634,7 @@ mod tests {
             }),
             Request::HubStop,
             Request::HubStatus,
+            Request::UpdatePackage,
         ]
     }
 
@@ -663,6 +675,7 @@ mod tests {
                 manufacturer: "FTDI".into(),
             }]),
             Response::Opened,
+            Response::Updated,
             Response::Hub {
                 access_point: true,
                 dhcp: false,

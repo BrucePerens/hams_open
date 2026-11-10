@@ -596,3 +596,38 @@ fn the_hub_is_refused_unless_enabled_and_then_written_from_the_templates() {
     );
     assert!(hub.lock().unwrap().is_none());
 }
+
+#[test]
+fn update_package_runs_only_when_the_config_enables_it() {
+    let peer = Peer {
+        uid: HAM_UID,
+        gid: 1000,
+        pid: 4242,
+    };
+    let now = Instant::now();
+    // Off by default: refused, the package manager is never asked.
+    let os = FakeOs::typical();
+    let updates = os.updates.clone();
+    let mut broker = broker_with(&test_config(), os, None);
+    let (resp, _) = broker.handle(peer, &Request::UpdatePackage, now);
+    assert!(
+        matches!(
+            resp,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+    assert_eq!(updates.load(std::sync::atomic::Ordering::SeqCst), 0);
+    // Enabled: one fixed upgrade per request.
+    let mut cfg = test_config();
+    cfg.update_package = true;
+    let os = FakeOs::typical();
+    let updates = os.updates.clone();
+    let mut broker = broker_with(&cfg, os, None);
+    let (resp, _) = broker.handle(peer, &Request::UpdatePackage, now);
+    assert_eq!(resp, Response::Updated);
+    assert_eq!(updates.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
