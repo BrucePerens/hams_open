@@ -800,6 +800,7 @@ async fn the_fifisdr_takes_its_vco_factor_from_the_board_and_carries_mode_levels
 
 fn log_has(bus: &FakeUsbBackend, transfer: FakeTransfer) -> bool {
     bus.log().contains(&transfer)
+}
 
 // Tests [@ANCHOR: radioctl_funcube_gain_value]
 // Tests [@ANCHOR: radioctl_funcube_gain_read]
@@ -903,5 +904,4 @@ async fn the_funcube_gain_commands_follow_the_dongle_model() {
         .await
         .is_err());
     assert!(rig.execute(Op::GetSignal).await.is_err());
-}
 }
