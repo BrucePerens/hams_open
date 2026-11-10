@@ -5,7 +5,7 @@ use crate::link::Link;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
-fn ch(args: &Value) -> Result<u8, String> {
+pub(crate) fn ch(args: &Value) -> Result<u8, String> {
     // [@ANCHOR: bench_mcp_scope_ch]
     match args.get("channel").and_then(|c| c.as_u64()) {
         Some(c @ 1..=2) => Ok(c as u8),
@@ -13,7 +13,7 @@ fn ch(args: &Value) -> Result<u8, String> {
     }
 }
 
-fn stamp() -> String {
+pub(crate) fn stamp() -> String {
     let t = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -56,15 +56,49 @@ pub fn measure(s: &mut Link, args: &Value) -> Result<Value, String> {
             .map(|s| s.to_string())
             .collect(),
     };
+    let runs = match args.get("statistics") {
+        None | Some(Value::Null) => 1,
+        Some(v) => v
+            .as_u64()
+            .filter(|n| (2..=100).contains(n))
+            .ok_or("statistics must be a whole number of readings from 2 to 100")?
+            as usize,
+    };
     let mut m = serde_json::Map::new();
     for it in items {
         if !it.chars().all(|c| c.is_ascii_uppercase()) {
             return Err("bad item".into());
         }
-        let r = s.query(&format!("C{c}:PAVA? {it}"))?;
-        m.insert(it, json!(Link::value(&r)));
+        if runs == 1 {
+            let r = s.query(&format!("C{c}:PAVA? {it}"))?;
+            m.insert(it, json!(Link::value(&r)));
+            continue;
+        }
+        // The scope's own statistics (PACU) did not answer on this unit, so the readings are repeated and summarised here.
+        let mut v: Vec<f64> = Vec::new();
+        for _ in 0..runs {
+            let r = s.query(&format!("C{c}:PAVA? {it}"))?;
+            let t = Link::value(&r).trim_end_matches(|c: char| !(c.is_ascii_digit() || c == '.'));
+            if let Ok(x) = t.parse::<f64>() {
+                v.push(x);
+            }
+        }
+        m.insert(it, statistics(&v, runs));
     }
     Ok(Value::Object(m))
+}
+
+/// Mean, extremes and standard deviation of the readings that were numbers; the rest (`****`, the scope could not measure) are counted.
+// [@ANCHOR: bench_mcp_scope_statistics]
+fn statistics(v: &[f64], asked: usize) -> Value {
+    if v.is_empty() {
+        return json!({"readings": 0, "asked": asked, "failed": asked, "note": "no reading was a number (the scope answers **** when it cannot measure)"});
+    }
+    let n = v.len() as f64;
+    let mean = v.iter().sum::<f64>() / n;
+    let var = v.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n;
+    json!({"readings": v.len(), "asked": asked, "failed": asked - v.len(), "mean": mean,
+        "min": v.iter().cloned().fold(f64::INFINITY, f64::min), "max": v.iter().cloned().fold(f64::NEG_INFINITY, f64::max), "std_dev": var.sqrt()})
 }
 
 struct Analysis {
@@ -110,13 +144,9 @@ fn analyse(volts: &[f32], sara: f64) -> Analysis {
     }
 }
 
-pub fn capture(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> {
-    // [@ANCHOR: bench_mcp_scope_capture]
-    let c = ch(args)?;
-    let stopped = Link::value(&s.query("TRIG_MODE?")?) == "STOP";
-    if stopped && args.get("allow_stopped").and_then(|v| v.as_bool()) != Some(true) {
-        return Err("the scope is stopped, so its waveform memory is an old frozen frame. Set trigger_mode AUTO (bench_set) or pass allow_stopped=true.".into());
-    }
+/// The channel's waveform memory in volts and the sample rate. The caller has checked that the scope is running or that a frozen frame is wanted.
+// [@ANCHOR: bench_mcp_scope_read_waveform]
+pub(crate) fn read_waveform(s: &mut Link, c: u8) -> Result<(Vec<f32>, f64), String> {
     // Every point, no decimation: without this the scope returned a few samples on this unit (found 2026-10-28).
     s.send("WFSU SP,1,NP,0,FP,0")?;
     let vdiv = s.number(&format!("C{c}:VDIV?"))?;
@@ -133,6 +163,17 @@ pub fn capture(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> 
     if volts.is_empty() {
         return Err("empty waveform".into());
     }
+    Ok((volts, sara))
+}
+
+pub fn capture(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_capture]
+    let c = ch(args)?;
+    let stopped = Link::value(&s.query("TRIG_MODE?")?) == "STOP";
+    if stopped && args.get("allow_stopped").and_then(|v| v.as_bool()) != Some(true) {
+        return Err("the scope is stopped, so its waveform memory is an old frozen frame. Set trigger_mode AUTO (bench_set) or pass allow_stopped=true.".into());
+    }
+    let (volts, sara) = read_waveform(s, c)?;
     let st = analyse(&volts, sara);
     let path: PathBuf = out.join(format!("ch{c}_{}.f32", stamp()));
     let bytes: Vec<u8> = volts.iter().flat_map(|v| v.to_le_bytes()).collect();
@@ -358,6 +399,23 @@ mod tests {
         let f = a.freq.unwrap();
         assert!((f - 1000.0).abs() < 1.0, "{f}");
         assert!(a.max > 3.0 && a.min < 0.0);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_statistics]
+    #[test]
+    fn statistics_summarise_numeric_readings_and_count_the_failed_ones() {
+        let v = statistics(&[1.0, 2.0, 3.0], 4);
+        assert_eq!(
+            (v["readings"].as_u64(), v["failed"].as_u64()),
+            (Some(3), Some(1))
+        );
+        assert_eq!(v["mean"], 2.0);
+        assert_eq!(
+            (v["min"].as_f64(), v["max"].as_f64()),
+            (Some(1.0), Some(3.0))
+        );
+        assert!((v["std_dev"].as_f64().unwrap() - (2.0f64 / 3.0).sqrt()).abs() < 1e-12);
+        assert_eq!(statistics(&[], 3)["failed"], 3);
     }
 
     #[test]

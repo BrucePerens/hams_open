@@ -10,6 +10,7 @@ use vnwa_open::timedomain::{gate, peak_time, transform, Mode, Response, Window};
 /// Speed of light, m/s.
 const C: f64 = 299_792_458.0;
 
+// [@ANCHOR: bench_vna_time_text]
 fn text<'a>(args: &'a Value, key: &str, default: &'a str) -> Result<&'a str, String> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(default),
@@ -17,6 +18,7 @@ fn text<'a>(args: &'a Value, key: &str, default: &'a str) -> Result<&'a str, Str
     }
 }
 
+// [@ANCHOR: bench_vna_time_number]
 fn number(args: &Value, key: &str) -> Result<Option<f64>, String> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
@@ -193,6 +195,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_vna_time_domain]
+    // Tests [@ANCHOR: bench_vna_time_text]
+    // Tests [@ANCHOR: bench_vna_time_number]
     // Tests [@ANCHOR: bench_vna_time_read_sweep]
     // Tests [@ANCHOR: bench_vna_time_file]
     #[test]
