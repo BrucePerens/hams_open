@@ -682,6 +682,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_si570_usb_word_from_hz] (radioctl-protocols) The 11.21 fixed-point oscillator word for a receive frequency, or `None` when it does not fit in 32 bits (oscillator above 2047 MHz).
 - [@ANCHOR: radioctl:radioctl_si570_usb_registers_from_hz] (radioctl-protocols) The six Si570 register bytes for a receive frequency on DG8SAQ firmware older than 0x0F00 (host-solved dividers), or `None` when the DCO cannot reach its window.
 - [@ANCHOR: radioctl:radioctl_si570_usb_hz_from_registers] (radioctl-protocols) The receive frequency of six Si570 register bytes.
+- [@ANCHOR: radioctl:radioctl_si570_usb_fifi_answer] (radioctl-protocols) What a FiFi-SDR parameter answer means (mode, width, volume, preamp, S-meter); the VCO factor answer replaces the engine's multiplier.
+- [@ANCHOR: radioctl:radioctl_si570_usb_engine_open_requests] (radioctl-protocols) The FiFi-SDR's open step: read the VCO factor (request 0xAB, wIndex 11); the other Si570 boards have none.
 - [@ANCHOR: radioctl:radioctl_si570_usb_hz_from_word] (radioctl-protocols) The receive frequency for an oscillator word, rounded to the nearest hertz; `None` for a multiplier of zero.
 - [@ANCHOR: radioctl:radioctl_si570_usb_engine_new] (radioctl-protocols) Builds an engine from a `si570` or `fifisdr` USB description.
 - [@ANCHOR: radioctl:radioctl_si570_usb_set_value] (radioctl-protocols) wValue of the set-frequency request on this board.

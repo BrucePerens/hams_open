@@ -1,10 +1,10 @@
 # Rig description: FiFi-SDR (usb-device, schema 1). See crates/radioctl-core/src/rigfile.rs.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/kit/fifisdr.c, read for facts only) and `rigctl -m 25012 --dump-caps`; no vendor document was read and no code was copied.
-# Hamlib lists: receive 39.1 kHz to 175 MHz. Si570 by-value frequency word (requests 0x32 and 0x3A); the multiplier is read from the device (request 0x39), default 4. Hamlib also sets mode, levels and a clarifier through vendor requests 0xAB and 0xAC, not described here.
-# ENGINE: crates/radioctl-protocols/src/si570_usb.rs (frequency) over the USB transport (radioctl-core usb_link; `transport kind = "usb"` in radioctld, which needs a build with the `usb` cargo feature and libusb-1.0). Tested only against the virtual twin on the fake USB bus; unverified on a board.
+# Hamlib lists: receive 39.1 kHz to 175 MHz. Si570 by-value frequency word (requests 0x32 and 0x3A); the VCO factor (the multiplier) is read from the device when the rig is opened (request 0xAB, wIndex 11; Hamlib fifisdr_open), default 4. Requests 0xAB (read) and 0xAC (write) carry mode, filter width, volume, preamp and S-meter by wIndex (Hamlib fifisdr_set_mode, fifisdr_get_mode, fifisdr_set_level, fifisdr_get_level); squelch, AGC and FM centre are not mapped.
+# ENGINE: crates/radioctl-protocols/src/si570_usb.rs (frequency, mode, filter width, af-gain, preamp, S-meter) over the USB transport (radioctl-core usb_link; `transport kind = "usb"` in radioctld, which needs a build with the `usb` cargo feature and libusb-1.0). Tested only against the virtual twin on the fake USB bus; unverified on a board.
 schema = 1
-capabilities = ["read-frequency", "set-frequency"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-signal", "filter", "levels"]
 
 [rig]
 id = "fifi-sdr"
@@ -18,6 +18,11 @@ product_id = 0x05DC
 manufacturer = "www.ov-lennestadt.de"
 product = "FiFi-SDR"
 multiplier = 4
+
+[levels]
+attenuator_db = []
+attenuator_any_up_to_db = 0
+preamp_steps = 1
 
 [timing]
 timeout_ms = 1000
@@ -45,10 +50,15 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "usb.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/fifisdr.c (USB ids, manufacturer and product strings, multiplier)", note = "Read for facts only; no code copied. Si570 by-value frequency word (requests 0x32 and 0x3A); the multiplier is read from the device (request 0x39), default 4. Hamlib also sets mode, levels and a clarifier through vendor requests 0xAB and 0xAC, not described here." }
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/fifisdr.c (USB ids, manufacturer and product strings, multiplier)", note = "Read for facts only; no code copied. Si570 by-value frequency word (requests 0x32 and 0x3A); the VCO factor (the multiplier) is read from the device when the rig is opened (request 0xAB, wIndex 11; Hamlib fifisdr_open), default 4. Requests 0xAB (read) and 0xAC (write) carry mode, filter width, volume, preamp and S-meter by wIndex (Hamlib fifisdr_set_mode, fifisdr_get_mode, fifisdr_set_level, fifisdr_get_level); squelch, AGC and FM centre are not mapped." }
 verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "`rigctl -m 25012 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/fifisdr.c", note = "A capability is claimed when Hamlib's backend implements it. Only frequency is implemented, by the Si570 USB engine (si570_usb.rs); tested against its virtual twin, not a board." }
+provenance = { kind = "program-output", reference = "`rigctl -m 25012 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/fifisdr.c", note = "A capability is claimed when Hamlib's backend implements it. Frequency, mode (LSB, USB, AM, FM), filter width, af-gain, preamp (step 1 is +6 dB) and the raw S-meter are implemented, by the Si570 USB engine (si570_usb.rs); tested against its virtual twin, not a board." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/fifisdr.c fifisdr_set_level and fifisdr_get_level, RIG_LEVEL_PREAMP", note = "Read for facts only; no code copied. The ADC preamp is one switch, 0 dB or +6 dB (request 0xAC/0xAB, wIndex 19), so one preamp step and no attenuator." }
 verified = { state = "unverified" }

@@ -31,7 +31,24 @@
 //! `si570avrusb.h` (constants, request numbers), `si570avrusb.c` `calcDividers`,
 //! `si570xxxusb_set_freq`, `calculateFrequency`, `si570xxxusb_get_freq`.
 //!
-//! The multiplier comes from the description, not from the board.
+//! The FiFi-SDR also has its own read (0xAB) and write (0xAC) requests, always wValue 0 with the
+//! parameter number in wIndex (Hamlib `fifisdr.c`: `fifisdr_open`, `fifisdr_set_mode`,
+//! `fifisdr_get_mode`, `fifisdr_set_level`, `fifisdr_get_level`, all little-endian):
+//!
+//! | wIndex | parameter | size | radioctl |
+//! |---|---|---|---|
+//! | 11 | VCO factor (the multiplier) | u32 | read once when the rig is opened, replaces the description's multiplier |
+//! | 14 | demodulator volume, 0 to 100 | i16 | `af-gain` |
+//! | 15 | demodulator mode: 0 LSB, 1 USB, 2 AM, 3 FM | u8 | mode |
+//! | 16 | filter width in hertz | u32 | filter width |
+//! | 17 | S-meter | u32 | signal (raw, capped at 65535) |
+//! | 19 | ADC preamp: 0 off, 1 +6 dB | u8 | `preamp` step 0 or 1 |
+//!
+//! Parameters 0 (firmware), 18 (FM centre), 20 (squelch) and 21 (AGC) are not mapped: radioctl has
+//! no squelch, AGC or FM-centre operation. Hamlib's set-volume clamps to 100; an out-of-range
+//! volume read back is reported as 0, as Hamlib does.
+//!
+//! Otherwise the multiplier comes from the description, not from the board.
 
 use std::time::Duration;
 
@@ -39,7 +56,7 @@ use radioctl_core::description::{RigDescription, UsbProtocol};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::units::{Hz, Vfo};
+use radioctl_core::units::{Hz, Level, Mode, Vfo};
 use radioctl_core::usb_device::{UsbDevice, UsbFailure};
 use radioctl_core::usb_wire::{FrameError, UsbReply, UsbStatus, UsbTransfer};
 
@@ -59,6 +76,17 @@ pub const REQUEST_READ_REGISTERS: u8 = 0x3F;
 pub const REQUEST_SET_PTT: u8 = 0x50;
 /// The Si570's I2C address as the kits use it.
 const SI570_I2C_ADDRESS: u16 = 0x55;
+
+/// FiFi-SDR read request.
+pub const REQUEST_FIFISDR_READ: u8 = 0xAB;
+/// FiFi-SDR write request.
+pub const REQUEST_FIFISDR_WRITE: u8 = 0xAC;
+const FIFI_VCO_FACTOR: u16 = 11;
+const FIFI_VOLUME: u16 = 14;
+const FIFI_MODE: u16 = 15;
+const FIFI_WIDTH: u16 = 16;
+const FIFI_SMETER: u16 = 17;
+const FIFI_PREAMP: u16 = 19;
 
 /// The nominal crystal of the DG8SAQ boards, in hertz.
 const NOMINAL_CRYSTAL_HZ: u128 = 114_285_000;
@@ -145,6 +173,67 @@ enum Pending {
     Set,
     ReadFrequency,
     ReadRegisters,
+    Fifi(FifiRead),
+}
+
+/// What a pending FiFi-SDR parameter read holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FifiRead {
+    VcoFactor,
+    Mode,
+    Width,
+    Volume,
+    Preamp,
+    Signal,
+}
+
+fn fifi_read(
+    index: u16,
+    length: u16,
+    reply: ReplyKind,
+    read: FifiRead,
+) -> (UsbTransfer, ReplyKind, Pending) {
+    (
+        UsbTransfer::ControlIn {
+            request_type: VENDOR_IN,
+            request: REQUEST_FIFISDR_READ,
+            value: 0,
+            index,
+            length,
+        },
+        reply,
+        Pending::Fifi(read),
+    )
+}
+
+fn fifi_write(index: u16, data: Vec<u8>) -> (UsbTransfer, ReplyKind, Pending) {
+    (
+        UsbTransfer::ControlOut {
+            request_type: VENDOR_OUT,
+            request: REQUEST_FIFISDR_WRITE,
+            value: 0,
+            index,
+            data,
+        },
+        ReplyKind::Ack,
+        Pending::Set,
+    )
+}
+
+fn fifi_mode_code(mode: Mode) -> Option<u8> {
+    match mode {
+        Mode::Lsb => Some(0),
+        Mode::Usb => Some(1),
+        Mode::Am => Some(2),
+        Mode::Fm => Some(3),
+        _ => None,
+    }
+}
+
+fn fifi_mode_of(code: u8) -> Option<Mode> {
+    [Mode::Lsb, Mode::Usb, Mode::Am, Mode::Fm]
+        .into_iter()
+        .find(|m| fifi_mode_code(*m) == Some(code))
 }
 
 /// The Si570 USB client engine.
@@ -193,6 +282,54 @@ impl Si570UsbEngine {
     }
 }
 
+impl Si570UsbEngine {
+    // [@ANCHOR: radioctl_si570_usb_fifi_answer]
+    /// What a FiFi-SDR parameter answer means; the VCO factor answer is taken into the engine.
+    fn fifi_answer(&mut self, read: FifiRead, reply: &UsbReply) -> Inbound {
+        let bad = || Inbound::Unrecognised(reply.encode());
+        let word = <[u8; 4]>::try_from(reply.data.as_slice())
+            .ok()
+            .map(u32::from_le_bytes);
+        match read {
+            FifiRead::VcoFactor => {
+                // A zero or absurd factor would divide by zero; keep the description's.
+                if let Some(factor) = word.and_then(|w| u8::try_from(w).ok()).filter(|f| *f > 0) {
+                    self.multiplier = factor;
+                }
+                Inbound::Ack
+            }
+            FifiRead::Mode => match reply.data.as_slice() {
+                [code] => fifi_mode_of(*code)
+                    .map(|m| Inbound::Observation(Observation::Mode(m)))
+                    .unwrap_or_else(bad),
+                _ => bad(),
+            },
+            FifiRead::Width => word
+                .map(|w| Inbound::Observation(Observation::FilterWidth(Hz(u64::from(w)))))
+                .unwrap_or_else(bad),
+            FifiRead::Signal => word
+                .map(|w| {
+                    Inbound::Observation(Observation::Signal(u16::try_from(w).unwrap_or(u16::MAX)))
+                })
+                .unwrap_or_else(bad),
+            FifiRead::Volume => match <[u8; 2]>::try_from(reply.data.as_slice()) {
+                Ok(b) => {
+                    let volume = u16::try_from(i16::from_le_bytes(b))
+                        .ok()
+                        .filter(|v| *v <= 100)
+                        .unwrap_or(0);
+                    Inbound::Observation(Observation::Level(Level::AfGain, volume))
+                }
+                Err(_) => bad(),
+            },
+            FifiRead::Preamp => match reply.data.as_slice() {
+                [b] => Inbound::Observation(Observation::Level(Level::Preamp, u16::from(*b != 0))),
+                _ => bad(),
+            },
+        }
+    }
+}
+
 impl ProtocolEngine for Si570UsbEngine {
     fn description(&self) -> &RigDescription {
         &self.desc
@@ -204,6 +341,7 @@ impl ProtocolEngine for Si570UsbEngine {
             return Err(unsupported("capability not in the rig description"));
         }
         let legacy = self.protocol == UsbProtocol::Si570Legacy;
+        let fifi = self.protocol == UsbProtocol::Fifisdr;
         let (transfer, reply, pending) = match op {
             Op::GetFrequency(Vfo::A) if legacy => (
                 UsbTransfer::ControlIn {
@@ -272,6 +410,57 @@ impl ProtocolEngine for Si570UsbEngine {
                     Pending::Set,
                 )
             }
+            Op::GetMode if fifi => fifi_read(
+                FIFI_MODE,
+                1,
+                ReplyKind::Observation(Field::Mode),
+                FifiRead::Mode,
+            ),
+            Op::SetMode(mode) if fifi => {
+                let code = fifi_mode_code(*mode).ok_or_else(|| {
+                    unsupported("the FiFi-SDR demodulates LSB, USB, AM and FM only")
+                })?;
+                fifi_write(FIFI_MODE, vec![code])
+            }
+            Op::GetFilterWidth if fifi => fifi_read(
+                FIFI_WIDTH,
+                4,
+                ReplyKind::Observation(Field::FilterWidth),
+                FifiRead::Width,
+            ),
+            Op::SetFilterWidth(hz) if fifi => {
+                let hz = u32::try_from(hz.0)
+                    .map_err(|_| unsupported("filter width does not fit in 32 bits"))?;
+                fifi_write(FIFI_WIDTH, hz.to_le_bytes().to_vec())
+            }
+            Op::GetSignal if fifi => fifi_read(
+                FIFI_SMETER,
+                4,
+                ReplyKind::Observation(Field::Signal),
+                FifiRead::Signal,
+            ),
+            Op::GetLevel(Level::AfGain) if fifi => fifi_read(
+                FIFI_VOLUME,
+                2,
+                ReplyKind::Observation(Field::Level(Level::AfGain)),
+                FifiRead::Volume,
+            ),
+            Op::SetLevel(Level::AfGain, value) if fifi => fifi_write(
+                FIFI_VOLUME,
+                i16::try_from((*value).min(100))
+                    .unwrap_or(100)
+                    .to_le_bytes()
+                    .to_vec(),
+            ),
+            Op::GetLevel(Level::Preamp) if fifi => fifi_read(
+                FIFI_PREAMP,
+                1,
+                ReplyKind::Observation(Field::Level(Level::Preamp)),
+                FifiRead::Preamp,
+            ),
+            Op::SetLevel(Level::Preamp, step @ (0 | 1)) if fifi => {
+                fifi_write(FIFI_PREAMP, vec![u8::try_from(*step).unwrap_or(0)])
+            }
             _ => return Err(unsupported("not implemented for the Si570 USB engine")),
         };
         self.pending = pending;
@@ -280,6 +469,27 @@ impl ProtocolEngine for Si570UsbEngine {
             bytes: transfer.encode(),
             reply,
         })
+    }
+
+    // [@ANCHOR: radioctl_si570_usb_engine_open_requests]
+    fn open_requests(&mut self) -> Vec<Request> {
+        if self.protocol != UsbProtocol::Fifisdr {
+            return Vec::new();
+        }
+        self.rx.clear();
+        let (transfer, reply, pending) =
+            fifi_read(FIFI_VCO_FACTOR, 4, ReplyKind::Ack, FifiRead::VcoFactor);
+        self.pending = pending;
+        vec![Request {
+            bytes: transfer.encode(),
+            reply,
+        }]
+    }
+
+    fn link_restored(&mut self) -> Vec<Request> {
+        self.pending = Pending::Nothing;
+        self.rx.clear();
+        self.open_requests()
     }
 
     // [@ANCHOR: radioctl_si570_usb_engine_feed]
@@ -322,6 +532,7 @@ impl ProtocolEngine for Si570UsbEngine {
                         None => Inbound::Unrecognised(reply.encode()),
                     }
                 }
+                (Pending::Fifi(read), UsbStatus::Ok) => self.fifi_answer(read, &reply),
                 (_, _) => Inbound::Nak,
             });
         }
@@ -336,6 +547,18 @@ pub struct Si570Twin {
     word: u32,
     registers: [u8; 6],
     ptt: bool,
+    fifi: FifiState,
+}
+
+/// The FiFi-SDR parameters the twin holds.
+#[derive(Debug)]
+struct FifiState {
+    vco_factor: u32,
+    mode: u8,
+    width: u32,
+    volume: i16,
+    preamp: u8,
+    signal: u32,
 }
 
 impl Si570Twin {
@@ -354,7 +577,22 @@ impl Si570Twin {
             word,
             registers,
             ptt: false,
+            fifi: FifiState {
+                vco_factor: u32::from(usb.multiplier),
+                mode: 1,
+                width: 2_400,
+                volume: 50,
+                preamp: 0,
+                signal: 0,
+            },
         })
+    }
+
+    /// Makes a FiFi-SDR twin report another VCO factor and S-meter reading than the defaults, so
+    /// a test can see the engine take them from the board.
+    pub fn set_fifisdr_factor_and_signal(&mut self, vco_factor: u32, signal: u32) {
+        self.fifi.vco_factor = vco_factor;
+        self.fifi.signal = signal;
     }
 
     // [@ANCHOR: radioctl_si570_usb_twin_ptt]
@@ -375,6 +613,22 @@ impl UsbDevice for Si570Twin {
         length: u16,
         _timeout: Duration,
     ) -> Result<Vec<u8>, UsbFailure> {
+        if self.protocol == UsbProtocol::Fifisdr
+            && request_type == VENDOR_IN
+            && request == REQUEST_FIFISDR_READ
+            && value == 0
+        {
+            let f = &self.fifi;
+            return match (index, length) {
+                (FIFI_VCO_FACTOR, 4) => Ok(f.vco_factor.to_le_bytes().to_vec()),
+                (FIFI_VOLUME, 2) => Ok(f.volume.to_le_bytes().to_vec()),
+                (FIFI_MODE, 1) => Ok(vec![f.mode]),
+                (FIFI_WIDTH, 4) => Ok(f.width.to_le_bytes().to_vec()),
+                (FIFI_SMETER, 4) => Ok(f.signal.to_le_bytes().to_vec()),
+                (FIFI_PREAMP, 1) => Ok(vec![f.preamp]),
+                _ => Err(UsbFailure::Stall),
+            };
+        }
         match (request_type, request, index, length) {
             (VENDOR_IN, REQUEST_READ_FREQUENCY, 0, 4)
                 if self.protocol != UsbProtocol::Si570Legacy =>
@@ -411,6 +665,21 @@ impl UsbDevice for Si570Twin {
             UsbProtocol::Fifisdr => 0,
             _ => 0x700 + SI570_I2C_ADDRESS,
         };
+        if self.protocol == UsbProtocol::Fifisdr
+            && request_type == VENDOR_OUT
+            && request == REQUEST_FIFISDR_WRITE
+            && value == 0
+        {
+            let f = &mut self.fifi;
+            match (index, data) {
+                (FIFI_VOLUME, [a, b]) => f.volume = i16::from_le_bytes([*a, *b]),
+                (FIFI_MODE, [m]) if *m <= 3 => f.mode = *m,
+                (FIFI_WIDTH, [a, b, c, d]) => f.width = u32::from_le_bytes([*a, *b, *c, *d]),
+                (FIFI_PREAMP, [p]) if *p <= 1 => f.preamp = *p,
+                _ => return Err(UsbFailure::Stall),
+            }
+            return Ok(data.len());
+        }
         if self.protocol == UsbProtocol::Si570Legacy {
             return match (
                 request_type,
