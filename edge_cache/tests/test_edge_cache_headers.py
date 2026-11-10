@@ -307,6 +307,9 @@ class TestEdgeCacheHeaders(HamsHttpCase):
         for path in (
             "/definitely-not-a-route-9c4e1b58",
             "/blog/definitely-not-a-post-9c4e1b58",
+            # A stale asset bundle link after a deploy: the controller raises NotFound and Odoo answers with the
+            # bare werkzeug exception, which never reaches _post_dispatch.
+            "/web/assets/1/definitely-not-a-bundle-9c4e1b58.js",
         ):
             response = self.url_open(path, allow_redirects=False)
             self.assertGreaterEqual(response.status_code, 400, path)
