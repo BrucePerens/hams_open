@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
 import time
-from odoo import models, fields, _
+from odoo import api, models, fields, _
 from odoo.exceptions import UserError
 import logging
 from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token, inspect_token
@@ -91,10 +91,19 @@ class ResConfigSettings(models.TransientModel):
             ) or _("Never")
 
     # [@ANCHOR: cloudflare:COMM_settings_check_token_scope]
-    def _check_cloudflare_token_scope(self):
-        """Refuse (unless overridden) a changed token that is broad or that Cloudflare cannot introspect."""
-        token = self.cloudflare_api_token
-        if not token or token == self.website_id.cloudflare_api_token:
+    def _check_cloudflare_token_scope(self, vals):
+        """Refuse (unless overridden) a changed token that is broad or that Cloudflare cannot introspect.
+
+        Runs on the values about to be created: Settings' create writes the token to the website at once, so
+        by set_values time the token no longer looks changed.
+        """
+        token = vals.get("cloudflare_api_token")
+        website = (
+            self.env["website"].browse(vals["website_id"])
+            if vals.get("website_id")
+            else self.env["website"].get_current_website()
+        )
+        if not token or token == website.cloudflare_api_token:
             return
         ok, detail = inspect_token(token)
         if ok and not detail:
@@ -105,13 +114,18 @@ class ResConfigSettings(models.TransientModel):
                         "module README and remove these.") % ", ".join(detail)
         else:
             problem = detail
-        if self.cloudflare_allow_broad_token:
+        if vals.get("cloudflare_allow_broad_token"):
             _logger.warning("Cloudflare token accepted by override (cloudflare.allow_broad_token): %s", problem)
             return
         raise UserError(problem + " " + _("(Tick 'Allow an over-broad API token' to override.)"))
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            self._check_cloudflare_token_scope(vals)
+        return super().create(vals_list)
+
     def set_values(self):
-        self._check_cloudflare_token_scope()
         super().set_values()
         # Publish the custom-ranges edit to Redis immediately, so it takes effect for the
         # env-less WSGI hook (wsgi_proxy_scheme.py) right away instead of waiting for the

@@ -74,18 +74,15 @@ class TestTokenScope(HamsTransactionCase):
     def test_settings_refuse_then_override(self):
         # Tests [@ANCHOR: cloudflare:COMM_settings_check_token_scope]
         pol = [{"effect": "allow", "permission_groups": [{"name": "Billing Write"}]}]
-        settings = self._settings(cloudflare_api_token="brand-new-token")
         m = self.safe_patch("odoo.addons.cloudflare.models.res_config_settings.inspect_token")
         m.return_value = (True, cloudflare_api.broad_token_permissions(pol))
         with self.assertRaisesRegex(UserError, "Billing Write"):
-            settings._check_cloudflare_token_scope()
-        settings.cloudflare_allow_broad_token = True
-        settings._check_cloudflare_token_scope()  # accepted, logged
+            self._settings(cloudflare_api_token="brand-new-token")
+        self._settings(cloudflare_api_token="brand-new-token", cloudflare_allow_broad_token=True)  # accepted, logged
 
     def test_settings_unchanged_token_not_rechecked(self):
         website = self.env["website"].get_current_website()
         website.write({"cloudflare_api_token": "same"})
-        settings = self._settings()
         m = self.safe_patch("odoo.addons.cloudflare.models.res_config_settings.inspect_token")
-        settings._check_cloudflare_token_scope()
+        self._settings(cloudflare_api_token="same")
         m.assert_not_called()
