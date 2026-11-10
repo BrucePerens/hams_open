@@ -564,6 +564,7 @@ class TestDnsApiCalls(HamsTransactionCase):
         self.mock = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api._make_request")
 
     def test_01_find_zone_matches_the_exact_name_and_reports_a_failed_read(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_find_zone_id]
         zid = _id()
         self.mock.return_value = self._Response({"result": [{"name": "hams.com.evil.net", "id": _id()},
                                                             {"name": "hams.com", "id": zid}]})
@@ -575,6 +576,7 @@ class TestDnsApiCalls(HamsTransactionCase):
         self.assertEqual(cloudflare_api.find_zone_id("hams.com", "t"), (False, "API Error"))
 
     def test_02_listing_follows_pages_and_a_failed_page_is_not_an_empty_list(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_list_records_named]
         zone = _id()
         pages = [self._Response({"result": [{"id": "1"}], "result_info": {"total_pages": 2}}),
                  self._Response({"result": [{"id": "2"}], "result_info": {"total_pages": 2}})]
@@ -584,6 +586,10 @@ class TestDnsApiCalls(HamsTransactionCase):
         self.assertEqual(cloudflare_api.list_dns_records_named(zone, "a.hams.com", "t"), (False, "API Error"))
 
     def test_03_create_posts_and_update_puts_and_ids_that_are_not_cloudflare_ids_are_refused(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_is_cloudflare_id]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_list_records_named]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_create_record]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_update_record]
         zone, rid = _id(), _id()
         self.mock.side_effect = None
         self.mock.return_value = self._Response({"result": {"id": rid}})
@@ -600,6 +606,8 @@ class TestDnsApiCalls(HamsTransactionCase):
         self.assertEqual(cloudflare_api.create_dns_record(zone, {}, "t"), (False, "API Error"))
 
     def test_04_delete_uses_delete_treats_404_as_gone_and_refuses_malformed_ids(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_is_cloudflare_id]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_delete_record]
         zone, rid = _id(), _id()
         self.mock.return_value = self._Response({"result": {"id": rid}})
         self.assertEqual(cloudflare_api.delete_dns_record(zone, rid, "t"), (True, rid))
@@ -614,6 +622,8 @@ class TestDnsApiCalls(HamsTransactionCase):
 
 
     def test_04_zone_details_and_record_count_are_reads_and_a_missing_total_is_a_failure(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_get_zone_details]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_count_records]
         zone = _id()
         self.mock.return_value = self._Response({"result": {"plan": {"legacy_id": "pro"}, "created_on": "2014-01-25"}})
         self.assertEqual(cloudflare_api.get_zone_details(zone, "t")[1]["plan"]["legacy_id"], "pro")
