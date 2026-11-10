@@ -85,6 +85,12 @@ exercised with the test's own UID), and the systemd units (examples under `packa
 never installed; `CapabilityBoundingSet=` empty by default, one capability to be added per
 action only when measured necessary).
 
+The emergency hub's generated configuration has one more test, `tests/hub_netns.rs`, skipped unless `HAMS_HUB_NETNS=1`. It runs the real `dnsmasq`
+from `hub::dnsmasq_conf` in a network namespace joined to a client namespace by a veth pair (no Wi-Fi), takes a DHCP lease (router, DNS server and NTP
+server options, pool, lease time) and resolves the relay name and the captive-portal probe names against it; `hostapd` cannot run without a radio, so
+`hub::hostapd_conf` is only parsed by the real `hostapd` (a deliberately broken file must be rejected). It needs passwordless `sudo ip`, and runs as a
+bounded job: `agent_procs.py run --tag NAME hubns -- timeout 120 env HAMS_HUB_NETNS=1 cargo test --test hub_netns`.
+
 ## Build and test
 
 ```sh
