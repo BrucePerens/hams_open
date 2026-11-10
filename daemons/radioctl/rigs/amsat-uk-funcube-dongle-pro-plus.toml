@@ -1,10 +1,10 @@
 # Rig description: AMSAT-UK FUNcube Dongle Pro+ (usb-device, schema 1). See crates/radioctl-core/src/rigfile.rs.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/kit/funcube.c, funcube.h, read for facts only) and `rigctl -m 25018 --dump-caps`; no vendor document was read and no code was copied.
-# Hamlib lists: receive 150 kHz to 1.9 GHz. Same HID framing as the FUNcube Dongle (commands 0x65 and 0x66); the Pro+ adds LNA, mixer and IF gain commands that are not described here.
-# ENGINE: crates/radioctl-protocols/src/funcube.rs (frequency; 64-byte reports as libusb interrupt transfers on interface 2) over the USB transport (radioctl-core usb_link; `transport kind = "usb"` in radioctld, which needs a build with the `usb` cargo feature and libusb-1.0). Tested only against the virtual twin on the fake USB bus; unverified on a dongle.
+# Hamlib lists: receive 150 kHz to 1.9 GHz. Same HID framing as the FUNcube Dongle (commands 0x65 and 0x66); the Pro+ adds LNA, mixer and IF gain commands (0x6E, 0x72, 0x75; reads 0x96, 0x9A, 0x9D).
+# ENGINE: crates/radioctl-protocols/src/funcube.rs (frequency, LNA, mixer and IF gain; 64-byte reports as libusb interrupt transfers on interface 2) over the USB transport (radioctl-core usb_link; `transport kind = "usb"` in radioctld, which needs a build with the `usb` cargo feature and libusb-1.0). Tested only against the virtual twin on the fake USB bus; unverified on a dongle.
 schema = 1
-capabilities = ["read-frequency", "set-frequency"]
+capabilities = ["read-frequency", "set-frequency", "levels"]
 
 [rig]
 id = "amsat-uk-funcube-dongle-pro-plus"
@@ -18,6 +18,11 @@ product_id = 0xFB31
 manufacturer = "Hanlincrest Ltd."
 product = "FunCube Dongle Pro+"
 multiplier = 0
+
+[levels]
+attenuator_db = [20]
+attenuator_any_up_to_db = 0
+preamp_steps = 1
 
 [timing]
 timeout_ms = 1000
@@ -45,10 +50,15 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "usb.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/funcube.c, funcube.h (USB ids, manufacturer and product strings, multiplier)", note = "Read for facts only; no code copied. Same HID framing as the FUNcube Dongle (commands 0x65 and 0x66); the Pro+ adds LNA, mixer and IF gain commands that are not described here." }
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/funcube.c, funcube.h (USB ids, manufacturer and product strings, multiplier)", note = "Read for facts only; no code copied. Same HID framing as the FUNcube Dongle (commands 0x65 and 0x66); the Pro+ adds LNA, mixer and IF gain commands (0x6E, 0x72, 0x75; reads 0x96, 0x9A, 0x9D)." }
 verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "`rigctl -m 25018 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/funcube.c, funcube.h", note = "A capability is claimed when Hamlib's backend implements it. Only frequency is implemented, by the FUNcube engine (funcube.rs); tested against its virtual twin, not a dongle." }
+provenance = { kind = "program-output", reference = "`rigctl -m 25018 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/funcube.c, funcube.h", note = "A capability is claimed when Hamlib's backend implements it. Frequency and the LNA, mixer and IF gain levels are implemented, by the FUNcube engine (funcube.rs); tested against its virtual twin, not a dongle." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/kit/funcube.c funcube_set_level, funcube_get_level, funcubepro_set_level, funcubepro_get_level; funcube.h (commands 0x6E, 0x72, 0x75, 0x96, 0x9A, 0x9D, 0x68)", note = "Read for facts only; no code copied. LNA on or off (0x6E, read 0x96) is preamp step 1 (+10 dB); mixer gain (0x72, read 0x9A) is +20 dB when on, mapped to attenuator step 1 = mixer gain off (a radioctl choice, reversible by editing); IF gain 0 to 59 dB (0x75, read 0x9D) is rf-gain in decibels. Hamlib has no RSSI for the Pro+." }
 verified = { state = "unverified" }

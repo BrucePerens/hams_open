@@ -694,6 +694,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_si570_usb_twin_control] (radioctl-protocols) `control_in` (see the source).
 - [@ANCHOR: radioctl:radioctl_funcube_command_report] (radioctl-protocols) The 64-byte report for command `command` with argument bytes `args`.
 - [@ANCHOR: radioctl:radioctl_funcube_engine_new] (radioctl-protocols) Builds an engine from a `funcube` USB description.
+- [@ANCHOR: radioctl:radioctl_funcube_gain_value] (radioctl-protocols) The command and argument byte that set a level to a step on this dongle (original Dongle LNA code, or Pro+ LNA, mixer and IF gain).
+- [@ANCHOR: radioctl:radioctl_funcube_gain_read] (radioctl-protocols) The read command and answer decoding for a level on this dongle.
 - [@ANCHOR: radioctl:radioctl_funcube_exchange] (radioctl-protocols) `exchange` (see the source).
 - [@ANCHOR: radioctl:radioctl_funcube_engine_encode] (radioctl-protocols) `encode` (see the source).
 - [@ANCHOR: radioctl:radioctl_funcube_engine_feed] (radioctl-protocols) `feed` (see the source).
