@@ -1,4 +1,5 @@
-from unittest.mock import MagicMock
+import os
+from unittest.mock import MagicMock, patch
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -35,6 +36,22 @@ class TestDatabaseManagement(HamsTransactionCase):
         if stat:
             stat.action_vacuum_analyze()
             mock_run.assert_called()
+
+    def test_01a_vacuum_uses_the_local_socket_and_never_a_password(self):
+        # Tests [@ANCHOR: COMM_vacuum_analyze]
+        mock_run = self.safe_patch("subprocess.run")
+        self.safe_patch("shutil.which", return_value="/bin/mock")
+        mock_run.return_value = MagicMock(returncode=0)
+        stat = self.env["database.table.stat"].search([("table_name", "=", "res_users")], limit=1)
+        self.assertTrue(stat)
+        with patch.dict(os.environ, {"PGPASSWORD": "leaked", "PGHOST": ""}):
+            stat.action_vacuum_analyze()
+        env = mock_run.call_args.kwargs["env"]
+        self.assertNotIn("PGPASSWORD", env)
+        self.assertNotIn("PGHOST", env, "no PGHOST means libpq uses the local socket")
+        with patch.dict(os.environ, {"PGHOST": "/var/run/postgresql"}):
+            stat.action_vacuum_analyze()
+        self.assertEqual(mock_run.call_args.kwargs["env"]["PGHOST"], "/var/run/postgresql")
 
     def test_01b_vacuum_analyze_failures(self):
         mock_run = self.safe_patch("subprocess.run")

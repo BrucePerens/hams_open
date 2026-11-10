@@ -70,14 +70,15 @@ class DatabaseTableStat(models.Model):
         exe = self._get_executable("vacuumdb")
         db_name = self.env.cr.dbname
         # ADR-0044: Use minimal environment for subprocess to prevent secret leakage
+        # No password: with PGHOST unset vacuumdb uses the local socket and peer authentication, the way the Odoo process itself
+        # connects (hams_shared docs/DATABASE_SEPARATION.md). A PGHOST that names a TCP host is the operator's own arrangement.
         env_vars = {
             "PATH": os.environ.get("PATH", ""),
-            "PGHOST": os.environ.get("PGHOST", "postgres"),
             "PGPORT": os.environ.get("PGPORT", "5432"),
             "PGUSER": os.environ.get("PGUSER", "odoo"),
         }
-        if "PGPASSWORD" in os.environ:
-            env_vars["PGPASSWORD"] = os.environ["PGPASSWORD"]
+        if os.environ.get("PGHOST"):
+            env_vars["PGHOST"] = os.environ["PGHOST"]
 
         # Performance: Batching tables to reduce subprocess overhead and connection round-trips
         table_names = self.filtered(lambda r: r.table_name).mapped("table_name")

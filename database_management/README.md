@@ -34,7 +34,7 @@ Models in this module are designed to be **logically global**. Since they monito
 
 *   **Input Validation:** The HA wizard parses node IP addresses with Python's `ipaddress` module, requires cluster and user names to match `^[a-zA-Z0-9_]+$`, requires etcd hosts as comma-separated `host:port` pairs, and requires a replication password of at least 8 characters with no characters that would break the generated YAML. `[@ANCHOR: COMM_pg_ha_wizard]`
 
-*   **Binary Safety:** Execution of external binaries (e.g., `vacuumdb`) is managed via `zero_sudo.security.utils._ensure_executable()`, which uses the binary found on `PATH` or, if there is none, asks `binary_downloader` to install it. `vacuumdb` runs without a shell and with a minimal environment (`PATH`, `PGHOST`, `PGPORT`, `PGUSER`, and `PGPASSWORD` if set). `[@ANCHOR: COMM_vacuum_analyze]`
+*   **Binary Safety:** Execution of external binaries (e.g., `vacuumdb`) is managed via `zero_sudo.security.utils._ensure_executable()`, which uses the binary found on `PATH` or, if there is none, asks `binary_downloader` to install it. `vacuumdb` runs without a shell and with a minimal environment (`PATH`, `PGPORT`, `PGUSER`, and `PGHOST` if set; no password: by default it uses the local socket with peer authentication, as the Odoo process does). `[@ANCHOR: COMM_vacuum_analyze]`
 *   **Access Control:** Model access rights are granted to the `database_management.group_database_management_manager` group ("Database Manager", listed under the "Database Management" privilege). Odoo's `base.group_system` (Settings) implies that group, and the **Database & SRE** menu is shown only to `base.group_system`.
 
 ### Components
