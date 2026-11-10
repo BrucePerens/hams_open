@@ -14,6 +14,7 @@ use crate::p1::{self, Ep2Builder, P1Config, TxRequest};
 use crate::types::{HardwareStatus, Protocol};
 use std::collections::VecDeque;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
@@ -57,6 +58,8 @@ struct Shared {
     cfg: Mutex<P1Config>,
     status: Mutex<HardwareStatus>,
     tx: Mutex<TxState>,
+    /// Set when the `Radio` is dropped without `stop()`: the task sends one more (unkeyed) datagram and the Stop packet, then ends.
+    closing: AtomicBool,
 }
 
 // [@ANCHOR: hpsdr_session_lock]
@@ -68,12 +71,14 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-/// A running Protocol 1 receive session.
+/// A running Protocol 1 receive session. Call [`Radio::stop`]; a plain drop unkeys and stops the radio too, but only
+/// from the task's next tick and without reporting a failure.
+#[must_use = "dropping a session ends it without waiting; call stop().await"]
 #[derive(Debug)]
 pub struct Radio {
     shared: Arc<Shared>,
     sock: Arc<UdpSocket>,
-    task: JoinHandle<()>,
+    task: Option<JoinHandle<()>>,
     streams: Vec<ChannelStream>,
     gate: TxGate,
     num_rx: u8,
@@ -98,7 +103,11 @@ fn next_datagram(
             drive: tx.drive,
             iq: &iq,
         };
-        return b.build_tx(&cfg, gate, now, &req).ok();
+        if let Ok(d) = b.build_tx(&cfg, gate, now, &req) {
+            return Some(d);
+        }
+        // Refused (the limits were narrowed, or the frequency left the allowed bands, while keyed): unkey with a receive datagram,
+        // never send nothing and leave the radio keyed.
     }
     tx.ptt = false;
     tx.iq.clear();
@@ -165,6 +174,12 @@ async fn run(
                 if let Some(d) = next_datagram(&shared, &gate, &mut builder, Instant::now()) {
                     let _ = sock.send(&d).await;
                 }
+                if shared.closing.load(Ordering::SeqCst) {
+                    // The `Radio` was dropped: the datagram above was built after the key request was cleared, so it was a
+                    // receive datagram (MOX clear). Now Stop, and end.
+                    let _ = sock.send(&p1::stop_packet()).await;
+                    return;
+                }
             }
             r = sock.recv(&mut buf) => {
                 if let Ok(len) = r {
@@ -203,6 +218,7 @@ impl Radio {
             cfg: Mutex::new(cfg),
             status: Mutex::new(HardwareStatus::default()),
             tx: Mutex::new(TxState::default()),
+            closing: AtomicBool::new(false),
         });
         let (mut senders, mut counters, mut streams) = (Vec::new(), Vec::new(), Vec::new());
         for _ in 0..num_rx {
@@ -223,7 +239,7 @@ impl Radio {
         Ok(Self {
             shared,
             sock,
-            task,
+            task: Some(task),
             streams,
             gate,
             num_rx,
@@ -264,6 +280,7 @@ impl Radio {
     /// [`HpsdrError::GateClosed`] while the gate is closed; unkeying is always accepted. The sender
     /// task re-checks the gate before every datagram and unkeys when the lease expires.
     pub fn request_ptt(&self, ptt: bool, drive: u8) -> Result<(), HpsdrError> {
+        let tx_hz = lock(&self.shared.cfg).tx_hz;
         let mut tx = lock(&self.shared.tx);
         if !ptt {
             tx.ptt = false;
@@ -274,6 +291,8 @@ impl Radio {
         if !self.gate.is_open(Instant::now()) {
             return Err(HpsdrError::GateClosed);
         }
+        // The gate's limits: the drive is capped, a frequency outside the allowed bands is refused.
+        let drive = self.gate.check_tx(tx_hz, drive)?;
         tx.ptt = true;
         tx.drive = drive;
         Ok(())
@@ -299,7 +318,7 @@ impl Radio {
     /// transmit datagram can follow; then one receive datagram (MOX clear, drive zero) is sent so a
     /// radio that was keyed is told to unkey explicitly, whatever it does on Stop. The Stop packet is
     /// sent even if that datagram could not be.
-    pub async fn stop(self) -> Result<(), HpsdrError> {
+    pub async fn stop(mut self) -> Result<(), HpsdrError> {
         let cfg = {
             let mut tx = lock(&self.shared.tx);
             tx.ptt = false;
@@ -307,9 +326,10 @@ impl Radio {
             tx.iq.clear();
             lock(&self.shared.cfg).clone()
         };
-        let mut task = self.task;
-        task.abort();
-        let _ = (&mut task).await;
+        if let Some(mut task) = self.task.take() {
+            task.abort();
+            let _ = (&mut task).await;
+        }
         let unkeyed = match Ep2Builder::new().build_rx(&cfg) {
             Ok(d) => self
                 .sock
@@ -321,6 +341,21 @@ impl Radio {
         };
         self.sock.send(&p1::stop_packet()).await?;
         unkeyed
+    }
+}
+
+impl Drop for Radio {
+    // [@ANCHOR: hpsdr_session_drop]
+    /// A session dropped without `stop()` unkeys at once (the key request and queued I/Q are cleared, so the task's next datagram is a
+    /// receive one) and the task then sends Stop and ends. It is never just aborted: that would leave the last keyed datagram standing.
+    fn drop(&mut self) {
+        {
+            let mut tx = lock(&self.shared.tx);
+            tx.ptt = false;
+            tx.drive = 0;
+            tx.iq.clear();
+        }
+        self.shared.closing.store(true, Ordering::SeqCst);
     }
 }
 
@@ -758,6 +793,98 @@ mod tests {
             lost_marked |= b.lost_before > 0;
         }
         assert!(lost_marked, "a block reports the datagrams lost before it");
+        radio.stop().await.expect("stop");
+        emu.stop();
+    }
+
+    #[tokio::test]
+    async fn dropping_a_keyed_session_unkeys_and_sends_stop_and_the_task_ends() {
+        // Tests [@ANCHOR: hpsdr_session_drop]
+        let fake = UdpSocket::bind("127.0.0.1:0").await.expect("bind");
+        let d = Discovered {
+            protocol: Protocol::P1,
+            addr: fake.local_addr().expect("addr"),
+            mac: [0; 6],
+            board: crate::types::Board::Hermes,
+            code_version: 0,
+            busy: false,
+            protocol_version: None,
+            num_ddcs: None,
+            phase_word: false,
+        };
+        let gate = TxGate::new();
+        let radio = Radio::start(
+            &Handle::current(),
+            &d,
+            P1Config::default(),
+            gate.clone(),
+            SessionOptions::default(),
+        )
+        .await
+        .expect("start");
+        assert!(gate.open_until(Instant::now() + Duration::from_secs(60)));
+        assert_eq!(radio.request_ptt(true, 100), Ok(()));
+        let mut buf = vec![0u8; 2048];
+        let mox = |d: &[u8]| {
+            d.len() == p1::DATAGRAM_LEN
+                && p1::parse_ep2(d).is_ok_and(|e| e.cc.iter().any(|cc| cc[0] & 1 == 1))
+        };
+        let keyed = tokio::time::timeout(WAIT, async {
+            loop {
+                let n = fake.recv(&mut buf).await.expect("recv");
+                if mox(&buf[..n]) {
+                    return;
+                }
+            }
+        })
+        .await;
+        assert!(keyed.is_ok(), "the radio was never keyed");
+        drop(radio);
+        let mut after = Vec::new();
+        while let Ok(Ok(n)) =
+            tokio::time::timeout(Duration::from_millis(400), fake.recv(&mut buf)).await
+        {
+            after.push(buf[..n].to_vec());
+        }
+        assert_eq!(
+            after.last().map(Vec::as_slice),
+            Some(p1::stop_packet().as_slice()),
+            "the Stop packet is last, and nothing follows it (the task ended)"
+        );
+        let last_ep2 = after
+            .iter()
+            .rev()
+            .find(|d| d.len() == p1::DATAGRAM_LEN)
+            .expect("an EP2 datagram before Stop");
+        assert!(
+            !mox(last_ep2),
+            "the last EP2 datagram still keyed the radio"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_gates_limits_refuse_a_frequency_and_cap_the_drive() {
+        // Tests [@ANCHOR: hpsdr_gate_check_tx]
+        let (emu, d) = setup(EmulatorConfig::default()).await;
+        let gate = TxGate::new();
+        gate.narrow_limits(80, &[(7_000_000, 7_300_000)]);
+        let radio = Radio::start(
+            &Handle::current(),
+            &d,
+            P1Config::default(),
+            gate.clone(),
+            SessionOptions::default(),
+        )
+        .await
+        .expect("start");
+        assert!(gate.open_until(Instant::now() + Duration::from_secs(30)));
+        radio
+            .update(|c| c.tx_hz = 10_100_000)
+            .expect("config is valid");
+        assert_eq!(radio.request_ptt(true, 50), Err(HpsdrError::OutsideLimits));
+        radio.update(|c| c.tx_hz = 7_100_000).expect("config");
+        assert_eq!(radio.request_ptt(true, 255), Ok(()));
+        assert_eq!(lock(&radio.shared.tx).drive, 80, "drive is capped");
         radio.stop().await.expect("stop");
         emu.stop();
     }

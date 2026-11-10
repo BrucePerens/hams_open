@@ -20,7 +20,7 @@ use crate::session::SessionOptions;
 use crate::types::{HardwareStatus, Protocol, Rate};
 use std::collections::VecDeque;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
@@ -118,6 +118,8 @@ struct Shared {
     status: Mutex<HardwareStatus>,
     tx: Mutex<TxQueue>,
     stray: AtomicU64,
+    /// Set when the `Radio2` is dropped without `stop()`: the task sends one unkeyed packet with the run bit clear and ends.
+    closing: AtomicBool,
 }
 
 // [@ANCHOR: hpsdr_session_p2_lock]
@@ -193,11 +195,13 @@ fn next_packets(
         };
         if hpp.is_some() {
             seqs.hp = seqs.hp.wrapping_add(1);
+            if duc.is_some() {
+                seqs.duc = seqs.duc.wrapping_add(1);
+            }
+            return (hpp, duc);
         }
-        if duc.is_some() {
-            seqs.duc = seqs.duc.wrapping_add(1);
-        }
-        return (hpp, duc);
+        // Refused (the limits were narrowed, or the frequency left the allowed bands, while keyed): fall through to the receive
+        // packet, which unkeys. Nothing is sent as I/Q.
     }
     tx.ptt = false;
     tx.drive = 0;
@@ -302,6 +306,14 @@ async fn run(mut t: Task) {
                 if let Some(d) = duc {
                     let _ = t.sock.send_to(&d, (ip, cfg.ports.duc0_iq)).await;
                 }
+                if t.shared.closing.load(Ordering::SeqCst) {
+                    // The `Radio2` was dropped: the packet above was built after the key request was cleared (not keyed). Send the
+                    // run-bit-clear packet `stop` sends, and end.
+                    if let Ok(d) = p2::encode_high_priority_rx(u32::MAX, &hp_rx(&cfg, &t.target, false)) {
+                        let _ = t.sock.send_to(&d, (ip, cfg.ports.hp_from_pc)).await;
+                    }
+                    return;
+                }
             }
             r = t.sock.recv_from(&mut buf) => {
                 if let Ok((len, from)) = r {
@@ -312,12 +324,14 @@ async fn run(mut t: Task) {
     }
 }
 
-/// A running Protocol 2 receive session.
+/// A running Protocol 2 receive session. Call [`Radio2::stop`]; a plain drop unkeys and stops the radio too, but only
+/// from the task's next tick and without reporting a failure.
+#[must_use = "dropping a session ends it without waiting; call stop().await"]
 #[derive(Debug)]
 pub struct Radio2 {
     shared: Arc<Shared>,
     sock: Arc<UdpSocket>,
-    task: JoinHandle<()>,
+    task: Option<JoinHandle<()>>,
     streams: Vec<ChannelStream>,
     gate: TxGate,
     target: Target,
@@ -371,6 +385,7 @@ impl Radio2 {
             status: Mutex::new(HardwareStatus::default()),
             tx: Mutex::new(TxQueue::default()),
             stray: AtomicU64::new(0),
+            closing: AtomicBool::new(false),
         });
         let (mut senders, mut counters, mut streams) = (Vec::new(), Vec::new(), Vec::new());
         for _ in 0..num_rx {
@@ -393,7 +408,7 @@ impl Radio2 {
         Ok(Self {
             shared,
             sock,
-            task,
+            task: Some(task),
             streams,
             gate,
             target,
@@ -447,6 +462,7 @@ impl Radio2 {
     /// [`HpsdrError::GateClosed`] while the gate is closed; unkeying is always accepted. The sender
     /// task re-checks the gate before every packet and unkeys when the lease expires.
     pub fn request_ptt(&self, ptt: bool, drive: u8) -> Result<(), HpsdrError> {
+        let tx_hz = lock(&self.shared.cfg).0.tx_hz;
         let mut tx = lock(&self.shared.tx);
         if !ptt {
             tx.ptt = false;
@@ -457,6 +473,8 @@ impl Radio2 {
         if !self.gate.is_open(Instant::now()) {
             return Err(HpsdrError::GateClosed);
         }
+        // The gate's limits: the drive is capped, a frequency outside the allowed bands is refused.
+        let drive = self.gate.check_tx(tx_hz, drive)?;
         tx.ptt = true;
         tx.drive = drive;
         Ok(())
@@ -481,22 +499,37 @@ impl Radio2 {
     /// Unkey, send a High Priority packet with the run bit clear, and end the session task. The task
     /// is ended and awaited before that packet is sent, so a transmit packet the task was building
     /// on another worker thread cannot follow (and undo) the unkey.
-    pub async fn stop(self) -> Result<(), HpsdrError> {
+    pub async fn stop(mut self) -> Result<(), HpsdrError> {
         {
             let mut tx = lock(&self.shared.tx);
             tx.ptt = false;
             tx.drive = 0;
             tx.iq.clear();
         }
-        let mut task = self.task;
-        task.abort();
-        let _ = (&mut task).await;
+        if let Some(mut task) = self.task.take() {
+            task.abort();
+            let _ = (&mut task).await;
+        }
         let cfg = lock(&self.shared.cfg).0.clone();
         let d = p2::encode_high_priority_rx(u32::MAX, &hp_rx(&cfg, &self.target, false))?;
         self.sock
             .send_to(&d, (self.target.ip, cfg.ports.hp_from_pc))
             .await?;
         Ok(())
+    }
+}
+
+impl Drop for Radio2 {
+    // [@ANCHOR: hpsdr_session_p2_drop]
+    /// See [`Radio`]'s drop: unkey at once, then the task sends the run-bit-clear packet and ends; never just aborted.
+    fn drop(&mut self) {
+        {
+            let mut tx = lock(&self.shared.tx);
+            tx.ptt = false;
+            tx.drive = 0;
+            tx.iq.clear();
+        }
+        self.shared.closing.store(true, Ordering::SeqCst);
     }
 }
 
@@ -859,6 +892,73 @@ mod tests {
         let ss = slow.take_streams().remove(0);
         assert!(wait_until(|| ss.stats().dropped_blocks > 0).await);
         slow.stop().await.expect("stop");
+        emu.stop();
+    }
+
+    #[tokio::test]
+    async fn stopping_or_dropping_a_keyed_session_leaves_the_radio_unkeyed() {
+        // Tests [@ANCHOR: hpsdr_session_p2_stop]
+        // Tests [@ANCHOR: hpsdr_session_p2_drop]
+        for drop_it in [false, true] {
+            let (emu, d, ports) = setup(P2EmulatorConfig::default(), 1).await;
+            let gate = TxGate::new();
+            let radio = Radio2::start(
+                &Handle::current(),
+                &d,
+                cfg_with(ports, vec![7_100_000], Rate::K48),
+                gate.clone(),
+                SessionOptions::default(),
+            )
+            .await
+            .expect("start");
+            let c = emu.counters();
+            assert!(gate.open_until(Instant::now() + Duration::from_secs(30)));
+            radio.request_ptt(true, 50).expect("gate open");
+            assert!(
+                wait_until(|| P2Counters::get(&c.ptt_now) == 1).await,
+                "keyed"
+            );
+            if drop_it {
+                drop(radio);
+            } else {
+                radio.stop().await.expect("stop");
+            }
+            assert!(
+                wait_until(|| P2Counters::get(&c.ptt_now) == 0).await,
+                "unkeyed after drop={drop_it}"
+            );
+            // And it stays unkeyed: the task is gone or sending receive packets only.
+            let frames = P2Counters::get(&c.ptt_frames);
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            assert_eq!(
+                P2Counters::get(&c.ptt_frames),
+                frames,
+                "no PTT after drop={drop_it}"
+            );
+            emu.stop();
+        }
+    }
+
+    #[tokio::test]
+    async fn the_gates_limits_refuse_a_frequency_and_cap_the_drive() {
+        // Tests [@ANCHOR: hpsdr_gate_check_tx]
+        let (emu, d, ports) = setup(P2EmulatorConfig::default(), 1).await;
+        let gate = TxGate::new();
+        gate.narrow_limits(80, &[(7_000_000, 7_300_000)]);
+        let mut cfg = cfg_with(ports, vec![7_100_000], Rate::K48);
+        cfg.tx_hz = 10_100_000;
+        let radio = Radio2::start(
+            &Handle::current(),
+            &d,
+            cfg,
+            gate.clone(),
+            SessionOptions::default(),
+        )
+        .await
+        .expect("start");
+        assert!(gate.open_until(Instant::now() + Duration::from_secs(30)));
+        assert_eq!(radio.request_ptt(true, 50), Err(HpsdrError::OutsideLimits));
+        radio.stop().await.expect("stop");
         emu.stop();
     }
 }

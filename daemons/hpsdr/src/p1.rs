@@ -307,8 +307,9 @@ impl Ep2Builder {
 
     // [@ANCHOR: hpsdr_p1_ep2_build_tx]
     /// A datagram that may key the transmitter. Returns [`HpsdrError::GateClosed`] and builds nothing
-    /// unless `gate` is open at `now`. With the gate open and `req.ptt` false the datagram is the
-    /// receive one.
+    /// unless `gate` is open at `now`. A keyed request is also checked against the gate's limits (drive capped,
+    /// [`HpsdrError::OutsideLimits`] for a frequency outside the allowed bands). With the gate open and `req.ptt` false the datagram
+    /// is the receive one.
     pub fn build_tx(
         &mut self,
         cfg: &P1Config,
@@ -320,8 +321,9 @@ impl Ep2Builder {
             return Err(HpsdrError::GateClosed);
         }
         if req.ptt {
+            let drive = gate.check_tx(cfg.tx_hz, req.drive)?;
             let n = req.iq.len().min(TX_SAMPLES_PER_DATAGRAM);
-            self.assemble(cfg, true, req.drive, &req.iq[..n])
+            self.assemble(cfg, true, drive, &req.iq[..n])
         } else {
             self.assemble(cfg, false, 0, &[])
         }
