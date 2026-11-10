@@ -8,7 +8,7 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(p) = RtpPacket::parse(data) {
         let mut seq = SeqTracker::default();
         seq.push(p.seq);
-        for c in data.chunks_exact(2) {
+        for c in data.as_chunks::<2>().0 {
             seq.push(u16::from_be_bytes([c[0], c[1]]));
         }
         for n in 0..=40u64 {
