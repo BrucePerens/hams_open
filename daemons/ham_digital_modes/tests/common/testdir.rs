@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! The one way a test of this crate makes a scratch directory: a fresh, empty directory under the temporary directory that is removed,
 //! with everything in it, when the value is dropped (also while a failing test unwinds). The test includes this file with `#[path]`;
-//! `tools/check_test_temp_dirs.py` fails a new hand-built `temp_dir().join(` in test code.
+//! `tools/check_test_temp_dirs.py` fails a new hand-built scratch path in test code.
 #![allow(dead_code)]
 
 use std::ops::Deref;
