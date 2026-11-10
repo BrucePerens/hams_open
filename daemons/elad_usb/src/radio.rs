@@ -71,12 +71,13 @@ impl<T: Transport> Radio<T> {
             )));
         }
         let mut fw = [0u8; 2];
-        let n = t.control_in(protocol::REQ_FW_VERSION, 0, 0, &mut fw)?;
+        let n = read_request(&mut t, protocol::REQ_FW_VERSION, 0, 0, &mut fw)?;
         let firmware = (n == 2).then_some(fw);
         let mut fields: [Vec<u8>; 6] = Default::default();
         for (i, (addr, len)) in protocol::EEPROM_MAP.iter().enumerate() {
             let mut buf = vec![0u8; *len];
-            let n = t.control_in(
+            let n = read_request(
+                &mut t,
                 protocol::REQ_EEPROM,
                 *addr,
                 protocol::EEPROM_INDEX,
@@ -106,8 +107,8 @@ impl<T: Transport> Radio<T> {
     }
 
     // [@ANCHOR: elad_radio_send]
-    fn send(&mut self, r: &Request) -> Result<(), Error> {
-        if !protocol::is_receive_request(r) {
+    pub(crate) fn send(&mut self, r: &Request) -> Result<(), Error> {
+        if !protocol::is_send_request(r) {
             return Err(Error::NotReceiveOnly(r.request));
         }
         self.t.control_out(r.request, r.value, r.index, &r.data)?;
@@ -162,16 +163,16 @@ impl<T: Transport> Radio<T> {
         };
         self.send(&req)?;
         self.tuned_hz = Some(hz);
-        self.write_front_end()
+        self.write_front_end(self.filters, self.attenuator)
     }
 
     // [@ANCHOR: elad_radio_write_front_end]
-    fn write_front_end(&mut self) -> Result<(), Error> {
+    fn write_front_end(&mut self, filters: bool, attenuator: bool) -> Result<(), Error> {
         if !self.info.model.has_front_end_switches() {
             return Ok(());
         }
         let hz = self.tuned_hz.unwrap_or(0.0);
-        let code = protocol::front_end_code(self.filters, hz, self.attenuator);
+        let code = protocol::front_end_code(filters, hz, attenuator);
         self.send(&Request {
             request: protocol::REQ_FRONT_END,
             value: u16::from(code),
@@ -180,30 +181,44 @@ impl<T: Transport> Radio<T> {
         })
     }
 
+    // [@ANCHOR: elad_radio_require_switches]
+    fn require_switches(&self, what: &str) -> Result<(), Error> {
+        if self.info.model.has_front_end_switches() {
+            Ok(())
+        } else {
+            Err(Error::OutOfRange(format!(
+                "the {} has no switchable {what} here",
+                self.info.model.name()
+            )))
+        }
+    }
+
+    /// Sets the S2's band filters and attenuator together. Before the first [`Radio::tune`] nothing is sent (the code depends on the
+    /// band): the state is recorded and [`Radio::tune`] writes it, so the receiver is never tuned at a gain the caller did not ask for.
+    /// The state is recorded only if the write succeeded.
+    // [@ANCHOR: elad_radio_set_front_end]
+    pub fn set_front_end(&mut self, filters: bool, attenuator: bool) -> Result<(), Error> {
+        self.require_switches("filters or attenuator")?;
+        if self.tuned_hz.is_some() {
+            self.write_front_end(filters, attenuator)?;
+        }
+        self.filters = filters;
+        self.attenuator = attenuator;
+        Ok(())
+    }
+
     /// Switches the S2's band filters in or out.
     // [@ANCHOR: elad_radio_set_filters]
     pub fn set_filters(&mut self, on: bool) -> Result<(), Error> {
-        if !self.info.model.has_front_end_switches() {
-            return Err(Error::OutOfRange(format!(
-                "the {} has no switchable filters here",
-                self.info.model.name()
-            )));
-        }
-        self.filters = on;
-        self.write_front_end()
+        self.require_switches("filters")?;
+        self.set_front_end(on, self.attenuator)
     }
 
     /// Switches the S2's attenuator.
     // [@ANCHOR: elad_radio_set_attenuator]
     pub fn set_attenuator(&mut self, on: bool) -> Result<(), Error> {
-        if !self.info.model.has_front_end_switches() {
-            return Err(Error::OutOfRange(format!(
-                "the {} has no switchable attenuator here",
-                self.info.model.name()
-            )));
-        }
-        self.attenuator = on;
-        self.write_front_end()
+        self.require_switches("attenuator")?;
+        self.set_front_end(self.filters, on)
     }
 
     /// Starts the sample FIFO.
@@ -212,6 +227,8 @@ impl<T: Transport> Radio<T> {
         if !self.fpga.ready_for(self.info.model) {
             return Err(Error::FpgaImageRequired);
         }
+        // Marked streaming first: a start request the unit accepted but reported as failed must still be followed by a stop.
+        self.streaming = true;
         if self.info.model == Model::Duo {
             self.send(&protocol::duo_request(protocol::DUO_FIFO_INIT, 0))?;
             self.send(&protocol::duo_request(protocol::DUO_FIFO_RUN, 1))?;
@@ -224,7 +241,6 @@ impl<T: Transport> Radio<T> {
             })?;
         }
         self.decoder.reset();
-        self.streaming = true;
         Ok(())
     }
 
@@ -279,6 +295,21 @@ impl<T: Transport> Radio<T> {
             Err(Error::Timeout)
         }
     }
+}
+
+/// A control IN, refused unless the request is one of the read-only ones.
+// [@ANCHOR: elad_radio_read_request]
+fn read_request<T: Transport>(
+    t: &mut T,
+    request: u8,
+    value: u16,
+    index: u16,
+    buf: &mut [u8],
+) -> Result<usize, Error> {
+    if !protocol::is_read_request(request) {
+        return Err(Error::NotReceiveOnly(request));
+    }
+    t.control_in(request, value, index, buf)
 }
 
 impl<T: Transport> Drop for Radio<T> {
