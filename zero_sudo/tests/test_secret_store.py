@@ -70,7 +70,7 @@ class TestSecretStoreTierA(BaseCase):
         super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="secret_store_")
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        self.uid = os.getuid()
+        self.os_uid = os.getuid()
 
     def test_names_are_checked(self):
         # Tests [@ANCHOR: zero_sudo:secret_store_check_name]
@@ -82,20 +82,20 @@ class TestSecretStoreTierA(BaseCase):
     def test_private_file_rules(self):
         # Tests [@ANCHOR: zero_sudo:secret_store_check_private_file]
         good = _write(os.path.join(self.tmp, "good"), "a=b\n", 0o640)
-        self.assertEqual(ss.check_private_file(good, self.uid).st_uid, self.uid)
+        self.assertEqual(ss.check_private_file(good, self.os_uid).st_uid, self.os_uid)
         for mode in (0o644, 0o660, 0o604):
             os.chmod(good, mode)
             with self.assertRaises(ss.InsecureSecretSource, msg=oct(mode)):
-                ss.check_private_file(good, self.uid)
+                ss.check_private_file(good, self.os_uid)
         os.chmod(good, 0o600)
-        if self.uid != 0:
+        if self.os_uid != 0:
             # Root-owned is the default: a file the reading account owns could be rewritten by it.
             with self.assertRaises(ss.InsecureSecretSource):
                 ss.check_private_file(good)
         link = os.path.join(self.tmp, "link")
         os.symlink(good, link)
         with self.assertRaises(ss.InsecureSecretSource):
-            ss.check_private_file(link, self.uid)
+            ss.check_private_file(link, self.os_uid)
 
     def test_read_small_file_refuses_symlinks_and_large_files(self):
         # Tests [@ANCHOR: zero_sudo:secret_store_read_small_file]
@@ -135,13 +135,13 @@ class TestSecretStoreTierA(BaseCase):
         # Tests [@ANCHOR: zero_sudo:secret_store_file_init]
         # Tests [@ANCHOR: zero_sudo:secret_store_file_get]
         path = _write(os.path.join(self.tmp, "secrets"), f"stripe.secret_key={SECRET}\n", 0o640)
-        backend = ss.CredentialsFileBackend(path, owner_uid=self.uid)
+        backend = ss.CredentialsFileBackend(path, owner_uid=self.os_uid)
         self.assertEqual(backend.get("stripe.secret_key"), SECRET)
         self.assertIsNone(backend.get("other"))
         os.chmod(path, 0o644)  # loosened after start: refused on the next read, not trusted
         with self.assertRaises(ss.InsecureSecretSource):
             backend.get("stripe.secret_key")
-        if self.uid != 0:
+        if self.os_uid != 0:
             os.chmod(path, 0o640)
             with self.assertRaises(ss.InsecureSecretSource):
                 ss.CredentialsFileBackend(path).get("stripe.secret_key")
@@ -161,7 +161,7 @@ class TestSecretStoreTierA(BaseCase):
             os.path.join(self.tmp, "values.json"),
             json.dumps({"stripe.secret_key": token, "moved": token}), 0o644,
         )
-        backend = ss.EncryptedBackend(ss.key_from_file(key_path, self.uid), ss.json_file_lookup(json_path))
+        backend = ss.EncryptedBackend(ss.key_from_file(key_path, self.os_uid), ss.json_file_lookup(json_path))
         self.assertEqual(backend.get("stripe.secret_key"), SECRET)
         self.assertIsNone(backend.get("absent"))
         with self.assertRaises(ss.SecretStoreError):  # a token copied to another name does not decrypt
@@ -178,7 +178,7 @@ class TestSecretStoreTierA(BaseCase):
             ss.json_file_lookup(json_path)("a")
         _write(key_path, base64.urlsafe_b64encode(b"x" * 16).decode(), 0o600)
         with self.assertRaises(ss.SecretStoreError):
-            ss.key_from_file(key_path, self.uid)()
+            ss.key_from_file(key_path, self.os_uid)()
 
     def test_store_order_missing_secret_and_require(self):
         # Tests [@ANCHOR: zero_sudo:secret_store_init]
@@ -188,7 +188,7 @@ class TestSecretStoreTierA(BaseCase):
         os.mkdir(first)
         _write(os.path.join(first, "a"), "from-systemd", 0o400)
         path = _write(os.path.join(self.tmp, "secrets"), "a=from-file\nb=only-file\n", 0o600)
-        store = ss.SecretStore([ss.SystemdCredentialBackend(first), ss.CredentialsFileBackend(path, self.uid)])
+        store = ss.SecretStore([ss.SystemdCredentialBackend(first), ss.CredentialsFileBackend(path, self.os_uid)])
         self.assertEqual(store.get("a"), "from-systemd")
         self.assertEqual(store.get("b"), "only-file")
         store.require("a", "b")
