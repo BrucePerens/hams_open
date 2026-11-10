@@ -503,7 +503,10 @@ impl RigService {
             }
             LevelSource::Swr if !self.description.capabilities.has(Capability::ReadSwr) => {
                 let ratio = self.meter(Meter::Swr).await?;
-                fmt_float(crate::meter_cal::swr_ratio(crate::meter_cal::for_rig(&self.description.id), ratio))
+                fmt_float(crate::meter_cal::swr_ratio(
+                    crate::meter_cal::for_rig(&self.description.id),
+                    ratio,
+                ))
             }
             LevelSource::PowerWatts => {
                 let cal = self
