@@ -59,10 +59,13 @@ def scannable_response(response):
 
 
 def _candidates(token):
+    """The token, without leading and trailing dots, and each 16+ character piece between slashes (a secret in a path)."""
+    seen = {token}
     yield token
-    stripped = token.strip(".")
-    if stripped != token:
-        yield stripped
+    for candidate in [token.strip("."), *token.split("/")]:
+        if len(candidate) >= 16 and candidate not in seen:
+            seen.add(candidate)
+            yield candidate
 
 
 # [@ANCHOR: hams_secret_canary:find_matches]
@@ -82,9 +85,10 @@ def find_matches(text, salt, table):
 def redact(text, salt, table):
     """Returns `text` with every token that matches a fingerprint in `table` replaced by `[REDACTED:<label>]`."""
     def replace(match):
-        for candidate in _candidates(match.group()):
+        token = match.group()
+        for candidate in _candidates(token):
             entry = table.get(fingerprint(salt, candidate))
             if entry is not None:
-                return "[REDACTED:%s]" % entry[0]
-        return match.group()
+                return token.replace(candidate, "[REDACTED:%s]" % entry[0])
+        return token
     return TOKEN_RE.sub(replace, text)

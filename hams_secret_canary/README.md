@@ -72,7 +72,7 @@ when it is not `direct_passthrough`, is a sequence (not streamed) and its mimety
 
 **Purpose.** The scan. `find_matches(text, salt, table)`: `text` `str`; `salt` `str`; `table` `{digest: (label, kind)}`.
 Returns a list of `(label, kind)` (`kind` is `canary` or `secret`), each once, in order of first appearance; empty when
-none. A token is also tried with leading and trailing dots removed. Pure; one hash per distinct token. Test:
+none. A token is also tried with leading and trailing dots removed and as each 16+ character piece between slashes (a secret in a URL path). Pure; one hash per distinct token. Test:
 `TestDetector.test_secret_in_json_html_and_url_is_found_once_each`, `test_ordinary_responses_have_no_false_positives`,
 `test_one_megabyte_scans_fast`.
 
