@@ -355,7 +355,7 @@ class SimulatedFx2(Transport):
         if not self.running:
             raise Fx2Error("simulator: vendor request to an unprogrammed device")
         if req_type == 0x40 and req == REQ_GPIO_SET:
-            if (value | index) & ~LED_MASK or self.engine.map_state == "valid":
+            if (value | index) & ~LED_MASK or self.engine.map_state != "none":
                 raise Stalled("simulator: stall")
             self.ioa_latch = index
             self.oea = value
@@ -363,6 +363,8 @@ class SimulatedFx2(Transport):
         eng = self.engine
         if req_type == 0x40 and req in (REQ_MAP_BEGIN, REQ_MAP_PIN, REQ_MAP_PARAM, REQ_MAP_HEARTBEAT,
                                         REQ_MAP_COMMIT, REQ_KEY):
+            if req == REQ_MAP_BEGIN:
+                self._release_manual()
             ok = {
                 REQ_MAP_BEGIN: lambda: eng.map_begin(),
                 REQ_MAP_PIN: lambda: eng.map_pin(value & 0xFF, value >> 8, index & 0xFF),
@@ -382,9 +384,16 @@ class SimulatedFx2(Transport):
 
     def bus_reset(self):
         self.engine.bus_reset()
+        self._release_manual()
 
     def suspend(self):
         self.engine.suspend()
+        self._release_manual()
+
+    def _release_manual(self):
+        """Pins driven by GPIO_SET go back to inputs (as io_manual_release does)."""
+        if self.engine.map_state != "valid":
+            self.oea = 0
 
     def _pa(self):
         """(output-enable, pin levels) of port A: the engine's mapped pins override the latch."""

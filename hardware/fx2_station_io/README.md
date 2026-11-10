@@ -57,7 +57,7 @@ MAP_COMMIT) and validated by the firmware, which stalls the refused step and rec
 function other than ptt/keyline/power, a safe state not defined, a driven safe state equal to the
 active level, a ptt without a time-out (max on-time 0), a ptt partner that is not a free keyline, a
 keyline nobody owns, lead or lag without a keyline, a zero heartbeat lapse, steps out of order.
-Unlisted pins stay inputs. Direct GPIO_SET is refused while a map is active.
+Unlisted pins stay inputs. Direct GPIO_SET is refused unless no map exists (loading or valid); pins it drove go back to inputs at map begin, USB bus reset and suspend.
 
 `ptt` channel (`[@ANCHOR: HAMS_FX2_ptt_channel]`, `[@ANCHOR: HAMS_FX2_ptt_timeout]`): KEY down
 raises the line (active level) only if the heartbeat is alive and the minimum off time since the last release has

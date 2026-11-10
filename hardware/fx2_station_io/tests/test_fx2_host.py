@@ -143,6 +143,19 @@ class GpioTests(unittest.TestCase):
         self.assertEqual(st["oea"], 0)
         self.assertEqual(st["pb"], 0xFF)          # other ports stay inputs
 
+    def test_bus_reset_and_suspend_release_driven_pins(self):
+        for event in (self.sim.bus_reset, self.sim.suspend):
+            h.gpio_set(self.sim, 3, 1)
+            event()
+            self.assertEqual(h.gpio_get(self.sim)["oea"], 0)
+
+    def test_gpio_set_refused_while_a_map_loads_and_pins_released_at_map_begin(self):
+        h.gpio_set(self.sim, 3, 0)
+        self.sim.ctrl_out(0x40, h.REQ_MAP_BEGIN, 0, 0, b"")
+        self.assertEqual(h.gpio_get(self.sim)["oea"], 0)
+        with self.assertRaises(h.Fx2Error):
+            h.gpio_set(self.sim, 1, 0)
+
     def test_refuses_pins_other_than_pa0_pa1(self):
         for oe, lv in ((4, 0), (0, 4), (0x80, 0x80)):
             with self.assertRaises(h.Fx2Error):

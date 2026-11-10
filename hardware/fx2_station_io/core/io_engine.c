@@ -198,6 +198,33 @@ void io_init(void)
     clear_map();
 }
 
+/* Port A bits the board lets the firmware drive (the mapped channels' pins). */
+static u8 chan_mask(void)
+{
+    u8 c, m = 0;
+    for (c = 0; c < IO_NCH; c++) {
+        m |= (u8)(1 << board_chan_pin[c]);
+    }
+    return m;
+}
+
+/* GPIO_SET, only with no map: keeps the latch shadow in step with the pins. */
+void io_manual_set(u8 oe, u8 lvl)
+{
+    u8 m = chan_mask();
+    g_shadow = (u8)((g_shadow & ~m) | (lvl & m));
+    IOA = g_shadow;                          /* latch first, then enable */
+    OEA = (u8)((OEA & ~m) | (oe & m));
+}
+
+/* Pins driven by GPIO_SET go back to inputs on USB reset, suspend and map begin. */
+void io_manual_release(void)
+{
+    if (g_map_state != IO_MAP_VALID) {
+        OEA &= (u8)~chan_mask();
+    }
+}
+
 u8 io_map_state(void)
 {
     return g_map_state;
@@ -212,6 +239,7 @@ static u8 fail(u8 code)
 u8 io_map_begin(void)
 {
     clear_map();
+    io_manual_release();
     g_map_error = IO_ERR_NONE;
     g_map_state = IO_MAP_LOADING;
     return 1;
