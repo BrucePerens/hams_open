@@ -86,6 +86,10 @@ pub trait Os {
     fn hub_status(&self) -> (bool, bool);
     /// Upgrades the installed relay package through the system package manager.
     fn update_package(&self) -> io::Result<()>;
+    /// The system clock, Unix seconds.
+    fn system_time_unix_secs(&self) -> u64;
+    /// Steps the system clock (needs `CAP_SYS_TIME`).
+    fn set_system_time(&self, unix_secs: u64) -> io::Result<()>;
 }
 
 /// The Linux implementation: sysfs for enumeration, `/etc/group` for membership.
@@ -405,6 +409,29 @@ impl Os for LinuxOs {
         } else {
             Err(io::Error::other(format!("{program} exited with {status}")))
         }
+    }
+
+    fn system_time_unix_secs(&self) -> u64 {
+        LinuxOs::wall_clock_secs()
+    }
+
+    fn set_system_time(&self, unix_secs: u64) -> io::Result<()> {
+        let secs = i64::try_from(unix_secs).map_err(io::Error::other)?;
+        nix::time::clock_settime(
+            nix::time::ClockId::CLOCK_REALTIME,
+            nix::sys::time::TimeSpec::new(secs, 0),
+        )
+        .map_err(io::Error::from)
+    }
+}
+
+impl LinuxOs {
+    // [@ANCHOR: relay_broker_os_system_time]
+    /// The wall clock now, Unix seconds (0 if the clock is before 1970).
+    fn wall_clock_secs() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs())
     }
 }
 

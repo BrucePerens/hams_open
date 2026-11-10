@@ -109,6 +109,28 @@ pub enum Request {
     HubStatus,
     /// Upgrade the installed relay package through the system package manager (a fixed command, no arguments from the caller; only with `update_package = true`).
     UpdatePackage,
+    /// Step the system clock to a UTC the relay decided on; the broker applies its own ceilings (`time_guard.rs`).
+    SetSystemTime {
+        /// The UTC to set, Unix seconds.
+        target_unix_secs: u64,
+        /// Where the relay got it.
+        source: TimeSource,
+        /// How many independent sources agree (the evidence).
+        agreeing: u8,
+    },
+    /// Read-only: the broker's clock and its time-step limits.
+    TimeStatus,
+}
+
+/// The kind of source a clock step rests on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeSource {
+    /// A GPS receiver with a fix.
+    Gps = 1,
+    /// A network time source.
+    Network = 2,
+    /// Another relay or a person.
+    Other = 3,
 }
 
 /// One enumerated device.
@@ -170,6 +192,24 @@ pub enum Response {
     },
     /// Answer to `UpdatePackage`: the package manager ran and exited successfully.
     Updated,
+    /// Answer to `TimeStatus`.
+    TimeStatus {
+        /// The system clock now, Unix seconds.
+        now_unix_secs: u64,
+        /// Steps made in the last hour.
+        steps_last_hour: u8,
+        /// The circuit breaker is open: every step is refused.
+        breaker_open: bool,
+        /// The earliest target the broker accepts (its build date).
+        min_target_unix_secs: u64,
+    },
+    /// Answer to `SetSystemTime`: the clock before and after.
+    TimeSet {
+        /// The clock before the step, Unix seconds.
+        before_unix_secs: u64,
+        /// The clock after the step, Unix seconds.
+        after_unix_secs: u64,
+    },
     /// Any non-`Ok` status with a short reason.
     Error {
         /// The status.
@@ -236,6 +276,12 @@ impl<'a> Reader<'a> {
             [a, b, c, d] => Ok(u32::from_be_bytes([*a, *b, *c, *d])),
             _ => Err(WireError::Truncated),
         }
+    }
+
+    /// A big-endian u64.
+    fn u64(&mut self) -> Result<u64, WireError> {
+        let b: [u8; 8] = self.take(8)?.try_into().map_err(|_| WireError::Truncated)?;
+        Ok(u64::from_be_bytes(b))
     }
 
     // [@ANCHOR: relay_broker_reader_string]
@@ -339,6 +385,17 @@ impl Request {
             Request::HubStop => out.push(7),
             Request::HubStatus => out.push(8),
             Request::UpdatePackage => out.push(9),
+            Request::SetSystemTime {
+                target_unix_secs,
+                source,
+                agreeing,
+            } => {
+                out.push(10);
+                out.extend_from_slice(&target_unix_secs.to_be_bytes());
+                out.push(*source as u8);
+                out.push(*agreeing);
+            }
+            Request::TimeStatus => out.push(11),
         }
         out
     }
@@ -408,6 +465,17 @@ impl Request {
             7 => Request::HubStop,
             8 => Request::HubStatus,
             9 => Request::UpdatePackage,
+            10 => Request::SetSystemTime {
+                target_unix_secs: r.u64()?,
+                source: match r.u8()? {
+                    1 => TimeSource::Gps,
+                    2 => TimeSource::Network,
+                    3 => TimeSource::Other,
+                    other => return Err(WireError::BadTag(other)),
+                },
+                agreeing: r.u8()?,
+            },
+            11 => Request::TimeStatus,
             other => return Err(WireError::BadTag(other)),
         };
         r.finish()?;
@@ -489,6 +557,28 @@ impl Response {
                 out.push(Status::Ok as u8);
                 out.push(5);
             }
+            Response::TimeStatus {
+                now_unix_secs,
+                steps_last_hour,
+                breaker_open,
+                min_target_unix_secs,
+            } => {
+                out.push(Status::Ok as u8);
+                out.push(6);
+                out.extend_from_slice(&now_unix_secs.to_be_bytes());
+                out.push(*steps_last_hour);
+                out.push(u8::from(*breaker_open));
+                out.extend_from_slice(&min_target_unix_secs.to_be_bytes());
+            }
+            Response::TimeSet {
+                before_unix_secs,
+                after_unix_secs,
+            } => {
+                out.push(Status::Ok as u8);
+                out.push(7);
+                out.extend_from_slice(&before_unix_secs.to_be_bytes());
+                out.extend_from_slice(&after_unix_secs.to_be_bytes());
+            }
             Response::Error { status, reason } => {
                 out.push(*status as u8);
                 put_string(&mut out, reason);
@@ -568,6 +658,16 @@ impl Response {
                     }
                 }
                 5 => Response::Updated,
+                6 => Response::TimeStatus {
+                    now_unix_secs: r.u64()?,
+                    steps_last_hour: r.u8()?,
+                    breaker_open: r.bool()?,
+                    min_target_unix_secs: r.u64()?,
+                },
+                7 => Response::TimeSet {
+                    before_unix_secs: r.u64()?,
+                    after_unix_secs: r.u64()?,
+                },
                 4 => Response::Hub {
                     access_point: r.bool()?,
                     dhcp: r.bool()?,
@@ -635,6 +735,12 @@ mod tests {
             Request::HubStop,
             Request::HubStatus,
             Request::UpdatePackage,
+            Request::SetSystemTime {
+                target_unix_secs: 1_793_500_000,
+                source: TimeSource::Gps,
+                agreeing: 2,
+            },
+            Request::TimeStatus,
         ]
     }
 
@@ -676,6 +782,16 @@ mod tests {
             }]),
             Response::Opened,
             Response::Updated,
+            Response::TimeStatus {
+                now_unix_secs: 1_793_500_000,
+                steps_last_hour: 1,
+                breaker_open: false,
+                min_target_unix_secs: 1_793_491_200,
+            },
+            Response::TimeSet {
+                before_unix_secs: 1_793_500_000,
+                after_unix_secs: 1_793_500_030,
+            },
             Response::Hub {
                 access_point: true,
                 dhcp: false,

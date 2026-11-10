@@ -6,7 +6,8 @@
 
 use proptest::prelude::*;
 use relay_broker::wire::{
-    frame_body_len, DeviceClass, DeviceDescriptor, Group, Request, Response, Status, MAX_FRAME,
+    frame_body_len, DeviceClass, DeviceDescriptor, Group, Request, Response, Status, TimeSource,
+    MAX_FRAME,
 };
 
 fn any_class() -> impl Strategy<Value = DeviceClass> {
@@ -27,6 +28,16 @@ fn any_request() -> impl Strategy<Value = Request> {
             .prop_map(|group| Request::GrantGroup { group }),
         Just(Request::ProvisionGroups),
         Just(Request::UpdatePackage),
+        Just(Request::TimeStatus),
+        (any::<u64>(), 1u8..=3, any::<u8>()).prop_map(|(t, s, agreeing)| Request::SetSystemTime {
+            target_unix_secs: t,
+            source: match s {
+                1 => TimeSource::Gps,
+                2 => TimeSource::Network,
+                _ => TimeSource::Other,
+            },
+            agreeing,
+        }),
     ]
 }
 

@@ -34,6 +34,9 @@ pub struct FakeOs {
     pub hub: Arc<Mutex<Option<(String, String, String)>>>,
     /// How many times the package manager was asked to upgrade the relay.
     pub updates: Arc<std::sync::atomic::AtomicUsize>,
+    /// The fake clock (Unix seconds) and a switch that makes setting it fail.
+    pub clock: Arc<std::sync::atomic::AtomicU64>,
+    pub clock_fails: Arc<std::sync::atomic::AtomicBool>,
     last_opened: Cell<Option<NodeKind>>,
 }
 
@@ -101,6 +104,8 @@ impl FakeOs {
             binds: Arc::new(Mutex::new(Vec::new())),
             hub: Arc::new(Mutex::new(None)),
             updates: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            clock: Arc::new(std::sync::atomic::AtomicU64::new(1_793_500_000)),
+            clock_fails: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_opened: Cell::new(None),
         }
     }
@@ -172,6 +177,17 @@ impl Os for FakeOs {
     fn update_package(&self) -> io::Result<()> {
         self.updates
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    }
+    fn system_time_unix_secs(&self) -> u64 {
+        self.clock.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    fn set_system_time(&self, unix_secs: u64) -> io::Result<()> {
+        if self.clock_fails.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(io::Error::other("no CAP_SYS_TIME"));
+        }
+        self.clock
+            .store(unix_secs, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
     fn hub_status(&self) -> (bool, bool) {

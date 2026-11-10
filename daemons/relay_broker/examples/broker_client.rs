@@ -47,6 +47,7 @@ fn main() {
         },
         (Some("provision"), None, None, None) => Request::ProvisionGroups,
         (Some("update"), None, None, None) => Request::UpdatePackage,
+        (Some("time"), None, None, None) => Request::TimeStatus,
         _ => panic!("{usage}"),
     };
     // The account that serves the socket: root unless BROKER_UID names another (a broker started by hand).
@@ -84,6 +85,7 @@ fn main() {
             println!("hub: access point {access_point}, dhcp {dhcp}")
         }
         Response::Updated => println!("the relay package was upgraded"),
+        other @ (Response::TimeStatus { .. } | Response::TimeSet { .. }) => println!("{other:?}"),
         Response::Error { status, reason } => {
             eprintln!("{status:?}: {reason}");
             std::process::exit(1);
