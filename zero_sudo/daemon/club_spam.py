@@ -88,7 +88,8 @@ SITE_PROBLEM_KIND = "site_compromised_spam"
 BASIS_REDIRECT = "redirect"
 MAX_REDIRECT_TEXT_CHARS = 400
 # Second-level labels under a two-letter country code that make the registrable domain three labels (example.co.uk).
-_SECOND_LEVEL_LABELS = frozenset({"co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go", "gob", "nom"})
+_SECOND_LEVEL_LABELS = frozenset({"co", "com", "org", "net", "ac", "gov", "edu", "or", "ne", "go", "gob", "nom",
+                                    "me", "ltd", "plc", "sch", "asn", "id"})
 
 
 @dataclass(frozen=True)
@@ -614,7 +615,7 @@ def build_redirect(home_url, final_url, markup):
 def redirect_is_spam(redirect):
     """True when `redirect` (the dict `build_redirect` makes, untrusted: it comes from the daemon) says the club's address ends on
     a different registrable domain AND the destination page scores as spam: the same lexicon as every other entry, over the
-    destination's address, title and opening text, ham-radio words counting against it. A redirect to another club's page, to a
+    destination's address and title (not its page text), ham-radio words counting against it. A redirect to another club's page, to a
     page of the same registrable domain, or anything malformed is False. No ownership or registration lookup is made: a club
     site that has changed hands to another legitimate owner is not flagged. Pure; never raises."""
     if not isinstance(redirect, dict):
@@ -626,7 +627,9 @@ def redirect_is_spam(redirect):
         return False
     title = str(redirect.get("title") or "")[:MAX_TITLE_CHARS]
     text = str(redirect.get("text") or "")[:MAX_REDIRECT_TEXT_CHARS]
-    return score_entry(final, (title + " " + text).strip()).flagged
+    # Only the address and the title are scored: the lexicon and the 3-point threshold were calibrated for slugs and titles, and an
+    # ordinary club page that mentions a casino night, or one non-English page with the word "Wetten", flagged on its body text.
+    return score_entry(final, title).flagged
 
 
 # --------------------------------------------------------------------------------------------------------------------

@@ -710,6 +710,17 @@ class TestRedirectToSpam(BaseCase):
         casino_night = CLUB_DESTINATION.replace("weekly net", "weekly net and our casino night fundraiser")
         self.assertFalse(spam.redirect_is_spam(spam.build_redirect("https://w9vcl.com/", "https://sheboygan-arc.org/", casino_night)))
 
+    def test_62b_page_text_alone_never_makes_a_redirect_spam_and_uk_au_second_levels_are_one_site(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]
+        # Tests [@ANCHOR: zero_sudo:club_spam_registrable_domain]
+        club = {"from": "https://w9vcl.com/", "to": "https://other.org/", "title": "Springfield Amateur Radio Club"}
+        for text in ("Join us for our casino night fundraiser, slot machines and poker. Weekly net on the repeater.",
+                     "Willkommen im Verein. Wetten auf den besten Funker und Kredit fuer Mitglieder."):
+            self.assertFalse(spam.redirect_is_spam(dict(club, text=text)), text)
+        self.assertTrue(spam.redirect_is_spam(dict(club, title="Kudatogel slot gacor")))
+        for value, expected in (("www.club.me.uk", "club.me.uk"), ("a.b.ltd.uk", "b.ltd.uk"), ("x.asn.au", "x.asn.au"), ("x.id.au", "x.id.au")):
+            self.assertEqual(spam.registrable_domain(value), expected)
+
     def test_63_a_redirect_inside_the_same_registrable_domain_is_not_flagged_even_to_spam_text(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_build_redirect]
         # Tests [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]
