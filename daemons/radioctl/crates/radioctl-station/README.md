@@ -126,9 +126,11 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - **The token** comes from a `SecretStore` by name (`FileSecrets` reads mode-0600 files;
   `MemorySecrets` is for tests), lives in a `Secret` whose `Debug` is redacted, and is sent only as
   the bearer header and the WebSocket auth message. Not in config, errors, the audit log or logs.
-- **Private IP literals only** (default port 8123). No TLS is implemented, so the link is plain
-  HTTP and WebSocket on the owner's own network; if Home Assistant is only reachable over HTTPS,
-  put a local TLS-terminating proxy on loopback, or do not use this driver (known limitation).
+- **Private IP literals only** (default port 8123). The link is plain HTTP and WebSocket unless
+  `HaConfig::tls` is set: then HTTPS and `wss`, trusting only the owner's CA (PEM; the address must
+  be an IP entry of the certificate) or one pinned SHA-256 certificate fingerprint (`tls.rs`).
+  Verification is never off and the system's public roots are not used. Tested against a fake
+  Home Assistant with a CA-signed certificate; not run against a real Home Assistant.
 - **Audit.** Every service call, session start, authentication result, loss and discovery goes to
   an `AuditLog`. Wiring it to the relay's audit log is the integrator's step.
 - `discover()` lists what Home Assistant offers, to choose from; only configured entities are ever
