@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split", "filter", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split", "filter", "levels", "identify", "read-meters"]
 
 [rig]
 id = "icom-ic-9100"
@@ -125,3 +125,8 @@ verified = { state = "manual-checked", reference = "Icom IC-9100 Instruction Man
 key = "capability.split"
 provenance = { kind = "manual", reference = "Icom IC-9100 Instruction Manual, CI-V command table, PDF page 193 (command 0F split off/on; printed page numbers differ), https://archive.org/download/icom-43b621/IC-9100.pdf, sha256 2fd1cce6daea9e898efb5e78e3f62198a3ad230a2450295b22a1a9ed86d9c907", note = "Command 0F with sub-command 00 (split off) and 01 (split on) is in the manual's CI-V table, the form the engine sends. Cross-check: Hamlib 4.6.2. Icom's download endpoint is excluded by robots.txt and the direct path is 403; the copy read is the archive.org mirror; read for facts under Bruce Perens' decision of 2026-10-31, nothing copied." }
 verified = { state = "manual-checked", reference = "Icom IC-9100 Instruction Manual, PDF page 193, command 0F split off/on" }
+
+[[facts]]
+key = "capability.read-meters"
+provenance = { kind = "manual", reference = "Icom IC-9100 Instruction Manual (IC-9100_ENG_2a.pdf, sha256 1ac4d513003b84d6c9fc5d531ae60b85d699291c941653be6bd7d674e95c6fb1), CI-V command table, PDF page 194: 15 11 to 15 14 (Po, SWR, ALC, COMP meter levels, 0000 to 0255)", note = "Obtained under Icom's download terms (individual use, accepted on the owner's instruction 2026-11-10). The IC-9100 table lists only 15 11 (Po), 15 12 (SWR), 15 13 (ALC) and 15 14 (COMP): no Vd or Id meter, so the radio is expected to refuse 15 15 and 15 16 and radioctl serves those two from the default scale. `read-power` is not claimed here (a follow-up). Per-model scale points are in radioctld meter_cal; facts only, nothing copied." }
+verified = { state = "unverified" }
