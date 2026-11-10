@@ -179,7 +179,7 @@ class TestFormShield(HamsTransactionCase):
         # One visitor's refused retries used no whole-form budget: two other networks still pass.
         self.assertTrue(attempt("198.51.100.1").ok)
         self.assertTrue(attempt("192.0.2.1").ok)
-        self.assertEqual(attempt("192.0.2.2").reason, "rate_global")
+        self.assertEqual(attempt("100.64.0.1").reason, "rate_global")
 
     def test_redis_down_is_reported_not_skipped(self):
         # Tests [@ANCHOR: form_shield:check]
