@@ -39,7 +39,7 @@ def hmac_verify(secret, payload, signature, digest="sha256"):
 def stripe_webhook_verify(secret, payload, signature_header, tolerance=300, now=None):
     """Stripe's webhook check: `signature_header` is `t=<unix time>,v1=<hex>[,v1=...]`; valid when one
     v1 is the HMAC-SHA256 of `"<t>.<payload>"` under the webhook secret and |now - t| <= tolerance.
-    A malformed header, no v1, a non-integer t or a non-positive tolerance is simply False."""
+    A malformed header, no v1, a non-integer t (ASCII digits only, at most 12) or a non-positive tolerance is simply False."""
     if not isinstance(signature_header, str) or not isinstance(payload, str):
         return False
     if not isinstance(tolerance, int) or tolerance <= 0:
@@ -51,7 +51,7 @@ def stripe_webhook_verify(secret, payload, signature_header, tolerance=300, now=
             timestamp = value
         elif key == "v1":
             candidates.append(value)
-    if not timestamp or not timestamp.isdigit() or not candidates:
+    if not timestamp or not (timestamp.isascii() and timestamp.isdigit() and len(timestamp) <= 12) or not candidates:
         return False
     now = time.time() if now is None else now
     if abs(now - int(timestamp)) > tolerance:
