@@ -56,7 +56,8 @@ class TestPeerRules(HamsTransactionCase):
         self.assertEqual(gate.parse_peer_rules(None).rules, ())
 
     def test_malformed_entries_are_errors(self):
-        for value in ("=login", "user=", "user=a|", "bad name", "@", "us/er", "user=a b"):
+        for value in ("=login", "user=", "user=a|", "bad name", "@", "us/er", "user=a b",
+                      "\u00b2", "@\u00b2=svc"):  # superscript two: str.isdigit() is true, int() raises ValueError
             with self.subTest(value=value), self.assertRaises(gate.ConfigError):
                 gate.parse_peer_rules(value)
 

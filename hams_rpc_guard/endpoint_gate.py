@@ -273,7 +273,7 @@ def parse_peer_rules(value):
             raise ConfigError("%s: %r has an empty or malformed login list." % (UNIX_PEERS_PARAM, item))
         is_group = who.startswith("@")
         name = who[1:] if is_group else who
-        if name.isdigit():
+        if name.isascii() and name.isdigit():  # not str.isdigit alone: it is true for "\u00b2", which int() refuses
             rules.append(PeerRule("gid" if is_group else "uid", int(name), logins))
         elif _NAME.match(name):
             rules.append(PeerRule("group" if is_group else "user", name, logins))
