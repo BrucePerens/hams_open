@@ -10,6 +10,8 @@ use std::net::SocketAddr;
 pub struct ChannelStatus {
     /// SSRC the status is about (`0` is the front end).
     pub ssrc: u32,
+    /// True when the status carried an `OUTPUT_SSRC` entry; without one `ssrc` is 0 only by default, and the status is not the front end's.
+    pub has_ssrc: bool,
     /// Echoed command tag.
     pub tag: Option<u64>,
     /// Commands received by this channel.
@@ -142,7 +144,11 @@ impl ChannelStatus {
         let mut s = Self::default();
         for e in entries {
             match e.ty {
-                ty::OUTPUT_SSRC => s.ssrc = e.uint()? as u32,
+                ty::OUTPUT_SSRC => {
+                    // A value wider than 32 bits is refused, not truncated into some other channel's number.
+                    s.ssrc = u32::try_from(e.uint()?).map_err(|_| TlvError::BadValue(e.ty))?;
+                    s.has_ssrc = true;
+                }
                 ty::COMMAND_TAG => s.tag = Some(e.uint()?),
                 ty::CMD_CNT => s.command_count = Some(e.uint()?),
                 ty::DESCRIPTION => s.description = Some(e.text()),
@@ -265,6 +271,26 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radiod_client_status_decode]
+    #[test]
+    fn a_status_with_no_ssrc_or_a_wider_than_32_bit_one_is_not_taken_for_the_front_end() {
+        // Tests [@ANCHOR: radiod_client_status_decode]
+        let none = ChannelStatus::decode(&status(&[(ty::COMMAND_TAG, vec![1])]))
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        assert!(!none.has_ssrc);
+        let wide = status(&[(ty::OUTPUT_SSRC, vec![1, 0, 0, 0, 0])]);
+        assert_eq!(
+            ChannelStatus::decode(&wide),
+            Err(TlvError::BadValue(ty::OUTPUT_SSRC))
+        );
+        let zero = ChannelStatus::decode(&status(&[(ty::OUTPUT_SSRC, vec![])]))
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        assert!(zero.has_ssrc && zero.ssrc == 0);
+    }
+
     #[test]
     fn decodes_channel_fields_by_tag() {
         let pkt = status(&[

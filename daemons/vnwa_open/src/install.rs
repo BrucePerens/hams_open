@@ -103,8 +103,10 @@ impl Exec for ProcessExec {
     }
 }
 
-/// True if `argv` is one of the commands the installer may run. Everything else is refused before it is run.
-pub fn allowed(argv: &[String], restart_audio: bool) -> bool {
+/// True if `argv` is one of the commands the installer may run. Everything else is refused before it is run. A path counts as ours only
+/// when it is exactly a managed destination (or its backup), or, with `--root DIR`, that destination joined under DIR; a path that merely
+/// ends with one does not.
+pub fn allowed(argv: &[String], restart_audio: bool, root: Option<&Path>) -> bool {
     // [@ANCHOR: vnwa_open_install_commands]
     let a: Vec<&str> = argv.iter().map(String::as_str).collect();
     let a = if a.first() == Some(&"sudo") {
@@ -119,10 +121,11 @@ pub fn allowed(argv: &[String], restart_audio: bool) -> bool {
     };
     let ours = |p: &str| {
         managed().iter().any(|m| {
-            p == m.dest
-                || p == format!("{}{BACKUP_SUFFIX}", m.dest)
-                || p.ends_with(m.dest)
-                || p.ends_with(&format!("{}{BACKUP_SUFFIX}", m.dest))
+            let exact = |d: &str| match root {
+                Some(r) => Path::new(p) == r.join(d.trim_start_matches('/')),
+                None => p == d,
+            };
+            exact(m.dest) || exact(&format!("{}{BACKUP_SUFFIX}", m.dest))
         })
     };
     match a.as_slice() {
@@ -176,7 +179,7 @@ impl Installer<'_> {
     fn do_run(&self, argv: Vec<String>, done: &mut Vec<String>) -> Result<(), String> {
         // [@ANCHOR: vnwa_open_install_do_run]
         let argv = self.command(argv);
-        if !allowed(&argv, self.opts.restart_audio) {
+        if !allowed(&argv, self.opts.restart_audio, self.opts.root.as_deref()) {
             return Err(format!(
                 "refused to run a command that is not one of the installer's: {}",
                 argv.join(" ")
@@ -577,13 +580,15 @@ mod tests {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         assert!(allowed(
             &s(&["sudo", "-n", "udevadm", "control", "--reload"]),
-            false
+            false,
+            None
         ));
         assert!(allowed(
             &s(&["sudo", "-n", "install", "-D", "-m", "0644", "/tmp/x", UDEV_DEST]),
-            false
+            false,
+            None
         ));
-        assert!(allowed(&s(&["rm", "-f", WIREPLUMBER_DEST]), false));
+        assert!(allowed(&s(&["rm", "-f", WIREPLUMBER_DEST]), false, None));
         for bad in [
             &["udevadm", "trigger"][..],
             &[
@@ -602,19 +607,36 @@ mod tests {
             &["rm", "-rf", "/etc/udev"],
             &["install", "-D", "-m", "0644", "/tmp/x", "/etc/passwd"],
             &["mv", "/etc/passwd", UDEV_DEST],
+            &[
+                "rm",
+                "-f",
+                "/tmp/evil/etc/udev/rules.d/60-vnwa-codecs.rules",
+            ],
             &["curl", "http://example.invalid"],
             &["apt-get", "install", "x"],
         ] {
-            assert!(!allowed(&s(bad), false), "{bad:?} must be refused");
+            assert!(!allowed(&s(bad), false, None), "{bad:?} must be refused");
         }
+        // With --root only the destination joined under that root is ours, not any path that ends with one.
+        let root = Path::new("/stage");
+        let under = format!("/stage{UDEV_DEST}");
+        assert!(allowed(&s(&["rm", "-f", &under]), false, Some(root)));
+        assert!(!allowed(&s(&["rm", "-f", UDEV_DEST]), false, Some(root)));
+        assert!(!allowed(
+            &s(&["rm", "-f", &format!("/elsewhere{UDEV_DEST}")]),
+            false,
+            Some(root)
+        ));
         // Only the explicit opt-in allows the one restart command.
         assert!(allowed(
             &s(&["systemctl", "--user", "restart", "wireplumber"]),
-            true
+            true,
+            None
         ));
         assert!(!allowed(
             &s(&["systemctl", "--user", "restart", "pipewire"]),
-            true
+            true,
+            None
         ));
     }
 
