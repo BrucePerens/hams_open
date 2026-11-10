@@ -103,6 +103,23 @@ def certificate_identity(utils):
     return "cert:" + subject.strip() if subject and subject.strip() else ""
 
 
+# [@ANCHOR: hams_rpc_guard:unix_identity]
+def unix_identity():
+    """`(identity, logins)` for a call that came in on the Unix socket and was admitted by the gate: `identity` is
+    `unix:<user name>` (`unix:uid:<n>` for a uid without a name), `logins` the frozenset of Odoo logins that peer may
+    act as (empty: any). `("", None)` for any other call. The environ entries are set only by `unix_listener` and the
+    gate; an HTTP client cannot set them."""
+    if not request:
+        return "", None
+    environ = request.httprequest.environ
+    peer = environ.get(endpoint_gate.UNIX_PEER_ENVIRON_KEY)
+    logins = environ.get(endpoint_gate.UNIX_LOGINS_ENVIRON_KEY)
+    if peer is None:
+        return "", None
+    identity = "unix:" + peer["user"] if peer.get("user") else "unix:uid:%d" % peer["uid"]
+    return identity, logins
+
+
 # [@ANCHOR: hams_rpc_guard:check_rpc_call]
 def check_rpc_call(model, name):
     """Judge one RPC call of method `name` on `model` and refuse it (enforce mode) or count it (report mode).
@@ -115,14 +132,20 @@ def check_rpc_call(model, name):
         strict_stock = policy.truthy(utils._get_system_param(policy.STRICT_STOCK_PARAM, ""))
         authors = policy.parse_authors(utils._get_system_param(policy.MANAGED_AUTHORS_PARAM, ""))
         cert = certificate_identity(utils)
+        local_identity, bound_logins = unix_identity()
     except Exception:  # audit-ignore-catch-all: a parameter that cannot be read must not open the guard
         _logger.exception("Could not read the RPC guard parameters; using the strict defaults.")
         mode, strict_stock, authors, cert = policy.DEFAULT_MODE, False, policy.DEFAULT_MANAGED_AUTHORS, ""
+        local_identity, bound_logins = "", None
     if mode == policy.MODE_OFF:
         return
     exposure = exposure_module.load_exposure(model.env.cr, model.env.registry)
-    call = describe_call(model, name, authors, exposure, cert)
-    verdict, reason = policy.decide(call, exposure, strict_stock)
+    call = describe_call(model, name, authors, exposure, local_identity or cert)
+    if bound_logins and model.env.user.login not in bound_logins:
+        # The local user may act only as the Odoo accounts its unix_peers entry names.
+        verdict, reason = policy.DENY, "unix-login-not-bound"
+    else:
+        verdict, reason = policy.decide(call, exposure, strict_stock)
     policy.apply_verdict(call, verdict, reason, mode)
 
 

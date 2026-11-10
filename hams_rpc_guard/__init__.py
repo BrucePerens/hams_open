@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from . import endpoint_gate
+from . import unix_listener
 from . import exposure
 from . import policy
 from . import patch
