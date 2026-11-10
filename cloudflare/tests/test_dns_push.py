@@ -117,6 +117,8 @@ class TestDnsPlan(HamsTransactionCase):
 
     def test_01_an_existing_identical_record_is_adopted_never_created_or_updated(self):
         # stun.hams.com must stay untouched: the first thing the planner may never do is write over it.
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_entry]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_row]
         remote = self._remote()
         entry = dns_plan.plan_row(self._row(), [remote])
         self.assertEqual(entry["action"], dns_plan.ADOPT)
@@ -124,19 +126,23 @@ class TestDnsPlan(HamsTransactionCase):
         self.assertNotIn(entry["action"], dns_plan.WRITING_ACTIONS)
 
     def test_02_adopting_refuses_when_the_proxied_flag_differs(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_effective_proxied]
         entry = dns_plan.plan_row(self._row(proxied=True), [self._remote(proxied=False)])
         self.assertEqual(entry["action"], dns_plan.CONFLICT)
 
     def test_03_other_content_under_the_same_name_is_a_conflict_not_an_overwrite(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_row]
         entry = dns_plan.plan_row(self._row(content="192.0.2.1"), [self._remote()])
         self.assertEqual(entry["action"], dns_plan.CONFLICT)
         self.assertIn("66.135.10.56", entry["reason"])
 
     def test_04_a_missing_record_is_created_and_an_unmanaged_one_is_not(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_entry]
         self.assertEqual(dns_plan.plan_row(self._row(), [])["action"], dns_plan.CREATE)
         self.assertEqual(dns_plan.plan_row(self._row(manage=False), [])["action"], dns_plan.DRIFT)
 
     def test_05_a_linked_row_updates_content_and_proxied_and_keeps_the_remote_ttl(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_row]
         remote = self._remote(content="192.0.2.9")
         entry = dns_plan.plan_row(self._row(cf_record_id=remote["id"]), [remote])
         self.assertEqual((entry["action"], entry["ttl"]), (dns_plan.UPDATE, 300))
@@ -150,6 +156,7 @@ class TestDnsPlan(HamsTransactionCase):
         self.assertEqual(entry["action"], dns_plan.DRIFT)
 
     def test_07_a_linked_id_that_vanished_or_changed_type_is_a_conflict(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_row]
         gone = dns_plan.plan_row(self._row(cf_record_id=_id()), [self._remote()])
         self.assertEqual(gone["action"], dns_plan.CONFLICT)
         txt = self._remote(type="TXT", content="x")
@@ -169,6 +176,7 @@ class TestDnsPlan(HamsTransactionCase):
             dns_plan.CONFLICT)
 
     def test_09_spellings_of_one_value_compare_equal(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_normalize_content]
         self.assertEqual(dns_plan.normalize_content("TXT", '"v=spf1 -all"'), "v=spf1 -all")
         self.assertEqual(dns_plan.normalize_content("NS", "NS1.Hams.com."), "ns1.hams.com")
         self.assertEqual(dns_plan.normalize_content("AAAA", "2001:0db8:0000:0000:0000:0000:0000:0001"), "2001:db8::1")
@@ -177,6 +185,8 @@ class TestDnsPlan(HamsTransactionCase):
         self.assertEqual(entry["action"], dns_plan.ADOPT)
 
     def test_10_the_plan_hash_changes_with_what_would_be_written_and_the_text_says_nothing_is_deleted(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_hash]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_render]
         entries = [dns_plan.plan_row(self._row(), [])]
         first = dns_plan.plan_hash(entries)
         entries[0]["content"] = "192.0.2.1"
@@ -184,6 +194,7 @@ class TestDnsPlan(HamsTransactionCase):
         self.assertIn("never changed or deleted", dns_plan.render(entries))
 
     def test_11_retire_deletes_only_a_linked_managed_record_of_the_same_type(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_retire]
         remote = self._remote()
         entry = dns_plan.plan_row(self._row(cf_record_id=remote["id"], retire=True), [remote])
         self.assertEqual((entry["action"], entry["remote_id"]), (dns_plan.DELETE, remote["id"]))
@@ -215,6 +226,7 @@ class TestDnsPlan(HamsTransactionCase):
         self.assertEqual((changed["action"], changed["reason"]), (dns_plan.UPDATE, "comment 'why' -> 'new'"))
 
     def test_13_an_empty_comment_never_clears_one_set_at_cloudflare_and_the_hash_follows_the_comment(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_hash]
         remote = self._remote(comment="set by hand")
         entry = dns_plan.plan_row(self._row(cf_record_id=remote["id"], comment=""), [remote])
         self.assertEqual(entry["action"], dns_plan.UNCHANGED)
@@ -621,6 +633,7 @@ class TestDnsCapacityPlan(HamsTransactionCase):
     """The record-limit arithmetic, as pure data. Tests [@ANCHOR: cloudflare:COMM_dns_capacity]"""
 
     def test_01_limits_by_plan(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_record_limit]
         self.assertEqual(dns_plan.record_limit("free", "2024-08-31T00:00:00Z"), 1000)
         self.assertEqual(dns_plan.record_limit("free", "2024-09-01T00:00:00Z"), 200)
         self.assertEqual(dns_plan.record_limit("pro", "2014-01-25T03:59:00Z"), 3500)
@@ -629,6 +642,7 @@ class TestDnsCapacityPlan(HamsTransactionCase):
         self.assertIsNone(dns_plan.record_limit("", None))
 
     def test_02_hard_stop_at_ninety_percent(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_capacity_problem]
         self.assertIsNone(dns_plan.capacity_problem("hams.com", 3500, 3000, 100, 0))
         self.assertIsNone(dns_plan.capacity_problem("hams.com", 3500, 3149, 1, 0), "3,150 is exactly 90%: allowed")
         self.assertIn("hard stop", dns_plan.capacity_problem("hams.com", 3500, 3150, 1, 0))
@@ -637,6 +651,7 @@ class TestDnsCapacityPlan(HamsTransactionCase):
         self.assertIsNone(dns_plan.capacity_problem("hams.com", None, 99999, 10, 0), "no per-zone limit known")
 
     def test_03_a_member_delegation_is_one_label_directly_under_the_zone(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_is_member_delegation]
         ns = {"type": "NS", "name": "k6bp.hams.com"}
         self.assertTrue(dns_plan.is_member_delegation(ns, "hams.com"))
         self.assertFalse(dns_plan.is_member_delegation(dict(ns, name="x.k6bp.hams.com"), "hams.com"))

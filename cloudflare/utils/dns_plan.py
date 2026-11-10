@@ -30,6 +30,7 @@ def normalize_name(name):
     return (name or "").strip().rstrip(".").lower()
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_normalize_content]
 def normalize_content(record_type, content):
     """The form two spellings of the same value share, so Odoo and Cloudflare can be compared."""
     text = (content or "").strip()
@@ -48,10 +49,12 @@ def normalize_content(record_type, content):
     return text
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_effective_proxied]
 def effective_proxied(record_type, proxied):
     return bool(proxied) and record_type in PROXIABLE_TYPES
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_entry]
 def _entry(action, row, reason="", **extra):
     entry = {"action": action, "row_id": row["id"], "type": row["type"], "name": row["name"],
              "content": row["content"], "reason": reason,
@@ -61,6 +64,7 @@ def _entry(action, row, reason="", **extra):
     return entry
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_row]
 def plan_row(row, remote):
     """One row against what Cloudflare holds under the same name.
 
@@ -131,6 +135,7 @@ def plan_row(row, remote):
     return _entry(CREATE, row, note)
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_retire]
 def _plan_retire(row, remote):
     """A row marked retire: delete its own record at Cloudflare, and nothing else."""
     kind = row["type"]
@@ -148,6 +153,7 @@ def _plan_retire(row, remote):
     return _entry(DELETE, row, "marked retire: this record is removed at Cloudflare", remote_id=rec["id"])
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_hash]
 def plan_hash(entries):
     """A digest of the writing part of a plan, so that applying can insist on exactly what was shown."""
     body = [
@@ -158,6 +164,7 @@ def plan_hash(entries):
     return hashlib.sha256(json.dumps(body, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_render]
 def render(entries):
     """The plan as text for a person: one line per row, writing actions first."""
     order = {CREATE: 0, UPDATE: 1, DELETE: 2, ADOPT: 3, CONFLICT: 4, PROBLEM: 5, DRIFT: 6, UNCHANGED: 7}
@@ -188,6 +195,7 @@ CAPACITY_HARD_STOP_PERCENT = 90
 FREE_OLD_ZONE_CUTOFF = "2024-09-01"
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_record_limit]
 def record_limit(plan_legacy_id, created_on):
     """The zone's record limit from its plan, or None when Cloudflare gives no per-zone limit (Enterprise, an
     account quota) or the plan is not recognised. `created_on` is Cloudflare's ISO date string."""
@@ -199,6 +207,7 @@ def record_limit(plan_legacy_id, created_on):
     return None
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_capacity_problem]
 def capacity_problem(zone_name, limit, current, creates, deletes):
     """A reason string when the push would pass the hard stop, else None."""
     if limit is None:
@@ -211,6 +220,7 @@ def capacity_problem(zone_name, limit, current, creates, deletes):
     return None
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_is_member_delegation]
 def is_member_delegation(entry, zone_name):
     """An NS row for a single label directly under the zone, such as k6bp.hams.com: a member's name."""
     name = normalize_name(entry.get("name"))

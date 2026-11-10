@@ -18,12 +18,16 @@ class TestCachePlanMerge(BaseCase):
     """The pure merge: managed rules in, unmanaged rules carried through."""
 
     def test_empty_zone_creates_both_bypass_first(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_merge]
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_summary]
         plan = cache_plan.merge([], [CACHE, BYPASS], {"Bypass", "Downloads"})
         self.assertEqual([r["description"] for r in plan["rules"]], ["Bypass", "Downloads"])
         self.assertEqual([e["action"] for e in plan["entries"]], ["create", "create"])
         self.assertFalse(plan["problems"])
 
     def test_unmanaged_rule_survives_in_place_without_read_only_fields(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_clean]
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_merge]
         plan = cache_plan.merge([dict(OTHER)], [BYPASS, CACHE], {"Bypass", "Downloads"})
         self.assertEqual([r["description"] for r in plan["rules"]], ["Bypass", "Hand made", "Downloads"])
         kept = plan["rules"][1]
@@ -32,6 +36,8 @@ class TestCachePlanMerge(BaseCase):
         self.assertIn("keep", [e["action"] for e in plan["entries"]])
 
     def test_existing_managed_rule_is_updated_in_place_by_id_and_unchanged_is_not_a_write(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_view]
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_merge]
         remote = [dict(BYPASS, id="b1"), dict(CACHE, id="c1", expression="(false)")]
         plan = cache_plan.merge(remote, [BYPASS, CACHE], {"Bypass", "Downloads"})
         by = {e["name"]: e["action"] for e in plan["entries"]}
@@ -39,18 +45,21 @@ class TestCachePlanMerge(BaseCase):
         self.assertEqual({r["description"]: r["id"] for r in plan["rules"]}, {"Bypass": "b1", "Downloads": "c1"})
 
     def test_inactive_managed_rule_is_the_only_thing_ever_deleted(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_merge]
         remote = [dict(BYPASS, id="b1"), dict(OTHER)]
         plan = cache_plan.merge(remote, [], {"Bypass"})
         self.assertEqual([r["description"] for r in plan["rules"]], ["Hand made"])
         self.assertEqual({e["name"]: e["action"] for e in plan["entries"]}, {"Bypass": "delete", "Hand made": "keep"})
 
     def test_duplicate_names_are_refused(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_merge]
         plan = cache_plan.merge([dict(BYPASS, id="1"), dict(BYPASS, id="2")], [BYPASS], {"Bypass"})
         self.assertTrue(plan["problems"])
         plan = cache_plan.merge([], [BYPASS, BYPASS], {"Bypass"})
         self.assertTrue(plan["problems"])
 
     def test_hash_changes_when_the_zone_changes(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_hash]
         a = cache_plan.merge([], [BYPASS], {"Bypass"})["hash"]
         b = cache_plan.merge([dict(OTHER)], [BYPASS], {"Bypass"})["hash"]
         self.assertNotEqual(a, b)
