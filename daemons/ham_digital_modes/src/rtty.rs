@@ -1786,7 +1786,11 @@ mod tests {
     #[test]
     fn a_lone_first_character_with_no_leading_idle_decodes_whatever_its_first_data_bit() {
         let sample_rate = 48000u32;
-        for &c in LTRS_CHARS.iter().chain(FIGS_CHARS.iter()).filter(|&&c| c != '\0') {
+        for &c in LTRS_CHARS
+            .iter()
+            .chain(FIGS_CHARS.iter())
+            .filter(|&&c| c != '\0')
+        {
             let text = c.to_string();
             let mut mono = rtty_modulate(&text, RTTY_DEFAULT_MARK_HZ, sample_rate);
             mono.extend(idle_mark_audio(RTTY_DEFAULT_MARK_HZ, sample_rate, 0.05));
@@ -1800,7 +1804,10 @@ mod tests {
             for chunk in mono.chunks(977) {
                 got.push_str(&decoder.feed(chunk));
             }
-            assert_eq!(got, text, "streamed decode of a lone {c:?} with no leading idle");
+            assert_eq!(
+                got, text,
+                "streamed decode of a lone {c:?} with no leading idle"
+            );
         }
     }
 
