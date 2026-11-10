@@ -21,6 +21,9 @@ use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
+#[path = "common/testdir.rs"]
+mod testdir_helper;
+
 fn binary_exists(name: &str) -> bool {
     Command::new("which")
         .arg(name)
@@ -168,8 +171,7 @@ fn decodes_a_clean_high_snr_signal_matching_the_reference() {
         eprintln!("skipping: wsjtx (ft8sim/jt9) not installed");
         return;
     }
-    let work_dir = std::env::temp_dir().join(format!("ft8_ref_test_clean_{}", std::process::id()));
-    std::fs::create_dir_all(&work_dir).unwrap();
+    let work_dir = testdir_helper::TestDir::new("ft8_ref_test_clean");
 
     let (ours, reference) = generate_and_decode("K1ABC W9XYZ EN37", -10, Channel::Awgn, &work_dir);
     assert!(reference.is_some(), "the reference decoder itself must decode a -10dB signal -- if it can't, this test's premise is broken, not this crate");
@@ -178,7 +180,6 @@ fn decodes_a_clean_high_snr_signal_matching_the_reference() {
         "must decode a clean/high-SNR (-10dB) signal the real reference decoder also decodes; got: {ours:?}, reference: {reference:?}"
     );
 
-    let _ = std::fs::remove_dir_all(&work_dir);
 }
 
 #[test]
@@ -187,8 +188,7 @@ fn noise_channel_sweep_reports_real_snr_sensitivity_against_the_reference() {
         eprintln!("skipping: wsjtx (ft8sim/jt9) not installed");
         return;
     }
-    let work_dir = std::env::temp_dir().join(format!("ft8_ref_test_sweep_{}", std::process::id()));
-    std::fs::create_dir_all(&work_dir).unwrap();
+    let work_dir = testdir_helper::TestDir::new("ft8_ref_test_sweep");
 
     let message = "K1ABC W9XYZ EN37";
     let mut results = Vec::new();
@@ -220,7 +220,6 @@ fn noise_channel_sweep_reports_real_snr_sensitivity_against_the_reference() {
         eprintln!("  {snr:+4} dB: this_decoder={ours:5} reference={reference:5}");
     }
 
-    let _ = std::fs::remove_dir_all(&work_dir);
 }
 
 /// `hams_local_relay`'s mic input runs at 48kHz (matching its Opus voice
@@ -240,8 +239,7 @@ fn decodes_correctly_when_fed_at_48khz_directly_no_resampling() {
         eprintln!("skipping: wsjtx (ft8sim/jt9) or sox not installed");
         return;
     }
-    let work_dir = std::env::temp_dir().join(format!("ft8_ref_test_48k_{}", std::process::id()));
-    std::fs::create_dir_all(&work_dir).unwrap();
+    let work_dir = testdir_helper::TestDir::new("ft8_ref_test_48k");
 
     let message = "K1ABC W9XYZ EN37";
     // ft8sim always emits 12000 Hz, on a fading channel whose noise and fading
@@ -303,7 +301,6 @@ fn decodes_correctly_when_fed_at_48khz_directly_no_resampling() {
          wiring, which this test previously found unnecessary."
     );
 
-    let _ = std::fs::remove_dir_all(&work_dir);
 }
 
 /// `encode_message()` wraps the vendored `ft8_lib`'s own real message
@@ -322,8 +319,7 @@ fn encode_message_matches_the_real_ft8sim_reference_tone_sequence() {
         eprintln!("skipping: wsjtx (ft8sim) not installed");
         return;
     }
-    let work_dir = std::env::temp_dir().join(format!("ft8_encode_ref_test_{}", std::process::id()));
-    std::fs::create_dir_all(&work_dir).unwrap();
+    let work_dir = testdir_helper::TestDir::new("ft8_encode_ref_test");
 
     let message = "K1ABC W9XYZ EN37";
     let out = Command::new("ft8sim")
@@ -361,5 +357,4 @@ fn encode_message_matches_the_real_ft8sim_reference_tone_sequence() {
         "encode_message()'s tone sequence must match ft8sim's own reference output exactly"
     );
 
-    let _ = std::fs::remove_dir_all(&work_dir);
 }
