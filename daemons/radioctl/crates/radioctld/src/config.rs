@@ -41,6 +41,8 @@
 //! listen = "127.0.0.1:4533"                # default: loopback, port 4533 + index
 //! [rotator.transport]
 //! kind = "virtual"                         # or "tcp" (address)
+//!                                          # or "serial" (path or usb = { vid, pid, serial? }, baud = 9600;
+//!                                          # 8N1, no flow control; optional lines = "unmanaged")
 //! ```
 
 use std::net::{IpAddr, SocketAddr};
@@ -83,7 +85,15 @@ struct RotatorSection {
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 enum RotatorTransportSection {
     Virtual,
-    Tcp { address: String },
+    Tcp {
+        address: String,
+    },
+    Serial {
+        path: Option<String>,
+        usb: Option<UsbSection>,
+        baud: u32,
+        lines: Option<String>,
+    },
 }
 
 #[derive(Deserialize, Default)]
@@ -340,6 +350,16 @@ pub enum RotatorTransportConfig {
         /// `host:port`.
         address: String,
     },
+    /// A serial or USB-serial port (a GS-232 controller or a rotator interface), 8N1 with no flow
+    /// control, reopened by the link when it comes back after an unplug.
+    Serial {
+        /// The port, by path or by USB ids.
+        target: PortTarget,
+        /// The baud rate (a fixed one: rotator controllers have no probe).
+        baud: u32,
+        /// Whether the port has modem control lines this daemon may use.
+        lines: LineControl,
+    },
 }
 
 /// One rotator to serve.
@@ -576,25 +596,9 @@ fn transport_config(
             baud_probe,
             lines,
         } => {
-            let target = match (path, usb) {
-                (Some(path), None) if !path.is_empty() => PortTarget::Path(PathBuf::from(path)),
-                (None, Some(usb)) => PortTarget::Usb(UsbMatcher {
-                    vid: usb.vid,
-                    pid: usb.pid,
-                    serial: usb.serial,
-                }),
-                _ => return Err("serial transport needs exactly one of path and usb".to_string()),
-            };
+            let target = serial_target(path, usb)?;
             let baud = baud_setting(baud, baud_probe)?;
-            let lines = match lines.as_deref() {
-                None | Some("managed") => LineControl::Managed,
-                Some("unmanaged") => LineControl::Unmanaged,
-                Some(other) => {
-                    return Err(format!(
-                        "serial lines {other:?} is not \"managed\" or \"unmanaged\""
-                    ))
-                }
-            };
+            let lines = line_control(lines.as_deref())?;
             Ok(TransportConfig::Serial {
                 target,
                 baud,
@@ -757,6 +761,30 @@ fn listen_address(
     Ok(listen)
 }
 
+/// A serial transport's port: exactly one of a path and USB ids.
+fn serial_target(path: Option<String>, usb: Option<UsbSection>) -> Result<PortTarget, String> {
+    match (path, usb) {
+        (Some(path), None) if !path.is_empty() => Ok(PortTarget::Path(PathBuf::from(path))),
+        (None, Some(usb)) => Ok(PortTarget::Usb(UsbMatcher {
+            vid: usb.vid,
+            pid: usb.pid,
+            serial: usb.serial,
+        })),
+        _ => Err("serial transport needs exactly one of path and usb".to_string()),
+    }
+}
+
+/// A serial transport's `lines`: managed (the default) or unmanaged.
+fn line_control(lines: Option<&str>) -> Result<LineControl, String> {
+    match lines {
+        None | Some("managed") => Ok(LineControl::Managed),
+        Some("unmanaged") => Ok(LineControl::Unmanaged),
+        Some(other) => Err(format!(
+            "serial lines {other:?} is not \"managed\" or \"unmanaged\""
+        )),
+    }
+}
+
 // [@ANCHOR: radioctld_config_rotator]
 /// Validates one `[[rotator]]`: a known model from the shipped descriptions, a listen address
 /// (default: loopback, port 4533 + index) and a transport.
@@ -793,6 +821,24 @@ fn rotator_config(
         RotatorTransportSection::Tcp { address } => {
             check_host_port(&address)?;
             RotatorTransportConfig::Tcp { address }
+        }
+        RotatorTransportSection::Serial {
+            path,
+            usb,
+            baud,
+            lines,
+        } => {
+            let target = serial_target(path, usb)?;
+            if !(300..=1_000_000).contains(&baud) {
+                return Err(format!(
+                    "rotator {name}: baud {baud} is outside 300 to 1000000"
+                ));
+            }
+            RotatorTransportConfig::Serial {
+                target,
+                baud,
+                lines: line_control(lines.as_deref())?,
+            }
         }
     };
     Ok(RotatorConfig {
@@ -1096,6 +1142,30 @@ kind = "virtual"
             parse(&ROTATOR.replace("kind = \"virtual\"", "kind = \"tcp\"\naddress = \"x\""))
                 .is_err()
         );
+        let serial = |lines: &str| {
+            parse(&ROTATOR.replace("kind = \"virtual\"", &format!("kind = \"serial\"\n{lines}")))
+        };
+        assert_eq!(
+            serial("path = \"/dev/ttyUSB1\"\nbaud = 9600")
+                .expect("serial")
+                .rotators[0]
+                .transport,
+            RotatorTransportConfig::Serial {
+                target: PortTarget::Path(PathBuf::from("/dev/ttyUSB1")),
+                baud: 9600,
+                lines: LineControl::Managed,
+            }
+        );
+        assert!(
+            serial("usb = { vid = 0x0403, pid = 0x6001 }\nbaud = 9600\nlines = \"unmanaged\"")
+                .is_ok()
+        );
+        assert!(serial("baud = 9600").is_err(), "a port is required");
+        assert!(
+            serial("path = \"/dev/ttyUSB1\"").is_err(),
+            "a baud rate is required"
+        );
+        assert!(serial("path = \"/dev/ttyUSB1\"\nbaud = 5").is_err());
         assert!(parse(&ROTATOR.replace("kind = \"virtual\"", "kind = \"serial\"")).is_err());
         assert!(parse(&ROTATOR.replace("model =", "bogus = 1\nmodel =")).is_err());
     }

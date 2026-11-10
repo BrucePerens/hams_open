@@ -8,6 +8,7 @@
 use std::sync::Arc;
 
 use radioctl_core::net::{open_link, NetConfig, NetMonitor, RawFraming};
+use radioctl_core::serial::{open_serial, SerialConfig, SerialMonitor};
 use radioctl_station::rotator::Rotator;
 use radioctl_station::virtual_rotator::{
     serve_virtual_rotator, VirtualRotator, VirtualRotatorControl,
@@ -27,6 +28,8 @@ pub struct BuiltRotator {
     pub virtual_control: Option<VirtualRotatorControl>,
     /// The network link's status and counters. Kept for the life of the rotator.
     pub net_link: Option<NetMonitor>,
+    /// The serial port's status and counters. Kept for the life of the rotator.
+    pub serial_link: Option<SerialMonitor>,
 }
 
 // [@ANCHOR: radioctld_rotators_build_rotator]
@@ -52,6 +55,27 @@ pub async fn build_rotator(
             address
         }
         RotatorTransportConfig::Tcp { address } => address.clone(),
+        RotatorTransportConfig::Serial {
+            target,
+            baud,
+            lines,
+        } => {
+            let mut serial = SerialConfig::new(target.clone(), *baud);
+            serial.lines = *lines;
+            let link = open_serial(runtime, serial).await.map_err(|e| fail(&e))?;
+            let watch = link.watch();
+            let (transport, monitor) = link.into_parts();
+            return Ok(BuiltRotator {
+                service: Arc::new(RotatorService::new(Rotator::new(
+                    engine,
+                    transport,
+                    Some(watch),
+                ))),
+                virtual_control: None,
+                net_link: None,
+                serial_link: Some(monitor),
+            });
+        }
     };
     let mut config = NetConfig::new(address);
     config.first_attempts = 1;
@@ -65,6 +89,7 @@ pub async fn build_rotator(
         service: Arc::new(RotatorService::new(handle)),
         virtual_control,
         net_link: Some(monitor),
+        serial_link: None,
     })
 }
 
