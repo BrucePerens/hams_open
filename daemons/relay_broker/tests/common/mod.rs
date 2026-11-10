@@ -184,9 +184,9 @@ pub fn broker_with(cfg: &Config, os: FakeOs, audit: Option<&Path>) -> Broker {
     Broker::new(cfg, AuditLog::open(audit).expect("audit"), Box::new(os))
 }
 
-pub fn temp_dir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("relay_broker_it_{tag}_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("tempdir");
-    dir
+#[path = "../../src/testdir.rs"]
+mod testdir;
+
+pub fn temp_dir(tag: &str) -> testdir::TestDir {
+    testdir::TestDir::new(&format!("it_{tag}"))
 }

@@ -88,7 +88,6 @@ fn an_unlisted_peer_is_closed_before_any_byte_is_read() {
     );
     assert_eq!(outcome, Outcome::Answered);
     assert!(matches!(resp, Response::Devices(_)));
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 // Tests [@ANCHOR: relay_broker_broker_handle]
@@ -301,7 +300,6 @@ fn a_peer_over_its_rate_is_refused_and_logged() {
         1,
         "{text}"
     );
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 // Tests [@ANCHOR: relay_broker_broker_grant]
@@ -374,7 +372,6 @@ fn provisioning_reports_by_default_and_applies_only_when_configured() {
             ..
         }
     ));
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 // Tests [@ANCHOR: relay_broker_run]
@@ -422,7 +419,6 @@ fn the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_wh
     );
     // Without systemd's environment there is no activated listener.
     assert!(relay_broker::server::activated_listener().is_none());
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 /// An impostor that listens on the broker's path as the test's own account, answers any request
@@ -485,7 +481,6 @@ fn the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_noth
         worker.join().unwrap().unwrap().0,
         Response::Devices(_)
     ));
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
