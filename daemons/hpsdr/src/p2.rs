@@ -297,6 +297,7 @@ pub fn encode_high_priority_tx(
     }
     let mut p = hp_base(seq, hp)?;
     if tx.ptt {
+        let drive = gate.check_tx(tx.duc_hz, tx.drive)?;
         p[4] |= 2;
         put32(
             &mut p,
@@ -304,7 +305,7 @@ pub fn encode_high_priority_tx(
             hp.phase_clock_hz
                 .map_or(tx.duc_hz, |c| phase_word(tx.duc_hz, c)),
         );
-        p[345] = tx.drive;
+        p[345] = drive;
     }
     Ok(p)
 }

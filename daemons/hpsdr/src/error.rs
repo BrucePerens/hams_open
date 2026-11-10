@@ -16,6 +16,8 @@ pub enum HpsdrError {
     Config(String),
     /// A transmit-capable operation was refused because the transmit gate is closed.
     GateClosed,
+    /// A transmit request is outside the limits narrowed onto the gate (frequency outside the allowed bands).
+    OutsideLimits,
     /// A socket or task failure (the I/O error text).
     Io(String),
     /// Nothing arrived in time.
@@ -34,6 +36,7 @@ impl fmt::Display for HpsdrError {
             Self::Unsupported(m) => write!(f, "unsupported: {m}"),
             Self::Config(m) => write!(f, "invalid setting: {m}"),
             Self::GateClosed => write!(f, "transmit gate is closed"),
+            Self::OutsideLimits => write!(f, "transmit frequency is outside the allowed bands"),
             Self::Io(m) => write!(f, "i/o error: {m}"),
             Self::Timeout => write!(f, "timed out"),
             Self::Stopped => write!(f, "session stopped"),
