@@ -725,6 +725,7 @@ dependencies = [
 name = "radioctl-station"
 version = "0.1.0"
 dependencies = [
+ "futures-core",
  "radioctl-core",
  "radioctl-protocols",
  "serde",

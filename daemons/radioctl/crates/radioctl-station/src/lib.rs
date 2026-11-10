@@ -11,6 +11,7 @@
 //! - [`gpio_map`]: the GPIO function-map format (TOML) and board models, with validation.
 //! - [`fx2`]: host side of the FX2LP Station I/O board (sans-IO: records, map requests, heartbeat, refusals).
 //! - [`actor_link`]: the real rig actor behind the manager: spawn, respawn, the unkey pass.
+//! - [`band_follow`]: a selector follows the rig's transmit frequency (`active_tx_frequency`), behind the interlock.
 //! - [`channel`]: channel drivers, the virtual bank, the switchboard (commanded and confirmed
 //!   state, break-before-make selectors, momentary pulses, debounced inputs).
 //! - [`modbus`]: sans-IO Modbus framing and the coil relay driver (ASCII and RTU).
@@ -28,6 +29,7 @@
 //! - [`station`]: the dependency graph, profiles, interlocks and the emergency all-off.
 
 pub mod actor_link;
+pub mod band_follow;
 pub mod channel;
 pub mod error;
 pub mod fx2;
