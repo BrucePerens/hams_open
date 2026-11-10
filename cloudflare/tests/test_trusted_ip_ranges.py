@@ -68,6 +68,20 @@ class TestTrustedIpRanges(HamsTransactionCase):
         self.assertIn("203.0.113.0/24", ranges)
         self.assertNotIn("not-a-cidr", ranges)
 
+    def test_03b_range_with_host_bits_or_a_bare_address_is_stored_canonical(self):
+        # Tests [@ANCHOR: cloudflare:get_effective_trusted_ip_ranges]
+        # Tests [@ANCHOR: cloudflare:is_trusted_cf_peer_with_env]
+        self._enable_non_tunnel_mode()
+        self._icp().set_param(
+            "cloudflare.trusted_ip_ranges_custom", "198.51.100.77/24, 192.0.2.9"
+        )
+        ranges = self._utils()._get_effective_trusted_ip_ranges()
+        self.assertIn("198.51.100.0/24", ranges)
+        self.assertIn("192.0.2.9/32", ranges)
+        self.assertNotIn("198.51.100.77/24", ranges)
+        # The peer test builds each network strictly: before the fix a stored host-bits range raised.
+        self.assertTrue(self._utils()._is_trusted_cf_peer("198.51.100.200"))
+
     # Tests [@ANCHOR: cloudflare:is_trusted_cf_peer_with_env]
     def test_04_is_trusted_cf_peer_true_for_loopback(self):
         self.assertTrue(self._utils()._is_trusted_cf_peer("127.0.0.1"))  # burn-ignore-ssrf-test-value
