@@ -20,7 +20,9 @@ use radioctl_core::usb_device::{FakeTransfer, FakeUsbBackend};
 use radioctl_core::usb_link::{open_usb, UsbConfig};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::funcube::{command_report, FuncubeEngine, FuncubeTwin};
-use radioctl_protocols::si570_usb::{hz_from_word, word_from_hz, Si570UsbEngine};
+use radioctl_protocols::si570_usb::{
+    hz_from_registers, hz_from_word, registers_from_hz, word_from_hz, Si570UsbEngine,
+};
 use radioctl_protocols::usb_family::{target_for, twin_for, UsbFrameStandIn};
 use tokio::runtime::Handle;
 
@@ -48,7 +50,7 @@ fn every_usb_file_carries_its_ids_and_a_known_protocol() {
     let all = usb_descriptions();
     assert_eq!(
         all.len(),
-        11,
+        12,
         "{:?}",
         all.iter().map(|d| &d.id).collect::<Vec<_>>()
     );
@@ -153,6 +155,41 @@ fn the_si570_word_is_eleven_dot_twenty_one_fixed_point_of_the_oscillator_frequen
     }
 }
 
+// Tests [@ANCHOR: radioctl_si570_usb_registers_from_hz]
+// Tests [@ANCHOR: radioctl_si570_usb_hz_from_registers]
+#[test]
+fn the_legacy_si570_registers_hold_the_solved_dividers() {
+    // 7.074 MHz on a x4 board is 28.296 MHz: the lowest DCO in range is 4980.096 MHz with
+    // HS_DIV 4 and N1 44, so the bytes are code 0, N1-1 = 43, RFREQ = DCO / 114.285 MHz in 10.28
+    // fixed point (11697373590). Worked out by hand, not by the code under test.
+    assert_eq!(
+        registers_from_hz(Hz(7_074_000), 4),
+        Some([0x0A, 0xC2, 0xB9, 0x37, 0xC1, 0x96])
+    );
+    assert_eq!(
+        hz_from_registers(&[0x0A, 0xC2, 0xB9, 0x37, 0xC1, 0x96], 4),
+        Some(Hz(7_074_000))
+    );
+    // Nothing solves a frequency whose DCO cannot reach the window, or a zero multiplier.
+    assert_eq!(registers_from_hz(Hz(1_000), 4), None);
+    assert_eq!(registers_from_hz(Hz(0), 4), None);
+    assert_eq!(hz_from_registers(&[0; 6], 0), None);
+    // The unused HS_DIV code 4 decodes to nothing.
+    assert_eq!(hz_from_registers(&[0x80, 0, 0, 0, 0, 1], 4), None);
+    for hz in (1_800_000..=53_700_000u64)
+        .step_by(1_000)
+        .chain([7_074_123, 14_199_999])
+    {
+        for multiplier in [2, 4] {
+            let regs = registers_from_hz(Hz(hz), multiplier).expect("solvable");
+            let back = hz_from_registers(&regs, multiplier).expect("decodes").0;
+            // Below about 3.4 MHz at the oscillator the divider chain cannot reach the DCO
+            // window, so the range starts at 1.8 MHz. RFREQ has 2^-28 resolution on a 114 MHz crystal: well under a hertz.
+            assert!(back.abs_diff(hz) <= 1, "{hz} x{multiplier} -> {back}");
+        }
+    }
+}
+
 // Tests [@ANCHOR: radioctl_si570_usb_engine_new]
 // Tests [@ANCHOR: radioctl_si570_usb_set_value]
 // Tests [@ANCHOR: radioctl_si570_usb_engine_encode]
@@ -209,6 +246,7 @@ fn the_si570_engine_encodes_the_documented_requests() {
 async fn every_si570_board_tunes_through_the_link_and_the_closed_gate_keeps_the_ptt_request_back() {
     let boards = [
         "softrock-si570-avr-usb",
+        "softrock-si570-avr-usb-legacy",
         "kth-si570-pic-usb",
         "ae9rb-peaberry-v1",
         "ae9rb-peaberry-v2",
@@ -229,14 +267,27 @@ async fn every_si570_board_tunes_through_the_link_and_the_closed_gate_keeps_the_
         rig.set_frequency(Vfo::A, Hz(14_205_000))
             .await
             .expect("set");
-        assert_eq!(
-            rig.frequency(Vfo::A, Freshness::Fresh)
-                .await
-                .expect("read")
-                .value,
-            Hz(14_205_000),
-            "{id}"
-        );
+        let read = rig
+            .frequency(Vfo::A, Freshness::Fresh)
+            .await
+            .expect("read")
+            .value;
+        // The legacy register word has finite resolution; the by-value word is exact here.
+        assert!(read.0.abs_diff(14_205_000) <= 1, "{id}: {read:?}");
+        if id.ends_with("-legacy") {
+            assert!(
+                bus.log()
+                    .iter()
+                    .any(|t| matches!(t, FakeTransfer::ControlOut(0x40, 0x30, 0x755, 0, _))),
+                "{id}: no request 0x30"
+            );
+            assert!(
+                !bus.log()
+                    .iter()
+                    .any(|t| matches!(t, FakeTransfer::ControlOut(_, 0x32, ..))),
+                "{id}: legacy firmware got request 0x32"
+            );
+        }
         if desc
             .capabilities
             .has(radioctl_core::capability::Capability::SetPtt)

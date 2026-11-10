@@ -10,7 +10,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 - Hamlib 4.6.2 models: **313**
 - Not applicable (not a radio, or no transport radioctl has): **30**
-- Real radios (models less not applicable): **283**; with a radioctl description: **283** (291 description files), **100%** of the real radios
+- Real radios (models less not applicable): **283**; with a radioctl description: **283** (292 description files), **100%** of the real radios
 - Hardware-verified: **1**
 
 | Status | Models |
@@ -67,6 +67,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 - `anan-100` (Apache Labs ANAN-100): highest level unverified
 - `microtelecom-perseus-usb` (Microtelecom Perseus (receiver board over USB)): highest level unverified
 - `radiod-channel` (radiod receive channel (RX-888 and other radiod front ends)): highest level unverified
+- `softrock-si570-avr-usb-legacy` (SoftRock Si570 AVR-USB (firmware before 0x0F00)): highest level unverified
 
 ## Models that are not applicable
 

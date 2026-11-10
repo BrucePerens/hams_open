@@ -38,7 +38,7 @@ fn no_engine(desc: &RigDescription, why: &str) -> RigError {
 /// The engine of a USB-device description, or why there is none.
 pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigError> {
     Ok(match usb_of(desc)?.protocol {
-        UsbProtocol::Si570 | UsbProtocol::Fifisdr => {
+        UsbProtocol::Si570 | UsbProtocol::Si570Legacy | UsbProtocol::Fifisdr => {
             Box::new(crate::si570_usb::Si570UsbEngine::new(desc.clone())?)
         }
         UsbProtocol::Funcube => Box::new(crate::funcube::FuncubeEngine::new(desc.clone())?),
@@ -57,7 +57,7 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
 /// The virtual device of a USB-device description, for the fake backend.
 pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn UsbDevice>, RigError> {
     Ok(match usb_of(desc)?.protocol {
-        UsbProtocol::Si570 | UsbProtocol::Fifisdr => {
+        UsbProtocol::Si570 | UsbProtocol::Si570Legacy | UsbProtocol::Fifisdr => {
             Box::new(crate::si570_usb::Si570Twin::new(desc)?)
         }
         UsbProtocol::Funcube => Box::new(crate::funcube::FuncubeTwin::new(desc, false)?),

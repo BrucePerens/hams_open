@@ -290,6 +290,8 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "yaesu-ft-650": [1047],
     "yaesu-ft-897": [1023],
     "softrock-si570-avr-usb": [25009],
+    # The same Hamlib model 25009 on firmware older than 0x0F00; Hamlib picks by the version it reads.
+    "softrock-si570-avr-usb-legacy": [],
     "kth-si570-pic-usb": [25011],
     "ae9rb-peaberry-v1": [25016],
     "ae9rb-peaberry-v2": [25017],
