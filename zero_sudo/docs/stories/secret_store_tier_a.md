@@ -109,6 +109,111 @@ The Tier B client (`BrokerClient`, `[@ANCHOR: zero_sudo:secret_store_broker_clie
 raises `SecretStoreError` with the broker's error code on a refusal. It sends no credential: the broker identifies the caller
 from the kernel (`SO_PEERCRED`).
 
+## Odoo core's secrets (`database.secret`, the Web Push VAPID private key)
+
+Odoo core reads two secrets from `ir.config_parameter`, so both sit in every database dump: `database.secret` (CSRF tokens in
+`odoo/http.py`, `odoo.tools.misc.hmac` for portal, mail and mass-mailing links, and the session token, which `res.users` reads
+with its own SQL past `get_param`) and `mail.web_push_vapid_private_key` (signs every Web Push message). Core code signs with
+them itself, so they are Tier A secrets: the value is in Odoo memory, and the Tier B broker cannot serve them. A store that has
+only a broker does not hold them.
+
+`zero_sudo/models/core_secrets.py` serves both from the secret store under the same names, behind a host flag. The flag is
+the Odoo configuration option `hams_core_secrets_from_store` (odoo.conf, `[options]`), not a database setting, so a database
+write cannot switch the source back. **Off (the default, and any host without the option): nothing changes.** The values come
+from `ir.config_parameter` exactly as before and the store is never read, so a host without a store keeps working. **On:** the
+store is the only source; the database row holds `moved-to-secret-store` (`MOVED_MARKER`) once the rollout clears it; every
+database on the host signs with the one store value (the store is per host). Odoo logs `unknown option
+'hams_core_secrets_from_store' ... stored as-is` once at start-up when the option is set; that is expected.
+
+Rollout (copy, flip, verify, clear) and rollback (restore, unflip): hams_com `docs/runbooks/CORE_SECRETS_FROM_STORE.md`. The
+store value must equal the database value at the flip, so sessions, CSRF tokens and Web Push subscriptions stay valid.
+
+### `parse_flag(value)` `[@ANCHOR: zero_sudo:core_secrets_parse_flag]`
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `value` | `None`, `bool` or `str` | the option as Odoo stored it (text from odoo.conf) |
+
+Returns `True` for `True`, `1`, `true`, `yes`, `on`; `False` for `None`, `False`, empty, `0`, `false`, `no`, `off` (any case,
+surrounding blanks ignored). Anything else raises `ValueError` naming the option: a typo must not silently choose the database.
+Pure function, no side effects.
+
+### `core_secrets_from_store(config=None)` `[@ANCHOR: zero_sudo:core_secrets_from_store]`
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `config` | mapping with `get`, or `None` | where the option is read; `None` means Odoo's `tools.config` |
+
+Returns `parse_flag(config.get("hams_core_secrets_from_store"))`. Raises `ValueError` for a value `parse_flag` refuses. Read
+on every call (no caching), so it costs one dictionary lookup.
+
+### `core_secret_store()` `[@ANCHOR: zero_sudo:core_secrets_store]`
+
+No arguments. Returns the process's `SecretStore` from `default_store()` (`$HAMS_SECRET_STORE`, else the safest backends the
+host offers). Raises `SecretStoreError` for a spec that names a backend that is not there. Built on every call, so a change to
+the store is seen without a restart. A separate function so tests give it a store of their own.
+
+### `store_value(key)` `[@ANCHOR: zero_sudo:core_secrets_store_value]`
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `key` | `str` | `database.secret` or `mail.web_push_vapid_private_key` (any valid secret name works) |
+
+Returns the store's value (str). Raises `SecretNotFound` (names the backends tried, never a value) when no backend holds it,
+`InsecureSecretSource` for a secret file with a wrong owner or mode, `SecretStoreError` for an unreadable store.
+
+### `ir.config_parameter._get_param(key)` `[@ANCHOR: zero_sudo:core_secrets_get_param]`
+
+The one read path under `get_param` (core's `get_param` checks read access, then calls this). Flag off, or any other key:
+Odoo's own `_get_param` (ormcached database read). Flag on: `database.secret` is `store_value()` and raises `SecretNotFound`
+when missing (Odoo cannot sign anything without it; core would raise "CSRF protection requires a configured database secret"
+anyway); the VAPID private key is the store value or `None` when missing, which core reads as "Web Push is not set up". The
+store values are not put in the ormcache. Access rules above this method (core's, and hams_com `ham_base`'s service-account
+checks on `get_param`) are unchanged.
+
+### `ir.config_parameter.create(vals_list)` `[@ANCHOR: zero_sudo:core_secrets_create]` and `write(vals)` `[@ANCHOR: zero_sudo:core_secrets_write]`
+
+Flag off: Odoo's own. Flag on, for a row of one of the two keys, the value written is decided per row (`_core_secret_db_value`):
+
+| Value written | What the row gets |
+|---|---|
+| `False`, `None` or `moved-to-secret-store` | that value |
+| anything, with context `hams_core_secret_restore` (only the restore step sets it) | that value |
+| any other value for `database.secret` (Odoo writes a fresh one when it creates or duplicates a database) | `moved-to-secret-store`, with a warning in the log; the store value stays the one in use |
+| the store's own value for the VAPID private key (constant-time compare) | `moved-to-secret-store` |
+| any other value for the VAPID private key (a new key pair from `mail.push.device`) | `UserError`: the new private key would be lost while its public key landed in the database, and every push would fail; put the pair in the store first |
+
+Rows of other keys in the same `write` are written unchanged. Batch-safe (`create` takes a list; `write` handles each row).
+
+### `ir.config_parameter._check_core_secrets_in_store()` `[@ANCHOR: zero_sudo:core_secrets_check_store]` and `_register_hook()` `[@ANCHOR: zero_sudo:core_secrets_register_hook]`
+
+Flag off: does nothing and does not read the store. Flag on: `store_value("database.secret")`, and the VAPID private key too
+whenever the database has a `mail.web_push_vapid_public_key`. Raises `SecretNotFound` naming the missing key. `_register_hook`
+runs it once per registry load, so a flag-on host with an incomplete store refuses to load the database (fail fast at start-up)
+instead of serving pages whose CSRF check or push signature fails later.
+
+### `ir.config_parameter._hams_core_secrets_clear_from_database()` `[@ANCHOR: zero_sudo:core_secrets_clear_from_database]`
+
+Rollout step after the flip (Odoo shell, superuser). No arguments. Raises `UserError` when the flag is off. Checks first that
+the store holds every key whose database row still has a value, raising `SecretNotFound` and writing nothing otherwise, so it
+cannot throw away the only copy; then writes `moved-to-secret-store` into those rows. Returns the sorted list of keys it
+cleared (names only, never values); `[]` when nothing was left to clear (idempotent).
+
+### `ir.config_parameter._hams_core_secrets_restore_to_database()` `[@ANCHOR: zero_sudo:core_secrets_restore_to_database]`
+
+Rollback step before the flag goes off (Odoo shell, superuser). No arguments. Writes the store's value of each key back into
+its database row (through the restore context, so the flag-on guard lets it through), so the flag-off host signs with the same
+secret and sessions survive. Keys the store does not hold are skipped. Returns the list of keys it restored (names only).
+Works with the flag on or off; idempotent.
+
+### `res.users._session_token_get_values()` `[@ANCHOR: zero_sudo:core_secrets_session_token_values]`
+
+Core builds the session token key from `(column, value)` pairs it selects with SQL, including `database_secret` read straight
+from `ir_config_parameter`. Flag off: core's tuple unchanged. Flag on: the `database_secret` value is replaced by
+`store_value("database.secret")` (raises `SecretNotFound` when missing), so a row holding the marker never signs sessions, and a
+store value equal to the old row gives the same token, which keeps every open session valid across the flip. Returns core's
+`False` unchanged when the user row is missing.
+
 ## Outstanding migrations
 
 This change adds the store; it migrates nothing yet. Every item below still holds a secret where the web process can read it,
@@ -122,7 +227,7 @@ in the order that gives the largest reduction per step.
 | process environment | `HAMS_CRYPTO_KEY` (decrypts every `*_crypt` column) | `zero_sudo` (`_get_crypto_secret`) | it also protects backup credentials, so any change needs Bruce's decision |
 | process environment | `GEMINI_API_KEY`, `SMTP_PASS`, `REDIS_PASSWORD`, `RMQ_PASS`, `DB_PASS`, `PDNS_API_KEY`, `ODOO_ADMIN_PASSWORD`, `ODOO_SERVICE_PASSWORD` | deployment (env files) | stop loading the env files into the web unit; move each to a unit credential or the broker |
 | `ir.config_parameter` | `stripe.secret_key`, `stripe.webhook_secret` | Stripe dues module | webhook check becomes `stripe_webhook_verify` |
-| `ir.config_parameter` | `database.secret`, `mail.web_push_vapid_private_key` | Odoo core (`base`, `mail`) | needs a `get_param` override that serves them from the store |
+| `ir.config_parameter` | `database.secret`, `mail.web_push_vapid_private_key` | Odoo core (`base`, `mail`) | served from the store by `core_secrets.py` behind `hams_core_secrets_from_store` (above); off until the hams1 rollout flips it |
 | `ir.config_parameter` | `gemini.api_key`, `form_shield.signing_key`, `parking.form_secret` | AI provider glue, `form_shield`, `parking` | the two signing keys become `hmac_sign` / `hmac_verify` |
 | `ir.config_parameter` | `ham_relay_bridge.api_key`, `ham_relay_bridge.source_publish_key`, `ham_relay_bridge.turn_secret`, `ham_simulated_band.ident_token_secret` | relay bridge, simulated band | |
 | settings fields | `hams_s3_aws_access_key_id`, `hams_s3_aws_secret_access_key` | `hams_s3` | |
@@ -133,4 +238,4 @@ in the order that gives the largest reduction per step.
 | model columns | `ham_dns_zone.acme_token`, `ham_simulated_bot_host.api_token`, `res_users.allstar_password_crypt` | DNS, simulated bots, AllStar | |
 | key directory | daemon `*_service_internal.key` and daemon `.env` files owned by the web account | daemon provisioning | ownership move to root, a separate item |
 
-Tests: `zero_sudo/tests/test_secret_store.py`.
+Tests: `zero_sudo/tests/test_secret_store.py`, `zero_sudo/tests/test_core_secrets_from_store.py` (both flag modes).
