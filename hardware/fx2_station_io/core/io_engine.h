@@ -80,6 +80,8 @@ extern const u8 board_chan_pin[IO_NCH];
 
 void io_init(void);
 u8 io_map_state(void);
+void io_manual_set(u8 oe, u8 lvl);   /* GPIO_SET: the caller refuses it unless the map state is NONE */
+void io_manual_release(void);       /* GPIO_SET pins back to inputs (not while a map is valid) */
 /* Each map step returns 1 when accepted; on 0 the error code is in the status. */
 u8 io_map_begin(void);
 u8 io_map_pin(u8 pin, u8 func, u8 flags);

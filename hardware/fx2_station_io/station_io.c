@@ -59,6 +59,7 @@ static __xdata u8 g_reply[48];
 static void release_outputs(void)
 {
     io_release_all(IO_REL_USB_RESET);
+    io_manual_release();
 }
 
 void app_init(void)
@@ -77,6 +78,7 @@ void app_usb_reset(void)
 void app_usb_suspend(void)
 {
     io_release_all(IO_REL_USB_SUSPEND);
+    io_manual_release();
 }
 
 void app_tick(void)
@@ -122,14 +124,13 @@ u8 app_vendor_request(u8 bm, u8 req, u16 value, u16 index, u16 length)
         core_ep0_reply(g_reply, io_fill_edges(g_reply));
         return 1;
     }
-    if (req == HAMS_REQ_GPIO_SET && bm == 0x40 && io_map_state() != IO_MAP_VALID) {
+    if (req == HAMS_REQ_GPIO_SET && bm == 0x40 && io_map_state() == IO_MAP_NONE) {
         u8 oe = (u8)value;
         u8 lvl = (u8)index;
         if ((oe & (u8)~DRIVABLE_A) || (lvl & (u8)~DRIVABLE_A) || (value >> 8) || (index >> 8)) {
             return 0;
         }
-        IOA = lvl;          /* latch first, then enable, so a pin never glitches */
-        OEA = oe;
+        io_manual_set(oe, lvl);
         core_ep0_ack();
         return 1;
     }
