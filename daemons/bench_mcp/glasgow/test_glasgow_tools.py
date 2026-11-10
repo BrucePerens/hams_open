@@ -40,7 +40,7 @@ class InstallerTests(unittest.TestCase):
             src = Path(d) / "x.tar.gz"
             src.write_bytes(b"first")
             dest = Path(d) / "install"
-            seen = {}
+            seen: dict[str, object] = {}
 
             def fake_sha(p):
                 seen["path"] = Path(p)
