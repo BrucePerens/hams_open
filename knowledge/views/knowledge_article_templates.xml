@@ -5,9 +5,10 @@
         <!-- burn-ignore-tour -->
         <li class="nav-item">
             <a t-attf-href="#{nav_article.website_url}"
-               t-attf-class="nav-link o_manual_article_link #{'active fw-bold' if (article and article.id == nav_article.id) else 'text-dark'}"
+               t-attf-class="nav-link o_manual_article_link #{'active fw-bold border-start border-3 border-primary' if (article and article.id == nav_article.id) else 'text-body'}"
                aria-label="Navigate to Article">
-                <span t-if="nav_article.icon" t-out="nav_article.icon" class="me-1" aria-hidden="true"/>
+                <!-- Redesign T21: the stored icon (often an emoji) stays in the record; the sidebar shows the section initial as a small mono tag. -->
+                <span t-if="nav_article.icon" t-out="nav_article.name[:1].upper()" class="hams-manual-icon badge text-bg-light border font-monospace me-1" aria-hidden="true"/>
                 <span t-out="nav_article.name"/>
             </a>
             <t t-if="nav_article.child_ids">
@@ -85,7 +86,7 @@
                     <div class="row">
 
                         <aside class="col-12 col-lg-3 col-xl-2 border-end d-none d-lg-block">
-                            <nav aria-label="Manual Navigation" class="sticky-top" style="top: 80px; z-index: 10;">
+                            <nav aria-label="Manual Navigation" class="sticky-top" style="top: var(--hams-header-h, 80px); z-index: 10;">
                                 <t t-call="knowledge.manual_sidebar"/>
                             </nav>
                         </aside>
@@ -121,8 +122,7 @@
 
                             <article>
                                 <header class="mb-4 pb-3 border-bottom">
-                                    <h1 class="display-4 fw-bold">
-                                        <span t-if="article.icon" t-out="article.icon" class="me-2" aria-hidden="true"/>
+                                    <h1 class="fs-2 fw-bold">
                                         <span t-field="article.name"/>
                                     </h1>
                                     <div class="text-muted small d-flex align-items-center mt-2">
@@ -156,11 +156,11 @@
                                         <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                         <input type="hidden" name="article_id" t-att-value="article.id"/>
                                         <input type="text" name="website_feedback_honeypot" style="display: none;" tabindex="-1" autocomplete="off"/>
-                                        <button type="submit" name="is_helpful" value="1" class="btn btn-outline-success me-2 rounded-pill px-4" aria-label="Yes">
-                                            <i class="fa fa-thumbs-up me-1" aria-hidden="true"/> Yes
+                                        <button type="submit" name="is_helpful" value="1" class="btn btn-outline-success me-2 px-4">
+                                            <i class="fa fa-thumbs-up me-1" aria-hidden="true"/> Yes, it helped
                                         </button>
-                                        <button type="submit" name="is_helpful" value="0" class="btn btn-outline-danger rounded-pill px-4" aria-label="No">
-                                            <i class="fa fa-thumbs-down me-1" aria-hidden="true"/> No
+                                        <button type="submit" name="is_helpful" value="0" class="btn btn-outline-danger px-4">
+                                            <i class="fa fa-thumbs-down me-1" aria-hidden="true"/> No, it did not
                                         </button>
                                     </form>
                                     <div t-if="request.params.get('feedback_submitted')" class="alert alert-success mt-3 p-2 rounded">
@@ -171,7 +171,7 @@
                         </main>
 
                         <aside class="col-lg-2 d-none d-lg-block">
-                            <nav id="manual_toc_container" class="sticky-top" style="top: 80px; z-index: 10; font-size: 0.9rem;">
+                            <nav id="manual_toc_container" class="sticky-top" style="top: var(--hams-header-h, 80px); z-index: 10; font-size: 0.9rem;">
                             </nav>
                         </aside>
 
@@ -189,7 +189,7 @@
                 <div class="container-fluid pt-4 pb-5">
                     <div class="row">
                         <aside class="col-12 col-lg-3 col-xl-2 border-end d-none d-lg-block">
-                            <nav aria-label="Manual Navigation" class="sticky-top" style="top: 80px; z-index: 10;">
+                            <nav aria-label="Manual Navigation" class="sticky-top" style="top: var(--hams-header-h, 80px); z-index: 10;">
                                 <t t-call="knowledge.manual_sidebar"/>
                             </nav>
                         </aside>
