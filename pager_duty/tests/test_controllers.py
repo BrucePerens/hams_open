@@ -159,6 +159,21 @@ class TestPagerControllers(HamsHttpCase):
         self.assertEqual(response.json()["result"]["status"], "error")
         self.assertIn("Empty payload", response.json()["result"]["message"])
 
+    def test_04b_update_domains_rejects_a_non_ascii_or_non_string_identity(self):
+        # Tests [@ANCHOR: pd_domain_api_i18n]
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "the-real-secret")
+        for identity in ("s\u00e9cret", 12345, ["x"]):
+            response = self.url_open(
+                "/api/v1/pager_duty/update_domains",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "call",
+                    "params": {"domains": ["example.com"], "api_identity": identity},
+                },
+            )
+            self.assertEqual(response.json()["result"]["status"], "error", identity)
+            self.assertIn("Unauthorized", response.json()["result"]["message"])
+
     def test_04_update_domains_rejects_a_wrong_identity(self):
         # _set_system_param()'s WRITE whitelist doesn't cover this key (only
         # the READ whitelist does, per security_utils.py -- production

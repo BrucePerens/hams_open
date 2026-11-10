@@ -1455,7 +1455,7 @@ class UserWebsitesController(http.Controller):
             db_secret.encode("utf-8"), message, hashlib.sha256
         ).hexdigest()
 
-        if not hmac.compare_digest(expected_token, token):
+        if not hmac.compare_digest(expected_token.encode(), str(token).encode("utf-8", "replace")):
             return request.make_response(
                 json.dumps({"error": "Forbidden"}),
                 status=403,
