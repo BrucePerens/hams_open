@@ -122,11 +122,13 @@ def _parse_ranges(text):
         if not token:
             continue
         try:
-            ipaddress.ip_network(token, strict=False)
+            network = ipaddress.ip_network(token, strict=False)
         except ValueError:
             _logger.warning("Skipping malformed Cloudflare trusted IP range: %r", token)
             continue
-        ranges.append(token)
+        # Stored in canonical form: the readers (this module's peer test and the WSGI hook)
+        # build networks strictly, and "203.0.113.5/24" or a bare address would raise there.
+        ranges.append(str(network))
     return ranges
 
 
