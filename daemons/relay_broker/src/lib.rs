@@ -24,5 +24,6 @@ pub mod ratelimit;
 pub mod server;
 #[cfg(test)]
 mod testdir;
+pub mod time_guard;
 pub mod transport;
 pub mod wire;

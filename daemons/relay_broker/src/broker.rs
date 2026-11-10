@@ -16,7 +16,8 @@ use crate::hub::{self, HubSettings};
 use crate::os::{Os, Peer};
 use crate::policy::Policy;
 use crate::ratelimit::RateLimiter;
-use crate::wire::{DeviceClass, Group, Request, Response, Status};
+use crate::time_guard::{TimeGuard, BUILD_DATE_UNIX_SECS};
+use crate::wire::{DeviceClass, Group, Request, Response, Status, TimeSource};
 
 /// The broker state shared by every connection.
 pub struct Broker {
@@ -32,6 +33,9 @@ pub struct Broker {
     pub hub_enabled: bool,
     /// Whether `update_package` is served (default: refused).
     pub update_package: bool,
+    /// Whether `set_system_time` is served (default: refused).
+    pub set_time: bool,
+    time_guard: TimeGuard,
     rate: RateLimiter,
     audit: AuditLog,
     os: Box<dyn Os + Send>,
@@ -48,6 +52,11 @@ impl Broker {
             bind_udp_ports: config.bind_udp_ports.clone(),
             hub_enabled: config.hub_enabled,
             update_package: config.update_package,
+            set_time: config.set_time,
+            time_guard: TimeGuard::new(
+                config.max_unproven_step_secs,
+                config.max_time_steps_per_hour,
+            ),
             rate: RateLimiter::new(config.rate_per_minute),
             audit,
             os,
@@ -92,6 +101,8 @@ impl Broker {
             Request::HubStop => "hub_stop",
             Request::HubStatus => "hub_status",
             Request::UpdatePackage => "update_package",
+            Request::SetSystemTime { .. } => "set_system_time",
+            Request::TimeStatus => "time_status",
         };
         if !self.rate.allow(peer.uid, now) {
             self.log(peer, action, "rate_limited", String::new());
@@ -124,7 +135,92 @@ impl Broker {
             Request::HubStop => self.hub_stop(peer),
             Request::HubStatus => self.hub_status(peer),
             Request::UpdatePackage => self.update_package(peer),
+            Request::SetSystemTime {
+                target_unix_secs,
+                source,
+                agreeing,
+            } => self.set_system_time(peer, now, *target_unix_secs, *source, *agreeing),
+            Request::TimeStatus => self.time_status(peer, now),
         }
+    }
+
+    // [@ANCHOR: relay_broker_broker_set_system_time]
+    /// Steps the clock when the config enables it and the ceilings in `time_guard.rs` allow it. Every outcome is audited with the
+    /// clock before, the target, the source and the evidence.
+    fn set_system_time(
+        &mut self,
+        peer: Peer,
+        now: Instant,
+        target: u64,
+        source: TimeSource,
+        agreeing: u8,
+    ) -> (Response, Option<OwnedFd>) {
+        if !self.set_time {
+            self.log(
+                peer,
+                "set_system_time",
+                "denied",
+                "clock steps not enabled".into(),
+            );
+            return (
+                Response::error(Status::Denied, "clock steps not enabled"),
+                None,
+            );
+        }
+        let before = self.os.system_time_unix_secs();
+        let detail =
+            format!("before={before} target={target} source={source:?} agreeing={agreeing}");
+        if let Err(denial) = self.time_guard.check(now, before, target, source, agreeing) {
+            self.log(
+                peer,
+                "set_system_time",
+                "denied",
+                format!("{detail} {}", denial.reason()),
+            );
+            return (Response::error(Status::Denied, denial.reason()), None);
+        }
+        match self.os.set_system_time(target) {
+            Ok(()) => {
+                self.time_guard.record_step(now);
+                let after = self.os.system_time_unix_secs();
+                self.log(
+                    peer,
+                    "set_system_time",
+                    "allowed",
+                    format!("{detail} after={after}"),
+                );
+                (
+                    Response::TimeSet {
+                        before_unix_secs: before,
+                        after_unix_secs: after,
+                    },
+                    None,
+                )
+            }
+            Err(e) => {
+                self.log(peer, "set_system_time", "failed", format!("{detail} {e}"));
+                (
+                    Response::error(Status::Failed, format!("set time: {e}")),
+                    None,
+                )
+            }
+        }
+    }
+
+    // [@ANCHOR: relay_broker_broker_time_status]
+    /// The clock and the step limits; read-only, always served.
+    fn time_status(&mut self, peer: Peer, now: Instant) -> (Response, Option<OwnedFd>) {
+        let (steps_last_hour, breaker_open) = self.time_guard.status(now);
+        self.log(peer, "time_status", "allowed", String::new());
+        (
+            Response::TimeStatus {
+                now_unix_secs: self.os.system_time_unix_secs(),
+                steps_last_hour,
+                breaker_open,
+                min_target_unix_secs: BUILD_DATE_UNIX_SECS,
+            },
+            None,
+        )
     }
 
     /// The package update action: one fixed command (`apt-get install --only-upgrade hams-local-relay`, or the `dnf` equivalent) that the

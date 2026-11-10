@@ -6,7 +6,7 @@
 //! Keys: `allow_uid`, `allow_gid` (repeatable), `apply_groups` (`true`/`false`, default false:
 //! provisioning only reports), `audit_log` (path), `rate_per_minute`, `device_root`,
 //! `serial_major`, `audio_major`, `deny_usb` (`vvvv:pppp`, repeatable), `deny_path` (repeatable),
-//! `idle_exit_secs`, `hub` (`true`/`false`, default false), `update_package` (`true`/`false`, default false), `bind_udp_port` (repeatable, default 123). Setting any `serial_major`/`audio_major`/`deny_usb`/`deny_path`/`bind_udp_port` replaces the
+//! `idle_exit_secs`, `hub` (`true`/`false`, default false), `update_package` (`true`/`false`, default false), `set_time` (`true`/`false`, default false), `max_unproven_step_secs` (default 30), `max_time_steps_per_hour` (default 4), `bind_udp_port` (repeatable, default 123). Setting any `serial_major`/`audio_major`/`deny_usb`/`deny_path`/`bind_udp_port` replaces the
 //! default list for that key.
 
 use std::fs;
@@ -34,6 +34,12 @@ pub struct Config {
     pub hub_enabled: bool,
     /// Whether `update_package` is served (`update_package = true`; default off, the packaged config turns it on).
     pub update_package: bool,
+    /// Whether `set_system_time` is served (`set_time = true`; default off, the packaged config turns it on).
+    pub set_time: bool,
+    /// The largest clock step (seconds) a request without a GPS source or two agreeing sources may make (`max_unproven_step_secs`).
+    pub max_unproven_step_secs: u64,
+    /// Clock steps allowed per hour before the circuit breaker trips (`max_time_steps_per_hour`).
+    pub max_time_steps_per_hour: u32,
     /// Requests per minute per peer.
     pub rate_per_minute: u32,
     /// Exit after this many idle seconds (socket activation restarts the broker on demand).
@@ -50,6 +56,9 @@ impl Default for Config {
             bind_udp_ports: vec![123],
             hub_enabled: false,
             update_package: false,
+            set_time: false,
+            max_unproven_step_secs: 30,
+            max_time_steps_per_hour: 4,
             rate_per_minute: 60,
             idle_exit_secs: 60,
         }
@@ -128,6 +137,19 @@ impl Config {
                         "false" => false,
                         _ => return Err(err("expected true or false")),
                     }
+                }
+                "set_time" => {
+                    cfg.set_time = match value {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err(err("expected true or false")),
+                    }
+                }
+                "max_unproven_step_secs" => {
+                    cfg.max_unproven_step_secs = value.parse().map_err(|_| err("bad number"))?
+                }
+                "max_time_steps_per_hour" => {
+                    cfg.max_time_steps_per_hour = value.parse().map_err(|_| err("bad number"))?
                 }
                 "bind_udp_port" => {
                     if !seen_port {
@@ -264,6 +286,20 @@ mod tests {
                 .update_package
         );
         assert!(Config::parse("update_package = yes").is_err());
+        assert!(
+            !Config::default().set_time,
+            "clock steps are off unless the config turns them on"
+        );
+        let t = Config::parse(
+            "set_time = true\nmax_unproven_step_secs = 5\nmax_time_steps_per_hour = 2",
+        )
+        .unwrap();
+        assert!(t.set_time);
+        assert_eq!(
+            (t.max_unproven_step_secs, t.max_time_steps_per_hour),
+            (5, 2)
+        );
+        assert!(Config::parse("set_time = 1").is_err());
         assert!(!Config::default().apply_groups, "dry run by default");
         assert_eq!(Config::parse("bogus = 1").unwrap_err().line, 1);
         assert_eq!(Config::parse("\nallow_uid = x").unwrap_err().line, 2);

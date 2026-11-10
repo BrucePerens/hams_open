@@ -15,6 +15,7 @@ answers a fixed set of typed requests from authenticated local peers over a Unix
 | `grant_group` / `provision_groups` | reports which of `dialout`/`audio` the **caller's own** account lacks; changes nothing unless `apply_groups = true`, then runs `/usr/sbin/gpasswd -a USER GROUP` with a fixed argv | root or a gpasswd setuid, only with apply |
 | `bind_udp` | binds a UDP socket on a port the config lists (default only 123, the relay's time service) on the wildcard address and passes the descriptor; any other port is `Denied` | root (privileged port) |
 | `update_package` | upgrades the relay package through the system package manager (`apt-get install --only-upgrade hams-local-relay`, or `dnf upgrade`): a fixed command, nothing from the caller; only with `update_package = true` in the config (the relay package's config turns it on) |
+| `set_system_time` / `time_status` | `set_system_time` steps the system clock to a UTC the relay chose (`CLOCK_REALTIME`; needs `CAP_SYS_TIME`), only with `set_time = true` (the relay package's config turns it on). The broker applies its own ceilings and does not trust the relay: the target must not be before the build date (2026-11-01); a step beyond `max_unproven_step_secs` (default 30) needs a GPS source or two agreeing sources; at most `max_time_steps_per_hour` (default 4) steps an hour, then one more attempt trips a circuit breaker that refuses everything for an hour. Every attempt is audited with the clock before, the target, the source and the evidence. `time_status` is read-only: the clock, steps in the last hour, breaker state, the earliest accepted target | root or `CAP_SYS_TIME` |
 | `hub_start` / `hub_stop` / `hub_status` | the stand-alone emergency hub: only with `hub = true` in the config. Validates the typed settings, writes `hostapd.conf` and `dnsmasq.conf` from fixed templates into `/run/hams-relay-broker/hub` (mode 0600), gives the wifi interface the hub address with `ip` and starts `hostapd -B` and `dnsmasq` with fixed argument lists; stop signals only a pid whose `/proc/PID/comm` still names the program, then removes the files | root |
 
 Every request is rate-limited per UID and written to an append-only `events.jsonl` audit log (a peer turned away is logged once per UID per minute; the file moves to `events.jsonl.1` at 4 MiB).
@@ -131,6 +132,13 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 ## Function reference
 
+- [@ANCHOR: relay_broker:relay_broker_time_guard_new] (time_guard.rs) A guard with the configured ceilings.
+- [@ANCHOR: relay_broker:relay_broker_time_guard_check] (time_guard.rs) Decides whether the clock may be stepped: breaker, build date, large step without proof, steps per hour; a refusal on the step count trips the breaker.
+- [@ANCHOR: relay_broker:relay_broker_time_guard_record_step] (time_guard.rs) Counts one completed step.
+- [@ANCHOR: relay_broker:relay_broker_time_guard_status] (time_guard.rs) Steps in the last hour and whether the breaker is open.
+- [@ANCHOR: relay_broker:relay_broker_broker_set_system_time] (broker.rs) Steps the clock when enabled and inside the ceilings; audits every outcome with before, target, source and evidence.
+- [@ANCHOR: relay_broker:relay_broker_broker_time_status] (broker.rs) The clock and the step limits; read-only, always served.
+- [@ANCHOR: relay_broker:relay_broker_os_system_time] (os.rs) The wall clock now in Unix seconds (the Linux layer also steps it with `clock_settime`).
 - [@ANCHOR: relay_broker:relay_broker_json_escape] (audit.rs) Escapes a string for a JSON literal (quotes, backslash, control characters).
 - [@ANCHOR: relay_broker:relay_broker_audit_event_to_json_line] (audit.rs) The record as one JSON line (with the trailing newline). `ts` is Unix seconds.
 - [@ANCHOR: relay_broker:relay_broker_audit_log_open] (audit.rs) Opens (creating, mode 0600) the log at `path`; `None` disables logging to a file, which

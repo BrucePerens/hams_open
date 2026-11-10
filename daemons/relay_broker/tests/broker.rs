@@ -631,3 +631,133 @@ fn update_package_runs_only_when_the_config_enables_it() {
     assert_eq!(resp, Response::Updated);
     assert_eq!(updates.load(std::sync::atomic::Ordering::SeqCst), 1);
 }
+
+// Tests [@ANCHOR: relay_broker_broker_set_system_time]
+// Tests [@ANCHOR: relay_broker_broker_time_status]
+// Tests [@ANCHOR: relay_broker_os_system_time]
+#[test]
+fn the_clock_is_stepped_only_when_enabled_and_inside_the_ceilings() {
+    use relay_broker::wire::TimeSource;
+    let peer = Peer {
+        uid: HAM_UID,
+        gid: 1000,
+        pid: 4242,
+    };
+    let now = Instant::now();
+    let step = |target: u64, source: TimeSource, agreeing: u8| Request::SetSystemTime {
+        target_unix_secs: target,
+        source,
+        agreeing,
+    };
+    let denied = |r: &Response| {
+        matches!(
+            r,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        )
+    };
+    // Off by default: refused and the clock untouched; the read-only status is always served.
+    let os = FakeOs::typical();
+    let clock = os.clock.clone();
+    let mut broker = broker_with(&test_config(), os, None);
+    let (resp, _) = broker.handle(peer, &step(1_793_500_001, TimeSource::Gps, 0), now);
+    assert!(denied(&resp), "{resp:?}");
+    assert_eq!(
+        clock.load(std::sync::atomic::Ordering::SeqCst),
+        1_793_500_000
+    );
+    let (resp, _) = broker.handle(peer, &Request::TimeStatus, now);
+    assert!(
+        matches!(
+            resp,
+            Response::TimeStatus {
+                now_unix_secs: 1_793_500_000,
+                breaker_open: false,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+
+    // Enabled: a small step, a GPS-proven large step, an unproven large step and a pre-build target.
+    let mut cfg = test_config();
+    cfg.set_time = true;
+    cfg.max_time_steps_per_hour = 2;
+    let os = FakeOs::typical();
+    let clock = os.clock.clone();
+    let fails = os.clock_fails.clone();
+    let audit_dir = temp_dir("time");
+    let audit_path = audit_dir.join("events.jsonl");
+    let mut broker = broker_with(&cfg, os, Some(&audit_path));
+    let (resp, _) = broker.handle(peer, &step(1_793_500_010, TimeSource::Network, 1), now);
+    assert_eq!(
+        resp,
+        Response::TimeSet {
+            before_unix_secs: 1_793_500_000,
+            after_unix_secs: 1_793_500_010
+        }
+    );
+    let (resp, _) = broker.handle(peer, &step(1_793_600_000, TimeSource::Network, 1), now);
+    assert!(denied(&resp), "unproven large step: {resp:?}");
+    let (resp, _) = broker.handle(peer, &step(1_000, TimeSource::Gps, 3), now);
+    assert!(denied(&resp), "before the build date: {resp:?}");
+    assert_eq!(
+        clock.load(std::sync::atomic::Ordering::SeqCst),
+        1_793_500_010
+    );
+    let (resp, _) = broker.handle(peer, &step(1_793_600_000, TimeSource::Gps, 0), now);
+    assert!(matches!(resp, Response::TimeSet { .. }), "{resp:?}");
+    // The hour's two steps are used: the next trips the breaker, and the status says so.
+    let (resp, _) = broker.handle(peer, &step(1_793_600_001, TimeSource::Gps, 0), now);
+    assert!(denied(&resp), "{resp:?}");
+    let (resp, _) = broker.handle(peer, &Request::TimeStatus, now);
+    assert!(
+        matches!(
+            resp,
+            Response::TimeStatus {
+                steps_last_hour: 2,
+                breaker_open: true,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+    // An OS failure is Failed, not Denied, and is not counted as a step.
+    let os = FakeOs::typical();
+    os.clock_fails
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut cfg = test_config();
+    cfg.set_time = true;
+    let mut broker = broker_with(&cfg, os, None);
+    let (resp, _) = broker.handle(peer, &step(1_793_500_001, TimeSource::Gps, 0), now);
+    assert!(
+        matches!(
+            resp,
+            Response::Error {
+                status: Status::Failed,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+    let (resp, _) = broker.handle(peer, &Request::TimeStatus, now);
+    assert!(
+        matches!(
+            resp,
+            Response::TimeStatus {
+                steps_last_hour: 0,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+    let _ = fails;
+    // Every attempt is in the audit log with its evidence.
+    let log = std::fs::read_to_string(&audit_path).expect("audit");
+    assert!(
+        log.contains("set_system_time") && log.contains("source=Gps") && log.contains("breaker"),
+        "{log}"
+    );
+}
