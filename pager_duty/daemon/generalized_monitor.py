@@ -748,6 +748,8 @@ def _freshness_unit(units, max_age, now, failing=None):
     """One or several comma-separated units sharing a limit; every stale or failed unit is named in one message.
     `failing`, when given, is a list that receives the name of each unit that is stale or failed."""
     names = [u.strip() for u in units.split(",") if u.strip()]
+    if not names:
+        return False, f"unit: needs one or more comma-separated unit names, not {units!r}"
     if len(names) == 1:
         ok, msg = _freshness_one_unit(names[0], max_age, now)
         if not ok and failing is not None:

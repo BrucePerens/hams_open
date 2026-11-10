@@ -171,6 +171,12 @@ class UnitTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("redis-zset", msg)
 
+    def test_a_unit_list_with_no_names_fails_instead_of_passing_for_zero_units(self):
+        for target in ("unit:,", "unit: , "):
+            ok, msg = run(target, 60)
+            self.assertFalse(ok, target)
+            self.assertIn("unit names", msg)
+
     def test_an_unknown_unit_fails(self):
         with show(LoadState="not-found"):
             self.assertFalse(run("unit:nope.service", 60)[0])
