@@ -161,6 +161,80 @@ pub fn dnsmasq_conf(s: &HubSettings) -> Result<String, String> {
     ))
 }
 
+/// Phase 0 takeover (RELAY_STANDALONE_EMERGENCY_HUB.md section 1a): the hub is a node of the user's own /24 and the router's DHCP is gone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TakeoverSettings {
+    /// The bridge (or Ethernet) interface on the user's LAN.
+    pub interface: String,
+    /// The hub's own fixed address on that LAN; the subnet is its /24.
+    pub hub_address: Ipv4Addr,
+    /// The router, handed out as the default gateway so nothing changes for clients when it comes back.
+    pub gateway: Ipv4Addr,
+    /// The relay's DNS name, one label.
+    pub relay_name: String,
+    /// The router's DNS server when it is still reachable; none means names other than the hub's fail at once.
+    pub uplink_dns: Option<Ipv4Addr>,
+}
+
+/// Takeover leases are short so clients move back to the router quickly after the hand-back, minutes.
+pub const TAKEOVER_LEASE_MINUTES: u32 = 5;
+
+/// The `dnsmasq.conf` text for a takeover: DHCP for the same /24 from a high pool (.200 to .250, away from the router's own and static addresses),
+/// short leases, the router as gateway, the hub as DNS and NTP server, the relay's own name. dnsmasq checks an address with a ping before it offers it
+/// (we leave that on), which keeps it from handing out one that a still-running machine holds.
+pub fn takeover_dnsmasq_conf(t: &TakeoverSettings) -> Result<String, String> {
+    let hub = HubSettings {
+        interface: t.interface.clone(),
+        ssid: "x".into(),
+        passphrase: "xxxxxxxx".into(),
+        channel: 1,
+        five_ghz: false,
+        hub_address: t.hub_address,
+        relay_name: t.relay_name.clone(),
+        uplink_dns: t.uplink_dns,
+        lease_minutes: TAKEOVER_LEASE_MINUTES,
+    };
+    validate(&hub)?;
+    let o = t.hub_address.octets();
+    let g = t.gateway.octets();
+    if g[..3] != o[..3] || g[3] == 0 || g[3] == 255 || t.gateway == t.hub_address {
+        return Err("the gateway must be another host address on the hub's /24".into());
+    }
+    if (200..=250).contains(&o[3]) || (200..=250).contains(&g[3]) {
+        return Err(
+            "the hub and the gateway must be outside the takeover pool .200 to .250".into(),
+        );
+    }
+    let net = |last: u8| Ipv4Addr::new(o[0], o[1], o[2], last);
+    let forwarding = match t.uplink_dns {
+        Some(dns) => format!("server={dns}\n"),
+        None => "no-resolv\n".to_string(),
+    };
+    Ok(format!(
+        "# Written by the hams relay broker for a DHCP takeover. Do not edit.\n\
+         interface={}\n\
+         bind-interfaces\n\
+         dhcp-range={},{},255.255.255.0,{}m\n\
+         dhcp-option=3,{}\n\
+         dhcp-option=6,{}\n\
+         dhcp-option=42,{}\n\
+         address=/{}/{}\n\
+         address=/{}.local/{}\n\
+         {forwarding}",
+        t.interface,
+        net(200),
+        net(250),
+        TAKEOVER_LEASE_MINUTES,
+        t.gateway,
+        t.hub_address,
+        t.hub_address,
+        t.relay_name,
+        t.hub_address,
+        t.relay_name,
+        t.hub_address,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,5 +325,48 @@ mod tests {
         up.uplink_dns = Some(Ipv4Addr::new(192, 168, 1, 1));
         let text = dnsmasq_conf(&up).unwrap();
         assert!(text.lines().any(|l| l == "server=192.168.1.1") && !text.contains("no-resolv"));
+    }
+
+    fn takeover() -> TakeoverSettings {
+        TakeoverSettings {
+            interface: "br0".into(),
+            hub_address: Ipv4Addr::new(192, 168, 1, 5),
+            gateway: Ipv4Addr::new(192, 168, 1, 1),
+            relay_name: "relay".into(),
+            uplink_dns: None,
+        }
+    }
+    #[test]
+    fn the_takeover_serves_the_same_subnet_from_a_high_pool_with_short_leases() {
+        let text = takeover_dnsmasq_conf(&takeover()).unwrap();
+        for line in [
+            "interface=br0",
+            "dhcp-range=192.168.1.200,192.168.1.250,255.255.255.0,5m",
+            "dhcp-option=3,192.168.1.1",
+            "dhcp-option=6,192.168.1.5",
+            "dhcp-option=42,192.168.1.5",
+            "address=/relay/192.168.1.5",
+            "no-resolv",
+        ] {
+            assert!(text.lines().any(|l| l == line), "{line}\n{text}");
+        }
+        assert!(!text.contains("no-ping"), "the ping check stays on");
+        let mut up = takeover();
+        up.uplink_dns = Some(Ipv4Addr::new(192, 168, 1, 1));
+        let text = takeover_dnsmasq_conf(&up).unwrap();
+        assert!(text.lines().any(|l| l == "server=192.168.1.1") && !text.contains("no-resolv"));
+    }
+    #[test]
+    fn a_takeover_gateway_off_the_subnet_or_a_hub_in_the_pool_is_refused() {
+        let bad = |f: fn(&mut TakeoverSettings)| {
+            let mut t = takeover();
+            f(&mut t);
+            takeover_dnsmasq_conf(&t).is_err()
+        };
+        assert!(bad(|t| t.gateway = Ipv4Addr::new(192, 168, 2, 1)));
+        assert!(bad(|t| t.gateway = t.hub_address));
+        assert!(bad(|t| t.hub_address = Ipv4Addr::new(192, 168, 1, 210)));
+        assert!(bad(|t| t.gateway = Ipv4Addr::new(192, 168, 1, 250)));
+        assert!(bad(|t| t.interface = "br0;x".into()));
     }
 }
