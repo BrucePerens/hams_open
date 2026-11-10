@@ -95,7 +95,9 @@ def verify_form_token(secret, host, token, now=None):
     if age < TOKEN_MIN_AGE or age > TOKEN_MAX_AGE:
         return False
     expected = hmac.new(secret.encode(), f"{host}|{stamp}".encode(), hashlib.sha256).hexdigest()[:32]
-    return hmac.compare_digest(expected, mac)
+    # Bytes: compare_digest on str raises TypeError for a non-ASCII character, and the token is
+    # whatever the visitor posted, so that would answer a public form with a 500.
+    return hmac.compare_digest(expected.encode(), mac.encode())
 
 
 # [@ANCHOR: parking:COMM_client_ip]

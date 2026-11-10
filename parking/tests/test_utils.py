@@ -47,7 +47,7 @@ class TestParkingUtils(HamsTransactionCase):
         self.assertFalse(utils.verify_form_token("s3cret", "a.example", token, now=1000 + 86401))
         self.assertFalse(utils.verify_form_token("s3cret", "b.example", token, now=1010))
         self.assertFalse(utils.verify_form_token("other", "a.example", token, now=1010))
-        for junk in ("", "x", "1000.", "abc.def", None):
+        for junk in ("", "x", "1000.", "abc.def", None, "1000.\u00e9", "1000." + "\u0661" * 32):
             self.assertFalse(utils.verify_form_token("s3cret", "a.example", junk, now=1010))
 
     # [@ANCHOR: parking:COMM_test_render_pages]
