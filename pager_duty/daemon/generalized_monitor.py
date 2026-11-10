@@ -332,6 +332,7 @@ FAILING_NAMES = set()
 CHECK_UNITS = {}
 
 
+# [@ANCHOR: pager_duty:note_failing_units]
 def note_failing_units(check, units):
     """Records the units behind this run's failure, in order and once each, for polling_thread to send."""
     CHECK_UNITS[check_key(check)] = list(dict.fromkeys(u for u in units if u))
@@ -447,7 +448,6 @@ def fallback_notify(source, msg, severity):
         logger.critical(f"SMTP Fallback completely failed: {e}")
 
 
-# [@ANCHOR: pager_duty:severity_for_days_left]
 # Graduated thresholds, in days, ordered from least to most urgent -- the first one a credential's
 # remaining lifetime falls under (days_left <= threshold) wins. Shared by every expiring-credential
 # synthetic check in this codebase (check_github_pat_expiry.py, check_cloudflare_token_expiry.py)
@@ -460,6 +460,7 @@ SEVERITY_THRESHOLDS_DAYS = (
 )
 
 
+# [@ANCHOR: pager_duty:severity_for_days_left]
 def severity_for_days_left(days_left):
     """Returns the graduated severity name for `days_left` remaining until some credential
     expires, or None if it's healthy (past every threshold)."""
@@ -469,10 +470,10 @@ def severity_for_days_left(days_left):
     return None
 
 
-# [@ANCHOR: pager_duty:extract_severity_prefix]
 _SEVERITY_PREFIX_RE = re.compile(r"^\[SEVERITY:(low|medium|high|critical)\] (.*)\Z", re.DOTALL)
 
 
+# [@ANCHOR: pager_duty:extract_severity_prefix]
 def extract_severity_prefix(msg, default="high"):
     """The other half of the "synthetic" check type's graduated-severity extension (see
     execute_check()'s own comment on the ctype == "synthetic" branch): pulls a
@@ -641,6 +642,7 @@ FEED_STAMP_VERSION = 1
 FEED_ERROR_CLASS_REGEX = re.compile(r"[A-Za-z0-9_.-]{1,64}\Z")
 
 
+# [@ANCHOR: pager_duty:human_age]
 def _human_age(seconds):
     seconds = int(max(0, seconds))
     if seconds < 120:
@@ -652,6 +654,7 @@ def _human_age(seconds):
     return f"{seconds // 86400}d"
 
 
+# [@ANCHOR: pager_duty:parse_freshness_time]
 def parse_freshness_time(value):
     """Epoch seconds from a number, a numeric string, or an ISO 8601 / 'YYYY-MM-DD HH:MM:SS' string (UTC when naive).
     Returns None when it cannot be read."""
@@ -676,6 +679,7 @@ def parse_freshness_time(value):
     return parsed.timestamp()
 
 
+# [@ANCHOR: pager_duty:parse_systemd_timestamp]
 def parse_systemd_timestamp(text):
     """Epoch seconds from systemctl's 'Tue 2026-10-20 05:17:00 UTC'; None for an empty value (the event has not happened)."""
     text = (text or "").strip()
@@ -705,6 +709,7 @@ def _freshness_redis():
     )
 
 
+# [@ANCHOR: pager_duty:freshness_one_unit]
 def _freshness_one_unit(unit, max_age, now):
     exe, err = ensure_executable("systemctl")
     if not exe:
@@ -744,6 +749,7 @@ def _freshness_one_unit(unit, max_age, now):
     return True, f"OK (last successful run of {unit} ended {_human_age(age)} ago)"
 
 
+# [@ANCHOR: pager_duty:freshness_unit]
 def _freshness_unit(units, max_age, now, failing=None):
     """One or several comma-separated units sharing a limit; every stale or failed unit is named in one message.
     `failing`, when given, is a list that receives the name of each unit that is stale or failed."""

@@ -84,6 +84,7 @@ class RedisZsetTests(unittest.TestCase):
 
 class RedisKeyAndFileTests(unittest.TestCase):
     def test_epoch_and_iso_values_are_read(self):
+        # Tests [@ANCHOR: pager_duty:parse_freshness_time]
         expected = 1_800_000_000.0
         for value in (1800000000, "1800000000", "1800000000.0", b"1800000000", "2027-01-15 08:00:00", "2027-01-15T08:00:00Z",
                       "2027-01-15T09:00:00+01:00"):
@@ -93,6 +94,7 @@ class RedisKeyAndFileTests(unittest.TestCase):
             self.assertIsNone(gm.parse_freshness_time(value), value)
 
     def test_iso_time_age_is_computed_in_utc(self):
+        # Tests [@ANCHOR: pager_duty:parse_freshness_time]
         iso = "2027-01-15 08:00:00"
         epoch = gm.parse_freshness_time(iso)
         ok, _ = run("redis-key:k", 600, FakeRedis(keys={"k": iso}), now=epoch + 300)
@@ -101,6 +103,7 @@ class RedisKeyAndFileTests(unittest.TestCase):
         self.assertFalse(ok)
 
     def test_a_missing_key_or_garbage_fails(self):
+        # Tests [@ANCHOR: pager_duty:parse_freshness_time]
         self.assertFalse(run("redis-key:k", 600, FakeRedis())[0])
         ok, msg = run("redis-key:k", 600, FakeRedis(keys={"k": "yesterday-ish"}))
         self.assertFalse(ok)
@@ -129,12 +132,14 @@ class UnitTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def test_a_recent_successful_run_passes(self):
+        # Tests [@ANCHOR: pager_duty:freshness_one_unit]
         with show(ExecMainExitTimestamp="Tue 2026-10-20 05:17:00 UTC"):
             now = gm.parse_systemd_timestamp("Tue 2026-10-20 05:17:00 UTC") + 3600
             ok, msg = run("unit:fcc.uls.sync.service", 3 * 86400, now=now)
         self.assertTrue(ok, msg)
 
     def test_a_run_older_than_the_limit_fails(self):
+        # Tests [@ANCHOR: pager_duty:freshness_one_unit]
         with show(ExecMainExitTimestamp="Tue 2026-10-20 05:17:00 UTC"):
             now = gm.parse_systemd_timestamp("Tue 2026-10-20 05:17:00 UTC") + 4 * 86400
             ok, msg = run("unit:fcc.uls.sync.service", 3 * 86400, now=now)
@@ -142,12 +147,14 @@ class UnitTests(unittest.TestCase):
         self.assertIn("4d", msg)
 
     def test_a_failed_last_run_fails(self):
+        # Tests [@ANCHOR: pager_duty:freshness_one_unit]
         with show(Result="exit-code", ExecMainExitTimestamp="Tue 2026-10-20 05:17:00 UTC"):
             ok, msg = run("unit:fcc.uls.sync.service", 86400, now=gm.parse_systemd_timestamp("Tue 2026-10-20 06:00:00 UTC"))
         self.assertFalse(ok)
         self.assertIn("did not succeed", msg)
 
     def test_a_run_in_progress_passes_until_it_has_run_longer_than_the_limit(self):
+        # Tests [@ANCHOR: pager_duty:freshness_one_unit]
         start = "Tue 2026-10-20 05:00:00 UTC"
         t0 = gm.parse_systemd_timestamp(start)
         with show(ActiveState="activating", ExecMainStartTimestamp=start):
@@ -166,6 +173,7 @@ class UnitTests(unittest.TestCase):
         self.assertIn("since boot", msg)
 
     def test_a_long_running_daemon_unit_is_refused_with_advice(self):
+        # Tests [@ANCHOR: pager_duty:freshness_one_unit]
         with show(Type="simple", ActiveState="active"):
             ok, msg = run("unit:ham.dx.daemon.service", 1800)
         self.assertFalse(ok)
@@ -178,10 +186,12 @@ class UnitTests(unittest.TestCase):
             self.assertIn("unit names", msg)
 
     def test_an_unknown_unit_fails(self):
+        # Tests [@ANCHOR: pager_duty:freshness_one_unit]
         with show(LoadState="not-found"):
             self.assertFalse(run("unit:nope.service", 60)[0])
 
     def test_several_units_report_every_stale_one_in_a_single_message(self):
+        # Tests [@ANCHOR: pager_duty:freshness_unit]
         outputs = {
             "a.service": "LoadState=loaded\nType=oneshot\nActiveState=inactive\nResult=success\nExecMainExitTimestamp=Tue 2026-10-20 05:17:00 UTC\n",
             "b.service": "LoadState=loaded\nType=oneshot\nActiveState=inactive\nResult=success\nExecMainExitTimestamp=Fri 2026-10-09 05:17:00 UTC\n",
@@ -204,6 +214,8 @@ class UnitTests(unittest.TestCase):
         self.assertTrue(ok, msg)
 
     def test_the_stale_units_are_sent_with_the_incident(self):
+        # Tests [@ANCHOR: pager_duty:freshness_unit]
+        # Tests [@ANCHOR: pager_duty:note_failing_units]
         """Tests [@ANCHOR: pager_duty:check_units]."""
         outputs = {
             "a.service": "LoadState=loaded\nType=oneshot\nActiveState=inactive\nResult=success\nExecMainExitTimestamp=Tue 2026-10-20 05:17:00 UTC\n",
@@ -223,6 +235,7 @@ class UnitTests(unittest.TestCase):
             self.assertNotIn(13, gm.CHECK_UNITS)
 
     def test_systemd_timestamps(self):
+        # Tests [@ANCHOR: pager_duty:parse_systemd_timestamp]
         self.assertEqual(gm.parse_systemd_timestamp("Tue 2026-10-20 05:17:00 UTC"), 1792473420.0)
         self.assertIsNone(gm.parse_systemd_timestamp(""))
         self.assertIsNone(gm.parse_systemd_timestamp("n/a"))
@@ -399,6 +412,7 @@ class ConfigurationTests(unittest.TestCase):
         cf.assert_called_once()
 
     def test_human_age(self):
+        # Tests [@ANCHOR: pager_duty:human_age]
         self.assertEqual(gm._human_age(45), "45s")
         self.assertEqual(gm._human_age(1800), "30min")
         self.assertEqual(gm._human_age(3 * 3600 + 120), "3h02")
