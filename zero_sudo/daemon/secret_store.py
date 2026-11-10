@@ -36,9 +36,12 @@ import re
 import socket
 import stat
 
-try:
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+if __package__:  # imported as odoo.addons.zero_sudo.daemon.secret_store
     from . import secret_operations
-except ImportError:  # a daemon that put this directory itself on sys.path (zero_sudo/daemon/README.md)
+else:  # a daemon that put this directory itself on sys.path (zero_sudo/daemon/README.md)
     import secret_operations
 
 SECRET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,99}$")
@@ -188,8 +191,6 @@ class EncryptedBackend:
 # [@ANCHOR: zero_sudo:secret_store_encrypt_value]
 def encrypt_value(key, name, plaintext):
     """The stored form of `plaintext` under `key` (32 bytes) for the secret `name` (str token)."""
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
     if len(key) != 32:
         raise ValueError("the key must be 32 bytes")
     nonce = os.urandom(12)
@@ -201,9 +202,6 @@ def encrypt_value(key, name, plaintext):
 def decrypt_value(key, name, token):
     """The plaintext of a token made by `encrypt_value` for the same key and name; SecretStoreError
     for a token of another format, another key or another name (the message never holds the token)."""
-    from cryptography.exceptions import InvalidTag
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
     prefix, _, body = token.partition(".")
     if prefix != ENCRYPTED_FORMAT.decode() or len(key) != 32:
         raise SecretStoreError(f"secret {name!r}: not a {ENCRYPTED_FORMAT.decode()} token or wrong key size")

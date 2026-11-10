@@ -9,6 +9,7 @@ Story: zero_sudo/docs/stories/secret_store_tier_a.md."""
 import base64
 import json
 import os
+import shutil
 import socket
 import tempfile
 import threading
@@ -39,7 +40,7 @@ class _FakeBroker:
         self.server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.server.bind(self.path)
         self.server.listen(4)
-        self.thread = threading.Thread(target=self._serve, daemon=True)
+        self.thread = threading.Thread(target=self._serve, daemon=True)  # burn-ignore-test-daemon-thread: ends when close() closes the listening socket
         self.thread.start()
 
     def _serve(self):
@@ -68,7 +69,7 @@ class TestSecretStoreTierA(BaseCase):
     def setUp(self):
         super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="secret_store_")
-        self.addCleanup(lambda: __import__("shutil").rmtree(self.tmp, ignore_errors=True))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
         self.uid = os.getuid()
 
     def test_names_are_checked(self):
@@ -255,7 +256,7 @@ class TestSecretStoreConfiguration(BaseCase):
     def setUp(self):
         super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="secret_store_")
-        self.addCleanup(lambda: __import__("shutil").rmtree(self.tmp, ignore_errors=True))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def test_broker_client_and_store_routing(self):
         # Tests [@ANCHOR: zero_sudo:secret_store_broker_client_init]
