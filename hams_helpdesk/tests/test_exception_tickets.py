@@ -669,6 +669,27 @@ class TestExceptionQuietPeriodReopen(ExceptionTicketCase):
         self.assertTrue(self.occur_again(exc))
         self.assertFalse(ticket.message_ids[0].partner_ids)
 
+    def test_the_silent_count_after_a_reopen_page_counts_only_tickets_opened_after_it(self):
+        # Tests [@ANCHOR: hams_helpdesk:exc_notification_state]
+        model = self.Fingerprint
+        exc = self.caught(raise_attribute_error)
+        self.assertTrue(self.report(exc))
+        old = self.fingerprints()
+        old_ticket = old.ticket_id
+        uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
+        self.env.flush_all()
+        self.Fingerprint.with_user(uid).report_daemon_failure("adif-processor.service", "unit_failed", "exit-code", "x")
+        self.env.invalidate_all()
+        newer = self.Fingerprint.search([("id", "!=", old.id)], limit=1).ticket_id
+        self.assertTrue(newer)
+        # A reopen page recorded on the OLD ticket's row, after the newer ticket was opened and paged.
+        later = fields.Datetime.now() + timedelta(hours=2)
+        old.notified_at = later
+        self.assertGreater(newer.id, old_ticket.id)
+        quiet, silent = model._notification_state(later + timedelta(days=1))
+        self.assertFalse(quiet)
+        self.assertEqual(silent, 0, "the newer ticket was opened before the page, not silently after it")
+
 
 @tagged("post_install", "-at_install", "standard")
 class TestExceptionTicketAccess(ExceptionTicketCase):

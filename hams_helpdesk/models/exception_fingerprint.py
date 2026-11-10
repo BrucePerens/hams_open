@@ -599,5 +599,7 @@ class ExceptionFingerprint(models.Model):
             return True, 0
         domain = [("ticket_type", "=", TICKET_TYPE)]
         if last_page:
-            domain.append(("id", ">", last_page.ticket_id.id or 0))
+            # By time, not ticket id: a reopen page is recorded on an OLD ticket's row, and its id says nothing
+            # about which newer tickets were silent after that page.
+            domain.append(("create_date", ">", last_page.notified_at))
         return False, self.env["hams_helpdesk.ticket"].search_count(domain)
