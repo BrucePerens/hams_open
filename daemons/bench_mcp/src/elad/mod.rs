@@ -397,17 +397,16 @@ fn open_tuned(bench: &dyn Bench, cfg: &Config, args: &Value) -> Result<Tuned, St
             sample_rate_hz: rate,
         },
     )?;
-    radio.tune(freq).map_err(|e| next_step(&e.to_string()))?;
+    // The front-end state goes in first (a record only, nothing is sent yet), so the tune writes it and the receiver is never tuned
+    // at a gain the caller did not ask for.
     if found.model.has_front_end_switches() {
         radio
-            .set_filters(filters)
-            .map_err(|e| next_step(&e.to_string()))?;
-        radio
-            .set_attenuator(att)
+            .set_front_end(filters, att)
             .map_err(|e| next_step(&e.to_string()))?;
     } else if !filters || att {
         return Err(format!("the {} has no switchable filters or attenuator; leave `filters` and `attenuator` at their defaults", found.model.name()));
     }
+    radio.tune(freq).map_err(|e| next_step(&e.to_string()))?;
     Ok(Tuned { radio, found, rate })
 }
 

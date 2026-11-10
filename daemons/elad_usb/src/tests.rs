@@ -3,7 +3,7 @@ use crate::convert::{Decoder, Format};
 use crate::fpga::FpgaState;
 use crate::protocol::*;
 use crate::radio::{OpenOptions, Radio};
-use crate::transport::{FakeTransport, Op};
+use crate::transport::{FakeTransport, Op, Transport};
 use crate::Error;
 use std::time::Duration;
 
@@ -106,6 +106,34 @@ fn only_receive_requests_are_allowed() {
         };
         assert_eq!(is_receive_request(&r), ok, "request {rq:#x} index {ix:#x}");
     }
+}
+
+#[test]
+fn the_send_guard_refuses_the_in_only_requests_so_an_eeprom_write_cannot_pass() {
+    // Tests [@ANCHOR: elad_is_send_request]
+    // Tests [@ANCHOR: elad_is_read_request]
+    for (rq, ix, ok) in [
+        (REQ_FW_VERSION, 0u16, false),
+        (REQ_EEPROM, 0x0151, false),
+        (REQ_TUNE, 0, true),
+        (REQ_FRONT_END, 2, true),
+        (REQ_FIFO, 0, true),
+        (REQ_DUO_GATEWAY, 0xE800, true),
+        (REQ_DUO_GATEWAY, 0xF200, true),
+        (REQ_DUO_GATEWAY, 0xF500, false),
+        (REQ_DUO_GATEWAY, 0xFC00, false),
+        (REQ_DUO_GATEWAY, 0xF100, false),
+    ] {
+        let r = Request {
+            request: rq,
+            value: 0,
+            index: ix,
+            data: vec![0],
+        };
+        assert_eq!(is_send_request(&r), ok, "request {rq:#x} index {ix:#x}");
+    }
+    assert!(is_read_request(REQ_EEPROM) && is_read_request(REQ_FW_VERSION));
+    assert!(!is_read_request(REQ_TUNE));
 }
 
 #[test]
@@ -604,6 +632,7 @@ fn radio_internals_are_exercised_through_the_public_calls() {
         opts(FpgaState::LoadedExternally, 192_000),
     )
     .unwrap();
+    r.tune(14_000_000.0).unwrap();
     r.set_attenuator(true).unwrap();
     assert!(
         t.ops().iter().any(|o| matches!(
@@ -638,4 +667,142 @@ fn a_boxed_transport_forwards_every_call() {
     assert_eq!(boxed.control_out(0x44, 0, 0, &[1]).unwrap(), 1);
     assert_eq!(boxed.bulk_in(&mut b, Duration::from_millis(1)).unwrap(), 2);
     assert_eq!(fake.ops().len(), 2, "the calls reached the inner fake");
+}
+
+/// A fake whose n-th control OUT (counting from 1) fails after the unit "accepted" it: the case a timed-out transfer makes.
+struct FailNthOut {
+    inner: FakeTransport,
+    count: usize,
+    fail_at: usize,
+}
+
+impl Transport for FailNthOut {
+    fn control_in(&mut self, r: u8, v: u16, i: u16, b: &mut [u8]) -> Result<usize, Error> {
+        self.inner.control_in(r, v, i, b)
+    }
+    fn control_out(&mut self, r: u8, v: u16, i: u16, d: &[u8]) -> Result<usize, Error> {
+        self.count += 1;
+        let res = self.inner.control_out(r, v, i, d);
+        if self.count == self.fail_at {
+            return Err(Error::Timeout);
+        }
+        res
+    }
+    fn bulk_in(&mut self, b: &mut [u8], t: Duration) -> Result<usize, Error> {
+        self.inner.bulk_in(b, t)
+    }
+}
+
+fn outs(t: &FakeTransport) -> Vec<(u8, u16)> {
+    t.ops()
+        .into_iter()
+        .filter_map(|o| match o {
+            Op::Out { request, value, .. } => Some((request, value)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_failed_fifo_start_is_still_followed_by_a_stop_on_drop() {
+    // Tests [@ANCHOR: elad_radio_start]
+    // Tests [@ANCHOR: elad_radio_stop]
+    for (model, fail_at, stop) in [
+        (Model::S2, 1, (REQ_FIFO, 0u16)),
+        (Model::Duo, 2, (REQ_DUO_GATEWAY, 0)),
+    ] {
+        let fake = fake_unit();
+        let mut r = Radio::open(
+            FailNthOut {
+                inner: fake.clone(),
+                count: 0,
+                fail_at,
+            },
+            model,
+            opts(FpgaState::LoadedExternally, 192_000),
+        )
+        .unwrap();
+        assert!(r.start().is_err());
+        drop(r);
+        let sent = outs(&fake);
+        assert_eq!(sent.last().copied(), Some(stop), "{model:?}: {sent:?}");
+    }
+}
+
+#[test]
+fn a_failed_front_end_write_leaves_the_recorded_state_unchanged() {
+    // Tests [@ANCHOR: elad_radio_set_front_end]
+    // Tests [@ANCHOR: elad_radio_write_front_end]
+    let fake = fake_unit();
+    let mut r = Radio::open(
+        FailNthOut {
+            inner: fake.clone(),
+            count: 0,
+            fail_at: 3,
+        },
+        Model::S2,
+        opts(FpgaState::LoadedExternally, 192_000),
+    )
+    .unwrap();
+    r.tune(14_000_000.0).unwrap(); // OUT 1 tune, OUT 2 front end
+    let before = r.level_offset_db();
+    assert!(r.set_attenuator(true).is_err()); // OUT 3 fails
+    assert_eq!(
+        r.level_offset_db(),
+        before,
+        "the unit never got the attenuator"
+    );
+    r.tune(14_100_000.0).unwrap();
+    assert_eq!(outs(&fake).last().copied(), Some((REQ_FRONT_END, 0x03)));
+}
+
+#[test]
+fn set_front_end_before_tune_sends_nothing_and_the_tune_writes_it() {
+    // Tests [@ANCHOR: elad_radio_require_switches]
+    // Tests [@ANCHOR: elad_radio_set_front_end]
+    let fake = fake_unit();
+    let mut r = Radio::open(
+        fake.clone(),
+        Model::S2,
+        opts(FpgaState::LoadedExternally, 192_000),
+    )
+    .unwrap();
+    r.set_front_end(false, true).unwrap();
+    assert!(outs(&fake).is_empty(), "nothing is sent before the tune");
+    r.tune(14_000_000.0).unwrap();
+    assert_eq!(
+        outs(&fake)
+            .iter()
+            .filter(|o| o.0 == REQ_FRONT_END)
+            .map(|o| o.1)
+            .collect::<Vec<_>>(),
+        vec![0x09],
+        "filters off, attenuator on, in the first front-end write"
+    );
+    let mut d = Radio::open(fake_unit(), Model::Duo, opts(FpgaState::Unknown, 192_000)).unwrap();
+    assert!(matches!(
+        d.set_front_end(false, false),
+        Err(Error::OutOfRange(_))
+    ));
+}
+
+#[test]
+fn an_eeprom_write_cannot_go_out_through_send() {
+    // Tests [@ANCHOR: elad_radio_send]
+    // Tests [@ANCHOR: elad_radio_read_request]
+    let fake = fake_unit();
+    let mut r = Radio::open(
+        fake.clone(),
+        Model::S2,
+        opts(FpgaState::LoadedExternally, 192_000),
+    )
+    .unwrap();
+    let w = Request {
+        request: REQ_EEPROM,
+        value: 0x4000,
+        index: 0x0151,
+        data: vec![1],
+    };
+    assert!(matches!(r.send(&w), Err(Error::NotReceiveOnly(0xA2))));
+    assert!(outs(&fake).is_empty());
 }

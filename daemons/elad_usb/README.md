@@ -52,6 +52,8 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_tune_request_duo] The FDM-DUO tune request through its gateway request.
 - [@ANCHOR: elad_usb:elad_front_end_code] The FDM-S2 filter-bank and attenuator code for a frequency.
 - [@ANCHOR: elad_usb:elad_is_receive_request] The list of requests that may be sent; a CAT write or an unknown request is not on it.
+- [@ANCHOR: elad_usb:elad_is_send_request] The control OUT guard: the receive-only list minus the IN-only reads (firmware version, EEPROM, DUO tune-read and status), so an EEPROM write cannot pass.
+- [@ANCHOR: elad_usb:elad_is_read_request] The requests that go out only as a control IN (firmware version, EEPROM).
 - [@ANCHOR: elad_usb:elad_calibration_from_eeprom] Decodes the EEPROM calibration; unprogrammed (all-ones) and short fields are absent.
 - [@ANCHOR: elad_usb:elad_level_offset_db] The dB offset from a normalised sample level to the input level for a model, rate and front-end state.
 - [@ANCHOR: elad_usb:elad_format_for_rate] The component width for a sample rate.
@@ -60,6 +62,8 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_radio_open] Opens a unit read-only: rate check, firmware version, EEPROM calibration.
 - [@ANCHOR: elad_usb:elad_radio_tune] Sets the centre frequency (range-checked) and the S2's filter code.
 - [@ANCHOR: elad_usb:elad_radio_set_filters] Switches the S2's band filters.
+- [@ANCHOR: elad_usb:elad_radio_set_front_end] Sets the S2's filters and attenuator together; before the first tune it only records them, and it records them only after a successful write.
+- [@ANCHOR: elad_usb:elad_radio_require_switches] Refuses the S2-only filter and attenuator calls on a model without them.
 - [@ANCHOR: elad_usb:elad_radio_set_attenuator] Switches the S2's attenuator.
 - [@ANCHOR: elad_usb:elad_radio_start] Starts the sample FIFO; refuses an S1/S2 with no declared FPGA image.
 - [@ANCHOR: elad_usb:elad_radio_stop] Stops the sample FIFO.
@@ -76,6 +80,7 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_model_rx_range_hz] The model's receive range in Hz.
 - [@ANCHOR: elad_usb:elad_model_sample_rates_hz] The sample rates the model streams.
 - [@ANCHOR: elad_usb:elad_radio_send] Sends a control request only if it is on the receive-only list.
+- [@ANCHOR: elad_usb:elad_radio_read_request] A control IN, refused unless the request is a read-only one.
 - [@ANCHOR: elad_usb:elad_radio_silence] Turns repeated silent reads into the no-samples verdict.
 - [@ANCHOR: elad_usb:elad_radio_write_front_end] Writes the S2's filter and attenuator code for the current frequency.
 - [@ANCHOR: elad_usb:elad_fake_reply] Scripts a control reply on the fake transport.
@@ -89,7 +94,8 @@ Each entry is a semantic anchor in the source with a test citing it (`// Tests [
 - [@ANCHOR: elad_usb:elad_box_bulk_in] A boxed transport forwards a bulk IN.
 - [@ANCHOR: elad_lock_acquire] Takes the single-owner lock for one receiver in the lock directory; a second taker is refused naming the holder.
 - [@ANCHOR: elad_lock_acquire_in] The same with the directory given; the lock is an advisory `flock` on `elad-<bus>-<address>.lock`, released on drop or process death, with the holder's pid and name written in.
-- [@ANCHOR: elad_lock_dir] The lock directory: `ELAD_LOCK_DIR`, else `/run/lock`, else the temp directory.
+- [@ANCHOR: elad_lock_dir] The lock directory: `ELAD_LOCK_DIR`, else `XDG_RUNTIME_DIR`, else a private (mode 0700, owner-checked) `elad-<uid>` directory in the temp directory; never the shared `/run/lock`.
+- [@ANCHOR: elad_lock_ensure_private_dir] Creates the default lock directory mode 0700 and refuses one not owned by this user or open to others.
 - [@ANCHOR: elad_lock_file_name] The lock file name for a bus and address.
 - [@ANCHOR: elad_lock_read_holder] Reads who holds a lock, falling back to "another program".
 - [@ANCHOR: elad_lock_error_display] The refusal text: who holds the receiver and what to do.

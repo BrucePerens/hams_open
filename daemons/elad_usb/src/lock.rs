@@ -2,7 +2,8 @@
 //! Single-owner lock for one receiver, so the relay and the bench MCP never stream from the same unit at once.
 //!
 //! One lock file per USB bus and address, `elad-<bus>-<address>.lock`, in a directory both programs can write
-//! (`ELAD_LOCK_DIR`, else `/run/lock`, else the system temp directory). The lock is an advisory `flock` on that file, held for
+//! (`ELAD_LOCK_DIR`, else the user's `XDG_RUNTIME_DIR`, else a private `elad-<uid>` directory in the temp directory; never a directory
+//! other users can write to, so nobody else can pre-create or hold the file). The lock is an advisory `flock` on that file, held for
 //! as long as the [`DeviceLock`] value lives; the kernel drops it when the process dies, so a crash never leaves a stale lock.
 //! The holder writes its pid and name into the file so the refusal can say who has the receiver. libusb's interface claim is a
 //! second, kernel-level guard against a program that does not use this lock.
@@ -51,17 +52,46 @@ pub struct DeviceLock {
     path: PathBuf,
 }
 
-/// The directory lock files go in: `ELAD_LOCK_DIR` if set, else `/run/lock` if it exists, else the temp directory.
+/// The directory lock files go in: `ELAD_LOCK_DIR` if set, else `XDG_RUNTIME_DIR` (private to the user), else `elad-<uid>` in the temp
+/// directory (made mode 0700 and checked to be ours by [`DeviceLock::acquire`]). Never `/run/lock`: any local user can write there.
 // [@ANCHOR: elad_lock_dir]
 pub fn lock_dir() -> PathBuf {
     if let Some(d) = std::env::var_os("ELAD_LOCK_DIR") {
         return PathBuf::from(d);
     }
-    let run_lock = Path::new("/run/lock");
-    if run_lock.is_dir() {
-        return run_lock.to_path_buf();
+    if let Some(d) = std::env::var_os("XDG_RUNTIME_DIR") {
+        let d = PathBuf::from(d);
+        if d.is_dir() {
+            return d;
+        }
     }
-    std::env::temp_dir()
+    std::env::temp_dir().join(format!("elad-{}", current_uid().unwrap_or(0)))
+}
+
+fn current_uid() -> Option<u32> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata("/proc/self").ok().map(|m| m.uid())
+}
+
+/// Makes sure a private lock directory is ours: creates it mode 0700 when missing, refuses one owned by someone else or open to
+/// group or others. Used only for the default `elad-<uid>` directory.
+// [@ANCHOR: elad_lock_ensure_private_dir]
+fn ensure_private_dir(dir: &Path) -> Result<(), LockError> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    let io = |e: std::io::Error| LockError::Io(format!("{}: {e}", dir.display()));
+    if let Err(e) = std::fs::DirBuilder::new().mode(0o700).create(dir) {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(io(e));
+        }
+    }
+    let m = std::fs::symlink_metadata(dir).map_err(io)?;
+    if !m.is_dir() || Some(m.uid()) != current_uid() || m.mode() & 0o077 != 0 {
+        return Err(LockError::Io(format!(
+            "{} is not a private directory owned by this user; remove it or set ELAD_LOCK_DIR",
+            dir.display()
+        )));
+    }
+    Ok(())
 }
 
 /// The lock file name for a bus and address.
@@ -74,7 +104,13 @@ impl DeviceLock {
     /// Takes the lock for the receiver at `bus`/`address` in [`lock_dir`], recording `owner` (a short program name).
     // [@ANCHOR: elad_lock_acquire]
     pub fn acquire(bus: u8, address: u8, owner: &str) -> Result<DeviceLock, LockError> {
-        DeviceLock::acquire_in(&lock_dir(), bus, address, owner)
+        let dir = lock_dir();
+        if std::env::var_os("ELAD_LOCK_DIR").is_none()
+            && std::env::var_os("XDG_RUNTIME_DIR").is_none_or(|d| !Path::new(&d).is_dir())
+        {
+            ensure_private_dir(&dir)?;
+        }
+        DeviceLock::acquire_in(&dir, bus, address, owner)
     }
 
     /// As [`DeviceLock::acquire`] with the directory given.
@@ -256,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn the_directory_comes_from_the_environment_then_run_lock_then_temp() {
+    fn the_directory_comes_from_the_environment_then_the_runtime_dir_then_a_private_temp_dir() {
         // Tests [@ANCHOR: elad_lock_dir]
         // Tests [@ANCHOR: elad_lock_acquire]
         let d = dir("env");
@@ -267,7 +303,29 @@ mod tests {
         drop(l);
         std::env::remove_var("ELAD_LOCK_DIR");
         let fallback = lock_dir();
-        assert!(fallback == Path::new("/run/lock") || fallback == std::env::temp_dir());
+        assert_ne!(fallback, Path::new("/run/lock"));
+        assert_ne!(fallback, std::env::temp_dir());
+    }
+
+    #[test]
+    fn the_default_directory_is_private_and_a_foreign_or_open_one_is_refused() {
+        // Tests [@ANCHOR: elad_lock_ensure_private_dir]
+        // Tests [@ANCHOR: elad_lock_dir]
+        use std::os::unix::fs::PermissionsExt;
+        let base = dir("priv");
+        let mine = base.join("elad-test");
+        ensure_private_dir(&mine).unwrap();
+        ensure_private_dir(&mine).unwrap();
+        assert_eq!(
+            std::fs::metadata(&mine).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        std::fs::set_permissions(&mine, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let err = ensure_private_dir(&mine).unwrap_err();
+        assert!(err.to_string().contains("not a private directory"), "{err}");
+        let link = base.join("link");
+        std::os::unix::fs::symlink(&mine, &link).unwrap();
+        assert!(ensure_private_dir(&link).is_err());
     }
 
     #[test]

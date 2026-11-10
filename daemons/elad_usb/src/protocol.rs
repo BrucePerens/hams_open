@@ -207,6 +207,23 @@ pub fn is_receive_request(r: &Request) -> bool {
     }
 }
 
+/// True for the requests that are control IN reads on this unit: firmware version and EEPROM. Request 0xA2 is the Cypress EEPROM
+/// request whose direction picks read or write, so it must only ever go out as an IN.
+// [@ANCHOR: elad_is_read_request]
+pub fn is_read_request(request: u8) -> bool {
+    matches!(request, REQ_FW_VERSION | REQ_EEPROM)
+}
+
+/// True for the requests this crate may send as a control OUT: the receive-only list minus the IN-only reads (firmware version,
+/// EEPROM, and the DUO tune-read and status sub-commands), so an EEPROM write cannot pass.
+// [@ANCHOR: elad_is_send_request]
+pub fn is_send_request(r: &Request) -> bool {
+    if !is_receive_request(r) || is_read_request(r.request) {
+        return false;
+    }
+    !(r.request == REQ_DUO_GATEWAY && matches!((r.index >> 8) as u8, DUO_TUNE_READ | DUO_STATUS))
+}
+
 /// Calibration read from the unit's EEPROM (dB offsets and a rate correction); unprogrammed (all-ones) values are absent.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Calibration {
