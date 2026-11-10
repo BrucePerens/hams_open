@@ -100,7 +100,10 @@ class TestPurgeEverything(RealTransactionCase):
         )
 
         def wipe(token, zone):
-            self.PurgeQueue.enqueue_tags(["late"], website_id=self.website_a.id)
+            # setUp's credential writes leave a purge-everything row for website B too; only A's wipe
+            # is the one this test races against.
+            if token == "token_a":
+                self.PurgeQueue.enqueue_tags(["late"], website_id=self.website_a.id)
             return True
 
         self.safe_patch(
