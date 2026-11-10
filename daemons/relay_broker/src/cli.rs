@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! The `hams-relay-broker` binary. Usage:
+//! The `hams-relay-broker` program (a thin `main.rs` calls `run_main`, so the relay package can build the same binary). Usage:
 //! `hams-relay-broker [--config /etc/hams-relay-broker.conf] [--socket PATH] [--config-owner UID]`.
 //! With socket activation the listener is fd 3; otherwise `--socket` names a path to bind
 //! (mode 0660, for development). The config must be owned by `--config-owner` (default 0).
@@ -9,11 +9,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use relay_broker::audit::AuditLog;
-use relay_broker::broker::Broker;
-use relay_broker::config::Config;
-use relay_broker::os::LinuxOs;
-use relay_broker::server::{activated_listener, run};
+use crate::audit::AuditLog;
+use crate::broker::Broker;
+use crate::config::Config;
+use crate::os::LinuxOs;
+use crate::server::{activated_listener, run};
 
 /// Command-line options.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,7 +63,8 @@ fn remove_stale_socket(path: &std::path::Path) -> std::io::Result<()> {
     }
 }
 
-fn main() -> ExitCode {
+/// The program: parses argv, loads the config, opens the audit log and the listener and serves until idle.
+pub fn run_main() -> ExitCode {
     let argv: Vec<String> = std::env::args().collect();
     let args = match parse_args(&argv) {
         Ok(a) => a,
@@ -130,9 +131,6 @@ fn main() -> ExitCode {
         }
     }
 }
-
-#[cfg(test)]
-mod testdir;
 
 #[cfg(test)]
 mod tests {

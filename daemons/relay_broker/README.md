@@ -159,9 +159,9 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 - [@ANCHOR: relay_broker:relay_broker_parse_usb_pair] (config.rs) Parses `vvvv:pppp` (hex) into a vendor/product pair.
 - [@ANCHOR: relay_broker:relay_broker_config_parse] (config.rs) Parses the file text. Comments start with `#`; blank lines are skipped.
 - [@ANCHOR: relay_broker:relay_broker_config_load] (config.rs) Reads and parses `path`, first requiring it to be owned by `owner_uid` (0 in production)
-- [@ANCHOR: relay_broker:relay_broker_main_parse_args] (main.rs) Parses argv; unknown options are an error.
-- [@ANCHOR: relay_broker:relay_broker_remove_stale_socket] (main.rs) Removes a leftover socket at the `--socket` path from an earlier run; any other kind of file there is an error and is left alone. The listener is then bound and set to mode 0660.
-- [@ANCHOR: relay_broker:relay_broker_main] (main.rs) Entry point.
+- [@ANCHOR: relay_broker:relay_broker_main_parse_args] (cli.rs) Parses argv; unknown options are an error.
+- [@ANCHOR: relay_broker:relay_broker_remove_stale_socket] (cli.rs) Removes a leftover socket at the `--socket` path from an earlier run; any other kind of file there is an error and is left alone. The listener is then bound and set to mode 0660.
+- [@ANCHOR: relay_broker:relay_broker_main] (cli.rs) Entry point.
 - [@ANCHOR: relay_broker:relay_broker_kind_of_mode] (os.rs) Maps `st_mode`/`st_rdev` to a `NodeKind`.
 - [@ANCHOR: relay_broker:relay_broker_read_hex_u16] (os.rs) Reads a sysfs attribute holding a hexadecimal id (`idVendor`, `idProduct`).
 - [@ANCHOR: relay_broker:relay_broker_usb_identity_from_sysfs] (os.rs) Walks up from a sysfs device directory (at most eight levels) to the USB device that holds
