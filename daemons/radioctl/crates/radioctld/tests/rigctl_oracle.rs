@@ -401,3 +401,59 @@ async fn hamlibs_rigctl_works_against_a_server_in_vfo_mode() {
     eventually("mode", || rig.state().mode == Mode::Usb).await;
     daemon.stop().await;
 }
+
+// Tests [@ANCHOR: radioctld_service_execute]
+// Tests [@ANCHOR: radioctld_service_set_split_vfo]
+// Tests [@ANCHOR: radioctld_service_refuse]
+// Tests [@ANCHOR: radioctld_reply_render]
+/// The command sequence WSJT-X and fldigi send through Hamlib's NET rigctl backend, as one
+/// persistent client session on a virtual KX3 with the transmit gate closed: capability probe,
+/// frequency and mode, split with its own transmit frequency and mode, then a keying request that
+/// the gate must refuse without the rig hearing anything. This is the headless stand-in for
+/// running those programs against radioctld; it never keys anything.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_wsjtx_style_split_session_through_hamlibs_client_works_and_never_keys() {
+    use std::io::Write;
+    let daemon = start(&config_text("", "kx3", "elecraft-kx3.toml", false, false)).await;
+    let addr = daemon.rigs[0].server.local_addr().to_string();
+    let rig = control(&daemon).clone();
+    let script = "\\chk_vfo\n\\get_powerstat\nF 14074000\nM USB 2400\n\
+                  \\set_split_vfo 1 VFOB\n\\set_split_freq_mode 14076000 USB 2400\n\
+                  f\nm\ns\n\\get_split_freq_mode\nT 1\nt\n";
+    let out = tokio::task::spawn_blocking(move || {
+        let mut child = Command::new(rigctl_binary())
+            .args(["-m", "2", "-r", &addr])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("rigctl");
+        let mut stdin = child.stdin.take().expect("stdin");
+        stdin.write_all(script.as_bytes()).expect("write");
+        drop(stdin);
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while child.try_wait().expect("wait").is_none() {
+            assert!(Instant::now() < deadline, "rigctl session did not finish");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let o = child.wait_with_output().expect("output");
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&o.stdout),
+            String::from_utf8_lossy(&o.stderr)
+        )
+    })
+    .await
+    .expect("join");
+    let state = rig.state();
+    assert_eq!(state.freq_a, Hz(14_074_000), "{out}");
+    assert_eq!(state.freq_b, Hz(14_076_000), "{out}");
+    assert!(state.split, "{out}");
+    assert!(!state.ptt, "the closed gate must keep the rig unkeyed: {out}");
+    assert!(
+        out.contains("Command rejected by the rig"),
+        "T 1 must be refused: {out}"
+    );
+    assert!(out.contains("14076000"), "split transmit frequency read back: {out}");
+    daemon.stop().await;
+}
