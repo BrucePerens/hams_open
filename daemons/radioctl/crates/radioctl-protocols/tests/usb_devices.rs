@@ -801,3 +801,107 @@ async fn the_fifisdr_takes_its_vco_factor_from_the_board_and_carries_mode_levels
 fn log_has(bus: &FakeUsbBackend, transfer: FakeTransfer) -> bool {
     bus.log().contains(&transfer)
 }
+
+// Tests [@ANCHOR: radioctl_funcube_gain_value]
+// Tests [@ANCHOR: radioctl_funcube_gain_read]
+#[tokio::test]
+async fn the_funcube_gain_commands_follow_the_dongle_model() {
+    use radioctl_core::op::Observation;
+    use radioctl_core::units::Level;
+    // The original Dongle: one LNA code, steps map through Hamlib's tables, RSSI is raw.
+    let desc = by_id("amsat-uk-funcube-dongle");
+    let mut twin = FuncubeTwin::new(&desc, false).expect("twin");
+    twin.set_rssi(83);
+    let bus = FakeUsbBackend::new(Box::new(twin));
+    let link = open_usb(&Handle::current(), Arc::new(bus.clone()), fast(&desc))
+        .await
+        .expect("link");
+    let (stream, monitor) = link.into_parts();
+    let mut options = RigOptions::default();
+    options.poll.enabled = false;
+    std::mem::forget(monitor);
+    let engine = radioctl_protocols::usb_family::engine_for(&desc).expect("engine");
+    let rig = spawn(&Handle::current(), engine, stream, options).expect("spawn");
+    rig.execute(Op::SetLevel(Level::Preamp, 4))
+        .await
+        .expect("preamp");
+    assert!(bus.log().iter().any(
+        |t| matches!(t, FakeTransfer::InterruptWrite(0x02, d) if d.get(..2) == Some(&[0x6E, 12]))
+    ));
+    assert_eq!(
+        rig.execute(Op::GetLevel(Level::Preamp))
+            .await
+            .expect("read"),
+        Some(Observation::Level(Level::Preamp, 4))
+    );
+    // The attenuator (decibels) shares the one LNA setting: 5 dB is code 0, which no preamp step has.
+    rig.execute(Op::SetLevel(Level::Attenuator, 5))
+        .await
+        .expect("att");
+    assert_eq!(
+        rig.execute(Op::GetLevel(Level::Attenuator))
+            .await
+            .expect("read"),
+        Some(Observation::Level(Level::Attenuator, 5))
+    );
+    assert_eq!(
+        rig.execute(Op::GetLevel(Level::Preamp))
+            .await
+            .expect("read"),
+        Some(Observation::Level(Level::Preamp, 0))
+    );
+    assert!(rig.execute(Op::SetLevel(Level::Preamp, 7)).await.is_err());
+    assert!(rig
+        .execute(Op::SetLevel(Level::Attenuator, 3))
+        .await
+        .is_err());
+    assert!(rig.execute(Op::SetLevel(Level::RfGain, 1)).await.is_err());
+    assert_eq!(rig.signal(Freshness::Fresh).await.expect("rssi").value, 83);
+
+    // The Pro+: LNA switch, mixer (20 dB of attenuator is the mixer gain off), IF gain 0 to 59.
+    let desc = by_id("amsat-uk-funcube-dongle-pro-plus");
+    let (rig, bus) = rig_on_fake_bus(&desc).await;
+    rig.execute(Op::SetLevel(Level::Preamp, 1))
+        .await
+        .expect("lna");
+    rig.execute(Op::SetLevel(Level::Attenuator, 20))
+        .await
+        .expect("mixer");
+    rig.execute(Op::SetLevel(Level::RfGain, 200))
+        .await
+        .expect("if");
+    let writes: Vec<Vec<u8>> = bus
+        .log()
+        .iter()
+        .filter_map(|t| match t {
+            FakeTransfer::InterruptWrite(0x02, d) => d.get(..2).map(<[u8]>::to_vec),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(writes, vec![vec![0x6E, 1], vec![0x72, 0], vec![0x75, 59]]);
+    for (level, want) in [
+        (Level::Preamp, 1),
+        (Level::Attenuator, 20),
+        (Level::RfGain, 59),
+    ] {
+        assert_eq!(
+            rig.execute(Op::GetLevel(level)).await.expect("read"),
+            Some(Observation::Level(level, want))
+        );
+    }
+    rig.execute(Op::SetLevel(Level::Attenuator, 0))
+        .await
+        .expect("mixer on");
+    assert_eq!(
+        rig.execute(Op::GetLevel(Level::Attenuator))
+            .await
+            .expect("read"),
+        Some(Observation::Level(Level::Attenuator, 0))
+    );
+    assert!(rig.execute(Op::SetLevel(Level::Preamp, 2)).await.is_err());
+    assert!(rig
+        .execute(Op::SetLevel(Level::Attenuator, 10))
+        .await
+        .is_err());
+    assert!(rig.execute(Op::GetSignal).await.is_err());
+}

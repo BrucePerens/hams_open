@@ -866,8 +866,8 @@ fn check_timing(timing: &TimingSection) -> Result<Timing, RigError> {
 
 /// Most attenuator steps a model may list.
 const MAX_ATTENUATOR_STEPS: usize = 9;
-/// Most preamplifier steps a model may declare.
-const MAX_PREAMP_STEPS: u8 = 3;
+/// Most preamplifier steps a model may declare (the original FUNcube Dongle has six LNA codes).
+const MAX_PREAMP_STEPS: u8 = 6;
 
 // [@ANCHOR: radioctl_core_rigfile_build_elecraft]
 /// The `[elecraft]` block: the model id and the per-model level ranges, each naming one of the
@@ -1857,7 +1857,7 @@ verified = { state = "unverified" }
             "attenuator_db = [12, 6]",
             "attenuator_db = [0, 6]",
             "attenuator_db = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]",
-            "preamp_steps = 4",
+            "preamp_steps = 7",
         ] {
             let line = if bad.starts_with("preamp") {
                 bad.to_string()
