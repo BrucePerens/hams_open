@@ -4,10 +4,20 @@
 //! Hand-formatted so there is no serialisation dependency; the only escaping needed is for the
 //! short reason strings.
 
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// The log is moved to `<path>.1` (replacing an older one) when it reaches this size, so the log
+/// directory never holds more than about twice this.
+pub const MAX_LOG_BYTES: u64 = 4 * 1024 * 1024;
+/// A peer turned away (`peer_rejected`) is logged once per UID per this many seconds.
+pub const REJECTION_LOG_SECS: u64 = 60;
+/// The most UIDs remembered for that throttle; past it the memory is cleared, which only means a
+/// few extra lines.
+const MAX_REMEMBERED_UIDS: usize = 1024;
 
 /// One audit record.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +39,10 @@ pub struct AuditEvent {
 #[derive(Debug)]
 pub struct AuditLog {
     file: Option<File>,
+    path: Option<PathBuf>,
+    size: u64,
+    max_bytes: u64,
+    last_rejection: HashMap<u32, u64>,
 }
 
 // [@ANCHOR: relay_broker_json_escape]
@@ -81,21 +95,75 @@ impl AuditLog {
             ),
             None => None,
         };
-        Ok(AuditLog { file })
+        let size = match &file {
+            Some(f) => f.metadata()?.len(),
+            None => 0,
+        };
+        Ok(AuditLog {
+            file,
+            path: path.map(Path::to_path_buf),
+            size,
+            max_bytes: MAX_LOG_BYTES,
+            last_rejection: HashMap::new(),
+        })
     }
 
     // [@ANCHOR: relay_broker_audit_log_record]
-    /// Appends one event. A write failure is reported but never stops the broker.
+    /// Appends one event. A write failure is reported but never stops the broker. A peer turned
+    /// away is logged once per UID per minute (a group member not on the allow-list can connect as
+    /// fast as it likes), and the file is rotated to `<path>.1` at the size cap.
     pub fn record(&mut self, event: &AuditEvent) -> io::Result<()> {
         let ts = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
+        self.record_at(event, ts)
+    }
+
+    fn record_at(&mut self, event: &AuditEvent, ts: u64) -> io::Result<()> {
+        if event.action == "peer_rejected" {
+            if let Some(last) = self.last_rejection.get(&event.uid) {
+                if ts.saturating_sub(*last) < REJECTION_LOG_SECS {
+                    return Ok(());
+                }
+            }
+            if self.last_rejection.len() >= MAX_REMEMBERED_UIDS {
+                self.last_rejection.clear();
+            }
+            self.last_rejection.insert(event.uid, ts);
+        }
         let line = event.to_json_line(ts);
+        if self.size.saturating_add(line.len() as u64) > self.max_bytes {
+            self.rotate()?;
+        }
         match self.file.as_mut() {
-            Some(f) => f.write_all(line.as_bytes()),
+            Some(f) => {
+                f.write_all(line.as_bytes())?;
+                self.size = self.size.saturating_add(line.len() as u64);
+                Ok(())
+            }
             None => Ok(()),
         }
+    }
+
+    /// Moves the full log to `<path>.1` and starts an empty one (mode 0600).
+    fn rotate(&mut self) -> io::Result<()> {
+        use std::os::unix::fs::OpenOptionsExt;
+        let Some(path) = self.path.clone() else {
+            return Ok(());
+        };
+        let mut old = path.clone().into_os_string();
+        old.push(".1");
+        std::fs::rename(&path, PathBuf::from(old))?;
+        self.file = Some(
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .mode(0o600)
+                .open(&path)?,
+        );
+        self.size = 0;
+        Ok(())
     }
 }
 
@@ -149,6 +217,47 @@ mod tests {
         );
         assert!(AuditLog::open(None).unwrap().record(&e).is_ok());
         assert!(AuditLog::open(Some(&dir.join("no/such/dir/x"))).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // Tests [@ANCHOR: relay_broker_audit_log_record]
+    #[test]
+    fn a_rejected_peer_is_logged_once_per_minute_and_the_log_rotates_at_the_cap() {
+        let dir = std::env::temp_dir().join(format!("relay_broker_audit_rot_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("events.jsonl");
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(dir.join("events.jsonl.1"));
+        let rejected = |uid| AuditEvent {
+            uid,
+            pid: 2,
+            action: "peer_rejected",
+            outcome: "rejected",
+            detail: "gid 5".into(),
+        };
+        let mut log = AuditLog::open(Some(&path)).unwrap();
+        log.record_at(&rejected(7), 1000).unwrap();
+        log.record_at(&rejected(7), 1030).unwrap();
+        log.record_at(&rejected(8), 1030).unwrap();
+        log.record_at(&rejected(7), 1060).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap().lines().count(), 3);
+
+        log.max_bytes = 300;
+        let other = AuditEvent {
+            uid: 1,
+            pid: 2,
+            action: "list_devices",
+            outcome: "allowed",
+            detail: String::new(),
+        };
+        for _ in 0..20 {
+            log.record_at(&other, 2000).unwrap();
+        }
+        let current = std::fs::metadata(&path).unwrap().len();
+        assert!(current <= 300, "current log is {current} bytes");
+        assert!(dir.join("events.jsonl.1").exists());
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

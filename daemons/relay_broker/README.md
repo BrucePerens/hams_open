@@ -14,7 +14,7 @@ answers a fixed set of typed requests from authenticated local peers over a Unix
 | `open_device` | validates one path against the policy, opens it `O_NOFOLLOW|O_CLOEXEC|O_NOCTTY`, re-checks the open descriptor, passes it with SCM_RIGHTS; the worker never needs `/dev` access and never learns another device's path | group membership (`dialout`, `audio`) or, failing that, one capability (see the unit) |
 | `grant_group` / `provision_groups` | reports which of `dialout`/`audio` the **caller's own** account lacks; changes nothing unless `apply_groups = true`, then runs `/usr/sbin/gpasswd -a USER GROUP` with a fixed argv | root or a gpasswd setuid, only with apply |
 
-Every request is rate-limited per UID and written to an append-only `events.jsonl` audit log.
+Every request is rate-limited per UID and written to an append-only `events.jsonl` audit log (a peer turned away is logged once per UID per minute; the file moves to `events.jsonl.1` at 4 MiB).
 
 ## Wire protocol (`src/wire.rs`, `src/transport.rs`)
 
