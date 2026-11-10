@@ -8,8 +8,10 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 mod common;
+#[path = "../../../testdir.rs"]
+mod testdir;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -168,10 +170,8 @@ impl Radio {
 
 /// A secret directory of its own for one test, with `ts890-password` holding `password`, mode
 /// 0600 (the store refuses anything others can read).
-fn secrets(tag: &str, password: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("radioctld-ts890-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("dir");
+fn secrets(tag: &str, password: &str) -> testdir::TestDir {
+    let dir = testdir::TestDir::new(&format!("ts890-{tag}"));
     let file = dir.join("ts890-password");
     std::fs::write(&file, format!("{password}\n")).expect("write");
     #[cfg(unix)]
@@ -259,7 +259,6 @@ async fn the_daemon_logs_in_serves_cat_keeps_the_line_alive_and_logs_in_again_af
     }
     assert_eq!(radio.counts.refused.load(Ordering::SeqCst), 0);
     daemon.stop().await;
-    std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
 // Tests [@ANCHOR: radioctld_rigs_tcp_framing]
@@ -278,7 +277,6 @@ async fn a_wrong_password_a_missing_secret_or_a_readable_one_fails_closed_withou
     assert!(err.contains("wrong account or password"), "{err}");
     assert!(!err.contains("hunter2"), "{err}");
     assert_eq!(radio.counts.refused.load(Ordering::SeqCst), 1);
-    std::fs::remove_dir_all(&dir).expect("cleanup");
     // A missing secret: nothing is connected at all.
     let before = radio.counts.connections.load(Ordering::SeqCst);
     let dir = secrets("missing", "admin");
@@ -289,7 +287,6 @@ async fn a_wrong_password_a_missing_secret_or_a_readable_one_fails_closed_withou
         .expect("missing");
     assert!(err.contains("ts890-password"), "{err}");
     assert_eq!(radio.counts.connections.load(Ordering::SeqCst), before);
-    std::fs::remove_dir_all(&dir).expect("cleanup");
     // A secret others can read is refused before it is used; the value stays out of the error.
     #[cfg(unix)]
     {
@@ -307,7 +304,6 @@ async fn a_wrong_password_a_missing_secret_or_a_readable_one_fails_closed_withou
         assert!(err.contains("0600"), "{err}");
         assert!(!err.contains("s3cret"), "{err}");
         assert_eq!(radio.counts.connections.load(Ordering::SeqCst), before);
-        std::fs::remove_dir_all(&dir).expect("cleanup");
     }
     // A password the login frame cannot carry (a `;`) never reaches the wire either.
     let dir = secrets("unsendable", "ad;min");
@@ -320,7 +316,6 @@ async fn a_wrong_password_a_missing_secret_or_a_readable_one_fails_closed_withou
         "{err}"
     );
     assert_eq!(radio.counts.connections.load(Ordering::SeqCst), before);
-    std::fs::remove_dir_all(&dir).expect("cleanup");
 }
 
 // Tests [@ANCHOR: radioctld_rigs_build_rig]
@@ -438,5 +433,4 @@ async fn the_lan_sweeps_reach_the_scope_streams_through_the_daemon() {
     let mut client = Client::connect(&daemon).await;
     assert_eq!(client.ask("f").await, "14074000\n");
     daemon.stop().await;
-    std::fs::remove_dir_all(&dir).expect("cleanup");
 }

@@ -46,3 +46,7 @@ pub mod station;
 pub mod tls;
 pub mod virtual_rotator;
 pub mod ws;
+
+#[cfg(test)]
+#[path = "../../../testdir.rs"]
+mod testdir;

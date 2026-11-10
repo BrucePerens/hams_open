@@ -15,6 +15,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "../../../testdir.rs"]
+mod testdir;
+
 fn workspace() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
@@ -395,8 +398,8 @@ fn bench_console_reads_sets_scopes_and_cannot_transmit() {
     build_examples_once();
     let binary = example_binary("bench_console");
     assert!(binary.exists(), "{} was not built", binary.display());
-    let wire_file =
-        std::env::temp_dir().join(format!("bench-console-wire-{}.txt", std::process::id()));
+    let wire_dir = testdir::TestDir::new("bench-console-wire");
+    let wire_file = wire_dir.join("wire.txt");
     let mut child = Command::new(&binary)
         .args([
             "--wire",
@@ -430,7 +433,6 @@ fn bench_console_reads_sets_scopes_and_cannot_transmit() {
     assert!(text.contains("= Ptt(false)"), "{text}");
     // The tap records both directions of the link, as hexadecimal lines with the time.
     let wire = fs::read_to_string(&wire_file).expect("the wire tap file");
-    let _ = fs::remove_file(&wire_file);
     assert!(
         wire.contains(" tx fe fe 94 e0 03 fd"),
         "a frequency read went out: {wire}"

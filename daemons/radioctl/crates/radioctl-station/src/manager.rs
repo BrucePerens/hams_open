@@ -953,6 +953,7 @@ power = { source = "always_on" }
         link: VirtualRadioLink,
         key: Arc<Key>,
         path: std::path::PathBuf,
+        dir: Arc<crate::testdir::TestDir>,
     }
 
     fn dev(s: &str) -> DeviceId {
@@ -964,29 +965,28 @@ power = { source = "always_on" }
     }
 
     fn rig(name: &str, boot: Option<Duration>) -> Rig {
-        let path = std::env::temp_dir().join(format!("rs-mgr-{name}-{}.json", std::process::id()));
-        let _ = std::fs::remove_file(&path);
-        build(path, boot, VirtualBank::new())
+        let dir = Arc::new(crate::testdir::TestDir::new(&format!("mgr-{name}")));
+        build(dir, boot, VirtualBank::new())
     }
 
-    fn build(path: std::path::PathBuf, boot: Option<Duration>, bank: VirtualBank) -> Rig {
-        build_def(DEF, path, boot, bank)
+    fn build(dir: Arc<crate::testdir::TestDir>, boot: Option<Duration>, bank: VirtualBank) -> Rig {
+        build_def(DEF, dir, boot, bank)
     }
 
     /// The same station with the opt-in shared-supply protection on the radio's power channel.
     fn shared_supply(name: &str) -> Rig {
-        let path = std::env::temp_dir().join(format!("rs-mgr-{name}-{}.json", std::process::id()));
-        let _ = std::fs::remove_file(&path);
+        let dir = Arc::new(crate::testdir::TestDir::new(&format!("mgr-{name}")));
         let def = DEF.replacen("safe = \"off\"", "safe = \"off\"\nshared_supply = true", 1);
-        build_def(&def, path, Some(secs(3)), VirtualBank::new())
+        build_def(&def, dir, Some(secs(3)), VirtualBank::new())
     }
 
     fn build_def(
         toml: &str,
-        path: std::path::PathBuf,
+        dir: Arc<crate::testdir::TestDir>,
         boot: Option<Duration>,
         bank: VirtualBank,
     ) -> Rig {
+        let path = dir.join("record.json");
         let def = StationDef::from_toml(toml).unwrap();
         let mut b = Switchboard::new();
         for c in def.channels.clone() {
@@ -1012,6 +1012,7 @@ power = { source = "always_on" }
             link,
             key,
             path,
+            dir,
         }
     }
 
@@ -1109,7 +1110,7 @@ power = { source = "always_on" }
             .mgr
             .note_state(&dev("nope"), KnownState::default(), None)
             .is_err());
-        let again = build(r.path.clone(), Some(secs(5)), r.bank.clone());
+        let again = build(r.dir.clone(), Some(secs(5)), r.bank.clone());
         let rec = again.mgr.record(&dev("ic7300")).unwrap();
         assert_eq!(rec.capabilities, vec!["ReadPtt".to_string()]);
         assert_eq!(rec.last_state.unwrap().mode.as_deref(), Some("CW"));
@@ -1124,7 +1125,6 @@ power = { source = "always_on" }
             r.mgr.press(&dev("amp"), Button::On).await.unwrap_err().kind,
             StationErrorKind::Unknown
         );
-        let _ = std::fs::remove_file(&r.path);
     }
 
     // Tests [@ANCHOR: radioctl_station_manager_press]
@@ -1192,10 +1192,8 @@ power = { source = "always_on" }
             StationErrorKind::Refused
         );
         assert_eq!(shared.bank.log().len(), before);
-        let _ = std::fs::remove_file(&shared.path);
         // health was counted
         assert!(r.mgr.record(&dev("ic7300")).unwrap().health.failures >= 1);
-        let _ = std::fs::remove_file(&r.path);
     }
 
     // Tests [@ANCHOR: radioctl_station_manager_spawn_monitor]
@@ -1249,7 +1247,6 @@ power = { source = "always_on" }
         // a poll with nothing new changes nothing
         assert!(r.mgr.poll(&dev("ic7300")).await.unwrap().is_none());
         assert!(r.mgr.poll(&dev("nope")).await.is_err());
-        let _ = std::fs::remove_file(&r.path);
     }
 
     // Tests [@ANCHOR: radioctl_station_manager_reconcile]
@@ -1278,7 +1275,7 @@ power = { source = "always_on" }
         );
         // restart: the line is physically off (power failed)
         let bank = VirtualBank::new();
-        let second = build(first.path.clone(), Some(secs(2)), bank.clone());
+        let second = build(first.dir.clone(), Some(secs(2)), bank.clone());
         let items = second.mgr.reconcile().await;
         let item = items.iter().find(|i| i.radio == dev("ic7300")).unwrap();
         assert_eq!(
@@ -1298,7 +1295,7 @@ power = { source = "always_on" }
         );
         // the other way: the record says Off, but the line is really on (switched by hand)
         bank.set_physical(0, true);
-        let third = build(first.path.clone(), Some(secs(2)), bank.clone());
+        let third = build(first.dir.clone(), Some(secs(2)), bank.clone());
         let items = third.mgr.reconcile().await;
         let item = items.iter().find(|i| i.radio == dev("ic7300")).unwrap();
         assert_eq!(
@@ -1309,7 +1306,7 @@ power = { source = "always_on" }
         // a switch that cannot be read: Unreachable, nothing written, cached state kept
         let bank2 = VirtualBank::new();
         bank2.set_fault(Fault::FailReads);
-        let fourth = build(first.path.clone(), Some(secs(2)), bank2.clone());
+        let fourth = build(first.dir.clone(), Some(secs(2)), bank2.clone());
         let items = fourth.mgr.reconcile().await;
         let item = items.iter().find(|i| i.radio == dev("ic7300")).unwrap();
         assert_eq!(
@@ -1320,7 +1317,7 @@ power = { source = "always_on" }
         assert!(fourth.mgr.cached(&dev("ic7300")).is_some());
         // a corrupt record file never crashes or gets trusted
         std::fs::write(&first.path, b"{ garbage").unwrap();
-        let fifth = build(first.path.clone(), Some(secs(2)), VirtualBank::new());
+        let fifth = build(first.dir.clone(), Some(secs(2)), VirtualBank::new());
         assert!(!fifth.mgr.problems().is_empty());
         assert!(fifth
             .mgr
@@ -1330,6 +1327,5 @@ power = { source = "always_on" }
             .is_none());
         assert_eq!(fifth.mgr.record(&dev("ic7300")).unwrap().make, "unknown");
         let _ = ChannelId("x".into());
-        let _ = std::fs::remove_file(&first.path);
     }
 }

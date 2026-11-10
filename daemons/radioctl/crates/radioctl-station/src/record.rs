@@ -403,12 +403,8 @@ impl RecordStore {
 mod tests {
     use super::*;
 
-    fn dir(name: &str) -> PathBuf {
-        let d =
-            std::env::temp_dir().join(format!("radioctl-station-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&d);
-        std::fs::create_dir_all(&d).unwrap();
-        d
+    fn dir(name: &str) -> crate::testdir::TestDir {
+        crate::testdir::TestDir::new(&format!("station-{name}"))
     }
 
     fn sample(id: &str) -> RadioRecord {
@@ -482,7 +478,6 @@ mod tests {
                 .cached(1)
                 .is_none()
         );
-        let _ = std::fs::remove_dir_all(d);
     }
 
     // Tests [@ANCHOR: radioctl_station_store_load]
@@ -515,7 +510,6 @@ mod tests {
         // a wrong schema is not understood
         std::fs::write(store.path(), br#"{"schema":99,"radios":{}}"#).unwrap();
         assert!(store.load().problems.iter().any(|p| p.contains("schema")));
-        let _ = std::fs::remove_dir_all(d);
     }
 
     // Tests [@ANCHOR: radioctl_station_store_load]
@@ -552,7 +546,6 @@ mod tests {
         let mut bad = sample("bad");
         bad.boot_time_ms = MAX_BOOT_MS + 1;
         assert!(store.save(&all(&[bad])).is_err());
-        let _ = std::fs::remove_dir_all(d);
     }
 
     // Tests [@ANCHOR: radioctl_station_store_load]
@@ -588,6 +581,5 @@ mod tests {
             missing.save(&all(&[sample("a")])).unwrap_err().kind,
             StationErrorKind::Store
         );
-        let _ = std::fs::remove_dir_all(d);
     }
 }

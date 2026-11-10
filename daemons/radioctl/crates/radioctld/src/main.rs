@@ -170,6 +170,10 @@ fn main() -> ExitCode {
 }
 
 #[cfg(test)]
+#[path = "../../../testdir.rs"]
+mod testdir;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -201,8 +205,7 @@ mod tests {
     #[test]
     fn loading_a_missing_file_fails_and_check_mode_does_not_listen() {
         assert!(load(Path::new("/nonexistent/radioctld.toml")).is_err());
-        let dir = std::env::temp_dir().join(format!("radioctld-main-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("dir");
+        let dir = crate::testdir::TestDir::new("main");
         let rigs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs/elecraft-kx3.toml");
         let file = dir.join("radioctld.toml");
         std::fs::write(
@@ -219,6 +222,5 @@ mod tests {
             help: false,
         };
         assert_eq!(run(&cli), Ok(()));
-        std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 }

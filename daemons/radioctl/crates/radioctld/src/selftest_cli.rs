@@ -1001,7 +1001,8 @@ mod tests {
             target: "/dev/no-such-selftest-port".into(),
             port: None,
         };
-        let report = std::env::temp_dir().join(format!("test-one-{}.txt", std::process::id()));
+        let dir = crate::testdir::TestDir::new("test-one");
+        let report = dir.join("test-one.txt");
         assert!(test_one(
             &o,
             &t,
@@ -1013,7 +1014,6 @@ mod tests {
         )
         .await
         .is_err());
-        std::fs::remove_file(format!("{}.wire.tmp", report.display())).ok();
     }
 
     // Tests [@ANCHOR: radioctld_cli_stdin_lines_read]

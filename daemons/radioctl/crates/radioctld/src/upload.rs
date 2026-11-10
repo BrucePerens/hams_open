@@ -615,7 +615,7 @@ mod tests {
     // Tests [@ANCHOR: radioctld_upload_load_saved]
     #[test]
     fn saved_answers_round_trip_and_are_private() {
-        let dir = std::env::temp_dir().join(format!("upload-save-{}", std::process::id()));
+        let dir = crate::testdir::TestDir::new("upload-save");
         let path = dir.join("radioctl/contact.json");
         assert_eq!(load_saved(&path), None);
         let saved = SavedContact {
@@ -632,7 +632,6 @@ mod tests {
             let mode = std::fs::metadata(&path).expect("meta").permissions().mode();
             assert_eq!(mode & 0o777, 0o600);
         }
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     // Tests [@ANCHOR: radioctld_upload_valid_email]

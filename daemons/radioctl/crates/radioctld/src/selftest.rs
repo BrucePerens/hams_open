@@ -466,11 +466,11 @@ mod tests {
     use super::*;
     use radioctl_core::description::RigDescription;
 
-    fn temp_wire(name: &str) -> (Arc<Mutex<File>>, PathBuf) {
-        let path =
-            std::env::temp_dir().join(format!("selftest-{name}-{}.wire", std::process::id()));
+    fn temp_wire(name: &str) -> (Arc<Mutex<File>>, PathBuf, crate::testdir::TestDir) {
+        let dir = crate::testdir::TestDir::new(&format!("selftest-{name}"));
+        let path = dir.join("test.wire");
         let file = File::create(&path).expect("temp file");
-        (Arc::new(Mutex::new(file)), path)
+        (Arc::new(Mutex::new(file)), path, dir)
     }
 
     // Tests [@ANCHOR: radioctld_selftest_plan_checks]
@@ -580,7 +580,7 @@ mod tests {
     #[tokio::test]
     async fn virtual_ic7300_passes_and_the_wire_log_has_both_directions() {
         let description = RigDescription::ic7300();
-        let (wire, path) = temp_wire("virtual");
+        let (wire, path, _dir) = temp_wire("virtual");
         let rig = open(&description, "virtual", 19_200, true, wire)
             .await
             .expect("virtual rig opens");
@@ -599,7 +599,6 @@ mod tests {
             "{results:?}"
         );
         let wire_text = std::fs::read_to_string(&path).expect("wire file");
-        std::fs::remove_file(&path).ok();
         assert!(wire_text.contains(" tx "), "{wire_text}");
         assert!(wire_text.contains(" rx "), "{wire_text}");
         // A CI-V frame to the radio starts fe fe; none of them may be a PTT set (1c 00 01).
