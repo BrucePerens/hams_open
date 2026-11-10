@@ -95,11 +95,14 @@ class ParkingDomain(models.Model):
 
     # [@ANCHOR: parking:COMM_domain_constraints]
     # Verified by [@ANCHOR: parking:COMM_test_domain_constraints]
-    @api.constrains("behavior", "redirect_url", "name", "cache_ttl")
+    @api.constrains("behavior", "redirect_url", "name", "cache_ttl", "include_www")
     def _check_behavior(self):
         for record in self:
             if record.behavior == "redirect":
                 reason = utils.validate_redirect_url(record.redirect_url, record.name)
+                if not reason and record.include_www:
+                    # www.<name> is answered by this same record, so a target there loops forever.
+                    reason = utils.validate_redirect_url(record.redirect_url, "www." + record.name)
                 if reason:
                     raise ValidationError(
                         self.env._("Invalid redirect target for %(name)s: %(reason)s", name=record.name, reason=reason)
