@@ -8,7 +8,7 @@ use std::time::Duration;
 use radioctl_core::description::RigDescription;
 use radioctl_core::error::ErrorKind;
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::rig::{spawn, Freshness, RigHandle, RigOptions};
+use radioctl_core::rig::{spawn, Freshness, RigHandle, RigOptions, TransmitPermit};
 use radioctl_core::rigfile;
 use radioctl_core::units::{Hz, Level, Mode, Vfo};
 use radioctl_protocols::elecraft::ElecraftEngine;
@@ -135,4 +135,49 @@ async fn auto_info_from_the_panel_reaches_the_cache_and_the_event_stream() {
     assert!(rig.stats().unsolicited >= 3);
     let fresh = rig.mode(Freshness::Fresh).await.expect("mode");
     assert_eq!(fresh.value, Mode::Lsb);
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_apply_set]
+#[tokio::test(start_paused = true)]
+async fn the_transmit_frequency_moves_with_the_split_set_not_with_the_next_poll() {
+    // KX3 bench check 2026-11-05: `S 1 VFOB` then `I 14065000`, then `\get_active_tx_freq` read
+    // the receive VFO's frequency until a poll learned the transmit VFO two seconds later.
+    // The `FT` poll that ran before the split was set cached "transmit on A".
+    let (rig, _control) = kx3(quiet());
+    rig.execute(Op::GetFrequency(Vfo::A)).await.expect("a");
+    rig.execute(Op::GetFrequency(Vfo::B)).await.expect("b");
+    rig.execute(Op::GetTxVfo).await.expect("tx vfo");
+    let active = || rig.active_tx_frequency(Freshness::Cached);
+    assert_eq!(active().await.expect("simplex"), Hz(14_060_000));
+    rig.execute(Op::SetSplit(true)).await.expect("split on");
+    rig.set_frequency(Vfo::B, Hz(14_065_000)).await.expect("b");
+    assert_eq!(active().await.expect("split"), Hz(14_065_000));
+    rig.execute(Op::SetSplit(false)).await.expect("split off");
+    assert_eq!(active().await.expect("simplex again"), Hz(14_060_000));
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_apply_set]
+#[tokio::test(start_paused = true)]
+async fn the_unkey_updates_the_cached_ptt_at_once() {
+    // KX3 bench check 2026-11-05: `t` read 1 about 0.85 s after `T 0`. The actor runs polls and
+    // sets one at a time, so a poll cannot overwrite the unkey with an older answer; this pins
+    // that the cache says "receiving" the moment the unkey returns.
+    let (rig, control) = kx3(quiet());
+    rig.open_transmit_gate(TransmitPermit::new("kx3 test"));
+    rig.set_ptt(true).await.expect("keyed");
+    assert_eq!(
+        rig.execute(Op::GetPtt).await.expect("read"),
+        Some(Observation::Ptt(true))
+    );
+    rig.set_ptt(false).await.expect("unkeyed");
+    assert_eq!(
+        rig.cached(Field::Ptt).map(|c| c.value),
+        Some(Observation::Ptt(false))
+    );
+    sleep(Duration::from_secs(1)).await;
+    assert_eq!(
+        rig.cached(Field::Ptt).map(|c| c.value),
+        Some(Observation::Ptt(false))
+    );
+    assert!(!control.state().ptt);
 }
