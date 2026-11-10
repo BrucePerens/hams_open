@@ -110,9 +110,10 @@ pub fn limits(npins: u32, link_mbps: f64) -> Value {
     // [@ANCHOR: gla_limits]
     let data = npins.div_ceil(8) as f64;
     let full = link_mbps < 400.0;
-    // Usable bulk bytes per second. Full speed: 0.91 MiB/s, measured on the revC3 unit with `glasgow run benchmark` (sink mode, the only
-    // direction that worked at 12 Mb/s). High speed: about 40 MB/s through the FX2, a model that a 480 Mb/s link has to confirm.
-    let bulk = if full { 0.91 * 1048576.0 } else { 40e6 };
+    // Usable bulk bytes per second. Full speed: 1.04 MiB/s device-to-host (benchmark source mode) and 0.92 MiB/s host-to-device (sink),
+    // measured on the revC3 unit on 2026-11-10 with the full-speed fallback gateware (64-byte IN packets; the stock gateware overflows
+    // every read at 12 Mb/s). High speed: about 40 MB/s through the FX2, a model that a 480 Mb/s link has to confirm.
+    let bulk = if full { 1.04 * 1048576.0 } else { 40e6 };
     let rows: Vec<Value> = [
         (0.0, "edges closer than 2.7 us (delta below 128 ticks)"),
         (1.0, "edges 2.7 us to 340 us apart"),
@@ -125,8 +126,8 @@ pub fn limits(npins: u32, link_mbps: f64) -> Value {
     })
     .collect();
     json!({"model": true, "pins": npins, "link_mbps": link_mbps, "bulk_bytes_per_s": bulk,
-        "capture_works": !full, "bulk_bytes_per_s_source": if full { "measured, glasgow benchmark sink mode at 12 Mb/s on the revC3 unit, 2026-11-08" } else { "model, not yet measured" },
-        "note": if full { "At 12 Mb/s (full speed) the Glasgow's gateware cannot stream: its bulk endpoints are 512 bytes (high speed), so no capture is possible; the figures below are what the same record stream would allow if it did. Use a data-rated USB 2.0 cable and a port that links at 480 Mb/s." } else { "Edge rate is what limits a capture, not the time stamp clock: a quiet signal can be captured for a long time, a 5 MHz clock on 4 pins fills the link." },
+        "capture_works": !full, "capture_works_in_full_speed_fallback": full, "bulk_bytes_per_s_source": if full { "measured, glasgow benchmark source mode with the full-speed fallback gateware at 12 Mb/s on the revC3 unit, 2026-11-10" } else { "model, not yet measured" },
+        "note": if full { "At 12 Mb/s (full speed) the stock gateware cannot stream: it sends 512-byte packets that a full-speed link cannot carry, so a capture is refused unless the instrument's config sets \"full_speed_fallback\": true. In that FULL-SPEED FALLBACK mode the gateware sends 64-byte packets and the figures below (about 1 MiB/s) are the ceiling; a signal with more edges per second than the rows show overruns and the capture fails." } else { "Edge rate is what limits a capture, not the time stamp clock: a quiet signal can be captured for a long time, a 5 MHz clock on 4 pins fills the link." },
         "timestamp_clock_hz": CLOCK_HZ, "timestamp_resolution_ns": 1e9 / CLOCK_HZ, "rows": rows,
         "trigger": "none in the device (revision C): the capture is continuous, the trigger and the pre-trigger buffer are found in the recorded data by the host",
         "sample_rate": "the recorded data has the clock's resolution; a lower sample_rate_hz resamples it on the host and reports the pulses it can no longer show"})

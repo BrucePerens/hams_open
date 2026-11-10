@@ -3,7 +3,7 @@ title: Glasgow logic analyzer and pattern generator
 summary: How the bench_gla tools work on the revision C analyzer (no hardware trigger, 48 MHz timestamps), what the USB link limits, and what has and has not been measured.
 see_also: [instruments/glasgow/limits, instruments/glasgow/logic-bench-session, tools/bench_gla_capture, tools/bench_gla_pattern, tools/bench_gla_limits]
 instrument: glasgow
-verified: full-speed rate measured on the unit 2026-11-08; no capture has run yet (the unit links at 12 Mb/s); everything else fixtures only
+verified: full-speed fallback rates measured on the unit 2026-11-10; one unwired analyzer capture ran at 12 Mb/s; no real signal captured yet; everything else fixtures only
 ---
 
 # Glasgow logic analyzer and pattern generator
@@ -20,10 +20,11 @@ The limit is edges per second, not the sample rate: a record is 3 to 6 bytes (se
 
 | Link | Measured or modelled | Edges per second (4 pins, closely spaced) |
 |---|---|---|
-| 12 Mb/s | measured: `glasgow run benchmark` sink mode 0.91 MiB/s; the IN direction fails with `LIBUSB_TRANSFER_OVERFLOW`, so a capture cannot run at all | would be about 318 000 if it could |
+| 12 Mb/s, stock gateware | `LIBUSB_TRANSFER_OVERFLOW` on every read (512-byte packets), so a capture cannot run; the call is refused | none |
+| 12 Mb/s, FULL-SPEED FALLBACK (config `full_speed_fallback: true`) | measured 2026-11-10: `glasgow run benchmark` source 1.04 MiB/s, loopback 1.03, sink 0.92; an unwired `analyzer` capture ran and wrote a VCD | about 363 000 (ceiling, not measured with a real signal) |
 | 480 Mb/s | model: about 40 MB/s | about 13 million; not measured on this unit yet |
 
-High sample or edge rates need the 480 Mb/s link. Until the unit links at high speed, the only things that work are the register-only tools: `bench_gla_pattern`, `bench_gla_analyze` on existing files, and `bench_gla_limits`.
+High sample or edge rates need the 480 Mb/s link. On a 12 Mb/s link, `bench_gla_capture` works only with the full-speed fallback (slow signals; a fast clock overruns); `bench_gla_pattern`, `bench_gla_analyze` on existing files and `bench_gla_limits` work either way.
 
 ## Files
 

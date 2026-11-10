@@ -349,6 +349,7 @@ fn rq(args: &[&str], secs: u64) -> Req {
         stop_after: None,
         watch: None,
         nice: false,
+        full_speed: None,
     }
 }
 
@@ -1030,6 +1031,23 @@ fn bulk_tools_refuse_a_full_speed_link_and_register_tools_do_not() {
             json!({"pins": "A0:3", "actions": ["A2"]})
         )
         .is_ok());
+}
+
+#[test]
+fn the_full_speed_fallback_runs_bulk_tools_on_a_full_speed_link_and_labels_the_result() {
+    let r = rig("g_slow_fb", r#","full_speed_fallback":true"#);
+    r.set_port("A", 3.3);
+    r.speed("12\n");
+    let v = r.call("bench_glasgow_i2c_scan", json!({})).unwrap();
+    assert_eq!(v["full_speed_fallback"], true);
+    assert!(v["full_speed_note"].as_str().unwrap().contains("64-byte"));
+    let launcher = std::fs::read_to_string(r.dir.join("out/glasgow_fs.py")).unwrap();
+    assert!(launcher.contains("_PACKET_SIZE = 64"));
+    // At high speed the same call is not labelled and no launcher is needed.
+    r.speed("480\n");
+    let v = r.call("bench_glasgow_i2c_scan", json!({})).unwrap();
+    assert!(v.get("full_speed_fallback").is_none());
+    let _ = std::fs::remove_dir_all(&r.dir);
 }
 
 #[test]

@@ -55,6 +55,9 @@ pub struct Config {
     pub build_timeout_s: u64,
     /// The highest current limit a tool may ask the port supply to trip at, amperes (the hardware's range is 0 to 0.325).
     pub max_trip_a: f64,
+    /// FULL-SPEED FALLBACK (default off): when the device links at 12 Mb/s, run the data-streaming applets anyway through `glasgow_fs.py`
+    /// (64-byte IN packets, about 1 MiB/s) instead of refusing them. Every result then says `full_speed_fallback: true`.
+    pub full_speed_fallback: bool,
 }
 
 impl Default for Config {
@@ -66,6 +69,7 @@ impl Default for Config {
             op_timeout_s: 120,
             build_timeout_s: 600,
             max_trip_a: 0.1,
+            full_speed_fallback: false,
         }
     }
 }
@@ -108,6 +112,11 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     }
     if let Some(x) = num("max_trip_a", 0.01, 0.325)? {
         cfg.max_trip_a = x;
+    }
+    if let Some(v) = c.get("full_speed_fallback") {
+        cfg.full_speed_fallback = v
+            .as_bool()
+            .ok_or("full_speed_fallback must be true or false")?;
     }
     if let Some(s) = c.get("serial") {
         let s = s.as_str().ok_or("serial must be a string")?;
@@ -293,6 +302,7 @@ fn req(args: Vec<String>, secs: u64) -> Req {
         stop_after: None,
         watch: None,
         nice: false,
+        full_speed: None,
     }
 }
 
