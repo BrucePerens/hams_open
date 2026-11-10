@@ -63,6 +63,7 @@ class TestScrubErrorBody(HamsTransactionCase):
         self.assertIs(http._dispatchers["json2"], lockdown.HamsJson2Dispatcher)
 
     def test_jsonrpc_handle_error_has_no_traceback(self):
+        # Tests [@ANCHOR: hams_base:database_lockdown_jsonrpc_handle_error]
         request = SimpleNamespace(make_json_response=lambda body, **kw: body)
         dispatcher = lockdown.HamsJsonRPCDispatcher(request)
         dispatcher.request_id = 7
@@ -75,6 +76,7 @@ class TestScrubErrorBody(HamsTransactionCase):
         self.assertEqual(response["id"], 7)
 
     def test_jsonrpc_handle_error_names_a_bad_request_as_a_400(self):
+        # Tests [@ANCHOR: hams_base:database_lockdown_jsonrpc_handle_error]
         request = SimpleNamespace(make_json_response=lambda body, **kw: body)
         dispatcher = lockdown.HamsJsonRPCDispatcher(request)
         dispatcher.request_id = 3
@@ -85,6 +87,7 @@ class TestScrubErrorBody(HamsTransactionCase):
         self.assertEqual(response["error"]["data"]["debug"], "")
 
     def test_json2_handle_error_has_no_traceback_and_keeps_the_status(self):
+        # Tests [@ANCHOR: hams_base:database_lockdown_json2_handle_error]
         seen = {}
 
         def make(body, headers=None, status=None):
@@ -108,6 +111,15 @@ class TestDatabaseManagerIs404(HamsHttpCase):
     """Every /web/database route is a 404 outside developer mode (audit row 15)."""
 
     def test_pages_and_actions_are_not_found(self):
+        # Tests [@ANCHOR: hams_base:database_lockdown_refuse]
+        # Tests [@ANCHOR: hams_base:database_lockdown_selector]
+        # Tests [@ANCHOR: hams_base:database_lockdown_manager]
+        # Tests [@ANCHOR: hams_base:database_lockdown_create]
+        # Tests [@ANCHOR: hams_base:database_lockdown_duplicate]
+        # Tests [@ANCHOR: hams_base:database_lockdown_drop]
+        # Tests [@ANCHOR: hams_base:database_lockdown_backup]
+        # Tests [@ANCHOR: hams_base:database_lockdown_restore]
+        # Tests [@ANCHOR: hams_base:database_lockdown_change_password]
         with _dev_mode([]):
             for path in ("/web/database/manager", "/web/database/selector"):
                 with self.subTest(path=path):
@@ -118,6 +130,7 @@ class TestDatabaseManagerIs404(HamsHttpCase):
                     self.assertEqual(response.status_code, 404)
 
     def test_the_database_list_rpc_is_not_found(self):
+        # Tests [@ANCHOR: hams_base:database_lockdown_list]
         with _dev_mode([]):
             response = self.opener.post(
                 self.base_url() + "/web/database/list",
@@ -127,6 +140,8 @@ class TestDatabaseManagerIs404(HamsHttpCase):
         self.assertEqual(response.json()["error"]["code"], 404)
 
     def test_developer_mode_still_reaches_the_core_page(self):
+        # Tests [@ANCHOR: hams_base:database_lockdown_refuse]
+        # Tests [@ANCHOR: hams_base:database_lockdown_selector]
         with _dev_mode(["all"]):
             response = self.url_open("/web/database/selector")
         self.assertNotEqual(response.status_code, 404)
@@ -170,6 +185,8 @@ class TestXmlrpcFaultsCarryNoTraceback(HamsHttpCase):
         return self.url_open(route, data=body, headers={"Content-Type": "text/xml"})
 
     def test_a_malformed_body_has_no_traceback_or_path_in_the_reply(self):
+        # Tests [@ANCHOR: hams_base:xmlrpc_fault_scrub_string]
+        # Tests [@ANCHOR: hams_base:xmlrpc_lockdown_install]
         with _dev_mode([]):
             for route in ("/xmlrpc/2/common", "/xmlrpc/common"):
                 response = self._post(route, "this is not xml")
@@ -186,6 +203,7 @@ class TestXmlrpcFaultsCarryNoTraceback(HamsHttpCase):
         self.assertNotIn("nosuchmethod", response.text)
 
     def test_a_wrong_password_keeps_its_message(self):
+        # Tests [@ANCHOR: hams_base:xmlrpc_fault_scrub_string]
         body = (
             '<?xml version="1.0"?><methodCall><methodName>authenticate</methodName><params>'
             "<param><value><string>nodb</string></value></param>"
@@ -200,6 +218,7 @@ class TestXmlrpcFaultsCarryNoTraceback(HamsHttpCase):
         self.assertNotIn("Traceback", response.text)
 
     def test_a_good_call_still_works(self):
+        # Tests [@ANCHOR: hams_base:xmlrpc_lockdown_install]
         body = '<?xml version="1.0"?><methodCall><methodName>version</methodName><params/></methodCall>'
         with _dev_mode([]):
             response = self._post("/xmlrpc/2/common", body)

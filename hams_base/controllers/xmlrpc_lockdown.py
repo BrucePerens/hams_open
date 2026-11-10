@@ -35,6 +35,7 @@ def scrubbed_fault_int(error):
     return dumps(xmlrpc.client.Fault(RPC_FAULT_CODE_APPLICATION_ERROR, GENERIC_MESSAGE))
 
 
+# [@ANCHOR: hams_base:xmlrpc_fault_scrub_string]
 def scrubbed_fault_string(error):
     """The legacy `/xmlrpc/` reply (the fault code is a string) for `error`."""
     if developer_mode() or isinstance(error, EXPECTED_XMLRPC_ERRORS):
@@ -47,6 +48,7 @@ def scrubbed_fault_string(error):
 # `XMLRPC` did not take over: the stock route still matched first), so the scrubbing is installed where the
 # stock methods look the functions up. `database_lockdown` could subclass the dispatchers instead because they are
 # registered by routing type; these two functions have no such registry.
+# [@ANCHOR: hams_base:xmlrpc_lockdown_install]
 def install():
     stock = sys.modules[XMLRPC.__module__]
     stock.xmlrpc_handle_exception_int = scrubbed_fault_int
