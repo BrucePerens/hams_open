@@ -245,6 +245,8 @@ class TestSecretOperations(BaseCase):
             ("body", f"t={now}", 300, now),                       # no v1
             ("body", f"v1={good}", 300, now),                     # no t
             ("body", f"t=abc,v1={good}", 300, now),               # t not an integer
+            ("body", f"t=\u00b2,v1={good}", 300, now),            # a digit str.isdigit() accepts and int() refuses
+            ("body", f"t={'9' * 5000},v1={good}", 300, now),      # too many digits for int()
             ("body", f"t={now},v1={good}", 0, now),               # tolerance switched off
             ("body", None, 300, now),
         ]
