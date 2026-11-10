@@ -197,6 +197,9 @@ pub enum UsbProtocol {
     /// Si570 synthesizer boards on the V-USB shared id (SoftRock AVR-USB, KTH PIC-USB, Peaberry, FA-SDR):
     /// vendor control requests with a frequency word in 11.21 fixed point.
     Si570,
+    /// The same boards with DG8SAQ firmware older than 0x0F00: the Si570 divider registers are
+    /// solved on the host and sent with request 0x30 (read with 0x3F).
+    Si570Legacy,
     /// FiFi-SDR: the Si570 requests plus its own read and write requests.
     Fifisdr,
     /// AMSAT-UK FUNcube Dongle and Pro+: 64-byte HID reports.
@@ -212,8 +215,9 @@ pub enum UsbProtocol {
 }
 
 impl UsbProtocol {
-    const ALL: [UsbProtocol; 6] = [
+    const ALL: [UsbProtocol; 7] = [
         UsbProtocol::Si570,
+        UsbProtocol::Si570Legacy,
         UsbProtocol::Fifisdr,
         UsbProtocol::Funcube,
         UsbProtocol::Elektor507,
@@ -226,6 +230,7 @@ impl UsbProtocol {
     pub fn name(self) -> &'static str {
         match self {
             UsbProtocol::Si570 => "si570",
+            UsbProtocol::Si570Legacy => "si570-legacy",
             UsbProtocol::Fifisdr => "fifisdr",
             UsbProtocol::Funcube => "funcube",
             UsbProtocol::Elektor507 => "elektor507",

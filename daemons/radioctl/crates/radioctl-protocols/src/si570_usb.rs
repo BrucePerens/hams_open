@@ -20,10 +20,18 @@
 //!   that is ignored. Encoded for the descriptions that list `set-ptt`; unverified, and the
 //!   transmit gate keeps it closed unless the operator opens it.
 //!
-//! Firmware older than 0x0F00 (DG8SAQ) takes request 0x30 with the Si570 registers solved on the
-//! host; that is not implemented, and neither is the FiFi-SDR's own read and write requests
-//! (0xAB and 0xAC), which carry levels and the VCO factor. The multiplier comes from the
-//! description, not from the board.
+//! Firmware older than 0x0F00 (DG8SAQ, `UsbProtocol::Si570Legacy`) has no by-value request. It
+//! takes the Si570's six divider registers (7 to 12) instead: set is request 0x30 with the same
+//! wValue (0x700 + 0x55) and the six bytes, read is request 0x3F with wValue 0x55 and a six-byte
+//! answer. The host solves the dividers: HS_DIV from {4, 5, 6, 7, 9, 11} and N1 (1 or even, up to
+//! 128) such that the DCO (output times HS_DIV times N1) lies in 4850 to 5670 MHz, the lowest
+//! such DCO winning, and RFREQ = DCO / crystal as 10.28 fixed point with the board's nominal
+//! 114.285 MHz crystal. The six bytes are the 48-bit word HS_DIV code (3 bits, 0 4, 1 5, 2 6, 3 7,
+//! 5 9, 7 11), N1 minus one (7 bits), RFREQ (38 bits), big-endian. Facts: Hamlib
+//! `si570avrusb.h` (constants, request numbers), `si570avrusb.c` `calcDividers`,
+//! `si570xxxusb_set_freq`, `calculateFrequency`, `si570xxxusb_get_freq`.
+//!
+//! The multiplier comes from the description, not from the board.
 
 use std::time::Duration;
 
@@ -43,10 +51,22 @@ pub const VENDOR_IN: u8 = 0xC0;
 pub const REQUEST_SET_FREQ_BY_VALUE: u8 = 0x32;
 /// Read the frequency.
 pub const REQUEST_READ_FREQUENCY: u8 = 0x3A;
+/// Set the frequency as Si570 registers (firmware before 0x0F00).
+pub const REQUEST_SET_FREQ_REGISTERS: u8 = 0x30;
+/// Read the Si570 registers (firmware before 0x0F00).
+pub const REQUEST_READ_REGISTERS: u8 = 0x3F;
 /// Set PTT.
 pub const REQUEST_SET_PTT: u8 = 0x50;
 /// The Si570's I2C address as the kits use it.
 const SI570_I2C_ADDRESS: u16 = 0x55;
+
+/// The nominal crystal of the DG8SAQ boards, in hertz.
+const NOMINAL_CRYSTAL_HZ: u128 = 114_285_000;
+/// DCO limits in hertz.
+const DCO_LOW_HZ: u128 = 4_850_000_000;
+const DCO_HIGH_HZ: u128 = 5_670_000_000;
+/// The HS_DIV divider and its 3-bit register code.
+const HS_DIVIDERS: [(u128, u8); 6] = [(4, 0), (5, 1), (6, 2), (7, 3), (9, 5), (11, 7)];
 
 fn unsupported(what: &str) -> RigError {
     RigError::new(ErrorKind::Unsupported, what.to_string())
@@ -73,11 +93,58 @@ pub fn hz_from_word(word: u32, multiplier: u8) -> Option<Hz> {
     u64::try_from(hz).ok().map(Hz)
 }
 
+// [@ANCHOR: radioctl_si570_usb_registers_from_hz]
+/// The six Si570 register bytes (registers 7 to 12) for a receive frequency, or `None` when no
+/// divider setting puts the DCO in range.
+pub fn registers_from_hz(hz: Hz, multiplier: u8) -> Option<[u8; 6]> {
+    let output = u128::from(hz.0) * u128::from(multiplier);
+    if output == 0 {
+        return None;
+    }
+    let mut best: Option<(u128, u8, u128)> = None;
+    for (hs, code) in HS_DIVIDERS {
+        for n1 in std::iter::once(1u128).chain((2..=128).step_by(2)) {
+            let dco = output * hs * n1;
+            if (DCO_LOW_HZ..=DCO_HIGH_HZ).contains(&dco) && best.is_none_or(|(low, _, _)| dco < low)
+            {
+                best = Some((dco, code, n1));
+            }
+        }
+    }
+    let (dco, code, n1) = best?;
+    let rfreq = (dco * (1u128 << 28) + NOMINAL_CRYSTAL_HZ / 2) / NOMINAL_CRYSTAL_HZ;
+    let word = (u64::from(code) << 45)
+        | (u64::try_from(n1 - 1).ok()? << 38)
+        | u64::try_from(rfreq).ok()?;
+    let bytes = word.to_be_bytes();
+    <[u8; 6]>::try_from(bytes.get(2..)?).ok()
+}
+
+// [@ANCHOR: radioctl_si570_usb_hz_from_registers]
+/// The receive frequency of six Si570 register bytes, rounded to the nearest hertz; `None` for a
+/// multiplier of zero or an unused HS_DIV code.
+pub fn hz_from_registers(registers: &[u8; 6], multiplier: u8) -> Option<Hz> {
+    if multiplier == 0 {
+        return None;
+    }
+    let word = registers
+        .iter()
+        .fold(0u64, |acc, byte| (acc << 8) | u64::from(*byte));
+    let code = u8::try_from(word >> 45).ok()?;
+    let hs = HS_DIVIDERS.iter().find(|(_, c)| *c == code)?.0;
+    let n1 = u128::from((word >> 38) & 0x7F) + 1;
+    let rfreq = u128::from(word & ((1u64 << 38) - 1));
+    let divisor = (1u128 << 28) * hs * n1 * u128::from(multiplier);
+    let hz = (NOMINAL_CRYSTAL_HZ * rfreq + divisor / 2) / divisor;
+    u64::try_from(hz).ok().map(Hz)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
     Set,
     ReadFrequency,
+    ReadRegisters,
 }
 
 /// The Si570 USB client engine.
@@ -98,7 +165,10 @@ impl Si570UsbEngine {
             .usb
             .as_ref()
             .ok_or_else(|| unsupported("not a USB description"))?;
-        if !matches!(usb.protocol, UsbProtocol::Si570 | UsbProtocol::Fifisdr) {
+        if !matches!(
+            usb.protocol,
+            UsbProtocol::Si570 | UsbProtocol::Si570Legacy | UsbProtocol::Fifisdr
+        ) {
             return Err(unsupported("not an Si570 USB protocol"));
         }
         if usb.multiplier == 0 {
@@ -133,7 +203,34 @@ impl ProtocolEngine for Si570UsbEngine {
         if !self.desc.capabilities.has(op.required_capability()) {
             return Err(unsupported("capability not in the rig description"));
         }
+        let legacy = self.protocol == UsbProtocol::Si570Legacy;
         let (transfer, reply, pending) = match op {
+            Op::GetFrequency(Vfo::A) if legacy => (
+                UsbTransfer::ControlIn {
+                    request_type: VENDOR_IN,
+                    request: REQUEST_READ_REGISTERS,
+                    value: SI570_I2C_ADDRESS,
+                    index: 0,
+                    length: 6,
+                },
+                ReplyKind::Observation(Field::Frequency(Vfo::A)),
+                Pending::ReadRegisters,
+            ),
+            Op::SetFrequency(Vfo::A, hz) if legacy => {
+                let registers = registers_from_hz(*hz, self.multiplier)
+                    .ok_or_else(|| unsupported("frequency is beyond the Si570's range"))?;
+                (
+                    UsbTransfer::ControlOut {
+                        request_type: VENDOR_OUT,
+                        request: REQUEST_SET_FREQ_REGISTERS,
+                        value: self.set_value(),
+                        index: 0,
+                        data: registers.to_vec(),
+                    },
+                    ReplyKind::Ack,
+                    Pending::Set,
+                )
+            }
             Op::GetFrequency(Vfo::A) => (
                 UsbTransfer::ControlIn {
                     request_type: VENDOR_IN,
@@ -160,17 +257,21 @@ impl ProtocolEngine for Si570UsbEngine {
                     Pending::Set,
                 )
             }
-            Op::SetPtt(on) if self.protocol == UsbProtocol::Si570 => (
-                UsbTransfer::ControlIn {
-                    request_type: VENDOR_IN,
-                    request: REQUEST_SET_PTT,
-                    value: u16::from(*on),
-                    index: 0,
-                    length: 3,
-                },
-                ReplyKind::Ack,
-                Pending::Set,
-            ),
+            Op::SetPtt(on)
+                if matches!(self.protocol, UsbProtocol::Si570 | UsbProtocol::Si570Legacy) =>
+            {
+                (
+                    UsbTransfer::ControlIn {
+                        request_type: VENDOR_IN,
+                        request: REQUEST_SET_PTT,
+                        value: u16::from(*on),
+                        index: 0,
+                        length: 3,
+                    },
+                    ReplyKind::Ack,
+                    Pending::Set,
+                )
+            }
             _ => return Err(unsupported("not implemented for the Si570 USB engine")),
         };
         self.pending = pending;
@@ -212,6 +313,15 @@ impl ProtocolEngine for Si570UsbEngine {
                         None => Inbound::Unrecognised(reply.encode()),
                     }
                 }
+                (Pending::ReadRegisters, UsbStatus::Ok) => {
+                    match <[u8; 6]>::try_from(reply.data.as_slice())
+                        .ok()
+                        .and_then(|regs| hz_from_registers(&regs, self.multiplier))
+                    {
+                        Some(hz) => Inbound::Observation(Observation::Frequency(Vfo::A, hz)),
+                        None => Inbound::Unrecognised(reply.encode()),
+                    }
+                }
                 (_, _) => Inbound::Nak,
             });
         }
@@ -224,6 +334,7 @@ impl ProtocolEngine for Si570UsbEngine {
 pub struct Si570Twin {
     protocol: UsbProtocol,
     word: u32,
+    registers: [u8; 6],
     ptt: bool,
 }
 
@@ -237,9 +348,11 @@ impl Si570Twin {
             .ok_or_else(|| unsupported("not a USB description"))?;
         let word = word_from_hz(desc.default_frequency, usb.multiplier)
             .ok_or_else(|| unsupported("default frequency is beyond the Si570's range"))?;
+        let registers = registers_from_hz(desc.default_frequency, usb.multiplier).unwrap_or([0; 6]);
         Ok(Si570Twin {
             protocol: usb.protocol,
             word,
+            registers,
             ptt: false,
         })
     }
@@ -263,9 +376,19 @@ impl UsbDevice for Si570Twin {
         _timeout: Duration,
     ) -> Result<Vec<u8>, UsbFailure> {
         match (request_type, request, index, length) {
-            (VENDOR_IN, REQUEST_READ_FREQUENCY, 0, 4) => Ok(self.word.to_le_bytes().to_vec()),
+            (VENDOR_IN, REQUEST_READ_FREQUENCY, 0, 4)
+                if self.protocol != UsbProtocol::Si570Legacy =>
+            {
+                Ok(self.word.to_le_bytes().to_vec())
+            }
+            (VENDOR_IN, REQUEST_READ_REGISTERS, 0, 6)
+                if self.protocol == UsbProtocol::Si570Legacy && value == SI570_I2C_ADDRESS =>
+            {
+                Ok(self.registers.to_vec())
+            }
             (VENDOR_IN, REQUEST_SET_PTT, 0, 3)
-                if self.protocol == UsbProtocol::Si570 && value <= 1 =>
+                if matches!(self.protocol, UsbProtocol::Si570 | UsbProtocol::Si570Legacy)
+                    && value <= 1 =>
             {
                 self.ptt = value == 1;
                 Ok(vec![0, 0, 0])
@@ -288,6 +411,21 @@ impl UsbDevice for Si570Twin {
             UsbProtocol::Fifisdr => 0,
             _ => 0x700 + SI570_I2C_ADDRESS,
         };
+        if self.protocol == UsbProtocol::Si570Legacy {
+            return match (
+                request_type,
+                request,
+                value,
+                index,
+                <[u8; 6]>::try_from(data),
+            ) {
+                (VENDOR_OUT, REQUEST_SET_FREQ_REGISTERS, v, 0, Ok(registers)) if v == expected => {
+                    self.registers = registers;
+                    Ok(data.len())
+                }
+                _ => Err(UsbFailure::Stall),
+            };
+        }
         match (
             request_type,
             request,
