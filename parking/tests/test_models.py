@@ -45,6 +45,13 @@ class TestParkingModels(HamsTransactionCase):
         )
         self.assertEqual(ok.redirect_code, "301")
 
+    def test_a_redirect_to_the_own_www_name_loops_and_is_refused_only_when_www_is_answered(self):
+        www = {"name": "loop.example", "behavior": "redirect", "redirect_url": "https://www.loop.example/"}
+        with self.assertRaises(ValidationError):
+            self.Domain.create(dict(www, include_www=True))
+            self.env.flush_all()
+        self.assertTrue(self.Domain.create(dict(www, name="noloop.example", redirect_url="https://www.noloop.example/", include_www=False)))
+
     def test_ttl_range(self):
         with self.assertRaises(ValidationError):
             self.Domain.create({"name": "ttl.example", "cache_ttl": -1})
