@@ -5,7 +5,7 @@
 //! Commands: `FA`/`FB` read or set a VFO (11 digits), `MD` read or set the mode (the TS-2000
 //! digit table of `RigDescription::ts2000`), `TX`/`RX` key and unkey, `SM0` S-meter, `ID` (019),
 //! `AI` auto-information on or off for this client, `PS` (power is on). Settings get no reply; a
-//! refusal or an unknown command is `?;`. With `AI1` the client is sent `FA`, `FB` and `MD` when
+//! refusal or an unknown command is `?;`. With `AI2` (the TS-2000's only on level; its manual does not support `AI1`/`AI3`, which answer `?;`) the client is sent `FA`, `FB` and `MD` when
 //! the rig changes.
 //!
 //! `IF` is answered with the 38-character composite status of the TS-2000 (see
@@ -120,9 +120,11 @@ impl Ts2000Personality {
             ("IF", "") => Self::rig(Request::ReadStatus),
             ("ID", "") => Action::Local(b"ID019;".to_vec()),
             ("PS", "") => Action::Local(b"PS1;".to_vec()),
-            ("AI", "") => Action::Local(format!("AI{};", u8::from(self.auto_info)).into_bytes()),
-            ("AI", flag @ ("0" | "1")) => {
-                self.auto_info = flag == "1";
+            ("AI", "") => {
+                Action::Local(format!("AI{};", if self.auto_info { 2 } else { 0 }).into_bytes())
+            }
+            ("AI", flag @ ("0" | "2")) => {
+                self.auto_info = flag == "2";
                 Action::Ignore
             }
             _ => refuse(),
@@ -255,10 +257,13 @@ mod tests {
                 "{refused}"
             );
         }
-        assert_eq!(actions(&mut p, "AI1;"), vec![Action::Ignore]);
+        // The manual lists only AI0 and AI2; AI1 and AI3 are not supported.
+        assert_eq!(actions(&mut p, "AI1;"), vec![Action::Local(b"?;".to_vec())]);
+        assert_eq!(actions(&mut p, "AI3;"), vec![Action::Local(b"?;".to_vec())]);
+        assert_eq!(actions(&mut p, "AI2;"), vec![Action::Ignore]);
         assert_eq!(
             actions(&mut p, "AI;"),
-            vec![Action::Local(b"AI1;".to_vec())]
+            vec![Action::Local(b"AI2;".to_vec())]
         );
         assert_eq!(
             p.parse(&[0x01, b';'], T0)
@@ -373,7 +378,7 @@ mod tests {
             new: Observation::Frequency(Vfo::A, Hz(7_074_000)),
         };
         assert!(p.unsolicited(&change).is_empty());
-        actions(&mut p, "AI1;");
+        actions(&mut p, "AI2;");
         assert_eq!(p.unsolicited(&change), b"FA00007074000;");
         let mode = Change {
             field: Field::Mode,

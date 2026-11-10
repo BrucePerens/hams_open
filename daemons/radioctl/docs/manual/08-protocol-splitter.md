@@ -55,7 +55,7 @@ Each client has its own state.
   another.
 - **Unsolicited frames.** Every client is sent the radio's changes as that protocol's unsolicited
   traffic: CI-V `00` (frequency) and `01` (mode) to the broadcast address when VFO A or the mode
-  changes; for TS-2000, `FA`, `FB` and `MD` only to clients that sent `AI1`. A field that a request read
+  changes; for TS-2000, `FA`, `FB` and `MD` only to clients that sent `AI2` (the TS-2000 has only `AI0` and `AI2`; `AI1`/`AI3` answer `?;`). A field that a request read
   for the first time is a reading, not a change, and is not pushed; a value the radio reported on its
   own always is.
 - **Reads come from the cache** when it is no older than `SplitterConfig::max_age` (default 5 s),

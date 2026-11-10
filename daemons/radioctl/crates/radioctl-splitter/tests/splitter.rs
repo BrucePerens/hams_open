@@ -200,7 +200,7 @@ async fn front_panel_changes_reach_every_client_as_that_clients_unsolicited_fram
     let mut icom = client(&ci_v);
     let mut kenwood_off = client(&cat);
     let mut kenwood_on = client(&cat);
-    kenwood_on.write_all(b"AI1;").await.expect("write");
+    kenwood_on.write_all(b"AI2;").await.expect("write");
     sleep(Duration::from_millis(100)).await;
     control.front_panel(PanelChange::Frequency(Hz(7_100_000)));
     assert_eq!(
