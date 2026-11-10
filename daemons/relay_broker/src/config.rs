@@ -259,8 +259,7 @@ mod tests {
     #[test]
     fn load_requires_the_expected_owner_and_private_mode() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("relay_broker_cfg_{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("cfg");
         let path = dir.join("broker.conf");
         fs::write(&path, "allow_uid = 7\n").unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
@@ -278,6 +277,5 @@ mod tests {
             .message
             .contains("writable"));
         assert!(Config::load(&dir.join("missing"), me).is_err());
-        fs::remove_dir_all(&dir).unwrap();
     }
 }

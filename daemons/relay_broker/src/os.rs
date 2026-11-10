@@ -382,17 +382,8 @@ mod tests {
     use super::*;
     use std::os::fd::AsFd;
 
-    fn temp_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "relay_broker_os_{tag}_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        dir
+    fn temp_dir(tag: &str) -> crate::testdir::TestDir {
+        crate::testdir::TestDir::new(&format!("os_{tag}"))
     }
 
     /// A sysfs tree with one USB serial port, one virtual console, and one USB sound card.
@@ -423,7 +414,7 @@ mod tests {
         let root = temp_dir("sysfs");
         fake_sysfs(&root);
         let os = LinuxOs {
-            sysfs_root: root.clone(),
+            sysfs_root: root.to_path_buf(),
             group_file: root.join("group"),
             ..LinuxOs::default()
         };
@@ -447,7 +438,6 @@ mod tests {
         assert_eq!(os.usb_identity(Path::new("/dev/sda")), None);
         assert_eq!(os.usb_identity(Path::new("/etc/passwd")), None);
         assert_eq!(read_hex_u16(&root.join("missing")), None);
-        fs::remove_dir_all(&root).unwrap();
     }
 
     // Tests [@ANCHOR: relay_broker_linux_groups_of]
@@ -461,7 +451,7 @@ mod tests {
         )
         .unwrap();
         let os = LinuxOs {
-            sysfs_root: root.clone(),
+            sysfs_root: root.to_path_buf(),
             group_file: root.join("group"),
             ..LinuxOs::default()
         };
@@ -469,7 +459,6 @@ mod tests {
         assert_eq!(os.groups_of("nobody_here"), Vec::<String>::new());
         let me = nix::unistd::getuid().as_raw();
         assert!(os.username(me).is_some());
-        fs::remove_dir_all(&root).unwrap();
     }
 
     // Tests [@ANCHOR: relay_broker_linux_node_kind]
