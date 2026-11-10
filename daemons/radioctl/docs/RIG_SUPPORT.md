@@ -151,7 +151,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2045 | Elecraft | KX3 | A | elecraft_ascii | elecraft | `elecraft-kx3` | hardware-verified | K6BP (bench run by Claude on bruce-toughpad), 2026-11-05 | described |
 | 2038 | Elecraft | XG3 | A | elecraft_ascii | elecraft | `elecraft-xg3` | manual-checked | - | described |
 | 25001 | Elektor | Elektor 3/04 | D | other_serial | - | - | unverified | - | not applicable |
-| 25007 | Elektor | Elektor SDR-USB | D | other_usb | - | `elektor-sdr-usb` | unverified | - | described |
+| 25007 | Elektor | Elektor SDR-USB | D | other_usb | elektor507 | `elektor-sdr-usb` | unverified | - | described |
 | 25012 | FiFi | FiFi-SDR | D | other_usb | si570_usb | `fifi-sdr` | unverified | - | described |
 | 2036 | FlexRadio | 6xxx | A | flexradio_network | flex | `flex-6300`, `flex-6400`, `flex-6600`, `flex-6700` | unverified | - | described |
 | 23001 | FlexRadio | SDR-1000 | D | other_parallel | - | - | unverified | - | not applicable |

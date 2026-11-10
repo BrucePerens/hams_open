@@ -2,9 +2,9 @@
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Hamlib 4.6.2 (rigs/kit/elektor507.c, read for facts only) and `rigctl -m 25007 --dump-caps`; no vendor document was read and no code was copied.
 # Hamlib lists: receive 30 kHz to 30 MHz. An FTDI FT232R used as a bit-banged port that clocks an Si570-style synthesizer; the frequency is computed on the host from the oscillator (default 10 MHz) and the divider limits. Hamlib also selects antennas and levels.
-# NO ENGINE YET: the USB transport exists, but this board programs a Cypress PLL through an FTDI chip in bit-bang mode (an I2C bit-banger over bulk writes), which is not implemented. radioctld refuses it with that reason.
+# The engine (crates/radioctl-protocols/src/elektor507.rs) programs the Cypress PLL through the FTDI chip in bit-bang mode (I2C samples over bulk writes) and has a virtual twin. The board cannot be read back, so there is no read-frequency; the daemon's cache holds the last value set. The 10 MHz oscillator is fixed (Hamlib has a setting); antenna selection has no radioctl operation.
 schema = 1
-capabilities = ["read-frequency", "set-frequency"]
+capabilities = ["set-frequency", "levels"]
 
 [rig]
 id = "elektor-sdr-usb"
@@ -18,6 +18,11 @@ product_id = 0x6001
 manufacturer = ""
 product = ""
 multiplier = 0
+
+[levels]
+attenuator_db = [10, 20]
+attenuator_any_up_to_db = 0
+preamp_steps = 0
 
 [timing]
 timeout_ms = 1000
@@ -50,5 +55,10 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "program-output", reference = "`rigctl -m 25007 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/elektor507.c", note = "A capability is claimed when Hamlib's backend implements it. No engine: the FTDI bit-bang PLL programming is not implemented, so none of the claimed capabilities can be exercised." }
+provenance = { kind = "program-output", reference = "`rigctl -m 25007 --dump-caps` (Hamlib 4.6.2) \"Can set/get\" lines; rigs/kit/elektor507.c", note = "set-frequency is elektor507_set_freq; levels is the attenuator of elektor507_set_level (0, 10 or 20 dB). Hamlib answers get_freq and get_level from its own state, not from the board, so no read capability is claimed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 rigs/kit/elektor507.c: the attenuator list in elektor507_caps and the pin coding in elektor507_set_level", note = "Read for facts only. Attenuator 0, 10 or 20 dB on two FT232R pins." }
 verified = { state = "unverified" }

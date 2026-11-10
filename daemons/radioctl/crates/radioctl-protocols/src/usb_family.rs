@@ -3,9 +3,6 @@
 //! [`UsbDevice`] to run over [`radioctl_core::usb_device::FakeUsbBackend`]) and the
 //! [`UsbTarget`] to look for on the bus.
 //!
-//! The Elektor SDR-USB has a description but no engine, for the reason [`engine_for`] states: it
-//! needs an FTDI bit-bang I2C programmer for its Cypress PLL, which is not written.
-
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,13 +24,6 @@ fn usb_of(desc: &RigDescription) -> Result<&radioctl_core::description::UsbParam
     }
 }
 
-fn no_engine(desc: &RigDescription, why: &str) -> RigError {
-    RigError::new(
-        ErrorKind::Unsupported,
-        format!("{} has no engine yet: {why}", desc.name),
-    )
-}
-
 // [@ANCHOR: radioctl_usb_family_engine_for]
 /// The engine of a USB-device description, or why there is none.
 pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigError> {
@@ -43,10 +33,7 @@ pub fn engine_for(desc: &RigDescription) -> Result<Box<dyn ProtocolEngine>, RigE
         }
         UsbProtocol::Funcube => Box::new(crate::funcube::FuncubeEngine::new(desc.clone())?),
         UsbProtocol::Elektor507 => {
-            return Err(no_engine(
-                desc,
-                "it programs a Cypress PLL through an FTDI chip in bit-bang mode, which is not implemented",
-            ))
+            Box::new(crate::elektor507::Elektor507Engine::new(desc.clone())?)
         }
         UsbProtocol::Dwt => Box::new(crate::dwt::DwtEngine::new(desc.clone())?),
         UsbProtocol::Perseus => Box::new(crate::perseus_engine::PerseusEngine::new(desc.clone())?),
@@ -65,7 +52,7 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn UsbDevice>, RigError> {
         UsbProtocol::Perseus => {
             crate::perseus::ReadyVirtualPerseus::new(1).open(&target_for(desc)?)?
         }
-        UsbProtocol::Elektor507 => return Err(no_engine(desc, "no virtual twin")),
+        UsbProtocol::Elektor507 => Box::new(crate::elektor507::Elektor507Twin::new(desc)?),
     })
 }
 

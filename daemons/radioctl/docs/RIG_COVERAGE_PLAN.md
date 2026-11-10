@@ -173,7 +173,7 @@ radio described. Classified so far (`NOT_APPLICABLE` in `tools/rig_support_matri
   backend and the libusb backend behind the `usb` feature) and three engines are done: `si570_usb.rs` (SoftRock AVR-USB, KTH PIC-USB,
   Peaberry V1 and V2, FA-SDR, FiFi-SDR: frequency, PTT where listed), `funcube.rs` (both FUNcube dongles: frequency) and `dwt.rs`
   (Digital World Traveller: set frequency only, as Hamlib's libusb build). All unverified, tested against virtual twins. Not done:
-  the Elektor SDR-USB (FTDI bit-bang I2C programming of a Cypress PLL), the pre-0x0F00 DG8SAQ firmware, the FiFi-SDR 0xAB/0xAC
+  the pre-0x0F00 DG8SAQ firmware, the FiFi-SDR 0xAB/0xAC
   requests, and the FUNcube gain and RSSI commands. HiQSDR (25014, UDP) is not in this transport. Perseus (3074) is described as the CAT (CI-V) port of the vendor's Windows application on the Icom CI-V engine (`microtelecom-perseus`, 2026-11-02): Hamlib's model is that dialect (rigs/icom/perseus.c, address 0xE1), not the board, which speaks no CI-V. The board itself (FX2 firmware loader and front-end control over USB, from the public libperseus-sdr headers, LGPL-3.0, facts only) is the `microtelecom-perseus-usb` description (2026-11-02: `perseus.rs` loader backend and session, `perseus_engine.rs`, USB transport in radioctld, virtual board and daemon tests; DESIGN decision 22); the user supplies the vendor firmware, which is never stored in a repository; I/Q streaming is the shared-receiver service's job.
 - Kenwood CAT emulations (done, on the classic Kenwood engine): (tr)uSDX (2055), Malachite DSP (2049), BG2FX FX-4 (2053),
   ELAD FDM-DUO (33001); the QRP Labs QCX/QDX and QMX went in with the Kenwood batch.

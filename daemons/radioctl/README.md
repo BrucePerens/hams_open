@@ -701,6 +701,22 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_funcube_engine_feed] (radioctl-protocols) `feed` (see the source).
 - [@ANCHOR: radioctl:radioctl_funcube_twin_new] (radioctl-protocols) A twin in the description's default state; `legacy` makes it an older dongle that refuses the hertz commands.
 - [@ANCHOR: radioctl:radioctl_funcube_twin_frequency] (radioctl-protocols) The frequency the dongle is tuned to.
+- [@ANCHOR: radioctl:radioctl_elektor507_pll_frequency] (radioctl-protocols) The frequency the settings give: the pump times the reference over the divider, over four.
+- [@ANCHOR: radioctl:radioctl_elektor507_pll_solve] (radioctl-protocols) The settings nearest to a frequency, searched over every counter and every pump that keeps the oscillator in range.
+- [@ANCHOR: radioctl:radioctl_elektor507_pll_registers] (radioctl-protocols) The register groups that program the settings.
+- [@ANCHOR: radioctl:radioctl_elektor507_engine_new] (radioctl-protocols) Builds an engine from an `elektor507` USB description.
+- [@ANCHOR: radioctl:radioctl_elektor507_engine_setup] (radioctl-protocols) The open sequence: three FTDI control transfers, then the clock chip.
+- [@ANCHOR: radioctl:radioctl_elektor507_engine_encode] (radioctl-protocols) Encodes a set frequency or attenuator as one bulk transfer of pin samples (`encode`).
+- [@ANCHOR: radioctl:radioctl_elektor507_engine_feed] (radioctl-protocols) Feeds reply frames to the engine (`feed`).
+- [@ANCHOR: radioctl:radioctl_elektor507_engine_open_requests] (radioctl-protocols) The open sequence (`open_requests`).
+- [@ANCHOR: radioctl:radioctl_elektor507_engine_link_restored] (radioctl-protocols) The open sequence again after a link loss (`link_restored`).
+- [@ANCHOR: radioctl:radioctl_elektor507_twin_new] (radioctl-protocols) A twin that has not been set up yet.
+- [@ANCHOR: radioctl:radioctl_elektor507_twin_register] (radioctl-protocols) The clock chip register `index`.
+- [@ANCHOR: radioctl:radioctl_elektor507_twin_frequency] (radioctl-protocols) The frequency the clock chip registers give, once the pump has been written.
+- [@ANCHOR: radioctl:radioctl_elektor507_twin_attenuation] (radioctl-protocols) The attenuation the two pins select, in decibels.
+- [@ANCHOR: radioctl:radioctl_elektor507_twin_multiplexer] (radioctl-protocols) The input multiplexer pins (0 to 7).
+- [@ANCHOR: radioctl:radioctl_elektor507_twin_control_out] (radioctl-protocols) `control_out` (see the source).
+- [@ANCHOR: radioctl:radioctl_elektor507_twin_bulk_write] (radioctl-protocols) `bulk_write` (see the source).
 - [@ANCHOR: radioctl:radioctl_funcube_twin_interrupt] (radioctl-protocols) `interrupt_write` (see the source).
 - [@ANCHOR: radioctl:radioctl_perseus_files_in_dir] (radioctl-protocols) The two files in `dir`: `fx2.hex` and `fpga.rbs`.
 - [@ANCHOR: radioctl:radioctl_perseus_files_default_dir] (radioctl-protocols) The directory in use: `env_dir` (the value of `RADIOCTL_PERSEUS_FIRMWARE_DIR`) when set and not empty, else `$HOME/.config/radioctl/firmware/perseus` (`home` is `$HOME`).
