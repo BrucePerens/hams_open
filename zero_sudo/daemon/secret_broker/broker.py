@@ -336,8 +336,10 @@ class Broker:
             result = self._run(op, policy, secret, args)
         except Refused as refusal:
             return {"ok": False, "error": refusal.code}
-        except (ValueError, TypeError, UnicodeDecodeError):
+        except (ValueError, TypeError, UnicodeDecodeError, RecursionError):  # RecursionError: deeply nested JSON
             return {"ok": False, "error": "bad_request"}
+        except secret_store.SecretStoreError:  # the secret went missing or its file was loosened since startup
+            return {"ok": False, "error": "secret_unavailable"}
         except (OSError, http.client.HTTPException):
             return {"ok": False, "error": "upstream_failed"}
         return {"ok": True, "result": scrub(result, secret)}
