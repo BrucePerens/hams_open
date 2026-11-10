@@ -179,7 +179,6 @@ fn decodes_a_clean_high_snr_signal_matching_the_reference() {
         ours.iter().any(|(text, _, _)| text.contains("K1ABC") && text.contains("W9XYZ")),
         "must decode a clean/high-SNR (-10dB) signal the real reference decoder also decodes; got: {ours:?}, reference: {reference:?}"
     );
-
 }
 
 #[test]
@@ -219,7 +218,6 @@ fn noise_channel_sweep_reports_real_snr_sensitivity_against_the_reference() {
     for (snr, ours, reference) in &results {
         eprintln!("  {snr:+4} dB: this_decoder={ours:5} reference={reference:5}");
     }
-
 }
 
 /// `hams_local_relay`'s mic input runs at 48kHz (matching its Opus voice
@@ -300,7 +298,6 @@ fn decodes_correctly_when_fed_at_48khz_directly_no_resampling() {
          If this starts failing, hams_local_relay needs a real 48k->12k resampler before FT8 \
          wiring, which this test previously found unnecessary."
     );
-
 }
 
 /// `encode_message()` wraps the vendored `ft8_lib`'s own real message
@@ -356,5 +353,4 @@ fn encode_message_matches_the_real_ft8sim_reference_tone_sequence() {
         ours, reference_tones,
         "encode_message()'s tone sequence must match ft8sim's own reference output exactly"
     );
-
 }
