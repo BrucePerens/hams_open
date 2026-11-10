@@ -70,11 +70,8 @@ pub(crate) mod fixtures {
         }
     }
 
-    pub fn tmp(tag: &str) -> std::path::PathBuf {
-        let p = std::env::temp_dir().join(format!("vnwa_open_{tag}_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&p);
-        std::fs::create_dir_all(&p).unwrap();
-        p
+    pub fn tmp(tag: &str) -> crate::testdir::TestDir {
+        crate::testdir::TestDir::new(tag)
     }
 }
 

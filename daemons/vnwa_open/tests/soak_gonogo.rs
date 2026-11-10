@@ -2,9 +2,11 @@
 //! `tools/soak_gonogo.sh` judging a recorded soak log (GONOGO_VERDICT_ONLY), without a unit or a scope.
 use std::process::Command;
 
+#[path = "../src/testdir.rs"]
+mod testdir;
+
 fn verdict(name: &str, log: &str, events: &str) -> (i32, String) {
-    let dir = std::env::temp_dir().join(format!("vnwa_gonogo_{name}_{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = testdir::TestDir::new(&format!("gonogo_{name}"));
     std::fs::write(dir.join("soak.log"), log).unwrap();
     std::fs::write(dir.join("events.jsonl"), events).unwrap();
     let o = Command::new("bash")
@@ -13,7 +15,6 @@ fn verdict(name: &str, log: &str, events: &str) -> (i32, String) {
         .env("GONOGO_VERDICT_ONLY", "1")
         .output()
         .unwrap();
-    std::fs::remove_dir_all(&dir).ok();
     (
         o.status.code().unwrap(),
         String::from_utf8_lossy(&o.stdout).to_string(),
