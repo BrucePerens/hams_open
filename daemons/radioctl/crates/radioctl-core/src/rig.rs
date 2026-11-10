@@ -1857,7 +1857,24 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
             Op::SetFrequency(vfo, hz) => self.observe(Observation::Frequency(*vfo, *hz), source),
             Op::SetMode(mode) => self.observe(Observation::Mode(*mode), source),
             Op::SetPtt(on) => self.observe(Observation::Ptt(*on), source),
-            Op::SetSplit(on) => self.observe(Observation::Split(*on), source),
+            Op::SetSplit(on) => {
+                // The transmit VFO moves with split, in the same step: an `FT` poll cached the
+                // old transmit VFO, and left alone it would name the wrong VFO (and so the wrong
+                // transmit frequency) until the next poll. Entering split first sets the
+                // transmit VFO, leaving it first clears the split flag, so the derived transmit
+                // frequency changes once.
+                let rx = {
+                    let cache = guard(&self.shared.cache);
+                    TxState::from_cache(|f| cache.get(&f).map(|e| e.value)).rx_vfo()
+                };
+                if *on {
+                    self.observe(Observation::TxVfo(rx.other()), source);
+                    self.observe(Observation::Split(true), source);
+                } else {
+                    self.observe(Observation::Split(false), source);
+                    self.observe(Observation::TxVfo(rx), source);
+                }
+            }
             Op::SetRit(on) => self.observe(Observation::Rit(*on), source),
             Op::SetXit(on) => self.observe(Observation::Xit(*on), source),
             Op::SetRitOffset(hz) => self.observe(Observation::RitOffset(*hz), source),
