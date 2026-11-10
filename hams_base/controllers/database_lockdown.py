@@ -58,43 +58,53 @@ class DatabaseManagerLockdown(Database):
 
     Each override keeps the route (`type`, `auth`, `methods`) of the method it replaces."""
 
+    # [@ANCHOR: hams_base:database_lockdown_refuse]
     @staticmethod
     def _refuse():
         if not developer_mode():
             raise NotFound()
 
+    # [@ANCHOR: hams_base:database_lockdown_selector]
     def selector(self, **kw):
         self._refuse()
         return super().selector(**kw)
 
+    # [@ANCHOR: hams_base:database_lockdown_manager]
     def manager(self, **kw):
         self._refuse()
         return super().manager(**kw)
 
+    # [@ANCHOR: hams_base:database_lockdown_create]
     def create(self, *args, **kw):
         self._refuse()
         return super().create(*args, **kw)
 
+    # [@ANCHOR: hams_base:database_lockdown_duplicate]
     def duplicate(self, *args, **kw):
         self._refuse()
         return super().duplicate(*args, **kw)
 
+    # [@ANCHOR: hams_base:database_lockdown_drop]
     def drop(self, *args, **kw):
         self._refuse()
         return super().drop(*args, **kw)
 
+    # [@ANCHOR: hams_base:database_lockdown_backup]
     def backup(self, *args, **kw):
         self._refuse()
         return super().backup(*args, **kw)
 
+    # [@ANCHOR: hams_base:database_lockdown_restore]
     def restore(self, *args, **kw):
         self._refuse()
         return super().restore(*args, **kw)
 
+    # [@ANCHOR: hams_base:database_lockdown_change_password]
     def change_password(self, *args, **kw):
         self._refuse()
         return super().change_password(*args, **kw)
 
+    # [@ANCHOR: hams_base:database_lockdown_list]
     def list(self, *args, **kw):
         self._refuse()
         return super().list(*args, **kw)
@@ -104,6 +114,7 @@ class DatabaseManagerLockdown(Database):
 class HamsJsonRPCDispatcher(JsonRPCDispatcher):
     routing_type = "jsonrpc"
 
+    # [@ANCHOR: hams_base:database_lockdown_jsonrpc_handle_error]
     def handle_error(self, exc: Exception) -> collections.abc.Callable:
         error = {
             "code": 0,
@@ -127,6 +138,7 @@ class HamsJsonRPCDispatcher(JsonRPCDispatcher):
 class HamsJson2Dispatcher(Json2Dispatcher):
     routing_type = "json2"
 
+    # [@ANCHOR: hams_base:database_lockdown_json2_handle_error]
     def handle_error(self, exc: Exception) -> collections.abc.Callable:
         if isinstance(exc, HTTPException) and exc.response:
             return exc.response
