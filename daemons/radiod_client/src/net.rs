@@ -79,11 +79,11 @@ pub fn is_ack(status: &ChannelStatus, ssrc: u32, tag: u32) -> bool {
 }
 
 // [@ANCHOR: radiod_client_net_is_front_end]
-/// True when `status` describes the front end (SSRC 0). `radiod` does not echo the command tag in
+/// True when `status` describes the front end (an `OUTPUT_SSRC` entry of 0; a status with no SSRC at all is not the front end's). `radiod` does not echo the command tag in
 /// a front-end reply (observed on the RX-888, 2026-11-05), so any front-end status counts as the
 /// answer to a front-end poll: it is the same front end whoever asked.
 pub fn is_front_end(status: &ChannelStatus) -> bool {
-    status.ssrc == 0
+    status.has_ssrc && status.ssrc == 0
 }
 
 // [@ANCHOR: radiod_client_net_classify]
@@ -358,6 +358,8 @@ mod tests {
         assert!(!is_ack(&reply, 6, 9));
         assert!(!is_ack(&reply, 5, 10));
         assert!(!is_ack(&ChannelStatus::default(), 0, 1));
+        // A foreign datagram with no SSRC entry is not the front end's reply.
+        assert!(!is_front_end(&ChannelStatus::default()));
 
         let mut malformed = 0;
         let status = [0u8, ty::OUTPUT_SSRC, 1, 7, ty::EOL];

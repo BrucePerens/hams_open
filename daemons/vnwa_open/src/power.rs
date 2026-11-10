@@ -37,8 +37,24 @@ pub const OFF_TIME: Duration = Duration::from_secs(3);
 /// The longest wait for the unit and its codecs to be back after power-on (it takes about 8 s).
 pub const BACK_TIMEOUT: Duration = Duration::from_secs(45);
 
+/// True for a hub location as `uhubctl -l` takes it, `^[0-9]+(-[0-9]+)*(\.[0-9]+)*$` (for example `3-2` or `3-2.4`). A name that starts with
+/// `-` would be read by `uhubctl` as an option.
+// [@ANCHOR: vnwa_open_power_valid_hub_name]
+pub fn valid_hub_name(name: &str) -> bool {
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let mut dots = name.split('.');
+    let head = dots.next().unwrap_or("");
+    head.split('-').all(digits) && dots.all(digits)
+}
+
 fn uhubctl(run: &dyn Runner, port: &HubPort, action: &str) -> Result<(), String> {
     // [@ANCHOR: vnwa_open_power_uhubctl]
+    if !valid_hub_name(&port.hub) {
+        return Err(format!(
+            "hub name {:?} is not a USB hub location such as 3-2 or 3-2.4; nothing was switched",
+            port.hub
+        ));
+    }
     let args: Vec<String> = [
         "-n",
         "uhubctl",
@@ -349,6 +365,35 @@ mod tests {
                 },
             ))
         }
+    }
+
+    // Tests [@ANCHOR: vnwa_open_power_valid_hub_name]
+    // Tests [@ANCHOR: vnwa_open_power_uhubctl]
+    #[test]
+    fn a_hub_name_that_is_not_a_usb_location_is_refused_before_uhubctl_runs() {
+        for ok in ["3-2", "1", "3-2.4", "3-2.4.1", "10-1-2"] {
+            assert!(valid_hub_name(ok), "{ok}");
+        }
+        for bad in [
+            "", "-x", "--help", "3-", "-3", "3--2", "3-2.", ".4", "3.2-1", "3-2 ", "a", "3-2;ls",
+        ] {
+            assert!(!valid_hub_name(bad), "{bad:?}");
+        }
+        let f = Fake {
+            calls: RefCell::new(Vec::new()),
+            fail_on: None,
+        };
+        let e = uhubctl(
+            &f,
+            &HubPort {
+                hub: "--help".into(),
+                port: 2,
+            },
+            "off",
+        )
+        .unwrap_err();
+        assert!(e.contains("not a USB hub location"), "{e}");
+        assert!(f.calls.borrow().is_empty());
     }
 
     fn port() -> HubPort {

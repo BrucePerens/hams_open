@@ -240,6 +240,9 @@ pub struct Policy {
     pub max_lifetime_frames: u32,
     /// Largest averaging count.
     pub max_averaging: u32,
+    /// Widest spectrum span (bin count times bin width), Hz, the front end can fill, from [`max_spectrum_span_hz`]; `None` when the
+    /// front end is not known (no span check). A wider request comes back with zero bins, so it is refused instead.
+    pub max_span_hz: Option<f64>,
 }
 
 impl Default for Policy {
@@ -252,6 +255,7 @@ impl Default for Policy {
             min_bin_hz: 1.0,
             max_lifetime_frames: 15_000, // 5 minutes at 20 ms
             max_averaging: 64,
+            max_span_hz: None,
         }
     }
 }
@@ -272,6 +276,8 @@ pub enum CommandError {
     Lifetime(u32),
     /// Averaging zero or above the policy limit.
     Averaging(u32),
+    /// Spectrum span (bins times bin width, Hz) wider than the front end can fill ([`Policy::max_span_hz`]).
+    Span(f64),
     /// Opus bit rate out of range.
     Bitrate(u32),
     /// Filter edges not finite, beyond [`MAX_FILTER_EDGE_HZ`], or low not below high.
@@ -408,6 +414,10 @@ impl Command {
                 }
                 if s.averaging == 0 || s.averaging > p.max_averaging {
                     return Err(CommandError::Averaging(s.averaging));
+                }
+                let span = f64::from(s.bin_count) * f64::from(s.bin_hz);
+                if p.max_span_hz.is_some_and(|max| span > max) {
+                    return Err(CommandError::Span(span));
                 }
                 Ok(())
             }
@@ -838,6 +848,25 @@ mod tests {
             .find(|x| x.ty == ty::LIFETIME)
             .and_then(|x| x.uint().ok());
         assert_eq!(found, Some(1));
+    }
+
+    // Tests [@ANCHOR: radiod_client_command_validate]
+    #[test]
+    fn a_spectrum_wider_than_the_front_end_can_fill_is_refused_when_the_policy_knows_it() {
+        let wide = Policy {
+            max_span_hz: Some(max_spectrum_span_hz(64_800_000, true)),
+            ..Policy::default()
+        };
+        // 8192 bins of 3950 Hz fit in 32.4 MHz; 3960 Hz do not.
+        let mut s = spectrum(8192, false);
+        s.bin_hz = 3950.0;
+        assert!(Command::Spectrum(s.clone()).encode(&wide, 1).is_ok());
+        s.bin_hz = 3960.0;
+        assert!(matches!(
+            Command::Spectrum(s.clone()).encode(&wide, 1),
+            Err(CommandError::Span(_))
+        ));
+        assert!(Command::Spectrum(s).encode(&Policy::default(), 1).is_ok());
     }
 
     // Tests [@ANCHOR: radiod_client_command_policy_bin_limit]

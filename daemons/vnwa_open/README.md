@@ -155,7 +155,7 @@ Each is a test against bytes or samples recorded from the vendor program.
 * One frequency-meter measurement (the recovery repeats it): the set-up block is sent and the tone offset is fitted. (Hardware test.) [@ANCHOR: vnwa_open_meter_once]
 * The cold reset of the unit through its hub port, waiting for the unit and both codecs. (Hardware test.) [@ANCHOR: vnwa_open_power_cold_reset]
 * The production runner returns the exit status and both output streams of a real program. [@ANCHOR: vnwa_open_power_process_runner]
-* The hub port is switched through `sudo -n uhubctl`; a failure is a clear error. [@ANCHOR: vnwa_open_power_uhubctl]
+* The hub port is switched through `sudo -n uhubctl`; a failure is a clear error, and a hub name that is not a USB hub location (`3-2`, `3-2.4`) is refused before `uhubctl` runs. [@ANCHOR: vnwa_open_power_uhubctl] [@ANCHOR: vnwa_open_power_valid_hub_name]
 * A condition is polled until it is true or the timeout passes. [@ANCHOR: vnwa_open_power_wait_until]
 * The unit is opened through libusb by vendor and product id. (Hardware test.) [@ANCHOR: vnwa_open_rusb_transport_open]
 * The scripted transport plays back read outcomes in order, then succeeds. [@ANCHOR: vnwa_open_scripted_read]
