@@ -29,11 +29,13 @@ class TestTokenScope(HamsTransactionCase):
     """Recorded-shape provider responses; no real key is used."""
 
     def test_scoped_token_accepted(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_inspect_token]
         pol = [{"effect": "allow", "permission_groups": [{"name": "Zone DNS Write"}, {"name": "Cache Purge"}]}]
         self.safe_patch(API).side_effect = _answers(pol)
         self.assertEqual(cloudflare_api.inspect_token("t"), (True, []))
 
     def test_broad_token_reported(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_broad_token_permissions]
         pol = [{"effect": "allow", "permission_groups": [{"name": "API Tokens Write"}, {"name": "Zone DNS Write"}]}]
         self.safe_patch(API).side_effect = _answers(pol)
         self.assertEqual(cloudflare_api.inspect_token("t"), (True, ["API Tokens Write"]))
@@ -70,6 +72,7 @@ class TestTokenScope(HamsTransactionCase):
         return self.env["res.config.settings"].create({"website_id": website.id, **vals})
 
     def test_settings_refuse_then_override(self):
+        # Tests [@ANCHOR: cloudflare:COMM_settings_check_token_scope]
         pol = [{"effect": "allow", "permission_groups": [{"name": "Billing Write"}]}]
         settings = self._settings(cloudflare_api_token="brand-new-token")
         m = self.safe_patch("odoo.addons.cloudflare.models.res_config_settings.inspect_token")

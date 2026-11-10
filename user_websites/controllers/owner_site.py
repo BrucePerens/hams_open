@@ -104,6 +104,7 @@ def _page_arch(site_slug, page_key, title, body_html):
     )
 
 
+# [@ANCHOR: user_websites:COMM_owner_ascii_digits]
 def _is_ascii_digits(value):
     """True for a non-empty string of ASCII digits: what int() accepts. `str.isdigit()` is also true for
     digits such as the superscript two, which int() refuses (the route answered 500 instead of 404)."""

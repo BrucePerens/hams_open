@@ -379,6 +379,7 @@ class TestOwnerSite(HamsHttpCase):
 
     def test_10b_a_page_id_that_is_not_ascii_digits_is_a_404_not_a_500(self):
         # Tests [@ANCHOR: user_websites:COMM_owner_page_save]
+        # Tests [@ANCHOR: user_websites:COMM_owner_ascii_digits]
         self.authenticate("ownerone", "ownerone")
         for bad in ("\u00b2", "x1", "1.5"):
             response = self._post("/my/site/ownerone/page/save", page_id=bad, title="X", content="<p>x</p>")
