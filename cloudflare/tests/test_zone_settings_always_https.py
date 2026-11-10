@@ -124,3 +124,20 @@ class TestZoneSettingsAlwaysUseHttps(HamsTransactionCase):
         self.assertIn("hsts_include_subdomains", arch)
         self.assertIn("hsts_nosniff", arch)
         self.assertIn("hsts_preload", arch)
+
+    def test_10_respect_existing_headers_sends_zero(self):
+        # Tests [@ANCHOR: cloudflare:COMM_zone_settings_browser_cache_respect_headers]
+        wiz = self.env["cloudflare.zone.settings.wizard"].create({"browser_cache_respect_headers": True, "browser_cache_ttl": 1800})
+        self.safe_patch(CREDS, return_value=("tok", "zone"))
+        upd = self.safe_patch(WIZ + ".update_zone_setting", return_value=(True, "ok"))
+        wiz.action_apply_settings()
+        upd.assert_called_once_with("browser_cache_ttl", 0, "tok", "zone")
+
+    def test_11_plain_ttl_and_untouched_cases(self):
+        self.safe_patch(CREDS, return_value=("tok", "zone"))
+        upd = self.safe_patch(WIZ + ".update_zone_setting", return_value=(True, "ok"))
+        self.env["cloudflare.zone.settings.wizard"].create({"browser_cache_ttl": 3600}).action_apply_settings()
+        upd.assert_called_once_with("browser_cache_ttl", 3600, "tok", "zone")
+        upd.reset_mock()
+        self.env["cloudflare.zone.settings.wizard"].create({}).action_apply_settings()
+        upd.assert_not_called()
