@@ -12,6 +12,7 @@ use std::time::Instant;
 use crate::audit::{AuditEvent, AuditLog};
 use crate::auth::AllowList;
 use crate::config::Config;
+use crate::hub::{self, HubSettings};
 use crate::os::{Os, Peer};
 use crate::policy::Policy;
 use crate::ratelimit::RateLimiter;
@@ -25,6 +26,10 @@ pub struct Broker {
     pub policy: Policy,
     /// Whether group changes are applied or only reported.
     pub apply_groups: bool,
+    /// UDP ports `bind_udp` may bind (default: 123, the time service).
+    pub bind_udp_ports: Vec<u16>,
+    /// Whether the hub requests are served at all (default: refused).
+    pub hub_enabled: bool,
     rate: RateLimiter,
     audit: AuditLog,
     os: Box<dyn Os + Send>,
@@ -38,6 +43,8 @@ impl Broker {
             allow: config.allow.clone(),
             policy: config.policy.clone(),
             apply_groups: config.apply_groups,
+            bind_udp_ports: config.bind_udp_ports.clone(),
+            hub_enabled: config.hub_enabled,
             rate: RateLimiter::new(config.rate_per_minute),
             audit,
             os,
@@ -77,6 +84,10 @@ impl Broker {
             Request::OpenDevice { .. } => "open_device",
             Request::GrantGroup { .. } => "grant_group",
             Request::ProvisionGroups => "provision_groups",
+            Request::BindUdp { .. } => "bind_udp",
+            Request::HubStart(_) => "hub_start",
+            Request::HubStop => "hub_stop",
+            Request::HubStatus => "hub_status",
         };
         if !self.rate.allow(peer.uid, now) {
             self.log(peer, action, "rate_limited", String::new());
@@ -104,7 +115,88 @@ impl Broker {
             } => self.open_device(peer, *class, *read_only, path),
             Request::GrantGroup { group } => self.grant(peer, action, &[*group]),
             Request::ProvisionGroups => self.grant(peer, action, &[Group::Dialout, Group::Audio]),
+            Request::BindUdp { port } => self.bind_udp(peer, *port),
+            Request::HubStart(settings) => self.hub_start(peer, settings),
+            Request::HubStop => self.hub_stop(peer),
+            Request::HubStatus => self.hub_status(peer),
         }
+    }
+
+    /// The bind action: only a port the config lists. The descriptor is passed; the relay never needs a privilege to hold it.
+    fn bind_udp(&mut self, peer: Peer, port: u16) -> (Response, Option<OwnedFd>) {
+        if !self.bind_udp_ports.contains(&port) {
+            self.log(peer, "bind_udp", "denied", format!("port {port}"));
+            return (Response::error(Status::Denied, "port not allowed"), None);
+        }
+        match self.os.bind_udp(port) {
+            Ok(fd) => {
+                self.log(peer, "bind_udp", "allowed", format!("port {port}"));
+                (Response::Opened, Some(fd))
+            }
+            Err(e) => {
+                self.log(peer, "bind_udp", "failed", format!("port {port}: {e}"));
+                (Response::error(Status::Failed, format!("bind: {e}")), None)
+            }
+        }
+    }
+
+    fn hub_answer(&self) -> Response {
+        let (access_point, dhcp) = self.os.hub_status();
+        Response::Hub { access_point, dhcp }
+    }
+
+    /// The hub start action: settings validated, both files written from the fixed templates, the programs started.
+    fn hub_start(&mut self, peer: Peer, settings: &HubSettings) -> (Response, Option<OwnedFd>) {
+        if !self.hub_enabled {
+            self.log(peer, "hub_start", "denied", "hub not enabled".into());
+            return (Response::error(Status::Denied, "hub not enabled"), None);
+        }
+        let texts =
+            hub::hostapd_conf(settings).and_then(|h| hub::dnsmasq_conf(settings).map(|d| (h, d)));
+        let (hostapd, dnsmasq) = match texts {
+            Ok(t) => t,
+            Err(why) => {
+                self.log(peer, "hub_start", "denied", why.clone());
+                return (Response::error(Status::Denied, why), None);
+            }
+        };
+        match self.os.hub_start(
+            &hostapd,
+            &dnsmasq,
+            &settings.interface,
+            settings.hub_address,
+        ) {
+            Ok(()) => {
+                self.log(peer, "hub_start", "allowed", settings.interface.clone());
+                (self.hub_answer(), None)
+            }
+            Err(e) => {
+                self.log(peer, "hub_start", "failed", e.to_string());
+                (Response::error(Status::Failed, format!("hub: {e}")), None)
+            }
+        }
+    }
+
+    fn hub_stop(&mut self, peer: Peer) -> (Response, Option<OwnedFd>) {
+        if !self.hub_enabled {
+            self.log(peer, "hub_stop", "denied", "hub not enabled".into());
+            return (Response::error(Status::Denied, "hub not enabled"), None);
+        }
+        match self.os.hub_stop() {
+            Ok(()) => {
+                self.log(peer, "hub_stop", "allowed", String::new());
+                (self.hub_answer(), None)
+            }
+            Err(e) => {
+                self.log(peer, "hub_stop", "failed", e.to_string());
+                (Response::error(Status::Failed, format!("hub: {e}")), None)
+            }
+        }
+    }
+
+    fn hub_status(&mut self, peer: Peer) -> (Response, Option<OwnedFd>) {
+        self.log(peer, "hub_status", "allowed", String::new());
+        (self.hub_answer(), None)
     }
 
     // [@ANCHOR: relay_broker_broker_open_device]

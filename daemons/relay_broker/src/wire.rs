@@ -2,13 +2,16 @@
 //! The wire protocol: a closed, versioned request/response schema carried in length-prefixed
 //! frames over a Unix domain socket. Everything is big-endian, every length is bounded, and the
 //! parser never panics: an unknown tag, a short buffer, trailing bytes or an over-long string is
-//! `WireError`, not UB and not a crash. There is no free-form command: a request is one of four
+//! `WireError`, not UB and not a crash. There is no free-form command: a request is one of a few
 //! tagged variants with typed fields, and the broker executes nothing but those variants.
 //!
 //! Frame: `u32 length` (1..=`MAX_FRAME`) then `length` bytes of body. A body starts with the
 //! protocol version byte (`VERSION`) and a tag byte. Strings are `u16 length` + UTF-8 bytes, at
 //! most `MAX_STRING` bytes. A passed file descriptor is not in the body: it rides in SCM_RIGHTS
 //! ancillary data alongside an `Opened` response.
+
+use crate::hub::HubSettings;
+use std::net::Ipv4Addr;
 
 /// Protocol version carried in every body. A peer speaking another version gets
 /// `Status::UnsupportedVersion` and nothing else is parsed.
@@ -93,6 +96,17 @@ pub enum Request {
     },
     /// Add the caller to every group the relay needs (dry run unless enabled).
     ProvisionGroups,
+    /// Bind a UDP socket on a privileged port the config lists (123 for the relay's time service) and pass the descriptor.
+    BindUdp {
+        /// The port; the broker refuses any port its config does not list.
+        port: u16,
+    },
+    /// Start the stand-alone hub's access point and DHCP/DNS server from the validated settings and fixed templates.
+    HubStart(HubSettings),
+    /// Stop the hub and remove its files.
+    HubStop,
+    /// Whether the hub's two programs are running.
+    HubStatus,
 }
 
 /// One enumerated device.
@@ -134,7 +148,7 @@ pub enum Status {
 pub enum Response {
     /// Answer to `ListDevices`.
     Devices(Vec<DeviceDescriptor>),
-    /// Answer to `OpenDevice`; the descriptor is in the ancillary data of the same frame.
+    /// Answer to `OpenDevice` and `BindUdp`; the descriptor is in the ancillary data of the same frame.
     Opened,
     /// Answer to `GrantGroup`/`ProvisionGroups`.
     GroupReport {
@@ -144,6 +158,13 @@ pub enum Response {
         user: String,
         /// Groups that were (or would be) added; empty when nothing is missing.
         groups: Vec<String>,
+    },
+    /// Answer to `HubStart`, `HubStop` and `HubStatus`: which of the hub's programs are running now.
+    Hub {
+        /// The access point (`hostapd`) is running.
+        access_point: bool,
+        /// The DHCP/DNS server (`dnsmasq`) is running.
+        dhcp: bool,
     },
     /// Any non-`Ok` status with a short reason.
     Error {
@@ -182,6 +203,33 @@ impl<'a> Reader<'a> {
         let b = self.take(2)?;
         match (b.first(), b.get(1)) {
             (Some(hi), Some(lo)) => Ok(u16::from_be_bytes([*hi, *lo])),
+            _ => Err(WireError::Truncated),
+        }
+    }
+
+    /// A byte that is 0 or 1.
+    fn bool(&mut self) -> Result<bool, WireError> {
+        match self.u8()? {
+            0 => Ok(false),
+            1 => Ok(true),
+            other => Err(WireError::BadTag(other)),
+        }
+    }
+
+    /// Four bytes as an IPv4 address.
+    fn ipv4(&mut self) -> Result<Ipv4Addr, WireError> {
+        let b = self.take(4)?;
+        match b {
+            [a, b, c, d] => Ok(Ipv4Addr::new(*a, *b, *c, *d)),
+            _ => Err(WireError::Truncated),
+        }
+    }
+
+    /// A big-endian u32.
+    fn u32(&mut self) -> Result<u32, WireError> {
+        let b = self.take(4)?;
+        match b {
+            [a, b, c, d] => Ok(u32::from_be_bytes([*a, *b, *c, *d])),
             _ => Err(WireError::Truncated),
         }
     }
@@ -262,6 +310,30 @@ impl Request {
                 out.push(*group as u8);
             }
             Request::ProvisionGroups => out.push(4),
+            Request::BindUdp { port } => {
+                out.push(5);
+                out.extend_from_slice(&port.to_be_bytes());
+            }
+            Request::HubStart(h) => {
+                out.push(6);
+                put_string(&mut out, &h.interface);
+                put_string(&mut out, &h.ssid);
+                put_string(&mut out, &h.passphrase);
+                out.push(h.channel);
+                out.push(u8::from(h.five_ghz));
+                out.extend_from_slice(&h.hub_address.octets());
+                put_string(&mut out, &h.relay_name);
+                match h.uplink_dns {
+                    Some(dns) => {
+                        out.push(1);
+                        out.extend_from_slice(&dns.octets());
+                    }
+                    None => out.push(0),
+                }
+                out.extend_from_slice(&h.lease_minutes.to_be_bytes());
+            }
+            Request::HubStop => out.push(7),
+            Request::HubStatus => out.push(8),
         }
         out
     }
@@ -305,6 +377,31 @@ impl Request {
                 Request::GrantGroup { group }
             }
             4 => Request::ProvisionGroups,
+            5 => Request::BindUdp { port: r.u16()? },
+            6 => {
+                let interface = r.string()?;
+                let ssid = r.string()?;
+                let passphrase = r.string()?;
+                let channel = r.u8()?;
+                let five_ghz = r.bool()?;
+                let hub_address = r.ipv4()?;
+                let relay_name = r.string()?;
+                let uplink_dns = if r.bool()? { Some(r.ipv4()?) } else { None };
+                let lease_minutes = r.u32()?;
+                Request::HubStart(HubSettings {
+                    interface,
+                    ssid,
+                    passphrase,
+                    channel,
+                    five_ghz,
+                    hub_address,
+                    relay_name,
+                    uplink_dns,
+                    lease_minutes,
+                })
+            }
+            7 => Request::HubStop,
+            8 => Request::HubStatus,
             other => return Err(WireError::BadTag(other)),
         };
         r.finish()?;
@@ -315,13 +412,7 @@ impl Request {
 impl Response {
     // [@ANCHOR: relay_broker_response_error]
     /// Shorthand for an error response.
-    /// `Status::Ok` is not an error; it is sent as `Status::Failed` (the decoder rejects an Ok error frame).
     pub fn error(status: Status, reason: impl Into<String>) -> Response {
-        let status = if status == Status::Ok {
-            Status::Failed
-        } else {
-            status
-        };
         Response::Error {
             status,
             reason: reason.into(),
@@ -381,6 +472,12 @@ impl Response {
                 for g in groups.iter().take(n) {
                     put_string(&mut out, g);
                 }
+            }
+            Response::Hub { access_point, dhcp } => {
+                out.push(Status::Ok as u8);
+                out.push(4);
+                out.push(u8::from(*access_point));
+                out.push(u8::from(*dhcp));
             }
             Response::Error { status, reason } => {
                 out.push(*status as u8);
@@ -460,6 +557,10 @@ impl Response {
                         groups,
                     }
                 }
+                4 => Response::Hub {
+                    access_point: r.bool()?,
+                    dhcp: r.bool()?,
+                },
                 other => return Err(WireError::BadTag(other)),
             }
         };
@@ -508,6 +609,20 @@ mod tests {
                 group: Group::Audio,
             },
             Request::ProvisionGroups,
+            Request::BindUdp { port: 123 },
+            Request::HubStart(crate::hub::HubSettings {
+                interface: "wlan0".into(),
+                ssid: "HAMS-EMERGENCY".into(),
+                passphrase: "correct horse".into(),
+                channel: 6,
+                five_ghz: false,
+                hub_address: Ipv4Addr::new(192, 168, 50, 1),
+                relay_name: "relay".into(),
+                uplink_dns: Some(Ipv4Addr::new(192, 168, 1, 1)),
+                lease_minutes: 60,
+            }),
+            Request::HubStop,
+            Request::HubStatus,
         ]
     }
 
@@ -548,13 +663,16 @@ mod tests {
                 manufacturer: "FTDI".into(),
             }]),
             Response::Opened,
+            Response::Hub {
+                access_point: true,
+                dhcp: false,
+            },
             Response::GroupReport {
                 applied: false,
                 user: "ham".into(),
                 groups: vec!["dialout".into()],
             },
             Response::error(Status::Denied, "disk"),
-            Response::error(Status::Ok, "not really ok"),
         ];
         for resp in samples {
             let body = resp.encode();

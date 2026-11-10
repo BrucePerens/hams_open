@@ -16,6 +16,8 @@ pub mod auth;
 pub mod broker;
 pub mod client;
 pub mod config;
+pub mod hub;
+pub mod hub_runner;
 pub mod os;
 pub mod policy;
 pub mod ratelimit;
