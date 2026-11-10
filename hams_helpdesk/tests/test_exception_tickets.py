@@ -259,6 +259,10 @@ class TestExceptionScrubbing(ExceptionTicketCase):
             ("redis://:pw0rd9@cache:6379/0", "pw0rd9"),
             ("Authorization: Basic dXNlcjpwdw==", "dXNlcjpwdw"),
             ('"Authorization": "Bearer abc123.def"', "abc123"),
+            ('password="two words here" next', "words"),
+            ("db_password='correct horse battery' x", "horse"),
+            ('{"secret": "a b c"}', "b c"),
+            ('token="unterminated value', "unterminated"),
         )
         for text, secret in cases:
             self.assertNotIn(secret, scrub.scrub_text(text, strict=False), text)
