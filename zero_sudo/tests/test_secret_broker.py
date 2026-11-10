@@ -117,13 +117,13 @@ class TestSecretBrokerPolicy(BaseCase):
         for name in ("stripe.secret_key", "stripe.webhook_secret"):
             os.chmod(os.path.join(self.tmp, name), 0o400)
         self.store = ss.SecretStore([ss.SystemdCredentialBackend(self.tmp)])
-        self.uid = os.getuid()
+        self.os_uid = os.getuid()
 
     def _broker(self, config=None):
-        return sb.Broker(config or _config(os.path.join(self.tmp, "b.sock")), self.store, {self.uid})
+        return sb.Broker(config or _config(os.path.join(self.tmp, "b.sock")), self.store, {self.os_uid})
 
     def _ask(self, broker, op, **args):
-        return broker.handle(json.dumps({"v": 1, "op": op, "args": args}).encode(), self.uid)
+        return broker.handle(json.dumps({"v": 1, "op": op, "args": args}).encode(), self.os_uid)
 
     def test_config_validation(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_validate_config]
@@ -214,7 +214,7 @@ class TestSecretBrokerPolicy(BaseCase):
              "bad_request"),
         ]
         for raw, code in cases:
-            self.assertEqual(broker.handle(raw, self.uid), {"ok": False, "error": code}, raw)
+            self.assertEqual(broker.handle(raw, self.os_uid), {"ok": False, "error": code}, raw)
         https_cases = [
             ({"method": "DELETE", "path": "/v1/x"}, "method_not_allowed"),
             ({"method": "GET", "path": "/v2/x"}, "path_not_allowed"),
@@ -226,7 +226,7 @@ class TestSecretBrokerPolicy(BaseCase):
             reply = self._ask(broker, "https_request", name="stripe.secret_key", **args)
             self.assertEqual(reply, {"ok": False, "error": code}, args)
         # A peer that is not allowed is refused before the request is even parsed.
-        self.assertEqual(broker.handle(b"anything", self.uid + 1), {"ok": False, "error": "peer_not_allowed"})
+        self.assertEqual(broker.handle(b"anything", self.os_uid + 1), {"ok": False, "error": "peer_not_allowed"})
         self.assertEqual(broker.handle(b"anything", None)["error"], "peer_not_allowed")
         self.assertEqual(broker.handle(b"anything", True)["error"], "peer_not_allowed")
 
@@ -278,7 +278,7 @@ class TestSecretBrokerIsolation(BaseCase):
         super().setUp()
         self.tmp = tempfile.mkdtemp(prefix="secret_broker_")
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        self.uid = os.getuid()
+        self.os_uid = os.getuid()
 
     def test_acl_entries(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_acl_grants_read]
@@ -296,8 +296,8 @@ class TestSecretBrokerIsolation(BaseCase):
             handle.write("a=b\n")
         gid = os.stat(path).st_gid
         os.chmod(path, 0o600)
-        other = self.uid + 1
-        self.assertTrue(sb.readable_by(path, self.uid, set()))
+        other = self.os_uid + 1
+        self.assertTrue(sb.readable_by(path, self.os_uid, set()))
         self.assertTrue(sb.readable_by(path, 0, set()))
         self.assertFalse(sb.readable_by(path, other, {gid}))
         os.chmod(path, 0o640)
@@ -316,16 +316,16 @@ class TestSecretBrokerIsolation(BaseCase):
         with open(path, "w") as handle:
             handle.write("a=b\n")
         os.chmod(path, 0o600)
-        web_other = {"odoo": (self.uid + 1, set())}
+        web_other = {"odoo": (self.os_uid + 1, set())}
         sb.check_not_readable([path], ["odoo"], web_other.get)
         # The same file is refused when the web account is its owner, or reaches it through a group.
         with self.assertRaises(sb.BrokerConfigError):
-            sb.check_not_readable([path], ["odoo"], {"odoo": (self.uid, set())}.get)
+            sb.check_not_readable([path], ["odoo"], {"odoo": (self.os_uid, set())}.get)
         os.chmod(path, 0o640)
         with self.assertRaises(sb.BrokerConfigError):
-            sb.check_not_readable([path], ["odoo"], {"odoo": (self.uid + 1, {os.stat(path).st_gid})}.get)
-        uid, gids = sb.account_ids(self.uid)
-        self.assertEqual(uid, self.uid)
+            sb.check_not_readable([path], ["odoo"], {"odoo": (self.os_uid + 1, {os.stat(path).st_gid})}.get)
+        uid, gids = sb.account_ids(self.os_uid)
+        self.assertEqual(uid, self.os_uid)
         self.assertIn(os.getgid(), gids)
 
     def test_wrong_peer_uid_is_refused_on_the_real_socket(self):
@@ -339,7 +339,7 @@ class TestSecretBrokerIsolation(BaseCase):
         os.chmod(os.path.join(creds, "stripe.webhook_secret"), 0o400)
         store = ss.SecretStore([ss.SystemdCredentialBackend(creds)])
         results = {}
-        for label, allowed in (("me", {self.uid}), ("other", {self.uid + 1})):
+        for label, allowed in (("me", {self.os_uid}), ("other", {self.os_uid + 1})):
             sock = os.path.join(self.tmp, f"{label}.sock")
             stop = threading.Event()
             broker = sb.Broker(_config(sock), store, allowed)
@@ -371,14 +371,14 @@ class TestSecretBrokerIsolation(BaseCase):
         os.chmod(path, 0o600)
         config = _config(os.path.join(self.tmp, "b.sock"))
         env = {"CREDENTIALS_DIRECTORY": creds}
-        web_other = {"odoo": (self.uid + 1, set())}.get
-        built = broker_main.build(config, env, self.uid, web_other)
-        self.assertEqual(built.allowed_uids, frozenset({self.uid + 1}))
+        web_other = {"odoo": (self.os_uid + 1, set())}.get
+        built = broker_main.build(config, env, self.os_uid, web_other)
+        self.assertEqual(built.allowed_uids, frozenset({self.os_uid + 1}))
         refusals = [
             (config, env, 0, web_other),                                      # root
-            (config, {}, self.uid, web_other),                                # no LoadCredential
-            (config, env, self.uid, {"odoo": (self.uid, set())}.get),         # web account can read it
-            (dict(config, credentials=path), env, self.uid, web_other),      # not root-owned
+            (config, {}, self.os_uid, web_other),                                # no LoadCredential
+            (config, env, self.os_uid, {"odoo": (self.os_uid, set())}.get),         # web account can read it
+            (dict(config, credentials=path), env, self.os_uid, web_other),      # not root-owned
         ]
         for args in refusals:
             with self.assertRaises((broker_main.broker.BrokerConfigError, broker_main.secret_store.SecretStoreError)):
