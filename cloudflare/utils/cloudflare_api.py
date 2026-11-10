@@ -403,13 +403,26 @@ def inspect_token(token):
     resp = _make_request("GET", f"{base}/verify", token, "Cloudflare token verify failed", timeout=10)
     if resp is None or resp.status_code != 200:
         return False, "Cloudflare could not verify the token (unreachable, or not a user API token)."
-    result = (resp.json() or {}).get("result") or {}
-    if result.get("status") != "active" or not result.get("id"):
+    result = _json_result(resp)
+    if not isinstance(result, dict) or result.get("status") != "active" or not result.get("id"):
         return False, "Cloudflare reports the token is not active."
     resp = _make_request("GET", f"{base}/{result['id']}", token, "Cloudflare token detail failed", timeout=10)
     if resp is None or resp.status_code != 200:
         return False, "Cloudflare would not list the token's permissions (the token cannot read its own policy)."
-    return True, broad_token_permissions((resp.json() or {}).get("result", {}).get("policies"))
+    detail = _json_result(resp)
+    if not isinstance(detail, dict) or not isinstance(detail.get("policies"), list):
+        return False, "Cloudflare would not list the token's permissions (the answer was not readable)."
+    return True, broad_token_permissions(detail["policies"])
+
+
+def _json_result(resp):
+    """The `result` of a Cloudflare JSON answer, or None when the body is not JSON or has no object result."""
+    try:
+        body = resp.json()
+    except ValueError:
+        return None
+    result = body.get("result") if isinstance(body, dict) else None
+    return result if isinstance(result, dict) else None
 
 
 def get_zone_settings(token, zone_id):
