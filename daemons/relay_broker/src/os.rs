@@ -101,6 +101,9 @@ pub struct LinuxOs {
     pub group_file: PathBuf,
     /// The stand-alone hub's programs and files.
     pub hub: crate::hub_runner::HubRunner,
+    /// Normally `/var/lib/hams-relay-broker/update-requested`: the file `update_package` creates; the relay package's root-owned
+    /// `hams-relay-update.path` unit watches it and runs the package upgrade, because this unprivileged service cannot.
+    pub update_request: PathBuf,
 }
 
 impl Default for LinuxOs {
@@ -109,6 +112,7 @@ impl Default for LinuxOs {
             sysfs_root: PathBuf::from("/sys"),
             group_file: PathBuf::from("/etc/group"),
             hub: crate::hub_runner::HubRunner::default(),
+            update_request: PathBuf::from("/var/lib/hams-relay-broker/update-requested"),
         }
     }
 }
@@ -382,33 +386,11 @@ impl Os for LinuxOs {
         self.hub.status()
     }
 
+    // [@ANCHOR: relay_broker_linux_update_package]
     fn update_package(&self) -> io::Result<()> {
-        let (program, args, noninteractive): (&str, &[&str], bool) =
-            if Path::new("/usr/bin/apt-get").exists() {
-                (
-                    "/usr/bin/apt-get",
-                    &["install", "--only-upgrade", "-y", RELAY_PACKAGE],
-                    true,
-                )
-            } else if Path::new("/usr/bin/dnf").exists() {
-                ("/usr/bin/dnf", &["upgrade", "-y", RELAY_PACKAGE], false)
-            } else {
-                return Err(io::Error::other("no apt-get or dnf on this system"));
-            };
-        let mut command = std::process::Command::new(program);
-        command
-            .args(args)
-            .env_clear()
-            .env("PATH", "/usr/sbin:/usr/bin:/sbin:/bin");
-        if noninteractive {
-            command.env("DEBIAN_FRONTEND", "noninteractive");
-        }
-        let status = command.status()?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(io::Error::other(format!("{program} exited with {status}")))
-        }
+        // The broker holds no right to run a package manager. It leaves a request file; a root-owned path unit shipped in the
+        // package notices it and runs the one fixed upgrade command. Nothing from the caller reaches that command.
+        fs::write(&self.update_request, b"")
     }
 
     fn system_time_unix_secs(&self) -> u64 {
@@ -434,9 +416,6 @@ impl LinuxOs {
             .map_or(0, |d| d.as_secs())
     }
 }
-
-/// The one package `update_package` upgrades.
-const RELAY_PACKAGE: &str = "hams-local-relay";
 
 #[cfg(test)]
 mod tests {
@@ -555,6 +534,20 @@ mod tests {
         let peer = os.peer_credentials(a.as_fd()).unwrap();
         assert_eq!(peer.uid, nix::unistd::getuid().as_raw());
         assert_eq!(peer.pid, std::process::id() as i32);
+    }
+
+    // Tests [@ANCHOR: relay_broker_linux_update_package]
+    #[test]
+    fn update_package_leaves_a_request_file_and_runs_no_program() {
+        let root = temp_dir("update");
+        let os = LinuxOs {
+            update_request: root.join("update-requested"),
+            ..LinuxOs::default()
+        };
+        assert!(!os.update_request.exists());
+        os.update_package().unwrap();
+        assert!(os.update_request.exists());
+        os.update_package().unwrap(); // a second request while one is pending is fine
     }
 
     // Tests [@ANCHOR: relay_broker_linux_add_to_group]
