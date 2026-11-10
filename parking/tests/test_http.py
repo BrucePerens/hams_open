@@ -77,6 +77,13 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.headers["Cache-Control"], "no-store")
         self.assert_clean(response)
 
+    def test_for_sale_page_is_not_cached_longer_than_its_form_token_lives(self):
+        # Tests [@ANCHOR: parking:COMM_parking_response]
+        self.sale.cache_ttl = 31536000
+        response = self.get("/", "sale.example")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("s-maxage=43200", response.headers["Cache-Control"])
+
     def test_unknown_host_default_page_policy(self):
         self.env["ir.config_parameter"].set_param("parking.unknown_host_policy", "default_page")
         response = self.get("/", "nobody.example")

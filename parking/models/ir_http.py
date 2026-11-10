@@ -146,6 +146,10 @@ class IrHttp(models.AbstractModel):
             headers["Cache-Control"] = "no-store"
         else:
             ttl = max(record.cache_ttl, 0)
+            if record.behavior == "for_sale":
+                # The page carries a form token that stops working after TOKEN_MAX_AGE; a copy
+                # cached longer would show visitors a form whose inquiry is silently dropped.
+                ttl = min(ttl, utils.TOKEN_MAX_AGE // 2)
             headers["Cache-Control"] = f"public, max-age={min(ttl, 300)}, s-maxage={ttl}"
         if record is None or record.noindex:
             headers["X-Robots-Tag"] = "noindex, nofollow"
