@@ -113,7 +113,7 @@ class TestAlarm(CanaryCase):
 
     def test_a_planted_canary_raises_the_alarm_as_a_canary(self):
         self.canary._plant_canaries()
-        params = self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.config_service_internal")["ir.config_parameter"]
+        params = self.env["ir.config_parameter"]  # the admin reads it as an attacker would; service accounts may not
         value = params.get_param("stripe_secret_key_old")
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
             self.assertEqual(self.canary._scan_text("leaked " + value, "response", "/x"), [("stripe_secret_key", "canary")])
@@ -142,7 +142,7 @@ class TestPlanting(CanaryCase):
     # Tests [@ANCHOR: hams_secret_canary:post_init_hook]
 
     def test_planting_is_idempotent_and_registers_each_decoy(self):
-        params = self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.config_service_internal")["ir.config_parameter"]
+        params = self.env["ir.config_parameter"]  # the admin reads it as an attacker would; service accounts may not
         self.canary._plant_canaries()
         first = {label: params.get_param("%s_old" % label) for label in detector.CANARY_SHAPES}
         self.assertTrue(all(first.values()))
