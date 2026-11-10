@@ -104,6 +104,8 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 - [@ANCHOR: hpsdr:hpsdr_error_from_io] (error) Wraps an I/O error.
 - [@ANCHOR: hpsdr:hpsdr_gate_new] (gate) A closed gate.
 - [@ANCHOR: hpsdr:hpsdr_gate_open_until] (gate) Open the gate until `deadline`; returns false (and leaves it closed) if the lock is poisoned.
+- [@ANCHOR: hpsdr:hpsdr_gate_narrow_limits] (gate) Narrow what may be sent: the drive cap becomes the lower of the old and the new, and the allowed bands become the overlap of the old bands with the new ones; it can never widen, so a later setting cannot undo an earlier one.
+- [@ANCHOR: hpsdr:hpsdr_gate_check_tx] (gate) The drive to send for a key request at a frequency: the requested drive capped at the gate's limit, or `OutsideLimits` when the frequency is outside the allowed bands (a poisoned lock refuses).
 - [@ANCHOR: hpsdr:hpsdr_gate_close] (gate) Close the gate now.
 - [@ANCHOR: hpsdr:hpsdr_gate_is_open] (gate) True only while a lease granted by `open_until` has not expired at `now`.
 - [@ANCHOR: hpsdr:hpsdr_iq_counters_delivered] (iq) Record one delivered block of `n` samples.
@@ -165,6 +167,7 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 - [@ANCHOR: hpsdr:hpsdr_session_request_ptt] (session) Ask to key (or unkey) the transmitter with `drive` 0..=255. Refused with
 - [@ANCHOR: hpsdr:hpsdr_session_send_tx_iq] (session) Queue transmit I/Q (16-bit pairs at 48 ksps). Refused while the gate is closed or the queue
 - [@ANCHOR: hpsdr:hpsdr_session_stop] (session) Unkey, send Stop, and end the session task.
+- [@ANCHOR: hpsdr:hpsdr_session_drop] (session) A session dropped without `stop()` unkeys at once (the key request and queued I/Q are cleared) and the task then sends Stop and ends; it is never just aborted, which would leave the last keyed datagram standing.
 - [@ANCHOR: hpsdr:hpsdr_session_p2_config_default] (session_p2) One receiver at 48 ksps on 7.1 MHz, no attenuation, the specification's default ports.
 - [@ANCHOR: hpsdr:hpsdr_session_p2_config_validate] (session_p2) Reject settings the protocol cannot express.
 - [@ANCHOR: hpsdr:hpsdr_session_p2_config_ddcs] (session_p2) The DDC-specific settings: every receiver enabled on ADC0 at the common rate.
@@ -181,6 +184,7 @@ Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test ca
 - [@ANCHOR: hpsdr:hpsdr_session_p2_request_ptt] (session_p2) Ask to key (or unkey) the transmitter with `drive` 0..=255. Refused with
 - [@ANCHOR: hpsdr:hpsdr_session_p2_send_tx_iq] (session_p2) Queue transmit I/Q (16-bit pairs). Refused while the gate is closed or the queue would exceed
 - [@ANCHOR: hpsdr:hpsdr_session_p2_stop] (session_p2) Unkey, send a High Priority packet with the run bit clear, and end the session task.
+- [@ANCHOR: hpsdr:hpsdr_session_p2_drop] (session_p2) Dropped without `stop()`: unkey at once, then the task sends the run-bit-clear packet and ends; never just aborted.
 - [@ANCHOR: hpsdr:hpsdr_types_board_from_p1_id] (types) Protocol 1 `Board_ID` (Metis v1.33: 0 Metis, 1 Hermes, 2 Griffin, 4 Angelia, 5 Orion, 6 Hermes Lite).
 - [@ANCHOR: hpsdr:hpsdr_types_board_from_p2_type] (types) Protocol 2 board type (spec v4.4 Discovery Reply byte 11).
 - [@ANCHOR: hpsdr:hpsdr_types_board_dsp_clock] (types) DSP clock in hertz, needed for phase words (spec v4.4 Appendix A gives 122.88 MHz for Hermes);
