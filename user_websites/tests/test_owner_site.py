@@ -377,6 +377,15 @@ class TestOwnerSite(HamsHttpCase):
         self.sub.invalidate_recordset()
         self.assertEqual(self.sub.name, "About")
 
+    def test_10b_a_page_id_that_is_not_ascii_digits_is_a_404_not_a_500(self):
+        # Tests [@ANCHOR: user_websites:COMM_owner_page_save]
+        self.authenticate("ownerone", "ownerone")
+        for bad in ("\u00b2", "x1", "1.5"):
+            response = self._post("/my/site/ownerone/page/save", page_id=bad, title="X", content="<p>x</p>")
+            self.assertEqual(response.status_code, 404, msg=repr(bad))
+            response = self._post("/my/site/ownerone/page/save", page_id=bad, title="", content="<p>x</p>")
+            self.assertEqual(response.status_code, 404, msg=repr(bad))
+
     def test_11_cannot_touch_other_members_content(self):
         # Tests [@ANCHOR: user_websites:owner_resolve_site]
         self.authenticate("ownertwo", "ownertwo")

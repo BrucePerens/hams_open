@@ -104,6 +104,13 @@ def _page_arch(site_slug, page_key, title, body_html):
     )
 
 
+def _is_ascii_digits(value):
+    """True for a non-empty string of ASCII digits: what int() accepts. `str.isdigit()` is also true for
+    digits such as the superscript two, which int() refuses (the route answered 500 instead of 404)."""
+    text = str(value)
+    return text.isascii() and text.isdigit()
+
+
 def _escape(text):
     # [@ANCHOR: user_websites:fn_owner_escape]
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
@@ -447,7 +454,7 @@ class UserWebsitesOwnerController(http.Controller):
             return refused("too_long")
 
         if page_id:
-            if not str(page_id).isdigit():
+            if not _is_ascii_digits(page_id):
                 raise request.not_found()
             page = self._own_page(profile_user, profile_group, int(page_id))
             _old_body, editable = _arch_body(page.arch_base)
@@ -496,7 +503,7 @@ class UserWebsitesOwnerController(http.Controller):
         """The page editor again, with the reason and everything the member typed (title, address, body, tick)."""
         page = None
         if page_id:
-            if not str(page_id).isdigit():
+            if not _is_ascii_digits(page_id):
                 raise request.not_found()
             page = self._own_page(profile_user, profile_group, int(page_id))
         owner = profile_user or profile_group
@@ -524,7 +531,7 @@ class UserWebsitesOwnerController(http.Controller):
 
     def _back_to_editor(self, slug, page_id, error):
         # [@ANCHOR: user_websites:fn_owner_back_to_editor]
-        base = f"/my/site/{quote(slug, safe='')}/page/" + (page_id if str(page_id).isdigit() else "new")
+        base = f"/my/site/{quote(slug, safe='')}/page/" + (page_id if _is_ascii_digits(page_id) else "new")
         return request.redirect(f"{base}?error={error}")
 
     @http.route(
