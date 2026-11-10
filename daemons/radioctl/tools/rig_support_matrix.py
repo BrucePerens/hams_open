@@ -434,6 +434,7 @@ MODEL_ENGINES: dict[int, str] = {
     **{i: "si570_usb" for i in (25009, 25011, 25012, 25015, 25016, 25017)},
     **{i: "funcube" for i in (25013, 25018)},
     25003: "dwt",
+    25007: "elektor507",
 }
 
 # Manufacturers whose models (outside the families above) need a new engine: Tier C. Every other

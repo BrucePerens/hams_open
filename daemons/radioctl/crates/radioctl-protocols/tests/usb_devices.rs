@@ -440,7 +440,10 @@ fn the_conformance_stand_in_answers_the_frames_the_engines_encode() {
             "{}",
             d.id
         );
-        if d.id == "digital-world-traveller" || d.id == "microtelecom-perseus-usb" {
+        if matches!(
+            d.id.as_str(),
+            "digital-world-traveller" | "microtelecom-perseus-usb" | "elektor-sdr-usb"
+        ) {
             // Set only: there is no read on the wire.
             assert!(engine.encode(&Op::GetFrequency(Vfo::A)).is_err());
             continue;
@@ -500,15 +503,6 @@ async fn the_traveller_is_tuned_in_whole_kilohertz_and_cannot_be_read() {
         vec![0x4A, 0, 3, 0, 0xFF, 0xFF, 0x32, 0x3B, 0xC4]
     )));
     assert!(radioctl_protocols::dwt::DwtTwin::default().khz().is_none());
-}
-
-#[test]
-fn the_elektor_has_no_engine_and_says_why() {
-    let id = "elektor-sdr-usb";
-    let error = engine_for(&by_id(id)).map(|_| ()).expect_err("no engine");
-    assert_eq!(error.kind, ErrorKind::Unsupported, "{id}");
-    assert!(error.detail.contains("bit-bang"), "{}", error.detail);
-    assert!(twin_for(&by_id(id)).is_err(), "{id}");
 }
 
 #[test]

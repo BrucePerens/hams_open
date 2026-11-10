@@ -28,6 +28,7 @@ pub mod drake;
 pub mod drt1;
 pub mod dwt;
 pub mod elecraft;
+pub mod elektor507;
 pub mod flex;
 pub mod funcube;
 pub mod gomspace;

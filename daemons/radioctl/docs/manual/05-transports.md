@@ -252,8 +252,8 @@ transfer_timeout_ms = 1000                    # 50 to 10000
 
 A build without the `usb` feature refuses this transport at start with a message saying so.
 `kind = "virtual"` on a USB description runs the board's twin on the fake bus, for trying
-clients. Status: unverified on every board; the Elektor SDR-USB has a description but no engine yet
-(it programs a Cypress PLL through an FTDI chip in bit-bang mode).
+clients. Status: unverified on every board; the Elektor SDR-USB programs its Cypress PLL through an FTDI chip in
+bit-bang mode (frequency and attenuator, write-only).
 
 ## TCP
 
