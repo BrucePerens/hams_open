@@ -81,4 +81,21 @@ describe("manual_toc", () => {
         expect(container.textContent).not.toInclude("Stale content");
         expect(container.querySelectorAll("a.nav-link").length).toBe(1);
     });
+
+    test("a leading H1 in the body that repeats the page title becomes an H2", () => {
+        const article = document.createElement("article");
+        article.innerHTML = "<header><h1>Logging</h1></header>";
+        document.body.appendChild(article);
+        const { container, articleBody } = makeFixture("<h1>Logging</h1><h2>Setup</h2>");
+        const instance = Object.create(ManualTOC.prototype);
+        instance.el = articleBody;
+
+        instance.start();
+
+        expect(articleBody.querySelectorAll("h1").length).toBe(0);
+        expect(articleBody.querySelectorAll("h2").length).toBe(2);
+        expect(container.querySelectorAll("a.nav-link").length).toBe(2);
+        article.remove();
+        articleBody.remove();
+    });
 });

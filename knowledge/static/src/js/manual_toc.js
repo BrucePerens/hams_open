@@ -14,6 +14,15 @@ export class ManualTOC extends Interaction {
     static selector = '.o_manual_body';
 
     start() {
+        // Redesign T21: the page title is the one H1; a leading H1 in the body that repeats the article name becomes an H2.
+        const title = document.querySelector('article > header h1');
+        const lead = this.el.querySelector('h1');
+        if (title && lead && lead.textContent.trim() === title.textContent.trim()) {
+            const h2 = document.createElement('h2');
+            h2.innerHTML = lead.innerHTML;
+            lead.replaceWith(h2);
+        }
+
         const tocContainer = document.getElementById('manual_toc_container');
         if (!tocContainer) {
             return;
