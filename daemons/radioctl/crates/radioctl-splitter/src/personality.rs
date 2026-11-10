@@ -41,7 +41,9 @@ pub enum Request {
 /// The rig state a composite status answer (the Kenwood `IF`) is built from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Status {
-    /// Frequency of VFO A.
+    /// The VFO the rig receives on (VFO A when the rig does not say).
+    pub rx_vfo: Vfo,
+    /// Frequency of the receive VFO.
     pub frequency: Hz,
     /// Operating mode.
     pub mode: Mode,

@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use radioctl_core::event::Source;
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::rig::RigHandle;
+use radioctl_core::rig::{Cached, RigHandle};
 use radioctl_core::transport::Transport;
 use radioctl_core::units::{Hz, Vfo};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -414,17 +414,25 @@ impl Splitter {
     }
 
     // [@ANCHOR: radioctl_splitter_read_status]
-    /// The composite status: frequency of VFO A, mode and transmit state must be readable, else
+    /// The composite status: frequency of the receive VFO (VFO A unless the rig has reported
+    /// otherwise, as a Kenwood does in its `IF`), mode and transmit state must be readable, else
     /// the request is refused (an `IF` that guessed them would lie about the transmitter); RIT,
     /// XIT, its offset and split are optional features, and one the rig cannot read is reported
     /// at its neutral value (off, 0).
     async fn read_status(&self) -> Outcome {
+        let rx_vfo = match self.inner.rig.cached(Field::RxVfo) {
+            Some(Cached {
+                value: Observation::RxVfo(vfo),
+                ..
+            }) => vfo,
+            _ => Vfo::A,
+        };
         let (
             Outcome::Value(Observation::Frequency(_, frequency)),
             Outcome::Value(Observation::Mode(mode)),
             Outcome::Value(Observation::Ptt(ptt)),
         ) = (
-            self.read_frequency(Vfo::A).await,
+            self.read_frequency(rx_vfo).await,
             self.read(Field::Mode, Op::GetMode).await,
             self.read(Field::Ptt, Op::GetPtt).await,
         )
@@ -448,6 +456,7 @@ impl Splitter {
             Outcome::Value(Observation::Split(true))
         );
         Outcome::Status(Status {
+            rx_vfo,
             frequency,
             mode,
             ptt,
