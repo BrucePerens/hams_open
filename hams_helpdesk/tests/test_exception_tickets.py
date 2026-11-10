@@ -539,11 +539,17 @@ class TestExceptionPaging(ExceptionTicketCase):
         self.assertFalse(self.Fingerprint.search([("ticket_id", "in", later.ids)]).mapped("notified_at")[0])
 
     def test_after_the_window_the_next_ticket_pages_and_counts_the_silent_ones(self):
-        self.open_ticket(0)
+        paged_ticket = self.open_ticket(0)
         self.open_ticket(1)
         self.open_ticket(2)
         paged = self.Fingerprint.search([("notified_at", "!=", False)])
         paged.notified_at = fields.Datetime.now() - reporter.NOTIFY_WINDOW - timedelta(minutes=1)
+        # The silent ones are the tickets created after the page: the paged ticket itself is older than it.
+        self.env.cr.execute(
+            "UPDATE hams_helpdesk_ticket SET create_date = %s WHERE id = %s",
+            (paged.notified_at - timedelta(minutes=1), paged_ticket.id),
+        )
+        paged_ticket.invalidate_recordset(["create_date"])
         fourth = self.open_ticket(3)
         messages = self.assignment_messages(fourth)
         self.assertEqual(len(messages), 1)
