@@ -200,6 +200,13 @@ class TestCoreSecretsFromStore(TransactionCase, SafePatchMixin):
             self.icp.set_param(cs.VAPID_PRIVATE_KEY, "a-new-test-vapid-key")
         self.assertEqual(self._row(cs.VAPID_PRIVATE_KEY), DB_VAPID)
 
+    def test_on_non_ascii_vapid_value_is_a_user_error_not_a_type_error(self):
+        # Tests [@ANCHOR: zero_sudo:core_secrets_db_value]
+        self._flag(True)
+        with self.assertRaises(UserError):
+            self.icp.set_param(cs.VAPID_PRIVATE_KEY, "caf\u00e9-vapid-key")
+        self.assertEqual(self._row(cs.VAPID_PRIVATE_KEY), DB_VAPID)
+
     def test_on_write_of_other_keys_is_untouched(self):
         # Tests [@ANCHOR: zero_sudo:core_secrets_write]
         self._flag(True)

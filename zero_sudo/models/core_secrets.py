@@ -120,7 +120,7 @@ class IrConfigParameterCoreSecrets(models.Model):
             )
             return MOVED_MARKER
         current = _optional_store_value(key)
-        if current is not None and hmac.compare_digest(str(value), current):
+        if current is not None and hmac.compare_digest(str(value).encode("utf-8", "replace"), current.encode("utf-8", "replace")):
             return MOVED_MARKER
         # A new VAPID key pair (mail.push.device generates one when the public key is missing): the public key
         # would land in the database while the private key is dropped, and every push would fail its
