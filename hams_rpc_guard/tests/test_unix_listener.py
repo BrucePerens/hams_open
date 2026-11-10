@@ -333,3 +333,12 @@ class TestUnixLoginBinding(HamsTransactionCase):
         self.values[policy.MODE_PARAM] = "enforce"
         self.environ[gate.UNIX_LOGINS_ENVIRON_KEY] = frozenset({"admin"})
         guard.check_rpc_call(partners, "search")
+
+    def test_an_unreadable_parameter_does_not_drop_the_login_binding(self):
+        partners = self.env["res.partner"].with_user(self.env.ref("base.user_admin"))
+        self.environ[gate.UNIX_PEER_ENVIRON_KEY] = gate.Peer(1, 1001, 1001, "hamsd_fcc", "hamsd").as_dict()
+        self.environ[gate.UNIX_LOGINS_ENVIRON_KEY] = frozenset({"callbook_sync"})
+        self.values[policy.CLIENT_CERT_HEADER_PARAM] = "X-Client-Cert"
+        self.values[gate.TRUSTED_PROXIES_PARAM] = "not-a-network"  # certificate_identity raises ConfigError
+        with self.assertLogs(guard._logger, "ERROR"), self.assertRaises(AccessError):
+            guard.check_rpc_call(partners, "search")
