@@ -23,7 +23,7 @@ Measures the frequency of the signal on the RX input within +/-25 Hz of `freq_hz
 
 ## Returns
 
-`center_hz`, `tx_dds_hz`, `offset_hz` with `offset_codec1_hz`, `offset_codec2_hz` and `stderr_hz`, `frequency_hz` (centre plus offset), `measurement_s`, a `note` and `recovery` counts. A TX-to-RX loopback reads an offset of 0. The reference is the unit's 12 MHz TCXO; the sign convention (higher RX frequency is a positive offset) and the absolute accuracy are not verified against an external standard.
+`center_hz`, `tx_dds_hz`, `offset_hz` with `offset_codec1_hz`, `offset_codec2_hz` and `stderr_hz`, `frequency_hz` (centre plus offset), `measurement_s`, the flags `sign_verified` and `absolute_accuracy_verified` (both `false` until a known external signal has been measured; Bruce's decision of 2026-11-08), the `reference` (the internal TCXO), a `note` and `recovery` counts. A TX-to-RX loopback reads an offset of 0. The reference is the unit's 12 MHz TCXO; the sign convention (higher RX frequency is a positive offset) and the absolute accuracy are not verified against an external standard.
 
 ## NanoVNA
 

@@ -10,6 +10,8 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- tools/bench_vna_time_domain: impulse or step response and time gating of a stored sweep, host only
+
 - instruments/glasgow/logic-analyzer: how the bench_gla tools work on the revision C analyzer (host-side trigger, pre-trigger window and sample rate), the USB link limits with the full-speed rate measured on the unit
 - instruments/glasgow/logic-bench-session: the wiring to verify the logic analyzer and the pattern generator on real hardware (no capture has run yet)
 - tools/bench_gla_limits: bytes per edge and edges per second the link can carry, as a model

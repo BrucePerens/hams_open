@@ -35,7 +35,7 @@ to 0.7 to 0.9 percent in magnitude and phase at 1, 10, 20 and 30 MHz, and to 1.5
 the points are laid out in time (the unit drifts smoothly with time while it settles; the loopback is flat in RF frequency). It also
 reproduces the unit's IF-dependent response (|S21| 0.874 at IF 12 kHz down to 0.767 at 1 kHz, nine IFs) to 0.1 to 1 percent on both codecs
 (`Reference::Left` for codec 1, `Reference::Right` for codec 2). Not covered: a device under test with a frequency-dependent response, the open/short/load/through calibration (now `cal`, see below); the low-frequency range needs no special filtering down to 200 Hz
-and the time-domain transforms with their windows are in `timedomain` (details in `docs/PROTOCOL.md`).
+and the time-domain transforms with their windows and time gating (`timedomain::gate`) are in `timedomain` (details in `docs/PROTOCOL.md`).
 
 The two DDS chips are an AD9859 and an AD9951 (identical register maps, no sweep engine), clocked from a 12 MHz TCXO
 times a premultiplier of 3, then times nRF = 10 (RF, 360 MHz) and nLO = 9 (LO, 324 MHz).
@@ -168,6 +168,7 @@ Each is a test against bytes or samples recorded from the vendor program.
 * The internal temperature counts are read from request 0x85 and refused on a firmware that has no sensor. [@ANCHOR: vnwa_open_temperature_counts]
 * A time-domain transform needs at least four points on a uniform, rising frequency grid. [@ANCHOR: vnwa_open_time_domain_check_grid]
 * The delay of the largest peak is found by parabolic interpolation. [@ANCHOR: vnwa_open_time_domain_peak_time]
+* A time gate keeps what arrives between two times (shaped by a window across the gate) and returns that part's frequency response on the same grid; the impulse response is taken with a rectangular window so nothing needs undoing. [@ANCHOR: vnwa_open_time_domain_gate]
 * One point is traced raw: the audio of both codecs around the set-up block send. (Hardware test.) [@ANCHOR: vnwa_open_trace_point]
 * A transfer error reads as its message, with `(transient)` when it is worth sending again. [@ANCHOR: vnwa_open_transfer_error_text]
 * Every transfer try is remembered with its time, name and outcome, the last 16 kept. [@ANCHOR: vnwa_open_transfer_remember]

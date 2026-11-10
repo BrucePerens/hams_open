@@ -32,6 +32,7 @@ mod spectrum;
 mod testdir;
 mod usb_hub;
 mod vna;
+mod vna_time;
 mod vna_tools;
 
 use config::{Instrument, Kind, Tier};
@@ -110,6 +111,9 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_vna_meter", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA frequency meter: the frequency of the signal on the RX input within +/-25 Hz of center_hz (param freq_hz), by the phase of RX against the unit's own reference over about 1.7 s (point_ms 60 default; the TX DDS runs at the centre, nothing else may use the unit). Returns the offset in Hz with its standard error and the reading. A TX-to-RX loopback reads 0. The sign and absolute accuracy are not yet verified against an external standard.",
         props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number","description":"centre frequency in Hz"},"point_ms":{"type":"number"}}"#, required: &["freq_hz"] },
+    ToolSpec { name: "bench_vna_time_domain", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
+        desc: "VNA, host only (sends nothing to the unit): the impulse or step response of S11 or S21 of a sweep that bench_vna_sweep wrote (`file`, a .csv name in the output directory), with the vendor's windows (rectangular, hamming, hanning, blackman, blackman_squared), low-pass or band-pass, and optionally a time gate (`gate_start_s`, `gate_stop_s`, `gate_shape`) whose gated frequency response is written to a second CSV. Returns the peak delay and, with `velocity_factor`, the distance (round trip for S11). Low-pass needs a sweep that starts at a multiple of its step (for example 2 MHz to 200 MHz in 100 points).",
+        props: r#"{"instrument":{"type":"string"},"file":{"type":"string"},"trace":{"type":"string","enum":["s11","s21"]},"window":{"type":"string","enum":["rectangular","hamming","hanning","blackman","blackman_squared"]},"mode":{"type":"string","enum":["lowpass","bandpass"]},"response":{"type":"string","enum":["impulse","step"]},"time_points":{"type":"integer","description":"8 to 8192, default 512"},"t_max_s":{"type":"number","description":"last time, default half the unaliased range"},"velocity_factor":{"type":"number","description":"0.1 to 1: also return a distance"},"gate_start_s":{"type":"number"},"gate_stop_s":{"type":"number"},"gate_shape":{"type":"string","enum":["rectangular","hamming","hanning","blackman","blackman_squared"]}}"#, required: &["file"] },
     ToolSpec { name: "bench_vna_calibrate_measure", tier: Tier::ReadConfig, kinds: &[Kind::Vna],
         desc: "VNA calibration, step 1: sweep one standard (open, short, load or thru) and store it under `session`, with the settings and the `cable` text (what is between the ports and the reference plane). Repeat for each standard with the same start_hz, stop_hz, points and cable.",
         props: r#"{"instrument":{"type":"string"},"session":{"type":"string"},"standard":{"type":"string","enum":["open","short","load","thru"]},"cable":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"points":{"type":"integer"},"if_hz":{"type":"number"},"point_ms":{"type":"number"},"rf_level":{"type":"integer"}}"#, required: &["session","standard","cable","start_hz","stop_hz","points"] },
@@ -399,6 +403,10 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
     let _hub_held = hub_lock
         .as_ref()
         .map(|l| l.lock().unwrap_or_else(|e| e.into_inner()));
+    if name == "bench_vna_time_domain" {
+        // Reads a stored sweep: no unit is needed, whichever VNA driver made it.
+        return vna_time::time_domain(args, &out_dir());
+    }
     if inst.kind == Kind::Vna && inst.driver == "nanovna" {
         return nanovna::call(inst, name, args, &out_dir());
     }
@@ -836,6 +844,7 @@ mod tests {
             "bench_vna_generator_fm",
             "bench_vna_spectrum",
             "bench_vna_meter",
+            "bench_vna_time_domain",
             "bench_vna_calibrate_measure",
             "bench_vna_calibrate_build",
         ];
