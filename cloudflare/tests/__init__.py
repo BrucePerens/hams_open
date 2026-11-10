@@ -29,3 +29,4 @@ from . import test_dns_push
 from . import tunnel_simulator
 from . import test_zone_settings_always_https
 from . import test_rpc_exposure
+from . import test_token_scope

@@ -3,7 +3,10 @@
 import time
 from odoo import models, fields, _
 from odoo.exceptions import UserError
-from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token
+import logging
+from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token, inspect_token
+
+_logger = logging.getLogger(__name__)
 
 
 # # Verified by [@ANCHOR: test_xpath_rendering_cf_settings]
@@ -12,6 +15,12 @@ class ResConfigSettings(models.TransientModel):
 
     cloudflare_api_token = fields.Char(
         related="website_id.cloudflare_api_token", readonly=False
+    )
+    cloudflare_allow_broad_token = fields.Boolean(
+        string="Allow an over-broad API token",
+        config_parameter="cloudflare.allow_broad_token",
+        help="Off (default): saving a token that can manage API tokens, billing, members or account settings is "
+             "refused, and so is a token Cloudflare cannot introspect. On: it is accepted with a logged warning.",
     )
     cloudflare_zone_id = fields.Char(
         related="website_id.cloudflare_zone_id", readonly=False
@@ -81,7 +90,27 @@ class ResConfigSettings(models.TransientModel):
                 "cloudflare.trusted_ip_ranges_last_refreshed"
             ) or _("Never")
 
+    def _check_cloudflare_token_scope(self):
+        """Refuse (unless overridden) a changed token that is broad or that Cloudflare cannot introspect."""
+        token = self.cloudflare_api_token
+        if not token or token == self.website_id.cloudflare_api_token:
+            return
+        ok, detail = inspect_token(token)
+        if ok and not detail:
+            return
+        if ok:
+            problem = _("This Cloudflare token holds permissions an edge token does not need: %s. "
+                        "Create a token with only the Zone and DNS/Cache/Firewall scopes listed in the "
+                        "module README and remove these.") % ", ".join(detail)
+        else:
+            problem = detail
+        if self.cloudflare_allow_broad_token:
+            _logger.warning("Cloudflare token accepted by override (cloudflare.allow_broad_token): %s", problem)
+            return
+        raise UserError(problem + " " + _("(Tick 'Allow an over-broad API token' to override.)"))
+
     def set_values(self):
+        self._check_cloudflare_token_scope()
         super().set_values()
         # Publish the custom-ranges edit to Redis immediately, so it takes effect for the
         # env-less WSGI hook (wsgi_proxy_scheme.py) right away instead of waiting for the
