@@ -170,6 +170,9 @@ impl Policy {
         };
         let mut cursor = self.device_root.clone();
         let parts: Vec<_> = rel.components().collect();
+        if parts.is_empty() {
+            return Err(Denial::OutsideRoot); // the device root itself is not a node
+        }
         let last = parts.len().saturating_sub(1);
         for (i, c) in parts.iter().enumerate() {
             cursor.push(c);
@@ -342,6 +345,11 @@ mod tests {
         assert_eq!(
             p.check_node(&os, Path::new("/etc/x"), DeviceClass::Serial),
             Err(Denial::OutsideRoot)
+        );
+        assert_eq!(
+            p.check_node(&os, Path::new("/dev"), DeviceClass::Serial),
+            Err(Denial::OutsideRoot),
+            "the device root itself is not a node"
         );
     }
 }

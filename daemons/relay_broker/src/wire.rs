@@ -315,7 +315,13 @@ impl Request {
 impl Response {
     // [@ANCHOR: relay_broker_response_error]
     /// Shorthand for an error response.
+    /// `Status::Ok` is not an error; it is sent as `Status::Failed` (the decoder rejects an Ok error frame).
     pub fn error(status: Status, reason: impl Into<String>) -> Response {
+        let status = if status == Status::Ok {
+            Status::Failed
+        } else {
+            status
+        };
         Response::Error {
             status,
             reason: reason.into(),
@@ -548,6 +554,7 @@ mod tests {
                 groups: vec!["dialout".into()],
             },
             Response::error(Status::Denied, "disk"),
+            Response::error(Status::Ok, "not really ok"),
         ];
         for resp in samples {
             let body = resp.encode();

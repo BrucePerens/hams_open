@@ -49,6 +49,18 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
 }
 
 // [@ANCHOR: relay_broker_main]
+/// Removes a leftover socket at `path` from an earlier run; anything else at that path is an error, not deleted.
+// [@ANCHOR: relay_broker_remove_stale_socket]
+fn remove_stale_socket(path: &std::path::Path) -> std::io::Result<()> {
+    use std::os::unix::fs::FileTypeExt;
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.file_type().is_socket() => std::fs::remove_file(path),
+        Ok(_) => Err(std::io::Error::other("exists and is not a socket; not removing it")),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().collect();
     let args = match parse_args(&argv) {
@@ -80,8 +92,16 @@ fn main() -> ExitCode {
     let listener = match (activated_listener(), &args.socket) {
         (Some(l), _) => l,
         (None, Some(path)) => {
-            let _ = std::fs::remove_file(path);
-            match UnixListener::bind(path) {
+            if let Err(e) = remove_stale_socket(path) {
+                eprintln!("hams-relay-broker: {}: {e}", path.display());
+                return ExitCode::from(2);
+            }
+            let bound = UnixListener::bind(path).and_then(|l| {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o660))?; // as documented
+                Ok(l)
+            });
+            match bound {
                 Ok(l) => l,
                 Err(e) => {
                     eprintln!("hams-relay-broker: bind {}: {e}", path.display());
@@ -137,5 +157,23 @@ mod tests {
         assert!(parse_args(&s(&["b", "--socket"])).is_err());
         // main's own exit paths: no config file means exit 2, exercised through the binary in
         // tests/cli.rs; here the argument parser is the unit.
+    }
+
+    // Tests [@ANCHOR: relay_broker_remove_stale_socket]
+    #[test]
+    fn only_a_leftover_socket_is_removed() {
+        let dir = std::env::temp_dir().join(format!("rb-stale-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sock = dir.join("s");
+        let _l = UnixListener::bind(&sock).unwrap();
+        drop(_l); // the file stays behind, as after a crash
+        assert!(remove_stale_socket(&sock).is_ok());
+        assert!(!sock.exists());
+        assert!(remove_stale_socket(&sock).is_ok(), "nothing there is fine");
+        let file = dir.join("f");
+        std::fs::write(&file, b"keep").unwrap();
+        assert!(remove_stale_socket(&file).is_err());
+        assert!(file.exists(), "a regular file is left alone");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
