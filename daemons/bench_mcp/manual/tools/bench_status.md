@@ -23,7 +23,7 @@ Reads the current state. Use it before changing anything and after any error fro
 
 * **Scope**: `trigger_mode` (`AUTO`, `NORM`, `SINGLE`, `STOP`), `acquisition` (`running` or `stopped`), `timebase_s_per_div`, `sample_rate_sa_s`, and for channels 1 and 2 `vdiv_v`, `offset_v`, `coupling` (`A1M`, `D1M`, `GND`) and `attenuation` (probe ratio).
 * **Supply**: `output` (`on`/`off`), `set_voltage_v`, `set_current_a`, `ovp_v`, `ocp_a` (the supply's own protection limits), `measured_voltage_v`, `measured_current_a`, and `error` (the last entry of the supply's error queue).
-* **VNA**: `usb` (`present`, `present but not answering`, `not found or no permission`), the result of a harmless read, `instrument_monitoring` (firmware version and `temperature_counts`, see the [monitoring page](instruments/vna/monitoring-and-recovery)), `hub`, `power_cycles_by_this_server`, the codec ids, and the sweep defaults `if_hz`, `point_ms`, `rf_level`.
+* **VNA**: `usb` (`present`, `present but not answering`, `not found or no permission`), the result of a harmless read, `instrument_monitoring` (firmware version and `temperature_counts`, see the [monitoring page](instruments/vna/monitoring-and-recovery)), `external_clock` (always `false`: this driver never selects the external clock input) with `reference_clock`, `hub`, `power_cycles_by_this_server`, the codec ids, and the sweep defaults `if_hz`, `point_ms`, `rf_level`.
 * **SDR**: the same as [bench_identify](tools/bench_identify).
 
 ## Failure modes

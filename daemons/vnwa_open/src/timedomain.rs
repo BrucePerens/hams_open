@@ -187,6 +187,82 @@ pub fn transform(
     Ok(out)
 }
 
+/// Time-domain gating: keeps only what arrives between `t_start_s` and `t_stop_s` and returns the frequency response of that part, on the
+/// same frequency grid. The impulse response is taken with a rectangular frequency window (so nothing needs undoing afterwards), on a
+/// time grid that spans one whole period of the grid (`1 / step`, signed about zero), multiplied by a gate shaped by `shape` between the
+/// two times (zero outside), and transformed back with the inverse of the same sum. With a rectangular gate of the whole period the
+/// input comes back unchanged. `mode` is as for [`transform`]; low-pass mode gives a real response, so the gate times are signed
+/// delays and a negative `t_start_s` keeps the part before zero.
+pub fn gate(
+    freqs: &[f64],
+    data: &[Complex],
+    mode: Mode,
+    t_start_s: f64,
+    t_stop_s: f64,
+    shape: Window,
+) -> Result<Vec<Complex>, String> {
+    // [@ANCHOR: vnwa_open_time_domain_gate]
+    if !(t_start_s.is_finite() && t_stop_s.is_finite() && t_start_s < t_stop_s) {
+        return Err("the gate must start before it stops".into());
+    }
+    let (f0, step) = check_grid(freqs)?;
+    // One whole period holds `m` samples, enough to hold the mirrored low-pass spectrum (or the band-pass one) without aliasing.
+    let top = ((freqs[freqs.len() - 1] / step).round() as usize).max(1);
+    let m = (2 * top + 2).max(freqs.len() * 2);
+    let period = 1.0 / step;
+    let dt = period / m as f64;
+    let times: Vec<f64> = (0..m)
+        .map(|i| {
+            let k = if i > m / 2 {
+                i as f64 - m as f64
+            } else {
+                i as f64
+            };
+            k * dt
+        })
+        .collect();
+    let h = transform(
+        freqs,
+        data,
+        Window::Rectangular,
+        mode,
+        Response::Impulse,
+        &times,
+    )?;
+    let mut kept = vec![Complex { re: 0.0, im: 0.0 }; m];
+    let span = t_stop_s - t_start_s;
+    // Sample positions inside the gate get the shape's weight across the gate, found by scaling the window over a fine index range.
+    const FINE: usize = 1 << 16;
+    for (i, (&t, z)) in times.iter().zip(&h).enumerate() {
+        if t >= t_start_s && t <= t_stop_s {
+            let u = (t - t_start_s) / span;
+            let g = shape.weight((u * (FINE - 1) as f64).round() as usize, FINE);
+            kept[i] = Complex {
+                re: z.re * g,
+                im: z.im * g,
+            };
+        }
+    }
+    let _ = f0;
+    Ok(freqs
+        .iter()
+        .map(|&f| {
+            let mut sum = Complex { re: 0.0, im: 0.0 };
+            for (&t, z) in times.iter().zip(&kept) {
+                let e = Complex {
+                    re: (2.0 * PI * f * t).cos(),
+                    im: -(2.0 * PI * f * t).sin(),
+                };
+                sum = sum + *z * e;
+            }
+            Complex {
+                re: sum.re * dt,
+                im: sum.im * dt,
+            }
+        })
+        .collect())
+}
+
 /// The delay of the largest peak of `|z|`, by parabolic interpolation around it.
 pub fn peak_time(times_s: &[f64], z: &[Complex]) -> Option<f64> {
     // [@ANCHOR: vnwa_open_time_domain_peak_time]
@@ -317,6 +393,68 @@ mod tests {
         assert!(h[10].re.abs() < 0.02, "before the reflection: {}", h[10].re);
         let late = h[200].re;
         assert!((late - 0.5).abs() < 0.03, "after it: {late}");
+    }
+
+    // Tests [@ANCHOR: vnwa_open_time_domain_gate]
+    #[test]
+    fn a_gate_around_the_near_reflection_removes_the_far_one_and_a_whole_period_gate_changes_nothing(
+    ) {
+        let step = 2e6;
+        let f = grid(250, step, 1);
+        let two = |x: f64| Complex {
+            re: 0.5 * (2.0 * PI * x * 6e-9).cos() + 0.3 * (2.0 * PI * x * 40e-9).cos(),
+            im: -0.5 * (2.0 * PI * x * 6e-9).sin() - 0.3 * (2.0 * PI * x * 40e-9).sin(),
+        };
+        let near = |x: f64| Complex {
+            re: 0.5 * (2.0 * PI * x * 6e-9).cos(),
+            im: -0.5 * (2.0 * PI * x * 6e-9).sin(),
+        };
+        let s: Vec<Complex> = f.iter().map(|x| two(*x)).collect();
+        for mode in [Mode::LowPass, Mode::BandPass] {
+            let g = gate(&f, &s, mode, 1e-9, 20e-9, Window::Rectangular).unwrap();
+            // Away from the band edges (the gate and the band limit smear the ends) the gated response is the near reflection alone.
+            let worst = f
+                .iter()
+                .zip(&g)
+                .skip(20)
+                .take(210)
+                .map(|(x, z)| {
+                    let w = near(*x);
+                    ((z.re - w.re).powi(2) + (z.im - w.im).powi(2)).sqrt()
+                })
+                .fold(0.0, f64::max);
+            assert!(worst < 0.1, "{mode:?}: worst error {worst}");
+            // A Hanning gate centred on the reflection (peak weight 1 at 6 ns) keeps its size too.
+            let h = gate(&f, &s, mode, 0.0, 12e-9, Window::Hanning).unwrap();
+            let mid = h[100].abs();
+            assert!(
+                (mid - 0.5).abs() < 0.12,
+                "{mode:?}: Hanning-gated size {mid}"
+            );
+            let ungated: f64 = s
+                .iter()
+                .skip(20)
+                .take(210)
+                .map(|z| (z.re - near(0.0).re).abs())
+                .sum();
+            assert!(ungated > 0.0);
+        }
+        let all = gate(
+            &f,
+            &s,
+            Mode::LowPass,
+            -1.0 / step,
+            1.0 / step,
+            Window::Rectangular,
+        )
+        .unwrap();
+        let worst = s
+            .iter()
+            .zip(&all)
+            .map(|(a, b)| ((a.re - b.re).powi(2) + (a.im - b.im).powi(2)).sqrt())
+            .fold(0.0, f64::max);
+        assert!(worst < 1e-6, "whole-period gate: {worst}");
+        assert!(gate(&f, &s, Mode::LowPass, 5e-9, 5e-9, Window::Rectangular).is_err());
     }
 
     // Tests [@ANCHOR: vnwa_open_time_domain_check_grid]
