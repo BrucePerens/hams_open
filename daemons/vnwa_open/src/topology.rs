@@ -159,8 +159,7 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_codec_find_cards]
     #[test]
     fn sysfs_is_read_for_the_codec_vendor_only() {
-        let root = std::env::temp_dir().join(format!("vnwa_topo_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        let root = crate::testdir::TestDir::new("topo");
         for (card, id, usb, vid, pid) in [
             ("card1", "CODEC", "3-2.2.2", "08bb", "29c0"),
             ("card2", "CODEC_1", "3-2.2.3", "08bb", "29c0"),
@@ -178,7 +177,6 @@ mod tests {
         }
         let mut cards = find_cards(&root);
         cards.sort_by(|a, b| a.card_id.cmp(&b.card_id));
-        std::fs::remove_dir_all(&root).unwrap();
         assert_eq!(
             cards,
             vec![card("CODEC", "3-2.2.2"), card("CODEC_1", "3-2.2.3")]

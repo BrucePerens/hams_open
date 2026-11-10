@@ -2,6 +2,9 @@
 //! The `vnwa_open` command line, run as the built binary: exit codes and output of its commands that need no unit.
 use std::process::Command;
 
+#[path = "../src/testdir.rs"]
+mod testdir;
+
 fn run(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_vnwa_open"))
         .args(args)
@@ -27,9 +30,7 @@ fn the_command_line_refuses_an_unknown_command_and_answers_a_codec_question_with
 #[test]
 fn install_system_config_check_under_a_staging_root_reports_the_files_it_would_manage_and_changes_nothing(
 ) {
-    let root = std::env::temp_dir().join(format!("vnwa_open_cli_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
+    let root = testdir::TestDir::new("cli");
     let root_arg = root.to_str().unwrap();
     let o = run(&["install-system-config", "--check", "--root", root_arg]);
     let out = String::from_utf8_lossy(&o.stdout).to_string();
@@ -43,5 +44,4 @@ fn install_system_config_check_under_a_staging_root_reports_the_files_it_would_m
     // Nothing but the install log (which a check does not write either) may appear under the root.
     let created: Vec<_> = std::fs::read_dir(&root).unwrap().collect();
     assert!(created.is_empty(), "{created:?}");
-    let _ = std::fs::remove_dir_all(&root);
 }

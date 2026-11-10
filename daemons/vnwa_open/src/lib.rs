@@ -20,6 +20,8 @@ pub mod soak_topology;
 pub mod sound_server;
 pub mod spectrum;
 pub mod sweep;
+#[cfg(test)]
+mod testdir;
 pub mod timedomain;
 pub mod topology;
 pub mod trace;

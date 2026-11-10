@@ -185,7 +185,7 @@ mod tests {
 
     const PACTL: &str = "Card #3\n\tName: alsa_card.usb-BurrBrown_USB_AUDIO_CODEC-00\n\tProperties:\n\t\tdevice.bus_path = \"pci-0000:00:14.0-usb-0:2.2.3:1.0\"\n\t\tdevice.vendor.id = \"08bb\"\nCard #4\n\tProperties:\n\t\tdevice.vendor.id = \"0x08bb\"\n\t\tdevice.product.id = \"0x29c0\"\n\t\tdevice.bus_path = \"pci-0000:00:14.0-usb-0:2.2.3:1.0\"\n\t\tdevice.description = \"USB AUDIO  CODEC\"\n";
 
-    fn unit_tree(tag: &str) -> std::path::PathBuf {
+    fn unit_tree(tag: &str) -> crate::testdir::TestDir {
         let root = tmp(tag);
         tree(
             &root,
