@@ -223,7 +223,8 @@ mod tests {
     // Tests [@ANCHOR: relay_broker_audit_log_record]
     #[test]
     fn a_rejected_peer_is_logged_once_per_minute_and_the_log_rotates_at_the_cap() {
-        let dir = std::env::temp_dir().join(format!("relay_broker_audit_rot_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("relay_broker_audit_rot_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("events.jsonl");
         let _ = std::fs::remove_file(&path);
@@ -257,7 +258,10 @@ mod tests {
         assert!(current <= 300, "current log is {current} bytes");
         assert!(dir.join("events.jsonl.1").exists());
         use std::os::unix::fs::PermissionsExt;
-        assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
