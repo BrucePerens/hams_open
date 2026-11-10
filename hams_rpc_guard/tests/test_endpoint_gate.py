@@ -185,6 +185,8 @@ class TestSettings(HamsTransactionCase):
         # Tests [@ANCHOR: hams_rpc_guard:check_gate_parameters]
         # Tests [@ANCHOR: hams_rpc_guard:parameter_parsers]
         params = self.env["ir.config_parameter"]
+        # A deployment's ham_rpc_guard_config module may already hold these keys; start from none.
+        params.search([("key", "like", "hams_rpc_guard.%")]).unlink()
         for key, value in ((gate.ALLOWED_NETWORKS_PARAM, "10.99.0.0/40"), (gate.TRANSPORT_PARAM, "carrier-pigeon"),
                            (gate.CLIENT_ADDRESS_HEADER_PARAM, "X-Forwarded-For"), (gate.UNIX_PEERS_PARAM, "=x"),
                            (gate.LEGACY_PARAM, "any"), (gate.TRUSTED_PROXIES_PARAM, "nope")):
@@ -433,6 +435,8 @@ class TestPostInitHook(HamsTransactionCase):
 
     def test_the_hook_installs_the_documentation_and_sets_no_parameter(self):
         bootstrap = self.safe_patch_object(type(self.env["ir.module.module"]), "_bootstrap_knowledge_docs")
+        # ham_rpc_guard_config (when installed) creates the parameters itself; the hook must not add any.
+        self.env["ir.config_parameter"].search([("key", "like", "hams_rpc_guard.%")]).unlink()
         post_init_hook(self.env)
         bootstrap.assert_called_once_with()
         keys = [gate.ALLOWED_NETWORKS_PARAM, gate.LEGACY_PARAM, gate.TRUSTED_PROXIES_PARAM, gate.TRANSPORT_PARAM,
