@@ -559,12 +559,14 @@ def delete_custom_hostname(hostname_id, token, zone_id):
 _CF_ID = re.compile(r"[0-9a-f]{32}")
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_is_cloudflare_id]
 def is_cloudflare_id(value):
     """Cloudflare's object ids are 32 lower-case hex characters. Ids are put into URL paths, so one that
     is not that shape (a value an administrator pasted in) is refused instead of interpolated."""
     return bool(value) and bool(_CF_ID.fullmatch(value))
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_find_zone_id]
 def find_zone_id(name, token):
     """The id of the zone called exactly `name` that the token can see. (True, id), (True, None) when
     the token sees no such zone, or (False, message) when Cloudflare could not be asked. GET only."""
@@ -583,6 +585,7 @@ def find_zone_id(name, token):
     return True, None
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_list_records_named]
 def list_dns_records_named(zone_id, name, token):
     """Every DNS record of the zone under exactly `name` (all types): (True, [record, ...]) or
     (False, message). A failed read is never an empty list, so a caller can not mistake an outage for
@@ -607,6 +610,7 @@ def list_dns_records_named(zone_id, name, token):
         page += 1
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_create_record]
 def create_dns_record(zone_id, payload, token):
     # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
     if not token or not is_cloudflare_id(zone_id):
@@ -620,6 +624,7 @@ def create_dns_record(zone_id, payload, token):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_update_record]
 def update_dns_record(zone_id, record_id, payload, token):
     # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
     if not token or not is_cloudflare_id(zone_id) or not is_cloudflare_id(record_id):
@@ -633,6 +638,7 @@ def update_dns_record(zone_id, record_id, payload, token):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_delete_record]
 def delete_dns_record(zone_id, record_id, token):
     """Delete one DNS record by id. Only the push's "retire" path calls this. 404 means it is already gone,
     which is what the caller wanted."""
@@ -648,6 +654,7 @@ def delete_dns_record(zone_id, record_id, token):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_get_zone_details]
 def get_zone_details(zone_id, token):
     """The zone object (plan, creation date, name): (True, dict) or (False, message). GET only."""
     # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
@@ -662,6 +669,7 @@ def get_zone_details(zone_id, token):
     return True, response.json().get("result") or {}
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_count_records]
 def count_dns_records(zone_id, token):
     """How many DNS records the zone holds (Cloudflare's own total_count): (True, int) or (False, message).
     GET only, one record per page asked for."""
