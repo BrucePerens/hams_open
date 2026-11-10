@@ -29,6 +29,7 @@ from . import test_repeater_page_text
 from . import test_ssrf_safe_fetch
 from . import test_club_spam
 from . import test_secret_store
+from . import test_secret_broker
 from . import test_tdd_fixes
 from . import test_views
 from . import test_facility
