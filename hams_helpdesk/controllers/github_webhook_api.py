@@ -71,7 +71,8 @@ def _verify_github_signature(raw_body, secret, signature_header):
     except (TypeError, ValueError) as e:
         _logger.warning("GitHub webhook: could not compute HMAC for verification: %s", e)
         return False
-    return hmac.compare_digest(mac.hexdigest(), provided_hex)
+    # Bytes: compare_digest on str raises TypeError for a non-ASCII character in the header.
+    return hmac.compare_digest(mac.hexdigest().encode(), provided_hex.encode("utf-8", "replace"))
 
 
 class GithubWebhookController(http.Controller):

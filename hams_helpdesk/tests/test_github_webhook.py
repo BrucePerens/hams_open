@@ -136,6 +136,11 @@ class TestGithubWebhookHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(self.Ticket.search([]))
 
+    def test_github_webhook_non_ascii_signature_is_denied_not_an_error(self):
+        from odoo.addons.hams_helpdesk.controllers.github_webhook_api import _verify_github_signature
+
+        self.assertFalse(_verify_github_signature(b"{}", _TEST_SECRET, "sha256=" + "\u00e9" * 64))
+
     def test_github_webhook_wrong_key_signature_is_denied(self):
         # A signature computed with a DIFFERENT secret than the one configured -- distinct
         # from test_github_webhook_invalid_signature_is_denied's all-zero garbage signature,

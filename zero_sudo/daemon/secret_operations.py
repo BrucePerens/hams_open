@@ -31,7 +31,8 @@ def hmac_verify(secret, payload, signature, digest="sha256"):
     """True when `signature` (hex) equals the HMAC of `payload`; compared in constant time."""
     if not isinstance(signature, str):
         return False
-    return hmac.compare_digest(hmac_sign(secret, payload, digest), signature.lower())
+    # Bytes: compare_digest on str raises TypeError for a non-ASCII character in the signature.
+    return hmac.compare_digest(hmac_sign(secret, payload, digest).encode(), signature.lower().encode("utf-8", "replace"))
 
 
 # [@ANCHOR: zero_sudo:secret_operations_stripe_webhook_verify]
@@ -56,4 +57,4 @@ def stripe_webhook_verify(secret, payload, signature_header, tolerance=300, now=
     if abs(now - int(timestamp)) > tolerance:
         return False
     expected = hmac_sign(secret, f"{timestamp}.{payload}")
-    return any(hmac.compare_digest(expected, candidate) for candidate in candidates)
+    return any(hmac.compare_digest(expected.encode(), candidate.encode("utf-8", "replace")) for candidate in candidates)

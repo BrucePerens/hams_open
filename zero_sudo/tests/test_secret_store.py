@@ -230,6 +230,7 @@ class TestSecretOperations(BaseCase):
             ops.hmac_sign("k", b"p")
         self.assertTrue(ops.hmac_verify("k", "p", sig.upper()))
         self.assertFalse(ops.hmac_verify("k", "p", None))
+        self.assertFalse(ops.hmac_verify("k", "p", "\u00e9" * 64))
         self.assertFalse(ops.hmac_verify("other", "p", sig))
 
     def test_stripe_webhook_verify(self):

@@ -59,7 +59,14 @@ class PagerDutyController(http.Controller):
                 r_client = None
 
         stored_identity = request.env["zero_sudo.security.utils"]._get_system_param("pager_duty.domain_api_identity")
-        if not stored_identity or not api_identity or not hmac.compare_digest(api_identity, stored_identity):
+        # Bytes: compare_digest on str raises TypeError for a non-ASCII character, which would skip
+        # the failed-attempt count below.
+        if (
+            not stored_identity
+            or not isinstance(api_identity, str)
+            or not api_identity
+            or not hmac.compare_digest(api_identity.encode("utf-8", "replace"), stored_identity.encode())
+        ):
             if r_client:
                 try:
                     pipe = r_client.pipeline()
