@@ -192,7 +192,10 @@ class UserBlogRedirects(WebsiteBlog):
     def blog(self, blog=None, tag=None, page=1, search=None, **opt):
         path = _owned_blog_path(blog)
         if path:
-            page_number = int(page or 1)
+            try:
+                page_number = int(page or 1)
+            except ValueError:  # ?page=abc reaches here as the string (the /page/<int> route never does)
+                page_number = 1
             target = path if page_number == 1 else f"{path}/page/{page_number}"
             return request.redirect(target, code=301, local=True)
         return super().blog(blog=blog, tag=tag, page=page, search=search, **opt)

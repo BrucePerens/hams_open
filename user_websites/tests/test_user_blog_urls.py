@@ -124,6 +124,12 @@ class TestUserBlogUrls(HamsHttpCase):
             self.assertEqual(response.status_code, 301, old)
             self.assertEqual(self._location(response), new, old)
 
+    def test_06a_a_non_numeric_page_parameter_redirects_instead_of_failing(self):
+        # Tests [@ANCHOR: user_websites:COMM_stock_blog_redirects]
+        response = self.url_open(f"/blog/{self.blog_slug}?page=abc", allow_redirects=False)
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(self._location(response), "/burlowner/blog")
+
     def test_06b_the_old_post_edit_style_address_ends_at_the_callsign_address(self):
         # Tests [@ANCHOR: user_websites:COMM_stock_old_blog_post_redirect]
         # Tests [@ANCHOR: user_websites:COMM_stock_blog_redirects]
