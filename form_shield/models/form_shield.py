@@ -286,7 +286,9 @@ class FormShield(models.AbstractModel):
     # [@ANCHOR: form_shield:over_limit]
     # Verified by [@ANCHOR: form_shield:test_check_refusal_table]
     def _over_limit(self, form_id, subject, target, table):
-        """The scope name of the first exceeded limit, else None. Each call counts one use."""
+        """The scope name of the first exceeded limit, else None. Each call counts one use in
+        every scope up to and including the first one exceeded: a visitor already over their own
+        limit must not keep eating the target and whole-form budgets other people share."""
         client = self._redis()
         values = {
             "subject": subject,
@@ -297,7 +299,6 @@ class FormShield(models.AbstractModel):
             ),
             "global": "all",
         }
-        exceeded = None
         for scope, allowed, window in table:
             value = values.get(scope)
             if value is None:
@@ -306,6 +307,6 @@ class FormShield(models.AbstractModel):
             used = client.incr(key)
             if used == 1 or client.ttl(key) < 0:
                 client.expire(key, window)
-            if used > allowed and exceeded is None:
-                exceeded = "rate_" + scope
-        return exceeded
+            if used > allowed:
+                return "rate_" + scope
+        return None
