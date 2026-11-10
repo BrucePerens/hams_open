@@ -277,6 +277,27 @@ receive I/Q is a separate data plane. So the engine speaks a small line protocol
   and `radioctl-protocols/tests/hpsdr_actor.rs`. The `hpsdr` crate, its emulator and these files are all
   `unverified`; no HPSDR radio was used.
 
+## Other engines and shared parts
+
+Each of these is a sans-IO engine with a virtual twin and tests against the twin; none has been run on a
+radio. The `Sources` paragraph at the top of each file names the manual or header the facts came from.
+
+- **`aor_classic.rs`**: AOR AR3030 and AR3000A, whose ASCII sets differ from the `RF` / `MD` / `LM` family of
+  `aor.rs`.
+- **`rs_hf.rs`**: Rohde and Schwarz HF receivers with the line-feed framed `F` / `I` sets (EK 895, EK 896,
+  XK 2100) and the `*F` / `*I` set (XK 852).
+- **`tentec_rx320.rs`**: Ten-Tec RX-320 and Pegasus TT-550 (the `rx320` and `tt550` dialects).
+- **`uniden_digital.rs`**: Uniden BCD396T and BCD996T digital trunking scanners (`GLG` / `QSH`).
+- **`serial_vendor.rs`**: the receive buffer, digit parsing and the dispatch from a description's
+  `vendor.protocol` to its engine and twin, shared by the vendor serial engines (Ten-Tec, Drake, Racal and
+  others); `VendorTwin` lets the conformance harness drive every one the same way.
+- **`usb_family.rs`**: the dispatch for the `usb-device` family, from a description to its engine, its virtual
+  twin and the device to look for on the bus (chapter [5](05-transports.md#usb-devices)).
+- **`perseus_engine.rs`**: the Microtelecom Perseus as an engine; it encodes each operation as one control
+  transfer for the `perseus` loader (known gap 11, chapter [13](13-roadmap.md)).
+- **`easy.rs`**: the one-call constructors behind the prelude (`VirtualRig::spawn`, `spawn_virtual`);
+  chapter [2](02-quick-start.md).
+
 ## What "agree" means here
 
 The oracle (chapter [11](11-testing.md)) drives the virtual twin of a radio once through Hamlib's `rigctld`

@@ -448,3 +448,24 @@ fn bench_console_reads_sets_scopes_and_cannot_transmit() {
         );
     }
 }
+
+/// Every public module of `radioctl-protocols` is named in the README or a manual page, so a new
+/// engine cannot be added without the manual (or the README) mentioning it.
+#[test]
+fn every_protocol_module_is_named_in_the_manual() {
+    let lib = read(&workspace().join("crates/radioctl-protocols/src/lib.rs"));
+    let mut text = read(&workspace().join("README.md"));
+    for (_, page) in pages() {
+        text.push_str(&page);
+    }
+    let missing: Vec<&str> = lib
+        .lines()
+        .filter_map(|l| l.strip_prefix("pub mod "))
+        .map(|l| l.trim_end_matches(';'))
+        .filter(|m| !text.contains(*m))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "radioctl-protocols modules the manual never names: {missing:?}; add them to chapter 7"
+    );
+}
