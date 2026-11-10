@@ -3,6 +3,7 @@
 import logging
 from odoo import models
 from odoo.http import Response, request
+from werkzeug.exceptions import HTTPException
 
 _logger = logging.getLogger(__name__)
 
@@ -177,6 +178,19 @@ class IrHttp(models.AbstractModel):
         response = super()._handle_error(exception)
         if isinstance(response, Response) and cls._cloudflare_error_never_stored(response):
             response.headers.setdefault("Cloudflare-CDN-Cache-Control", NO_EDGE_CACHE)
+        elif isinstance(response, HTTPException) and (response.code or 0) >= 400:
+            # A NotFound raised by a controller (a stale /web/assets/<id>/<hash>/... bundle after a deploy) comes
+            # back as the bare werkzeug exception: a WSGI callable with no headers to edit and no pass through
+            # _post_dispatch. Answer with the same body, plus the never-stored headers.
+            http_exception = response
+
+            def answer_without_storing(environ, start_response):
+                built = http_exception.get_response(environ)
+                built.headers["Cache-Control"] = NO_STORE
+                built.headers["Cloudflare-CDN-Cache-Control"] = NO_EDGE_CACHE
+                return built(environ, start_response)
+
+            return answer_without_storing
         return response
 
     @classmethod
