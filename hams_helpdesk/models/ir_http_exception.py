@@ -10,6 +10,7 @@ broken report cannot change the response.
 
 import inspect
 import logging
+import math
 import traceback
 
 import werkzeug.exceptions
@@ -68,7 +69,7 @@ def _error_is_the_senders_number(error, parameter_values):
                 number = float(value)
             except ValueError:
                 continue
-            if number != number or number in (float("inf"), float("-inf")):
+            if not math.isfinite(number):
                 return True
         return False
     return any(message.endswith(": " + repr(value)) for value in parameter_values)
