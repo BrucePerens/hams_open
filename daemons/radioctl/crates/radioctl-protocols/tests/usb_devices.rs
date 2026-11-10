@@ -691,3 +691,113 @@ async fn the_loader_backend_loads_the_users_firmware_on_open_and_names_a_missing
         .expect_err("no fx2.hex");
     assert!(error.detail.contains("fx2.hex"), "{}", error.detail);
 }
+
+// Tests [@ANCHOR: radioctl_si570_usb_fifi_answer]
+// Tests [@ANCHOR: radioctl_si570_usb_engine_open_requests]
+#[tokio::test]
+async fn the_fifisdr_takes_its_vco_factor_from_the_board_and_carries_mode_levels_and_meter() {
+    use radioctl_core::op::Observation;
+    use radioctl_core::units::{Level, Mode};
+    use radioctl_protocols::si570_usb::Si570Twin;
+    let desc = by_id("fifi-sdr");
+    // A board whose VCO factor is 2 (the description says 4) and whose S-meter reads 70000.
+    let mut twin = Si570Twin::new(&desc).expect("twin");
+    twin.set_fifisdr_factor_and_signal(2, 70_000);
+    let bus = FakeUsbBackend::new(Box::new(twin));
+    let link = open_usb(&Handle::current(), Arc::new(bus.clone()), fast(&desc))
+        .await
+        .expect("link");
+    let (stream, monitor) = link.into_parts();
+    let mut options = RigOptions::default();
+    options.poll.enabled = false;
+    options.link_watch = Some(monitor.watch());
+    let engine = radioctl_protocols::usb_family::engine_for(&desc).expect("engine");
+    std::mem::forget(monitor);
+    let rig = spawn(&Handle::current(), engine, stream, options).expect("spawn");
+
+    // Opening reads the VCO factor (request 0xAB, wIndex 11, four bytes) before anything else.
+    rig.set_frequency(Vfo::A, Hz(14_205_000))
+        .await
+        .expect("set");
+    let log = bus.log();
+    assert_eq!(
+        log.first(),
+        Some(&FakeTransfer::ControlIn(0xC0, 0xAB, 0, 11, 4))
+    );
+    // The word on the wire is the oscillator frequency with the board's factor: 14.205 MHz x2.
+    let expected = word_from_hz(Hz(14_205_000), 2)
+        .expect("fits")
+        .to_le_bytes()
+        .to_vec();
+    assert!(log.contains(&FakeTransfer::ControlOut(0x40, 0x32, 0, 0, expected)));
+    assert_eq!(
+        rig.frequency(Vfo::A, Freshness::Fresh)
+            .await
+            .expect("read")
+            .value,
+        Hz(14_205_000)
+    );
+
+    rig.set_mode(Mode::Am).await.expect("mode");
+    assert!(log_has(
+        &bus,
+        FakeTransfer::ControlOut(0x40, 0xAC, 0, 15, vec![2])
+    ));
+    assert_eq!(
+        rig.mode(Freshness::Fresh).await.expect("mode").value,
+        Mode::Am
+    );
+    assert!(rig.set_mode(Mode::Cw).await.is_err());
+
+    rig.execute(Op::SetFilterWidth(Hz(2_700)))
+        .await
+        .expect("width");
+    assert!(log_has(
+        &bus,
+        FakeTransfer::ControlOut(0x40, 0xAC, 0, 16, 2_700u32.to_le_bytes().to_vec())
+    ));
+    assert_eq!(
+        rig.execute(Op::GetFilterWidth).await.expect("width"),
+        Some(Observation::FilterWidth(Hz(2_700)))
+    );
+
+    // Volume is a percentage, clamped at 100; the preamp is step 0 or 1 (+6 dB).
+    rig.execute(Op::SetLevel(Level::AfGain, 250))
+        .await
+        .expect("volume");
+    assert!(log_has(
+        &bus,
+        FakeTransfer::ControlOut(0x40, 0xAC, 0, 14, 100i16.to_le_bytes().to_vec())
+    ));
+    assert_eq!(
+        rig.execute(Op::GetLevel(Level::AfGain))
+            .await
+            .expect("volume"),
+        Some(Observation::Level(Level::AfGain, 100))
+    );
+    rig.execute(Op::SetLevel(Level::Preamp, 1))
+        .await
+        .expect("preamp");
+    assert!(log_has(
+        &bus,
+        FakeTransfer::ControlOut(0x40, 0xAC, 0, 19, vec![1])
+    ));
+    assert_eq!(
+        rig.execute(Op::GetLevel(Level::Preamp))
+            .await
+            .expect("preamp"),
+        Some(Observation::Level(Level::Preamp, 1))
+    );
+    assert!(rig.execute(Op::SetLevel(Level::Preamp, 2)).await.is_err());
+    assert!(rig.execute(Op::SetLevel(Level::RfGain, 1)).await.is_err());
+
+    // The raw S-meter is capped at 65535.
+    assert_eq!(
+        rig.signal(Freshness::Fresh).await.expect("signal").value,
+        u16::MAX
+    );
+}
+
+fn log_has(bus: &FakeUsbBackend, transfer: FakeTransfer) -> bool {
+    bus.log().contains(&transfer)
+}
