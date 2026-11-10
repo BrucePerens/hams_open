@@ -48,6 +48,23 @@ class TestTokenScope(HamsTransactionCase):
         self.safe_patch(API).return_value = _resp(200, {"result": {"id": "x", "status": "expired"}})
         self.assertFalse(cloudflare_api.inspect_token("t")[0])
 
+    def test_unreadable_answers_fail_closed(self):
+        # [@ANCHOR: test_inspect_token_unreadable_answers]
+        # A 200 whose body is not JSON, has no result object, or has no policy list is not "scoped".
+        broken = MagicMock()
+        broken.status_code = 200
+        broken.json.side_effect = ValueError("not json")
+        for first in (broken, _resp(200, {"result": None}), _resp(200, ["x"])):
+            self.safe_patch(API).return_value = first
+            ok, msg = cloudflare_api.inspect_token("t")
+            self.assertFalse(ok)
+            self.assertIn("not active", msg)
+        for second in (broken, _resp(200, {"result": None}), _resp(200, {"result": {}})):
+            self.safe_patch(API).side_effect = [_resp(200, {"result": {"id": "tok1", "status": "active"}}), second]
+            ok, msg = cloudflare_api.inspect_token("t")
+            self.assertFalse(ok)
+            self.assertIn("not readable", msg)
+
     def _settings(self, **vals):
         website = self.env["website"].get_current_website()
         return self.env["res.config.settings"].create({"website_id": website.id, **vals})
