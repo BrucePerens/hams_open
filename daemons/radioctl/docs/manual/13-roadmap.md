@@ -41,7 +41,8 @@ priority against the zero-privilege, SDR and band-scope tracks (the roadmap puts
 ## Known gaps and findings in the code
 
 Found while writing this manual. Each was a statement about `main` on 2026-10-30; items 1, 9 and 11 were
-brought up to date on 2026-11-08, the others were not re-checked, and the manual fixes none of them.
+brought up to date on 2026-11-08 and items 3, 6, 8 and 10 were re-read against the code on 2026-11-10;
+the others were not re-checked, and the manual fixes none of them.
 
 1. **Reconnect and session state.** Link loss and restore reach the rig actor on every link `radioctld` and `radioctl-capi` open (serial through `open_serial`, TCP and UDP through `open_link`; `RigOptions::link_watch`), which unkeys on a restored link. A bare `connect_tcp` stream (used by tests and by a caller that builds its own) is a dead link for good. `radioctld`'s `tcp` transport has been on `net::open_link` since 2026-10-31 (reconnects, the actor watches the link), and since 2026-11-01 the actor tells the engine when the link is back: after the fail-closed unkey and before the `LinkRestored` event it calls `ProtocolEngine::link_restored`, which drops half-received frames and returns the requests that set the session up again, each written once. The Kenwood (including TS-890S; its LAN login is the framing's and repeats on every reconnect), Elecraft and Flex engines re-send `AI2;` or the `sub` lines only if the controller had turned them on; the Icom PCR receivers (`receiver.rs`) also have an open step, `ProtocolEngine::open_requests`: `H101` and `G300` are written once when the actor starts with the link up and again after each reconnect, before any command, never keying anything (decision 24 in `DESIGN.md`); every other engine sets up nothing. Still open: a CI-V radio's transceive (a menu item) cannot be restored by the engine.
 2. **Polling reads VFO A, VFO B, split, mode, PTT and the two meters.** A front-panel change of RIT, XIT or
@@ -51,15 +52,20 @@ brought up to date on 2026-11-08, the others were not re-checked, and the manual
 4. Fixed 2026-10-30: `\dump_state` no longer prints empty `agc_levels=`, `ctcss_list=` and `dcs_list=`
    lines (Hamlib's `rigctld` prints each only when non-empty; the empty ones were "invalid dumpcaps
    line" to `rigctl -vvv`).
-5. **Oracle disagreements to settle on real radios:** TS-590 VFO B read (`FA;` or `FB;`) and AF gain,
+5. **Oracle disagreements to settle on real radios:** TS-590 VFO B read (`FA;` or `FB;`; the Kenwood
+   command reference defines `FR` as the receive VFO (simplex) and `FT` as the transmit VFO (split) but
+   does not say which VFO's frequency `IF` carries while keyed in split, so a bench read is still needed) and AF gain,
    IC-7610 split flow, IC-9700 VFO B, X108G final VFO A.
 6. Fixed 2026-11-01: the TS-2000 splitter personality answers `IF;` (`Request::ReadStatus`,
    `Outcome::Status`, `Ts2000Personality::status_answer`), built from the rig's frequency, mode, PTT, RIT,
-   XIT, offset and split. Not yet: pushing `IF` to an `AI2` client when those change, and the transmit VFO.
+   XIT, offset and split. Since 2026-11-09 (hams_open #1396) it reports the receive VFO's frequency and
+   function digit rather than always VFO A. Not yet: pushing `IF` to an `AI2` client when those change.
 7. Fixed 2026-10-30: the stale module notes in `transport.rs` and `description.rs` and the `IF` wording of
    `docs/DESIGN.md` item 16.
-8. **`radioctld` serial transport is fixed** at 8N1 with one open attempt and default idle lines; there is
-   no configuration for data bits, parity, flow control or reopen attempts.
+8. **`radioctld` serial transport is fixed** at 8N1 without flow control. The configuration chooses the
+   path or USB identity, the baud rate (fixed, `"auto"` or a `baud_probe` list) and the idle lines
+   (`lines = "unmanaged"`); there is no setting for data bits, parity or flow control, and the link
+   reopens with backoff after an unplug.
 9. **Almost nothing has run on hardware.** Only the Elecraft KX3 has (the bench run of 2026-11-05, including
    a keyed transmission into a dummy load); every other description is `unverified` or `manual-checked`
    (the counts are in [`RIG_SUPPORT.md`](../RIG_SUPPORT.md)). No client other than Hamlib's `rigctl` has

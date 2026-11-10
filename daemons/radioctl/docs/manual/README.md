@@ -19,7 +19,7 @@ where it is not obvious.
 | Label | Meaning |
 |---|---|
 | **Implemented** | The code is on `main` and has tests. |
-| **Unverified** | The code exists, but no real radio has ever been used to check it. At the time of writing this applies to nearly every radio description: of the <!--count:facts-->2525<!--/count--> facts in the <!--count:description_files-->292<!--/count--> files in `rigs/`, only those the Elecraft KX3 bench run of 2026-11-05 exercised are `hardware-verified` (<!--count:hardware_verified-->1<!--/count--> description); the rest are `unverified` or `manual-checked`. [Chapter 6](06-rig-descriptions.md) has the states and [`RIG_SUPPORT.md`](../RIG_SUPPORT.md) the list. |
+| **Unverified** | The code exists, but no real radio has ever been used to check it. At the time of writing this applies to nearly every radio description: of the <!--count:facts-->2528<!--/count--> facts in the <!--count:description_files-->292<!--/count--> files in `rigs/`, only those the Elecraft KX3 bench run of 2026-11-05 exercised are `hardware-verified` (<!--count:hardware_verified-->1<!--/count--> description); the rest are `unverified` or `manual-checked`. [Chapter 6](06-rig-descriptions.md) has the states and [`RIG_SUPPORT.md`](../RIG_SUPPORT.md) the list. |
 | **Planned** | Described in a proposal (`hams_com/docs/proposals/`, not a public document), not in the code. Never rely on it. |
 
 A feature is called implemented only if this manual's author found it in the code. Chapter
