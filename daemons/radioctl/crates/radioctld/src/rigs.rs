@@ -558,12 +558,9 @@ mod tests {
         load_description(Path::new(&path)).expect("Perseus file")
     }
 
-    fn synthetic_dir(name: &str, with_fpga: bool) -> std::path::PathBuf {
+    fn synthetic_dir(name: &str, with_fpga: bool) -> crate::testdir::TestDir {
         // Synthetic stand-ins for the user's files, nothing from Microtelecom.
-        let dir =
-            std::env::temp_dir().join(format!("radioctld-perseus-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("dir");
+        let dir = crate::testdir::TestDir::new(&format!("perseus-{name}"));
         std::fs::write(dir.join("fx2.hex"), ":0400000001020304F2\n:00000001FF\n").expect("hex");
         if with_fpga {
             std::fs::write(dir.join("fpga.rbs"), [9u8, 8, 7]).expect("rbs");
@@ -583,7 +580,7 @@ mod tests {
         let backend = radioctl_protocols::usb_family::backend_for(
             &description,
             Arc::new(board.clone()),
-            Some(&dir),
+            Some(&*dir),
             None,
             None,
             false,
@@ -649,7 +646,7 @@ mod tests {
         let backend = radioctl_protocols::usb_family::backend_for(
             &description,
             Arc::new(VirtualPerseusBackend::new(false, 5, true)),
-            Some(&dir),
+            Some(&*dir),
             None,
             None,
             false,

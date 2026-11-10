@@ -5,6 +5,8 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
 mod common;
+#[path = "../../../testdir.rs"]
+mod testdir;
 
 use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
@@ -108,10 +110,8 @@ fn host(ports: Vec<PortInfo>) -> Host {
     }
 }
 
-fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("selftest-cli-{name}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("dir");
-    dir
+fn temp_dir(name: &str) -> testdir::TestDir {
+    testdir::TestDir::new(&format!("selftest-cli-{name}"))
 }
 
 /// A loopback server that answers 204 to every POST and keeps the bodies.
@@ -258,7 +258,6 @@ async fn one_run_tests_every_identified_rig_and_uploads_one_report_each() {
         .expect("checks")
         .iter()
         .any(|c| c["raw_hex"].is_string())));
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 // Tests [@ANCHOR: radioctld_cli_run]
@@ -294,7 +293,6 @@ async fn a_failed_upload_never_changes_the_exit_status() {
     assert!(dir.join("r.txt").is_file());
     let report = std::fs::read_to_string(dir.join("r.txt")).expect("report");
     assert!(report.contains("nothing was transmitted") && report.contains("PASS read frequency A"));
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 // Tests [@ANCHOR: radioctld_cli_run]
@@ -352,7 +350,6 @@ async fn the_first_interactive_run_asks_once_and_a_scripted_run_never_asks() {
     assert_eq!(contact(0)["name"], "Ann Ham");
     assert_eq!(contact(1)["email"], "ann@example.org");
     assert_eq!(contact(2), serde_json::json!({}));
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 // Tests [@ANCHOR: radioctld_cli_main_from_env]

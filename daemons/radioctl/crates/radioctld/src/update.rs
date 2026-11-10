@@ -364,8 +364,7 @@ mod tests {
     // Tests [@ANCHOR: radioctld_update_replace_exe]
     #[test]
     fn replacing_keeps_the_old_program_as_prev_and_failure_leaves_it_alone() {
-        let dir = std::env::temp_dir().join(format!("update-replace-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("dir");
+        let dir = crate::testdir::TestDir::new("update-replace");
         let exe = dir.join("radioctl-selftest");
         std::fs::write(&exe, b"OLD").expect("old");
         let prev = replace_exe(&exe, b"NEW").expect("replace");
@@ -374,7 +373,6 @@ mod tests {
         assert!(!dir.join("radioctl-selftest.new").exists());
         assert!(replace_exe(&dir.join("missing/none"), b"X").is_err());
         assert_eq!(std::fs::read(&exe).expect("exe"), b"NEW");
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     // Tests [@ANCHOR: radioctld_update_restart]

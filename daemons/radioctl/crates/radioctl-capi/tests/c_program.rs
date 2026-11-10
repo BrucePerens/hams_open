@@ -7,6 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "../../../testdir.rs"]
+mod testdir;
+
 fn manifest() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -67,8 +70,7 @@ fn shared_library_dir() -> PathBuf {
 #[test]
 fn the_c_program_passes_against_the_shared_library() {
     let lib = shared_library_dir();
-    let out_dir = std::env::temp_dir().join(format!("radioctl-capi-ctest-{}", std::process::id()));
-    std::fs::create_dir_all(&out_dir).expect("temp dir");
+    let out_dir = testdir::TestDir::new("capi-ctest");
     let exe = out_dir.join("capi_test");
     let compile = Command::new("cc")
         .args([
@@ -97,7 +99,6 @@ fn the_c_program_passes_against_the_shared_library() {
     );
     let rigfile = manifest().join("../../rigs/elecraft-kx3.toml");
     let run = Command::new(&exe).arg(&rigfile).output().expect("run");
-    let _ = std::fs::remove_dir_all(&out_dir);
     assert!(
         run.status.success(),
         "the C test failed:\n{}\n{}",

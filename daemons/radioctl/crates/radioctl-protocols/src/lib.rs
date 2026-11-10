@@ -83,3 +83,7 @@ pub mod hpsdr_io;
 pub mod io;
 #[cfg(feature = "tokio-io")]
 pub mod radiod_io;
+
+#[cfg(test)]
+#[path = "../../../testdir.rs"]
+mod testdir;

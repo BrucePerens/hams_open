@@ -7,6 +7,9 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 use std::collections::BTreeMap;
+
+#[path = "../../../testdir.rs"]
+mod testdir;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -821,10 +824,8 @@ async fn start_refuses_what_it_should_before_touching_the_network() {
     assert!(parse_ha_address("10.1.2.3").is_ok() && check_entity("switch.x").is_ok());
 
     // File secrets: mode 0600 only, plain names only.
-    let dir = std::env::temp_dir().join(format!("rs-ha-secrets-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    let store = FileSecrets::new(&dir);
+    let dir = testdir::TestDir::new("ha-secrets");
+    let store = FileSecrets::new(&*dir);
     std::fs::write(dir.join("ha_token"), format!("{TOKEN}\n")).unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(dir.join("ha_token"), std::fs::Permissions::from_mode(0o644)).unwrap();
@@ -838,7 +839,6 @@ async fn start_refuses_what_it_should_before_touching_the_network() {
     std::fs::write(dir.join("blank"), "\n").unwrap();
     std::fs::set_permissions(dir.join("blank"), std::fs::Permissions::from_mode(0o600)).unwrap();
     assert!(store.secret("blank").is_err());
-    let _ = std::fs::remove_dir_all(&dir);
     let _ = Secret::new("x");
 }
 

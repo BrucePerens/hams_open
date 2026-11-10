@@ -7,6 +7,9 @@
 
 use radioctl_core::description::{Family, RigDescription, UsbProtocol};
 use std::path::Path;
+
+#[path = "../../../testdir.rs"]
+mod testdir;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -527,13 +530,10 @@ fn a_bare_si570_twin_follows_the_ptt_request() {
         .is_err());
 }
 
-fn synthetic_firmware(name: &str, fpga: bool) -> std::path::PathBuf {
+fn synthetic_firmware(name: &str, fpga: bool) -> testdir::TestDir {
     // Synthetic stand-ins, nothing from Microtelecom: two valid Intel HEX records and an
     // end-of-file record, and a few arbitrary bytes for the bitstream.
-    let dir =
-        std::env::temp_dir().join(format!("radioctl-perseus-it-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("dir");
+    let dir = testdir::TestDir::new(&format!("perseus-it-{name}"));
     std::fs::write(
         dir.join("fx2.hex"),
         ":0400000001020304F2\n:02001000AABB89\n:00000001FF\n",
@@ -679,10 +679,7 @@ async fn the_loader_backend_loads_the_users_firmware_on_open_and_names_a_missing
     assert!(shown.contains("libperseus-sdr"), "{shown}");
 
     // No firmware at all on a blank board.
-    let empty =
-        std::env::temp_dir().join(format!("radioctl-perseus-it-empty-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&empty);
-    std::fs::create_dir_all(&empty).expect("dir");
+    let empty = testdir::TestDir::new("perseus-it-empty");
     let loader = PerseusLoaderBackend::new(
         Arc::new(VirtualPerseusBackend::new(false, 3, true)),
         PerseusFiles::in_dir(&empty),

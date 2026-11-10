@@ -36,3 +36,7 @@ pub mod server;
 pub mod service;
 pub mod update;
 pub mod upload;
+
+#[cfg(test)]
+#[path = "../../../testdir.rs"]
+mod testdir;

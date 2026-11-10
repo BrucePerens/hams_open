@@ -13,6 +13,9 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[path = "../../../testdir.rs"]
+mod testdir;
+
 fn free_port() -> u16 {
     TcpListener::bind("127.0.0.1:0")
         .expect("bind")
@@ -21,7 +24,7 @@ fn free_port() -> u16 {
         .port()
 }
 
-fn config(dir: &PathBuf, port: u16) -> PathBuf {
+fn config(dir: &std::path::Path, port: u16) -> PathBuf {
     let rigs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../rigs/elecraft-kx3.toml");
     let text = format!(
         "[[rig]]\nname = \"kx3\"\ndescription = {:?}\nlisten = \"127.0.0.1:{port}\"\n\
@@ -34,8 +37,7 @@ fn config(dir: &PathBuf, port: u16) -> PathBuf {
 }
 
 fn key_then_signal(signal: &str) {
-    let dir = std::env::temp_dir().join(format!("radioctld-stop-{signal}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("dir");
+    let dir = testdir::TestDir::new(&format!("stop-{signal}"));
     let port = free_port();
     let mut child = Command::new(env!("CARGO_BIN_EXE_radioctld"))
         .arg("--config")
@@ -71,7 +73,6 @@ fn key_then_signal(signal: &str) {
     let mut rest = String::new();
     stderr.read_to_string(&mut rest).expect("rest of stderr");
     let exit = child.wait().expect("wait");
-    let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(exit.code(), Some(0), "{signal}: {exit:?} {rest:?}");
     assert!(rest.contains("radioctld: stopping ("), "{signal}: {rest:?}");
 }
