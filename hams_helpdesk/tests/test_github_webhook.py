@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import json
 
+from odoo.addons.hams_helpdesk.controllers.github_webhook_api import _verify_github_signature
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase, HamsTransactionCase
 from odoo.exceptions import UserError
 from odoo.tests.common import tagged
@@ -137,8 +138,6 @@ class TestGithubWebhookHttp(HamsHttpCase):
         self.assertFalse(self.Ticket.search([]))
 
     def test_github_webhook_non_ascii_signature_is_denied_not_an_error(self):
-        from odoo.addons.hams_helpdesk.controllers.github_webhook_api import _verify_github_signature
-
         self.assertFalse(_verify_github_signature(b"{}", _TEST_SECRET, "sha256=" + "\u00e9" * 64))
 
     def test_github_webhook_wrong_key_signature_is_denied(self):
