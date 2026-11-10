@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo import api, fields, models
 
+# What the Settings form shows in place of a stored S3 secret key. Saving the form with this value (or an empty one)
+# leaves the stored key as it is; any other value replaces it.
+SECRET_MASK = "********"
+
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -80,7 +84,7 @@ class ResConfigSettings(models.TransientModel):
                 res.update({
                     'hams_s3_aws_host': backend.aws_host,
                     'hams_s3_aws_access_key_id': backend.aws_access_key_id,
-                    'hams_s3_aws_secret_access_key': backend.aws_secret_access_key,
+                    'hams_s3_aws_secret_access_key': SECRET_MASK if backend.aws_secret_access_key else False,
                     'hams_s3_aws_bucket': backend.aws_bucket,
                     'hams_s3_aws_region': backend.aws_region,
                 })
@@ -103,6 +107,11 @@ class ResConfigSettings(models.TransientModel):
                 'aws_bucket': self.hams_s3_aws_bucket,
                 'aws_region': self.hams_s3_aws_region or 'us-east-1',
             }
+            if self.hams_s3_aws_secret_access_key in (SECRET_MASK, False, ''):
+                if backend:
+                    del vals['aws_secret_access_key']  # unchanged in the form: keep the stored key
+                else:
+                    vals['aws_secret_access_key'] = False
             if backend:
                 backend.write(vals)
             else:

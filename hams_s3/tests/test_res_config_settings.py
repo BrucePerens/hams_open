@@ -48,8 +48,17 @@ class TestHamsS3ConfigSettings(HamsTransactionCase):
         
         self.assertEqual(res.get('hams_s3_aws_host'), 's3.amazonaws.com')
         self.assertEqual(res.get('hams_s3_aws_access_key_id'), 'TEST_KEY')
-        self.assertEqual(res.get('hams_s3_aws_secret_access_key'), 'TEST_SECRET')
+        self.assertEqual(res.get('hams_s3_aws_secret_access_key'), '********', "the stored key is never shown")
+        self.assertNotIn('TEST_SECRET', str(res))
         self.assertEqual(res.get('hams_s3_aws_bucket'), 'test-bucket')
+
+        # Saving the form with the mask keeps the stored key; a new value replaces it.
+        new_settings.write({'hams_s3_use_s3': True, 'hams_s3_aws_secret_access_key': res['hams_s3_aws_secret_access_key']})
+        new_settings.set_values()
+        self.assertEqual(backend.aws_secret_access_key, 'TEST_SECRET')
+        new_settings.write({'hams_s3_aws_secret_access_key': 'NEW_SECRET'})
+        new_settings.set_values()
+        self.assertEqual(backend.aws_secret_access_key, 'NEW_SECRET')
         self.assertEqual(res.get('hams_s3_aws_region'), 'us-east-1')
 
     # Tests [@ANCHOR: hams_s3_compute_oca_installed]
