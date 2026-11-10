@@ -71,7 +71,7 @@ def _error_is_the_senders_number(error, parameter_values):
             if number != number or number in (float("inf"), float("-inf")):
                 return True
         return False
-    return any(value and message.endswith(": " + repr(value)) for value in parameter_values)
+    return any(message.endswith(": " + repr(value)) for value in parameter_values)
 
 # Odoo's own date-string parsers (odoo/tools/date_utils.py). The ORM's domain optimizer calls them on any date
 # value in a search domain, so a ValueError raised inside one means the request carried a date it could not read.
