@@ -90,6 +90,9 @@ pub enum Kind {
     Glasgow,
 }
 
+/// The longest `max_on_s` a config may ask for (one day).
+pub const MAX_ON_S_LIMIT: f64 = 86_400.0;
+
 #[derive(Clone, Debug)]
 pub struct Instrument {
     pub name: String,
@@ -346,10 +349,10 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             && inst.max_amps.is_finite()
             && inst.max_amps > 0.0
             && inst.max_on_s.is_finite()
-            && inst.max_on_s >= 1.0)
+            && (1.0..=MAX_ON_S_LIMIT).contains(&inst.max_on_s))
         {
             return Err(format!(
-                "{name}: max_volts and max_amps must be positive numbers and max_on_s at least 1"
+                "{name}: max_volts and max_amps must be positive numbers and max_on_s from 1 to 86400"
             ));
         }
         out.push(inst);
@@ -455,6 +458,17 @@ mod tests {
             r#"{"instruments":{"x":{"driver":"atm6301","serial":"/dev/x","tier":"root"}}}"#
         )
         .is_err());
+        for bad in ["1e30", "86401", "0.5", "-5"] {
+            let e = parse(&format!(
+                r#"{{"instruments":{{"x":{{"driver":"atm6301","serial":"/dev/x","max_on_s":{bad}}}}}}}"#
+            ))
+            .unwrap_err();
+            assert!(e.contains("max_on_s from 1 to 86400"), "{bad}: {e}");
+        }
+        assert!(parse(
+            r#"{"instruments":{"x":{"driver":"atm6301","serial":"/dev/x","max_on_s":86400}}}"#
+        )
+        .is_ok());
     }
 
     // Tests [@ANCHOR: bench_mcp_config_vna]

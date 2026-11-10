@@ -225,6 +225,7 @@ The Glasgow Interface Explorer (USB 20b7:9db1; UART, I2C, SPI, JTAG, SWD, logic 
 * A pattern is timed from the host, bounded in time, and releases every pin even when it fails. [@ANCHOR: glasgow_ops_gpio_pattern]
 * The SWD tool reads DPIDR and its fields and nothing else. [@ANCHOR: glasgow_ops_swd_idcode]
 * The installer refuses a source archive whose sha256 is not the pinned one before creating any venv, never reuses a directory, and hashes files in blocks. [@ANCHOR: glasgow_install_main] [@ANCHOR: glasgow_install_sha256] [@ANCHOR: glasgow_install_run]
+* The installer copies the archive (given or downloaded, at most the pinned size plus 1 MiB) into DEST and hashes and extracts that copy, so the original cannot change between check and use. [@ANCHOR: glasgow_install_copy_bounded]
 * The pin generator keeps only Linux wheels and sdists, with their sha256, and prints every pinned package. [@ANCHOR: glasgow_pin_hashes] [@ANCHOR: glasgow_pin_main]
 
 ## Checks this crate makes for the SDRs (anchors)

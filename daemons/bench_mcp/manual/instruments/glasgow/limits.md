@@ -13,7 +13,7 @@ verified: measured on the unit (Glasgow revC3, device firmware API level 3, glas
 | Port voltage | 1.65 to 5.0 V (revA to C), 0.9 to 5.5 V (revD); 0 = off | `glasgow voltage --help` of the pinned install; the config's `max_volts` can only lower it |
 | Voltage limit register | set equal to the supply by `bench_glasgow_port_set`; the device reports 5.5 V when idle | `glasgow voltage-limit`, measured idle |
 | Supply current trip | 0 to 0.325 A, default 0.1 A, config `max_trip_a` | the device (revC2 and later) |
-| Time a port stays powered | `max_on_s`, default 600 s | the config; a watchdog thread switches ports off |
+| Time a port stays powered | `max_on_s`, 1 to 86400 s, default 600 s | the config; a watchdog thread switches ports off |
 | Capture length | `max_capture_s`, default 30 s, at most 120 s; file at most `max_capture_mb` (default 64, at most 512) | the config |
 | Applet call | `op_timeout_s`, default 120 s; hard stop by SIGINT then SIGTERM; never SIGKILL | the config |
 | Pins | A0 to A7, B0 to B7; 16 for the analyzer, 8 for a pattern | the hardware and the tools |

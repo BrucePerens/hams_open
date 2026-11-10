@@ -1171,7 +1171,7 @@ fn captures_write_a_file_and_return_a_summary() {
     let v = r
         .call(
             "bench_glasgow_logic_capture",
-            json!({"pins": "A0:1", "duration_s": 1, "pull": "up", "names": "clk,burst"}),
+            json!({"pins": "A0:1", "duration_s": 1, "pull": "up", "names": "clk,burst", "confirm": true}),
         )
         .unwrap();
     let file = v["file"].as_str().unwrap();
@@ -1231,13 +1231,35 @@ fn gpio_and_pattern_release_every_pin_even_when_the_run_fails() {
         (Some(true), Some(true), Some(0.2))
     );
     assert!(!r.sim.st.lock().unwrap().driven, "the park ended the drive");
-    // Reads and pulls need no confirm.
+    // Reads need no confirm; weak pulls put a level on the target and do.
     assert!(r
         .call(
             "bench_glasgow_gpio",
-            json!({"pins": "A0:3", "actions": ["A1=H", "A2"]})
+            json!({"pins": "A0:3", "actions": ["A2"]})
         )
         .is_ok());
+    for a in ["A1=H", "A1=L"] {
+        assert!(r
+            .call(
+                "bench_glasgow_gpio",
+                json!({"pins": "A0:3", "actions": [a]})
+            )
+            .unwrap_err()
+            .contains("confirm: true"));
+    }
+    assert!(r
+        .call(
+            "bench_glasgow_gpio",
+            json!({"pins": "A0:3", "actions": ["A1=H", "A2"], "confirm": true})
+        )
+        .is_ok());
+    assert!(r
+        .call(
+            "bench_glasgow_logic_capture",
+            json!({"pins": "A0:1", "duration_s": 1, "pull": "down"})
+        )
+        .unwrap_err()
+        .contains("confirm: true"));
     let steps =
         json!([{"value": 1, "hold_ms": 5}, {"value": 2, "hold_ms": 5}, {"value": 0, "hold_ms": 5}]);
     assert!(r

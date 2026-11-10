@@ -522,6 +522,12 @@ pub fn port_set(ctx: &Ctx, inst: &Instrument, args: &Value) -> Result<Value, Str
         return Err(format!("bench_glasgow_port_set powers port {port} at {volts} V; call it with confirm: true only when the person at the bench has said this port may be powered at that voltage (dry_run: true shows the plan)"));
     }
     let _lock = device_lock(&ctx.lock_path)?;
+    // The deadline is built before anything energizes, so no failure can follow the rail coming on and leave it without a timer.
+    let window = Duration::try_from_secs_f64(inst.max_on_s)
+        .map_err(|e| format!("max_on_s {} cannot be used as a time: {e}", inst.max_on_s))?;
+    let deadline = Instant::now()
+        .checked_add(window)
+        .ok_or_else(|| format!("max_on_s {} is too large", inst.max_on_s))?;
     let ch = port.chars().next().unwrap_or('A');
     // The pins are made inputs while the rail is still off, so nothing a previous gateware drove is connected when the rail comes up.
     ops::park(ctx, inst, ch, false)?;
@@ -596,12 +602,7 @@ pub fn port_set(ctx: &Ctx, inst: &Instrument, args: &Value) -> Result<Value, Str
             ),
         ));
     }
-    let deadline = Instant::now() + Duration::from_secs_f64(inst.max_on_s);
-    let (runner, serial, tmo) = (
-        ctx.runner.clone(),
-        inst.serial.clone(),
-        Duration::from_secs_f64(inst.max_on_s),
-    );
+    let (runner, serial, tmo) = (ctx.runner.clone(), inst.serial.clone(), window);
     with_session(|s| {
         let e = s.entry(inst.name.clone()).or_insert_with(|| Session {
             ports: BTreeMap::new(),
