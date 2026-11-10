@@ -14,7 +14,8 @@
                             <field name="website_id" groups="website.group_multi_website"/>
                             <field name="security_level"/>
                             <field name="development_mode"/>
-                            <field name="browser_cache_ttl"/>
+                            <field name="browser_cache_ttl" invisible="browser_cache_respect_headers"/>
+                            <field name="browser_cache_respect_headers"/>
                         </group>
                         <group>
                             <separator string="HTTPS &amp; Transport Security"/>

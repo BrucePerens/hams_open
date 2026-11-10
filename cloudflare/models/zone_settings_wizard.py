@@ -67,6 +67,10 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
         string="Browser Cache TTL (seconds)",
         help="Time in seconds. 0 means respect existing headers.",
     )
+    browser_cache_respect_headers = fields.Boolean(
+        string="Respect Existing Headers",
+        help="Send Browser Cache TTL 0, so the browser cache time is the origin's own Cache-Control, not a zone value.",
+    )
 
     @api.model
     # [@ANCHOR: cloudflare:COMM_zone_settings_default_get]
@@ -188,10 +192,15 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
         # non-zero. Trade-off: this wizard can no longer be used to
         # explicitly (re-)set the TTL to literal 0 -- a dedicated tri-state
         # (e.g. a separate "apply TTL" checkbox) would be needed to support
-        # that without ambiguity; not implemented.
-        if self.browser_cache_ttl:
+        # that without ambiguity; that box is `browser_cache_respect_headers`.
+        # [@ANCHOR: cloudflare:COMM_zone_settings_browser_cache_respect_headers]
+        # An explicit box is the unambiguous way to send 0 ("Respect Existing Headers"), which the origin's no-store needs.
+        if self.browser_cache_respect_headers or self.browser_cache_ttl:
             success, msg = update_zone_setting(
-                "browser_cache_ttl", self.browser_cache_ttl, token, zone_id
+                "browser_cache_ttl",
+                0 if self.browser_cache_respect_headers else self.browser_cache_ttl,
+                token,
+                zone_id,
             )
             if not success:
                 errors.append(f"Browser Cache TTL: {msg}")
