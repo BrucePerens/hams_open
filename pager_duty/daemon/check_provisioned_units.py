@@ -16,7 +16,7 @@ What counts as in operation:
     .timer / .path not active                              not running   (a timer MANIFEST marks opt_in that is not enabled is
                                                                            deliberately only linked, and is left alone)
     .service that is not Type=oneshot, has no .timer or
-    .path of its own, and is not active                    not running   (unless its Condition*= is unmet on this host)
+    .path of its own, and is not active                    not running   (unless its Condition*= was evaluated and is unmet on this host)
 
 Templates (`name@.service`), entries for a host class this host does not have, and units listed in HAMS_UNITS_EXPECTED_OFF
 (comma separated unit names) are not checked. The MANIFEST is read from the hams_shared tree beside this script's repository
@@ -35,7 +35,7 @@ DEFAULT_INFRASTRUCTURE_DIR = os.path.join(
 )
 SYSTEMD_DIR = "/opt/hams/systemd/"
 UNIT_SUFFIXES = (".service", ".timer", ".path")
-SHOW_PROPERTIES = "LoadState,ActiveState,UnitFileState,Type,ConditionResult"
+SHOW_PROPERTIES = "LoadState,ActiveState,UnitFileState,Type,ConditionResult,ConditionTimestamp"
 SHORT_LIST = 4
 
 # The MANIFEST module is a hard dependency: reached by a sys.path hop (the odoo.addons namespace is not importable in this
@@ -88,7 +88,11 @@ def units_not_in_operation(units, show=systemctl_show, expected_off=()):
                 problems.append((name, "not running"))
         elif name.endswith(".service"):
             long_running = not info["oneshot"] and name[: -len(".service")] not in has_trigger
-            if long_running and not active and state.get("ConditionResult", "yes") != "no":
+            # ConditionResult is "no" for a unit systemd has never evaluated too (ConditionTimestamp empty): a unit that was
+            # installed and never started is the case this check exists for, so only an evaluated "no" excuses it.
+            condition_unmet = state.get("ConditionResult", "yes") == "no" and bool(state.get("ConditionTimestamp"))
+            deliberately_off = info["opt_in"] and state.get("UnitFileState") != "enabled"  # as for a timer
+            if long_running and not active and not condition_unmet and not deliberately_off:
                 problems.append((name, "not running"))
     return problems
 

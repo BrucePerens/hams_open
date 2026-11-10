@@ -74,7 +74,18 @@ class NotInOperationTests(unittest.TestCase):
         self.assertEqual(self.problems(**{"paid.timer": enabled}), {"paid.timer": "not running"})
 
     def test_a_service_whose_condition_is_unmet_on_this_host_is_not_a_fault(self):
-        self.assertEqual(self.problems(**{"daemon.service": {"LoadState": "loaded", "ActiveState": "inactive", "ConditionResult": "no"}}), {})
+        self.assertEqual(self.problems(**{"daemon.service": {"LoadState": "loaded", "ActiveState": "inactive", "ConditionResult": "no", "ConditionTimestamp": "Mon 2026-11-09 13:57:48 PST"}}), {})
+        # systemd reports ConditionResult=no for a unit it never evaluated (empty ConditionTimestamp): installed and never started is a problem.
+        self.assertEqual(self.problems(**{"daemon.service": {"LoadState": "loaded", "ActiveState": "inactive", "ConditionResult": "no", "ConditionTimestamp": ""}}), {"daemon.service": "not running"})
+
+    def test_an_opt_in_service_that_is_not_enabled_is_left_alone_like_an_opt_in_timer(self):
+        # The never-evaluated Condition no longer excuses a service, so the opt_in marker has to.
+        units = dict(self.units, **{"signer.service": {"opt_in": True, "oneshot": False}})
+        base = {"LoadState": "loaded", "ActiveState": "inactive", "ConditionResult": "no", "ConditionTimestamp": ""}
+        linked = dict(base, UnitFileState="linked")
+        self.assertEqual(check.units_not_in_operation(units, show=shown(**{"signer.service": linked})), [])
+        enabled = dict(base, UnitFileState="enabled")
+        self.assertEqual(check.units_not_in_operation(units, show=shown(**{"signer.service": enabled})), [("signer.service", "not running")])
 
     def test_an_expected_off_unit_is_skipped(self):
         got = check.units_not_in_operation(self.units, show=shown(**{"a.timer": {"LoadState": "not-found"}}), expected_off={"a.timer"})
