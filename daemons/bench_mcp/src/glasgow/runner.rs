@@ -22,6 +22,8 @@ pub struct Req {
     pub watch: Option<(PathBuf, u64)>,
     /// Run at low priority (bitstream builds use every core for ten seconds).
     pub nice: bool,
+    /// Full-speed fallback: run this launcher script with the install's Python instead of the `glasgow` command (see `glasgow_fs.py`).
+    pub full_speed: Option<PathBuf>,
 }
 
 /// What came back.
@@ -51,12 +53,22 @@ pub struct RealRunner {
 impl RealRunner {
     fn command(&self, req: &Req) -> Command {
         // [@ANCHOR: glasgow_runner_command]
+        // Full-speed fallback: the install's Python runs the launcher script, which then behaves as `glasgow`.
+        let mut argv = vec![self.program.clone().into_os_string()];
+        if let Some(launcher) = &req.full_speed {
+            argv = vec![
+                self.program.with_file_name("python").into_os_string(),
+                launcher.clone().into_os_string(),
+            ];
+        }
         let mut c = if req.nice {
             let mut c = Command::new("nice");
-            c.args(["-n", "10"]).arg(&self.program);
+            c.args(["-n", "10"]).args(&argv);
             c
         } else {
-            Command::new(&self.program)
+            let mut c = Command::new(&argv[0]);
+            c.args(&argv[1..]);
+            c
         };
         c.args(&req.args)
             // The bitstream cache of the pinned install, never the user's own ~/.cache.

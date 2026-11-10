@@ -19,6 +19,7 @@ macro_rules! props {
 }
 
 const HELPER: &str = include_str!("ops.py");
+const FS_LAUNCHER: &str = include_str!("glasgow_fs.py");
 
 /// The applet tools. Pins are `A0` to `A7` and `B0` to `B7`; a role without a default must be given.
 pub const SPECS: &[Spec] = &[
@@ -544,6 +545,7 @@ pub(crate) fn park(
         stop_after: None,
         watch: None,
         nice: false,
+        full_speed: None,
     };
     r.timeout = r.timeout.max(Duration::from_secs(60));
     let out = run(ctx, r, "parking the pins")?;
@@ -659,10 +661,22 @@ fn execute(
             return Err(fail_closed(ctx, inst, format!("port {port} is not as it was set ({want} V recorded; the device reports {seen})")));
         }
     }
+    let mut full_speed = None;
     if p.needs_hs {
         if let Some(u) = parse::usb_device(&ctx.sysfs) {
             if u.get("high_speed").and_then(|h| h.as_bool()) == Some(false) {
-                return Err(format!("the Glasgow is linked at {} Mb/s (full speed): this tool streams data over bulk endpoints that need high speed (480 Mb/s), so it would fail and make the device re-enumerate. Nothing was run; the ports stay as set. Next: a short data-rated USB 2.0 cable and another port (manual instruments/glasgow/troubleshooting), or bench_glasgow_safe_state to power the ports down.", u.get("link_speed_mbps").and_then(|s| s.as_f64()).unwrap_or(0.0)));
+                if inst.glasgow.full_speed_fallback {
+                    // FULL-SPEED FALLBACK: the launcher makes the gateware send 64-byte packets, which a 12 Mb/s link can carry.
+                    let launcher = ctx.out_dir.join("glasgow_fs.py");
+                    let _ = std::fs::create_dir_all(&ctx.out_dir);
+                    if std::fs::read_to_string(&launcher).ok().as_deref() != Some(FS_LAUNCHER) {
+                        std::fs::write(&launcher, FS_LAUNCHER)
+                            .map_err(|e| format!("{}: {e}", launcher.display()))?;
+                    }
+                    full_speed = Some(launcher);
+                } else {
+                    return Err(format!("the Glasgow is linked at {} Mb/s (full speed): this tool streams data over bulk endpoints that need high speed (480 Mb/s), so it would fail and make the device re-enumerate. Nothing was run; the ports stay as set. Next: a short data-rated USB 2.0 cable and another port (manual instruments/glasgow/troubleshooting), or set \"full_speed_fallback\": true in this instrument's config entry (about 1 MiB/s, labelled in every result), or bench_glasgow_safe_state to power the ports down.", u.get("link_speed_mbps").and_then(|s| s.as_f64()).unwrap_or(0.0)));
+                }
             }
         }
     }
@@ -693,6 +707,7 @@ fn execute(
             stop_after: p.stop_after,
             watch: p.watch.clone(),
             nice: false,
+            full_speed: full_speed.clone(),
         },
         &format!("the {} applet", p.applet),
     );
@@ -839,6 +854,13 @@ pub fn call(ctx: &Ctx, inst: &Instrument, name: &str, args: &Value) -> Result<Va
     let mut v = done(result, &p, started);
     if let Value::Object(m) = &mut v {
         m.insert("log_problems".into(), json!(problems));
+        if p.needs_hs
+            && inst.glasgow.full_speed_fallback
+            && parse::usb_device(&ctx.sysfs).and_then(|u| u["high_speed"].as_bool()) == Some(false)
+        {
+            m.insert("full_speed_fallback".into(), true.into());
+            m.insert("full_speed_note".into(), "FULL-SPEED FALLBACK: the link is 12 Mb/s; the gateware sent 64-byte packets (glasgow_fs.py). Usable throughput is about 1 MiB/s (measured with glasgow benchmark on the revC3 unit), so a busy capture can overrun; see bench_gla_limits".into());
+        }
     }
     Ok(v)
 }
@@ -925,6 +947,7 @@ pub fn prepare(ctx: &Ctx, inst: &Instrument, args: &Value) -> Result<Value, Stri
             stop_after: None,
             watch: None,
             nice: true,
+            full_speed: None,
         },
         "the gateware build",
     );

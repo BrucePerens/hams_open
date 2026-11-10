@@ -37,7 +37,7 @@ The Glasgow re-enumerates after every firmware load, so a hand-set ACL on its de
             "venv": "<install dir from step 1>"}
 ```
 
-Everything but `driver` is optional. `serial` (the device's own serial, see `bench_glasgow_list`) is required when more than one Glasgow is attached. `max_volts` is the highest port voltage any tool may set (default 5.5; the revision's own range still applies). `max_on_s` is how long a port may stay powered after it was set (default 600). `max_trip_a` caps the supply current trip (0.01 to 0.325). Use `tier: read_config` to forbid driving pins altogether: then only the read and passive tools exist (and no port can be powered, so the passive tools cannot run).
+Everything but `driver` is optional. `serial` (the device's own serial, see `bench_glasgow_list`) is required when more than one Glasgow is attached. `max_volts` is the highest port voltage any tool may set (default 5.5; the revision's own range still applies). `max_on_s` is how long a port may stay powered after it was set (default 600). `max_trip_a` caps the supply current trip (0.01 to 0.325). `full_speed_fallback` (default false): when the device links at 12 Mb/s, run the data-streaming tools anyway with 64-byte packets (about 1 MiB/s; results say `full_speed_fallback: true`) instead of refusing them. Use `tier: read_config` to forbid driving pins altogether: then only the read and passive tools exist (and no port can be powered, so the passive tools cannot run).
 
 ## Reserved device
 

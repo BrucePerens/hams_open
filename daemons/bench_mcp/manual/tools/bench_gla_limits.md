@@ -5,7 +5,7 @@ see_also: [instruments/glasgow/logic-analyzer, tools/bench_gla_capture]
 tools: [bench_gla_limits]
 instrument: glasgow
 tier: read_only
-verified: model; 12 Mb/s rate measured on the unit 2026-11-08, 480 Mb/s not measured
+verified: model; 12 Mb/s fallback rate measured on the unit 2026-11-10, 480 Mb/s not measured
 ---
 
 # bench_gla_limits

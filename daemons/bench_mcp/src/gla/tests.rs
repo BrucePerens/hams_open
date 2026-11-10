@@ -1107,11 +1107,12 @@ fn the_limits_say_that_full_speed_cannot_capture_and_high_speed_is_edge_limited(
     // Tests [@ANCHOR: gla_limits]
     let fs = tools::limits(4, 12.0);
     assert_eq!(fs["capture_works"], false);
-    assert!(fs["note"].as_str().unwrap().contains("480"));
+    assert_eq!(fs["capture_works_in_full_speed_fallback"], true);
+    assert!(fs["note"].as_str().unwrap().contains("full_speed_fallback"));
     assert_eq!(fs["rows"][0]["bytes_per_edge"], 3.0);
     assert_eq!(
         fs["rows"][0]["max_edges_per_s"],
-        (0.91 * 1048576.0f64 / 3.0).floor()
+        (1.04 * 1048576.0f64 / 3.0).floor()
     );
     assert!(fs["bulk_bytes_per_s_source"]
         .as_str()
