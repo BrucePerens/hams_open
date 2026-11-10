@@ -12,7 +12,7 @@ place to ask for a secret, so that I never read one from `ir.config_parameter`, 
 
 The code is `zero_sudo/daemon/secret_store.py` and `zero_sudo/daemon/secret_operations.py`. Both are plain Python with no
 `odoo` import, so a standalone daemon (the Tier B broker among them) uses the same code. Tier B (an out-of-process broker,
-`secret_broker.py`) has its own page, `secret_store_tier_b.md`, added with the broker.
+`secret_broker/`) has its own page: [secret_store_tier_b.md](secret_store_tier_b.md).
 
 ## What Tier A protects, and what it does not
 
