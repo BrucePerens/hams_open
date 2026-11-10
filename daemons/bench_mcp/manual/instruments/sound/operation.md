@@ -5,7 +5,7 @@ see_also: [instruments/sound/setup, instruments/sound/safety, instruments/sound/
 tools: [bench_audio_status, bench_audio_devices, bench_audio_levels, bench_audio_play, bench_audio_record, bench_audio_meter, bench_audio_verify, bench_audio_safe_state]
 instrument: sound
 tier: read_only
-verified: code only, 2026-10-29
+verified: dry_run of play, speak and alert, and the no-output refusal, on the dev box Trust USB Audio (volume stayed 0.94), 2026-11-10; the audible calls and safe_state are code only (2026-10-29)
 ---
 
 # Using the sound tools
