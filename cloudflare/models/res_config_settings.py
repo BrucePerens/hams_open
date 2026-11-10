@@ -119,6 +119,7 @@ class ResConfigSettings(models.TransientModel):
             return
         raise UserError(problem + " " + _("(Tick 'Allow an over-broad API token' to override.)"))
 
+    # [@ANCHOR: cloudflare:COMM_settings_create]
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:

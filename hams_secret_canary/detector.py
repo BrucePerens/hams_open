@@ -58,6 +58,7 @@ def scannable_response(response):
     return mimetype.startswith("text/") or mimetype in SCANNABLE_MIMETYPES
 
 
+# [@ANCHOR: hams_secret_canary:candidates]
 def _candidates(token):
     """The token, without leading and trailing dots, and each 16+ character piece between slashes (a secret in a path)."""
     seen = {token}

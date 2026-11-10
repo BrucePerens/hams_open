@@ -18,6 +18,7 @@ _tables = {}
 _original_factory = []
 
 
+# [@ANCHOR: hams_secret_canary:watch_log_records]
 def _watch_log_records(factory):
     def make_record(*args, **kwargs):
         record = factory(*args, **kwargs)
@@ -39,6 +40,7 @@ class SecretCanary(models.AbstractModel):
     _description = "Secret Canary"
 
     @api.model
+    # [@ANCHOR: hams_secret_canary:register_hook]
     def _register_hook(self):
         super()._register_hook()
         self._load_state()
@@ -62,6 +64,7 @@ class SecretCanary(models.AbstractModel):
         return state["salt"], table
 
     @api.model
+    # [@ANCHOR: hams_secret_canary:store_state]
     def _store_state(self, salt, table):
         self.env["zero_sudo.security.utils"]._set_kv(STATE_KEY, json.dumps({"salt": salt, "table": table}))
         _tables.pop(self.env.cr.dbname, None)
