@@ -466,3 +466,4 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_vmeter_serve] (radioctl-station) Serves a virtual meter of a driver on a stream (duplex or pty) and returns its control.
 - [@ANCHOR: radioctl:radioctl_station_meterdef_validate] (radioctl-station) Checks the definition: a known driver, a unit that driver can report, sane limits.
 - [@ANCHOR: radioctl:radioctl_station_meterdef_offset_db] (radioctl-station) The offset in decibels.
+- [@ANCHOR: radioctl:radioctl_station_ha_open_stream] (radioctl-station) A byte stream to Home Assistant: TCP, wrapped in TLS when a connector is given.
