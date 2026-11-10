@@ -157,6 +157,23 @@ class TestTrustedIpRanges(HamsTransactionCase):
             "A failed refresh must leave the last known-good list untouched.",
         )
 
+    def test_10b_cron_refresh_with_one_family_missing_keeps_the_existing_list(self):
+        # Tests [@ANCHOR: cloudflare:cron_refresh_cloudflare_ip_ranges]
+        self._icp().set_param(
+            "cloudflare.trusted_ip_ranges_auto", "203.0.113.0/24\n2001:db8::/32"
+        )
+        fake_v4 = MagicMock(text="198.51.100.0/24\n", raise_for_status=lambda: None)
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.trusted_ip_ranges.requests.get",
+            side_effect=[fake_v4, requests.exceptions.ConnectionError("v6 unreachable")],
+        )
+        self._utils()._cron_refresh_cloudflare_ip_ranges()
+        self.assertEqual(
+            self._icp().get_param("cloudflare.trusted_ip_ranges_auto"),
+            "203.0.113.0/24\n2001:db8::/32",
+            "Half a refresh must not replace the whole list.",
+        )
+
     # Tests [@ANCHOR: cloudflare:publish_trusted_ip_ranges_to_redis]
     def test_11_publish_with_non_tunnel_mode_off_writes_an_empty_list_that_outlives_the_daily_cron(self):
         """A Tunnel-only deployment publishes an empty list, not Cloudflare's ranges -- that is what
