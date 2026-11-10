@@ -239,6 +239,8 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_def_validate] (radioctl-station) Checks names, references, channel kinds, one device per power channel, and that the
 - [@ANCHOR: radioctl:radioctl_station_def_power_on_order] (radioctl-station) Every device in an order where each follows the devices it depends on (ties by name);
 - [@ANCHOR: radioctl:radioctl_station_def_dependents] (radioctl-station) Every device that depends on `id`, directly or not, in power-off order (the most
+- [@ANCHOR: radioctl:radioctl_station_band_route_for] (radioctl-station) The first route whose band holds `hz`, or `None` outside every band (the selector is then left alone).
+- [@ANCHOR: radioctl:radioctl_station_band_follow_tx_frequency] (radioctl-station) Follows the rig's transmit frequency until its event stream ends: switches the selector of the
 - [@ANCHOR: radioctl:radioctl_station_rig_name] (radioctl-station) The rig id.
 - [@ANCHOR: radioctl:radioctl_station_rig_key_state] (radioctl-station) Keyed state from the rig handle: unknown when the link is down; the rig's own PTT read
 - [@ANCHOR: radioctl:radioctl_station_station_new] (radioctl-station) Builds a station over a switchboard that has every channel of `def`. Nothing is switched.
