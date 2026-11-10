@@ -125,6 +125,20 @@ class TestMissingRequiredParams(HamsHttpCase):
             self.assertNotIn("ValueError", response.text)
         self.assertEqual(self.env["hams_helpdesk.exception.fingerprint"].search_count([]), before)
 
+    def test_a_number_error_is_the_senders_only_when_the_text_was_sent(self):
+        # Tests [@ANCHOR: hams_helpdesk:error_is_the_senders_number]
+        from odoo.addons.hams_helpdesk.models.ir_http_exception import _error_is_the_senders_number as senders
+
+        error = ValueError("invalid literal for int() with base 10: 'abc'")
+        self.assertTrue(senders(error, ["abc"]))
+        self.assertFalse(senders(error, ["other", ""]), "a stored value is a server bug")
+        self.assertFalse(senders(error, []))
+        self.assertTrue(senders(ValueError("could not convert string to float: 'x1'"), ["x1"]))
+        nan = ValueError("cannot convert float NaN to integer")
+        self.assertTrue(senders(nan, ["nan"]))
+        self.assertFalse(senders(nan, ["12", "abc"]))
+        self.assertFalse(senders(ValueError("something else"), ["something else"]))
+
     def test_text_where_a_blog_wants_a_date_is_a_400_not_a_500(self):
         # Tests [@ANCHOR: hams_helpdesk:bad_date_is_400]
         # Tests [@ANCHOR: hams_helpdesk:error_is_unreadable_date]

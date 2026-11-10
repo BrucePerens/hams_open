@@ -52,6 +52,27 @@ def report_request_exception(exception):
 # What int() and float() say when handed text that is not a number.
 _NOT_A_NUMBER_MESSAGES = ("invalid literal for int()", "could not convert string to float", "cannot convert float")
 
+
+# [@ANCHOR: hams_helpdesk:error_is_the_senders_number]
+def _error_is_the_senders_number(error, parameter_values):
+    """True when ``error`` is int()/float() refusing text the request itself carried: the message quotes the
+    text (``... base 10: 'abc'``) and one of ``parameter_values`` is that text. The same error on a stored
+    value is a server bug and is not matched, so it stays a 500 and a ticket. "cannot convert float NaN to
+    integer" quotes nothing; it is the sender's when a parameter reads as nan or infinity."""
+    message = str(error)
+    if not message.startswith(_NOT_A_NUMBER_MESSAGES):
+        return False
+    if message.startswith("cannot convert float"):
+        for value in parameter_values:
+            try:
+                number = float(value)
+            except ValueError:
+                continue
+            if number != number or number in (float("inf"), float("-inf")):
+                return True
+        return False
+    return any(value and message.endswith(": " + repr(value)) for value in parameter_values)
+
 # Odoo's own date-string parsers (odoo/tools/date_utils.py). The ORM's domain optimizer calls them on any date
 # value in a search domain, so a ValueError raised inside one means the request carried a date it could not read.
 _DATE_PARSER_FUNCTIONS = frozenset({"parse_date", "parse_iso_date"})
@@ -216,8 +237,10 @@ class IrHttpExceptionReport(models.AbstractModel):
                 # A handler that turns a request parameter into a number with int() or float() and gets text raises
                 # ValueError("invalid literal for int() ..."): the sender's mistake, not a server fault (e.g.
                 # /club/apply/submit?club_id=abc, /my/identity/street-quiz/submit?quiz_id=abc and the like, a 500 and
-                # a ticket each). Answered 400; logged at warning so a handler that really has this bug stays visible.
-                if str(error).startswith(_NOT_A_NUMBER_MESSAGES):
+                # a ticket each), when the text is one the request carried. Answered 400; logged at warning so a handler that really has this bug stays visible.
+                if _error_is_the_senders_number(
+                    error, [value for value in request.params.values() if isinstance(value, str)]
+                ):
                     _logger.warning("Answered 400 for a non-numeric parameter on %s: %s", route_name, error)
                     raise werkzeug.exceptions.BadRequest("A request parameter is not a number.") from error
                 # [@ANCHOR: hams_helpdesk:bad_date_is_400]
