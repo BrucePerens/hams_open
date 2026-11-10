@@ -4,6 +4,7 @@
 import werkzeug.exceptions
 
 from odoo.tests.common import tagged
+from odoo.addons.hams_helpdesk.models.ir_http_exception import _error_is_the_senders_number as senders
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 # The six public GETs (docs/qa/QA_PASS_2026-10-13.md QA-014) that answered 500 with no parameters. A route whose
@@ -127,8 +128,6 @@ class TestMissingRequiredParams(HamsHttpCase):
 
     def test_a_number_error_is_the_senders_only_when_the_text_was_sent(self):
         # Tests [@ANCHOR: hams_helpdesk:error_is_the_senders_number]
-        from odoo.addons.hams_helpdesk.models.ir_http_exception import _error_is_the_senders_number as senders
-
         error = ValueError("invalid literal for int() with base 10: 'abc'")
         self.assertTrue(senders(error, ["abc"]))
         self.assertFalse(senders(error, ["other", ""]), "a stored value is a server bug")
