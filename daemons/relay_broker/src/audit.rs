@@ -193,8 +193,7 @@ mod tests {
     // Tests [@ANCHOR: relay_broker_audit_log_record]
     #[test]
     fn records_append_to_a_private_file_and_none_is_a_sink() {
-        let dir = std::env::temp_dir().join(format!("relay_broker_audit_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("audit");
         let path = dir.join("events.jsonl");
         let _ = std::fs::remove_file(&path);
         let e = AuditEvent {
@@ -217,15 +216,12 @@ mod tests {
         );
         assert!(AuditLog::open(None).unwrap().record(&e).is_ok());
         assert!(AuditLog::open(Some(&dir.join("no/such/dir/x"))).is_err());
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     // Tests [@ANCHOR: relay_broker_audit_log_record]
     #[test]
     fn a_rejected_peer_is_logged_once_per_minute_and_the_log_rotates_at_the_cap() {
-        let dir =
-            std::env::temp_dir().join(format!("relay_broker_audit_rot_{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("audit_rot");
         let path = dir.join("events.jsonl");
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(dir.join("events.jsonl.1"));
@@ -262,6 +258,5 @@ mod tests {
             std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
             0o600
         );
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -22,5 +22,7 @@ pub mod os;
 pub mod policy;
 pub mod ratelimit;
 pub mod server;
+#[cfg(test)]
+mod testdir;
 pub mod transport;
 pub mod wire;

@@ -132,6 +132,9 @@ fn main() -> ExitCode {
 }
 
 #[cfg(test)]
+mod testdir;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -164,8 +167,7 @@ mod tests {
     // Tests [@ANCHOR: relay_broker_remove_stale_socket]
     #[test]
     fn only_a_leftover_socket_is_removed() {
-        let dir = std::env::temp_dir().join(format!("rb-stale-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::testdir::TestDir::new("stale");
         let sock = dir.join("s");
         let _l = UnixListener::bind(&sock).unwrap();
         drop(_l); // the file stays behind, as after a crash
@@ -176,6 +178,5 @@ mod tests {
         std::fs::write(&file, b"keep").unwrap();
         assert!(remove_stale_socket(&file).is_err());
         assert!(file.exists(), "a regular file is left alone");
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
