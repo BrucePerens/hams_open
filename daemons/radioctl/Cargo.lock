@@ -730,7 +730,9 @@ dependencies = [
  "serde",
  "serde_json",
  "serialport",
+ "sha2",
  "tokio",
+ "tokio-rustls",
  "toml 0.8.23",
 ]
 

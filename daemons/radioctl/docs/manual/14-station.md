@@ -57,7 +57,8 @@ board acknowledged the write but cannot report its state; the state is the drive
 - the long-lived access token comes from a `SecretStore` by name, never from configuration; its
   `Secret` wrapper has a redacted `Debug` and the token is never in an error, a log or the audit log;
 - the address is a private IP literal (no names, no internet) and the link is plain HTTP and
-  WebSocket: no TLS is implemented;
+  WebSocket unless the configuration gives TLS trust: the owner's CA, or the SHA-256 fingerprint of the
+  server's certificate (verification is never off);
 - every service call and session event goes to an `AuditLog`.
 
 ### Relay boards whose status is not readable (SainSmart 16-channel)

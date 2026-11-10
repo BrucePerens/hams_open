@@ -20,8 +20,9 @@
 //!   is redacted, and sent only as the bearer header and the WebSocket auth message. It is never
 //!   in a config file, an error message, the audit log or a log line.
 //! - **Private addresses only**: an IP literal in a loopback, private or link-local range, never a
-//!   name, never the internet. The connection is plain HTTP and WebSocket (no TLS is implemented),
-//!   which is why the address must be on the owner's own network.
+//!   name, never the internet. The connection is plain HTTP and WebSocket unless the
+//!   configuration has a [`HaTls`] (the owner's CA or a pinned fingerprint, see [`crate::tls`]),
+//!   then HTTPS and `wss`; either way the address must be on the owner's own network.
 //! - **Audit**: every service call, session start, authentication result, loss and discovery goes
 //!   to an [`AuditLog`].
 //! - **Allow-list**: only the configured entities can be written. Discovery lists what Home
@@ -30,6 +31,7 @@
 use crate::channel::{Assurance, BoxFuture, ChannelDriver};
 use crate::error::{StationError, StationErrorKind};
 use crate::http_relay::is_private_or_loopback;
+use crate::tls::{connector, server_name, HaTls};
 use crate::ws::{
     check_handshake_response, client_key, encode_frame, handshake_request, random_bytes, Decoder,
     Opcode,
@@ -42,12 +44,13 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::runtime::Handle;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout, Instant};
+use tokio_rustls::TlsConnector;
 
 /// Domains whose entities can be switched on and off.
 const WRITABLE: [&str; 4] = ["switch", "input_boolean", "light", "fan"];
@@ -251,6 +254,9 @@ pub struct HaConfig {
     pub ping_every: Duration,
     /// Waits between reconnect attempts of the session.
     pub backoff: Backoff,
+    /// TLS to a Home Assistant that serves only HTTPS: the owner's trust, never off. `None` is
+    /// plain HTTP and WebSocket.
+    pub tls: Option<HaTls>,
 }
 
 impl HaConfig {
@@ -270,6 +276,7 @@ impl HaConfig {
             confirm_wait: Duration::from_secs(3),
             ping_every: Duration::from_secs(15),
             backoff: Backoff::default(),
+            tls: None,
         }
     }
 }
@@ -298,6 +305,7 @@ struct Cache {
 
 struct Inner {
     addr: SocketAddr,
+    connector: Option<TlsConnector>,
     token: Secret,
     cfg: HaConfig,
     cache: Mutex<Cache>,
@@ -405,9 +413,11 @@ impl HomeAssistant {
         for e in &config.entities {
             check_entity(e)?;
         }
+        let connector = config.tls.as_ref().map(connector).transpose()?;
         let token = secrets.secret(&config.token_name)?;
         let inner = Arc::new(Inner {
             addr,
+            connector,
             token,
             cfg: config,
             cache: Mutex::new(Cache::default()),
@@ -616,7 +626,7 @@ impl Inner {
     /// One HTTP/1.0 POST with the bearer token; success is a 200 or 201.
     async fn post(&self, path: &str, body: &str) -> Result<(), StationError> {
         let exchange = async {
-            let mut s = TcpStream::connect(self.addr)
+            let mut s = open_stream(self.addr, self.connector.as_ref())
                 .await
                 .map_err(|e| driver_err(format!("cannot reach Home Assistant: {e}")))?;
             let req = format!(
@@ -630,10 +640,13 @@ impl Inner {
                 .await
                 .map_err(|e| driver_err(format!("cannot send to Home Assistant: {e}")))?;
             let mut buf = Vec::new();
-            s.take(MAX_REPLY)
-                .read_to_end(&mut buf)
-                .await
-                .map_err(|e| driver_err(format!("no answer from Home Assistant: {e}")))?;
+            // `Connection: close` ends the reply with the connection; over TLS a server that
+            // just closes the socket (no close_notify) is an end of data too once something came.
+            match (&mut s).take(MAX_REPLY).read_to_end(&mut buf).await {
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof && !buf.is_empty() => {}
+                Err(e) => return Err(driver_err(format!("no answer from Home Assistant: {e}"))),
+            }
             Ok::<_, StationError>(buf)
         };
         let buf = timeout(self.cfg.request_timeout, exchange)
@@ -707,9 +720,33 @@ async fn run_sessions(inner: Arc<Inner>) {
     }
 }
 
+// [@ANCHOR: radioctl_station_ha_open_stream]
+/// A byte stream to Home Assistant: TCP, wrapped in TLS when a connector is given (the server's
+/// certificate must then match the address or the pin).
+async fn open_stream(addr: SocketAddr, tls: Option<&TlsConnector>) -> Result<Box<dyn Io>, String> {
+    let tcp = TcpStream::connect(addr)
+        .await
+        .map_err(|e| format!("connect: {e}"))?;
+    let _ = tcp.set_nodelay(true);
+    match tls {
+        None => Ok(Box::new(tcp)),
+        Some(connector) => {
+            let stream = connector
+                .connect(server_name(addr.ip()), tcp)
+                .await
+                .map_err(|e| format!("TLS: {e}"))?;
+            Ok(Box::new(stream))
+        }
+    }
+}
+
+/// Anything the driver can read and write.
+trait Io: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> Io for T {}
+
 // [@ANCHOR: radioctl_station_ha_read_head]
 /// Reads an HTTP response head (to the blank line), returning it and any bytes after it.
-async fn read_head(stream: &mut TcpStream) -> Result<(String, Vec<u8>), String> {
+async fn read_head(stream: &mut (impl AsyncRead + Unpin)) -> Result<(String, Vec<u8>), String> {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 1024];
     loop {
@@ -730,7 +767,7 @@ async fn read_head(stream: &mut TcpStream) -> Result<(String, Vec<u8>), String> 
 
 // [@ANCHOR: radioctl_station_ha_send_json]
 /// Sends one JSON text frame.
-async fn send_json(stream: &mut TcpStream, value: &Json) -> Result<(), String> {
+async fn send_json(stream: &mut (impl AsyncWrite + Unpin), value: &Json) -> Result<(), String> {
     let frame = encode_frame(
         Opcode::Text,
         value.to_string().as_bytes(),
@@ -746,11 +783,9 @@ async fn send_json(stream: &mut TcpStream, value: &Json) -> Result<(), String> {
 /// One WebSocket session until it fails.
 async fn session(inner: &Arc<Inner>, failures: &mut u32) -> Result<(), String> {
     let limit = inner.cfg.request_timeout;
-    let mut stream = timeout(limit, TcpStream::connect(inner.addr))
+    let mut stream = timeout(limit, open_stream(inner.addr, inner.connector.as_ref()))
         .await
-        .map_err(|_| "connect timed out".to_string())?
-        .map_err(|e| format!("connect: {e}"))?;
-    let _ = stream.set_nodelay(true);
+        .map_err(|_| "connect timed out".to_string())??;
     let key = client_key();
     stream
         .write_all(handshake_request(&inner.addr.to_string(), "/api/websocket", &key).as_bytes())

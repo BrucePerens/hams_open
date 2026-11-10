@@ -41,5 +41,6 @@ pub mod record;
 pub mod rotator;
 pub mod spawner;
 pub mod station;
+pub mod tls;
 pub mod virtual_rotator;
 pub mod ws;

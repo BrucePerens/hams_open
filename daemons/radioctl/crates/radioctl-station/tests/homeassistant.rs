@@ -19,16 +19,28 @@ use radioctl_station::homeassistant::{
 };
 use radioctl_station::model::{ChannelId, DeviceId, StationDef, Value};
 use radioctl_station::station::Station;
+use radioctl_station::tls::HaTls;
 use radioctl_station::ws::{accept_key, encode_frame, Decoder, Opcode};
 use serde_json::{json, Value as Json};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::TcpListener;
+use tokio_rustls::rustls::pki_types::pem::PemObject;
+use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use tokio_rustls::rustls::ServerConfig;
+use tokio_rustls::TlsAcceptor;
+
+trait Io: AsyncRead + AsyncWrite + Unpin + Send + 'static {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send + 'static> Io for T {}
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, timeout};
 
 const TOKEN: &str = "llat-SECRET-0123456789";
+const TEST_CERT: &str = include_str!("data/ha_test_cert.pem");
+const TEST_KEY: &str = include_str!("data/ha_test_key.pem");
+/// SHA-256 of the test certificate's DER (`openssl x509 -outform der | sha256sum`).
+const TEST_PIN: &str = "bef7f838506b223a1686563afc78ec732a6e3940a01b262d8c562b003e3b0651";
 
 #[derive(Default)]
 struct Fake {
@@ -50,6 +62,7 @@ struct Ha {
     state: Arc<Mutex<Fake>>,
     addr: std::net::SocketAddr,
     task: Option<JoinHandle<()>>,
+    tls: Option<TlsAcceptor>,
 }
 
 fn event(entity: &str, state: &str) -> Vec<u8> {
@@ -76,16 +89,52 @@ impl Ha {
             state: Arc::new(Mutex::new(fake)),
             addr: listener.local_addr().expect("addr"),
             task: None,
+            tls: None,
         };
+        ha.serve(listener);
+        ha
+    }
+
+    /// A Home Assistant that serves only TLS, with the test certificate (valid for 127.0.0.1).
+    async fn start_tls() -> Ha {
+        let mut ha = Ha::start().await;
+        ha.stop().await;
+        let cert: Vec<CertificateDer<'static>> =
+            CertificateDer::pem_slice_iter(TEST_CERT.as_bytes())
+                .collect::<Result<_, _>>()
+                .expect("cert");
+        let key = PrivateKeyDer::from_pem_slice(TEST_KEY.as_bytes()).expect("key");
+        let provider = Arc::new(tokio_rustls::rustls::crypto::ring::default_provider());
+        let config = ServerConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .expect("versions")
+            .with_no_client_auth()
+            .with_single_cert(cert, key)
+            .expect("server config");
+        ha.tls = Some(TlsAcceptor::from(Arc::new(config)));
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        ha.addr = listener.local_addr().expect("addr");
         ha.serve(listener);
         ha
     }
 
     fn serve(&mut self, listener: TcpListener) {
         let state = Arc::clone(&self.state);
+        let tls = self.tls.clone();
         self.task = Some(tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
-                tokio::spawn(connection(stream, Arc::clone(&state)));
+                let state = Arc::clone(&state);
+                let tls = tls.clone();
+                tokio::spawn(async move {
+                    match tls {
+                        None => connection(stream, state).await,
+                        Some(acceptor) => {
+                            if let Ok(stream) = acceptor.accept(stream).await {
+                                connection(stream, state).await;
+                            }
+                        }
+                    }
+                });
             }
         }));
     }
@@ -122,7 +171,7 @@ impl Ha {
     }
 }
 
-async fn read_head(stream: &mut TcpStream) -> Option<(String, Vec<u8>)> {
+async fn read_head(stream: &mut (impl AsyncRead + Unpin)) -> Option<(String, Vec<u8>)> {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 1024];
     loop {
@@ -138,7 +187,7 @@ async fn read_head(stream: &mut TcpStream) -> Option<(String, Vec<u8>)> {
     }
 }
 
-async fn connection(mut stream: TcpStream, state: Arc<Mutex<Fake>>) {
+async fn connection(mut stream: impl Io, state: Arc<Mutex<Fake>>) {
     let Some((head, mut rest)) = read_head(&mut stream).await else {
         return;
     };
@@ -211,7 +260,7 @@ async fn connection(mut stream: TcpStream, state: Arc<Mutex<Fake>>) {
         .await;
 }
 
-async fn websocket(mut stream: TcpStream, state: Arc<Mutex<Fake>>) {
+async fn websocket(mut stream: impl Io, state: Arc<Mutex<Fake>>) {
     let (tx, mut rx) = mpsc::unbounded_channel::<Push>();
     state.lock().unwrap().ws_connections += 1;
     let send = |v: Json| encode_frame(Opcode::Text, v.to_string().as_bytes(), None);
@@ -791,4 +840,96 @@ async fn start_refuses_what_it_should_before_touching_the_network() {
     assert!(store.secret("blank").is_err());
     let _ = std::fs::remove_dir_all(&dir);
     let _ = Secret::new("x");
+}
+
+// Tests [@ANCHOR: radioctl_station_tls_connector]
+// Tests [@ANCHOR: radioctl_station_ha_open_stream]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn home_assistant_over_tls_with_the_owners_ca_or_a_pinned_fingerprint() {
+    for tls in [
+        HaTls {
+            ca_pem: Some(include_str!("data/ha_test_ca.pem").to_string()),
+            pin_sha256: None,
+        },
+        HaTls {
+            ca_pem: None,
+            pin_sha256: Some(TEST_PIN.to_string()),
+        },
+    ] {
+        let mut ha = Ha::start_tls().await;
+        let audit = Arc::new(MemoryAudit::new());
+        let mut cfg = config(&ha);
+        cfg.tls = Some(tls);
+        let d = Arc::new(
+            HomeAssistant::start(
+                &Handle::current(),
+                cfg,
+                &secrets(),
+                Arc::clone(&audit) as Arc<dyn AuditLog>,
+            )
+            .expect("start"),
+        );
+        until("synced over TLS", || d.is_synced()).await;
+        let b = Arc::new(board(&d));
+        let station = Station::new(
+            StationDef::from_toml(DEF).unwrap(),
+            Arc::clone(&b),
+            vec![],
+            None,
+        )
+        .expect("station");
+        station
+            .set_channel(&ch("radio_pwr"), Value::On)
+            .await
+            .expect("a REST call over TLS, confirmed by the event");
+        assert_eq!(ha.calls().len(), 1);
+        drop(station);
+        drop(b);
+        drop(d);
+        ha.stop().await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_certificate_the_owner_did_not_choose_is_refused_and_plain_http_is_not_tried() {
+    // Another certificate's fingerprint, and the wrong authority: the session never syncs.
+    for tls in [
+        HaTls {
+            ca_pem: None,
+            pin_sha256: Some("00".repeat(32)),
+        },
+        HaTls {
+            ca_pem: Some(include_str!("data/other_cert.pem").to_string()),
+            pin_sha256: None,
+        },
+    ] {
+        let mut ha = Ha::start_tls().await;
+        let audit = Arc::new(MemoryAudit::new());
+        let mut cfg = config(&ha);
+        cfg.tls = Some(tls);
+        let d = HomeAssistant::start(
+            &Handle::current(),
+            cfg,
+            &secrets(),
+            Arc::clone(&audit) as Arc<dyn AuditLog>,
+        )
+        .expect("start");
+        until("a refused handshake is logged", || {
+            audit.entries().iter().any(|e| e.action == "websocket lost")
+        })
+        .await;
+        assert!(!d.is_synced());
+        assert_eq!(ha.ws_connections(), 0);
+        assert!(!format!("{:?}", audit.entries()).contains(TOKEN));
+        drop(d);
+        ha.stop().await;
+    }
+    // Plain HTTP against a TLS-only server is just a failed connection, not a downgrade.
+    let mut ha = Ha::start_tls().await;
+    let audit = Arc::new(MemoryAudit::new());
+    let d = driver(&ha, &audit);
+    sleep(Duration::from_millis(300)).await;
+    assert!(!d.is_synced());
+    drop(d);
+    ha.stop().await;
 }
