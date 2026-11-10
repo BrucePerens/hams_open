@@ -164,6 +164,23 @@ class TestFormShield(HamsTransactionCase):
         response = shield_response(self.env, "tiny", "192.0.2.2")
         self.assertEqual(self.shield.check("tiny", response, limits=tiny).reason, "rate_global")
 
+    def test_refused_attempts_do_not_burn_the_shared_limits(self):
+        # Tests [@ANCHOR: form_shield:over_limit]
+        limits = (("subject", 1, 3600), ("global", 3, 3600))
+
+        def attempt(address):
+            self.visitor_address = address
+            response = shield_response(self.env, "shared", address)
+            return self.shield.check("shared", response, limits=limits)
+
+        self.assertTrue(attempt("203.0.113.1").ok)
+        for _ in range(5):
+            self.assertEqual(attempt("203.0.113.1").reason, "rate_subject")
+        # One visitor's refused retries used no whole-form budget: two other networks still pass.
+        self.assertTrue(attempt("198.51.100.1").ok)
+        self.assertTrue(attempt("192.0.2.1").ok)
+        self.assertEqual(attempt("192.0.2.2").reason, "rate_global")
+
     def test_redis_down_is_reported_not_skipped(self):
         # Tests [@ANCHOR: form_shield:check]
         response = shield_response(self.env, "contact", GUEST)
