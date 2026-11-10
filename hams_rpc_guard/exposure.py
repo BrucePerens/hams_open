@@ -76,10 +76,14 @@ class Exposure:
                 _logger.warning("%s: unknown section %r in %s", origin, key, EXPOSURE_FILE)
         for section in SECTIONS:
             getattr(self, section).update(_pairs(document.get(section)))
-        for login, entry in (document.get("clients") or {}).items():
+        clients = document.get("clients") or {}
+        if not isinstance(clients, dict):  # a list here used to raise out of load_exposure and fail every RPC call
+            _logger.warning("%s: 'clients' in %s is not a mapping of login to allowed methods; ignored", origin, EXPOSURE_FILE)
+            clients = {}
+        for login, entry in clients.items():
             allow = entry.get("allow") if isinstance(entry, dict) and "allow" in entry else entry
             self.clients.setdefault(login, set()).update(_pairs(allow))
-            if isinstance(entry, dict) and entry.get("sources"):
+            if isinstance(entry, dict) and isinstance(entry.get("sources"), list):
                 self.sources.setdefault(login, []).extend(entry["sources"])
 
 

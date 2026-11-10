@@ -112,6 +112,19 @@ class TestExposureFiles(HamsTransactionCase):
         self.assertEqual(result.clients, {"daemon": {("a.b", "m3")}, "short": {("c.d", "m4")}})
         self.assertEqual(result.sources, {"daemon": ["x/daemon/main.py"]})
 
+    def test_a_clients_section_that_is_not_a_mapping_is_ignored_not_fatal(self):
+        for junk in (["daemon"], "daemon", 7):
+            with self.subTest(junk=junk):
+                result = exposure.Exposure()
+                with self.assertLogs(exposure._logger, "WARNING"):
+                    result.merge({"internal": {"a.b": ["m1"]}, "clients": junk}, "origin")
+                self.assertEqual(result.internal, {("a.b", "m1")})
+                self.assertEqual(result.clients, {})
+        result = exposure.Exposure()
+        result.merge({"clients": {"daemon": {"allow": {"a.b": ["m3"]}, "sources": 5}}}, "origin")
+        self.assertEqual(result.clients, {"daemon": {("a.b", "m3")}})
+        self.assertEqual(result.sources, {})
+
     def test_the_installed_addons_files_are_merged_once_per_registry(self):
         loaded = exposure.load_exposure(self.env.cr, self.env.registry)
         self.assertIn("hams_rpc_guard", loaded.modules)
