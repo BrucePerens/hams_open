@@ -127,16 +127,15 @@ def check_rpc_call(model, name):
     Reads the mode, `strict_stock` and `managed_authors` parameters through `zero_sudo.security.utils`; a parameter that
     cannot be read is read as the strict value (enforce, strict_stock off, default authors)."""
     utils = model.env["zero_sudo.security.utils"]
+    local_identity, bound_logins = unix_identity()  # environ only, outside the try: an unreadable parameter must not drop the login binding
     try:
         mode = policy.normalise_mode(utils._get_system_param(policy.MODE_PARAM, policy.DEFAULT_MODE))
         strict_stock = policy.truthy(utils._get_system_param(policy.STRICT_STOCK_PARAM, ""))
         authors = policy.parse_authors(utils._get_system_param(policy.MANAGED_AUTHORS_PARAM, ""))
         cert = certificate_identity(utils)
-        local_identity, bound_logins = unix_identity()
     except Exception:  # audit-ignore-catch-all: a parameter that cannot be read must not open the guard
         _logger.exception("Could not read the RPC guard parameters; using the strict defaults.")
         mode, strict_stock, authors, cert = policy.DEFAULT_MODE, False, policy.DEFAULT_MANAGED_AUTHORS, ""
-        local_identity, bound_logins = "", None
     if mode == policy.MODE_OFF:
         return
     exposure = exposure_module.load_exposure(model.env.cr, model.env.registry)
