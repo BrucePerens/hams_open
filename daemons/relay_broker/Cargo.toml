@@ -32,7 +32,7 @@ panic = "deny"
 [dependencies]
 # Only the OS wrappers: no serde, no tokio, no web. The wire format and the config file are
 # hand-parsed so the whole input surface is in this crate and can be read in one sitting.
-nix = { version = "0.31", default-features = false, features = ["socket", "uio", "fs", "user", "poll"] }
+nix = { version = "0.31", default-features = false, features = ["socket", "uio", "fs", "user", "poll", "signal", "net"] }
 
 [dev-dependencies]
 proptest = { version = "1.12", default-features = false, features = ["std"] }

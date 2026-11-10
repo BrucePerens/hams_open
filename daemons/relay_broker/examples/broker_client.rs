@@ -79,6 +79,9 @@ fn main() {
                 groups.join(",")
             );
         }
+        Response::Hub { access_point, dhcp } => {
+            println!("hub: access point {access_point}, dhcp {dhcp}")
+        }
         Response::Error { status, reason } => {
             eprintln!("{status:?}: {reason}");
             std::process::exit(1);

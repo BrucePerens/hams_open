@@ -487,3 +487,117 @@ fn the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_noth
     ));
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn bind_udp_serves_only_listed_ports_and_passes_a_descriptor() {
+    let os = FakeOs::typical();
+    let binds = os.binds.clone();
+    let peer = os.peer;
+    let mut broker = broker_with(&test_config(), os, None);
+    let now = Instant::now();
+    let (resp, fd) = broker.handle(peer, &Request::BindUdp { port: 123 }, now);
+    assert_eq!(resp, Response::Opened);
+    assert!(fd.is_some(), "the descriptor is passed");
+    for port in [22, 80, 0, 1123] {
+        let (resp, fd) = broker.handle(peer, &Request::BindUdp { port }, now);
+        assert!(
+            matches!(
+                resp,
+                Response::Error {
+                    status: Status::Denied,
+                    ..
+                }
+            ) && fd.is_none(),
+            "port {port}: {resp:?}"
+        );
+    }
+    assert_eq!(
+        *binds.lock().unwrap(),
+        vec![123],
+        "only the listed port reached the OS"
+    );
+}
+
+fn hub_settings() -> relay_broker::hub::HubSettings {
+    relay_broker::hub::HubSettings {
+        interface: "wlan0".into(),
+        ssid: "HAMS-EMERGENCY".into(),
+        passphrase: "correct horse".into(),
+        channel: 6,
+        five_ghz: false,
+        hub_address: std::net::Ipv4Addr::new(192, 168, 50, 1),
+        relay_name: "relay".into(),
+        uplink_dns: None,
+        lease_minutes: 60,
+    }
+}
+
+#[test]
+fn the_hub_is_refused_unless_enabled_and_then_written_from_the_templates() {
+    let now = Instant::now();
+    // Off by default.
+    let os = FakeOs::typical();
+    let peer = os.peer;
+    let mut broker = broker_with(&test_config(), os, None);
+    let (resp, _) = broker.handle(peer, &Request::HubStart(hub_settings()), now);
+    assert!(
+        matches!(
+            resp,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+    // Enabled.
+    let mut cfg = test_config();
+    cfg.hub_enabled = true;
+    let os = FakeOs::typical();
+    let hub = os.hub.clone();
+    let mut broker = broker_with(&cfg, os, None);
+    let (resp, _) = broker.handle(peer, &Request::HubStart(hub_settings()), now);
+    assert_eq!(
+        resp,
+        Response::Hub {
+            access_point: true,
+            dhcp: true
+        }
+    );
+    let started = hub.lock().unwrap().clone().expect("started");
+    assert!(
+        started.0.contains("wpa_passphrase=correct horse")
+            && started.1.contains("dhcp-option=42,192.168.50.1")
+    );
+    // A setting that would add a line or open the network never reaches the OS.
+    let mut bad = hub_settings();
+    bad.ssid = "x\nwpa=0".into();
+    let (resp, _) = broker.handle(peer, &Request::HubStart(bad), now);
+    assert!(
+        matches!(
+            resp,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+    let (resp, _) = broker.handle(peer, &Request::HubStatus, now);
+    assert_eq!(
+        resp,
+        Response::Hub {
+            access_point: true,
+            dhcp: true
+        }
+    );
+    let (resp, _) = broker.handle(peer, &Request::HubStop, now);
+    assert_eq!(
+        resp,
+        Response::Hub {
+            access_point: false,
+            dhcp: false
+        }
+    );
+    assert!(hub.lock().unwrap().is_none());
+}

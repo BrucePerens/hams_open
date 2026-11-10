@@ -28,6 +28,10 @@ pub struct FakeOs {
     pub users: HashMap<u32, String>,
     pub groups: HashMap<String, Vec<String>>,
     pub added: Arc<Mutex<Vec<(String, String)>>>,
+    /// Ports `bind_udp` was asked for.
+    pub binds: Arc<Mutex<Vec<u16>>>,
+    /// The configuration texts and interface of a started hub.
+    pub hub: Arc<Mutex<Option<(String, String, String)>>>,
     last_opened: Cell<Option<NodeKind>>,
 }
 
@@ -92,6 +96,8 @@ impl FakeOs {
                 ("audio".to_string(), vec![]),
             ]),
             added: Arc::new(Mutex::new(Vec::new())),
+            binds: Arc::new(Mutex::new(Vec::new())),
+            hub: Arc::new(Mutex::new(None)),
             last_opened: Cell::new(None),
         }
     }
@@ -137,6 +143,32 @@ impl Os for FakeOs {
             .unwrap()
             .push((user.to_string(), group.to_string()));
         Ok(())
+    }
+    fn bind_udp(&self, port: u16) -> io::Result<OwnedFd> {
+        self.binds.lock().unwrap().push(port);
+        LinuxOs::default().open_device(Path::new("/dev/null"), true)
+    }
+    fn hub_start(
+        &self,
+        hostapd_conf: &str,
+        dnsmasq_conf: &str,
+        interface: &str,
+        _address: std::net::Ipv4Addr,
+    ) -> io::Result<()> {
+        *self.hub.lock().unwrap() = Some((
+            hostapd_conf.to_string(),
+            dnsmasq_conf.to_string(),
+            interface.to_string(),
+        ));
+        Ok(())
+    }
+    fn hub_stop(&self) -> io::Result<()> {
+        *self.hub.lock().unwrap() = None;
+        Ok(())
+    }
+    fn hub_status(&self) -> (bool, bool) {
+        let up = self.hub.lock().unwrap().is_some();
+        (up, up)
     }
 }
 

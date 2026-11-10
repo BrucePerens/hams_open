@@ -41,10 +41,7 @@ impl RateLimiter {
                 self.buckets.remove(&oldest);
             }
         }
-        let entry = self
-            .buckets
-            .entry(uid)
-            .or_insert((self.capacity, now, now));
+        let entry = self.buckets.entry(uid).or_insert((self.capacity, now, now));
         entry.2 = now;
         let elapsed = now.saturating_duration_since(entry.1);
         let every = self.refill_every.as_nanos().max(1);
@@ -130,7 +127,10 @@ mod tests {
         }
         assert!(!rl.allow(0, t0 + Duration::from_secs(1)));
         assert!(rl.allow(1000, t0 + Duration::from_secs(2)));
-        assert!(rl.buckets.contains_key(&0), "the active peer keeps its bucket");
+        assert!(
+            rl.buckets.contains_key(&0),
+            "the active peer keeps its bucket"
+        );
         assert!(!rl.buckets.contains_key(&1), "an idle peer was dropped");
     }
 }

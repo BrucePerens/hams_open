@@ -70,6 +70,20 @@ pub trait Os {
     fn groups_of(&self, user: &str) -> Vec<String>;
     /// Adds an account to a group. Only reached when the config enables apply.
     fn add_to_group(&self, user: &str, group: &str) -> io::Result<()>;
+    /// A UDP socket bound to the wildcard address on `port` (dual stack where the kernel allows it).
+    fn bind_udp(&self, port: u16) -> io::Result<OwnedFd>;
+    /// Writes the hub's two configuration files and starts its programs.
+    fn hub_start(
+        &self,
+        hostapd_conf: &str,
+        dnsmasq_conf: &str,
+        interface: &str,
+        address: std::net::Ipv4Addr,
+    ) -> io::Result<()>;
+    /// Stops the hub's programs and removes its files.
+    fn hub_stop(&self) -> io::Result<()>;
+    /// Whether the hub's access point and DHCP/DNS programs are running.
+    fn hub_status(&self) -> (bool, bool);
 }
 
 /// The Linux implementation: sysfs for enumeration, `/etc/group` for membership.
@@ -79,6 +93,8 @@ pub struct LinuxOs {
     pub sysfs_root: PathBuf,
     /// Normally `/etc/group`.
     pub group_file: PathBuf,
+    /// The stand-alone hub's programs and files.
+    pub hub: crate::hub_runner::HubRunner,
 }
 
 impl Default for LinuxOs {
@@ -86,6 +102,7 @@ impl Default for LinuxOs {
         LinuxOs {
             sysfs_root: PathBuf::from("/sys"),
             group_file: PathBuf::from("/etc/group"),
+            hub: crate::hub_runner::HubRunner::default(),
         }
     }
 }
@@ -298,6 +315,66 @@ impl Os for LinuxOs {
             Err(io::Error::other(format!("gpasswd exited with {status}")))
         }
     }
+
+    fn bind_udp(&self, port: u16) -> io::Result<OwnedFd> {
+        use nix::sys::socket::{
+            bind, setsockopt, socket, AddressFamily, SockFlag, SockType, SockaddrIn, SockaddrIn6,
+        };
+        // Dual stack when the kernel has IPv6, plain IPv4 otherwise.
+        match socket(
+            AddressFamily::Inet6,
+            SockType::Datagram,
+            SockFlag::SOCK_CLOEXEC,
+            None,
+        ) {
+            Ok(fd) => {
+                setsockopt(&fd, sockopt::Ipv6V6Only, &false).map_err(io::Error::from)?;
+                let addr = SockaddrIn6::from(std::net::SocketAddrV6::new(
+                    std::net::Ipv6Addr::UNSPECIFIED,
+                    port,
+                    0,
+                    0,
+                ));
+                bind(std::os::fd::AsRawFd::as_raw_fd(&fd), &addr).map_err(io::Error::from)?;
+                Ok(fd)
+            }
+            Err(nix::errno::Errno::EAFNOSUPPORT) => {
+                let fd = socket(
+                    AddressFamily::Inet,
+                    SockType::Datagram,
+                    SockFlag::SOCK_CLOEXEC,
+                    None,
+                )
+                .map_err(io::Error::from)?;
+                let addr = SockaddrIn::from(std::net::SocketAddrV4::new(
+                    std::net::Ipv4Addr::UNSPECIFIED,
+                    port,
+                ));
+                bind(std::os::fd::AsRawFd::as_raw_fd(&fd), &addr).map_err(io::Error::from)?;
+                Ok(fd)
+            }
+            Err(e) => Err(io::Error::from(e)),
+        }
+    }
+
+    fn hub_start(
+        &self,
+        hostapd_conf: &str,
+        dnsmasq_conf: &str,
+        interface: &str,
+        address: std::net::Ipv4Addr,
+    ) -> io::Result<()> {
+        self.hub
+            .start(hostapd_conf, dnsmasq_conf, interface, address)
+    }
+
+    fn hub_stop(&self) -> io::Result<()> {
+        self.hub.stop()
+    }
+
+    fn hub_status(&self) -> (bool, bool) {
+        self.hub.status()
+    }
 }
 
 #[cfg(test)]
@@ -348,6 +425,7 @@ mod tests {
         let os = LinuxOs {
             sysfs_root: root.clone(),
             group_file: root.join("group"),
+            ..LinuxOs::default()
         };
         let devs = os.list_devices();
         assert_eq!(devs.len(), 2, "{devs:?}");
@@ -385,6 +463,7 @@ mod tests {
         let os = LinuxOs {
             sysfs_root: root.clone(),
             group_file: root.join("group"),
+            ..LinuxOs::default()
         };
         assert_eq!(os.groups_of("ham"), vec!["dialout".to_string()]);
         assert_eq!(os.groups_of("nobody_here"), Vec::<String>::new());
@@ -437,5 +516,22 @@ mod tests {
         assert!(os
             .add_to_group("nobody", "nogroup-relay-broker-test")
             .is_err());
+    }
+
+    #[test]
+    fn a_udp_socket_is_bound_and_a_second_bind_of_the_same_port_is_refused() {
+        let os = LinuxOs::default();
+        let first = os.bind_udp(0).unwrap();
+        let addr = nix::sys::socket::getsockname::<nix::sys::socket::SockaddrStorage>(
+            std::os::fd::AsRawFd::as_raw_fd(&first),
+        )
+        .unwrap();
+        let port = addr
+            .as_sockaddr_in6()
+            .map(|a| a.port())
+            .or_else(|| addr.as_sockaddr_in().map(|a| a.port()))
+            .unwrap();
+        assert!(port != 0);
+        assert!(os.bind_udp(port).is_err());
     }
 }

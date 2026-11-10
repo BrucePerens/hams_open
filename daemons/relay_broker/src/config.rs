@@ -6,7 +6,7 @@
 //! Keys: `allow_uid`, `allow_gid` (repeatable), `apply_groups` (`true`/`false`, default false:
 //! provisioning only reports), `audit_log` (path), `rate_per_minute`, `device_root`,
 //! `serial_major`, `audio_major`, `deny_usb` (`vvvv:pppp`, repeatable), `deny_path` (repeatable),
-//! `idle_exit_secs`. Setting any `serial_major`/`audio_major`/`deny_usb`/`deny_path` replaces the
+//! `idle_exit_secs`, `hub` (`true`/`false`, default false), `bind_udp_port` (repeatable, default 123). Setting any `serial_major`/`audio_major`/`deny_usb`/`deny_path`/`bind_udp_port` replaces the
 //! default list for that key.
 
 use std::fs;
@@ -28,6 +28,10 @@ pub struct Config {
     pub apply_groups: bool,
     /// Where the audit log goes; `None` logs nowhere (tests only).
     pub audit_log: Option<PathBuf>,
+    /// UDP ports `bind_udp` may bind: the time service's 123 unless `bind_udp_port` lines replace it.
+    pub bind_udp_ports: Vec<u16>,
+    /// Whether `hub_start`/`hub_stop` are served (`hub = true`; default off, a hub is something the owner sets up).
+    pub hub_enabled: bool,
     /// Requests per minute per peer.
     pub rate_per_minute: u32,
     /// Exit after this many idle seconds (socket activation restarts the broker on demand).
@@ -41,6 +45,8 @@ impl Default for Config {
             policy: Policy::default(),
             apply_groups: false,
             audit_log: Some(PathBuf::from("/var/log/hams-relay-broker/events.jsonl")),
+            bind_udp_ports: vec![123],
+            hub_enabled: false,
             rate_per_minute: 60,
             idle_exit_secs: 60,
         }
@@ -75,6 +81,7 @@ impl Config {
         let mut seen_audio = false;
         let mut seen_usb = false;
         let mut seen_path = false;
+        let mut seen_port = false;
         for (idx, raw) in text.lines().enumerate() {
             let lineno = idx.saturating_add(1);
             let err = |m: &str| ConfigError {
@@ -104,6 +111,21 @@ impl Config {
                         "false" => false,
                         _ => return Err(err("expected true or false")),
                     }
+                }
+                "hub" => {
+                    cfg.hub_enabled = match value {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err(err("expected true or false")),
+                    }
+                }
+                "bind_udp_port" => {
+                    if !seen_port {
+                        cfg.bind_udp_ports.clear();
+                        seen_port = true;
+                    }
+                    cfg.bind_udp_ports
+                        .push(value.parse().map_err(|_| err("bad port"))?);
                 }
                 "audit_log" => cfg.audit_log = Some(PathBuf::from(value)),
                 "rate_per_minute" => {
@@ -213,6 +235,15 @@ mod tests {
             "untouched list keeps its default"
         );
         assert_eq!(cfg.idle_exit_secs, 5);
+        assert_eq!(cfg.bind_udp_ports, vec![123]);
+        assert!(
+            !cfg.hub_enabled,
+            "the hub is off unless the owner turns it on"
+        );
+        let cfg = Config::parse("hub = true\nbind_udp_port = 123\nbind_udp_port = 1123\n").unwrap();
+        assert!(cfg.hub_enabled);
+        assert_eq!(cfg.bind_udp_ports, vec![123, 1123]);
+        assert!(Config::parse("bind_udp_port = 70000").is_err());
         assert!(!Config::default().apply_groups, "dry run by default");
         assert_eq!(Config::parse("bogus = 1").unwrap_err().line, 1);
         assert_eq!(Config::parse("\nallow_uid = x").unwrap_err().line, 2);

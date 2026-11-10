@@ -55,7 +55,9 @@ fn remove_stale_socket(path: &std::path::Path) -> std::io::Result<()> {
     use std::os::unix::fs::FileTypeExt;
     match std::fs::symlink_metadata(path) {
         Ok(m) if m.file_type().is_socket() => std::fs::remove_file(path),
-        Ok(_) => Err(std::io::Error::other("exists and is not a socket; not removing it")),
+        Ok(_) => Err(std::io::Error::other(
+            "exists and is not a socket; not removing it",
+        )),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e),
     }
