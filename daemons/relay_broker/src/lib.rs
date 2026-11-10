@@ -14,6 +14,7 @@
 pub mod audit;
 pub mod auth;
 pub mod broker;
+pub mod cli;
 pub mod client;
 pub mod config;
 pub mod hub;
