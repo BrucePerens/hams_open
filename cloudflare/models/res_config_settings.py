@@ -90,6 +90,7 @@ class ResConfigSettings(models.TransientModel):
                 "cloudflare.trusted_ip_ranges_last_refreshed"
             ) or _("Never")
 
+    # [@ANCHOR: cloudflare:COMM_settings_check_token_scope]
     def _check_cloudflare_token_scope(self):
         """Refuse (unless overridden) a changed token that is broad or that Cloudflare cannot introspect."""
         token = self.cloudflare_api_token

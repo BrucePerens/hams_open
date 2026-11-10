@@ -381,6 +381,7 @@ def purge_everything(token, zone_id):
 BROAD_PERMISSION_WORDS = ("api tokens", "billing", "members", "account settings write", "organizations")
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_broad_token_permissions]
 def broad_token_permissions(policies):
     """Names of the broad permission groups in a Cloudflare token's policy list (empty list: scoped)."""
     found = []
@@ -394,6 +395,8 @@ def broad_token_permissions(policies):
     return sorted(set(found))
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_inspect_token]
+# Verified by [@ANCHOR: test_inspect_token_unreadable_answers]
 def inspect_token(token):
     """Ask Cloudflare what this token may do. Returns (True, [broad permission names]) or (False, message).
 
