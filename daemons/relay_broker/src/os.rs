@@ -84,6 +84,8 @@ pub trait Os {
     fn hub_stop(&self) -> io::Result<()>;
     /// Whether the hub's access point and DHCP/DNS programs are running.
     fn hub_status(&self) -> (bool, bool);
+    /// Upgrades the installed relay package through the system package manager.
+    fn update_package(&self) -> io::Result<()>;
 }
 
 /// The Linux implementation: sysfs for enumeration, `/etc/group` for membership.
@@ -375,7 +377,39 @@ impl Os for LinuxOs {
     fn hub_status(&self) -> (bool, bool) {
         self.hub.status()
     }
+
+    fn update_package(&self) -> io::Result<()> {
+        let (program, args, noninteractive): (&str, &[&str], bool) =
+            if Path::new("/usr/bin/apt-get").exists() {
+                (
+                    "/usr/bin/apt-get",
+                    &["install", "--only-upgrade", "-y", RELAY_PACKAGE],
+                    true,
+                )
+            } else if Path::new("/usr/bin/dnf").exists() {
+                ("/usr/bin/dnf", &["upgrade", "-y", RELAY_PACKAGE], false)
+            } else {
+                return Err(io::Error::other("no apt-get or dnf on this system"));
+            };
+        let mut command = std::process::Command::new(program);
+        command
+            .args(args)
+            .env_clear()
+            .env("PATH", "/usr/sbin:/usr/bin:/sbin:/bin");
+        if noninteractive {
+            command.env("DEBIAN_FRONTEND", "noninteractive");
+        }
+        let status = command.status()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(io::Error::other(format!("{program} exited with {status}")))
+        }
+    }
 }
+
+/// The one package `update_package` upgrades.
+const RELAY_PACKAGE: &str = "hams-local-relay";
 
 #[cfg(test)]
 mod tests {

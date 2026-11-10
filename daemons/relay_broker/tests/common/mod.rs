@@ -32,6 +32,8 @@ pub struct FakeOs {
     pub binds: Arc<Mutex<Vec<u16>>>,
     /// The configuration texts and interface of a started hub.
     pub hub: Arc<Mutex<Option<(String, String, String)>>>,
+    /// How many times the package manager was asked to upgrade the relay.
+    pub updates: Arc<std::sync::atomic::AtomicUsize>,
     last_opened: Cell<Option<NodeKind>>,
 }
 
@@ -98,6 +100,7 @@ impl FakeOs {
             added: Arc::new(Mutex::new(Vec::new())),
             binds: Arc::new(Mutex::new(Vec::new())),
             hub: Arc::new(Mutex::new(None)),
+            updates: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             last_opened: Cell::new(None),
         }
     }
@@ -164,6 +167,11 @@ impl Os for FakeOs {
     }
     fn hub_stop(&self) -> io::Result<()> {
         *self.hub.lock().unwrap() = None;
+        Ok(())
+    }
+    fn update_package(&self) -> io::Result<()> {
+        self.updates
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
     fn hub_status(&self) -> (bool, bool) {
