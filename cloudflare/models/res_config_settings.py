@@ -16,7 +16,7 @@ class ResConfigSettings(models.TransientModel):
     cloudflare_api_token = fields.Char(
         related="website_id.cloudflare_api_token", readonly=False
     )
-    cloudflare_allow_broad_token = fields.Boolean(
+    cloudflare_allow_broad_token = fields.Boolean(  # secret-storage-ignore: secret-config-parameter: an on/off switch, not a token
         string="Allow an over-broad API token",
         config_parameter="cloudflare.allow_broad_token",
         help="Off (default): saving a token that can manage API tokens, billing, members or account settings is "
