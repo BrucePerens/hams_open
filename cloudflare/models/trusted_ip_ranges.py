@@ -203,6 +203,7 @@ class CloudflareTrustedIpUtils(models.AbstractModel):
         a fetch failure (network error, Cloudflare serving something unexpected) leaves the last
         known-good list in place rather than silently disabling the allow-list."""
         fetched = []
+        complete = True
         # audit-ignore-outbound-fetch: both URLs are fixed literals in this tuple, never derived
         # from a caller, a record field, or an HTTP parameter -- there is no SSRF surface here.
         for url in ("https://www.cloudflare.com/ips-v4", "https://www.cloudflare.com/ips-v6"):
@@ -211,12 +212,19 @@ class CloudflareTrustedIpUtils(models.AbstractModel):
                 response.raise_for_status()
             except requests.exceptions.RequestException as e:
                 _logger.warning("Could not fetch Cloudflare IP ranges from %s: %s", url, e)
+                complete = False
                 continue
-            fetched.extend(_parse_ranges(response.text))
+            ranges = _parse_ranges(response.text)
+            if not ranges:
+                complete = False
+            fetched.extend(ranges)
 
-        if not fetched:
+        if not complete:
+            # One family missing would replace the stored list with half of it and stop trusting
+            # every peer of the other family until the next successful run.
             _logger.warning(
-                "Cloudflare IP range refresh produced no valid ranges; keeping the existing list."
+                "Cloudflare IP range refresh was incomplete (IPv4 or IPv6 missing or empty); "
+                "keeping the existing list."
             )
             return
 
