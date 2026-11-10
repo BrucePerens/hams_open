@@ -9,6 +9,7 @@
 //!
 //! - [`model`]: channels, devices, profiles and the station definition, with validation.
 //! - [`gpio_map`]: the GPIO function-map format (TOML) and board models, with validation.
+//! - [`fx2`]: host side of the FX2LP Station I/O board (sans-IO: records, map requests, heartbeat, refusals).
 //! - [`actor_link`]: the real rig actor behind the manager: spawn, respawn, the unkey pass.
 //! - [`channel`]: channel drivers, the virtual bank, the switchboard (commanded and confirmed
 //!   state, break-before-make selectors, momentary pulses, debounced inputs).
@@ -29,6 +30,7 @@
 pub mod actor_link;
 pub mod channel;
 pub mod error;
+pub mod fx2;
 pub mod gpio_map;
 pub mod homeassistant;
 pub mod http_relay;

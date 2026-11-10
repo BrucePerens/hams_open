@@ -174,6 +174,16 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_catalog_builtin] (radioctl-station) The built-in catalog.
 - [@ANCHOR: radioctl:radioctl_station_catalog_get] (radioctl-station) A board by name.
 - [@ANCHOR: radioctl:radioctl_station_map_from_toml] (radioctl-station) Parses a map and validates it against `catalog`.
+- [@ANCHOR: radioctl:radioctl_station_fx2_info_parse] (radioctl-station) Parses the FX2 Station I/O board's GET_INFO record.
+- [@ANCHOR: radioctl:radioctl_station_fx2_info_require_station_io] (radioctl-station) Accepts only a Station I/O board that reports a hardware time-out, a heartbeat and release on reset; a bench board is refused.
+- [@ANCHOR: radioctl:radioctl_station_fx2_status_parse] (radioctl-station) Parses the board's 23-byte status record.
+- [@ANCHOR: radioctl:radioctl_station_fx2_pin_id] (radioctl-station) A pin name (PA0 to PD7) as the firmware's port-and-bit id.
+- [@ANCHOR: radioctl:radioctl_station_fx2_map_steps] (radioctl-station) A GPIO map as the firmware's map requests, ending with the commit; inputs are left alone and functions the firmware lacks are refused.
+- [@ANCHOR: radioctl:radioctl_station_fx2_board_open] (radioctl-station) Opens a board through a control transport after the refusals above.
+- [@ANCHOR: radioctl:radioctl_station_fx2_board_status] (radioctl-station) Reads the board's status.
+- [@ANCHOR: radioctl:radioctl_station_fx2_board_load_map] (radioctl-station) Sends and commits a map; a refused step reports the firmware's map error code.
+- [@ANCHOR: radioctl:radioctl_station_fx2_board_heartbeat] (radioctl-station) One heartbeat; the answer must echo the sequence and the commanded keyed state.
+- [@ANCHOR: radioctl:radioctl_station_fx2_board_key] (radioctl-station) Keys a ptt line down or up; a refusal carries the firmware's reason.
 - [@ANCHOR: radioctl:radioctl_station_map_validate] (radioctl-station) No pin has two functions or appears twice, no pin the board does not expose, no power,
 - [@ANCHOR: radioctl:radioctl_station_map_safe_levels] (radioctl-station) The pins with a defined safe level, for the firmware or driver to apply on release.
 - [@ANCHOR: radioctl:radioctl_station_http_is_private] (radioctl-station) Whether an address is loopback, private or link-local (IPv4 or IPv6, including IPv4-mapped).
