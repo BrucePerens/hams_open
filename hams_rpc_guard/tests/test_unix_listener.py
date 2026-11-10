@@ -187,24 +187,28 @@ class TestUnixSocketEndToEnd(HamsHttpCase):
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         self.me = pwd.getpwuid(os.getuid()).pw_name
-        # HttpCase lets a request use the test cursor only inside allow_requests (it releases the test lock); the daemon
-        # client sends no test cookie, hence all_requests. The test body touches no record while it is open.
-        self.enterContext(self.allow_requests(all_requests=True))
         # The test server's dbfilter may select the database by host name: send the test server's own.
         self.host = urllib.parse.urlsplit(self.base_url()).netloc
         self.unix = OdooRpcClient("unix://" + self.path, "not-a-real-api-key", self.env.cr.dbname, host=self.host)
 
+    def _requests(self):
+        """HttpCase lets a request use the test cursor only inside allow_requests (it releases the test lock); the
+        daemon client sends no test cookie, hence all_requests. Not held for the whole test: HamsHttpCase.tearDown
+        does its own url_open and would take the lock a second time."""
+        return self.allow_requests(all_requests=True)
+
     def _status(self, client=None):
-        with self.assertRaises(OdooRpcError) as caught:
+        with self._requests(), self.assertRaises(OdooRpcError) as caught:
             (client or self.unix).call("res.users", "context_get")
         return caught.exception.status
 
     def _version(self, path="/xmlrpc/2/common"):
         connection = UnixHTTPConnection(self.path, timeout=10, host=self.host)
         try:
-            connection.request("POST", path, body=VERSION_CALL, headers={"Content-Type": "text/xml"})
-            response = connection.getresponse()
-            return response.status, response.read()
+            with self._requests():
+                connection.request("POST", path, body=VERSION_CALL, headers={"Content-Type": "text/xml"})
+                response = connection.getresponse()
+                return response.status, response.read()
         finally:
             connection.close()
 
@@ -243,10 +247,12 @@ class TestUnixSocketEndToEnd(HamsHttpCase):
         self.values = {gate.TRANSPORT_PARAM: "unix", gate.UNIX_PEERS_PARAM: self.me}
         connection = UnixHTTPConnection(self.path, timeout=10, host=self.host)
         try:
-            connection.request("GET", "/web/login")
-            response = connection.getresponse()
+            with self._requests():
+                connection.request("GET", "/web/login")
+                response = connection.getresponse()
+                body = response.read()
             self.assertEqual(response.status, 404)
-            self.assertIn(b"only the RPC endpoints", response.read())
+            self.assertIn(b"only the RPC endpoints", body)
         finally:
             connection.close()
 
@@ -254,10 +260,12 @@ class TestUnixSocketEndToEnd(HamsHttpCase):
         self.values = {gate.TRANSPORT_PARAM: "unix", gate.UNIX_PEERS_PARAM: "somebody_else_hrg"}
         connection = UnixHTTPConnection(self.path, timeout=10, host=self.host)
         try:
-            connection.request("POST", "/json/2/res.users/context_get", body=b"{}", headers={
-                "Content-Type": "application/json", "Authorization": "Bearer not-a-real-api-key",
-                "X-Odoo-Database": self.env.cr.dbname, "X-Forwarded-For": "10.99.0.4", "X-Real-IP": "10.99.0.4"})
-            self.assertEqual(connection.getresponse().status, 404)
+            with self._requests():
+                connection.request("POST", "/json/2/res.users/context_get", body=b"{}", headers={
+                    "Content-Type": "application/json", "Authorization": "Bearer not-a-real-api-key",
+                    "X-Odoo-Database": self.env.cr.dbname, "X-Forwarded-For": "10.99.0.4", "X-Real-IP": "10.99.0.4"})
+                status = connection.getresponse().status
+            self.assertEqual(status, 404)
         finally:
             connection.close()
 
