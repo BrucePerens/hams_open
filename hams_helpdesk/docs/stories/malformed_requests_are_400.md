@@ -20,7 +20,9 @@ Every route goes through `ir.http._dispatch`, which `hams_helpdesk` wraps.
    and was a 500. The reply is now a 400 that names the missing parameters (never a value). This covers
    page routes and JSON-RPC routes.
 3. **Text where a number belongs.** A handler that turns a parameter into a number and gets text
-   (`int("abc")`) is answered with a 400 "A request parameter is not a number".
+   (`int("abc")`) is answered with a 400 "A request parameter is not a number", but only when the text in
+   the error message is one of the request's own parameters `[@ANCHOR: hams_helpdesk:error_is_the_senders_number]`;
+   the same error on a stored value is a server bug and stays a 500 with a ticket.
 4. **Text where a date belongs.** Stock `/blog` passes `?date_begin=` and `?date_end=` straight into a
    search domain, and the ORM raised `ValueError` while optimizing it (45 requests from one scanner, 500 each,
    and two tickets). Such a request is answered with a 400 "A request parameter is not a date"
