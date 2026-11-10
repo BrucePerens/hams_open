@@ -12,6 +12,8 @@
     "author": "HAMS",
     "category": "Website",
     "depends": ["website", "website_blog", "edge_routing", "zero_sudo", "cloudflare"],
+    # Modules the TESTS need installed although `depends` does not list them: test_http.py creates a parking.domain (parking model).
+    "test_depends": ["parking"],
     "data": [
         "security/security_data.xml",
         "security/ir.model.access.csv",
