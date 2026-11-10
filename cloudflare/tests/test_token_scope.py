@@ -52,6 +52,7 @@ class TestTokenScope(HamsTransactionCase):
 
     def test_unreadable_answers_fail_closed(self):
         # [@ANCHOR: test_inspect_token_unreadable_answers]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_json_result]
         # A 200 whose body is not JSON, has no result object, or has no policy list is not "scoped".
         broken = MagicMock()
         broken.status_code = 200
@@ -72,6 +73,7 @@ class TestTokenScope(HamsTransactionCase):
         return self.env["res.config.settings"].create({"website_id": website.id, **vals})
 
     def test_settings_refuse_then_override(self):
+        # Tests [@ANCHOR: cloudflare:COMM_settings_create]
         # Tests [@ANCHOR: cloudflare:COMM_settings_check_token_scope]
         pol = [{"effect": "allow", "permission_groups": [{"name": "Billing Write"}]}]
         m = self.safe_patch("odoo.addons.cloudflare.models.res_config_settings.inspect_token")

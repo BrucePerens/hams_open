@@ -41,6 +41,7 @@ class TestDetector(CanaryCase):
     # Tests [@ANCHOR: hams_secret_canary:make_canary]
     # Tests [@ANCHOR: hams_secret_canary:is_token]
     # Tests [@ANCHOR: hams_secret_canary:find_matches]
+    # Tests [@ANCHOR: hams_secret_canary:candidates]
     # Tests [@ANCHOR: hams_secret_canary:redact]
 
     def test_secret_in_json_html_and_url_is_found_once_each(self):
@@ -86,6 +87,7 @@ class TestAlarm(CanaryCase):
     """A hit raises every backend's alarm, and no alarm carries the matched value."""
     # Tests [@ANCHOR: hams_secret_canary:register_secret]
     # Tests [@ANCHOR: hams_secret_canary:load_state]
+    # Tests [@ANCHOR: hams_secret_canary:store_state]
     # Tests [@ANCHOR: hams_secret_canary:scan_text]
     # Tests [@ANCHOR: hams_secret_canary:raise_alarm]
     # Tests [@ANCHOR: hams_secret_canary:register_backend]
@@ -127,6 +129,8 @@ class TestAlarm(CanaryCase):
         self.assertEqual(seen, [alerts.Alarm("test_secret", "secret", "response", "/x")])
 
     def test_a_log_line_with_a_registered_secret_raises_the_alarm_and_is_redacted(self):
+        # Tests [@ANCHOR: hams_secret_canary:register_hook]
+        # Tests [@ANCHOR: hams_secret_canary:watch_log_records]
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as alarms, self.assertLogs("some.addon", "WARNING") as lines:
             logging.getLogger("some.addon").warning("login failed with key %s for user", SECRET)
         self.assertEqual(lines.output, ["WARNING:some.addon:login failed with key [REDACTED:test_secret] for user"])

@@ -418,6 +418,7 @@ def inspect_token(token):
     return True, broad_token_permissions(detail["policies"])
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_json_result]
 def _json_result(resp):
     """The `result` of a Cloudflare JSON answer, or None when the body is not JSON or has no object result."""
     try:
