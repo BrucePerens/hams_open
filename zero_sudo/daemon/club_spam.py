@@ -626,7 +626,6 @@ def redirect_is_spam(redirect):
     if registrable_domain(final) == registrable_domain(home):
         return False
     title = str(redirect.get("title") or "")[:MAX_TITLE_CHARS]
-    text = str(redirect.get("text") or "")[:MAX_REDIRECT_TEXT_CHARS]
     # Only the address and the title are scored: the lexicon and the 3-point threshold were calibrated for slugs and titles, and an
     # ordinary club page that mentions a casino night, or one non-English page with the word "Wetten", flagged on its body text.
     return score_entry(final, title).flagged
