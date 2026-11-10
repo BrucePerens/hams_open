@@ -10,6 +10,13 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- tools/bench_scope_math: channel 1 op channel 2 on the host from one frozen frame
+- tools/bench_scope_cursors: values at chosen times and the differences between two cursors, from the waveform memory
+- tools/bench_scope_acquire: acquisition mode, average count and memory depth with read-back
+- tools/bench_scope_channel: bandwidth limit and inversion with read-back
+- tools/bench_scope_display: screen saver, grid and intensity with read-back
+- tools/bench_measure: new `statistics` argument (repeated readings summarised on the host)
+
 - tools/bench_vna_time_domain: impulse or step response and time gating of a stored sweep, host only
 
 - instruments/glasgow/logic-analyzer: how the bench_gla tools work on the revision C analyzer (host-side trigger, pre-trigger window and sample rate), the USB link limits with the full-speed rate measured on the unit

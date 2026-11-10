@@ -20,6 +20,7 @@ The scope's own automatic measurements (the same ones its front panel shows) on 
 * `device`: the name of the instrument instance, the same as `instrument`; required when several instances fit, otherwise optional. See [multiple devices](concepts/several-instruments).
 * `channel`: scope only, `1` or `2`, and mandatory for the scope (`channel must be 1 or 2` otherwise). Ignored for the supply.
 * `items`: scope only, a list of parameter names from the enumeration; default `PKPK`, `MEAN`, `FREQ`, `DUTY`. Voltages are in volts, `FREQ` and counters in hertz, `PER`, `RISE`, `FALL`, `WID`, `PWID`, `NWID` in seconds, `DUTY` and `NDUTY` in percent, `OVSN`, `OVSP` in percent of amplitude.
+* `statistics`: scope only, 2 to 100. Each item is read that many times and returned as `{readings, asked, failed, mean, min, max, std_dev}` (a `****` reading counts as failed). The scope's own statistics did not answer, so the readings are repeated and summarised on the host.
 
 ## Returns
 
