@@ -102,13 +102,10 @@ pub fn swr_ratio(cal: &MeterCal, raw: u16) -> f64 {
     let x = f64::from(raw.min(255));
     let points = cal.swr;
     let last = points.len() - 1;
-    let ratio = points
-        .windows(2)
-        .find(|pair| x <= pair[1].0)
-        .map_or_else(
-            || interpolate(points[last - 1], points[last], x),
-            |pair| interpolate(pair[0], pair[1], x),
-        );
+    let ratio = points.windows(2).find(|pair| x <= pair[1].0).map_or_else(
+        || interpolate(points[last - 1], points[last], x),
+        |pair| interpolate(pair[0], pair[1], x),
+    );
     ratio.min(SWR_CEILING)
 }
 
@@ -220,9 +217,17 @@ mod tests {
         for (raw, ratio) in [(0, 1.0), (41, 1.5), (81, 2.0), (120, 3.0)] {
             assert!((swr_ratio(nine, raw) - ratio).abs() < 1e-9, "9100 {raw}");
         }
-        for id in ["icom-ic-7300", "icom-ic-7610", "icom-ic-705", "icom-ic-7850"] {
+        for id in [
+            "icom-ic-7300",
+            "icom-ic-7610",
+            "icom-ic-705",
+            "icom-ic-7850",
+        ] {
             for (raw, ratio) in [(0, 1.0), (48, 1.5), (80, 2.0), (120, 3.0)] {
-                assert!((swr_ratio(for_rig(id), raw) - ratio).abs() < 1e-9, "{id} {raw}");
+                assert!(
+                    (swr_ratio(for_rig(id), raw) - ratio).abs() < 1e-9,
+                    "{id} {raw}"
+                );
             }
         }
         assert!((swr_ratio(for_rig("icom-ic-7300"), 64) - 1.75).abs() < 1e-9);
@@ -300,7 +305,13 @@ mod tests {
         assert!((id_amps(for_rig("icom-ic-705"), 241) - 4.0).abs() < 1e-9);
         assert!((full_scale(for_rig("icom-ic-7610"), Meter::Id) - 30.0).abs() < 1e-9);
         assert!((full_scale(for_rig("icom-ic-705"), Meter::Comp) - 25.5).abs() < 1e-9);
-        for id in ["icom-ic-9100", "icom-ic-7300", "icom-ic-7610", "icom-ic-705", "x"] {
+        for id in [
+            "icom-ic-9100",
+            "icom-ic-7300",
+            "icom-ic-7610",
+            "icom-ic-705",
+            "x",
+        ] {
             let cal = for_rig(id);
             for meter in Meter::ALL {
                 let top = full_scale(cal, meter);

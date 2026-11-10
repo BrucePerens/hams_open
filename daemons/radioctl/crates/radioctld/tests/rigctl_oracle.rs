@@ -449,11 +449,17 @@ async fn a_wsjtx_style_split_session_through_hamlibs_client_works_and_never_keys
     assert_eq!(state.freq_a, Hz(14_074_000), "{out}");
     assert_eq!(state.freq_b, Hz(14_076_000), "{out}");
     assert!(state.split, "{out}");
-    assert!(!state.ptt, "the closed gate must keep the rig unkeyed: {out}");
+    assert!(
+        !state.ptt,
+        "the closed gate must keep the rig unkeyed: {out}"
+    );
     assert!(
         out.contains("Command rejected by the rig"),
         "T 1 must be refused: {out}"
     );
-    assert!(out.contains("14076000"), "split transmit frequency read back: {out}");
+    assert!(
+        out.contains("14076000"),
+        "split transmit frequency read back: {out}"
+    );
     daemon.stop().await;
 }
