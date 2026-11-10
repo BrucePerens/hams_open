@@ -76,6 +76,7 @@ def store_value(key):
     return core_secret_store().get(key)
 
 
+# [@ANCHOR: zero_sudo:core_secrets_optional_store_value]
 def _optional_store_value(key):
     """The store's value, or None when the store does not hold it."""
     try:
@@ -101,6 +102,7 @@ class IrConfigParameterCoreSecrets(models.Model):
             return _optional_store_value(key)
         return super()._get_param(key)
 
+    # [@ANCHOR: zero_sudo:core_secrets_db_value]
     @api.model
     def _core_secret_db_value(self, key, value):
         """What the database row gets when `value` is written to core secret `key` with the flag on.
