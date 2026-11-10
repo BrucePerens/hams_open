@@ -186,22 +186,14 @@ mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
-    fn temp_dir(tag: &str) -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("relay_broker_hub_{tag}_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
     fn script(path: &Path, body: &str) {
         fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
     /// A runner whose "hostapd" and "dnsmasq" are scripts that start a copy of `sleep` named like the real program and write its pid file.
-    fn fake(tag: &str) -> (HubRunner, PathBuf) {
-        let root = temp_dir(tag);
+    fn fake(tag: &str) -> (HubRunner, crate::testdir::TestDir) {
+        let root = crate::testdir::TestDir::new(&format!("hub_{tag}"));
         let sleep = ["/usr/bin/sleep", "/bin/sleep"]
             .into_iter()
             .find(|p| Path::new(p).exists())
@@ -278,19 +270,17 @@ mod tests {
         assert!(!hub.dir.join("hostapd.conf").exists());
         let ip = fs::read_to_string(root.join("ip.log")).unwrap();
         assert!(ip.contains("addr flush dev wlan0"), "{ip}");
-        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
     fn a_pid_that_is_not_the_program_is_never_signalled_or_reported() {
-        let (hub, root) = fake("stale");
+        let (hub, _root) = fake("stale");
         fs::create_dir_all(&hub.dir).unwrap();
         // Our own pid is alive but is not "hostapd".
         fs::write(hub.pid_file("hostapd"), std::process::id().to_string()).unwrap();
         assert_eq!(hub.status(), (false, false));
         hub.stop().unwrap();
         assert!(!hub.pid_file("hostapd").exists());
-        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
@@ -311,6 +301,5 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
         assert_eq!(hub.status(), (false, false));
-        fs::remove_dir_all(&root).unwrap();
     }
 }
