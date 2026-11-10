@@ -58,7 +58,10 @@ _IPV6_RE = re.compile(r"(?i)(?<![\w:])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?![\w
 _SECRET_KV_RE = re.compile(
     r"(?i)(?<![A-Za-z0-9])((?:[\w.-]{0,40}?(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|apikey|"
     r"session[_-]?id|cookie|authorization|bearer|signature|otp|private[_-]?key|access[_-]?key|credential)"
-    r"[\w.-]{0,40})|sid)(['\"]?\s*[=:]\s*['\"]?)([^\s,;&'\"]+)"
+    r"[\w.-]{0,40})|sid)(['\"]?\s*[=:]\s*)"
+    # A quoted value is taken whole, spaces included (password="two words" must not leave "words" behind); an unterminated
+    # quote or a bare value stops at the first separator.
+    r"(\"[^\"\n]*\"|'[^'\n]*'|['\"]?[^\s,;&'\"]+)"
 )
 # The scheme and the credential of an Authorization header ("Basic <base64>", "Bearer <token>").
 _AUTH_RE = re.compile(
