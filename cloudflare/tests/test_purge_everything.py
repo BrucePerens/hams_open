@@ -91,6 +91,27 @@ class TestPurgeEverything(RealTransactionCase):
             self.PurgeQueue.search_count([("website_id", "=", self.website_b.id)]), 0
         )
 
+    def test_purge_queued_during_the_wipe_is_kept(self):
+        # Tests [@ANCHOR: COMM_cf_process_queue_logic]
+        """A purge enqueued while the purge-everything call is in flight is not covered by it."""
+        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=True)
+        purge_tags = self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True
+        )
+
+        def wipe(token, zone):
+            self.PurgeQueue.enqueue_tags(["late"], website_id=self.website_a.id)
+            return True
+
+        self.safe_patch(
+            "odoo.addons.cloudflare.models.purge_queue.purge_everything", side_effect=wipe
+        )
+        self.PurgeQueue.enqueue_urls(["/early"], website_id=self.website_a.id)
+        self.PurgeQueue.enqueue_everything(website_ids=self.website_a.ids)
+        self.PurgeQueue.process_queue()
+        # The later batch of the same run sent the late tag; the old blanket DELETE dropped it unsent.
+        purge_tags.assert_called_once_with(["late"], "token_a", "zone_a")
+
     def test_purge_everything_multi_website_resilience(self):
         # [@ANCHOR: COMM_test_purge_everything_multi_website_resilience]
         """Verify that one website failing doesn't stop others."""

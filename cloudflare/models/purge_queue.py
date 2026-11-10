@@ -260,6 +260,14 @@ class CloudflarePurgeQueue(models.Model):
             else:
                 # If we are purging everything for this website, we can drop all other pending records for it.
                 if everything_records:
+                    # Only rows that existed before the API call are covered by it: a purge queued
+                    # while the call is in flight is for content that may be newer than the wipe.
+                    self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: cf_process_queue_logic]  # fmt: skip
+                        "SELECT COALESCE(max(id), 0) FROM cloudflare_purge_queue "
+                        "WHERE website_id = %s AND state = 'pending'",
+                        (first_website.id,),
+                    )
+                    covered_up_to_id = self.env.cr.fetchone()[0]
                     if not purge_everything(token, zone_id):
                         success = False
                         everything_records.write({"state": "failed"})
@@ -269,8 +277,9 @@ class CloudflarePurgeQueue(models.Model):
                         
                         # Optimization: Clear all other pending records for this website since we just wiped everything
                         self.env.cr.execute(  # audit-ignore-sql: # Tested by [@ANCHOR: cf_process_queue_logic]  # fmt: skip
-                            "DELETE FROM cloudflare_purge_queue WHERE website_id = %s AND state = 'pending'",
-                            (first_website.id,),
+                            "DELETE FROM cloudflare_purge_queue "
+                            "WHERE website_id = %s AND state = 'pending' AND id <= %s",
+                            (first_website.id, covered_up_to_id),
                         )
 
                 # Refresh batch_records by filtering out non-existent ones before further processing
