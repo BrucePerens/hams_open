@@ -82,11 +82,13 @@ def peer_of(connection):
     return gate.Peer(pid, uid, gid, _user_names().get(uid, ""), _group_names().get(gid, ""))
 
 
+# [@ANCHOR: hams_rpc_guard:user_names]
 def _user_names():
     """{uid: name} of the passwd database (read whole: a missing uid is an ordinary answer, not an error)."""
     return {entry.pw_uid: entry.pw_name for entry in pwd.getpwall()}
 
 
+# [@ANCHOR: hams_rpc_guard:group_names]
 def _group_names():
     """{gid: name} of the group database."""
     return {entry.gr_gid: entry.gr_name for entry in grp.getgrall()}
@@ -189,12 +191,15 @@ class UnixRequestHandler(werkzeug.serving.WSGIRequestHandler):
     protocol_version = "HTTP/1.0"
     timeout = SOCKET_TIMEOUT  # per socket operation, as Odoo's own worker: an idle client cannot hold a worker
 
+    # [@ANCHOR: hams_rpc_guard:unix_request_handler_address_string]
     def address_string(self):
         return LOOPBACK_ADDRESS
 
+    # [@ANCHOR: hams_rpc_guard:unix_request_handler_port_integer]
     def port_integer(self):
         return 0
 
+    # [@ANCHOR: hams_rpc_guard:unix_request_handler_make_environ]
     def make_environ(self):
         environ = super().make_environ()
         environ[gate.UNIX_PEER_ENVIRON_KEY] = peer_of(self.connection).as_dict()

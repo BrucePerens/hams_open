@@ -212,9 +212,11 @@ class Peer:
 
     __slots__ = ("pid", "uid", "gid", "user", "group")
 
+    # [@ANCHOR: hams_rpc_guard:peer_init]
     def __init__(self, pid, uid, gid, user="", group=""):
         self.pid, self.uid, self.gid, self.user, self.group = pid, uid, gid, user, group
 
+    # [@ANCHOR: hams_rpc_guard:peer_as_dict]
     def as_dict(self):
         return {name: getattr(self, name) for name in self.__slots__}
 
@@ -226,9 +228,11 @@ class PeerRule:
 
     __slots__ = ("kind", "value", "logins")
 
+    # [@ANCHOR: hams_rpc_guard:peer_rule_init]
     def __init__(self, kind, value, logins=frozenset()):
         self.kind, self.value, self.logins = kind, value, frozenset(logins)
 
+    # [@ANCHOR: hams_rpc_guard:peer_rule_matches]
     def matches(self, peer):
         return {"user": peer.user, "uid": peer.uid, "group": peer.group, "gid": peer.gid}[self.kind] == self.value
 
@@ -238,9 +242,11 @@ class PeerRules:
     """The parsed `hams_rpc_guard.unix_peers`: an ordered tuple of `PeerRule`. `match(peer)` returns the first rule
     that matches, or None (the peer is refused)."""
 
+    # [@ANCHOR: hams_rpc_guard:peer_rules_init]
     def __init__(self, rules=()):
         self.rules = tuple(rules)
 
+    # [@ANCHOR: hams_rpc_guard:peer_rules_match]
     def match(self, peer):
         return next((rule for rule in self.rules if rule.matches(peer)), None)
 
@@ -284,6 +290,7 @@ class GateSettings:
     for none), `legacy` (`networks`/`none`), `transport` (`tcp`/`unix`/`both`/`closed`), `unix_peers` (a
     `PeerRules`, or None when the setting could not be read: no Unix peer is admitted)."""
 
+    # [@ANCHOR: hams_rpc_guard:gate_settings_init]
     def __init__(self, allowed_networks, trusted_proxies=(), client_address_header="", legacy=LEGACY_NETWORKS,
                  transport=TRANSPORT_TCP, unix_peers=None):
         self.allowed_networks = tuple(allowed_networks)
@@ -357,6 +364,7 @@ def peer_is_trusted(environ, trusted_proxies):
     return peer is not None and peer.is_loopback and _in_any(peer, trusted_proxies)
 
 
+# [@ANCHOR: hams_rpc_guard:in_any]
 def _in_any(address, networks):
     return any(address in network for network in networks if network.version == address.version)
 

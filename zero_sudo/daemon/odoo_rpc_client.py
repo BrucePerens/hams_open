@@ -23,6 +23,7 @@ class OdooRpcError(Exception):
     """A JSON-2 call that did not succeed: `status` (int, the HTTP status; 0 when no answer arrived) and `body` (the
     first 500 characters of the answer, for the daemon's own log; Odoo's error answers carry no secret)."""
 
+    # [@ANCHOR: zero_sudo:odoo_rpc_error_init]
     def __init__(self, status, body):
         super().__init__("JSON-2 call failed with HTTP %s: %s" % (status, body))
         self.status = status
@@ -34,10 +35,12 @@ class UnixHTTPConnection(http.client.HTTPConnection):
     """`http.client.HTTPConnection` that connects to the Unix socket `path` instead of a TCP address. The Host header
     is `unix-socket`."""
 
+    # [@ANCHOR: zero_sudo:unix_http_connection_init]
     def __init__(self, path, timeout=30, host=UNIX_HOST):
         super().__init__(host, timeout=timeout)
         self.socket_path = path
 
+    # [@ANCHOR: zero_sudo:unix_http_connection_connect]
     def connect(self):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(self.timeout)
@@ -56,6 +59,7 @@ class OdooRpcClient:
     the database name (header `X-Odoo-Database`); `timeout` seconds per socket operation; `host` the Host header on the
     Unix socket (default `unix-socket`; set it when the server's `dbfilter` uses `%h` or `%d`). One connection per call."""
 
+    # [@ANCHOR: zero_sudo:odoo_rpc_client_init]
     def __init__(self, url, api_key, database, timeout=30, host=UNIX_HOST):
         parsed = urllib.parse.urlsplit(url)
         if parsed.scheme == UNIX_SCHEME:
@@ -69,6 +73,7 @@ class OdooRpcClient:
         self.timeout = timeout
         self.host = host
 
+    # [@ANCHOR: zero_sudo:odoo_rpc_client_connection]
     def _connection(self):
         parsed = self.parsed
         if parsed.scheme == UNIX_SCHEME:

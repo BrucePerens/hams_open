@@ -53,6 +53,16 @@ be identified by the kernel rather than only by a key.
   `[@ANCHOR: hams_rpc_guard:ensure_listener]`.
 - The daemon client: `[@ANCHOR: zero_sudo:odoo_rpc_client]`, `[@ANCHOR: zero_sudo:odoo_rpc_client_call]`,
   `[@ANCHOR: zero_sudo:unix_http_connection]`.
+- Constructors and small helpers of the above, named so each is a separate anchor: `[@ANCHOR: hams_rpc_guard:peer_init]`,
+  `[@ANCHOR: hams_rpc_guard:peer_as_dict]`, `[@ANCHOR: hams_rpc_guard:peer_rule_init]`,
+  `[@ANCHOR: hams_rpc_guard:peer_rule_matches]`, `[@ANCHOR: hams_rpc_guard:peer_rules_init]`,
+  `[@ANCHOR: hams_rpc_guard:peer_rules_match]`, `[@ANCHOR: hams_rpc_guard:gate_settings_init]`,
+  `[@ANCHOR: hams_rpc_guard:in_any]` (the CIDR membership test), `[@ANCHOR: hams_rpc_guard:user_names]`,
+  `[@ANCHOR: hams_rpc_guard:group_names]` (uid and gid to names), `[@ANCHOR: hams_rpc_guard:unix_request_handler_address_string]`,
+  `[@ANCHOR: hams_rpc_guard:unix_request_handler_port_integer]`, `[@ANCHOR: hams_rpc_guard:unix_request_handler_make_environ]`,
+  `[@ANCHOR: zero_sudo:unix_http_connection_init]`, `[@ANCHOR: zero_sudo:unix_http_connection_connect]`,
+  `[@ANCHOR: zero_sudo:odoo_rpc_error_init]`, `[@ANCHOR: zero_sudo:odoo_rpc_client_init]`,
+  `[@ANCHOR: zero_sudo:odoo_rpc_client_connection]`.
 
 ## Verification
 

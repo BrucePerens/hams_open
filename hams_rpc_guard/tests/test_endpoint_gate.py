@@ -54,6 +54,7 @@ class TestEndpointFamily(HamsTransactionCase):
 class TestResolveClient(HamsTransactionCase):
     """Who the true client is, and that forged headers never make a visitor look local or allowed."""
     # Tests [@ANCHOR: hams_rpc_guard:resolve_client]
+    # Tests [@ANCHOR: hams_rpc_guard:in_any]
     # Tests [@ANCHOR: hams_rpc_guard:socket_peer]
     # Tests [@ANCHOR: hams_rpc_guard:parse_address]
 
@@ -123,6 +124,7 @@ class TestSettings(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:read_settings]
     # Tests [@ANCHOR: hams_rpc_guard:gate_settings]
     # Tests [@ANCHOR: hams_rpc_guard:gate_parameters]
+    # Tests [@ANCHOR: hams_rpc_guard:gate_settings_init]
 
     def test_the_default_is_loopback_only(self):
         networks = gate.parse_networks(None, default=gate.DEFAULT_ALLOWED_NETWORKS)

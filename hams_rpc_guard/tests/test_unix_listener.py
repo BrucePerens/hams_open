@@ -40,6 +40,12 @@ class TestPeerRules(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:peer_rules]
     # Tests [@ANCHOR: hams_rpc_guard:peer_rule]
     # Tests [@ANCHOR: hams_rpc_guard:peer]
+    # Tests [@ANCHOR: hams_rpc_guard:peer_init]
+    # Tests [@ANCHOR: hams_rpc_guard:peer_as_dict]
+    # Tests [@ANCHOR: hams_rpc_guard:peer_rule_init]
+    # Tests [@ANCHOR: hams_rpc_guard:peer_rule_matches]
+    # Tests [@ANCHOR: hams_rpc_guard:peer_rules_init]
+    # Tests [@ANCHOR: hams_rpc_guard:peer_rules_match]
     # Tests [@ANCHOR: hams_rpc_guard:judge_unix]
 
     def test_entries(self):
@@ -83,6 +89,8 @@ class TestPeerRules(HamsTransactionCase):
 @tagged("post_install", "-at_install")
 class TestListenerSocket(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:listener_config]
+    # Tests [@ANCHOR: hams_rpc_guard:user_names]
+    # Tests [@ANCHOR: hams_rpc_guard:group_names]
     # Tests [@ANCHOR: hams_rpc_guard:listener_options]
     # Tests [@ANCHOR: hams_rpc_guard:open_listener]
     # Tests [@ANCHOR: hams_rpc_guard:peer_of]
@@ -162,11 +170,19 @@ class TestUnixSocketEndToEnd(HamsHttpCase):
     went through the gate to the core's authentication; the gate's refusal is a 404."""
     # Tests [@ANCHOR: hams_rpc_guard:unix_wsgi_server]
     # Tests [@ANCHOR: hams_rpc_guard:unix_request_handler]
+    # Tests [@ANCHOR: hams_rpc_guard:unix_request_handler_address_string]
+    # Tests [@ANCHOR: hams_rpc_guard:unix_request_handler_port_integer]
+    # Tests [@ANCHOR: hams_rpc_guard:unix_request_handler_make_environ]
     # Tests [@ANCHOR: hams_rpc_guard:rpc_only_app]
     # Tests [@ANCHOR: hams_rpc_guard:serve_unix_connection]
     # Tests [@ANCHOR: zero_sudo:odoo_rpc_client]
     # Tests [@ANCHOR: zero_sudo:odoo_rpc_client_call]
     # Tests [@ANCHOR: zero_sudo:unix_http_connection]
+    # Tests [@ANCHOR: zero_sudo:unix_http_connection_init]
+    # Tests [@ANCHOR: zero_sudo:unix_http_connection_connect]
+    # Tests [@ANCHOR: zero_sudo:odoo_rpc_error_init]
+    # Tests [@ANCHOR: zero_sudo:odoo_rpc_client_init]
+    # Tests [@ANCHOR: zero_sudo:odoo_rpc_client_connection]
 
     def setUp(self):
         super().setUp()
