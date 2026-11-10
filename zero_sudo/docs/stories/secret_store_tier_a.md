@@ -162,6 +162,12 @@ the store is seen without a restart. A separate function so tests give it a stor
 Returns the store's value (str). Raises `SecretNotFound` (names the backends tried, never a value) when no backend holds it,
 `InsecureSecretSource` for a secret file with a wrong owner or mode, `SecretStoreError` for an unreadable store.
 
+### `_optional_store_value(key)` `[@ANCHOR: zero_sudo:core_secrets_optional_store_value]`
+
+Module-level; `key` is a core secret name. Returns the store's value (str), or `None` when no backend holds it (it catches
+`SecretNotFound` only: `InsecureSecretSource` and `SecretStoreError` still propagate). The VAPID private key read and the VAPID
+write comparison use it, because a missing VAPID key is an ordinary state, unlike a missing `database.secret`.
+
 ### `ir.config_parameter._get_param(key)` `[@ANCHOR: zero_sudo:core_secrets_get_param]`
 
 The one read path under `get_param` (core's `get_param` checks read access, then calls this). Flag off, or any other key:
@@ -170,6 +176,14 @@ when missing (Odoo cannot sign anything without it; core would raise "CSRF prote
 anyway); the VAPID private key is the store value or `None` when missing, which core reads as "Web Push is not set up". The
 store values are not put in the ormcache. Access rules above this method (core's, and hams_com `ham_base`'s service-account
 checks on `get_param`) are unchanged.
+
+### `ir.config_parameter._core_secret_db_value(key, value)` `[@ANCHOR: zero_sudo:core_secrets_db_value]`
+
+Called per row by `create` and `write` with the flag on; the table under the next heading is its whole contract. Returns the value
+the database row gets: `value` itself for `False`, `None`, the marker, or any value while context `hams_core_secret_restore` is
+set; the marker `moved-to-secret-store` for any other `database.secret` (with a log warning naming the option, never the value)
+and for a VAPID private key equal to the store's (`hmac.compare_digest`); raises `UserError` (names the key and the option) for any
+other VAPID private-key value.
 
 ### `ir.config_parameter.create(vals_list)` `[@ANCHOR: zero_sudo:core_secrets_create]` and `write(vals)` `[@ANCHOR: zero_sudo:core_secrets_write]`
 

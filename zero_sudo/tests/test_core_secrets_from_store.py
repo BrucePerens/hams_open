@@ -153,6 +153,7 @@ class TestCoreSecretsFromStore(TransactionCase, SafePatchMixin):
             self._session_secret()
 
     def test_on_missing_vapid_key_reads_as_not_configured(self):
+        # Tests [@ANCHOR: zero_sudo:core_secrets_optional_store_value]
         self._flag(True)
         del self.store_values[cs.VAPID_PRIVATE_KEY]
         self.assertFalse(self.icp.get_param(cs.VAPID_PRIVATE_KEY))
@@ -175,6 +176,7 @@ class TestCoreSecretsFromStore(TransactionCase, SafePatchMixin):
         self.assertEqual(before, after)
 
     def test_on_set_param_never_writes_the_secret(self):
+        # Tests [@ANCHOR: zero_sudo:core_secrets_db_value]
         # Tests [@ANCHOR: zero_sudo:core_secrets_write]
         self._flag(True)
         self.icp.set_param(cs.DATABASE_SECRET, "a-fresh-test-database-secret")
@@ -191,6 +193,7 @@ class TestCoreSecretsFromStore(TransactionCase, SafePatchMixin):
         self.assertEqual(self._row(cs.DATABASE_SECRET), cs.MOVED_MARKER)
 
     def test_on_new_vapid_key_not_in_the_store_is_refused(self):
+        # Tests [@ANCHOR: zero_sudo:core_secrets_db_value]
         # Tests [@ANCHOR: zero_sudo:core_secrets_write]
         self._flag(True)
         with self.assertRaises(UserError):
