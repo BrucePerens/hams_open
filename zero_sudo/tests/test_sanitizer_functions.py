@@ -9,6 +9,7 @@ from lxml import etree
 import lxml.html
 
 from odoo.tests.common import BaseCase, tagged
+from odoo.tools import mail
 
 from odoo.addons.zero_sudo import css_sanitizer as css
 from odoo.addons.zero_sudo import svg_sanitizer as svg
@@ -303,7 +304,6 @@ class TestSvgSanitizerFunctions(BaseCase):
 
     def test_21_install_is_idempotent(self):
         # Tests [@ANCHOR: zero_sudo:svg_install]
-        from odoo.tools import mail
         call = mail._Cleaner.__call__
         svg.install()
         self.assertIs(mail._Cleaner.__call__, call)
