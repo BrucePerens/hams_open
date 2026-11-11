@@ -1182,6 +1182,8 @@ mod tests {
             line: 7,
             safe: None,
             description: String::new(),
+            rig: None,
+            band_follow: true,
         };
         b.add_channel(def, Arc::new(bank.clone())).unwrap();
         let b = Arc::new(b);

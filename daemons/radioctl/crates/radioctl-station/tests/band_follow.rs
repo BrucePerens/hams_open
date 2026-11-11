@@ -14,7 +14,7 @@ use radioctl_core::units::{Hz, Vfo};
 use radioctl_protocols::io::spawn_virtual_rig;
 use radioctl_protocols::kenwood::KenwoodEngine;
 use radioctl_protocols::virtual_rig::VirtualRig;
-use radioctl_station::band_follow::{follow_tx_frequency, route_for, BandRoute};
+use radioctl_station::band_follow::{follow_configured, follow_tx_frequency, route_for, BandRoute};
 use radioctl_station::channel::{Switchboard, VirtualBank};
 use radioctl_station::model::{ChannelId, StationDef, Value};
 use radioctl_station::station::{KeyedSource, Station};
@@ -39,6 +39,12 @@ fn routes() -> Vec<BandRoute> {
 }
 
 fn rig_and_station() -> (RigHandle, Arc<Station>) {
+    rig_and_station_from(
+        "[[channels]]\nid = \"ant\"\ntype = \"selector\"\nways = 2\ndriver = \"bank\"\nline = 0\n",
+    )
+}
+
+fn rig_and_station_from(def_toml: &str) -> (RigHandle, Arc<Station>) {
     let text = std::fs::read_to_string(format!(
         "{}/../../rigs/kenwood-ts-590sg.toml",
         env!("CARGO_MANIFEST_DIR")
@@ -53,10 +59,7 @@ fn rig_and_station() -> (RigHandle, Arc<Station>) {
         RigOptions::default(),
     )
     .expect("spawn");
-    let def = StationDef::from_toml(
-        "[[channels]]\nid = \"ant\"\ntype = \"selector\"\nways = 2\ndriver = \"bank\"\nline = 0\n",
-    )
-    .expect("def");
+    let def = StationDef::from_toml(def_toml).expect("def");
     let bank = VirtualBank::new();
     let mut board = Switchboard::new();
     for c in def.channels.clone() {
@@ -128,4 +131,116 @@ async fn the_selector_follows_the_transmit_vfo_in_split_and_waits_while_keyed() 
     wait_for_way(&station, 2).await;
     assert!(results.lock().expect("lock").contains(&(2, true)));
     task.abort();
+}
+
+const CONFIG: &str = r#"
+[[channels]]
+id = "ant"
+type = "selector"
+ways = 2
+driver = "bank"
+line = 0
+rig = "ts590"
+
+[[channels]]
+id = "amp"
+type = "selector"
+ways = 2
+driver = "bank"
+line = 2
+band_follow = false
+
+[[channels]]
+id = "dec"
+type = "selector"
+ways = 2
+driver = "bank"
+line = 4
+rig = "kx3"
+
+[[channels]]
+id = "any"
+type = "selector"
+ways = 2
+driver = "bank"
+line = 6
+
+[[band_routes]]
+channel = "ant"
+low_hz = 14000000
+high_hz = 14350000
+port = 1
+[[band_routes]]
+channel = "amp"
+low_hz = 14000000
+high_hz = 14350000
+port = 1
+[[band_routes]]
+channel = "dec"
+low_hz = 14000000
+high_hz = 14350000
+port = 1
+[[band_routes]]
+channel = "any"
+low_hz = 7000000
+high_hz = 7300000
+port = 2
+"#;
+
+// Tests [@ANCHOR: radioctl_station_def_band_routes_for]
+#[test]
+fn a_channel_follows_only_its_own_rig_and_only_without_the_opt_out() {
+    let def = StationDef::from_toml(CONFIG).expect("def");
+    let names = |rig: &str| -> Vec<String> {
+        def.band_routes_for(rig)
+            .into_iter()
+            .map(|r| r.channel.0)
+            .collect()
+    };
+    // "amp" opted out; "dec" belongs to the other rig; "any" belongs to none in particular.
+    assert_eq!(names("ts590"), ["ant", "any"]);
+    assert_eq!(names("kx3"), ["dec", "any"]);
+    assert_eq!(names("ic7300"), ["any"]);
+    let r = &def.band_routes_for("ts590")[0];
+    assert_eq!((r.low, r.high, r.port), (Hz(14_000_000), Hz(14_350_000), 1));
+}
+
+// Tests [@ANCHOR: radioctl_station_def_validate]
+#[test]
+fn a_band_route_must_name_a_selector_way_and_a_sane_band() {
+    let with = |route: &str| format!("{CONFIG}\n[[band_routes]]\n{route}");
+    for bad in [
+        "channel = \"nope\"\nlow_hz = 1\nhigh_hz = 2\nport = 1\n",
+        "channel = \"ant\"\nlow_hz = 3\nhigh_hz = 2\nport = 1\n",
+        "channel = \"ant\"\nlow_hz = 1\nhigh_hz = 2\nport = 3\n",
+        "channel = \"ant\"\nlow_hz = 1\nhigh_hz = 2\nport = 0\n",
+    ] {
+        assert!(StationDef::from_toml(&with(bad)).is_err(), "{bad}");
+    }
+}
+
+// Tests [@ANCHOR: radioctl_station_follow_configured]
+#[tokio::test]
+async fn the_configured_follower_switches_only_the_channels_of_the_named_rig() {
+    let (rig, station) = rig_and_station_from(CONFIG);
+    rig.set_frequency(Vfo::A, Hz(14_100_000)).await.expect("A");
+    let task = {
+        let (rig, station) = (rig.clone(), station.clone());
+        tokio::spawn(async move {
+            follow_configured(&station, "ts590", &rig, |_, _| {}).await;
+        })
+    };
+    wait_for_way(&station, 1).await;
+    // The opted-out channel and the other rig's channel were left alone.
+    let known = |id: &str| station.board().known(&ChannelId(id.into())).expect("known");
+    assert_ne!(known("amp"), Some(Value::Port(1)));
+    assert_ne!(known("dec"), Some(Value::Port(1)));
+    task.abort();
+}
+
+#[tokio::test]
+async fn a_rig_with_no_routes_returns_at_once() {
+    let (rig, station) = rig_and_station();
+    follow_configured(&station, "ts590", &rig, |_, _| panic!("no route")).await;
+    assert_eq!(way(&station).await, None);
 }

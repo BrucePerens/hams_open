@@ -80,3 +80,20 @@ pub async fn follow_tx_frequency(
         }
     }
 }
+
+// [@ANCHOR: radioctl_station_follow_configured]
+/// Starts the follower for the rig named `rig_name` from the station's own `[[band_routes]]`:
+/// only the channels that belong to this rig and have not opted out follow (see
+/// [`crate::model::StationDef::band_routes_for`]). Returns at once when the rig has no routes.
+pub async fn follow_configured(
+    station: &Station,
+    rig_name: &str,
+    rig: &RigHandle,
+    on_result: impl FnMut(&BandRoute, &Result<(), StationError>),
+) {
+    let routes = station.def().band_routes_for(rig_name);
+    if routes.is_empty() {
+        return;
+    }
+    follow_tx_frequency(station, rig, &routes, on_result).await;
+}

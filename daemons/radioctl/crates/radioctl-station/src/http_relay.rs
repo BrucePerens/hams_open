@@ -359,6 +359,8 @@ mod tests {
             line: 0,
             safe: None,
             description: String::new(),
+            rig: None,
+            band_follow: true,
         };
         b.add_channel(def, relay).unwrap();
         let id = ChannelId("ant".into());

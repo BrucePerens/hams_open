@@ -132,6 +132,18 @@ pub struct ChannelDef {
     /// Free text.
     #[serde(default)]
     pub description: String,
+    /// The rig this channel belongs to (the rig's name in the daemon configuration). A selector
+    /// follows a rig's transmit band only for that rig; none means every rig.
+    #[serde(default)]
+    pub rig: Option<String>,
+    /// Per-channel opt-out of band following (`band_follow = false`): the channel keeps whatever
+    /// way is set by hand or by a profile although a `[[band_routes]]` entry names it.
+    #[serde(default = "default_true")]
+    pub band_follow: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl ChannelDef {
@@ -402,6 +414,23 @@ pub struct StationDef {
     /// Profiles.
     #[serde(default)]
     pub profiles: Vec<ProfileDef>,
+    /// Band routes: which way of a selector channel serves which band (`[[band_routes]]`).
+    #[serde(default)]
+    pub band_routes: Vec<BandRouteDef>,
+}
+
+/// One `[[band_routes]]` entry: transmit frequencies from `low_hz` to `high_hz` inclusive select
+/// `port` of the selector `channel`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BandRouteDef {
+    /// The selector channel.
+    pub channel: ChannelId,
+    /// Lowest frequency of the band, in hertz.
+    pub low_hz: u64,
+    /// Highest frequency of the band, in hertz.
+    pub high_hz: u64,
+    /// The way (from 1) to select.
+    pub port: u32,
 }
 
 impl StationDef {
@@ -418,6 +447,25 @@ impl StationDef {
     /// A channel by name.
     pub fn channel(&self, id: &ChannelId) -> Option<&ChannelDef> {
         self.channels.iter().find(|c| &c.id == id)
+    }
+
+    // [@ANCHOR: radioctl_station_def_band_routes_for]
+    /// The routes the rig named `rig` drives: a channel follows when it belongs to that rig (or
+    /// to none in particular) and has not opted out with `band_follow = false`.
+    pub fn band_routes_for(&self, rig: &str) -> Vec<crate::band_follow::BandRoute> {
+        self.band_routes
+            .iter()
+            .filter(|r| {
+                self.channel(&r.channel)
+                    .is_some_and(|c| c.band_follow && c.rig.as_deref().is_none_or(|n| n == rig))
+            })
+            .map(|r| crate::band_follow::BandRoute {
+                low: radioctl_core::units::Hz(r.low_hz),
+                high: radioctl_core::units::Hz(r.high_hz),
+                channel: r.channel.clone(),
+                port: r.port,
+            })
+            .collect()
     }
 
     // [@ANCHOR: radioctl_station_def_device]
@@ -463,6 +511,23 @@ impl StationDef {
                         c.driver
                     ));
                 }
+            }
+        }
+        for r in &self.band_routes {
+            let ways = match self.channel(&r.channel).map(|c| &c.kind) {
+                Some(ChannelKind::Selector { ways, .. }) => *ways,
+                _ => {
+                    return bad(format!(
+                        "band route names {} which is not a selector",
+                        r.channel.0
+                    ))
+                }
+            };
+            if r.low_hz > r.high_hz || r.port == 0 || r.port > ways {
+                return bad(format!(
+                    "band route for {}: needs low <= high and a port from 1 to {ways}",
+                    r.channel.0
+                ));
             }
         }
         let mut meters = BTreeSet::new();
