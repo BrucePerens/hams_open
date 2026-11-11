@@ -301,7 +301,6 @@ class TestPurgeResolveAsPurgeAccount(RealTransactionCase):
     def test_01_resolve_posts_the_note_when_the_purge_account_is_the_default_env(self):
         # Tests [@ANCHOR: cloudflare:COMM_purge_pager_default_env]
         # Tests [@ANCHOR: cloudflare:COMM_resolve_purge_failure]
-        Queue = self.env["cloudflare.purge.queue"]
         website = self.env["website"].create({"name": "Purge Resolve Site", "domain": "https://purge-resolve.example"})
         pager_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
         incident = self.env["pager.incident"].with_user(pager_uid).create(
