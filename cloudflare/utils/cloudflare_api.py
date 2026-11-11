@@ -168,8 +168,9 @@ def purge_tags(tags, token, zone_id):
     return success
 
 
-# # Verified by [@ANCHOR: test_cf_ban_ip_api]
 # [@ANCHOR: cloudflare:COMM_cf_api_ban_ip]
+# Adds a Cloudflare IP access rule for the zone and returns its id.
+# # Verified by [@ANCHOR: test_cf_ban_ip_api]
 def ban_ip(ip_address, mode, notes, token, zone_id):
     # # Verified by [@ANCHOR: test_cf_ban_ip_api]
     if not token or not zone_id:
