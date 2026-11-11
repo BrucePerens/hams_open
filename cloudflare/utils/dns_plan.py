@@ -13,6 +13,7 @@ Odoo row on its own removes nothing at Cloudflare.
 import hashlib
 import ipaddress
 import json
+import re
 
 # [@ANCHOR: cloudflare:COMM_dns_plan]
 CREATE, UPDATE, DELETE, ADOPT, UNCHANGED, DRIFT, CONFLICT, PROBLEM = (
@@ -221,9 +222,34 @@ def capacity_problem(zone_name, limit, current, creates, deletes):
     return None
 
 
+# A callsign as a DNS label: one or two letters or digits, one digit, one to four letters (k6bp, w1aw, kp4djt, 4x1ab).
+# The infrastructure names under hams.com (www, auth, turn, stun, relay, crawler, parked, mail, ns1, ns2, hams1,
+# callbook, acme) have none of this shape.
+CALLSIGN_LABEL = re.compile(r"[a-z0-9]{1,2}[0-9][a-z]{1,4}")
+# Members' names live under this domain only; a hostname in a tenant's own domain is that tenant's business.
+MEMBER_DOMAIN = "hams.com"
+
+
+# [@ANCHOR: cloudflare:COMM_dns_plan_callsign_label]
+# Verified by [@ANCHOR: cloudflare:COMM_test_member_names_never_reach_cloudflare]
+def callsign_label_in(name):
+    """The first label of `name` below hams.com that is shaped like an amateur callsign, or None. Bruce,
+    2026-11-11: nothing for a `<callsign>.hams.com` name may exist at Cloudflare, so no create or update of such a
+    name is ever sent there (a delete is allowed: it removes one). `k6bp.hams.com`, `www.k6bp.hams.com` and
+    `k6bp.callbook.hams.com` all name a callsign; `hams.com`, `www.hams.com` and `k6bp.example.org` do not."""
+    name = normalize_name(name)
+    suffix = "." + MEMBER_DOMAIN
+    if not name.endswith(suffix):
+        return None
+    for label in name[: -len(suffix)].split("."):
+        if CALLSIGN_LABEL.fullmatch(label):
+            return label
+    return None
+
+
 # [@ANCHOR: cloudflare:COMM_dns_plan_is_member_delegation]
 def is_member_delegation(entry, zone_name):
-    """An NS row for a single label directly under the zone, such as k6bp.hams.com: a member's name."""
+    """An NS row for a single label directly under the zone (a child zone delegated away from it)."""
     name = normalize_name(entry.get("name"))
     suffix = "." + (zone_name or "")
     if entry.get("type") != "NS" or not zone_name or not name.endswith(suffix):

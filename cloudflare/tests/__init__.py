@@ -27,6 +27,7 @@ from . import test_tenant_key
 from . import test_wsgi_proxy_scheme
 from . import test_trusted_ip_ranges
 from . import test_dns_push
+from . import test_member_names_never_reach_cloudflare
 from . import test_cloudflare_api_calls
 from . import tunnel_simulator
 from . import test_zone_settings_always_https

@@ -9,7 +9,7 @@
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
 //! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.scope_link` (`lan`, the default, or `serial`: how a TS-890S sends its scopes), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
-//! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`),
+//! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`), `yaesu.split` (`"st"` when split is the `ST` command; `"ft"` or absent otherwise),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
 //! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
@@ -225,6 +225,9 @@ struct YaesuSection {
     /// Per-model level ranges, `level-name = [min, max]` (see `YaesuParams::level_ranges`).
     #[serde(default)]
     levels: BTreeMap<String, (u16, u16)>,
+    /// `"st"`: split is the `ST` command (see `YaesuParams::split_st`); `"ft"` is the default.
+    #[serde(default)]
+    split: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -659,6 +662,15 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
                 model_id: y.model_id,
                 frequency_digits,
                 level_ranges: build_level_ranges("yaesu", &y.levels)?,
+                split_st: match y.split.as_deref() {
+                    None | Some("ft") => false,
+                    Some("st") => true,
+                    Some(other) => {
+                        return Err(bad(format!(
+                            "yaesu.split must be \"ft\" or \"st\", not {other:?}"
+                        )))
+                    }
+                },
             })
         })
         .transpose()?;
@@ -1336,6 +1348,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         if !yaesu.level_ranges.is_empty() {
             keys.push("yaesu.levels".to_string());
         }
+        if yaesu.split_st {
+            keys.push("yaesu.split".to_string());
+        }
     }
     if let Some(legacy) = &description.yaesu_legacy {
         keys.push("yaesu_legacy.stop_bits".to_string());
@@ -1727,6 +1742,29 @@ verified = { state = "unverified" }
             );
             expect_rejected(&format!("{text}{fact}"), "yaesu.levels");
         }
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    #[test]
+    fn yaesu_split_st_needs_a_fact_and_refuses_other_words() {
+        let yaesu = GOOD
+            .replace("family = \"kenwood-ascii\"", "family = \"yaesu-newcat\"")
+            .replace("[kenwood]", "[yaesu]")
+            .replace("key = \"kenwood.model_id\"", "key = \"yaesu.model_id\"");
+        let with = |word: &str| {
+            yaesu.replace(
+                "[yaesu]\nmodel_id = 19",
+                &format!("[yaesu]\nmodel_id = 19\nsplit = \"{word}\""),
+            )
+        };
+        let fact = "\n[[facts]]\nkey = \"yaesu.split\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        expect_rejected(&with("st"), "yaesu.split");
+        let loaded = parse(&format!("{}{fact}", with("st"))).expect("loads");
+        assert!(loaded.description.yaesu.clone().expect("yaesu").split_st);
+        assert!(expected_keys(&loaded.description).contains(&"yaesu.split".to_string()));
+        let plain = parse(&yaesu).expect("loads");
+        assert!(!plain.description.yaesu.expect("yaesu").split_st);
+        expect_rejected(&format!("{}{fact}", with("vfo")), "yaesu.split");
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_parse]

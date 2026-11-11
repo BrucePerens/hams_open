@@ -24,10 +24,10 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("elad", Kind::Elad),
     ("example", Kind::Example),
     ("glasgow", Kind::Glasgow),
-    ("hamlib", Kind::Hamlib),
     ("limesdr", Kind::Sdr),
     ("nanovna", Kind::Vna),
     ("procedure", Kind::Procedure),
+    ("radioctl", Kind::Radioctl),
     ("rotator", Kind::Rotator),
     ("rx888", Kind::Rx888),
     ("siglent_sds", Kind::Scope),
@@ -72,9 +72,9 @@ pub enum Kind {
     UsbHub,
     /// The host's sound devices (`audio` module): PipeWire, wpctl and the speech synthesizers.
     Audio,
-    /// A radio driven through Hamlib's `rigctld` (`hamlib` module): receivers, and transmitters into an attested dummy load.
-    Hamlib,
-    /// An antenna rotator driven through Hamlib's `rotctld` (`rotator` module).
+    /// A radio driven through the `radioctld` daemon (`radioctl` module): receivers, and transmitters into an attested dummy load.
+    Radioctl,
+    /// An antenna rotator driven through a `radioctld` rotator listener (`rotator` module).
     Rotator,
     /// A Siglent SSA3000X spectrum analyzer with tracking generator (`sa` module), SCPI over the LAN.
     Sa,
@@ -114,7 +114,7 @@ pub struct Instrument {
     pub sdr: crate::sdr::Config,
     pub usb: crate::usb_hub::Config,
     pub audio: crate::audio::Config,
-    pub hamlib: crate::hamlib::Config,
+    pub radioctl: crate::radioctl::Config,
     pub rotator: crate::rotator::Config,
     pub elad: crate::elad::Config,
     pub example: crate::example::Config,
@@ -291,6 +291,9 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             .and_then(|d| d.as_str())
             .ok_or(format!("{name}: no driver"))?
             .to_string();
+        if driver == "hamlib" {
+            return Err(format!("{name}: the \"hamlib\" driver was removed; use \"driver\": \"radioctl\" (a radioctl rig description in \"rig\" instead of the Hamlib \"model\" number; see the README section Radioctl rigs)"));
+        }
         let kind = DRIVER_KINDS
             .iter()
             .find(|(d, _)| *d == driver)
@@ -320,7 +323,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             usb: crate::usb_hub::parse_config(c).map_err(|e| format!("{name}: {e}"))?,
             nanovna: module_config!(nanovna, driver_name, c, name),
             audio: module_config!(audio, driver_name, c, name),
-            hamlib: module_config!(hamlib, driver_name, c, name),
+            radioctl: module_config!(radioctl, driver_name, c, name),
             rotator: module_config!(rotator, driver_name, c, name),
             elad: module_config!(elad, driver_name, c, name),
             example: module_config!(example, driver_name, c, name),

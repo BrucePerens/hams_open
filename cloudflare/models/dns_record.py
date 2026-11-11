@@ -137,6 +137,20 @@ class CloudflareDNSRecord(models.Model):
                                         type=rec.type, name=rec.name, content=rec.content))
             self._check_glue(rec)
 
+    # [@ANCHOR: cloudflare:COMM_dns_record_no_member_names]
+    # Verified by [@ANCHOR: cloudflare:COMM_test_member_names_never_reach_cloudflare]
+    @api.constrains("name", "active")
+    def _check_not_a_member_name(self):
+        """No active row may name a callsign (`k6bp.hams.com`, `www.k6bp.hams.com`): hams.com's own name servers
+        answer for members, Cloudflare never holds their names (Bruce, 2026-11-11). Archiving a row is always
+        allowed, so a row that already exists can be retired; only an active row is refused."""
+        for rec in self.filtered("active"):
+            label = dns_plan.callsign_label_in(rec.name)
+            if label:
+                raise ValidationError(_(
+                    "%(name)s names a callsign (%(label)s). Names for members are served by hams.com's own name "
+                    "servers and are never entered at Cloudflare.", name=rec.name, label=label))
+
     # [@ANCHOR: cloudflare:COMM_dns_record_require_ip]
     @staticmethod
     def _require_ip(rec, factory):
@@ -270,7 +284,20 @@ class CloudflareDNSRecord(models.Model):
     def _dns_problems(self, entries):
         """Reasons the whole push must be refused (strings; empty = fine). A hook: other modules extend it
         the way `_ingress_problems` is extended for tunnel pushes."""
-        return self._dns_capacity_problems(entries)
+        return self._dns_member_name_problems(entries) + self._dns_capacity_problems(entries)
+
+    # [@ANCHOR: cloudflare:COMM_dns_member_name_problems]
+    # Verified by [@ANCHOR: cloudflare:COMM_test_member_names_never_reach_cloudflare]
+    def _dns_member_name_problems(self, entries):
+        """Refuse the whole push when any entry would create or update a record whose name is a callsign: even a
+        row that got into the table some other way (SQL, an old release) is never sent. A delete, an adoption
+        (an id stored in Odoo) and an unchanged row write nothing at Cloudflare and are allowed."""
+        return [
+            f"{entry['name']} names a callsign; member names are served by hams.com's own name servers and are "
+            "never written to Cloudflare. Archive that row"
+            for entry in entries
+            if entry["action"] in (dns_plan.CREATE, dns_plan.UPDATE) and dns_plan.callsign_label_in(entry["name"])
+        ]
 
     # [@ANCHOR: cloudflare:COMM_dns_capacity_guard]
     # Verified by [@ANCHOR: COMM_test_dns_capacity_guard]
