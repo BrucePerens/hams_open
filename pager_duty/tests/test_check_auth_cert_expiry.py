@@ -77,6 +77,7 @@ class TestAuthCertExpiryCheck(HamsTransactionCase):
     # Tests [@ANCHOR: pager_duty:auth_cert_main]
     # Tests [@ANCHOR: pager_duty:auth_cert_read_expiry]
     def test_healthy_certificate_exits_zero(self):
+        # Tests [@ANCHOR: pager_duty:auth_cert_enddate_of]
         os.environ["HAMS_AUTH_CERT_PATH"] = _make_cert(self.tmpdir.name, 90)
         code, out, err = self._run_main()
         self.assertEqual(code, 0, err)
@@ -116,6 +117,7 @@ class TestAuthCertExpiryCheck(HamsTransactionCase):
         self.assertIn("expires in", err)
 
     def test_an_unreadable_certificate_pages(self):
+        # Tests [@ANCHOR: pager_duty:auth_cert_enddate_of]
         path = os.path.join(self.tmpdir.name, "bad.crt")
         with open(path, "w", encoding="utf-8") as f:
             f.write("not a certificate\n")
@@ -125,6 +127,7 @@ class TestAuthCertExpiryCheck(HamsTransactionCase):
         self.assertIn("SEVERITY:high", err)
 
     def test_missing_file_falls_back_to_the_served_certificate(self):
+        # Tests [@ANCHOR: pager_duty:auth_cert_enddate_of]
         pem = open(_make_cert(self.tmpdir.name, 10), encoding="utf-8").read()
         os.environ["HAMS_AUTH_CERT_PATH"] = os.path.join(self.tmpdir.name, "absent.crt")
         mock_get = self.safe_patch(
