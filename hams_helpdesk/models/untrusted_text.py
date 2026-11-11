@@ -27,6 +27,7 @@ is "suspicious": it is never auto-triaged, auto-answered or acted on by an AI.
 import base64
 import binascii
 import codecs
+import colorsys
 import html as _html
 import json
 import logging
@@ -461,9 +462,16 @@ def _parse_color(value):
             if a < 0.15:
                 return "invisible"
         return tuple(min(255, max(0, c)) for c in chans)
-    m = re.fullmatch(r"hsla?\(\s*[\d.]+(?:deg)?[\s,]+[\d.]+%[\s,]+([\d.]+)%.*\)", value)
-    if m and (_css_number(m.group(1)) or 0) >= 97:
-        return (255, 255, 255)
+    m = re.fullmatch(r"hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%.*\)", value)
+    if m:
+        hue, saturation, lightness = (_css_number(part) for part in m.groups())
+        if None in (hue, saturation, lightness):
+            return None
+        if lightness >= 97:
+            return (255, 255, 255)
+        # Pale grey or tinted text on a white page (hsl(0 0% 93%)) is as good as hidden, so it is compared like any other colour.
+        red, green, blue = colorsys.hls_to_rgb((hue % 360) / 360, min(lightness, 100) / 100, min(saturation, 100) / 100)
+        return (round(red * 255), round(green * 255), round(blue * 255))
     return None
 
 
