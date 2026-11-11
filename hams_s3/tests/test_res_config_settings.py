@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+from unittest.mock import MagicMock
+
+import requests
 from lxml import etree
 
+from odoo.exceptions import UserError
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests import tagged
 
@@ -127,3 +131,63 @@ class TestHamsS3ConfigSettings(HamsTransactionCase):
         self.env["res.config.settings"].get_view(view_id=view.id)
         self.assertIn("hams_cloud_storage", arch)
         self.assertIn("hams_s3_use_s3", arch)
+
+
+def _b2_answer(capabilities, buckets, status=200):
+    response = MagicMock()
+    response.status_code = status
+    response.json.return_value = {"apiInfo": {"storageApi": {"allowed": {"capabilities": capabilities, "buckets": buckets}}}}
+    return response
+
+
+@tagged('post_install', '-at_install')
+class TestHamsS3B2KeyScope(HamsTransactionCase):
+    """Recorded-shape Backblaze answers; no real key is used."""
+    # Tests [@ANCHOR: hams_s3_set_values]
+
+    CHECK = 'odoo.addons.hams_s3.models.b2_key_scope.requests.get'
+    SCOPED = ['listBuckets', 'listFiles', 'readFiles', 'writeFiles']
+
+    def _save(self, host='s3.us-west-004.backblazeb2.com', secret='K004abcdefghijklmnopqrstuvwxyz0123'):
+        self.env['res.config.settings'].create({
+            'hams_s3_use_s3': True,
+            'hams_s3_aws_host': host,
+            'hams_s3_aws_access_key_id': '004abcdef',
+            'hams_s3_aws_secret_access_key': secret,
+        }).set_values()
+
+    def test_a_bucket_scoped_key_without_delete_is_accepted(self):
+        self.safe_patch(self.CHECK).return_value = _b2_answer(self.SCOPED, [{'id': 'b1', 'name': 'bucket'}])
+        self._save()
+
+    def test_a_key_that_can_delete_or_is_not_bucket_limited_is_refused_naming_the_problem(self):
+        self.safe_patch(self.CHECK).return_value = _b2_answer(self.SCOPED + ['deleteFiles', 'writeBuckets'], None)
+        with self.assertRaises(UserError) as caught:
+            self._save()
+        message = str(caught.exception)
+        self.assertIn('deleteFiles', message)
+        self.assertIn('writeBuckets', message)
+        self.assertIn('not limited to one bucket', message)
+        self.assertNotIn('K004abcdefghijklmnopqrstuvwxyz0123', message)
+
+    def test_the_override_parameter_accepts_a_broad_key_with_a_warning(self):
+        self.safe_patch(self.CHECK).return_value = _b2_answer(self.SCOPED + ['deleteFiles'], None)
+        self.env['ir.config_parameter'].set_param('hams_s3.allow_broad_b2_key', 'True')
+        with self.assertLogs('odoo.addons.hams_s3.models.res_config_settings', 'WARNING'):
+            self._save()
+
+    def test_an_unreachable_or_unreadable_answer_fails_closed(self):
+        self.safe_patch(self.CHECK).side_effect = requests.ConnectionError('down')
+        with self.assertRaises(UserError):
+            self._save()
+        self.safe_patch(self.CHECK).side_effect = None
+        self.safe_patch(self.CHECK).return_value = _b2_answer(self.SCOPED, [], status=401)
+        with self.assertRaises(UserError):
+            self._save()
+
+    def test_another_host_an_unchanged_key_and_no_key_are_not_checked(self):
+        check = self.safe_patch(self.CHECK)
+        self._save(host='s3.amazonaws.com')
+        self._save(secret='********')
+        self._save(secret='')
+        check.assert_not_called()

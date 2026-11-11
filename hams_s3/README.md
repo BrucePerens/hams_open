@@ -5,6 +5,7 @@ This module integrates the OCA `storage.backend` model (from OCA's `storage_back
 ## Features
 
 - **General Settings Integration**: Adds a "Cloud Storage" block to General Settings for configuring S3 buckets.
+- **Backblaze key scope**: when the endpoint host ends in `backblazeb2.com` and a new secret key is saved, the module asks Backblaze (`b2_authorize_account`, with the installer's own key; nothing goes to hams.com) what the key may do. It refuses a key that can `deleteFiles`, `writeBuckets`, `deleteBuckets`, `writeKeys`, `deleteKeys` or `bypassGovernance`, a key that is not limited to one bucket, and a key Backblaze cannot be asked about. Create an application key limited to one bucket with only `listBuckets`, `listFiles`, `readFiles` and `writeFiles`. Setting the system parameter `hams_s3.allow_broad_b2_key` to `True` accepts a broad key with a logged warning.
 - **Dependency Setup**: Includes a script `scripts/install_oca_storage.py` that clones the OCA `storage`, `connector` and `server-env` repositories (branch `18.0`), then copies and patches four addons from them into a directory you name: `storage_backend`, `storage_backend_s3`, `component` (from the `connector` repository), and `server_environment`. It does not install them into Odoo; it only copies them.
 
 ## Installation / Setup
