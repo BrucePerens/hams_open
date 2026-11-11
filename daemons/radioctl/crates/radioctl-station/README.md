@@ -235,12 +235,14 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_channel_validate] (radioctl-station) Checks the channel on its own: a power or ptt channel needs a defined safe state, a safe
 - [@ANCHOR: radioctl:radioctl_station_def_from_toml] (radioctl-station) Parses and validates a station definition.
 - [@ANCHOR: radioctl:radioctl_station_def_channel] (radioctl-station) A channel by name.
+- [@ANCHOR: radioctl:radioctl_station_def_band_routes_for] (radioctl-station) The routes the rig named `rig` drives: a channel follows when it belongs to that rig (or to none in particular) and has not opted out with `band_follow = false`.
 - [@ANCHOR: radioctl:radioctl_station_def_device] (radioctl-station) A device by name.
 - [@ANCHOR: radioctl:radioctl_station_def_validate] (radioctl-station) Checks names, references, channel kinds, one device per power channel, and that the
 - [@ANCHOR: radioctl:radioctl_station_def_power_on_order] (radioctl-station) Every device in an order where each follows the devices it depends on (ties by name);
 - [@ANCHOR: radioctl:radioctl_station_def_dependents] (radioctl-station) Every device that depends on `id`, directly or not, in power-off order (the most
 - [@ANCHOR: radioctl:radioctl_station_band_route_for] (radioctl-station) The first route whose band holds `hz`, or `None` outside every band (the selector is then left alone).
 - [@ANCHOR: radioctl:radioctl_station_band_follow_tx_frequency] (radioctl-station) Follows the rig's transmit frequency until its event stream ends: switches the selector of the
+- [@ANCHOR: radioctl:radioctl_station_follow_configured] (radioctl-station) Starts the follower for the rig named `rig_name` from the station's own `[[band_routes]]`: only the channels that belong to this rig and have not opted out follow. Returns at once when the rig has no routes.
 - [@ANCHOR: radioctl:radioctl_station_rig_name] (radioctl-station) The rig id.
 - [@ANCHOR: radioctl:radioctl_station_rig_key_state] (radioctl-station) Keyed state from the rig handle: unknown when the link is down; the rig's own PTT read
 - [@ANCHOR: radioctl:radioctl_station_station_new] (radioctl-station) Builds a station over a switchboard that has every channel of `def`. Nothing is switched.
