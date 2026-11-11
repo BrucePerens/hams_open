@@ -419,6 +419,7 @@ class TestPrivacyGDPR(HamsHttpCase):
 
     def test_03_self_writeable_fields_idiom(self):
         # Tests [@ANCHOR: test_user_websites_self_writeable_fields]
+        # Tests [@ANCHOR: user_websites:fn_users_self_writeable_fields]
         """
         MASTER_10 Identity & Access Control, section 2: a
         SELF_WRITEABLE_FIELDS override must be proven by an actual

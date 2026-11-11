@@ -126,6 +126,8 @@ class TestOwnerDelete(HamsHttpCase):
 
     def test_05_restore_brings_it_back_unpublished(self):
         # Tests [@ANCHOR: user_websites:COMM_owner_restore]
+        # Tests [@ANCHOR: user_websites:fn_owner_own_page_any]
+        # Tests [@ANCHOR: user_websites:fn_owner_back]
         self.authenticate("delowner", "delowner")
         self._post(f"/my/site/delowner/page/{self.about.id}/delete")
         self._post(f"/my/site/delowner/post/{self.post.id}/delete")

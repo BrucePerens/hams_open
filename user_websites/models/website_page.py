@@ -33,6 +33,7 @@ redis_pool = redis.ConnectionPool(
 redis_client = redis.Redis(connection_pool=redis_pool)
 
 
+# [@ANCHOR: user_websites:fn_page_remove_keeping_tail]
 def _remove_keeping_tail(element):
     """Remove `element` from its parent without losing the text that follows it."""
     parent = element.getparent()
@@ -415,6 +416,7 @@ class WebsitePage(models.Model):
                 svc_uid, owner_id, group_id, url or "/unknown-page", reporter_id
             )
 
+    # [@ANCHOR: user_websites:fn_page_malicious_arch_violation_targets]
     def _malicious_arch_violation_targets(self, vals, records):
         """Return one (owner_id, group_id, url) per account to strike.
 
@@ -439,6 +441,7 @@ class WebsitePage(models.Model):
                 targets[key] = vals.get("url") or rec.url
         return [(o, g, u) for (o, g), u in targets.items()]
 
+    # [@ANCHOR: user_websites:fn_page_file_malicious_arch_report]
     def _file_malicious_arch_report(
         self, svc_uid, owner_id, group_id, target_url, reporter_id
     ):

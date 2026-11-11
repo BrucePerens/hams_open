@@ -163,6 +163,7 @@ class ResUsers(models.Model):
                 )
 
     @property
+    # [@ANCHOR: user_websites:fn_users_self_writeable_fields]
     def SELF_WRITEABLE_FIELDS(self):
         """ADR-0015: Self-Writeable Fields Idiom"""
         # Verified by [@ANCHOR: test_user_websites_self_writeable_fields]
@@ -259,16 +260,19 @@ class ResUsers(models.Model):
     # [@ANCHOR: user_websites:COMM_res_users_slug_policy]
     # Verified by [@ANCHOR: test_site_slug_one_site]
 
+    # [@ANCHOR: user_websites:fn_users_slug_identity_fields]
     def _slug_identity_fields(self):
         """Field names the "callsign" slug policy builds the slug from. A deployment that sets the
         policy extends this (hams.com: callsign); open source has none, so the policy is inert there."""
         return ()
 
+    # [@ANCHOR: user_websites:fn_users_slug_identity]
     def _slug_identity(self, vals=None):
         """The text the "callsign" policy slugifies (a callsign), from `vals` if they carry it, else
         from this record. False when the member has none."""
         return False
 
+    # [@ANCHOR: user_websites:fn_users_apply_slug_policy]
     def _apply_slug_policy(self, record, vals):
         """Under the "callsign" policy a member has exactly one site address: the slug of their
         callsign (K6BP -> k6bp, K6BP/P -> k6bp-p). Rewrites vals in place. Returns True when the

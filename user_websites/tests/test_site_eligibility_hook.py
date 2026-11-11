@@ -76,6 +76,8 @@ class TestSiteEligibilityHook(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:COMM_website_publicly_visible]
         # Tests [@ANCHOR: user_websites:fn_ir_http_serve_page_eligibility]
         # Tests [@ANCHOR: user_websites:field_hidden_by_eligibility]
+        # Tests [@ANCHOR: user_websites:fn_eligibility_hide_site_content]
+        # Tests [@ANCHOR: user_websites:fn_eligibility_show_site_content]
         with self._gaps(GAP):
             self.assertEqual(self.url_open("/eligowner", allow_redirects=False).status_code, 404)
             self.assertEqual(self.url_open("/eligowner/about", allow_redirects=False).status_code, 404)
@@ -106,6 +108,7 @@ class TestSiteEligibilityHook(HamsHttpCase):
     def test_03_owner_is_told_what_is_missing_and_cannot_create(self):
         # Tests [@ANCHOR: user_websites:owner_site_ineligible]
         # Tests [@ANCHOR: user_websites:fn_answers_site_response]
+        # Tests [@ANCHOR: user_websites:fn_site_response_init]
         self.authenticate("eligowner", "eligowner")
         with self._gaps(GAP):
             for path in ("/my/site/eligowner", "/my/site/eligowner/page/new"):
@@ -158,6 +161,7 @@ class TestSiteEligibilityHook(HamsHttpCase):
     def test_06_the_scheduled_job_runs_the_reconciler_as_the_service_account(self):
         # Tests [@ANCHOR: user_websites:ir_cron_reconcile_website_eligibility]
         # Tests [@ANCHOR: user_websites:COMM_cron_reconcile_website_eligibility]
+        # Tests [@ANCHOR: user_websites:fn_eligibility_site_user_ids]
         cron = self.env.ref("user_websites.ir_cron_reconcile_website_eligibility")
         self.assertTrue(cron.active)
         self.assertEqual(cron.model_id.model, "res.users")
