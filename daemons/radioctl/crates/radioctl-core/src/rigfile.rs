@@ -736,8 +736,10 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         capabilities.push(capability);
     }
     // A transmit-power range is never a default: the K3's 110 W made half power full power on a
-    // KX3. An Elecraft model that claims `levels` must state its own `rf-power` range.
+    // KX3. An Elecraft model that claims `levels` must state its own `rf-power` range, or list
+    // `rf-power` in `levels.absent` (the K4's PC has a range letter the engine does not send).
     if capabilities.contains(&Capability::Levels)
+        && !levels.lacks(Level::RfPower)
         && elecraft
             .as_ref()
             .is_some_and(|e| e.level_range(Level::RfPower).is_none())
@@ -1670,6 +1672,12 @@ verified = { state = "unverified" }
             "the GOOD text changed shape"
         );
         expect_rejected(&claims, "elecraft.levels.rf-power");
+        // Or the model says it has no such level: then there is no range to get wrong.
+        let lacking = claims.replace(
+            "[elecraft]\nmodel_id = 19",
+            "[levels]\nattenuator_db = []\npreamp_steps = 0\nabsent = [\"rf-power\"]\n\n[elecraft]\nmodel_id = 19",
+        ) + "\n[[facts]]\nkey = \"levels.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        parse(&lacking).expect("rf-power absent stands in for its range");
         let stated = claims.replace(
             "rf-gain = [190, 250]",
             "rf-gain = [190, 250], rf-power = [0, 12]",
