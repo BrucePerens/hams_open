@@ -444,6 +444,43 @@ class TestNcmecReport(HamsTransactionCase):
         self.assertTrue(called_request.get_header("Authorization", "").startswith("Basic "))
         self.assertTrue(mock_urlopen.call_args.kwargs.get("https_only"))
 
+    def test_action_ncmec_report_keeps_pending_when_the_reply_is_not_a_confirmed_success(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_submit_report_via_api]
+        utils = self.env["zero_sudo.security.utils"]
+        self.safe_patch_object(
+            type(utils),
+            "_get_system_param",
+            lambda self, key, default=None: {
+                "hams_helpdesk.ncmec_api_base_url": _FAKE_NCMEC_BASE_URL,
+                "hams_helpdesk.ncmec_api_username": "test_user",
+                "hams_helpdesk.ncmec_api_password": "test_pass",
+            }.get(key, default),
+            create=True,
+        )
+        bad_replies = [
+            b"<html>gateway page</html>",
+            b"not xml at all",
+            b"<reportResponse></reportResponse>",
+            b"<reportResponse><reportId>  </reportId></reportResponse>",
+            b"<reportResponse><responseCode>1</responseCode>"
+            b"<reportId>X-1</reportId></reportResponse>",
+            b"<reportResponse><error>rejected</error></reportResponse>",
+        ]
+        for body in bad_replies:
+            with self.subTest(body=body):
+                mock_response = MagicMock()
+                mock_response.read.return_value = body
+                mock_response.__enter__.return_value = mock_response
+                self.safe_patch(
+                    "odoo.addons.hams_helpdesk.models.helpdesk_ticket._urlopen_ssrf_safe",
+                    return_value=mock_response,
+                )
+                ticket = self._create_csam_ticket()
+                with self.assertRaises(UserError):
+                    ticket.with_user(self.system_user).action_ncmec_report()
+                self.assertEqual(ticket.ncmec_report_state, "not_reported")
+                self.assertFalse(ticket.ncmec_report_reference)
+
     def test_action_ncmec_report_surfaces_an_http_error_without_changing_state(self):
         utils = self.env["zero_sudo.security.utils"]
         self.safe_patch_object(

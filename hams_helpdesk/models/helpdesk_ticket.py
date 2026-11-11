@@ -1955,21 +1955,39 @@ class HelpdeskTicket(models.Model):
                 _("Could not reach NCMEC's reporting API: %s") % e
             ) from e
 
+        # Only a reply that parses as XML, carries a reportId and (when present) a responseCode of 0
+        # counts as filed; anything else leaves the ticket pending and tells the admin.
         report_id = False
+        code = None
         try:
             response_root = ET.fromstring(response_body)
             report_id_el = response_root.find(".//reportId")
-            if report_id_el is not None:
-                report_id = report_id_el.text
+            if report_id_el is not None and (report_id_el.text or "").strip():
+                report_id = report_id_el.text.strip()
+            code_el = response_root.find(".//responseCode")
+            if code_el is not None:
+                code = (code_el.text or "").strip()
         except ET.ParseError as e:
             _logger.warning(
                 "NCMEC ticket #%s: could not parse /submit response as XML: %s", self.id, e
+            )
+        if not report_id or code not in (None, "0"):
+            _logger.error(
+                "NCMEC ticket #%s: /submit reply is not a verified success; the report is still "
+                "pending: %s",
+                self.id,
+                response_body[:500],
+            )
+            raise UserError(
+                _("NCMEC's reply to the submission was not a confirmed success, so the report is "
+                  "NOT marked as filed and is still pending. See the server log, then retry or "
+                  "file it by hand.")
             )
 
         self.write(
             {
                 "ncmec_report_state": "report_submitted",
-                "ncmec_report_reference": report_id or False,
+                "ncmec_report_reference": report_id,
                 "ncmec_report_submitted_at": fields.Datetime.now(),
                 "ncmec_report_submitted_by_id": self.env.user.id,
             }
