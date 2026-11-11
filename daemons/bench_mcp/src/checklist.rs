@@ -66,9 +66,9 @@ const SAFE_STATE_COMPANION: &[(&str, &str)] = &[
     ("bench_glasgow_pattern", "bench_glasgow_safe_state"),
     ("bench_glasgow_jtag_scan", "bench_glasgow_safe_state"),
     ("bench_glasgow_swd_idcode", "bench_glasgow_safe_state"),
-    ("bench_hamlib_load_baseline", "bench_hamlib_safe_state"),
-    ("bench_hamlib_tx_key_test", "bench_hamlib_safe_state"),
-    ("bench_hamlib_tx_power_sweep", "bench_hamlib_safe_state"),
+    ("bench_radioctl_load_baseline", "bench_radioctl_safe_state"),
+    ("bench_radioctl_tx_key_test", "bench_radioctl_safe_state"),
+    ("bench_radioctl_tx_power_sweep", "bench_radioctl_safe_state"),
 ];
 
 /// `full` tools that have no safe-state companion, and why. The reason must be one that stays true: the effect ends by itself

@@ -1193,7 +1193,7 @@ fn the_safe_state_rules_name_real_tools_and_only_count_calls_that_change_somethi
     assert!(safe::action_for("bench_example_status", &json!({}), &cfg).is_none());
     assert!(safe::action_for("bench_rotator_park", &json!({}), &cfg).is_some());
     assert!(safe::action_for(
-        "bench_hamlib_tx_key_test",
+        "bench_radioctl_tx_key_test",
         &json!({"instrument": "rig"}),
         &cfg
     )

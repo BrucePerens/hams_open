@@ -30,8 +30,7 @@
 //! P7 VFO or memory, P8 tone, P9 two fixed characters, P10 shift.
 //!
 //! Not implemented: SWR and calibrated meters (`RM` scales are model tables), VFO-B reads on the
-//! MAIN/SUB models beyond `FB` (the FTDX10 and FTDX101 split is by band, not VFO, so their
-//! descriptions have no `split`), monitor level, the data and narrow modes (A, B, D, E, F),
+//! MAIN/SUB models beyond `FB`, monitor level, the data and narrow modes (A, B, D, E, F),
 //! memory channels, and the FTDX101MP (ID 0682 is not in the guide read).
 
 use std::time::Duration;
@@ -188,6 +187,17 @@ impl YaesuEngine {
             .is_some_and(|y| y.clarifier == YaesuClarifier::CfReceive)
     }
 
+    // [@ANCHOR: radioctl_yaesu_engine_split_st]
+    /// True when this model's split is the `ST` command (`yaesu.split = "st"`), not `FT2`/`FT3`.
+    fn split_st(&self) -> bool {
+        self.desc.yaesu.as_ref().is_some_and(|y| y.split_st)
+    }
+
+    /// The read command for the split state and the transmit VFO.
+    fn split_read(&self) -> String {
+        if self.split_st() { "ST;" } else { "FT;" }.to_string()
+    }
+
     // [@ANCHOR: radioctl_yaesu_engine_decode_front_end]
     /// An `RA` or `PA` answer: `0` (main receiver; the FT-991A has this digit as a fixed zero)
     /// and the step, mapped by the description.
@@ -228,6 +238,10 @@ impl YaesuEngine {
                 .map(Observation::Mode),
             (Some("TX"), Some(flag @ ("0" | "1" | "2"))) => Some(Observation::Ptt(*flag != *"0")),
             (Some("FT"), Some(flag @ ("0" | "1"))) => Some(Observation::Split(*flag == *"1")),
+            // `ST` (P1 0 off, 1 on, 2 on and 5 kHz up): the split flag on the models that have it.
+            (Some("ST"), Some("0" | "1" | "2")) if self.split_st() => {
+                Some(Observation::Split(text.get(2..) != Some("0")))
+            }
             (Some("RT"), Some(flag @ ("0" | "1"))) => Some(Observation::Rit(*flag == *"1")),
             // `CF` P1 0, P2 the receive clarifier (0 off, 1 on), P3 0: the FT-891's form.
             (Some("CF"), Some(rest @ ("000" | "010"))) if self.cf_receive() => {
@@ -338,8 +352,11 @@ impl ProtocolEngine for YaesuEngine {
             Op::GetSignal => Self::command("SM0;".into(), observe(Field::Signal)),
             Op::GetPower => Self::command("RM5;".into(), observe(Field::Power)),
             Op::SetTransceive(on) => Self::command(format!("AI{};", u8::from(*on)), none),
-            Op::GetSplit => Self::command("FT;".into(), observe(Field::Split)),
-            Op::GetTxVfo => Self::command("FT;".into(), observe(Field::TxVfo)),
+            Op::GetSplit => Self::command(self.split_read(), observe(Field::Split)),
+            Op::GetTxVfo => Self::command(self.split_read(), observe(Field::TxVfo)),
+            Op::SetSplit(on) if self.split_st() => {
+                Self::command(format!("ST{};", u8::from(*on)), none)
+            }
             Op::SetSplit(on) => Self::command(format!("FT{};", if *on { 3 } else { 2 }), none),
             Op::GetRit if self.cf_receive() => Self::command("CF0;".into(), observe(Field::Rit)),
             Op::SetRit(on) if self.cf_receive() => {
@@ -603,10 +620,10 @@ mod tests {
             e.encode(&Op::StopCw).expect_err("no stop").kind,
             ErrorKind::Unsupported
         );
-        let mut x = YaesuEngine::new(shipped("yaesu-ftdx10")).expect("engine");
+        let mut x = YaesuEngine::new(shipped("yaesu-ft-450")).expect("engine");
         assert!(
             x.encode(&Op::SetSplit(true)).is_err(),
-            "FTDX10 splits by band"
+            "the FT-450 file does not claim split (its ST is the tuning step)"
         );
     }
 
@@ -638,6 +655,46 @@ mod tests {
         assert_eq!(b(&mut e, Op::SetRit(true)), b"RT1;");
         assert!(matches!(
             e.feed(b"CF010;", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_engine_split_st]
+    #[test]
+    fn split_is_the_st_command_on_the_models_whose_book_has_it() {
+        for id in [
+            "yaesu-ft-891",
+            "yaesu-ft-710",
+            "yaesu-ftdx10",
+            "yaesu-ftdx101d",
+            "yaesu-ftdx-101mp",
+        ] {
+            let mut e = YaesuEngine::new(shipped(id)).expect("engine");
+            let b = |e: &mut YaesuEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+            assert_eq!(b(&mut e, Op::SetSplit(true)), b"ST1;", "{id}");
+            assert_eq!(b(&mut e, Op::SetSplit(false)), b"ST0;", "{id}");
+            assert_eq!(b(&mut e, Op::GetSplit), b"ST;", "{id}");
+            assert_eq!(b(&mut e, Op::GetTxVfo), b"ST;", "{id}");
+            // P1 2 is split on with the transmitter 5 kHz up.
+            for (answer, on) in [(&b"ST0;"[..], false), (b"ST1;", true), (b"ST2;", true)] {
+                assert_eq!(
+                    e.feed(answer, T0),
+                    vec![
+                        Inbound::Observation(Observation::Split(on)),
+                        Inbound::Observation(Observation::TxVfo(if on { Vfo::B } else { Vfo::A })),
+                    ],
+                    "{id}"
+                );
+            }
+            assert!(matches!(
+                e.feed(b"ST3;", T0).as_slice(),
+                [Inbound::Unrecognised(_)]
+            ));
+        }
+        // The FT-991A keeps FT2/FT3 and does not read ST.
+        let mut e = YaesuEngine::new(shipped("yaesu-ft-991a")).expect("engine");
+        assert!(matches!(
+            e.feed(b"ST1;", T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
     }

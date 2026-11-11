@@ -8,6 +8,8 @@ import secrets
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from . import dns_plan
+
 _logger = logging.getLogger(__name__)
 
 
@@ -358,6 +360,10 @@ def get_cfd_tunnel_token(account_id, token, tunnel_id):
 def update_cfd_tunnel_configuration(account_id, token, tunnel_id, payload):
     if not token or not account_id or not tunnel_id:
         return False, "Missing credentials or tunnel ID"
+    for rule in ((payload or {}).get("config") or {}).get("ingress") or []:
+        refusal = member_name_refusal(rule.get("hostname"))
+        if refusal:
+            return False, refusal
 
     endpoint = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/cfd_tunnel/{tunnel_id}/configurations"
     response = _make_request(
@@ -392,48 +398,6 @@ def purge_everything(token, zone_id):
     if response and response.status_code == 200:
         return True
     return False
-
-
-# Permission groups no edge-orchestration token needs: they let a leaked token mint other tokens, change
-# billing or membership, or rewrite account settings. Matched case-insensitively against the group name.
-BROAD_PERMISSION_WORDS = ("api tokens", "billing", "members", "account settings write", "organizations")
-
-
-# [@ANCHOR: cloudflare:COMM_dns_api_broad_token_permissions]
-def broad_token_permissions(policies):
-    """Names of the broad permission groups in a Cloudflare token's policy list (empty list: scoped)."""
-    found = []
-    for policy in policies or []:
-        if policy.get("effect", "allow") != "allow":
-            continue
-        for group in policy.get("permission_groups") or []:
-            name = str(group.get("name", ""))
-            if any(word in name.lower() for word in BROAD_PERMISSION_WORDS):
-                found.append(name)
-    return sorted(set(found))
-
-
-# [@ANCHOR: cloudflare:COMM_dns_api_inspect_token]
-# Verified by [@ANCHOR: test_inspect_token_unreadable_answers]
-def inspect_token(token):
-    """Ask Cloudflare what this token may do. Returns (True, [broad permission names]) or (False, message).
-
-    Fails closed: any answer that is not a clear "active token with a readable policy list" is (False, ...).
-    """
-    base = "https://api.cloudflare.com/client/v4/user/tokens"
-    resp = _make_request("GET", f"{base}/verify", token, "Cloudflare token verify failed", timeout=10)
-    if resp is None or resp.status_code != 200:
-        return False, "Cloudflare could not verify the token (unreachable, or not a user API token)."
-    result = _json_result(resp)
-    if not isinstance(result, dict) or result.get("status") != "active" or not result.get("id"):
-        return False, "Cloudflare reports the token is not active."
-    resp = _make_request("GET", f"{base}/{result['id']}", token, "Cloudflare token detail failed", timeout=10)
-    if resp is None or resp.status_code != 200:
-        return False, "Cloudflare would not list the token's permissions (the token cannot read its own policy)."
-    detail = _json_result(resp)
-    if not isinstance(detail, dict) or not isinstance(detail.get("policies"), list):
-        return False, "Cloudflare would not list the token's permissions (the answer was not readable)."
-    return True, broad_token_permissions(detail["policies"])
 
 
 # [@ANCHOR: cloudflare:COMM_dns_api_json_result]
@@ -525,11 +489,28 @@ def delete_cfd_tunnel(account_id, token, tunnel_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_member_name_refusal]
+# Verified by [@ANCHOR: cloudflare:COMM_test_member_names_never_reach_cloudflare]
+def member_name_refusal(name):
+    """A refusal message when `name` carries a callsign-shaped label, else None. Every function here that creates
+    or changes a name at Cloudflare asks this first and sends nothing when it answers: a member's
+    `<callsign>.hams.com` is served by hams.com's own name servers only (Bruce, 2026-11-11)."""
+    label = dns_plan.callsign_label_in(name)
+    if not label:
+        return None
+    _logger.error("Refusing to send %r to Cloudflare: %r is shaped like a callsign, and names for members are never "
+                  "created there.", name, label)
+    return f"refused: {name} names a callsign, and member names are never sent to Cloudflare"
+
+
 # [@ANCHOR: cloudflare:COMM_cf_api_create_custom_hostname]
 def create_custom_hostname(hostname, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_03_tunnel_setup]
     if not token or not zone_id or not hostname:
         return False, "Missing credentials or hostname"
+    refusal = member_name_refusal(hostname)
+    if refusal:
+        return False, refusal
 
     endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/custom_hostnames"
     payload = {
@@ -661,6 +642,9 @@ def create_dns_record(zone_id, payload, token):
     # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
     if not token or not is_cloudflare_id(zone_id):
         return False, "Missing credentials or zone"
+    refusal = member_name_refusal((payload or {}).get("name"))
+    if refusal:
+        return False, refusal
     endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
     response = _make_request(
         "POST", endpoint, token, "Cloudflare Create DNS Record API failed", json=payload, timeout=15
@@ -677,6 +661,9 @@ def update_dns_record(zone_id, record_id, payload, token):
     # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
     if not token or not is_cloudflare_id(zone_id) or not is_cloudflare_id(record_id):
         return False, "Missing credentials, zone or record id"
+    refusal = member_name_refusal((payload or {}).get("name"))
+    if refusal:
+        return False, refusal
     endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
     response = _make_request(
         "PUT", endpoint, token, "Cloudflare Update DNS Record API failed", json=payload, timeout=15

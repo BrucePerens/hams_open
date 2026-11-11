@@ -218,6 +218,7 @@ impl VirtualRig {
                     frequency_digits: 9,
                     level_ranges: Vec::new(),
                     clarifier: YaesuClarifier::RtXt,
+                    split_st: false,
                 }),
                 tokenizer: Tokenizer::default(),
             },

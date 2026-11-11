@@ -2,7 +2,7 @@
 # Written from Yaesu's published CAT Operation Reference Manual (document, PDF page and sha256 in each fact).
 # No radio has been connected, so every `verified` is unverified. Gaps: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "rit-xit", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "split", "rit-xit", "levels", "identify"]
 
 [rig]
 id = "yaesu-ftdx10"
@@ -11,6 +11,7 @@ family = "yaesu-newcat"
 
 [yaesu]
 model_id = 761
+split = "st"
 
 [levels]
 attenuator_db = [6, 12, 18]
@@ -93,10 +94,15 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "manual", reference = "Yaesu FTDX10 'CAT Operation Reference Manual' (copyright 2022), file ftdx10_cat_manual.pdf, sha256 c63d7899e4308ca621271087f20da425fc9d68e2bb1d89d38c545adeb72a6db3: FA p. 14, FB p. 14, IF p. 15, MD p. 16, TX p. 23, SM p. 22, RM p. 21, AG p. 7, RG p. 21, MG p. 16, PC p. 19, KS p. 15, RT p. 21, XT p. 24, RC p. 20, RD p. 20, AI p. 7, FT p. 14", note = "The FTDX10 guide describes FT as MAIN/SUB band transmitter and has a separate ST command for split (0 off, 1 on, 2 on + 5 kHz up) that the engine does not use yet, so split is not claimed." }
+provenance = { kind = "manual", reference = "Yaesu FTDX10 'CAT Operation Reference Manual' (copyright 2022), file ftdx10_cat_manual.pdf, sha256 c63d7899e4308ca621271087f20da425fc9d68e2bb1d89d38c545adeb72a6db3: FA p. 14, FB p. 14, IF p. 15, MD p. 16, TX p. 23, SM p. 22, RM p. 21, AG p. 7, RG p. 21, MG p. 16, PC p. 19, KS p. 15, RT p. 21, XT p. 24, RC p. 20, RD p. 20, AI p. 7, FT p. 14", note = "The FTDX10 guide describes FT as MAIN/SUB band transmitter and has a separate ST command for split (0 off, 1 on, 2 on + 5 kHz up) which the engine uses for split (yaesu.split)." }
 verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu FTDX10 'CAT Operation Reference Manual' (copyright 2022), file ftdx10_cat_manual.pdf, sha256 c63d7899e4308ca621271087f20da425fc9d68e2bb1d89d38c545adeb72a6db3: MD, PDF p. 16: 1 LSB, 2 USB, 3 CW-U, 4 FM, 5 AM, 6 RTTY-LSB, 7 CW-L, 8 DATA-LSB, 9 RTTY-USB, C DATA-USB", note = "Mapping to radioctl modes is ours: CW-U is cw, CW-L is cw-r, RTTY-L is rtty, RTTY-U is rtty-r, DATA-L is data-r, DATA-U is data. Modes A, B, D, E, F (data FM, narrow FM, narrow AM, C4FM/PSK, narrow data FM) are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.split"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX10 CAT Operation Reference Manual' (2308-F), file FTDX10_CAT_OM_ENG_2308-F.pdf, sha256 3f7b5ed7e71e59fe9685c9c7aa0c1bbc37fc5d5578101f3ead26ca52af0b9c8c: ST SPLIT, PDF p. 23 (set ST P1; read ST; answer ST P1: 0 split off, 1 on, 2 on and the transmitter 5 kHz up)", note = "Split is the ST command on this model, not FT2/FT3; the engine sends ST0 and ST1 and reads P1 0 as off and 1 or 2 as on. Unverified." }
 verified = { state = "unverified" }

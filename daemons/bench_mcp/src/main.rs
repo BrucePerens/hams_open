@@ -15,7 +15,7 @@ mod elad;
 mod example;
 mod gla;
 mod glasgow;
-mod hamlib;
+mod radioctl;
 mod link;
 mod manual;
 mod nanovna;
@@ -193,22 +193,22 @@ const MODULES: &[Module] = &[
         sample: r#""glasgow":{"driver":"glasgow","tier":"full"}"#,
     },
     Module {
-        prefix: "bench_hamlib_",
-        call: hamlib::call,
-        tool_defs: hamlib::tool_defs,
-        sample: r#""rig":{"driver":"hamlib","tier":"full","model":1,"transmit":{"dummy_load":true,"attested_by":"EXAMPLE","attested_on":"2026-01-01","cabling":"example dummy load","max_power_w":5,"max_seconds":10,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["CW"]}}"#,
-    },
-    Module {
         prefix: "bench_proc_",
         call: procedure::call,
         tool_defs: procedure::tool_defs,
         sample: r#""procs":{"driver":"procedure","tier":"full"}"#,
     },
     Module {
+        prefix: "bench_radioctl_",
+        call: radioctl::call,
+        tool_defs: radioctl::tool_defs,
+        sample: r#""rig":{"driver":"radioctl","tier":"full","rig":"elecraft-kx3","full_power_w":15,"transmit":{"dummy_load":true,"attested_by":"EXAMPLE","attested_on":"2026-01-01","cabling":"example dummy load","max_power_w":5,"max_seconds":10,"frequency_ranges":[[7000000,7100000]],"allowed_modes":["CW"]}}"#,
+    },
+    Module {
         prefix: "bench_rotator_",
         call: rotator::call,
         tool_defs: rotator::tool_defs,
-        sample: r#""rotor":{"driver":"rotator","tier":"full","rotctld_port":4533}"#,
+        sample: r#""rotor":{"driver":"rotator","tier":"full","radioctld_port":4533}"#,
     },
     Module {
         prefix: "bench_rx888_",
@@ -679,9 +679,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if argv.first().map(|a| a.as_str()) == Some(usb_hub::privileged::FLAG) {
         std::process::exit(usb_hub::privileged::main(&argv[1..]));
     }
-    // The transmit watchdog of the hamlib tools: this program run again, with the rig's rigctld address and a deadline.
-    if argv.first().map(|a| a.as_str()) == Some(hamlib::guard::FLAG) {
-        std::process::exit(hamlib::guard::main(&argv[1..]));
+    // The transmit watchdog of the radioctl tools: this program run again, with the rig's radioctld address and a deadline.
+    if argv.first().map(|a| a.as_str()) == Some(radioctl::guard::FLAG) {
+        std::process::exit(radioctl::guard::main(&argv[1..]));
     }
     let insts = config::load()?;
     // Runs of a server that died while they were active are marked lost and their instruments put in a safe state.
@@ -698,7 +698,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::select! { _ = term.recv() => {}, _ = int.recv() => {} }
         let _ = tokio::task::spawn_blocking(|| {
             procedure::shutdown();
-            hamlib::shutdown();
+            radioctl::shutdown();
             glasgow::shutdown();
         })
         .await;
@@ -712,7 +712,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ended = service.waiting().await;
     // Whatever way the connection ended, stop what this server started.
     procedure::shutdown();
-    hamlib::shutdown();
+    radioctl::shutdown();
     glasgow::shutdown();
     ended?;
     Ok(())
@@ -1187,7 +1187,7 @@ mod tests {
             "DRIVER_KINDS is alphabetical"
         );
         // A routed tool reaches its module: with no instrument configured the module says so, not "unknown tool".
-        let e = call(&insts(), "bench_hamlib_status", &json!({})).unwrap_err();
+        let e = call(&insts(), "bench_radioctl_status", &json!({})).unwrap_err();
         assert!(!e.contains("unknown tool"), "{e}");
         let e = call(&insts(), "bench_no_such_thing", &json!({})).unwrap_err();
         assert!(e.contains("unknown tool"), "{e}");

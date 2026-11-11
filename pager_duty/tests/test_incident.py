@@ -7,7 +7,7 @@ import redis
 import logging
 import datetime
 from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, invalidate_zero_sudo_utils_cache
 from odoo.addons.pager_duty import hooks
 from odoo.addons.pager_duty.models.incident import REPAGE_HOURS, TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
 from unittest.mock import MagicMock
@@ -30,6 +30,7 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         params.set_param("pager_duty.helpdesk_model", "hams_helpdesk.ticket")
         self.assertTrue(self.incident_model._joins_unit_tickets())
         params.set_param("pager_duty.helpdesk_model", "other.ticket")
+        invalidate_zero_sudo_utils_cache(self)  # the parameter read is cached; the first call above stored the old value
         self.assertFalse(self.incident_model._joins_unit_tickets())
 
     def test_00b_the_incident_notes_which_unit_tickets_carry_it(self):

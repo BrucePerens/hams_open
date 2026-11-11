@@ -59,10 +59,10 @@ pub(super) const RULES: &[Rule] = &[
         psu_gate: false,
     },
     Rule {
-        triggers: &["bench_hamlib_tx_key_test", "bench_hamlib_tx_power_sweep"],
+        triggers: &["bench_radioctl_tx_key_test", "bench_radioctl_tx_power_sweep"],
         arg_true: None,
         arg_in: None,
-        safe_tool: "bench_hamlib_safe_state",
+        safe_tool: "bench_radioctl_safe_state",
         safe_arg: None,
         psu_gate: false,
     },

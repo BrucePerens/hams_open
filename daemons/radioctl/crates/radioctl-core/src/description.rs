@@ -751,6 +751,9 @@ pub struct YaesuParams {
     pub level_ranges: Vec<(Level, u16, u16)>,
     /// How the clarifier is switched: by `RT`/`XT` (the default), or by `CF` on the FT-891.
     pub clarifier: YaesuClarifier,
+    /// True when split is the `ST` command (FT-891, FT-710, FTDX10, FTDX101: `ST1;` is on) instead
+    /// of `FT2;`/`FT3;` (FT-991A and the models where `FT` picks the transmit VFO).
+    pub split_st: bool,
 }
 
 /// The command that switches the clarifier on a Yaesu newcat model.
