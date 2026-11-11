@@ -10,6 +10,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 
 ## 0.1.0
 
+- instruments/radioctl: the `hamlib` driver is replaced by the `radioctl` driver (a radioctld started from a rig description; `rig`, `rigs_dir`; `model` and `set_conf` removed), tools renamed `bench_hamlib_*` to `bench_radioctl_*` and `bench_hamlib_rigctld` to `bench_radioctl_daemon`; rotators use a radioctld rotator listener (`radioctld_port`)
 - tools/bench_scope_math: channel 1 op channel 2 on the host from one frozen frame
 - tools/bench_scope_cursors: values at chosen times and the differences between two cursors, from the waveform memory
 - tools/bench_scope_acquire: acquisition mode, average count and memory depth with read-back
@@ -45,14 +46,14 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - tools/bench_audio_safe_state: new, stops this server's playback and lowers outputs above their cap
 - tools/bench_audio_play: dry_run on every sound-making tool, and the system default device is never used
 - tools/bench_scope_self_cal: dry_run
-- instruments/hamlib: bench_hamlib_watch (the dial by polling); stopping the daemon of a rig that may be keyed releases it first or is refused
-- instruments/hamlib: transmit into an attested dummy load (bench_hamlib_tx_key_test, bench_hamlib_tx_power_sweep, bench_hamlib_safe_state), the transmit watchdog process, the keyed-interval log, the safety model and its limits; procedures/test-a-transmitter-into-a-dummy-load
+- instruments/radioctl: bench_radioctl_watch (the dial by polling); stopping the daemon of a rig that may be keyed releases it first or is refused
+- instruments/radioctl: transmit into an attested dummy load (bench_radioctl_tx_key_test, bench_radioctl_tx_power_sweep, bench_radioctl_safe_state), the transmit watchdog process, the keyed-interval log, the safety model and its limits; procedures/test-a-transmitter-into-a-dummy-load
 - tools/bench_psu_output: now a full-tier tool with dry_run, confirm_load_connected and a switch-off timer (for_s, max_on_s)
 - tools/bench_psu_safe_state: new, switches the supply output off and reads it back
-- instruments/hamlib: reference stations (bench_hamlib_stations, bench_hamlib_station_set), receiver test with audio (bench_hamlib_rx_check), the dummy-load plausibility check and baseline (bench_hamlib_load_check, bench_hamlib_load_baseline), the transmit attestation in setup, measurement recipes
+- instruments/radioctl: reference stations (bench_radioctl_stations, bench_radioctl_station_set), receiver test with audio (bench_radioctl_rx_check), the dummy-load plausibility check and baseline (bench_radioctl_load_check, bench_radioctl_load_baseline), the transmit attestation in setup, measurement recipes
 - procedures/check-a-receiver: read a rig, listen on a time station, judge the audio chain
-- instruments/hamlib: receiver control tools bench_hamlib_set, bench_hamlib_memory, bench_hamlib_scan and the connection test bench_hamlib_diagnose
-- instruments/hamlib: Hamlib rigs through rigctld (overview, setup, operation, limits, troubleshooting, protocol) and the tools bench_hamlib_models, bench_hamlib_rigs, bench_hamlib_status, bench_hamlib_get, bench_hamlib_rigctld
+- instruments/radioctl: receiver control tools bench_radioctl_set, bench_radioctl_memory, bench_radioctl_scan and the connection test bench_radioctl_diagnose
+- instruments/radioctl: radioctl rigs through radioctld (overview, setup, operation, limits, troubleshooting, protocol) and the tools bench_radioctl_models, bench_radioctl_rigs, bench_radioctl_status, bench_radioctl_get, bench_radioctl_daemon
 - concepts/extending: the contributor guide (what belongs, before you code, anatomy, standing safety rules, provenance, checks, documentation, submitting, worked examples)
 - procedures/add-an-instrument: step by step from the skeleton to the pull request
 - instruments/example: the template instrument (overview, setup, operation, limits, troubleshooting, protocol) and its four tools, the model for a new driver's pages

@@ -45,7 +45,7 @@ pub fn instrument_of(insts: &[Instrument], tool: &str, args: &Value) -> Option<S
     let kind = [
         ("bench_audio_", Kind::Audio),
         ("bench_example_", Kind::Example),
-        ("bench_hamlib_", Kind::Hamlib),
+        ("bench_radioctl_", Kind::Radioctl),
         ("bench_rotator_", Kind::Rotator),
         ("bench_usb_", Kind::UsbHub),
     ]
