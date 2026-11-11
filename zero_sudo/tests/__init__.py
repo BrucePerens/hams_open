@@ -42,6 +42,7 @@ from . import test_confirm_submit_csp
 from . import svg_corpus
 from . import test_svg_sanitizer
 from . import test_css_sanitizer
+from . import test_sanitizer_functions
 from . import common
 from . import dummy_daemon
 
