@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import os
+
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -682,7 +684,6 @@ class TestHelpdeskCore(HamsTransactionCase):
     def test_portal_templates_use_theme_aware_surfaces(self):
         """The ticket card header must follow the page's light or dark mode: a fixed bg-light stays
         white under data-bs-theme=dark; bg-body-tertiary follows it."""
-        import os
         path = os.path.join(os.path.dirname(__file__), "..", "views", "portal_templates.xml")
         with open(path, encoding="utf-8") as f:
             xml = f.read()
