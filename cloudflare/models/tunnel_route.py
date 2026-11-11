@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
 
-from odoo import api, models, fields
+from odoo import api, models, fields, _
+from odoo.exceptions import ValidationError
+
+from ..utils import dns_plan
 
 
 class CloudflareTunnelRoute(models.Model):
@@ -54,3 +57,16 @@ class CloudflareTunnelRoute(models.Model):
             if route.path:
                 target += route.path
             route.name = f"{target} -> {route.service_url or ''}"
+
+    # [@ANCHOR: cloudflare:COMM_tunnel_route_no_member_names]
+    # Verified by [@ANCHOR: cloudflare:COMM_test_member_names_never_reach_cloudflare]
+    @api.constrains("hostname")
+    def _check_hostname_is_not_a_member_name(self):
+        """A pushed ingress rule puts its hostname at Cloudflare, so a callsign name (`k6bp.hams.com`) is refused
+        here as it is in cloudflare.dns.record (Bruce, 2026-11-11)."""
+        for route in self:
+            label = dns_plan.callsign_label_in(route.hostname)
+            if label:
+                raise ValidationError(_(
+                    "%(hostname)s names a callsign (%(label)s). Names for members are never entered at Cloudflare.",
+                    hostname=route.hostname, label=label))

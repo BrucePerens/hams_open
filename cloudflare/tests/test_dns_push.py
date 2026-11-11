@@ -684,9 +684,9 @@ class TestDnsCapacityPlan(HamsTransactionCase):
 
     def test_03_a_member_delegation_is_one_label_directly_under_the_zone(self):
         # Tests [@ANCHOR: cloudflare:COMM_dns_plan_is_member_delegation]
-        ns = {"type": "NS", "name": "k6bp.hams.com"}
+        ns = {"type": "NS", "name": "child.hams.com"}
         self.assertTrue(dns_plan.is_member_delegation(ns, "hams.com"))
-        self.assertFalse(dns_plan.is_member_delegation(dict(ns, name="x.k6bp.hams.com"), "hams.com"))
+        self.assertFalse(dns_plan.is_member_delegation(dict(ns, name="x.child.hams.com"), "hams.com"))
         self.assertFalse(dns_plan.is_member_delegation(dict(ns, type="A"), "hams.com"))
         self.assertFalse(dns_plan.is_member_delegation(dict(ns, name="*.hams.com"), "hams.com"))
         self.assertFalse(dns_plan.is_member_delegation(dict(ns, name="hams.com"), "hams.com"))
@@ -717,7 +717,7 @@ class TestDnsCapacityGuard(HamsTransactionCase):
         return self._row(f"{label}.hams.com", "NS", "ns1.hams.com")
 
     def test_20_a_member_delegation_is_planned_when_there_is_room(self):
-        row = self._member("k6bp")
+        row = self._member("labone")
         plan = row.dns_push_plan()
         self.assertEqual(plan["problems"], [])
         self.assertEqual(plan["entries"][0]["action"], "create")
@@ -725,7 +725,7 @@ class TestDnsCapacityGuard(HamsTransactionCase):
 
     def test_21_the_push_is_refused_past_ninety_percent_of_the_plan_limit(self):
         self.cf.count_override = 3150
-        row = self._member("k6bp")
+        row = self._member("labone")
         plan = row.dns_push_plan()
         self.assertTrue(any("hard stop" in p for p in plan["problems"]), plan["problems"])
         with self.assertRaises(UserError):
@@ -735,22 +735,22 @@ class TestDnsCapacityGuard(HamsTransactionCase):
     def test_22_a_new_free_zone_has_room_for_only_one_hundred_eighty(self):
         self.cf.plan = ("free", "2025-01-01T00:00:00Z")
         self.cf.count_override = 181
-        self.assertTrue(self._member("k6bp").dns_push_plan()["problems"])
+        self.assertTrue(self._member("labone").dns_push_plan()["problems"])
         self.cf.count_override = 179
-        self.assertEqual(self._member("n0pz").dns_push_plan()["problems"], [])
+        self.assertEqual(self._member("labtwo").dns_push_plan()["problems"], [])
 
     def test_23_a_push_that_cannot_read_the_count_is_refused_not_guessed(self):
-        row = self._member("k6bp")
+        row = self._member("labone")
         self.safe_patch(MODEL + "count_dns_records").return_value = (False, "API Error")
         self.assertTrue(any("may not guess" in p for p in row.dns_push_plan()["problems"]))
 
     def test_24_an_existing_wildcard_refuses_member_delegations(self):
         self.cf.add("hams.com", "*.hams.com", "CNAME", "hams.com", proxied=False)
-        plan = self._member("k6bp").dns_push_plan()
+        plan = self._member("labone").dns_push_plan()
         self.assertTrue(any("wildcard record" in p for p in plan["problems"]), plan["problems"])
 
     def test_25_a_wildcard_created_with_delegations_in_one_push_is_refused(self):
-        rows = self._member("k6bp") | self._row("*.hams.com", "CNAME", "hams.com")
+        rows = self._member("labone") | self._row("*.hams.com", "CNAME", "hams.com")
         plan = rows.dns_push_plan()
         self.assertTrue(any("together" in p for p in plan["problems"]), plan["problems"])
 
@@ -768,7 +768,7 @@ class TestDnsCapacityGuard(HamsTransactionCase):
         # Tests [@ANCHOR: COMM_test_dns_push_pending]
         # Tests [@ANCHOR: cloudflare:COMM_dns_push_pending]
         pushed = self._row("pushed.hams.com", "A", "192.0.2.60", cf_record_id="b" * 32)
-        waiting = self._member("n0pz")
+        waiting = self._member("labtwo")
         gone = self._row("gone.hams.com", "A", "192.0.2.61", cf_record_id="c" * 32, retire=True)
         unmanaged = self._row("watch.hams.com", "A", "192.0.2.62", manage=False)
         action = self.Record.action_push_pending()
@@ -777,7 +777,7 @@ class TestDnsCapacityGuard(HamsTransactionCase):
         self.assertEqual(set(wizard.record_ids.ids), {waiting.id, gone.id})
         self.assertNotIn(pushed, wizard.record_ids)
         self.assertNotIn(unmanaged, wizard.record_ids)
-        self.assertIn("n0pz.hams.com", wizard.plan_text)
+        self.assertIn("labtwo.hams.com", wizard.plan_text)
         self.assertEqual(self.cf.writes(), [], "showing the plan writes nothing")
         # With nothing waiting it says so instead of planning every record.
         self.Record.search([]).unlink()
