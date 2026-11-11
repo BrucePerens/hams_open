@@ -491,11 +491,23 @@ def _style_dict(style):
     return out
 
 
+def _leading_number(value):
+    """The number a CSS value starts with, or None when it starts with none or with digits and dots that are
+    no number ("1.2.3", "."). Huge values stay inf: a 400-digit offset is off-screen, not unreadable."""
+    m = re.match(r"^(-?[\d.]+)", value or "")
+    try:
+        return float(m.group(1)) if m else None
+    except ValueError:
+        return None
+
+
 def _tiny_size(value):
     m = re.match(r"^([\d.]+)\s*(px|pt|em|rem|%|ex|ch|vw|vh|mm|cm|in)?", value or "")
     if not m:
         return value in ("xx-small", "x-small")
-    n = float(m.group(1))
+    n = _leading_number(m.group(1))
+    if n is None:  # not a size a browser would apply, so the text is shown at its normal size
+        return False
     unit = m.group(2) or "px"
     px = {"px": n, "pt": n * 1.33, "em": n * 16, "rem": n * 16, "%": n * 0.16, "ex": n * 8, "ch": n * 8, "vw": n * 5, "vh": n * 5, "mm": n * 3.8, "cm": n * 38, "in": n * 96}[unit]
     return px < 5
@@ -545,11 +557,11 @@ def _hidden_reason(tag, attrs, bg):
     pos = style.get("position", "")
     if pos in ("absolute", "fixed"):
         for key in ("left", "right", "top", "bottom"):
-            m = re.match(r"^(-?[\d.]+)", style.get(key, ""))
-            if m and abs(float(m.group(1))) >= 500 and (float(m.group(1)) < 0 or abs(float(m.group(1))) >= 5000):
+            offset = _leading_number(style.get(key, ""))
+            if offset is not None and abs(offset) >= 500 and (offset < 0 or abs(offset) >= 5000):
                 return "off_screen"
-    m = re.match(r"^(-?[\d.]+)", style.get("text-indent", ""))
-    if m and float(m.group(1)) <= -500:
+    indent = _leading_number(style.get("text-indent", ""))
+    if indent is not None and indent <= -500:
         return "off_screen"
     if style.get("transform", "").startswith("scale(0") or "scale(0)" in style.get("transform", ""):
         return "scaled_to_zero"

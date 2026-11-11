@@ -405,3 +405,19 @@ class TestUntrustedTextCorpus(BaseCase):
         # An opacity that is not a finite number is not provably hidden, and does not raise.
         result = ut.sanitize_html(f"<p>Hi</p><span style=\"opacity:{huge}\">shown</span>")
         self.assertIn("shown", result.plain)
+
+    def test_a_size_or_offset_that_is_not_a_number_does_not_end_the_parse(self):
+        """`1.2.3` and `.` match the digit-and-dot patterns but are no number: the rest of the mail used to
+        vanish behind an `unparseable_html` finding that was not even suspicious."""
+        for style in ("font-size:1.2.3px", "font:..px serif", "position:absolute;left:-.", "text-indent:-.", "position:fixed;top:1.2.3"):
+            with self.subTest(style):
+                result = ut.sanitize_html('<p>Before</p><span style="%s">middle</span><p>After text</p>' % style)
+                self.assertIn("middle", result.plain)
+                self.assertIn("After text", result.plain)
+                self.assertNotIn("unparseable_html", [f["vector"] for f in result.findings])
+        # A real hiding trick written with a huge number is still caught.
+        huge = "9" * 400
+        for style in (f"position:absolute;left:-{huge}px", f"text-indent:-{huge}", "font-size:0"):
+            with self.subTest(style):
+                result = ut.sanitize_html('<p>Hi</p><span style="%s">%s</span>' % (style, C))
+                self.assertNotIn(C, result.plain)
