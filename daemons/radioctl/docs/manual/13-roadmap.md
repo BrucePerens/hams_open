@@ -41,12 +41,14 @@ priority against the zero-privilege, SDR and band-scope tracks (the roadmap puts
 ## Known gaps and findings in the code
 
 Found while writing this manual. Each was a statement about `main` on 2026-10-30; items 1, 9 and 11 were
-brought up to date on 2026-11-08 and items 3, 6, 8 and 10 were re-read against the code on 2026-11-10;
-the others were not re-checked, and the manual fixes none of them.
+brought up to date on 2026-11-08 and items 2, 3, 6, 8 and 10 were re-read against the code on 2026-11-10 (items 4 and 7 are
+fixed and kept as a record); item 5 waits for a bench. The manual fixes none of them.
 
 1. **Reconnect and session state.** Link loss and restore reach the rig actor on every link `radioctld` and `radioctl-capi` open (serial through `open_serial`, TCP and UDP through `open_link`; `RigOptions::link_watch`), which unkeys on a restored link. A bare `connect_tcp` stream (used by tests and by a caller that builds its own) is a dead link for good. `radioctld`'s `tcp` transport has been on `net::open_link` since 2026-10-31 (reconnects, the actor watches the link), and since 2026-11-01 the actor tells the engine when the link is back: after the fail-closed unkey and before the `LinkRestored` event it calls `ProtocolEngine::link_restored`, which drops half-received frames and returns the requests that set the session up again, each written once. The Kenwood (including TS-890S; its LAN login is the framing's and repeats on every reconnect), Elecraft and Flex engines re-send `AI2;` or the `sub` lines only if the controller had turned them on; the Icom PCR receivers (`receiver.rs`) also have an open step, `ProtocolEngine::open_requests`: `H101` and `G300` are written once when the actor starts with the link up and again after each reconnect, before any command, never keying anything (decision 24 in `DESIGN.md`); every other engine sets up nothing. Still open: a CI-V radio's transceive (a menu item) cannot be restored by the engine.
-2. **Polling reads VFO A, VFO B, split, mode, PTT and the two meters.** A front-panel change of RIT, XIT or
-   a level is not noticed unless the radio reports it.
+2. **Polling reads what the capabilities allow, and only these fields:** VFO A and VFO B frequency, split, mode,
+   PTT (the fast group), the S-meter and the transmit power (the slow group), from `PollSchedule::for_capabilities`;
+   the SWR, ALC and the other meters are read on request, not polled. A front-panel change of RIT, XIT or a level is
+   not noticed unless the radio reports it (transceive) or a client reads it.
 3. **CI-V transceive cannot be switched on by the engine** (`SetTransceive` is `Unsupported`; it is a menu
    item). The Icom descriptions nevertheless list the capability.
 4. Fixed 2026-10-30: `\dump_state` no longer prints empty `agc_levels=`, `ctcss_list=` and `dcs_list=`

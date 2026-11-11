@@ -142,6 +142,38 @@ power-off (it is the first step of one). Powering an amplifier off puts it in st
 standby before anything else. `function = "tune"` is a momentary pulse (`pulse_ms`) that starts the
 device's own tune cycle; the station never keys a transmitter for it.
 
+## Band following
+
+A selector channel (an antenna switch, a band-decoder output or an amplifier's band input) can follow the frequency the
+rig will **transmit** on. The source is the rig's `active_tx_frequency`, which is correct in split operation and while
+keyed (an amplifier that followed the CAT frequency did not see the transmit frequency, Hamlib issue 138). The routes
+are the station definition's `[[band_routes]]`:
+
+```toml fragment
+[[band_routes]]
+channel = "antenna-switch"   # a selector channel
+low_hz = 14000000            # transmit frequencies low_hz..=high_hz (inclusive)
+high_hz = 14350000
+port = 2                     # the way (from 1) to select
+```
+
+A route must name a selector, with `low_hz <= high_hz` and a port from 1 to the selector's ways; the definition is
+refused otherwise. A frequency outside every route leaves the selector alone, and the first matching route wins.
+Which rig a selector follows is the channel's optional `rig = "<name>"` (none means every rig); a channel opts out of
+following with `band_follow = false`, and then keeps the way set by hand or by a profile.
+
+```rust pseudo
+pub async fn follow_configured(station: &Station, rig_name: &str, rig: &RigHandle,
+    on_result: impl FnMut(&BandRoute, &Result<(), StationError>))
+```
+
+`follow_configured` runs until the rig's event stream ends: it switches once at the start and again after every change of
+the transmit frequency or of the keyed state, only when the wanted way is not the one it last applied, and it returns at
+once when the rig has no routes. The switch goes through `Station::select`, so the keyed-state interlock still applies: a
+change that arrives while the rig is keyed is refused, passed to `on_result`, and tried again on the next event, and
+the unkey is one. `follow_tx_frequency` is the same loop over a route list the caller builds. Nothing in `radioctld` starts
+the follower yet (the daemon hosts no station); it is a library feature, tested against virtual rigs and relay boards.
+
 ## Rotators
 
 A rotator has a TOML description (`data/station/rotators.toml`: protocol, azimuth and elevation
