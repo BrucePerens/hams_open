@@ -302,9 +302,9 @@ fn the_filter_scope_needs_dd1_and_the_bandscope_needs_dd0_and_off_stops_both() {
     rig.feed(b"DD00;", NOW);
     assert!(rig.scope_sweep().is_empty());
     assert_eq!(rig.filter_scope_sweep().len(), 432);
-    // The COM/USB choice of DD1 sends nothing on the LAN.
+    // The COM/USB choice of DD1 sends no ##DD3, but the serial DD3 splits.
     rig.feed(b"DD12;", NOW);
-    assert!(rig.filter_scope_sweep().is_empty());
+    assert!(rig.filter_scope_sweep().starts_with(b"DD300"));
     // The engine's output-off command stops both.
     rig.feed(b"DD02;DD11;", NOW);
     let off = engine
@@ -671,4 +671,72 @@ fn an_auto_scroll_sweep_is_placed_from_the_edges_read_and_they_are_read_after_ea
         String::from_utf8(engine.encode(&set).expect("encode").bytes).expect("text"),
         "FA00014120000;"
     );
+}
+
+fn serial_pair() -> (Ts890Engine, VirtualRig) {
+    let text = include_str!("../../../rigs/kenwood-ts-890s.toml")
+        .replace("\n[kenwood]\n", "\n[kenwood]\nscope_link = \"serial\"\n");
+    let desc = rigfile::parse(&text).expect("loads").description;
+    (
+        Ts890Engine::new(desc.clone()).expect("engine"),
+        VirtualRig::from_description(&desc).expect("rig"),
+    )
+}
+
+// Tests [@ANCHOR: radioctl_ts890_engine_serial_scope]
+// Tests [@ANCHOR: radioctl_ts890_engine_serial_split]
+// Tests [@ANCHOR: radioctl_ts890_splits_push]
+// Tests [@ANCHOR: radioctl_ts890_engine_scope_start]
+// Tests [@ANCHOR: radioctl_virtual_ts890_serial_splits]
+// Tests [@ANCHOR: radioctl_virtual_ts890_sweep_digits]
+// Tests [@ANCHOR: radioctl_virtual_ts890_sweep]
+// Tests [@ANCHOR: radioctl_virtual_ts890_filter_sweep]
+// Tests [@ANCHOR: radioctl_core_rigfile_parse]
+#[test]
+fn a_serial_description_asks_for_com_output_and_assembles_the_split_frames() {
+    let (mut engine, mut rig) = serial_pair();
+    let request = engine.encode(&Op::SetScopeOutput(true)).expect("encode");
+    let text = String::from_utf8(request.bytes).expect("ascii");
+    assert!(text.ends_with("DD04;DD12;"), "{text}");
+    start_output(&mut engine, &mut rig);
+    let wire = rig.scope_sweep();
+    let first = wire.iter().position(|b| *b == b';').expect("one frame") + 1;
+    assert_eq!(
+        (first, wire.len(), wire.starts_with(b"DD200")),
+        (46, 32 * 46, true)
+    );
+    // Arrives in small pieces; one frame once split 31 has come.
+    let mut got = Vec::new();
+    for piece in wire.chunks(37) {
+        got.extend(frames(engine.feed(piece, NOW)));
+    }
+    let [frame] = got.as_slice() else {
+        panic!("expected one frame, got {got:?}");
+    };
+    assert_eq!((frame.axis, frame.samples.len()), (ScopeAxis::Center, 640));
+    assert_eq!((frame.low, frame.high), (Hz(14_049_000), Hz(14_099_000)));
+    assert_eq!(frame.samples[0], 140 - 1);
+    // The filter scope: 12 splits of 44 bytes, 213 samples.
+    let filter = rig.filter_scope_sweep();
+    assert_eq!(
+        (filter.len(), filter.starts_with(b"DD300")),
+        (12 * 44, true)
+    );
+    let got = filter_frames(engine.feed(&filter, NOW));
+    assert_eq!(got.first().map(|f| f.samples.len()), Some(213));
+    assert_eq!(engine.scope_frames_dropped(), 0);
+    // A missing split drops the sweep and a later whole sweep still arrives.
+    let mut broken = wire.clone();
+    broken.drain(46 * 5..46 * 6);
+    assert!(frames(engine.feed(&broken, NOW)).is_empty());
+    assert_eq!(engine.scope_frames_dropped(), 1);
+    assert_eq!(frames(engine.feed(&wire, NOW)).len(), 1);
+    // A wrong-size or out-of-range split is counted.
+    assert!(engine.feed(b"DD200ABC;DD232", NOW).is_empty());
+    assert!(engine.feed(b";DD240;", NOW).is_empty());
+    assert_eq!(engine.scope_frames_dropped(), 4);
+    // `scope_link` must be known.
+    let bad = include_str!("../../../rigs/kenwood-ts-890s.toml")
+        .replace("\n[kenwood]\n", "\n[kenwood]\nscope_link = \"usb\"\n");
+    assert!(rigfile::parse(&bad).is_err());
 }

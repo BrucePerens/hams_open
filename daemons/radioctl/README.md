@@ -1944,6 +1944,9 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ts890_lan_login] (radioctl-protocols) The second LAN frame, `##ID<type><len><len><account><password>;` (guide p. 72): `administrator` picks account type 0 (administrator) or 1 (user); each length is two digits, 1 to 32.  # Errors  `Unsupported` for an empty or over-long account or password, or one that holds a `;` or a non-ASCII byte (the frame could not be told apart from its terminator).
 - [@ANCHOR: radioctl:radioctl_ts890_lan_reply] (radioctl-protocols) What a LAN answer says: `Some(true)` for `##CN1;` and `##ID1;` (authorised), `Some(false)` for `##CN0;` and `##ID0;`, `None` for anything else.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_new] (radioctl-protocols) Builds an engine from a Kenwood-family description whose dialect is `ts890`.  # Errors  `Unsupported` for any other description.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_serial_scope] (radioctl-protocols) Whether the description says the TS-890S scopes come over the serial link (`kenwood.scope_link = "serial"`).
+- [@ANCHOR: radioctl:radioctl_ts890_engine_serial_split] (radioctl-protocols) One serial `DD2` or `DD3` split: the swept frame at the last split, a dropped count for a bad one.
+- [@ANCHOR: radioctl:radioctl_ts890_splits_push] (radioctl-protocols) Collects serial scope splits in order and returns the whole sweep after the last.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_scope_frames_dropped] (radioctl-protocols) Bandscope sweeps received and not published.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_decode] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_decode_step] (radioctl-protocols) An `RA` or `PA` answer: one digit, the step, mapped by the description.
@@ -1980,8 +1983,10 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_level] (radioctl-protocols) `AGnnn`, `RGnnn`, `MGnnn`, `KSnnn`, `PCnnn`: a read when `arg` is empty, else a set inside the guide's range.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_scope_default] (radioctl-protocols) The starting bandscope state of a virtual TS-890S.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_scope_command] (radioctl-protocols) One `BS` command of the virtual TS-890S: a read, or a set inside the guide's range.
-- [@ANCHOR: radioctl:radioctl_virtual_ts890_sweep] (radioctl-protocols) One `##DD2` frame from a virtual TS-890S when the LAN waveform output is on.
-- [@ANCHOR: radioctl:radioctl_virtual_ts890_filter_sweep] (radioctl-protocols) One `##DD3` frame from a virtual TS-890S when the LAN waveform output is on.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_sweep] (radioctl-protocols) One `##DD2` frame from a virtual TS-890S when the LAN waveform output is on, or its 32 serial `DD2` splits with `DD0` 4.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_sweep_digits] (radioctl-protocols) The synthetic samples of a virtual TS-890S sweep as hexadecimal digits.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_serial_splits] (radioctl-protocols) A virtual TS-890S sweep cut into serial `DD2`/`DD3` split frames.
+- [@ANCHOR: radioctl:radioctl_virtual_ts890_filter_sweep] (radioctl-protocols) One `##DD3` frame from a virtual TS-890S when the filter-scope output is on LAN, or its 12 serial `DD3` splits with `DD1` 2.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_edges_command] (radioctl-protocols) `BSM` on a virtual TS-890S: reads the edges in use, stores the edges of range 1 to 3, or restores the initial ones.
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_current_edges] (radioctl-protocols) The edges the virtual TS-890S scope shows: the fixed range's, or in auto scroll the page of the span's width holding the receive frequency (our model).
 - [@ANCHOR: radioctl:radioctl_virtual_ts890_marker_shift] (radioctl-protocols) `BSE` on the virtual TS-890S: re-centres a fixed range on the receive frequency, nothing in auto scroll, refused in center mode.
