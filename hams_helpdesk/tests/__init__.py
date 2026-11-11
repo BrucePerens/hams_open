@@ -33,4 +33,5 @@ from . import test_triage_verdict
 from . import test_triage_notify_hold
 from . import test_triage_stall_alarm
 from . import test_phishing_link_defang
+from . import test_untrusted_text_api
 from . import test_daemon_reporter_unreadable_key
