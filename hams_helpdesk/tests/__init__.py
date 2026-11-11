@@ -16,11 +16,13 @@ from . import test_triage_followups
 from . import test_untrusted_text
 from . import test_ticket_untrusted_filter
 from . import test_ncmec_report
+from . import test_untrusted_text_named_colours
 from . import test_ui_tours
 from . import test_member_menu_item
 from . import test_member_manual
 from . import test_exception_tickets
 from . import test_missing_params
+from . import test_untrusted_text_hsl_colours
 from . import test_exception_reporter_key
 from . import test_browser_exceptions
 from . import test_relay_exceptions
@@ -32,3 +34,4 @@ from . import test_triage_notify_hold
 from . import test_triage_stall_alarm
 from . import test_phishing_link_defang
 from . import test_untrusted_text_api
+from . import test_daemon_reporter_unreadable_key

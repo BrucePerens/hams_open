@@ -117,6 +117,7 @@ def _make_request(method, endpoint, token, error_msg, **kwargs):
         return None
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_purge_urls]
 def purge_urls(urls, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_purge_urls_api]
     if not token or not zone_id:
@@ -167,6 +168,8 @@ def purge_tags(tags, token, zone_id):
     return success
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_ban_ip]
+# Adds a Cloudflare IP access rule for the zone and returns its id.
 # # Verified by [@ANCHOR: test_cf_ban_ip_api]
 def ban_ip(ip_address, mode, notes, token, zone_id):
     # # Verified by [@ANCHOR: test_cf_ban_ip_api]
@@ -189,11 +192,13 @@ def ban_ip(ip_address, mode, notes, token, zone_id):
         timeout=10,
     )
     if response and response.status_code == 200:
-        rule_id = response.json().get("result", {}).get("id")
-        return True, rule_id
+        result = _json_result(response)
+        if result is not None:
+            return True, result.get("id")
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_unban_ip]
 def unban_ip(rule_id, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_02_cf_action_lift_ban]
     if not token or not zone_id:
@@ -208,6 +213,7 @@ def unban_ip(rule_id, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_verify_turnstile]
 def verify_turnstile(token, remote_ip, secret):
     # # Verified by [@ANCHOR: COMM_test_cf_turnstile_verify]
     if not secret or not token:
@@ -227,6 +233,7 @@ def verify_turnstile(token, remote_ip, secret):
         return False
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_zone_ruleset]
 def get_zone_ruleset(phase, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_03_cf_action_pull_waf_rules]
     if not token or not zone_id:
@@ -239,10 +246,11 @@ def get_zone_ruleset(phase, token, zone_id):
     if response:
         if response.status_code == 404:
             return None
-        return response.json().get("result")
+        return _json_result(response)
     return None
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_zone_ruleset_checked]
 def get_zone_ruleset_checked(phase, token, zone_id):
     """Like get_zone_ruleset, but tells "there is no ruleset" from "Cloudflare could not be read".
 
@@ -258,10 +266,11 @@ def get_zone_ruleset_checked(phase, token, zone_id):
         return "absent", None
     if response.status_code != 200:
         return "error", f"HTTP {response.status_code}"
-    result = response.json().get("result")
-    return ("ok", result) if isinstance(result, dict) else ("error", "unexpected response")
+    result = _json_result(response)
+    return ("ok", result) if result is not None else ("error", "unexpected response")
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_update_zone_ruleset]
 def update_zone_ruleset(ruleset_id, payload, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
     if not token or not zone_id:
@@ -283,6 +292,7 @@ def update_zone_ruleset(ruleset_id, payload, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_create_zone_ruleset]
 def create_zone_ruleset(payload, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
     if not token or not zone_id:
@@ -302,6 +312,7 @@ def create_zone_ruleset(payload, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_create_cfd_tunnel]
 def create_cfd_tunnel(account_id, token, tunnel_name):
     # # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
     if not token or not account_id:
@@ -320,10 +331,13 @@ def create_cfd_tunnel(account_id, token, tunnel_name):
         timeout=15,
     )
     if response and response.status_code == 200:
-        return True, response.json().get("result", {}).get("id")
+        result = _json_result(response)
+        if result is not None:
+            return True, result.get("id")
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_cfd_tunnel_token]
 def get_cfd_tunnel_token(account_id, token, tunnel_id):
     # # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
     if not token or not account_id:
@@ -334,7 +348,9 @@ def get_cfd_tunnel_token(account_id, token, tunnel_id):
         "GET", endpoint, token, "Cloudflare Tunnel Token API failed", timeout=15
     )
     if response and response.status_code == 200:
-        return True, response.json().get("result", "")
+        run_token = _json_result(response, str)
+        if run_token is not None:
+            return True, run_token
     return False, "API Error"
 
 
@@ -356,6 +372,8 @@ def update_cfd_tunnel_configuration(account_id, token, tunnel_id, payload):
         return True, "Configuration updated successfully."
     return False, "API Error"
 
+
+# [@ANCHOR: cloudflare:COMM_cf_api_purge_everything]
 def purge_everything(token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_purge_everything_logic]
     if not token or not zone_id:
@@ -419,16 +437,24 @@ def inspect_token(token):
 
 
 # [@ANCHOR: cloudflare:COMM_dns_api_json_result]
-def _json_result(resp):
-    """The `result` of a Cloudflare JSON answer, or None when the body is not JSON or has no object result."""
+def _json_body(resp):
+    """The JSON object of a Cloudflare answer, or None when the body is not JSON or not an object."""
     try:
         body = resp.json()
     except ValueError:
         return None
-    result = body.get("result") if isinstance(body, dict) else None
-    return result if isinstance(result, dict) else None
+    return body if isinstance(body, dict) else None
 
 
+def _json_result(resp, kind=dict):
+    """The `result` of a Cloudflare JSON answer, or None when the body is not JSON or its result is not a `kind`
+    (an object by default; a list or a string for the calls that return those)."""
+    body = _json_body(resp)
+    result = body.get("result") if body is not None else None
+    return result if isinstance(result, kind) else None
+
+
+# [@ANCHOR: cloudflare:COMM_cf_api_get_zone_settings]
 def get_zone_settings(token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_zone_settings_tour]
     if not token or not zone_id:
@@ -441,10 +467,11 @@ def get_zone_settings(token, zone_id):
     if response:
         if response.status_code == 404:
             return None
-        return response.json().get("result")
+        return _json_result(response, list)
     return None
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_update_zone_setting]
 def update_zone_setting(setting_name, value, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_zone_settings_tour]
     if not token or not zone_id:
@@ -467,6 +494,7 @@ def update_zone_setting(setting_name, value, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_list_cfd_tunnels]
 def list_cfd_tunnels(account_id, token):
     # # Verified by [@ANCHOR: COMM_test_cf_sync_tunnels]
     if not token or not account_id:
@@ -477,10 +505,11 @@ def list_cfd_tunnels(account_id, token):
         "GET", endpoint, token, "Cloudflare List Tunnels API failed", timeout=15
     )
     if response and response.status_code == 200:
-        return response.json().get("result", [])
+        return _json_result(response, list) or []
     return []
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_delete_cfd_tunnel]
 def delete_cfd_tunnel(account_id, token, tunnel_id):
     # # Verified by [@ANCHOR: COMM_test_cf_delete_tunnel]
     if not token or not account_id or not tunnel_id:
@@ -495,6 +524,7 @@ def delete_cfd_tunnel(account_id, token, tunnel_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_create_custom_hostname]
 def create_custom_hostname(hostname, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_03_tunnel_setup]
     if not token or not zone_id or not hostname:
@@ -514,10 +544,13 @@ def create_custom_hostname(hostname, token, zone_id):
         timeout=15,
     )
     if response and response.status_code == 200:
-        return True, response.json().get("result", {})
+        result = _json_result(response)
+        if result is not None:
+            return True, result
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_custom_hostname]
 def get_custom_hostname(hostname_id, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_sync_tunnels]
     if not token or not zone_id or not hostname_id:
@@ -528,10 +561,13 @@ def get_custom_hostname(hostname_id, token, zone_id):
         "GET", endpoint, token, "Cloudflare Get Custom Hostname API failed", timeout=15
     )
     if response and response.status_code == 200:
-        return True, response.json().get("result", {})
+        result = _json_result(response)
+        if result is not None:
+            return True, result
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_delete_custom_hostname]
 def delete_custom_hostname(hostname_id, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_05_delete_tunnel]
     if not token or not zone_id or not hostname_id:
@@ -583,7 +619,10 @@ def find_zone_id(name, token):
     )
     if response is None or response.status_code != 200:
         return False, "API Error"
-    for zone in response.json().get("result") or []:
+    body = _json_body(response)
+    if body is None or not isinstance(body.get("result") or [], list):
+        return False, "API Error"
+    for zone in body.get("result") or []:
         if (zone.get("name") or "").lower() == name.lower():
             return True, zone.get("id")
     return True, None
@@ -607,7 +646,9 @@ def list_dns_records_named(zone_id, name, token):
         )
         if response is None or response.status_code != 200:
             return False, "API Error"
-        body = response.json()
+        body = _json_body(response)
+        if body is None or not isinstance(body.get("result") or [], list):
+            return False, "API Error"
         found.extend(body.get("result") or [])
         if page >= int((body.get("result_info") or {}).get("total_pages") or 1):
             return True, found
@@ -624,7 +665,9 @@ def create_dns_record(zone_id, payload, token):
         "POST", endpoint, token, "Cloudflare Create DNS Record API failed", json=payload, timeout=15
     )
     if response is not None and response.status_code == 200:
-        return True, (response.json().get("result") or {}).get("id")
+        body = _json_body(response)
+        if body is not None:
+            return True, (body.get("result") or {}).get("id")
     return False, "API Error"
 
 
@@ -670,7 +713,10 @@ def get_zone_details(zone_id, token):
     )
     if response is None or response.status_code != 200:
         return False, "API Error"
-    return True, response.json().get("result") or {}
+    body = _json_body(response)
+    if body is None:
+        return False, "API Error"
+    return True, body.get("result") or {}
 
 
 # [@ANCHOR: cloudflare:COMM_dns_api_count_records]
@@ -686,7 +732,7 @@ def count_dns_records(zone_id, token):
     )
     if response is None or response.status_code != 200:
         return False, "API Error"
-    total = (response.json().get("result_info") or {}).get("total_count")
+    total = ((_json_body(response) or {}).get("result_info") or {}).get("total_count")
     if not isinstance(total, int):
         return False, "Cloudflare did not report a record count"
     return True, total
