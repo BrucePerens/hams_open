@@ -22,6 +22,7 @@ MAIL_STASH_KEY = "hams_helpdesk_untrusted_mail"
 REPLY_MESSAGE_MODELS = ["hams_helpdesk.ticket", "pager.incident"]
 
 
+# [@ANCHOR: hams_helpdesk:inbound_stash_for]
 def stash_for(env):
     return env.cr.cache.setdefault(MAIL_STASH_KEY, {})
 
@@ -29,6 +30,7 @@ def stash_for(env):
 class MailThread(models.AbstractModel):
     _inherit = "mail.thread"
 
+    # [@ANCHOR: hams_helpdesk:inbound_message_parse]
     @api.model
     def message_parse(self, message, save_original=False):
         msg_dict = super().message_parse(message, save_original=save_original)

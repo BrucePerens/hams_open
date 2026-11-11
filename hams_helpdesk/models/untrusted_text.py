@@ -532,6 +532,7 @@ def _style_dict(style):
     return out
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_leading_number]
 def _leading_number(value):
     """The number a CSS value starts with, or None when it starts with none or with digits and dots that are
     no number ("1.2.3", "."). Huge values stay inf: a 400-digit offset is off-screen, not unreadable."""
