@@ -5,7 +5,7 @@ see_also: [instruments/rotator/overview, instruments/rotator/limits, instruments
 tools: [bench_rotator_point]
 instrument: rotator
 tier: read_config
-verified: dummy rotator only, 2026-10-29
+verified: virtual rotator only, 2026-11-11
 ---
 
 # bench_rotator_point

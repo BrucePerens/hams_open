@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Antenna rotators through Hamlib's `rotctld` daemon, over its documented TCP protocol (the same text protocol as `rigctld`, so the
-//! client of the `hamlib` module is used). Hamlib is LGPL and is not linked. A rotator is a motor: the limits in the owner's config
-//! narrow what the rotator itself reports, every move is checked before it is sent, and the safe-state pair `bench_rotator_stop`
-//! and `bench_rotator_park` is always available.
+//! Antenna rotators through a `radioctld` rotator listener (`[[rotator]]` in its configuration), over the `rotctld` text protocol that
+//! radioctld serves (the same line protocol as its rigs, so the client of the `radioctl` module is used). A rotator is a motor: the
+//! limits in the owner's config narrow what the rotator itself reports, every move is checked before it is sent, and the safe-state
+//! pair `bench_rotator_stop` and `bench_rotator_park` is always available.
 //!
-//! The entry in the bench config: `{"driver": "rotator", "tier": "read_config", "rotctld_port": 4533, "min_az": 0, "max_az": 360,
-//! "min_el": 0, "max_el": 90}`. This step talks to a `rotctld` that already runs (the owner starts it for the rotator, for example
-//! `rotctld -m 202 -r /dev/serial/by-id/... -s 9600 -t 4533 -T 127.0.0.1`); a managed rotctld like the rig tools have is not done.
+//! The entry in the bench config: `{"driver": "rotator", "tier": "read_config", "radioctld_port": 4533, "min_az": 0, "max_az": 360,
+//! "min_el": 0, "max_el": 90}`. This step talks to a `radioctld` that already runs (the owner starts it with a `[[rotator]]` section for the
+//! rotator, for example `model = "yaesu-g-5500-gs232b"` on `listen = "127.0.0.1:4533"`); a managed radioctld like the rig tools have is
+//! not done. radioctld serves `set_pos`, `get_pos`, `stop`, `park` and `get_info`, which are all this module sends, so rotators need no
+//! other daemon.
 
 use crate::config::{Instrument, Kind, Tier};
-use crate::hamlib::proto::{code_name, Client, RigError};
+use crate::radioctl::proto::{code_name, Client, RigError};
 use rmcp::model::Tool;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -63,23 +65,28 @@ fn degrees(c: &Value, key: &str, lo: f64, hi: f64) -> Result<Option<f64>, String
     }
 }
 
-/// Reads `rotctld_port` (required), `rotctld_host` (this machine unless `allow_remote_rotctld`), `reply_timeout_s`, the limits
+/// Reads `radioctld_port` (required), `radioctld_host` (this machine unless `allow_remote_radioctld`), `reply_timeout_s`, the limits
 /// `min_az`, `max_az`, `min_el`, `max_el` (degrees), `tolerance_deg` and `max_wait_s` (up to 600).
 pub fn parse_config(c: &Value) -> Result<Config, String> {
     // [@ANCHOR: rotator_config]
+    for (old, new) in [("rotctld_port", "radioctld_port"), ("rotctld_host", "radioctld_host"), ("allow_remote_rotctld", "allow_remote_radioctld")] {
+        if c.get(old).is_some() {
+            return Err(format!("{old} was the setting for Hamlib's rotctld and is gone: use {new} (the port of a radioctld with a [[rotator]] section)"));
+        }
+    }
     let port = c
-        .get("rotctld_port")
+        .get("radioctld_port")
         .and_then(|p| p.as_u64())
         .and_then(|p| u16::try_from(p).ok())
         .filter(|p| *p > 0)
         .ok_or(
-            "a rotator needs rotctld_port (1 to 65535): the port of a rotctld that already runs",
+            "a rotator needs radioctld_port (1 to 65535): the port of a radioctld with a rotator that already runs",
         )?;
     let mut cfg = Config {
         port,
         ..Config::default()
     };
-    if let Some(h) = c.get("rotctld_host") {
+    if let Some(h) = c.get("radioctld_host") {
         let h = h
             .as_str()
             .filter(|h| {
@@ -87,13 +94,13 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
                     && h.bytes()
                         .all(|b| b.is_ascii_alphanumeric() || b".-:".contains(&b))
             })
-            .ok_or("rotctld_host must be a host name or address")?;
+            .ok_or("radioctld_host must be a host name or address")?;
         let remote_ok = c
-            .get("allow_remote_rotctld")
+            .get("allow_remote_radioctld")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         if !matches!(h, "127.0.0.1" | "localhost" | "::1") && !remote_ok {
-            return Err(format!("rotctld_host {h:?} is not this machine. rotctld has no authentication and must not be shared on a network; set allow_remote_rotctld true only if the owner accepts that"));
+            return Err(format!("radioctld_host {h:?} is not this machine. radioctld has no authentication and must not be shared on a network; set allow_remote_radioctld true only if the owner accepts that"));
         }
         cfg.host = h.to_string();
     }
@@ -207,10 +214,10 @@ fn text(e: RigError) -> String {
                 .unwrap_or(&m)
                 .trim_end_matches('.')
                 .to_string();
-            format!("{head}. Next: check that rotctld runs on the host and port in the config, the rotator's cable and power, and restart rotctld; then bench_rotator_stop if it may be moving.")
+            format!("{head}. Next: check that radioctld runs on the host and port in the config, the rotator's cable and power, and restart radioctld; then bench_rotator_stop if it may be moving.")
         }
         RigError::Rig { code, cmd } => format!(
-            "rotctld refused {cmd}: RPRT {code} ({}). Next: {}",
+            "radioctld refused {cmd}: RPRT {code} ({}). Next: {}",
             code_name(code),
             if code == -21 || code == -1 || code == -17 {
                 "the position is outside what the rotator accepts; bench_rotator_status shows its limits"
@@ -240,12 +247,19 @@ fn position(c: &mut Client) -> Result<(f64, f64), String> {
 pub fn limits(c: &mut Client, cfg: &Config) -> Result<([f64; 4], String), String> {
     // [@ANCHOR: rotator_limits]
     let r = c.read("dump_state").map_err(text)?;
-    let get = |k: &str| r.kv(k).and_then(|v| v.parse::<f64>().ok());
+    // radioctld's dump_state has `min_az=...` lines; a rotctld in the extended form has `Minimum Azimuth: ...` lines.
+    let get = |k: &str, long: &str| {
+        r.lines
+            .iter()
+            .find_map(|l| l.strip_prefix(&format!("{k}=")))
+            .or_else(|| r.kv(long))
+            .and_then(|v| v.trim().parse::<f64>().ok())
+    };
     let own = [
-        get("Minimum Azimuth"),
-        get("Maximum Azimuth"),
-        get("Minimum Elevation"),
-        get("Maximum Elevation"),
+        get("min_az", "Minimum Azimuth"),
+        get("max_az", "Maximum Azimuth"),
+        get("min_el", "Minimum Elevation"),
+        get("max_el", "Maximum Elevation"),
     ];
     let owner = [cfg.min_az, cfg.max_az, cfg.min_el, cfg.max_el];
     let mut out = [0.0; 4];
@@ -452,12 +466,13 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hamlib::testkit::{err, ok, FakeRigctld, Reply};
+    use crate::radioctl::testkit::{err, ok, FakeRadioctld, Reply};
 
-    /// Hamlib's dummy rotator, in its own rotctld on a free localhost port: the owner's "rotctld that already runs".
+    /// A radioctld with one virtual rotator (a Yaesu G-5500) on a free localhost port: the owner's "radioctld that already runs".
     struct Rotctld {
         child: std::process::Child,
         port: u16,
+        dir: std::path::PathBuf,
     }
 
     impl Rotctld {
@@ -467,18 +482,22 @@ mod tests {
                 .local_addr()
                 .unwrap()
                 .port();
-            let child = std::process::Command::new("rotctld")
-                .args(["-m", "1", "-t", &port.to_string(), "-T", "127.0.0.1"])
+            let dir = crate::testdir::scratch(&format!("bench_mcp-rotator-test-{port}"));
+            let conf = dir.join("radioctld.toml");
+            std::fs::write(&conf, format!("[[rotator]]\nname = \"g5500\"\nmodel = \"yaesu-g-5500-gs232b\"\nlisten = \"127.0.0.1:{port}\"\n\n[rotator.transport]\nkind = \"virtual\"\n")).unwrap();
+            let child = std::process::Command::new(crate::radioctl::rigd::program())
+                .arg("--config")
+                .arg(&conf)
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .spawn()
-                .expect("rotctld (libhamlib-utils) is needed for this test");
+                .expect("radioctld is needed for this test");
             let until = Instant::now() + Duration::from_secs(10);
             while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
-                assert!(Instant::now() < until, "rotctld did not start");
+                assert!(Instant::now() < until, "radioctld did not start");
                 std::thread::sleep(Duration::from_millis(50));
             }
-            Rotctld { child, port }
+            Rotctld { child, port, dir }
         }
     }
 
@@ -486,11 +505,12 @@ mod tests {
         fn drop(&mut self) {
             let _ = self.child.kill();
             let _ = self.child.wait();
+            let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
 
     fn bench(name: &str, port: u16, tier: &str, extra: &str) -> Vec<Instrument> {
-        crate::config::parse(&format!(r#"{{"instruments":{{"{name}":{{"driver":"rotator","tier":"{tier}","rotctld_port":{port}{extra}}}}}}}"#)).unwrap()
+        crate::config::parse(&format!(r#"{{"instruments":{{"{name}":{{"driver":"rotator","tier":"{tier}","radioctld_port":{port}{extra}}}}}}}"#)).unwrap()
     }
 
     fn parse(extra: &str) -> Result<Config, String> {
@@ -509,25 +529,26 @@ mod tests {
     // Tests [@ANCHOR: rotator_degrees]
     #[test]
     fn config_needs_a_port_keeps_rotctld_on_this_machine_and_refuses_bad_limits() {
-        let c = parse(r#""rotctld_port":4533,"min_az":0,"max_az":360,"min_el":0,"max_el":90,"tolerance_deg":1,"max_wait_s":300"#).unwrap();
+        let c = parse(r#""radioctld_port":4533,"min_az":0,"max_az":360,"min_el":0,"max_el":90,"tolerance_deg":1,"max_wait_s":300"#).unwrap();
         assert_eq!(
             (c.port, c.min_az, c.max_az, c.tolerance_deg, c.max_wait_s),
             (4533, Some(0.0), Some(360.0), 1.0, 300.0)
         );
         for bad in [
             r#""#,
-            r#""rotctld_port":0"#,
-            r#""rotctld_port":4533,"rotctld_host":"192.0.2.7""#,
-            r#""rotctld_port":4533,"min_az":400,"max_az":300"#,
-            r#""rotctld_port":4533,"min_el":"x""#,
-            r#""rotctld_port":4533,"max_wait_s":9000"#,
-            r#""rotctld_port":4533,"reply_timeout_s":0"#,
-            r#""rotctld_port":4533,"min_az":99999"#,
+            r#""radioctld_port":0"#,
+            r#""rotctld_port":4533"#,
+            r#""radioctld_port":4533,"radioctld_host":"192.0.2.7""#,
+            r#""radioctld_port":4533,"min_az":400,"max_az":300"#,
+            r#""radioctld_port":4533,"min_el":"x""#,
+            r#""radioctld_port":4533,"max_wait_s":9000"#,
+            r#""radioctld_port":4533,"reply_timeout_s":0"#,
+            r#""radioctld_port":4533,"min_az":99999"#,
         ] {
             assert!(parse(bad).is_err(), "{bad}");
         }
         assert!(parse(
-            r#""rotctld_port":4533,"rotctld_host":"192.0.2.7","allow_remote_rotctld":true"#
+            r#""radioctld_port":4533,"radioctld_host":"192.0.2.7","allow_remote_radioctld":true"#
         )
         .is_ok());
     }
@@ -553,17 +574,17 @@ mod tests {
             (json!(0.0), json!(false)),
             "{v}"
         );
-        // The rotator allows -180 to 450; the owner narrows azimuth to 0 to 360; elevation stays the rotator's.
+        // The virtual G-5500 allows azimuth 0 to 450 and elevation 0 to 180; the owner narrows azimuth to 0 to 360; elevation stays the rotator's.
         assert_eq!(
             (
                 v["limits"]["min_az"].clone(),
                 v["limits"]["max_az"].clone(),
                 v["limits"]["max_el"].clone()
             ),
-            (json!(0.0), json!(360.0), json!(90.0))
+            (json!(0.0), json!(360.0), json!(180.0))
         );
         assert!(v["limits"]["source"].as_str().unwrap().contains("narrowed"));
-        assert!(v["info"].as_str().unwrap().contains("Dummy"));
+        assert!(v["info"].as_str().unwrap().contains("G-5500"));
         // Tiers, names and unknown tools.
         assert!(call(&b, "bench_rotator_point", &json!({"azimuth_deg": 10}))
             .unwrap_err()
@@ -574,7 +595,7 @@ mod tests {
                 .contains("no rotator named")
         );
         assert!(call(&b, "bench_rotator_nonsense", &json!({})).is_err());
-        let two = crate::config::parse(&format!(r#"{{"instruments":{{"a":{{"driver":"rotator","rotctld_port":{0}}},"b":{{"driver":"rotator","rotctld_port":{0}}}}}}}"#, d.port)).unwrap();
+        let two = crate::config::parse(&format!(r#"{{"instruments":{{"a":{{"driver":"rotator","radioctld_port":{0}}},"b":{{"driver":"rotator","radioctld_port":{0}}}}}}}"#, d.port)).unwrap();
         assert!(call(&two, "bench_rotator_status", &json!({}))
             .unwrap_err()
             .contains("name the rotator: a, b"));
@@ -595,7 +616,7 @@ mod tests {
     fn a_target_outside_the_limits_or_a_dry_run_sends_nothing_and_a_move_is_read_back() {
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
         let s = seen.clone();
-        let fake = FakeRigctld::serve(move |c| {
+        let fake = FakeRadioctld::serve(move |c| {
             s.lock().unwrap().push(c.to_string());
             match c {
                 "get_pos" => ok(&["Azimuth: 10.0", "Elevation: 5.0"]),
@@ -734,7 +755,7 @@ mod tests {
         assert_eq!(after["moving"], false);
         // A rotator that keeps moving after the stop is reported loudly, with what to do by hand.
         let mut az = 0.0;
-        let fake = FakeRigctld::serve(move |c| {
+        let fake = FakeRadioctld::serve(move |c| {
             if c == "get_pos" {
                 az += 1.0;
                 return ok(&[&format!("Azimuth: {az}"), "Elevation: 0"]);
@@ -777,7 +798,7 @@ mod tests {
     // Tests [@ANCHOR: rotator_error_text]
     #[test]
     fn a_rotator_that_does_not_answer_or_refuses_is_an_error_with_a_next_action_for_a_rotator() {
-        let silent = FakeRigctld::serve(|_| Reply::Silent);
+        let silent = FakeRadioctld::serve(|_| Reply::Silent);
         let e = call(
             &bench(
                 "rot_silent",
@@ -790,10 +811,10 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            e.contains("Next:") && e.contains("rotctld") && !e.contains("bench_hamlib"),
+            e.contains("Next:") && e.contains("radioctld") && !e.contains("bench_radioctl"),
             "{e}"
         );
-        let refusing = FakeRigctld::serve(|c| if c == "get_pos" { err(-21) } else { ok(&[]) });
+        let refusing = FakeRadioctld::serve(|c| if c == "get_pos" { err(-21) } else { ok(&[]) });
         let e = call(
             &bench("rot_refuse", refusing.port, "read_only", ""),
             "bench_rotator_status",
@@ -801,7 +822,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            e.contains("RPRT -21") && e.contains("Next:") && !e.contains("bench_hamlib"),
+            e.contains("RPRT -21") && e.contains("Next:") && !e.contains("bench_radioctl"),
             "{e}"
         );
         let refused_port = std::net::TcpListener::bind("127.0.0.1:0")
@@ -816,7 +837,7 @@ mod tests {
         )
         .unwrap_err();
         assert!(
-            e.contains("cannot connect") && !e.contains("bench_hamlib"),
+            e.contains("cannot connect") && !e.contains("bench_radioctl"),
             "{e}"
         );
     }

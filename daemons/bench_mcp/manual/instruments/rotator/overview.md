@@ -5,12 +5,12 @@ see_also: [instruments/rotator/setup, instruments/rotator/operation, instruments
 tools: [bench_rotator_status, bench_rotator_point, bench_rotator_stop, bench_rotator_park]
 instrument: rotator
 tier: read_only
-verified: dummy rotator only, 2026-10-29
+verified: virtual rotator only, 2026-11-11
 ---
 
 # Rotator tools
 
-A rotator turns an antenna in azimuth and elevation. The tools speak to Hamlib's `rotctld` daemon over its documented text protocol, the same protocol and the same client as the [Hamlib rig tools](instruments/hamlib/overview); Hamlib itself is not linked (it is LGPL). One configured instrument is one rotator.
+A rotator turns an antenna in azimuth and elevation. The tools speak to a `radioctld` rotator listener over the `rotctld` text protocol that radioctld serves, the same protocol and the same client as the [radioctl rig tools](instruments/radioctl/overview). One configured instrument is one rotator.
 
 | Tool | Tier | Does |
 |---|---|---|
@@ -21,4 +21,4 @@ A rotator turns an antenna in azimuth and elevation. The tools speak to Hamlib's
 
 ## What is left out
 
-The daemon is not managed by this server: the owner starts `rotctld` for the rotator and the config names its port (a managed `rotctld`, like the one the rig tools have, is not done). There is no raw command, no calibration, no sun or satellite tracking and no speed setting.
+The daemon is not managed by this server: the owner starts `radioctld` with a rotator section and the config names its port (a managed radioctld for rotators, like the one the rig tools have, is not done). There is no raw command, no calibration, no sun or satellite tracking and no speed setting.
