@@ -457,42 +457,68 @@ impl VirtualRig {
     }
 
     // [@ANCHOR: radioctl_virtual_ts890_filter_sweep]
-    /// One `##DD3` frame (LAN output) when the filter-scope output is on LAN (`DD1` 1) and auto
-    /// information is on, as the guide says (p. 70): 213 deterministic samples from 00 to 32.
+    /// One `##DD3` frame when the filter-scope output is on LAN (`DD1` 1), or the twelve serial `DD3`
+    /// splits when it is on COM/USB (`DD1` 2), with auto information on, as the guide says (p. 18, 70):
+    /// 213 deterministic samples from 00 to 32.
     pub(super) fn ts890_filter_sweep(&mut self) -> Vec<u8> {
-        let on = self.state.transceive && self.ts890_scope.filter_output == 1;
-        if !on || self.desc.scope.is_none() {
+        let output = self.ts890_scope.filter_output;
+        if !self.state.transceive || !(1..=2).contains(&output) || self.desc.scope.is_none() {
             return Vec::new();
         }
-        let mut out = String::from("##DD3");
-        for index in 0..FILTER_SWEEP_SAMPLES {
-            let value = crate::civ_scope::sample_value(
-                index,
-                self.ts890_scope.sweep,
-                u16::from(FILTER_SWEEP_MAX),
-            );
-            out.push_str(&format!("{value:02X}"));
+        let digits = sweep_digits(
+            FILTER_SWEEP_SAMPLES,
+            self.ts890_scope.sweep,
+            FILTER_SWEEP_MAX,
+        );
+        if output == 1 {
+            return format!("##DD3{digits};").into_bytes();
         }
-        out.push(';');
-        out.into_bytes()
+        serial_splits("DD3", &digits, 38, "00")
     }
 
     // [@ANCHOR: radioctl_virtual_ts890_sweep]
-    /// One `##DD2` frame (LAN output) when the waveform output is on a LAN cycle (`DD0` 1 to 3) and
-    /// auto information is on, else nothing; the samples are the deterministic synthetic ones.
+    /// One `##DD2` frame when the waveform output is on a LAN cycle (`DD0` 1 to 3), or the 32 serial
+    /// `DD2` splits when it is on COM/USB with AI linked (`DD0` 4), with auto information on, else
+    /// nothing (`DD0` 5, the `DD4` form, is not modelled); the samples are the deterministic synthetic ones.
     pub(super) fn ts890_sweep(&mut self) -> Vec<u8> {
-        let on = self.state.transceive && (1..=3).contains(&self.ts890_scope.output);
+        let output = self.ts890_scope.output;
+        let on = self.state.transceive && ((1..=3).contains(&output) || output == 4);
         if !on || self.desc.scope.is_none() {
             return Vec::new();
         }
         self.ts890_scope.sweep = self.ts890_scope.sweep.wrapping_add(1);
-        let mut out = String::from("##DD2");
-        for index in 0..SWEEP_SAMPLES {
-            let value =
-                crate::civ_scope::sample_value(index, self.ts890_scope.sweep, u16::from(SWEEP_MAX));
-            out.push_str(&format!("{value:02X}"));
+        let digits = sweep_digits(SWEEP_SAMPLES, self.ts890_scope.sweep, SWEEP_MAX);
+        if output == 4 {
+            return serial_splits("DD2", &digits, 40, "");
         }
-        out.push(';');
-        out.into_bytes()
+        format!("##DD2{digits};").into_bytes()
     }
+}
+
+// [@ANCHOR: radioctl_virtual_ts890_sweep_digits]
+/// `count` synthetic samples as two hexadecimal digits each.
+fn sweep_digits(count: usize, sweep: u32, max: u8) -> String {
+    (0..count)
+        .map(|index| {
+            let value = crate::civ_scope::sample_value(index, sweep, u16::from(max));
+            format!("{value:02X}")
+        })
+        .collect()
+}
+
+// [@ANCHOR: radioctl_virtual_ts890_serial_splits]
+/// A sweep's digits as serial frames `<name><two-digit split><split_digits digits>;`; the last split
+/// is padded with `filler` (the guide gives no value for the unused digits).
+fn serial_splits(name: &str, digits: &str, split_digits: usize, filler: &str) -> Vec<u8> {
+    let mut out = String::new();
+    for (index, chunk) in digits.as_bytes().chunks(split_digits).enumerate() {
+        let chunk = String::from_utf8_lossy(chunk);
+        let pad = if filler.is_empty() {
+            String::new()
+        } else {
+            filler.repeat((split_digits - chunk.len()) / filler.len())
+        };
+        out.push_str(&format!("{name}{index:02}{chunk}{pad};"));
+    }
+    out.into_bytes()
 }
