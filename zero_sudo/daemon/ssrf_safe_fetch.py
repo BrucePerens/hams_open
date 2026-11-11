@@ -209,6 +209,7 @@ def _pinned_create_connection(validated_addrinfo):
     return _create_connection
 
 
+# [@ANCHOR: zero_sudo:ssrf_safe_fetch_make_pinned_http_class]
 def _make_pinned_http_class(base_cls, validated_addrinfo):
     """Returns a callable with the same call signature `do_open()` uses to
     build its connection (`http_class(host, timeout=..., **extra_kwargs)`) --
@@ -234,10 +235,12 @@ class _SSRFSafeHTTPHandler(urllib.request.HTTPHandler):
     too (the previous per-module code only re-validated the resolved final
     URL's hostname AFTER the redirected connection had already happened)."""
 
+    # [@ANCHOR: zero_sudo:ssrf_safe_fetch_http_handler_init]
     def __init__(self, context_label):
         super().__init__()
         self._context_label = context_label
 
+    # [@ANCHOR: zero_sudo:ssrf_safe_fetch_http_open]
     def http_open(self, req):
         hostname = urlsplit(req.full_url).hostname
         validated = resolve_ssrf_safe_addresses(hostname, self._context_label)
@@ -254,10 +257,12 @@ class _SSRFSafeHTTPSHandler(urllib.request.HTTPSHandler):
     `HTTPSHandler.https_open()` forwards it, so nothing about TLS
     verification changes -- only which raw address the socket dials."""
 
+    # [@ANCHOR: zero_sudo:ssrf_safe_fetch_https_handler_init]
     def __init__(self, context_label, context=None, check_hostname=None):
         super().__init__(context=context, check_hostname=check_hostname)
         self._context_label = context_label
 
+    # [@ANCHOR: zero_sudo:ssrf_safe_fetch_https_open]
     def https_open(self, req):
         hostname = urlsplit(req.full_url).hostname
         validated = resolve_ssrf_safe_addresses(hostname, self._context_label)
@@ -276,6 +281,7 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+# [@ANCHOR: zero_sudo:ssrf_safe_fetch_build_opener]
 def _build_ssrf_safe_opener(context_label, https_only, ssl_context=None, follow_redirects=True):
     """Builds a fresh `OpenerDirector` with ONLY the handlers this fetch
     needs -- deliberately NOT `urllib.request.build_opener()`, and deliberately
