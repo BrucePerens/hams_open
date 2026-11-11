@@ -1873,6 +1873,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctld_service_vfo_info] (radioctld) `\get_vfo_info`: frequency, mode, width and split of the selected VFO.
 - [@ANCHOR: radioctl:radioctld_service_execute] (radioctld) Executes one command for `client`. The answer is the body of a success, or the `RPRT`
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_command] (radioctl-protocols) The newcat command interpreter of a virtual Yaesu (FA/FB, MD0, TX, FT/ST, RT/XT/RC/RU/RD, SM0, RM5, IF, ID, AI, levels and the fixed answers Hamlib needs).
+- [@ANCHOR: radioctl:radioctl_virtual_yaesu_cf] (radioctl-protocols) True when the virtual Yaesu rig switches its clarifier with `CF` (`yaesu.clarifier = "cf-receive"`).
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_digits] (radioctl-protocols) Digits of the virtual Yaesu rig's frequency fields: 9, or 8 for the older models (`yaesu.frequency_digits`).
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_set_frequency] (radioctl-protocols) Sets VFO A or B from the model's digits (nine, or eight on the older models); `?;` otherwise.
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_if] (radioctl-protocols) The 28-character IF answer.
@@ -1886,6 +1887,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_front_end] (radioctl-protocols) An `RA` or `PA` answer: `0` (main receiver; the FT-991A has this digit as a fixed zero) and the step, mapped by the description.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode] (radioctl-protocols) Decodes one newcat reply into observations.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_digits] (radioctl-protocols) Digits of the frequency fields of `FA`, `FB` and `IF` for this model: 9, or 8 on the FT-450, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000 and FTDX9000.
+- [@ANCHOR: radioctl:radioctl_yaesu_engine_cf_receive] (radioctl-protocols) True when this model's clarifier is the `CF` command (`yaesu.clarifier = "cf-receive"`, the FT-891: `CF010;` on, `CF000;` off, `CF0;` read, receive clarifier only) instead of `RT` and `XT`.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_if] (radioctl-protocols) The observations in an IF answer (frequency of VFO A, mode, RIT, XIT, clarifier offset).
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_encode] (radioctl-protocols) Encodes an operation as a newcat command.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_feed] (radioctl-protocols) Feeds received bytes to the newcat engine.

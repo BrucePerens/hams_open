@@ -9,7 +9,7 @@
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
 //! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.scope_link` (`lan`, the default, or `serial`: how a TS-890S sends its scopes), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
-//! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`),
+//! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`), `yaesu.clarifier` (`"cf-receive"` when the clarifier is the `CF` command; `"rt-xt"` or absent otherwise),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
 //! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
@@ -30,7 +30,7 @@ use crate::description::{
     KenwoodDialect, KenwoodHhParams, KenwoodParams, KyForm, KyParams, KyStop, LegacyBlock,
     LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams, PowerMeterParams,
     ReceiverParams, ReceiverProtocol, RigDescription, ScopeParams, Timing, UsbParams, UsbProtocol,
-    VendorParams, VendorProtocol, YaesuLegacyParams, YaesuParams,
+    VendorParams, VendorProtocol, YaesuClarifier, YaesuLegacyParams, YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -225,6 +225,9 @@ struct YaesuSection {
     /// Per-model level ranges, `level-name = [min, max]` (see `YaesuParams::level_ranges`).
     #[serde(default)]
     levels: BTreeMap<String, (u16, u16)>,
+    /// `"cf-receive"`: the clarifier is the `CF` command (see `YaesuClarifier`); `"rt-xt"` is the default.
+    #[serde(default)]
+    clarifier: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -659,6 +662,15 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
                 model_id: y.model_id,
                 frequency_digits,
                 level_ranges: build_level_ranges("yaesu", &y.levels)?,
+                clarifier: match y.clarifier.as_deref() {
+                    None | Some("rt-xt") => YaesuClarifier::RtXt,
+                    Some("cf-receive") => YaesuClarifier::CfReceive,
+                    Some(other) => {
+                        return Err(bad(format!(
+                            "yaesu.clarifier must be \"rt-xt\" or \"cf-receive\", not {other:?}"
+                        )))
+                    }
+                },
             })
         })
         .transpose()?;
@@ -1336,6 +1348,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         if !yaesu.level_ranges.is_empty() {
             keys.push("yaesu.levels".to_string());
         }
+        if yaesu.clarifier != YaesuClarifier::RtXt {
+            keys.push("yaesu.clarifier".to_string());
+        }
     }
     if let Some(legacy) = &description.yaesu_legacy {
         keys.push("yaesu_legacy.stop_bits".to_string());
@@ -1727,6 +1742,33 @@ verified = { state = "unverified" }
             );
             expect_rejected(&format!("{text}{fact}"), "yaesu.levels");
         }
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    #[test]
+    fn yaesu_clarifier_cf_needs_a_fact_and_refuses_other_words() {
+        let yaesu = GOOD
+            .replace("family = \"kenwood-ascii\"", "family = \"yaesu-newcat\"")
+            .replace("[kenwood]", "[yaesu]")
+            .replace("key = \"kenwood.model_id\"", "key = \"yaesu.model_id\"");
+        let with = |word: &str| {
+            yaesu.replace(
+                "[yaesu]\nmodel_id = 19",
+                &format!("[yaesu]\nmodel_id = 19\nclarifier = \"{word}\""),
+            )
+        };
+        let fact = "\n[[facts]]\nkey = \"yaesu.clarifier\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        expect_rejected(&with("cf-receive"), "yaesu.clarifier");
+        let loaded = parse(&format!("{}{fact}", with("cf-receive"))).expect("loads");
+        let params = loaded.description.yaesu.clone().expect("yaesu");
+        assert_eq!(params.clarifier, YaesuClarifier::CfReceive);
+        assert!(expected_keys(&loaded.description).contains(&"yaesu.clarifier".to_string()));
+        let plain = parse(&yaesu).expect("loads");
+        assert_eq!(
+            plain.description.yaesu.expect("yaesu").clarifier,
+            YaesuClarifier::RtXt
+        );
+        expect_rejected(&format!("{}{fact}", with("rit")), "yaesu.clarifier");
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_parse]

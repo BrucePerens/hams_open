@@ -749,6 +749,19 @@ pub struct YaesuParams {
     /// Per-model wire ranges `(level, min, max)` that replace the engine's defaults (the FT-891's
     /// `RG` is 0-30, the FTDX5000's `MG` and `PC` are 0-255). Empty means the defaults apply.
     pub level_ranges: Vec<(Level, u16, u16)>,
+    /// How the clarifier is switched: by `RT`/`XT` (the default), or by `CF` on the FT-891.
+    pub clarifier: YaesuClarifier,
+}
+
+/// The command that switches the clarifier on a Yaesu newcat model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum YaesuClarifier {
+    /// `RT` (receive) and `XT` (transmit), with `RC`/`RU`/`RD` for the offset: FT-991A and most others.
+    #[default]
+    RtXt,
+    /// `CF P1 P2 P3` (P2 0 off, 1 on): the receive clarifier only, there is no transmit clarifier command; the offset is
+    /// still `RC`/`RU`/`RD`. FT-891.
+    CfReceive,
 }
 
 impl YaesuParams {

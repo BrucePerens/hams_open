@@ -36,7 +36,7 @@
 
 use std::time::Duration;
 
-use radioctl_core::description::{Family, RigDescription};
+use radioctl_core::description::{Family, RigDescription, YaesuClarifier};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
@@ -179,6 +179,15 @@ impl YaesuEngine {
         }
     }
 
+    // [@ANCHOR: radioctl_yaesu_engine_cf_receive]
+    /// True when this model's clarifier is the `CF` command (`yaesu.clarifier = "cf-receive"`), not `RT` and `XT`.
+    fn cf_receive(&self) -> bool {
+        self.desc
+            .yaesu
+            .as_ref()
+            .is_some_and(|y| y.clarifier == YaesuClarifier::CfReceive)
+    }
+
     // [@ANCHOR: radioctl_yaesu_engine_decode_front_end]
     /// An `RA` or `PA` answer: `0` (main receiver; the FT-991A has this digit as a fixed zero)
     /// and the step, mapped by the description.
@@ -220,6 +229,10 @@ impl YaesuEngine {
             (Some("TX"), Some(flag @ ("0" | "1" | "2"))) => Some(Observation::Ptt(*flag != *"0")),
             (Some("FT"), Some(flag @ ("0" | "1"))) => Some(Observation::Split(*flag == *"1")),
             (Some("RT"), Some(flag @ ("0" | "1"))) => Some(Observation::Rit(*flag == *"1")),
+            // `CF` P1 0, P2 the receive clarifier (0 off, 1 on), P3 0: the FT-891's form.
+            (Some("CF"), Some(rest @ ("000" | "010"))) if self.cf_receive() => {
+                Some(Observation::Rit(rest == "010"))
+            }
             (Some("XT"), Some(flag @ ("0" | "1"))) => Some(Observation::Xit(*flag == *"1")),
             (Some("SM"), Some(rest)) if rest.len() == 4 && rest.starts_with('0') => rest
                 .get(1..)
@@ -328,6 +341,15 @@ impl ProtocolEngine for YaesuEngine {
             Op::GetSplit => Self::command("FT;".into(), observe(Field::Split)),
             Op::GetTxVfo => Self::command("FT;".into(), observe(Field::TxVfo)),
             Op::SetSplit(on) => Self::command(format!("FT{};", if *on { 3 } else { 2 }), none),
+            Op::GetRit if self.cf_receive() => Self::command("CF0;".into(), observe(Field::Rit)),
+            Op::SetRit(on) if self.cf_receive() => {
+                Self::command(format!("CF0{}0;", u8::from(*on)), none)
+            }
+            Op::GetXit | Op::SetXit(_) if self.cf_receive() => {
+                return Err(Self::unsupported(
+                    "this model has no transmit clarifier command (CF is the receive clarifier)",
+                ))
+            }
             Op::GetRit => Self::command("RT;".into(), observe(Field::Rit)),
             Op::GetXit => Self::command("XT;".into(), observe(Field::Xit)),
             Op::GetRitOffset => Self::command("IF;".into(), observe(Field::RitOffset)),
@@ -586,6 +608,38 @@ mod tests {
             x.encode(&Op::SetSplit(true)).is_err(),
             "FTDX10 splits by band"
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_engine_cf_receive]
+    #[test]
+    fn the_ft_891_switches_its_clarifier_with_cf_and_has_no_transmit_one() {
+        let mut e = YaesuEngine::new(shipped("yaesu-ft-891")).expect("engine");
+        let b = |e: &mut YaesuEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+        assert_eq!(b(&mut e, Op::SetRit(true)), b"CF010;");
+        assert_eq!(b(&mut e, Op::SetRit(false)), b"CF000;");
+        assert_eq!(b(&mut e, Op::GetRit), b"CF0;");
+        assert_eq!(b(&mut e, Op::GetRitOffset), b"IF;");
+        assert_eq!(b(&mut e, Op::SetRitOffset(150)), b"RC;RU0150;");
+        assert!(e.encode(&Op::SetXit(true)).is_err());
+        assert!(e.encode(&Op::GetXit).is_err());
+        assert_eq!(
+            e.feed(b"CF010;CF000;", T0),
+            vec![
+                Inbound::Observation(Observation::Rit(true)),
+                Inbound::Observation(Observation::Rit(false)),
+            ]
+        );
+        assert!(matches!(
+            e.feed(b"CF020;", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
+        // The FT-991A keeps RT and XT and does not read CF.
+        let mut e = YaesuEngine::new(shipped("yaesu-ft-991a")).expect("engine");
+        assert_eq!(b(&mut e, Op::SetRit(true)), b"RT1;");
+        assert!(matches!(
+            e.feed(b"CF010;", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
     }
 
     // Tests [@ANCHOR: radioctl_yaesu_engine_feed]
