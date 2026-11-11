@@ -37,6 +37,7 @@ class TestUserArchStyleAndLink(HamsHttpCase):
         return self.env["website.page"]._sanitize_user_arch(arch)
 
     def test_01_link_is_removed_whatever_its_rel_and_text_is_kept(self):
+        # Tests [@ANCHOR: user_websites:fn_page_remove_keeping_tail]
         for rel in ("stylesheet", "preload", "prefetch", "icon", "canonical", "dns-prefetch", "STYLESHEET"):
             with self.subTest(rel=rel):
                 cleaned, modified = self.sanitize(

@@ -155,6 +155,7 @@ class SiteResponse(Exception):
     this into the route's return value instead."""
 
     def __init__(self, response):
+        # [@ANCHOR: user_websites:fn_site_response_init]
         super().__init__("owner site response")
         self.response = response
 
@@ -595,6 +596,7 @@ class UserWebsitesOwnerController(http.Controller):
             raise request.not_found()
         return post
 
+    # [@ANCHOR: user_websites:fn_owner_own_page_any]
     def _own_page_any(self, profile_user, profile_group, page_id):
         """Like _own_page, but also finds a page the owner deleted (its address is parked)."""
         page = self._svc()["website.page"].with_context(active_test=False).browse(page_id)
@@ -606,6 +608,7 @@ class UserWebsitesOwnerController(http.Controller):
             raise request.not_found()
         return page
 
+    # [@ANCHOR: user_websites:fn_owner_back]
     def _back(self, site_slug, flag):
         return request.redirect(f"/my/site/{quote(site_slug, safe='')}?{flag}", code=303)
 

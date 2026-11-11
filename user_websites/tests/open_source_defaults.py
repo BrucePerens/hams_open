@@ -45,6 +45,7 @@ _FORM_SHIELD_TUNING_KEYS = (
 )
 
 
+# [@ANCHOR: user_websites:fn_open_source_set_committed_param]
 def _set_committed_param(key, value):
     """Upsert (or, for value None, delete) an ir_config_parameter row on its own committed connection and return the old value."""
     with odoo.sql_db.db_connect(get_db_name()).cursor() as cr:
@@ -60,10 +61,12 @@ def _set_committed_param(key, value):
     return row[0] if row else None
 
 
+# [@ANCHOR: user_websites:fn_open_source_eligibility_gaps]
 def _open_source_eligibility_gaps(self):
     return ResUsersSiteEligibility._website_eligibility_gaps(self)
 
 
+# [@ANCHOR: user_websites:fn_open_source_wrap]
 def _wrap(cls):
     own = cls.__dict__.get("setUpClass")
     inner = own.__func__ if own is not None else super(cls, cls).setUpClass.__func__
@@ -83,6 +86,7 @@ def _wrap(cls):
     cls.setUpClass = classmethod(setUpClass)
 
 
+# [@ANCHOR: user_websites:fn_open_source_pin_package]
 def pin_package(package_name):
     """Wrap every database test case defined in the test modules of `package_name` (call after the imports)."""
     for name, module in list(sys.modules.items()):

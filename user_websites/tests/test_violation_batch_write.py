@@ -91,6 +91,8 @@ class TestViolationBatchWrite(RealTransactionCase):
 
     def test_03_two_owner_helper_strikes_each_owner_once(self):
         """The attribution helper itself strikes every distinct owner once."""
+        # Tests [@ANCHOR: user_websites:fn_page_malicious_arch_violation_targets]
+        # Tests [@ANCHOR: user_websites:fn_page_file_malicious_arch_report]
         a1, a2 = self._page(self.owner_a, "m1"), self._page(self.owner_a, "m2")
         b1 = self._page(self.owner_b, "m1")
         ba, bb = self._strikes(self.owner_a), self._strikes(self.owner_b)

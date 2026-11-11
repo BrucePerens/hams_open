@@ -52,6 +52,7 @@ from . import test_owner_site
 from . import test_report_shield
 from . import test_mail_sender_fallback
 from . import test_rpc_exposure
+from . import test_open_source_defaults
 
 from .open_source_defaults import pin_package
 

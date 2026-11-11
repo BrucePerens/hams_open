@@ -69,6 +69,7 @@ class ResUsersSiteEligibility(models.Model):
         return not self.is_suspended_from_websites and self._hams_website_eligible()
 
     @api.model
+    # [@ANCHOR: user_websites:fn_eligibility_site_user_ids]
     def _website_site_user_ids(self):
         """Members who have a site address (the only ones eligibility can hide)."""
         self.env.cr.execute(  # audit-ignore-sql: static SQL, no parameters
@@ -106,6 +107,7 @@ class ResUsersSiteEligibility(models.Model):
         return changed
 
     @api.model
+    # [@ANCHOR: user_websites:fn_eligibility_hide_site_content]
     def _hide_site_content(self, env_svc, user):
         pages = env_svc["website.page"].search([("owner_user_id", "=", user.id), ("website_published", "=", True)])
         if pages:
@@ -115,6 +117,7 @@ class ResUsersSiteEligibility(models.Model):
             posts.write({"is_published": False, "hidden_by_eligibility": True})
 
     @api.model
+    # [@ANCHOR: user_websites:fn_eligibility_show_site_content]
     def _show_site_content(self, env_svc, user):
         if user.is_suspended_from_websites:
             return

@@ -13,6 +13,7 @@ from odoo.modules.module import load_script
 from odoo.tests import tagged
 
 from odoo.addons.user_websites.models import site_slug
+from odoo.addons.user_websites.models.res_users import ResUsers
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 ARCH = (
@@ -72,6 +73,8 @@ class TestSiteSlugOneSite(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:site_slug_module]
         # Tests [@ANCHOR: user_websites:fn_legacy_slug_target]
         # Tests [@ANCHOR: user_websites:fn_rehome_site]
+        # Tests [@ANCHOR: user_websites:fn_site_slug_next_hop]
+        # Tests [@ANCHOR: user_websites:fn_site_slug_like_escape]
         self._rename("k6zz")
         self.home.invalidate_recordset()
         self.assertEqual(self.home.url, "/k6zz")
@@ -210,6 +213,8 @@ class TestSiteSlugOneSite(HamsHttpCase):
     def test_09_callsign_policy_no_callsign_no_site_and_collisions_fail(self):
         # Tests [@ANCHOR: user_websites:fn_site_slug_current_slug]
         # Tests [@ANCHOR: user_websites:fn_assert_slug_free]
+        # Tests [@ANCHOR: user_websites:fn_site_slug_count]
+        # Tests [@ANCHOR: user_websites:fn_users_apply_slug_policy]
         # Tests [@ANCHOR: user_websites:COMM_res_users_slug_policy]
         self._policy("callsign")
         self._callsign_identity()
@@ -232,6 +237,7 @@ class TestSiteSlugOneSite(HamsHttpCase):
 
     def test_10_a_service_account_is_recognised_and_never_given_a_callsign_slug(self):
         # Tests [@ANCHOR: user_websites:fn_site_slug_is_service_account]
+        # Tests [@ANCHOR: user_websites:fn_users_apply_slug_policy]
         # Tests [@ANCHOR: user_websites:COMM_res_users_slug_policy]
         service = self.env.ref("user_websites.user_websites_service_account")
         self.assertTrue(site_slug.is_service_account(self.env, service))
@@ -248,3 +254,11 @@ class TestSiteSlugOneSite(HamsHttpCase):
         self.assertFalse(self.env["res.users"]._apply_slug_policy(None, member_vals))
         self.assertEqual(member_vals["website_slug"], "k6sv")
 
+    def test_11_the_open_source_slug_identity_hooks_name_no_identity(self):
+        # Tests [@ANCHOR: user_websites:fn_users_slug_identity_fields]
+        # Tests [@ANCHOR: user_websites:fn_users_slug_identity]
+        # Called on the open-source class itself: a module that overrides them (hams.com's ham_onboarding) does not change the base.
+        users = self.env["res.users"]
+        self.assertEqual(ResUsers._slug_identity_fields(users), ())
+        self.assertFalse(ResUsers._slug_identity(users))
+        self.assertFalse(ResUsers._slug_identity(self.owner, {"function": "K6XX"}), "the base ignores vals")

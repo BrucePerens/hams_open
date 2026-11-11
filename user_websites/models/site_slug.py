@@ -34,6 +34,7 @@ SVC = "user_websites.user_websites_service_account"
 _SLUG_PATH_RE = re.compile(r"^/[a-z0-9\-]+\Z")
 
 
+# [@ANCHOR: user_websites:fn_site_slug_like_escape]
 def _like_escape(text):
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
@@ -72,6 +73,7 @@ def current_slug(env, user):
     return row[0] if row else False
 
 
+# [@ANCHOR: user_websites:fn_site_slug_next_hop]
 def _next_hop(svc, current):
     """The slug `/current` redirects to (a 301 row to a single-segment path), or None."""
     row = svc["website.rewrite"].search(
@@ -114,6 +116,7 @@ def assert_slug_free(env, slug, record):
             raise ValidationError(_("The site address '%s' is already taken.") % slug)
 
 
+# [@ANCHOR: user_websites:fn_site_slug_count]
 def _count(env, model, domain):
     svc = env["zero_sudo.security.utils"]._get_service_env("edge_routing.edge_routing_service_account")
     return svc[model].with_context(active_test=False).search_count(domain)
