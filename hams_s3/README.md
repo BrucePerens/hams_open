@@ -5,6 +5,7 @@ This module integrates the OCA `storage.backend` model (from OCA's `storage_back
 ## Features
 
 - **General Settings Integration**: Adds a "Cloud Storage" block to General Settings for configuring S3 buckets.
+- **Secret canary**: when the optional `hams_secret_canary` addon is installed, a newly saved S3 secret key is registered with it (only a salted hash is kept), so that its appearance in a response or a log line raises an alarm. An unchanged (masked) or empty key, or one that is not a single token, is skipped; saving never fails because of the canary. A key saved before the canary was installed is registered the next time it is saved.
 - **Dependency Setup**: Includes a script `scripts/install_oca_storage.py` that clones the OCA `storage`, `connector` and `server-env` repositories (branch `18.0`), then copies and patches four addons from them into a directory you name: `storage_backend`, `storage_backend_s3`, `component` (from the `connector` repository), and `server_environment`. It does not install them into Odoo; it only copies them.
 
 ## Installation / Setup
