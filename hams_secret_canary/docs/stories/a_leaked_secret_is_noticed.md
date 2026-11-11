@@ -21,6 +21,8 @@ secret is noticed when it happens and not months later.
    `[@ANCHOR: hams_secret_canary:post_dispatch_scan]` `[@ANCHOR: hams_secret_canary:scannable_response]`
    `[@ANCHOR: hams_secret_canary:scan_text]` `[@ANCHOR: hams_secret_canary:find_matches]` `[@ANCHOR: hams_secret_canary:candidates]`
    `[@ANCHOR: hams_secret_canary:register_hook]` `[@ANCHOR: hams_secret_canary:watch_log_records]`
+   An error response (an XML-RPC fault, say) is scanned too, by a wrapper on the WSGI entry point.
+   `[@ANCHOR: hams_secret_canary:watch_unscanned_responses]`
 4. A hit runs every alert backend: a CRITICAL log line, a security-log row and an email to the administrator. A log
    line that held the value is rewritten with the value removed. No alarm carries the matched value.
    `[@ANCHOR: hams_secret_canary:redact]` `[@ANCHOR: hams_secret_canary:raise_alarm]`

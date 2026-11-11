@@ -5,7 +5,7 @@ import json
 import logging
 import time
 
-from odoo import api, models
+from odoo import api, http, models
 
 from .. import alerts, detector
 
@@ -16,6 +16,7 @@ CACHE_SECONDS = 30
 # watcher reads whatever is loaded.
 _tables = {}
 _original_factory = []
+_original_application_call = []
 
 
 # [@ANCHOR: hams_secret_canary:watch_log_records]
@@ -35,6 +36,41 @@ def _watch_log_records(factory):
     return make_record
 
 
+# [@ANCHOR: hams_secret_canary:watch_unscanned_responses]
+def _watch_unscanned_responses(application_call):
+    """Wraps the WSGI entry point `odoo.http.Application.__call__`. A short text response that did not pass the
+    `ir.http` hook is read and scanned, then returned unchanged. Error responses (an XML-RPC fault that carries an
+    exception message is an HTTP 200) are made outside `ir.http._post_dispatch`, which is the only other scan point;
+    the hook marks the requests it scanned so none is scanned twice. Static files are skipped. There is no database
+    environment here, so only the logging backend runs, as for a log line."""
+    def call(self, environ, start_response):
+        seen = {}
+
+        def capture(status, headers, exc_info=None):
+            seen["headers"] = dict((k.lower(), v) for k, v in headers)
+            return start_response(status, headers, exc_info)
+
+        result = application_call(self, environ, capture)
+        if not _tables or environ.get(detector.SCANNED_KEY) or "/static/" in environ.get("PATH_INFO", ""):
+            return result
+        headers = seen.get("headers", {})
+        mimetype = headers.get("content-type", "").split(";")[0].strip()
+        if not (mimetype.startswith("text/") or mimetype in detector.SCANNABLE_MIMETYPES):
+            return result
+        if not 0 < int(headers.get("content-length", 0)) <= detector.MAX_SCAN_BYTES:
+            return result
+        body = b"".join(result)
+        if not isinstance(result, (list, tuple)):  # an iterator must be closed; a plain list has no close()
+            result.close()
+        text = body.decode("utf-8", "replace")
+        for _loaded, salt, table in list(_tables.values()):
+            for label, kind in detector.find_matches(text, salt, table):
+                where = detector.redact(environ.get("PATH_INFO", ""), salt, table)
+                alerts.logging_backend(None, alerts.Alarm(label, kind, "response", where))
+        return [body]
+    return call
+
+
 class SecretCanary(models.AbstractModel):
     _name = "hams.secret.canary"
     _description = "Secret Canary"
@@ -47,6 +83,9 @@ class SecretCanary(models.AbstractModel):
         if not _original_factory:
             _original_factory.append(logging.getLogRecordFactory())
             logging.setLogRecordFactory(_watch_log_records(_original_factory[0]))
+        if not _original_application_call:
+            _original_application_call.append(http.Application.__call__)
+            http.Application.__call__ = _watch_unscanned_responses(_original_application_call[0])
 
     @api.model
     # [@ANCHOR: hams_secret_canary:load_state]

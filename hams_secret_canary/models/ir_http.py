@@ -17,6 +17,8 @@ class IrHttp(models.AbstractModel):
         response: the leak has already happened, this only makes it noticed. Skips responses that are not text or are
         streamed."""
         result = super()._post_dispatch(response)
+        if request:
+            request.httprequest.environ[detector.SCANNED_KEY] = True  # the WSGI wrapper does not scan this one again
         if request and detector.scannable_response(response):
             data = response.get_data()[: detector.MAX_SCAN_BYTES]
             request.env["hams.secret.canary"]._scan_text(

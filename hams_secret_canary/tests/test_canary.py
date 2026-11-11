@@ -172,3 +172,28 @@ class TestResponseHook(CanaryCase, HamsHttpCase):
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
             self.url_open("/odoo")
         self.assertIn("page_token", logs.output[0])
+
+
+@tagged("post_install", "-at_install")
+class TestErrorResponses(CanaryCase, HamsHttpCase):
+    """The WSGI wrapper, through a real XML-RPC request whose fault carries the secret in its message."""
+    # Tests [@ANCHOR: hams_secret_canary:watch_unscanned_responses]
+
+    def _call_unknown_method(self, name):
+        body = "<?xml version='1.0'?><methodCall><methodName>%s</methodName><params></params></methodCall>" % name
+        return self.url_open("/xmlrpc/2/common", data=body, headers={"Content-Type": "text/xml"})
+
+    def test_an_xmlrpc_fault_carrying_a_registered_token_raises_the_alarm_without_the_value(self):
+        token = "Fault_Zk39dQ7mPq2LxV8nTb4RcY6a"
+        self.canary._register_secret("fault_token", token)
+        secret_canary._tables.clear()
+        self.canary._load_state()
+        with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
+            response = self._call_unknown_method(token)
+        self.assertIn(token, response.text)  # the fault is returned unchanged
+        self.assertIn("fault_token", logs.output[0])
+        self.assertNotIn(token, logs.output[0])
+
+    def test_an_xmlrpc_fault_without_a_token_raises_nothing(self):
+        with self.assertNoLogs("hams_secret_canary.alarm", "CRITICAL"):
+            self._call_unknown_method("no_such_method")

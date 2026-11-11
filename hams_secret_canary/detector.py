@@ -13,6 +13,8 @@ TOKEN_RE = re.compile(r"[A-Za-z0-9_\-+/.]{16,512}")
 # Only the first MAX_SCAN_BYTES of a response are scanned, bounding the cost of a response.
 MAX_SCAN_BYTES = 1 << 20
 SCANNABLE_MIMETYPES = frozenset({"application/json", "application/javascript", "application/xml", "application/xhtml+xml"})
+# Set in the WSGI environ by the `ir.http` hook for a request whose response it scanned.
+SCANNED_KEY = "hams_secret_canary.scanned"
 KIND_CANARY = "canary"
 KIND_SECRET = "secret"
 _ALNUM = string.ascii_letters + string.digits

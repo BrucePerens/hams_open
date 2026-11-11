@@ -25,9 +25,11 @@ service: alerts go to the Odoo log, a `zero_sudo.security.log` row and an email 
   anything else (quotes, spaces, `=`, `&`, `:`, `,`, `<`). A secret that is split, encoded, or embedded inside a longer
   run of those characters is not found.
 * Cost: one hash per distinct token, at most about 1 MiB of text per response (tested: under one second for 1 MiB).
-* Not done: a WSGI-level scan (routes that bypass `ir.http`, such as `/xmlrpc/2/*` responses, are not scanned), a
-  decoy file in `keys/` and a decoy environment variable (an install can add them and register their values with
-  `_register_secret`), and wiring the real secrets of other modules to `_register_secret`.
+* A short text response that did not pass the `ir.http` hook, such as an XML-RPC fault carrying an exception message
+  (an HTTP 200 made outside `ir.http._post_dispatch`), is scanned by a wrapper on the WSGI entry point and returned
+  unchanged. The hook marks the requests it scanned so none is scanned twice, and static files are skipped. There is no
+  database environment there, so only the logging alert runs. Successful XML-RPC responses are ordinary routed
+  responses and are scanned by the `ir.http` hook.
 
 ## Alerts
 
@@ -61,6 +63,15 @@ digits, `-`, `_`). Returns the value; an unknown label raises `KeyError`. Random
 **Purpose.** Whether a value is exactly one token, the only shape the scan can find. `is_token(value)`: `value` any
 string. Returns `True` for 16 to 512 characters of `A-Za-z0-9_-+/.` not ending in `.`; `False` otherwise (including
 empty). Pure. Test: `TestDetector.test_canaries_are_random_per_call_and_shaped`, `test_registering_a_non_token_fails`.
+
+### `hams_secret_canary:watch_unscanned_responses`
+
+**Purpose.** Scans responses that the `ir.http` hook never sees. `_watch_unscanned_responses(application_call)`:
+`application_call` the original `odoo.http.Application.__call__`; returns the wrapper installed on first
+`_register_hook`. A response of a request not marked by the hook (`detector.SCANNED_KEY` in the WSGI environ), not a
+static file, with a scannable type and a `Content-Length` of 1 byte to 1 MiB is read, scanned
+(`detector.find_matches`) and returned unchanged; each hit runs the logging backend only (source `response`, the
+request path with any registered token redacted). Test: `TestErrorResponses`.
 
 ### `hams_secret_canary:scannable_response`
 
