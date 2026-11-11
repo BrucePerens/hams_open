@@ -39,9 +39,6 @@ This module is fully optimized for Odoo 19 and adheres to a strict Zero-Sudo arc
 ## 1. Overview
 Control plane for the CDN edge. Manages Cache-Tags (labels sent in a response's `Cache-Tag` header so Cloudflare can later purge every cached object carrying that label; this module sets `odoo-static-assets` and `odoo-website-<id>`), WAF bans, and Turnstile CAPTCHA verification to offload processing to Cloudflare's edge.
 
-## Minimal token scopes
-Saving a changed API token in Settings asks Cloudflare what the token may do (`/user/tokens/verify`, then the token's own policy list; nothing is sent to hams.com). A token that holds API Tokens, Billing, Members, Account Settings Write or Organizations permissions is refused with the names to remove, and so is a token Cloudflare cannot introspect (fail closed, never a silent pass). Create the token with only Zone: Cache Purge, Zone: DNS Edit, Zone: Zone Settings Edit, Zone: Firewall Services Edit (and Account: Cloudflare Tunnel Edit if you use tunnels), limited to the zones you manage. An installer who cannot do this ticks "Allow an over-broad API token"; the override is logged as a warning.
-
 ## Secret canary
 
 When the optional `hams_secret_canary` addon is installed, a newly written API token or Turnstile secret on a website is registered with it (only a salted hash is kept), so that its appearance in a response or a log line raises an alarm. A value that is not a single token (shorter than 16 characters, or with spaces) is logged and skipped; saving never fails because of the canary. A secret saved before the canary was installed is registered the next time it is saved.
@@ -169,14 +166,10 @@ The module enforces website-level isolation through the website's company: recor
 - `[@ANCHOR: cloudflare:COMM_dns_api_get_zone_details]` `get_zone_details(zone_id, token)` GETs the zone object (plan, creation date, name) and returns `(True, dict)` or `(False, message)`. **Tests:** `TestDnsApiCalls.test_04_zone_details_and_record_count_are_reads_and_a_missing_total_is_a_failure`.
 - `[@ANCHOR: cloudflare:COMM_dns_api_count_records]` `count_dns_records(zone_id, token)` asks for one record per page and returns `(True, total_count)`; a missing total or a failed read is `(False, message)`, so the capacity guard refuses instead of guessing. **Tests:** `TestDnsApiCalls.test_04_zone_details_and_record_count_are_reads_and_a_missing_total_is_a_failure`.
 
-## Token scope check (`utils/cloudflare_api.py`, `models/res_config_settings.py`)
+## Settings secrets and JSON helper (`utils/cloudflare_api.py`, `models/res_config_settings.py`)
 
-- `[@ANCHOR: cloudflare:COMM_dns_api_broad_token_permissions]` `broad_token_permissions(policies)` returns the sorted names of the broad permission groups (API tokens, billing, members, account settings write, organizations) in the allow policies of a token's policy list; an empty list means the token is scoped.
-- `[@ANCHOR: cloudflare:COMM_dns_api_inspect_token]` `inspect_token(token)` asks Cloudflare what a token may do and returns `(True, [broad permission names])`, or `(False, message)` when the token cannot be verified, is not active, or its policy list cannot be read (it fails closed). **Tests:** `test_scoped_token_accepted`, `test_unreadable_answers_fail_closed`.
-- `[@ANCHOR: cloudflare:COMM_dns_api_json_result]` `_json_body(resp)` returns the JSON object of a Cloudflare answer, or None when the body is not JSON or not an object; `inspect_token` treats None as unreadable and fails closed.
-- `[@ANCHOR: cloudflare:COMM_settings_create]` `create(vals_list)` on the settings model runs `_check_cloudflare_token_scope` for each record before saving it.
+- `[@ANCHOR: cloudflare:COMM_dns_api_json_result]` `_json_body(resp)` returns the JSON object of a Cloudflare answer, or None when the body is not JSON or not an object.
 - `[@ANCHOR: cloudflare:COMM_settings_masks_secrets]` The settings form shows the stored API token and Turnstile secret as `********` (computed fields), writes them only when edited, and clears them when blank; `get_values` masks them too, so a settings read over RPC never returns the secret.
-- `[@ANCHOR: cloudflare:COMM_settings_check_token_scope]` `_check_cloudflare_token_scope(vals)` runs when the settings are created with a changed API token: it refuses a changed token that is broad or that Cloudflare cannot introspect (unless overridden), and does nothing for an empty or unchanged token. **Tests:** `test_settings_refuse_then_override`.
 
 ## Cloudflare API helpers (`utils/cloudflare_api.py`)
 

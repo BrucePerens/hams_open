@@ -394,48 +394,6 @@ def purge_everything(token, zone_id):
     return False
 
 
-# Permission groups no edge-orchestration token needs: they let a leaked token mint other tokens, change
-# billing or membership, or rewrite account settings. Matched case-insensitively against the group name.
-BROAD_PERMISSION_WORDS = ("api tokens", "billing", "members", "account settings write", "organizations")
-
-
-# [@ANCHOR: cloudflare:COMM_dns_api_broad_token_permissions]
-def broad_token_permissions(policies):
-    """Names of the broad permission groups in a Cloudflare token's policy list (empty list: scoped)."""
-    found = []
-    for policy in policies or []:
-        if policy.get("effect", "allow") != "allow":
-            continue
-        for group in policy.get("permission_groups") or []:
-            name = str(group.get("name", ""))
-            if any(word in name.lower() for word in BROAD_PERMISSION_WORDS):
-                found.append(name)
-    return sorted(set(found))
-
-
-# [@ANCHOR: cloudflare:COMM_dns_api_inspect_token]
-# Verified by [@ANCHOR: test_inspect_token_unreadable_answers]
-def inspect_token(token):
-    """Ask Cloudflare what this token may do. Returns (True, [broad permission names]) or (False, message).
-
-    Fails closed: any answer that is not a clear "active token with a readable policy list" is (False, ...).
-    """
-    base = "https://api.cloudflare.com/client/v4/user/tokens"
-    resp = _make_request("GET", f"{base}/verify", token, "Cloudflare token verify failed", timeout=10)
-    if resp is None or resp.status_code != 200:
-        return False, "Cloudflare could not verify the token (unreachable, or not a user API token)."
-    result = _json_result(resp)
-    if not isinstance(result, dict) or result.get("status") != "active" or not result.get("id"):
-        return False, "Cloudflare reports the token is not active."
-    resp = _make_request("GET", f"{base}/{result['id']}", token, "Cloudflare token detail failed", timeout=10)
-    if resp is None or resp.status_code != 200:
-        return False, "Cloudflare would not list the token's permissions (the token cannot read its own policy)."
-    detail = _json_result(resp)
-    if not isinstance(detail, dict) or not isinstance(detail.get("policies"), list):
-        return False, "Cloudflare would not list the token's permissions (the answer was not readable)."
-    return True, broad_token_permissions(detail["policies"])
-
-
 # [@ANCHOR: cloudflare:COMM_dns_api_json_result]
 def _json_body(resp):
     """The JSON object of a Cloudflare answer, or None when the body is not JSON or not an object."""
