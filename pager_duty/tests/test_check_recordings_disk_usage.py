@@ -51,6 +51,7 @@ class TestRecordingsDiskUsage(HamsTransactionCase):
         self.assertEqual((used, available), (60000, 30000))
 
     def test_a_missing_directory_is_measured_through_its_nearest_parent(self):
+        # Tests [@ANCHOR: pager_duty:recordings_disk_nearest_directory]
         with tempfile.TemporaryDirectory() as tmp:
             missing = os.path.join(tmp, "not", "yet")
             self.assertEqual(check_mod.nearest_existing_directory(missing), os.path.abspath(tmp))
@@ -112,10 +113,20 @@ class TestRecordingsVolumeEstimate(HamsTransactionCase):
         self.assertAlmostEqual(rate, 24 * GB)
 
     def test_a_huge_horizon_reads_as_more_than_ten_years(self):
+        # Tests [@ANCHOR: pager_duty:recordings_disk_summary_line]
         line = check_mod.summary_line("/r", 24.0, (10, 2 * GB, 1000, True, None), 1000, 400000.0)
         self.assertIn("more than 10 years to 85%", line)
 
+    def test_human_sizes_use_decimal_units(self):
+        # Tests [@ANCHOR: pager_duty:recordings_disk_human]
+        self.assertEqual(check_mod.human(0), "0 B")
+        self.assertEqual(check_mod.human(999), "999 B")
+        self.assertEqual(check_mod.human(1500), "1.5 KB")
+        self.assertEqual(check_mod.human(2 * GB), "2.0 GB")
+        self.assertEqual(check_mod.human(5000 * GB), "5.0 TB")
+
     def test_summary_line_carries_files_size_rate_and_days(self):
+        # Tests [@ANCHOR: pager_duty:recordings_disk_summary_line]
         line = check_mod.summary_line("/r", 24.0, (10, 2 * GB, 7 * GB, True, None), 1 * GB, 55.0)
         for part in ("/r", "10 files", "2.0 GB", "1.0 GB/day", "24% used", "55 days to 85%"):
             self.assertIn(part, line)
