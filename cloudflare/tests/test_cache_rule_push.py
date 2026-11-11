@@ -64,6 +64,8 @@ class TestCacheRulePush(HamsTransactionCase):
         )
 
     def test_bypass_always_precedes_cache_and_respects_origin(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_action_push_cache_rules]
+        # Tests [@ANCHOR: cloudflare:COMM_cache_build_ruleset_rules]
         self._make_rows()
         self.mock_get.return_value = ("ok", {"id": "rs_1", "name": "Existing", "rules": []})
         ok, _msg = self._push()
@@ -124,6 +126,7 @@ class TestCacheRulePush(HamsTransactionCase):
         self.mock_create.assert_not_called()
 
     def test_form_button_pushes_via_service_user(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_rule_push_to_cloudflare]
         self._make_rows()
         self.mock_get.return_value = ("ok", {"id": "rs_1", "name": "Existing", "rules": []})
         rec = self.env["cloudflare.cache.rule"].search([], limit=1)
@@ -152,6 +155,7 @@ class TestCacheRulePush(HamsTransactionCase):
         self.assertEqual(self.mock_update.call_args[0][1]["name"], "Existing")
 
     def test_unreadable_ruleset_is_refused_not_treated_as_empty(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_cache_rules]
         self._make_rows()
         self.mock_get.return_value = ("error", "API Error")
         ok, msg = self._push()
@@ -161,6 +165,8 @@ class TestCacheRulePush(HamsTransactionCase):
         self.mock_create.assert_not_called()
 
     def test_plan_changes_nothing_and_stale_hash_is_refused(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_cache_rules]
+        # Tests [@ANCHOR: cloudflare:COMM_cache_action_push_cache_rules]
         self._make_rows()
         self.mock_get.return_value = ("absent", None)
         plan = self.env["cloudflare.config.manager"].with_user(self.svc_uid).plan_cache_rules(self.website.id)
@@ -173,6 +179,7 @@ class TestCacheRulePush(HamsTransactionCase):
         self.mock_create.assert_not_called()
 
     def test_second_push_of_same_rows_has_nothing_to_do(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_action_push_cache_rules]
         self._make_rows()
         self.mock_get.return_value = ("absent", None)
         self._push()
@@ -184,3 +191,27 @@ class TestCacheRulePush(HamsTransactionCase):
         self.assertTrue(ok)
         self.assertIn("Nothing to do", msg)
         self.mock_update.assert_not_called()
+
+    def test_form_button_shows_the_plan_without_writing_and_shows_a_refusal(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_rule_plan_push]
+        self._make_rows()
+        rec = self.env["cloudflare.cache.rule"].search([], limit=1)
+        self.mock_get.return_value = ("absent", None)
+        res = rec.action_plan_cache_push()
+        self.assertEqual(res["params"]["type"], "info")
+        self.assertIn("CREATE", res["params"]["message"])
+        self.mock_create.assert_not_called()
+        self.mock_update.assert_not_called()
+        self.mock_get.return_value = ("error", "API Error")
+        res = rec.action_plan_cache_push()
+        self.assertEqual(res["params"]["type"], "danger")
+        self.assertIn("REFUSED", res["params"]["message"])
+
+    def test_rules_are_built_bypass_first_and_each_cache_rule_negates_the_bypass(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_build_ruleset_rules]
+        self._make_rows()
+        rules = self.env["cloudflare.config.manager"].with_user(self.svc_uid)._build_cache_ruleset_rules(self.website)
+        self.assertEqual([r["action_parameters"].get("cache") for r in rules], [False, True])
+        self.assertEqual(rules[0]["description"], "Bypass cache when session_id cookie present")
+        self.assertEqual(rules[1]["expression"], 'not ((http.cookie contains "session_id"))')
+        self.assertTrue(all(r["enabled"] and r["action"] == "set_cache_settings" for r in rules))

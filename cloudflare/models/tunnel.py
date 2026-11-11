@@ -95,6 +95,7 @@ class CloudflareTunnel(models.Model):
         "point this to the reverse proxy (e.g. port 8085) to prevent slow clients from truncating large downloads.",
     )
 
+    # [@ANCHOR: cloudflare:COMM_tunnel_check_catch_all_service]
     @api.constrains("catch_all_service")
     def _check_catch_all_service(self):
         # See [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]

@@ -510,6 +510,7 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
         mock_push.assert_not_called()
 
     def test_push_configuration_catch_all_service_is_per_tunnel(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_check_catch_all_service]
         # Tests [@ANCHOR: cloudflare:COMM_tunnel_catch_all_service]
         """
         The last ingress rule is the tunnel's own catch_all_service. A default tunnel keeps pushing this
