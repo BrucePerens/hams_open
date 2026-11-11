@@ -13,6 +13,10 @@ from email import message_from_bytes
 from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
     BULK_SCORE_THRESHOLD,
     STORED_TICKET_SCORE_THRESHOLD,
+    _brand_mentioned,
+    _domain_matches_brand,
+    _extract_link_domains,
+    _registrable_domain,
     bulk_mail_findings,
     detect_bulk_mail_signals,
     detect_inbound_spam_signals,
@@ -42,6 +46,7 @@ class TestInboundSpamFilter(HamsTransactionCase):
     # ------------------------------------------------------------------
 
     def test_01_domain_expiring_spam_is_flagged(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_detect_spam_signals]
         reasons = detect_inbound_spam_signals(
             subject="You have domain(s) expiring soon",
             body_html="<p>Act now to renew your domain(s) before they expire.</p>",
@@ -209,9 +214,30 @@ class TestInboundSpamFilter(HamsTransactionCase):
         )
         self.assertEqual(reasons, [])
 
+    def test_16b_the_link_and_brand_helpers_by_themselves(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_registrable_domain]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_domain_matches_brand]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_extract_link_domains]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_brand_mentioned]
+        self.assertEqual(_registrable_domain("WWW.Intuit.com "), "intuit.com")
+        self.assertEqual(_registrable_domain("accounts.intuit.com"), "accounts.intuit.com")  # only a leading www. goes
+        self.assertEqual(_registrable_domain(""), "")
+        self.assertEqual(_registrable_domain(None), "")
+        self.assertTrue(_domain_matches_brand("intuit.com", ("intuit.com",)))
+        self.assertTrue(_domain_matches_brand("www.intuit.com", ("intuit.com",)))
+        self.assertTrue(_domain_matches_brand("accounts.intuit.com", ("intuit.com",)))
+        self.assertFalse(_domain_matches_brand("notintuit.com", ("intuit.com",)))
+        self.assertFalse(_domain_matches_brand("intuit.com.evil.example", ("intuit.com",)))
+        self.assertFalse(_domain_matches_brand("", ("intuit.com",)))
+        body = '<a href="https://Click.Example.org/x">a</a> <a href=\'http://www.intuit.com/\'>b</a> <a href="http://[x/">bad</a> <a href="/relative">c</a>'
+        self.assertEqual(_extract_link_domains(body), {"click.example.org", "www.intuit.com"})
+        self.assertEqual(_extract_link_domains(None), set())
+        self.assertTrue(_brand_mentioned("paypal", "Your PayPal account"))
+        self.assertFalse(_brand_mentioned("paypal", "paypalish and unpaypal"))
+        self.assertFalse(_brand_mentioned("dhl", ""))
+
     # ------------------------------------------------------------------
     # Amazon SES scan verdicts [@ANCHOR: test_ses_verdicts_flag_only_a_fail]
-    # Tests [@ANCHOR: hams_helpdesk:ses_verdicts]
     # ------------------------------------------------------------------
 
     def _ses_message(self, spam, virus):
@@ -219,6 +245,8 @@ class TestInboundSpamFilter(HamsTransactionCase):
         return message_from_bytes(raw)
 
     def test_17_ses_verdicts_flag_only_a_fail(self):
+        # Tests [@ANCHOR: hams_helpdesk:ses_verdicts]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_ses_verdict_reasons]
         self.assertEqual(ses_verdict_reasons(ses_verdicts(self._ses_message("PASS", "PASS"))), [])
         self.assertEqual(ses_verdict_reasons(ses_verdicts(self._ses_message("GRAY", "PROCESSING_FAILED"))), [])
         spam = ses_verdict_reasons(ses_verdicts(self._ses_message("FAIL", "PASS")))
@@ -228,12 +256,15 @@ class TestInboundSpamFilter(HamsTransactionCase):
         self.assertEqual(len(both), 2)
 
     def test_18_a_message_without_ses_headers_has_no_verdicts(self):
+        # Tests [@ANCHOR: hams_helpdesk:ses_verdicts]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_ses_verdict_reasons]
         message = message_from_bytes(b"Subject: hi\r\n\r\nbody\r\n")
         self.assertEqual(ses_verdicts(message), {})
         self.assertEqual(ses_verdict_reasons(ses_verdicts(message)), [])
         self.assertEqual(ses_verdict_reasons(None), [])
 
     def test_19_a_hostile_verdict_value_is_bounded(self):
+        # Tests [@ANCHOR: hams_helpdesk:ses_verdicts]
         verdicts = ses_verdicts(self._ses_message("FAIL" + "x" * 500, "PASS"))
         self.assertLessEqual(len(verdicts["spam"]), 32)
         self.assertEqual(ses_verdict_reasons(verdicts), [])
