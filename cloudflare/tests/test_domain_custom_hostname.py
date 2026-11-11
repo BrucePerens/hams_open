@@ -80,6 +80,7 @@ class TestDomainCustomHostname(RealTransactionCase):
         self.assertFalse(domain.cloudflare_hostname_id)
 
     def test_unlink_deletes_the_custom_hostname_when_one_exists(self):
+        # Tests [@ANCHOR: cloudflare:COMM_domain_unlink]
         # Tests [@ANCHOR: cloudflare:COMM_delete_custom_hostname_batch]
         mock_create = self.safe_patch(
             "odoo.addons.cloudflare.models.domain.cf_utils.create_custom_hostname"
@@ -100,6 +101,7 @@ class TestDomainCustomHostname(RealTransactionCase):
         mock_delete.assert_called_once_with("hostname_456", "tok", "zone")
 
     def test_unlink_logs_a_warning_when_the_cloudflare_delete_fails(self):
+        # Tests [@ANCHOR: cloudflare:COMM_domain_unlink]
         # Regression for todo 05a5144b: the (bool, str) result of delete_custom_hostname
         # used to be discarded, so a failed delete left an orphaned hostname on Cloudflare
         # with no trace anywhere.

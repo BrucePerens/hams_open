@@ -110,6 +110,7 @@ def plan_hash(merged, remote_rules):
     return hashlib.sha256(json.dumps(body, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+# [@ANCHOR: cloudflare:COMM_cache_plan_render]
 def render(plan, ruleset_state):
     order = {CREATE: 0, UPDATE: 1, DELETE: 2, KEEP: 3, UNCHANGED: 4}
     lines = [f"Zone cache-settings ruleset: {ruleset_state}"]

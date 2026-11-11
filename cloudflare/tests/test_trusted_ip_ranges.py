@@ -7,6 +7,7 @@ import requests
 from odoo.tests.common import tagged
 from odoo.tools import convert_file
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.cloudflare.models.trusted_ip_ranges import _parse_ranges
 
 
 @tagged("post_install", "-at_install")
@@ -219,6 +220,7 @@ class TestTrustedIpRanges(HamsTransactionCase):
     # Tests [@ANCHOR: cloudflare:COMM_trusted_ip_ranges_settings_fields]
     # Tests [@ANCHOR: cloudflare:publish_trusted_ip_ranges_to_redis]
     def test_13_settings_custom_field_is_config_parameter_backed_and_republishes(self):
+        # Tests [@ANCHOR: cloudflare:COMM_settings_set_values]
         """The settings-screen `cloudflare_trusted_ip_ranges_custom` field is a plain
         `config_parameter=` passthrough (res_config_settings.py), so saving the settings
         form must both persist the value to ir.config_parameter and re-publish the merged
@@ -261,3 +263,23 @@ class TestTrustedIpRanges(HamsTransactionCase):
         result = settings.action_refresh_cloudflare_trusted_ip_ranges()
         self.assertTrue(mock_cron.called, "The button must call the same cron refresh method.")
         self.assertEqual(result, {"type": "ir.actions.client", "tag": "reload"})
+
+    def test_14_parse_ranges_keeps_canonical_networks_and_skips_what_does_not_parse(self):
+        # Tests [@ANCHOR: cloudflare:COMM_trusted_ip_parse_ranges]
+        with self.assertLogs("odoo.addons.cloudflare.models.trusted_ip_ranges", level="WARNING"):
+            ranges = _parse_ranges("203.0.113.0/24, bogus\n\n198.51.100.77/24\n2001:db8::1")
+        self.assertEqual(ranges, ["203.0.113.0/24", "198.51.100.0/24", "2001:db8::1/128"])
+        self.assertEqual(_parse_ranges(None), [])
+
+    def test_15_the_settings_screen_shows_the_refresh_state_or_the_defaults(self):
+        # Tests [@ANCHOR: cloudflare:COMM_settings_compute_trusted_ip_display]
+        self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "")
+        self._icp().set_param("cloudflare.trusted_ip_ranges_last_refreshed", "")
+        settings = self.env["res.config.settings"].create({})
+        self.assertIn("not yet refreshed", settings.cloudflare_trusted_ip_ranges_auto)
+        self.assertEqual(settings.cloudflare_trusted_ip_ranges_last_refreshed, "Never")
+        self._icp().set_param("cloudflare.trusted_ip_ranges_auto", "173.245.48.0/20")
+        self._icp().set_param("cloudflare.trusted_ip_ranges_last_refreshed", "2026-11-01 00:00:00")
+        settings = self.env["res.config.settings"].create({})
+        self.assertEqual(settings.cloudflare_trusted_ip_ranges_auto, "173.245.48.0/20")
+        self.assertEqual(settings.cloudflare_trusted_ip_ranges_last_refreshed, "2026-11-01 00:00:00")

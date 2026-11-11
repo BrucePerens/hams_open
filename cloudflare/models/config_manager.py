@@ -340,6 +340,7 @@ class CloudflareConfigManager(models.AbstractModel):
         else:
             return create_zone_ruleset(ruleset_payload, token, zone_id)
 
+    # [@ANCHOR: cloudflare:COMM_cache_build_ruleset_rules]
     @api.model
     def _build_cache_ruleset_rules(self, website):
         """Turn the website's active cache rules into Cloudflare cache-settings rules.
@@ -388,6 +389,7 @@ class CloudflareConfigManager(models.AbstractModel):
             )
         return payload
 
+    # [@ANCHOR: cloudflare:COMM_cache_plan_cache_rules]
     @api.model
     def plan_cache_rules(self, website_id=None):
         """What pushing the Odoo cache rules would do. Reads Cloudflare (GET only), writes nothing.
@@ -421,6 +423,7 @@ class CloudflareConfigManager(models.AbstractModel):
                 "rules": plan["rules"], "ruleset_id": (ruleset or {}).get("id"), "ruleset_name": (ruleset or {}).get("name"),
             }
 
+    # [@ANCHOR: cloudflare:COMM_cache_action_push_cache_rules]
     @api.model
     def action_push_cache_rules(self, website_id=None, plan_hash=None):
         """Push the Odoo cache rules to Cloudflare's http_request_cache_settings phase.

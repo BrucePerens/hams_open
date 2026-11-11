@@ -83,6 +83,7 @@ class CloudflareCacheRule(models.Model):
     )
     website_id = fields.Many2one("website", string="Website")
 
+    # [@ANCHOR: cloudflare:COMM_cache_rule_plan_push]
     def action_plan_cache_push(self):
         """Show what a push would do (reads Cloudflare, writes nothing)."""
         self.ensure_one()
@@ -100,6 +101,7 @@ class CloudflareCacheRule(models.Model):
             },
         }
 
+    # [@ANCHOR: cloudflare:COMM_cache_rule_push_to_cloudflare]
     def action_push_to_cloudflare(self):
         """Push every active cache rule of this rule's website to Cloudflare."""
         self.ensure_one()

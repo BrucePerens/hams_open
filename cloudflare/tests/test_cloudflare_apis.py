@@ -169,6 +169,7 @@ class TestCloudflareAPIs(HamsTransactionCase):
         )
 
     def test_03_tunnel_setup(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_wizard_compute_command]
         # [@ANCHOR: COMM_test_cf_tunnel_setup]
 
         # Tests [@ANCHOR: COMM_cf_tunnel_setup]
