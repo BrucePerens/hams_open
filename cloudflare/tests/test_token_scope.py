@@ -88,3 +88,21 @@ class TestTokenScope(HamsTransactionCase):
         m = self.safe_patch("odoo.addons.cloudflare.models.res_config_settings.inspect_token")
         self._settings(cloudflare_api_token="same")
         m.assert_not_called()
+
+    def test_settings_mask_the_stored_secrets(self):
+        # Tests [@ANCHOR: cloudflare:COMM_settings_masks_secrets]
+        website = self.env["website"].get_current_website()
+        website.write({"cloudflare_api_token": "real-token", "cloudflare_turnstile_secret": "real-secret"})
+        m = self.safe_patch("odoo.addons.cloudflare.models.res_config_settings.inspect_token")
+        settings = self._settings()
+        self.assertEqual(settings.read(["cloudflare_api_token"])[0]["cloudflare_api_token"], "********")
+        self.assertEqual(settings.cloudflare_turnstile_secret, "********")
+        self.assertEqual(self.env["res.config.settings"].get_values()["cloudflare_api_token"], "********")
+        settings.cloudflare_api_token = "********"  # saved untouched: kept
+        self.assertEqual(website.cloudflare_api_token, "real-token")
+        self.assertEqual(website.cloudflare_turnstile_secret, "real-secret")
+        m.assert_not_called()
+        settings.cloudflare_turnstile_secret = "new-secret"  # edited: stored
+        self.assertEqual(website.cloudflare_turnstile_secret, "new-secret")
+        settings.cloudflare_turnstile_secret = ""  # blank: cleared
+        self.assertFalse(website.cloudflare_turnstile_secret)

@@ -10,11 +10,17 @@ _logger = logging.getLogger(__name__)
 
 
 # # Verified by [@ANCHOR: test_xpath_rendering_cf_settings]
+SECRET_MASK = "********"
+SECRET_FIELDS = ("cloudflare_api_token", "cloudflare_turnstile_secret")
+
+
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
+    # The two stored credentials read back as a mask (compute) and are written only when the field was changed
+    # (inverse): a settings read over RPC never returns the secret. [@ANCHOR: cloudflare:COMM_settings_masks_secrets]
     cloudflare_api_token = fields.Char(
-        related="website_id.cloudflare_api_token", readonly=False
+        compute="_compute_cloudflare_secrets", inverse="_inverse_cloudflare_secrets"
     )
     cloudflare_allow_broad_token = fields.Boolean(  # secret-storage-ignore: secret-config-parameter: an on/off switch, not a token
         string="Allow an over-broad API token",
@@ -29,7 +35,7 @@ class ResConfigSettings(models.TransientModel):
         related="website_id.cloudflare_account_id", readonly=False
     )
     cloudflare_turnstile_secret = fields.Char(
-        related="website_id.cloudflare_turnstile_secret", readonly=False
+        compute="_compute_cloudflare_secrets", inverse="_inverse_cloudflare_secrets"
     )
 
     # Off by default: a Tunnel-only deployment's origin is never reachable from Cloudflare's
@@ -90,6 +96,29 @@ class ResConfigSettings(models.TransientModel):
                 "cloudflare.trusted_ip_ranges_last_refreshed"
             ) or _("Never")
 
+    @api.depends("website_id")
+    def _compute_cloudflare_secrets(self):
+        for rec in self:
+            for name in SECRET_FIELDS:
+                rec[name] = SECRET_MASK if rec.website_id[name] else False
+
+    def _inverse_cloudflare_secrets(self):
+        # The mask means "not edited"; a blank value clears the secret.
+        for rec in self:
+            vals = {n: rec[n] or False for n in SECRET_FIELDS if rec[n] != SECRET_MASK}
+            if vals and rec.website_id:
+                rec.website_id.write(vals)
+
+    @api.private
+    @api.model
+    def get_values(self):
+        res = super().get_values()
+        website = self.env["website"].get_current_website()
+        for name in SECRET_FIELDS:
+            if website[name]:
+                res[name] = SECRET_MASK
+        return res
+
     # [@ANCHOR: cloudflare:COMM_settings_check_token_scope]
     def _check_cloudflare_token_scope(self, vals):
         """Refuse (unless overridden) a changed token that is broad or that Cloudflare cannot introspect.
@@ -103,7 +132,7 @@ class ResConfigSettings(models.TransientModel):
             if vals.get("website_id")
             else self.env["website"].get_current_website()
         )
-        if not token or token == website.cloudflare_api_token:
+        if not token or token in (SECRET_MASK, website.cloudflare_api_token):
             return
         ok, detail = inspect_token(token)
         if ok and not detail:
