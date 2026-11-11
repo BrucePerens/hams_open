@@ -746,6 +746,20 @@ pub struct YaesuParams {
     /// FT-891, FT-710, FTDX10 and FTDX101, 8 on the FT-450, FT-950, FT-2000, FTDX1200,
     /// FTDX3000, FTDX5000 and FTDX9000.
     pub frequency_digits: u8,
+    /// Per-model wire ranges `(level, min, max)` that replace the engine's defaults (the FT-891's
+    /// `RG` is 0-30, the FTDX5000's `MG` and `PC` are 0-255). Empty means the defaults apply.
+    pub level_ranges: Vec<(Level, u16, u16)>,
+}
+
+impl YaesuParams {
+    // [@ANCHOR: radioctl_core_yaesu_level_range]
+    /// The per-model `(min, max)` of `level`, if the description gives one.
+    pub fn level_range(&self, level: Level) -> Option<(u16, u16)> {
+        self.level_ranges
+            .iter()
+            .find(|(l, _, _)| *l == level)
+            .map(|(_, min, max)| (*min, *max))
+    }
 }
 
 /// Yaesu legacy five-byte CAT parameters.

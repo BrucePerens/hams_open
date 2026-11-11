@@ -9,7 +9,7 @@
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
 //! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.scope_link` (`lan`, the default, or `serial`: how a TS-890S sends its scopes), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
-//! `yaesu.frequency_digits` (only when not 9),
+//! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
 //! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
@@ -222,6 +222,9 @@ struct YaesuSection {
     model_id: u16,
     #[serde(default)]
     frequency_digits: Option<u8>,
+    /// Per-model level ranges, `level-name = [min, max]` (see `YaesuParams::level_ranges`).
+    #[serde(default)]
+    levels: BTreeMap<String, (u16, u16)>,
 }
 
 #[derive(Deserialize)]
@@ -655,6 +658,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
             Ok::<YaesuParams, RigError>(YaesuParams {
                 model_id: y.model_id,
                 frequency_digits,
+                level_ranges: build_level_ranges("yaesu", &y.levels)?,
             })
         })
         .transpose()?;
@@ -887,7 +891,19 @@ const MAX_ANTENNA_PORTS: u8 = 8;
 /// Elecraft model that claims the levels capability.
 fn build_elecraft(section: &ElecraftSection) -> Result<ElecraftParams, RigError> {
     let mut params = ElecraftParams::new(section.model_id);
-    for (name, (min, max)) in &section.levels {
+    params.level_ranges = build_level_ranges("elecraft", &section.levels)?;
+    Ok(params)
+}
+
+// [@ANCHOR: radioctl_core_rigfile_build_level_ranges]
+/// A family block's per-model level ranges (`elecraft.levels`, `yaesu.levels`), each naming one of
+/// the numeric levels with `min <= max <= 999` (three wire digits).
+fn build_level_ranges(
+    block: &str,
+    levels: &BTreeMap<String, (u16, u16)>,
+) -> Result<Vec<(Level, u16, u16)>, RigError> {
+    let mut ranges = Vec::new();
+    for (name, (min, max)) in levels {
         let level = Level::from_name(name)
             .filter(|l| {
                 matches!(
@@ -902,17 +918,17 @@ fn build_elecraft(section: &ElecraftSection) -> Result<ElecraftParams, RigError>
             })
             .ok_or_else(|| {
                 bad(format!(
-                    "elecraft.levels names {name:?}, which is not one of af-gain, rf-gain, mic-gain, monitor-level, keyer-speed, rf-power"
+                    "{block}.levels names {name:?}, which is not one of af-gain, rf-gain, mic-gain, monitor-level, keyer-speed, rf-power"
                 ))
             })?;
         if min > max || *max > 999 {
             return Err(bad(format!(
-                "elecraft.levels.{name} must be [min, max] with min <= max <= 999"
+                "{block}.levels.{name} must be [min, max] with min <= max <= 999"
             )));
         }
-        params.level_ranges.push((level, *min, *max));
+        ranges.push((level, *min, *max));
     }
-    Ok(params)
+    Ok(ranges)
 }
 
 // [@ANCHOR: radioctl_core_rigfile_build_power_meter]
@@ -1315,6 +1331,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         if yaesu.frequency_digits != 9 {
             keys.push("yaesu.frequency_digits".to_string());
         }
+        if !yaesu.level_ranges.is_empty() {
+            keys.push("yaesu.levels".to_string());
+        }
     }
     if let Some(legacy) = &description.yaesu_legacy {
         keys.push("yaesu_legacy.stop_bits".to_string());
@@ -1672,7 +1691,36 @@ verified = { state = "unverified" }
         }
     }
 
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_level_ranges]
+    // Tests [@ANCHOR: radioctl_core_yaesu_level_range]
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    #[test]
+    fn yaesu_level_ranges_parse_need_a_fact_and_refuse_nonsense() {
+        let yaesu = GOOD
+            .replace("family = \"kenwood-ascii\"", "family = \"yaesu-newcat\"")
+            .replace("[kenwood]", "[yaesu]")
+            .replace("key = \"kenwood.model_id\"", "key = \"yaesu.model_id\"");
+        let with_levels = yaesu.replace(
+            "[yaesu]\nmodel_id = 19",
+            "[yaesu]\nmodel_id = 19\nlevels = { rf-gain = [0, 30] }",
+        );
+        assert_ne!(with_levels, yaesu, "the GOOD text changed shape");
+        expect_rejected(&with_levels, "yaesu.levels");
+        let fact = "\n[[facts]]\nkey = \"yaesu.levels\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let loaded = parse(&format!("{with_levels}{fact}")).expect("loads");
+        let params = loaded.description.yaesu.clone().expect("yaesu");
+        assert_eq!(params.level_range(Level::RfGain), Some((0, 30)));
+        assert_eq!(params.level_range(Level::AfGain), None);
+        assert!(expected_keys(&loaded.description).contains(&"yaesu.levels".to_string()));
+        for bad in ["preamp = [0, 1]", "af-gain = [9, 1]", "af-gain = [0, 1000]"] {
+            let text = yaesu.replace(
+                "[yaesu]\nmodel_id = 19",
+                &format!("[yaesu]\nmodel_id = 19\nlevels = {{ {bad} }}"),
+            );
+            expect_rejected(&format!("{text}{fact}"), "yaesu.levels");
+        }
+    }
+
     // Tests [@ANCHOR: radioctl_core_rigfile_parse]
     #[test]
     fn every_key_needs_a_fact_and_every_fact_a_key() {

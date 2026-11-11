@@ -3,9 +3,9 @@
 # Written from Yaesu's published Yaesu 'FT DX 9000 Series CAT Operation Reference' (document, PDF page and sha256 in each fact), with Hamlib 4.6.2 as a cross-check.
 # Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
 # Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
-# Gaps and open questions: The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), no levels (MG and PC are 000-255). Details: crates/radioctl-protocols/src/yaesu.rs.
+# Gaps and open questions: The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), levels (MG and PC are 000-255). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "levels", "identify"]
 
 [rig]
 id = "yaesu-ftdx-9000"
@@ -15,6 +15,7 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 101
 frequency_digits = 8
+levels = { mic-gain = [0, 255], rf-power = [0, 255] }
 
 [timing]
 timeout_ms = 2000
@@ -72,7 +73,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "yaesu.model_id"
-provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: ID, PDF p. 11; The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), no levels (MG and PC are 000-255).", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: ID, PDF p. 11; The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), levels (MG and PC are 000-255).", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -92,7 +93,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: ID p. 11, FA p. 11, FB p. 11, IF p. 12, MD p. 13, TX p. 18, SM p. 18, AI p. 5, RT p. 17, XT p. 19, RC p. 16, RD p. 16", note = "The guide's command pages. The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), no levels (MG and PC are 000-255)." }
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: ID p. 11, FA p. 11, FB p. 11, IF p. 12, MD p. 13, TX p. 18, SM p. 18, AI p. 5, RT p. 17, XT p. 19, RC p. 16, RD p. 16", note = "The guide's command pages. The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); Hamlib's separate 'FTDX-9000 Old' model (1050) is not described. Dual receiver: no split, no read-power (PO is RM 08), levels (MG and PC are 000-255)." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -103,4 +104,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: MD, PDF p. 13: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK (RTTY-LSB), 7 CW-R, 8 PKT-L, 9 FSK-R (RTTY-USB), A PKT-FM, B FM-N, C PKT-U", note = "Mapping to radioctl modes is ours: 6 is rtty, 9 is rtty-r, 8 (PKT-L) is data-r and C (PKT-U) is data; A and B are not described." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.levels"
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: AG p. 5, KS p. 12, MG p. 13, PC p. 15, RG p. 16", note = "AG and RG 000-255 (P1 0 main receiver), MG 000-255, PC 000-255, KS 004-060 WPM; MG and PC differ from the engine's default ranges. Where this block is silent the engine's default range applies." }
 verified = { state = "unverified" }

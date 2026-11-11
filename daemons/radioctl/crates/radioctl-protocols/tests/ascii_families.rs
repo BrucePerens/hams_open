@@ -357,7 +357,16 @@ fn the_ft_450_reads_its_po_meter_with_rm5_as_its_cat_book_says() {
         .feed(&answer, NOW)
         .iter()
         .any(|i| matches!(i, Inbound::Observation(Observation::Power(_)))));
-    // The book has no XT command and no MG/PC of the engine's ranges: not claimed.
+    // The book has no XT command: no rit-xit. Its MG and PC are 000-255, stated in the file, so
+    // the levels are claimed with those ranges.
     assert!(!desc.capabilities.has(Capability::RitXit));
-    assert!(!desc.capabilities.has(Capability::Levels));
+    assert!(desc.capabilities.has(Capability::Levels));
+    assert_eq!(
+        radioctl_protocols::yaesu::level_range(&desc, Level::MicGain),
+        Some((0, 255))
+    );
+    assert_eq!(
+        radioctl_protocols::yaesu::level_range(&desc, Level::RfPower),
+        Some((0, 255))
+    );
 }

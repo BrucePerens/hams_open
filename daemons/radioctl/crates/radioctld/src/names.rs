@@ -457,18 +457,7 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             | Level::Preselector
             | Level::Antenna => (0, 0),
         }),
-        Family::YaesuNewcat => match level {
-            Level::AfGain | Level::RfGain => Some((0, 255)),
-            Level::MicGain => Some((0, 100)),
-            Level::KeyerSpeed => Some((4, 60)),
-            Level::RfPower => Some((5, 100)),
-            Level::MonitorLevel
-            | Level::Attenuator
-            | Level::Preamp
-            | Level::Dither
-            | Level::Preselector
-            | Level::Antenna => None,
-        },
+        Family::YaesuNewcat => radioctl_protocols::yaesu::level_range(description, level),
         // The legacy five-byte engine has no level commands, so no level has a range.
         Family::YaesuLegacy | Family::KenwoodHh => None,
         // The OpenHPSDR control plane has no level commands.

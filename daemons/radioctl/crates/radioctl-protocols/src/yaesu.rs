@@ -81,6 +81,21 @@ fn level_wire(level: Level) -> Option<LevelWire> {
     })
 }
 
+// [@ANCHOR: radioctl_yaesu_level_range]
+/// The `(min, max)` of a level on the described model, or `None` when the family has no such
+/// level command: the description's `[yaesu] levels` range where it gives one, else the default
+/// range of `level_wire` (the guides differ per model: the FT-891's `RG` is 000-030, the
+/// FTDX5000's `MG` and `PC` are 000-255).
+pub fn level_range(desc: &RigDescription, level: Level) -> Option<(u16, u16)> {
+    let wire = level_wire(level)?;
+    Some(
+        desc.yaesu
+            .as_ref()
+            .and_then(|y| y.level_range(level))
+            .unwrap_or((wire.min, wire.max)),
+    )
+}
+
 // [@ANCHOR: radioctl_yaesu_decode_level]
 /// A level answer: command name and digits (`AG0128` is name `AG`, digits `0128`).
 fn decode_level(name: &str, digits: &str) -> Option<Observation> {
@@ -359,7 +374,9 @@ impl ProtocolEngine for YaesuEngine {
             Op::SetLevel(level, value) => {
                 let wire = level_wire(*level)
                     .ok_or_else(|| Self::unsupported("level not implemented for newcat"))?;
-                if *value < wire.min || *value > wire.max {
+                let (min, max) = level_range(&self.desc, *level)
+                    .ok_or_else(|| Self::unsupported("level not implemented for newcat"))?;
+                if *value < min || *value > max {
                     return Err(Self::unsupported("level outside the range of the guides"));
                 }
                 let digit = if wire.leading_zero { "0" } else { "" };
@@ -423,6 +440,35 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_yaesu_engine_digits]
     // Tests [@ANCHOR: radioctl_yaesu_engine_encode]
+    // Tests [@ANCHOR: radioctl_yaesu_level_range]
+    // Tests [@ANCHOR: radioctl_yaesu_level_wire]
+    #[test]
+    fn a_description_may_replace_the_default_level_ranges() {
+        let b = |e: &mut YaesuEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+        // FT-891: RG is 000-030, the other levels keep the guide's ranges.
+        let desc = shipped("yaesu-ft-891");
+        assert_eq!(level_range(&desc, Level::RfGain), Some((0, 30)));
+        assert_eq!(level_range(&desc, Level::AfGain), Some((0, 255)));
+        assert_eq!(level_range(&desc, Level::MonitorLevel), None);
+        let mut e = YaesuEngine::new(desc).expect("engine");
+        assert_eq!(b(&mut e, Op::SetLevel(Level::RfGain, 30)), b"RG0030;");
+        assert!(e.encode(&Op::SetLevel(Level::RfGain, 31)).is_err());
+        // FTDX5000: MG and PC are 000-255 (the default is 0-100 and 5-100).
+        let mut x = YaesuEngine::new(shipped("yaesu-ftdx-5000")).expect("engine");
+        assert_eq!(b(&mut x, Op::SetLevel(Level::MicGain, 255)), b"MG255;");
+        assert_eq!(b(&mut x, Op::SetLevel(Level::RfPower, 0)), b"PC000;");
+        assert!(x.encode(&Op::SetLevel(Level::MicGain, 256)).is_err());
+        // FT-450D: MG is 000-255, PC keeps 005-100.
+        let mut d = YaesuEngine::new(shipped("yaesu-ft-450d")).expect("engine");
+        assert_eq!(b(&mut d, Op::SetLevel(Level::MicGain, 171)), b"MG171;");
+        assert!(d.encode(&Op::SetLevel(Level::RfPower, 4)).is_err());
+        // A model without a stated range keeps the default.
+        assert_eq!(
+            level_range(&shipped("yaesu-ft-991a"), Level::MicGain),
+            Some((0, 100))
+        );
+    }
+
     // Tests [@ANCHOR: radioctl_yaesu_engine_feed]
     // Tests [@ANCHOR: radioctl_yaesu_engine_decode]
     // Tests [@ANCHOR: radioctl_yaesu_engine_decode_if]

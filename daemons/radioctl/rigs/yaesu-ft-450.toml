@@ -2,9 +2,9 @@
 # Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The command facts marked manual-checked were compared with Yaesu's 'FT-450 CAT Operation Reference Book' (sha256 in each fact); timing and the model name are Hamlib 4.6.2 (rigs/yaesu/ft450.c, newcat.c, `rigctl -m 1027 --dump-caps`, facts only).
 # Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
 # Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon (both checked against the book).
-# Gaps and pinned open questions (details: crates/radioctl-protocols/src/yaesu.rs): no levels (MG is three sub-ranges of 000-255, PC is 000-255, the engine's ranges are 0-100 and 5-100; AG and RG match); no split (FT selects the displayed or the opposite band); no RIT/XIT capability (the book has RT, RU, RD, RC for the receive clarifier but no XT, and the capability covers both).
+# Gaps and pinned open questions (details: crates/radioctl-protocols/src/yaesu.rs): levels (MG is three sub-ranges of 000-255 and PC is 000-255, set per model; AG, RG and KS match the engine's ranges); no split (FT selects the displayed or the opposite band); no RIT/XIT capability (the book has RT, RU, RD, RC for the receive clarifier but no XT, and the capability covers both).
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "identify", "read-power"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "levels", "identify", "read-power"]
 
 [rig]
 id = "yaesu-ft-450"
@@ -14,6 +14,7 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 241
 frequency_digits = 8
+levels = { mic-gain = [0, 255], rf-power = [0, 255] }
 
 [timing]
 timeout_ms = 2000
@@ -103,3 +104,8 @@ verified = { state = "manual-checked", reference = "FT-450 CAT Operation Referen
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK' (18 pages, no document number printed), file ft450_cat_reference.pdf, https://archive.org/download/FT-450_CAT_Operation_Reference_Book/FT-450_CAT_Operation_Reference_Book.pdf (a public archive.org copy of Vertex Standard's book), sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2, read by us in this session: MD, PDF p. 12 (1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA (RTTY-LSB), 7 CW-R, 8 USER-L, 9 DATA (RTTY-USB), B FM-N, C USER-U)", note = "Mapping to radioctl modes is ours: 6 rtty, 9 rtty-r, 8 data-r, C data. FM-N (B) is not mapped." }
 verified = { state = "manual-checked", reference = "FT-450 CAT Operation Reference Book, MD (PDF p. 12)" }
+
+[[facts]]
+key = "yaesu.levels"
+provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK', file ft450_cat_reference.pdf, sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2: AG p. 5, KS p. 11, MG p. 12, PC p. 13, RG p. 14", note = "AG P2 and RG P2 000-255, MG 000-255 (L/M/H sub-ranges), PC 000-255, KS 004-060 WPM; MG and PC differ from the engine's default ranges. Where this block is silent the engine's default range applies." }
+verified = { state = "unverified" }
