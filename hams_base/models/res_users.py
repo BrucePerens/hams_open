@@ -10,6 +10,7 @@ _logger = logging.getLogger(__name__)
 class ResUsers(models.Model):
     _inherit = "res.users"
 
+    # [@ANCHOR: hams_base:res_users_normalize_login]
     @staticmethod
     def _normalize_login(login):
         """Logins are stored stripped and lowercase (the sign-up form already does this)."""
@@ -28,6 +29,7 @@ class ResUsers(models.Model):
         """
         return super()._get_login_domain(self._normalize_login(login))
 
+    # [@ANCHOR: hams_base:res_users_create]
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:

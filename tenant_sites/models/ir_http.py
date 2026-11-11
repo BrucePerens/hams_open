@@ -45,6 +45,7 @@ class IrHttp(models.AbstractModel):
             memo["kind"] = cls._tenant_compute_kind()
         return memo["kind"]
 
+    # [@ANCHOR: tenant_sites:compute_kind]
     @classmethod
     def _tenant_compute_kind(cls):
         httprequest = request.httprequest

@@ -55,6 +55,7 @@ class TenantSiteHost(models.Model):
                     self.env._("%s is a hostname of the main site and cannot belong to a tenant.", record.name)
                 )
 
+    # [@ANCHOR: tenant_sites:host_service_env]
     @api.model
     def _service_env(self):
         return self.env["zero_sudo.security.utils"]._get_service_env(SERVICE_XMLID)
