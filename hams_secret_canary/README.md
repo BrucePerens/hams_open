@@ -130,7 +130,7 @@ Returns nothing. A directory or file that cannot be written is logged by type of
 
 **Purpose.** Plants this install's decoys. `_plant_canaries()`: no arguments, no return. For each decoy label not yet
 registered and whose `<label>_old` system parameter is empty, generates a value, registers it as a canary and stores it
-as that parameter (written as `zero_sudo.config_service_internal`). Idempotent. Test:
+as that parameter (read and written as the installing user: a service account may not touch these keys). Idempotent. Test:
 `TestPlanting.test_planting_is_idempotent_and_registers_each_decoy`.
 
 ### `hams_secret_canary:post_init_hook`
