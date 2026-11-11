@@ -184,6 +184,7 @@ class Module(models.Model):
                 utils, Article, mod_name, doc_info, existing_hashes, existing_article_ids
             )
 
+    # [@ANCHOR: zero_sudo:ir_module_markdown_doc_to_html]
     @api.model
     def _markdown_doc_to_html(self, text):
         """Convert a markdown documentation file to sanitized HTML.
@@ -197,6 +198,7 @@ class Module(models.Model):
         rendered = markdown.markdown(text, extensions=["fenced_code", "tables", "toc"])
         return html_sanitize(rendered)
 
+    # [@ANCHOR: zero_sudo:ir_module_is_internal_doc_path]
     @api.model
     def _is_internal_doc_path(self, path):
         """True for stories, journeys and runbooks, which are never public."""
@@ -205,6 +207,7 @@ class Module(models.Model):
 
     @api.model
     # [@ANCHOR: zero_sudo:doc_audience_for]
+    # [@ANCHOR: zero_sudo:ir_module_doc_audience_for]
     def _doc_audience_for(self, path, doc_info):
         """Model-level door to classify_doc_audience, for callers and tests."""
         return classify_doc_audience(path, doc_info)

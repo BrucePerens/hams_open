@@ -131,6 +131,7 @@ odoo.tests.common.HttpCase.fetch_proxy = None
 odoo.tests.common.HttpCase.extra_allowed_fetch_hosts = ()
 
 
+# [@ANCHOR: zero_sudo:url_is_at_origin]
 def _url_is_at_origin(url, origin, allow_any_port=False):
     """True when `url` begins with `origin` AND the origin ends at a real authority boundary.
 
@@ -218,6 +219,7 @@ if _original_preexec:
 _original_spawn_chrome = odoo.tests.common.ChromeBrowser._spawn_chrome
 
 
+# [@ANCHOR: zero_sudo:protected_pids]
 def _protected_pids():
     """This process, pid 1 (a namespace's init) and every ancestor of this process: never signalled by the browser
     clean-up below, whatever pid a stale Popen object or a reused number points at."""
@@ -229,6 +231,7 @@ def _protected_pids():
     return pids
 
 
+# [@ANCHOR: zero_sudo:kill_browser_tree]
 def _kill_browser_tree(proc, where):
     """SIGKILLs a test browser (a subprocess.Popen) and its descendants, and its process group only when that group is
     its own. Runs in a separate PID namespace have died with -9 in this clean-up right after tearDown's /odoo/health
@@ -689,6 +692,7 @@ original_chrome_init = ChromeBrowser.__init__
 # the browser's own DevTools session (`_websocket_request`), and write one JSON record from a
 # `browser.cleanup` callback when it shuts down. Unset, nothing here runs. Coverage is best effort: a failure logs a warning and never
 # fails the test.
+# [@ANCHOR: zero_sudo:js_coverage_start]
 def _js_coverage_start(browser):
     if not os.environ.get("HAMS_JS_COVERAGE_DIR"):
         return
@@ -723,6 +727,7 @@ def _js_coverage_start(browser):
         _logger.warning("JS coverage: could not start (%s)", repr(e))
 
 
+# [@ANCHOR: zero_sudo:js_coverage_write]
 def _js_coverage_write(browser):
     out_dir = os.environ.get("HAMS_JS_COVERAGE_DIR")
     if not out_dir or not getattr(browser, "_hams_js_coverage_on", False):  # burn-ignore-introspection
@@ -1387,6 +1392,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin, PersonaMixin):
     # [@ANCHOR: zero_sudo:COMM_hams_transaction_case]
     _active_daemons = []
 
+    # [@ANCHOR: zero_sudo:hams_transaction_case_setup_class]
     @classmethod
     def setUpClass(cls):
         # Fresh, per-class daemon list. _active_daemons = [] at the class
@@ -1528,6 +1534,7 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin, PersonaMixin):
             except Exception as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning("Suppressed: %s", e)
 
+    # [@ANCHOR: zero_sudo:hams_transaction_case_start_daemon]
     def start_daemon(
         self, script_path, args=None, env_vars=None, health_url=None, timeout=600
     ):
@@ -1672,6 +1679,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
             **kwargs,
         )
 
+    # [@ANCHOR: zero_sudo:hams_http_case_setup_class]
     @classmethod
     def setUpClass(cls):
         # Guarantee a valid Fernet key for test cryptography operations
