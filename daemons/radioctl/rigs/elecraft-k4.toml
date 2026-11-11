@@ -3,11 +3,11 @@
 # SOURCE: Elecraft K4 Programmer's Reference Rev. D11 (May 1, 2026), sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf.
 # The K4 speaks the K3 command set in its K3-compatible (K40) meta mode, the one used here: the engine never sends K41;. Only commands
 # whose K4 form is the same as the K3's are claimed. The K4 differs from the K3 in AG (000-060), RG (negative dB), KS (8-100), MG (000-080),
-# PC (power with a range letter), RA/PA (3 dB steps, preamp 10/18/20 dB) and has no RO, so levels, rit-xit and read-signal are NOT claimed (open
+# PC (power with a range letter), RA/PA (3 dB steps, preamp 10/18/20 dB) and has no RO, so rit-xit and read-signal are NOT claimed (open
 # to-do in docs/RIG_COVERAGE_PLAN.md). Split is not claimed: the guide's FT takes 0/1 but has no FR to leave split.
 # EVERYTHING HERE IS UNVERIFIED: written from the guide, never run against a radio. Hamlib 4.6.2 lists serial 4800..115200 baud, 8N1, no handshake.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "send-cw", "transceive", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "send-cw", "transceive", "levels", "identify"]
 
 [rig]
 id = "elecraft-k4"
@@ -16,6 +16,12 @@ family = "elecraft-ascii"
 
 [elecraft]
 model_id = 17
+levels = { af-gain = [0, 60], mic-gain = [0, 80], keyer-speed = [8, 100] }
+
+[levels]
+attenuator_db = []
+preamp_steps = 0
+absent = ["rf-gain", "monitor-level", "rf-power"]
 
 [timing]
 timeout_ms = 600
@@ -101,4 +107,14 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): MD (Operating Mode), PDF p. 21: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA, 7 CW REV, 9 DATA REV (0 and 8 are N/A)", note = "Mapping to radioctl modes is ours: DATA is data, DATA REV is data-r." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "elecraft.levels"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf: AG PDF p. 6 (AGnnn, 000-060), MG PDF p. 21 (MGxxx, 000-080), KS PDF p. 18 (KSnnn, 8 to 100 WPM); the K41 meta mode changes only DS, GT$, ID, IF, IS$, NB$, PA$, PC, RA$, SM$ and VT$ (PDF p. 18), so these three keep their form in the K40 mode the engine uses", note = "Same wire form as the K3 (AGnnn, MGnnn, KSnnn), only the ranges differ." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf: RG$ PDF p. 28 (negative dB), PC PDF p. 25 (PCnnnr with a range letter; the K41 meta mode changes its response), ML PDF p. 22 (MLmnnn per mode in K41, K3 form MLnnn 0-60 in K40)", note = "Not claimed: the engine sends the K3 forms of RG and PC, and the K4's ML ranges differ by mode; the K40 form of PC is not documented in the guide." }
 verified = { state = "unverified" }
