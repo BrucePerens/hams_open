@@ -128,7 +128,10 @@ impl Ft8Decoder {
     /// slot's audio.
     // [@ANCHOR: Ft8Decoder::decode]
     pub fn decode(&mut self) -> Vec<(String, i32, f32)> {
-        self.decode_timed().into_iter().map(|(text, snr, freq, _)| (text, snr, freq)).collect()
+        self.decode_timed()
+            .into_iter()
+            .map(|(text, snr, freq, _)| (text, snr, freq))
+            .collect()
     }
 
     /// Like `decode()`, with a fourth value: the signal's start in seconds from the first
@@ -349,8 +352,14 @@ mod tests {
             let mut decoder = Ft8Decoder::new(12000, 200.0, 3000.0).unwrap();
             decoder.feed(&samples);
             let decoded = decoder.decode_timed();
-            let (_, _, _, t) = decoded.iter().find(|d| d.0.contains("K1ABC")).unwrap_or_else(|| panic!("no decode at lead {lead_s}: {decoded:?}"));
-            assert!((t - lead_s).abs() < 0.1, "start {t} s should be near the real {lead_s} s");
+            let (_, _, _, t) = decoded
+                .iter()
+                .find(|d| d.0.contains("K1ABC"))
+                .unwrap_or_else(|| panic!("no decode at lead {lead_s}: {decoded:?}"));
+            assert!(
+                (t - lead_s).abs() < 0.1,
+                "start {t} s should be near the real {lead_s} s"
+            );
         }
     }
 
