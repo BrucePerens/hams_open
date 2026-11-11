@@ -35,3 +35,8 @@ and keeps the remainder. It does not decode.
 (message text, SNR estimate, audio frequency in Hz) for each. It does not clear the waterfall; `reset` does that
 before the next slot.
 *(Reference: `src/ft8.rs` -> `[@ANCHOR: Ft8Decoder::decode]`)*
+
+`Ft8Decoder::decode_timed` is `decode` with a fourth value per message: the signal's start in seconds from the
+first sample fed since the last `reset` (slightly negative is possible). With audio fed from the slot boundary,
+the DT that WSJT-X reports is this value minus 0.5 s.
+*(Reference: `src/ft8.rs` -> `[@ANCHOR: Ft8Decoder::decode_timed]`)*
