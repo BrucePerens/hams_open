@@ -42,6 +42,7 @@ class TestVisitorTrackDedup(HamsTransactionCase):
         return track
 
     def test_a_recent_track_for_the_same_url_skips_every_write(self):
+        # Tests [@ANCHOR: hams_base:visitor_track_exists]
         self._track()
         self.assertTrue(self.visitors._track_exists_for_this_request())
         self.visitors._handle_webpage_dispatch(False)

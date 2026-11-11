@@ -27,6 +27,7 @@ Deliberately keeps two layers separate, per the module's own design:
   "is loopback correctly rejected").
 """
 
+import http.client
 import http.server
 import ipaddress
 import os
@@ -274,6 +275,10 @@ class TestSsrfSafeFetch(HamsTransactionCase):
 
     def test_urlopen_ssrf_safe_pins_the_connection_and_sets_the_real_host_header_and_sni(self):
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_urlopen_ssrf_safe]
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_https_handler_init]
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_https_open]
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_build_opener]
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_make_pinned_http_class]
         # The key regression test: getaddrinfo is mocked to return the real
         # (loopback test-server) address on the FIRST call and a completely
         # different, bogus address on any SUBSEQUENT call -- simulating
@@ -343,6 +348,7 @@ class TestSsrfSafeFetch(HamsTransactionCase):
     def test_a_refused_redirect_reaches_the_caller_as_an_http_error(self):
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_no_redirect]
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_urlopen_ssrf_safe]
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_build_opener]
         handler = sf._NoRedirectHandler()
         self.assertIsNone(handler.redirect_request(None, None, 301, "Moved", {}, "http://elsewhere.example.net/"))
         follows = sf._build_ssrf_safe_opener("test", https_only=False)
@@ -367,3 +373,55 @@ class TestSsrfSafeFetch(HamsTransactionCase):
         with self.assertRaises(urllib.error.URLError) as ctx:
             sf.urlopen_ssrf_safe(req, "test-context", https_only=True)
         self.assertIn("unknown url type", str(ctx.exception))
+
+    def test_the_handlers_keep_their_context_label_and_the_https_handler_its_ssl_context(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_http_handler_init]
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_https_handler_init]
+        plain = sf._SSRFSafeHTTPHandler("label-a")
+        self.assertEqual(plain._context_label, "label-a")
+        secure = sf._SSRFSafeHTTPSHandler("label-b", context=self.client_ssl_context)
+        self.assertEqual(secure._context_label, "label-b")
+        self.assertIs(secure._context, self.client_ssl_context)
+
+    def test_make_pinned_http_class_builds_a_connection_that_only_dials_the_validated_address(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_make_pinned_http_class]
+        factory = sf._make_pinned_http_class(http.client.HTTPConnection, self._validated_addrinfo_for_test_server)
+        conn = factory("never-resolved.invalid", timeout=5)
+        self.assertIsInstance(conn, http.client.HTTPConnection)
+        self.assertEqual(conn.host, "never-resolved.invalid", "the Host header keeps the original name")
+        sock = conn._create_connection(("never-resolved.invalid", self.server_port))
+        self.addCleanup(sock.close)
+        self.assertEqual(sock.getpeername()[:2], self._validated_addrinfo_for_test_server[0][4][:2])
+
+    def test_http_open_pins_a_plain_http_request_and_checks_the_address_first(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_http_open]
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_build_opener]
+        plain_httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _RecordingHandler)  # burn-ignore-self-hosted-server: this test spawns its own local server and connects to it in the same process
+        plain_port = plain_httpd.server_address[1]
+        thread = threading.Thread(target=plain_httpd.serve_forever, daemon=True)  # burn-ignore-test-daemon-thread: explicitly shut down + joined with a timeout in the cleanup below
+        thread.start()
+
+        def _stop_plain_server():
+            plain_httpd.shutdown()
+            plain_httpd.server_close()
+            thread.join(timeout=5.0)
+
+        self.addCleanup(_stop_plain_server)
+        call_log = []
+        pinned = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", plain_port))]  # burn-ignore-self-hosted-server: pins to the local test server started above, in this same process
+
+        def fake_getaddrinfo(host, *args, **kwargs):
+            call_log.append(host)
+            return pinned
+
+        self.safe_patch("socket.getaddrinfo", side_effect=fake_getaddrinfo)
+        self.safe_patch_object(sf, "is_ssrf_safe_public_ip", return_value=True)
+        with sf.urlopen_ssrf_safe(f"http://{self.test_hostname}:{plain_port}/", "test-context") as response:
+            body = response.read()
+        self.assertEqual(body, b"ssrf-safe-fetch-ok")
+        self.assertEqual(call_log, [self.test_hostname], "one lookup, then the connection is pinned")
+        self.assertEqual(_RecordingHandler.recorded_host_headers, [f"{self.test_hostname}:{plain_port}"])
+
+        self.safe_patch_object(sf, "is_ssrf_safe_public_ip", return_value=False)
+        with self.assertRaisesRegex(sf.SSRFValidationError, "non-public address"):
+            sf.urlopen_ssrf_safe(f"http://{self.test_hostname}:{plain_port}/", "test-context")

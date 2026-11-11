@@ -122,6 +122,7 @@ class TestRemoteSelfRotation(RealTransactionCase):
         return self._post(WHOAMI_URL, key, {}).status_code == 200
 
     def test_two_phase_rotation_revokes_nothing_until_the_new_key_is_proven(self):
+        # Tests [@ANCHOR: daemon_key_manager:own_key_row_id]
         # [@ANCHOR: COMM_test_rotate_own_key_two_phase]
 
         # Tests [@ANCHOR: COMM_rotate_own_key_api]
@@ -257,6 +258,9 @@ class TestRemoteSelfRotation(RealTransactionCase):
         return (moment - datetime.datetime.utcnow()).total_seconds() / 86400
 
     def test_key_lifetime_is_only_for_a_remote_row_and_within_range(self):
+        # Tests [@ANCHOR: daemon_key_manager:check_key_lifetime_days]
+        # Tests [@ANCHOR: daemon_key_manager:lifetime_days]
+        # Tests [@ANCHOR: daemon_key_manager:rotation_age_days]
         # Tests [@ANCHOR: COMM_action_apply_key_lifetime]
         path = self.env_paths[0]
         local = self.registry_model.create(
@@ -279,6 +283,7 @@ class TestRemoteSelfRotation(RealTransactionCase):
         self.assertEqual(remote._rotation_age_days(), 59)
 
     def test_a_year_long_lifetime_extends_the_held_key_and_mints_year_long_keys(self):
+        # Tests [@ANCHOR: daemon_key_manager:mint_key]
         # Tests [@ANCHOR: COMM_action_apply_key_lifetime]
         name = "Remote Lifetime Year Test"
         registry, old_key = self._remote_registry(name, self.env_paths[0])

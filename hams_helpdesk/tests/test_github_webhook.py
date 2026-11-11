@@ -138,6 +138,7 @@ class TestGithubWebhookHttp(HamsHttpCase):
         self.assertFalse(self.Ticket.search([]))
 
     def test_github_webhook_non_ascii_signature_is_denied_not_an_error(self):
+        # Tests [@ANCHOR: hams_helpdesk:github_verify_signature]
         self.assertFalse(_verify_github_signature(b"{}", _TEST_SECRET, "sha256=" + "\u00e9" * 64))
 
     def test_github_webhook_wrong_key_signature_is_denied(self):
@@ -185,6 +186,7 @@ class TestGithubWebhookHttp(HamsHttpCase):
         self.assertFalse(self.Ticket.search([]))
 
     def test_github_webhook_valid_signature_is_accepted(self):
+        # Tests [@ANCHOR: hams_helpdesk:github_verify_signature]
         self._configure_secret()
         response = self._post("dependabot_alert", _dependabot_alert_payload())
         self.assertEqual(response.status_code, 200)

@@ -197,3 +197,21 @@ delete the service account (it stays, with no key and no group beyond its own) a
 registry never removes a key file, so an operator deletes the leftover file by hand. It is not a security gate and takes no lock. Tests:
 `tests/test_hooks.py` (a row registered exactly as version 1.0 did is removed with its key, the second call removes nothing, and the manifest
 declares no `post_init_hook`).
+
+### 8. `main()` (`daemons/cache_manager.py`): the cache manager daemon loop `[@ANCHOR: distributed_redis_cache:cache_manager_main]`
+
+**Purpose.** The whole run of `hams-cache-manager`: it listens on one PostgreSQL channel (`PG_CHANNEL`) of one database and re-publishes every notification to Redis, so every Odoo worker and server sees a cache invalidation. It is the body of `asyncio.run(main())` at the foot of the file.
+
+No arguments, no return value; it is a coroutine (`async def`) that normally runs until cancelled. Steps and results:
+
+| Step | Result |
+| --- | --- |
+| `_require_db_credentials()` | `RuntimeError` is raised before any connection is made when the database user or password is empty; the daemon never starts without a login. |
+| Redis connect and `ping()` | A `redis.asyncio` client with 10 second connect and read timeouts. A `RedisError` is logged as critical and `main()` returns and the process ends. |
+| LISTEN | One `asyncpg` connection to `DB_NAME` (10 second timeout) with `postgres_notify_handler` as the listener. A failure to connect is logged and retried on the next loop pass. |
+| Loop | Every 60 seconds a `SELECT 1` (10 second timeout) proves the connection is alive; a closed connection is reconnected; any other error is logged, waits 5 seconds, closes the connections and reconnects. |
+| `asyncio.CancelledError` | Logged as a clean shutdown; the loop ends and the Redis client is closed with `aclose()`. |
+
+**Special concerns.** Holds the module-level `redis_client` global. Exactly one database is listened to; it does not enumerate the cluster's databases. Each notification becomes its own background task in `postgres_notify_handler`, so a stalled Redis cannot block the loop (the socket timeouts make a stall a per-call failure). The password is read only from the family key directory and is never logged.
+
+**See also.** `test_main_refuses_to_start_without_a_database_password` in `daemons/test_cache_manager.py` (the guard is wired into `main`).

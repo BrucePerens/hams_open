@@ -54,6 +54,7 @@ class WebsitePage(models.Model):
             response.headers[EDGE_CACHEABLE_MARKER] = "1"
         return response
 
+    # [@ANCHOR: edge_cache:website_page_get_response_raw]
     def _get_response_raw(self, request):
         # Verified by [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
         """Flag a freshly rendered page as not a cache hit; see _get_response()."""
@@ -62,6 +63,7 @@ class WebsitePage(models.Model):
             response.cf_page_cache_hit = False
         return response
 
+    # [@ANCHOR: edge_cache:website_page_post_process_response_from_cache]
     def _post_process_response_from_cache(self, request, response):
         # Verified by [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
         """Flag a response built from Odoo's page cache as a cache hit; see _get_response()."""

@@ -63,6 +63,7 @@ class TestBrowserReportSchema(HamsTransactionCase):
     # Tests [@ANCHOR: hams_helpdesk:browser_is_ignorable]
     # Tests [@ANCHOR: hams_helpdesk:browser_stored_message]
     # Tests [@ANCHOR: hams_helpdesk:browser_build_report]
+    # Tests [@ANCHOR: hams_helpdesk:browser_report_rejected]
 
     def test_a_valid_body_is_accepted_and_every_other_shape_is_refused(self):
         self.assertEqual(schema.parse_body(encode(good_body()))["type"], "TypeError")
@@ -214,6 +215,7 @@ class TestBrowserReportSchema(HamsTransactionCase):
 class TestBrowserExceptionEndpoint(RealTransactionCase):
     # Tests [@ANCHOR: hams_helpdesk:browser_exception_endpoint]
     # Tests [@ANCHOR: hams_helpdesk:browser_same_origin]
+    # Tests [@ANCHOR: hams_helpdesk:browser_answer]
     # Tests [@ANCHOR: hams_helpdesk:browser_record]
     # Tests [@ANCHOR: hams_helpdesk:browser_release_is_current]
     # Tests [@ANCHOR: hams_helpdesk:browser_current_versions]

@@ -24,6 +24,23 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.service_user = self.env.ref("pager_duty.user_pager_service_internal")
         self.creator_user = self.env.ref("pager_duty.user_pager_incident_creator")
 
+    def test_00_unit_tickets_join_only_for_the_stock_helpdesk_ticket(self):
+        # Tests [@ANCHOR: pager_duty:joins_unit_tickets]
+        params = self.env["ir.config_parameter"]
+        params.set_param("pager_duty.helpdesk_model", "hams_helpdesk.ticket")
+        self.assertTrue(self.incident_model._joins_unit_tickets())
+        params.set_param("pager_duty.helpdesk_model", "other.ticket")
+        self.assertFalse(self.incident_model._joins_unit_tickets())
+
+    def test_00b_the_incident_notes_which_unit_tickets_carry_it(self):
+        # Tests [@ANCHOR: pager_duty:note_unit_tickets]
+        incident = self.incident_model.create({"source": "units", "severity": "high", "description": "Unit ticket note"})
+        incident._note_unit_tickets(incident, {"b.service": 7, "a.service": 3})
+        note = incident.message_ids.filtered(lambda m: "per-unit ticket" in (m.body or ""))
+        self.assertEqual(len(note), 1)
+        self.assertIn("#3 (a.service), #7 (b.service)", note.body)
+        self.assertIn("no separate ticket was opened", note.body)
+
     def test_01_rate_limiting_blocks_spam_standard(self):
         # Tests [@ANCHOR: report_incident_rate_limit]
 

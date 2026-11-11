@@ -63,3 +63,13 @@ class TestCachePlanMerge(BaseCase):
         a = cache_plan.merge([], [BYPASS], {"Bypass"})["hash"]
         b = cache_plan.merge([dict(OTHER)], [BYPASS], {"Bypass"})["hash"]
         self.assertNotEqual(a, b)
+
+    def test_render_lists_each_entry_then_the_resulting_order_and_the_summary(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_render]
+        # Tests [@ANCHOR: cloudflare:COMM_cache_plan_render]
+        plan = cache_plan.merge([dict(OTHER)], [BYPASS, CACHE], {"Bypass", "Downloads"})
+        lines = cache_plan.render(plan, "1 rule(s) now").splitlines()
+        self.assertEqual(lines[0], "Zone cache-settings ruleset: 1 rule(s) now")
+        self.assertEqual([l.split()[0] for l in lines[1:4]], ["CREATE", "CREATE", "KEEP"])
+        self.assertEqual(lines[4], "Resulting order: Bypass | Hand made | Downloads")
+        self.assertTrue(lines[5].startswith("Summary: 2 change(s) to managed rules"))

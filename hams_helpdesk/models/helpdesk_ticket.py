@@ -574,6 +574,7 @@ class HelpdeskTicket(models.Model):
 
         return tickets
 
+    # [@ANCHOR: hams_helpdesk:ticket_schedule_triage_wakeup]
     @api.model
     def _schedule_triage_wakeup(self, ticket_ids):
         """Queues the post-commit spool write for `ticket_ids`. Never raises into create()."""
@@ -584,6 +585,7 @@ class HelpdeskTicket(models.Model):
         except Exception:  # audit-ignore-catch-all: scheduling a notification must never break the ticket create
             _logger.exception("Could not schedule the ticket-triage wake-up.")
 
+    # [@ANCHOR: hams_helpdesk:ticket_silent_exception_note]
     def _silent_exception_note(self):
         """Tail of the assignment message of an exception ticket that pages after a quiet stretch."""
         silent = self.env.context.get("hams_exception_silent_count") or 0

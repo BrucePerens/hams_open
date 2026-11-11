@@ -42,6 +42,9 @@ class TestDaemonReporterUnreadableKey(BaseCase):
 
     def test_reporting_failures_still_raises_the_daemons_own_exception_when_the_key_is_unreadable(self):
         # Tests [@ANCHOR: hams_helpdesk:daemon_reporting_failures]
+        # Tests [@ANCHOR: hams_helpdesk:daemon_reporting_failures_init]
+        # Tests [@ANCHOR: hams_helpdesk:daemon_reporting_failures_enter]
+        # Tests [@ANCHOR: hams_helpdesk:daemon_reporting_failures_exit]
         for name, path in self._unreadable_key_files():
             with self.subTest(name):
                 self.helper._LAST_REPORT.clear()

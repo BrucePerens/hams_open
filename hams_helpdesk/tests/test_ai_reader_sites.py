@@ -28,6 +28,7 @@ class TestAiReaderSites(BaseCase):
         self.assertEqual(found, [], "raw ticket-like text handed to an AI reader; use ticket.safe_view()/mcp_safe_read() or the filter:\n" + "\n".join(found))
 
     def test_02_a_raw_mcp_method_on_a_ticket_model_is_caught(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_check_source]
         source = (
             "class T(models.Model):\n"
             "    _inherit = 'hams_helpdesk.ticket'\n"
@@ -37,6 +38,7 @@ class TestAiReaderSites(BaseCase):
         self.assertEqual(len(check_source(source)), 1)
 
     def test_03_the_same_method_through_the_filter_passes(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_markers]
         source = (
             "class T(models.Model):\n"
             "    _inherit = 'pager.incident'\n"
@@ -46,6 +48,7 @@ class TestAiReaderSites(BaseCase):
         self.assertEqual(check_source(source), [])
 
     def test_04_a_raw_daemon_read_is_caught_even_through_constants(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_constants]
         source = AI + (
             "FIELDS = ['stage']\n"
             "TEXT = FIELDS + ['description']\n"
@@ -80,6 +83,7 @@ class TestAiReaderSites(BaseCase):
         self.assertEqual(len(check_source(source + "CLAUDE_COMMAND = ['claude']\n")), 1)
 
     def test_08_the_ignore_tag_with_a_reason_silences_one_call(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_ignored]
         source = AI + (
             "def run(client):\n"
             "    return client.execute('hams_helpdesk.ticket', 'read', [1], ['name'])  # ticket-ai-ignore: staff export, no AI\n"
@@ -96,6 +100,7 @@ class TestAiReaderSites(BaseCase):
         # Tests [@ANCHOR: hams_helpdesk:ai_reader_sites_rule]
         # Tests [@ANCHOR: hams_helpdesk:ai_reader_tracked_files]
         # Tests [@ANCHOR: hams_helpdesk:ai_reader_candidate_files]
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_py_files]
         # A stray untracked directory (a leftover nested checkout, a scratch copy) once failed the
         # repository scan with violations that are not this repository's code.
         bad = AI + "def run(client):\n    return client.execute('pager.incident', 'read', [1])\n"

@@ -215,19 +215,23 @@ class reporting_failures(contextlib.ContextDecorator):
 
     Only ``Exception`` is reported: a stop signal (SystemExit, KeyboardInterrupt) is a normal stop."""
 
+    # [@ANCHOR: hams_helpdesk:daemon_reporting_failures_init]
     def __init__(self, daemon_name, **options):
         self.daemon_name = daemon_name
         self.options = options
 
+    # [@ANCHOR: hams_helpdesk:daemon_reporting_failures_enter]
     def __enter__(self):
         return self
 
+    # [@ANCHOR: hams_helpdesk:daemon_reporting_failures_exit]
     def __exit__(self, exc_type, exc, traceback_):
         if exc is not None and isinstance(exc, Exception):
             report_exception(self.daemon_name, exc, **self.options)
         return False
 
 
+# [@ANCHOR: hams_helpdesk:daemon_main]
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) != 2 or argv[0] != "report-unit":

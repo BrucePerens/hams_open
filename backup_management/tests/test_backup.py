@@ -269,6 +269,7 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(job.state, "pending")
 
     def test_08d_kopia_auto_download(self):
+        # Tests [@ANCHOR: backup_management:get_executable]
         # Tests [@ANCHOR: backup_management:COMM_test_kopia_auto_download]
         mock_ensure = self.safe_patch_object(
             type(self.env["binary.manifest"]), "ensure_executable", return_value="/opt/kopia"

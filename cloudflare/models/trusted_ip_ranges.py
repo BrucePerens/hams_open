@@ -111,6 +111,7 @@ REDIS_KEY = "cloudflare:trusted_ip_ranges"
 REDIS_KEY_TTL_SECONDS = 3 * 86400
 
 
+# [@ANCHOR: cloudflare:COMM_trusted_ip_parse_ranges]
 def _parse_ranges(text):
     """Splits `text` on newlines/commas/whitespace and returns the subset of tokens that parse
     as a real IPv4/IPv6 network. Malformed tokens (typos, blank lines) are skipped and logged,

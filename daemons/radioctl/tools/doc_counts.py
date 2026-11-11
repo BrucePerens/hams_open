@@ -9,7 +9,8 @@ description, how many are hardware-verified) is written in prose between two mar
     <!--count:described-->283<!--/count-->
 
 This tool recomputes each named number from `docs/RIG_SUPPORT.md` (itself generated and checked by
-`rig_support_matrix.py`) and `rigs/*.toml`, and compares it with the text between the markers.
+`rig_support_matrix.py`) and `rigs/*.toml` (the number of facts, and per capability the number of
+descriptions listing it, as `cap_read_frequency` for `read-frequency`), and compares it with the text between the markers.
 
 Usage:
     doc_counts.py            rewrite every marked number that is wrong
@@ -20,6 +21,8 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import tomllib
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -49,6 +52,12 @@ def compute(root: Path = ROOT) -> dict[str, str]:
     # The number of facts is read from the descriptions themselves.
     facts = sum(p.read_text().count("\n[[facts]]") for p in (root / "rigs").glob("*.toml"))
     counts["facts"] = str(facts)
+    # How many descriptions list each capability: `cap_<name>` with the hyphens of the name as underscores.
+    capabilities = Counter()
+    for path in (root / "rigs").glob("*.toml"):
+        capabilities.update(tomllib.loads(path.read_text()).get("capabilities", []))
+    for name, number in capabilities.items():
+        counts["cap_" + name.replace("-", "_")] = str(number)
     return counts
 
 

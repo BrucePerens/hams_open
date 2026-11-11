@@ -40,6 +40,7 @@ class RequireDbCredentialsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_main_refuses_to_start_without_a_database_password(self):
         # Tests [@ANCHOR: COMM_cache_manager_require_db_credentials]
+        # Tests [@ANCHOR: distributed_redis_cache:cache_manager_main]
         # Proves the guard is actually wired into main(), not just defined
         # and never called -- main() must raise before it ever touches
         # Redis (create_redis_client below would otherwise be a real

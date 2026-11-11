@@ -131,6 +131,7 @@ The core model defining monitoring checks.
 *   `action_push_to_json(self)`: Exports database checks to `pager_config.json` for daemon consumption. Only active checks are written; the file is given mode 0600 because it holds check passwords in plain text.
 *   `action_autodiscover(self)`: Scans the system to automatically generate recommended monitoring checks for web services, databases, etc. Checks whose name already exists are skipped, and the JSON file is pushed afterwards.
 *   `action_trigger_check(self)`: Does not run the check. It only shows a notice that the external daemon runs checks on its own polling schedule.
+*   `_schedule_config_export(self)`: [@ANCHOR: pager_duty:schedule_config_export] Called by `create`, `write` (only when an exported field changes) and `unlink`: queues one post-commit rewrite of `pager_config.json` for the transaction, however many checks changed, so a check deleted any way (a migration, a shell) leaves the daemon's file. A failed export is logged and never raised, and a rolled-back change never reaches the file.
 *   `update_lets_encrypt_domains(self, domains)`: Sets the target of the first `certbot` (Certbot Readiness) check to the comma-joined `domains`, creating that check if none exists, then pushes the JSON file.
 
 #### Feed freshness (`feed:` target), functions and data
@@ -183,6 +184,9 @@ Handles the lifecycle of monitoring alerts.
 *   `auto_resolve_incidents(self, source, website_id=None)`: Resolves any active incidents matching the provided source. Call this when a system returns to a healthy state. `generalized_monitor.py` calls it after a check passes three times in a row, using the check name as the source.
 *   `action_acknowledge(self)`: Acknowledges the current incident, halting its escalation timer.
 *   `get_board_data(self)`: Generates real-time, aggregated JSON metrics for the NOC Dashboard UI.
+
+*   `_joins_unit_tickets(self)`: [@ANCHOR: pager_duty:joins_unit_tickets] True only when the `pager_duty.helpdesk_model` parameter (default `hams_helpdesk.ticket`) names the stock `hams_helpdesk.ticket`, the one model that carries the per-unit exception tickets; `report_incident()` joins an incident to a unit's ticket only then.
+*   `_note_unit_tickets(self, incident, unit_tickets)`: [@ANCHOR: pager_duty:note_unit_tickets] Posts an internal note on `incident` listing `#ticket (unit)` for each entry of `unit_tickets`, sorted by unit, saying no separate ticket was opened.
 
 ### `pager.incident` Helpdesk adapter (`models/incident_ticket_adapter.py`, an extension of `pager.incident`, not a separate model)
 *   `action_generate_helpdesk_ticket(self)`: Converts an existing Pager Duty incident into a Helpdesk ticket, assigning the active on-call responder. Used in automated flows (no button in this module's views calls it).

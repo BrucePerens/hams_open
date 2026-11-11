@@ -73,6 +73,7 @@ class TestMemberManual(HamsHttpCase):
             self.assertFalse(article.is_published)
 
     # Tests [@ANCHOR: hams_helpdesk:UX_SUPPORT_WHERE]
+    # Tests [@ANCHOR: hams_helpdesk:portal_my_tickets]
     def test_02_list_page_has_the_names_the_manual_uses(self):
         self.authenticate("helpdesk_manual_member", "helpdesk_manual_member")
         body = self.url_open("/my/tickets").text

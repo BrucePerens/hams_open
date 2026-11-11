@@ -96,6 +96,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
     http_request_key = ""
     http_request_allow_all = False
 
+    # [@ANCHOR: zero_sudo:real_transaction_case_authenticate]
     def authenticate(self, user, password, *args, **kwargs):
         """Signs in, then commits this test's cursor.
 
@@ -109,6 +110,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
         self.env.cr.commit()
         return session
 
+    # [@ANCHOR: zero_sudo:real_transaction_case_setup_class]
     @classmethod
     def setUpClass(cls):
         # A real, physically-committed cursor, NOT cls.registry.cursor(): under

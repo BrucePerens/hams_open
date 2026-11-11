@@ -55,6 +55,7 @@ class TestBackupPublishFailure(RealTransactionCase):
 
     # Tests [@ANCHOR: backup_management:COMM_job_dispatch_failed]
     def test_01_no_channel_marks_the_job_failed(self):
+        # Tests [@ANCHOR: backup_management:publish_to_rabbitmq]
         self.safe_patch_object(type(self.pool), "_get_channel", return_value=None)
         job = self._trigger()
         self.assertEqual(job.state, "failed")

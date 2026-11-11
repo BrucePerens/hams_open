@@ -73,6 +73,19 @@ class FailedUnitsCheckTests(unittest.TestCase):
         self.assertIn("1 failed systemd unit(s)", msg)
         self.assertIn("2 instances of a@: a@1.service, a@2.service", msg)
 
+    def test_failure_detail_is_the_result_and_the_time_without_the_weekday(self):
+        # Tests [@ANCHOR: pager_duty:failure_detail]
+        with mock.patch.object(gm.subprocess, "run", side_effect=fake_run("")):
+            self.assertEqual(gm._failure_detail("/bin/systemctl", "foo.service"), "signal since 2026-10-19 01:02:03 UTC")
+            self.assertEqual(gm._failure_detail("/bin/systemctl", "unknown.service"), "")
+
+    def test_failure_detail_is_empty_when_systemctl_fails_or_cannot_run(self):
+        # Tests [@ANCHOR: pager_duty:failure_detail]
+        with mock.patch.object(gm.subprocess, "run", return_value=mock.Mock(returncode=1, stdout="Result=exit-code\n")):
+            self.assertEqual(gm._failure_detail("/bin/systemctl", "foo.service"), "")
+        with mock.patch.object(gm.subprocess, "run", side_effect=OSError("gone")):
+            self.assertEqual(gm._failure_detail("/bin/systemctl", "foo.service"), "")
+
     def test_a_unit_listed_twice_is_counted_once(self):
         self.assertEqual(gm.parse_failed_unit_names("x.service l f f\nx.service l f f\n"), ["x.service"])
 

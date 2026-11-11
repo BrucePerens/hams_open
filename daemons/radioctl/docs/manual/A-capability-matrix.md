@@ -42,130 +42,33 @@ Derived protocol families (models, of the 312 dumped):
 
 (The remainder: Icom marine 4, Icom PCR 4, parallel 2, virtual 2, other 2.)
 
-What the Hamlib 4.6.2 matrix says about the families radioctl has not covered yet is a measure of the
-work ahead: 79 Icom CI-V models against the twenty-three Icom and five Xiegu radios described, 31 legacy Yaesu
-models against three, and 9 FlexRadio network models against four.
+How far radioctl's descriptions cover each of these families, and at what verification level, is in [`RIG_SUPPORT.md`](../RIG_SUPPORT.md) (generated, one row per Hamlib model).
 
 ## radioctl's rig descriptions
 
-Twenty-three files in `rigs/`, at the time of writing (commit `f54256f4`; the Icom CI-V files added since, listed in chapter [6](06-rig-descriptions.md), are not in the table). A `yes` means the description
-lists the capability (and therefore the handle accepts the operation); the engine must also implement it
-(chapter [7](07-protocol-engines.md)). Everything is unverified. `transceive` for the Icom and Xiegu
-radios means unsolicited frames are decoded if the radio is set to send them; the CI-V engine cannot
-switch transceive on. For the FlexRadio files it means the engine subscribes to the radio's status.
-The FlexRadio files claim no S-meter, power or SWR because those arrive on streams the engine does not
-read. `read-meters` is the raw Icom meter family (SWR, ALC, COMP, Vd, Id as a 0 to 255 deflection, read
-with command `15`); `read-swr` is a calibrated ratio in tenths, which the CI-V engine cannot derive without
-a per-model table, so the IC-7300 claims the first and not the second. The IC-705, IC-7610 and IC-9700
-files could claim both the meters and the data modes on the same Hamlib facts; they were left as they
-were until a bench run or a review adds them. The ANAN files claim no mode: an SDR's demodulation happens in the host. The table is derived from `rigs/*.toml`; run `grep capabilities rigs/*.toml` for the source of truth.
+The descriptions are the files `rigs/*.toml` (<!--count:description_files-->292<!--/count--> of them). A capability that a description lists is one the handle accepts (chapter [4](04-api.md)); the engine must also implement it (chapter [7](07-protocol-engines.md)), and a listed capability that the engine does not implement answers `Unsupported`. Which radio lists what is not copied here: it was a hand-written table of twenty-three files that went stale, and the same facts are in each description (`grep capabilities rigs/<name>.toml`) and, with each radio's verification level, in [`RIG_SUPPORT.md`](../RIG_SUPPORT.md). What this appendix keeps is what each capability means and how many descriptions list it; the counts are checked against `rigs/*.toml` by `tools/doc_counts.py --check`, and a capability that has no row here fails `tools/test_doc_counts.py`.
 
-**Icom and Xiegu (CI-V)**
+| Capability | Meaning | Descriptions listing it |
+|---|---|---:|
+| `read-frequency` | the VFO A frequency can be read | <!--count:cap_read_frequency-->269<!--/count--> |
+| `set-frequency` | a frequency can be set | <!--count:cap_set_frequency-->289<!--/count--> |
+| `second-vfo` | VFO B can be read and set | <!--count:cap_second_vfo-->62<!--/count--> |
+| `read-mode` | the mode and passband can be read | <!--count:cap_read_mode-->248<!--/count--> |
+| `set-mode` | the mode and passband can be set | <!--count:cap_set_mode-->265<!--/count--> |
+| `read-ptt` | the keyed state can be read | <!--count:cap_read_ptt-->127<!--/count--> |
+| `set-ptt` | the radio can be keyed and unkeyed (a transmitting capability: the transmit gate applies) | <!--count:cap_set_ptt-->166<!--/count--> |
+| `read-signal` | the S-meter reading | <!--count:cap_read_signal-->97<!--/count--> |
+| `read-power` | the transmit power reading | <!--count:cap_read_power-->38<!--/count--> |
+| `send-cw` | text can be sent as CW by the radio's own keyer (a transmitting capability) | <!--count:cap_send_cw-->34<!--/count--> |
+| `transceive` | unsolicited status frames are decoded if the radio is set to send them; the CI-V engine cannot switch transceive on, and for the FlexRadio files it means the engine subscribes to the radio's status | <!--count:cap_transceive-->61<!--/count--> |
+| `split` | split operation: the transmit VFO and the receive VFO differ | <!--count:cap_split-->82<!--/count--> |
+| `rit-xit` | RIT and XIT on and their offset | <!--count:cap_rit_xit-->43<!--/count--> |
+| `filter` | filter width or selection | <!--count:cap_filter-->32<!--/count--> |
+| `levels` | AF gain, RF gain, mic gain, keyer speed, power setting, attenuator, preamplifier and the like | <!--count:cap_levels-->76<!--/count--> |
+| `read-swr` | a calibrated standing-wave ratio, which the CI-V engine can derive only from a per-model table | <!--count:cap_read_swr-->6<!--/count--> |
+| `read-meters` | the raw Icom meter family (SWR, ALC, COMP, Vd, Id as a 0 to 255 deflection, read with command `15`) | <!--count:cap_read_meters-->10<!--/count--> |
+| `identify` | the model identifier can be read back | <!--count:cap_identify-->134<!--/count--> |
+| `scope` | bandscope or panadapter output (the `[scope]` block of the description) | <!--count:cap_scope-->5<!--/count--> |
 
-| Capability | IC-7300 | IC-705 | IC-7610 | IC-9700 | G90 | X6100 | X108G |
-|---|---|---|---|---|---|---|---|
-| `read-frequency` | yes | yes | yes | yes | yes | yes | yes |
-| `set-frequency` | yes | yes | yes | yes | yes | yes | yes |
-| `second-vfo` | yes | yes | yes | yes | - | - | - |
-| `read-mode` | yes | yes | yes | yes | yes | yes | yes |
-| `set-mode` | yes | yes | yes | yes | yes | yes | yes |
-| `read-ptt` | yes | yes | yes | yes | yes | yes | yes |
-| `set-ptt` | yes | yes | yes | yes | yes | yes | yes |
-| `read-signal` | yes | yes | yes | yes | yes | yes | yes |
-| `read-power` | yes | yes | yes | yes | - | - | - |
-| `send-cw` | yes | yes | yes | yes | - | - | - |
-| `transceive` | yes | yes | yes | yes | - | - | - |
-| `split` | yes | yes | yes | yes | - | - | - |
-| `rit-xit` | yes | yes | yes | yes | - | - | - |
-| `filter` | yes | yes | yes | yes | - | - | - |
-| `levels` | yes | yes | yes | yes | - | - | - |
-| `read-swr` | - | - | - | - | - | - | - |
-| `read-meters` | yes | - | - | - | - | - | - |
-| `identify` | yes | yes | yes | yes | - | - | - |
-| `scope` | yes | - | yes | - | - | - | - |
-| data modes (`data`, `data-r`) | yes | - | - | - | - | - | - |
-| `[scope]` block | yes | yes | yes | yes | - | - | - |
+The ANAN files claim no mode, since an SDR's demodulation happens in the host. `read-meters` and `read-swr` differ: the first is the raw 0 to 255 deflection, the second is a ratio in tenths and needs a per-model calibration table (chapter [15](15-power.md)).
 
-**Kenwood and Elecraft**
-
-| Capability | TS-2000 | TS-590S | TS-590SG | KX3 |
-|---|---|---|---|---|
-| `read-frequency` | yes | yes | yes | yes |
-| `set-frequency` | yes | yes | yes | yes |
-| `second-vfo` | yes | yes | yes | yes |
-| `read-mode` | yes | yes | yes | yes |
-| `set-mode` | yes | yes | yes | yes |
-| `read-ptt` | yes | yes | yes | yes |
-| `set-ptt` | yes | yes | yes | yes |
-| `read-signal` | yes | yes | yes | yes |
-| `read-power` | - | - | - | yes |
-| `send-cw` | - | - | - | yes |
-| `transceive` | yes | yes | yes | yes |
-| `split` | yes | yes | yes | yes |
-| `rit-xit` | yes | yes | yes | yes |
-| `filter` | - | - | - | yes |
-| `levels` | yes | yes | yes | yes |
-| `read-swr` | - | - | - | yes |
-| `identify` | yes | yes | yes | yes |
-| `[scope]` block | - | - | - | - |
-
-**Yaesu**
-
-| Capability | FT-991A | FTDX10 | FTDX101D | FT-817ND | FT-857D | FT-897D |
-|---|---|---|---|---|---|---|
-| `read-frequency` | yes | yes | yes | yes | yes | yes |
-| `set-frequency` | yes | yes | yes | yes | yes | yes |
-| `second-vfo` | yes | yes | - | - | - | - |
-| `read-mode` | yes | yes | yes | yes | yes | yes |
-| `set-mode` | yes | yes | yes | yes | yes | yes |
-| `read-ptt` | yes | yes | yes | yes | yes | yes |
-| `set-ptt` | yes | yes | yes | yes | yes | yes |
-| `read-signal` | yes | yes | yes | yes | yes | yes |
-| `read-power` | yes | yes | yes | yes | yes | yes |
-| `send-cw` | - | - | - | - | - | - |
-| `transceive` | yes | yes | yes | - | - | - |
-| `split` | yes | - | - | yes | yes | yes |
-| `rit-xit` | yes | yes | yes | yes | yes | yes |
-| `filter` | - | - | - | - | - | - |
-| `levels` | yes | yes | yes | - | - | - |
-| `read-swr` | - | - | - | - | - | - |
-| `identify` | yes | yes | yes | - | - | - |
-| `[scope]` block | - | - | - | - | - | - |
-
-**FlexRadio**
-
-| Capability | 6300 | 6400 | 6600 | 6700 |
-|---|---|---|---|---|
-| `read-frequency` | yes | yes | yes | yes |
-| `set-frequency` | yes | yes | yes | yes |
-| `second-vfo` | - | - | - | - |
-| `read-mode` | yes | yes | yes | yes |
-| `set-mode` | yes | yes | yes | yes |
-| `read-ptt` | yes | yes | yes | yes |
-| `set-ptt` | yes | yes | yes | yes |
-| `read-signal` | - | - | - | - |
-| `read-power` | - | - | - | - |
-| `send-cw` | yes | yes | yes | yes |
-| `transceive` | yes | yes | yes | yes |
-| `split` | - | - | - | - |
-| `rit-xit` | - | - | - | - |
-| `filter` | yes | yes | yes | yes |
-| `levels` | yes | yes | yes | yes |
-| `read-swr` | - | - | - | - |
-| `identify` | yes | yes | yes | yes |
-| `[scope]` block | - | - | - | - |
-
-**OpenHPSDR (ANAN)**
-
-| Capability | ANAN-10 | ANAN-100 |
-|---|---|---|
-| `read-frequency` | yes | yes |
-| `set-frequency` | yes | yes |
-| `read-ptt` | yes | yes |
-| `set-ptt` | yes | yes |
-| `read-power` | yes | yes |
-| `read-swr` | yes | yes |
-
-All other capabilities are absent for both.
-
-Columns of the first group: Icom IC-7300, IC-705, IC-7610, IC-9700; Xiegu G90, X6100, X108G.

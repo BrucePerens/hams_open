@@ -91,6 +91,7 @@ def _candidate_files(root):
             yield os.path.join(dirpath, fname)
 
 
+# [@ANCHOR: hams_helpdesk:ai_reader_py_files]
 def _py_files(root, daemon_only=False):
     for path in _candidate_files(root):
         fname = os.path.basename(path)
@@ -101,6 +102,7 @@ def _py_files(root, daemon_only=False):
         yield path
 
 
+# [@ANCHOR: hams_helpdesk:ai_reader_constants]
 def _constants(tree):
     """Module-level NAME = "str" / [..] / list + list, resolved to Python values where simple."""
     consts = {}
@@ -126,6 +128,7 @@ def _constants(tree):
     return consts, value
 
 
+# [@ANCHOR: hams_helpdesk:ai_reader_markers]
 def _markers(node):
     found = set()
     for sub in ast.walk(node):
@@ -138,10 +141,12 @@ def _markers(node):
     return found
 
 
+# [@ANCHOR: hams_helpdesk:ai_reader_ignored]
 def _ignored(lines, *linenos):
     return any(0 < n <= len(lines) and IGNORE_TAG in lines[n - 1] for n in linenos)
 
 
+# [@ANCHOR: hams_helpdesk:ai_reader_check_source]
 def check_source(source, filename="<src>"):
     """List of (line, message) violations in one Python source."""
     try:

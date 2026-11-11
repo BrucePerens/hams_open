@@ -115,3 +115,16 @@ Every record rule below is also limited to the user's allowed companies.
 ## 6. External Dependencies
 *   `markdown`
 </dependencies>
+
+## Function reference (ADR 0113): `_plain_text_preview(html_body)` `[@ANCHOR: knowledge:plain_text_preview]`
+
+**Purpose.** Turns an article's HTML body into plain text for a search-result snippet. `KnowledgeArticle._compute_body_snippet` (`[@ANCHOR: knowledge:COMM_compute_body_snippet]`) calls it, then collapses the blanks and keeps the first 300 characters. Odoo's own `html2plaintext` was wrong for this: it draws headings as `**...**` and emphasis as `/.../`, and its tag stripper does not match an HTML comment that spans several lines, which leaked a maintainer's review note into a public search page.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `html_body` | `str` or empty | The stored HTML of `knowledge.article.body`. |
+| returns | `str` | The text content of the parsed HTML tree with no markup decoration and no comments, whitespace not yet collapsed; `""` for an empty or false body. |
+
+Errors: none escape for malformed content. When `lxml.html.fromstring` raises `TypeError`, `ValueError`, `ParserError` or `XMLSyntaxError`, it falls back to Odoo's `html2plaintext`, so one bad article cannot break a whole listing. **Special concerns.** Pure: no database, no I/O, safe to retry. The text is returned as plain text, not HTML, so a template must still escape it (`t-out` does).
+
+**See also.** `test_01b_body_snippet_is_a_truncated_plain_text_preview` and `test_01c_body_snippet_never_leaks_a_multiline_html_comment_or_pseudo_markdown` in `tests/test_ui_enhancements.py`.

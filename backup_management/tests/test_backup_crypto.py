@@ -37,6 +37,7 @@ class TestBackupCrypto(HamsTransactionCase):
         super().tearDown()
 
     def test_kopia_password_round_trips_through_real_encryption(self):
+        # Tests [@ANCHOR: backup_management:get_fernet]
         # Tests [@ANCHOR: backup_management:COMM_crypt_field]
 
         # Tests [@ANCHOR: backup_management:COMM_compute_encrypted_field]

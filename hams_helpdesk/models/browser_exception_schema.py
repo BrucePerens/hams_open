@@ -65,6 +65,7 @@ class ReportRejected(Exception):
     """The report is refused. ``status`` is the HTTP status to answer, ``reason`` a short fixed word
     (never a piece of the report) for the log and the tests."""
 
+    # [@ANCHOR: hams_helpdesk:browser_report_rejected]
     def __init__(self, status, reason):
         super().__init__(reason)
         self.status = status

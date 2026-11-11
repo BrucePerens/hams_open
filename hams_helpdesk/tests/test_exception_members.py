@@ -151,6 +151,14 @@ class TestWhoIsLinked(MemberCase):
         self.assertEqual(again.member_ids.user_id, self.member | self.portal_other)
         self.assertEqual(again.occurrence_count, 2)
 
+    def test_is_listed_is_true_for_a_listed_member_or_a_full_list_only(self):
+        # Tests [@ANCHOR: hams_helpdesk:exc_is_listed]
+        row = self.fail_as(self.member)
+        self.assertTrue(self.Member._is_listed(row, self.member.id))
+        self.assertFalse(self.Member._is_listed(row, self.portal_other.id))
+        self.safe_patch_object(member_model, "MEMBER_LIST_LIMIT", new=1)
+        self.assertTrue(self.Member._is_listed(row, self.portal_other.id), "a full list would not list a new member anyway")
+
     def test_the_list_is_capped_and_the_overflow_is_only_counted(self):
         self.safe_patch_object(member_model, "MEMBER_LIST_LIMIT", new=1)
         row = self.fail_as(self.member)
@@ -171,6 +179,8 @@ class TestWhoIsLinked(MemberCase):
 class TestPanelDetails(MemberCase):
     # Tests [@ANCHOR: hams_helpdesk:ticket_affected_members]
     # Tests [@ANCHOR: hams_helpdesk:exc_contact_user]
+    # Tests [@ANCHOR: hams_helpdesk:exc_compute_details]
+    # Tests [@ANCHOR: hams_helpdesk:exc_callsigns_of]
 
     def panel_row(self):
         return self.the_panel(self.fail_as(self.member))
@@ -182,6 +192,12 @@ class TestPanelDetails(MemberCase):
         self.assertEqual(panel.contact_kind, "member")
         self.assertEqual(panel.contact_name, NAME)
         self.assertEqual(panel.contact_email, EMAIL)
+
+    def test_the_row_name_is_a_number_only(self):
+        # Tests [@ANCHOR: hams_helpdesk:exc_compute_name]
+        panel = self.panel_row()
+        self.assertEqual(panel.name, "Affected member %s" % panel.id)
+        self.assertNotIn(NAME, panel.name)
 
     def test_a_member_with_no_callsign_still_shows_name_and_email(self):
         no_call = self.env["res.users"].create(
@@ -254,6 +270,7 @@ class TestPanelDetails(MemberCase):
 @tagged("post_install", "-at_install", "standard")
 class TestReplyIsOnlyADraft(MemberCase):
     # Tests [@ANCHOR: hams_helpdesk:exc_reply_to_member]
+    # Tests [@ANCHOR: hams_helpdesk:exc_contact_partner]
 
     def test_reply_opens_the_composer_addressed_to_the_member_and_sends_nothing(self):
         panel = self.the_panel(self.fail_as(self.member))
@@ -275,6 +292,7 @@ class TestReplyIsOnlyADraft(MemberCase):
         self.assertNotIn(self.member.partner_id, ticket.message_partner_ids, "the member is not made a follower")
 
     def test_the_mailto_action_is_a_plain_mailto_link(self):
+        # Tests [@ANCHOR: hams_helpdesk:exc_action_mailto]
         panel = self.the_panel(self.fail_as(self.member))
         action = panel.action_mailto()
         self.assertEqual(action["type"], "ir.actions.act_url")

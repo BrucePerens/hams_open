@@ -20,3 +20,8 @@ sign-in.
 ## Verification
 
 `hams_base/tests/test_login_case_insensitive.py`.
+
+## Interface
+
+- `[@ANCHOR: hams_base:res_users_normalize_login]` `ResUsers._normalize_login(login)` (a static method) returns the string stripped of surrounding whitespace and lower-cased; anything that is not a string (`None`, `False`, a number) is returned unchanged. It does no database work and cannot raise. Used by the sign-in lookup, `create` and `write`. **Tests:** `TestLoginCaseInsensitive.test_normalize_login_strips_and_lowercases_a_string_and_passes_anything_else_through`.
+- `[@ANCHOR: hams_base:res_users_create]` `ResUsers.create(vals_list)` replaces the `login` of every values dict that has one with its normalized form before core creates the users, so a login is never stored in mixed case or with spaces. It edits the caller's dicts in place and adds no other behaviour. **Tests:** `TestLoginCaseInsensitive.test_create_and_write_store_lowercase_login`.

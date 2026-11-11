@@ -55,3 +55,10 @@ class TestExceptionReporterKey(RealTransactionCase):
         # Registering again (a re-install, the migration on an installed database) updates the same row.
         hooks.register_exception_reporter_key(self.env)
         self.assertEqual(self._registries(), registry)
+
+    def test_the_post_init_hook_registers_the_key_on_a_fresh_install(self):
+        # Tests [@ANCHOR: hams_helpdesk:post_init_hook]
+        self.addCleanup(lambda: self._registries().unlink())
+        hooks.post_init_hook(self.env)
+        self.assertEqual(len(self._registries()), 1)
+        self.assertTrue(os.path.exists(SCRATCH_KEY_FILE))

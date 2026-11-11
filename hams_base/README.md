@@ -23,6 +23,9 @@ The `hams_base` module provides foundational security, compliance, and email tra
 * **`res.config.settings`**:
   * Manages compliance settings (organization name and mailing address, shown in the footer `views/mail_templates.xml` adds to Odoo's notification emails) and exposes recommended SPF and DMARC DNS configurations for the instance domain. The SPF record is a template naming an example provider, to be edited. The DMARC record (`p=quarantine`, reports to `dmarc-reports@<domain>`) is shown only when "Enable Custom DMARC" is on. The domain comes from `mail.catchall.domain`, or else `web.base.url`. DKIM records must be taken from the mail provider.
 
+* **`website.visitor`**:
+  * `_track_exists_for_this_request()` `[@ANCHOR: hams_base:visitor_track_exists]` (a model method, no arguments) returns True when the visitor of the current request already has a `website_track` row for this exact URL newer than `TRACK_DEDUP_MINUTES` (30). It runs one read-only `SELECT ... LIMIT 1` and writes nothing; it returns False when the request carries no visitor token (`_get_access_token` raised `ValueError`). `_handle_webpage_dispatch` skips core's visitor UPSERT and track INSERT when it returns True. **Tests:** `TestVisitorTrackDedup.test_a_recent_track_for_the_same_url_skips_every_write`, which also covers the no-token, other-URL, other-session and old-track cases.
+
 ### Website Routes
 * `/email-policy`: public page listing the kinds of email the platform sends.
 * `/unsubscribe`: public page offering an email link to ask a person to stop optional email (there is no per-kind preference switch; nothing stores or reads one), or (for a logged-in user) a total account lockout.

@@ -26,6 +26,7 @@ MULTI_VALUE_TYPES = frozenset({"NS", "TXT"})
 PROXIABLE_TYPES = frozenset({"A", "AAAA", "CNAME"})
 
 
+# [@ANCHOR: cloudflare:COMM_dns_plan_normalize_name]
 def normalize_name(name):
     return (name or "").strip().rstrip(".").lower()
 

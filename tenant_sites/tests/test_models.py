@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import importlib.util
 import os
+from unittest.mock import MagicMock
 
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError, UserError, ValidationError
@@ -58,6 +59,7 @@ class TestTenantSitesModels(HamsTransactionCase):
     # [@ANCHOR: tenant_sites:COMM_test_own_host_normalize]
     def test_own_host_patterns(self):
         # Tests [@ANCHOR: tenant_sites:COMM_own_host_normalize]
+        # Tests [@ANCHOR: tenant_sites:own_host_create]
         Own = self.env["tenant.site.own.host"]
         Own.create([{"name": "Main.Example"}, {"name": "*.Main.Example"}])
         self.assertEqual(sorted(Own.search([], limit=100).mapped("name")), ["*.main.example", "main.example"])
@@ -251,3 +253,62 @@ class TestTenantSitesModels(HamsTransactionCase):
         module.migrate(self.env.cr, "1.0")
         self.env.invalidate_all()
         self.assertEqual(site_b.static_service, OTHER_SERVICE_7)  # a value already set is left alone
+
+    def _watch_cache_clears(self):
+        clear = MagicMock(name="registry.clear_cache")
+        self.safe_patch_object(self.env.registry, "clear_cache", clear)
+        return clear
+
+    def _assert_both_caches_cleared(self, clear):
+        clear.assert_any_call("assets")
+        clear.assert_any_call()
+
+    def test_changing_or_removing_a_site_clears_the_asset_and_registry_caches(self):
+        # Tests [@ANCHOR: tenant_sites:site_write]
+        # Tests [@ANCHOR: tenant_sites:site_unlink]
+        clear = self._watch_cache_clears()
+        self.site.write({"notes": "changed"})
+        self.assertEqual(self.site.notes, "changed")
+        self._assert_both_caches_cleared(clear)
+        other = self.env["tenant.site"].create({"name": "Doomed", "website_id": self.env["website"].create({"name": "Doomed"}).id})
+        clear.reset_mock()
+        other.unlink()
+        self.assertFalse(other.exists())
+        self._assert_both_caches_cleared(clear)
+
+    def test_the_kept_module_list_clears_the_asset_and_registry_caches_on_every_change(self):
+        # Tests [@ANCHOR: tenant_sites:kept_module_create]
+        # Tests [@ANCHOR: tenant_sites:kept_module_write]
+        # Tests [@ANCHOR: tenant_sites:kept_module_unlink]
+        clear = self._watch_cache_clears()
+        kept = self.env["tenant.site.kept.module"].create({"name": "some_policy_module"})
+        self._assert_both_caches_cleared(clear)
+        clear.reset_mock()
+        kept.write({"name": "other_policy_module"})
+        self.assertEqual(kept.name, "other_policy_module")
+        self._assert_both_caches_cleared(clear)
+        clear.reset_mock()
+        kept.unlink()
+        self.assertFalse(kept.exists())
+        self._assert_both_caches_cleared(clear)
+
+    def test_an_own_host_pattern_is_normalized_on_write_and_a_bad_one_is_refused(self):
+        # Tests [@ANCHOR: tenant_sites:own_host_write]
+        own = self.env["tenant.site.own.host"].create({"name": "first.example"})
+        own.write({"name": "  *.Second.Example "})
+        self.assertEqual(own.name, "*.second.example")
+        own.write({})  # a write without a name leaves it alone
+        self.assertEqual(own.name, "*.second.example")
+        with self.assertRaises(ValidationError):
+            own.write({"name": "x y"})
+            self.env.flush_all()
+
+    def test_both_service_env_helpers_run_as_the_tenant_sites_service_account(self):
+        # Tests [@ANCHOR: tenant_sites:host_service_env]
+        # Tests [@ANCHOR: tenant_sites:site_service_env]
+        service_uid = self.env.ref("tenant_sites.user_tenant_sites_service").id
+        host_env = self.env["tenant.site.host"]._service_env()
+        site_env = self.env["tenant.site"]._service_env()
+        self.assertEqual(host_env.uid, service_uid)
+        self.assertEqual(site_env.uid, service_uid)
+        self.assertNotEqual(self.env.uid, service_uid)

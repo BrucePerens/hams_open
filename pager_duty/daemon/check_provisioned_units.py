@@ -64,6 +64,7 @@ def expected_units(infra, environment="prod"):
     return units
 
 
+# [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
 def systemctl_show(unit):
     """{property: value} for one unit; an unreadable answer is an empty dict."""
     result = subprocess.run(["systemctl", "show", unit, "-p", SHOW_PROPERTIES], capture_output=True, text=True, check=False)
@@ -97,6 +98,7 @@ def units_not_in_operation(units, show=systemctl_show, expected_off=()):
     return problems
 
 
+# [@ANCHOR: pager_duty:provisioned_units_main]
 def main(argv=None):
     expected_off = {name.strip() for name in os.environ.get("HAMS_UNITS_EXPECTED_OFF", "").split(",") if name.strip()}
     try:

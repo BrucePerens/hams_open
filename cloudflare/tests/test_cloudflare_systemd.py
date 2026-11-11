@@ -28,6 +28,7 @@ class TestCloudflareSystemd(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:is_tunnel_daemon_running]
     def test_01_is_tunnel_daemon_running_true_for_active_unit(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_unit_name]
         mock_run = self._mock_run(returncode=0, stdout="active\n")
         self.assertTrue(cf_systemd.is_tunnel_daemon_running("cftun-test"))
         args = mock_run.call_args[0][0]
@@ -48,6 +49,7 @@ class TestCloudflareSystemd(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:start_tunnel_daemon]
     def test_04_start_tunnel_daemon_writes_env_file_and_enables_unit(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_env_file_path]
         self.safe_patch(
             "odoo.addons.cloudflare.utils.cloudflare_systemd._ensure_unit_installed"
         )
@@ -100,6 +102,7 @@ class TestCloudflareSystemd(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:stop_tunnel_daemon]
     def test_06b_stopping_a_tunnel_removes_its_run_token_file(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_remove_env_file]
         # The file holds a live credential; start_tunnel_daemon writes it again on every start, so a stopped or
         # deleted tunnel has no use for it.
         path = cf_systemd._env_file_path("cftun-remove-test")
@@ -121,6 +124,7 @@ class TestCloudflareSystemd(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:stop_tunnel_daemon]
     def test_06d_a_key_that_resolves_outside_the_keys_directory_is_never_removed(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_remove_env_file]
         with tempfile.TemporaryDirectory() as tmp:
             keys_dir = os.path.join(tmp, "keys")
             os.makedirs(keys_dir)
@@ -166,12 +170,14 @@ class TestCloudflareSystemd(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:cloudflare_systemd] (secure file writing)
     def test_09_write_secure_file_refuses_paths_outside_the_mandatory_prefix(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_write_secure_file]
         with self.assertRaises(ValueError):
             cf_systemd._write_secure_file(
                 "/opt/hams/not-allowed.env", "content", cf_systemd._KEYS_DIR
             )
 
     def test_10_write_secure_file_writes_atomically_at_0600(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_write_secure_file]
         path = os.path.join(cf_systemd._KEYS_DIR, "test_cloudflare_systemd_write.env")
         try:
             cf_systemd._write_secure_file(path, "FOO=bar\n", cf_systemd._KEYS_DIR)
@@ -189,6 +195,7 @@ class TestCloudflareSystemd(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:cloudflare_systemd] (secure file writing)
     def test_11_write_secure_file_refuses_a_sibling_directory_sharing_the_prefix(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_write_secure_file]
         """A string-prefix test is not a directory boundary: "/x/keys_evil/f" starts with "/x/keys"."""
         with tempfile.TemporaryDirectory() as tmp:
             prefix = os.path.join(tmp, "keys")
@@ -261,3 +268,43 @@ class TestCloudflareSystemd(HamsTransactionCase):
         self.assertNotIn("${", exec_lines[0])
         self.assertNotIn("TOKEN", exec_lines[0])
         self.assertTrue(any(l.startswith("EnvironmentFile=") for l in template.splitlines()))
+
+    def test_16_unit_name_env_file_and_systemctl_environment(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_unit_name]
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_systemctl_env]
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_env_file_path]
+        self.assertEqual(cf_systemd._unit_name("cftun-a"), "cloudflared@cftun-a.service")
+        self.assertEqual(
+            cf_systemd._env_file_path("cftun-a"), os.path.join(cf_systemd._KEYS_DIR, "cloudflared-cftun-a.env")
+        )
+        self.assertEqual(cf_systemd._systemctl_env()["XDG_RUNTIME_DIR"], "/run/user/%d" % os.getuid())
+
+    def test_17_run_systemctl_reports_success_failure_and_a_missing_systemctl(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_run_systemctl]
+        mock_run = self._mock_run(returncode=0, stdout=" ok\n")
+        self.assertEqual(cf_systemd._run_systemctl("is-active", "u"), (True, "ok"))
+        self.assertEqual(mock_run.call_args[0][0], ["systemctl", "--user", "is-active", "u"])
+        self._mock_run(returncode=1, stderr="boom\n")
+        self.assertEqual(cf_systemd._run_systemctl("x"), (False, "boom"))
+        self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_systemd.subprocess.run", side_effect=OSError("gone"))
+        with self.assertLogs(cf_systemd._logger.name, level="ERROR"):
+            self.assertEqual(cf_systemd._run_systemctl("x"), (False, "gone"))
+
+    def test_18_the_binary_is_the_vendored_one_else_the_one_on_path_else_the_vendored_path(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_resolve_cloudflared_bin]
+        with tempfile.TemporaryDirectory() as tmp:
+            vendored = os.path.join(tmp, "cloudflared")
+            self.safe_patch_object(cf_systemd, "_VENDORED_BIN_PATH", vendored)
+            self.assertEqual(cf_systemd._resolve_cloudflared_bin(), vendored, "missing: the path is still returned")
+            with open(vendored, "w") as f:
+                f.write("#!/bin/sh\n")
+            os.chmod(vendored, 0o755)
+            self.assertEqual(cf_systemd._resolve_cloudflared_bin(), vendored)
+            os.chmod(vendored, 0o644)
+            which = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_systemd.shutil.which")
+            which.return_value = "/usr/bin/cloudflared"
+            with self.assertLogs(cf_systemd._logger.name, level="WARNING"):
+                self.assertEqual(cf_systemd._resolve_cloudflared_bin(), "/usr/bin/cloudflared")
+            which.return_value = None
+            with self.assertLogs(cf_systemd._logger.name, level="ERROR"):
+                self.assertEqual(cf_systemd._resolve_cloudflared_bin(), vendored)

@@ -29,6 +29,7 @@ class WebsiteVisitor(models.Model):
             return None
         return super()._handle_webpage_dispatch(website_page)
 
+    # [@ANCHOR: hams_base:visitor_track_exists]
     @api.model
     def _track_exists_for_this_request(self):
         try:

@@ -60,6 +60,7 @@ def severity_for_percent(percent, warn=DEFAULT_WARN_PERCENT, fail=DEFAULT_FAIL_P
     return None
 
 
+# [@ANCHOR: pager_duty:recordings_disk_nearest_directory]
 def nearest_existing_directory(path):
     """`path` itself when it is a directory, else its closest existing parent."""
     path = os.path.abspath(path)
@@ -116,6 +117,7 @@ def directory_volume(path, now=None, window_days=RATE_WINDOW_DAYS, budget=SCAN_B
     return count, total, recent, True, oldest
 
 
+# [@ANCHOR: pager_duty:recordings_disk_human]
 def human(nbytes):
     value = float(nbytes)
     for unit in ("B", "KB", "MB", "GB", "TB"):
@@ -145,6 +147,7 @@ def estimate(used_bytes, available_bytes, volume, window_days=RATE_WINDOW_DAYS, 
     return rate, room / rate
 
 
+# [@ANCHOR: pager_duty:recordings_disk_summary_line]
 def summary_line(path, percent, volume, rate, days_to_fail, fail=DEFAULT_FAIL_PERCENT):
     count, total, _recent, complete, _oldest = volume
     if days_to_fail is None:

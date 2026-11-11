@@ -547,6 +547,9 @@ pub struct KenwoodParams {
     pub dialect: KenwoodDialect,
     /// The model's `KY` (send CW text) record; `None` where the description does not record one.
     pub ky: Option<KyParams>,
+    /// TS-890S only: the bandscope and filter scope come over the serial (COM/USB) link as split
+    /// `DD2`/`DD3` frames (`scope_link = "serial"`) rather than as LAN `##DD2`/`##DD3` frames.
+    pub scope_serial: bool,
 }
 
 /// Which command set a Kenwood handheld or mobile speaks.
@@ -1158,6 +1161,7 @@ impl RigDescription {
                 model_id: 19,
                 dialect: KenwoodDialect::Classic,
                 ky: None,
+                scope_serial: false,
             }),
             elecraft: None,
             yaesu: None,

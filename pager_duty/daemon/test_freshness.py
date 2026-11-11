@@ -5,6 +5,7 @@ newest record of a feed (or the last successful run of a timer-driven unit) is o
 "active" but wedged is caught. Plain unittest, no Odoo:
     python3 pager_duty/daemon/test_freshness.py
 """
+import datetime
 import json
 import os
 import subprocess
@@ -417,6 +418,30 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(gm._human_age(1800), "30min")
         self.assertEqual(gm._human_age(3 * 3600 + 120), "3h02")
         self.assertEqual(gm._human_age(5 * 86400), "5d")
+
+    def test_freshness_redis_connects_to_the_configured_host_and_port(self):
+        # Tests [@ANCHOR: pager_duty:freshness_redis]
+        with mock.patch.dict(os.environ, {"REDIS_HOST": "r.example", "REDIS_PORT": "6390"}), \
+                mock.patch.object(gm.redis_lib, "Redis") as redis_class:
+            client = gm._freshness_redis()
+        self.assertIs(client, redis_class.return_value)
+        kwargs = redis_class.call_args.kwargs
+        self.assertEqual((kwargs["host"], kwargs["port"]), ("r.example", 6390))
+        self.assertEqual(kwargs["socket_timeout"], 5)
+
+    def test_freshness_redis_defaults_to_the_redis_host(self):
+        # Tests [@ANCHOR: pager_duty:freshness_redis]
+        env = {k: v for k, v in os.environ.items() if k not in ("REDIS_HOST", "REDIS_PORT")}
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(gm.redis_lib, "Redis") as redis_class:
+            gm._freshness_redis()
+        self.assertEqual((redis_class.call_args.kwargs["host"], redis_class.call_args.kwargs["port"]), ("redis", 6379))
+
+    def test_utcnow_is_a_naive_utc_datetime(self):
+        # Tests [@ANCHOR: pager_duty:utcnow]
+        now = gm._utcnow()
+        self.assertIsNone(now.tzinfo)
+        expected = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        self.assertLess(abs((expected - now).total_seconds()), 5)
 
 
 if __name__ == "__main__":

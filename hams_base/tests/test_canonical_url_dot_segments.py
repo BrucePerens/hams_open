@@ -90,6 +90,7 @@ class TestCanonicalUrlSurvivesDotSegments(HamsHttpCase):
                 )
 
     def test_05_the_dot_segment_check_matches_odoos_own_refusals(self):
+        # Tests [@ANCHOR: hams_base:has_dot_segment]
         for refused in ("/a/../b", "/a/./b", "/a/%2e%2e/b", "/a/%2E/b", "/a/..%2fb", "/a/%ff/b"):
             self.assertTrue(_has_dot_segment(refused), refused)
         for fine in ("/", "/a/b", "/a/b..c/", "/a/.hidden", "/a/%252e%252e/b", "/caf%C3%A9"):

@@ -15,6 +15,7 @@ class TenantSiteKeptModule(models.Model):
         "listed here (for example one that applies a content security policy to every page) is kept.",
     )
 
+    # [@ANCHOR: tenant_sites:kept_module_create]
     # The bundles of every tenant depend on this list; Odoo caches them.
     @api.model_create_multi
     def create(self, vals_list):
@@ -23,12 +24,14 @@ class TenantSiteKeptModule(models.Model):
         self.env.registry.clear_cache()
         return records
 
+    # [@ANCHOR: tenant_sites:kept_module_write]
     def write(self, vals):
         result = super().write(vals)
         self.env.registry.clear_cache('assets')
         self.env.registry.clear_cache()
         return result
 
+    # [@ANCHOR: tenant_sites:kept_module_unlink]
     def unlink(self):
         result = super().unlink()
         self.env.registry.clear_cache('assets')
