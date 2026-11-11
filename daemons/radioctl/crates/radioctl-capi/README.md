@@ -21,8 +21,14 @@ if (rctl_rig_open_tcp(rt, rigfile_text, "192.168.1.50:4992", &rig) == RCTL_OK) {
        rctl_rig_permit_transmit(rig, "who decided") */
     rctl_rig_close(rig);                   /* unkeys first */
 }
-rctl_runtime_free(rt);                     /* RCTL_ERR_BUSY while a rig is still open */
+rctl_runtime_free(rt);                     /* RCTL_ERR_BUSY while a rig or rotator is still open */
 ```
+
+Rotators (the engines of `radioctl-station`: rotctld and GS-232, models from `data/station/rotators.toml`):
+`rctl_rotator_open_virtual`, `_open_tcp` and `_open_serial` take a model id such as
+`yaesu-g-5500-gs232b`; then `rctl_rotator_set_position` (outside the model's travel is refused with
+`RCTL_ERR_REJECTED` before anything is written), `_get_position`, `_stop`, `_park` and
+`rctl_rotator_close`. Nothing is verified against a real rotator.
 
 Link with `-lradioctl_capi`; the working example is `tests/c/capi_test.c`. Every call returns a
 negative `RCTL_ERR_*` code on failure and sets a per-thread message read with `rctl_last_error()`.
@@ -61,3 +67,15 @@ negative `RCTL_ERR_*` code on failure and sets a per-thread message read with `r
 - [@ANCHOR: radioctl:radioctl_capi_rig_revoke_transmit] (radioctl-capi) `rctl_rig_revoke_transmit` (see the source).
 - [@ANCHOR: radioctl:radioctl_capi_rig_transmit_permitted] (radioctl-capi) `rctl_rig_transmit_permitted` (see the source).
 - [@ANCHOR: radioctl:radioctl_capi_rig_link_up] (radioctl-capi) `rctl_rig_link_up` (see the source).
+- [@ANCHOR: radioctl:radioctl_capi_from_station_error] (radioctl-capi) A station (rotator) error as a status code: a driver error that names the link is a down link.
+- [@ANCHOR: radioctl:radioctl_capi_rotator_ref] (radioctl-capi) A live rotator handle as a reference.
+- [@ANCHOR: radioctl:radioctl_capi_rotator_description] (radioctl-capi) The shipped description of the rotator model `id` (an id from `data/station/rotators.toml`).
+- [@ANCHOR: radioctl:radioctl_capi_rotator_open_with] (radioctl-capi) Common part of the rotator open calls: find the model, then run `connect` to get the `Rotator`, the transport's monitor and the control of a served virtual rotator.
+- [@ANCHOR: radioctl:radioctl_capi_rotator_open_virtual] (radioctl-capi) `rctl_rotator_open_virtual` (see the source).
+- [@ANCHOR: radioctl:radioctl_capi_rotator_open_tcp] (radioctl-capi) `rctl_rotator_open_tcp` (see the source).
+- [@ANCHOR: radioctl:radioctl_capi_rotator_open_serial] (radioctl-capi) `rctl_rotator_open_serial` (see the source).
+- [@ANCHOR: radioctl:radioctl_capi_rotator_close] (radioctl-capi) `rctl_rotator_close` (see the source).
+- [@ANCHOR: radioctl:radioctl_capi_rotator_set_position] (radioctl-capi) `rctl_rotator_set_position` (see the source).
+- [@ANCHOR: radioctl:radioctl_capi_rotator_get_position] (radioctl-capi) `rctl_rotator_get_position` (see the source).
+- [@ANCHOR: radioctl:radioctl_capi_rotator_stop] (radioctl-capi) `rctl_rotator_stop` (see the source).
+- [@ANCHOR: radioctl:radioctl_capi_rotator_park] (radioctl-capi) `rctl_rotator_park` (see the source).

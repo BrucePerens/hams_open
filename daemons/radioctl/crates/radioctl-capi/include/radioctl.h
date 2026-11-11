@@ -83,6 +83,12 @@
 typedef struct rctl_rig rctl_rig;
 
 /*
+ An opaque rotator handle (`rctl_rotator`): one open rotator. Rotators count with rigs when a
+ runtime is freed.
+ */
+typedef struct rctl_rotator rctl_rotator;
+
+/*
  An opaque runtime handle (`rctl_runtime`): the tokio runtime that drives rigs.
  */
 typedef struct rctl_runtime rctl_runtime;
@@ -258,6 +264,87 @@ int32_t rctl_rig_transmit_permitted(rctl_rig *rig, int *out_open);
  `rig` must be a live rig handle and `out_up` a writable `int`.
  */
 int32_t rctl_rig_link_up(rctl_rig *rig, int *out_up);
+
+/*
+ Opens a rotator of the model `model` (an id such as `yaesu-g-5500-gs232b`) on a virtual
+ rotator served on a loopback socket inside the library (no hardware).
+
+ # Safety
+ `runtime` must be a live runtime handle, `model` a NUL-terminated string and `out_rotator` a
+ writable `rctl_rotator *`.
+ */
+int32_t rctl_rotator_open_virtual(rctl_runtime *runtime,
+                                  const char *model,
+                                  rctl_rotator **out_rotator);
+
+/*
+ Opens a rotator of the model `model` reached over TCP (a rotctld, or a serial server in front
+ of a controller), reconnecting with backoff. `address` is `host:port`.
+
+ # Safety
+ As for `rctl_rotator_open_virtual`; `address` is a NUL-terminated string.
+ */
+int32_t rctl_rotator_open_tcp(rctl_runtime *runtime,
+                              const char *model,
+                              const char *address,
+                              rctl_rotator **out_rotator);
+
+/*
+ Opens a rotator of the model `model` on a serial port (a device path such as
+ `/dev/ttyUSB0`) at `baud`, 8N1, reopening the port if it disappears.
+
+ # Safety
+ As for `rctl_rotator_open_virtual`; `path` is a NUL-terminated string.
+ */
+int32_t rctl_rotator_open_serial(rctl_runtime *runtime,
+                                 const char *model,
+                                 const char *path,
+                                 uint32_t baud,
+                                 rctl_rotator **out_rotator);
+
+/*
+ Closes a rotator: it is told to stop (best effort, bounded), then the transport is released.
+ Passing null is an error, not a no-op.
+
+ # Safety
+ `rotator` must be a pointer returned by an `rctl_rotator_open_*` call and not yet closed, and
+ no other thread may be using it.
+ */
+int32_t rctl_rotator_close(rctl_rotator *rotator);
+
+/*
+ Moves the rotator to azimuth `az` and elevation `el`, in degrees. A position outside the
+ travel of the model is refused (`RCTL_ERR_REJECTED`) before anything is written. Returns when
+ the rotator has accepted the command, not when it arrives.
+
+ # Safety
+ `rotator` must be a live rotator handle.
+ */
+int32_t rctl_rotator_set_position(rctl_rotator *rotator, float az, float el);
+
+/*
+ Reads the rotator's azimuth and elevation, in degrees. Asks the rotator.
+
+ # Safety
+ `rotator` must be a live rotator handle; `out_az` and `out_el` writable `float`s.
+ */
+int32_t rctl_rotator_get_position(rctl_rotator *rotator, float *out_az, float *out_el);
+
+/*
+ Stops the rotator. No interlock applies.
+
+ # Safety
+ `rotator` must be a live rotator handle.
+ */
+int32_t rctl_rotator_stop(rctl_rotator *rotator);
+
+/*
+ Sends the rotator to its park position. A model without one is refused (`RCTL_ERR_REJECTED`).
+
+ # Safety
+ `rotator` must be a live rotator handle.
+ */
+int32_t rctl_rotator_park(rctl_rotator *rotator);
 
 #ifdef __cplusplus
 }  // extern "C"

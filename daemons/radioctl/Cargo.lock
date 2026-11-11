@@ -681,6 +681,7 @@ dependencies = [
  "cbindgen",
  "radioctl-core",
  "radioctl-protocols",
+ "radioctl-station",
  "tokio",
 ]
 

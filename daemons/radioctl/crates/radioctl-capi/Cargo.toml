@@ -35,6 +35,7 @@ owned-runtime = ["tokio/rt-multi-thread"]
 [dependencies]
 radioctl-core = { path = "../radioctl-core" }
 radioctl-protocols = { path = "../radioctl-protocols" }
+radioctl-station = { path = "../radioctl-station" }
 tokio = { workspace = true, features = ["rt", "sync", "time", "io-util", "net", "macros"] }
 
 [build-dependencies]

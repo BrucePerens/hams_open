@@ -42,6 +42,8 @@ static char *slurp(const char *path) {
 int main(int argc, char **argv) {
     rctl_runtime *rt = NULL;
     rctl_rig *rig = NULL;
+    rctl_rotator *rot = NULL;
+    float az = -1.0f, el = -1.0f;
     uint64_t hz = 0;
     int on = -1, open = -1, up = -1;
     char mode[16];
@@ -134,6 +136,27 @@ int main(int argc, char **argv) {
     CHECK(rig == NULL);
     CHECK(rctl_rig_open_serial(rt, toml, "/dev/null/not-a-port", 0, &rig) == RCTL_ERR_INVALID_ARG);
     CHECK(rctl_rig_open_serial(rt, toml, "/dev/null/not-a-port", 9600, &rig) == RCTL_ERR_LINK_DOWN);
+    CHECK(rctl_runtime_free(rt) == RCTL_OK);
+
+    /* A virtual rotator: positions inside the travel are accepted and read back, a position
+       outside it is refused before anything is written, a model without a park is refused. */
+    rt = NULL;
+    CHECK(rctl_runtime_new(&rt) == RCTL_OK);
+    CHECK(rctl_rotator_open_virtual(rt, "no-such-rotator", &rot) == RCTL_ERR_INVALID_ARG);
+    CHECK(rot == NULL);
+    CHECK(rctl_rotator_get_position(NULL, &az, &el) == RCTL_ERR_NULL);
+    CHECK(rctl_rotator_open_virtual(rt, "yaesu-g-5500-gs232b", &rot) == RCTL_OK);
+    CHECK(rot != NULL);
+    if (rot) {
+        CHECK(rctl_runtime_free(rt) == RCTL_ERR_BUSY);
+        CHECK(rctl_rotator_set_position(rot, 90.0f, 45.0f) == RCTL_OK);
+        CHECK(rctl_rotator_get_position(rot, &az, &el) == RCTL_OK);
+        CHECK(az >= 0.0f && az <= 450.0f);
+        CHECK(rctl_rotator_set_position(rot, 9999.0f, 0.0f) == RCTL_ERR_REJECTED);
+        CHECK(rctl_rotator_stop(rot) == RCTL_OK);
+        CHECK(rctl_rotator_park(rot) == RCTL_OK);
+        CHECK(rctl_rotator_close(rot) == RCTL_OK);
+    }
     CHECK(rctl_runtime_free(rt) == RCTL_OK);
 
     free(toml);

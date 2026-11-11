@@ -67,6 +67,12 @@ fn shared_library_dir() -> PathBuf {
 // Tests [@ANCHOR: radioctl_capi_rig_transmit_permitted]
 // Tests [@ANCHOR: radioctl_capi_rig_link_up]
 // Tests [@ANCHOR: radioctl_capi_keep_connected]
+// Tests [@ANCHOR: radioctl_capi_rotator_open_virtual]
+// Tests [@ANCHOR: radioctl_capi_rotator_close]
+// Tests [@ANCHOR: radioctl_capi_rotator_set_position]
+// Tests [@ANCHOR: radioctl_capi_rotator_get_position]
+// Tests [@ANCHOR: radioctl_capi_rotator_stop]
+// Tests [@ANCHOR: radioctl_capi_rotator_park]
 #[test]
 fn the_c_program_passes_against_the_shared_library() {
     let lib = shared_library_dir();
