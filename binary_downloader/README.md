@@ -224,3 +224,18 @@ For detailed narratives and end-to-end workflows, refer to the following:
 ## 6. External Dependencies
 * `python`: `[]`
 </semantic_anchors>
+
+## Function reference (ADR 0113)
+
+### `[@ANCHOR: binary_utils_count_binary_file_references]` `BinaryDownloaderMixin._count_binary_file_references(keys)`
+
+**Purpose.** A downloaded binary is stored in `hams_bin` under a file name made from both the command name and the checksum (`_get_target_filename`). Before a manifest or a version is deleted, `binary.manifest.unlink` and `binary.version.unlink` need to know whether another record still points at the same file, so the file is removed only when the last user goes.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `keys` | iterable of `(cmd_name, checksum)` | The files to count. A pair with an empty name or checksum is ignored. |
+| returns | `collections.Counter` | For each pair, the number of `binary.manifest` and `binary.version` rows that map to that same file (a version's command name is its manifest's name). An empty `Counter` when no valid key was given. |
+
+**Special concerns.** An `@api.model` method that reads and never writes: one search of `binary.manifest` and one of `binary.version` by checksum, with Odoo's default filter (archived rows are not counted) and under the caller's access rules; the two callers run it as the Downloader service user (`with_user(svc_uid)`) so the count covers every record, not only those the deleting user can see. Two rows with the same checksum but different command names point at different files and do not count for each other. The count is taken before the caller's own deletion, so the caller compares against its own references. Safe to retry.
+
+**See also.** `test_unlink_does_not_remove_a_still_referenced_binary_file` and `test_unlink_ignores_a_differently_named_manifest_sharing_the_checksum` in `tests/test_binary_version.py`.

@@ -189,6 +189,7 @@ def _process_one(request_path):
             os.rename(request_path, os.path.join(SPOOL_DIR, f"failed-{job_id}.json"))
 
 
+# [@ANCHOR: backup_management:pgbackrest_sidecar_main]
 def main():
     os.makedirs(SPOOL_DIR, exist_ok=True)
     request_paths = sorted(glob.glob(os.path.join(SPOOL_DIR, "request-*.json")))

@@ -104,6 +104,7 @@ def validate_backup_path(path):
     if ".." in path.split(os.path.sep):
         raise UserError(_("Invalid path: directory traversal is not allowed."))
 
+# [@ANCHOR: backup_management:publish_to_rabbitmq]
 def publish_to_rabbitmq(env, msg, job_id=None, svc_uid=None):
     """
     Publishes a message to RabbitMQ backup_tasks queue using the global connection pool.

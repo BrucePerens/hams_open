@@ -129,6 +129,7 @@ class BackupConfig(models.Model):
     _min_size_pos_msg = """Minimum size threshold cannot be negative."""
     _min_size_positive = models.Constraint("CHECK(minimum_size_mb >= 0)", _min_size_pos_msg)
 
+    # [@ANCHOR: backup_management:get_fernet]
     def _get_fernet(self):
         key = os.environ.get("ODOO_BACKUP_CRYPTO_KEY") or os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env: # Tested by [@ANCHOR: backup_management:COMM_test_env_key]  # fmt: skip
         if not key:
@@ -230,6 +231,7 @@ class BackupConfig(models.Model):
             if rec.restore_drill_script:
                 validate_backup_path(rec.restore_drill_script)
 
+    # [@ANCHOR: backup_management:get_executable]
     def _get_executable(self, engine):
         """
         Retrieves the path to the backup engine binary.

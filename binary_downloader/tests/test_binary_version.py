@@ -294,6 +294,7 @@ class TestBinaryVersion(HamsTransactionCase):
             os.remove(path)
 
     def test_unlink_does_not_remove_a_still_referenced_binary_file(self):
+        # Tests [@ANCHOR: binary_utils_count_binary_file_references]
         # Tests [@ANCHOR: binary_version_unlink]
         # Mirrors test_binary_manifest.py's own
         # test_19_unlink_privilege_escalation for binary.manifest --
