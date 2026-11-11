@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
+
+from . import b2_key_scope
 
 _logger = logging.getLogger(__name__)
 
@@ -96,6 +99,7 @@ class ResConfigSettings(models.TransientModel):
 
     def set_values(self):
         # [@ANCHOR: hams_s3_set_values]
+        self._check_b2_key_scope()
         super(ResConfigSettings, self).set_values()
         self._register_s3_secret_with_canary()
         if self.hams_s3_use_s3 and 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
@@ -121,6 +125,27 @@ class ResConfigSettings(models.TransientModel):
                 backend.write(vals)
             else:
                 env_svc['storage.backend'].create(vals)
+
+    def _check_b2_key_scope(self):
+        """When the S3 endpoint is Backblaze B2 and a new secret key is being saved, asks Backblaze what the key may do
+        and refuses (unless overridden) a key that can delete files or buckets or manage keys, one that is not limited
+        to a bucket, and one Backblaze cannot be asked about. The override is the system parameter
+        `hams_s3.allow_broad_b2_key` set to `True`, which accepts the key with a logged warning."""
+        if not self.hams_s3_use_s3 or not b2_key_scope.is_b2_host(self.hams_s3_aws_host):
+            return
+        secret = self.hams_s3_aws_secret_access_key
+        if secret in (SECRET_MASK, False, ''):
+            return
+        ok, detail = b2_key_scope.inspect_b2_key(self.hams_s3_aws_access_key_id, secret)
+        if ok and not detail:
+            return
+        problem = detail if not ok else _(
+            "This Backblaze key is broader than a storage key needs: %s. Create an application key limited to one "
+            "bucket without those capabilities.", ", ".join(detail))
+        if self.env["ir.config_parameter"].get_param("hams_s3.allow_broad_b2_key") == "True":
+            _logger.warning("Backblaze key accepted by override (hams_s3.allow_broad_b2_key): %s", problem)
+            return
+        raise UserError(problem + " " + _("(Set the system parameter hams_s3.allow_broad_b2_key to True to override.)"))
 
     def _register_s3_secret_with_canary(self):
         """When the optional `hams_secret_canary` addon is installed, registers the fingerprint of a newly entered S3
