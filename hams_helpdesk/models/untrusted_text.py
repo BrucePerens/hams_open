@@ -52,6 +52,7 @@ MAX_FINDINGS = 40
 class Result:
     """text: the clean text (or sanitized HTML). plain: its visible text. findings: list of dicts."""
 
+    # [@ANCHOR: hams_helpdesk:untrusted_result_init]
     def __init__(self, text="", plain=None, findings=None, removed=0, score=0):
         self.text = text
         self.plain = text if plain is None else plain
@@ -59,14 +60,17 @@ class Result:
         self.removed = removed
         self.score = score
 
+    # [@ANCHOR: hams_helpdesk:untrusted_result_suspicious]
     @property
     def suspicious(self):
         return self.score >= SUSPICION_THRESHOLD
 
+    # [@ANCHOR: hams_helpdesk:untrusted_result_iter]
     def __iter__(self):  # (text, removed): the signature clean_untrusted_text always had
         return iter((self.text, self.removed))
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_excerpt]
 def _excerpt(value):
     """A short, escaped, printable excerpt: safe to show in a staff banner or log."""
     value = "".join(ch if ch.isprintable() and ch not in "<>&\"'" else "?" for ch in str(value))
@@ -74,6 +78,7 @@ def _excerpt(value):
     return value[:EXCERPT_CHARS] + ("..." if len(value) > EXCERPT_CHARS else "")
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_add]
 def _add(findings, vector, location, count, excerpt="", weight=0):
     if count <= 0 and not weight:
         return
@@ -93,6 +98,7 @@ def _add(findings, vector, location, count, excerpt="", weight=0):
 _PHRASE_VECTORS = None
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_is_phrase]
 def _is_phrase(vector):
     global _PHRASE_VECTORS
     if _PHRASE_VECTORS is None:
@@ -100,6 +106,7 @@ def _is_phrase(vector):
     return vector in _PHRASE_VECTORS or vector.startswith("split_")
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_score]
 def _score(findings):
     """Hidden-content findings add up. Phrase-only findings are weak evidence (ordinary support text
     says "System: Ubuntu" and "send me my password"), so on their own they only reach the threshold
@@ -120,6 +127,7 @@ _FILLERS = {0x2800, 0x3164, 0x115F, 0x1160, 0x180E, 0x034F, 0xFFA0, 0x17B4, 0x17
 _LINE_BREAKS = {0x2028, 0x2029, 0x0085, 0x000B, 0x000C}
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_bucket]
 def _bucket(ch):
     """The finding vector for a character that must be removed, or None to keep it."""
     cp = ord(ch)
@@ -176,6 +184,7 @@ _LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t
 _SCRIPT_PREFIXES = ("LATIN", "CYRILLIC", "GREEK", "ARMENIAN", "HEBREW", "ARABIC", "CHEROKEE", "COPTIC")
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_script]
 def _script(ch):
     try:
         name = unicodedata.name(ch)
@@ -187,6 +196,7 @@ def _script(ch):
     return None
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_mixed_script_words]
 def _mixed_script_words(text):
     """Words mixing Latin letters with Cyrillic/Greek/etc. ones: the homoglyph trick."""
     found = []
@@ -198,6 +208,7 @@ def _mixed_script_words(text):
     return found
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_fold_for_scanning]
 def fold_for_scanning(text):
     """NFKC, confusables to Latin, lower case: only ever used to look for instructions."""
     text = unicodedata.normalize("NFKC", text)
@@ -205,6 +216,7 @@ def fold_for_scanning(text):
     return text.casefold()
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_strip_invisible]
 def strip_invisible(value, location="text", findings=None):
     """(clean str, findings): invisible, control, format, tag, selector, bidi and filler characters
     removed; tag characters decoded into a finding; long runs of combining marks cut. Newline and tab
@@ -286,6 +298,7 @@ _PHRASES = [
 _PHRASES = [(n, re.compile(p, re.I), w) for n, p, w in _PHRASES]
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_scan_views]
 def _scan_views(text):
     """The text as scanned: homoglyphs folded to Latin, and NFKC only (for non-Latin phrases)."""
     plain = unicodedata.normalize("NFKC", text).casefold()
@@ -293,6 +306,7 @@ def _scan_views(text):
     return (folded,) if plain == folded else (folded, plain)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_scan_phrases]
 def _scan_phrases(text, location, findings, prefix=""):
     seen = 0
     views = _scan_views(text)
@@ -306,6 +320,7 @@ def _scan_phrases(text, location, findings, prefix=""):
     return seen
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_decoded_variants]
 def _decoded_variants(text):
     """Variants of `text` that a reader could be asked to decode. For scanning only."""
     out = []
@@ -349,6 +364,7 @@ def _decoded_variants(text):
     return out
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_scan_encodings]
 def scan_encodings(text, location, findings):
     """Flag text that only reads as instructions after decoding. Decoded text is never returned."""
     if not text:
@@ -369,6 +385,7 @@ def scan_encodings(text, location, findings):
                 break
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_scan_text]
 def scan_text(value, limit=None, location="text"):
     """Filter plain text. Returns a Result whose .text is safe to show and hand to a reader."""
     findings = []
@@ -429,6 +446,7 @@ def _css_number(text):
     return number if math.isfinite(number) else None
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_parse_color]
 def _parse_color(value):
     value = (value or "").strip().lower().replace("!important", "").strip()
     if value in _NAMED_COLORS:
@@ -467,6 +485,7 @@ def _parse_color(value):
     return None
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_luminance]
 def _luminance(rgb):
     def chan(c):
         c = c / 255
@@ -476,12 +495,14 @@ def _luminance(rgb):
     return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_contrast]
 def _contrast(a, b):
     la, lb = _luminance(a), _luminance(b)
     hi, lo = max(la, lb), min(la, lb)
     return (hi + 0.05) / (lo + 0.05)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_style_dict]
 def _style_dict(style):
     out = {}
     for part in re.split(r";(?![^(]*\))", style or ""):
@@ -491,6 +512,7 @@ def _style_dict(style):
     return out
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_tiny_size]
 def _tiny_size(value):
     m = re.match(r"^([\d.]+)\s*(px|pt|em|rem|%|ex|ch|vw|vh|mm|cm|in)?", value or "")
     if not m:
@@ -501,6 +523,7 @@ def _tiny_size(value):
     return px < 5
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_hidden_reason]
 def _hidden_reason(tag, attrs, bg):
     """Why this element's text would not be visible to a reader, or None. `bg` is the nearest
     background colour in force (an RGB tuple; white by default)."""
@@ -568,6 +591,7 @@ def _hidden_reason(tag, attrs, bg):
     return None
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_new_bg]
 def _new_bg(attrs, bg):
     a = {k.lower(): (v or "") for k, v in attrs}
     style = _style_dict(a.get("style", ""))
@@ -576,6 +600,7 @@ def _new_bg(attrs, bg):
     return color if isinstance(color, tuple) else bg
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_safe_href]
 def _safe_href(value):
     value = (value or "").strip()
     try:
@@ -588,6 +613,7 @@ def _safe_href(value):
 
 
 class _Sanitizer(HTMLParser):
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_init]
     def __init__(self, location):
         super().__init__(convert_charrefs=True)
         self.location = location
@@ -608,12 +634,14 @@ class _Sanitizer(HTMLParser):
         self.in_pre = 0
 
     # -- helpers
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_note_drop]
     def _note_drop(self, reason, text):
         text = text.strip()
         if text:
             self.dropped.append((reason, text))
             self.dropped_text += len(text)
 
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_attr_texts]
     def _attr_texts(self, tag, attrs):
         for key, val in attrs:
             key = (key or "").lower()
@@ -631,6 +659,7 @@ class _Sanitizer(HTMLParser):
             elif key in ("href", "srcset", "poster", "background") and val.strip().lower().startswith(("data:", "javascript:", "vbscript:")):
                 self.attr_text.append(("data_uri" if val.strip().lower().startswith("data:") else "script_uri", val.strip()[:200]))
 
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_handle_starttag]
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
         self._attr_texts(tag, attrs)
@@ -679,11 +708,13 @@ class _Sanitizer(HTMLParser):
             self.in_pre += 1
         self.stack.append((tag, None, saved_bg, emitted))
 
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_handle_startendtag]
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
         if tag.lower() not in _VOID:
             self.handle_endtag(tag)
 
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_handle_endtag]
     def handle_endtag(self, tag):
         tag = tag.lower()
         if tag in _VOID:
@@ -723,6 +754,7 @@ class _Sanitizer(HTMLParser):
             if t in _BLOCK and self.text and not self.text[-1].endswith("\n"):
                 self.text.append("\n")
 
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_handle_data]
     def handle_data(self, data):
         if self.drop_depth:
             self._note_drop(self.drop_reason or "hidden", data)
@@ -733,20 +765,24 @@ class _Sanitizer(HTMLParser):
         if self.link_stack:
             self.link_stack[-1][1].append(data)
 
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_handle_comment]
     def handle_comment(self, data):
         self.comments += 1
         self._note_drop("html_comment", data)
 
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_unknown_decl]
     def unknown_decl(self, data):
         self.comments += 1
         self._note_drop("cdata_or_decl", data)
 
     # A <!DOCTYPE ...> declaration is ignored: HTMLParser.handle_decl already does nothing.
 
+    # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_handle_pi]
     def handle_pi(self, data):
         self._note_drop("processing_instruction", data)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_sanitize_html]
 def sanitize_html(value, limit=None, location="html"):
     """Strict allow-list HTML sanitizer. Result.text is safe HTML (only allow-listed tags, no
     attributes except a checked <a href>); Result.plain is the visible text; findings say what was
@@ -810,10 +846,12 @@ def sanitize_html(value, limit=None, location="html"):
     return Result(html_out, plain, findings, removed, _score(findings))
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_looks_like_html]
 def looks_like_html(value):
     return isinstance(value, str) and bool(re.search(r"<\s*/?\s*[a-zA-Z!][^>]*>|<!--", value))
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_sanitize_any]
 def sanitize_any(value, limit=None, location="text"):
     """HTML goes through the HTML sanitizer, anything else through scan_text."""
     if looks_like_html(value):
@@ -821,6 +859,7 @@ def sanitize_any(value, limit=None, location="text"):
     return scan_text(value, limit, location)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_clean_untrusted_text]
 def clean_untrusted_text(value, limit):
     """(clean text, number of characters removed): the original simulated-band signature."""
     result = scan_text(value, limit)
@@ -832,6 +871,7 @@ def clean_untrusted_text(value, limit):
 # ---------------------------------------------------------------------------------------------
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_merge]
 def merge(results):
     """Combine per-field Results: findings concatenated, score summed (capped), removed summed."""
     findings = []
@@ -842,6 +882,7 @@ def merge(results):
     return findings[:MAX_FINDINGS], removed, min(sum(r.score for r in results), 100)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_scan_concatenation]
 def scan_concatenation(parts, location="all_fields"):
     """Scan the fields joined together, to catch an instruction split across fields."""
     joined = " ".join(p.replace("\n", " ") for p in parts if p)
@@ -850,6 +891,7 @@ def scan_concatenation(parts, location="all_fields"):
     return findings
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_compare_alternatives]
 def compare_alternatives(plain_text, html_text, location="alternative_parts"):
     """Findings when the text/plain and text/html parts of one mail say different things."""
     findings = []
@@ -866,6 +908,7 @@ def compare_alternatives(plain_text, html_text, location="alternative_parts"):
     return findings
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_safe_header]
 def safe_header(value, limit=200, location="header"):
     """A header-like value (Subject, From display name, filename) as plain, escaped-safe text."""
     result = scan_text(value if isinstance(value, str) else "", limit, location)
@@ -920,17 +963,20 @@ ATTACHMENT_NOTICE_UNKNOWN = (
 )
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_attachment_notice]
 def attachment_notice(count):
     """The fixed sentence every AI read states about attachments (they are not opened)."""
     return ATTACHMENT_NOTICE % int(count or 0)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_safe_filename]
 def safe_filename(value, limit=200, location="attachment_name"):
     """An attachment file name as plain visible text: hidden, bidi (right-to-left override tricks) and
     control characters removed and counted, one line, length capped."""
     return safe_header(value, limit, location)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_part_text]
 def _part_text(part):
     payload = part.get_payload(decode=True)
     if payload is None:
@@ -942,6 +988,7 @@ def _part_text(part):
         return payload.decode("utf-8", "replace")
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_inspect_mail]
 def inspect_mail(message, location="mail"):
     """Check one parsed inbound mail (an `email.message.Message`) before anything reads it.
 
@@ -1010,6 +1057,7 @@ def inspect_mail(message, location="mail"):
     return Result("", "", all_findings, removed, min(100, score + sum(f.get("weight", 0) for f in findings if not f["vector"].startswith("split_"))))
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_wrap_untrusted]
 def wrap_untrusted(text, label="ticket"):
     """The text inside a random-delimited untrusted-data block, for a prompt. The delimiter is
     unpredictable and never appears in `text`. The fixed statement goes before and after."""
@@ -1033,6 +1081,7 @@ _URL = re.compile(r"(?:https?|ftp|mailto|data|file|javascript)\s*:[^\s<>\")\]]*"
 _REF_DEF = re.compile(r"^\s*\[[^\]]+\]:\s*\S+.*$", re.M)
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_filter_ai_output]
 def filter_ai_output(text, allowed_hosts=(), location="ai_output"):
     """A model's output made safe to store or render: no markdown images, no HTML, no links to a host
     that was not explicitly allowed, no bare URLs, no invisible characters. Returns a Result."""
@@ -1057,10 +1106,12 @@ def filter_ai_output(text, allowed_hosts=(), location="ai_output"):
     return Result(clean.strip(), clean.strip(), findings, 0, _score(findings))
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_findings_to_json]
 def findings_to_json(findings):
     return json.dumps(findings[:MAX_FINDINGS], ensure_ascii=True, separators=(",", ":"))
 
 
+# [@ANCHOR: hams_helpdesk:untrusted_findings_from_json]
 def findings_from_json(value):
     try:
         data = json.loads(value or "[]")
