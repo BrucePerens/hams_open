@@ -23,6 +23,11 @@ use radioctl_core::units::{Hz, Mode, Vfo};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::io::spawn_virtual_rig;
 use radioctl_protocols::virtual_rig::VirtualRig;
+use radioctl_station::error::{StationError, StationErrorKind};
+use radioctl_station::rotator::{Rotator, RotatorDescription};
+use radioctl_station::virtual_rotator::{
+    serve_virtual_rotator, VirtualRotator, VirtualRotatorControl,
+};
 use tokio::runtime::Handle;
 
 /// The version of this ABI. It changes only when an existing function changes incompatibly.
@@ -57,6 +62,7 @@ pub const RCTL_ERR_INTERNAL: i32 = -12;
 
 const MAGIC_RUNTIME: u64 = 0x5243_544C_5254_4D45; // "RCTLRTME"
 const MAGIC_RIG: u64 = 0x5243_544C_5249_4720; // "RCTLRIG "
+const MAGIC_ROTATOR: u64 = 0x5243_544C_524F_5420; // "RCTLROT "
 const MAX_TEXT: usize = 1 << 20;
 const MAX_WHO: usize = 256;
 
@@ -98,6 +104,18 @@ pub struct RctlRig {
     shared: Arc<Shared>,
     handle: RigHandle,
     keep: Keep,
+}
+
+/// An opaque rotator handle (`rctl_rotator`): one open rotator. Rotators count with rigs when a
+/// runtime is freed.
+pub struct RctlRotator {
+    magic: u64,
+    shared: Arc<Shared>,
+    rotator: Rotator,
+    /// Keeps the transport's monitor alive for the life of the handle.
+    _keep: Keep,
+    /// The served virtual rotator behind a virtual handle, stopped on close.
+    virtual_control: Option<VirtualRotatorControl>,
 }
 
 /// A failure on its way to a status code and an error message.
@@ -172,6 +190,22 @@ fn from_rig_error(e: &RigError) -> Fail {
     fail(code, message)
 }
 
+// [@ANCHOR: radioctl_capi_from_station_error]
+/// A station (rotator) error as a status code. A driver error that names the link is a down link.
+fn from_station_error(e: &StationError) -> Fail {
+    let code = match e.kind {
+        StationErrorKind::Config | StationErrorKind::Unknown => RCTL_ERR_INVALID_ARG,
+        StationErrorKind::Refused
+        | StationErrorKind::KeyedUnknown
+        | StationErrorKind::NotConfirmed => RCTL_ERR_REJECTED,
+        StationErrorKind::Timeout => RCTL_ERR_TIMEOUT,
+        StationErrorKind::Driver if e.detail.contains("link") => RCTL_ERR_LINK_DOWN,
+        StationErrorKind::Driver => RCTL_ERR_PROTOCOL,
+        StationErrorKind::Store => RCTL_ERR_INTERNAL,
+    };
+    fail(code, e.detail.clone())
+}
+
 // [@ANCHOR: radioctl_capi_str_arg]
 /// A borrowed C string as `&str`: not null, UTF-8, at most `max` bytes.
 ///
@@ -217,6 +251,20 @@ unsafe fn rig_ref<'a>(ptr: *const RctlRig) -> Result<&'a RctlRig, Fail> {
         return Err(fail(RCTL_ERR_BAD_HANDLE, "not a live rig handle"));
     }
     Ok(rig)
+}
+
+// [@ANCHOR: radioctl_capi_rotator_ref]
+/// A live rotator handle as a reference.
+///
+/// # Safety
+/// `ptr` is null or a pointer returned by this library that has not been freed.
+unsafe fn rotator_ref<'a>(ptr: *const RctlRotator) -> Result<&'a RctlRotator, Fail> {
+    // SAFETY: see above; the magic number catches most stale handles.
+    let rot = unsafe { ptr.as_ref() }.ok_or_else(|| fail(RCTL_ERR_NULL, "rotator is null"))?;
+    if rot.magic != MAGIC_ROTATOR {
+        return Err(fail(RCTL_ERR_BAD_HANDLE, "not a live rotator handle"));
+    }
+    Ok(rot)
 }
 
 // [@ANCHOR: radioctl_capi_out]
@@ -737,5 +785,285 @@ pub unsafe extern "C" fn rctl_rig_link_up(rig: *mut RctlRig, out_up: *mut c_int)
         // SAFETY: `slot` was checked for null and the caller promises it is writable.
         unsafe { *slot = c_int::from(r.handle.link_up() && r.keep.connected()) };
         Ok(())
+    })
+}
+
+// [@ANCHOR: radioctl_capi_rotator_description]
+/// The shipped description of the rotator model `id` (an id from `data/station/rotators.toml`).
+fn rotator_description(id: &str) -> Result<RotatorDescription, Fail> {
+    RotatorDescription::builtin()
+        .into_iter()
+        .find(|d| d.id == id)
+        .ok_or_else(|| {
+            fail(
+                RCTL_ERR_INVALID_ARG,
+                format!("unknown rotator model {id:?}"),
+            )
+        })
+}
+
+// [@ANCHOR: radioctl_capi_rotator_open_with]
+/// Common part of the rotator open calls: find the model, then run `connect` to get the
+/// `Rotator`, the transport's monitor and the control of a served virtual rotator, if any.
+fn rotator_open_with(
+    rt: &RctlRuntime,
+    model: &str,
+    slot: *mut *mut RctlRotator,
+    connect: impl FnOnce(
+        &Handle,
+        RotatorDescription,
+    ) -> Result<(Rotator, Keep, Option<VirtualRotatorControl>), Fail>,
+) -> Result<(), Fail> {
+    let slot = out(slot, "out_rotator")?;
+    let description = rotator_description(model)?;
+    let (rotator, keep, virtual_control) = connect(&rt.shared.handle, description)?;
+    rt.shared.rigs.fetch_add(1, Ordering::AcqRel);
+    let boxed = Box::new(RctlRotator {
+        magic: MAGIC_ROTATOR,
+        shared: Arc::clone(&rt.shared),
+        rotator,
+        _keep: keep,
+        virtual_control,
+    });
+    // SAFETY: `slot` was checked for null and the caller promises it is writable.
+    unsafe { *slot = Box::into_raw(boxed) };
+    Ok(())
+}
+
+/// Opens a rotator of the model `model` (an id such as `yaesu-g-5500-gs232b`) on a virtual
+/// rotator served on a loopback socket inside the library (no hardware).
+///
+/// # Safety
+/// `runtime` must be a live runtime handle, `model` a NUL-terminated string and `out_rotator` a
+/// writable `rctl_rotator *`.
+#[no_mangle]
+// [@ANCHOR: radioctl_capi_rotator_open_virtual]
+pub unsafe extern "C" fn rctl_rotator_open_virtual(
+    runtime: *mut RctlRuntime,
+    model: *const c_char,
+    out_rotator: *mut *mut RctlRotator,
+) -> i32 {
+    run(|| {
+        // SAFETY: the caller's contract.
+        let rt = unsafe { runtime_ref(runtime) }?;
+        // SAFETY: the caller's contract.
+        let model = unsafe { str_arg(model, "model", 255) }?;
+        rotator_open_with(rt, model, out_rotator, |handle, description| {
+            let engine = description.engine().map_err(|e| from_station_error(&e))?;
+            let listener = rt
+                .shared
+                .handle
+                .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+                .map_err(|e| fail(RCTL_ERR_INTERNAL, e.to_string()))?;
+            let address = listener
+                .local_addr()
+                .map_err(|e| fail(RCTL_ERR_INTERNAL, e.to_string()))?
+                .to_string();
+            let control = serve_virtual_rotator(handle, listener, VirtualRotator::new(description));
+            let mut config = NetConfig::new(address);
+            config.first_attempts = 1;
+            let link = rt
+                .shared
+                .handle
+                .block_on(open_link(handle, config, Box::new(RawFraming)))
+                .map_err(|e| from_rig_error(&e))?;
+            let watch = link.watch();
+            let (transport, monitor) = link.into_parts();
+            let rotator = Rotator::new(engine, transport, Some(watch));
+            Ok((rotator, Keep::Net(monitor), Some(control)))
+        })
+    })
+}
+
+/// Opens a rotator of the model `model` reached over TCP (a rotctld, or a serial server in front
+/// of a controller), reconnecting with backoff. `address` is `host:port`.
+///
+/// # Safety
+/// As for `rctl_rotator_open_virtual`; `address` is a NUL-terminated string.
+#[no_mangle]
+// [@ANCHOR: radioctl_capi_rotator_open_tcp]
+pub unsafe extern "C" fn rctl_rotator_open_tcp(
+    runtime: *mut RctlRuntime,
+    model: *const c_char,
+    address: *const c_char,
+    out_rotator: *mut *mut RctlRotator,
+) -> i32 {
+    run(|| {
+        // SAFETY: the caller's contract.
+        let rt = unsafe { runtime_ref(runtime) }?;
+        // SAFETY: the caller's contract.
+        let model = unsafe { str_arg(model, "model", 255) }?;
+        // SAFETY: the caller's contract.
+        let address = unsafe { str_arg(address, "address", 255) }?.to_string();
+        rotator_open_with(rt, model, out_rotator, |handle, description| {
+            let engine = description.engine().map_err(|e| from_station_error(&e))?;
+            let link = rt
+                .shared
+                .handle
+                .block_on(open_link(
+                    handle,
+                    NetConfig::new(address),
+                    Box::new(RawFraming),
+                ))
+                .map_err(|e| from_rig_error(&e))?;
+            let watch = link.watch();
+            let (transport, monitor) = link.into_parts();
+            let rotator = Rotator::new(engine, transport, Some(watch));
+            Ok((rotator, Keep::Net(monitor), None))
+        })
+    })
+}
+
+/// Opens a rotator of the model `model` on a serial port (a device path such as
+/// `/dev/ttyUSB0`) at `baud`, 8N1, reopening the port if it disappears.
+///
+/// # Safety
+/// As for `rctl_rotator_open_virtual`; `path` is a NUL-terminated string.
+#[no_mangle]
+// [@ANCHOR: radioctl_capi_rotator_open_serial]
+pub unsafe extern "C" fn rctl_rotator_open_serial(
+    runtime: *mut RctlRuntime,
+    model: *const c_char,
+    path: *const c_char,
+    baud: u32,
+    out_rotator: *mut *mut RctlRotator,
+) -> i32 {
+    run(|| {
+        // SAFETY: the caller's contract.
+        let rt = unsafe { runtime_ref(runtime) }?;
+        // SAFETY: the caller's contract.
+        let model = unsafe { str_arg(model, "model", 255) }?;
+        // SAFETY: the caller's contract.
+        let path = unsafe { str_arg(path, "path", 4096) }?.to_string();
+        if baud == 0 {
+            return Err(fail(RCTL_ERR_INVALID_ARG, "baud must be positive"));
+        }
+        rotator_open_with(rt, model, out_rotator, |handle, description| {
+            let engine = description.engine().map_err(|e| from_station_error(&e))?;
+            let config = SerialConfig::new(PortTarget::Path(path.into()), baud);
+            let link = rt
+                .shared
+                .handle
+                .block_on(open_serial(handle, config))
+                .map_err(|e| from_rig_error(&e))?;
+            let watch = link.watch();
+            let (transport, monitor) = link.into_parts();
+            let rotator = Rotator::new(engine, transport, Some(watch));
+            Ok((rotator, Keep::Serial(monitor), None))
+        })
+    })
+}
+
+/// Closes a rotator: it is told to stop (best effort, bounded), then the transport is released.
+/// Passing null is an error, not a no-op.
+///
+/// # Safety
+/// `rotator` must be a pointer returned by an `rctl_rotator_open_*` call and not yet closed, and
+/// no other thread may be using it.
+#[no_mangle]
+// [@ANCHOR: radioctl_capi_rotator_close]
+pub unsafe extern "C" fn rctl_rotator_close(rotator: *mut RctlRotator) -> i32 {
+    run(|| {
+        // SAFETY: the caller's contract.
+        let r = unsafe { rotator_ref(rotator) }?;
+        let _ = r.shared.handle.block_on(async {
+            tokio::time::timeout(Duration::from_secs(2), r.rotator.stop()).await
+        });
+        if let Some(control) = &r.virtual_control {
+            r.shared.handle.block_on(control.stop());
+        }
+        // SAFETY: the pointer came from Box::into_raw and the magic number says it is live.
+        let mut boxed = unsafe { Box::from_raw(rotator) };
+        boxed.magic = 0;
+        boxed.shared.rigs.fetch_sub(1, Ordering::AcqRel);
+        drop(boxed);
+        Ok(())
+    })
+}
+
+/// Moves the rotator to azimuth `az` and elevation `el`, in degrees. A position outside the
+/// travel of the model is refused (`RCTL_ERR_REJECTED`) before anything is written. Returns when
+/// the rotator has accepted the command, not when it arrives.
+///
+/// # Safety
+/// `rotator` must be a live rotator handle.
+#[no_mangle]
+// [@ANCHOR: radioctl_capi_rotator_set_position]
+pub unsafe extern "C" fn rctl_rotator_set_position(
+    rotator: *mut RctlRotator,
+    az: f32,
+    el: f32,
+) -> i32 {
+    run(|| {
+        // SAFETY: the caller's contract.
+        let r = unsafe { rotator_ref(rotator) }?;
+        r.shared
+            .handle
+            .block_on(r.rotator.set_position(az, el))
+            .map_err(|e| from_station_error(&e))
+    })
+}
+
+/// Reads the rotator's azimuth and elevation, in degrees. Asks the rotator.
+///
+/// # Safety
+/// `rotator` must be a live rotator handle; `out_az` and `out_el` writable `float`s.
+#[no_mangle]
+// [@ANCHOR: radioctl_capi_rotator_get_position]
+pub unsafe extern "C" fn rctl_rotator_get_position(
+    rotator: *mut RctlRotator,
+    out_az: *mut f32,
+    out_el: *mut f32,
+) -> i32 {
+    run(|| {
+        // SAFETY: the caller's contract.
+        let r = unsafe { rotator_ref(rotator) }?;
+        let az_slot = out(out_az, "out_az")?;
+        let el_slot = out(out_el, "out_el")?;
+        let (az, el) = r
+            .shared
+            .handle
+            .block_on(r.rotator.position())
+            .map_err(|e| from_station_error(&e))?;
+        // SAFETY: both slots were checked for null and the caller promises they are writable.
+        unsafe {
+            *az_slot = az;
+            *el_slot = el;
+        }
+        Ok(())
+    })
+}
+
+/// Stops the rotator. No interlock applies.
+///
+/// # Safety
+/// `rotator` must be a live rotator handle.
+#[no_mangle]
+// [@ANCHOR: radioctl_capi_rotator_stop]
+pub unsafe extern "C" fn rctl_rotator_stop(rotator: *mut RctlRotator) -> i32 {
+    run(|| {
+        // SAFETY: the caller's contract.
+        let r = unsafe { rotator_ref(rotator) }?;
+        r.shared
+            .handle
+            .block_on(r.rotator.stop())
+            .map_err(|e| from_station_error(&e))
+    })
+}
+
+/// Sends the rotator to its park position. A model without one is refused (`RCTL_ERR_REJECTED`).
+///
+/// # Safety
+/// `rotator` must be a live rotator handle.
+#[no_mangle]
+// [@ANCHOR: radioctl_capi_rotator_park]
+pub unsafe extern "C" fn rctl_rotator_park(rotator: *mut RctlRotator) -> i32 {
+    run(|| {
+        // SAFETY: the caller's contract.
+        let r = unsafe { rotator_ref(rotator) }?;
+        r.shared
+            .handle
+            .block_on(r.rotator.park())
+            .map_err(|e| from_station_error(&e))
     })
 }

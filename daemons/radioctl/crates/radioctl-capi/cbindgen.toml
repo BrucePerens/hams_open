@@ -12,6 +12,7 @@ usize_is_size_t = true
 [export.rename]
 "RctlRuntime" = "rctl_runtime"
 "RctlRig" = "rctl_rig"
+"RctlRotator" = "rctl_rotator"
 
 [parse]
 parse_deps = false

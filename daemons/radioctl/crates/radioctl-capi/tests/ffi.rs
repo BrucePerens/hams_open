@@ -294,3 +294,82 @@ fn a_serial_open_that_cannot_succeed_is_a_clean_error() {
         assert_eq!(rctl_runtime_free(rt), RCTL_OK);
     }
 }
+
+// Tests [@ANCHOR: radioctl_capi_rotator_open_virtual]
+// Tests [@ANCHOR: radioctl_capi_rotator_open_with]
+// Tests [@ANCHOR: radioctl_capi_rotator_description]
+// Tests [@ANCHOR: radioctl_capi_rotator_ref]
+// Tests [@ANCHOR: radioctl_capi_rotator_close]
+// Tests [@ANCHOR: radioctl_capi_rotator_set_position]
+// Tests [@ANCHOR: radioctl_capi_rotator_get_position]
+// Tests [@ANCHOR: radioctl_capi_rotator_stop]
+// Tests [@ANCHOR: radioctl_capi_rotator_park]
+// Tests [@ANCHOR: radioctl_capi_from_station_error]
+// Tests [@ANCHOR: radioctl_capi_rotator_open_tcp]
+// Tests [@ANCHOR: radioctl_capi_rotator_open_serial]
+#[test]
+fn a_virtual_rotator_through_the_c_api_moves_stops_parks_and_refuses_out_of_travel() {
+    // SAFETY (whole block): valid pointers, or deliberately mismatched live handles.
+    unsafe {
+        let mut rt: *mut RctlRuntime = ptr::null_mut();
+        assert_eq!(rctl_runtime_new(&mut rt), RCTL_OK);
+        let mut rot: *mut RctlRotator = ptr::null_mut();
+        assert_eq!(
+            rctl_rotator_open_virtual(rt, c("no-such-rotator").as_ptr(), &mut rot),
+            RCTL_ERR_INVALID_ARG
+        );
+        assert!(last_error().contains("unknown rotator model"));
+        assert_eq!(
+            rctl_rotator_open_virtual(rt, c("yaesu-g-5500-gs232b").as_ptr(), &mut rot),
+            RCTL_OK
+        );
+        // The rotator counts as open: the runtime cannot go, and a rotator is not a rig.
+        assert_eq!(rctl_runtime_free(rt), RCTL_ERR_BUSY);
+        let mut hz = 0u64;
+        assert_eq!(
+            rctl_rig_get_frequency(rot.cast::<RctlRig>(), 0, &mut hz),
+            RCTL_ERR_BAD_HANDLE
+        );
+        assert_eq!(
+            rctl_rotator_get_position(rt.cast::<RctlRotator>(), &mut 0.0, &mut 0.0),
+            RCTL_ERR_BAD_HANDLE
+        );
+        assert_eq!(
+            rctl_rotator_get_position(rot, ptr::null_mut(), &mut 0.0),
+            RCTL_ERR_NULL
+        );
+        // Out of travel is refused before anything is written; nothing moved.
+        assert_eq!(
+            rctl_rotator_set_position(rot, 9999.0, 0.0),
+            RCTL_ERR_REJECTED
+        );
+        assert_eq!(rctl_rotator_set_position(rot, 3.0, 2.0), RCTL_OK);
+        let (mut az, mut el) = (0.0f32, 0.0f32);
+        wait("the rotator reaches 3, 2", || {
+            rctl_rotator_get_position(rot, &mut az, &mut el) == RCTL_OK
+                && (az - 3.0).abs() < 0.6
+                && (el - 2.0).abs() < 0.6
+        });
+        assert_eq!(rctl_rotator_stop(rot), RCTL_OK);
+        assert_eq!(rctl_rotator_park(rot), RCTL_OK);
+        assert_eq!(rctl_rotator_close(rot), RCTL_OK);
+        // Nothing listens on port 1; a serial path that is no port; a zero baud rate.
+        let model = c("yaesu-g-5500-gs232b");
+        let mut other: *mut RctlRotator = ptr::null_mut();
+        assert_eq!(
+            rctl_rotator_open_tcp(rt, model.as_ptr(), c("127.0.0.1:1").as_ptr(), &mut other),
+            RCTL_ERR_LINK_DOWN
+        );
+        let path = c("/dev/null/not-a-port");
+        assert_eq!(
+            rctl_rotator_open_serial(rt, model.as_ptr(), path.as_ptr(), 0, &mut other),
+            RCTL_ERR_INVALID_ARG
+        );
+        assert_eq!(
+            rctl_rotator_open_serial(rt, model.as_ptr(), path.as_ptr(), 9600, &mut other),
+            RCTL_ERR_LINK_DOWN
+        );
+        assert!(other.is_null());
+        assert_eq!(rctl_runtime_free(rt), RCTL_OK);
+    }
+}
