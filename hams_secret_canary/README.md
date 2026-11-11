@@ -30,6 +30,11 @@ service: alerts go to the Odoo log, a `zero_sudo.security.log` row and an email 
   anything else (quotes, spaces, `=`, `&`, `:`, `,`, `<`). A secret that is split, encoded, or embedded inside a longer
   run of those characters is not found.
 * Cost: one hash per distinct token, at most about 1 MiB of text per response (tested: under one second for 1 MiB).
+* A WSGI wrapper around `odoo.http.Application.__call__` scans the text responses that never reach
+  `_post_dispatch`: the XML-RPC fault a controller builds itself from an exception message (`/xmlrpc/*`) is the one
+  that matters. It passes the body through unchanged, scans the first 1 MiB after it has been sent, and skips a response
+  `_post_dispatch` already scanned, so no alarm is raised twice. The alarms run on a fresh cursor of every database this
+  process has loaded; a failure in the scan is logged and never reaches the client.
 
 ## Alerts
 
@@ -39,6 +44,21 @@ Every backend in `alerts.BACKENDS` runs for every alarm; add one with `alerts.re
 environment, so only `logging` runs for it.
 
 ## Anchor entries
+
+### `hams_secret_canary:scan_wsgi`
+
+**Purpose.** Scans the text responses `_post_dispatch` never sees. `scan_wsgi(application, scan)`: `application` a WSGI
+callable (or a method taking `self` first), `scan` a function `(text, path)`. Returns a WSGI callable that returns the
+application's body unchanged and, once the whole body has been sent, calls `scan` with the first 1 MiB decoded as UTF-8
+(undecodable bytes replaced) and the request path; a response whose `Content-Type` is not text, or whose environ carries
+`hams_secret_canary.scanned`, is not scanned. It does not catch errors from `scan`; the installed one never raises. Test: `TestWsgiScan`.
+
+### `hams_secret_canary:scan_after_request`
+
+**Purpose.** The installed `scan` for `scan_wsgi`. `scan_after_request(text, where)`: `text` the response text, `where`
+the request path. Looks for registered fingerprints in every database this process has loaded and raises each alarm on a
+fresh cursor of that database; returns nothing. Any exception is logged, never raised. Test:
+`TestWsgiHook.test_a_fault_naming_a_registered_secret_raises_the_alarm_once_without_the_value`.
 
 ### `hams_secret_canary:fingerprint`
 

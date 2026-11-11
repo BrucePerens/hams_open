@@ -6,10 +6,11 @@ import logging
 import os
 import time
 
-from odoo import api, models
+from odoo import api, http, models
+from odoo.modules.registry import Registry
 from odoo.tools import config
 
-from .. import alerts, detector
+from .. import alerts, detector, wsgi_scan
 
 _logger = logging.getLogger(__name__)
 STATE_KEY = "hams_secret_canary.state"
@@ -18,6 +19,7 @@ CACHE_SECONDS = 30
 # watcher reads whatever is loaded.
 _tables = {}
 _original_factory = []
+_original_call = []
 
 
 # [@ANCHOR: hams_secret_canary:watch_log_records]
@@ -37,6 +39,29 @@ def _watch_log_records(factory):
     return make_record
 
 
+# [@ANCHOR: hams_secret_canary:scan_after_request]
+def scan_after_request(text, where):
+    """Scans a response body that never went through `ir.http._post_dispatch` against every database this process has
+    loaded, and raises the alarms on a fresh cursor of that database (the request's own is gone by now). A failure is
+    logged: it must never reach a client."""
+    try:
+        for dbname, (_loaded, salt, table) in list(_tables.items()):
+            matches = detector.find_matches(text, salt, table)
+            if matches:
+                where = detector.redact(where, salt, table)
+                with Registry(dbname).cursor() as cr:
+                    # No request environment is left after the response: resolve the facility service account the
+                    # way `_get_service_uid` does and run the backends as it (they take their own service accounts from it).
+                    with cr.savepoint():
+                        cr.execute("SELECT zero_sudo_get_service_uid(%s)", ("zero_sudo.odoo_facility_service_internal",))  # audit-ignore-sql: # Tested by [@ANCHOR: hams_secret_canary:scan_after_request]
+                        uid = cr.fetchone()[0]
+                    env = api.Environment(cr, uid, {})
+                    for label, kind in matches:
+                        alerts.raise_alarm(env, alerts.Alarm(label, kind, "response", where))
+    except Exception:  # audit-ignore-catch-all: a detector must not break the response it is watching
+        _logger.exception("Secret canary: scanning a response failed")
+
+
 class SecretCanary(models.AbstractModel):
     _name = "hams.secret.canary"
     _description = "Secret Canary"
@@ -50,6 +75,9 @@ class SecretCanary(models.AbstractModel):
         if not _original_factory:
             _original_factory.append(logging.getLogRecordFactory())
             logging.setLogRecordFactory(_watch_log_records(_original_factory[0]))
+        if not _original_call:
+            _original_call.append(http.Application.__call__)
+            http.Application.__call__ = wsgi_scan.scan_wsgi(_original_call[0], scan_after_request)
 
     @api.model
     # [@ANCHOR: hams_secret_canary:load_state]

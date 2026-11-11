@@ -12,7 +12,7 @@ from odoo.tests import tagged
 from odoo.tools import config
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase, HamsTransactionCase
 
-from odoo.addons.hams_secret_canary import alerts, detector
+from odoo.addons.hams_secret_canary import alerts, detector, wsgi_scan
 from odoo.addons.hams_secret_canary.models import secret_canary
 
 SECRET = "whsec_Zk39dQ7mPq2LxV8nTb4RcY6a"
@@ -195,3 +195,58 @@ class TestResponseHook(CanaryCase, HamsHttpCase):
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
             self.url_open("/odoo")
         self.assertIn("page_token", logs.output[0])
+
+
+def _wsgi(body, content_type="text/xml", chunks=1):
+    """A WSGI application answering `body` in `chunks` pieces."""
+    def application(environ, start_response):
+        start_response("200 OK", [("Content-Type", content_type)])
+        size = max(1, len(body) // chunks)
+        return [body[i:i + size] for i in range(0, len(body), size)]
+    return application
+
+
+@tagged("post_install", "-at_install")
+class TestWsgiScan(HamsTransactionCase):
+    """The WSGI wrapper: what it scans and that it never changes the response."""
+    # Tests [@ANCHOR: hams_secret_canary:scan_wsgi]
+
+    def _run(self, application, environ=None):
+        seen = []
+        wrapped = wsgi_scan.scan_wsgi(application, lambda text, path: seen.append((text, path)))
+        sent = []
+        body = b"".join(wrapped(dict(environ or {}, PATH_INFO="/xmlrpc/2/common"), lambda status, headers, exc_info=None: sent.append(status)))
+        return body, seen, sent
+
+    def test_text_is_scanned_after_it_is_sent_unchanged_even_when_split_in_chunks(self):
+        payload = b"<fault>" + SECRET.encode() + b"</fault>"
+        body, seen, sent = self._run(_wsgi(payload, chunks=4))
+        self.assertEqual((body, sent), (payload, ["200 OK"]))
+        self.assertEqual(seen, [(payload.decode(), "/xmlrpc/2/common")])
+
+    def test_a_response_post_dispatch_already_scanned_is_not_scanned_again(self):
+        self.assertEqual(self._run(_wsgi(b"x"), {wsgi_scan.SCANNED: True})[1], [])
+
+    def test_binary_responses_are_not_scanned(self):
+        self.assertEqual(self._run(_wsgi(b"x", "image/png"))[1], [])
+
+    def test_only_the_first_megabyte_is_scanned(self):
+        body, seen, _sent = self._run(_wsgi(b"a" * (detector.MAX_SCAN_BYTES + 5000), chunks=3))
+        self.assertEqual(len(body), detector.MAX_SCAN_BYTES + 5000)
+        self.assertEqual(len(seen[0][0]), detector.MAX_SCAN_BYTES)
+
+
+@tagged("post_install", "-at_install")
+class TestWsgiHook(CanaryCase, HamsHttpCase):
+    """A real XML-RPC fault, which a controller builds itself and `_post_dispatch` never sees."""
+    # Tests [@ANCHOR: hams_secret_canary:scan_after_request]
+
+    def test_a_fault_naming_a_registered_secret_raises_the_alarm_once_without_the_value(self):
+        self.assertTrue(secret_canary._tables)  # loaded by setUp, as the process has it after start-up
+        request_xml = "<?xml version='1.0'?><methodCall><methodName>%s</methodName><params></params></methodCall>" % SECRET
+        with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
+            response = self.url_open("/xmlrpc/2/common", data=request_xml, headers={"Content-Type": "text/xml"})
+        self.assertIn(SECRET, response.text)  # the fault does echo it: the leak this scan exists for
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("test_secret", logs.output[0])
+        self.assertNotIn(SECRET, logs.output[0])

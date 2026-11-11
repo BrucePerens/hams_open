@@ -4,7 +4,7 @@
 from odoo import models
 from odoo.http import request
 
-from .. import detector
+from .. import detector, wsgi_scan
 
 
 class IrHttp(models.AbstractModel):
@@ -18,6 +18,7 @@ class IrHttp(models.AbstractModel):
         streamed."""
         result = super()._post_dispatch(response)
         if request and detector.scannable_response(response):
+            request.httprequest.environ[wsgi_scan.SCANNED] = True
             data = response.get_data()[: detector.MAX_SCAN_BYTES]
             request.env["hams.secret.canary"]._scan_text(
                 data.decode("utf-8", "replace"), "response", request.httprequest.path
