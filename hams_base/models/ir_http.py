@@ -103,6 +103,7 @@ class IrHttp(models.AbstractModel):
         return url
 
 
+# [@ANCHOR: hams_base:has_dot_segment]
 def _has_dot_segment(path):
     """True for a path ``tools.urls.urljoin`` would refuse: a ``.`` or ``..`` segment, also percent-encoded, or
     bytes that are not UTF-8."""
