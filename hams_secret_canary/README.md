@@ -16,6 +16,11 @@ service: alerts go to the Odoo log, a `zero_sudo.security.log` row and an email 
 * On install it generates a per-install salt and three decoys (never fixed strings in the repository): a Stripe-shaped
   key, an S3-shaped secret and a Cloudflare-shaped token, stored as the system parameters `stripe_secret_key_old`,
   `s3_secret_access_key_old` and `cloudflare_api_token_old`. A parameter of that name that already exists is left alone.
+* The same decoys are also placed where code reading the environment or the key directory looks: an environment
+  variable `STRIPE_SECRET_KEY_OLD`, `S3_SECRET_ACCESS_KEY_OLD` or `CLOUDFLARE_API_TOKEN_OLD` in each Odoo process (one
+  already set is left alone) and a file `stripe_secret_key_old` (and so on, mode 0600) in the `keys` directory of the
+  Odoo data directory (one that exists is left alone; best effort, a failure is logged). They hold the registered
+  canary values, so a leak of either is noticed by the same scan.
 * Only salted SHA-256 hashes of canaries and registered secrets are stored (the key-value store key
   `hams_secret_canary.state`). The module never stores or logs a secret value, and no alarm contains one.
 * `ir.http._post_dispatch` scans every finished, non-streamed text response (`text/*`, JSON, JavaScript, XML), the
@@ -30,8 +35,6 @@ service: alerts go to the Odoo log, a `zero_sudo.security.log` row and an email 
   that matters. It passes the body through unchanged, scans the first 1 MiB after it has been sent, and skips a response
   `_post_dispatch` already scanned, so no alarm is raised twice. The alarms run on a fresh cursor of every database this
   process has loaded; a failure in the scan is logged and never reaches the client.
-* Not done: a decoy file in `keys/` and a decoy environment variable (an install can add them and register their
-  values with `_register_secret`), and wiring the real secrets of other modules to `_register_secret`.
 
 ## Alerts
 
@@ -114,6 +117,14 @@ label and value. Test: `TestAlarm`, `TestDetector.test_registering_a_non_token_f
 **Purpose.** Reads the salt and the fingerprint table. `_load_state()` returns `(salt, table)`; `(None, {})` before the
 first registration. Cached per process and database for 30 seconds (`CACHE_SECONDS`), so a response costs no query in
 the common case; the log watcher reads the cached table. Test: `TestAlarm`.
+
+### `hams_secret_canary:plant_decoy_file_and_env`
+
+**Purpose.** Places the planted decoys in the process environment and the key directory. `_plant_decoy_file_and_env()`:
+no arguments; for each decoy parameter `<label>_old` that exists, sets the environment variable `<LABEL>_OLD` (unless
+set) and writes the file `<data_dir>/keys/<label>_old` with mode 0600 (unless it exists), the directory with mode 0700.
+Returns nothing. A directory or file that cannot be written is logged by type of error and skipped. Called by
+`_register_hook` and by `_plant_canaries`. Private: not callable over RPC. Test: `TestPlanting`.
 
 ### `hams_secret_canary:plant_canaries`
 

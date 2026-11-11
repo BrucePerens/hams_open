@@ -84,6 +84,7 @@ class CloudflareDNSRecord(models.Model):
              "says nothing: a comment someone set at Cloudflare is left alone.")
     cf_last_result = fields.Char(string="Last push result", readonly=True, copy=False)
 
+    # [@ANCHOR: cloudflare:COMM_dns_record_create]
     @api.model_create_multi
     def create(self, vals_list):
         """A row of a type that can never be proxied, created without saying so, is created DNS-only (the
@@ -94,6 +95,7 @@ class CloudflareDNSRecord(models.Model):
                 vals["proxied"] = False
         return super().create(vals_list)
 
+    # [@ANCHOR: cloudflare:COMM_dns_record_onchange_type]
     @api.onchange("type")
     def _onchange_type_clears_proxied(self):
         """The form's Proxied box defaults on; an NS or TXT row can never be proxied, so choosing one of those
@@ -135,6 +137,7 @@ class CloudflareDNSRecord(models.Model):
                                         type=rec.type, name=rec.name, content=rec.content))
             self._check_glue(rec)
 
+    # [@ANCHOR: cloudflare:COMM_dns_record_require_ip]
     @staticmethod
     def _require_ip(rec, factory):
         try:
@@ -165,6 +168,7 @@ class CloudflareDNSRecord(models.Model):
         if not (self.env.is_superuser() or self.env.user.has_group("base.group_system")):
             raise AccessError(_("Only an administrator may push DNS records to Cloudflare."))
 
+    # [@ANCHOR: cloudflare:COMM_dns_credential_website]
     def _dns_credential_website(self, row, websites):
         """The website whose token pushes `row`: its own website, else the first of `websites` (every website,
         by id, fetched once by the caller) that has a token. Returns (website, token, problem)."""
@@ -236,12 +240,14 @@ class CloudflareDNSRecord(models.Model):
         return {"entries": entries, "problems": problems, "hash": dns_plan.plan_hash(entries),
                 "text": dns_plan.render(entries)}
 
+    # [@ANCHOR: cloudflare:COMM_dns_problem_entry]
     @staticmethod
     def _dns_problem_entry(plain, reason):
         return {"action": dns_plan.PROBLEM, "row_id": plain["id"], "type": plain["type"], "name": plain["name"],
                 "content": plain["content"], "reason": reason,
                 "proxied": dns_plan.effective_proxied(plain["type"], plain["proxied"])}
 
+    # [@ANCHOR: cloudflare:COMM_dns_zone_of]
     @api.model
     def _dns_zone_of(self, name, website, token, cache):
         """The zone that holds `name`: the longest suffix of it, of two labels or more, that is a zone the

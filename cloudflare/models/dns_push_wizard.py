@@ -24,6 +24,7 @@ class CloudflareDnsPushWizard(models.TransientModel):
     plan_writes = fields.Integer(readonly=True)
     result_text = fields.Text(string="Result", readonly=True)
 
+    # [@ANCHOR: cloudflare:COMM_dns_push_wizard_reopen]
     def _reopen(self):
         return {
             "type": "ir.actions.act_window",

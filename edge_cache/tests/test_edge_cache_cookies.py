@@ -60,6 +60,8 @@ class TestEdgeCacheCookies(HamsHttpCase):
         return [_set_cookie_name(value) for value in response.raw.headers.getlist("Set-Cookie")]
 
     def test_set_cookie_parsing(self):
+        # Tests [@ANCHOR: edge_cache:set_cookie_name]
+        # Tests [@ANCHOR: edge_cache:set_cookie_value]
         # Tests [@ANCHOR: COMM_cloudflare_strip_redundant_cookies]
         raw = "session_id=abc=def; Expires=Sun, 03 Oct 2027 04:47:29 GMT; HttpOnly; Path=/"
         self.assertEqual(_set_cookie_name(raw), "session_id")
@@ -191,6 +193,8 @@ class TestEdgeCacheCookies(HamsHttpCase):
         # [@ANCHOR: COMM_test_page_cache_never_replays_a_set_cookie]
         # Tests [@ANCHOR: COMM_website_page_no_inherited_set_cookie]
         # Tests [@ANCHOR: COMM_website_page_no_shared_cache_entry]
+        # Tests [@ANCHOR: edge_cache:website_page_get_response_raw]
+        # Tests [@ANCHOR: edge_cache:website_page_post_process_response_from_cache]
         """Odoo's page cache must not hand one visitor's session cookie to the next.
 
         When a cached page is older than website.page._CACHE_DURATION, Odoo re-renders it and

@@ -56,6 +56,7 @@ _VENDORED_BIN_PATH = os.path.join(
 )
 
 
+# [@ANCHOR: cloudflare:COMM_systemd_resolve_cloudflared_bin]
 def _resolve_cloudflared_bin():
     """Returns the best available cloudflared binary path: the vendored build if it actually
     exists and is executable, else whatever `cloudflared` is on PATH, else the vendored path
@@ -93,6 +94,7 @@ _UNIT_NAME_TEMPLATE = "cloudflared@.service"
 _SYSTEMCTL_TIMEOUT_SECONDS = 15
 
 
+# [@ANCHOR: cloudflare:COMM_systemd_systemctl_env]
 def _systemctl_env():
     """`systemctl --user` needs a running user-manager session to talk to (via D-Bus), which
     Odoo's own process -- started by systemd as a SYSTEM unit, never an interactive login -- does
@@ -108,6 +110,7 @@ def _systemctl_env():
     return env
 
 
+# [@ANCHOR: cloudflare:COMM_systemd_run_systemctl]
 def _run_systemctl(*args):
     """Runs `systemctl --user <args>`, returning (success, stdout_or_stderr)."""
     try:
@@ -127,14 +130,17 @@ def _run_systemctl(*args):
     return True, result.stdout.strip()
 
 
+# [@ANCHOR: cloudflare:COMM_systemd_unit_name]
 def _unit_name(tunnel_key):
     return "cloudflared@%s.service" % tunnel_key
 
 
+# [@ANCHOR: cloudflare:COMM_systemd_env_file_path]
 def _env_file_path(tunnel_key):
     return os.path.join(_KEYS_DIR, "cloudflared-%s.env" % tunnel_key)
 
 
+# [@ANCHOR: cloudflare:COMM_systemd_write_secure_file]
 def _write_secure_file(path, content, mandatory_prefix):
     """Writes `content` to `path` at mode 0600, atomically. Same mkstemp + fchmod + os.rename
     idiom `daemon_key_manager`'s own `_write_secure_env_file` already uses for the identical
@@ -166,6 +172,7 @@ def _write_secure_file(path, content, mandatory_prefix):
         raise
 
 
+# [@ANCHOR: cloudflare:COMM_systemd_remove_env_file]
 def _remove_env_file(tunnel_key):
     """Removes a stopped tunnel's run-token file, if there is one. The file holds a live credential and
     `start_tunnel_daemon` writes it afresh on every start, so nothing needs it once the unit is disabled. A key that

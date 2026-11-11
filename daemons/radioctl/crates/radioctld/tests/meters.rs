@@ -72,8 +72,9 @@ async fn radioctld_serves_the_meters_the_way_hamlib_reads_them() {
 // Tests [@ANCHOR: radioctld_caps_granularity]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_power_meter_is_a_fraction_and_watts_only_with_a_calibration() {
-    // The IC-7300 description has no power calibration: a fraction of the raw scale (the virtual
-    // rig keys at raw 128) and no watts level.
+    // The IC-7300 description has no watt calibration: no watts level, but the fraction follows the
+    // manual's printed power points (0 = 0, 143 = half, 213 = full), so the virtual rig keyed at
+    // raw 128 reads 128/143 of one half.
     let daemon = start(&config_text("", "ic7300", "icom-ic-7300.toml", true, false)).await;
     let mut client = Client::connect(&daemon).await;
     assert_eq!(client.ask("l RFPOWER_METER").await, "0\n");
@@ -81,7 +82,7 @@ async fn the_power_meter_is_a_fraction_and_watts_only_with_a_calibration() {
     assert_eq!(client.ask("T 1").await, "RPRT 0\n");
     let rig = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
     eventually("the virtual rig keyed", || rig.state().ptt).await;
-    wait_for(&mut client, "l RFPOWER_METER", 128.0 / 255.0).await;
+    wait_for(&mut client, "l RFPOWER_METER", 128.0 / 143.0 * 0.5).await;
     assert_eq!(client.ask("L RFPOWER_METER 1").await, "RPRT -11\n");
     assert_eq!(client.ask("T 0").await, "RPRT 0\n");
     daemon.stop().await;

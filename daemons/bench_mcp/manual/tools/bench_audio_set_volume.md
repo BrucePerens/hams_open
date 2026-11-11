@@ -12,6 +12,8 @@ verified: run on the dev box (virtual sink and source, and the speaker with the 
 
 Set volume and/or mute of one device, an output never above its cap.
 
+`device` names the sound device (alias or node name from `bench_audio_devices`); `instrument` is only the name of the configured sound instrument and is not needed with one. Giving a device name as `instrument` is refused with "no audio instrument named".
+
 Arguments: `device`, `direction`, `volume`, `mute`, `dry_run`. `dry_run: true` reads the current level and returns what would change, and changes nothing; the cap applies to a dry run too.
 
 ## Arguments

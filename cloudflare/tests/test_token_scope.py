@@ -90,6 +90,9 @@ class TestTokenScope(HamsTransactionCase):
         m.assert_not_called()
 
     def test_settings_mask_the_stored_secrets(self):
+        # Tests [@ANCHOR: cloudflare:COMM_settings_get_values]
+        # Tests [@ANCHOR: cloudflare:COMM_settings_inverse_secrets]
+        # Tests [@ANCHOR: cloudflare:COMM_settings_compute_secrets]
         # Tests [@ANCHOR: cloudflare:COMM_settings_masks_secrets]
         website = self.env["website"].get_current_website()
         website.write({"cloudflare_api_token": "real-token", "cloudflare_turnstile_secret": "real-secret"})
@@ -106,3 +109,12 @@ class TestTokenScope(HamsTransactionCase):
         self.assertEqual(website.cloudflare_turnstile_secret, "new-secret")
         settings.cloudflare_turnstile_secret = ""  # blank: cleared
         self.assertFalse(website.cloudflare_turnstile_secret)
+
+    def test_json_result_returns_the_result_only_when_it_is_the_kind_asked_for(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_json_result_kind]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_json_result_kind]
+        self.assertEqual(cloudflare_api._json_result(_resp(200, {"result": {"a": 1}})), {"a": 1})
+        self.assertIsNone(cloudflare_api._json_result(_resp(200, {"result": [1]})))
+        self.assertEqual(cloudflare_api._json_result(_resp(200, {"result": [1]}), list), [1])
+        self.assertIsNone(cloudflare_api._json_result(_resp(200, {"result": "x"}), list))
+        self.assertIsNone(cloudflare_api._json_result(_resp(200, ["x"])))

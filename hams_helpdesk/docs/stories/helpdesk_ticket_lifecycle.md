@@ -67,3 +67,7 @@ assignment email is off: quarantined mail pages nobody. A "New" ticket notifies 
 ### A member can submit a ticket that is routed to an agent
 The portal submit form creates the ticket under the helpdesk service account, also for the transaction's access check on the agent assignment note, so a plain member is never refused over contact access.
 <!-- [@ANCHOR: hams_helpdesk:portal_submit_service_default_env] -->
+
+### A member sees their own tickets under /my/tickets
+`portal_my_tickets(page=1)` **[@ANCHOR: hams_helpdesk:portal_my_tickets]** lists the signed-in member's tickets, 20 to a page, newest first, with a pager. It reads under the helpdesk service account and the website's company, filtered to the member's own partner and to tickets of this website or of no website, so a ticket from another site never shows. Login required (`auth="user"`). Tests: `test_member_manual.py` (`test_02_list_page_has_the_names_the_manual_uses`).
+

@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 import logging
+import os
 import time
 
 from odoo import api, http, models
 from odoo.modules.registry import Registry
+from odoo.tools import config
 
 from .. import alerts, detector, wsgi_scan
 
@@ -69,6 +71,7 @@ class SecretCanary(models.AbstractModel):
     def _register_hook(self):
         super()._register_hook()
         self._load_state()
+        self._plant_decoy_file_and_env()
         if not _original_factory:
             _original_factory.append(logging.getLogRecordFactory())
             logging.setLogRecordFactory(_watch_log_records(_original_factory[0]))
@@ -129,6 +132,33 @@ class SecretCanary(models.AbstractModel):
             value = detector.make_canary(label)
             self._register_secret(label, value, detector.KIND_CANARY)
             params.set_param(key, value)
+        self._plant_decoy_file_and_env()
+
+    @api.model
+    # [@ANCHOR: hams_secret_canary:plant_decoy_file_and_env]
+    def _plant_decoy_file_and_env(self):
+        """Puts each planted decoy where code that reads the environment or the key directory looks: an environment
+        variable `<LABEL>_OLD` in this process (not overriding one that is set) and a file `<LABEL>_old` (mode 0600)
+        in the `keys` directory of the Odoo data directory (not replacing one that exists). The values are the canaries
+        already registered, so a leak of either is noticed by the same scan. Best effort: a directory or file that
+        cannot be written is logged and skipped."""
+        params = self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.config_service_internal")["ir.config_parameter"]
+        directory = os.path.join(config["data_dir"], "keys")
+        for label in detector.CANARY_SHAPES:
+            value = params.get_param("%s_old" % label)
+            if not value:
+                continue
+            os.environ.setdefault("%s_OLD" % label.upper(), value)
+            path = os.path.join(directory, "%s_old" % label)
+            if os.path.exists(path):
+                continue
+            try:
+                os.makedirs(directory, mode=0o700, exist_ok=True)
+                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # audit-ignore-path: fixed label under the data directory
+                with os.fdopen(descriptor, "w") as handle:
+                    handle.write(value + "\n")
+            except OSError as error:
+                _logger.warning("Decoy key file %s not written: %s", label, type(error).__name__)
 
     @api.model
     # [@ANCHOR: hams_secret_canary:scan_text]

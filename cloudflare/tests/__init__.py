@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+from . import test_canary_registration
 from . import test_multi_website
 from . import test_cache_rule_push
 from . import test_cache_plan

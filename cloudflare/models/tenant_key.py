@@ -44,6 +44,7 @@ class CloudflareTenantKey(models.Model):
         "Only one Cloudflare tenant key is allowed per company.",
     )
 
+    # [@ANCHOR: cloudflare:COMM_tenant_key_compute_name]
     @api.depends("company_id.name")
     def _compute_name(self):
         for rec in self:

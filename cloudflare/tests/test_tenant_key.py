@@ -121,6 +121,7 @@ class TestCloudflareTenantKey(HamsTransactionCase):
         )
 
     def test_a_company_can_hold_only_one_wrapped_key(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tenant_key_compute_name]
         # Tests [@ANCHOR: cloudflare:COMM_tenant_key_fields]
         TenantKey = self.env["cloudflare.tenant.key"]
         TenantKey._get_or_create_fernet(self.company_a)

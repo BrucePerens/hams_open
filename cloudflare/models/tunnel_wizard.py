@@ -30,6 +30,7 @@ class CloudflareTunnelWizard(models.TransientModel):
         help="Copy and execute this command in your terminal to install the Cloudflare Tunnel.",
     )
 
+    # [@ANCHOR: cloudflare:COMM_tunnel_wizard_compute_command]
     @api.depends_context("install_command")
     def _compute_command(self):
         for wizard in self:

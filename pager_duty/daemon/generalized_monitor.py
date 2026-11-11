@@ -198,6 +198,7 @@ logging.basicConfig(
 logger = logging.getLogger("generalized_monitor")
 
 
+# [@ANCHOR: pager_duty:utcnow]
 def _utcnow():
     """The current UTC time as a naive datetime, what Odoo stores and what `utcnow()` (deprecated since Python 3.12) returned."""
     return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
@@ -541,7 +542,6 @@ def auto_resolve(client, source, website_id=False):
         logger.error(f"Failed to auto-resolve incidents for {source}: {e}")
 
 
-# [@ANCHOR: pager_duty:amqp_check]
 # Verified by [@ANCHOR: pager_duty:test_amqp_check_full_transaction]
 # Verified by [@ANCHOR: pager_duty:test_amqp_check_header_only_gone]
 # Seconds. One AMQP check is a one-shot connection: socket_timeout bounds the TCP connect, stack_timeout the whole
@@ -556,6 +556,7 @@ AMQP_HEARTBEAT = 2
 logging.getLogger("pika").setLevel(logging.CRITICAL)
 
 
+# [@ANCHOR: pager_duty:amqp_check]
 def amqp_check(host, port, user, password, vhost="/"):
     """
     Check RabbitMQ the way a client uses it: open a connection, authenticate (Start-Ok), open the vhost, open a channel,
@@ -698,6 +699,7 @@ def parse_systemd_timestamp(text):
     return time.mktime(naive.timetuple())  # the host's own zone, which is what systemd printed
 
 
+# [@ANCHOR: pager_duty:freshness_redis]
 def _freshness_redis():
     return redis_lib.Redis(
         host=os.environ.get("REDIS_HOST") or "redis",
@@ -1946,6 +1948,7 @@ def parse_failed_unit_names(listing, ignored=()):
     return sorted(names)
 
 
+# [@ANCHOR: pager_duty:failure_detail]
 def _failure_detail(exe, unit):
     """`exit-code since 2026-10-18 18:24:17 UTC` for a failed unit, from systemd's Result and StateChangeTimestamp; "" when
     unreadable."""

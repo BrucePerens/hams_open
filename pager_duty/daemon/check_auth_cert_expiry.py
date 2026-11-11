@@ -79,6 +79,7 @@ def parse_enddate(output):
     return parsed.replace(tzinfo=datetime.timezone.utc)
 
 
+# [@ANCHOR: pager_duty:auth_cert_enddate_of]
 def _enddate_of(args, pem=None):
     result = subprocess.run(
         [OPENSSL, "x509", "-noout", "-enddate"] + args,

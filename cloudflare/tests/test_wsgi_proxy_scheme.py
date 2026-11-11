@@ -160,6 +160,7 @@ class TestWsgiProxyScheme(HamsTransactionCase):
         self.assertNotIn("HTTP_X_FORWARDED_PROTO", result)
 
     def test_05e_redis_outage_after_a_successful_read_keeps_serving_the_last_known_good_list(self):
+        # Tests [@ANCHOR: cloudflare:COMM_wsgi_get_cached_trusted_networks]
         """Once a self-hosted non-Tunnel admin's real allow-list has actually been read from
         Redis, a later transient Redis outage must not drop that trust back to loopback-only --
         it should keep serving the last-known-good list until Redis is reachable again."""
@@ -277,3 +278,22 @@ class TestWsgiProxyScheme(HamsTransactionCase):
             "wsgi.url_scheme": "http",
         }
         self.assertNotIn("HTTP_X_FORWARDED_HOST", self._call(environ))
+
+    def test_13_cached_networks_are_read_once_per_ttl_and_the_last_good_list_survives_failures(self):
+        # Tests [@ANCHOR: cloudflare:COMM_wsgi_get_cached_trusted_networks]
+        fake_redis = MagicMock()
+        fake_redis.get.return_value = json.dumps(["203.0.113.0/24"])
+        getter = self.safe_patch(
+            "odoo.addons.cloudflare.wsgi_proxy_scheme.get_redis_connection", return_value=fake_redis
+        )
+        networks = wsgi_proxy_scheme._get_cached_trusted_networks()
+        self.assertEqual([str(n) for n in networks], ["203.0.113.0/24"])
+        wsgi_proxy_scheme._get_cached_trusted_networks()
+        fake_redis.get.assert_called_once()
+        wsgi_proxy_scheme._ranges_cache["loaded_at"] = 0.0
+        getter.side_effect = ConnectionError("redis unreachable")
+        self.assertEqual(wsgi_proxy_scheme._get_cached_trusted_networks(), networks)
+        wsgi_proxy_scheme._ranges_cache["loaded_at"] = 0.0
+        getter.side_effect = None
+        fake_redis.get.return_value = "not json"
+        self.assertEqual(wsgi_proxy_scheme._get_cached_trusted_networks(), networks)

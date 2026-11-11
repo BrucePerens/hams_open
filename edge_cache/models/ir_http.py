@@ -28,11 +28,13 @@ LANG_COOKIE = "frontend_lang"
 STATEFUL_REQUEST_COOKIES = (SESSION_COOKIE, "website_cookies_bar")
 
 
+# [@ANCHOR: edge_cache:set_cookie_name]
 def _set_cookie_name(header_value):
     """Pure: the cookie name of one raw Set-Cookie header value."""
     return header_value.split(";", 1)[0].partition("=")[0].strip()
 
 
+# [@ANCHOR: edge_cache:set_cookie_value]
 def _set_cookie_value(header_value):
     """Pure: the cookie value of one raw Set-Cookie header value."""
     return header_value.split(";", 1)[0].partition("=")[2].strip()

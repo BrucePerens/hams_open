@@ -16,6 +16,7 @@ class TestIntegrationFacility(HamsTransactionCase):
 
     def test_01_daemon_lifecycle(self):
         # Tests [@ANCHOR: zero_sudo:dummy_daemon_do_head]
+        # Tests [@ANCHOR: zero_sudo:hams_transaction_case_start_daemon]
         # ---
         # [@ANCHOR: zero_sudo:COMM_test_integration_daemon_testing]
         # ---

@@ -235,6 +235,7 @@ class PagerCheck(models.Model):
         }
     )
 
+    # [@ANCHOR: pager_duty:schedule_config_export]
     def _schedule_config_export(self):
         """Rewrite the daemon's pager_config.json once, after the transaction that changed the checks commits.
 

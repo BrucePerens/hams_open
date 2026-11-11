@@ -104,3 +104,58 @@ Purpose: installs the four listeners (`focusin`, `pointerdown`, `submit`, `click
 Returns a function that removes the four listeners, or `null` and installs nothing when `session.is_website_user` (from `@web/session`) is false: a logged-in visitor's pages are never
 edge-cached, so their token is already good. It reads `@web/session` and not `odoo.__session_info__` because that module deletes the global when it loads, before this one runs.
 Calling it twice installs the listeners twice; keep and call the returned remover first.
+
+## Python functions (ADR 0113): cookies and page-cache flags
+
+### `[@ANCHOR: edge_cache:set_cookie_name]` `_set_cookie_name(header_value)`
+
+**Purpose.** Reads the cookie name out of one raw `Set-Cookie` header value, so `ir.http._cloudflare_strip_redundant_cookies` can decide whether a response sets the session cookie or the language cookie (`models/ir_http.py`).
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `header_value` | `str` | One raw `Set-Cookie` value such as `session_id=abc; Path=/; HttpOnly`. |
+| returns | `str` | Everything before the first `=` of the part before the first `;`, stripped of blanks; `""` for a value with no `=`. |
+
+Errors: none for a `str` (a non-string raises `AttributeError`). **Special concerns.** Pure: no I/O, no state, safe to call anywhere. Attributes after the first `;` are ignored.
+
+**See also.** `test_set_cookie_parsing` in `tests/test_edge_cache_cookies.py`.
+
+### `[@ANCHOR: edge_cache:set_cookie_value]` `_set_cookie_value(header_value)`
+
+**Purpose.** The twin of `_set_cookie_name`: the cookie value of one raw `Set-Cookie` header value. `_cloudflare_strip_redundant_cookies` uses it to tell a language cookie that only repeats the website's default language (dropped from the response) from one that changes it.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `header_value` | `str` | One raw `Set-Cookie` value. |
+| returns | `str` | Everything after the first `=` of the part before the first `;`, stripped of blanks; an `=` inside the value is kept (`session_id=abc=def` gives `abc=def`); `""` for a value with no `=`. |
+
+**Special concerns.** Pure, as `_set_cookie_name`. The value is a session identifier when the name is `session_id`: callers compare it and never log it.
+
+**See also.** `test_set_cookie_parsing` in `tests/test_edge_cache_cookies.py`.
+
+### `[@ANCHOR: edge_cache:website_page_get_response_raw]` `WebsitePage._get_response_raw(request)`
+
+**Purpose.** Odoo's page cache calls `_get_response_raw` to render a page that is not in the cache. This override marks that response as a fresh render, `cf_page_cache_hit = False`, so `WebsitePage._get_response` can tell it from a cache hit and give the dispatcher a copy of it: a fresh render may be the very object Odoo stores in its cache, and the dispatcher must not add one visitor's `Set-Cookie` to it.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `request` | the `odoo.http` request | Passed through to Odoo unchanged. |
+| returns | `http.Response` or a falsy value | What Odoo's `_get_response_raw` returned, with `cf_page_cache_hit` set to `False` when it is truthy; a falsy answer is returned untouched. |
+
+**Special concerns.** It changes only that one attribute and does no I/O. Runs on every cache miss and on the re-render of an entry older than `_CACHE_DURATION`.
+
+**See also.** `test_page_cache_never_replays_a_set_cookie` in `tests/test_edge_cache_cookies.py`.
+
+### `[@ANCHOR: edge_cache:website_page_post_process_response_from_cache]` `WebsitePage._post_process_response_from_cache(request, response)`
+
+**Purpose.** Odoo calls this on a response it built from its page cache. This override lets Odoo finish its work and then flags the response as a cache hit, `cf_page_cache_hit = True`; `WebsitePage._get_response` then knows the response is already a private copy for this request and does not copy it again.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `request` | the `odoo.http` request | Passed to Odoo unchanged. |
+| `response` | `http.Response` | The response built from the cache; mutated in place. |
+| returns | `None` | Nothing. |
+
+**Special concerns.** It raises whatever Odoo's version raises (for example `TypeError` if the body was turned into bytes); the flag is set only after Odoo's work succeeds. No I/O and no lock.
+
+**See also.** `test_page_cache_never_replays_a_set_cookie` in `tests/test_edge_cache_cookies.py` (the second visitor is served a cache hit).

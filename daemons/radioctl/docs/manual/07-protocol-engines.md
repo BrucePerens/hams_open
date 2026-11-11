@@ -161,7 +161,7 @@ fact of `rigs/kenwood-ts-890s.toml`).
   any other expanded case, expanded scroll mode or an unread `BSO` is dropped. The virtual rig answers every `BS`
   command above, `BSM`, `DD0` and `DD1` and sends synthetic `##DD2` and `##DD3` frames; its auto-scroll edges are our model
   (a page of the span's width), since the guide gives none.
-- **Does not cover:** the COM/USB `DD2`/`DD3`/`DD4` forms; the audio scope and oscilloscope waveforms; CW
+- **Does not cover:** the COM/USB `DD4` form (the guide bars AI on that connector, which the engine needs); the COM/USB `DD2`/`DD3` splits are handled when the description says `kenwood.scope_link = "serial"` (the engine then sets `DD0` 4 and `DD1` 2; the default `lan` sets `DD0` 2 and `DD1` 1; virtual rig only, unverified on a radio); the audio scope and oscilloscope waveforms; CW
   text, memories, the menu (`EX`) and the `PSQ/PKS` pin note.
 - **Oracle:** Hamlib 4.6.2's TS-890S backend reads the frequency and mode with `IF;` and sets the frequency
   with `SF`, neither of which is in the guide, so the virtual rig refuses them and the frequency and mode steps

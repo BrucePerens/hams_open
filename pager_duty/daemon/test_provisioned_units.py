@@ -5,6 +5,8 @@
 """
 # Tests [@ANCHOR: pager_duty:provisioned_units]
 # Tests [@ANCHOR: pager_duty:units_not_in_operation]
+# Tests [@ANCHOR: pager_duty:provisioned_units_main]
+# Tests [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
 import os
 import sys
 import unittest
@@ -101,11 +103,13 @@ class MainTests(unittest.TestCase):
         return code, "".join(c.args[0] for c in out.write.call_args_list), "".join(c.args[0] for c in err.write.call_args_list)
 
     def test_healthy_exits_zero(self):
+        # Tests [@ANCHOR: pager_duty:provisioned_units_main]
         code, out, _ = self.run_main([])
         self.assertEqual(code, 0)
         self.assertIn("in operation", out)
 
     def test_a_problem_pages_with_a_short_first_line_and_the_full_list(self):
+        # Tests [@ANCHOR: pager_duty:provisioned_units_main]
         problems = [(f"u{i}.timer", "not running") for i in range(6)]
         code, _, err = self.run_main(problems)
         self.assertEqual(code, 1)
@@ -114,11 +118,27 @@ class MainTests(unittest.TestCase):
         self.assertIn("u5.timer (not running)", err)
 
     def test_an_unloadable_manifest_fails_loudly(self):
+        # Tests [@ANCHOR: pager_duty:provisioned_units_main]
         with mock.patch.object(check, "expected_units", side_effect=KeyError("static_files")), \
                 mock.patch("sys.stderr") as err:
             code = check.main([])
         self.assertEqual(code, 1)
         self.assertIn("MANIFEST did not load", "".join(c.args[0] for c in err.write.call_args_list))
+
+
+class SystemctlShowTests(unittest.TestCase):
+    def test_properties_are_read_as_a_dict_and_garbage_lines_are_skipped(self):
+        # Tests [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
+        done = mock.Mock(stdout="LoadState=loaded\nActiveState=active\nnoise without equals\nDescription=a=b\n")
+        with mock.patch.object(check.subprocess, "run", return_value=done) as run:
+            got = check.systemctl_show("a.timer")
+        self.assertEqual(got, {"LoadState": "loaded", "ActiveState": "active", "Description": "a=b"})
+        self.assertEqual(run.call_args.args[0][:3], ["systemctl", "show", "a.timer"])
+
+    def test_an_unreadable_answer_is_an_empty_dict(self):
+        # Tests [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
+        with mock.patch.object(check.subprocess, "run", return_value=mock.Mock(stdout="")):
+            self.assertEqual(check.systemctl_show("nope.timer"), {})
 
 
 if __name__ == "__main__":

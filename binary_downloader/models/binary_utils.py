@@ -414,6 +414,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
         return f"{cmd_name}_{identifier}"
 
     @api.model
+    # [@ANCHOR: binary_utils_count_binary_file_references]
     def _count_binary_file_references(self, keys):
         """Counts every binary.manifest / binary.version row that maps to the same on-disk file as
         each `(cmd_name, checksum)` in `keys`. The filename is derived from BOTH the command name

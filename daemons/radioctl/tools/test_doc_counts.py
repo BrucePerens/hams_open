@@ -36,6 +36,21 @@ class DocCountsTests(unittest.TestCase):
         )
 
     # Tests [@ANCHOR: radioctl_doc_counts_compute]
+    def test_each_capability_is_counted_over_the_descriptions_that_list_it(self):
+        root = tree("")
+        (root / "rigs" / "b.toml").write_text('capabilities = ["read-frequency", "split"]\n')
+        (root / "rigs" / "c.toml").write_text('capabilities = ["read-frequency"]\n')
+        counts = dc.compute(root)
+        self.assertEqual((counts["cap_read_frequency"], counts["cap_split"]), ("2", "1"))
+
+    # Tests [@ANCHOR: radioctl_doc_counts_compute]
+    def test_every_capability_a_real_description_lists_has_a_row_in_appendix_a(self):
+        counts = dc.compute()
+        appendix = (dc.ROOT / "docs" / "manual" / "A-capability-matrix.md").read_text()
+        missing = [name for name in counts if name.startswith("cap_") and f"<!--count:{name}-->" not in appendix]
+        self.assertEqual(missing, [])
+
+    # Tests [@ANCHOR: radioctl_doc_counts_compute]
     def test_a_support_list_without_a_count_is_an_error(self):
         root = tree("")
         (root / "docs" / "RIG_SUPPORT.md").write_text("- Hamlib 4.6.2 models: **313**\n")

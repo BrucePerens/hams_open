@@ -90,6 +90,7 @@ _ranges_cache_lock = threading.Lock()
 _ranges_cache = {"networks": (), "loaded_at": 0.0}
 
 
+# [@ANCHOR: cloudflare:COMM_wsgi_get_cached_trusted_networks]
 def _get_cached_trusted_networks():
     now = time.monotonic()
     with _ranges_cache_lock:

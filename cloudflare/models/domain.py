@@ -37,6 +37,7 @@ class CloudflareRoutingDomain(models.Model):
         records._create_cloudflare_custom_hostname_batch()
         return records
 
+    # [@ANCHOR: cloudflare:COMM_domain_unlink]
     def unlink(self):
         # # Verified by [@ANCHOR: COMM_test_multi_website_purge_queue]
         # spacing

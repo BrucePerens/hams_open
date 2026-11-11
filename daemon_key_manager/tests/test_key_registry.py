@@ -646,6 +646,7 @@ class TestKeyRegistry(RealTransactionCase):
         self.assertTrue(os.path.exists(env_file_path))
 
     def test_action_rotate_key_self_heals_a_service_account_missing_the_usage_group(self):
+        # Tests [@ANCHOR: daemon_key_manager:ensure_usage_group]
         """
         Real bug found 2026-09-28/29 (a live production incident, `backup_worker` unable to
         rotate its own key): `group_daemon_key_usage` (the group that grants a 90-day API-key

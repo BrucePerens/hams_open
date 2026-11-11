@@ -2,9 +2,14 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
+import os
+import stat
+import tempfile
 import time
+from unittest.mock import patch
 
 from odoo.tests import tagged
+from odoo.tools import config
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase, HamsTransactionCase
 
 from odoo.addons.hams_secret_canary import alerts, detector, wsgi_scan
@@ -144,6 +149,24 @@ class TestPlanting(CanaryCase):
     """The decoys are created per install, once."""
     # Tests [@ANCHOR: hams_secret_canary:plant_canaries]
     # Tests [@ANCHOR: hams_secret_canary:post_init_hook]
+    # Tests [@ANCHOR: hams_secret_canary:plant_decoy_file_and_env]
+
+    def test_decoys_are_also_an_environment_variable_and_a_private_file(self):
+        self.canary._plant_canaries()
+        params = self.env["ir.config_parameter"]
+        value = params.get_param("stripe_secret_key_old")
+        with tempfile.TemporaryDirectory() as data_dir, \
+                patch.dict(config.options, {"data_dir": data_dir}), patch.dict(os.environ):
+            os.environ.pop("STRIPE_SECRET_KEY_OLD", None)
+            self.canary._plant_decoy_file_and_env()
+            path = os.path.join(data_dir, "keys", "stripe_secret_key_old")
+            with open(path) as handle:
+                self.assertEqual(handle.read().strip(), value)
+            self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+            self.assertEqual(os.environ["STRIPE_SECRET_KEY_OLD"], value)
+            self.canary._plant_decoy_file_and_env()  # a second call leaves the existing file and variable alone
+            with open(path) as handle:
+                self.assertEqual(handle.read().strip(), value)
 
     def test_planting_is_idempotent_and_registers_each_decoy(self):
         params = self.env["ir.config_parameter"]  # the admin reads it as an attacker would; service accounts may not

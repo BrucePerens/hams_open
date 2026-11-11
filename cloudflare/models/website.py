@@ -38,7 +38,24 @@ class WebsiteCloudflare(models.Model):
         result = super().write(vals)
         if _CLOUDFLARE_CREDENTIAL_FIELDS & vals.keys():
             notify_model_invalidation(self.env, "website")
+        self._register_secrets_with_canary(vals)
         return result
+
+    def _register_secrets_with_canary(self, vals):
+        """When the optional `hams_secret_canary` addon is installed, registers the fingerprint of a newly written API
+        token or Turnstile secret so that its appearance in a response or a log line raises an alarm. Only a salted
+        hash is kept. A value that is not a single token (too short, or has spaces) is skipped: saving never fails
+        because of the canary."""
+        if "hams.secret.canary" not in self.env:
+            return
+        for field, label in (("cloudflare_api_token", "cloudflare_api_token"),
+                             ("cloudflare_turnstile_secret", "cloudflare_turnstile_secret")):
+            value = vals.get(field)
+            if value and value != "********":
+                try:
+                    self.env["hams.secret.canary"]._register_secret(label, value)
+                except ValueError as error:
+                    logging.getLogger(__name__).warning("Not registered with the secret canary: %s", error)
 
     cloudflare_ip_ban_ids = fields.One2many("cloudflare.ip.ban", "website_id")
     cloudflare_tunnel_ids = fields.One2many("cloudflare.tunnel", "website_id")

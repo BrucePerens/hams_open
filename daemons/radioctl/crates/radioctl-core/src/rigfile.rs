@@ -8,7 +8,7 @@
 //!
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
-//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
+//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.scope_link` (`lan`, the default, or `serial`: how a TS-890S sends its scopes), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
 //! `yaesu.frequency_digits` (only when not 9),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
@@ -189,6 +189,8 @@ struct KenwoodSection {
     dialect: Option<String>,
     #[serde(default)]
     ky: Option<KySection>,
+    #[serde(default)]
+    scope_link: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -380,6 +382,8 @@ struct LevelsSection {
     #[serde(default)]
     attenuator_any_up_to_db: u8,
     preamp_steps: u8,
+    #[serde(default)]
+    antenna_ports: u8,
     #[serde(default)]
     absent: Vec<String>,
 }
@@ -621,10 +625,16 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
                     .ok_or_else(|| bad(format!("unknown kenwood.dialect {name:?}")))?,
             };
             let ky = k.ky.as_ref().map(build_ky).transpose()?;
+            let scope_serial = match k.scope_link.as_deref() {
+                None | Some("lan") => false,
+                Some("serial") => true,
+                Some(other) => return Err(bad(format!("unknown kenwood.scope_link {other:?}"))),
+            };
             Ok::<KenwoodParams, RigError>(KenwoodParams {
                 model_id: k.model_id,
                 dialect,
                 ky,
+                scope_serial,
             })
         })
         .transpose()?;
@@ -868,6 +878,7 @@ fn check_timing(timing: &TimingSection) -> Result<Timing, RigError> {
 const MAX_ATTENUATOR_STEPS: usize = 9;
 /// Most preamplifier steps a model may declare (the original FUNcube Dongle has six LNA codes).
 const MAX_PREAMP_STEPS: u8 = 6;
+const MAX_ANTENNA_PORTS: u8 = 8;
 
 // [@ANCHOR: radioctl_core_rigfile_build_elecraft]
 /// The `[elecraft]` block: the model id and the per-model level ranges, each naming one of the
@@ -947,10 +958,15 @@ fn build_levels(section: Option<&LevelsSection>) -> Result<LevelParams, RigError
             "levels.preamp_steps is more than {MAX_PREAMP_STEPS}"
         )));
     }
+    if levels.antenna_ports > MAX_ANTENNA_PORTS {
+        return Err(bad(format!(
+            "levels.antenna_ports is more than {MAX_ANTENNA_PORTS}"
+        )));
+    }
     let mut absent = Vec::new();
     for name in &levels.absent {
         match Level::from_name(name) {
-            Some(level) if !matches!(level, Level::Attenuator | Level::Preamp) => {
+            Some(level) if !matches!(level, Level::Attenuator | Level::Preamp | Level::Antenna) => {
                 if !absent.contains(&level) {
                     absent.push(level);
                 }
@@ -966,6 +982,7 @@ fn build_levels(section: Option<&LevelsSection>) -> Result<LevelParams, RigError
         attenuator_db: levels.attenuator_db.clone(),
         attenuator_any_up_to_db: levels.attenuator_any_up_to_db,
         preamp_steps: levels.preamp_steps,
+        antenna_ports: levels.antenna_ports,
         absent,
     })
 }
@@ -1267,6 +1284,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
             ]
             .map(String::from),
         );
+        if description.levels.antenna_ports > 0 {
+            keys.push("levels.antenna_ports".to_string());
+        }
         if !description.levels.absent.is_empty() {
             keys.push("levels.absent".to_string());
         }

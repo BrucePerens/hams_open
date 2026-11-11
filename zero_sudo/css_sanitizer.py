@@ -54,6 +54,7 @@ _BAD_PROPERTIES = frozenset({"behavior", "-moz-binding", "-ms-behavior"})
 _POSITIONS = frozenset({"static", "relative", "absolute"})
 
 
+# [@ANCHOR: zero_sudo:css_scan]
 def _scan(text, start, stops):
     """Index of the first character in `stops` at or after `start` that is outside a string
     and outside parentheses, or len(text). A string left open runs to the end."""
@@ -77,6 +78,7 @@ def _scan(text, start, stops):
     return len(text)
 
 
+# [@ANCHOR: zero_sudo:css_matching_brace]
 def _matching_brace(text, start):
     """Index of the `}` closing the `{` at `start`, or None if it never closes."""
     depth = 0
@@ -97,6 +99,7 @@ def _matching_brace(text, start):
     return None
 
 
+# [@ANCHOR: zero_sudo:css_parse_blocks]
 def _parse_blocks(text):
     """`[(prelude, body or None)]`. `body` is the text inside the braces, None for a statement
     ended by `;` (an at-rule such as `@import ...;`). A trailing fragment becomes a
@@ -123,6 +126,7 @@ def _parse_blocks(text):
     return items
 
 
+# [@ANCHOR: zero_sudo:css_clean_value]
 def _clean_value(prop, raw):
     """The value re-written, or None to drop the declaration."""
     value = raw.strip()
@@ -144,6 +148,7 @@ def _clean_value(prop, raw):
     return value + important
 
 
+# [@ANCHOR: zero_sudo:css_clean_declarations]
 def _clean_declarations(body):
     """`(text, dropped)` for the inside of one `{...}` block."""
     kept = []
@@ -179,6 +184,7 @@ class _Counter:
     rules = 0
 
 
+# [@ANCHOR: zero_sudo:css_clean_rules]
 def _clean_rules(text, depth, counter, in_keyframes=False):
     """`(rules, dropped)`: the canonical text of the accepted rules in `text`."""
     out = []
@@ -221,6 +227,7 @@ def _clean_rules(text, depth, counter, in_keyframes=False):
     return "\n".join(out), dropped
 
 
+# [@ANCHOR: zero_sudo:css_sanitize_stylesheet]
 def sanitize_stylesheet(text):
     """`(css, dropped)`. `css` is a stylesheet made only of what the rules above accept."""
     if not text or not text.strip():

@@ -82,6 +82,7 @@ class ResConfigSettings(models.TransientModel):
         compute="_compute_cloudflare_trusted_ip_ranges_display",
     )
 
+    # [@ANCHOR: cloudflare:COMM_settings_compute_trusted_ip_display]
     def _compute_cloudflare_trusted_ip_ranges_display(self):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_trusted_ip"
@@ -96,12 +97,14 @@ class ResConfigSettings(models.TransientModel):
                 "cloudflare.trusted_ip_ranges_last_refreshed"
             ) or _("Never")
 
+    # [@ANCHOR: cloudflare:COMM_settings_compute_secrets]
     @api.depends("website_id")
     def _compute_cloudflare_secrets(self):
         for rec in self:
             for name in SECRET_FIELDS:
                 rec[name] = SECRET_MASK if rec.website_id[name] else False
 
+    # [@ANCHOR: cloudflare:COMM_settings_inverse_secrets]
     def _inverse_cloudflare_secrets(self):
         # The mask means "not edited"; a blank value clears the secret.
         for rec in self:
@@ -109,6 +112,7 @@ class ResConfigSettings(models.TransientModel):
             if vals and rec.website_id:
                 rec.website_id.write(vals)
 
+    # [@ANCHOR: cloudflare:COMM_settings_get_values]
     @api.private
     @api.model
     def get_values(self):
@@ -155,6 +159,7 @@ class ResConfigSettings(models.TransientModel):
             self._check_cloudflare_token_scope(vals)
         return super().create(vals_list)
 
+    # [@ANCHOR: cloudflare:COMM_settings_set_values]
     def set_values(self):
         super().set_values()
         # Publish the custom-ranges edit to Redis immediately, so it takes effect for the

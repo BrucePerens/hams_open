@@ -234,6 +234,11 @@ class TestDnsPlan(HamsTransactionCase):
         b = dns_plan.plan_row(self._row(comment="two"), [])
         self.assertNotEqual(dns_plan.plan_hash([a]), dns_plan.plan_hash([b]))
 
+    def test_14_names_compare_equal_whatever_their_case_trailing_dot_or_blanks(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_normalize_name]
+        self.assertEqual(dns_plan.normalize_name("  Stun.HAMS.com. "), "stun.hams.com")
+        self.assertEqual(dns_plan.normalize_name(None), "")
+
 
 @tagged("post_install", "-at_install")
 class TestDnsRecordModel(HamsTransactionCase):
@@ -272,6 +277,7 @@ class TestDnsRecordModel(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:COMM_dns_record_constraints]
     def test_03_names_content_and_ids_are_validated(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_record_require_ip]
         for bad in ({"name": "Stun.hams.com"}, {"name": "stun.hams.com."}, {"name": "hams"},
                     {"content": "not-an-ip"}, {"type": "AAAA", "content": "66.135.10.56"},
                     {"type": "CNAME", "content": "Host.Example.com."}, {"cf_record_id": "../../x"}):
@@ -281,6 +287,7 @@ class TestDnsRecordModel(HamsTransactionCase):
         self._make(name="*.hams.com", type="CNAME", content=TUNNEL_CNAME, proxied=True)
 
     def test_03b_a_row_created_without_proxied_is_dns_only_when_its_type_cannot_be_proxied(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_record_create]
         ns = self.Record.create({"name": "callbook.hams.com", "type": "NS", "content": "ns1.hams.com"})
         self.assertFalse(ns.proxied)
         a_row = self.Record.create({"name": "www.hams.com", "type": "CNAME", "content": TUNNEL_CNAME})
@@ -419,6 +426,9 @@ class TestDnsPush(HamsTransactionCase):
         self.assertEqual(self.cf.writes(), [])
 
     def test_08_a_row_without_credentials_or_a_zone_is_a_problem_entry_not_a_failure_of_the_rest(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_zone_of]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_problem_entry]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_credential_website]
         bare = self.env["website"].create({"name": "No token site", "domain": "https://notoken.example.com"})
         tenant_row = self._row("tenant.hams.com", "A", "192.0.2.20", website_id=bare.id)
         nowhere = self._row("nowhere.example.org", "A", "192.0.2.21")
@@ -430,12 +440,15 @@ class TestDnsPush(HamsTransactionCase):
         self.assertIn("no usable Cloudflare API token", [e for e in plan["entries"] if e["name"] == "tenant.hams.com"][0]["reason"])
 
     def test_09_rows_without_a_website_use_the_first_website_that_has_a_token(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_credential_website]
         row = self.Record.create({"name": "nosite.hams.com", "type": "A", "content": "192.0.2.30", "proxied": False})
         plan = row.dns_push_plan()
         self.assertEqual(plan["entries"][0]["action"], "create")
         self.assertEqual([c[2] for c in self.cf.calls if c[0] == "find_zone"][0], "tok-dns")
 
     def test_10_an_unreachable_cloudflare_plans_nothing_instead_of_creating_everything(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_zone_of]
+        # Tests [@ANCHOR: cloudflare:COMM_dns_problem_entry]
         self.cf.fail_reads = True
         row = self._row("down.hams.com", "A", "192.0.2.40")
         plan = row.dns_push_plan()
@@ -490,6 +503,7 @@ class TestDnsPush(HamsTransactionCase):
     # Tests [@ANCHOR: cloudflare:COMM_dns_push_wizard_plan]
     # Tests [@ANCHOR: cloudflare:COMM_dns_push_wizard_apply]
     def test_13_the_wizard_shows_the_plan_first_and_applies_exactly_that(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_push_wizard_reopen]
         row = self._row("wiz.hams.com", "A", "192.0.2.43")
         wizard = self.env["cloudflare.dns.push.wizard"].create({"record_ids": [(6, 0, row.ids)]})
         with self.assertRaises(UserError):
@@ -514,6 +528,7 @@ class TestDnsPush(HamsTransactionCase):
         self.assertFalse(row.active)
 
     def test_13c_an_ns_row_can_be_saved_from_the_form_without_touching_proxied(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_record_onchange_type]
         form = Form(self.Record)
         form.name = "callbook.hams.com"
         form.type = "NS"
@@ -546,6 +561,13 @@ class TestDnsPush(HamsTransactionCase):
         update = [c for c in self.cf.writes() if c[0] == "update"][-1]
         self.assertEqual(update[3]["comment"], "documentation example address")
         self.assertEqual([e["action"] for e in bare.dns_push_plan()["entries"]], ["unchanged"])
+
+    def test_16_the_wizard_reopens_itself_as_a_dialog(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_push_wizard_reopen]
+        wizard = self.env["cloudflare.dns.push.wizard"].create({})
+        self.assertEqual(wizard._reopen(), {
+            "type": "ir.actions.act_window", "res_model": "cloudflare.dns.push.wizard", "res_id": wizard.id,
+            "view_mode": "form", "target": "new"})
 
 
 @tagged("post_install", "-at_install")

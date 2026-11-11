@@ -14,6 +14,7 @@ import unicodedata
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: knowledge:plain_text_preview]
 def _plain_text_preview(html_body):
     """Real plain text for a search-result preview: no leaked markup, no leaked comments.
 
