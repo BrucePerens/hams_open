@@ -109,7 +109,8 @@ fn level_wire(level: Level) -> Option<LevelWire> {
         | Level::Attenuator
         | Level::Preamp
         | Level::Dither
-        | Level::Preselector => return None,
+        | Level::Preselector
+        | Level::Antenna => return None,
     };
     Some(LevelWire { name, min, max })
 }
@@ -282,6 +283,7 @@ impl Ts890Engine {
             (Some("RT"), Some(v @ ("0" | "1"))) => Some(Observation::Rit(v == "1")),
             (Some("XT"), Some(v @ ("0" | "1"))) => Some(Observation::Xit(v == "1")),
             (Some("RF"), Some(d)) if d.len() == 5 => decode_offset(d),
+            (Some("AN"), Some(d)) => decode_antenna(d),
             (Some("RA"), Some(d)) => self.decode_step(Level::Attenuator, d),
             (Some("PA"), Some(d)) => self.decode_step(Level::Preamp, d),
             (Some(name), Some(d)) => decode_level(name, d),
@@ -291,6 +293,15 @@ impl Ts890Engine {
             Some(value) => Inbound::Observation(value),
             None => Inbound::Unrecognised(format!("{text};").into_bytes()),
         }
+    }
+
+    // [@ANCHOR: radioctl_ts890_engine_antenna_port]
+    /// `port` as the digit `AN` takes, refused when the description lists no such antenna.
+    fn antenna_port(&self, port: u16) -> Result<u8, RigError> {
+        u8::try_from(port)
+            .ok()
+            .filter(|p| *p >= 1 && *p <= self.desc.levels.antenna_ports.min(2))
+            .ok_or_else(|| Self::unsupported("no such antenna port on this model"))
     }
 
     // [@ANCHOR: radioctl_ts890_engine_decode_step]
@@ -726,6 +737,16 @@ impl ProtocolEngine for Ts890Engine {
                 };
                 Self::command(format!("{name}{step};"), none)
             }
+            // `AN` (guide p. 47): P1 is the antenna, 1 or 2; the other three parameters are sent as 9,
+            // "no change". The answer carries all four.
+            Op::GetLevel(Level::Antenna) => {
+                self.antenna_port(1)?;
+                Self::command("AN;".into(), observe(Field::Level(Level::Antenna)))
+            }
+            Op::SetLevel(Level::Antenna, port) => {
+                let port = self.antenna_port(*port)?;
+                Self::command(format!("AN{port}999;"), none)
+            }
             Op::GetLevel(level) => {
                 let wire = level_wire(*level)
                     .ok_or_else(|| Self::unsupported("level not implemented for the TS-890S"))?;
@@ -889,5 +910,19 @@ impl ProtocolEngine for Ts890Engine {
             requests.extend(self.encode(&Op::SetScopeOutput(true)).ok());
         }
         requests
+    }
+}
+
+// [@ANCHOR: radioctl_ts890_decode_antenna]
+/// An `AN` answer, `P1 P2 P3 P4` as four digits (guide p. 47): the antenna in use is P1, 1 or 2.
+fn decode_antenna(digits: &str) -> Option<Observation> {
+    let bytes = digits.as_bytes();
+    if bytes.len() != 4 || !bytes.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    match bytes[0] {
+        b'1' => Some(Observation::Level(Level::Antenna, 1)),
+        b'2' => Some(Observation::Level(Level::Antenna, 2)),
+        _ => None,
     }
 }

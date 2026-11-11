@@ -673,6 +673,8 @@ pub struct LevelParams {
     pub attenuator_any_up_to_db: u8,
     /// How many preamplifier steps above off the model has (0 for none).
     pub preamp_steps: u8,
+    /// How many antenna connectors the rig itself selects between (0 for none, or no known command).
+    pub antenna_ports: u8,
     /// Levels (of the plain `14` family: AF, RF, microphone, monitor, keyer, power) the model's
     /// command table does not have; the CI-V engine and virtual rig refuse them. Empty means the
     /// model has them all, which is what a description without `levels.absent` states.

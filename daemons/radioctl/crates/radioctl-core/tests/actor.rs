@@ -19,10 +19,11 @@ use radioctl_core::poll::PollConfig;
 use radioctl_core::rig::{
     spawn, spawn_current, EventStream, Freshness, RigHandle, RigOptions, TransmitPermit,
 };
-use radioctl_core::units::{Hz, Mode, Vfo};
+use radioctl_core::units::{Hz, Level, Mode, Vfo};
 use radioctl_protocols::civ::CivEngine;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
 use radioctl_protocols::kenwood::KenwoodEngine;
+use radioctl_protocols::kenwood_ts890::Ts890Engine;
 use radioctl_protocols::virtual_rig::{PanelChange, VirtualRig};
 use tokio::runtime::Handle;
 use tokio::time::{sleep, timeout, Instant};
@@ -1666,4 +1667,34 @@ async fn sending_cw_is_refused_while_the_transmit_frequency_is_unknown() {
         .await
         .expect_err("CW is a transmission too");
     assert_eq!(cw.kind, ErrorKind::TransmitFrequencyUnknown);
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_run_command]
+#[tokio::test(start_paused = true)]
+async fn the_antenna_changes_not_while_the_rig_is_known_keyed() {
+    let desc = radioctl_core::rigfile::parse(include_str!("../../../rigs/kenwood-ts-890s.toml"))
+        .expect("loads")
+        .description;
+    let rig = VirtualRig::from_description(&desc).expect("rig");
+    let (stream, control) = spawn_virtual_rig(&Handle::current(), rig, Duration::ZERO);
+    let handle =
+        spawn_current(Ts890Engine::new(desc).expect("engine"), stream, quiet()).expect("spawn");
+
+    // Not known keyed: allowed, and the rig took it.
+    handle
+        .execute(Op::SetLevel(Level::Antenna, 2))
+        .await
+        .expect("antenna 2");
+    assert_eq!(control.state().levels.get(&Level::Antenna), Some(&2));
+
+    // Keyed: refused before anything reaches the rig, which still has antenna 2.
+    handle.open_transmit_gate(permit());
+    handle.set_ptt(true).await.expect("keyed");
+    let keyed = handle
+        .execute(Op::SetLevel(Level::Antenna, 1))
+        .await
+        .expect_err("keyed");
+    assert_eq!(keyed.kind, ErrorKind::Unsupported);
+    assert_eq!(control.state().levels.get(&Level::Antenna), Some(&2));
+    handle.set_ptt(false).await.expect("unkey");
 }

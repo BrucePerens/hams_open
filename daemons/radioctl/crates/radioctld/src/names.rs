@@ -441,7 +441,8 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
                 | Level::Attenuator
                 | Level::Preamp
                 | Level::Dither
-                | Level::Preselector => None,
+                | Level::Preselector
+                | Level::Antenna => None,
             }
         }
         Family::KenwoodAscii => Some(match level {
@@ -450,7 +451,11 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             Level::MonitorLevel => (0, 9),
             Level::KeyerSpeed => (10, 60),
             Level::RfPower => (5, 100),
-            Level::Attenuator | Level::Preamp | Level::Dither | Level::Preselector => (0, 0),
+            Level::Attenuator
+            | Level::Preamp
+            | Level::Dither
+            | Level::Preselector
+            | Level::Antenna => (0, 0),
         }),
         Family::YaesuNewcat => match level {
             Level::AfGain | Level::RfGain => Some((0, 255)),
@@ -461,7 +466,8 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             | Level::Attenuator
             | Level::Preamp
             | Level::Dither
-            | Level::Preselector => None,
+            | Level::Preselector
+            | Level::Antenna => None,
         },
         // The legacy five-byte engine has no level commands, so no level has a range.
         Family::YaesuLegacy | Family::KenwoodHh => None,
@@ -484,7 +490,8 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
             | Level::Attenuator
             | Level::Preamp
             | Level::Dither
-            | Level::Preselector => None,
+            | Level::Preselector
+            | Level::Antenna => None,
         },
     }
 }

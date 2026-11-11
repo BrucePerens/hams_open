@@ -225,6 +225,21 @@ impl VirtualRig {
                     _ => Some(REFUSED.to_string()),
                 }
             }
+            ("AN", "") => {
+                let port = self.state.levels.get(&Level::Antenna).copied().unwrap_or(1);
+                Some(format!("AN{port}000;"))
+            }
+            ("AN", set) => {
+                let ports = u16::from(self.desc.levels.antenna_ports.min(2));
+                let port = set.get(..1).and_then(|d| d.parse::<u16>().ok());
+                match port {
+                    Some(p) if set.len() == 4 && (1..=ports).contains(&p) => {
+                        self.state.levels.insert(Level::Antenna, p);
+                        None
+                    }
+                    _ => Some(REFUSED.to_string()),
+                }
+            }
             ("BS", sub) => self.ts890_scope_command(sub),
             ("DD", "0") => Some(format!("DD0{};", self.ts890_scope.output)),
             ("DD", "1") => Some(format!("DD1{};", self.ts890_scope.filter_output)),

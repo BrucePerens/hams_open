@@ -381,6 +381,8 @@ struct LevelsSection {
     attenuator_any_up_to_db: u8,
     preamp_steps: u8,
     #[serde(default)]
+    antenna_ports: u8,
+    #[serde(default)]
     absent: Vec<String>,
 }
 
@@ -868,6 +870,7 @@ fn check_timing(timing: &TimingSection) -> Result<Timing, RigError> {
 const MAX_ATTENUATOR_STEPS: usize = 9;
 /// Most preamplifier steps a model may declare (the original FUNcube Dongle has six LNA codes).
 const MAX_PREAMP_STEPS: u8 = 6;
+const MAX_ANTENNA_PORTS: u8 = 8;
 
 // [@ANCHOR: radioctl_core_rigfile_build_elecraft]
 /// The `[elecraft]` block: the model id and the per-model level ranges, each naming one of the
@@ -947,10 +950,15 @@ fn build_levels(section: Option<&LevelsSection>) -> Result<LevelParams, RigError
             "levels.preamp_steps is more than {MAX_PREAMP_STEPS}"
         )));
     }
+    if levels.antenna_ports > MAX_ANTENNA_PORTS {
+        return Err(bad(format!(
+            "levels.antenna_ports is more than {MAX_ANTENNA_PORTS}"
+        )));
+    }
     let mut absent = Vec::new();
     for name in &levels.absent {
         match Level::from_name(name) {
-            Some(level) if !matches!(level, Level::Attenuator | Level::Preamp) => {
+            Some(level) if !matches!(level, Level::Attenuator | Level::Preamp | Level::Antenna) => {
                 if !absent.contains(&level) {
                     absent.push(level);
                 }
@@ -966,6 +974,7 @@ fn build_levels(section: Option<&LevelsSection>) -> Result<LevelParams, RigError
         attenuator_db: levels.attenuator_db.clone(),
         attenuator_any_up_to_db: levels.attenuator_any_up_to_db,
         preamp_steps: levels.preamp_steps,
+        antenna_ports: levels.antenna_ports,
         absent,
     })
 }
@@ -1267,6 +1276,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
             ]
             .map(String::from),
         );
+        if description.levels.antenna_ports > 0 {
+            keys.push("levels.antenna_ports".to_string());
+        }
         if !description.levels.absent.is_empty() {
             keys.push("levels.absent".to_string());
         }

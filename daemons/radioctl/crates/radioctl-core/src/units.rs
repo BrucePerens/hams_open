@@ -157,9 +157,13 @@ pub enum Level {
     /// Front-end preselector of a receiver that has one (the Perseus): 0 is the wide-band path,
     /// 1 selects the band filter for the tuned frequency automatically.
     Preselector,
+    /// The rig's own antenna connector in use, numbered from 1 (ANT1, ANT2...); a model accepts
+    /// 1 up to `levels.antenna_ports` of its description. Changing it moves the RF path, so the
+    /// actor refuses the change unless the rig is known not to be keyed.
+    Antenna,
 }
 
-const LEVEL_NAMES: [(Level, &str); 10] = [
+const LEVEL_NAMES: [(Level, &str); 11] = [
     (Level::AfGain, "af-gain"),
     (Level::RfGain, "rf-gain"),
     (Level::MicGain, "mic-gain"),
@@ -170,6 +174,7 @@ const LEVEL_NAMES: [(Level, &str); 10] = [
     (Level::Preamp, "preamp"),
     (Level::Dither, "dither"),
     (Level::Preselector, "preselector"),
+    (Level::Antenna, "antenna"),
 ];
 
 /// A transmitter or power-supply meter read in the rig's own raw scale. Unlike
