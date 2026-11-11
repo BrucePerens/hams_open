@@ -24,13 +24,13 @@ registry.category("web_tour.tours").add("frontend_misc_tour", {
             run: function () {},
         },
         {
-            trigger: 'h1.display-4',
+            trigger: 'article h1.fs-2',
             content: "Verify Documentation Page renders correctly (real article title, not the QWeb fallback stub)",
             run: function () {
-                if (!document.querySelector('h1.display-4').textContent.includes('User Websites Documentation')) {
+                if (!document.querySelector('article h1.fs-2').textContent.includes('User Websites Documentation')) {
                     throw new Error(
                         "Expected the real 'User Websites Documentation' knowledge article title, got: " +
-                        document.querySelector('h1.display-4').textContent
+                        document.querySelector('article h1.fs-2').textContent
                     );
                 }
             },
