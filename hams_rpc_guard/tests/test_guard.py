@@ -174,6 +174,39 @@ class TestWrapper(GuardCase, HamsTransactionCase):
 
 
 @tagged("post_install", "-at_install")
+class TestSecretBugClasses(GuardCase, HamsTransactionCase):
+    """The tonight-bug classes of the default-deny to-do, pinned against the installed registry."""
+
+    def _staff(self, model_name):
+        self._as_rpc()
+        return build_persona(self.env, "internal_staff").env[model_name]
+
+    def test_a_settings_get_values_override_of_ours_is_not_rpc_callable(self):
+        # The hams_s3 bug: `res.config.settings.get_values` returned a secret to any signed-in caller over call_kw.
+        # Every installed override of ours must be @api.private (refused over RPC); the stock one is only reachable by group_system.
+        staff = self._staff("res.config.settings")
+        ours = [c for c in type(staff).mro() if "get_values" in c.__dict__ and "_module" in c.__dict__
+                and guard._module_is_managed(c.__dict__["_module"], policy.DEFAULT_MANAGED_AUTHORS)]
+        if ours:
+            with self.assertRaises(AccessError):
+                service_model.get_public_method(staff, "get_values")
+
+    def test_service_identity_helpers_are_not_rpc_callable(self):
+        # Methods that run as a service account and trust the caller must never be reachable over call_kw.
+        staff = self._staff("zero_sudo.security.utils")
+        for name in ("_get_service_env", "_get_service_uid", "_erase_via_service_account"):
+            with self.assertRaises(AccessError, msg=name):
+                service_model.get_public_method(staff, name)
+
+    def test_a_public_model_method_of_ours_needs_an_exposure_entry(self):
+        # The ham_nets bug: a public @api.model import method callable by any signed-in user.
+        staff = self._staff("res.partner")
+        self._own("res.partner", "address_get")
+        with self.assertLogs(policy._logger, "WARNING"), self.assertRaises(AccessError):
+            service_model.get_public_method(staff, "address_get")
+
+
+@tagged("post_install", "-at_install")
 class TestOverHttp(GuardCase, HamsHttpCase):
     """The same decisions through the real routes: the web client's call_kw, JSON-2 and XML-RPC execute_kw."""
     # Tests [@ANCHOR: hams_rpc_guard:call_is_rpc]
