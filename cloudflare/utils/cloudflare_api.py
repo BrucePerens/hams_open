@@ -117,6 +117,7 @@ def _make_request(method, endpoint, token, error_msg, **kwargs):
         return None
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_purge_urls]
 def purge_urls(urls, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_purge_urls_api]
     if not token or not zone_id:
@@ -168,6 +169,7 @@ def purge_tags(tags, token, zone_id):
 
 
 # # Verified by [@ANCHOR: test_cf_ban_ip_api]
+# [@ANCHOR: cloudflare:COMM_cf_api_ban_ip]
 def ban_ip(ip_address, mode, notes, token, zone_id):
     # # Verified by [@ANCHOR: test_cf_ban_ip_api]
     if not token or not zone_id:
@@ -194,6 +196,7 @@ def ban_ip(ip_address, mode, notes, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_unban_ip]
 def unban_ip(rule_id, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_02_cf_action_lift_ban]
     if not token or not zone_id:
@@ -208,6 +211,7 @@ def unban_ip(rule_id, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_verify_turnstile]
 def verify_turnstile(token, remote_ip, secret):
     # # Verified by [@ANCHOR: COMM_test_cf_turnstile_verify]
     if not secret or not token:
@@ -227,6 +231,7 @@ def verify_turnstile(token, remote_ip, secret):
         return False
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_zone_ruleset]
 def get_zone_ruleset(phase, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_03_cf_action_pull_waf_rules]
     if not token or not zone_id:
@@ -243,6 +248,7 @@ def get_zone_ruleset(phase, token, zone_id):
     return None
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_zone_ruleset_checked]
 def get_zone_ruleset_checked(phase, token, zone_id):
     """Like get_zone_ruleset, but tells "there is no ruleset" from "Cloudflare could not be read".
 
@@ -262,6 +268,7 @@ def get_zone_ruleset_checked(phase, token, zone_id):
     return ("ok", result) if isinstance(result, dict) else ("error", "unexpected response")
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_update_zone_ruleset]
 def update_zone_ruleset(ruleset_id, payload, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
     if not token or not zone_id:
@@ -283,6 +290,7 @@ def update_zone_ruleset(ruleset_id, payload, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_create_zone_ruleset]
 def create_zone_ruleset(payload, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_cf_action_push_waf_rules]
     if not token or not zone_id:
@@ -302,6 +310,7 @@ def create_zone_ruleset(payload, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_create_cfd_tunnel]
 def create_cfd_tunnel(account_id, token, tunnel_name):
     # # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
     if not token or not account_id:
@@ -324,6 +333,7 @@ def create_cfd_tunnel(account_id, token, tunnel_name):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_cfd_tunnel_token]
 def get_cfd_tunnel_token(account_id, token, tunnel_id):
     # # Verified by [@ANCHOR: COMM_test_cf_tunnel_setup]
     if not token or not account_id:
@@ -356,6 +366,8 @@ def update_cfd_tunnel_configuration(account_id, token, tunnel_id, payload):
         return True, "Configuration updated successfully."
     return False, "API Error"
 
+
+# [@ANCHOR: cloudflare:COMM_cf_api_purge_everything]
 def purge_everything(token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_purge_everything_logic]
     if not token or not zone_id:
@@ -429,6 +441,7 @@ def _json_result(resp):
     return result if isinstance(result, dict) else None
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_zone_settings]
 def get_zone_settings(token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_zone_settings_tour]
     if not token or not zone_id:
@@ -445,6 +458,7 @@ def get_zone_settings(token, zone_id):
     return None
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_update_zone_setting]
 def update_zone_setting(setting_name, value, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_zone_settings_tour]
     if not token or not zone_id:
@@ -467,6 +481,7 @@ def update_zone_setting(setting_name, value, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_list_cfd_tunnels]
 def list_cfd_tunnels(account_id, token):
     # # Verified by [@ANCHOR: COMM_test_cf_sync_tunnels]
     if not token or not account_id:
@@ -481,6 +496,7 @@ def list_cfd_tunnels(account_id, token):
     return []
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_delete_cfd_tunnel]
 def delete_cfd_tunnel(account_id, token, tunnel_id):
     # # Verified by [@ANCHOR: COMM_test_cf_delete_tunnel]
     if not token or not account_id or not tunnel_id:
@@ -495,6 +511,7 @@ def delete_cfd_tunnel(account_id, token, tunnel_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_create_custom_hostname]
 def create_custom_hostname(hostname, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_03_tunnel_setup]
     if not token or not zone_id or not hostname:
@@ -518,6 +535,7 @@ def create_custom_hostname(hostname, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_custom_hostname]
 def get_custom_hostname(hostname_id, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_04_sync_tunnels]
     if not token or not zone_id or not hostname_id:
@@ -532,6 +550,7 @@ def get_custom_hostname(hostname_id, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_delete_custom_hostname]
 def delete_custom_hostname(hostname_id, token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_05_delete_tunnel]
     if not token or not zone_id or not hostname_id:
