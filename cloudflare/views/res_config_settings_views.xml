@@ -24,9 +24,6 @@
                                     <field name="cloudflare_api_token" password="True" placeholder="Bearer Token..."/>
                                 </div>
                                 <div class="mt8">
-                                    <field name="cloudflare_allow_broad_token"/>
-                                </div>
-                                <div class="mt8">
                                     <field name="cloudflare_zone_id" placeholder="32-character Zone ID..."/>
                                 </div>
                                 <div class="mt8">

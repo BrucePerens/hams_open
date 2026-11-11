@@ -4,7 +4,7 @@ import time
 from odoo import api, models, fields, _
 from odoo.exceptions import UserError
 import logging
-from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token, inspect_token
+from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token
 
 _logger = logging.getLogger(__name__)
 
@@ -21,12 +21,6 @@ class ResConfigSettings(models.TransientModel):
     # (inverse): a settings read over RPC never returns the secret. [@ANCHOR: cloudflare:COMM_settings_masks_secrets]
     cloudflare_api_token = fields.Char(
         compute="_compute_cloudflare_secrets", inverse="_inverse_cloudflare_secrets"
-    )
-    cloudflare_allow_broad_token = fields.Boolean(  # secret-storage-ignore: secret-config-parameter: an on/off switch, not a token
-        string="Allow an over-broad API token",
-        config_parameter="cloudflare.allow_broad_token",
-        help="Off (default): saving a token that can manage API tokens, billing, members or account settings is "
-             "refused, and so is a token Cloudflare cannot introspect. On: it is accepted with a logged warning.",
     )
     cloudflare_zone_id = fields.Char(
         related="website_id.cloudflare_zone_id", readonly=False
@@ -122,42 +116,6 @@ class ResConfigSettings(models.TransientModel):
             if website[name]:
                 res[name] = SECRET_MASK
         return res
-
-    # [@ANCHOR: cloudflare:COMM_settings_check_token_scope]
-    def _check_cloudflare_token_scope(self, vals):
-        """Refuse (unless overridden) a changed token that is broad or that Cloudflare cannot introspect.
-
-        Runs on the values about to be created: Settings' create writes the token to the website at once, so
-        by set_values time the token no longer looks changed.
-        """
-        token = vals.get("cloudflare_api_token")
-        website = (
-            self.env["website"].browse(vals["website_id"])
-            if vals.get("website_id")
-            else self.env["website"].get_current_website()
-        )
-        if not token or token in (SECRET_MASK, website.cloudflare_api_token):
-            return
-        ok, detail = inspect_token(token)
-        if ok and not detail:
-            return
-        if ok:
-            problem = _("This Cloudflare token holds permissions an edge token does not need: %s. "
-                        "Create a token with only the Zone and DNS/Cache/Firewall scopes listed in the "
-                        "module README and remove these.") % ", ".join(detail)
-        else:
-            problem = detail
-        if vals.get("cloudflare_allow_broad_token"):
-            _logger.warning("Cloudflare token accepted by override (cloudflare.allow_broad_token): %s", problem)
-            return
-        raise UserError(problem + " " + _("(Tick 'Allow an over-broad API token' to override.)"))
-
-    # [@ANCHOR: cloudflare:COMM_settings_create]
-    @api.model_create_multi
-    def create(self, vals_list):
-        for vals in vals_list:
-            self._check_cloudflare_token_scope(vals)
-        return super().create(vals_list)
 
     # [@ANCHOR: cloudflare:COMM_settings_set_values]
     def set_values(self):
