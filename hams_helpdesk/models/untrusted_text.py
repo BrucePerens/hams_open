@@ -414,6 +414,18 @@ _NAMED_COLORS = {
     "transparent": None, "inherit": None, "currentcolor": None, "lightgray": (211, 211, 211), "lightgrey": (211, 211, 211),
     "gainsboro": (220, 220, 220), "beige": (245, 245, 220), "lightyellow": (255, 255, 224), "aliceblue": (240, 248, 255),
     "lavender": (230, 230, 250), "navy": (0, 0, 128), "orange": (255, 165, 0), "purple": (128, 0, 128),
+    # The rest of the CSS named colours that are within contrast 1.6 of white or of black (pale ones on a white page, dark ones on a black one).
+    "antiquewhite": (250, 235, 215), "aqua": (0, 255, 255), "aquamarine": (127, 255, 212), "bisque": (255, 228, 196),
+    "blanchedalmond": (255, 235, 205), "chartreuse": (127, 255, 0), "cornsilk": (255, 248, 220),
+    "cyan": (0, 255, 255), "darkblue": (0, 0, 139), "gold": (255, 215, 0), "greenyellow": (173, 255, 47),
+    "honeydew": (240, 255, 240), "khaki": (240, 230, 140), "lavenderblush": (255, 240, 245),
+    "lawngreen": (124, 252, 0), "lemonchiffon": (255, 250, 205), "lightblue": (173, 216, 230),
+    "lightcyan": (224, 255, 255), "lightgoldenrodyellow": (250, 250, 210), "lightgreen": (144, 238, 144),
+    "lime": (0, 255, 0), "mediumspringgreen": (0, 250, 154), "midnightblue": (25, 25, 112),
+    "mistyrose": (255, 228, 225), "moccasin": (255, 228, 181), "navajowhite": (255, 222, 173),
+    "oldlace": (253, 245, 230), "palegoldenrod": (238, 232, 170), "palegreen": (152, 251, 152),
+    "paleturquoise": (175, 238, 238), "papayawhip": (255, 239, 213), "peachpuff": (255, 218, 185),
+    "pink": (255, 192, 203), "powderblue": (176, 224, 230), "springgreen": (0, 255, 127), "wheat": (245, 222, 179),
 }
 
 
