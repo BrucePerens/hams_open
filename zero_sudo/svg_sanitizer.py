@@ -732,8 +732,9 @@ def sanitize_xml_svgs(root):
             if totals.blocks > MAX_TOTAL_SVG_BLOCKS:
                 hostile = True  # an author sending thousands of blocks is not drawing
             # Not validated: drop the block. A foreign-namespace or prefix-games svg is never
-            # an honest drawing, so that counts as hostile too.
-            if svg_local_name(source.tag) != "svg" or ":" in source.tag:
+            # an honest drawing, so that counts as hostile too. (A Clark name of the SVG
+            # namespace holds "http:" and so a colon: over a size cap it is still honest.)
+            if svg_local_name(source.tag) != "svg":
                 hostile = True
             _drop_keeping_tail(source)
             continue
