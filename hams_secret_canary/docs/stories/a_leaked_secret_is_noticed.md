@@ -14,6 +14,8 @@ secret is noticed when it happens and not months later.
    `cloudflare_api_token_old`. Their salted hashes are the registered canaries.
    `[@ANCHOR: hams_secret_canary:post_init_hook]` `[@ANCHOR: hams_secret_canary:plant_canaries]`
    `[@ANCHOR: hams_secret_canary:new_salt]` `[@ANCHOR: hams_secret_canary:make_canary]`
+   The same decoys are also set as environment variables and written to files in the `keys` directory of the data
+   directory. `[@ANCHOR: hams_secret_canary:plant_decoy_file_and_env]`
 2. Code that holds a real secret registers it; only the salted hash is stored.
    `[@ANCHOR: hams_secret_canary:register_secret]` `[@ANCHOR: hams_secret_canary:fingerprint]`
    `[@ANCHOR: hams_secret_canary:is_token]` `[@ANCHOR: hams_secret_canary:load_state]` `[@ANCHOR: hams_secret_canary:store_state]`
