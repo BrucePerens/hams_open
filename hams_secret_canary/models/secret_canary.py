@@ -124,7 +124,7 @@ class SecretCanary(models.AbstractModel):
         alone and not registered."""
         salt, table = self._load_state()
         registered = {label for label, kind in table.values() if kind == detector.KIND_CANARY}
-        params = self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.config_service_internal")["ir.config_parameter"]
+        params = self.env["ir.config_parameter"]  # the installing user: a service account may not read or write these keys
         for label in detector.CANARY_SHAPES:
             key = "%s_old" % label
             if label in registered or params.get_param(key):
@@ -142,7 +142,7 @@ class SecretCanary(models.AbstractModel):
         in the `keys` directory of the Odoo data directory (not replacing one that exists). The values are the canaries
         already registered, so a leak of either is noticed by the same scan. Best effort: a directory or file that
         cannot be written is logged and skipped."""
-        params = self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.config_service_internal")["ir.config_parameter"]
+        params = self.env["ir.config_parameter"]  # the installing user: a service account may not read or write these keys
         directory = os.path.join(config["data_dir"], "keys")
         for label in detector.CANARY_SHAPES:
             value = params.get_param("%s_old" % label)
