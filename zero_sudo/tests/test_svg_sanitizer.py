@@ -429,6 +429,23 @@ class TestSvgAllowlistSanitizerUnit(BaseCase, SafePatchMixin):
             self.assertEqual(text.count("<svg"), 1000)
             self.assertLess(len(text), 8 * len(value) + 100)
 
+    def test_xml_svg_over_a_cap_is_dropped_without_a_hostile_verdict(self):
+        # A drawing in the SVG namespace that only exceeds a cap (here: nested too deep) is
+        # dropped, but its Clark name `{http://www.w3.org/2000/svg}svg` holds a colon, which
+        # used to be read as prefix games and so struck an honest author.
+        deep = "<g>" * 40 + "</g>" * 40
+        honest = etree.fromstring(
+            f'<div><svg xmlns="{svg_sanitizer.SVG_NS}">{deep}</svg></div>'
+        )
+        self.assertFalse(svg_sanitizer.sanitize_xml_svgs(honest))
+        self.assertEqual(len(honest), 0)
+        prefixed = etree.fromstring(
+            f'<div xmlns:x="{svg_sanitizer.SVG_NS}"><x:svg>{deep}</x:svg></div>'
+        )
+        self.assertFalse(svg_sanitizer.sanitize_xml_svgs(prefixed))
+        foreign = etree.fromstring('<div><svg xmlns="urn:other"><g/></svg></div>')
+        self.assertTrue(svg_sanitizer.sanitize_xml_svgs(foreign))
+
 
 @tagged("post_install", "-at_install")
 class TestSvgAllowlistHtmlFields(HamsTransactionCase):
