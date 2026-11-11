@@ -292,3 +292,28 @@ class TestPurgeFailureAlerts(RealTransactionCase):
         self.safe_patch_object(type(self.Queue), "_pager_incidents", lambda model: None)
         self.assertFalse(self.Queue._report_purge_failure(self.website, "x", "high"))
         self.assertFalse(self.Queue._resolve_purge_failure(self.website))
+
+
+@tagged("post_install", "-at_install")
+class TestPurgeResolveAsPurgeAccount(RealTransactionCase):
+    """The cron runs as the purge service account; resolving the pager incident must not need that account to read contacts."""
+
+    def test_01_resolve_posts_the_note_when_the_purge_account_is_the_default_env(self):
+        # Tests [@ANCHOR: cloudflare:COMM_purge_pager_default_env]
+        # Tests [@ANCHOR: cloudflare:COMM_resolve_purge_failure]
+        Queue = self.env["cloudflare.purge.queue"]
+        website = self.env["website"].create({"name": "Purge Resolve Site", "domain": "https://purge-resolve.example"})
+        pager_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
+        incident = self.env["pager.incident"].with_user(pager_uid).create(
+            {"name": "Purge failing", "description": "purges not reaching Cloudflare", "source": "Cloudflare purge queue", "website_id": website.id, "severity": "high"}
+        )
+        purge_env = self.env(user=self.env.ref("cloudflare.user_cloudflare_purge").id)
+        transaction = self.env.transaction
+        previous_default_env = transaction.default_env
+        transaction.default_env = purge_env
+        self.addCleanup(setattr, transaction, "default_env", previous_default_env)
+
+        purge_env["cloudflare.purge.queue"]._resolve_purge_failure(website)
+
+        self.assertEqual(incident.status, "resolved")
+        self.assertIs(transaction.default_env, purge_env, "the purge account is the default env again afterwards")

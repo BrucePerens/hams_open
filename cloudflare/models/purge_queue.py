@@ -2,6 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 import logging
 import time
+from contextlib import contextmanager
 from odoo import models, fields, api
 from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
 
@@ -149,6 +150,25 @@ class CloudflarePurgeQueue(models.Model):
             "pager_duty.user_pager_service_internal"
         )["pager.incident"]
 
+    @staticmethod
+    @contextmanager
+    def _pager_default_env(incidents):
+        # [@ANCHOR: cloudflare:COMM_purge_pager_default_env]
+        """Make the pager service account the transaction's default env while it posts on an incident.
+
+        Odoo 19's Many2many.write_real() re-checks res.partner read on mail.message.partner_ids as
+        transaction.default_env.uid, here the cron's purge account, ignoring the with_user() the pager code
+        uses. The purge account has no business reading contacts, so for the duration of the call the pager
+        service account (which has that read) is the default env, as the RPC dispatcher does for service callers.
+        """
+        transaction = incidents.env.transaction
+        previous = transaction.default_env
+        transaction.default_env = incidents.env
+        try:
+            yield
+        finally:
+            transaction.default_env = previous
+
     @api.model
     def _report_purge_failure(self, website, description, severity):
         # [@ANCHOR: cloudflare:COMM_report_purge_failure]
@@ -156,14 +176,15 @@ class CloudflarePurgeQueue(models.Model):
         incidents = self._pager_incidents()
         if incidents is None:
             return False
-        return incidents.report_incident(
-            {
-                "source": PURGE_INCIDENT_SOURCE,
-                "severity": severity,
-                "description": f"{website.name} (website {website.id}): {description}",
-                "website_id": website.id,
-            }
-        )
+        with self._pager_default_env(incidents):
+            return incidents.report_incident(
+                {
+                    "source": PURGE_INCIDENT_SOURCE,
+                    "severity": severity,
+                    "description": f"{website.name} (website {website.id}): {description}",
+                    "website_id": website.id,
+                }
+            )
 
     @api.model
     def _resolve_purge_failure(self, website):
@@ -172,7 +193,8 @@ class CloudflarePurgeQueue(models.Model):
         incidents = self._pager_incidents()
         if incidents is None:
             return False
-        return incidents.auto_resolve_incidents(PURGE_INCIDENT_SOURCE, website_id=website.id)
+        with self._pager_default_env(incidents):
+            return incidents.auto_resolve_incidents(PURGE_INCIDENT_SOURCE, website_id=website.id)
 
     @api.model
     def requeue_failed(self):
