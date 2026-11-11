@@ -1947,6 +1947,8 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_ts890_engine_scope_frames_dropped] (radioctl-protocols) Bandscope sweeps received and not published.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_decode] (radioctl-protocols) See the source.
 - [@ANCHOR: radioctl:radioctl_ts890_engine_decode_step] (radioctl-protocols) An `RA` or `PA` answer: one digit, the step, mapped by the description.
+- [@ANCHOR: radioctl:radioctl_ts890_engine_antenna_port] (radioctl-protocols) The `AN` antenna digit for a port number, refused when the description lists no such antenna (`levels.antenna_ports`).
+- [@ANCHOR: radioctl:radioctl_ts890_decode_antenna] (radioctl-protocols) An `AN` answer, four digits; the antenna in use is the first (`Level::Antenna`).
 - [@ANCHOR: radioctl:radioctl_ts890_vfo_of] (radioctl-protocols) The VFO named by an `FR`/`FT` digit (`0` is A).
 - [@ANCHOR: radioctl:radioctl_ts890_decode_offset] (radioctl-protocols) The `RF` answer after its name: a direction digit (0 plus, 1 minus) and four digits of hertz.
 - [@ANCHOR: radioctl:radioctl_ts890_decode_level] (radioctl-protocols) A numeric level answer: the command name and its three digits (`AG128`).

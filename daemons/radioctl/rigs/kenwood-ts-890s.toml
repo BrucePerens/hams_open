@@ -32,6 +32,7 @@ spans_hz = [5000, 10000, 25000, 50000, 100000, 200000, 500000]
 attenuator_db = [6, 12, 18]
 attenuator_any_up_to_db = 0
 preamp_steps = 2
+antenna_ports = 2
 
 [timing]
 timeout_ms = 200
@@ -105,6 +106,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "levels.*"
 provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide' (January/30/2019), file ts890_pc_command_en_rev1.pdf, sha256 e106050c990747234bc9bf6d5b5ca7619ebebdb0ce6f36fe3009a1304e37ea77: RA (Attenuator) PDF p. 57: P1 0 OFF, 1 6 dB, 2 12 dB, 3 18 dB; PA (Pre-amplifier) PDF p. 52: P1 0 OFF, 1 PRE 1, 2 PRE 2" }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.antenna_ports"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC CONTROL COMMAND Reference Guide', file ts890_pc_command_e.pdf, sha256 47aaa1031686d02f229456321fd018e8b53666819016aeb1e19531877cb64ae7: AN (Antenna Selection) PDF p. 5, printed p. 47: P1 1 ANT1, 2 ANT2" }
 verified = { state = "unverified" }
 
 [[facts]]

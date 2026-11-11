@@ -79,7 +79,7 @@ pub fn level_wire(level: Level) -> LevelWire {
         Level::Preamp => ("PA", 0, 0),
         // Receiver-board levels with no Elecraft command; the empty prefix matches no reply and the
         // encoder refuses both before it asks for a wire form.
-        Level::Dither | Level::Preselector => ("", 0, 0),
+        Level::Dither | Level::Preselector | Level::Antenna => ("", 0, 0),
     };
     LevelWire { prefix, min, max }
 }
@@ -300,8 +300,8 @@ impl ElecraftEngine {
                 }
                 Self::set(format!("BW{:04};", hz.0 / 10))
             }
-            Op::GetLevel(Level::Dither | Level::Preselector)
-            | Op::SetLevel(Level::Dither | Level::Preselector, _) => {
+            Op::GetLevel(Level::Dither | Level::Preselector | Level::Antenna)
+            | Op::SetLevel(Level::Dither | Level::Preselector | Level::Antenna, _) => {
                 return Err(Self::unsupported("no such level on this rig"));
             }
             Op::SetLevel(level @ (Level::Attenuator | Level::Preamp), value) => {

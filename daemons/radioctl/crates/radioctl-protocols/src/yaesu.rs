@@ -70,7 +70,8 @@ fn level_wire(level: Level) -> Option<LevelWire> {
         | Level::Attenuator
         | Level::Preamp
         | Level::Dither
-        | Level::Preselector => return None,
+        | Level::Preselector
+        | Level::Antenna => return None,
     };
     Some(LevelWire {
         name,
