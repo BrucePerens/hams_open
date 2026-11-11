@@ -21,6 +21,7 @@ from . import test_member_menu_item
 from . import test_member_manual
 from . import test_exception_tickets
 from . import test_missing_params
+from . import test_untrusted_text_hsl_colours
 from . import test_exception_reporter_key
 from . import test_browser_exceptions
 from . import test_relay_exceptions
