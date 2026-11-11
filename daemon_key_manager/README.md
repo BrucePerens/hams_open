@@ -232,3 +232,70 @@ exists, not that Odoo answers a revoked key with 401 for every endpoint; the ful
 * **unauthorized_access**: Zero-sudo barriers blocking non-system service accounts from escalating permissions are verified by [@ANCHOR: COMM_test_unauthorized_access].
 
 * **key_ownership**: Finally, proper multi-tenant key isolation is checked and verified by [@ANCHOR: COMM_test_key_ownership].
+
+## Function reference (ADR 0113): key lifetime and minting helpers (`models/key_registry.py`)
+
+The constants used below: `KEY_LIFETIME_DAYS = 90` (the default key life), `MAX_KEY_LIFETIME_DAYS = 400` and `ROTATION_AGE_DAYS = 59` (a default key is due for rotation 59 days after it was issued, 31 days before it expires).
+
+### `[@ANCHOR: daemon_key_manager:check_key_lifetime_days]` `DaemonKeyRegistry._check_key_lifetime_days()`
+
+**Purpose.** The `@api.constrains("key_lifetime_days", "remote_self_rotation")` check that keeps the per-registry Key Lifetime field honest. Odoo runs it on create and on write of either field; nobody calls it directly.
+
+No arguments; it checks every record in `self` and returns nothing. A record whose `key_lifetime_days` is 0 (the default) always passes. Otherwise it raises `ValidationError` when the registry is not a Remote Self-Rotation registry ("Key Lifetime can only be set on a Remote Self-Rotation registry.") or when the value is outside `KEY_LIFETIME_DAYS` to `MAX_KEY_LIFETIME_DAYS` inclusive, that is 90 to 400 days (so 89, 401 and negative values are refused). **Special concerns.** Pure validation: no writes, no SQL, no side effects; it does not touch an existing key (`action_apply_key_lifetime` does that).
+
+**See also.** `test_key_lifetime_is_only_for_a_remote_row_and_within_range` in `tests/test_remote_self_rotation.py`.
+
+### `[@ANCHOR: daemon_key_manager:lifetime_days]` `DaemonKeyRegistry._lifetime_days()`
+
+**Purpose.** The number of days a key minted for this registry lives. Used when a key is minted (`_mint_key`), when the long-lived group is needed (`_ensure_usage_group`), when a key is extended (`action_apply_key_lifetime`) and to derive the rotation age (`_rotation_age_days`).
+
+Argument: none beyond `self`, which must be exactly one record (`ensure_one`, otherwise `ValueError`). Returns `int`: `key_lifetime_days` when it is set (non-zero), else `KEY_LIFETIME_DAYS` (90). **Special concerns.** Pure read, no side effects, safe to retry. It does not validate the field; `_check_key_lifetime_days` does that at write time.
+
+**See also.** `test_key_lifetime_is_only_for_a_remote_row_and_within_range` in `tests/test_remote_self_rotation.py`.
+
+### `[@ANCHOR: daemon_key_manager:rotation_age_days]` `DaemonKeyRegistry._rotation_age_days()`
+
+**Purpose.** How old, in days, a remote daemon's key may get before it is due for rotation: the key's lifetime minus 31 days (`KEY_LIFETIME_DAYS - ROTATION_AGE_DAYS`), so a daemon always has a month to rotate before expiry. `_issue_remote_rotation` (step 1 of `rotate_own_key`) compares the time since `last_rotated` with it and answers `not_due` when the key is younger.
+
+Argument: none beyond `self`, exactly one record (`ensure_one`). Returns `int`: 59 for the default 90-day lifetime, 334 for 365 days. **Special concerns.** Pure arithmetic on `_lifetime_days()`; no side effects.
+
+**See also.** `test_key_lifetime_is_only_for_a_remote_row_and_within_range` in `tests/test_remote_self_rotation.py`.
+
+### `[@ANCHOR: daemon_key_manager:ensure_usage_group]` `DaemonKeyRegistry._ensure_usage_group(user)`
+
+**Purpose.** Makes sure a daemon service account holds the groups whose API-key duration allows the keys minted for it: `group_daemon_key_usage` (90 days), and `group_daemon_key_usage_long` when the registry's lifetime is longer than 90 days. A module upgrade replaces each service account's group set with a static list that never named these groups, so without this a later rotation fails with "You cannot exceed 1.0 days". It is called at the start of every rotation (`_rotate_key_and_write_file`, `_issue_remote_rotation`) and by `action_apply_key_lifetime`, so every path heals the membership.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `user` | `res.users` record | The service account to put in the group(s). Borrowed; its group cache is invalidated when a group is added. |
+| returns | `None` | Nothing. |
+
+**Special concerns.** Writes by a direct `INSERT ... ON CONFLICT DO NOTHING` into `res_groups_users_rel` (through `_grant_usage_group`) because granting a group through the ORM would need the Settings administrator group, which this service account must not have (zero-sudo rule); it also clears the registry cache. Idempotent and safe to retry: a user already in the group is left alone, and a missing group record (a partly installed module) is skipped. It runs inside the caller's transaction.
+
+**See also.** `test_action_rotate_key_self_heals_a_service_account_missing_the_usage_group` in `tests/test_key_registry.py`.
+
+### `[@ANCHOR: daemon_key_manager:mint_key]` `DaemonKeyRegistry._mint_key(key_name)`
+
+**Purpose.** Creates one new API key of the registry's service account. It is the single place a key is generated, shared by the local rotation (`_rotate_key_and_write_file`, which `register_daemon`, `action_rotate_key` and the nightly cron all use) and the remote self-rotation (`_issue_remote_rotation`).
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `key_name` | `str` | The name stored on the `res.users.apikeys` row; rotation uses `<registry name>_key`, which is how older keys are found and revoked. |
+| returns | `str` | The raw key. It exists only in this return value (Odoo stores a hash), so the caller must place it in the key file or the reply and never log it. |
+
+Argument `self`: exactly one record (`ensure_one`). The key expires `_lifetime_days()` days from now (`fields.Datetime.now()` plus that many days). **Special concerns.** It generates as the service account itself (`with_user(user_id)`), because Odoo limits an API key's life by the groups of the account that owns it; the account must already be in the usage group(s) (`_ensure_usage_group`), otherwise Odoo raises `ValidationError` ("You cannot exceed ..."). It adds a row but revokes nothing: removing older keys is the caller's job. Not idempotent: each call makes another valid key.
+
+**See also.** `test_a_year_long_lifetime_extends_the_held_key_and_mints_year_long_keys` in `tests/test_remote_self_rotation.py`.
+
+### `[@ANCHOR: daemon_key_manager:own_key_row_id]` `DaemonKeyRegistry._own_key_row_id(raw_key)`
+
+**Purpose.** Finds which `res.users.apikeys` row a raw key string is. The key's hash and index are not ORM fields, so the check is SQL. `rotate_own_key` uses it to confirm that the key a remote daemon presented belongs to this registry, and `_issue_remote_rotation` uses it to remember the freshly minted key as `pending_key_id`.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `raw_key` | `str` | The key as the daemon holds it; only its first `INDEX_SIZE` characters (the stored index) go into the query, never the whole key. |
+| returns | `int` or `None` | The row id of the live key of this account named `<registry name>_key` whose hash matches `raw_key` (`KEY_CRYPT_CONTEXT.verify`), or `None` when no such unexpired key exists. |
+
+Argument `self`: exactly one record (`ensure_one`). **Special concerns.** Read-only SQL on `res_users_apikeys`; rows with a past expiry date are ignored. The key is compared only by hash and is not logged. Safe to retry.
+
+**See also.** `test_two_phase_rotation_revokes_nothing_until_the_new_key_is_proven` in `tests/test_remote_self_rotation.py`.

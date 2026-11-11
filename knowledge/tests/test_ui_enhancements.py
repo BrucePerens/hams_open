@@ -45,6 +45,7 @@ class TestManualUIEnhancements(HamsTransactionCase):
         )
 
     def test_01b_body_snippet_is_a_truncated_plain_text_preview(self):
+        # Tests [@ANCHOR: knowledge:plain_text_preview]
         # Tests [@ANCHOR: knowledge:COMM_compute_body_snippet]
         long_word_run = "word " * 100
         article = self.env["knowledge.article"].create(

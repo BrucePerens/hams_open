@@ -210,3 +210,75 @@ Errors: `IndexError` for an empty list (callers have already checked `cmd[0]` wi
 include an argument in the result.
 
 **See also.** `test_describe_command_gives_the_program_and_an_argument_count_only` in `daemon/test_main.py`.
+
+### `[@ANCHOR: backup_management:kopia_config_file]` `_kopia_config_file(config_id)`
+
+**Purpose.** The backup worker serves many `backup.config` records, each possibly pointing at a different bucket with different credentials. Kopia keeps one global default config, which would make every job run against whichever bucket the previous job connected to, so each config gets its own kopia config file. This returns that file's path; for an S3 or B2 config `execute_job` passes it to kopia as `KOPIA_CONFIG_PATH` and as the config file of the repository connect-or-create step (`daemon/main.py`).
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `config_id` | `int` | The id of the `backup.config` the job belongs to. |
+| returns | `str` | `<_KOPIA_CONFIG_DIR>/config_<config_id>.config`. `_KOPIA_CONFIG_DIR` is `BACKUP_WORKER_KOPIA_CONFIG_DIR` from the environment, default `/var/lib/odoo/backups/.kopia-configs`. |
+
+Errors: none raised. **Special concerns.** Pure: it builds a string, touches no file and takes no lock, so it is safe to call repeatedly; the directory and the file are created later by kopia. The id is an integer from the job payload, never a user-supplied path fragment.
+
+**See also.** `test_01_kopia_s3_job_connects_before_snapshot_and_hides_secrets` in `daemon/test_main.py`.
+
+### `[@ANCHOR: backup_management:worker_run]` `run()`
+
+**Purpose.** The entry point of the backup worker service (`backup.worker.service`). It runs `main()` inside `reporting_failures("backup.worker.service")` so that an uncaught exception is sent to the exception tickets and then raised again; the process still dies and systemd (`Restart=always`, then `OnFailure=`) still sees the failure. Called from the `__main__` block of `daemon/main.py`, after the `--start-test` smoke test has been handled.
+
+No arguments and no return value: it returns only when `main()` returns, which it does not under normal operation (it consumes the queue forever). Errors: whatever `main()` raises is raised again unchanged after being reported; `SystemExit` from a stop signal is not reported. **Special concerns.** Blocking for the life of the process. When the reporting helper `exception_reporter.py` has not been deployed to the host, the import falls back to a plain pass-through and the daemon still runs and still raises. The report carries the unit name and a journal tail with addresses removed; no argument or secret is added by this function.
+
+**See also.** `test_an_uncaught_exception_is_reported_with_the_unit_name_and_raised_again`, `test_a_stop_signal_is_not_reported` and `test_without_the_helper_the_daemon_still_runs_and_still_raises` in `daemon/test_main.py`.
+
+### `[@ANCHOR: backup_management:pgbackrest_sidecar_main]` `main()` (`daemon/pgbackrest_sidecar.py`)
+
+**Purpose.** The privileged pgBackRest sidecar is started by `hams-pgbackrest-backup.path` whenever a request file appears in the spool directory. `main()` is its whole run: it makes sure the spool directory exists, lists every `request-*.json` file in it in sorted order, and hands each to `_process_one`. It handles all pending files, not only the one that triggered the unit, because several may have queued while an earlier run was busy, and then exits (the unit is `Type=oneshot`).
+
+No arguments, no return value. The spool directory is `PGBACKREST_SPOOL_DIR` (default `/opt/hams/backup_requests`). Errors: a failure inside one request is handled by `_process_one` (it writes a `failed-<job>.json` file) and does not stop the others; `os.makedirs` can raise `OSError` when the directory cannot be created, which ends the run with a traceback. **Special concerns.** Runs as root, unsandboxed by design; each request is validated by `_process_one` before the privileged `runuser` call, and pgBackRest itself never runs as root. Not re-entrant: a second instance would race on the same request files, which the `.path` unit avoids by not starting a second oneshot while one runs.
+
+**See also.** `test_drains_every_queued_request` in `daemon/test_pgbackrest_sidecar.py`.
+
+### `[@ANCHOR: backup_management:get_fernet]` `BackupConfig._get_fernet()`
+
+**Purpose.** Gives the encryption helper the key that protects the Kopia password and the storage secret key stored on a `backup.config`. Used by `_crypt_field` and so by every compute and inverse of the encrypted fields.
+
+| Item | Meaning |
+| --- | --- |
+| arguments | none beyond `self`; it does not read the record. |
+| returns | A `cryptography.fernet.Fernet` built from the environment variable `ODOO_BACKUP_CRYPTO_KEY`, or when that is empty `HAMS_CRYPTO_KEY`; `None` when neither is set. |
+| raises | `ValueError` when the key is set but is not a valid Fernet key (32 url-safe base64 bytes). |
+
+**Special concerns.** Reads the process environment on every call (no caching), so a changed key takes effect at once. The key is never logged or stored. A `None` result means no key is configured; `_crypt_field` then refuses to store the secret instead of saving it in the clear. Pure apart from the environment read; safe to retry.
+
+**See also.** `test_kopia_password_round_trips_through_real_encryption` and `test_no_crypto_key_configured_raises_rather_than_silently_discarding` in `tests/test_backup_crypto.py`.
+
+### `[@ANCHOR: backup_management:get_executable]` `BackupConfig._get_executable(engine)`
+
+**Purpose.** Finds the backup program for an engine, and for Kopia installs it when it is missing. No production code path calls it today: the only caller is the test, and the worker daemon does its own `shutil.which` check in `execute_job` without asking Odoo. It stays as the documented way to resolve a backup binary from Odoo code.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `engine` | `str` | `"kopia"` or `"pgbackrest"`. |
+| returns | `str` | The full path of the binary: `shutil.which(engine)` when it is on `PATH`, otherwise, for Kopia only, the path returned by `binary.manifest.ensure_executable("kopia")`. |
+
+Errors: `UserError` when `pgbackrest` is missing (it needs OS packages and is never downloaded; the message tells the administrator to use the package manager) and `UserError("Unknown engine")` for any other engine that is not on `PATH`. **Special concerns.** Blocking and with side effects when Kopia is missing: it posts two chatter messages as the backup service account (`user_backup_service_internal`, never the caller) and downloads the binary through `binary_downloader` under that account with `active_test=False`. Retrying after a success finds the binary on `PATH` and does nothing further. The worker daemon performs its own `shutil.which` check and does not call this method.
+
+**See also.** `test_08d_kopia_auto_download` in `tests/test_backup.py`.
+
+### `[@ANCHOR: backup_management:publish_to_rabbitmq]` `publish_to_rabbitmq(env, msg, job_id=None, svc_uid=None)`
+
+**Purpose.** Sends one backup or restore task to the `backup_tasks` queue through the shared `hams_rabbitmq.pool`. Called by `backup.config` (when a backup is triggered) and by the restore wizard. The pool reports success as soon as the send is queued for after the commit, so on its own it cannot say whether the broker took the message; with a job id this function turns a failed send into a failed job instead of a job that stays "pending" forever.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `env` | `odoo.api.Environment` | Used for the pool and, for the failure callback, the registry. Borrowed. |
+| `msg` | `str` | The JSON task body, passed through unchanged. |
+| `job_id` | `int` or `None` | The `backup.job` this message starts. With `svc_uid` it enables the failure callback. |
+| `svc_uid` | `int` or `None` | A service user allowed to write that job; the callback runs as this user. |
+| returns | `None` | Nothing. |
+
+Errors: none escape. A publish exception is logged with its traceback; when a callback exists it is then called with `False`, and an error inside that callback is logged too. **Special concerns.** The real send happens after the transaction commits; the callback opens its own cursor from `env.registry` (the originating transaction is over by then) and calls `backup.job._mark_dispatch_failed()`. It does not retry; a failed send leaves a failed job for the administrator to see and trigger again.
+
+**See also.** `test_01_no_channel_marks_the_job_failed` in `tests/test_backup_publish_failure.py`.

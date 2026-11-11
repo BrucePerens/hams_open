@@ -242,6 +242,7 @@ class TestMainProcessesEveryPendingRequest(unittest.TestCase):
 
     @patch("pgbackrest_sidecar.subprocess.run")
     def test_drains_every_queued_request(self, mock_run):
+        # Tests [@ANCHOR: backup_management:pgbackrest_sidecar_main]
         mock_run.return_value = MagicMock(returncode=0, stdout="ok")
         for job_id in ("10", "11", "12"):
             with open(os.path.join(self._tmpdir, f"request-{job_id}.json"), "w") as f:
