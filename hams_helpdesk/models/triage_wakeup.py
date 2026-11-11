@@ -42,6 +42,7 @@ MAX_SPOOL_FILES = 500
 _WAKEUP_NAME_RE = re.compile(r"^ticket-\d+\.json\Z")
 
 
+# [@ANCHOR: hams_helpdesk:triage_spool_dir]
 def spool_dir():
     return os.environ.get(SPOOL_DIR_ENV) or DEFAULT_SPOOL_DIR
 

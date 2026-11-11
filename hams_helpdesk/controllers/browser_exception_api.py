@@ -38,6 +38,7 @@ _logger = logging.getLogger("hams_helpdesk.exception_reporter")
 ROUTE = "/hams_helpdesk/browser_exception"
 
 
+# [@ANCHOR: hams_helpdesk:browser_answer]
 def _answer(status):
     """A body-less answer that no cache keeps."""
     return http.Response("", status=status, headers=[("Cache-Control", "no-store")])

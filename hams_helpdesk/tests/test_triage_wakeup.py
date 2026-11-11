@@ -91,6 +91,7 @@ class TestTriageWakeup(HamsTransactionCase):
         self.assertEqual(self._files(), [])  # nothing published, no half-written file left behind
 
     def test_04_a_failure_to_even_schedule_it_never_breaks_ticket_creation(self):
+        # Tests [@ANCHOR: hams_helpdesk:ticket_schedule_triage_wakeup]
         ticket = self.Ticket.create({"name": "Created before the hook breaks"})
         # Broken only after the create: other Odoo code legitimately uses the same registry.
         self.safe_patch_object(type(self.env.cr.postcommit), "add", side_effect=RuntimeError("no hook"))
@@ -149,6 +150,13 @@ class TestTriageWakeup(HamsTransactionCase):
     def test_12_a_non_integer_id_is_refused_without_raising(self):
         self.assertEqual(triage_wakeup.write_triage_wakeups(["../../etc/passwd"]), 0)
         self.assertEqual(self._files(), [])
+
+    def test_13a_spool_dir_is_the_environment_override_else_the_default(self):
+        # Tests [@ANCHOR: hams_helpdesk:triage_spool_dir]
+        self.assertEqual(triage_wakeup.spool_dir(), self.spool)
+        with patch.dict(os.environ):
+            os.environ.pop(triage_wakeup.SPOOL_DIR_ENV)
+            self.assertEqual(triage_wakeup.spool_dir(), triage_wakeup.DEFAULT_SPOOL_DIR)
 
     def test_13_the_default_spool_directory_is_the_one_the_path_unit_watches(self):
         self.assertEqual(triage_wakeup.DEFAULT_SPOOL_DIR, "/opt/hams/spool/ticket_triage")

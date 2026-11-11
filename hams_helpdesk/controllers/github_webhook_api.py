@@ -42,6 +42,7 @@ _DEPENDABOT_ACTIONABLE_ACTIONS = {"created", "reopened"}
 _DEPENDABOT_HIGH_PRIORITY_SEVERITIES = {"high", "critical"}
 
 
+# [@ANCHOR: hams_helpdesk:github_verify_signature]
 def _verify_github_signature(raw_body, secret, signature_header):
     """Verifies GitHub's own ``X-Hub-Signature-256`` header: ``sha256=<hex hmac>`` of the raw
     request body, keyed by the shared webhook secret (GitHub's own documented scheme -- see
