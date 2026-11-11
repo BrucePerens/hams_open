@@ -808,6 +808,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_core_meter_from_name] (radioctl-core) The raw meter with a file-format name.
 - [@ANCHOR: radioctl:radioctl_core_powermeter_cal] (radioctl-core) The calibration, `None` when the points do not form one.
 - [@ANCHOR: radioctl:radioctl_core_elecraft_level_range] (radioctl-core) The per-model `(min, max)` wire range of an Elecraft level from the description's `[elecraft] levels`, `None` when the K3 range applies.
+- [@ANCHOR: radioctl:radioctl_core_yaesu_level_range] (radioctl-core) The per-model `(min, max)` wire range of a Yaesu newcat level from the description's `[yaesu] levels`, `None` when the engine's default range applies.
 - [@ANCHOR: radioctl:radioctl_power_from_watts] (radioctl-core) Power from a figure in watts; `None` for a negative, infinite or not-a-number figure.
 - [@ANCHOR: radioctl:radioctl_power_from_dbm] (radioctl-core) Power from decibels relative to one milliwatt: `P = 10^((dBm - 30) / 10)` watts.
 - [@ANCHOR: radioctl:radioctl_power_from_dbw] (radioctl-core) Power from decibels relative to one watt.
@@ -828,6 +829,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_power_format] (radioctl-core) The text for a power: three significant digits, a fixed decimals rule per unit, dashes when unknown.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_power_meter] (radioctl-core) Validates the optional `[power_meter]` calibration block of a rig file.
 - [@ANCHOR: radioctl:radioctl_core_rigfile_build_elecraft] (radioctl-core) Validates the `[elecraft]` block: the model id and the optional per-model `levels` table (`level-name = [min, max]`, numeric levels only, `min <= max <= 999`). `parse` refuses an Elecraft description that claims the levels capability without an `rf-power` range: no default power range stands in for the model's own.
+- [@ANCHOR: radioctl:radioctl_core_rigfile_build_level_ranges] (radioctl-core) Validates a family block's `levels` table (`elecraft.levels`, `yaesu.levels`): each key names a numeric level and each value is `[min, max]` with `min <= max <= 999`.
 - [@ANCHOR: radioctl:radioctld_meter_cal_power_fraction] (radioctld) The uncalibrated output power as a 0 to 1 fraction of the meter's raw scale.
 - [@ANCHOR: radioctl:radioctld_meter_cal_power_fraction_cal] (radioctld) The output power as a fraction of the calibrated full scale (the last calibration point).
 - [@ANCHOR: radioctl:radioctld_service_power_raw] (radioctld) The engine's raw power reading in the family's own scale (CI-V deflection, Yaesu `RM5`, Elecraft `PO`).
@@ -1877,6 +1879,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_move_offset] (radioctl-protocols) RU/RD: moves the clarifier offset by four digits of hertz; refuses beyond 9999 Hz.
 - [@ANCHOR: radioctl:radioctl_virtual_yaesu_level] (radioctl-protocols) A newcat level read or set (AG0, RG0, MG, PC, KS), refusing values outside the guides' ranges.
 - [@ANCHOR: radioctl:radioctl_yaesu_level_wire] (radioctl-protocols) The wire form and range of a level for the newcat family.
+- [@ANCHOR: radioctl:radioctl_yaesu_level_range] (radioctl-protocols) The `(min, max)` of a level on the described newcat model: the description's `[yaesu] levels` range where it gives one (FT-891 RG 0-30; MG and PC 0-255 on the FT-450, FTDX5000 and FTDX9000; MG 0-255 on the FT-450D), else the default of `level_wire`. All from the CAT books, unverified.
 - [@ANCHOR: radioctl:radioctl_yaesu_decode_level] (radioctl-protocols) A newcat level answer (command name and digits).
 - [@ANCHOR: radioctl:radioctl_yaesu_parse_clarifier] (radioctl-protocols) The clarifier offset in the five characters of IF P3: a sign and four digits.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_new] (radioctl-protocols) Builds a newcat engine from a yaesu-newcat description.

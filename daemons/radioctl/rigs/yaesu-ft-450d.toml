@@ -3,9 +3,9 @@
 # Written from Yaesu's published Yaesu 'FT-450D CAT Operation Reference Book' (document, PDF page and sha256 in each fact), with Hamlib 4.6.2 as a cross-check.
 # Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
 # Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
-# Gaps and open questions: No split (FT here selects the displayed or opposite band, not VFO A or B), no XIT (the guide has no XT), no read-power (RM 5 is not PO here), no levels (MG is split into L/M/H sub-ranges of 000-255, not 0-100). Details: crates/radioctl-protocols/src/yaesu.rs.
+# Gaps and open questions: No split (FT here selects the displayed or opposite band, not VFO A or B), no XIT (the guide has no XT), no read-power (RM 5 is not PO here), levels (MG is 000-255 in L/M/H sub-ranges, not 0-100; the other four match the engine's ranges). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "levels", "identify"]
 
 [rig]
 id = "yaesu-ft-450d"
@@ -15,6 +15,7 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 244
 frequency_digits = 8
+levels = { mic-gain = [0, 255] }
 
 [timing]
 timeout_ms = 2000
@@ -92,7 +93,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "manual", reference = "Yaesu 'FT-450D CAT Operation Reference Book' (Copyright 2017), file FT-450D_CAT_OM_ENG_1710-B.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-450D_CAT_OM_ENG_1710-B.pdf, sha256 b2f6ce2107171e1bd097bbe911335059fcb7c493ea6b0d28b7f948d31b629f27: ID p. 10, FA p. 10, FB p. 10, IF p. 10, MD p. 12, TX p. 16, SM p. 15, AI p. 5", note = "The guide's command pages. No split (FT here selects the displayed or opposite band, not VFO A or B), no XIT (the guide has no XT), no read-power (RM 5 is not PO here), no levels (MG is split into L/M/H sub-ranges of 000-255, not 0-100)." }
+provenance = { kind = "manual", reference = "Yaesu 'FT-450D CAT Operation Reference Book' (Copyright 2017), file FT-450D_CAT_OM_ENG_1710-B.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-450D_CAT_OM_ENG_1710-B.pdf, sha256 b2f6ce2107171e1bd097bbe911335059fcb7c493ea6b0d28b7f948d31b629f27: ID p. 10, FA p. 10, FB p. 10, IF p. 10, MD p. 12, TX p. 16, SM p. 15, AI p. 5", note = "The guide's command pages. No split (FT here selects the displayed or opposite band, not VFO A or B), no XIT (the guide has no XT), no read-power (RM 5 is not PO here), levels (MG is 000-255 in L/M/H sub-ranges, not 0-100; the other four match the engine's ranges)." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -103,4 +104,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu 'FT-450D CAT Operation Reference Book' (Copyright 2017), file FT-450D_CAT_OM_ENG_1710-B.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-450D_CAT_OM_ENG_1710-B.pdf, sha256 b2f6ce2107171e1bd097bbe911335059fcb7c493ea6b0d28b7f948d31b629f27: MD, PDF p. 12: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA (RTTY-LSB), 7 CW-R, 8 USER-L, 9 DATA (RTTY-USB), C USER-U", note = "Mapping to radioctl modes is ours: 6 is rtty, 9 is rtty-r, 8 (USER-L) is data-r and C (USER-U) is data." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.levels"
+provenance = { kind = "manual", reference = "Yaesu 'FT-450D CAT Operation Reference Book' (Copyright 2017), file FT-450D_CAT_OM_ENG_1710-B.pdf, sha256 b2f6ce2107171e1bd097bbe911335059fcb7c493ea6b0d28b7f948d31b629f27: AG p. 5, KS p. 11, MG p. 12, PC p. 13, RG p. 14", note = "AG P2 and RG P2 000-255, MG 000-255 (L 000-085, M 086-170, H 171-255), PC 005-100, KS 004-060 WPM; only MG differs from the engine's default ranges. Where this block is silent the engine's default range applies." }
 verified = { state = "unverified" }

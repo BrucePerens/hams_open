@@ -33,6 +33,7 @@ use crate::civ_scope::{ScopeAnswer, ScopeSim, SCOPE_CMD, SUB_WAVEFORM};
 use crate::elecraft;
 use crate::kenwood::{self, Token, Tokenizer};
 use crate::receiver::VirtualReceiver;
+use crate::yaesu;
 use crate::yaesu_legacy as legacy;
 
 /// Signal level a fresh virtual rig reports (the simulator's raw 30).
@@ -214,6 +215,7 @@ impl VirtualRig {
                 params: desc.yaesu.clone().unwrap_or(YaesuParams {
                     model_id: 0,
                     frequency_digits: 9,
+                    level_ranges: Vec::new(),
                 }),
                 tokenizer: Tokenizer::default(),
             },
@@ -1289,13 +1291,14 @@ impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_yaesu_level]
     /// A newcat level command: `AG`/`RG` carry a leading `0`; the others are three digits.
     fn yaesu_level(&mut self, name: &str, arg: &str) -> Option<String> {
-        let (level, leading_zero, min, max) = match name {
-            "AG" => (Level::AfGain, true, 0, 255),
-            "RG" => (Level::RfGain, true, 0, 255),
-            "MG" => (Level::MicGain, false, 0, 100),
-            "KS" => (Level::KeyerSpeed, false, 4, 60),
-            _ => (Level::RfPower, false, 5, 100),
+        let (level, leading_zero) = match name {
+            "AG" => (Level::AfGain, true),
+            "RG" => (Level::RfGain, true),
+            "MG" => (Level::MicGain, false),
+            "KS" => (Level::KeyerSpeed, false),
+            _ => (Level::RfPower, false),
         };
+        let (min, max) = yaesu::level_range(&self.desc, level).unwrap_or((0, 0));
         let reading = if leading_zero {
             arg == "0"
         } else {
