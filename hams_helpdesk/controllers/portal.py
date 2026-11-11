@@ -52,6 +52,7 @@ class HelpdeskPortal(CustomerPortal):
         auth="user",
         website=True,
     )
+    # [@ANCHOR: hams_helpdesk:portal_my_tickets]
     def portal_my_tickets(self, page=1, **kw):
         # Verified by [@ANCHOR: test_06_multi_website_awareness_logic]
         values = self._prepare_portal_layout_values()

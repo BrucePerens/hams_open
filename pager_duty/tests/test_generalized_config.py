@@ -266,12 +266,14 @@ class TestGeneralizedConfig(HamsTransactionCase):
         """A check deleted by a migration or a shell, not the Push button, used to stay in pager_config.json and keep paging
         (the retired QRZ Scraper check, incident 39)."""
         # Tests [@ANCHOR: pager_duty:pager_check_unlink]
+        # Tests [@ANCHOR: pager_duty:schedule_config_export]
         check = self.env["pager.check"].create({"name": "Retired Check", "check_type": "system", "target": "cpu"})
         self.assertEqual(self._auto_export_calls(check.unlink), 1)
 
     def test_09_creating_and_configuring_a_check_rewrites_the_config_once(self):
         # Tests [@ANCHOR: pager_duty:pager_check_create]
         # Tests [@ANCHOR: pager_duty:pager_check_write]
+        # Tests [@ANCHOR: pager_duty:schedule_config_export]
         Check = self.env["pager.check"]
 
         def change():
@@ -297,6 +299,7 @@ class TestGeneralizedConfig(HamsTransactionCase):
 
     def test_11_a_failing_export_does_not_break_the_committed_change(self):
         # Tests [@ANCHOR: pager_duty:pager_check_unlink]
+        # Tests [@ANCHOR: pager_duty:schedule_config_export]
         check = self.env["pager.check"].create({"name": "Export Fails", "check_type": "system", "target": "cpu"})
         self.safe_patch_object(type(check), "action_push_to_json", side_effect=OSError("disk full"))
         self.env.cr.postcommit.run()

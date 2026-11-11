@@ -88,6 +88,70 @@ const SCOPE_OUTPUT_ON: u8 = 2;
 /// The `DD1` value the engine sets to turn the filter-scope output on: LAN (the guide's only LAN
 /// choice, p. 17); `##DD3` is sent only with it.
 const FILTER_SCOPE_OUTPUT_ON: u8 = 1;
+/// `DD0` for a serial link: output to COM/USB with AI linked (guide p. 17), so `DD2` splits follow
+/// the AI the engine already turns on. `DD0` 5 (`DD4`, AI not linked) is not used: the guide says the
+/// connector then cannot use AI, which the engine needs.
+const SCOPE_OUTPUT_SERIAL: u8 = 4;
+/// `DD1` for a serial link: output to COM/USB (guide p. 17).
+const FILTER_SCOPE_OUTPUT_SERIAL: u8 = 2;
+/// Serial `DD2` frames per sweep (split 00 to 31), each 20 samples, so 640 in all.
+const DD2_SPLITS: u8 = 32;
+/// Serial `DD3` frames per sweep (split 00 to 11), 19 samples each except the last, whose first
+/// four samples (digits 1 to 8) are the right edge: 213 in all.
+const DD3_SPLITS: u8 = 12;
+/// Digits in a serial `DD2` split and a `DD3` split.
+const DD2_SPLIT_DIGITS: usize = 40;
+const DD3_SPLIT_DIGITS: usize = 38;
+/// Digits of the last `DD3` split that carry samples.
+const DD3_LAST_DIGITS: usize = 8;
+
+/// A serial scope sweep arriving in splits: the digits so far and the split expected next.
+#[derive(Debug, Default)]
+struct Splits {
+    next: u8,
+    digits: String,
+    /// A split of this sweep was bad and counted; the rest of the sweep is skipped without counting.
+    broken: bool,
+}
+
+impl Splits {
+    // [@ANCHOR: radioctl_ts890_splits_push]
+    /// Adds split `index` (`payload` is its digits). `Err` (once per sweep) when the split is out of
+    /// order or its payload is the wrong size (the sweep so far is discarded); `Ok(Some(digits))`
+    /// when `index` is the last split, with the whole sweep; `Ok(None)` while more are due or the
+    /// rest of a broken sweep is being skipped.
+    fn push(
+        &mut self,
+        index: u8,
+        payload: &str,
+        splits: u8,
+        split_digits: usize,
+        last_digits: usize,
+    ) -> Result<Option<String>, ()> {
+        if index == 0 {
+            self.next = 0;
+            self.digits.clear();
+            self.broken = false;
+        }
+        if self.broken {
+            return Ok(None);
+        }
+        let last = index + 1 == splits;
+        let want = if last { last_digits } else { split_digits };
+        if index != self.next || !payload.is_ascii() || payload.len() != split_digits {
+            self.digits.clear();
+            self.broken = true;
+            return Err(());
+        }
+        self.digits.push_str(&payload[..want]);
+        self.next = index + 1;
+        if last {
+            self.next = 0;
+            return Ok(Some(std::mem::take(&mut self.digits)));
+        }
+        Ok(None)
+    }
+}
 
 /// How a level is written: the command and the guide's range.
 struct LevelWire {
@@ -109,7 +173,8 @@ fn level_wire(level: Level) -> Option<LevelWire> {
         | Level::Attenuator
         | Level::Preamp
         | Level::Dither
-        | Level::Preselector => return None,
+        | Level::Preselector
+        | Level::Antenna => return None,
     };
     Some(LevelWire { name, min, max })
 }
@@ -172,6 +237,9 @@ pub struct Ts890Engine {
     scope_output: bool,
     /// What the frame edges are computed from.
     scope: ScopeContext,
+    /// Serial `DD2` and `DD3` sweeps being assembled.
+    dd2: Splits,
+    dd3: Splits,
 }
 
 /// What a `##DD2` frame (which has no frequency) is placed with.
@@ -214,6 +282,8 @@ impl Ts890Engine {
             transceive: false,
             scope_output: false,
             scope: ScopeContext::default(),
+            dd2: Splits::default(),
+            dd3: Splits::default(),
         })
     }
 
@@ -282,6 +352,7 @@ impl Ts890Engine {
             (Some("RT"), Some(v @ ("0" | "1"))) => Some(Observation::Rit(v == "1")),
             (Some("XT"), Some(v @ ("0" | "1"))) => Some(Observation::Xit(v == "1")),
             (Some("RF"), Some(d)) if d.len() == 5 => decode_offset(d),
+            (Some("AN"), Some(d)) => decode_antenna(d),
             (Some("RA"), Some(d)) => self.decode_step(Level::Attenuator, d),
             (Some("PA"), Some(d)) => self.decode_step(Level::Preamp, d),
             (Some(name), Some(d)) => decode_level(name, d),
@@ -291,6 +362,15 @@ impl Ts890Engine {
             Some(value) => Inbound::Observation(value),
             None => Inbound::Unrecognised(format!("{text};").into_bytes()),
         }
+    }
+
+    // [@ANCHOR: radioctl_ts890_engine_antenna_port]
+    /// `port` as the digit `AN` takes, refused when the description lists no such antenna.
+    fn antenna_port(&self, port: u16) -> Result<u8, RigError> {
+        u8::try_from(port)
+            .ok()
+            .filter(|p| *p >= 1 && *p <= self.desc.levels.antenna_ports.min(2))
+            .ok_or_else(|| Self::unsupported("no such antenna port on this model"))
     }
 
     // [@ANCHOR: radioctl_ts890_engine_decode_step]
@@ -636,8 +716,55 @@ impl Ts890Engine {
     /// The commands that turn the waveform output on: first read what the frames are placed from
     /// (`FA`, `FB`, `FR`, `BS3`, `BS4`, `BSO`, `BSM`; the answers update the engine's copies as they arrive), then
     /// `DD0` and `DD1` (the bandscope and the filter scope are switched separately). Nothing here transmits.
-    fn scope_start() -> String {
-        format!("FA;FB;FR;BS3;BS4;BSO;BSM;DD0{SCOPE_OUTPUT_ON};DD1{FILTER_SCOPE_OUTPUT_ON};")
+    fn scope_start(&self) -> String {
+        let (dd0, dd1) = if self.serial_scope() {
+            (SCOPE_OUTPUT_SERIAL, FILTER_SCOPE_OUTPUT_SERIAL)
+        } else {
+            (SCOPE_OUTPUT_ON, FILTER_SCOPE_OUTPUT_ON)
+        };
+        format!("FA;FB;FR;BS3;BS4;BSO;BSM;DD0{dd0};DD1{dd1};")
+    }
+
+    // [@ANCHOR: radioctl_ts890_engine_serial_scope]
+    /// True when the description says the scopes come over the serial link (`scope_link = "serial"`).
+    fn serial_scope(&self) -> bool {
+        self.desc.kenwood.as_ref().is_some_and(|k| k.scope_serial)
+    }
+
+    // [@ANCHOR: radioctl_ts890_engine_serial_split]
+    /// A serial `DD2` or `DD3` split (`DD2` + two-digit split number + digits, no `;`): the sweep when
+    /// this is the last split, nothing while more are due, and a count in `dropped` for a malformed or
+    /// out-of-order split.
+    fn serial_split(&mut self, text: &str) -> Option<Inbound> {
+        let is_dd2 = text.starts_with("DD2");
+        let (splits, split_digits, last_digits) = if is_dd2 {
+            (DD2_SPLITS, DD2_SPLIT_DIGITS, DD2_SPLIT_DIGITS)
+        } else {
+            (DD3_SPLITS, DD3_SPLIT_DIGITS, DD3_LAST_DIGITS)
+        };
+        let index = text
+            .get(3..5)
+            .and_then(parse_digits)
+            .and_then(|v| u8::try_from(v).ok())
+            .filter(|v| *v < splits);
+        let assembly = if is_dd2 { &mut self.dd2 } else { &mut self.dd3 };
+        let pushed = match (index, text.get(5..)) {
+            (Some(index), Some(payload)) => {
+                assembly.push(index, payload, splits, split_digits, last_digits)
+            }
+            _ => Err(()),
+        };
+        match pushed {
+            Ok(None) => None,
+            Ok(Some(body)) if is_dd2 => self.scope_frame(&body).map(Inbound::ScopeFrame),
+            Ok(Some(body)) => self
+                .filter_scope_frame(&body)
+                .map(Inbound::FilterScopeFrame),
+            Err(()) => {
+                self.scope.dropped += 1;
+                None
+            }
+        }
     }
 }
 
@@ -726,6 +853,16 @@ impl ProtocolEngine for Ts890Engine {
                 };
                 Self::command(format!("{name}{step};"), none)
             }
+            // `AN` (guide p. 47): P1 is the antenna, 1 or 2; the other three parameters are sent as 9,
+            // "no change". The answer carries all four.
+            Op::GetLevel(Level::Antenna) => {
+                self.antenna_port(1)?;
+                Self::command("AN;".into(), observe(Field::Level(Level::Antenna)))
+            }
+            Op::SetLevel(Level::Antenna, port) => {
+                let port = self.antenna_port(*port)?;
+                Self::command(format!("AN{port}999;"), none)
+            }
             Op::GetLevel(level) => {
                 let wire = level_wire(*level)
                     .ok_or_else(|| Self::unsupported("level not implemented for the TS-890S"))?;
@@ -758,7 +895,7 @@ impl ProtocolEngine for Ts890Engine {
             Op::SetScopeOutput(on) => {
                 self.scope_output = *on;
                 let text = if *on {
-                    Self::scope_start()
+                    self.scope_start()
                 } else {
                     "DD00;DD10;".to_string()
                 };
@@ -852,6 +989,8 @@ impl ProtocolEngine for Ts890Engine {
                         out.extend(self.scope_frame(body).map(Inbound::ScopeFrame));
                     } else if let Some(body) = text.strip_prefix("##DD3") {
                         out.extend(self.filter_scope_frame(body).map(Inbound::FilterScopeFrame));
+                    } else if text.starts_with("DD2") || text.starts_with("DD3") {
+                        out.extend(self.serial_split(&text));
                     } else if text == "BSD" {
                         // The rig's confirmation that the waterfall was cleared (sent with auto
                         // information on): nothing to report.
@@ -889,5 +1028,19 @@ impl ProtocolEngine for Ts890Engine {
             requests.extend(self.encode(&Op::SetScopeOutput(true)).ok());
         }
         requests
+    }
+}
+
+// [@ANCHOR: radioctl_ts890_decode_antenna]
+/// An `AN` answer, `P1 P2 P3 P4` as four digits (guide p. 47): the antenna in use is P1, 1 or 2.
+fn decode_antenna(digits: &str) -> Option<Observation> {
+    let bytes = digits.as_bytes();
+    if bytes.len() != 4 || !bytes.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    match bytes[0] {
+        b'1' => Some(Observation::Level(Level::Antenna, 1)),
+        b'2' => Some(Observation::Level(Level::Antenna, 2)),
+        _ => None,
     }
 }

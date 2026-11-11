@@ -191,3 +191,26 @@ class TestHamsS3B2KeyScope(HamsTransactionCase):
         self._save(secret='********')
         self._save(secret='')
         check.assert_not_called()
+
+@tagged('post_install', '-at_install')
+class TestHamsS3CanaryRegistration(HamsTransactionCase):
+    """A newly saved S3 secret key is registered with the optional secret canary when it is installed."""
+
+    def _save(self, secret):
+        self.env['res.config.settings'].create({'hams_s3_aws_secret_access_key': secret}).set_values()
+
+    def test_a_saved_secret_key_is_registered_and_the_mask_is_not(self):
+        if 'hams.secret.canary' not in self.env:
+            return  # optional addon not installed in this database
+        secret = 'Qw8Zk39dQ7mPq2LxV8nTb4RcY6aHjUe5Wg1XyZ0A'
+        self._save(secret)
+        with self.assertLogs('hams_secret_canary.alarm', 'CRITICAL') as logs:
+            self.env['hams.secret.canary']._scan_text('<p>%s</p>' % secret, 'response', '/x')
+        self.assertNotIn(secret, logs.output[0])
+        self._save('********')
+        with self.assertNoLogs('hams_secret_canary.alarm', 'CRITICAL'):
+            self.env['hams.secret.canary']._scan_text('<p>********</p>', 'response', '/x')
+
+    def test_an_unusable_value_never_fails_the_save(self):
+        self._save('short')
+        self._save('')

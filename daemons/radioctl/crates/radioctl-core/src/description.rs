@@ -547,6 +547,9 @@ pub struct KenwoodParams {
     pub dialect: KenwoodDialect,
     /// The model's `KY` (send CW text) record; `None` where the description does not record one.
     pub ky: Option<KyParams>,
+    /// TS-890S only: the bandscope and filter scope come over the serial (COM/USB) link as split
+    /// `DD2`/`DD3` frames (`scope_link = "serial"`) rather than as LAN `##DD2`/`##DD3` frames.
+    pub scope_serial: bool,
 }
 
 /// Which command set a Kenwood handheld or mobile speaks.
@@ -673,6 +676,8 @@ pub struct LevelParams {
     pub attenuator_any_up_to_db: u8,
     /// How many preamplifier steps above off the model has (0 for none).
     pub preamp_steps: u8,
+    /// How many antenna connectors the rig itself selects between (0 for none, or no known command).
+    pub antenna_ports: u8,
     /// Levels (of the plain `14` family: AF, RF, microphone, monitor, keyer, power) the model's
     /// command table does not have; the CI-V engine and virtual rig refuse them. Empty means the
     /// model has them all, which is what a description without `levels.absent` states.
@@ -1156,6 +1161,7 @@ impl RigDescription {
                 model_id: 19,
                 dialect: KenwoodDialect::Classic,
                 ky: None,
+                scope_serial: false,
             }),
             elecraft: None,
             yaesu: None,

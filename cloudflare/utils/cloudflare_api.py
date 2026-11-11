@@ -446,6 +446,7 @@ def _json_body(resp):
     return body if isinstance(body, dict) else None
 
 
+# [@ANCHOR: cloudflare:COMM_dns_api_json_result_kind]
 def _json_result(resp, kind=dict):
     """The `result` of a Cloudflare JSON answer, or None when the body is not JSON or its result is not a `kind`
     (an object by default; a list or a string for the calls that return those)."""

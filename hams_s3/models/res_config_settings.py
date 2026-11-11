@@ -101,6 +101,7 @@ class ResConfigSettings(models.TransientModel):
         # [@ANCHOR: hams_s3_set_values]
         self._check_b2_key_scope()
         super(ResConfigSettings, self).set_values()
+        self._register_s3_secret_with_canary()
         if self.hams_s3_use_s3 and 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
             env_svc = self._get_s3_service_env()
             backend = env_svc['storage.backend'].search(
@@ -145,3 +146,16 @@ class ResConfigSettings(models.TransientModel):
             _logger.warning("Backblaze key accepted by override (hams_s3.allow_broad_b2_key): %s", problem)
             return
         raise UserError(problem + " " + _("(Set the system parameter hams_s3.allow_broad_b2_key to True to override.)"))
+
+    def _register_s3_secret_with_canary(self):
+        """When the optional `hams_secret_canary` addon is installed, registers the fingerprint of a newly entered S3
+        secret key so that its appearance in a response or a log line raises an alarm. Only a salted hash is kept.
+        An unchanged (masked) or empty value, or one that is not a single token, is skipped: saving never fails
+        because of the canary."""
+        secret = self.hams_s3_aws_secret_access_key
+        if "hams.secret.canary" not in self.env or secret in (SECRET_MASK, False, ''):
+            return
+        try:
+            self.env["hams.secret.canary"]._register_secret("hams_s3_aws_secret_access_key", secret)
+        except ValueError as error:
+            _logger.warning("Not registered with the secret canary: %s", error)

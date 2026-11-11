@@ -409,6 +409,7 @@ class PagerIncident(models.Model):
         )
         return trend_incident.id
 
+    # [@ANCHOR: pager_duty:joins_unit_tickets]
     @api.model
     def _joins_unit_tickets(self):
         """True when Helpdesk integration is the stock hams_helpdesk ticket, the only model that
@@ -418,6 +419,7 @@ class PagerIncident(models.Model):
         )
         return target == "hams_helpdesk.ticket"
 
+    # [@ANCHOR: pager_duty:note_unit_tickets]
     def _note_unit_tickets(self, incident, unit_tickets):
         """Says on the incident which per-unit ticket(s) carry it."""
         mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(

@@ -157,6 +157,7 @@ _KOPIA_CONFIG_DIR = os.environ.get(
 )
 
 
+# [@ANCHOR: backup_management:kopia_config_file]
 def _kopia_config_file(config_id):
     return os.path.join(_KOPIA_CONFIG_DIR, f"config_{config_id}.config")
 
@@ -1055,6 +1056,7 @@ def main():
             time.sleep(5)  # audit-ignore-sleep: [@ANCHOR: backup_management:COMM_audit_ignore_sleep_4]
 
 
+# [@ANCHOR: backup_management:worker_run]
 def run():
     """main(), with an uncaught exception reported to the exception tickets and then raised again, so the
     process still dies and systemd (Restart=always, then OnFailure=) still sees it."""

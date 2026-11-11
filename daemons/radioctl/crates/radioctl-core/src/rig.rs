@@ -49,7 +49,7 @@ use crate::scope::{FilterScopeFrame, ScopeFrame};
 use crate::serial::LinkStatus;
 use crate::transport::Transport;
 use crate::txstate::TxState;
-use crate::units::{Hz, Mode, Vfo};
+use crate::units::{Hz, Level, Mode, Vfo};
 
 mod easy;
 pub use easy::TransmitLease;
@@ -1501,6 +1501,20 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         }
         if op.transmits() {
             self.require_known_tx_frequency()?;
+        }
+        // An antenna change moves the RF path: refused while the rig is known keyed. Some rigs
+        // (the TS-890S) cannot be asked for PTT, so an unknown state is left to the caller, which
+        // owns the station interlock (DESIGN decision 19; the relay refuses an unknown state too).
+        if matches!(op, Op::SetLevel(Level::Antenna, _))
+            && matches!(
+                guard(&self.shared.cache).get(&Field::Ptt).map(|e| e.value),
+                Some(Observation::Ptt(true))
+            )
+        {
+            return Err(self.error(
+                ErrorKind::Unsupported,
+                "the antenna is not changed while the rig is keyed",
+            ));
         }
         if let Some(steps) = self.engine.encode_lines(op)? {
             return self.run_line_steps(op, &steps, deadline, source).await;

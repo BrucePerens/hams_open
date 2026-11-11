@@ -31,12 +31,14 @@ class TenantSiteOwnHost(models.Model):
             raise ValidationError(self.env._("'%s' is not a valid hostname or pattern.", vals["name"]))
         vals["name"] = normalized
 
+    # [@ANCHOR: tenant_sites:own_host_create]
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
             self._normalize_vals(vals)
         return super().create(vals_list)
 
+    # [@ANCHOR: tenant_sites:own_host_write]
     def write(self, vals):
         self._normalize_vals(vals)
         return super().write(vals)

@@ -54,12 +54,14 @@ class TenantSite(models.Model):
         sites._apply_public_layout()
         return sites
 
+    # [@ANCHOR: tenant_sites:site_write]
     def write(self, vals):
         result = super().write(vals)
         self.env.registry.clear_cache('assets')
         self.env.registry.clear_cache()
         return result
 
+    # [@ANCHOR: tenant_sites:site_unlink]
     def unlink(self):
         result = super().unlink()
         self.env.registry.clear_cache('assets')
@@ -117,6 +119,7 @@ class TenantSite(models.Model):
         stock_dirs = {os.path.realpath(config.addons_base_dir), os.path.realpath(config.addons_community_dir)}
         return os.path.dirname(os.path.realpath(path)) in stock_dirs
 
+    # [@ANCHOR: tenant_sites:site_service_env]
     @api.model
     def _service_env(self):
         return self.env["tenant.site.host"]._service_env()
@@ -141,6 +144,7 @@ class TenantSite(models.Model):
             limit=100000,
         )
 
+    # [@ANCHOR: tenant_sites:hide_foreign_layout_views]
     def _hide_foreign_layout_views(self):
         for site in self:
             wid = site.website_id.id

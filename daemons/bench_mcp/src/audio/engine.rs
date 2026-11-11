@@ -160,6 +160,19 @@ impl Drop for Recorder {
     }
 }
 
+/// The `pw-play` command line of one playback. `bench_audio_safe_state` finds these by `PLAY_SIGNATURE`.
+fn play_command(node: &str, path: &Path, stream_volume: f64) -> Command {
+    let mut c = Command::new("pw-play");
+    c.arg("-P")
+        .arg(NO_FALLBACK)
+        .arg("--target")
+        .arg(node)
+        .arg("--volume")
+        .arg(format!("{stream_volume:.3}"))
+        .arg(path);
+    c
+}
+
 /// A `pw-play` process playing one file.
 pub struct Playing {
     child: Child,
@@ -170,14 +183,7 @@ impl Playing {
     /// Starts playing `path` on `node` with the stream volume `stream_volume` (1.0 leaves the file's own level).
     pub fn start(node: &str, path: &Path, stream_volume: f64) -> Result<Playing, String> {
         // [@ANCHOR: bench_mcp_audio_engine_playing_start]
-        let child = Command::new("pw-play")
-            .arg("-P")
-            .arg(NO_FALLBACK)
-            .arg("--target")
-            .arg(node)
-            .arg("--volume")
-            .arg(format!("{stream_volume:.3}"))
-            .arg(path)
+        let child = play_command(node, path, stream_volume)
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .stdin(Stdio::null())
@@ -256,6 +262,18 @@ mod tests {
             "{e}"
         );
         assert_eq!(rec.len(), 0);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_engine_playing_start]
+    #[test]
+    fn a_playback_command_line_starts_with_the_signature_that_safe_state_stops() {
+        let c = play_command("node-x", Path::new("/tmp/a.wav"), 0.5);
+        let line = std::iter::once(c.get_program())
+            .chain(c.get_args())
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(line.starts_with(PLAY_SIGNATURE), "{line}");
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_engine_playing_drop]

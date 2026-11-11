@@ -353,6 +353,7 @@ class DaemonKeyRegistry(models.Model):
         return count
 
     @api.constrains("key_lifetime_days", "remote_self_rotation")
+    # [@ANCHOR: daemon_key_manager:check_key_lifetime_days]
     def _check_key_lifetime_days(self):
         for registry in self:
             days = registry.key_lifetime_days
@@ -368,11 +369,13 @@ class DaemonKeyRegistry(models.Model):
                     % {"low": KEY_LIFETIME_DAYS, "high": MAX_KEY_LIFETIME_DAYS}
                 )
 
+    # [@ANCHOR: daemon_key_manager:lifetime_days]
     def _lifetime_days(self):
         """Days a key minted for this registry lives."""
         self.ensure_one()
         return self.key_lifetime_days or KEY_LIFETIME_DAYS
 
+    # [@ANCHOR: daemon_key_manager:rotation_age_days]
     def _rotation_age_days(self):
         """Days after which a remote daemon's key is due for rotation: 31 days before it expires."""
         self.ensure_one()
@@ -416,6 +419,7 @@ class DaemonKeyRegistry(models.Model):
             )
         return extended
 
+    # [@ANCHOR: daemon_key_manager:ensure_usage_group]
     def _ensure_usage_group(self, user):
         """
         Grants `group_daemon_key_usage` (the 90-day API-key-duration group) to `user`
@@ -690,6 +694,7 @@ class DaemonKeyRegistry(models.Model):
             return registry._confirm_remote_rotation(current_key)
         return registry._issue_remote_rotation()
 
+    # [@ANCHOR: daemon_key_manager:own_key_row_id]
     def _own_key_row_id(self, raw_key):
         """
         Id of the live res.users.apikeys row of this registry that `raw_key` is, or
@@ -851,6 +856,7 @@ class DaemonKeyRegistry(models.Model):
             "Successfully rotated and exported API key for daemon: %s", self.name
         )
 
+    # [@ANCHOR: daemon_key_manager:mint_key]
     def _mint_key(self, key_name):
         """Generates a key named `key_name` for this registry's account, living `_lifetime_days()` days."""
         self.ensure_one()

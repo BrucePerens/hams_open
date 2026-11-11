@@ -560,6 +560,7 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         popen_env = mock_popen.call_args.kwargs["env"]
         self.assertEqual(popen_env["AWS_ACCESS_KEY_ID"], "AKIAFAKEKEY")
         self.assertEqual(popen_env["AWS_SECRET_ACCESS_KEY"], "fakesecretvalue")
+        # Tests [@ANCHOR: backup_management:kopia_config_file]
         self.assertEqual(
             popen_env["KOPIA_CONFIG_PATH"],
             backup_worker._kopia_config_file(42),
@@ -891,6 +892,7 @@ class TestRunReportsFailures(unittest.TestCase):
         return module
 
     def test_an_uncaught_exception_is_reported_with_the_unit_name_and_raised_again(self):
+        # Tests [@ANCHOR: backup_management:worker_run]
         helper = self._real_helper()
         helper._LAST_REPORT.clear()
         sent = []

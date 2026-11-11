@@ -40,6 +40,8 @@ fn observed(inbound: Vec<Inbound>) -> Observation {
 // Tests [@ANCHOR: radioctl_ts890_engine_feed]
 // Tests [@ANCHOR: radioctl_ts890_engine_decode]
 // Tests [@ANCHOR: radioctl_ts890_engine_decode_step]
+// Tests [@ANCHOR: radioctl_ts890_engine_antenna_port]
+// Tests [@ANCHOR: radioctl_ts890_decode_antenna]
 // Tests [@ANCHOR: radioctl_ts890_vfo_of]
 // Tests [@ANCHOR: radioctl_ts890_decode_offset]
 // Tests [@ANCHOR: radioctl_ts890_decode_level]
@@ -118,6 +120,8 @@ fn the_engine_and_the_virtual_ts890_agree_on_every_operation() {
         (Level::RfPower, 5),
         (Level::Attenuator, 18),
         (Level::Preamp, 1),
+        (Level::Antenna, 2),
+        (Level::Antenna, 1),
     ] {
         exchange(&mut engine, &mut rig, Op::SetLevel(level, value));
         assert_eq!(
@@ -149,6 +153,8 @@ fn refusals_never_reach_the_wire_and_the_rig_refuses_what_it_does_not_know() {
         Op::GetLevel(Level::MonitorLevel),
         Op::SetLevel(Level::Attenuator, 7),
         Op::SetLevel(Level::Preamp, 3),
+        Op::SetLevel(Level::Antenna, 0),
+        Op::SetLevel(Level::Antenna, 3),
         Op::SetRitOffset(10_000),
         Op::SetFrequency(Vfo::A, Hz(100_000_000_000)),
         Op::SetMode(Mode::Wfm),
@@ -164,6 +170,8 @@ fn refusals_never_reach_the_wire_and_the_rig_refuses_what_it_does_not_know() {
         b"AG0128;",
         b"KS003;",
         b"RA9;",
+        b"AN3999;",
+        b"AN199;",
         b"TB2;",
         b"OM0Z;",
     ] {

@@ -43,7 +43,16 @@ class TestLoginCaseInsensitive(HamsTransactionCase):
         found = self.env["res.users"].search(self.env["res.users"]._get_login_domain("CASE_TEST@EXAMPLE.COM"))
         self.assertEqual(found, user)
 
+    def test_normalize_login_strips_and_lowercases_a_string_and_passes_anything_else_through(self):
+        # Tests [@ANCHOR: hams_base:res_users_normalize_login]
+        normalize = self.env["res.users"]._normalize_login
+        self.assertEqual(normalize("  N2YCH@iCloud.COM \n"), "n2ych@icloud.com")
+        self.assertEqual(normalize(""), "")
+        for not_text in (None, False, 5):
+            self.assertIs(normalize(not_text), not_text)
+
     def test_create_and_write_store_lowercase_login(self):
+        # Tests [@ANCHOR: hams_base:res_users_create]
         user = self._make_user("Upper_Case@Example.com")
         self.assertEqual(user.login, "upper_case@example.com")
         user.write({"login": " Other_Case@Example.COM "})

@@ -191,6 +191,7 @@ class TestTenantSitesHttp(HamsHttpCase):
     # [@ANCHOR: tenant_sites:COMM_test_site_hides_foreign_layout]
     def test_a_tenant_site_gets_the_plain_layout_without_other_authors_additions(self):
         # Tests [@ANCHOR: tenant_sites:COMM_apply_public_layout]
+        # Tests [@ANCHOR: tenant_sites:hide_foreign_layout_views]
         # Tests [@ANCHOR: tenant_sites:COMM_foreign_modules]
         # Tests [@ANCHOR: tenant_sites:COMM_foreign_layout_views]
         # Tests [@ANCHOR: tenant_sites:COMM_asset_addons]
@@ -296,6 +297,7 @@ class TestTenantSitesHttp(HamsHttpCase):
     # [@ANCHOR: tenant_sites:COMM_test_classify]
     def test_forged_forwarded_host_is_rejected(self):
         # Tests [@ANCHOR: tenant_sites:COMM_classify]
+        # Tests [@ANCHOR: tenant_sites:compute_kind]
         # Odoo's proxy_mode replaces Host by X-Forwarded-Host; the router uses the Host the client sent
         # and refuses a request where the two differ. (On the live site the cloudflare module also
         # drops the header from every request that carries Cloudflare's own headers.)
@@ -317,6 +319,7 @@ class TestTenantSitesHttp(HamsHttpCase):
     # [@ANCHOR: tenant_sites:COMM_test_post_dispatch]
     def test_unknown_hosts_get_an_uncached_404_with_no_cookie(self):
         # Tests [@ANCHOR: tenant_sites:COMM_serve_fallback]
+        # Tests [@ANCHOR: tenant_sites:compute_kind]
         # Tests [@ANCHOR: tenant_sites:COMM_serve_other]
         # Tests [@ANCHOR: tenant_sites:COMM_plain_response]
         # Tests [@ANCHOR: tenant_sites:COMM_post_dispatch]

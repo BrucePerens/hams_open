@@ -157,6 +157,7 @@ def postgres_notify_handler(connection, pid, channel, payload):
     task.add_done_callback(_background_tasks.discard)
 
 
+# [@ANCHOR: distributed_redis_cache:cache_manager_main]
 async def main():
     global redis_client
     logger.info("Initializing Distributed Cache Manager Daemon...")

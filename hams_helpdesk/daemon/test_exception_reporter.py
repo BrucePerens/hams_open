@@ -109,6 +109,61 @@ class PostReportErrorClassTests(unittest.TestCase):
         self.assertNotIn("odoo:8069", str(self.post(urllib.error.URLError(ConnectionRefusedError()))))
 
 
+class MainTests(unittest.TestCase):
+    # Tests [@ANCHOR: hams_helpdesk:daemon_main]
+    def run_main(self, argv, **patches):
+        err = io.StringIO()
+        out = io.StringIO()
+        with mock.patch.object(er, "report_unit", **patches) as report, redirect_stderr(err), \
+                mock.patch("sys.stdout", out):
+            code = er.main(argv)
+        return code, report, out.getvalue(), err.getvalue()
+
+    def test_report_unit_reports_the_named_unit_and_exits_zero(self):
+        code, report, out, _err = self.run_main(["report-unit", "club.crawl.service"], return_value={"recorded": True})
+        self.assertEqual(code, 0)
+        report.assert_called_once_with("club.crawl.service")
+        self.assertIn('{"recorded": true}', out)
+
+    def test_a_delivery_failure_exits_one_and_says_only_the_error(self):
+        code, _report, _out, err = self.run_main(["report-unit", "a.service"], side_effect=er.ReportError("Odoo answered HTTP 403"))
+        self.assertEqual(code, 1)
+        self.assertIn("Odoo answered HTTP 403", err)
+
+    def test_wrong_arguments_print_usage_and_exit_two(self):
+        for argv in ([], ["report-unit"], ["other", "a.service"], ["report-unit", "a", "b"]):
+            code, report, _out, err = self.run_main(argv)
+            self.assertEqual(code, 2, argv)
+            self.assertIn("usage:", err)
+            report.assert_not_called()
+
+
+class ReportingFailuresTests(unittest.TestCase):
+    # Tests [@ANCHOR: hams_helpdesk:daemon_reporting_failures_init]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_reporting_failures_enter]
+    # Tests [@ANCHOR: hams_helpdesk:daemon_reporting_failures_exit]
+    def test_an_exception_is_reported_once_and_propagates_unchanged(self):
+        guard = er.reporting_failures("club.crawl.service", key_file="/nope")
+        self.assertEqual((guard.daemon_name, guard.options), ("club.crawl.service", {"key_file": "/nope"}))
+        with mock.patch.object(er, "report_exception") as report:
+            with self.assertRaises(KeyError):
+                with guard as entered:
+                    self.assertIs(entered, guard)
+                    raise KeyError("x")
+        report.assert_called_once()
+        self.assertEqual(report.call_args[0][0], "club.crawl.service")
+        self.assertEqual(report.call_args[1], {"key_file": "/nope"})
+
+    def test_a_stop_signal_and_a_clean_exit_report_nothing(self):
+        with mock.patch.object(er, "report_exception") as report:
+            with er.reporting_failures("a.service"):
+                pass
+            with self.assertRaises(SystemExit):
+                with er.reporting_failures("a.service"):
+                    raise SystemExit(0)
+        report.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
 

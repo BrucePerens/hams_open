@@ -34,6 +34,8 @@ from . import test_secret_broker
 from . import test_tdd_fixes
 from . import test_views
 from . import test_facility
+from . import test_harness_setup_classes
+from . import test_ir_module_doc_helpers
 from . import test_controllers
 from . import test_offline_store_hoot
 from . import test_tour_abort_gate
@@ -42,6 +44,7 @@ from . import test_confirm_submit_csp
 from . import svg_corpus
 from . import test_svg_sanitizer
 from . import test_css_sanitizer
+from . import test_sanitizer_functions
 from . import common
 from . import dummy_daemon
 

@@ -158,6 +158,7 @@ _BLOCKED_CONTEXT = frozenset(
 )
 
 
+# [@ANCHOR: zero_sudo:svg_check_enum]
 def _check_enum(name):
     allowed = _ENUMS[name]
 
@@ -173,6 +174,7 @@ def _check_enum(name):
 SCALAR_LIMIT = 120
 
 
+# [@ANCHOR: zero_sudo:svg_check_regex]
 def _check_regex(regex, limit=SCALAR_LIMIT):
     def check(value):
         stripped = value.strip()
@@ -183,6 +185,7 @@ def _check_regex(regex, limit=SCALAR_LIMIT):
     return check
 
 
+# [@ANCHOR: zero_sudo:svg_paint]
 def _paint(value):
     stripped = value.strip()
     if len(stripped) > 2 * SCALAR_LIMIT or not _RE_PAINT.fullmatch(stripped):
@@ -195,6 +198,7 @@ def _paint(value):
     return stripped
 
 
+# [@ANCHOR: zero_sudo:svg_url_ref]
 def _url_ref(value):
     if len(value) > 2 * SCALAR_LIMIT:
         return None
@@ -205,6 +209,7 @@ def _url_ref(value):
     return f"url(#{ref.group(1)})" if ref else "none"
 
 
+# [@ANCHOR: zero_sudo:svg_viewbox]
 def _viewbox(value):
     if len(value) > 2 * SCALAR_LIMIT:
         return None
@@ -228,6 +233,7 @@ _CLOBBERING_IDS = frozenset(
 )
 
 
+# [@ANCHOR: zero_sudo:svg_safe_id]
 def _safe_id(value):
     stripped = value.strip()
     if len(stripped) > SCALAR_LIMIT or not _RE_ID.fullmatch(stripped):
@@ -243,6 +249,7 @@ def _safe_id(value):
 _ARIA_KEPT = {"aria-label", "aria-hidden", "aria-roledescription"}
 
 
+# [@ANCHOR: zero_sudo:svg_aria]
 def _aria(value):
     return value if _RE_ARIA_VALUE.fullmatch(value) else None
 
@@ -315,6 +322,7 @@ _RE_SVG_SIZE = re.compile(r"(\d{1,5}(?:\.\d{1,3})?)(px|em|rem|%)?")
 _RE_COLOUR_ONLY = re.compile(_COLOR)
 
 
+# [@ANCHOR: zero_sudo:svg_small_margin]
 def _small_margin(value):
     """A non-negative margin of at most 99px, or 9em/rem: spacing, never overlap."""
     match = _RE_SMALL_MARGIN.fullmatch(value.strip())
@@ -324,6 +332,7 @@ def _small_margin(value):
     return value.strip() if float(match.group(1)) <= limit else None
 
 
+# [@ANCHOR: zero_sudo:svg_size]
 def _svg_size(value):
     """width/height on an <svg>: `auto`, at most 100%, 4000px or 250em."""
     stripped = value.strip()
@@ -354,22 +363,26 @@ MAX_TOTAL_SVG_BYTES = 1024 * 1024
 
 
 class _CallTotals:
+    # [@ANCHOR: zero_sudo:svg_call_totals_init]
     def __init__(self):
         self.blocks = 0
         self.size = 0
 
 
 class _Budget:
+    # [@ANCHOR: zero_sudo:svg_budget_init]
     def __init__(self, totals=None):
         self.elements = 0
         self.size = 0
         self.totals = totals
 
+    # [@ANCHOR: zero_sudo:svg_budget_element]
     def element(self):
         self.elements += 1
         if self.elements > MAX_SVG_ELEMENTS:
             raise _Rejected("too many elements")
 
+    # [@ANCHOR: zero_sudo:svg_budget_spend]
     def spend(self, amount):
         self.size += amount
         if self.size > MAX_SVG_BYTES:
@@ -380,6 +393,7 @@ class _Budget:
                 raise _Rejected("too much SVG in one value")
 
 
+# [@ANCHOR: zero_sudo:svg_clean_style]
 def _clean_style(value):
     if len(value) > 2000 or "/*" in value or "@" in value or "\\" in value:
         return None
@@ -401,6 +415,7 @@ def _clean_style(value):
     return ";".join(declarations) or None
 
 
+# [@ANCHOR: zero_sudo:svg_clean_attribute]
 def _clean_attribute(name, value):
     """Return (canonical name, cleaned value) or None when not allowed."""
     if not isinstance(name, str) or not isinstance(value, str):
@@ -422,6 +437,7 @@ def _clean_attribute(name, value):
     return canonical, cleaned
 
 
+# [@ANCHOR: zero_sudo:svg_local_name]
 def svg_local_name(tag):
     """Lower-cased local name of an SVG-vocabulary tag, or None for a foreign one.
 
@@ -442,6 +458,7 @@ def svg_local_name(tag):
     return tag.lower()
 
 
+# [@ANCHOR: zero_sudo:svg_build]
 def _build(source, depth, budget, dropped_attributes=()):
     """Rebuild one source element as a clean element, or None to drop it."""
     if depth > MAX_SVG_DEPTH:
@@ -496,6 +513,7 @@ def _build(source, depth, budget, dropped_attributes=()):
     return clean
 
 
+# [@ANCHOR: zero_sudo:svg_join_text]
 def _join_text(first, second, keeps_text):
     joined = (first or "") + second
     # Layout whitespace is normalised so a second pass changes nothing.
@@ -504,6 +522,7 @@ def _join_text(first, second, keeps_text):
     return joined
 
 
+# [@ANCHOR: zero_sudo:svg_clean_text]
 def _clean_text(text, keeps_text, budget):
     if not text:
         return None
@@ -514,6 +533,7 @@ def _clean_text(text, keeps_text, budget):
     return "\n" if not text.strip() else None
 
 
+# [@ANCHOR: zero_sudo:svg_sanitize_element]
 def sanitize_svg_element(source, dropped_attributes=(), _totals=None):
     """Return a rebuilt, allowlisted copy of an `<svg>` element, or None.
 
@@ -541,6 +561,7 @@ def sanitize_svg_element(source, dropped_attributes=(), _totals=None):
     return clean
 
 
+# [@ANCHOR: zero_sudo:svg_top_level_svgs]
 def _top_level_svgs(doc):
     found = []
     for element in doc.iter("svg"):
@@ -550,6 +571,7 @@ def _top_level_svgs(doc):
     return found
 
 
+# [@ANCHOR: zero_sudo:svg_detach_svgs]
 def _detach_svgs(doc, nonce, dropped_attributes):
     """Validate every svg block and swap each for a placeholder comment.
 
@@ -585,6 +607,7 @@ def _detach_svgs(doc, nonce, dropped_attributes):
     return stash
 
 
+# [@ANCHOR: zero_sudo:svg_in_blocked_context]
 def _in_blocked_context(element):
     node = element
     while node is not None:
@@ -594,6 +617,7 @@ def _in_blocked_context(element):
     return False
 
 
+# [@ANCHOR: zero_sudo:svg_reattach_svgs]
 def _reattach_svgs(doc, stash, nonce):
     """Put each surviving block back; remove every placeholder either way."""
     pattern = re.compile(rf"hamssvg{nonce}x(\d+)x")
@@ -613,6 +637,7 @@ def _reattach_svgs(doc, stash, nonce):
         _remove_keeping_tails(parent, comments)
 
 
+# [@ANCHOR: zero_sudo:svg_remove_keeping_tails]
 def _remove_keeping_tails(parent, comments):
     """Remove placeholder comments in one pass, merging their tails with join().
 
@@ -632,6 +657,7 @@ def _remove_keeping_tails(parent, comments):
     _store_text(parent, holder, pieces)
 
 
+# [@ANCHOR: zero_sudo:svg_store_text]
 def _store_text(parent, holder, pieces):
     text = "".join(pieces) or None
     if holder is None:
@@ -640,6 +666,7 @@ def _store_text(parent, holder, pieces):
         holder.tail = text
 
 
+# [@ANCHOR: zero_sudo:svg_clean_document]
 def clean_document(doc, run_cleaner, dropped_attributes=()):
     """Run `run_cleaner(doc)` with every svg block validated around it."""
     if next(doc.iter("svg"), None) is None:
@@ -665,6 +692,7 @@ _URL_LIKE_ATTRS = frozenset(
 _RE_SCHEME_NOISE = re.compile(r"[\x00-\x20\x7f]+")
 
 
+# [@ANCHOR: zero_sudo:svg_looks_hostile]
 def _looks_hostile(source):
     for node in source.iter():
         if not isinstance(node.tag, str):
@@ -685,6 +713,7 @@ def _looks_hostile(source):
     return False
 
 
+# [@ANCHOR: zero_sudo:svg_drop_keeping_tail]
 def _drop_keeping_tail(element):
     parent = element.getparent()
     if parent is None:
@@ -699,6 +728,7 @@ def _drop_keeping_tail(element):
     parent.remove(element)
 
 
+# [@ANCHOR: zero_sudo:svg_sanitize_xml_svgs]
 def sanitize_xml_svgs(root):
     """Replace every `<svg>` block under an XML-parsed `root` with its allowlisted rebuild.
 
@@ -743,6 +773,7 @@ def sanitize_xml_svgs(root):
     return hostile
 
 
+# [@ANCHOR: zero_sudo:svg_install]
 def install():
     """Make Odoo's HTML sanitizer SVG-aware. Idempotent."""
     cleaner = mail._Cleaner
