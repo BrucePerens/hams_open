@@ -144,8 +144,10 @@ void ft8_session_reset(ft8_session_t* s) {
 // `offset = (offset * freq_osr) + freq_sub; offset = (offset * num_bins)
 // + freq_offset` candidate-to-bin-index mapping, not guessed):
 //   freq_hz = (min_bin + freq_offset + freq_sub/freq_osr) / symbol_period
+// out_time_s receives each decode's signal start in seconds from the first
+// sample fed since the last reset: (time_offset + time_sub/time_osr) * symbol_period.
 // Returns the number of messages actually decoded (may be 0).
-int ft8_session_decode(ft8_session_t* s, char out_messages[][FTX_MAX_MESSAGE_LENGTH], int* out_snr, float* out_freq_hz, int max_messages) {
+int ft8_session_decode(ft8_session_t* s, char out_messages[][FTX_MAX_MESSAGE_LENGTH], int* out_snr, float* out_freq_hz, float* out_time_s, int max_messages) {
     const ftx_waterfall_t* wf = &s->mon.wf;
     ftx_candidate_t candidate_list[FT8_MAX_CANDIDATES];
     int num_candidates = ftx_find_candidates(wf, FT8_MAX_CANDIDATES, candidate_list, FT8_MIN_SCORE);
@@ -199,6 +201,7 @@ int ft8_session_decode(ft8_session_t* s, char out_messages[][FTX_MAX_MESSAGE_LEN
             out_messages[out_count][FTX_MAX_MESSAGE_LENGTH - 1] = '\0';
             out_snr[out_count] = cand->score;
             out_freq_hz[out_count] = ((float)(s->mon.min_bin + cand->freq_offset) + ((float)cand->freq_sub / (float)wf->freq_osr)) / s->mon.symbol_period;
+            out_time_s[out_count] = ((float)cand->time_offset + (float)cand->time_sub / (float)wf->time_osr) * s->mon.symbol_period;
             ++out_count;
         }
     }
