@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split", "filter", "levels", "identify", "read-meters"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split", "filter", "levels", "identify", "read-power", "read-meters"]
 
 [rig]
 id = "icom-ic-9100"
@@ -128,5 +128,5 @@ verified = { state = "manual-checked", reference = "Icom IC-9100 Instruction Man
 
 [[facts]]
 key = "capability.read-meters"
-provenance = { kind = "manual", reference = "Icom IC-9100 Instruction Manual (IC-9100_ENG_2a.pdf, sha256 1ac4d513003b84d6c9fc5d531ae60b85d699291c941653be6bd7d674e95c6fb1), CI-V command table, PDF page 194: 15 11 to 15 14 (Po, SWR, ALC, COMP meter levels, 0000 to 0255)", note = "Obtained under Icom's download terms (individual use, accepted on the owner's instruction 2026-11-10). The IC-9100 table lists only 15 11 (Po), 15 12 (SWR), 15 13 (ALC) and 15 14 (COMP): no Vd or Id meter, so the radio is expected to refuse 15 15 and 15 16 and radioctl serves those two from the default scale. `read-power` is not claimed here (a follow-up). Per-model scale points are in radioctld meter_cal; facts only, nothing copied." }
+provenance = { kind = "manual", reference = "Icom IC-9100 Instruction Manual (IC-9100_ENG_2a.pdf, sha256 1ac4d513003b84d6c9fc5d531ae60b85d699291c941653be6bd7d674e95c6fb1), CI-V command table, PDF page 194: 15 11 to 15 14 (Po, SWR, ALC, COMP meter levels, 0000 to 0255)", note = "Obtained under Icom's download terms (individual use, accepted on the owner's instruction 2026-11-10). The IC-9100 table lists only 15 11 (Po), 15 12 (SWR), 15 13 (ALC) and 15 14 (COMP): no Vd or Id meter, so the radio is expected to refuse 15 15 and 15 16 and radioctl serves those two from the default scale. `read-power` (15 11, Po) is claimed from the same row. Per-model scale points are in radioctld meter_cal; facts only, nothing copied." }
 verified = { state = "unverified" }
