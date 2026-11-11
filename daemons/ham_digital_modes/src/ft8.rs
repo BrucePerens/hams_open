@@ -128,11 +128,20 @@ impl Ft8Decoder {
     /// slot's audio.
     // [@ANCHOR: Ft8Decoder::decode]
     pub fn decode(&mut self) -> Vec<(String, i32, f32)> {
+        self.decode_timed().into_iter().map(|(text, snr, freq, _)| (text, snr, freq)).collect()
+    }
+
+    /// Like `decode()`, with a fourth value: the signal's start in seconds from the first
+    /// sample fed since the last `reset()` (can be slightly negative). Feed audio from the
+    /// FT8 slot boundary and the DT as WSJT-X reports it is this value minus 0.5 s.
+    // [@ANCHOR: Ft8Decoder::decode_timed]
+    pub fn decode_timed(&mut self) -> Vec<(String, i32, f32, f32)> {
         const MAX_MESSAGES: usize = 50;
         let mut out_messages =
             [[0 as std::os::raw::c_char; ffi::FTX_MAX_MESSAGE_LENGTH]; MAX_MESSAGES];
         let mut out_snr = [0i32; MAX_MESSAGES];
         let mut out_freq_hz = [0f32; MAX_MESSAGES];
+        let mut out_time_s = [0f32; MAX_MESSAGES];
 
         let count = unsafe {
             ffi::ft8_session_decode(
@@ -140,6 +149,7 @@ impl Ft8Decoder {
                 out_messages.as_mut_ptr(),
                 out_snr.as_mut_ptr(),
                 out_freq_hz.as_mut_ptr(),
+                out_time_s.as_mut_ptr(),
                 MAX_MESSAGES as i32,
             )
         };
@@ -151,6 +161,7 @@ impl Ft8Decoder {
                     cstr.to_string_lossy().trim().to_string(),
                     out_snr[i],
                     out_freq_hz[i],
+                    out_time_s[i],
                 )
             })
             .collect()
@@ -324,6 +335,23 @@ mod tests {
     fn new_and_drop_do_not_crash() {
         let decoder = Ft8Decoder::new(12000, 200.0, 3000.0);
         assert!(decoder.is_some());
+    }
+
+    // Tests [@ANCHOR: Ft8Decoder::decode_timed]
+    #[test]
+    fn decode_timed_reports_the_signal_start_with_the_right_sign() {
+        let tones = encode_message("K1ABC W9XYZ EN37").unwrap();
+        let wave = synthesize_waveform(&tones, 12000, 1500.0);
+        for lead_s in [0.3f32, 0.8] {
+            let mut samples = vec![0.0f32; (lead_s * 12000.0) as usize];
+            samples.extend_from_slice(&wave);
+            samples.resize(15 * 12000, 0.0);
+            let mut decoder = Ft8Decoder::new(12000, 200.0, 3000.0).unwrap();
+            decoder.feed(&samples);
+            let decoded = decoder.decode_timed();
+            let (_, _, _, t) = decoded.iter().find(|d| d.0.contains("K1ABC")).unwrap_or_else(|| panic!("no decode at lead {lead_s}: {decoded:?}"));
+            assert!((t - lead_s).abs() < 0.1, "start {t} s should be near the real {lead_s} s");
+        }
     }
 
     #[test]
