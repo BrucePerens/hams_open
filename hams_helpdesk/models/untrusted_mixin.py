@@ -38,10 +38,12 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
     _description = "Untrusted text filter for tickets"
 
     # Other modules extend this to filter their own free-text fields too: override and add to the dict.
+    # [@ANCHOR: hams_helpdesk:untrusted_field_specs]
     @api.model
     def _untrusted_field_specs(self):
         return dict(UNTRUSTED_FIELDS)
 
+    # [@ANCHOR: hams_helpdesk:untrusted_filter_vals]
     @api.model
     def _untrusted_filter_vals(self, vals):
         """(new vals, [(field, Result)], {field: raw original}) with every untrusted field filtered."""
@@ -66,6 +68,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
             results.append((fname, result))
         return vals, results, raw
 
+    # [@ANCHOR: hams_helpdesk:untrusted_summary]
     @api.model
     def _untrusted_summary(self, results, extra_parts=()):
         findings, removed, score = ut.merge([r for _f, r in results])
@@ -73,6 +76,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
         score += sum(f["weight"] for f in findings if f["vector"].startswith("split_"))
         return findings, removed, min(score, 100)
 
+    # [@ANCHOR: hams_helpdesk:untrusted_record]
     def _untrusted_record(self, findings, removed, score, raw, source):
         """Persist what was found, if anything, on the tickets in self. Uses the helpdesk service
         account: staff can read the log, a portal customer cannot, and no sudo() is involved."""
@@ -101,6 +105,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
 
     # ---- the three entry points ----
 
+    # [@ANCHOR: hams_helpdesk:untrusted_create]
     @api.model_create_multi
     def create(self, vals_list):
         filtered = []
@@ -119,6 +124,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
             record._untrusted_log_only(findings, removed, score, raw, "create")
         return records
 
+    # [@ANCHOR: hams_helpdesk:untrusted_log_only]
     def _untrusted_log_only(self, findings, removed, score, raw, source):
         """Like _untrusted_record but the counters were already stored by create()."""
         if not (findings or removed or raw):
@@ -136,6 +142,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
             }
         )
 
+    # [@ANCHOR: hams_helpdesk:untrusted_write]
     def write(self, vals):
         if self.env.context.get("untrusted_filter_bypass"):
             return super().write(vals)
@@ -150,6 +157,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
                 ticket._untrusted_record(findings, removed, score, raw, "write")
         return result
 
+    # [@ANCHOR: hams_helpdesk:untrusted_message_post]
     def message_post(self, **kwargs):
         # Not "if body": a message with only a subject is still text from outside.
         body = kwargs.get("body")
@@ -198,6 +206,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
                 ticket._untrusted_record(findings, removed, score, raw, "message")
         return message
 
+    # [@ANCHOR: hams_helpdesk:untrusted_attachment_count]
     def _untrusted_attachment_count(self):
         """How many attachments the ticket has, or None when the caller cannot count them. They are
         counted, never opened: no AI reader gets attachment content."""
@@ -212,6 +221,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
 
     # ---- the safe view every AI reader uses ----
 
+    # [@ANCHOR: hams_helpdesk:untrusted_safe_view]
     def safe_view(self, max_chars=0):
         """One dict per ticket with only filtered, visible text, the findings, and an untrusted
         wrapper. No AI reads a raw ticket body, raw HTML or raw metadata: use this."""
@@ -277,6 +287,7 @@ class HamsHelpdeskTicketSuspicion(models.Model):
         for rec in self:
             rec.name = "%s (ticket %s)" % (rec.source or "text", rec.ticket_id.id)
 
+    # [@ANCHOR: hams_helpdesk:suspicion_findings_summary]
     @api.depends("findings_json")
     def _compute_findings_summary(self):
         for rec in self:

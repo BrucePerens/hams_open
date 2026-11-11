@@ -164,6 +164,23 @@ class TestMailGatewayInspection(HamsTransactionCase):
         self.assertNotIn("mime_alternative_mismatch", " ".join(logs.mapped("findings_json")))
         self.assertFalse(ticket.suspicious)
 
+    def test_04_message_parse_parks_the_findings_under_the_message_id(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_message_parse]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_stash_for]
+        msg = _mail(subject="Parse inspection test", body="Please reset the password on my account, thank you very much.")
+        msg["X-SES-Spam-Verdict"] = "FAIL"
+        msg.add_attachment(b"data", maintype="application", subtype="octet-stream", filename="report‮txt.exe")
+        stash = stash_for(self.env)
+        self.assertEqual(stash, {})
+        msg_dict = self.env["mail.thread"].message_parse(msg)
+        self.assertEqual(msg_dict["message_id"], "<m1@example.com>")
+        self.assertIs(stash_for(self.env), stash)  # the same dict on the cursor every time
+        parked = stash["<m1@example.com>"]
+        self.assertEqual(parked["ses_verdicts"], {"spam": "FAIL"})
+        self.assertIn("attachments_not_read", {f["vector"] for f in parked["findings"]})
+        self.assertIn("reply_headers", parked["mail_signals"])
+        self.assertFalse(parked["mail_signals"]["reply_headers"])  # no known message is referenced
+
     def test_03_the_parked_findings_do_not_outlive_the_message(self):
         self._ingest(_mail(subject="Stash inspection test"))
         self.assertEqual(stash_for(self.env), {})

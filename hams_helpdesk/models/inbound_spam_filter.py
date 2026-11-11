@@ -138,6 +138,7 @@ KNOWN_BRAND_DOMAINS = {
 _HREF_RE = re.compile(r"""href\s*=\s*['"]([^'"]+)['"]""", re.IGNORECASE)
 
 
+# [@ANCHOR: hams_helpdesk:inbound_registrable_domain]
 def _registrable_domain(hostname):
     """Strips a leading "www." only -- deliberately not a full public-
     suffix-list lookup (that's real complexity this heuristic doesn't
@@ -154,6 +155,7 @@ def _registrable_domain(hostname):
     return hostname
 
 
+# [@ANCHOR: hams_helpdesk:inbound_domain_matches_brand]
 def _domain_matches_brand(hostname, real_domains):
     domain = _registrable_domain(hostname)
     if not domain:
@@ -161,6 +163,7 @@ def _domain_matches_brand(hostname, real_domains):
     return any(domain == real or domain.endswith("." + real) for real in real_domains)
 
 
+# [@ANCHOR: hams_helpdesk:inbound_extract_link_domains]
 def _extract_link_domains(body_html):
     domains = set()
     for href in _HREF_RE.findall(body_html or ""):
@@ -176,10 +179,12 @@ def _extract_link_domains(body_html):
     return domains
 
 
+# [@ANCHOR: hams_helpdesk:inbound_brand_mentioned]
 def _brand_mentioned(brand, text):
     return re.search(r"\b" + re.escape(brand) + r"\b", text, re.IGNORECASE) is not None
 
 
+# [@ANCHOR: hams_helpdesk:inbound_detect_spam_signals]
 def detect_inbound_spam_signals(subject, body_html):
     """Returns a list of plain-English reason strings, one per matched
     signal -- empty if nothing matched. Never raises on malformed input
@@ -255,8 +260,6 @@ def detect_inbound_spam_signals(subject, body_html):
     return reasons
 
 
-# [@ANCHOR: hams_helpdesk:ses_verdicts]
-# Verified by [@ANCHOR: test_ses_verdicts_flag_only_a_fail]
 # Amazon SES scans mail when the receipt rule has ScanEnabled (hams.com's does) and writes the result into the
 # stored message as X-SES-Spam-Verdict and X-SES-Virus-Verdict, each PASS, FAIL, GRAY or PROCESSING_FAILED.
 # Only a FAIL is used: GRAY and PROCESSING_FAILED mean SES could not decide. The authentication results (DKIM, SPF,
@@ -268,6 +271,8 @@ _SES_VERDICT_HEADERS = (
 )
 
 
+# [@ANCHOR: hams_helpdesk:ses_verdicts]
+# Verified by [@ANCHOR: test_ses_verdicts_flag_only_a_fail]
 def ses_verdicts(message):
     """The SES scan verdicts of a parsed ``email.message.Message``, as {"spam": "FAIL", "virus": "PASS"}; a
     verdict header that is absent is absent from the dict. Values are upper-cased and cut to 32 characters
@@ -280,6 +285,7 @@ def ses_verdicts(message):
     return found
 
 
+# [@ANCHOR: hams_helpdesk:inbound_ses_verdict_reasons]
 def ses_verdict_reasons(verdicts):
     """Plain-English reasons for the verdicts that say FAIL; empty for anything else."""
     reasons = []

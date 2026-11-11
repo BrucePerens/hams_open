@@ -160,6 +160,7 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
         self.assertEqual(ut.merge([])[:2], ([], 0))
 
     def test_07_css_colour_and_size_helpers(self):
+        # Tests [@ANCHOR: hams_helpdesk:untrusted_leading_number]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_parse_color]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_luminance]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_contrast]
@@ -172,6 +173,13 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
         self.assertIsNone(ut._parse_color("transparent"))
         self.assertIsNone(ut._parse_color("#12345"))
         self.assertIsNone(ut._parse_color(None))
+        self.assertEqual(ut._leading_number("12px"), 12.0)
+        self.assertEqual(ut._leading_number("-3.5em"), -3.5)
+        self.assertIsNone(ut._leading_number("auto"))
+        self.assertIsNone(ut._leading_number("1.2.3"))  # digits and dots that are no number
+        self.assertIsNone(ut._leading_number("."))
+        self.assertIsNone(ut._leading_number(None))
+        self.assertEqual(ut._leading_number("9" * 400), float("inf"))
         self.assertAlmostEqual(ut._luminance(WHITE), 1.0)
         self.assertAlmostEqual(ut._luminance(BLACK), 0.0)
         self.assertAlmostEqual(ut._contrast(WHITE, BLACK), 21.0)
