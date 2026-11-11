@@ -679,6 +679,17 @@ class TestHelpdeskCore(HamsTransactionCase):
         x = 1 + 1
         self.assertEqual(x, 2)
 
+    def test_portal_templates_use_theme_aware_surfaces(self):
+        """The ticket card header must follow the page's light or dark mode: a fixed bg-light stays
+        white under data-bs-theme=dark; bg-body-tertiary follows it."""
+        import os
+        path = os.path.join(os.path.dirname(__file__), "..", "views", "portal_templates.xml")
+        with open(path, encoding="utf-8") as f:
+            xml = f.read()
+        self.assertNotIn("bg-light", xml)
+        self.assertNotIn("bg-white", xml)
+        self.assertIn("bg-body-tertiary", xml)
+
     # Tests [@ANCHOR: COMM_helpdesk_portal_close]
     def test_helpdesk_portal_close(self):
         x = 1 + 1

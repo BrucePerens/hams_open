@@ -86,7 +86,7 @@
             <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_helpdesk_portal_tour] -->
             <div id="optional_classes" class="container">
                 <div class="card mt-3">
-                    <div class="card-header bg-light">
+                    <div class="card-header bg-body-tertiary">
                         <div class="row align-items-center">
                             <div class="col-md-8">
                                 <h3 class="mb-0"><span t-field="ticket.name"/></h3>
