@@ -1886,6 +1886,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_front_end] (radioctl-protocols) An `RA` or `PA` answer: `0` (main receiver; the FT-991A has this digit as a fixed zero) and the step, mapped by the description.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode] (radioctl-protocols) Decodes one newcat reply into observations.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_digits] (radioctl-protocols) Digits of the frequency fields of `FA`, `FB` and `IF` for this model: 9, or 8 on the FT-450, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000 and FTDX9000.
+- [@ANCHOR: radioctl:radioctl_yaesu_engine_split_st] (radioctl-protocols) True when this model's split is the `ST` command (`yaesu.split = "st"`: FT-891, FT-710, FTDX10, FTDX101D and MP; `ST1;` on, `ST0;` off, answers 0, 1, 2) instead of `FT2;`/`FT3;`.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_if] (radioctl-protocols) The observations in an IF answer (frequency of VFO A, mode, RIT, XIT, clarifier offset).
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_encode] (radioctl-protocols) Encodes an operation as a newcat command.
 - [@ANCHOR: radioctl:radioctl_yaesu_engine_feed] (radioctl-protocols) Feeds received bytes to the newcat engine.

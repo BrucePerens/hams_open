@@ -749,6 +749,9 @@ pub struct YaesuParams {
     /// Per-model wire ranges `(level, min, max)` that replace the engine's defaults (the FT-891's
     /// `RG` is 0-30, the FTDX5000's `MG` and `PC` are 0-255). Empty means the defaults apply.
     pub level_ranges: Vec<(Level, u16, u16)>,
+    /// True when split is the `ST` command (FT-891, FT-710, FTDX10, FTDX101: `ST1;` is on) instead
+    /// of `FT2;`/`FT3;` (FT-991A and the models where `FT` picks the transmit VFO).
+    pub split_st: bool,
 }
 
 impl YaesuParams {

@@ -3,9 +3,9 @@
 # Written from Yaesu's published Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (document, PDF page and sha256 in each fact), with Hamlib 4.6.2 as a cross-check.
 # Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 70.5 MHz in 42 ranges; RIT range -9.999kHz/+9.999kHz.
 # Frequency fields are 9 digits (`yaesu.frequency_digits`); the IF answer is 28 characters with the semicolon.
-# Gaps and open questions: Same description as the FTDX101D except the ID (0682). Split is by band (FT selects the MAIN or SUB transmitter), so split is not claimed. Details: crates/radioctl-protocols/src/yaesu.rs.
+# Gaps and open questions: Same description as the FTDX101D except the ID (0682). FT selects the MAIN or SUB transmitter; split is the ST command. Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "rit-xit", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "split", "rit-xit", "levels", "identify"]
 
 [rig]
 id = "yaesu-ftdx-101mp"
@@ -14,6 +14,7 @@ family = "yaesu-newcat"
 
 [yaesu]
 model_id = 682
+split = "st"
 
 [levels]
 attenuator_db = [6, 12, 18]
@@ -76,7 +77,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "yaesu.model_id"
-provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ID, PDF p. 15; Same description as the FTDX101D except the ID (0682). Split is by band (FT selects the MAIN or SUB transmitter), so split is not claimed.", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ID, PDF p. 15; Same description as the FTDX101D except the ID (0682). FT selects the MAIN or SUB transmitter; split is the ST command.", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -101,7 +102,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ID p. 15, FA p. 14, FB p. 14, IF p. 15, MD p. 16, TX p. 23, SM p. 22, AI p. 7, RM p. 21, RT p. 21, XT p. 25, RC p. 20, RD p. 20, AG p. 7, RG p. 21, MG p. 16, PC p. 19, KS p. 15, RA p. 20, PA p. 19", note = "The guide's command pages. Same description as the FTDX101D except the ID (0682). Split is by band (FT selects the MAIN or SUB transmitter), so split is not claimed." }
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ID p. 15, FA p. 14, FB p. 14, IF p. 15, MD p. 16, TX p. 23, SM p. 22, AI p. 7, RM p. 21, RT p. 21, XT p. 25, RC p. 20, RD p. 20, AG p. 7, RG p. 21, MG p. 16, PC p. 19, KS p. 15, RA p. 20, PA p. 19", note = "The guide's command pages. Same description as the FTDX101D except the ID (0682). FT selects the MAIN or SUB transmitter; split is the ST command." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -112,4 +113,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: MD, PDF p. 16: 1 LSB, 2 USB, 3 CW-U, 4 FM, 5 AM, 6 RTTY-L, 7 CW-L, 8 DATA-L, 9 RTTY-U, A DATA-FM, B FM-N, C DATA-U", note = "Mapping to radioctl modes is ours: 6 is rtty, 9 is rtty-r, 7 (CW-L) is cw-r, 8 (DATA-L) is data-r and C (DATA-U) is data; A and B are not described." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.split"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ST SPLIT, PDF p. 23 (set ST P1; read ST; answer ST P1: 0 split off, 1 on, 2 on and the transmitter 5 kHz up)", note = "Split is the ST command on this model, not FT2/FT3; the engine sends ST0 and ST1 and reads P1 0 as off and 1 or 2 as on. Unverified." }
 verified = { state = "unverified" }

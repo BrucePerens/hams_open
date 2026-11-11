@@ -2,7 +2,7 @@
 # Written from Yaesu's published CAT Operation Reference Manual (document, PDF page and sha256 in each fact).
 # No radio has been connected, so every `verified` is unverified. Gaps: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "rit-xit", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "split", "rit-xit", "levels", "identify"]
 
 [rig]
 id = "yaesu-ftdx101d"
@@ -11,6 +11,7 @@ family = "yaesu-newcat"
 
 [yaesu]
 model_id = 681
+split = "st"
 
 [levels]
 attenuator_db = [6, 12, 18]
@@ -99,4 +100,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu FTDX101D/FTDX101MP 'CAT Operation Reference Manual' (FTDX101D_CAT_OM_ENG_1904-A.pdf, as mirrored by radioamatore.info; yaesu.com hosts the original), sha256 c1f65e35fc406fedea6cd75aaa710831f1be2b5058b6e23befa8d7e22039d88c: MD, PDF p. 14: 1 LSB, 2 USB, 3 CW-U, 4 FM, 5 AM, 6 RTTY-LSB, 7 CW-L, 8 DATA-LSB, 9 RTTY-USB, C DATA-USB", note = "Mapping to radioctl modes is ours: CW-U is cw, CW-L is cw-r, RTTY-L is rtty, RTTY-U is rtty-r, DATA-L is data-r, DATA-U is data. Modes A, B, D, E, F (data FM, narrow FM, narrow AM, C4FM/PSK, narrow data FM) are not mapped." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.split"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ST SPLIT, PDF p. 23 (set ST P1; read ST; answer ST P1: 0 split off, 1 on, 2 on and the transmitter 5 kHz up)", note = "Split is the ST command on this model, not FT2/FT3; the engine sends ST0 and ST1 and reads P1 0 as off and 1 or 2 as on. Unverified." }
 verified = { state = "unverified" }
