@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import logging
+
 from odoo import api, fields, models
+
+_logger = logging.getLogger(__name__)
 
 # What the Settings form shows in place of a stored S3 secret key. Saving the form with this value (or an empty one)
 # leaves the stored key as it is; any other value replaces it.
@@ -93,6 +97,7 @@ class ResConfigSettings(models.TransientModel):
     def set_values(self):
         # [@ANCHOR: hams_s3_set_values]
         super(ResConfigSettings, self).set_values()
+        self._register_s3_secret_with_canary()
         if self.hams_s3_use_s3 and 'storage.backend' in self.env:  # burn-ignore-optional-oca-dep
             env_svc = self._get_s3_service_env()
             backend = env_svc['storage.backend'].search(
@@ -116,3 +121,16 @@ class ResConfigSettings(models.TransientModel):
                 backend.write(vals)
             else:
                 env_svc['storage.backend'].create(vals)
+
+    def _register_s3_secret_with_canary(self):
+        """When the optional `hams_secret_canary` addon is installed, registers the fingerprint of a newly entered S3
+        secret key so that its appearance in a response or a log line raises an alarm. Only a salted hash is kept.
+        An unchanged (masked) or empty value, or one that is not a single token, is skipped: saving never fails
+        because of the canary."""
+        secret = self.hams_s3_aws_secret_access_key
+        if "hams.secret.canary" not in self.env or secret in (SECRET_MASK, False, ''):
+            return
+        try:
+            self.env["hams.secret.canary"]._register_secret("hams_s3_aws_secret_access_key", secret)
+        except ValueError as error:
+            _logger.warning("Not registered with the secret canary: %s", error)
