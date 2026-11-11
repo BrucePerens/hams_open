@@ -137,7 +137,6 @@ class CloudflareDNSRecord(models.Model):
                                         type=rec.type, name=rec.name, content=rec.content))
             self._check_glue(rec)
 
-    # [@ANCHOR: cloudflare:COMM_dns_record_require_ip]
     # [@ANCHOR: cloudflare:COMM_dns_record_no_member_names]
     # Verified by [@ANCHOR: cloudflare:COMM_test_member_names_never_reach_cloudflare]
     @api.constrains("name", "active")
@@ -152,6 +151,7 @@ class CloudflareDNSRecord(models.Model):
                     "%(name)s names a callsign (%(label)s). Names for members are served by hams.com's own name "
                     "servers and are never entered at Cloudflare.", name=rec.name, label=label))
 
+    # [@ANCHOR: cloudflare:COMM_dns_record_require_ip]
     @staticmethod
     def _require_ip(rec, factory):
         try:
