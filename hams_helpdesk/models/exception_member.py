@@ -142,6 +142,7 @@ class ExceptionMember(models.Model):
         fingerprint.last_member_id = member_uid
         return member_uid
 
+    # [@ANCHOR: hams_helpdesk:exc_is_listed]
     @api.model
     def _is_listed(self, fingerprint, uid):
         """True when ``uid`` already has a row for ``fingerprint``, or the list is full (so a new member would
@@ -158,6 +159,7 @@ class ExceptionMember(models.Model):
         directly. Runs as the staff member reading the ticket."""
         return KIND_MEMBER, user
 
+    # [@ANCHOR: hams_helpdesk:exc_callsigns_of]
     @api.model
     def _callsigns_of(self, users):
         """{user id: [callsigns]} from the account's own callsign and the callbook rows linked to the account.
@@ -174,11 +176,13 @@ class ExceptionMember(models.Model):
                 found[row.user_id.id].append(call)
         return found
 
+    # [@ANCHOR: hams_helpdesk:exc_compute_name]
     @api.depends("fingerprint_id")
     def _compute_name(self):
         for row in self:
             row.name = self.env._("Affected member %(number)s", number=row.id or "")
 
+    # [@ANCHOR: hams_helpdesk:exc_compute_details]
     @api.depends("user_id")
     def _compute_details(self):
         users = self.mapped("user_id")
@@ -211,6 +215,7 @@ class ExceptionMember(models.Model):
                     contact.login if "@" in (contact.login or "") else False
                 )
 
+    # [@ANCHOR: hams_helpdesk:exc_contact_partner]
     def _contact_partner(self):
         """The partner a reply is addressed to; raises UserError when there is nobody to write to."""
         self.ensure_one()
@@ -248,6 +253,7 @@ class ExceptionMember(models.Model):
             },
         }
 
+    # [@ANCHOR: hams_helpdesk:exc_action_mailto]
     def action_mailto(self):
         """Opens the staff member's own mail program with the same note (the 'mailto:' link)."""
         self.ensure_one()

@@ -110,6 +110,7 @@ def _error_is_unreadable_date(error, parameter_values):
 _CALLED_WITH_REQUEST_PARAMS = ("http", "json", "jsonrpc")
 
 
+# [@ANCHOR: hams_helpdesk:http_contains_nul]
 def _contains_nul(value):
     """True when a string anywhere inside `value` (a parameter dict, a list, a nested JSON body) holds a NUL
     byte. PostgreSQL cannot store or compare one, so a handler that reached the database with it raised
@@ -131,6 +132,7 @@ def _contains_nul(value):
     return False
 
 
+# [@ANCHOR: hams_helpdesk:http_missing_required_params]
 def _missing_required_params(endpoint):
     """Names of the parameters the handler requires that the request does not carry; [] for a handler
     Odoo gives no function to read, a route of another type, or when nothing is missing."""

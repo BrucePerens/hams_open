@@ -21,6 +21,7 @@ def register_exception_reporter_key(env):
     )
 
 
+# [@ANCHOR: hams_helpdesk:post_init_hook]
 def post_init_hook(env):
     """Registers the key on a fresh install; ``migrations/1.1`` does it for installed databases."""
     register_exception_reporter_key(env)

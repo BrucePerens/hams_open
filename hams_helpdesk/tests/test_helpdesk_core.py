@@ -44,6 +44,15 @@ class TestHelpdeskCore(HamsTransactionCase):
             }
         )
 
+    def test_silent_exception_note_is_empty_or_names_the_unpaged_count(self):
+        # Tests [@ANCHOR: hams_helpdesk:ticket_silent_exception_note]
+        Ticket = self.env["hams_helpdesk.ticket"]
+        self.assertEqual(Ticket._silent_exception_note(), "")
+        self.assertEqual(Ticket.with_context(hams_exception_silent_count=0)._silent_exception_note(), "")
+        note = Ticket.with_context(hams_exception_silent_count=7)._silent_exception_note()
+        self.assertTrue(note.startswith(" "))
+        self.assertIn("7 other server exception tickets", note)
+
     def test_01_ticket_creation_and_routing(self):
         """Verify ticket creation routes to on-duty user, subscribes customer, and fires bus toast."""
         # [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
