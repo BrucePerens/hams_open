@@ -20,7 +20,8 @@ use std::time::Duration;
 use std::collections::BTreeMap;
 
 use radioctl_core::description::{
-    CivCommandSet, CivParams, ElecraftParams, Family, KenwoodParams, RigDescription, YaesuParams,
+    CivCommandSet, CivParams, ElecraftParams, Family, KenwoodParams, RigDescription,
+    YaesuClarifier, YaesuParams,
 };
 use radioctl_core::engine::PARTIAL_FRAME_TIMEOUT;
 use radioctl_core::error::{ErrorKind, RigError};
@@ -216,6 +217,7 @@ impl VirtualRig {
                     model_id: 0,
                     frequency_digits: 9,
                     level_ranges: Vec::new(),
+                    clarifier: YaesuClarifier::RtXt,
                     split_st: false,
                 }),
                 tokenizer: Tokenizer::default(),
@@ -1173,6 +1175,12 @@ impl VirtualRig {
                 self.state.split = flag == "3";
                 None
             }
+            // FT-891 (guide: CF P1 0, P2 clarifier off or on, P3 0): the receive clarifier switch.
+            ("CF", "0") if self.yaesu_cf() => Some(format!("CF0{}0;", u8::from(self.state.rit))),
+            ("CF", flag @ ("000" | "010")) if self.yaesu_cf() => {
+                self.state.rit = flag == "010";
+                None
+            }
             ("RT", "") => Some(format!("RT{};", u8::from(self.state.rit))),
             ("RT", flag @ ("0" | "1")) => {
                 self.state.rit = flag == "1";
@@ -1231,6 +1239,12 @@ impl VirtualRig {
             _ => Some("?;".to_string()),
         };
         reply.map(String::into_bytes).unwrap_or_default()
+    }
+
+    // [@ANCHOR: radioctl_virtual_yaesu_cf]
+    /// True when this Yaesu model switches its clarifier with `CF` (`yaesu.clarifier = "cf-receive"`).
+    fn yaesu_cf(&self) -> bool {
+        matches!(&self.wire, Wire::Yaesu { params, .. } if params.clarifier == YaesuClarifier::CfReceive)
     }
 
     // [@ANCHOR: radioctl_virtual_yaesu_digits]
@@ -2317,6 +2331,37 @@ mod tests {
             assert_eq!(s590.feed(bad, T0), b"?;", "{bad:?}");
         }
         assert_eq!(s590.feed(b"ID;", T0), b"ID023;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_cf]
+    #[test]
+    fn the_ft_891_twin_switches_its_receive_clarifier_with_cf() {
+        let path = format!(
+            "{}/../../rigs/yaesu-ft-891.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = std::fs::read_to_string(path).expect("rig file");
+        let desc = radioctl_core::rigfile::parse(&text)
+            .expect("loads")
+            .description;
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        assert_eq!(rig.feed(b"CF0;", T0), b"CF000;");
+        assert!(rig.feed(b"CF010;", T0).is_empty());
+        assert_eq!(rig.feed(b"CF0;", T0), b"CF010;");
+        assert!(rig.feed(b"CF000;", T0).is_empty());
+        assert_eq!(rig.feed(b"CF0;", T0), b"CF000;");
+        assert_eq!(rig.feed(b"CF020;", T0), b"?;");
+        // A model that keeps RT does not answer CF.
+        let text = std::fs::read_to_string(format!(
+            "{}/../../rigs/yaesu-ft-991a.toml",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("rig file");
+        let desc = radioctl_core::rigfile::parse(&text)
+            .expect("loads")
+            .description;
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        assert_eq!(rig.feed(b"CF0;", T0), b"?;");
     }
 
     // Tests [@ANCHOR: radioctl_virtual_yaesu_digits]
