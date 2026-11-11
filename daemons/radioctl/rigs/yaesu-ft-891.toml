@@ -3,9 +3,9 @@
 # Written from Yaesu's published Yaesu 'FT-891 CAT Operation Reference Book' (document, PDF page and sha256 in each fact), with Hamlib 4.6.2 as a cross-check.
 # Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 470 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
 # Frequency fields are 9 digits (`yaesu.frequency_digits`); the IF answer is 28 characters with the semicolon.
-# Gaps and open questions: The guide gives ID 0650; Hamlib's table has 135. No split (the guide has ST, not FT 2/3), no rit-xit (the guide has CF, not RT/XT), levels (RG is 000-030 here, the other four match the engine's ranges). Details: crates/radioctl-protocols/src/yaesu.rs.
+# Gaps and open questions: The guide gives ID 0650; Hamlib's table has 135. Split is the ST command (the guide has ST, not FT 2/3), no rit-xit (the guide has CF, not RT/XT), levels (RG is 000-030 here, the other four match the engine's ranges). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "split", "levels", "identify"]
 
 [rig]
 id = "yaesu-ft-891"
@@ -14,6 +14,7 @@ family = "yaesu-newcat"
 
 [yaesu]
 model_id = 650
+split = "st"
 levels = { rf-gain = [0, 30] }
 
 [timing]
@@ -72,7 +73,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "yaesu.model_id"
-provenance = { kind = "manual", reference = "Yaesu 'FT-891 CAT Operation Reference Book', file FT-891_CAT_OM_ENG_1909-C.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-891_CAT_OM_ENG_1909-C.pdf, sha256 59e2295177633b970408bec10aae62f697c3bde5fe48a3be25282d992bc3bbb0: ID, PDF p. 11; The guide gives ID 0650; Hamlib's table has 135. No split (the guide has ST, not FT 2/3), no rit-xit (the guide has CF, not RT/XT), levels (RG is 000-030 here, the other four match the engine's ranges).", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
+provenance = { kind = "manual", reference = "Yaesu 'FT-891 CAT Operation Reference Book', file FT-891_CAT_OM_ENG_1909-C.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-891_CAT_OM_ENG_1909-C.pdf, sha256 59e2295177633b970408bec10aae62f697c3bde5fe48a3be25282d992bc3bbb0: ID, PDF p. 11; The guide gives ID 0650; Hamlib's table has 135. Split is the ST command (the guide has ST, not FT 2/3), no rit-xit (the guide has CF, not RT/XT), levels (RG is 000-030 here, the other four match the engine's ranges).", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -87,7 +88,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "manual", reference = "Yaesu 'FT-891 CAT Operation Reference Book', file FT-891_CAT_OM_ENG_1909-C.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-891_CAT_OM_ENG_1909-C.pdf, sha256 59e2295177633b970408bec10aae62f697c3bde5fe48a3be25282d992bc3bbb0: ID p. 11, FA p. 10, FB p. 10, IF p. 11, MD p. 12, TX p. 19, SM p. 18, AI p. 5, RM p. 17", note = "The guide's command pages. The guide gives ID 0650; Hamlib's table has 135. No split (the guide has ST, not FT 2/3), no rit-xit (the guide has CF, not RT/XT), levels (RG is 000-030 here, the other four match the engine's ranges)." }
+provenance = { kind = "manual", reference = "Yaesu 'FT-891 CAT Operation Reference Book', file FT-891_CAT_OM_ENG_1909-C.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-891_CAT_OM_ENG_1909-C.pdf, sha256 59e2295177633b970408bec10aae62f697c3bde5fe48a3be25282d992bc3bbb0: ID p. 11, FA p. 10, FB p. 10, IF p. 11, MD p. 12, TX p. 19, SM p. 18, AI p. 5, RM p. 17", note = "The guide's command pages. The guide gives ID 0650; Hamlib's table has 135. Split is the ST command (the guide has ST, not FT 2/3), no rit-xit (the guide has CF, not RT/XT), levels (RG is 000-030 here, the other four match the engine's ranges)." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -103,4 +104,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "yaesu.levels"
 provenance = { kind = "manual", reference = "Yaesu 'FT-891 CAT Operation Reference Book', file FT-891_CAT_OM_ENG_1909-C.pdf, sha256 59e2295177633b970408bec10aae62f697c3bde5fe48a3be25282d992bc3bbb0: AG p. 5, KS p. 12, MG p. 13, PC p. 15, RG p. 16", note = "AG P2 000-255, RG P2 000-030, MG 000-100, PC 005-100, KS 004-060 WPM; only RG differs from the engine's default ranges. Where this block is silent the engine's default range applies." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.split"
+provenance = { kind = "manual", reference = "Yaesu 'FT-891 CAT Operation Reference Book', file FT-891_CAT_OM_ENG_1909-C.pdf, sha256 59e2295177633b970408bec10aae62f697c3bde5fe48a3be25282d992bc3bbb0: ST SPLIT, PDF p. 18 (set ST P1; read ST; answer ST P1: 0 split off, 1 on, 2 on and the transmitter 5 kHz up)", note = "Split is the ST command on this model, not FT2/FT3; the engine sends ST0 and ST1 and reads P1 0 as off and 1 or 2 as on. Unverified." }
 verified = { state = "unverified" }

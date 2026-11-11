@@ -216,6 +216,7 @@ impl VirtualRig {
                     model_id: 0,
                     frequency_digits: 9,
                     level_ranges: Vec::new(),
+                    split_st: false,
                 }),
                 tokenizer: Tokenizer::default(),
             },
