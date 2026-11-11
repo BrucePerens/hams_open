@@ -189,8 +189,9 @@ def ban_ip(ip_address, mode, notes, token, zone_id):
         timeout=10,
     )
     if response and response.status_code == 200:
-        rule_id = response.json().get("result", {}).get("id")
-        return True, rule_id
+        result = _json_result(response)
+        if result is not None:
+            return True, result.get("id")
     return False, "API Error"
 
 
@@ -239,7 +240,7 @@ def get_zone_ruleset(phase, token, zone_id):
     if response:
         if response.status_code == 404:
             return None
-        return response.json().get("result")
+        return _json_result(response)
     return None
 
 
@@ -258,8 +259,8 @@ def get_zone_ruleset_checked(phase, token, zone_id):
         return "absent", None
     if response.status_code != 200:
         return "error", f"HTTP {response.status_code}"
-    result = response.json().get("result")
-    return ("ok", result) if isinstance(result, dict) else ("error", "unexpected response")
+    result = _json_result(response)
+    return ("ok", result) if result is not None else ("error", "unexpected response")
 
 
 def update_zone_ruleset(ruleset_id, payload, token, zone_id):
@@ -320,7 +321,9 @@ def create_cfd_tunnel(account_id, token, tunnel_name):
         timeout=15,
     )
     if response and response.status_code == 200:
-        return True, response.json().get("result", {}).get("id")
+        result = _json_result(response)
+        if result is not None:
+            return True, result.get("id")
     return False, "API Error"
 
 
@@ -334,7 +337,9 @@ def get_cfd_tunnel_token(account_id, token, tunnel_id):
         "GET", endpoint, token, "Cloudflare Tunnel Token API failed", timeout=15
     )
     if response and response.status_code == 200:
-        return True, response.json().get("result", "")
+        run_token = _json_result(response, str)
+        if run_token is not None:
+            return True, run_token
     return False, "API Error"
 
 
@@ -419,14 +424,21 @@ def inspect_token(token):
 
 
 # [@ANCHOR: cloudflare:COMM_dns_api_json_result]
-def _json_result(resp):
-    """The `result` of a Cloudflare JSON answer, or None when the body is not JSON or has no object result."""
+def _json_body(resp):
+    """The JSON object of a Cloudflare answer, or None when the body is not JSON or not an object."""
     try:
         body = resp.json()
     except ValueError:
         return None
-    result = body.get("result") if isinstance(body, dict) else None
-    return result if isinstance(result, dict) else None
+    return body if isinstance(body, dict) else None
+
+
+def _json_result(resp, kind=dict):
+    """The `result` of a Cloudflare JSON answer, or None when the body is not JSON or its result is not a `kind`
+    (an object by default; a list or a string for the calls that return those)."""
+    body = _json_body(resp)
+    result = body.get("result") if body is not None else None
+    return result if isinstance(result, kind) else None
 
 
 def get_zone_settings(token, zone_id):
@@ -441,7 +453,7 @@ def get_zone_settings(token, zone_id):
     if response:
         if response.status_code == 404:
             return None
-        return response.json().get("result")
+        return _json_result(response, list)
     return None
 
 
@@ -477,7 +489,7 @@ def list_cfd_tunnels(account_id, token):
         "GET", endpoint, token, "Cloudflare List Tunnels API failed", timeout=15
     )
     if response and response.status_code == 200:
-        return response.json().get("result", [])
+        return _json_result(response, list) or []
     return []
 
 
@@ -514,7 +526,9 @@ def create_custom_hostname(hostname, token, zone_id):
         timeout=15,
     )
     if response and response.status_code == 200:
-        return True, response.json().get("result", {})
+        result = _json_result(response)
+        if result is not None:
+            return True, result
     return False, "API Error"
 
 
@@ -528,7 +542,9 @@ def get_custom_hostname(hostname_id, token, zone_id):
         "GET", endpoint, token, "Cloudflare Get Custom Hostname API failed", timeout=15
     )
     if response and response.status_code == 200:
-        return True, response.json().get("result", {})
+        result = _json_result(response)
+        if result is not None:
+            return True, result
     return False, "API Error"
 
 
@@ -583,7 +599,10 @@ def find_zone_id(name, token):
     )
     if response is None or response.status_code != 200:
         return False, "API Error"
-    for zone in response.json().get("result") or []:
+    body = _json_body(response)
+    if body is None or not isinstance(body.get("result") or [], list):
+        return False, "API Error"
+    for zone in body.get("result") or []:
         if (zone.get("name") or "").lower() == name.lower():
             return True, zone.get("id")
     return True, None
@@ -607,7 +626,9 @@ def list_dns_records_named(zone_id, name, token):
         )
         if response is None or response.status_code != 200:
             return False, "API Error"
-        body = response.json()
+        body = _json_body(response)
+        if body is None or not isinstance(body.get("result") or [], list):
+            return False, "API Error"
         found.extend(body.get("result") or [])
         if page >= int((body.get("result_info") or {}).get("total_pages") or 1):
             return True, found
@@ -624,7 +645,9 @@ def create_dns_record(zone_id, payload, token):
         "POST", endpoint, token, "Cloudflare Create DNS Record API failed", json=payload, timeout=15
     )
     if response is not None and response.status_code == 200:
-        return True, (response.json().get("result") or {}).get("id")
+        body = _json_body(response)
+        if body is not None:
+            return True, (body.get("result") or {}).get("id")
     return False, "API Error"
 
 
@@ -670,7 +693,10 @@ def get_zone_details(zone_id, token):
     )
     if response is None or response.status_code != 200:
         return False, "API Error"
-    return True, response.json().get("result") or {}
+    body = _json_body(response)
+    if body is None:
+        return False, "API Error"
+    return True, body.get("result") or {}
 
 
 # [@ANCHOR: cloudflare:COMM_dns_api_count_records]
@@ -686,7 +712,7 @@ def count_dns_records(zone_id, token):
     )
     if response is None or response.status_code != 200:
         return False, "API Error"
-    total = (response.json().get("result_info") or {}).get("total_count")
+    total = ((_json_body(response) or {}).get("result_info") or {}).get("total_count")
     if not isinstance(total, int):
         return False, "Cloudflare did not report a record count"
     return True, total
