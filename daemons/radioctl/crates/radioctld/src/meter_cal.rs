@@ -261,6 +261,12 @@ mod tests {
         assert!((power_fraction(nine, 215) - 1.0).abs() < 1e-9);
         assert_eq!(power_fraction(nine, 255), 1.0);
         assert!((power_fraction(for_rig("icom-ic-7610"), 212) - 1.0).abs() < 1e-9);
+        // The IC-7300's printed points (0 = 0, 143 = half, 213 = full), not the raw deflection over 255.
+        let ic7300 = for_rig("icom-ic-7300");
+        assert_eq!(power_fraction(ic7300, 0), 0.0);
+        assert!((power_fraction(ic7300, 143) - 0.5).abs() < 1e-9);
+        assert!((power_fraction(ic7300, 213) - 1.0).abs() < 1e-9);
+        assert!((power_fraction(ic7300, 128) - 128.0 / 143.0 * 0.5).abs() < 1e-9);
         let cal =
             radioctl_core::power::PowerCal::new(vec![(0.0, 0.0), (100.0, 50.0), (200.0, 100.0)])
                 .expect("valid");
