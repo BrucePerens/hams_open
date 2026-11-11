@@ -42,6 +42,10 @@ Control plane for the CDN edge. Manages Cache-Tags (labels sent in a response's 
 ## Minimal token scopes
 Saving a changed API token in Settings asks Cloudflare what the token may do (`/user/tokens/verify`, then the token's own policy list; nothing is sent to hams.com). A token that holds API Tokens, Billing, Members, Account Settings Write or Organizations permissions is refused with the names to remove, and so is a token Cloudflare cannot introspect (fail closed, never a silent pass). Create the token with only Zone: Cache Purge, Zone: DNS Edit, Zone: Zone Settings Edit, Zone: Firewall Services Edit (and Account: Cloudflare Tunnel Edit if you use tunnels), limited to the zones you manage. An installer who cannot do this ticks "Allow an over-broad API token"; the override is logged as a warning.
 
+## Secret canary
+
+When the optional `hams_secret_canary` addon is installed, a newly written API token or Turnstile secret on a website is registered with it (only a salted hash is kept), so that its appearance in a response or a log line raises an alarm. A value that is not a single token (shorter than 16 characters, or with spaces) is logged and skipped; saving never fails because of the canary. A secret saved before the canary was installed is registered the next time it is saved.
+
 ## 2. API Interfaces
 * **DNS & Hostnames:** `cloudflare.dns.record` rows (A, AAAA, CNAME, TXT, NS) are pushed to Cloudflare by `dns_push_plan()` and `dns_push_apply(hash)` (list view, Action, "Push DNS records to Cloudflare"; administrators only). Odoo is the source of truth. `CloudflareRoutingDomain` provisions Custom Hostnames separately; never add one for a name that is already a zone of the account.
   * **Plan first.** The plan is computed from reads only and shows, per row: `create`, `update`, `delete`, `adopt`, `conflict`, `problem`, `drift`, `unchanged`, with the reason. Apply takes the plan's hash and refuses if Cloudflare or the rows changed since. A row that cannot be planned (no token, no zone, Cloudflare unreachable) is reported and does not hold back the others; an unreachable Cloudflare plans nothing, never "create everything".
