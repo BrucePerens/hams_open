@@ -72,12 +72,15 @@ def load_key(key_file):
     if not key_file or not os.path.isfile(key_file):
         raise ReportError("the exception reporter key file does not exist or cannot be read")
     values = {}
-    with open(key_file, "r", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                name, _, value = line.partition("=")
-                values[name.strip()] = value.strip()
+    try:
+        with open(key_file, "r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    name, _, value = line.partition("=")
+                    values[name.strip()] = value.strip()
+    except (OSError, UnicodeDecodeError):  # a file the daemon's account may not read (odoo-owned 0600) is a failed report, not a crash
+        raise ReportError("the exception reporter key file does not exist or cannot be read") from None
     key = values.get("ODOO_RPC_KEY")
     if not key:
         raise ReportError("the key file has no ODOO_RPC_KEY")
