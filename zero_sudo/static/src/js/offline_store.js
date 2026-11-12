@@ -29,6 +29,7 @@ export function isStorageFullError(err) {
 }
 
 export class OfflineStore {
+    // [@ANCHOR: zero_sudo:js_offline_store_constructor]
     constructor(dbName = 'HamShackOfflineDB', storeName = 'offline_logs') {
         this.dbName = dbName;
         this.dbVersion = 1;
@@ -36,6 +37,7 @@ export class OfflineStore {
         this.db = null;
     }
 
+    // [@ANCHOR: zero_sudo:js_offline_store_init]
     async init() {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(this.dbName, this.dbVersion);
@@ -61,6 +63,7 @@ export class OfflineStore {
         });
     }
 
+    // [@ANCHOR: zero_sudo:js_offline_store_save_log]
     async saveLog(logData) {
         if (!this.db) await this.init();
 
@@ -121,6 +124,7 @@ export class OfflineStore {
         });
     }
 
+    // [@ANCHOR: zero_sudo:js_offline_store_get_pending_logs]
     async getPendingLogs() {
         if (!this.db) await this.init();
 
@@ -147,6 +151,7 @@ export class OfflineStore {
         });
     }
 
+    // [@ANCHOR: zero_sudo:js_offline_store_delete_log]
     async deleteLog(uuid) {
         if (!this.db) await this.init();
 
