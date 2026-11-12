@@ -141,13 +141,31 @@ def _is_caller_reference(node):
     return name in CALLERS
 
 
+# [@ANCHOR: hams_rpc_guard:scan_module_string_constants]
+def module_string_constants(tree):
+    """`{NAME: "text"}` for every module-level `NAME = "text"` (also annotated) of a parsed source: a daemon names its model
+    (`RUN_MODEL = "ham.club.crawl.run"`) or method (`_SAFE_READ_METHOD = "mcp_safe_read"`) once and passes the name."""
+    found = {}
+    for statement in tree.body:
+        if isinstance(statement, ast.Assign) and len(statement.targets) == 1 and isinstance(statement.targets[0], ast.Name):
+            target, value = statement.targets[0].id, statement.value
+        elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name) and statement.value is not None:
+            target, value = statement.target.id, statement.value
+        else:
+            continue
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            found[target] = value.value
+    return found
+
+
 # [@ANCHOR: hams_rpc_guard:scan_daemon_pairs]
 def daemon_pairs(source):
     """The `(model, method)` pairs a daemon source file calls: `x.execute/call/execute_kw/_json2_call("model", "method", ...)`
     with two literal strings, the same two literal strings after other arguments in a batch helper
     (`push_batches_to_odoo(client, logger, rows, "model", "method")`) or after a passed-along caller
     (`asyncio.to_thread(client.execute, "model", "method", ...)`), and literal `/json/2/<model>/<method>` URLs (also inside
-    f-strings' constant parts). Names built from variables are not found."""
+    f-strings' constant parts). A model or method held in a module-level string constant of the same source is resolved; other
+    names built from variables are not found."""
     pairs = set()
     for match in JSON2_URL.finditer(source):
         pairs.add((match.group(1), match.group(2)))
@@ -155,6 +173,14 @@ def daemon_pairs(source):
         tree = ast.parse(source)
     except SyntaxError:
         return pairs
+    constants = module_string_constants(tree)
+
+    def text(node):
+        """The string a literal or a module-level string constant names, else None."""
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        return constants.get(node.id) if isinstance(node, ast.Name) else None
+
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -168,10 +194,9 @@ def daemon_pairs(source):
             starts = [index + 1 for index, argument in enumerate(node.args) if _is_caller_reference(argument)]
         for start in starts:
             first, second = (node.args[start:start + 2] + [None, None])[:2]
-            if (isinstance(first, ast.Constant) and isinstance(second, ast.Constant)
-                    and isinstance(first.value, str) and isinstance(second.value, str)
-                    and MODEL_NAME.match(first.value) and METHOD_NAME.match(second.value)):
-                pairs.add((first.value, second.value))
+            model, method = text(first), text(second)
+            if model and method and MODEL_NAME.match(model) and METHOD_NAME.match(method):
+                pairs.add((model, method))
     return pairs
 
 
