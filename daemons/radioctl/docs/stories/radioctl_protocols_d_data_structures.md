@@ -516,6 +516,8 @@ As a developer changing this code, I want every data structure in `src/perseus.r
 
 **Used by.** `from_description` (functions whose signature names it).
 
+**Notes.** A unit struct with no state: the dialect implementation of the `Dialect` trait for the Rohde and Schwarz `FREQ` and `DEM` commands. `LineEngine<RsDialect>` (`RsEngine`) supplies the buffering and the reply handling, and `from_description` builds the dialect from a rig description of this family.
+
 ## `RsTwin` [@ANCHOR: radioctl:radioctl_rs_rs_twin]
 
 **Purpose.** The virtual Rohde and Schwarz receiver.
