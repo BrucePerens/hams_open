@@ -25,7 +25,7 @@ struct Spec {
 }
 
 const CAPTURE_PROPS: &str = concat!(
-    r#""pins":{"type":"string","description":"pin spec, e.g. A0:3 or A0:1,B0; default A0:3"},"duration_s":{"type":"number","description":"0.1 up to the config's max_capture_s, default 2"},"pull":{"type":"string","enum":["none","up","down"]},"#,
+    r#""pins":{"type":"string","description":"pin spec, e.g. A0:3 or A0:1,B0; default A0:3"},"duration_s":{"type":"number","description":"0.1 up to the config's max_capture_s, default 2"},"pull":{"type":"string","enum":["none","up","down"]},"confirm":{"type":"boolean","description":"true: required with pull up or down; the person at the bench agrees weak pulls may be put on the target's pins"},"#,
     r#""trigger":{"type":"object","description":"{type: none|edge|level|pattern, pin, edge: rise|fall|either, level: 0|1, pattern: '1x0x' (one char per pin), min_ns}"},"pre_trigger_ms":{"type":"number","description":"keep this much of the capture before the trigger"},"post_trigger_ms":{"type":"number","description":"keep this much after the trigger (default: the rest)"},"samples":{"type":"integer","description":"window length in samples at sample_rate_hz (instead of post_trigger_ms)"},"sample_rate_hz":{"type":"number","description":"1 to 48000000; default: 4 samples on the shortest pulse"},"glitch_ns":{"type":"integer","description":"pulses shorter than this are reported as glitches"},"formats":{"type":"array","items":{"type":"string","enum":["vcd","csv","sr"]}},"decode":{"type":"object","description":"{type: uart, pin, baud, bits, parity, invert} | {type: i2c, scl, sda} | {type: spi, cs, sck, copi, cipo, mode, bits, msb_first, cs_active_low}"}"#
 );
 const ANALYZE_PROPS: &str = concat!(

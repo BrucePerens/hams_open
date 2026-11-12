@@ -552,7 +552,7 @@ pub fn call(
     }
 }
 
-/// The sweep arguments of a NanoVNA call: `start_hz`, optional `stop_hz` (default start), `points` (default 101 or the limit).
+/// The sweep arguments of a NanoVNA call: `start_hz`, `stop_hz` (required: a band, not a point), `points` (default 101 or the limit).
 /// The VNWA's `if_hz`, `point_ms` and `rf_level` are refused as not supported.
 pub fn sweep_args(args: &Value, id: &Identity, cfg: &Config) -> Result<(f64, f64, usize), Error> {
     // [@ANCHOR: bench_nanovna_sweep_args]
@@ -573,7 +573,9 @@ pub fn sweep_args(args: &Value, id: &Identity, cfg: &Config) -> Result<(f64, f64
             .ok_or(Error::Args(format!("{k} must be a number"))),
     };
     let start = num("start_hz")?.ok_or(Error::Args("start_hz is required".into()))?;
-    let stop = num("stop_hz")?.unwrap_or(start);
+    let stop = num("stop_hz")?.ok_or(Error::Args(
+        "stop_hz is required (the NanoVNA sweeps a band, so a single point is not possible)".into(),
+    ))?;
     let points = match num("points")? {
         None => lim.max_points.min(101),
         Some(p) if p.fract() == 0.0 && p >= 0.0 => p as usize,
@@ -1114,6 +1116,8 @@ mod tests {
                 .2,
             101
         );
+        let e = sweep_args(&json!({"start_hz": 1e6}), &id, &cfg()).unwrap_err();
+        assert!(format!("{e:?}").contains("stop_hz is required"), "{e:?}");
         for bad in [
             json!({}),
             json!({"start_hz": 1e6}),
