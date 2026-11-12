@@ -59,6 +59,7 @@ _counts = collections.Counter()
 _counts_lock = threading.Lock()
 
 
+# [@ANCHOR: hams_rpc_guard_policy_call]
 class Call:
     """The facts about one RPC call. Plain attributes so a test can build one without Odoo.
 

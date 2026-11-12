@@ -136,6 +136,7 @@ class TestSettings(HamsTransactionCase):
         networks = gate.parse_networks(" %s, %s ,%s,fd00::/8" % (LOOPBACK_NET, WG_NET, WG_PEER))
         self.assertEqual([str(n) for n in networks], [LOOPBACK_NET, WG_NET, WG_PEER + "/32", "fd00::/8"])
 
+    # Tests [@ANCHOR: hams_rpc_guard_endpoint_gate_config_error]
     def test_a_bad_cidr_is_a_loud_error_never_an_open_gate(self):
         for value in ("10.99.0.0/33", "10.99.0", "everyone", "0.0.0.0/0 ; drop", LOOPBACK_NET + ",nonsense"):
             with self.subTest(value=value), self.assertRaises(gate.ConfigError) as caught:
@@ -181,6 +182,7 @@ class TestSettings(HamsTransactionCase):
                          ((), "", gate.LEGACY_NETWORKS, gate.TRANSPORT_TCP))
         self.assertEqual(settings.unix_peers.rules, ())
 
+    # Tests [@ANCHOR: hams_rpc_guard_ir_config_parameter_ir_config_parameter]
     def test_a_bad_value_cannot_be_written(self):
         # Tests [@ANCHOR: hams_rpc_guard:check_gate_parameters]
         # Tests [@ANCHOR: hams_rpc_guard:parameter_parsers]

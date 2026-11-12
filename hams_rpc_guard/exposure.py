@@ -43,6 +43,7 @@ def decorator_marks(model_class, name):
     return marks
 
 
+# [@ANCHOR: hams_rpc_guard_exposure_exposure]
 class Exposure:
     """Everything the installed addons declared. Sets of `(model, method)` pairs; `clients` maps a login to its set."""
 

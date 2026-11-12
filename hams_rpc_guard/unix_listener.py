@@ -71,6 +71,7 @@ _state = {"socket": None, "path": None, "server": None, "patched": False}
 _state_lock = threading.Lock()
 
 
+# [@ANCHOR: hams_rpc_guard_unix_listener_listener_error]
 class ListenerError(RuntimeError):
     """The configured socket cannot be created safely. Logged at ERROR; the server runs without the listener."""
 
