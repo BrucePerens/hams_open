@@ -37,6 +37,7 @@ const TABLET_MODE_PATH = '/sys/bus/acpi/devices/MAT0020:00/tablet_mode';
  * The same actions are available on the session bus as org.cf19.OSK
  * (Toggle, Show, Hide).
  */
+// [@ANCHOR: panasonic_cf19:js_osk_extension_class]
 export default class Cf19OskExtension extends Extension {
     // [@ANCHOR: panasonic_cf19:js_osk_enable]
     enable() {

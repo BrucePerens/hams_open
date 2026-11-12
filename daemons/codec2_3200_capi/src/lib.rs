@@ -47,6 +47,7 @@ use std::os::raw::c_int;
 
 const CODEC2_MODE_3200: c_int = 0;
 
+// [@ANCHOR: codec2_state_struct]
 pub struct CODEC2 {
     encoder: EncoderFixed,
     decoder: Decoder,
@@ -261,6 +262,7 @@ mod tests {
 
     #[test]
     // Tests [@ANCHOR: codec2_create]
+    // Tests [@ANCHOR: codec2_state_struct]
     // Tests [@ANCHOR: codec2_encode]
     // Tests [@ANCHOR: codec2_decode]
     // Tests [@ANCHOR: codec2_decode_ber]
