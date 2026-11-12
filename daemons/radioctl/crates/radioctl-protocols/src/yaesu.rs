@@ -39,7 +39,7 @@ use radioctl_core::description::{Family, RigDescription, YaesuClarifier};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::units::{Hz, Level, Vfo};
+use radioctl_core::units::{Hz, Level, Receiver, Vfo};
 
 use crate::attenuation;
 use crate::kenwood::{parse_digits, Token, Tokenizer};
@@ -213,6 +213,12 @@ impl YaesuEngine {
         self.desc.yaesu.as_ref().is_some_and(|y| y.split_st)
     }
 
+    // [@ANCHOR: radioctl_yaesu_engine_tx_band]
+    /// True when this model's `FT` picks the transmitting band, Main or Sub (`yaesu.tx_band`).
+    fn tx_band(&self) -> bool {
+        self.desc.yaesu.as_ref().is_some_and(|y| y.tx_band)
+    }
+
     // [@ANCHOR: radioctl_yaesu_engine_split_read]
     /// The read command for the split state and the transmit VFO.
     fn split_read(&self) -> String {
@@ -286,6 +292,14 @@ impl YaesuEngine {
                 .and_then(|c| self.desc.code_mode(*c))
                 .map(Observation::Mode),
             (Some("TX"), Some(flag @ ("0" | "1" | "2"))) => Some(Observation::Ptt(*flag != *"0")),
+            // `FT` answers the band the transmitter follows (P2 0 Main, 1 Sub) on the dual-band models.
+            (Some("FT"), Some(flag @ ("0" | "1"))) if self.tx_band() => {
+                Some(Observation::TxReceiver(if *flag == *"1" {
+                    Receiver::Sub
+                } else {
+                    Receiver::Main
+                }))
+            }
             (Some("FT"), Some(flag @ ("0" | "1"))) => Some(Observation::Split(*flag == *"1")),
             // `ST` (P1 0 off, 1 on, 2 on and 5 kHz up): the split flag on the models that have it.
             (Some("ST"), Some("0" | "1" | "2")) if self.split_st() => {
@@ -403,6 +417,23 @@ impl ProtocolEngine for YaesuEngine {
             Op::SetTransceive(on) => Self::command(format!("AI{};", u8::from(*on)), none),
             Op::GetSplit => Self::command(self.split_read(), observe(Field::Split)),
             Op::GetTxVfo => Self::command(self.split_read(), observe(Field::TxVfo)),
+            Op::GetTxReceiver if self.tx_band() => {
+                Self::command("FT;".into(), observe(Field::TxReceiver))
+            }
+            Op::SetTxReceiver(rx) if self.tx_band() => Self::command(
+                format!("FT{};", if *rx == Receiver::Sub { 3 } else { 2 }),
+                none,
+            ),
+            Op::SelectReceiver(_)
+            | Op::GetReceiver
+            | Op::SetTxReceiver(_)
+            | Op::GetTxReceiver
+            | Op::SetDualWatch(_)
+            | Op::GetDualWatch => {
+                return Err(Self::unsupported(
+                    "not a Main/Sub command on this Yaesu model",
+                ))
+            }
             Op::SetSplit(on) if self.split_st() => {
                 Self::command(format!("ST{};", u8::from(*on)), none)
             }

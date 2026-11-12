@@ -61,6 +61,10 @@ The newcat command interpreter of a virtual Yaesu rig. `text` is one tokenized c
 
 The model id for `ID` comes from the wire parameters; model id 670 (the FT-991 family) uses shorter `SH` and `RM5` tails and does not answer `VS`, `ST` or `RF`, which the FTDX10 and FTDX101 do. `TX1` only sets the virtual PTT flag: no RF, no gate. Not modeled: VFO selection and roofing filter settings are accepted and ignored. Synchronous, no I/O, mutates only the virtual state.
 
+### `fn yaesu_tx_band_model(&self) -> bool` [@ANCHOR: radioctl:radioctl_virtual_yaesu_tx_band]
+
+Tells the virtual Yaesu interpreter whether this model's `FT` picks the transmitting band, Main or Sub (description value `yaesu.tx_band = true`: FTDX5000 and FTDX9000). Then `FT;` answers `FT0;` (Main) or `FT1;` (Sub) from the stored band, and `FT2;`/`FT3;` set Main or Sub; other models keep the split meaning of `FT`. Inspects the wire parameters only; false for any non-Yaesu wire. Pure.
+
 ### `fn yaesu_cf(&self) -> bool` [@ANCHOR: radioctl:radioctl_virtual_yaesu_cf]
 
 Tells the virtual Yaesu interpreter whether this model switches its receive clarifier with the `CF` command (description value `yaesu.clarifier = "cf-receive"`, the FT-891) instead of `RT`/`XT`. It inspects the wire parameters only and returns false for any non-Yaesu wire. `yaesu_command` uses it to guard the `CF0;` read and the `CF010;`/`CF000;` sets, so a model without the form still answers `?;`. The two-switch form of the FT-710 has its own sibling test (`yaesu_cf_rx_tx`, `"cf-rx-tx"`) with the `CF000` read and `CF001` offset. Pure, no side effects.
@@ -124,6 +128,10 @@ Number of digits in the frequency fields of `FA`, `FB` and P2 of `IF` for the de
 ### `fn cf_receive(&self) -> bool` [@ANCHOR: radioctl:radioctl_yaesu_engine_cf_receive]
 
 True when the model's clarifier is switched with the `CF` command alone (`yaesu.clarifier = "cf-receive"`, the FT-891): `CF010;` on, `CF000;` off, `CF0;` reads, and only the receive clarifier exists. The other styles are separate private checks: `rt_receive` (`"rt-receive"`, FT-450 and FT-450D) keeps `RT` with no `XT`, and `cf_rx_tx` (`"cf-rx-tx"`, FT-710) uses one `CF` for both switches and the offset. When this is true, `encode` refuses XIT with `Unsupported`. Reads the description only; pure.
+
+### `fn tx_band(&self) -> bool` [@ANCHOR: radioctl:radioctl_yaesu_engine_tx_band]
+
+True when the model's `FT` picks the transmitting band, Main or Sub (`yaesu.tx_band = true`, the FTDX5000 and FTDX9000 books): `SetTxReceiver` sends `FT2;` for Main and `FT3;` for Sub, `GetTxReceiver` sends `FT;`, and an `FT0;`/`FT1;` answer decodes to `TxReceiver(Main|Sub)` instead of a split flag. The other receiver ops (`SelectReceiver`, dual watch) are refused as unsupported on these models. Reads the description only; pure.
 
 ### `fn split_st(&self) -> bool` [@ANCHOR: radioctl:radioctl_yaesu_engine_split_st]
 

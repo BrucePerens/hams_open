@@ -10,7 +10,7 @@
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
 //! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.scope_link` (`lan`, the default, or `serial`: how a TS-890S sends its scopes), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
 //! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`), `yaesu.clarifier` (`"cf-receive"` when the clarifier is the receive-only `CF` command, `"cf-rx-tx"` when `CF` switches both, `"rt-receive"` when it is `RT` with no `XT`; `"rt-xt"` or absent otherwise),
-//! `yaesu.split` (`"st"` when split is the `ST` command; `"ft"` or absent otherwise),
+//! `yaesu.split` (`"st"` when split is the `ST` command; `"ft"` or absent otherwise), `yaesu.tx_band` (true when `FT` picks the Main or Sub transmit band),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
 //! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
@@ -232,6 +232,9 @@ struct YaesuSection {
     /// `"st"`: split is the `ST` command (see `YaesuParams::split_st`); `"ft"` is the default.
     #[serde(default)]
     split: Option<String>,
+    /// `true`: `FT` picks the transmitting band, Main or Sub (see `YaesuParams::tx_band`).
+    #[serde(default)]
+    tx_band: bool,
 }
 
 #[derive(Deserialize)]
@@ -686,6 +689,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
                         )))
                     }
                 },
+                tx_band: y.tx_band,
             })
         })
         .transpose()?;
@@ -1368,6 +1372,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         }
         if yaesu.split_st {
             keys.push("yaesu.split".to_string());
+        }
+        if yaesu.tx_band {
+            keys.push("yaesu.tx_band".to_string());
         }
     }
     if let Some(legacy) = &description.yaesu_legacy {
