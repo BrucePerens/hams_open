@@ -156,9 +156,15 @@ any other account is refused with an access error). Example for systemd:
 # odoo.service
 [Service]
 RuntimeDirectory=odoo
-RuntimeDirectoryMode=0750
+RuntimeDirectoryMode=0755
 SupplementaryGroups=hamsd
 ```
+
+systemd creates `/run/odoo` owned by the unit's own `User=`/`Group=` (`odoo:odoo`), not by `SupplementaryGroups`, so a mode of
+`0750` would keep every daemon user out of the directory and none could reach the socket. `0755` only lets them traverse it:
+who may connect is decided by the socket file itself (owner `odoo`, group `hamsd`, mode `0660`) and by `unix_peers`.
+`SupplementaryGroups=hamsd` is needed because Odoo must be a member of the group it gives the socket to; the unit fails to start
+(exit status 216/GROUP) if that group does not exist, so create it first (`groupadd --system hamsd`).
 
 ```ini
 # odoo.conf
@@ -168,7 +174,7 @@ hams_rpc_guard_socket_mode = 0660
 ```
 
 and `hams_rpc_guard.unix_peers = hamsd_backup=backup_service, hamsd_pager=pager_service`,
-`hams_rpc_guard.rpc_transport = unix`. The directory must let the daemon users traverse it (group `hamsd`, mode 0750).
+`hams_rpc_guard.rpc_transport = unix`. The directory must let the daemon users traverse it (mode 0755, see above).
 The identity `unix:<user>` can also be given a `clients` entry in `rpc_exposure.json`, which narrows the daemon like a
 certificate subject (both lists must allow a pair).
 
