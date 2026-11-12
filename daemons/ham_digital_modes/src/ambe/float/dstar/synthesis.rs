@@ -13,6 +13,7 @@ use crate::ambe::float::mbe_synthesis::{BadFrameAction, ErrorPolicy};
 use crate::ambe::float::tia_102_baba::unvoiced_synthesis::N;
 use crate::ambe::float::tone_synthesis::{dstar_tone_amplitude, ToneSynthesizer};
 
+// [@ANCHOR: dstar_synthesis_dstar_synthesis_decoder_struct]
 pub struct DStarSynthesisDecoder {
     dequant: DStarDecoderState,
     synth: MbeSynthesizer,
@@ -182,6 +183,7 @@ impl Default for DStarSynthesisDecoder {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: dstar_synthesis_dstar_synthesis_decoder_struct]
     use super::*;
     use crate::ambe::float::dstar::decode::RawParameters;
     use crate::ambe::float::dstar::encode::{build_frame, pack_raw_parameters};

@@ -17,6 +17,7 @@ use crate::ambe::float::mbe_encode::{
 use crate::ambe::float::tia_102_baba::encoder::{FrameAnalyzer, HighPassFilter};
 use crate::ambe::float::tone_detect::{detect_tone, volume_for_amplitude, DetectedTone};
 
+// [@ANCHOR: dstar_encoder_encoder_struct_alt]
 pub struct Encoder {
     analyzer: FrameAnalyzer,
     high_pass: HighPassFilter,
@@ -150,6 +151,7 @@ impl Default for Encoder {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: dstar_encoder_encoder_struct_alt]
     use super::*;
     use crate::ambe::float::dstar::decode::{parse_frame, DequantizedFrame};
 

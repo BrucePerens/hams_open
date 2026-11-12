@@ -18,6 +18,7 @@ use crate::ambe::float::tone_synthesis::{
     ToneSynthesizer, AMBE_PLUS_2_TONE_RMS, CALL_BUSY_HZ, CALL_DIAL_HZ, CALL_RING_HZ,
 };
 
+// [@ANCHOR: ambe_plus_2_synthesis_ambe_plus2_synthesis_decoder_struct]
 pub struct AmbePlus2SynthesisDecoder {
     dequant: DecoderState,
     synth: MbeSynthesizer,

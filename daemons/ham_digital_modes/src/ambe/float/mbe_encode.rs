@@ -18,6 +18,7 @@
 use std::f64::consts::{PI, SQRT_2};
 
 /// The per-mode tables the quantizer searches.
+// [@ANCHOR: float_mbe_encode_mode_tables_struct]
 pub struct ModeTables<'a> {
     pub vuv: &'a [[bool; 8]],
     pub dg: &'a [f64],
@@ -36,6 +37,7 @@ pub struct ModeTables<'a> {
 
 /// What the frame's analysis wants the decoder to reproduce. `voiced` and `ml` are 1-indexed by harmonic (index 0
 /// unused), length `l + 1`.
+// [@ANCHOR: float_mbe_encode_speech_target_struct]
 pub struct SpeechTarget<'a> {
     pub l: u32,
     pub w0: f64,
@@ -46,12 +48,14 @@ pub struct SpeechTarget<'a> {
 }
 
 /// The decoder-side state the recursion predicts from (`DStarDecoderState` / `DecoderState` fields).
+// [@ANCHOR: float_mbe_encode_prev_state_struct]
 pub struct PrevState<'a> {
     pub l: u32,
     pub log2_ml: &'a [f64],
     pub gamma: f64,
 }
 
+// [@ANCHOR: float_mbe_encode_quantized_speech_struct]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct QuantizedSpeech {
     pub b1: u32,
@@ -258,6 +262,7 @@ pub fn quantize_speech(
 }
 
 /// Frame-to-frame state of the voicing/amplitude analysis (energy tracker and previous band decisions).
+// [@ANCHOR: float_mbe_encode_analysis_state_struct]
 pub struct AnalysisState {
     xi_max: f64,
     prev_bands: Vec<bool>,

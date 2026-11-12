@@ -15,6 +15,7 @@
 //! Which bits are worth correcting was measured with `examples/ambe_bit_sensitivity.rs`.
 
 /// What the continuity prior looks at, computed from one decoded frame.
+// [@ANCHOR: float_concealment_descriptor_struct]
 #[derive(Clone, Debug)]
 pub struct Descriptor {
     pub w0: f64,
@@ -52,6 +53,7 @@ impl Descriptor {
 }
 
 /// Tunable constants; `Default` is the tuned set.
+// [@ANCHOR: float_concealment_conceal_params_struct]
 #[derive(Clone, Copy, Debug)]
 pub struct ConcealParams {
     /// Laplace scale of the level change between frames, dB.
@@ -105,6 +107,7 @@ impl Default for ConcealParams {
 }
 
 /// What to do with the frame.
+// [@ANCHOR: float_concealment_decision_enum]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Decision {
     /// Use candidate `index`.
@@ -113,6 +116,7 @@ pub enum Decision {
     Repeat { scale: f64, reset: bool },
 }
 
+// [@ANCHOR: float_concealment_concealer_struct]
 pub struct Concealer {
     pub params: ConcealParams,
     previous: Option<Descriptor>,
@@ -215,6 +219,10 @@ impl Concealer {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: float_concealment_descriptor_struct]
+    // Tests [@ANCHOR: float_concealment_conceal_params_struct]
+    // Tests [@ANCHOR: float_concealment_decision_enum]
+    // Tests [@ANCHOR: float_concealment_concealer_struct]
     use super::*;
 
     /// A descriptor of a flat spectrum: sixteen harmonics of equal amplitude, all voiced or all not.

@@ -23,6 +23,7 @@ use crate::ambe::general::fec::golay_decode;
 /// trap) -- real validation needs either a genuine round trip against known data (this module's own
 /// tests do that) or the same kind of multi-frame, perturbation-based empirical check the P25
 /// investigation used against the real chip.
+// [@ANCHOR: decode_parsed_frame_struct]
 pub struct ParsedFrame {
     /// The 49 decoded data bits, packed MSB-first into a `u64` (bit 48 down to bit 0).
     pub d: u64,
@@ -83,6 +84,7 @@ fn bit(d: u64, msb_index: usize) -> u32 {
 /// The nine raw parameter indices `b0..b8`, extracted from the 49 decoded data bits per the exact
 /// bit mapping documented in `mod.rs`'s own doc comment (traced directly from mbelib's real source,
 /// not guessed).
+// [@ANCHOR: dstar_decode_raw_parameters_struct]
 pub struct RawParameters {
     pub b0: u32,
     pub b1: u32,
@@ -123,6 +125,7 @@ pub fn extract_raw_parameters(d: u64) -> RawParameters {
 /// silence frame under D-STAR is decoded as ordinary (if pitch-unusual) speech by mbelib itself, not
 /// just by this crate. That is a real property of D-STAR's own encoding, not a gap this function
 /// needs to paper over.
+// [@ANCHOR: dstar_decode_frame_kind_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameKind {
     /// `b0` anything except 126/127: a real, voiced/unvoiced speech frame -- the common case,
@@ -152,6 +155,7 @@ pub fn classify_b0(b0: u32) -> FrameKind {
 /// | `123..128` | Invalid/reserved |
 /// | `128..=163` | A dual tone (DTMF is one, not the only, dual-tone signal) -- see [`dtmf_digit_from_tone_index`] |
 /// | `164..=255` (`index`'s remaining 8-bit values) | Invalid/reserved |
+// [@ANCHOR: dstar_decode_tone_kind_enum]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ToneKind {
     Invalid,
@@ -176,6 +180,7 @@ pub fn classify_tone_index(index: u32) -> ToneKind {
 
 /// A tone frame's own real payload: `index` (see [`classify_tone_index`]/[`ToneKind`] for what it
 /// means) and `volume`, an 8-bit level with no further documented structure.
+// [@ANCHOR: decode_tone_payload_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TonePayload {
     pub index: u32,
@@ -248,6 +253,7 @@ pub fn dtmf_digit_from_tone_index(index: u32) -> Option<(u8, u8)> {
 /// Persistent decoder state across frames -- the previous frame's own `L~`, its (post-inverse-DCT)
 /// `log2` spectral-amplitude history, and `γ`, all of which the gain/spectral-magnitude recursion
 /// below genuinely needs (mirroring mbelib's own `prev_mp` argument).
+// [@ANCHOR: decode_dstar_decoder_state_struct]
 pub struct DStarDecoderState {
     pub l: u32,
     pub log2_ml: Vec<f64>,
@@ -275,6 +281,7 @@ impl DStarDecoderState {
 /// per-harmonic voicing, and reconstructed spectral amplitudes `Ml[1..=l]` (1-indexed to match the
 /// spec-style harmonic numbering `mod.rs`'s own doc comment and this whole module use throughout;
 /// index 0 is unused padding).
+// [@ANCHOR: decode_dstar_parameters_struct]
 pub struct DStarParameters {
     pub l: u32,
     pub w0: f64,
@@ -288,6 +295,7 @@ pub struct DStarParameters {
 /// did before `classify_b0`/[`FrameKind::Tone`] existed (see this module's own doc comment history:
 /// a live chip capture with `TD_ENABLE` on and a DTMF/tone stimulus reliably produces `b0 in
 /// {126,127}`, which the pre-fix `dequantize` ran straight through the voiced-speech path).
+// [@ANCHOR: dstar_decode_dequantized_frame_enum_alt]
 pub enum DequantizedFrame {
     Speech(DStarParameters),
     Tone(TonePayload),
@@ -491,6 +499,14 @@ pub fn dequantize(d: u64, state: &mut DStarDecoderState) -> DequantizedFrame {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: decode_parsed_frame_struct]
+    // Tests [@ANCHOR: dstar_decode_raw_parameters_struct]
+    // Tests [@ANCHOR: dstar_decode_frame_kind_enum]
+    // Tests [@ANCHOR: dstar_decode_tone_kind_enum]
+    // Tests [@ANCHOR: decode_tone_payload_struct]
+    // Tests [@ANCHOR: decode_dstar_decoder_state_struct]
+    // Tests [@ANCHOR: decode_dstar_parameters_struct]
+    // Tests [@ANCHOR: dstar_decode_dequantized_frame_enum_alt]
     use super::*;
     use crate::ambe::float::dstar::whiten_c1;
     use crate::ambe::general::fec::golay_encode;

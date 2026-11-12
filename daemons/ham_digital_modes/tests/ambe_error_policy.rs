@@ -316,3 +316,6 @@ mod dstar_reserved_codes {
 // Tests [@ANCHOR: concealment_concealer_struct]
 // Tests [@ANCHOR: concealment_decision_enum]
 // Tests [@ANCHOR: concealment_descriptor_struct]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: ambe_plus_2_synthesis_ambe_plus2_synthesis_decoder_struct]

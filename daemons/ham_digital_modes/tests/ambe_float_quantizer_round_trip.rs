@@ -228,3 +228,10 @@ fn ambe_plus_2_quantizer_inverts_the_decoder() {
         "too few speech frames checked: {checked}"
     );
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: float_mbe_encode_analysis_state_struct]
+// Tests [@ANCHOR: float_mbe_encode_mode_tables_struct]
+// Tests [@ANCHOR: float_mbe_encode_prev_state_struct]
+// Tests [@ANCHOR: float_mbe_encode_quantized_speech_struct]
+// Tests [@ANCHOR: float_mbe_encode_speech_target_struct]
