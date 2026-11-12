@@ -2,6 +2,7 @@
 from odoo import api, fields, models
 
 
+# [@ANCHOR: tenant_sites_tenant_site_kept_module_tenant_site_kept_module]
 class TenantSiteKeptModule(models.Model):
     _name = "tenant.site.kept.module"
     _description = "Module of another author whose layout and assets tenant sites keep"

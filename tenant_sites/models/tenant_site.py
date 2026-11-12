@@ -9,6 +9,7 @@ LOGIN_LINK_VIEW = "portal.user_sign_in"
 LAYOUT_VIEW_KEYS = ("website.layout", "portal.frontend_layout", "web.frontend_layout", "web.layout", "website.homepage")
 
 
+# [@ANCHOR: tenant_sites_tenant_site_tenant_site]
 class TenantSite(models.Model):
     _name = "tenant.site"
     _description = "Tenant website"

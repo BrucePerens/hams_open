@@ -5,6 +5,7 @@ from odoo.exceptions import ValidationError
 from .. import utils
 
 
+# [@ANCHOR: tenant_sites_tenant_site_own_host_tenant_site_own_host]
 class TenantSiteOwnHost(models.Model):
     _name = "tenant.site.own.host"
     _description = "Hostname pattern of the main site"
