@@ -21,6 +21,8 @@ be identified by the kernel rather than only by a key.
    `[@ANCHOR: hams_rpc_guard:gate_settings]`
 4. A typo in a network list is refused when I save it, and if a bad value reaches the database anyway the gate logs an
    error and treats it as closed. `[@ANCHOR: hams_rpc_guard:check_gate_parameters]` `[@ANCHOR: hams_rpc_guard:read_settings]`
+   A saved change (mode, transport, networks, peers) reaches every running worker at once: writing a `hams_rpc_guard.`
+   parameter clears the zero_sudo cache that the settings are read through. `[@ANCHOR: hams_rpc_guard:parameter_cache_flush]`
 5. With `rpc_transport = unix` the endpoints are refused on TCP and served only on a Unix socket; each connecting
    process's uid/gid (`SO_PEERCRED`) must be in `unix_peers` and may act only as the Odoo logins it is bound to.
    `[@ANCHOR: hams_rpc_guard:judge_unix]` `[@ANCHOR: hams_rpc_guard:install_server_patches]`

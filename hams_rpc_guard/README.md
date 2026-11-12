@@ -339,6 +339,13 @@ mode and is only counted in `report` mode. A parameter read failure is logged an
 (the six gate settings, each mapped to its parser) must parse, or the create/write raises `ValidationError` naming the
 setting. Other keys are untouched. **Test:** `test_endpoint_gate.TestSettings.test_a_bad_value_cannot_be_written`.
 
+### `hams_rpc_guard:parameter_cache_flush`
+
+**Purpose.** `create`, `write` and `unlink` of `ir.config_parameter` call `_flush_hams_rpc_guard_cache(keys)`, which, when any key
+starts with `hams_rpc_guard.`, clears zero_sudo's cache of `_get_system_param` (`zero_sudo.security.utils._invalidate_model_cache`),
+the cache every setting of this module is read through (process-lifetime L1, 24 h in Redis, otherwise cleared by nothing).
+**Test:** `test_endpoint_gate.TestSettings.test_a_changed_setting_is_read_fresh_not_from_the_zero_sudo_cache`.
+
 ### `hams_rpc_guard:listener_options` and `hams_rpc_guard:listener_config`
 
 **Purpose.** The server-file options (`OPTION_PATH`, `OPTION_MODE`, `OPTION_GROUP`, `OPTION_OWNER`; constants

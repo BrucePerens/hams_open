@@ -199,6 +199,22 @@ class TestSettings(HamsTransactionCase):
             self.env.flush_all()
         params.create({"key": "some.other.key", "value": "10.99.0.0/40"})  # other keys are not ours to judge
 
+    def test_a_changed_setting_is_read_fresh_not_from_the_zero_sudo_cache(self):
+        """The gate and the method guard read their settings through `zero_sudo.security.utils._get_system_param`, whose result
+        is cached (process-lifetime L1, 24 h in Redis) and which nothing cleared on a parameter write: found in the
+        2026-11-12 rehearsal, where `rpc_transport` and `unix_peers` stayed stale in every worker after being set, and so
+        would a switch from report to enforce, or back to `off` as a rollback."""
+        # Tests [@ANCHOR: hams_rpc_guard:parameter_cache_flush]
+        utils = self.env["zero_sudo.security.utils"]
+        params = self.env["ir.config_parameter"]
+        params.search([("key", "=", gate.UNIX_PEERS_PARAM)]).unlink()
+        record = params.create({"key": gate.UNIX_PEERS_PARAM, "value": "alice"})
+        self.assertEqual(utils._get_system_param(gate.UNIX_PEERS_PARAM, ""), "alice")
+        record.write({"value": "bob"})
+        self.assertEqual(utils._get_system_param(gate.UNIX_PEERS_PARAM, ""), "bob")
+        record.unlink()
+        self.assertEqual(utils._get_system_param(gate.UNIX_PEERS_PARAM, "gone"), "gone")
+
     def test_the_parameters_are_readable_through_the_zero_sudo_whitelist(self):
         whitelist = self.env["zero_sudo.security.utils"]._get_param_read_whitelist()
         for key in (gate.ALLOWED_NETWORKS_PARAM, gate.LEGACY_PARAM, gate.TRUSTED_PROXIES_PARAM,
