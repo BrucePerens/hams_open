@@ -42,12 +42,33 @@ hyphens and apostrophes as spaces), `_tokens()` `[@ANCHOR: zero_sudo:club_spam_t
 `score_entry(url, title)` `[@ANCHOR: zero_sudo:club_spam_score_entry]` scores a page from both and keeps the better, never
 adding the two.
 
-## Reading Sitemaps Without an XML Parser `[@ANCHOR: zero_sudo:club_spam_parse_sitemap]`
+## Reading Sitemaps Without an XML Parser
 
-`parse_sitemap(text)` reads a sitemap index or URL set with regular expressions and returns its kind, up to 5,000 entries
-(address and last-modified text) and the true entry count. A hostile site could send an entity bomb; a regular expression has no
-entities to expand. `is_spam_feed_sitemap(url)` `[@ANCHOR: zero_sudo:club_spam_is_spam_feed_sitemap]` recognises the address
-shape the spam plugins inject into `robots.txt` (`/?feed=xmlsitemap1225`), which no legitimate sitemap plugin writes.
+A hostile site could send an entity bomb; a regular expression has no entities to expand, so sitemaps are read with regular expressions only.
+
+### parse_sitemap `[@ANCHOR: zero_sudo:club_spam_parse_sitemap]`
+
+**Signature.** `parse_sitemap(text, limit=MAX_SITEMAP_ENTRIES) -> (kind, entries, total)`
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `text` | str | The sitemap file as fetched. Anything that is not a str is treated as empty. |
+| `limit` | int | The most entries returned (default 5,000, `MAX_SITEMAP_ENTRIES`). |
+
+**Returns.** `kind` is `"index"` when the text holds a `<sitemapindex>` (its `<sitemap>` blocks are read), `"urlset"` when it has `<url>` blocks or
+a `<urlset>` tag, and `""` when neither. `entries` is a list of `(address, lastmod text)` pairs, in file order, up to `limit`: the `<loc>` is
+read with or without CDATA, HTML-unescaped and cut to `MAX_URL_CHARS` (300); a block with no `<loc>` is skipped; the `<lastmod>` is the raw
+text or `""`. `total` is the number of blocks in the file, which can exceed `len(entries)`, so a caller can tell a capped read.
+
+**Errors.** None raised; bad input gives `("", [], 0)`. **Special.** Pure, no network, no state, safe from any thread. Cost is linear in the
+text and bounded by the fetcher's size cap, since the regexes are non-nested. Tests: `zero_sudo/tests/test_club_spam.py` (real dates, an entity bomb).
+
+### is_spam_feed_sitemap `[@ANCHOR: zero_sudo:club_spam_is_spam_feed_sitemap]`
+
+`is_spam_feed_sitemap(url) -> bool` is True when `str(url or "")` contains `?feed=xmlsitemap` or `&feed=xmlsitemap`, with or without a number
+after it (case-insensitive): the address shape the spam plugins inject into `robots.txt` (`/?feed=xmlsitemap1225`). No legitimate
+WordPress sitemap plugin writes that (core uses `/wp-sitemap.xml`, Yoast `/sitemap_index.xml`). Any value, including `None`, is accepted;
+nothing is raised. `build_evidence` counts the `robots.txt` sitemap addresses it matches (`robots_spam_sitemaps`) and `is_suspicious` treats any match as a signal. Pure, no network.
 
 ## How Old Is the Spam: Not From the ETag `[@ANCHOR: zero_sudo:club_spam_age_days]`
 
@@ -60,17 +81,64 @@ in ten of at least twenty URLs as STAMPED: the spam plugin's extra sitemaps carr
 nothing about the pages, so their ages are None and cannot make the age gate fail. When too few flagged addresses have a usable
 date, our own history decides: the time the site was first seen significantly spammed and not clean since.
 
-## Reading a Home Page `[@ANCHOR: zero_sudo:club_spam_extract_home_evidence]`
+## Reading a Home Page
 
-`extract_home_evidence(markup, url)` reads a home page with the standard library parser and returns whether it looks like
-WordPress, its title, every link (with the "recent posts" widget and anything inside an inline-styled hidden element marked),
-and counts of hidden and outbound links. A hide is recognised only in an inline `style` (`display:none`,
-`visibility:hidden`, a font size of 0 to 2 pixels, a large negative indent or offset, zero opacity): stylesheet classes are
-common in honest themes and are not read. A link to the page itself (the comment form's `#respond`) is left out. The parser
-class is a stack of open tags with two inherited flags: `__init__` `[@ANCHOR: zero_sudo:club_spam_parser_init]`,
-`handle_starttag` `[@ANCHOR: zero_sudo:club_spam_parser_start]`, `handle_endtag` `[@ANCHOR: zero_sudo:club_spam_parser_end]` and
-`handle_data` `[@ANCHOR: zero_sudo:club_spam_parser_data]`; relative links are made absolute by `_join()`
-`[@ANCHOR: zero_sudo:club_spam_join]`.
+A hide is recognised only in an inline `style` (`display:none`, `visibility:hidden`, a font size of 0 to 2 pixels, a large negative
+indent or offset, zero opacity, `clip: rect(0`) or a `hidden` attribute: stylesheet classes are common in honest themes and are not read.
+
+### extract_home_evidence `[@ANCHOR: zero_sudo:club_spam_extract_home_evidence]`
+
+**Signature.** `extract_home_evidence(markup, base_url) -> dict`
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `markup` | str | The home page HTML, cut to the first 2,500,000 characters; None or non-str reads as empty. |
+| `base_url` | str | The address the page came from; used to make relative links absolute and to tell inside links from outbound ones (host compared without `www.`). |
+
+**Returns.** A JSON-able dict: `wordpress` (True when the `generator` meta names WordPress or at least two `wp-content` / `api.w.org` markers
+are present), `title` (whitespace-collapsed, 160 characters), `entries` (the page's own links, at most 300, each `{"u": absolute address
+(300), "t": anchor text (160), "s": "recent" for the recent-posts widget, "hidden" for a link inside a hidden element, else "link", "x": True
+when the host differs from the base}`, duplicates of the same address and text dropped), `link_count` (links the parser saw), `hidden_links`,
+`hidden_chars` (characters of visible text inside hidden elements), `outbound_links` and `outbound_domains`. `mailto`, `tel`, `javascript`,
+`sms`, `data` and bare `#` links are left out, as is a link to the page itself with only a fragment (the comment form's `#respond`).
+
+**Errors.** None raised. A page that does not parse to the end (`ValueError` or `AssertionError` from the standard parser) is logged at info
+level and what was read is used. **Special.** Pure, no network, no state; uses the standard library `html.parser`, which expands no entities or
+document types, so a hostile page costs only its length.
+
+### _HomeParser `[@ANCHOR: zero_sudo:club_spam_parser_init]`
+
+`_HomeParser` is an `html.parser.HTMLParser` subclass with `convert_charrefs=True`. `__init__()` takes no arguments and sets the state the
+three handlers share: `title` and `_in_title`, `generator` (the generator meta text, 80 characters), `wp_markers` (a counter), `links` (a
+list of dicts `href, text, hidden, recent`), `hidden_chars`, `_stack` (a stack of `(tag, hidden, recent)` for the open elements, not a tree),
+`_anchor` (the link being read) and `_skip_depth` (nesting inside script, style, noscript or template, whose text is ignored). One
+instance serves one page and is not reusable or thread-safe.
+
+### _HomeParser.handle_starttag `[@ANCHOR: zero_sudo:club_spam_parser_start]`
+
+`handle_starttag(tag, attrs)` is called by the parser for each opening tag. It inherits the two flags from the parent on the stack:
+`hidden` becomes true for an inline hiding style or a `hidden` attribute, and stays true for every descendant; `recent` becomes true when the
+`id` or `class` matches a recent-posts widget name (`recent-posts`, `widget_recent_entries`, `latest-posts`). It records the WordPress
+generator and marker attributes, sets `_in_title`, counts a skip-text element, pushes non-void elements on the stack, and for an `<a>` with an
+`href` starts `_anchor` (address cut to 300 characters). Void elements (`br`, `img`, `meta`, ...) are never pushed. Returns nothing.
+
+### _HomeParser.handle_endtag `[@ANCHOR: zero_sudo:club_spam_parser_end]`
+
+`handle_endtag(tag)` pops the stack back to the nearest open element of that tag (a stray end tag with no match changes nothing, which
+keeps broken markup from corrupting the flags), clears `_in_title` for `title`, and leaves a skip-text element. For `</a>` it finishes the
+link: the text is whitespace-collapsed and cut to 160 characters, and the link is appended to `links` unless the page already has 1,200
+links (`MAX_HOME_LINKS * 4`), which bounds memory on a link farm. Returns nothing.
+
+### _HomeParser.handle_data `[@ANCHOR: zero_sudo:club_spam_parser_data]`
+
+`handle_data(data)` receives text. It ignores text inside script, style, noscript and template; appends to the title while inside `<title>`;
+appends to the open link's text; and adds the stripped length to `hidden_chars` when the innermost open element is hidden. Returns nothing.
+
+### _join `[@ANCHOR: zero_sudo:club_spam_join]`
+
+`_join(base_url, href) -> str` is `urllib.parse.urljoin(base_url, href)`: it makes a relative link absolute against the page address.
+It exists as a named function so that both parsers resolve links the same way and tests can patch one place. `extract_home_evidence`
+catches the `ValueError` that `urlsplit` raises for a malformed result; `_join` itself raises nothing for ordinary strings. Pure.
 
 ## The Evidence Sent to Odoo `[@ANCHOR: zero_sudo:club_spam_build_evidence]`
 
@@ -167,16 +235,69 @@ page: a 3xx whose answer has `off_domain` true is `still_spam`; a 2xx (the home 
 `removed`; a 3xx that stays on the domain, 403, 405, 5xx or a timeout is `unknown`, never `removed`. Each result may carry
 `off_domain` (bool: the Location is on another registrable domain), set by the daemon's `PoliteFetcher.head`.
 
-## Cutting Spam Out of a Page `[@ANCHOR: zero_sudo:club_spam_strip_spam_blocks]`
+## Cutting Spam Out of a Page
 
-`strip_spam_blocks(markup, url)` removes, by character span, a recent-posts widget most of whose links are flagged, a hidden
-element holding a flagged link, a list item with one flagged link and any other flagged link, so a model reading a suspect site
-sees the club's own content. The parser class `_StripParser` is a stack with `__init__` `[@ANCHOR: zero_sudo:club_spam_strip_init]`,
-`_offset` `[@ANCHOR: zero_sudo:club_spam_strip_offset]`, `handle_starttag` `[@ANCHOR: zero_sudo:club_spam_strip_start]`,
-`handle_data` `[@ANCHOR: zero_sudo:club_spam_strip_data]` and `handle_endtag` `[@ANCHOR: zero_sudo:club_spam_strip_end]`.
+### strip_spam_blocks `[@ANCHOR: zero_sudo:club_spam_strip_spam_blocks]`
 
-`urlopen_ssrf_safe(..., follow_redirects=False)` `[@ANCHOR: zero_sudo:ssrf_safe_fetch_no_redirect]` hands a 3xx to the caller instead
-of following it, so a HEAD check stays on the host it was asked about.
+**Purpose.** For a site that is suspect but not dropped: removes the spam from a page before a model reads it, so the model sees the club's own content.
+
+**Signature.** `strip_spam_blocks(markup, base_url) -> (str, int)`
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `markup` | str | The page HTML; None or non-str reads as empty. Not modified. |
+| `base_url` | str | The page address, to make relative links absolute before scoring them. |
+
+**Returns.** `(markup without its spam blocks, characters removed)`. Empty input gives `("", 0)`. Spans cut, by character offset in the
+original text: a recent-posts widget at least half of whose links are flagged by `score_entry`; a hidden element that holds a flagged link;
+a list item whose only link is flagged; and any other flagged link. Overlapping spans are merged. A page with nothing flagged comes back
+unchanged with 0.
+
+**Errors.** None raised: a parse failure (`ValueError`, `AssertionError`) is logged at info level and the spam found so far is cut.
+**Special.** Pure, no network, no state. Uses the lexicon only, never a model.
+
+### _StripParser `[@ANCHOR: zero_sudo:club_spam_strip_init]`
+
+`_StripParser(source, base_url)` is an `HTMLParser` (`convert_charrefs=True`) that finds the spans. `source` is the full markup, kept to
+locate tag ends, and `base_url` the page address. `__init__` stores both, builds `_line_starts` (the offset of each line start, so the
+parser's `(line, column)` position can be turned into a character offset), creates the `_stack` of open-element dicts (`tag`, `start`,
+`hidden`, `recent`, `anchors` as a list of flagged booleans, `href`, `text`) and the `spans` result list. Single use per page.
+
+### _StripParser._offset `[@ANCHOR: zero_sudo:club_spam_strip_offset]`
+
+`_offset() -> int` converts the parser's current position (`getpos()`, a 1-based line and 0-based column) into an offset into `source`,
+using `_line_starts` (clamped to the last line). Called at every start tag, for the start of the span, and at every end tag, to find the
+end of the closing tag with `source.find(">", ...)`. Pure; no errors.
+
+### _StripParser.handle_starttag `[@ANCHOR: zero_sudo:club_spam_strip_start]`
+
+`handle_starttag(tag, attrs)` pushes a frame for every non-void element recording where it starts, whether its own inline style hides it,
+whether its `id` or `class` names a recent-posts widget, and for `<a>` its `href`. Unlike the home-page parser the flags are not
+inherited: each frame stands alone because the rule is applied when the element closes. Void elements are skipped. Returns nothing.
+
+### _StripParser.handle_data `[@ANCHOR: zero_sudo:club_spam_strip_data]`
+
+`handle_data(data)` appends the text to every open `<a>` frame on the stack, so a link's anchor text is complete when its end tag comes
+(and so nested markup inside a link counts). It does not look at any other text. Returns nothing.
+
+### _StripParser.handle_endtag `[@ANCHOR: zero_sudo:club_spam_strip_end]`
+
+`handle_endtag(tag)` closes the nearest open frame of that tag (an unmatched end tag is ignored) and decides. For an `<a>` with a real
+`href` (not `mailto`, `tel`, `javascript`, `sms`, `data` or `#`) it makes the address absolute with `_join`, scores it with `score_entry`
+together with the anchor text, records the flag in the frame and in the parent, and, if flagged and the parent is not a list item whose only
+link this is, appends the link's span. For any other element it passes its link flags to the parent, then appends the element's span when
+it is a recent-posts widget with at least half its links flagged, a hidden element with any flagged link, or a list item with exactly one link
+and that one flagged. The span ends after the closing `>` found in `source`.
+
+### urlopen_ssrf_safe with follow_redirects=False `[@ANCHOR: zero_sudo:ssrf_safe_fetch_no_redirect]`
+
+`_NoRedirectHandler.redirect_request(req, fp, code, msg, headers, newurl)` in `zero_sudo/daemon/ssrf_safe_fetch.py` always returns `None`,
+which is how `urllib` is told not to follow a redirect, so the 3xx answer reaches the caller as an `HTTPError` carrying the `Location`
+header. `_build_ssrf_safe_opener(..., follow_redirects=False)` installs it in place of the stock `HTTPRedirectHandler`, and
+`urlopen_ssrf_safe(..., follow_redirects=False)` selects it. The spam HEAD re-check uses this so that a HEAD stays on the host it was
+asked about and a redirect to another registrable domain is reported (`off_domain`) and never fetched. The arguments are those of the
+urllib handler (`req` the request, `fp` the response, `code` the status, `msg`, `headers`, `newurl` the target); the return value is always
+`None`. No state, no I/O, no errors of its own. The SSRF validation of the address still happens before any connection.
 
 ## Settings `[@ANCHOR: zero_sudo:club_spam_config_from_params]`
 
