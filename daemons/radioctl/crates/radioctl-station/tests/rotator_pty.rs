@@ -77,7 +77,7 @@ fn now(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_new_engines_move_read_park_and_refuse_over_a_pty() {
-    for id in ["easycomm2-azel", "easycomm3-satnogs"] {
+    for id in ["easycomm2-azel", "easycomm3-satnogs", "spid-rot2prog"] {
         let d = desc(id);
         let (path, virt) = pty_rotator(&d);
         let rot = open(path, &d).await;
@@ -109,6 +109,29 @@ async fn the_new_engines_move_read_park_and_refuse_over_a_pty() {
             before,
             "nothing written"
         );
+    }
+}
+
+/// The sheet shows ASCII digits in a reply, Hamlib reads plain 0 to 9: both are understood.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rot2prog_reads_ascii_and_plain_digit_replies() {
+    for raw in [true, false] {
+        let d = desc("spid-rot2prog");
+        let (path, virt) = pty_rotator(&d);
+        virt.lock().unwrap().raw_digits = raw;
+        let rot = open(path, &d).await;
+        rot.set_position(215.7, 33.3).await.unwrap();
+        rot.wait_for(215.7, 33.3, 0.05, Duration::from_secs(5))
+            .await
+            .unwrap();
+        let (az, el) = rot.position().await.unwrap();
+        assert!(
+            (az - 215.7).abs() < 0.01 && (el - 33.3).abs() < 0.01,
+            "{raw}: {az} {el}"
+        );
+        let log = virt.lock().unwrap().received().to_vec();
+        // 0x57, "5757" 0x0A "3933" 0x0A, 0x2F, 0x20 : (360 + 215.7) * 10 and (360 + 33.3) * 10
+        assert_eq!(log[0], "57 35 37 35 37 0A 33 39 33 33 0A 2F 20");
     }
 }
 
