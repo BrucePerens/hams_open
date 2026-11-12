@@ -167,6 +167,7 @@ pub fn hz_from_registers(registers: &[u8; 6], multiplier: u8) -> Option<Hz> {
     u64::try_from(hz).ok().map(Hz)
 }
 
+// [@ANCHOR: radioctl_si570_usb_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -177,6 +178,7 @@ enum Pending {
 }
 
 /// What a pending FiFi-SDR parameter read holds.
+// [@ANCHOR: radioctl_si570_usb_fifi_read]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FifiRead {
     VcoFactor,
@@ -238,6 +240,7 @@ fn fifi_mode_of(code: u8) -> Option<Mode> {
 }
 
 /// The Si570 USB client engine.
+// [@ANCHOR: radioctl_si570_usb_si570_usb_engine]
 #[derive(Debug)]
 pub struct Si570UsbEngine {
     desc: RigDescription,
@@ -543,6 +546,7 @@ impl ProtocolEngine for Si570UsbEngine {
 }
 
 /// A virtual Si570 USB board: a [`UsbDevice`] that answers the requests above.
+// [@ANCHOR: radioctl_si570_usb_si570_twin]
 #[derive(Debug)]
 pub struct Si570Twin {
     protocol: UsbProtocol,
@@ -553,6 +557,7 @@ pub struct Si570Twin {
 }
 
 /// The FiFi-SDR parameters the twin holds.
+// [@ANCHOR: radioctl_si570_usb_fifi_state]
 #[derive(Debug)]
 struct FifiState {
     vco_factor: u32,

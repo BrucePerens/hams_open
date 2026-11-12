@@ -921,3 +921,11 @@ async fn the_funcube_gain_commands_follow_the_dongle_model() {
 // Tests [@ANCHOR: radioctl_funcube_funcube_twin]
 // Tests [@ANCHOR: radioctl_funcube_pending]
 // Tests [@ANCHOR: radioctl_funcube_reading]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_perseus_engine_perseus_engine]
+// Tests [@ANCHOR: radioctl_si570_usb_fifi_read]
+// Tests [@ANCHOR: radioctl_si570_usb_fifi_state]
+// Tests [@ANCHOR: radioctl_si570_usb_pending]
+// Tests [@ANCHOR: radioctl_si570_usb_si570_twin]
+// Tests [@ANCHOR: radioctl_si570_usb_si570_usb_engine]

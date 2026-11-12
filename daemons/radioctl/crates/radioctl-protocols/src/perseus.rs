@@ -109,6 +109,7 @@ fn usb_err(what: &str, failure: UsbFailure) -> RigError {
 }
 
 /// Where the loader looks for the user-supplied firmware.
+// [@ANCHOR: radioctl_perseus_perseus_files]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PerseusFiles {
     /// The FX2 firmware, Intel HEX.
@@ -162,6 +163,7 @@ fn read_file(path: &Path, what: &str) -> Result<Vec<u8>, RigError> {
 }
 
 /// One data record of an Intel HEX file.
+// [@ANCHOR: radioctl_perseus_hex_record]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HexRecord {
     /// Load address in the FX2 RAM.
@@ -305,6 +307,7 @@ pub fn configure_fpga(
 }
 
 /// The product record the board keeps in its EEPROM.
+// [@ANCHOR: radioctl_perseus_product_id]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProductId {
     /// Serial number.
@@ -389,6 +392,7 @@ pub fn tuning_word(frequency_hz: f64) -> u32 {
 }
 
 /// A board with firmware running and the FPGA configured, ready for control.
+// [@ANCHOR: radioctl_perseus_perseus_control]
 pub struct PerseusControl {
     dev: Box<dyn UsbDevice>,
     product: ProductId,
@@ -586,6 +590,7 @@ pub const SESSION_PRESELECTOR: u8 = 0x25;
 
 /// A running board as a [`UsbDevice`] that takes the session requests above. Dropping it sends
 /// the board's shutdown command (FPGA reset, preselector off, 30 dB attenuation), the safe state.
+// [@ANCHOR: radioctl_perseus_perseus_session]
 pub struct PerseusSession {
     control: PerseusControl,
     frequency_hz: Option<f64>,
@@ -738,6 +743,7 @@ impl UsbDevice for PerseusSession {
 
 /// Opens a real (or virtual) board through the inner backend, loading the user's firmware as
 /// needed, and returns a [`PerseusSession`]. The USB link calls it on every (re)open.
+// [@ANCHOR: radioctl_perseus_perseus_loader_backend]
 pub struct PerseusLoaderBackend {
     inner: Arc<dyn UsbBackend>,
     files: PerseusFiles,
@@ -777,6 +783,7 @@ impl UsbBackend for PerseusLoaderBackend {
 
 /// A virtual Perseus whose firmware is already running and FPGA configured: opens straight into
 /// a [`PerseusSession`], needing no files. Clone it: all clones are the same board.
+// [@ANCHOR: radioctl_perseus_ready_virtual_perseus]
 #[derive(Clone)]
 pub struct ReadyVirtualPerseus {
     board: VirtualPerseusBackend,
@@ -809,6 +816,7 @@ impl UsbBackend for ReadyVirtualPerseus {
 }
 
 /// What the virtual board has been told, for tests.
+// [@ANCHOR: radioctl_perseus_virtual_perseus_state]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct VirtualPerseusState {
     /// True once the FX2 CPU was held in reset and released after RAM writes.
@@ -827,6 +835,7 @@ pub struct VirtualPerseusState {
     pub commands: Vec<Vec<u8>>,
 }
 
+// [@ANCHOR: radioctl_perseus_virtual_inner]
 struct VirtualInner {
     state: VirtualPerseusState,
     cpu_held: bool,
@@ -837,6 +846,7 @@ struct VirtualInner {
 
 /// A virtual Perseus on a virtual USB bus: it appears as the blank board until the FX2 firmware
 /// has been loaded, then as the running board. Clone it: all clones are the same board.
+// [@ANCHOR: radioctl_perseus_virtual_perseus_backend]
 #[derive(Clone)]
 pub struct VirtualPerseusBackend {
     inner: Arc<Mutex<VirtualInner>>,
@@ -898,6 +908,7 @@ impl UsbBackend for VirtualPerseusBackend {
     }
 }
 
+// [@ANCHOR: radioctl_perseus_virtual_perseus_handle]
 struct VirtualPerseusHandle {
     inner: Arc<Mutex<VirtualInner>>,
 }
@@ -1027,6 +1038,17 @@ impl UsbDevice for VirtualPerseusHandle {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_perseus_perseus_files]
+    // Tests [@ANCHOR: radioctl_perseus_hex_record]
+    // Tests [@ANCHOR: radioctl_perseus_product_id]
+    // Tests [@ANCHOR: radioctl_perseus_perseus_control]
+    // Tests [@ANCHOR: radioctl_perseus_perseus_session]
+    // Tests [@ANCHOR: radioctl_perseus_perseus_loader_backend]
+    // Tests [@ANCHOR: radioctl_perseus_ready_virtual_perseus]
+    // Tests [@ANCHOR: radioctl_perseus_virtual_perseus_state]
+    // Tests [@ANCHOR: radioctl_perseus_virtual_inner]
+    // Tests [@ANCHOR: radioctl_perseus_virtual_perseus_backend]
+    // Tests [@ANCHOR: radioctl_perseus_virtual_perseus_handle]
     #![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
     use super::*;
     use std::time::Duration;

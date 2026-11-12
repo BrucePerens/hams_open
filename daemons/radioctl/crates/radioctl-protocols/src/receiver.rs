@@ -69,6 +69,7 @@ pub trait Dialect: Debug + Send + 'static {
 }
 
 /// A protocol engine for a line-oriented receiver.
+// [@ANCHOR: radioctl_receiver_line_engine]
 #[derive(Debug)]
 pub struct LineEngine<D: Dialect> {
     desc: RigDescription,
@@ -214,6 +215,7 @@ pub trait ReceiverTwin: Debug + Send {
 }
 
 /// The line side of a virtual receiver: collects bytes into command lines for a twin.
+// [@ANCHOR: radioctl_receiver_virtual_receiver]
 #[derive(Debug)]
 pub struct VirtualReceiver {
     twin: Box<dyn ReceiverTwin>,

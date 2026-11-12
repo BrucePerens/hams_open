@@ -172,6 +172,7 @@ pub fn check_receive_only(desc: &RigDescription) -> Result<(), RigError> {
 }
 
 /// The engine for one `radiod` channel.
+// [@ANCHOR: radioctl_radiod_net_radiod_engine]
 #[derive(Debug)]
 pub struct RadiodEngine {
     desc: RigDescription,
@@ -303,6 +304,7 @@ impl ProtocolEngine for RadiodEngine {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_radiod_net_radiod_engine]
     use super::*;
     use radioctl_core::capability::Capability;
     use radioctl_core::rigfile;

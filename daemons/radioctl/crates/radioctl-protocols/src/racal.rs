@@ -34,6 +34,7 @@ use crate::serial_vendor::{parse_decimal, vendor_of, RxBuffer, TwinSnapshot, Ven
 const CR: u8 = b'\r';
 
 /// The Racal-family command dialects.
+// [@ANCHOR: radioctl_racal_dialect]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialect {
     /// Racal RA6790/GM.
@@ -152,6 +153,7 @@ pub fn parse_mhz(text: &[u8]) -> Option<Hz> {
     w.checked_mul(1_000_000)?.checked_add(f).map(Hz)
 }
 
+// [@ANCHOR: radioctl_racal_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -160,6 +162,7 @@ enum Pending {
 }
 
 /// The Racal client engine.
+// [@ANCHOR: radioctl_racal_racal_engine]
 #[derive(Debug)]
 pub struct RacalEngine {
     desc: RigDescription,
@@ -281,6 +284,7 @@ impl ProtocolEngine for RacalEngine {
 }
 
 /// A virtual Racal RA6790.
+// [@ANCHOR: radioctl_racal_racal_twin]
 #[derive(Debug)]
 pub struct RacalTwin {
     dialect: Dialect,
@@ -376,6 +380,10 @@ impl VendorTwin for RacalTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_racal_dialect]
+    // Tests [@ANCHOR: radioctl_racal_pending]
+    // Tests [@ANCHOR: radioctl_racal_racal_engine]
+    // Tests [@ANCHOR: radioctl_racal_racal_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

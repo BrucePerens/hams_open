@@ -16,6 +16,7 @@ use radioctl_core::units::Hz;
 
 /// What a vendor twin holds, for harnesses that compare it with another implementation of the
 /// same protocol (the Hamlib oracle batch).
+// [@ANCHOR: radioctl_serial_vendor_twin_snapshot]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TwinSnapshot {
     /// The frequency of the receive VFO.
@@ -41,6 +42,7 @@ pub trait VendorTwin: Send {
 }
 
 /// Receive buffer that drops a partial frame older than [`PARTIAL_FRAME_TIMEOUT`].
+// [@ANCHOR: radioctl_serial_vendor_rx_buffer]
 #[derive(Debug, Default)]
 pub struct RxBuffer {
     bytes: Vec<u8>,
@@ -196,6 +198,8 @@ pub fn twin_for(desc: &RigDescription) -> Result<Box<dyn VendorTwin>, RigError> 
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_serial_vendor_twin_snapshot]
+    // Tests [@ANCHOR: radioctl_serial_vendor_rx_buffer]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

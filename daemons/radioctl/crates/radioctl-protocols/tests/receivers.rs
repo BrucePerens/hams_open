@@ -225,3 +225,7 @@ fn only_the_icom_pcr_receivers_have_an_open_step() {
         );
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_receiver_line_engine]
+// Tests [@ANCHOR: radioctl_receiver_virtual_receiver]

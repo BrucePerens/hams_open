@@ -60,6 +60,7 @@ pub fn parse_khz(text: &[u8]) -> Option<Hz> {
 }
 
 /// The EKD-500 client engine.
+// [@ANCHOR: radioctl_rft_rft_engine]
 #[derive(Debug)]
 pub struct RftEngine {
     desc: RigDescription,
@@ -117,6 +118,7 @@ impl ProtocolEngine for RftEngine {
 }
 
 /// A virtual RFT EKD-500. It accepts the frequency command and says nothing.
+// [@ANCHOR: radioctl_rft_rft_twin]
 #[derive(Debug)]
 pub struct RftTwin {
     rx: RxBuffer,
@@ -165,6 +167,8 @@ impl VendorTwin for RftTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_rft_rft_engine]
+    // Tests [@ANCHOR: radioctl_rft_rft_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);
