@@ -261,6 +261,207 @@ pub fn passfail(s: &mut Link, args: &Value) -> Result<Value, String> {
     Ok(r)
 }
 
+/// The measurement items `PACU` installs (the guide's list; `ALL` is a snapshot, read with `snapshot`).
+const MEASURE_ITEMS: [&str; 28] = [
+    "PKPK", "MAX", "MIN", "AMPL", "TOP", "BASE", "CMEAN", "MEAN", "STDEV", "VSTD", "RMS", "CRMS",
+    "OVSN", "FPRE", "OVSP", "RPRE", "LEVELX", "DELAY", "TIMEL", "PER", "FREQ", "PWID", "NWID",
+    "RISE", "FALL", "WID", "DUTY", "NDUTY",
+];
+
+/// The delay measurements `MEAD` starts.
+const DELAY_TYPES: [&str; 10] = [
+    "PHA", "FRR", "FRF", "FFR", "FFF", "LRR", "LRF", "LFR", "LFF", "SKEW",
+];
+
+/// What `bench_scope_measure_custom` sets for the measurement gate.
+const GATE_ITEMS: [Item; 3] = [
+    Item {
+        arg: "gate",
+        cmd: "MEGS",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "gate_a_s",
+        cmd: "MEGA",
+        ty: Ty::Num(-1000.0, 1000.0, "S"),
+    },
+    Item {
+        arg: "gate_b_s",
+        cmd: "MEGB",
+        ty: Ty::Num(-1000.0, 1000.0, "S"),
+    },
+];
+
+/// `bench_scope_measure_custom`: the scope's own measurement list. `clear` removes the installed measurements (`MEACL`); `install` (up to 5 of
+/// `{item, channel}`) installs them (`PACU`); `statistics` is `on`, `off` or `reset` (`PASTAT`); `delay` (`{type, sources}`, for example PHA and C1-C2) starts a
+/// delay measurement (`MEAD`) and reads it; the gate (`gate`, `gate_a_s`, `gate_b_s`) limits what is measured. It always reads the installed
+/// measurements (`PAVA? CUSTALL`) and, with statistics on, each one's statistics (`PAVA? STATn`: current, mean, min, max, standard deviation, count);
+/// `snapshot` (a channel) reads every item at once (`PAVA? ALL`).
+pub fn measure_custom(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_measure_custom]
+    let installs: Vec<(String, u64)> = match args.get("install") {
+        None | Some(Value::Null) => vec![],
+        Some(v) => v
+            .as_array()
+            .filter(|a| a.len() <= 5)
+            .and_then(|a| {
+                a.iter()
+                    .map(|e| {
+                        let item = e.get("item")?.as_str()?.to_uppercase();
+                        let c = e.get("channel")?.as_u64().filter(|c| (1..=2).contains(c))?;
+                        MEASURE_ITEMS.contains(&item.as_str()).then_some((item, c))
+                    })
+                    .collect()
+            })
+            .ok_or_else(|| {
+                format!(
+                    "install must be up to 5 of {{item, channel 1 or 2}}, item one of {}",
+                    MEASURE_ITEMS.join(", ")
+                )
+            })?,
+    };
+    let stats = match args
+        .get("statistics")
+        .map(|v| v.as_str().map(str::to_uppercase))
+    {
+        None => None,
+        Some(Some(w)) if ["ON", "OFF", "RESET"].contains(&w.as_str()) => Some(w),
+        _ => return Err("statistics must be on, off or reset".into()),
+    };
+    let delay = match args.get("delay") {
+        None | Some(Value::Null) => None,
+        Some(d) => {
+            let t = d
+                .get("type")
+                .and_then(Value::as_str)
+                .map(str::to_uppercase)
+                .filter(|t| DELAY_TYPES.contains(&t.as_str()));
+            let src = d
+                .get("sources")
+                .and_then(Value::as_str)
+                .map(str::to_uppercase)
+                .filter(|x| x == "C1-C2" || x == "C2-C1");
+            Some(
+                (t.zip(src).ok_or_else(|| {
+                    format!(
+                        "delay must be {{type one of {}, sources C1-C2 or C2-C1}}",
+                        DELAY_TYPES.join(", ")
+                    )
+                })?),
+            )
+        }
+    };
+    let snapshot = match args.get("snapshot") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_u64()
+                .filter(|c| (1..=2).contains(c))
+                .ok_or("snapshot must be a channel, 1 or 2")?,
+        ),
+    };
+    let clear = match args.get("clear") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or("clear must be true or false")?,
+    };
+    let gate = item_cmds(args, &GATE_ITEMS, 1)?;
+    let mut cmds: Vec<(String, String)> = Vec::new();
+    if clear {
+        cmds.push(("MEACL".into(), "PAVA? CUSTALL".into()));
+    }
+    cmds.extend(
+        installs
+            .iter()
+            .map(|(i, c)| (format!("PACU {i},C{c}"), "PAVA? CUSTALL".to_string())),
+    );
+    cmds.extend(
+        stats
+            .iter()
+            .map(|w| (format!("PASTAT {w}"), "PASTAT?".to_string())),
+    );
+    cmds.extend(gate);
+    if let Some((t, src)) = &delay {
+        cmds.push((format!("MEAD {t},{src}"), format!("{src}:MEAD? {t}")));
+    }
+    let mut r = apply(s, cmds)?;
+    r["gate"] = read_items(s, &GATE_ITEMS, 1);
+    // The installed measurements: `PAVA CUST1:C1,PKPK,4.08E+00V;CUST2:OFF;...`.
+    let all = readback(s, "PAVA? CUSTALL");
+    let mut custom = Vec::new();
+    for part in all
+        .as_str()
+        .unwrap_or("")
+        .trim_start_matches("PAVA")
+        .split(';')
+    {
+        let Some((slot, rest)) = part.trim().split_once(':') else {
+            continue;
+        };
+        let f: Vec<&str> = rest.split(',').collect();
+        custom.push(match f.as_slice() {
+            [c, item, value] => json!({"slot": slot, "channel": c, "item": item, "value": value}),
+            _ => json!({"slot": slot, "off": true}),
+        });
+    }
+    r["custom"] = if custom.is_empty() {
+        json!({"unparsed": all})
+    } else {
+        json!(custom)
+    };
+    let installed = custom.iter().filter(|c| c.get("off").is_none()).count();
+    if readback(s, "PASTAT?")
+        .as_str()
+        .is_some_and(|t| t.ends_with("ON"))
+    {
+        let mut rows = Vec::new();
+        for n in 1..=installed {
+            s.set_timeout_secs(3);
+            // The guide shows the answer on two lines (`PAVA STAT1 C3` then `FREQ:cur,...`); join lines until the count arrives.
+            let mut text = s.query(&format!("PAVA? STAT{n}")).unwrap_or_default();
+            while !text.contains("count,") && !text.is_empty() {
+                match s.line() {
+                    Ok(l) => text = format!("{text} {l}"),
+                    Err(_) => break,
+                }
+            }
+            s.set_timeout_secs(10);
+            let f: Vec<&str> = text.split([',', ' ']).collect();
+            let mut row = json!({"slot": n, "text": text});
+            for key in ["cur", "mean", "min", "max", "std-dev", "count"] {
+                let at = f.iter().position(|t| t.ends_with(key));
+                if let Some(v) = at.and_then(|k| f.get(k + 1)) {
+                    row[key] = json!(v);
+                }
+            }
+            rows.push(row);
+        }
+        r["statistics"] = json!(rows);
+    }
+    if let Some((t, src)) = &delay {
+        r["delay"] = readback(s, &format!("{src}:MEAD? {t}"));
+    }
+    if let Some(c) = snapshot {
+        s.set_timeout_secs(3);
+        let text = s.query(&format!("C{c}:PAVA? ALL")).unwrap_or_default();
+        s.set_timeout_secs(10);
+        let f: Vec<&str> = text
+            .trim_start_matches(|ch: char| ch != ' ')
+            .trim()
+            .split(',')
+            .collect();
+        let pairs: serde_json::Map<String, Value> = f
+            .chunks(2)
+            .filter(|p| p.len() == 2)
+            .map(|p| (p[0].to_string(), json!(p[1])))
+            .collect();
+        r["snapshot"] = if pairs.is_empty() {
+            json!({"no_answer": text})
+        } else {
+            Value::Object(pairs)
+        };
+    }
+    Ok(r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -439,6 +640,77 @@ mod tests {
             json!({"create_mask": 1}),
         ] {
             assert!(passfail(&mut l, &bad).is_err(), "{bad}");
+        }
+        assert_eq!(f.seen.lock().unwrap().len(), n);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_measure_custom]
+    #[test]
+    fn custom_measurements_are_installed_read_with_statistics_gates_and_delay() {
+        let (f, mut l) = link();
+        let r = measure_custom(&mut l, &json!({"clear": true, "install": [{"item": "pkpk", "channel": 1}, {"item": "FREQ", "channel": 2}], "statistics": "on", "gate": true, "gate_a_s": 2e-5, "gate_b_s": 1.68e-3})).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!([
+                "MEACL",
+                "PACU PKPK,C1",
+                "PACU FREQ,C2",
+                "PASTAT ON",
+                "MEGS ON",
+                "MEGA 2E-5S",
+                "MEGB 1.68E-3S"
+            ])
+        );
+        assert_eq!(
+            r["custom"][0],
+            json!({"slot": "CUST1", "channel": "C1", "item": "PKPK", "value": "4.00E+00V"})
+        );
+        assert_eq!(r["custom"][2], json!({"slot": "CUST3", "off": true}));
+        assert_eq!(r["gate"]["gate_a_s"], "MEGA 2.00E-05S");
+        // The guide shows each statistics answer on two lines; they are joined.
+        let st = r["statistics"].as_array().unwrap();
+        assert_eq!(st.len(), 2);
+        assert_eq!(
+            (
+                st[1]["cur"].as_str().unwrap(),
+                st[1]["count"].as_str().unwrap()
+            ),
+            ("1.00E+03Hz", "171")
+        );
+        // The same statistics when the scope answers on one line.
+        let one = FakeScope::start_with(crate::fake_scope::Opts {
+            stat_one_line: true,
+            ..Default::default()
+        });
+        let mut l1 = Link::tcp("127.0.0.1", one.port).unwrap();
+        let r1 = measure_custom(
+            &mut l1,
+            &json!({"install": [{"item": "FREQ", "channel": 1}], "statistics": "on"}),
+        )
+        .unwrap();
+        assert_eq!(r1["statistics"][0]["mean"], "1.00E+03Hz");
+        let r = measure_custom(&mut l, &json!({"delay": {"type": "PHA", "sources": "C1-C2"}, "snapshot": 1, "statistics": "off"})).unwrap();
+        assert_eq!(r["delay"], "C1-C2:MEAD PHA,-8.95E+01degree");
+        assert_eq!(r["snapshot"]["PKPK"], "4.00E+00V");
+        assert_eq!(r["snapshot"]["DUTY"], "5.00E+01%");
+        assert!(
+            r.get("statistics").is_none(),
+            "statistics are read only while they are on"
+        );
+        let n = f.seen.lock().unwrap().len();
+        let too_many: Vec<Value> = (0..6)
+            .map(|_| json!({"item": "PKPK", "channel": 1}))
+            .collect();
+        for bad in [
+            json!({"install": [{"item": "BOGUS", "channel": 1}]}),
+            json!({"install": too_many}),
+            json!({"install": [{"item": "MAX", "channel": 3}]}),
+            json!({"statistics": "maybe"}),
+            json!({"delay": {"type": "PHA", "sources": "C1-C3"}}),
+            json!({"snapshot": 3}),
+            json!({"gate": "on"}),
+        ] {
+            assert!(measure_custom(&mut l, &bad).is_err(), "{bad}");
         }
         assert_eq!(f.seen.lock().unwrap().len(), n);
     }
