@@ -533,93 +533,1135 @@ Reports whether the gate is open at the given instant: true only while a lease g
 
 **Signature:** `pub fn is_open(&self, now: Instant) -> bool`. **See also:** tests `default_gate_is_closed_and_lease_expires`, `poisoned_gate_reads_closed` (gate.rs).
 
-### Anchors not yet expanded
+### `StreamCounters::delivered` [@ANCHOR: hpsdr:hpsdr_iq_counters_delivered]
 
-- [@ANCHOR: hpsdr:hpsdr_iq_counters_delivered] (iq) Record one delivered block of `n` samples.
-- [@ANCHOR: hpsdr:hpsdr_iq_counters_lost] (iq) Record `n` datagrams lost to a sequence gap.
-- [@ANCHOR: hpsdr:hpsdr_iq_counters_dropped] (iq) Record one block dropped because the consumer lagged.
-- [@ANCHOR: hpsdr:hpsdr_iq_counters_malformed] (iq) Record one rejected datagram.
-- [@ANCHOR: hpsdr:hpsdr_iq_counters_snapshot] (iq) Read all counters.
-- [@ANCHOR: hpsdr:hpsdr_iq_seq_observe] (iq) Account for one datagram; returns how many datagrams were skipped before it. A sequence
-- [@ANCHOR: hpsdr:hpsdr_iq_channel_new] (iq) A stream and the sender that feeds it; `depth` is the number of blocks buffered before drops.
-- [@ANCHOR: hpsdr:hpsdr_iq_channel_next_block] (iq) Wait for the next block.
-- [@ANCHOR: hpsdr:hpsdr_iq_channel_stats] (iq) Counters for this stream.
-- [@ANCHOR: hpsdr:hpsdr_p1_discovery_packet] (p1) The discovery request: `EF FE 02` and 60 zero bytes (Metis, "Metis Discover Packet format"). Send it
-- [@ANCHOR: hpsdr:hpsdr_p1_start_packet] (p1) Start command: `EF FE 04 <cmd>` and 60 zeros; bit 0 starts I/Q plus microphone data, bit 1 the
-- [@ANCHOR: hpsdr:hpsdr_p1_stop_packet] (p1) Stop command: the start layout with both bits clear (Metis, "Stop Command").
-- [@ANCHOR: hpsdr:hpsdr_p1_parse_reply] (p1) Parse a discovery reply: `EF FE <status> <MAC 6> <code version> <board id>` then zeros.
-- [@ANCHOR: hpsdr:hpsdr_p1_encode_reply] (p1) Build a discovery reply (used by the emulator): 60 bytes.
-- [@ANCHOR: hpsdr:hpsdr_p1_config_default] (p1) One receiver at 48 ksps on 7.1 MHz, no attenuation.
-- [@ANCHOR: hpsdr:hpsdr_p1_config_validate] (p1) Reject settings the protocol cannot express.
-- [@ANCHOR: hpsdr:hpsdr_p1_config_addresses] (p1) The C&C addresses sent in round-robin order: general (0), each receiver NCO (2..), transmit
-- [@ANCHOR: hpsdr:hpsdr_p1_config_encode_cc] (p1) The five C&C bytes for `addr`. `mox` is C0 bit 0; `drive` is the C1 byte of address 9. The
-- [@ANCHOR: hpsdr:hpsdr_p1_config_apply_cc] (p1) Fold one received C&C quintuple into the settings (used by the emulator, which plays the radio).
-- [@ANCHOR: hpsdr:hpsdr_p1_ep2_new] (p1) A builder with sequence 0.
-- [@ANCHOR: hpsdr:hpsdr_p1_ep2_reset] (p1) Restart the sequence at zero, as the PC must on every Start (Metis, "PC <> Metis UDP/IP data format").
-- [@ANCHOR: hpsdr:hpsdr_p1_ep2_assemble] (p1) Common assembly: header, then two frames each with the next C&C address.
-- [@ANCHOR: hpsdr:hpsdr_p1_ep2_build_rx] (p1) A receive-only datagram: MOX clear, drive zero, transmit I/Q zero, for every C&C address.
-- [@ANCHOR: hpsdr:hpsdr_p1_ep2_build_tx] (p1) A datagram that may key the transmitter. Returns [`HpsdrError::GateClosed`] and builds nothing
-- [@ANCHOR: hpsdr:hpsdr_p1_parse_ep2] (p1) Parse a PC-to-radio datagram.
-- [@ANCHOR: hpsdr:hpsdr_p1_samples_per_frame] (p1) Samples per receiver in one 512-byte frame: `504 / (6 n + 2)` (USB, "NOTE 1" padding table agrees).
-- [@ANCHOR: hpsdr:hpsdr_p1_parse_ep6] (p1) Decode an EP6 datagram carrying `num_rx` receivers. An EP4 (bandscope) datagram is reported as
-- [@ANCHOR: hpsdr:hpsdr_p1_encode_ep6] (p1) Build an EP6 datagram (used by the emulator). `rx[r]` holds the 24-bit (I, Q) integers of receiver
-- [@ANCHOR: hpsdr:hpsdr_p1_apply_status_cc] (p1) Fold one radio-to-PC C&C quintuple into `st`. C0 bits 7..3 are the address; bits 2..0 are the
-- [@ANCHOR: hpsdr:hpsdr_p1_encode_status_cc] (p1) Build the radio-to-PC C&C quintuple for status address `addr` (0..=4) from `st` (emulator side).
-- [@ANCHOR: hpsdr:hpsdr_p2_ports_default] (p2) The default port map from the specification.
-- [@ANCHOR: hpsdr:hpsdr_p2_put16] (p2) Store a big-endian 16-bit value.
-- [@ANCHOR: hpsdr:hpsdr_p2_put32] (p2) Store a big-endian 32-bit value.
-- [@ANCHOR: hpsdr:hpsdr_p2_discovery_packet] (p2) Discovery request: sequence 0, command 0x02, zeros (P2, "Discovery Packet"). Send to port 1024.
-- [@ANCHOR: hpsdr:hpsdr_p2_parse_reply] (p2) Parse a discovery reply. Replies with board type 254/255 (XML or full description) are reported
-- [@ANCHOR: hpsdr:hpsdr_p2_encode_reply] (p2) Build a discovery reply (emulator side). The board type byte is the P2 number of `board_type`.
-- [@ANCHOR: hpsdr:hpsdr_p2_encode_general] (p2) The General packet (command 0): the port map, the hardware reset timer enabled (byte 38 bit 0, so
-- [@ANCHOR: hpsdr:hpsdr_p2_encode_ddc_specific] (p2) The DDC Specific packet (to the DDC-specific port): number of ADCs, dither, random, per-DDC enable
-- [@ANCHOR: hpsdr:hpsdr_p2_phase_word] (p2) `2^32 * f / clock`, rounded (P2, "General Packet" byte 37 text).
-- [@ANCHOR: hpsdr:hpsdr_p2_hp_base] (p2) The receive part of a High Priority packet, shared by both encoders.
-- [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_rx] (p2) A receive-only High Priority packet: run bit and DDC frequencies and attenuators. PTT (byte 4 bit
-- [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_tx] (p2) A High Priority packet that may key the transmitter. Returns [`HpsdrError::GateClosed`] and builds
-- [@ANCHOR: hpsdr:hpsdr_p2_encode_duc_iq] (p2) A DUC I/Q packet (to the DUC0 I/Q port): 240 samples of 24-bit I then Q, big-endian (P2, "DUC I&Q
-- [@ANCHOR: hpsdr:hpsdr_p2_parse_hp_status] (p2) Parse a High Priority Status packet (60 bytes, from the radio's status port): PTT/dot/dash and PLL
-- [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_status] (p2) Build a High Priority Status packet (emulator side).
-- [@ANCHOR: hpsdr:hpsdr_p2_parse_ddc] (p2) Parse a DDC packet: seq, 64-bit timestamp, bits per sample (must be 24), sample count, then I/Q.
-- [@ANCHOR: hpsdr:hpsdr_p2_encode_ddc] (p2) Build a DDC packet from 24-bit integers (emulator side).
-- [@ANCHOR: hpsdr:hpsdr_session_options_default] (session) 10 ms tick, 64 blocks per stream.
-- [@ANCHOR: hpsdr:hpsdr_session_lock] (session) Lock a mutex, taking the data even if a panic poisoned it (the gate still decides on transmit).
-- [@ANCHOR: hpsdr:hpsdr_session_next_datagram] (session) The next EP2 datagram. It is a transmit datagram only while the caller has asked to key AND the
-- [@ANCHOR: hpsdr:hpsdr_session_handle_ep6] (session) Decode one received datagram, update status and push a block per receiver.
-- [@ANCHOR: hpsdr:hpsdr_session_run] (session) The session task: send EP2 datagrams on a timer and decode whatever arrives.
-- [@ANCHOR: hpsdr:hpsdr_session_start] (session) Configure the radio, send Start, and begin streaming. `radio` must be a Protocol 1 radio from
-- [@ANCHOR: hpsdr:hpsdr_session_take_streams] (session) Hand over the per-receiver streams (index = DDC number). Returns an empty list the second time.
-- [@ANCHOR: hpsdr:hpsdr_session_update] (session) Change settings (frequency, sample rate, attenuator, pre-amp...). The receiver count is fixed
-- [@ANCHOR: hpsdr:hpsdr_session_status] (session) The latest hardware status (ADC overload, power counts, supply, firmware).
-- [@ANCHOR: hpsdr:hpsdr_session_request_ptt] (session) Ask to key (or unkey) the transmitter with `drive` 0..=255. Refused with
-- [@ANCHOR: hpsdr:hpsdr_session_send_tx_iq] (session) Queue transmit I/Q (16-bit pairs at 48 ksps). Refused while the gate is closed or the queue
-- [@ANCHOR: hpsdr:hpsdr_session_stop] (session) Unkey, send Stop, and end the session task.
-- [@ANCHOR: hpsdr:hpsdr_session_drop] (session) A session dropped without `stop()` unkeys at once (the key request and queued I/Q are cleared) and the task then sends Stop and ends; it is never just aborted, which would leave the last keyed datagram standing.
-- [@ANCHOR: hpsdr:hpsdr_session_p2_config_default] (session_p2) One receiver at 48 ksps on 7.1 MHz, no attenuation, the specification's default ports.
-- [@ANCHOR: hpsdr:hpsdr_session_p2_config_validate] (session_p2) Reject settings the protocol cannot express.
-- [@ANCHOR: hpsdr:hpsdr_session_p2_config_ddcs] (session_p2) The DDC-specific settings: every receiver enabled on ADC0 at the common rate.
-- [@ANCHOR: hpsdr:hpsdr_session_p2_lock] (session_p2) Lock a mutex, taking the data even if a panic poisoned it (the gate still decides on transmit).
-- [@ANCHOR: hpsdr:hpsdr_session_p2_hp_rx] (session_p2) The receive High Priority settings from the configuration; `run` is the run bit.
-- [@ANCHOR: hpsdr:hpsdr_session_p2_next_packets] (session_p2) The next High Priority packet and, only while keyed, a DUC I/Q packet. They are transmit packets
-- [@ANCHOR: hpsdr:hpsdr_session_p2_handle_datagram] (session_p2) Decode one received datagram by the radio's source port: a DDC packet becomes a block on its
-- [@ANCHOR: hpsdr:hpsdr_session_p2_run] (session_p2) The session task: send High Priority packets (and DDC-specific packets when the settings changed or
-- [@ANCHOR: hpsdr:hpsdr_session_p2_start] (session_p2) Configure the radio (General, DDC-specific, then High Priority with the run bit) and begin
-- [@ANCHOR: hpsdr:hpsdr_session_p2_take_streams] (session_p2) Hand over the per-receiver streams (index = DDC number). Returns an empty list the second time.
-- [@ANCHOR: hpsdr:hpsdr_session_p2_update] (session_p2) Change settings (frequency, sample rate, attenuator...). The receiver count and the port map are
-- [@ANCHOR: hpsdr:hpsdr_session_p2_status] (session_p2) The latest hardware status (ADC overload, power counts, supply).
-- [@ANCHOR: hpsdr:hpsdr_session_p2_stray] (session_p2) Datagrams that arrived from a source port that belongs to no stream or status.
-- [@ANCHOR: hpsdr:hpsdr_session_p2_request_ptt] (session_p2) Ask to key (or unkey) the transmitter with `drive` 0..=255. Refused with
-- [@ANCHOR: hpsdr:hpsdr_session_p2_send_tx_iq] (session_p2) Queue transmit I/Q (16-bit pairs). Refused while the gate is closed or the queue would exceed
-- [@ANCHOR: hpsdr:hpsdr_session_p2_stop] (session_p2) Unkey, send a High Priority packet with the run bit clear, and end the session task.
-- [@ANCHOR: hpsdr:hpsdr_session_p2_drop] (session_p2) Dropped without `stop()`: unkey at once, then the task sends the run-bit-clear packet and ends; never just aborted.
-- [@ANCHOR: hpsdr:hpsdr_types_board_from_p1_id] (types) Protocol 1 `Board_ID` (Metis v1.33: 0 Metis, 1 Hermes, 2 Griffin, 4 Angelia, 5 Orion, 6 Hermes Lite).
-- [@ANCHOR: hpsdr:hpsdr_types_board_from_p2_type] (types) Protocol 2 board type (spec v4.4 Discovery Reply byte 11).
-- [@ANCHOR: hpsdr:hpsdr_types_board_dsp_clock] (types) DSP clock in hertz, needed for phase words (spec v4.4 Appendix A gives 122.88 MHz for Hermes);
-- [@ANCHOR: hpsdr:hpsdr_types_board_power_constant] (types) Constant 2 of the forward/reverse power formula (spec v4.4 Appendix A, Hermes: 0.09 for the
-- [@ANCHOR: hpsdr:hpsdr_types_rate_hz] (types) The rate in hertz.
-- [@ANCHOR: hpsdr:hpsdr_types_rate_from_ksps] (types) Parse a rate in kilohertz (48, 96, 192, 384, 768, 1536).
-- [@ANCHOR: hpsdr:hpsdr_types_rate_p1_code] (types) The Protocol 1 speed code (USB protocol v1.60, C0=0 C1[1:0]: 00 48k, 01 96k, 10 192k, 11 384k).
-- [@ANCHOR: hpsdr:hpsdr_types_rate_from_p1_code] (types) Inverse of [`Rate::p1_code`] (only the low two bits are used).
-- [@ANCHOR: hpsdr:hpsdr_types_status_supply_volts] (types) Supply volts: `adc / 4095 * 3.3` (spec v4.4 Appendix A, Hermes).
-- [@ANCHOR: hpsdr:hpsdr_types_status_watts] (types) Convert a raw power count to watts: `(adc / 4095 * 3.3)^2 / c2` (spec v4.4 Appendix A).
-- [@ANCHOR: hpsdr:hpsdr_types_status_swr] (types) Standing wave ratio from forward and reverse power counts; `None` with no forward power.
+Records that one block of receive I/Q reached the consumer: it adds one to the `blocks` counter and `n` to the `samples` counter. The session calls it after a block is successfully queued on the stream channel, so `blocks` and `samples` measure what the consumer could read, not what the radio sent.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `n` | `usize` | Number of complex samples in the delivered block; widened to `u64`. |
+
+**Returns:** nothing. **Errors:** none; the add wraps silently at 2^64, which no real stream reaches. **Special concerns:** `StreamCounters` is shared between the session task (producer) and the consumer through an `Arc`; its five fields are `AtomicU64`, updated with relaxed ordering, so there is no lock and a reader sees values that are eventually consistent. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn delivered(&self, n: usize)`. **See also:** `StreamCounters::snapshot`; test `counters_accumulate` (iq.rs).
+
+### `StreamCounters::lost` [@ANCHOR: hpsdr:hpsdr_iq_counters_lost]
+
+Adds datagrams that the radio sent but that never arrived to the `lost_packets` counter. The count comes from a sequence gap found by `SeqTracker::observe` and is also stored in `IqBlock::lost_before` of the next block, so the consumer sees both the running total and where the hole was.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `n` | `u32` | Datagrams skipped before the one just received (0 is allowed and adds nothing). |
+
+**Returns:** nothing. **Errors:** none. **Special concerns:** `StreamCounters` is shared between the session task (producer) and the consumer through an `Arc`; its five fields are `AtomicU64`, updated with relaxed ordering, so there is no lock and a reader sees values that are eventually consistent. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn lost(&self, n: u32)`. **See also:** `SeqTracker::observe`; test `counters_accumulate` (iq.rs).
+
+### `StreamCounters::dropped` [@ANCHOR: hpsdr:hpsdr_iq_counters_dropped]
+
+Records one block that was decoded but discarded because the consumer was too slow and the bounded channel was full. A rising `dropped_blocks` tells the relay that the receive path is losing data on the host side (in contrast to `lost_packets`, which is loss on the network). The session never blocks on a slow consumer: it uses `try_send`, drops and counts.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** nothing. **Errors:** none. **Special concerns:** `StreamCounters` is shared between the session task (producer) and the consumer through an `Arc`; its five fields are `AtomicU64`, updated with relaxed ordering, so there is no lock and a reader sees values that are eventually consistent. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn dropped(&self)`. **See also:** test `counters_accumulate` (iq.rs).
+
+### `StreamCounters::malformed` [@ANCHOR: hpsdr:hpsdr_iq_counters_malformed]
+
+Records one received datagram that the parser rejected (wrong magic, wrong length, unsupported end point and so on). The session calls it instead of failing, so a noisy or hostile network cannot stop reception; the counter makes the noise visible through `StreamStats::malformed`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** nothing. **Errors:** none. **Special concerns:** `StreamCounters` is shared between the session task (producer) and the consumer through an `Arc`; its five fields are `AtomicU64`, updated with relaxed ordering, so there is no lock and a reader sees values that are eventually consistent. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn malformed(&self)`. **See also:** test `counters_accumulate` (iq.rs).
+
+### `StreamCounters::snapshot` [@ANCHOR: hpsdr:hpsdr_iq_counters_snapshot]
+
+Reads the five counters into a plain `StreamStats` value (`blocks`, `samples`, `lost_packets`, `dropped_blocks`, `malformed`), each a `u64`. `IqStream::stats` and `Radio::stats` return it, so the consumer never touches the atomics.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** a `StreamStats` (`Copy`, `PartialEq`) holding the instantaneous values. **Errors:** none. **Special concerns:** each field is loaded separately with relaxed ordering, so the five numbers are not one atomic snapshot: a block delivered between two loads can show up in `blocks` but not yet in `samples`. Fine for monitoring, not for exact accounting. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn snapshot(&self) -> StreamStats`. **See also:** test `counters_accumulate` (iq.rs).
+
+### `SeqTracker::observe` [@ANCHOR: hpsdr:hpsdr_iq_seq_observe]
+
+Accounts for one received datagram sequence number and reports how many datagrams were skipped before it. The tracker remembers the next expected number; the first call returns 0, a number equal to the expected one returns 0, a number ahead returns the gap, and a number that is behind by less than half the 32-bit range is treated as a restart of the radio's counter (0 lost) and re-synchronises. The arithmetic is modulo 2^32, so the wrap from `u32::MAX` to 0 is a gap of 0.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Sequence number of the datagram just received (Protocol 1 EP6 header, or the Protocol 2 DDC packet sequence). |
+
+**Returns:** `u32`, datagrams lost immediately before this one. **Errors:** none. **Special concerns:** `&mut self`, so each stream owns its own tracker inside the session task; no locks, no I/O. A duplicate or reordered datagram counts as 0 lost and moves the expectation, so reordering is not reported as loss. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn observe(&mut self, seq: u32) -> u32`. **See also:** test `seq_gaps_and_wrap` (iq.rs).
+
+### `ChannelStream::new` [@ANCHOR: hpsdr:hpsdr_iq_channel_new]
+
+Creates the receive-side stream the sessions hand to the consumer: a bounded `tokio::sync::mpsc` channel of `IqBlock`s plus the shared counters. It returns the sender, which the session task keeps, and the `ChannelStream` that implements `IqStream`. When the channel holds `depth` blocks the session drops the next one and counts it with `StreamCounters::dropped`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `depth` | `usize` | Blocks buffered before drops; values below 1 are raised to 1 (a zero-capacity channel is not allowed by tokio). |
+| `counters` | `Arc<StreamCounters>` | The counters the producer updates; retained by the stream so `stats()` reads them. |
+
+**Returns:** `(mpsc::Sender<IqBlock>, ChannelStream)`. **Errors:** none. **Special concerns:** creates no task and does no I/O; the sender and stream may live on different tasks or threads. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn new(depth: usize, counters: Arc<StreamCounters>) -> (mpsc::Sender<IqBlock>, Self)`. **See also:** test `channel_stream_delivers_in_order` (iq.rs).
+
+### `ChannelStream::next_block` [@ANCHOR: hpsdr:hpsdr_iq_channel_next_block]
+
+The `IqStream` receive call: waits until the session has produced another block and returns it, in the order produced. Returns `None` after the sender side is dropped (the session stopped or the radio object was dropped) and the queue is empty, which is the consumer's signal that the stream ended.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut ChannelStream` | Borrowed mutably: one consumer per stream. |
+
+**Returns:** a future yielding `Option<IqBlock>`; `Some` while blocks arrive, `None` at the end of the stream. **Errors:** none; there is no timeout, the caller wraps the future in `tokio::time::timeout` if it needs one. **Special concerns:** async and cancel-safe (it is `mpsc::Receiver::recv`): dropping the future loses no block. The future is `Send`. No locks held. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn next_block(&mut self) -> impl Future<Output = Option<IqBlock>> + Send`. **See also:** test `channel_stream_delivers_in_order` (iq.rs).
+
+### `ChannelStream::stats` [@ANCHOR: hpsdr:hpsdr_iq_channel_stats]
+
+Returns the counters for this one stream as a `StreamStats`, by taking a snapshot of the shared `StreamCounters`. Use it to see loss, drops and malformed datagrams for a receiver (DDC) without reading blocks.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&ChannelStream` | Shared borrow; safe while another task awaits `next_block` only if the borrow rules allow, normally called between reads. |
+
+**Returns:** `StreamStats`. **Errors:** none. **Special concerns:** no locks, relaxed atomic loads (see `StreamCounters::snapshot`). Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn stats(&self) -> StreamStats`. **See also:** test `channel_stream_delivers_in_order` (iq.rs).
+
+### `discovery_packet` [@ANCHOR: hpsdr:hpsdr_p1_discovery_packet]
+
+Builds the Protocol 1 discovery request: the two magic bytes `EF FE`, the command byte `02`, then 60 zero bytes (Metis, "Metis Discover Packet format"), 63 bytes in all. `discover` sends it to every target; a Protocol 1 radio answers with the reply that `parse_reply` decodes. Send it to 255.255.255.255:1024 because the Metis notes say the subnet broadcast is not implemented.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** a `[u8; 63]`. **Errors:** none. **Special concerns:** pure function, no I/O or locks. It is only discovery: it carries no PTT, drive or I/Q, so the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn discovery_packet() -> [u8; 63]`. **See also:** test `discovery_start_stop_bytes` (p1.rs).
+
+### `start_packet` [@ANCHOR: hpsdr:hpsdr_p1_start_packet]
+
+Builds the Protocol 1 Start command: `EF FE 04`, one command byte, then 60 zeros (64 bytes). Bit 0 of the command byte starts I/Q plus microphone data (EP6), bit 1 starts the wide bandscope data (EP4); both clear is Stop (Metis, "Start Command"). The session sends it once after the first configuration datagrams.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `iq` | `bool` | Start the I/Q and microphone stream (command bit 0). |
+| `bandscope` | `bool` | Start the wide bandscope stream (command bit 1). |
+
+**Returns:** a `[u8; 64]`. **Errors:** none. **Special concerns:** pure, no I/O or locks. Starting the data stream does not key the transmitter: PTT is the MOX bit of the EP2 C&C bytes, built only by the gated `Ep2Builder::build_tx`.
+
+**Signature:** `pub fn start_packet(iq: bool, bandscope: bool) -> [u8; 64]`. **See also:** `stop_packet`; test `discovery_start_stop_bytes` (p1.rs).
+
+### `stop_packet` [@ANCHOR: hpsdr:hpsdr_p1_stop_packet]
+
+Builds the Protocol 1 Stop command: the Start layout with both stream bits clear (Metis, "Stop Command"), so `EF FE 04 00` followed by 60 zeros. `Radio::stop` and the drop path send it after one last receive datagram that has MOX clear, so the radio is unkeyed before it stops streaming.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** a `[u8; 64]`. **Errors:** none. **Special concerns:** pure, no I/O or locks. It cannot key a transmitter; the relay lock, band check and gate do not apply.
+
+**Signature:** `pub fn stop_packet() -> [u8; 64]`. **See also:** `Radio::stop`; test `discovery_start_stop_bytes` (p1.rs).
+
+### `parse_reply` [@ANCHOR: hpsdr:hpsdr_p1_parse_reply]
+
+Parses a Protocol 1 discovery reply: `EF FE <status> <MAC 6 bytes> <code version> <board id>` followed by zeros. Status 2 means idle and 3 means the radio is already streaming (busy); the board id is mapped to `Board` with `Board::from_p1_id`. Called by `discovery::parse_reply` for any datagram that does not start with the Protocol 2 marker.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `&[u8]` | The raw datagram; at least 11 bytes. |
+
+**Returns:** a `P1Reply` (`running`, `mac`, `code_version`, `board_id`, `board`). **Errors:** `HpsdrError::Truncated` for fewer than 11 bytes; `HpsdrError::BadMagic` when the first two bytes are not `EF FE` or the status byte is not 2 or 3. An unknown board id is not an error (it becomes `Board::Other(id)`). **Special concerns:** pure, no I/O, never panics on any input (the property test feeds arbitrary bytes). Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn parse_reply(d: &[u8]) -> Result<P1Reply, HpsdrError>`. **See also:** test `reply_round_trips_and_rejects_junk` (p1.rs).
+
+### `encode_reply` [@ANCHOR: hpsdr:hpsdr_p1_encode_reply]
+
+Builds the 60-byte Protocol 1 discovery reply for a `P1Reply`: magic, status 3 when `running` else 2, MAC, code version and board id, the rest zero. The loopback emulator uses it to play a radio; production code only parses replies.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `r` | `&P1Reply` | The identity to report: running flag, MAC, code version, board id (the `board` field is not encoded). |
+
+**Returns:** a `[u8; 60]`. **Errors:** none. **Special concerns:** pure, no I/O or locks. Round-trips with `parse_reply` (the test checks it). Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn encode_reply(r: &P1Reply) -> [u8; 60]`. **See also:** test `reply_round_trips_and_rejects_junk` (p1.rs).
+
+### `P1Config::default` [@ANCHOR: hpsdr:hpsdr_p1_config_default]
+
+The default Protocol 1 settings: sample rate `Rate::K48`, one receiver, all seven receiver frequencies and the transmit frequency at 7,100,000 Hz, pre-amp, dither and random off, attenuator 0 dB and disabled. Callers start from it and change fields (`P1Config { rate: Rate::K96, ..Default::default() }`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** a `P1Config`; field meanings: `rate` the common DDC rate, `num_rx` 1..=7 receivers, `rx_hz[i]` NCO frequency of receiver i in hertz, `preamp`, `dither`, `random` ADC options, `att_db` 0..=31 and `att_enable`, `tx_hz` the transmit NCO frequency in hertz. **Errors:** none. **Special concerns:** pure. The default cannot transmit: the transmit frequency only matters once the gated builder is used. The default values are `verified=unverified` (no real radio). Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `impl Default for P1Config { fn default() -> Self }`. **See also:** test `config_validation_and_cc_round_trip` (p1.rs).
+
+### `P1Config::validate` [@ANCHOR: hpsdr:hpsdr_p1_config_validate]
+
+Checks that the settings can be expressed in the Protocol 1 C&C bytes before any datagram is built: the rate must have a Protocol 1 code (48, 96, 192 or 384 ksps; 768 and 1536 do not), the receiver count must be 1 to 7, and the attenuator must be 0 to 31 dB. Both builders and `Radio::start` and `Radio::update` call it, so a bad setting is refused up front rather than sent.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&P1Config` | The settings to check. |
+
+**Returns:** `Ok(())`. **Errors:** `HpsdrError::Unsupported` for a rate without a Protocol 1 code; `HpsdrError::Config` naming the receiver count or attenuator value. **Special concerns:** pure, no I/O or locks. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn validate(&self) -> Result<(), HpsdrError>`. **See also:** test `config_validation_and_cc_round_trip` (p1.rs).
+
+### `P1Config::addresses` [@ANCHOR: hpsdr:hpsdr_p1_config_addresses]
+
+Lists the C&C addresses that the EP2 builder sends in round-robin order, two per datagram: general settings (0), one NCO address per receiver (2 for receiver 0, 3 for receiver 1, and so on), the transmit NCO (1), the drive level (9) and the attenuator (10). Every setting reaches the radio within a few datagrams; the radio keeps the last value of each.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&P1Config` | Only `num_rx` matters. |
+
+**Returns:** a `Vec<u8>` of `num_rx + 4` addresses. **Errors:** none. **Special concerns:** pure. The list includes the transmit NCO and drive addresses, but `build_rx` fills them with MOX clear and drive 0. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn addresses(&self) -> Vec<u8>`. **See also:** test `config_validation_and_cc_round_trip` (p1.rs).
+
+### `P1Config::encode_cc` [@ANCHOR: hpsdr:hpsdr_p1_config_encode_cc]
+
+Builds the five C&C bytes (C0..C4) for one address. C0 is `(addr << 1) | mox`. Address 0 carries the rate code in C1, the pre-amp, dither and random flags in C3 bits 2 to 4 and `num_rx - 1` in C4 bits 3 to 5; address 1 the transmit frequency as a big-endian 32-bit number; addresses 2 to 8 the receiver frequency; address 9 the drive byte in C1; address 10 the attenuator (5 bits plus enable in C4 bit 5). Other addresses give zeros.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `addr` | `u8` | C&C address 0..=10. |
+| `mox` | `bool` | C0 bit 0, the transmit-on switch. |
+| `drive` | `u8` | Drive level, used only for address 9. |
+
+**Returns:** `[u8; 5]`. **Errors:** none (private; `validate` has already run). **Special concerns:** pure and private. The receive builder always passes `false` and 0; only `build_tx` after the gate check passes anything else. A rate without a code encodes as 0 here but cannot reach it because `validate` refuses it first. Transmit: this is where MOX and drive enter the datagram, which is why its only transmit caller is behind `TxGate`.
+
+**Signature:** `fn encode_cc(&self, addr: u8, mox: bool, drive: u8) -> [u8; 5]`. **See also:** test `config_validation_and_cc_round_trip` (p1.rs).
+
+### `P1Config::apply_cc` [@ANCHOR: hpsdr:hpsdr_p1_config_apply_cc]
+
+The inverse of `encode_cc`, used by the emulator (which plays the radio) to fold one received C&C quintuple into its settings: rate, pre-amp, dither, random and receiver count from address 0, the transmit frequency from 1, receiver frequencies from 2 to 8, the attenuator from 10. Address 9 is not stored but returned so the emulator can count non-zero drive.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut P1Config` | The emulator's idea of the radio's settings, mutated. |
+| `cc` | `&[u8; 5]` | One received C&C quintuple. |
+
+**Returns:** `(bool, Option<u8>)`: the MOX bit of C0, and `Some(drive)` when the address was 9. **Errors:** none; unknown addresses change nothing. **Special concerns:** pure on its inputs. Only the emulator calls it; the counters it feeds (MOX frames, non-zero drive) are what the tests use to prove the transmit gate stays closed. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn apply_cc(&mut self, cc: &[u8; 5]) -> (bool, Option<u8>)`. **See also:** test `config_validation_and_cc_round_trip` (p1.rs).
+
+### `Ep2Builder::new` [@ANCHOR: hpsdr:hpsdr_p1_ep2_new]
+
+Creates a PC-to-radio datagram builder whose sequence number and C&C address cursor are both 0. One builder belongs to one session; the sequence number then increases by one per datagram, wrapping at 2^32, as the Metis format requires.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** an `Ep2Builder`. **Errors:** none. **Special concerns:** pure; the builder holds no socket and no lock and is not shared between threads. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn new() -> Self`. **See also:** test `receive_datagrams_never_carry_transmit_state` (p1.rs).
+
+### `Ep2Builder::reset` [@ANCHOR: hpsdr:hpsdr_p1_ep2_reset]
+
+Restarts the datagram sequence number and the C&C address cursor at zero. The Metis document requires the PC sequence to restart on every Start, so a session that restarts streaming on an existing builder must call it. (`Radio::start` today makes a fresh builder, whose sequence is already 0.)
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Ep2Builder` | The builder to rewind. |
+
+**Returns:** nothing. **Errors:** none. **Special concerns:** pure state change, no I/O. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn reset(&mut self)`. **See also:** `Ep2Builder::build_rx`; test `transmit_builder_refuses_unless_gate_open` (p1.rs).
+
+### `Ep2Builder::assemble` [@ANCHOR: hpsdr:hpsdr_p1_ep2_assemble]
+
+The private common step that builds one 1032-byte EP2 datagram: header `EF FE 01 02`, the 32-bit sequence number, then two 512-byte frames. Each frame has the sync bytes `7F 7F 7F`, the C&C quintuple for the next address in the round-robin list, then 63 four-field samples (left and right audio, always zero here, then the 16-bit Q and I swapped as the USB specification requires). Samples missing from `iq` are zero. It advances the sequence number and cursor.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `cfg` | `&P1Config` | Settings to encode (validated first). |
+| `mox` | `bool` | MOX bit for every C0. |
+| `drive` | `u8` | Drive byte for address 9. |
+| `iq` | `&[(i16, i16)]` | Transmit I/Q pairs, up to 126 per datagram; shorter is zero padded. |
+
+**Returns:** the datagram as `Vec<u8>` of `DATAGRAM_LEN` (1032) bytes. **Errors:** `HpsdrError` from `cfg.validate()`. **Special concerns:** `&mut self`, no I/O. It is private: its two callers are `build_rx` (MOX false, drive 0, no I/Q) and `build_tx` (only after the gate checks), so every transmit-capable datagram passes the gate. The I/Q swap is as documented but unverified on a radio.
+
+**Signature:** `fn assemble(&mut self, cfg: &P1Config, mox: bool, drive: u8, iq: &[(i16, i16)]) -> Result<Vec<u8>, HpsdrError>`. **See also:** test `receive_datagrams_never_carry_transmit_state` (p1.rs).
+
+### `Ep2Builder::build_rx` [@ANCHOR: hpsdr:hpsdr_p1_ep2_build_rx]
+
+Builds a receive-only EP2 datagram: MOX clear, drive zero and transmit I/Q zero in every C&C address. The function has no transmit parameters at all, so no caller can key the radio through it. The session uses it for every tick in which the gate or the caller does not ask for transmit.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `cfg` | `&P1Config` | The settings to send. |
+
+**Returns:** the 1032-byte datagram. **Errors:** `HpsdrError::Unsupported` or `Config` when `cfg` fails `validate`. **Special concerns:** advances the builder's sequence number and cursor; no I/O or locks. Transmit: structurally unable to key (the transmit-fail-closed design); tests assert MOX clear, drive zero and zero I/Q for every address.
+
+**Signature:** `pub fn build_rx(&mut self, cfg: &P1Config) -> Result<Vec<u8>, HpsdrError>`. **See also:** test `receive_datagrams_never_carry_transmit_state` (p1.rs).
+
+### `Ep2Builder::build_tx` [@ANCHOR: hpsdr:hpsdr_p1_ep2_build_tx]
+
+Builds a datagram that may key the transmitter. It first requires `gate.is_open(now)`, otherwise it returns `GateClosed` and builds nothing. When `req.ptt` is true it asks `gate.check_tx(cfg.tx_hz, req.drive)` for the permitted drive (capped by the gate limits, refused with `OutsideLimits` for a frequency outside the allowed bands) and then sets MOX with up to 126 transmit I/Q samples. With the gate open and `ptt` false it builds the receive datagram.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `cfg` | `&P1Config` | Settings, including `tx_hz` which is checked against the gate limits. |
+| `gate` | `&TxGate` | The transmit gate; must be open. |
+| `now` | `Instant` | Clock reading used for the lease test. |
+| `req` | `&TxRequest` | `ptt`, `drive` 0..=255 and `iq` samples. |
+
+**Returns:** the datagram `Vec<u8>`. **Errors:** `GateClosed`, `OutsideLimits`, or a `validate` error. **Special concerns:** takes the gate's lease and limits locks briefly (a poisoned lock reads as closed); no I/O. Transmit: this is the only Protocol 1 path that sets MOX. The gate is the whole defence inside the crate; the relay lock, band check and its own transmit gate still sit above this crate (unknown whether the relay consumes it yet; to-do: record in the relay docs).
+
+**Signature:** `pub fn build_tx(&mut self, cfg: &P1Config, gate: &TxGate, now: Instant, req: &TxRequest<'_>) -> Result<Vec<u8>, HpsdrError>`. **See also:** test `transmit_builder_refuses_unless_gate_open` (p1.rs).
+
+### `parse_ep2` [@ANCHOR: hpsdr:hpsdr_p1_parse_ep2]
+
+Parses a PC-to-radio EP2 datagram, which the emulator does to learn what the client asked for. It checks the length (1032), the header `EF FE 01 02`, and the sync bytes of both frames, then returns the sequence number, the two C&C quintuples and whether any transmit I/Q sample is non-zero (the I and Q bytes of each 8-byte group).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `&[u8]` | The raw datagram. |
+
+**Returns:** an `Ep2 { seq, cc: [[u8; 5]; 2], tx_iq_nonzero }`. **Errors:** `Truncated` when shorter than 1032 bytes; `BadMagic` for a wrong header or sync bytes. **Special concerns:** pure, never panics on any input (property test). Transmit: the emulator uses `tx_iq_nonzero` and the MOX bit to count attempts, which is how the tests prove nothing is sent while the gate is closed.
+
+**Signature:** `pub fn parse_ep2(d: &[u8]) -> Result<Ep2, HpsdrError>`. **See also:** test `receive_datagrams_never_carry_transmit_state` (p1.rs).
+
+### `samples_per_frame` [@ANCHOR: hpsdr:hpsdr_p1_samples_per_frame]
+
+Computes how many samples per receiver fit in one 512-byte EP6 frame: the 504 data bytes divided by the size of one sample group, `6 * num_rx + 2` (three bytes I and three bytes Q per receiver, plus two microphone bytes), rounded down. The USB specification's padding table agrees (1 receiver 63 samples, 2 receivers 36, and so on).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `num_rx` | `u8` | Receivers in the stream; 1..=8 is meaningful, 0 gives 252. |
+
+**Returns:** `usize` samples per receiver per frame; an EP6 datagram holds twice that. **Errors:** none. **Special concerns:** pure; used by `parse_ep6`, `encode_ep6` and the session. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn samples_per_frame(num_rx: u8) -> usize`. **See also:** test `ep6_round_trips_for_one_to_seven_receivers` (p1.rs).
+
+### `parse_ep6` [@ANCHOR: hpsdr:hpsdr_p1_parse_ep6]
+
+Decodes a radio-to-PC EP6 datagram carrying `num_rx` receivers: the sequence number, the two status C&C quintuples, for each receiver the 24-bit signed I and Q samples scaled to +/-1.0 (divided by 2^23), and the 16-bit microphone samples. An EP4 (bandscope) datagram is reported as unsupported.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `&[u8]` | The raw datagram, at least 1032 bytes. |
+| `num_rx` | `u8` | Receivers the radio was configured for, 1..=8 (the layout depends on it). |
+
+**Returns:** an `Ep6 { seq, cc, rx: Vec<Vec<Complex>>, mic: Vec<i16> }`. **Errors:** `Config` for `num_rx` 0 or above 8; `Truncated`; `BadMagic` for a wrong header or sync bytes; `Unsupported` for any end point other than 6. **Special concerns:** pure, never panics on any input (property tests, also with well-formed headers and any body). The session counts a failure as a malformed datagram and carries on. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn parse_ep6(d: &[u8], num_rx: u8) -> Result<Ep6, HpsdrError>`. **See also:** tests `ep6_round_trips_for_one_to_seven_receivers` (p1.rs), `hpsdr_packet_parsers_survive_any_datagram` (parser_props.rs).
+
+### `encode_ep6` [@ANCHOR: hpsdr:hpsdr_p1_encode_ep6]
+
+Builds an EP6 datagram for the emulator: header `EF FE 01 06`, the sequence number, and two frames of sync, C&C and the sample groups (24-bit I and Q per receiver, then 16-bit microphone), zero padded to 512 bytes per frame. Each receiver's vector must hold exactly `2 * samples_per_frame(n)` pairs and the microphone vector the same count.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Datagram sequence number. |
+| `cc` | `&[[u8; 5]; 2]` | Status C&C quintuples for the two frames. |
+| `rx` | `&[Vec<(i32, i32)>]` | Per-receiver 24-bit (I, Q) integers; the low 24 bits are used. |
+| `mic` | `&[i16]` | Microphone samples. |
+
+**Returns:** the 1032-byte datagram. **Errors:** `Config` when the receiver count does not fit a `u8` or is 0, or a sample count is wrong. **Special concerns:** pure; only the emulator calls it. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn encode_ep6(seq: u32, cc: &[[u8; 5]; 2], rx: &[Vec<(i32, i32)>], mic: &[i16]) -> Result<Vec<u8>, HpsdrError>`. **See also:** test `ep6_round_trips_for_one_to_seven_receivers` (p1.rs).
+
+### `apply_status_cc` [@ANCHOR: hpsdr:hpsdr_p1_apply_status_cc]
+
+Folds one radio-to-PC status quintuple into a `HardwareStatus`. C0 bits 2..0 are the PTT, DASH and DOT inputs; C0 bits 7..3 are the address: 0 gives ADC0 overload (C1 bit 0) and the firmware version (C4), 1 the exciter and forward power counts (12 bits each), 2 the reverse power count, 3 the supply count, 4 the overload flags of the four ADCs. Counts are masked to 12 bits. Temperature is not defined by the published protocol, so none is stored.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `st` | `&mut HardwareStatus` | Status record updated in place. |
+| `cc` | `&[u8; 5]` | One received C&C quintuple. |
+
+**Returns:** nothing. **Errors:** none; unknown addresses update only the three input bits. **Special concerns:** pure on its inputs; the session's `handle_ep6` calls it for both C&C quintuples of every EP6 datagram while holding the status mutex. The values are raw ADC counts; `HardwareStatus::supply_volts`, `forward_watts` and `swr` convert them. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn apply_status_cc(st: &mut HardwareStatus, cc: &[u8; 5])`. **See also:** test `status_cc_round_trips_overload_power_and_supply` (p1.rs).
+
+### `encode_status_cc` [@ANCHOR: hpsdr:hpsdr_p1_encode_status_cc]
+
+Builds the radio-to-PC status quintuple for status address 0 to 4 from a `HardwareStatus`, the exact inverse of `apply_status_cc`. The emulator cycles through the addresses so a client sees overload, power, supply and firmware values.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `st` | `&HardwareStatus` | The status to report. |
+| `addr` | `u8` | Status address 0..=4; others give a quintuple with only the C0 input bits. |
+
+**Returns:** `[u8; 5]`. **Errors:** none. **Special concerns:** pure, emulator side only. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn encode_status_cc(st: &HardwareStatus, addr: u8) -> [u8; 5]`. **See also:** test `status_cc_round_trips_overload_power_and_supply` (p1.rs).
+
+### `RadioPorts::default` [@ANCHOR: hpsdr:hpsdr_p2_ports_default]
+
+Returns the Protocol 2 UDP port map from the specification, used when the caller does not choose ports: DDC-specific 1025, DUC-specific 1026, High Priority from the PC 1027, High Priority status from the radio 1025, DDC audio 1028, DUC0 I/Q 1029, DDC0 I/Q source port 1035 (DDC n uses 1035 + n), microphone 1026 and wideband ADC0 1027. The General packet announces these ports to the radio; `session_p2` demultiplexes the incoming streams by them.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** a `RadioPorts` with the nine `u16` fields above. **Errors:** none. **Special concerns:** pure. The port map is `verified=unverified` on real hardware (see the open points at the top of this file). Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `impl Default for RadioPorts { fn default() -> Self }`. **See also:** `encode_general`; test `general_packet_carries_ports_and_the_hardware_timer` (p2.rs).
+
+### `put16` [@ANCHOR: hpsdr:hpsdr_p2_put16]
+
+Private helper that stores a 16-bit value big-endian into a packet buffer at a byte offset. Every Protocol 2 encoder uses it so that the byte order (big-endian, as revision 1.3 of the specification fixed it) is stated in one place.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `p` | `&mut [u8]` | Packet buffer; the two bytes at `at` must exist. |
+| `at` | `usize` | Byte offset of the first of the two bytes. |
+| `v` | `u16` | Value to store. |
+
+**Returns:** nothing. **Errors:** panics if `at + 2` is past the end of `p`; every caller passes constants inside a buffer of 60 or 1444 bytes. **Special concerns:** pure on its argument, no I/O or locks. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn put16(p: &mut [u8], at: usize, v: u16)`. **See also:** `put32`, `encode_general`; test `receive_high_priority_never_carries_transmit_state` (p2.rs).
+
+### `put32` [@ANCHOR: hpsdr:hpsdr_p2_put32]
+
+Private helper that stores a 32-bit value big-endian into a packet buffer at a byte offset: used for the packet sequence number at byte 0, frequencies or phase words, and similar.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `p` | `&mut [u8]` | Packet buffer; four bytes at `at` must exist. |
+| `at` | `usize` | Byte offset. |
+| `v` | `u32` | Value to store. |
+
+**Returns:** nothing. **Errors:** panics if `at + 4` is past the end of `p`; callers pass constants inside fixed-size buffers. **Special concerns:** pure, no I/O or locks. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn put32(p: &mut [u8], at: usize, v: u32)`. **See also:** `put16`, `encode_high_priority_rx`; test `receive_high_priority_never_carries_transmit_state` (p2.rs).
+
+### `discovery_packet` [@ANCHOR: hpsdr:hpsdr_p2_discovery_packet]
+
+Builds the Protocol 2 discovery request: 60 bytes, sequence 0, command byte 2 at offset 4, the rest zero (P2, "Discovery Packet"). `discover` sends it to port 1024 of each target next to the Protocol 1 request; a Protocol 2 radio replies and a Protocol 1 radio ignores it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** a `[u8; 60]`. **Errors:** none. **Special concerns:** pure, no I/O or locks. Discovery carries no PTT, drive or I/Q. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn discovery_packet() -> [u8; SMALL_LEN]`. **See also:** test `discovery_and_reply_round_trip` (p2.rs).
+
+### `parse_reply` [@ANCHOR: hpsdr:hpsdr_p2_parse_reply]
+
+Parses a Protocol 2 discovery reply (option 1, board type below 254): bytes 0..3 zero, byte 4 the status (2 idle, 3 already running), bytes 5..10 the MAC, 11 the board type, 12 the protocol version, 13 the firmware code version, 20 the number of DDCs, 21 the phase-word flag and 22 the data-format bits. Replies with board type 254 or 255 (XML or full hardware description) are reported as unsupported rather than guessed at.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `&[u8]` | The raw datagram, at least 24 bytes. |
+
+**Returns:** a `P2Reply { running, mac, board, protocol_version, firmware, num_ddcs, phase_word, data_modes }`. **Errors:** `Truncated` for fewer than 24 bytes; `BadMagic` when the first four bytes are not zero or the status is not 2 or 3; `Unsupported` for board type 254 or 255. **Special concerns:** pure, never panics on any input (the property test feeds arbitrary bytes). Called by `discovery::parse_reply` for datagrams that begin with the Protocol 2 marker. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn parse_reply(d: &[u8]) -> Result<P2Reply, HpsdrError>`. **See also:** test `discovery_and_reply_round_trip` (p2.rs).
+
+### `encode_reply` [@ANCHOR: hpsdr:hpsdr_p2_encode_reply]
+
+Builds the 60-byte Protocol 2 discovery reply for the emulator: status 3 when `running` else 2, MAC, the board type byte, protocol version, firmware, DDC count, phase-word flag and data-format bits; all other bytes zero. It is the inverse of `parse_reply` for board types below 254.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `r` | `&P2Reply` | Identity to report. |
+| `board_type` | `u8` | The Protocol 2 board number to put in byte 11 (the `board` field of `r` is not used, because `Board` does not keep the number). |
+
+**Returns:** a `[u8; 60]`. **Errors:** none. **Special concerns:** pure, emulator side only. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn encode_reply(r: &P2Reply, board_type: u8) -> [u8; SMALL_LEN]`. **See also:** test `discovery_and_reply_round_trip` (p2.rs).
+
+### `encode_general` [@ANCHOR: hpsdr:hpsdr_p2_encode_general]
+
+Builds the General packet (command 0) that starts a Protocol 2 session: the sequence number, the nine ports at bytes 5 to 21, the phase-word flag in byte 37 bit 3, byte 38 = 1 (hardware reset timer enabled, so a lost host puts the radio into standby) and byte 39 = 0 (big-endian 3-byte I/Q). The PA enable (byte 58) and Alex enables (byte 59) are left zero. Send it to port 1024 after discovery.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Packet sequence number. |
+| `ports` | `&RadioPorts` | The port map to announce. |
+| `phase_words` | `bool` | True when the radio's discovery reply said it takes phase words instead of hertz. |
+
+**Returns:** a `[u8; 60]`. **Errors:** none. **Special concerns:** pure, no I/O. It enables nothing that transmits (PA and Alex enables stay zero), so it is not a transmit packet. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn encode_general(seq: u32, ports: &RadioPorts, phase_words: bool) -> [u8; SMALL_LEN]`. **See also:** `session_p2::Radio2::start`; test `general_packet_carries_ports_and_the_hardware_timer` (p2.rs).
+
+### `encode_ddc_specific` [@ANCHOR: hpsdr:hpsdr_p2_encode_ddc_specific]
+
+Builds the 1444-byte DDC Specific packet that configures the receivers: the sequence number, the number of ADCs, dither and random flags (bytes 4 to 6), one enable bit per DDC from byte 7 (bit n % 8 of byte 7 + n / 8), and per DDC from byte 17 a 6-byte group: ADC index, rate in ksps as 16 bits, two reserved bytes (zero) and the sample size 24. Synchronous-DDC bytes stay zero, so every DDC is independent.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Packet sequence number. |
+| `num_adc` | `u8` | ADCs fitted, 1..=8. |
+| `dither` | `u8` | Dither bit mask, one bit per ADC. |
+| `random` | `u8` | Random bit mask, one bit per ADC. |
+| `ddcs` | `&[DdcSetting]` | Up to 80 settings: `enabled`, `adc` and `rate`. |
+
+**Returns:** the packet as a `Vec<u8>` of 1444 bytes. **Errors:** `Config` when there are more than 80 DDCs or `num_adc` is 0 or above 8. **Special concerns:** pure, no I/O. Receive configuration only; it cannot key the transmitter. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn encode_ddc_specific(seq: u32, num_adc: u8, dither: u8, random: u8, ddcs: &[DdcSetting]) -> Result<Vec<u8>, HpsdrError>`. **See also:** `DdcSetting`; test `ddc_specific_sets_enables_rates_and_adcs` (p2.rs).
+
+### `phase_word` [@ANCHOR: hpsdr:hpsdr_p2_phase_word]
+
+Converts a frequency to the 32-bit phase word that a radio which announces the phase-word flag expects instead of hertz: `2^32 * f / clock`, rounded to the nearest integer (P2, "General Packet" byte 37 text).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `freq_hz` | `u32` | Frequency in hertz. |
+| `clock_hz` | `f64` | The radio's DSP clock in hertz, from `Board::dsp_clock_hz` (122.88 MHz for Hermes). |
+
+**Returns:** the phase word as `u32`; the cast saturates, so a frequency at or above the clock gives `u32::MAX` rather than wrapping. **Errors:** none. **Special concerns:** pure arithmetic in `f64`; no I/O or locks. Used for the DDC frequencies and, in a transmit packet, the DUC frequency. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn phase_word(freq_hz: u32, clock_hz: f64) -> u32`. **See also:** `Board::dsp_clock_hz`; test `receive_high_priority_never_carries_transmit_state` (p2.rs).
+
+### `hp_base` [@ANCHOR: hpsdr:hpsdr_p2_hp_base]
+
+Builds the receive part of a High Priority packet shared by both encoders: 1444 bytes with the sequence number, the run bit (byte 4 bit 0), the DDC frequencies from byte 9 (four bytes each, hertz or phase words depending on `HpRx::phase_clock_hz`) and the two step attenuators at bytes 1442 (ADC1) and 1443 (ADC0). PTT, the DUC frequency and the drive level are left zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Packet sequence number. |
+| `hp` | `&HpRx` | `run`, `ddc_hz` (up to 80), `atten_adc0`, `atten_adc1` (each 0..=31 dB) and `phase_clock_hz`. |
+
+**Returns:** the packet `Vec<u8>`. **Errors:** `Config` for more than 80 DDC frequencies or an attenuator above 31. **Special concerns:** private and pure. It is the zero-transmit base: `encode_high_priority_tx` adds PTT, the DUC frequency and the drive on top of it, after the gate check. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn hp_base(seq: u32, hp: &HpRx) -> Result<Vec<u8>, HpsdrError>`. **See also:** `encode_high_priority_rx`, `encode_high_priority_tx`; test `receive_high_priority_never_carries_transmit_state` (p2.rs).
+
+### `encode_high_priority_rx` [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_rx]
+
+Builds a receive-only High Priority packet: the run bit, DDC frequencies and attenuators. PTT (byte 4 bit 1), the DUC frequency and the drive level are structurally zero because the function has no transmit parameters. The session sends it on every tick when the caller has not asked to key.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Packet sequence number. |
+| `hp` | `&HpRx` | The receive settings. |
+
+**Returns:** the 1444-byte packet. **Errors:** `Config` from `hp_base` for out-of-range settings. **Special concerns:** pure, no I/O. Transmit: structurally unable to key; tests assert that PTT, DUC frequency and drive stay zero. The relay lock and band check do not apply.
+
+**Signature:** `pub fn encode_high_priority_rx(seq: u32, hp: &HpRx) -> Result<Vec<u8>, HpsdrError>`. **See also:** `encode_high_priority_tx`; test `receive_high_priority_never_carries_transmit_state` (p2.rs).
+
+### `encode_high_priority_tx` [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_tx]
+
+Builds a High Priority packet that may key the transmitter. It returns `GateClosed` and builds nothing unless `gate.is_open(now)`. With the gate open and `tx.ptt` false it equals the receive packet. With `ptt` true it asks `gate.check_tx(tx.duc_hz, tx.drive)` for the permitted drive (capped by the gate limits, `OutsideLimits` outside the allowed bands), then sets PTT (byte 4 bit 1), writes the DUC0 frequency at byte 329 (hertz or phase word) and the drive at byte 345.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Packet sequence number. |
+| `hp` | `&HpRx` | Receive settings. |
+| `gate` | `&TxGate` | Must be open. |
+| `now` | `Instant` | Clock reading for the lease test. |
+| `tx` | `&TxState` | `ptt`, `duc_hz` and `drive` 0..=255. |
+
+**Returns:** the packet `Vec<u8>`. **Errors:** `GateClosed`, `OutsideLimits`, or `Config` from `hp_base`. **Special concerns:** takes the gate's locks briefly (a poisoned lock reads as closed); no I/O. Transmit: the only Protocol 2 path that sets PTT or drive, so the gate decides every keyed packet. The relay lock, band check and transmit gate above this crate are not part of it (to-do: record the relay side once the relay consumes this crate).
+
+**Signature:** `pub fn encode_high_priority_tx(seq: u32, hp: &HpRx, gate: &TxGate, now: Instant, tx: &TxState) -> Result<Vec<u8>, HpsdrError>`. **See also:** `TxGate::check_tx`; test `transmit_packets_are_refused_while_the_gate_is_closed` (p2.rs).
+
+### `encode_duc_iq` [@ANCHOR: hpsdr:hpsdr_p2_encode_duc_iq]
+
+Builds a DUC I/Q packet for the DUC0 I/Q port: the sequence number and up to 240 samples, each 24-bit signed I then Q, big-endian (P2, "DUC I&Q Data Packet"). A short slice is zero padded (silence); a sample is never repeated. Samples are the low 24 bits of the `i32` values.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Packet sequence number. |
+| `iq` | `&[(i32, i32)]` | Up to 240 (I, Q) pairs. |
+| `gate` | `&TxGate` | Must be open. |
+| `now` | `Instant` | Clock reading for the lease test. |
+
+**Returns:** the 1444-byte packet. **Errors:** `GateClosed` unless the gate is open at `now`; `Config` for more than 240 samples. **Special concerns:** takes the gate's lease lock briefly; no I/O. Transmit: transmit I/Q is refused with a closed gate, so nothing reaches the radio's modulator without a lease. The caller still has to key PTT through `encode_high_priority_tx`.
+
+**Signature:** `pub fn encode_duc_iq(seq: u32, iq: &[(i32, i32)], gate: &TxGate, now: Instant) -> Result<Vec<u8>, HpsdrError>`. **See also:** `DUC_SAMPLES`; test `transmit_packets_are_refused_while_the_gate_is_closed` (p2.rs).
+
+### `parse_hp_status` [@ANCHOR: hpsdr:hpsdr_p2_parse_hp_status]
+
+Parses a 60-byte High Priority Status packet from the radio's status port: the PTT, dot and dash inputs and PLL lock in byte 4, the ADC overload bits in byte 5, the exciter, forward and reverse power counts (bytes 6, 14, 22), the two ADC peak magnitudes (bytes 39 and 41, 15 bits), and the supply count (byte 49). Temperature is not defined by the published protocol and is not reported.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `&[u8]` | The raw datagram, at least 60 bytes. |
+
+**Returns:** `(u32, HardwareStatus)`: the packet sequence number and the status record (counts are raw ADC values; `pll_locked` is `Some`). **Errors:** `Truncated` for fewer than 60 bytes. **Special concerns:** pure, never panics on any input (property test). Called by the session under its status handling. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn parse_hp_status(d: &[u8]) -> Result<(u32, HardwareStatus), HpsdrError>`. **See also:** `encode_hp_status`; test `status_and_ddc_packets_round_trip` (p2.rs).
+
+### `encode_hp_status` [@ANCHOR: hpsdr:hpsdr_p2_encode_hp_status]
+
+Builds the 60-byte High Priority Status packet for the emulator from a `HardwareStatus`: the inverse of `parse_hp_status`. The emulator sends it so tests can check that overload, power and supply values arrive.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Packet sequence number. |
+| `st` | `&HardwareStatus` | The status to report. |
+
+**Returns:** a `[u8; 60]`. **Errors:** none. **Special concerns:** pure, emulator side only. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn encode_hp_status(seq: u32, st: &HardwareStatus) -> [u8; SMALL_LEN]`. **See also:** `parse_hp_status`; test `status_and_ddc_packets_round_trip` (p2.rs).
+
+### `parse_ddc_packet` [@ANCHOR: hpsdr:hpsdr_p2_parse_ddc]
+
+Parses a DDC data packet: the sequence number, a 64-bit timestamp, the bits per sample (only 24 is supported), the sample count, then that many 24-bit I and Q pairs scaled to +/-1.0. The packet does not carry its DDC number; the session identifies the stream by the source port of the datagram.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `&[u8]` | The raw datagram, at least 16 bytes plus 6 per sample. |
+
+**Returns:** a `DdcPacket { seq, timestamp, samples }`. **Errors:** `Truncated` when shorter than the header or than the announced sample count; `Unsupported` when bits per sample is not 24. **Special concerns:** pure, never panics on any input (property tests, also with well-formed headers and any body). Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn parse_ddc_packet(d: &[u8]) -> Result<DdcPacket, HpsdrError>`. **See also:** `session_p2::Radio2`; tests `status_and_ddc_packets_round_trip` (p2.rs), `hpsdr_packet_parsers_survive_any_datagram` (parser_props.rs).
+
+### `encode_ddc_packet` [@ANCHOR: hpsdr:hpsdr_p2_encode_ddc]
+
+Builds a DDC packet from 24-bit integers for the emulator: sequence number, timestamp, 24 bits per sample, sample count and the I and Q bytes. It is the inverse of `parse_ddc_packet`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `seq` | `u32` | Packet sequence number. |
+| `timestamp` | `u64` | Timestamp field. |
+| `iq` | `&[(i32, i32)]` | The (I, Q) pairs; only the low 24 bits are written and the count must fit a `u16`. |
+
+**Returns:** the packet `Vec<u8>` of `16 + 6 * n` bytes. **Errors:** none; a count above 65535 would be truncated by the cast (the emulator sends small packets). **Special concerns:** pure, emulator side only. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn encode_ddc_packet(seq: u32, timestamp: u64, iq: &[(i32, i32)]) -> Vec<u8>`. **See also:** `parse_ddc_packet`; test `status_and_ddc_packets_round_trip` (p2.rs).
+
+### `SessionOptions::default` [@ANCHOR: hpsdr:hpsdr_session_options_default]
+
+The default tunables of a session: a 10 ms tick between datagrams and 64 blocks buffered per receiver stream. The tick paces the EP2 datagrams (the C&C refresh and the transmit I/Q); the stream depth is the `depth` given to `ChannelStream::new`. Both values are unverified against a real radio, which may want datagrams paced to the 48 ksps transmit sample clock (126 samples, 2.6 ms).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** a `SessionOptions { tick: Duration, stream_depth: usize }`. **Errors:** none. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `impl Default for SessionOptions { fn default() -> Self }`. **See also:** `Radio::start`, `Radio2::start` (both take the options); test `two_receivers_stream_their_own_tones_without_loss` (session.rs).
+
+### `lock (Protocol 1 session)` [@ANCHOR: hpsdr:hpsdr_session_lock]
+
+Private helper that locks one of the session's mutexes and, if a panic in another thread poisoned it, takes the data anyway instead of panicking. The transmit gate, not these mutexes, decides whether anything is sent, so reading the data of a poisoned mutex does not weaken the transmit safety.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `m` | `&Mutex<T>` | The mutex to lock. |
+
+**Returns:** a `MutexGuard<T>`. **Errors:** none (poison is recovered). **Special concerns:** blocks until the mutex is free; callers hold the guard briefly and never across an `await`. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T>`. **See also:** `next_datagram`, `Radio::status`; test `two_receivers_stream_their_own_tones_without_loss` (session.rs).
+
+### `next_datagram` [@ANCHOR: hpsdr:hpsdr_session_next_datagram]
+
+Chooses and builds the next EP2 datagram for the session task. It is a transmit datagram only while the caller has asked to key (`tx.ptt`) and the gate is open at `now`: it then takes up to 126 queued I/Q samples and calls `Ep2Builder::build_tx`. In every other case, including a refusal by the gate or its limits while keyed, a stale key request and the I/Q queue are cleared and a receive datagram is built, so the radio is never left keyed.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `shared` | `&Shared` | Session state: configuration, status and transmit request (each mutex). |
+| `gate` | `&TxGate` | The transmit gate. |
+| `b` | `&mut Ep2Builder` | The datagram builder (sequence and cursor). |
+| `now` | `Instant` | Clock reading for the lease test. |
+
+**Returns:** `Option<Vec<u8>>`: the datagram, or `None` only if even the receive datagram failed to build. **Errors:** none (a build failure becomes `None`). **Special concerns:** private, called by `run` each tick. The shared state sits behind `std::sync::Mutex`es (`cfg`, `status`, `tx`) taken through `lock`, which recovers a poisoned mutex; locks are held briefly and never across an await. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `fn next_datagram(shared: &Shared, gate: &TxGate, b: &mut Ep2Builder, now: Instant) -> Option<Vec<u8>>`. **See also:** test `two_receivers_stream_their_own_tones_without_loss` (session.rs).
+
+### `handle_ep6` [@ANCHOR: hpsdr:hpsdr_session_handle_ep6]
+
+Handles one datagram received from the radio: decodes it with `parse_ep6` for the configured receiver count, applies both status C&C quintuples to the shared `HardwareStatus`, and for each receiver finds the sequence gap with its `SeqTracker`, records the loss and pushes an `IqBlock` (sample rate and centre frequency from the current settings) with `try_send`. A datagram that does not parse is counted as malformed on every stream.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `&[u8]` | The received datagram. |
+| `shared` | `&Shared` | Session state (configuration and status). |
+| `senders` | `&[mpsc::Sender<IqBlock>]` | One sender per receiver stream. |
+| `counters` | `&[Arc<StreamCounters>]` | One counter set per stream. |
+| `trackers` | `&mut [SeqTracker]` | One tracker per stream, mutated. |
+
+**Returns:** nothing. **Errors:** none; every failure is a counter (`malformed`, or `dropped` when the channel is full). **Special concerns:** synchronous and non-blocking (`try_send`), called from the session task. Takes the `cfg` mutex to copy the settings and the `status` mutex while updating it, never both at once. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn handle_ep6(d: &[u8], shared: &Shared, senders: &[mpsc::Sender<IqBlock>], counters: &[Arc<StreamCounters>], trackers: &mut [SeqTracker])`. **See also:** test `two_receivers_stream_their_own_tones_without_loss` (session.rs).
+
+### `run (Protocol 1 session)` [@ANCHOR: hpsdr:hpsdr_session_run]
+
+The session task. In a `tokio::select!` loop it does two things: on every tick of a timer (`MissedTickBehavior::Delay`) it builds the next EP2 datagram with `next_datagram` and sends it on the connected socket, and for every datagram that arrives it calls `handle_ep6`. When the `closing` flag is set (the `Radio` was dropped) it sends the Stop packet after the datagram of that tick, which is a receive datagram, and ends.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sock` | `Arc<UdpSocket>` | Socket connected to the radio. |
+| `shared` | `Arc<Shared>` | Session state shared with the `Radio`. |
+| `gate` | `TxGate` | The transmit gate (a clone). |
+| `senders` | `Vec<mpsc::Sender<IqBlock>>` | Stream senders. |
+| `counters` | `Vec<Arc<StreamCounters>>` | Stream counters. |
+| `tick` | `Duration` | Datagram interval. |
+
+**Returns:** a future that completes only after `closing` is set; otherwise it runs until the task is aborted by `Radio::stop`. **Errors:** send and receive errors are ignored (UDP is lossy by design); the effect is visible as lost-packet counters. **Special concerns:** async, one task per session, spawned on the caller's runtime. Single owner of the `Ep2Builder` and the trackers, so they need no lock. A transmit datagram can only come from `next_datagram`, so the gate is checked on every datagram. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `async fn run(sock: Arc<UdpSocket>, shared: Arc<Shared>, gate: TxGate, senders: Vec<mpsc::Sender<IqBlock>>, counters: Vec<Arc<StreamCounters>>, tick: Duration)`. **See also:** test `two_receivers_stream_their_own_tones_without_loss` (session.rs).
+
+### `Radio::start` [@ANCHOR: hpsdr:hpsdr_session_start]
+
+Configures a Protocol 1 radio and begins streaming. It validates the configuration, binds an ephemeral UDP socket and connects it to the radio, sends enough receive datagrams to deliver every C&C address once (`addresses().len() / 2 + 1`, rounded up), sends the Start command (I/Q on, bandscope off), builds the shared state and one `ChannelStream` per receiver, and spawns the session task. The caller owns the returned `Radio`; call `stop` when finished.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `handle` | `&Handle` | The caller's tokio runtime; the socket and task live on it. |
+| `radio` | `&Discovered` | A Protocol 1 radio from `discover`. |
+| `cfg` | `P1Config` | Initial settings (receiver count, rates, frequencies), moved in. |
+| `gate` | `TxGate` | The transmit gate; pass `TxGate::new()` (closed) for a receive-only session. |
+| `opts` | `SessionOptions` | Tick and stream depth. |
+
+**Returns:** `Radio` (marked `must_use`; dropping it ends the session). **Errors:** `Unsupported` for a Protocol 2 radio; `Config` or `Unsupported` from `validate`; `Io` from socket bind, connect or send. **Special concerns:** async; the start-up datagrams are all receive datagrams (MOX clear). Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `pub async fn start(handle: &Handle, radio: &Discovered, cfg: P1Config, gate: TxGate, opts: SessionOptions) -> Result<Self, HpsdrError>`. **See also:** `Ep2Builder`, `Radio::stop`; test `two_receivers_stream_their_own_tones_without_loss` (session.rs).
+
+### `Radio::take_streams` [@ANCHOR: hpsdr:hpsdr_session_take_streams]
+
+Hands the caller the per-receiver `ChannelStream`s, index equal to the DDC number, by moving them out of the `Radio`. It can be called once: the second call returns an empty list, because the streams have already gone to the first caller (each stream has one consumer).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Radio` | Mutated: the stream list is emptied. |
+
+**Returns:** `Vec<ChannelStream>` of `num_rx` entries the first time, empty afterwards. **Errors:** none. **Special concerns:** no locks, no I/O. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn take_streams(&mut self) -> Vec<ChannelStream>`. **See also:** `IqStream`; test `two_receivers_stream_their_own_tones_without_loss` (session.rs).
+
+### `Radio::update` [@ANCHOR: hpsdr:hpsdr_session_update]
+
+Changes the running radio's settings (frequency, sample rate, attenuator, pre-amp and so on) through a closure that edits a copy of the `P1Config`. The copy is validated and, if the receiver count is unchanged, replaces the shared settings; the session task sends the new values in the next datagrams. The receiver count is fixed for the life of the session.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `f` | `impl FnOnce(&mut P1Config)` | Closure that edits the copy; it runs while the configuration mutex is held, so it must not block or call back into the session. |
+
+**Returns:** `Ok(())`. **Errors:** `Config` or `Unsupported` from `validate`; `Config` when the receiver count changed. On error nothing is changed. **Special concerns:** takes the `cfg` mutex for the duration of the closure. Changing `tx_hz` does not key anything; the gate limits are checked against it at the next key request and datagram. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn update(&self, f: impl FnOnce(&mut P1Config)) -> Result<(), HpsdrError>`. **See also:** `P1Config::validate`; test `sample_rate_and_frequency_changes_reach_the_radio` (session.rs).
+
+### `Radio::status` [@ANCHOR: hpsdr:hpsdr_session_status]
+
+Returns a copy of the latest `HardwareStatus` that the session assembled from the radio's status C&C bytes: ADC overload flags, exciter, forward and reverse power counts, supply count, the PTT, dot and dash inputs and the firmware version. All counts are raw ADC values; convert with `supply_volts`, `HardwareStatus::watts` and `swr`. It is the default value until the first EP6 datagram arrives.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&Radio` | Shared borrow. |
+
+**Returns:** a `HardwareStatus` (`Copy`). **Errors:** none. **Special concerns:** takes the `status` mutex briefly. Temperature is not defined by the published protocol and is never reported. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn status(&self) -> HardwareStatus`. **See also:** `HardwareStatus`; test `overload_power_and_supply_status_are_reported` (session.rs).
+
+### `Radio::request_ptt` [@ANCHOR: hpsdr:hpsdr_session_request_ptt]
+
+Asks the session to key or unkey the transmitter. Unkeying (`ptt` false) is always accepted and clears the drive and the queued I/Q. Keying is refused with `GateClosed` while the gate is closed; otherwise `TxGate::check_tx` caps the drive at the gate's limit and refuses a transmit frequency outside the allowed bands, and only then is the request stored. The task re-checks the gate before every datagram and unkeys when the lease expires.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ptt` | `bool` | True to key, false to unkey. |
+| `drive` | `u8` | Requested drive 0..=255; may be lowered by the gate limits. |
+
+**Returns:** `Ok(())`. **Errors:** `GateClosed`; `OutsideLimits` when `tx_hz` is outside the allowed bands. **Special concerns:** takes the `cfg` and `tx` mutexes in that order, briefly. The request is a wish, not a transmission: nothing is sent until the next tick, and then only through `next_datagram`. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `pub fn request_ptt(&self, ptt: bool, drive: u8) -> Result<(), HpsdrError>`. **See also:** `TxGate::open_until`, `TxGate::check_tx`; test `a_whole_receive_session_with_a_closed_gate_never_transmits` (session.rs).
+
+### `Radio::send_tx_iq` [@ANCHOR: hpsdr:hpsdr_session_send_tx_iq]
+
+Queues transmit I/Q samples (16-bit pairs at 48 ksps) for the session task, which sends up to 126 per datagram while keyed. The queue holds at most `TX_QUEUE_MAX` (4096, about 85 ms) samples; a call that would overflow it is refused as a whole, so nothing is dropped silently or repeated.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `iq` | `&[(i16, i16)]` | (I, Q) samples to append. |
+
+**Returns:** `Ok(())`. **Errors:** `GateClosed` while the gate is closed; `Config("transmit queue full")` when the queue would exceed `TX_QUEUE_MAX`. **Special concerns:** takes the `tx` mutex briefly. Samples are only sent while `request_ptt(true, ..)` has been accepted and the gate stays open; an unkey or a lease expiry clears the queue. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `pub fn send_tx_iq(&self, iq: &[(i16, i16)]) -> Result<(), HpsdrError>`. **See also:** `TX_QUEUE_MAX`; test `a_whole_receive_session_with_a_closed_gate_never_transmits` (session.rs).
+
+### `Radio::stop` [@ANCHOR: hpsdr:hpsdr_session_stop]
+
+Ends the session cleanly and unkeys the radio. It clears the key request, drive and queued I/Q, aborts the session task and awaits it (so no transmit datagram can follow), sends one receive datagram (MOX clear, drive zero) so a radio that was keyed is told to unkey explicitly, then sends the Stop command. The Stop packet is sent even if the unkey datagram could not be.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `Radio` | The session, consumed. |
+
+**Returns:** `Ok(())`. **Errors:** `Io` if the Stop packet cannot be sent; the error of the unkey datagram if only that failed. **Special concerns:** async; takes the `tx` and `cfg` mutexes briefly, then awaits the aborted task. Idempotent by consumption: a stopped session cannot be used again. Transmit: after it returns the last datagram sent had MOX clear.
+
+**Signature:** `pub async fn stop(mut self) -> Result<(), HpsdrError>`. **See also:** `Radio::drop`; tests `an_open_gate_keys_and_the_lease_expiry_unkeys` (session.rs), `stop_while_keyed_sends_a_mox_clear_datagram_before_the_stop_packet` (session.rs).
+
+### `Radio::drop` [@ANCHOR: hpsdr:hpsdr_session_drop]
+
+The `Drop` implementation of the Protocol 1 session. A `Radio` dropped without `stop()` unkeys at once (key request, drive and queued I/Q are cleared, so the task's next datagram is a receive one) and sets the `closing` flag; the task then sends the Stop command and ends. The task is never just aborted, which would leave the last keyed datagram standing in the radio.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Radio` | The session being dropped. |
+
+**Returns:** nothing. **Errors:** none (a drop cannot report a failure). **Special concerns:** synchronous and non-blocking: it takes the `tx` mutex briefly and stores an atomic flag; the Stop packet goes out from the task on its next tick (up to one tick later). Transmit: unkeying takes effect on the next datagram, so call `stop().await` where the exact moment matters.
+
+**Signature:** `fn drop(&mut self)`. **See also:** `Radio::stop`; test `dropping_a_keyed_session_unkeys_and_sends_stop_and_the_task_ends` (session.rs).
+
+### `P2Config::default` [@ANCHOR: hpsdr:hpsdr_session_p2_config_default]
+
+The default Protocol 2 session settings: 48 ksps, one receiver at 7,100,000 Hz, one ADC, both attenuators 0 dB, dither and random off, transmit frequency 7,100,000 Hz and the specification's default port map (`RadioPorts::default`). Callers override fields with struct update syntax.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** a `P2Config { rate, rx_hz, num_adc, att_adc0, att_adc1, dither, random, tx_hz, ports }`; the receiver count is the length of `rx_hz` (1..=8). **Errors:** none. **Special concerns:** pure. The default does not transmit: the transmit frequency only matters once the gate is open and PTT is requested. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `impl Default for P2Config { fn default() -> Self }`. **See also:** `P2Config::validate`; test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `P2Config::validate` [@ANCHOR: hpsdr:hpsdr_session_p2_config_validate]
+
+Rejects settings the Protocol 2 packets cannot express: the receiver count (the length of `rx_hz`) must be 1 to 8, each attenuator 0 to 31 dB, and the ADC count 1 to 8. `Radio2::start` and `Radio2::update` call it so that a bad setting is refused before it reaches a packet.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&P2Config` | The settings to check. |
+
+**Returns:** `Ok(())`. **Errors:** `Config("1 to 8 receivers")`, `Config("attenuator 0..=31 dB")` or `Config("1 to 8 ADCs")`. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn validate(&self) -> Result<(), HpsdrError>`. **See also:** test `frequency_rate_and_attenuator_changes_reach_the_radio` (session_p2.rs).
+
+### `P2Config::ddcs` [@ANCHOR: hpsdr:hpsdr_session_p2_config_ddcs]
+
+Builds the DDC-specific settings from the configuration: one `DdcSetting` per entry of `rx_hz`, each enabled, listening to ADC0, at the common sample rate. The session passes the list to `encode_ddc_specific`. Assigning receivers to other ADCs is not supported yet.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&P2Config` | Only `rx_hz.len()` and `rate` are used. |
+
+**Returns:** a `Vec<DdcSetting>` with `rx_hz.len()` entries. **Errors:** none. **Special concerns:** private and pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn ddcs(&self) -> Vec<DdcSetting>`. **See also:** `encode_ddc_specific`; test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `lock (Protocol 2 session)` [@ANCHOR: hpsdr:hpsdr_session_p2_lock]
+
+Private helper identical in purpose to the Protocol 1 one: it locks a mutex and, if a panic poisoned it, takes the data instead of panicking. The gate, not these mutexes, decides whether anything is transmitted.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `m` | `&Mutex<T>` | The mutex to lock. |
+
+**Returns:** a `MutexGuard<T>`. **Errors:** none (poison is recovered). **Special concerns:** blocks until the mutex is free; guards are held briefly and never across an await. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T>`. **See also:** `session::lock`; test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `hp_rx` [@ANCHOR: hpsdr:hpsdr_session_p2_hp_rx]
+
+Builds the `HpRx` (receive High Priority settings) from the configuration and the target: the run bit as given, the receiver frequencies, both attenuators and, when the radio announced phase words, the DSP clock used to turn frequencies into phase words.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `cfg` | `&P2Config` | Current settings. |
+| `t` | `&Target` | Where the session sends; carries the optional `clock_hz`. |
+| `run` | `bool` | The run bit: true while streaming, false in the final packet of `stop` and drop. |
+
+**Returns:** an `HpRx`. **Errors:** none. **Special concerns:** private and pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn hp_rx(cfg: &P2Config, t: &Target, run: bool) -> HpRx`. **See also:** `p2::encode_high_priority_rx`; test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `next_packets` [@ANCHOR: hpsdr:hpsdr_session_p2_next_packets]
+
+Chooses the packets for one tick: a High Priority packet and, only while keyed, a DUC I/Q packet. They are transmit packets only while the caller asked to key and the gate is open at `now`: the High Priority packet is then built by `encode_high_priority_tx` and up to 240 queued samples (shifted left 8 bits to 24-bit) by `encode_duc_iq`. Otherwise, or when the gate or its limits refuse, the key request and queue are cleared and the receive High Priority packet is built; no I/Q packet is built. Sequence numbers advance only for packets actually built.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `shared` | `&Shared` | Session state. |
+| `gate` | `&TxGate` | Transmit gate. |
+| `t` | `&Target` | Target and clock. |
+| `seqs` | `&mut Seqs` | Per-packet-kind sequence numbers, mutated. |
+| `now` | `Instant` | Clock reading. |
+
+**Returns:** `(Option<Vec<u8>>, Option<Vec<u8>>)`: the High Priority packet and the optional DUC packet. **Errors:** none (a build failure gives `None`). **Special concerns:** private, called each tick by `run`. The shared state sits behind `std::sync::Mutex`es (`cfg`, `status`, `tx`) taken through `lock`, which recovers a poisoned mutex; locks are held briefly and never across an await. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `fn next_packets(shared: &Shared, gate: &TxGate, t: &Target, seqs: &mut Seqs, now: Instant) -> (Option<Vec<u8>>, Option<Vec<u8>>)`. **See also:** test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `handle_datagram` [@ANCHOR: hpsdr:hpsdr_session_p2_handle_datagram]
+
+Handles one datagram by the radio's source port. A datagram from the high-priority-to-PC port that parses as a status packet updates the shared status (keeping the firmware value). Otherwise the stream number is `source port - ports.ddc0`; a port below `ddc0` or beyond the receiver count is counted as stray; a DDC packet that does not parse is counted as malformed for its stream; a good one becomes an `IqBlock` after the loss count from its `SeqTracker`, delivered with `try_send` (dropped and counted when the channel is full).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `&[u8]` | The datagram. |
+| `from_port` | `u16` | Source UDP port, which identifies the stream. |
+| `shared` | `&Shared` | Session state. |
+| `senders` | `&[mpsc::Sender<IqBlock>]` | Stream senders. |
+| `counters` | `&[Arc<StreamCounters>]` | Stream counters. |
+| `trackers` | `&mut [SeqTracker]` | Per-stream sequence trackers. |
+
+**Returns:** nothing. **Errors:** none; every failure is a counter (`stray`, `malformed`, `dropped`). **Special concerns:** non-blocking and synchronous. Whether a real radio sends each stream from its own source port is `verified=unverified`, which is why strays are counted and visible through `Radio2::stray_datagrams`. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn handle_datagram(d: &[u8], from_port: u16, shared: &Shared, senders: &[mpsc::Sender<IqBlock>], counters: &[Arc<StreamCounters>], trackers: &mut [SeqTracker])`. **See also:** test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `run (Protocol 2 session)` [@ANCHOR: hpsdr:hpsdr_session_p2_run]
+
+The Protocol 2 session task. On every tick it sends a DDC-specific packet when the settings changed (a version counter) or a second has passed (so a lost datagram cannot leave stale settings), then the High Priority packet and, while keyed, the DUC I/Q packet from `next_packets`, each to its own port. For every datagram that arrives it calls `handle_datagram` with the source port. When `closing` is set it sends the run-bit-clear High Priority packet and ends.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `t` | `Task` | The task's fixed inputs: socket, shared state, gate, target, senders, counters, tick and sequence numbers. |
+
+**Returns:** a future that completes only after `closing` is set; otherwise it runs until aborted by `Radio2::stop`. **Errors:** send and receive errors are ignored (UDP); loss shows in the counters. **Special concerns:** async, one task per session, sole owner of the trackers and sequence numbers. All transmit packets come from `next_packets`, so the gate is consulted on every tick. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `async fn run(mut t: Task)`. **See also:** test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `Radio2::start` [@ANCHOR: hpsdr:hpsdr_session_p2_start]
+
+Configures a Protocol 2 radio and begins streaming. It validates the settings, takes the DSP clock from the board when the radio announced phase words (refusing a board with no known clock), binds an ephemeral socket, sends the General packet to the radio's command port, waits 5 ms so the radio has the port map, creates one stream per receiver and spawns the session task, whose first ticks send the DDC-specific and High Priority packets with the run bit set.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `handle` | `&Handle` | The caller's tokio runtime. |
+| `radio` | `&Discovered` | A Protocol 2 radio from discovery. |
+| `cfg` | `P2Config` | Initial settings. |
+| `gate` | `TxGate` | Transmit gate; pass `TxGate::new()` (closed) for receive only. |
+| `opts` | `SessionOptions` | `tick` paces the command packets; `stream_depth` the stream buffers. |
+
+**Returns:** `Radio2` (marked `must_use`). **Errors:** `Unsupported` for a Protocol 1 radio or for phase words on a board with no known clock; `Config` from `validate`; `Io` from the socket or the General packet send. **Special concerns:** async; the 5 ms pause is a fixed delay, unverified against hardware. The General packet enables no transmit path. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `pub async fn start(handle: &Handle, radio: &Discovered, cfg: P2Config, gate: TxGate, opts: SessionOptions) -> Result<Self, HpsdrError>`. **See also:** `p2::encode_general`, `Radio2::stop`; test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `Radio2::take_streams` [@ANCHOR: hpsdr:hpsdr_session_p2_take_streams]
+
+Hands the caller the per-receiver `ChannelStream`s (index equal to the DDC number) by moving them out of the `Radio2`. The second call returns an empty list.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Radio2` | Mutated: the stream list is emptied. |
+
+**Returns:** `Vec<ChannelStream>`; empty after the first call. **Errors:** none. **Special concerns:** no locks, no I/O. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn take_streams(&mut self) -> Vec<ChannelStream>`. **See also:** `Radio::take_streams`; test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `Radio2::update` [@ANCHOR: hpsdr:hpsdr_session_p2_update]
+
+Changes the running radio's settings through a closure editing a copy of the `P2Config`. The copy is validated; the receiver count and the port map may not change. On success it replaces the shared settings and bumps the version counter, so the task sends a fresh DDC-specific packet on its next tick.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `f` | `impl FnOnce(&mut P2Config)` | Closure that edits the copy; it runs under the `cfg` mutex and must not block or call back into the session. |
+
+**Returns:** `Ok(())`. **Errors:** `Config` from `validate`, `Config("the receiver count cannot change while running")`, `Config("the port map cannot change while running")`; nothing changes on error. **Special concerns:** takes the `cfg` mutex for the duration of the closure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn update(&self, f: impl FnOnce(&mut P2Config)) -> Result<(), HpsdrError>`. **See also:** `P2Config::validate`; test `frequency_rate_and_attenuator_changes_reach_the_radio` (session_p2.rs).
+
+### `Radio2::status` [@ANCHOR: hpsdr:hpsdr_session_p2_status]
+
+Returns a copy of the latest `HardwareStatus` from the High Priority Status packets: ADC overload flags, ADC peak magnitudes, exciter, forward and reverse power counts, supply count, PTT, dot and dash inputs and PLL lock. Counts are raw ADC values. It is the default until the first status packet arrives.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&Radio2` | Shared borrow. |
+
+**Returns:** a `HardwareStatus` (`Copy`). **Errors:** none. **Special concerns:** takes the `status` mutex briefly. Temperature is not defined by the published protocol. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn status(&self) -> HardwareStatus`. **See also:** `Radio::status`; test `overload_power_and_supply_status_are_reported` (session_p2.rs).
+
+### `Radio2::stray_datagrams` [@ANCHOR: hpsdr:hpsdr_session_p2_stray]
+
+Returns how many datagrams arrived from a source port that belongs to no stream or status. A non-zero count means the radio does not send its streams the way the session assumes (one source port per DDC, `ddc0 + n`), which is an open, unverified point of the specification; it signals stray traffic instead of delivering wrong data.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&Radio2` | Shared borrow. |
+
+**Returns:** `u64`, the running count since the session started. **Errors:** none. **Special concerns:** a relaxed atomic load, no locks. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn stray_datagrams(&self) -> u64`. **See also:** `handle_datagram`; test `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs).
+
+### `Radio2::request_ptt` [@ANCHOR: hpsdr:hpsdr_session_p2_request_ptt]
+
+Asks the Protocol 2 session to key or unkey. Unkeying is always accepted and clears the drive and queued I/Q. Keying is refused with `GateClosed` while the gate is closed, and `TxGate::check_tx` caps the drive and refuses a transmit frequency outside the allowed bands before the request is stored. The task re-checks the gate before every packet and unkeys when the lease expires.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ptt` | `bool` | True to key, false to unkey. |
+| `drive` | `u8` | Requested drive 0..=255, possibly lowered by the gate limits. |
+
+**Returns:** `Ok(())`. **Errors:** `GateClosed`; `OutsideLimits`. **Special concerns:** takes the `cfg` and `tx` mutexes briefly. The request is stored, not sent: packets go out on the next tick through `next_packets`. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `pub fn request_ptt(&self, ptt: bool, drive: u8) -> Result<(), HpsdrError>`. **See also:** `TxGate::check_tx`; test `a_whole_receive_session_with_a_closed_gate_never_transmits` (session_p2.rs).
+
+### `Radio2::send_tx_iq` [@ANCHOR: hpsdr:hpsdr_session_p2_send_tx_iq]
+
+Queues transmit I/Q (16-bit pairs) for the session task, which sends up to 240 per DUC packet while keyed. The queue is limited to `TX_QUEUE_MAX` (4096) samples; a call that would overflow it is refused whole, so nothing is dropped silently or repeated.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `iq` | `&[(i16, i16)]` | (I, Q) samples to append. |
+
+**Returns:** `Ok(())`. **Errors:** `GateClosed`; `Config("transmit queue full")`. **Special concerns:** takes the `tx` mutex briefly. An unkey or a lease expiry clears the queue. Transmit: this is a keying path. The gate must be open (a bounded lease) and its limits (drive cap, allowed bands) are checked; the crate has no relay lock or band plan of its own, so the relay's lock and band check have to be applied by the caller (unknown whether the relay consumes this crate yet; to-do: record that in the relay docs).
+
+**Signature:** `pub fn send_tx_iq(&self, iq: &[(i16, i16)]) -> Result<(), HpsdrError>`. **See also:** `TX_QUEUE_MAX`; test `a_whole_receive_session_with_a_closed_gate_never_transmits` (session_p2.rs).
+
+### `Radio2::stop` [@ANCHOR: hpsdr:hpsdr_session_p2_stop]
+
+Ends the Protocol 2 session and unkeys. It clears the key request, drive and queue, aborts the task and awaits it (so a transmit packet being built on another worker thread cannot follow and undo the unkey), then sends one High Priority packet with the run bit clear and sequence `u32::MAX` to the radio's High Priority port.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `Radio2` | The session, consumed. |
+
+**Returns:** `Ok(())`. **Errors:** `Config` from encoding the packet; `Io` from the send. **Special concerns:** async; takes the `tx` and `cfg` mutexes briefly. After it returns the last packet sent had PTT clear and the run bit clear. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub async fn stop(mut self) -> Result<(), HpsdrError>`. **See also:** `Radio::stop`; tests `two_receivers_stream_their_own_tones_without_loss` (session_p2.rs), `stopping_or_dropping_a_keyed_session_leaves_the_radio_unkeyed` (session_p2.rs).
+
+### `Radio2::drop` [@ANCHOR: hpsdr:hpsdr_session_p2_drop]
+
+The `Drop` implementation of the Protocol 2 session: same contract as the Protocol 1 one. A `Radio2` dropped without `stop()` clears the key request, drive and queue at once and sets `closing`; the task's next tick then sends the unkeyed run-bit-clear packet and ends. It is never just aborted.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Radio2` | The session being dropped. |
+
+**Returns:** nothing. **Errors:** none. **Special concerns:** synchronous and non-blocking (a mutex and an atomic flag); the final packet goes out up to one tick later. Call `stop().await` where the exact moment matters. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `fn drop(&mut self)`. **See also:** `Radio::drop`; test `stopping_or_dropping_a_keyed_session_leaves_the_radio_unkeyed` (session_p2.rs).
+
+### `Board::from_p1_id` [@ANCHOR: hpsdr:hpsdr_types_board_from_p1_id]
+
+Maps a Protocol 1 `Board_ID` byte from the discovery reply to the `Board` enum: 0 Metis, 1 Hermes, 4 Angelia, 5 Orion, 6 Hermes Lite; any other value, including 2 (Griffin, which the enum has no variant for), becomes `Board::Other(id)`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `id` | `u8` | The board id byte (Metis v1.33). |
+
+**Returns:** a `Board`. **Errors:** none; unknown ids are kept in `Other`. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn from_p1_id(id: u8) -> Self`. **See also:** `Board::from_p2_type`; test `board_ids_map_and_unknown_is_kept` (types.rs).
+
+### `Board::from_p2_type` [@ANCHOR: hpsdr:hpsdr_types_board_from_p2_type]
+
+Maps the Protocol 2 board type (byte 11 of the discovery reply, spec v4.4) to `Board`: 0 Metis, 1 Hermes, 2 Hermes B, 3 Angelia, 4 Orion, 5 Orion Mk II, 6 Hermes Lite, 10 Saturn; any other value becomes `Board::Other(t)`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `t` | `u8` | The board type byte. |
+
+**Returns:** a `Board`. **Errors:** none. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn from_p2_type(t: u8) -> Self`. **See also:** `Board::from_p1_id`; test `board_ids_map_and_unknown_is_kept` (types.rs).
+
+### `Board::dsp_clock_hz` [@ANCHOR: hpsdr:hpsdr_types_board_dsp_clock]
+
+Gives the radio's DSP clock in hertz, which is needed to turn frequencies into phase words: 122,880,000 for Hermes, Hermes B, Angelia, Orion and Orion Mk II (spec v4.4 Appendix A gives 122.88 MHz for Hermes). Other boards give `None` because the crate has not read their clock from the specification.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `Board` | The board. |
+
+**Returns:** `Option<f64>` hertz. **Errors:** none; `None` is the unknown case (a session that needs phase words refuses to start for it). **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn dsp_clock_hz(self) -> Option<f64>`. **See also:** `p2::phase_word`, `Radio2::start`; test `board_ids_map_and_unknown_is_kept` (types.rs).
+
+### `Board::power_constant` [@ANCHOR: hpsdr:hpsdr_types_board_power_constant]
+
+Gives constant 2 of the forward and reverse power formula (spec v4.4 Appendix A): for Hermes 0.09 for the ANAN-10 and 0.095 for the ANAN-100. Both models share board type 1, so the caller says which by the flag. Any other board gives `None` because the specification states no constant for it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `Board` | The board. |
+| `anan10` | `bool` | True for an ANAN-10, false for an ANAN-100. |
+
+**Returns:** `Option<f64>`, the constant `c2` for `HardwareStatus::watts` and `swr`. **Errors:** none; `None` means power cannot be converted to watts for this board (the raw counts are still reported). **Special concerns:** pure. Power calibration is `verified=unverified` on real hardware. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn power_constant(self, anan10: bool) -> Option<f64>`. **See also:** `HardwareStatus::watts`; test `board_ids_map_and_unknown_is_kept` (types.rs).
+
+### `Rate::hz` [@ANCHOR: hpsdr:hpsdr_types_rate_hz]
+
+Returns a receiver sample rate in hertz: 48,000, 96,000, 192,000, 384,000, 768,000 or 1,536,000. The sessions put it in `IqBlock::sample_rate_hz`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `Rate` | The rate. |
+
+**Returns:** `u32` hertz. **Errors:** none. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn hz(self) -> u32`. **See also:** `Rate::from_ksps`; test `rates_round_trip` (types.rs).
+
+### `Rate::from_ksps` [@ANCHOR: hpsdr:hpsdr_types_rate_from_ksps]
+
+Parses a sample rate given in kilohertz: 48, 96, 192, 384, 768 or 1536. Used to turn a human or configuration value into a `Rate`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `k` | `u16` | Rate in ksps. |
+
+**Returns:** the matching `Rate`. **Errors:** `Config("sample rate N ksps")` for any other value. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn from_ksps(k: u16) -> Result<Self, HpsdrError>`. **See also:** `Rate::hz`; test `rates_round_trip` (types.rs).
+
+### `Rate::p1_code` [@ANCHOR: hpsdr:hpsdr_types_rate_p1_code]
+
+Gives the Protocol 1 speed code for the C&C general address (USB protocol v1.60, C1 bits 1..0): 0 for 48 ksps, 1 for 96, 2 for 192, 3 for 384. Protocol 1 cannot express 768 or 1536 ksps.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `Rate` | The rate. |
+
+**Returns:** `Ok(u8)` code 0..=3. **Errors:** `Config("Protocol 1 supports 48/96/192/384 ksps")` for 768 and 1536 ksps; `P1Config::validate` surfaces it. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn p1_code(self) -> Result<u8, HpsdrError>`. **See also:** `Rate::from_p1_code`; test `rates_round_trip` (types.rs).
+
+### `Rate::from_p1_code` [@ANCHOR: hpsdr:hpsdr_types_rate_from_p1_code]
+
+The inverse of `Rate::p1_code`: only the low two bits of the code are used (0 48 ksps, 1 96, 2 192, 3 384), so it is total and the emulator can decode any received C1 byte.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `u8` | The code; bits above the low two are ignored. |
+
+**Returns:** a `Rate` (never 768 or 1536). **Errors:** none. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn from_p1_code(c: u8) -> Self`. **See also:** `Rate::p1_code`; test `rates_round_trip` (types.rs).
+
+### `HardwareStatus::supply_volts` [@ANCHOR: hpsdr:hpsdr_types_status_supply_volts]
+
+Converts the raw 12-bit supply count to volts with the Hermes formula `adc / 4095 * 3.3` (spec v4.4 Appendix A). The formula is for Hermes; other boards may scale differently (unknown; to-do: check each board when hardware is available).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&HardwareStatus` | Uses `supply_raw`. |
+
+**Returns:** `f64` volts, 0 to 3.3. **Errors:** none. **Special concerns:** pure. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn supply_volts(&self) -> f64`. **See also:** `HardwareStatus`; test `power_and_swr_from_counts` (types.rs).
+
+### `HardwareStatus::watts` [@ANCHOR: hpsdr:hpsdr_types_status_watts]
+
+Converts a raw forward or reverse power count to watts: `(adc / 4095 * 3.3)^2 / c2` (spec v4.4 Appendix A). Obtain `c2` from `Board::power_constant`. An associated function, not a method, so it works on any raw count.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `raw` | `u16` | The 12-bit ADC count. |
+| `c2` | `f64` | Calibration constant 2; must be non-zero, a zero gives infinity or NaN. |
+
+**Returns:** `f64` watts. **Errors:** none (no check on `c2`). **Special concerns:** pure. It is a report of what the radio measured, never a gate input. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn watts(raw: u16, c2: f64) -> f64`. **See also:** `Board::power_constant`; test `power_and_swr_from_counts` (types.rs).
+
+### `HardwareStatus::swr` [@ANCHOR: hpsdr:hpsdr_types_status_swr]
+
+Computes the standing wave ratio from the forward and reverse power counts: the reflection coefficient is the square root of reverse over forward power, and the SWR is `(1 + rho) / (1 - rho)`. Returns `None` when there is no forward power, and infinity when reverse is at least forward.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&HardwareStatus` | Uses `forward_raw` and `reverse_raw`. |
+| `c2` | `f64` | Calibration constant 2 from `Board::power_constant`. |
+
+**Returns:** `Option<f64>`. **Errors:** none; `None` means "no forward power". **Special concerns:** pure. Informational only: the crate does not trip anything on SWR. Transmit: not involved; the relay lock, band check and transmit gate do not apply.
+
+**Signature:** `pub fn swr(&self, c2: f64) -> Option<f64>`. **See also:** `HardwareStatus::watts`; test `power_and_swr_from_counts` (types.rs).
