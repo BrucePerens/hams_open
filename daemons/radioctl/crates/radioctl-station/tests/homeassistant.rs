@@ -753,6 +753,9 @@ async fn a_wrong_token_never_syncs_and_is_never_logged() {
     })
     .await;
     assert!(!d.is_synced());
+    // Tests [@ANCHOR: radioctl_station_ha_run_sessions]: a rejected token is not retried (backoff is 30 to 120 ms here).
+    sleep(Duration::from_millis(600)).await;
+    assert_eq!(ha.state.lock().unwrap().ws_connections, 1);
     let err = d.write_line(0, true).await.expect_err("401");
     assert!(err.detail.contains("rejected"), "{}", err.detail);
     let everything = format!("{:?} {err:?} {}", audit.entries(), err.detail);
