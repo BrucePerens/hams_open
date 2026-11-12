@@ -89,7 +89,7 @@ The `user_websites` module enables decentralized content creation. It employs th
 * **`view_count`**: Privacy-friendly server-side view tracker (the server counts non-admin page views in Redis and a cron flushes them to this column every 15 minutes). Only `website.page` counts are incremented today; this module declares `blog.post.view_count` but never increments it.
 
 ### Moderation Models
-* **`content.violation.report`** (model itself now in `content_moderation`, this module's own extension in `models/content_violation_report_moderation.py`): Stores abuse reports. Originator is masked from the target owner. The system automatically generates a report and issues a strike if a user attempts to inject malicious SSTI/XSS payloads into their site architecture `content_moderation:action_take_action_and_strike` (via this module's own enforcement-hook override `user_websites:COMM_apply_enforcement_action`), tested by `test_moderation_suspension`. Admin spam is prevented via a daily digest cron (`ir_cron_notify_pending_reports` `ir_cron_notify_pending_reports`, `cron_notify_pending_reports`, verified by `test_cron_pending_reports`) and a UI toast that is sticky but remembered in localStorage for 12 h per (count, newest id), with Review/Dismiss buttons, (`[@ANCHOR: toast_notifications_logic]`, `[@ANCHOR: admin_toast_logic]`, tested by `[@ANCHOR: test_tour_toast_notifications]`).
+* **`content.violation.report`** (model itself now in `content_moderation`, this module's own extension in `models/content_violation_report_moderation.py`): Stores abuse reports. Originator is masked from the target owner. The system automatically generates a report and issues a strike if a user attempts to inject malicious SSTI/XSS payloads into their site architecture `content_moderation:action_take_action_and_strike` (via this module's own enforcement-hook override `user_websites:COMM_apply_enforcement_action`), tested by `test_moderation_suspension`. Admin spam is prevented via a daily digest cron (`ir_cron_notify_pending_reports` `ir_cron_notify_pending_reports`, `cron_notify_pending_reports`, verified by `test_cron_pending_reports`) and a UI toast that is sticky but remembered in localStorage for 12 h per (count, newest id), with Review/Dismiss buttons, (`toast_notifications_logic`, `admin_toast_logic`, tested by `test_tour_toast_notifications`).
 
 * **Security Auto-Moderation**: The `website.page` model includes `_sanitize_user_arch` `website_page_sanitize_arch`, verified by `test_website_page_sanitize_arch`, which forcefully strips dangerous QWeb directives (`t-*`) and JS event handlers.
 * **Member CSS**: `<link>` is removed; `<style>` is rebuilt rule by rule and every `style="..."` attribute declaration by declaration with zero_sudo's `css_sanitizer` `user_websites:page_arch_style_attribute_filter`, verified by `test_user_arch_style_attribute_filter`: no `url()` except `#fragment`, no `image-set()`, `data:`, `expression`, escapes, and `position` only static, relative or absolute. A refused declaration is dropped (no strike); malformed CSS drops the whole attribute. Blog post content goes through `html_sanitize` instead and is not covered by this filter.
@@ -103,55 +103,55 @@ The `user_websites` module enables decentralized content creation. It employs th
 
 ### Explicit Dropzones
 To prevent monolithic entanglement, `user_websites` provides the following explicitly designated dropzones. You MUST use `<xpath>` targeting these specific IDs and cite the corresponding Semantic Anchor:
-* **Home Header:** `id="user_websites_dropzone_home_header"` -> `[@ANCHOR: dropzone_home_header]`
+* **Home Header:** `id="user_websites_dropzone_home_header"` -> `dropzone_home_header`
 
-* **Home Footer:** `id="user_websites_dropzone_home_footer"` -> `[@ANCHOR: dropzone_home_footer]`
+* **Home Footer:** `id="user_websites_dropzone_home_footer"` -> `dropzone_home_footer`
 
-* **Global Navbar:** `id="user_websites_dropzone_navbar"` -> `[@ANCHOR: dropzone_navbar]`
+* **Global Navbar:** `id="user_websites_dropzone_navbar"` -> `dropzone_navbar`
 
-* **Portal Templates:** `id="user_websites_dropzone_templates"` -> `[@ANCHOR: dropzone_templates]`
+* **Portal Templates:** `id="user_websites_dropzone_templates"` -> `dropzone_templates`
 
-* **Snippets Sidebar:** `id="user_websites_dropzone_snippets"` -> `[@ANCHOR: dropzone_snippets]`
+* **Snippets Sidebar:** `id="user_websites_dropzone_snippets"` -> `dropzone_snippets`
 
-* **Website Layout:** `id="user_websites_dropzone_layout"` -> `[@ANCHOR: dropzone_layout]`
+* **Website Layout:** `id="user_websites_dropzone_layout"` -> `dropzone_layout`
 
-* **User Settings:** `id="user_websites_dropzone_users"` -> `[@ANCHOR: dropzone_users]`
+* **User Settings:** `id="user_websites_dropzone_users"` -> `dropzone_users`
 
-* **Blog Post Form:** `id="user_websites_dropzone_blog_post"` -> `[@ANCHOR: dropzone_blog_post]`
+* **Blog Post Form:** `id="user_websites_dropzone_blog_post"` -> `dropzone_blog_post`
 
-* **Navbar Actions:** `id="user_websites_dropzone_navbar_actions"` -> `[@ANCHOR: dropzone_navbar_actions]`
+* **Navbar Actions:** `id="user_websites_dropzone_navbar_actions"` -> `dropzone_navbar_actions`
 
-* **Directory Card:** `id="user_websites_dropzone_directory_card"` -> `[@ANCHOR: dropzone_directory_card]`
+* **Directory Card:** `id="user_websites_dropzone_directory_card"` -> `dropzone_directory_card`
 
-* **Global Settings Form:** -> `[@ANCHOR: dropzone_settings]`
+* **Global Settings Form:** -> `dropzone_settings`
 
 ### Prohibited Dropzones
 DO NOT USE user_websites_settings_dropzone. All settings views must now inherit directly from base.res_config_settings_view_form and target the //form element using the modernized `<app>`, `<block>`, and `<setting>` XML tags.
 
 ### Endpoints & Webhooks
-* **Community Directory:** Renders public pages `/community` `[@ANCHOR: UX_COMMUNITY_DIRECTORY]`.
+* **Community Directory:** Renders public pages `/community` `UX_COMMUNITY_DIRECTORY`.
 
 * **Violation Reporting:** Form endpoint `/website/report_violation` `[@ANCHOR: user_websites:UX_REPORT_VIOLATION]`, `[@ANCHOR: violation_report_logic]`, verified by `[@ANCHOR: test_tour_violation_report]`. Protected by the `form_shield` module (proof of work or question, honeypots, minimum time-to-submit, per-network, per-page and per-site limits `[@ANCHOR: user_websites:report_limits]`, `[@ANCHOR: user_websites:report_violation_shield]`, the form's fields `[@ANCHOR: user_websites:report_violation_shield_fields]`); the reported URL must be a page of this site (this host, the base URL or a website domain, http and https alike, www ignored `[@ANCHOR: user_websites:report_own_site_hosts]`) `[@ANCHOR: user_websites:normalize_report_target]` and a guest's report is refused when it is short, one random-looking string, link-heavy or lacks a valid address `[@ANCHOR: user_websites:report_problem]`. `GET /website/report_violation` is the question variant for browsers without scripts `[@ANCHOR: user_websites:report_violation_page]`. Helpers: the redirect path is forced to a single leading slash `[@ANCHOR: user_websites:reported_path]`, hosts compare without `www.` `[@ANCHOR: user_websites:bare_host]`, a guest's address may not start or end its local part with a dot `[@ANCHOR: user_websites:local_part_ok]`, the question page is rendered by `[@ANCHOR: user_websites:render_report_page]` and a refusal is answered by `[@ANCHOR: user_websites:report_refusal]`; the old per-address redirect-path anchor `[@ANCHOR: user_websites:report_violation_redirect_target]` stays.
 
-* **Home Routing:** Target view `/<slug>` (the old `/<slug>/home` answers a permanent 301 to it, `[@ANCHOR: user_websites:COMM_user_home_legacy_redirect]`) `[@ANCHOR: controller_user_websites_home]`.
+* **Home Routing:** Target view `/<slug>` (the old `/<slug>/home` answers a permanent 301 to it, `user_websites:COMM_user_home_legacy_redirect`) `controller_user_websites_home`.
 
-* **Site Creation:** `/<slug>/create_site` `[@ANCHOR: UX_CREATE_SITE]`, concurrency scaling proven by `test_site_creation_performance_scaling`.
+* **Site Creation:** `/<slug>/create_site` `UX_CREATE_SITE`, concurrency scaling proven by `test_site_creation_performance_scaling`.
 
-* **Blog Routing:** `/<slug>/blog` `[@ANCHOR: controller_user_blog_index]`.
+* **Blog Routing:** `/<slug>/blog` `controller_user_blog_index`.
 
-* **Blog Creation:** `/<slug>/create_blog` `[@ANCHOR: UX_CREATE_BLOG_POST]`.
+* **Blog Creation:** `/<slug>/create_blog` `UX_CREATE_BLOG_POST`.
 
 * **Post Creation & Editing:** `POST /<slug>/create_blog_post` creates a blank "New Post" in the owner's blog (or redirects to `/<slug>/blog` if no blog exists yet) and redirects to `/blog_post/edit/<post_id>`, this module's own ownership-scoped title/body/publish form (the website-builder Edit toolbar needs the sitewide `website.group_website_designer` permission, which site owners do not hold).
 
-* **Documentation:** Proxies knowledge records `/user-websites/documentation` `[@ANCHOR: controller_user_websites_documentation]`.
+* **Documentation:** Proxies knowledge records `/user-websites/documentation` `controller_user_websites_documentation`.
 
-* **Appeals:** User submission endpoint `/website/submit_appeal` `[@ANCHOR: UX_SUBMIT_APPEAL]`.
+* **Appeals:** User submission endpoint `/website/submit_appeal` `UX_SUBMIT_APPEAL`.
 
-* **Subscriptions:** `/<slug>/subscribe` `[@ANCHOR: UX_SUBSCRIBE]`. Unsubscribe verification with HMAC-SHA256 token validation over the model, record, partner and timestamp `[@ANCHOR: controller_unsubscribe_digest]`. The timestamp is signed but its age is not checked, so a valid link does not expire.
+* **Subscriptions:** `/<slug>/subscribe` `UX_SUBSCRIBE`. Unsubscribe verification with HMAC-SHA256 token validation over the model, record, partner and timestamp `controller_unsubscribe_digest`. The timestamp is signed but its age is not checked, so a valid link does not expire.
 
-* **`GET /api/v1/user_websites/pending_reports`**: Returns a JSON object `{'count': int, 'latest_id': int, 'url': str}` of unhandled violation reports (`url` is the back-office pending queue, `/odoo/action-user_websites.action_content_violation_report_pending`). Restricted to administrators `[@ANCHOR: api_pending_reports]`; any other caller gets `{'count': 0, 'error': 'Forbidden'}` with HTTP 200, not an error status. Verified by `[@ANCHOR: test_admin_violation_toast_rpc]`.
+* **`GET /api/v1/user_websites/pending_reports`**: Returns a JSON object `{'count': int, 'latest_id': int, 'url': str}` of unhandled violation reports (`url` is the back-office pending queue, `/odoo/action-user_websites.action_content_violation_report_pending`). Restricted to administrators `api_pending_reports`; any other caller gets `{'count': 0, 'error': 'Forbidden'}` with HTTP 200, not an error status. Verified by `test_admin_violation_toast_rpc`.
 
-* **GDPR Actions:** Privacy dashboard `/my/privacy` `[@ANCHOR: controller_my_privacy_dashboard]`. Data exports `/my/privacy/export` `[@ANCHOR: UX_GDPR_EXPORT]`. Data erasure via batched unlinks (5000 records per batch, run within the request under the `zero_sudo.gdpr_service_internal` service account) `/my/privacy/delete_content` `[@ANCHOR: UX_GDPR_ERASURE]`, then redirects to the public confirmation `/privacy/erased` `[@ANCHOR: user_websites:COMM_privacy_erased]`.
+* **GDPR Actions:** Privacy dashboard `/my/privacy` `controller_my_privacy_dashboard`. Data exports `/my/privacy/export` `UX_GDPR_EXPORT`. Data erasure via batched unlinks (5000 records per batch, run within the request under the `zero_sudo.gdpr_service_internal` service account) `/my/privacy/delete_content` `UX_GDPR_ERASURE`, then redirects to the public confirmation `/privacy/erased` `user_websites:COMM_privacy_erased`.
 
 ### 🚨 Privilege Deprecation & Cross-Module Execution (CRITICAL)
 In adherence to the Micro-Service Account Pattern (ADR-0062), the `user_websites` internal service account (`user_websites.user_websites_service_account`) has been stripped of omnipotent ERP privileges. It **can no longer create or delete** core identity records (`res.users`, `res.partner`). Furthermore, it retains only microscopic access to framework tables (for example, read-only `1,0,0,0` on `res.company` and `res.partner.bank`, and read/write without create/delete `1,1,0,0` on `discuss.channel`; see `security/ir.model.access.csv` for the full list) strictly to satisfy Odoo's internal ORM cascade requirements (The Framework ACL Tax - ADR-0064). ADR-0062 and ADR-0064 are consolidated in `hams_shared/docs/adrs/MASTER_01_SECURITY_ZERO_SUDO.md`.
@@ -296,7 +296,7 @@ This section ensures all module functions and their developer usage are thorough
 * **Limits**: title 120 characters, body 200,000 characters, images JPEG/PNG/GIF/WebP at most 2 MB and 100 per site, 30 writes and 10 uploads per user per minute (Redis counters, `[@ANCHOR: user_websites:owner_rate_limit]`; Redis down answers 503).
 * **Retention**: no route erases. Unpublish keeps the record as a draft. Delete (`POST .../<page|post>/<id>/delete`, with a confirmation step) takes a page or post off the site and every public surface but archives it (`active` false, `deleted_by_owner` stamped; a page is moved to a private address so its own can be reused), and the dashboard's Deleted list can restore it, unpublished. The home page cannot be deleted. Uploaded images are public `ir.attachment` rows owned by the account (`res_model='res.users'`/`user.websites.group`, description `user_websites site image`); a member's account-erasure flow removes the images owned by that member's own account (not a group's images).
 * **Layout** `[@ANCHOR: user_websites:member_site_standalone_layout]`: on a member site `layout_inherit_user_navbar` sets `no_header`/`no_footer`, so hams.com's header and footer are not rendered, and the site's own header (`user_navbar`) and footer (`member_site_footer`) are. Assets: `static/src/css/member_site.css` and `rich_editor.js` in `web.assets_frontend`.
-* **Home address** `/<slug>` `[@ANCHOR: user_websites:COMM_user_home_fallback]`; `/<slug>/home` answers 301 `[@ANCHOR: user_websites:COMM_user_home_legacy_redirect]`.
+* **Home address** `/<slug>` `user_websites:COMM_user_home_fallback`; `/<slug>/home` answers 301 `user_websites:COMM_user_home_legacy_redirect`.
 * **Owner-site internals**: `/my/site` `[@ANCHOR: user_websites:COMM_owner_site_entry]`; the new-page and edit-page forms `[@ANCHOR: user_websites:COMM_owner_page_new]`, `[@ANCHOR: user_websites:COMM_owner_page_edit]`; a page's arch is the fixed member-page frame around sanitized body markup `[@ANCHOR: user_websites:owner_page_arch]` and the editor reads the body back out of it `[@ANCHOR: user_websites:owner_page_arch_body]`; uploads are accepted by magic number, not by file name or declared type `[@ANCHOR: user_websites:owner_image_mimetype]`.
 
 ### `UserWebsitesOwnerController._rate_limit(bucket, limit)` [@ANCHOR: user_websites:owner_rate_limit]
@@ -488,3 +488,127 @@ Test `test_06_cron_redis_flush_batching` in `tests/test_audit_edge_cases.py`, ci
 ### `simulation_environment` (high-speed simulation test) [@ANCHOR: simulation_environment]
 
 Test `test_01_high_speed_full_platform_exercise` in `tests/test_simulation.py`, class `TestLongRunningSimulation`, tagged `simulation` and excluded from the standard run (`-standard`). `setUp` creates 20 users and gives the administrator the User Websites administrator group. The test loops `SIMULATION_DURATION_MINUTES` (default 60) iterations; each iteration times, with a `track()` wrapper, guest visits (`/community`, `/manual`, `/privacy`, `/terms`), a member login, `create_site` and `create_blog` POSTs, administrator report processing and appeal pardons, a GDPR export and a database flush. Afterwards it compares each operation's average with `SIMULATION_MAX_AVG_TIME` (default 0.5 s; larger allowances for the GDPR export, report processing and the flush) and logs a regression when exceeded. It commits data; run it only on a test database.
+
+### Dropzone `user_websites_dropzone_home_header` [@ANCHOR: dropzone_home_header]
+
+**Where:** an empty `<div id="user_websites_dropzone_home_header">` at the top of the QWeb template `user_websites.template_default_home` in `views/user_websites_templates.xml`, before the page body (`<t t-out="0"/>`). Every member or group home page created by the module calls this template, so the div appears above the page's own content. **How to use:** inherit the template and target the id with `<xpath expr="//div[@id='user_websites_dropzone_home_header']" position="inside">`. Keep the content static; the page is cached for guests. **Contract:** the id never changes; removing the div breaks dependent modules. **Test:** `test_07_navbar_rendering` in `tests/test_xpath_rendering.py` renders `/<slug>` and asserts the id is present (`test_dropzone_home_header`).
+
+### Dropzone `user_websites_dropzone_home_footer` [@ANCHOR: dropzone_home_footer]
+
+**Where:** the empty `<div id="user_websites_dropzone_home_footer">` at the bottom of `user_websites.template_default_home`, after the page body, in `views/user_websites_templates.xml`. **How to use:** an `<xpath expr="//div[@id='user_websites_dropzone_home_footer']" position="inside">` in an inheriting view puts markup, for example a sponsor line or a related-links block, at the end of every member home page. **Contract:** the id is stable and the div stays empty in this module. Dependent modules own what they inject, including escaping any user data they print. **Test:** `test_07_navbar_rendering` in `tests/test_xpath_rendering.py` fetches a member's home page and asserts `id="user_websites_dropzone_home_footer"` is in the response (`test_dropzone_home_footer`).
+
+### Dropzone `user_websites_dropzone_navbar` [@ANCHOR: dropzone_navbar]
+
+**Where:** an empty `<div id="user_websites_dropzone_navbar">` that `layout_inherit_user_navbar` (an inheritance of `website.layout` in `views/user_websites_templates.xml`) places directly after the site `<header>`, ahead of the member navbar `user_websites.user_navbar` that is called only on member sites. **Use:** inherit `website.layout` or this template and add content `inside` the div to place a banner or global notice between the site header and the member navbar. **Contract:** the id is stable; the div renders on every website page that uses `website.layout`, not only on member sites, so check `resolved_slug` if your content is member-specific. **Test:** `test_07_navbar_rendering` in `tests/test_xpath_rendering.py` (`test_dropzone_navbar`).
+
+### Dropzone `user_websites_dropzone_templates` [@ANCHOR: dropzone_templates]
+
+**Where:** an empty `<div id="user_websites_dropzone_templates">` that the view `portal_my_home_appeal` (an inheritance of `portal.portal_my_home`, in `views/user_websites_templates.xml`) puts before the `o_portal_my_home` block, above the account-suspended notice and the privacy and data links. **Use:** a dependent module that wants a card on the portal "My Account" page inherits that view and targets the id with `position="inside"`; this is also where new portal templates for members are registered. **Contract:** the id is stable; the page needs a logged-in portal user. **Test:** `test_05_portal_templates` in `tests/test_xpath_rendering.py` logs in a portal user, opens `/my/home` and asserts the id and the privacy text are in the HTML (`test_dropzone_templates`).
+
+### Dropzone `user_websites_dropzone_snippets` [@ANCHOR: dropzone_snippets]
+
+**Where:** an empty `<div id="user_websites_dropzone_snippets">` inside the `website.snippets` inheritance `user_websites_snippet_category` in `views/snippets.xml`, just before the "Profile Widgets" panel `snippet_user_websites` that the same view adds to the website builder's snippet sidebar. **Use:** inherit `website.snippets` (or this view) and add your own drag-and-drop blocks `inside` the id, or put them in the `user_websites_snippets_body` panel. **Contract:** the id is stable. Snippets are only offered to users who may open the builder, which this module never grants to members. **Test:** `test_04_snippets` in `tests/test_xpath_rendering.py` reads the combined arch of `website.snippets` and asserts `id="snippet_user_websites"` exists (`test_dropzone_snippets`).
+
+### Dropzone `user_websites_dropzone_layout` [@ANCHOR: dropzone_layout]
+
+**Where:** an empty `<div id="user_websites_dropzone_layout">` placed after the `<footer>` of every page by `layout_inherit_report_violation`, an inheritance of `website.layout` in `views/website_layout.xml`, followed by the call to the report-violation modal. **Use:** add global markup that must exist once per page (for example a cookie or notice container, or extra modals) by inheriting `website.layout` and targeting the id with `position="inside"`. **Contract:** the id is stable, and its position after the footer is relied on by the violation modal. **Test:** `test_06_layout_templates` in `tests/test_xpath_rendering.py` fetches `/` as a guest and asserts the modal `reportViolationModal` rendered (`test_dropzone_layout`).
+
+### Dropzone `user_websites_dropzone_users` [@ANCHOR: dropzone_users]
+
+**Where:** an empty `<div id="user_websites_dropzone_users">` at the top of the "User Websites" notebook page (`name="user_websites_settings"`) that `view_users_form_user_websites` adds to the back-office user form (`base.view_users_form`, `views/res_users_views.xml`). The page also shows `website_slug`, `website_page_limit`, `privacy_show_in_directory` and, for administrators, strike count and suspension controls. **Use:** inherit the form and add your own per-user website settings `inside` the id. **Contract:** the id is stable; fields you add must be readable by whoever opens the user form. **Test:** `test_02_res_users` in `tests/test_xpath_rendering.py` loads the compiled form arch and asserts `name="user_websites_settings"` (`test_dropzone_users`).
+
+### Dropzone `user_websites_dropzone_blog_post` [@ANCHOR: dropzone_blog_post]
+
+**Where:** an empty `<div id="user_websites_dropzone_blog_post">` in the back-office blog post form, inserted by `view_blog_post_form_inherit_user_websites` (`views/blog_post_views.xml`) after `blog_id`, right after the `owner_user_id` and `user_websites_group_id` fields it adds. **Use:** inherit `website_blog.view_blog_post_form` and add fields for the proxy owner, such as moderation notes, `inside` the id. **Contract:** the id is stable. Group selection is `no_create` on purpose, because groups are made on their own form. **Test:** `test_03_blog_post` in `tests/test_xpath_rendering.py` loads the form arch and asserts `name="user_websites_group_id"` is present (`test_dropzone_blog_post`).
+
+### Dropzone `user_websites_dropzone_navbar_actions` [@ANCHOR: dropzone_navbar_actions]
+
+**Where:** an empty `<div id="user_websites_dropzone_navbar_actions">` at the end of the collapsible part (`#userNavbarNav`) of the member navbar template `user_websites.user_navbar`, after the list of Home, Blog and member menu pages (`views/user_websites_templates.xml`). **Use:** inherit `user_websites.user_navbar` and add buttons, such as a "Contact" or "Donate" action, `inside` the id; they sit on the right side of every member site's navbar. **Contract:** the id is stable and the navbar renders only on member sites (`member_site` true). Use `resolved_slug`, `profile_user` and `profile_group` from the QWeb context. **Test:** `test_07_navbar_rendering` in `tests/test_xpath_rendering.py` (`test_dropzone_navbar_actions`).
+
+### Dropzone `user_websites_dropzone_directory_card` [@ANCHOR: dropzone_directory_card]
+
+**Where:** an empty `<div id="user_websites_dropzone_directory_card" class="mt-3">` inside each entry card of the `/community` directory template (`views/user_websites_templates.xml`), under the "Visit Home" and "View Blog" buttons; the card shows the member's name and total view count. **Use:** inherit the directory template and add per-entry badges or links `inside` the id; the loop variable is `entry` (a `user_websites.public_directory_view` row with `user_id`, `name`, `website_slug`, `view_count`). **Contract:** the id is stable and repeats once per entry, so it must not be used with an `id`-based JavaScript lookup. **Test:** none cites this anchor yet (the view comment names `test_dropzone_directory_card`, which does not exist): to-do, add a `/community` render assertion.
+
+### Dropzone for the global settings form [@ANCHOR: dropzone_settings]
+
+**Where:** an empty `<div id="user_websites_dropzone_settings">` that `res_config_settings_view_form_inherit_user_websites` (`views/res_config_settings_views.xml`) puts inside the `//form` of `base.res_config_settings_view_form`, before the `<app name="user_websites">` block that holds "Manage Administrators", the global page limit and the abuse-report email. **Use:** inherit `base.res_config_settings_view_form`, target the form with the modern `<app>`, `<block>` and `<setting>` tags, and add settings `inside` the app, not inside this div; the div is the stable marker. The old `user_websites_settings_dropzone` is prohibited. **Contract:** the view is only for settings administrators. **Test:** `test_01_res_config_settings` in `tests/test_xpath_rendering.py` asserts `data-key="user_websites"` is in the compiled arch (`test_dropzone_settings`).
+
+### `GET /community` (community directory) [@ANCHOR: UX_COMMUNITY_DIRECTORY]
+
+**Purpose:** the public directory of members who opted in with `privacy_show_in_directory`. **Route:** `UserWebsitesController.community_directory(**kwargs)`, `auth="public"`, `website=True`, GET; the user-experience anchor is also written in `data/documentation.html`. **Returns:** the `user_websites.community_directory` page with `entries`, at most 1000 rows read from the SQL view `user_websites.public_directory_view` as the service account: active users with a slug, not service accounts, not suspended, not website-ineligible, each with name, slug, last update and summed page and post views. A reader who has not opted in is never listed. **Errors:** none of its own. **Side effects:** none; read-only, no locks. **Tests:** `test_03_community_directory_rendering`, `test_03b_community_directory_internal_user` and `test_04_community_directory_privacy_respect` in `tests/test_controllers.py`, and the tour `community_directory_tour.js`.
+
+### Home page route `/<slug>` [@ANCHOR: controller_user_websites_home]
+
+**Purpose:** serve a member or group site's home. **Route:** `user_home_fallback(website_slug, **kwargs)`, `auth="public"`, `website=True`, hidden from the sitemap. **Behaviour:** resolves the slug as the service account with the cached `get_record_by_slug` for users and groups. Unknown slug: a retired-slug redirect, else Odoo's stock page lookup, else 404. A suspended or not publicly visible owner gets 404. A different spelling of the slug gets a 301 to the canonical lower-case address. A published home page is served by Odoo after one Redis `INCR` of the view counter (skipped for administrators; a Redis failure is logged only). With no page, the owner sees the "Create Your Site" placeholder, and everyone else a plain placeholder. **Tests:** `test_group_site_routing` in `tests/test_lifecycle_and_groups.py`, `test_01_home_served_at_slug` to `test_06_rewrite_redirects_still_fire` in `tests/test_member_site_home_url.py`, and the tour `create_site_tour.js`.
+
+### Legacy home redirect `/<slug>/home` [@ANCHOR: user_websites:COMM_user_home_legacy_redirect]
+
+**Purpose:** keeps old links, bookmarks and search-engine entries working after the home moved from `/<slug>/home` to `/<slug>`. **Route:** `user_home_legacy_redirect(website_slug, **kwargs)`, `auth="public"`, hidden from the sitemap. **Behaviour:** resolves the slug as a user, then a group; when found it answers HTTP 301 to `"/" + quote(record.website_slug, safe="")` with `local=True`, built from the stored slug (lower-case, `[a-z0-9-]`), never from the request path, so it cannot be steered to another host and a single segment cannot loop. When no record exists it tries a retired-slug redirect, then Odoo's stock fallback, then 404. **Returns:** a redirect response, a page, or `NotFound`. No writes. **Tests:** `test_02_legacy_home_is_permanent_redirect` and `test_03_legacy_redirect_has_no_open_redirect_or_loop` in `tests/test_member_site_home_url.py`.
+
+### Home route fallback `user_home_fallback` [@ANCHOR: user_websites:COMM_user_home_fallback]
+
+The method itself: `UserWebsitesController.user_home_fallback(website_slug, **kwargs)` for `/<slug>`, described in the entry for the home route (`controller_user_websites_home`). Points to keep: it is the only handler for a single-segment path, so stock pages such as `/aboutus` and website rewrites still work through its fallback to `ir.http._serve_fallback`; for an existing page it deliberately does not use the page cache path, so a page unpublished by a suspension disappears at once; the owner or a group member gets `home_state` (none, unpublished, deleted, blocked) from `_owner_home`, so the placeholder and the create button never disagree. **Tests:** `tests/test_member_site_home_url.py` and `test_01_privacy_friendly_view_counter` in `tests/test_appeals_and_views.py`.
+
+### Site creation `POST /<slug>/create_site` [@ANCHOR: UX_CREATE_SITE]
+
+**Purpose:** Just-In-Time creation of the home page, after the owner presses "Create Your Site". **Route:** `create_site(website_slug, **kwargs)`, `auth="user"`, POST only, `csrf=True`. **Checks:** unknown slug, a user who is not the slug's owner, a suspended owner, a group the caller is not a member of: all 404. An owner who is not yet eligible gets a 303 to `/my/site/<slug>`. **Behaviour:** `_owner_home` finds an existing home: blocked goes to `/my/site/<slug>?error=home_blocked`; deleted is restored and published; unpublished is published; each redirects to `/<slug>`. Otherwise it creates a `website.page` as the service account with `owner_user_id` or `user_websites_group_id`, a QWeb arch calling `user_websites.template_default_home`, and the owner's name XML-escaped, then redirects to it. **Tests:** `test_02_group_member_access` and `test_02b_create_site_escapes_malicious_name` in `tests/test_lifecycle_and_groups.py`, and `create_site_tour.js`.
+
+### Blog index route `/<slug>/blog` [@ANCHOR: controller_user_blog_index]
+
+**Purpose:** a member's or group's blog listing, `/<slug>/blog` and `/<slug>/blog/page/<n>`. **Route:** `user_blog_index(website_slug, tag=None, search=None, date_begin=None, date_end=None, page=1, **kwargs)`, `auth="public"`. **Behaviour:** resolves the slug like the home route (retired slug redirects to `/blog` of the live one; unknown, suspended or not visible gives 404). It reads up to 100 blogs and 100 posts as the service account, but only the owner or a group member sees drafts: everyone else gets a domain with `is_published = True`, because the service account's own rule would otherwise reveal unpublished posts. With no blog and no post it renders the placeholder (with the create button for the owner), else `user_websites.blog_index`. The filter arguments are accepted but the pager is fixed. **Test:** `create_blog_tour.js`.
+
+### Blog creation `POST /<slug>/create_blog` [@ANCHOR: UX_CREATE_BLOG_POST]
+
+**Purpose:** creates the member's or group's `blog.blog` the first time (the "Create Your Blog" button). The anchor is the user-experience name shared with blog post creation in `data/documentation.html`. **Route:** `create_blog(website_slug, **kwargs)`, `auth="user"`, POST only, `csrf=True`. **Checks:** unknown slug, a caller who is not the owner, a suspended site, or a non-member of the group give 404; an ineligible owner is redirected (303) to `/my/site/<slug>`. **Behaviour:** as the service account it creates `blog.blog` named `<Name> Blog` (`_new_blog_name`) with the owner or group, and the blog-count limit (5 by default) applies in `create()`. **Returns:** a redirect to `/<slug>/blog`. **Tests:** `test_08_group_inverse_relationships` in `tests/test_lifecycle_and_groups.py` and `create_blog_tour.js`.
+
+### Documentation route `/user-websites/documentation` [@ANCHOR: controller_user_websites_documentation]
+
+**Purpose:** a stable address for the module's user documentation. **Route:** `documentation(**kwargs)`, `auth="user"`, `website=True`. **Behaviour:** as the requesting user (not the service account, so portal access rights apply) it searches `knowledge.article` for a name starting with "User Websites Documentation" (case-insensitive); when the article has a `website_url` it redirects there. The article is installed from `data/documentation.html` by zero_sudo's knowledge bootstrap and is published. If it cannot be found it renders the fallback template `user_websites.documentation_page`. **Returns:** a redirect or a page; no errors. No writes. **Test:** `test_02_documentation_route_authenticated` in `tests/test_documentation.py` (code anchor `COMM_documentation`, test anchor `test_documentation_route`).
+
+### Appeal submission `POST /website/submit_appeal` [@ANCHOR: UX_SUBMIT_APPEAL]
+
+**Purpose:** lets a suspended member, or a member of a suspended group, ask for the suspension to be lifted. **Route:** `submit_appeal(reason="", group_id=None, **post)`, `auth="user"`, POST only, `csrf=True`. **Arguments:** `reason` (text, required) and `group_id` (optional id of a group the caller belongs to). **Behaviour:** an empty reason redirects to `/my/home?error=missing_reason`; with `group_id` the caller must be in `member_ids`, else `?error=appeal_failed`; otherwise it creates a `content.violation.appeal` in state `new` as the service account. **Returns:** redirect to `/my/home?appeal_submitted=1`, which the toast script shows. A `KeyError` or `ValueError` is logged and redirects with `appeal_failed`. Approval or rejection is an administrator action elsewhere. **Tests:** `test_02_submit_and_approve_appeal` in `tests/test_appeals_and_views.py`, and `moderation_appeal_tour.js`.
+
+### Subscription `POST /<slug>/subscribe` [@ANCHOR: UX_SUBSCRIBE]
+
+**Purpose:** subscribe the signed-in visitor to the weekly digest of a member or group. **Route:** `subscribe(website_slug, **kwargs)`, `auth="user"`, POST only, `csrf=True`. **Behaviour:** resolves the slug as a user or group (404 if neither). For a user the follower record is the user's partner (`res.partner`), for a group the `user.websites.group` itself; as the service account it calls `message_subscribe` with the caller's partner id. Subscribing twice does nothing more. **Returns:** JSON `{"success": true}` with content type `application/json`. The follower rows feed the digest SQL view used by `send_weekly_digest`. **Test:** `test_03_subscribe_to_site` in `tests/test_subscriptions.py`.
+
+### Unsubscribe `/website/unsubscribe/...` [@ANCHOR: controller_unsubscribe_digest]
+
+**Purpose:** one-click unsubscribe from a digest, reachable without login from the email header. **Route:** `unsubscribe(model, record_id, partner_id, timestamp, token, **kwargs)`, `auth="public"`, path `/website/unsubscribe/<model>/<record_id>/<partner_id>/<timestamp>/<token>`. **Checks:** `model` must be `res.partner` or `user.websites.group` and the record must exist, else HTTP 403 JSON `{"error": "Forbidden"}`; the database crypto secret must be set; the token must equal `HMAC-SHA256(secret, "<model>-<record_id>-<partner_id>-<timestamp>")` in hex, compared with `hmac.compare_digest` (constant time). **Effect:** `message_unsubscribe([partner_id])` as the service account, then renders `user_websites.unsubscribe_success`. The timestamp is signed but its age is not checked, so a link does not expire. **Tests:** `test_unsubscribe_secret` (an invalid token leaves the follower subscribed) and the success path in `tests/test_subscriptions.py`.
+
+### `GET /api/v1/user_websites/pending_reports` [@ANCHOR: api_pending_reports]
+
+**Purpose:** the data source of the administrator toast and the badge for the moderation queue. **Route:** `pending_reports(**kwargs)`, `auth="public"`, `website=True`, `sitemap=False` (kept out of the public sitemap on purpose). **Authorisation:** only a logged-in user in `group_user_websites_administrator` or `base.group_system`. **Returns:** HTTP 200 always. Moderators get `{"count": int, "latest_id": int, "url": "/odoo/action-user_websites.action_content_violation_report_pending"}` (count of reports in state `new`, capped at 1000 in the search). Everybody else gets `{"count": 0, "error": "Forbidden"}` and no `url` or `latest_id`; the 200 status is so the page's `fetch` does not raise. Read-only as the service account. **Tests:** `test_01_api_pending_reports_admin_access` and `test_02_api_pending_reports_unauthorized_access` in `tests/test_controllers.py`.
+
+### `test_admin_violation_toast_rpc` [@ANCHOR: test_admin_violation_toast_rpc]
+
+The server half of the administrator toast: `test_01_api_pending_reports_admin_access` in `tests/test_controllers.py` (the anchor is declared inside its docstring). It logs in as an administrator with at least one pending report and GETs `/api/v1/user_websites/pending_reports`. It asserts HTTP 200, a JSON object with `count` at least 1, `latest_id` above 0 and `url` equal to the back-office pending-queue action, and that the action exists. The script `AdminViolationToast._checkPendingReports()` in `static/src/js/toast_notifications.js` depends on exactly those keys. The companion test `test_02` proves a non-administrator gets the `Forbidden` payload without `url` or `latest_id`.
+
+### `toast_notifications_logic` (URL toast widget) [@ANCHOR: toast_notifications_logic]
+
+**What:** `UrlToastNotification._checkUrlForNotifications()` in `static/src/js/toast_notifications.js`, a public interaction on `#wrapwrap` started on every page. **Input:** the query string. **Behaviour:** `report_error=<reason>` shows a danger toast "Report not sent" with the text from the `REPORT_ERRORS` table (unknown reasons use `default`); `report_submitted`, `appeal_submitted`, `subscribed` and `erased` show a success toast with the matching text. The first match wins. Then it removes the query string with `history.replaceState`, so a reload does not repeat the toast, and the back button is unchanged. **Side effects:** a non-sticky notification through Odoo's notification service; no network. **Errors:** none. **Test:** the tour `toast_notifications_tour` (`test_tour_toast_notifications`) opens `/?report_submitted=1` and waits for the toast.
+
+### `admin_toast_logic` (moderator toast) [@ANCHOR: admin_toast_logic]
+
+**What:** `AdminViolationToast._checkPendingReports()` in `static/src/js/toast_notifications.js`, a public interaction on every page. **Behaviour:** it fetches `/api/v1/user_websites/pending_reports`; a non-OK response or any error is ignored silently. `shouldShowToast(seen, data, now)` shows it when `count > 0` and it was never seen, the stored record is older than 12 hours (or in the future), or the count or newest report id grew. The sticky "Pending Moderation" toast has a "Review reports" button (only when `url` starts with `/`) and "Dismiss". `readSeen` and `writeSeen` keep `{count, latest_id, ts}` in `localStorage` under `admin_violation_toast_seen` and tolerate blocked storage. **Tests:** `test_admin_violation_toast_rpc`, `test_tour_toast_notifications`, and `tests/toast_notifications.test.js`.
+
+### `test_tour_toast_notifications` [@ANCHOR: test_tour_toast_notifications]
+
+The browser tour `toast_notifications_tour` in `static/tests/tours/toast_notifications_tour.js`, run by `test_02_toast_notifications_tour` in `tests/test_ui_tours.py`. It opens `/?report_submitted=1`, dismisses the cookie bar and waits for a `.o_notification_manager .o_notification` element, proving that the URL toast widget turns the query parameter into a visible notification. It covers `toast_notifications_logic` directly; `admin_toast_logic` is cited here too because both interactions live in one file, though the administrator path needs a logged-in moderator and is covered by the unit tests in `static/tests/toast_notifications.test.js`. Needs a headless browser.
+
+### Privacy dashboard `GET /my/privacy` [@ANCHOR: controller_my_privacy_dashboard]
+
+**Purpose:** the member's page for the data-protection rights this module offers: export of data and erasure of content. **Route:** `privacy_dashboard(**kwargs)`, `auth="user"`, `website=True`. **Returns:** the template `user_websites.portal_my_privacy`, with the "Download My Data" export form (`/my/privacy/export`) and the "Right to Erasure" card that posts to `/my/privacy/delete_content`. Anonymous visitors are sent to login by Odoo. No arguments are read, nothing is written. The export is read through the member's own session, so nobody can open another person's data here. **Test:** the tour `gdpr_privacy_tour` (`static/tests/tours/gdpr_privacy_tour.js`, started by `test_03_gdpr_privacy_tour` in `tests/test_ui_tours.py`) checks the header, the export button and the erasure flow.
+
+### Data export `/my/privacy/export` [@ANCHOR: UX_GDPR_EXPORT]
+
+**Purpose:** download of the member's data as a JSON file. **Route:** `privacy_export(**kwargs)`, `auth="user"`, `website=True`. **Behaviour:** calls `request.env.user._get_gdpr_export_data()` for the plain keys and `_get_gdpr_streamed_keys()` for the generators, and streams one JSON object, writing each list element as it is produced, so a large account does not fill memory. **Response headers:** `Content-Type: application/json`, `Content-Disposition: attachment; filename="gdpr_export.json"`, `Cache-Control: private, no-store`, so no cache keeps the file. The sibling `/my/privacy/export.zip` mints a single-use token and redirects to the separate export daemon. **Tests:** `test_01_data_portability_export` in `tests/test_privacy_gdpr.py` (200, JSON, attachment, no-store) and `gdpr_privacy_tour.js`.
+
+### Content erasure `POST /my/privacy/delete_content` [@ANCHOR: UX_GDPR_ERASURE]
+
+**Purpose:** the "delete my content" button. **Route:** `privacy_delete_content(**kwargs)`, `auth="user"`, POST only, `csrf=True`. **Behaviour:** calls `request.env.user._execute_gdpr_erasure()` (see `gdpr_sudo_erasure`), which hard-deletes the member's pages, posts, blogs and uploaded images in batches of 5000 under the GDPR service account, within the request, and which also deactivates the account. Because the account is then inactive, it redirects to the public page `/privacy/erased` rather than a login-gated page. **Errors:** errors from the erasure propagate; there is no undo. **Tests:** `test_02_right_to_erasure` in `tests/test_privacy_gdpr.py` and the tour `gdpr_privacy_tour.js`, which clicks the erasure button.
+
+### Erasure confirmation `GET /privacy/erased` [@ANCHOR: user_websites:COMM_privacy_erased]
+
+**Purpose:** a static confirmation page that an erased member can still open after the account is deactivated. **Route:** `privacy_erased(**kwargs)`, `auth="public"`, `website=True`. **Behaviour:** renders `user_websites.privacy_erased` ("Your data has been erased", element `user_websites_erasure_confirmed`) for everyone, identically. It reads no input: the query string is ignored, nothing is reflected, there is no redirect target, so the page cannot tell anyone whether an account ever existed. **Returns:** HTTP 200. No writes. **Tests:** the test anchored `test_privacy_erased_public_page` and `test_02_right_to_erasure` in `tests/test_privacy_gdpr.py`, and the end of the tour `gdpr_privacy_tour.js`.
