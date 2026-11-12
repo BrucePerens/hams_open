@@ -86,8 +86,26 @@ This module implements a strict CQRS (Command Query Responsibility Segregation) 
 
 This module provides essential tools to integrate customized models into the distributed caching ecosystem safely. When developing new modules, always use the functions detailed below instead of standard Odoo caching (`@tools.ormcache`).
 
-### 1. The `@distributed_cache()` Decorator
-Replaces Odoo's `@tools.ormcache` to provide precise, cross-worker distributed caching with multi-tenant awareness (website and company boundaries). [@ANCHOR: COMM_distributed_cache_decorator]
+### 1. The `@distributed_cache()` Decorator [@ANCHOR: COMM_distributed_cache_decorator]
+Replaces Odoo's `@tools.ormcache` to provide precise, cross-worker distributed caching with multi-tenant awareness (website and company boundaries).
+
+**Purpose.** Caches the result of an Odoo model method in two levels: a per-process in-memory cache (L1) and the shared Redis store (L2), keyed so that tenants never see each other's results. It replaces `@tools.ormcache`, which only knows about one worker.
+
+**Call interface.** `distributed_cache()` takes no arguments and returns the decorator, so it is always written with parentheses. The decorated function must be a method of an Odoo model (the wrapper reads `self.env` and `self._name`); it may take any positional and keyword arguments and keeps its own name and docstring. The wrapper does this, in order:
+
+| Step | What happens |
+|---|---|
+| Bypass | If `redis_bypass_cache` is truthy in the context, the method is called directly and nothing is read or written. |
+| Key | `<dbname>:distributed_cache:<model>:<method>:w<website_id>:c<company ids>:<argument hash>`. `website_id` is the context's `website_id` or 0; the company part is the sorted `allowed_company_ids` from the context, else the sorted ids of `env.companies`, else `0`; the hash is `_get_hash` (see `COMM_distributed_cache_key_generation`) and includes `self`. |
+| L1 | The process-wide `_local_cache` (LRU, 8192 entries, guarded by `LRU_LOCK`) is checked first; a hit returns the stored object itself, not a copy. |
+| L2 | With an HMAC key (`_cache_hmac_key` is not `None`) and a Redis pool, the key is read, the HMAC verified, the payload unpickled and copied into L1. |
+| Miss | The method runs; the result is pickled, signed and written with `SETEX` for 86400 seconds (24 hours), and is always stored in L1. |
+
+**Returns and errors.** The method's own return value. An exception raised by the method propagates and nothing is cached. A `redis.RedisError` is logged as a warning and the call carries on without Redis (fail open). A payload that is malformed, fails the HMAC check or will not unpickle is logged and ignored, and Redis is not written for that call. A result that cannot be pickled is returned and kept in L1 only.
+
+**Special concerns.** Synchronous and blocking: a Redis call waits at most the pool's 1 second socket timeout. The only lock taken is `LRU_LOCK`, briefly and never across a Redis call or the method itself. Callers share the cached object, so they must not mutate a returned list or dict, and a method whose result depends on something that is not in the key (the user, the language, the time) must not be decorated. L1 entries have no expiry of their own: they go when `poll_and_clear_local_cache` sees the invalidation counter change, when `invalidate_model_cache` runs for the model, or when the process restarts. Redis entries live 24 hours. Pickle is only read back after the HMAC verified, so a writer without the application secret cannot plant code.
+
+**See also.** Test: `tests/test_distributed_cache.py` (cites this anchor); related `COMM_notify_model_invalidation_logic`, `COMM_invalidate_model_cache_logic`, `distributed_redis_cache:COMM_get_redis_connection`, `distributed_redis_cache:COMM_cache_hmac_key`.
 
 **Usage:**
 ```python
@@ -140,9 +158,9 @@ def force_clear(self):
 * The cache-manager daemon's `_require_db_credentials()` [@ANCHOR: COMM_cache_manager_require_db_credentials] raises `RuntimeError` at start-up unless both `DB_USER` and `DB_PASS` are set, so it never connects to PostgreSQL without its own scoped role.
 * The daemon applies that login file with `_apply_db_env_file()` [@ANCHOR: COMM_cache_manager_db_env_precedence]: the file's `DB_USER`/`DB_PASS` always replace anything already exported, but its `DB_HOST`/`DB_PORT`/`DB_NAME` are only defaults, so a caller that exports `DB_NAME` (a test run serving its own slot database) is not overridden.
 
-### 6. `expiring_counter(client, key, window_seconds, amount=1)`: a rate-limit counter that always expires
+### 6. `expiring_counter(client, key, window_seconds, amount=1)`: a rate-limit counter that always expires [@ANCHOR: distributed_redis_cache:expiring_counter]
 
-`from odoo.addons.distributed_redis_cache.redis_pool import expiring_counter, redis_pool` [@ANCHOR: distributed_redis_cache:expiring_counter]
+`from odoo.addons.distributed_redis_cache.redis_pool import expiring_counter, redis_pool`
 
 Use it for every fixed-window counter that refuses a member or an address after N hits per window (rate limits, per-hour caps).
 The pattern it replaces, `count = client.incr(key)` followed by `if count == 1: client.expire(key, window)`, is two commands: a worker
@@ -171,16 +189,16 @@ expires on schedule. Tests: `tests/test_expiring_counter.py` (counting and a win
 patched to always raise, a legacy key without a TTL, an error reaching the caller, an `amount` added in one step). A caller's test makes the same failure with
 `self.safe_patch_object(redis.Redis, "expire", side_effect=redis.RedisError("..."))`.
 
-### 7. `unregister_cache_manager_key(env)`: drop the unused Daemon Key Manager registration
+### 7. `unregister_cache_manager_key(env)`: drop the unused Daemon Key Manager registration [@ANCHOR: distributed_redis_cache:unregister_cache_manager_key]
 
-`from odoo.addons.distributed_redis_cache.hooks import unregister_cache_manager_key` [@ANCHOR: distributed_redis_cache:unregister_cache_manager_key]
+`from odoo.addons.distributed_redis_cache.hooks import unregister_cache_manager_key`
 
 Versions before 1.1 registered the daemon "Redis Cache Manager" with the Daemon Key Manager in a `post_init_hook`, so the registry minted an
 Odoo API key for the service account `distributed_redis_cache.cache_manager_service_internal`, rotated it every 59 days and wrote it to
 `/opt/hams/etc/keys/cache_manager.env`. The cache-manager daemon has no Odoo client and never read that key (its only credential is the
 CONNECT-only PostgreSQL login in `keys/cache_manager/cache_manager_db.env`), so the key was a live credential with no user. Version 1.1
 removes the hook (the manifest has no `post_init_hook`) and `migrations/1.1/post-unregister-cache-manager-key.py` calls this function once
-on an installed database (its `migrate(cr, version)` does nothing for a fresh install, which has no version, and raises `ValueError` when the Daemon Key Manager service account is missing) [@ANCHOR: distributed_redis_cache:migrate].
+on an installed database (its `migrate(cr, version)` does nothing for a fresh install, which has no version, and raises `ValueError` when the Daemon Key Manager service account is missing) `distributed_redis_cache:migrate`.
 
 | Argument | Type and range | Meaning |
 |---|---|---|
@@ -197,6 +215,16 @@ delete the service account (it stays, with no key and no group beyond its own) a
 registry never removes a key file, so an operator deletes the leftover file by hand. It is not a security gate and takes no lock. Tests:
 `tests/test_hooks.py` (a row registered exactly as version 1.0 did is removed with its key, the second call removes nothing, and the manifest
 declares no `post_init_hook`).
+
+### 7a. `migrate(cr, version)` (`migrations/1.1/post-unregister-cache-manager-key.py`): the 1.1 upgrade step [@ANCHOR: distributed_redis_cache:migrate]
+
+**Purpose.** Upgrade step of version 1.1: removes the Daemon Key Manager registration "Redis Cache Manager" that earlier versions created, because the cache-manager daemon never used the Odoo API key it produced.
+
+**Call interface.** `migrate(cr, version)` in `migrations/1.1/post-unregister-cache-manager-key.py`, called by Odoo after the module's 1.1 data is loaded. `cr` is the upgrade cursor; `version` the previously installed version, empty on a fresh install. Returns `None`. With no `version` it does nothing. Otherwise it looks up `KEY_MANAGER_XMLID` (`daemon_key_manager.user_daemon_key_manager_service`) in `ir_model_data`, raises `ValueError` if that account is missing (the upgrade stops), and calls `unregister_cache_manager_key` with an environment for that user.
+
+**Special concerns.** Runs once in the upgrade's transaction (nothing commits here) and is idempotent through the function it calls. It runs as the Daemon Key Manager service account, not as superuser. It does not delete the service account or the key file on disk; an operator removes `keys/cache_manager.env` by hand.
+
+**See also.** Test `tests/test_hooks.py`; `distributed_redis_cache:unregister_cache_manager_key`.
 
 ### 8. `main()` (`daemons/cache_manager.py`): the cache manager daemon loop `[@ANCHOR: distributed_redis_cache:cache_manager_main]`
 
