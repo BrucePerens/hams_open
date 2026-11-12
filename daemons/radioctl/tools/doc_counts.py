@@ -53,7 +53,7 @@ def compute(root: Path = ROOT) -> dict[str, str]:
     facts = sum(p.read_text().count("\n[[facts]]") for p in (root / "rigs").glob("*.toml"))
     counts["facts"] = str(facts)
     # How many descriptions list each capability: `cap_<name>` with the hyphens of the name as underscores.
-    capabilities = Counter()
+    capabilities: Counter[str] = Counter()
     for path in (root / "rigs").glob("*.toml"):
         capabilities.update(tomllib.loads(path.read_text()).get("capabilities", []))
     for name, number in capabilities.items():
