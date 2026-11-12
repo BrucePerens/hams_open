@@ -59,3 +59,20 @@ routine to eliminate. `div_round_i128`'s division genuinely calls out to
 compiler-builtins) -- confirmed via `-dr` relocations, distinguishing it
 from the function's other `callx8` sites, which resolve to the cold
 `panic_const_div_by_zero` path, not the divide itself.
+
+## Host tests
+
+`cargo test` builds the crate with std (the `no_std` attribute and the
+`panic_handler` apply only to the real cross-compiled build) and checks each
+function's arithmetic on the host, with no target hardware.
+
+- `q_mul_i128` is a Q40 multiply rounded half up, with no overflow for full-range inputs.
+  *(Reference: `src/lib.rs` -> `[@ANCHOR: codegen_check_q_mul_i128]`)*
+- `div_round_i128_fn` divides with rounding half away from zero.
+  *(Reference: `src/lib.rs` -> `[@ANCHOR: codegen_check_div_round_i128_fn]`)*
+- `cheb_poly_eval_fixed_i64` evaluates a degree-5 Chebyshev series in Q29 and agrees with the float recurrence.
+  *(Reference: `src/lib.rs` -> `[@ANCHOR: codegen_check_cheb_i64]`)*
+- `cheb_poly_eval_fixed_i32` gives the same result as the i64 version where the i32 storage does not overflow.
+  *(Reference: `src/lib.rs` -> `[@ANCHOR: codegen_check_cheb_i32]`)*
+
+The bare `panic` handler (`loop {}`) is not tested: it never returns and exists only in the no_std build.
