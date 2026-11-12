@@ -35,6 +35,7 @@ fn synthesis_window_matches_float_at_every_integer_offset() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_scaling_coefficient_uncached]
 fn unvoiced_scaling_coefficient_matches_float_within_tolerance() {
     let float_val = float_uv::unvoiced_scaling_coefficient();
     let fixed_val = from_q16(fixed_uv::UNVOICED_SCALING_COEFFICIENT_Q16);
@@ -121,6 +122,12 @@ fn run_scenario(
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_UnvoicedState_synthesize]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_spectrum_q16]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_dft_q16]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_time_domain_q16]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_time_domain_at_q16]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_dft]
 fn synthesize_matches_float_for_a_fully_unvoiced_steady_tone() {
     // Not `2*pi/100`: that fraction puts the l=12 upper and l=13 lower band edges exactly on the
     // integer 32, where float's rounding noise (32.00000000000001) makes `ceil` give 33 while the

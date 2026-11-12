@@ -157,6 +157,7 @@ impl VoicedState {
     /// Q16.16 PCM samples, advancing the phase-tracking state for the next call. See the float
     /// sibling's own doc comment for the full parameter contract (`noise` must already reflect the
     /// current frame, shared with `unvoiced_synthesis::UnvoicedState`).
+    // [@ANCHOR: ham_digital_modes:fixed_general_voiced_synthesis_VoicedState_synthesize]
     pub fn synthesize(
         &mut self,
         noise: &NoiseState,

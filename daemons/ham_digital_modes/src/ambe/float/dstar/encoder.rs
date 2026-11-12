@@ -34,6 +34,7 @@ impl Encoder {
     // correlation of our stream through the chip's decoder (0.870 -> 0.865 at the best alignment, 0.819 -> 0.707 at
     // -80) even though it raises pitch-index agreement (40% -> 60% within 2 steps), so it is deliberately not copied.
 
+    // [@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_new]
     pub fn new() -> Self {
         let mut analyzer = FrameAnalyzer::new();
         analyzer.set_center_offset(Self::CHIP_ALIGNED_CENTER_OFFSET);
@@ -65,6 +66,7 @@ impl Encoder {
     }
 
     /// The next 72-bit logical frame if enough lookahead has been pushed.
+    // [@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_next_frame]
     pub fn next_frame(&mut self) -> Option<u128> {
         let a = self.analyzer.next_analysis()?;
         if let Some(det) = detect_tone(&a.slot_samples) {
@@ -129,6 +131,7 @@ impl Encoder {
     }
 
     /// Pads with silence so every pushed sample's frame is emitted, returning the remaining frames.
+    // [@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_finish]
     pub fn finish(&mut self) -> Vec<u128> {
         self.analyzer.finish_input();
         let mut out = Vec::new();

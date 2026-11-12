@@ -61,6 +61,17 @@ macro_rules! policy_tests {
             }
 
             #[test]
+            // Tests [@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_frame]
+            // Tests [@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]
+            // Tests [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]
+            // Tests [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_concealing]
+            // Tests [@ANCHOR: ham_digital_modes:float_dstar_synthesis_DStarSynthesisDecoder_decode_frame]
+            // Tests [@ANCHOR: ham_digital_modes:float_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]
+            // Tests [@ANCHOR: ham_digital_modes:float_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]
+            // Tests [@ANCHOR: ham_digital_modes:float_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_concealing]
+            // Tests [@ANCHOR: ham_digital_modes:fixed_general_concealment_Concealer_decide]
+            // Tests [@ANCHOR: ham_digital_modes:float_concealment_Concealer_decide]
+            // Tests [@ANCHOR: ham_digital_modes:fixed_general_concealment_Descriptor_new]
             fn the_default_policy_is_concealing_which_fades_instead_of_muting() {
                 let (quiet, loud) = quiet_and_loud();
                 let bad = loud ^ THREE_C0_ERRORS ^ PLUS_TWO_C1_ERRORS;

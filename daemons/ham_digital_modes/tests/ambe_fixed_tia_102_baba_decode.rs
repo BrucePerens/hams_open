@@ -90,6 +90,7 @@ fn build_synthetic_voiced_frame(b0: u32) -> [u32; 8] {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_parameters]
 fn decode_parameters_matches_float_exactly_for_a_real_synthetic_voiced_frame() {
     let c = build_synthetic_voiced_frame(50);
 
@@ -146,6 +147,7 @@ fn decode_parameters_matches_float_exactly_for_a_real_synthetic_voiced_frame() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_frame]
 fn decode_frame_matches_float_across_several_real_frames_with_varying_pitch() {
     let b0_values = [50u32, 51];
 

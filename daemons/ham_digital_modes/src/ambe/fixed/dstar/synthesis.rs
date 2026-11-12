@@ -55,6 +55,7 @@ impl DStarSynthesisDecoder {
     /// The raw bits considered for single-bit correction (same set as the float decoder).
     const CORRECTABLE_BITS: [usize; 11] = [38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48];
 
+    // [@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]
     fn decode_concealing(
         &mut self,
         parsed: &crate::ambe::float::dstar::decode::ParsedFrame,
@@ -114,6 +115,7 @@ impl DStarSynthesisDecoder {
 
     /// Decodes one logical 72-bit frame (see the float `interleave::wire_bytes_to_frame`) into 20 ms
     /// of Q16.16 PCM.
+    // [@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_frame]
     pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[i64; N]> {
         let parsed = parse_frame(logical_frame);
         let b0 = extract_raw_parameters(parsed.d).b0;

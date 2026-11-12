@@ -52,6 +52,7 @@ impl DStarSynthesisDecoder {
     /// pitch's lowest bit `d[48]` (`examples/ambe_bit_sensitivity.rs`).
     const CORRECTABLE_BITS: [usize; 11] = [38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48];
 
+    // [@ANCHOR: ham_digital_modes:float_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]
     fn decode_concealing(&mut self, parsed: &super::decode::ParsedFrame) -> Option<[f64; N]> {
         let mut candidates: Vec<(u32, Option<Descriptor>)> = Vec::new();
         let mut readings = Vec::new();
@@ -107,6 +108,7 @@ impl DStarSynthesisDecoder {
     }
 
     /// Decodes one logical 72-bit frame (see `interleave::wire_bytes_to_frame`) into 20 ms of PCM.
+    // [@ANCHOR: ham_digital_modes:float_dstar_synthesis_DStarSynthesisDecoder_decode_frame]
     pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[f64; N]> {
         let parsed = parse_frame(logical_frame);
         // mbelib's bad-frame policy (`mbe_processAmbe2400Dataf`): a speech frame with more than 3 corrected errors

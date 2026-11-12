@@ -91,6 +91,7 @@ fn run_scenario(frames: &[(f64, Vec<bool>, Vec<f64>)]) -> (Vec<f64>, Vec<f64>) {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_core]
 fn synthesize_frame_matches_float_for_a_steady_voiced_tone() {
     let omega0 = dequantize_fundamental_frequency(100);
     let voiced = vec![true; 16];
@@ -240,6 +241,7 @@ fn synthesize_frame_applies_a_no_op_gamma_m_when_amplitudes_are_well_under_thres
 /// under its own saturation point -- this test means to isolate enhancement/smoothing arithmetic,
 /// not mix in that separately-covered concern.
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_finalize_parameters]
 fn synthesize_frame_matches_float_when_gamma_m_actually_engages() {
     let omega0 = dequantize_fundamental_frequency(90);
     let l_hat = 30usize;

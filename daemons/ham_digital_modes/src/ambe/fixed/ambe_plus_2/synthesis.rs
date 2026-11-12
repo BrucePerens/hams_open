@@ -62,6 +62,7 @@ impl AmbePlus2SynthesisDecoder {
     /// The raw bits considered for single-bit correction (same set as the float decoder).
     const CORRECTABLE_BITS: [usize; 9] = [35, 36, 37, 38, 39, 40, 41, 42, 43];
 
+    // [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_concealing]
     fn decode_concealing(
         &mut self,
         parsed: &crate::ambe::float::dstar::decode::ParsedFrame,
@@ -121,6 +122,7 @@ impl AmbePlus2SynthesisDecoder {
 
     /// Decodes one logical 72-bit frame (see the float `interleave::interleaved_to_frame`) into
     /// 20 ms of Q16.16 PCM.
+    // [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]
     pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[i64; N]> {
         let parsed = parse_frame(logical_frame);
         let raw = extract_raw_parameters(parsed.d);

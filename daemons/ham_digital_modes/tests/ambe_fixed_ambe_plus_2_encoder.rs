@@ -84,6 +84,10 @@ fn parity(name: &str, start: usize, frames: usize) -> Parity {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encoder_Encoder_next_frame]
+// Tests [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encoder_Encoder_finish]
+// Tests [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_Encoder_next_frame]
+// Tests [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_Encoder_finish]
 fn speech_parity_with_the_float_encoder_first_150_frames() {
     let p = parity("AMBE+2 first 150 frames", 0, common::parity_frames());
     assert_eq!(p.count_mismatch, 0);

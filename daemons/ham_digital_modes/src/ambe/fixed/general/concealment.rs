@@ -42,6 +42,7 @@ pub struct Descriptor {
 
 impl Descriptor {
     /// `voiced` and `ml_q16` are 1-indexed by harmonic (index 0 unused).
+    // [@ANCHOR: ham_digital_modes:fixed_general_concealment_Descriptor_new]
     pub fn new(w0_q16: i32, voiced: &[bool], ml_q16: &[i32]) -> Self {
         let l = ml_q16.len() - 1;
         let mean_square_q32: u128 = ml_q16[1..]
@@ -162,6 +163,7 @@ impl Concealer {
     }
 
     /// Fixed-point sibling of `Concealer::decide`; `epsilon` is the number of errors the channel code corrected in this frame.
+    // [@ANCHOR: ham_digital_modes:fixed_general_concealment_Concealer_decide]
     pub fn decide(&mut self, candidates: &[(u32, Option<Descriptor>)], epsilon: u32) -> Decision {
         let q = self.params;
         let observed_q32 = ((epsilon as i128) << 32) / 47;

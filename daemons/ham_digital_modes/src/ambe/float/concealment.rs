@@ -164,6 +164,7 @@ impl Concealer {
     /// Chooses among the candidate readings of one frame. `candidates[i] = (flips, descriptor)` where `flips` is the number of raw bits
     /// changed from the received frame (candidate 0 is the frame as received, and is `None` if it is not a speech frame at all);
     /// `epsilon` is the total number of errors the channel code corrected in the received frame.
+    // [@ANCHOR: ham_digital_modes:float_concealment_Concealer_decide]
     pub fn decide(&mut self, candidates: &[(u32, Option<Descriptor>)], epsilon: u32) -> Decision {
         // Bit error rate estimate from the protected bits (47 per frame).
         let observed = epsilon as f64 / 47.0;
