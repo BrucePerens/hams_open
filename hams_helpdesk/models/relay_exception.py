@@ -34,6 +34,7 @@ REJECTED = "rejected"
 LIMITED = "limited"
 
 
+# [@ANCHOR: hams_helpdesk_relay_exception_relay_exception]
 class RelayException(models.AbstractModel):
     _name = "hams_helpdesk.relay.exception"
     _description = "Relay exception and crash reports"

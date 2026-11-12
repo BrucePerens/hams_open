@@ -176,6 +176,7 @@ class TestHelpdeskTours(HamsHttpCase):
             "[!] DIAGNOSTIC FOR AI: Backend ticket form failed to render (Expected 200).",
         )
 
+    # Tests [@ANCHOR: hams_helpdesk_portal_helpdesk_portal]
     def test_portal_ticket_new_renders_without_callsign(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
         # A Prospective Ham/SWL user (a real

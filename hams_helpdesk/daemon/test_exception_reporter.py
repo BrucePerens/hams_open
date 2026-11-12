@@ -61,6 +61,7 @@ class ReportUnitWaitTests(unittest.TestCase):
         # The journal and result are read once, not on every try.
         self.assertEqual({id(call[0][0]) for call in post.call_args_list}.__len__(), 1)
 
+    # Tests [@ANCHOR: hams_helpdesk_exception_reporter_odoo_unavailable]
     def test_gives_up_after_the_budget_with_the_last_error(self):
         answer, post, clock = self.run_report([refused()] * 100, wait=600)
         self.assertIsInstance(answer, er.OdooUnavailable)
@@ -69,6 +70,7 @@ class ReportUnitWaitTests(unittest.TestCase):
         self.assertEqual(clock.sleeps[:4], [5, 10, 20, 40])
         self.assertLessEqual(max(clock.sleeps), er.REPORT_BACKOFF_MAX_SECONDS)
 
+    # Tests [@ANCHOR: hams_helpdesk_exception_reporter_report_error]
     def test_a_rejected_key_is_not_retried(self):
         answer, post, clock = self.run_report([er.ReportError("Odoo answered HTTP 403")])
         self.assertIsInstance(answer, er.ReportError)
@@ -76,6 +78,7 @@ class ReportUnitWaitTests(unittest.TestCase):
         self.assertEqual(post.call_count, 1)
         self.assertEqual(clock.sleeps, [])
 
+    # Tests [@ANCHOR: hams_helpdesk_browser_exception_api_browser_exception_api]
     def test_the_unit_timeout_outlasts_the_wait(self):
         here = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(here, "hams-exception-report@.service"), encoding="utf-8") as handle:

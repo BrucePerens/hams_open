@@ -5,6 +5,7 @@
 from odoo import api, models, fields
 
 
+# [@ANCHOR: hams_helpdesk_res_partner_res_partner]
 class ResPartner(models.Model):
     _inherit = "res.partner"
 

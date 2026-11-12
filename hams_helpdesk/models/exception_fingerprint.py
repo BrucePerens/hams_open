@@ -283,6 +283,7 @@ def report_exception(registry, exc, source, uid=None, logged_in=False, path="", 
     )
 
 
+# [@ANCHOR: hams_helpdesk_exception_fingerprint_exception_fingerprint]
 class ExceptionFingerprint(models.Model):
     _name = "hams_helpdesk.exception.fingerprint"
     _description = "Server exception fingerprint"

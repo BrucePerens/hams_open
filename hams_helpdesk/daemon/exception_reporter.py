@@ -58,10 +58,12 @@ UNAVAILABLE_HTTP_CODES = frozenset({502, 503, 504})
 _LAST_REPORT = {}
 
 
+# [@ANCHOR: hams_helpdesk_exception_reporter_report_error]
 class ReportError(Exception):
     """The report could not be delivered. The message never holds a key, URL or response body."""
 
 
+# [@ANCHOR: hams_helpdesk_exception_reporter_odoo_unavailable]
 class OdooUnavailable(ReportError):
     """Odoo did not answer (connection refused or timed out, or a proxy's 502/503/504): worth retrying."""
 

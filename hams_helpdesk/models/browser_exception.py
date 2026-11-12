@@ -37,6 +37,7 @@ _VERSIONS_LOCK = threading.Lock()
 _VERSIONS = {}
 
 
+# [@ANCHOR: hams_helpdesk_browser_exception_browser_exception]
 class BrowserException(models.AbstractModel):
     _name = "hams_helpdesk.browser.exception"
     _description = "Browser JavaScript error reports"

@@ -16,6 +16,7 @@ from .link_defang import defang_html
 _TICKET_MODEL = "hams_helpdesk.ticket"
 
 
+# [@ANCHOR: hams_helpdesk_mail_message_defanged_mail_message_defanged]
 class MailMessageDefanged(models.Model):
     _inherit = "mail.message"
 

@@ -189,6 +189,7 @@ def _error_page_failed_on_the_url(error):
     return isinstance(error, ValueError) and str(error).startswith(_URLJOIN_MESSAGES)
 
 
+# [@ANCHOR: hams_helpdesk_ir_http_exception_ir_http_exception_report]
 class IrHttpExceptionReport(models.AbstractModel):
     _inherit = "ir.http"
 

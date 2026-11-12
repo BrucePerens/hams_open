@@ -34,6 +34,7 @@ SUSPICION_FIELDS = ("suspicion_score", "suspicious", "suspicion_removed", "suspi
 RAW_EVIDENCE_LIMIT = 100000
 
 
+# [@ANCHOR: hams_helpdesk_untrusted_mixin_hams_helpdesk_untrusted_mixin]
 class HamsHelpdeskUntrustedMixin(models.AbstractModel):
     _name = "hams_helpdesk.untrusted.mixin"
     _description = "Untrusted text filter for tickets"
@@ -268,6 +269,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
         return views
 
 
+# [@ANCHOR: hams_helpdesk_untrusted_mixin_hams_helpdesk_ticket_suspicion]
 class HamsHelpdeskTicketSuspicion(models.Model):
     _name = "hams_helpdesk.ticket.suspicion"
     _description = "What the untrusted-text filter removed or flagged on a ticket (staff evidence)"

@@ -6,6 +6,7 @@ import markupsafe
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: hams_helpdesk_shift_handoff_shift_handoff_wizard]
 class ShiftHandoffWizard(models.TransientModel):
     _name = "hams_helpdesk.shift_handoff"
     _description = "Shift Handoff Wizard"

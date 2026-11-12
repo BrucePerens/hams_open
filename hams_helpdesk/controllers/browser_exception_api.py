@@ -44,6 +44,7 @@ def _answer(status):
     return http.Response("", status=status, headers=[("Cache-Control", "no-store")])
 
 
+# [@ANCHOR: hams_helpdesk_browser_exception_api_browser_exception_api]
 class BrowserExceptionApi(http.Controller):
     # [@ANCHOR: hams_helpdesk:browser_same_origin]
     @staticmethod

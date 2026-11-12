@@ -170,6 +170,7 @@ class TestPhishingLinkDefangTickets(HamsTransactionCase):
         self.assertFalse(self.Ticket.browse().links_defanged)
         self.assertFalse((self._phishing_ticket("A") | self._phishing_ticket("B"))._triage_links_defanged(), "only one ticket at a time")
 
+    # Tests [@ANCHOR: hams_helpdesk_mail_message_defanged_mail_message_defanged]
     def test_03_the_chatter_of_a_phishing_ticket_shows_no_live_link(self):
         # Tests [@ANCHOR: hams_helpdesk:message_to_store_defanged]
         # Tests [@ANCHOR: hams_helpdesk:message_defanged_ticket_ids]

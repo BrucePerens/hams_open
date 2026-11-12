@@ -141,6 +141,7 @@ class TestGithubWebhookHttp(HamsHttpCase):
         # Tests [@ANCHOR: hams_helpdesk:github_verify_signature]
         self.assertFalse(_verify_github_signature(b"{}", _TEST_SECRET, "sha256=" + "\u00e9" * 64))
 
+    # Tests [@ANCHOR: hams_helpdesk_github_webhook_api_github_webhook_controller]
     def test_github_webhook_wrong_key_signature_is_denied(self):
         # A signature computed with a DIFFERENT secret than the one configured -- distinct
         # from test_github_webhook_invalid_signature_is_denied's all-zero garbage signature,

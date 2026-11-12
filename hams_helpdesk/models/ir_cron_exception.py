@@ -14,6 +14,7 @@ from .exception_fingerprint import report_exception
 from .exception_scrub import scrub_text
 
 
+# [@ANCHOR: hams_helpdesk_ir_cron_exception_ir_cron_exception_report]
 class IrCronExceptionReport(models.Model):
     _inherit = "ir.cron"
 

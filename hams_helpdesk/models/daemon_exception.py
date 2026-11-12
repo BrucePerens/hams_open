@@ -48,6 +48,7 @@ def quota_key_parts():
     return ("daemon.quota_exhausted", QUOTA_SERVICE, "quota", f"service:{QUOTA_SERVICE}")
 
 
+# [@ANCHOR: hams_helpdesk_daemon_exception_exception_fingerprint_daemon]
 class ExceptionFingerprintDaemon(models.Model):
     _inherit = "hams_helpdesk.exception.fingerprint"
 
