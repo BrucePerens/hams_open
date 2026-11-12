@@ -110,6 +110,7 @@ class DatabaseTableStat(models.Model):
             raise UserError(_("Error executing vacuumdb: %s") % str(e))
         return True
 
+    @api.private
     @api.model
     def cron_check_bloat(self):
         # [@ANCHOR: COMM_bloat_alert_synergy]

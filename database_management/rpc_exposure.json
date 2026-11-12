@@ -10,8 +10,7 @@
       "action_reset_stats"
     ],
     "database.table.stat": [
-      "action_vacuum_analyze",
-      "cron_check_bloat"
+      "action_vacuum_analyze"
     ],
     "pg.explain.wizard": [
       "action_close"
