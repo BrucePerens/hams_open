@@ -371,6 +371,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctl_core_observation_field]
+    // Tests [@ANCHOR: radioctl_core_units_receiver]
     #[test]
     fn observation_maps_to_its_field() {
         assert_eq!(

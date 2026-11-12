@@ -9,6 +9,7 @@
 
 use std::time::Duration;
 
+// [@ANCHOR: radioctl_core_power_power]
 /// Transmit power in watts: a finite, non-negative number.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
 pub struct Power(f64);
@@ -64,6 +65,7 @@ impl Power {
     }
 }
 
+// [@ANCHOR: radioctl_core_power_power_unit]
 /// The unit a power meter reports in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerUnit {
@@ -117,6 +119,7 @@ impl PowerUnit {
     }
 }
 
+// [@ANCHOR: radioctl_core_power_power_origin]
 /// Where a power reading came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PowerOrigin {
@@ -137,6 +140,7 @@ impl PowerOrigin {
     }
 }
 
+// [@ANCHOR: radioctl_core_power_power_reading]
 /// One transmit-power reading.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PowerReading {
@@ -164,6 +168,7 @@ pub trait RfPowerReader: Send + Sync {
     fn read(&self) -> Option<PowerReading>;
 }
 
+// [@ANCHOR: radioctl_core_power_power_cal]
 /// Calibration of a rig's raw power meter: ascending (raw, watts) points, linear in between,
 /// flat beyond the last. Provenance lives in the rig description's `[[facts]]`.
 #[derive(Debug, Clone, PartialEq)]
@@ -241,6 +246,7 @@ pub fn rig_reading(raw: u16, cal: Option<&PowerCal>) -> PowerReading {
     }
 }
 
+// [@ANCHOR: radioctl_core_power_display_unit]
 /// The unit a displayed power is shown in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayUnit {
@@ -344,6 +350,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_power_from_dbm]
     // Tests [@ANCHOR: radioctl_power_watts]
+    // Tests [@ANCHOR: radioctl_core_power_power]
     #[test]
     fn dbm_points_convert_to_watts() {
         for (dbm, w) in [
@@ -397,6 +404,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_power_offset_db]
     // Tests [@ANCHOR: radioctl_power_unit_to_power]
+    // Tests [@ANCHOR: radioctl_core_power_power_unit]
     #[test]
     fn the_coupler_offset_is_applied_before_conversion() {
         // 10 dBm at the meter behind 40 dB of coupler and attenuator is 50 dBm: 100 W.
@@ -422,6 +430,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_power_unit_name]
     // Tests [@ANCHOR: radioctl_power_unit_from_name]
     // Tests [@ANCHOR: radioctl_power_origin_label]
+    // Tests [@ANCHOR: radioctl_core_power_power_origin]
     #[test]
     fn unit_and_origin_names_round_trip() {
         for u in [
@@ -440,6 +449,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_power_cal_new]
     // Tests [@ANCHOR: radioctl_power_cal_watts]
     // Tests [@ANCHOR: radioctl_power_cal_full_scale]
+    // Tests [@ANCHOR: radioctl_core_power_power_cal]
     #[test]
     fn a_calibration_interpolates_and_stops_at_the_ends() {
         let cal = PowerCal::new(vec![(0.0, 0.0), (100.0, 50.0), (200.0, 100.0)]).expect("valid");
@@ -458,6 +468,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_power_format]
+    // Tests [@ANCHOR: radioctl_core_power_display_unit]
     #[test]
     fn the_formatter_picks_unit_and_decimals() {
         assert_eq!(text(0.25, None), "250 mW");
@@ -507,6 +518,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_power_rig_reading]
+    // Tests [@ANCHOR: radioctl_core_power_power_reading]
     #[test]
     fn a_rig_reading_is_watts_only_with_a_calibration() {
         let cal = PowerCal::new(vec![(0.0, 0.0), (143.0, 100.0), (213.0, 200.0)]).expect("valid");

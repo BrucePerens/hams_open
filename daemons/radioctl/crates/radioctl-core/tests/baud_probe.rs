@@ -149,6 +149,7 @@ async fn no_answer_at_any_rate_is_link_down_naming_every_rate() {
 }
 
 // Tests [@ANCHOR: radioctl_core_baud_probe_probe]
+// Tests [@ANCHOR: radioctl_core_baud_probe_probe_result]
 #[tokio::test(start_paused = true)]
 async fn an_open_error_ends_the_probe_with_that_error_not_with_no_answer() {
     let mut port = FakePort::new(Some(38400));
@@ -207,6 +208,8 @@ async fn an_engine_whose_frequency_read_is_not_a_read_is_refused_and_nothing_is_
 }
 
 // Tests [@ANCHOR: radioctl_core_baud_probe_read_request]
+// Tests [@ANCHOR: radioctl_core_engine_request]
+// Tests [@ANCHOR: radioctl_core_engine_reply_kind]
 #[test]
 fn the_request_is_the_engines_own_civ_frequency_read() {
     let request = read_request(&mut engine()).expect("a read");
@@ -220,6 +223,7 @@ fn the_request_is_the_engines_own_civ_frequency_read() {
 // Tests [@ANCHOR: radioctl_core_baud_probe_serial_port_new]
 // Tests [@ANCHOR: radioctl_core_baud_probe_serial_port_open]
 // Tests [@ANCHOR: radioctl_core_baud_probe_serial_port_close]
+// Tests [@ANCHOR: radioctl_core_baud_probe_serial_probe_port]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_serial_probe_port_reports_a_missing_device_and_closes_idempotently() {
     let config = SerialConfig::new(
