@@ -350,6 +350,19 @@ class TestAuditEdgeCases(RealTransactionCase):
         self.assertEqual(page.view_count, initial_views + 5)
         mock_trigger.assert_not_called()
 
+    def test_06d_flush_counts_a_key_the_scan_returned_twice_once(self):
+        # Tests [@ANCHOR: user_websites:website_page_flush_redis_view_counters]
+        """Redis SCAN may return a key more than once; its views must be added to the page once."""
+        page = self._flush_page("redis-flush-dup")
+        initial_views = page.view_count
+        key = self._view_key(page.id)
+        self.addCleanup(redis_client.delete, key)
+        redis_client.set(key, 5)
+        self.safe_patch_object(redis_client, "scan", return_value=(0, [key, key]))
+        self.env["website.page"]._flush_redis_view_counters()
+        page.invalidate_recordset(["view_count"])
+        self.assertEqual(page.view_count, initial_views + 5)
+
     def test_06c_a_full_batch_triggers_the_next_one_and_only_after_draining_something(self):
         # Tests [@ANCHOR: user_websites:website_page_flush_redis_view_counters]
         """ADR-0022: more keys than one run takes -> _trigger(); the chain ends because each run drains its batch."""

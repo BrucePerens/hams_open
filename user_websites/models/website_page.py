@@ -1071,7 +1071,7 @@ class WebsitePage(models.Model):
             _logger.error(f"Failed to connect to Redis for view counter flush: {e}")
             return
         batch_full = cursor != 0 or len(keys) > self._FLUSH_BATCH_KEYS  # keys remain for another run
-        keys = keys[: self._FLUSH_BATCH_KEYS]
+        keys = list(dict.fromkeys(keys))[: self._FLUSH_BATCH_KEYS]  # SCAN may return a key twice
 
         if not keys:
             return
