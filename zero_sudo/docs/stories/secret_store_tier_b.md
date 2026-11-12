@@ -59,7 +59,7 @@ returns the ordered steps; `apply(steps, dry_run, run=subprocess.run, user_exist
 | `broker.json` | policy, no secret (`default_config(web_user)` `[@ANCHOR: zero_sudo:secret_broker_provision_default_config]`: the web user is both the allowed caller and the denied reader; no secrets yet, so the broker refuses to start until one is configured); written only if absent | root:root 0644 |
 | `secrets` | `name=value` lines; created empty only if absent, never overwritten or read by the script | root:root 0600 |
 | `hams-secret-broker.service` | `unit_text(code_dir, python)` `[@ANCHOR: zero_sudo:secret_broker_provision_unit_text]`: `User=hams_secret_broker`, `LoadCredential=secrets:...`, `RuntimeDirectory=hams_secret_broker` 0750, `UMask=0117`, `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, `PrivateDevices`, an empty capability set, `MemoryDenyWriteExecute` | root:root 0644 |
-| `<odoo unit>.d/hams_secret_broker.conf` (with `--odoo-unit`) | `odoo_dropin_text()` `[@ANCHOR: zero_sudo:secret_broker_provision_odoo_dropin_text]`: `SupplementaryGroups=hams_secret_broker_clients` and `HAMS_SECRET_STORE=broker:/run/hams_secret_broker/broker.sock` | root:root 0644 |
+| `<odoo unit>.d/hams_secret_broker.conf` (with `--odoo-unit`) | `odoo_dropin_text()` `[@ANCHOR: zero_sudo:secret_broker_provision_odoo_dropin_text]`: `SupplementaryGroups=hams_secret_broker_clients` only. It does not set `HAMS_SECRET_STORE`: the default store (`default_spec`) then uses the broker when its socket exists and still falls back to the Tier A file or systemd credential, which Odoo core's secrets need (`hams_core_secrets_from_store`; a broker-only spec made the registry refuse to load) | root:root 0644 |
 
 ## Configuration (`broker.json`)
 
