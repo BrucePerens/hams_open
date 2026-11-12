@@ -192,6 +192,7 @@ async fn civ_echo_semantics_follow_the_endpoint_setting() {
 
 // Tests [@ANCHOR: radioctl_splitter_civ_unsolicited]
 // Tests [@ANCHOR: radioctl_splitter_ts2000_unsolicited]
+// Tests [@ANCHOR: radioctl_splitter_session_protocol]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn front_panel_changes_reach_every_client_as_that_clients_unsolicited_frames() {
     let (rig, control) = virtual_kx3().await;
@@ -224,6 +225,7 @@ async fn front_panel_changes_reach_every_client_as_that_clients_unsolicited_fram
 // Tests [@ANCHOR: radioctl_splitter_arbiter_release]
 // Tests [@ANCHOR: radioctl_splitter_arbiter_clear]
 // Tests [@ANCHOR: radioctl_splitter_arbiter_owner]
+// Tests [@ANCHOR: radioctl_splitter_session_inner]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn one_client_owns_the_transmitter_and_its_departure_unkeys_the_rig() {
     let (rig, control) = virtual_kx3().await;
@@ -295,6 +297,8 @@ async fn a_ts2000_client_reads_sets_and_is_refused_what_it_cannot_have() {
 // Tests [@ANCHOR: radioctl_splitter_read_status]
 // Tests [@ANCHOR: radioctl_splitter_read_frequency]
 // Tests [@ANCHOR: radioctl_splitter_ts2000_status_answer]
+// Tests [@ANCHOR: radioctl_splitter_session_splitter]
+// Tests [@ANCHOR: radioctl_splitter_session_splitter_config]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_ts2000_client_reads_the_composite_status_from_the_rigs_state() {
     let (rig, control) = virtual_kx3().await;
@@ -382,6 +386,7 @@ fn program_read(port: &mut serialport::TTYPort, want: usize) -> Vec<u8> {
 // Tests [@ANCHOR: radioctl_splitter_pty_drop]
 // Tests [@ANCHOR: radioctl_splitter_pty_read_master]
 // Tests [@ANCHOR: radioctl_splitter_pty_write_master]
+// Tests [@ANCHOR: radioctl_splitter_pty_pty_endpoint]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn two_programs_on_two_virtual_serial_ports_share_the_radio_and_the_transmitter() {
     let (rig, control) = virtual_kx3().await;
@@ -431,6 +436,8 @@ async fn two_programs_on_two_virtual_serial_ports_share_the_radio_and_the_transm
 
 // Tests [@ANCHOR: radioctl_splitter_client_wait]
 // Tests [@ANCHOR: radioctl_splitter_client_abort]
+// Tests [@ANCHOR: radioctl_splitter_session_client_handle]
+// Tests [@ANCHOR: radioctl_splitter_session_client_input]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_client_ends_when_its_stream_ends_or_when_aborted() {
     let (rig, _control) = virtual_kx3().await;
@@ -460,6 +467,8 @@ async fn a_client_ends_when_its_stream_ends_or_when_aborted() {
 // Tests [@ANCHOR: radioctl_splitter_serve_tcp]
 // Tests [@ANCHOR: radioctl_splitter_config_new]
 // Tests [@ANCHOR: radioctl_splitter_stats]
+// Tests [@ANCHOR: radioctl_splitter_session_counters]
+// Tests [@ANCHOR: radioctl_splitter_session_splitter_stats]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tcp_connections_past_the_client_limit_are_closed_and_a_freed_slot_is_reused() {
     let (rig, _control) = virtual_kx3().await;

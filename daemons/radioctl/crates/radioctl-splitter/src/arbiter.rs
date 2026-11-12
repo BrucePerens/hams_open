@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! PTT ownership: one transmitter, one owner at a time.
 
+// [@ANCHOR: radioctl_splitter_arbiter_client_id]
 /// A client identifier assigned by the splitter.
 pub type ClientId = u64;
 
+// [@ANCHOR: radioctl_splitter_arbiter_ptt_owner]
 /// Who holds the transmitter.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct PttOwner {
@@ -58,6 +60,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_splitter_arbiter_release]
     // Tests [@ANCHOR: radioctl_splitter_arbiter_clear]
     // Tests [@ANCHOR: radioctl_splitter_arbiter_owner]
+    // Tests [@ANCHOR: radioctl_splitter_arbiter_ptt_owner]
+    // Tests [@ANCHOR: radioctl_splitter_arbiter_client_id]
     #[test]
     fn the_first_client_to_key_owns_the_transmitter() {
         let mut ptt = PttOwner::default();

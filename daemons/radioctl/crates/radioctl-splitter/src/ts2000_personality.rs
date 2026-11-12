@@ -25,6 +25,7 @@ use radioctl_protocols::kenwood::{parse_digits, Token, Tokenizer};
 
 use crate::personality::{Action, Outcome, Pending, Personality, Request, Status};
 
+// [@ANCHOR: radioctl_splitter_ts2000_personality_ts2000_personality]
 /// The TS-2000 emulated by a CAT endpoint.
 pub struct Ts2000Personality {
     modes: Vec<(Mode, u8)>,
@@ -226,6 +227,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_splitter_ts2000_new]
     // Tests [@ANCHOR: radioctl_splitter_ts2000_parse]
     // Tests [@ANCHOR: radioctl_splitter_ts2000_classify]
+    // Tests [@ANCHOR: radioctl_splitter_ts2000_personality_ts2000_personality]
     #[test]
     fn commands_become_rig_actions_local_answers_or_refusals() {
         let mut p = Ts2000Personality::new();
@@ -317,6 +319,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_splitter_ts2000_status_answer]
     // Tests [@ANCHOR: radioctl_splitter_ts2000_reply]
+    // Tests [@ANCHOR: radioctl_splitter_personality_status]
     #[test]
     fn the_composite_status_has_the_ts2000_layout() {
         let mut p = Ts2000Personality::new();
