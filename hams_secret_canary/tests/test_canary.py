@@ -251,6 +251,11 @@ class TestWsgiHook(CanaryCase, HamsHttpCase):
         request_xml = "<?xml version='1.0'?><methodCall><methodName>%s</methodName><params></params></methodCall>" % SECRET
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
             response = self.url_open("/xmlrpc/2/common", data=request_xml, headers={"Content-Type": "text/xml"})
+            # The scan runs on the server thread once the last chunk is out, so the client can have the whole body
+            # before the alarm is logged (seen under load in gate round 39): wait for it.
+            deadline = time.monotonic() + 10
+            while not logs.records and time.monotonic() < deadline:
+                time.sleep(0.05)
         self.assertIn(SECRET, response.text)  # the fault does echo it: the leak this scan exists for
         self.assertEqual(len(logs.output), 1)
         self.assertIn("test_secret", logs.output[0])
