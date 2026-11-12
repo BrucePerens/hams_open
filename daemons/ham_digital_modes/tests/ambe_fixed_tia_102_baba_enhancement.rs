@@ -97,6 +97,7 @@ fn energy_and_scaled_energy_match() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:enhancement_enhance_spectral_amplitudes_q16]
 fn enhance_spectral_amplitudes_matches() {
     for (l, peak) in sweep_cases() {
         let amps = realistic_amplitudes(l, peak);
@@ -114,6 +115,7 @@ fn enhance_spectral_amplitudes_matches() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:enhancement_update_local_energy_q16]
 fn update_local_energy_matches() {
     // Real chip data: R_M0 from ~9 to ~4e8, S_E floored at 10000 -- covers the low, middle, and
     // high end of that measured range.
@@ -133,6 +135,7 @@ fn update_local_energy_matches() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:enhancement_adaptive_voicing_threshold_q16]
 fn adaptive_voicing_threshold_matches_all_three_branches() {
     // Real chip data shows S_E can range from the 10000 floor up past 4e8 -- exercise both ends,
     // not just one representative value.
@@ -247,6 +250,7 @@ fn amplitude_sum_matches() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:enhancement_update_amplitude_threshold_q16]
 fn update_amplitude_threshold_matches_both_branches() {
     for &prev in &[15000.0f64, 200_000.0] {
         // Branch 1: rate <= 0.005 && total <= 6.
@@ -292,6 +296,7 @@ fn update_amplitude_threshold_matches_both_branches() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:enhancement_amplitude_smoothing_scale_q16]
 fn amplitude_smoothing_scale_matches_both_branches() {
     for &(tau, a) in &[
         (100.0f64, 50.0),
@@ -308,6 +313,8 @@ fn amplitude_smoothing_scale_matches_both_branches() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:error_estimation_should_repeat_frame_q16]
+// Tests [@ANCHOR: ham_digital_modes:error_estimation_estimate_errors_q16]
 fn error_estimation_matches() {
     let counts = [1u32, 0, 2, 1, 0, 3, 1];
     let previous_rate = 0.02;

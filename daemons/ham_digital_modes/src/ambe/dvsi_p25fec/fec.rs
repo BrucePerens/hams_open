@@ -133,6 +133,7 @@ pub fn g3_encode(data: u8) -> u32 {
 /// (`g3`'s actual, confirmed rank-8 codeword space, not the full 4096-codeword Golay space
 /// `g0`-`g2` use) -- exact for this linear code at this size, same technique as
 /// [`super::fec::golay_decode`]/[`super::fec::hamming_decode`].
+// [@ANCHOR: ham_digital_modes:fec_g3_decode]
 pub fn g3_decode(received: u32) -> (u8, u32) {
     let received = received & 0x7F_FFFF;
     let mut best_data = 0u8;
@@ -152,6 +153,7 @@ pub fn g3_decode(received: u32) -> (u8, u32) {
 /// decodes it with the appropriate real chip FEC. Returns the recovered data bits and the number of
 /// bit errors corrected (for `g3`, out of its own real 8-bit codeword space, not a full Golay
 /// decode -- see [`G3_GENERATOR`]'s own doc comment for why).
+// [@ANCHOR: ham_digital_modes:fec_decode_block]
 pub fn decode_block(wire_frame_bits: &[bool; 144], block: Block) -> (u16, u32) {
     let members = block_wire_members(block);
     let mut received: u32 = 0;
@@ -321,6 +323,7 @@ mod tests {
     /// synthetic wire frame at `g0`'s confirmed positions must decode back to the same data with
     /// zero corrected errors.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:fec_decode_block]
     fn decode_block_round_trips_g0_with_the_real_golay_code() {
         for data in [0u16, 1, 0xABC, 0xFFF] {
             let codeword = golay_encode(data & 0x0FFF);
@@ -358,6 +361,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:fec_g3_decode]
     fn g3_decode_round_trips_every_one_of_its_256_real_codewords_with_zero_distance() {
         for data in 0u16..256 {
             let codeword = g3_encode(data as u8);

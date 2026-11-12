@@ -602,6 +602,7 @@ mod ambe_plus_2_mode {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:encode_amplitude_field_q16]
     fn tone_level_field_matches_float_mapping() {
         // The float `amplitude_field` is private to the encoder; its documented chip points are the ground truth.
         for (a, field) in [
@@ -625,6 +626,7 @@ mod ambe_plus_2_mode {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:mbe_encode_target_log2_ml_q16]
 fn log2_target_helper_matches_float_formula() {
     let mut rng = Rng(77);
     for _ in 0..500 {

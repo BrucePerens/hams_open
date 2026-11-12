@@ -78,6 +78,7 @@ fn phase_dither_q16(noise: &NoiseState, l: u32) -> i32 {
 /// literal `floor` form performs is done here via the exact phase round trip
 /// (`phase_from_radians_q16` then `radians_from_phase_q16`) rather than a hand-rolled floor -- the
 /// same reduction, reusing an already-exact primitive instead of a second implementation of it.
+// [@ANCHOR: ham_digital_modes:voiced_synthesis_delta_omega_q32]
 fn delta_omega_q32(
     phi_prev_q32: i64,
     phi_curr_q32: i64,
@@ -110,6 +111,7 @@ fn delta_omega_q32(
 /// to 159 make the quadratic `n*n` term's own numerator large enough that narrowing early would risk
 /// exactly the kind of intermediate overflow this crate's own established discipline checks for,
 /// even though the final angle itself is always a bounded, ordinary-sized radian value.
+// [@ANCHOR: ham_digital_modes:voiced_synthesis_theta_q32_i64]
 fn theta_q32_i64(
     n: i32,
     phi_prev_q32: i64,
@@ -337,6 +339,8 @@ mod tests {
     /// must land on `phi_curr` (mod `2*pi`) to within a small tolerance (Q16.16's own rounding, not
     /// zero, unlike the float sibling's exact `f64` invariant).
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:voiced_synthesis_theta_q32_i64]
+    // Tests [@ANCHOR: ham_digital_modes:voiced_synthesis_delta_omega_q32]
     fn theta_at_n_equals_capital_n_lands_near_phi_curr_mod_2pi() {
         // Literal Q16.16 values (`round(x * 65536)`), not computed from a float expression here --
         // this whole file is `#![deny(clippy::float_arithmetic)]`, which lints `#[cfg(test)]` code

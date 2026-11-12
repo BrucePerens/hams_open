@@ -21,6 +21,7 @@ fn from_q16(v: i32) -> f64 {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:unvoiced_synthesis_synthesis_window_q16]
 fn synthesis_window_matches_float_at_every_integer_offset() {
     for n in -120..=120 {
         let float_val = float_uv::synthesis_window(n);

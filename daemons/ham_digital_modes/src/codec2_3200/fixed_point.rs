@@ -380,6 +380,7 @@ pub(crate) const NATIVE_64_BIT: bool = cfg!(target_pointer_width = "64");
 
 /// [`log2_q23`] for a 32-bit core: normalisation in 32-bit halves with a table-based
 /// leading-zero count.
+// [@ANCHOR: ham_digital_modes:fixed_point_log2_q23_split32]
 fn log2_q23_split32(x_q23: i64) -> i64 {
     debug_assert!(
         x_q23 >= 0,
@@ -438,6 +439,7 @@ fn log2_q23_split32(x_q23: i64) -> i64 {
 
 /// [`log2_q23`] for a 64-bit core: the straightforward 64-bit form, with the hardware
 /// leading-zero count and 64-bit shifts and products.
+// [@ANCHOR: ham_digital_modes:fixed_point_log2_q23_native]
 fn log2_q23_native(x_q23: i64) -> i64 {
     let x_q23 = x_q23.max(1);
     let bits = 63 - x_q23.leading_zeros() as i32;
@@ -558,6 +560,8 @@ mod tests {
     /// of the input range, and on a large pseudo-random sweep across all
     /// magnitudes.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:fixed_point_log2_q23_split32]
+    // Tests [@ANCHOR: ham_digital_modes:fixed_point_log2_q23_native]
     // Tests [@ANCHOR: log2_q23]
     // Tests [@ANCHOR: exp2_q23]
     fn log2_and_exp2_q23_match_their_64_bit_reference_bit_for_bit() {

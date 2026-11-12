@@ -437,6 +437,7 @@ fn square_words(x: u64) -> (u64, u64) {
 }
 
 /// [`power_bin`] for a 32-bit core: squares from 32-bit limbs.
+// [@ANCHOR: ham_digital_modes:nlp_power_bin_split]
 fn power_bin_split(re: i64, im: i64) -> i128 {
     let (rl, rh) = square_words(re.unsigned_abs());
     let (il, ih) = square_words(im.unsigned_abs());
@@ -643,6 +644,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:nlp_power_bin_split]
     fn power_bin_kernels_agree_bit_for_bit() {
         let mut seed = 0x1234_5678_9abc_def1u64;
         let mut next = || {

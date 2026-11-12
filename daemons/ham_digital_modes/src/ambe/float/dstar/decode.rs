@@ -36,6 +36,7 @@ pub struct ParsedFrame {
 /// bit) into its 49 real decoded data bits, applying Golay correction to `C0`/`C1` and de-whitening
 /// `C1` using `C0`'s own corrected data (in that order -- see `mod.rs`'s own doc comment for why the
 /// order matters).
+// [@ANCHOR: ham_digital_modes:decode_parse_frame]
 pub fn parse_frame(frame: u128) -> ParsedFrame {
     let frame = frame & ((1u128 << 72) - 1);
     let c0 = ((frame >> 48) & 0xFF_FFFF) as u32; // top 24 bits
@@ -191,6 +192,7 @@ pub struct TonePayload {
 /// same functional-numeric-data status `tables.rs`'s own doc comment and this project's established
 /// position (`hams_com/docs/AMBE_TABLE_COPYRIGHTABILITY_ANALYSIS.md`) already cover -- only the eight
 /// values in each table are taken from mbelib; this function's own logic is freshly written.
+// [@ANCHOR: ham_digital_modes:decode_decode_tone]
 pub fn decode_tone(d: u64) -> TonePayload {
     let bit = |msb_index: usize| -> u32 { ((d >> (48 - msb_index)) & 1) as u32 };
     // Verified/guessed status per mbelib's own inline comments; kept in code since it's load-bearing,
@@ -229,6 +231,7 @@ pub fn decode_tone(d: u64) -> TonePayload {
 /// dual-tone signaling space the chip supports beyond the 16-digit DTMF keypad, most plausibly, but
 /// unconfirmed), so `classify_tone_index` still calls them `Dual`, only this function's own
 /// DTMF-specific mapping returns `None` for them.
+// [@ANCHOR: ham_digital_modes:decode_dtmf_digit_from_tone_index]
 pub fn dtmf_digit_from_tone_index(index: u32) -> Option<(u8, u8)> {
     if !(128..=163).contains(&index) {
         return None;
@@ -496,6 +499,7 @@ mod tests {
     /// `ambe::general::fec`'s own tests use for its Golay/Hamming implementations, applied here
     /// to this module's own frame assembly and whitening order.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:decode_parse_frame]
     fn parse_frame_recovers_a_cleanly_encoded_frame_with_zero_errors() {
         let c0_data: u16 = 0b1010_1100_1101; // arbitrary 12-bit value
         let c1_data: u16 = 0b0110_0111_0010;
@@ -699,6 +703,8 @@ mod tests {
     /// exact row/column pair for every one of the 16 digits (and correctly returns `None` for the
     /// plain tone), straight from the chip's own live response, not a synthetic round trip.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:decode_dtmf_digit_from_tone_index]
+    // Tests [@ANCHOR: ham_digital_modes:decode_decode_tone]
     fn real_chip_capture_dtmf_digits_and_tone_decode_correctly() {
         type Case = (&'static str, &'static str, Option<(u8, u8)>);
         let cases: [Case; 17] = [

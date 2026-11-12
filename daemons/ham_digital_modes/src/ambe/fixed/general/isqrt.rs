@@ -12,6 +12,7 @@
 /// root for this function (a well-known property of integer Newton square root, not assumed without
 /// the tests below), so a fixed iteration cap is safe -- `u64`'s own root fits in 32 bits, and each
 /// iteration at least halves the distance to the fixed point once the estimate is in range.
+// [@ANCHOR: ham_digital_modes:isqrt_isqrt_u64]
 pub fn isqrt_u64(n: u64) -> u64 {
     if n == 0 {
         return 0;
@@ -45,6 +46,7 @@ pub fn isqrt_u32(n: u32) -> u32 {
 /// `floor(sqrt(n))` for a `u128`, by the classic bit-pair digit recurrence (exact, 64 iterations).
 /// Needed where a wide energy ratio (`i128` sums of squared spectrum bins) must be rooted with no
 /// precision lost to narrowing to `u64` first.
+// [@ANCHOR: ham_digital_modes:isqrt_isqrt_u128]
 pub fn isqrt_u128(n: u128) -> u128 {
     let mut remainder = n;
     let mut result = 0u128;
@@ -69,6 +71,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:isqrt_isqrt_u64]
     fn isqrt_u64_matches_exact_perfect_squares() {
         for k in 0u64..2000 {
             assert_eq!(isqrt_u64(k * k), k, "k={k}");
@@ -95,6 +98,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:isqrt_isqrt_u128]
     fn isqrt_u128_matches_the_defining_inequality_and_isqrt_u64() {
         for n in [
             0u128,

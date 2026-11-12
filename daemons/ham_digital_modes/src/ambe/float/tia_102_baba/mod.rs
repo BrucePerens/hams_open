@@ -284,6 +284,7 @@ pub fn encode_code_vectors_chip(u: [u32; 8]) -> [u32; 8] {
 
 /// The inverse of [`encode_code_vectors_chip`] (no demodulation, chip Hamming labelling); see
 /// [`decode_code_vectors`] for the return convention.
+// [@ANCHOR: ham_digital_modes:mod_decode_code_vectors_chip]
 pub fn decode_code_vectors_chip(c: [u32; 8]) -> ([u32; 8], [u32; 7]) {
     use crate::ambe::dvsi_p25fec::fec::hamming_decode_chip;
     let (u0, e0) = fec::golay_decode(c[0]);
@@ -425,6 +426,7 @@ pub struct QuantizedAmplitudes {
 /// Annex J, per-block DCT (Eq. 58-60), gain-vector DCT (Eq. 61) and quantization (Eq. 62-64). Split out of
 /// [`encode_prioritized_bits`] so the quantization can be driven with given amplitudes (the encoder cross-validation
 /// feeds the same amplitudes to this and to an external encoder's quantizer). `None` if `l_hat` is outside `9..=56`.
+// [@ANCHOR: ham_digital_modes:mod_quantize_spectral_amplitudes]
 pub fn quantize_spectral_amplitudes(
     amplitudes: &[f64],
     l_hat: u32,
@@ -696,6 +698,7 @@ mod tests {
 
     /// The chip framing stays available, and is genuinely different from the standard's.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:mod_decode_code_vectors_chip]
     fn chip_wire_layer_round_trips_and_differs_from_the_standards() {
         let u = [
             0xABCu32, 0x123, 0x456, 0x789, 0x2AB, 0x155, 0x7FF, 0b1011010,

@@ -41,6 +41,7 @@ pub fn mode_tables() -> ModeTables<'static> {
 
 /// The 12-bit tone level field for a per-tone amplitude (Q16.16 PCM units); integer port of the float
 /// `amplitude_field` (same seven chip points, same clamping quirks below 250 and above 16000).
+// [@ANCHOR: ham_digital_modes:encode_amplitude_field_q16]
 pub fn amplitude_field_q16(amplitude_q16: i64) -> u16 {
     const POINTS: [(i64, i32); 7] = [
         (250, 0x715),

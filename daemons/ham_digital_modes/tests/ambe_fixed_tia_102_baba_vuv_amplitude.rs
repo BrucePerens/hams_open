@@ -189,6 +189,7 @@ fn fixed_voicing_and_amplitudes_match_float_on_real_speech_q16_omega0() {
 
 /// Eq. 41 and 42 at hand-computed values (the same cases as the float sibling's own unit tests).
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:vuv_energy_dependent_function_q30]
 fn xi_max_update_and_energy_dependent_function_match_the_equations() {
     use ham_digital_modes::ambe::fixed::tia_102_baba::vuv::{
         energy_dependent_function_q30, update_xi_max, XI_MAX_FLOOR_Q16,

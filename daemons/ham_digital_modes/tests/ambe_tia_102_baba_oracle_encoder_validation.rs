@@ -428,6 +428,7 @@ const AMPLITUDE_QUANTIZATION: &[(&[u32], &[u32], &[u32])] = &[
 ];
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:mod_quantize_spectral_amplitudes]
 fn amplitude_quantization_equals_the_oracles_except_that_it_floors_where_the_oracle_rounds() {
     let mut above = 0;
     let mut total = 0;
