@@ -9,6 +9,7 @@ from odoo.addons.zero_sudo import public_rpc
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: backup_management_backup_job_backup_job]
 class BackupJob(models.Model):
     _name = "backup.job"
     _description = "Asynchronous Backup Job"

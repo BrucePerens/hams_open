@@ -5,6 +5,7 @@ from odoo import http
 from odoo.http import request
 
 
+# [@ANCHOR: backup_management_board_backup_board]
 class BackupBoard(http.Controller):
     @http.route("/backup/board", type="http", auth="user", website=True)
     def backup_board(self):

@@ -8,6 +8,7 @@ from .utils import validate_backup_path, publish_to_rabbitmq
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: backup_management_restore_wizard_backup_restore_wizard]
 class BackupRestoreWizard(models.TransientModel):
     _name = "backup.restore.wizard"
     _description = "Backup Restore Wizard"

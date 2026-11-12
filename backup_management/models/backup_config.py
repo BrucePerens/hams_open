@@ -15,6 +15,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: backup_management_backup_config_backup_config]
 class BackupConfig(models.Model):
     _name = "backup.config"
     _description = "Backup Configuration"
