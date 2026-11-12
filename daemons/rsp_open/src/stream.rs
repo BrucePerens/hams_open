@@ -12,6 +12,7 @@ pub const HEADER_LEN: usize = 16;
 pub const PAYLOAD_LEN: usize = BLOCK_LEN - HEADER_LEN;
 
 /// One complex sample, I and Q left-aligned to 16 bits whatever the wire coding.
+// [@ANCHOR: stream_iq_i16_struct]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct IqI16 {
     pub i: i16,
@@ -19,6 +20,7 @@ pub struct IqI16 {
 }
 
 /// One complex sample as floats in -1.0..1.0.
+// [@ANCHOR: stream_iq_f32_struct]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct IqF32 {
     pub i: f32,
@@ -40,6 +42,7 @@ pub fn to_f32(src: &[IqI16]) -> Vec<IqF32> {
 }
 
 /// Running statistics of a stream.
+// [@ANCHOR: stream_stream_stats_struct]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct StreamStats {
     /// Blocks accepted.
@@ -55,6 +58,7 @@ pub struct StreamStats {
 }
 
 /// Splits packets into blocks, checks the counter and decodes samples.
+// [@ANCHOR: stream_block_parser_struct]
 #[derive(Clone, Debug)]
 pub struct BlockParser {
     format: SampleFormat,
@@ -181,6 +185,10 @@ pub fn decode_payload(format: SampleFormat, p: &[u8], out: &mut Vec<IqI16>) {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    // Tests [@ANCHOR: stream_iq_i16_struct]
+    // Tests [@ANCHOR: stream_iq_f32_struct]
+    // Tests [@ANCHOR: stream_stream_stats_struct]
+    // Tests [@ANCHOR: stream_block_parser_struct]
     use super::*;
     use crate::encode::{stream_config, IfMode};
 
