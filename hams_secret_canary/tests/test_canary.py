@@ -5,7 +5,9 @@ import logging
 import os
 import stat
 import tempfile
+import sys
 import time
+import xmlrpc.client
 from unittest.mock import patch
 
 from odoo.tests import tagged
@@ -250,6 +252,10 @@ class TestWsgiHook(CanaryCase, HamsHttpCase):
     def test_a_fault_naming_a_registered_secret_raises_the_alarm_once_without_the_value(self):
         self.assertTrue(secret_canary._tables)  # loaded by setUp, as the process has it after start-up
         request_xml = "<?xml version='1.0'?><methodCall><methodName>%s</methodName><params></params></methodCall>" % SECRET
+        # hams_base, when installed with this module (the gate does), scrubs XML-RPC faults so they no longer echo the
+        # method name; this test needs the stock fault that does, so put a verbatim one in for the request.
+        rpc = sys.modules["odoo.addons.rpc.controllers.xmlrpc"]
+        self.safe_patch_object(rpc, "xmlrpc_handle_exception_int", lambda error: rpc.dumps(xmlrpc.client.Fault(1, str(error))))
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
             response = self.url_open("/xmlrpc/2/common", data=request_xml, headers={"Content-Type": "text/xml"})
             # The scan runs on the server thread once the last chunk is out and opens its own cursor, which in test
