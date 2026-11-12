@@ -87,6 +87,7 @@ export class FormShieldForm extends Interaction {
             });
     }
 
+    // [@ANCHOR: form_shield:js_form_unavailable]
     async unavailable() {
         const link = this.el.querySelector("[data-form-shield-fallback]");
         if (link) {
