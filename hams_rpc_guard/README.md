@@ -474,8 +474,9 @@ before the first request; swaps module-level names, not Odoo source files. **Tes
 
 `load_exposure(cr, registry)` returns the merged declarations of the installed addons, read once per registry.
 `exposure_scan.py` is the generator and checker of the transitional lists (command line above); `scan_source`,
-`scan_addon`, `scan_model_of_class`, `scan_render`, `scan_managed_addons`, `scan_orm_names` and `scan_daemon_pairs` are
-its steps. All are pure functions of source text. Tests: `test_exposure.TestScanner`, `test_repository`.
+`scan_addon`, `scan_model_of_class`, `scan_render`, `scan_managed_addons`, `scan_orm_names`, `scan_caller_reference` and `scan_daemon_pairs` are
+its steps. `scan_daemon_pairs` finds the literal pairs of `execute`/`call`/`_json2_call` calls, of a batch helper
+(`push_batches_to_odoo(client, logger, rows, "model", "method")`) and of a caller passed along (`asyncio.to_thread(client.execute, "model", "method")`). All are pure functions of source text. Tests: `test_exposure.TestScanner`, `test_repository`.
 
 ### `hams_rpc_guard:certificate_identity`
 

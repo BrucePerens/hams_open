@@ -153,6 +153,7 @@ class TestScanner(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:scan_daemon_pairs]
     # Tests [@ANCHOR: hams_rpc_guard:scan_main]
     # Tests [@ANCHOR: hams_rpc_guard:scan_decorator_names]
+    # Tests [@ANCHOR: hams_rpc_guard:scan_caller_reference]
     # Tests [@ANCHOR: hams_rpc_guard:scan_string_values]
 
     def test_public_methods_only(self):
@@ -199,3 +200,15 @@ class TestScanner(HamsTransactionCase):
         self.assertEqual(exposure_scan.daemon_pairs(source), {
             ("pager.incident", "report_incident"), ("backup.job", "write"),
             ("hams_helpdesk.exception.fingerprint", "report_daemon_failure")})
+
+    def test_daemon_pairs_through_a_batch_helper_and_a_passed_along_caller(self):
+        """Found 2026-11-12: the batch pushes (`ham.callbook.sync_fcc_batch`, `ham.dx.spot.push_spot_batch`, ...) are the daemons'
+        main calls and were invisible to the scan, so they were missing from the allowlists."""
+        source = (
+            'push_batches_to_odoo(client, logger, iter(rows), "ham.au.register", "sync_au_register_batch")\n'
+            'await asyncio.to_thread(client.execute, "ham.dx.spot", "push_spot_batch", batch_data=1)\n'
+            'run(client.call, "ham.a.b", "from_call")\n'
+            'plain("ham.not.a", "caller", 1)\n'
+            'run(logger.info, "ham.not.either", "caller")\n')
+        self.assertEqual(exposure_scan.daemon_pairs(source), {
+            ("ham.au.register", "sync_au_register_batch"), ("ham.dx.spot", "push_spot_batch"), ("ham.a.b", "from_call")})

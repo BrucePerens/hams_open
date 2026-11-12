@@ -70,8 +70,10 @@ header can only narrow a daemon, never widen it. `[@ANCHOR: hams_rpc_guard:certi
   `[@ANCHOR: hams_rpc_guard:scan_managed_addons]` `[@ANCHOR: hams_rpc_guard:scan_decorator_names]` (the names of a
   method's decorators) `[@ANCHOR: hams_rpc_guard:scan_string_values]` (the string or list of strings a class attribute holds)
 * A daemon's entry names its source files; a test reads them and requires every model and method the daemon calls to
-  be in the entry, so a daemon keeps working when its code changes only together with its allowlist.
-  `[@ANCHOR: hams_rpc_guard:scan_daemon_pairs]`
+  be in the entry, so a daemon keeps working when its code changes only together with its allowlist. The scan also reads
+  the batch helper (`push_batches_to_odoo(client, logger, rows, "model", "method")`) and a caller passed along
+  (`asyncio.to_thread(client.execute, "model", "method")`): those are the daemons' main calls.
+  `[@ANCHOR: hams_rpc_guard:scan_daemon_pairs]` `[@ANCHOR: hams_rpc_guard:scan_caller_reference]` (a bare reference to a calling method)
 
 ## Verification
 
