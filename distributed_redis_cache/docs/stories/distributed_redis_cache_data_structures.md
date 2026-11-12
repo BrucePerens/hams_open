@@ -62,3 +62,17 @@
 **Methods.** `get_values`, `set_values`.
 
 **See also:** test `test_redis_pools_authenticate_with_the_redis_env_credentials (tests/test_fixes.py)`.
+
+### `UpgradeError` (scripts/odoo_upgrade.py)
+
+**Purpose and location.** The code anchor is `distributed_redis_cache_scripts_odoo_upgrade_upgrade_error` (the anchor scan skips the `scripts/` directory, so this entry carries no anchor tag of its own). The exception `odoo_upgrade.py` (the supervised module upgrade tool in `distributed_redis_cache/scripts/`) raises when a precondition of the upgrade fails: an invalid `--db`, `--modules` or `--install` value (including one with a trailing newline), `--shell` combined with `--modules` or `--install`, the Odoo service still running, a service with no `EnvironmentFile=` or whose files do not define the Redis secret, an unreadable environment file, or an unknown service `User=`. Defined in the same file as a plain `Exception` subclass with no body.
+
+**Definition.** `class UpgradeError(Exception)`; the argument is a message.
+
+**Message contents.** The message is safe to print: it never contains a value read from an environment file (only the names of keys, paths and the service name). `main()` catches it, prints `refusing: <message>` to standard error and returns exit status 2; every other exception is a bug and propagates. Nothing is changed on the system before the error is raised: the checks run before the upgrade command is built.
+
+**Concurrency.** Single-threaded command-line tool; the exception is raised and caught in one process and is never stored or sent.
+
+**Functions that touch it.** `require_redis_credentials`, `parse_args` and the argument checks in `run`, which raise it, and `main`, which reports it.
+
+**See also:** the tests in `distributed_redis_cache/scripts/test_odoo_upgrade.py` that call `run` with bad arguments and a fake service description and expect `UpgradeError` with the matching message.
