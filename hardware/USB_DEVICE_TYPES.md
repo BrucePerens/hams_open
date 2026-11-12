@@ -1,11 +1,11 @@
 # Hams USB device types (the sub-ID registry)
 
-Every device in the hams family answers the vendor request `GET_INFO` (0x01) on endpoint zero with a record whose bytes 3 and 4 (little endian) are the **device type**, the sub-ID. This file maps each number to its driver, protocol, firmware source and licence statement, as `docs/proposals/HAMS_USB_DEVICE_PROTOCOL.md` section 3 requires. A type is added here only together with the open source (and open hardware) files for it. The USB identifier is not yet registered with pid.codes: until it is, development uses the test PID 1209:0001, and 0x7373 is not used (Bruce's decision; registering is a public pull request that needs his go-ahead).
+Every device in the hams family answers the vendor request `GET_INFO` (0x01) on endpoint zero (the default USB control channel) with a record whose bytes 3 and 4 (little endian) are the **device type**, the sub-ID. This file maps each number to its driver, protocol, firmware source and licence statement, as `docs/proposals/HAMS_USB_DEVICE_PROTOCOL.md` section 3 requires. A type is added here only together with the open source (and open hardware) files for it. The USB identifier is not yet registered with pid.codes (a free registry of USB product identifiers): until it is, development uses the test PID (product identifier) 1209:0001, and 0x7373 is not used (Bruce's decision; registering is a public pull request that needs his go-ahead).
 
 | Type | Name | Firmware source | Host driver | Protocol | Licence |
 |---|---|---|---|---|---|
-| 0x0001 | Station I/O (relay: PTT, keyline, power switching) | `hardware/fx2_station_io/` | `daemons/radioctl/crates/radioctl-station/src/fx2.rs` | 0.2, `fx2_station_io/README.md` | AGPL-3.0-or-later (software); hardware licence not decided |
-| 0x0002 | Bench instrument (GPIO, logic capture, I2C, SPI, UARTs, pulses) | planned, `hardware/fx2_bench/` (not written) | planned, `bench_mcp` `bench_fx2_*` tools (not written) | not defined yet | AGPL-3.0-or-later (software) |
+| 0x0001 | Station I/O (relay: PTT, push-to-talk, keyline, power switching) | `hardware/fx2_station_io/` | `daemons/radioctl/crates/radioctl-station/src/fx2.rs` | 0.2, `fx2_station_io/README.md` | AGPL-3.0-or-later (software); hardware licence not decided |
+| 0x0002 | Bench instrument (GPIO, general-purpose input/output pins; logic capture; I2C, SPI and UARTs, three common serial chip-to-chip buses; pulses) | planned, `hardware/fx2_bench/` (not written) | planned, `bench_mcp` `bench_fx2_*` tools (not written) | not defined yet | AGPL-3.0-or-later (software) |
 
 Numbers are provisional placeholders until the pid.codes entry exists. 0x0000 is never a device. A new type takes the next free number.
 

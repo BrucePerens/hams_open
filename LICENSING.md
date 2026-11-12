@@ -20,7 +20,7 @@ independent of this repository's.
 
 ## Survey (as of 2026-08-25)
 
-File counts (not header occurrences -- one file, one header) from `SPDX-License-Identifier`
+File counts (not header occurrences -- one file, one header) from `SPDX-License-Identifier` (the standard machine-readable license tag, from the Software Package Data Exchange)
 across the tracked source tree (`*.py`, `*.pyi`, `*.rs`, `*.xml`, `*.js`, `*.ts`):
 
 | License | File count | Where |
@@ -43,7 +43,7 @@ since it handles legal/compliance pages and data. That carve-out was deliberatel
 it caused (headers within the same file sometimes disagreeing with each other on which variant
 applied). `compliance/` is AGPL-3.0-or-later now, same as everything else.
 
-**`daemons/rsp_open/` (the open SDRplay RSP2pro driver, added 2026-10-25) is AGPL-3.0-or-later**,
+**`daemons/rsp_open/` (the open driver for the SDRplay RSP2pro software-defined radio receiver, added 2026-10-25) is AGPL-3.0-or-later**,
 the repository default, in every file's SPDX header and in its `Cargo.toml` `license` field. Not
 counted in the 2026-08-25 survey table above.
 
