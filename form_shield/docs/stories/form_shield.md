@@ -71,3 +71,7 @@ challenge may be used once [@ANCHOR: form_shield:claim_nonce]; the limits count 
 [@ANCHOR: form_shield:redis_key] on the shared connection [@ANCHOR: form_shield:redis_connection]; every refusal is counted by reason [@ANCHOR: form_shield:reject]
 [@ANCHOR: form_shield:count_upsert] and the counters show a readable name [@ANCHOR: form_shield:rejection_name]. Redirecting forms build their paths with
 [@ANCHOR: form_shield:with_query].
+
+## Page script: the refusal notice
+
+- `FormShieldErrorNotice.start()` runs on each page; when the address carries `form_shield_error=<reason>` it shows the reason's words in a danger notification and removes the parameter from the address, keeping the others, so a reload does not repeat it; without the parameter it does nothing. Tests: `static/tests/error_notice_start.test.js`. [@ANCHOR: form_shield:js_error_notice_start]

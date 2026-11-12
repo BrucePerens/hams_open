@@ -35,6 +35,7 @@ export function noticeText(reason) {
 export class FormShieldErrorNotice extends Interaction {
     static selector = "#wrapwrap";
 
+    // [@ANCHOR: form_shield:js_error_notice_start]
     start() {
         const params = new URLSearchParams(document.location.search);
         if (!params.has("form_shield_error")) {
