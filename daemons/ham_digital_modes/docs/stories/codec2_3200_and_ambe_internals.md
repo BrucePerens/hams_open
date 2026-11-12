@@ -2763,18 +2763,299 @@ total corrected-error count. It estimates the bit error rate from the 47 protect
 **Signature:** `pub fn decide(&mut self, candidates: &[(u32, Option<Descriptor>)], epsilon: u32) -> Decision`
 **See also:** test in `tests/ambe_error_policy.rs`; `fixed_general_concealment_Concealer_decide`.
 
-### Entries of this section not yet expanded
+### `DecoderState::decode_parameters` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_parameters]
 
-The encoders (`Encoder::new`, `next_frame`, `finish` for D-STAR, AMBE+2 and TIA-102, fixed and float, and the TIA analyzer's `finish_input`, `next_analysis`,
-`table` and `HighPassFilter::step`) are cited by the real-speech parity tests that run the fixed and float encoders side by side and require identical frame
-counts, near-identical parameters and a decoded SNR floor. The synthesis decoders' `decode_frame` and `decode_concealing` (all four) and the concealers'
-`decide` (and the fixed `Descriptor::new`) are cited by the policy test that the default decoder fades instead of muting after repeated damaged frames; the TIA
-`DecoderState::decode_parameters` and `decode_frame` by the decode tests that match float exactly; `MbeSynthesizer` (`new`, `lift`, `errors_for`,
-`synthesize_speech`) by the speech-SNR decline test; the unvoiced and voiced synthesizers (`UnvoicedState::synthesize`, its spectrum, DFT and time-domain
-helpers, `unvoiced_dft`, `unvoiced_scaling_coefficient_uncached`, `VoicedState::synthesize`) by the float-parity synthesis tests; and the fixed TIA
-`SynthesisState::finalize_parameters` and `synthesize_core` by the float-parity synthesis tests, including the case where the gamma_m gain engages.
+Turns eight received TIA-102 code vectors into the frame's decoded parameters. It FEC-decodes the vectors (the standard's demodulate-then-decode, or the DVSI chip framing when the state was built for chip comparison),
+estimates the error rate (`estimate_errors_q16`, carrying the previous rate), reads `b0`, and returns `Mute` or `Repeat` when the error statistics or an invalid `b0` call for it. Otherwise it dequantizes the fundamental,
+derives `L_hat` and `K_hat`, de-prioritizes the bits, decodes the per-harmonic voicing and reconstructs the spectral amplitudes against the previous frame.
 
-  *(Reference: `src/ambe/fixed/tia_102_baba/decode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_parameters]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_frame]`; `src/ambe/fixed/general/mbe_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_synthesize_speech]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_lift]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_new]`; `src/ambe/float/mbe_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_synthesize_speech]`, `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_lift]`, `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_errors_for]`; `src/ambe/fixed/general/unvoiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_UnvoicedState_synthesize]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_spectrum_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_dft_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_time_domain_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_time_domain_at_q16]`; `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_dft]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_scaling_coefficient_uncached]`; `src/ambe/fixed/general/voiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_voiced_synthesis_VoicedState_synthesize]`; `src/ambe/fixed/tia_102_baba/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_finalize_parameters]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_core]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut DecoderState` | Holds the previous `L_hat`, amplitudes and error rate |
+| `c` | `[u32; 8]` | The eight received code vectors |
+
+**Returns:** `Option<FrameOutcome>`: `Mute`, `Repeat`, or `Decoded(DecodedParameters)`; `None` when a bit-allocation or reconstruction step fails.
+**Errors:** none raised; `None` is the failure signal.
+**Special concerns:** it updates the error-rate state but not the amplitude history, which `decode_frame` or `advance_history` commits; pure integer.
+**Signature:** `pub fn decode_parameters(&mut self, c: [u32; 8]) -> Option<FrameOutcome>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_decode.rs` (matches float exactly); `fixed_tia_102_baba_decode_DecoderState_decode_frame`.
+
+### `DecoderState::decode_frame` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_frame]
+
+Decodes eight code vectors to 20 ms of Q16.16 PCM. It calls `decode_parameters`; a `Repeat` outcome synthesizes the previous frame again, `Mute` produces the comfort-noise frame (random values in -5 to 5), and a
+decoded frame is synthesized with `synthesize_frame`, after which `l_hat_prev` and the previous amplitudes are committed for the next frame.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `[u32; 8]` | Received code vectors |
+
+**Returns:** `Option<[i64; N]>`, 160 samples of Q16.16 PCM; `None` if the parameters cannot be decoded or a repeat is asked for before any frame has run.
+**Errors:** none raised.
+**Special concerns:** stateful; one decoder per stream.
+**Signature:** `pub fn decode_frame(&mut self, c: [u32; 8]) -> Option<[i64; N]>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_decode.rs`; `fixed_tia_102_baba_decode_DecoderState_decode_parameters`.
+
+### `MbeSynthesizer::new` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_new]
+
+Creates the mode-independent fixed MBE synthesizer that D-STAR and AMBE+2 share. It builds a TIA-102 `SynthesisState` and sets its unvoiced gain to `UNVOICED_GAIN_Q16_16` (0.87, tuned against the chip's long-term band levels), with the
+previous error rate and the two-sample lift history at zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| none | | |
+
+**Returns:** `MbeSynthesizer`.
+**Errors:** none.
+**Special concerns:** one synthesizer per stream; a decoder mute re-creates it.
+**Signature:** `pub fn new() -> Self`
+**See also:** test in `tests/ambe_fixed_dstar_synthesis.rs`; `float_mbe_synthesis_MbeSynthesizer_synthesize_speech`.
+
+### `MbeSynthesizer::lift` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_lift]
+
+The high-frequency lift applied to every output frame: each output sample is `x + 0.10 * (x - 2 x[-1] + x[-2])` (the second difference weighted by `HIGH_LIFT_WEIGHT_Q16_16`, 6554), with saturating arithmetic. With the unvoiced gain it brings the
+decoder's long-term band levels closer to the chip's. The two-sample history carries across frames.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `[i64; N]` | One synthesized frame, Q16.16 |
+
+**Returns:** `[i64; N]`, the lifted frame.
+**Errors:** none.
+**Special concerns:** private; stateful (`lift_history`), so frames must be lifted in order and exactly once; repeats are lifted too.
+**Signature:** `fn lift(&mut self, frame: [i64; N]) -> [i64; N]`
+**See also:** test in `tests/ambe_fixed_dstar_synthesis.rs`; `float_mbe_synthesis_MbeSynthesizer_lift`.
+
+### `MbeSynthesizer::synthesize_speech` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_synthesize_speech]
+
+Synthesizes one speech frame from dequantized parameters. `voiced` and `ml_q16` are indexed by harmonic starting at 1 (index 0 is padding). It estimates the error state from the two Golay blocks' corrected-error counts (the other vectors count as zero),
+runs `SynthesisState::synthesize_frame` (enhancement, smoothing, voiced and unvoiced synthesis) on harmonics 1 and up, and applies `lift`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `w0_q32` | `i64` | Fundamental, radians per sample, Q32 |
+| `voiced` | `&[bool]` | Voicing per harmonic (index 0 unused) |
+| `ml_q16` | `&[i32]` | Amplitudes per harmonic, Q16.16 (index 0 unused) |
+| `epsilon_c0`, `epsilon_c1` | `u32` | Errors corrected in the two Golay blocks |
+
+**Returns:** `Option<[i64; N]>`; `None` when the two slices differ in length or have fewer than two entries.
+**Errors:** none raised.
+**Special concerns:** stateful (error rate, synthesis history, lift history).
+**Signature:** `pub fn synthesize_speech(&mut self, w0_q32, voiced, ml_q16, epsilon_c0, epsilon_c1) -> Option<[i64; N]>`
+**See also:** test in `tests/ambe_fixed_dstar_synthesis.rs` (speech-SNR decline test); `float_mbe_synthesis_MbeSynthesizer_synthesize_speech`.
+
+### `MbeSynthesizer::lift` (float) [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_lift]
+
+The float form of the output high-frequency lift: `x + HIGH_LIFT_WEIGHT * (x - 2 x[-1] + x[-2])` per sample, with a two-sample history kept between frames. It is the reference the fixed `lift` follows.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `[f64; N]` | One synthesized frame |
+
+**Returns:** `[f64; N]`.
+**Errors:** none.
+**Special concerns:** private; stateful, in-order.
+**Signature:** `fn lift(&mut self, frame: [f64; N]) -> [f64; N]`
+**See also:** test in `tests/ambe_fixed_dstar_synthesis.rs`; `fixed_general_mbe_synthesis_MbeSynthesizer_lift`.
+
+### `MbeSynthesizer::errors_for` (float) [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_errors_for]
+
+Builds the frame error statistics for the smoothing stages from the two Golay corrected-error counts: it calls `estimate_errors` with `[epsilon_c0, epsilon_c1, 0, 0, 0, 0, 0]` and the previous running rate, stores the new
+rate for the next frame and returns the `FrameErrors`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `epsilon_c0`, `epsilon_c1` | `u32` | Errors corrected in the two code words |
+
+**Returns:** `FrameErrors` (including the smoothed `rate`).
+**Errors:** none.
+**Special concerns:** private; mutates `error_rate_prev`.
+**Signature:** `fn errors_for(&mut self, epsilon_c0: u32, epsilon_c1: u32) -> FrameErrors`
+**See also:** test in `tests/ambe_fixed_dstar_synthesis.rs`; `float_mbe_synthesis_MbeSynthesizer_synthesize_speech`.
+
+### `MbeSynthesizer::synthesize_speech` (float) [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_synthesize_speech]
+
+Synthesizes one speech frame in floating point: `voiced` and `ml` are indexed by harmonic from 1 (index 0 unused), as D-STAR and AMBE+2 parameter structures carry them. It computes the error statistics with `errors_for`,
+runs the shared `SynthesisState::synthesize_frame` on harmonics 1 and up, and applies `lift`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `w0` | `f64` | Fundamental, radians per sample |
+| `voiced` | `&[bool]` | Voicing per harmonic |
+| `ml` | `&[f64]` | Amplitudes per harmonic |
+| `epsilon_c0`, `epsilon_c1` | `u32` | Corrected errors in the two Golay blocks |
+
+**Returns:** `Option<[f64; N]>`; `None` on a length mismatch or fewer than two entries.
+**Errors:** none raised.
+**Special concerns:** stateful.
+**Signature:** `pub fn synthesize_speech(&mut self, w0, voiced, ml, epsilon_c0, epsilon_c1) -> Option<[f64; N]>`
+**See also:** test in `tests/ambe_fixed_dstar_synthesis.rs`; `fixed_general_mbe_synthesis_MbeSynthesizer_synthesize_speech`.
+
+### `UnvoicedState::synthesize` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_UnvoicedState_synthesize]
+
+Synthesizes the frame's own unvoiced speech component `s_uv(n)` (Eq. 117 to 126) as Q16.16 samples and advances the overlap-add history. It builds the rescaled noise spectrum (`unvoiced_spectrum_q16`),
+inverse-transforms it (`unvoiced_time_domain_q16`), and blends the previous and current time-domain signals with the synthesis window, dividing by the sum of squared windows.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `noise` | `&NoiseState` | Shared noise window for the current frame |
+| `omega0_tilde_q32` | `i64` | Fundamental, Q32 |
+| `voiced` | `&[bool]` | Voicing per harmonic from 1 |
+| `spectral_amplitudes_q16` | `&[i32]` | Amplitudes per harmonic, Q16.16 |
+
+**Returns:** `Option<[i32; N]>`, 160 samples; `None` if `voiced` and amplitudes differ in length.
+**Errors:** none raised.
+**Special concerns:** stateful (previous time-domain signal, 256 values); the noise state is owned by the caller and shared with voiced synthesis.
+**Signature:** `pub fn synthesize(&mut self, noise, omega0_tilde_q32, voiced, spectral_amplitudes_q16) -> Option<[i32; N]>`
+**See also:** test in `tests/ambe_fixed_unvoiced_synthesis.rs`; `fixed_general_unvoiced_synthesis_unvoiced_spectrum_q16`.
+
+### `unvoiced_spectrum_q16` [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_spectrum_q16]
+
+Builds `U~_w(m)` (Eq. 119, 120 and 124): zero for voiced harmonics and outside every band, and for each unvoiced harmonic the noise DFT `U_w(m)` rescaled over the harmonic's bins to the enhanced amplitude. The rescale is
+`bin * gamma_w * M_l / sqrt(power)` done as one wide division per component (`mul_div_wide`), never materialising the small scale factor, because that loses precision for quiet harmonics.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `noise` | `&NoiseState` | Noise window |
+| `omega0_tilde_q32` | `i64` | Fundamental, Q32 (sets band edges) |
+| `voiced` | `&[bool]` | Voicing per harmonic |
+| `spectral_amplitudes_q16` | `&[i32]` | Amplitudes per harmonic |
+| `gamma_w_q16` | `i32` | Scaling coefficient, `UNVOICED_SCALING_COEFFICIENT_Q16` |
+
+**Returns:** `Option<[ComplexQ16; 256]>`; `None` on a length mismatch.
+**Errors:** none raised; bands of zero width or zero noise power stay zero.
+**Special concerns:** private; `i64` Q16.16 throughout (a loud harmonic exceeds `i32` Q16.16 range).
+**Signature:** `fn unvoiced_spectrum_q16(noise, omega0_tilde_q32, voiced, spectral_amplitudes_q16, gamma_w_q16) -> Option<[ComplexQ16; 256]>`
+**See also:** test in `tests/ambe_fixed_unvoiced_synthesis.rs`; `unvoiced_dft_q16`.
+
+### `unvoiced_dft_q16` [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_dft_q16]
+
+Computes `U_w(m)` (Eq. 118): the 256-point DFT of the current frame's windowed noise sequence `u(n) * w_S(n)` for `m` in -128 to 127, summing over the 209 noise samples `n = -104..=104` with a Q16.16 twiddle table and
+`i64` accumulators.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `noise` | `&NoiseState` | Noise window; must cover `-104..=104` (panics otherwise) |
+
+**Returns:** `[ComplexQ16; 256]`, bins in order `m = -128..=127`.
+**Errors:** panics via `expect` if the noise window does not cover the range (cannot happen with a `NoiseState` built by `new`).
+**Special concerns:** private; a direct O(256 x 209) transform, run once per frame.
+**Signature:** `fn unvoiced_dft_q16(noise: &NoiseState) -> [ComplexQ16; 256]`
+**See also:** test in `tests/ambe_fixed_unvoiced_synthesis.rs`; `float_tia_102_baba_unvoiced_synthesis_unvoiced_dft`.
+
+### `unvoiced_time_domain_q16` [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_time_domain_q16]
+
+Computes `u~_w(n)` (Eq. 125): the 256-point inverse DFT of `U~_w(m)` for `n` in -128 to 127, dividing by 256. Only the real part is kept, as in the float sibling; the imaginary part is zero mathematically because
+the spectrum is conjugate-symmetric.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `spectrum` | `&[ComplexQ16; 256]` | The rescaled spectrum from `unvoiced_spectrum_q16` |
+
+**Returns:** `[i64; 256]`, Q16.16 samples for `n = -128..=127`.
+**Errors:** none.
+**Special concerns:** private; direct O(256 x 256) transform per frame.
+**Signature:** `fn unvoiced_time_domain_q16(spectrum: &[ComplexQ16; 256]) -> [i64; 256]`
+**See also:** test in `tests/ambe_fixed_unvoiced_synthesis.rs`; `time_domain_at_q16`.
+
+### `time_domain_at_q16` [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_time_domain_at_q16]
+
+Reads sample `n` (-128 to 127) from a stored 256-sample time-domain signal, returning zero outside that range. The overlap-add in `UnvoicedState::synthesize` uses it so the previous and current signals can be indexed
+across the frame boundary without bounds checks.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i64; 256]` | Time-domain signal |
+| `n` | `i32` | Sample index, -128 to 127 |
+
+**Returns:** `i64`, the sample, or 0 outside the range.
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn time_domain_at_q16(samples: &[i64; 256], n: i32) -> i64`
+**See also:** test in `tests/ambe_fixed_unvoiced_synthesis.rs`; `unvoiced_time_domain_q16`.
+
+### `unvoiced_dft` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_dft]
+
+The float `U_w(m)` (Eq. 118): the 256-point DFT of the windowed noise sequence `u(n) w_S(n)` for `m` in -128 to 127. That range is offset by one bin from the pitch refinement's `S_w(m)` (-127 to 128); the source notes this is a real difference between the
+standard's Eq. 29 and Eq. 118, not a slip.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `noise` | `&NoiseState` | Noise window for this frame |
+
+**Returns:** `[Complex; 256]`.
+**Errors:** none.
+**Special concerns:** private; the reference for `unvoiced_dft_q16`.
+**Signature:** `fn unvoiced_dft(noise: &NoiseState) -> [Complex; 256]`
+**See also:** test in `tests/ambe_fixed_unvoiced_synthesis.rs`; `fixed_general_unvoiced_synthesis_unvoiced_dft_q16`.
+
+### `unvoiced_scaling_coefficient_uncached` [@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_scaling_coefficient_uncached]
+
+Computes the constant scaling coefficient of Eq. 120 from the two windows: `sum(w_R) * sqrt(sum(w_S^2) / sum(w_R^2))`, summing the refinement window over -110 to 110 and the synthesis window over -104 to 104. The public
+`unvoiced_scaling_coefficient` caches it in a `OnceLock`. The fixed port uses the precomputed constant `UNVOICED_SCALING_COEFFICIENT_Q16` (9610413, about 146.6433, agreeing to 1 part in 170,000).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| none | | |
+
+**Returns:** `f64`, about 146.64.
+**Errors:** none.
+**Special concerns:** private; a test in `tests/ambe_fixed_unvoiced_synthesis.rs` cites it (the cached public function is its cached form).
+**Signature:** `fn unvoiced_scaling_coefficient_uncached() -> f64`
+**See also:** test in `tests/ambe_fixed_unvoiced_synthesis.rs`; `unvoiced_scaling_coefficient`.
+
+### `VoicedState::synthesize` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_voiced_synthesis_VoicedState_synthesize]
+
+Synthesizes the frame's voiced speech component `s_v(n)` (Eq. 127 to 141) as Q16.16 samples, advancing the phase tracking. Harmonic phases `psi_l` and `phi_l` are kept as wrapping `u32` phases (one turn is 2^32),
+so the unbounded accumulation of the float version cannot overflow; the dither term for higher harmonics is `(unvoiced count / L) * phase_dither(l)`. It then sums, for each harmonic up to `max(L_prev, L_curr)`, the
+previous and current frame's contributions, depending on whether each was voiced.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `noise` | `&NoiseState` | Noise window; must already reflect the current frame (shared with the unvoiced synthesis) |
+| `omega0_curr_q32` | `i64` | Current fundamental, Q32 |
+| `voiced` | `&[bool]` | Voicing per harmonic from 1 |
+| `spectral_amplitudes_q16` | `&[i32]` | Amplitudes per harmonic, Q16.16 |
+
+**Returns:** `Option<[i32; N]>`; `None` if the slices differ in length or exceed `MAX_HARMONICS`.
+**Errors:** none raised.
+**Special concerns:** stateful (phases, previous parameters); call once per frame in order.
+**Signature:** `pub fn synthesize(&mut self, noise, omega0_curr_q32, voiced, spectral_amplitudes_q16) -> Option<[i32; N]>`
+**See also:** test in `tests/ambe_fixed_voiced_synthesis.rs`; `fixed_tia_102_baba_synthesis_SynthesisState_synthesize_core`.
+
+### `SynthesisState::finalize_parameters` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_finalize_parameters]
+
+Sections 8 and 9 (Eq. 105 to 116): turns reconstructed amplitudes into the final ones. It enhances the amplitudes, updates the local energy `S_E`, makes the adaptive voicing threshold and smooths the voiced/unvoiced
+decisions, updates the amplitude threshold `tau_M`, computes the smoothing scale `gamma_M` and applies it, then remembers the result so a repeated frame can reuse it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `reconstructed_amplitudes_q16` | `&[i32]` | Unenhanced amplitudes, Q16.16 |
+| `omega0_tilde_q32` | `i64` | Fundamental, Q32 |
+| `decoded_voiced` | `&[bool]` | Decoded voicing decisions |
+| `errors` | `&FrameErrorsQ16` | Frame error statistics |
+
+**Returns:** `Option<(Vec<bool>, Vec<i32>)>`: smoothed voicing and final amplitudes; `None` on a length mismatch.
+**Errors:** none raised.
+**Special concerns:** private; mutates `s_e`, `tau_m` and `last_final_amplitudes`.
+**Signature:** `fn finalize_parameters(&mut self, reconstructed_amplitudes_q16, omega0_tilde_q32, decoded_voiced, errors) -> Option<(Vec<bool>, Vec<i32>)>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_synthesis.rs` (includes the case where `gamma_M` engages); `synthesize_core`.
+
+### `SynthesisState::synthesize_core` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_core]
+
+Section 11 (Eq. 117 to 142): advances the shared noise generator once per frame (not on the first frame), runs the unvoiced and voiced synthesizers, applies the unvoiced gain (a rounded multiply, skipped when exactly 1.0) and sums
+the two halves into `i64` Q16.16 (Eq. 142). The sum stays `i64` rather than being narrowed to `i32`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `omega0_tilde_q32` | `i64` | Fundamental, Q32 |
+| `voiced` | `&[bool]` | Final voicing per harmonic |
+| `final_amplitudes_q16` | `&[i32]` | Final amplitudes, Q16.16 |
+
+**Returns:** `Option<[i64; N]>`, 160 samples; `None` if either synthesizer rejects the lengths.
+**Errors:** none raised.
+**Special concerns:** private; stateful (noise window, phase and overlap history). Used by `synthesize_frame` and the repeated-frame paths.
+**Signature:** `fn synthesize_core(&mut self, omega0_tilde_q32, voiced, final_amplitudes_q16) -> Option<[i64; N]>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_synthesis.rs`; `finalize_parameters`.
 
 ## Fixed and float AMBE quantizers, reconstruction and wire decode anchored in slice 8
 
@@ -2792,32 +3073,205 @@ float) and the fixed `Concealer::continuity_cost_q16` by the concealment policy 
 
 ## Codec2 fixed-point internals anchored in slice 9 (LPC, envelope phase, overlap-add, LSP table) and the timing autocorrelation profile
 
-`levinson_durbin_q23_from_integer_r` is the integer-only Levinson-Durbin recursion: for a first-order autocorrelation it returns the exact predictor
-`[1, -rho, 0, ...]` in Q8.23 and an all-zero input gives the identity filter. `cheb_poly_eval_q29` evaluates the Chebyshev polynomial in Q2.29 and agrees in sign with
-the plain float evaluation over a dense sweep of real captured coefficients. `sample_filter_phase_with` picks, per harmonic, the conjugate of the spectrum bin
-nearest `m * wo`; `prepare_subframe_fixed` and `overlap_add_subframe` are the phase/postfilter half and the windowed overlap-add half of one synthesis
-sub-frame, tested through the fixed decoder's bit-exact match with the reference decoder. `lsp_cb_q23` is the codec2 1600 LSP codebook start and step values
-as exact Q23 shifts. `autocorrelation_profile` is the signed autocorrelation of a feature's first difference over the lags of a baud range: a feature that
-flips every symbol shows a negative trough at the symbol rate and a positive peak at two symbols.
+Integer internals of the Codec2 3200 and 1600 paths plus the baud-rate autocorrelation profile of the timing characterizer. All are pure functions or state updates in memory: no I/O, no locks, no transmitter
+keying, so no PTT, band or transmit-gate logic applies.
 
-  *(Reference: `src/codec2_3200/envelope.rs` -> `[@ANCHOR: ham_digital_modes:codec2_3200_envelope_sample_filter_phase_with]`; `src/codec2_3200/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:codec2_3200_synthesis_SynthesisStateFixed_prepare_subframe_fixed]`, `[@ANCHOR: ham_digital_modes:codec2_3200_synthesis_overlap_add_subframe]`; `src/codec2_3200/lpc.rs` -> `[@ANCHOR: ham_digital_modes:codec2_3200_lpc_cheb_poly_eval_q29]`, `[@ANCHOR: ham_digital_modes:codec2_3200_lpc_levinson_durbin_q23_from_integer_r]`; `src/codec2_1600/lsp_quantiser.rs` -> `[@ANCHOR: ham_digital_modes:codec2_1600_lsp_quantiser_lsp_cb_q23]`; `src/timing_characterizer.rs` -> `[@ANCHOR: ham_digital_modes:timing_characterizer_autocorrelation_profile]`)*
+### `levinson_durbin_q23_from_integer_r` [@ANCHOR: ham_digital_modes:codec2_3200_lpc_levinson_durbin_q23_from_integer_r]
+
+The integer-only Levinson-Durbin recursion: from the autocorrelation `R[0..=LPC_ORD]` (integers) it returns the Q8.23 predictor coefficients, with no `f32` anywhere, so it builds without floating point (`no_std`). It normalizes `R`
+(`r0_normalize_fixed`) and runs the fixed core. A first-order autocorrelation gives exactly `[1, -rho, 0, ...]` and an all-zero input gives the identity filter. `levinson_durbin_fixed_from_integer_r` wraps it and adds an `f32` view.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `r_q` | `&[i64; LPC_ORD + 1]` | Autocorrelation values, integer |
+
+**Returns:** `[i64; LPC_ORD + 1]`, coefficients in Q8.23 (`a[0]` is 1.0).
+**Errors:** none; the core records whether a clamp fired internally but this function discards that flag.
+**Special concerns:** pure; called by the integer encoder.
+**Signature:** `pub fn levinson_durbin_q23_from_integer_r(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1]`
+**See also:** tests in `src/codec2_3200/lpc.rs` and `encoder_fixed.rs`; `levinson_durbin_fixed_from_integer_r`.
+
+### `cheb_poly_eval_q29` [@ANCHOR: ham_digital_modes:codec2_3200_lpc_cheb_poly_eval_q29]
+
+Evaluates the degree-5 Chebyshev-form polynomial used in line-spectral-pair root finding, with `x` already in Q2.29. The coefficients are Q8.23; each Chebyshev term `T_i` is kept in Q2.29 and each product is
+`(coef * T) >> 29` through a transient `i64`, so every stored value stays `i32`. It agrees in sign with the plain float evaluation over a dense sweep of real captured coefficients.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `coef_q` | `&[i32; 6]` | Polynomial coefficients, Q8.23 |
+| `x_q` | `i32` | Evaluation point in [-1, 1], Q2.29 |
+
+**Returns:** `i32`, the polynomial value, Q8.23.
+**Errors:** none; the formats were validated to cover the measured coefficient range (maximum 77.17).
+**Special concerns:** private; hot in the root search (about 200 evaluations per bracketing sweep).
+**Signature:** `fn cheb_poly_eval_q29(coef_q: &[i32; 6], x_q: i32) -> i32`
+**See also:** test in `src/codec2_3200/lpc.rs`; `find_next_root_q29`.
+
+### `sample_filter_phase_with` [@ANCHOR: ham_digital_modes:codec2_3200_envelope_sample_filter_phase_with]
+
+The phase-sampling step of the sample-filter phase: for each harmonic `m = 1..=L` it takes the conjugate of the spectrum bin nearest `m * wo` (`b = round(m * k_q23)`, limited to `FFT_ENC/2 - 1`), where `bin` is a closure reading
+the transform output. Production passes the transform scratch directly so the full spectrum array is never built; the test-only `sample_filter_phase_fixed` passes an array.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `bin` | `impl Fn(usize) -> ComplexQ23` | Spectrum accessor by bin index |
+| `model` | `&ModelFixed` | Harmonic count `l` and the Q23 bin spacing `k_q23` |
+
+**Returns:** `[ComplexQ23; MAX_AMP + 1]`, index 0 zero, `h[m]` for harmonics 1 to `l`.
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn sample_filter_phase_with(bin: impl Fn(usize) -> ComplexQ23, model: &ModelFixed) -> [ComplexQ23; MAX_AMP + 1]`
+**See also:** test in `src/codec2_3200/envelope.rs`; `prepare_subframe_fixed`.
+
+### `SynthesisStateFixed::prepare_subframe_fixed` [@ANCHOR: ham_digital_modes:codec2_3200_synthesis_SynthesisStateFixed_prepare_subframe_fixed]
+
+The first half of `synthesize_subframe_fixed`: it fills the harmonic phases (`model.phi`) with `synthesize_phase_fixed` and applies `postfilter_fixed` to the amplitudes (`model.a`), advancing the phase, noise-estimate and
+random-number state. Everything the 16 kHz spectral bridge reads from the model comes from here; the inverse transform and overlap-add are not needed for it (the 16 kHz decode used to run them and discard the samples).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut ModelFixed` | Decoded model; `phi` and `a` are updated |
+| `h` | `&[ComplexQ23; MAX_AMP + 1]` | Phase samples from `sample_filter_phase_with` |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** `#[inline(always)]`, `pub(crate)`; mutates the excitation phase, background estimate and RNG in the synthesis state, so it is called exactly once per sub-frame.
+**Signature:** `pub(crate) fn prepare_subframe_fixed(&mut self, model: &mut ModelFixed, h: &[ComplexQ23; MAX_AMP + 1])`
+**See also:** test in `src/codec2_3200/mod.rs` (bit-exact match with the reference decoder); `overlap_add_subframe`.
+
+### `overlap_add_subframe` [@ANCHOR: ham_digital_modes:codec2_3200_synthesis_overlap_add_subframe]
+
+The rate-independent tail of one synthesis sub-frame, generic over transform size `N`, samples per sub-frame `NS` and buffer `SF = 2 * NS`. It slides the overlap-add buffer by one sub-frame, adds the windowed real inverse-transform output
+(`re[N - NS + 1 ..]` into the first `NS - 1` entries, `re[..= NS]` from entry `NS - 1` on) with `mul_q23`, applies `ear_protection_fixed` to the first `NS` samples and rounds them from Q23 to 16-bit PCM, clamped to +-32767.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sn` | `&mut [i64; SF]` | Overlap-add buffer, Q23; updated |
+| `re` | `&[i64; N]` | Real inverse-transform output (valid at the indices `SparseInverse` computes) |
+| `window` | `&[i64; SF]` | Synthesis window, Q23 |
+
+**Returns:** `[i16; NS]` PCM samples.
+**Errors:** a compile-time assertion requires `SF == 2 * NS` and `NS < N / 4`.
+**Special concerns:** `pub(crate)`; stateful buffer; ear protection attenuates a whole frame when any sample exceeds the limit.
+**Signature:** `pub(crate) fn overlap_add_subframe<const N: usize, const NS: usize, const SF: usize>(sn, re, window) -> [i16; NS]`
+**See also:** test in `src/codec2_3200/mod.rs`; `fixed_fft:SparseInverse_run_kernel`.
+
+### `lsp_cb_q23` [@ANCHOR: ham_digital_modes:codec2_1600_lsp_quantiser_lsp_cb_q23]
+
+A `const fn` that builds the codec2 1600 LSP codebook's per-dimension `(start_hz, step_hz)` pairs in Q23 for the static `LSP_CB_Q23`. Every start and step is a whole number of hertz, so the conversion is an exact left shift by 23. A test
+checks the table against `f32_to_q_exact_round`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| none | | Reads the `LSP_CB` table of `LPC_ORD` entries |
+
+**Returns:** `[(i64, i64); LPC_ORD]`, `(start, step)` per LSP dimension.
+**Errors:** none.
+**Special concerns:** compile-time evaluated.
+**Signature:** `const fn lsp_cb_q23() -> [(i64, i64); super::LPC_ORD]`
+**See also:** test `fixed_tables_match_the_computed_values`; the Codec2 1600 LSP quantiser entries.
+
+### `autocorrelation_profile` [@ANCHOR: ham_digital_modes:timing_characterizer_autocorrelation_profile]
+
+The signed autocorrelation of a feature's first difference at every lag corresponding to a baud rate in `[min_baud, max_baud]`. Each lag gives `(baud = rate / lag, mean of d[i] * d[i + lag])`, ordered from the highest baud (shortest lag) to the lowest.
+It is the base of `dominant_symbol_period`. A feature that flips every symbol shows a negative trough at the symbol rate and a positive peak at two symbols, so the sign is evidence of the mechanism, not only the magnitude.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `feature` | `&[f64]` | Scalar time series, for example a mark/space ratio |
+| `feature_rate_hz` | `f64` | Sample rate of `feature`, positive |
+| `min_baud`, `max_baud` | `f64` | Baud range, `0 < min_baud < max_baud` |
+
+**Returns:** `Option<Vec<(f64, f64)>>` of `(baud, signed score)`.
+**Errors:** `None` when the rate or baud range is non-positive or empty, `feature` has fewer than 4 samples, or the lag range does not fit inside the differenced series.
+**Special concerns:** pure; allocates; O(lags x length).
+**Signature:** `pub fn autocorrelation_profile(feature: &[f64], feature_rate_hz: f64, min_baud: f64, max_baud: f64) -> Option<Vec<(f64, f64)>>`
+**See also:** test `probe_dominant_symbol_period_separates_rtty_cw_and_noise`; `dominant_symbol_period`.
 
 ## Float AMBE+2 tone level and unenhanced synthesis anchored in slice 10
 
-The float AMBE+2 encoder's `amplitude_field` maps a tone amplitude to the 12-bit level field by interpolating the chip's seven measured points in log2
-amplitude: each measured point is hit exactly, the ends clamp, and the mapping never decreases. `SynthesisState::synthesize_frame_unenhanced` synthesizes from
-already-final parameters with no enhancement or smoothing; it is deterministic, rejects a length mismatch, and records its parameters so the next repeated
-frame reuses them exactly.
+### `amplitude_field` [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_amplitude_field]
 
-  *(Reference: `src/ambe/float/ambe_plus_2/encoder.rs` -> `[@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_amplitude_field]`; `src/ambe/float/tia_102_baba/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_frame_unenhanced]`)*
+Maps a tone's per-tone amplitude to the 12-bit level field a chip encoder writes in a tone frame, by interpolating in log2(amplitude) between seven measured 1 kHz-sine points (250, 500, 1000, 2000, 4000, 8000, 16000 give
+0x715, 0x725, 0xea2, 0xed2, 0xf12, 0xf62, 0xfa2). Each point is hit exactly, amplitudes outside the range clamp to the end values, and the mapping never decreases. The chip's decoder and this crate's synthesis ignore the field, so no finer fit is possible or planned.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `amplitude` | `f64` | Per-tone amplitude (values below 1 are treated as 1) |
+
+**Returns:** `u16`, the level field (0x715 to 0xfa2).
+**Errors:** none.
+**Special concerns:** private; pure. Used by the float AMBE+2 `next_frame` when a tone is detected.
+**Signature:** `fn amplitude_field(amplitude: f64) -> u16`
+**See also:** test in `src/ambe/float/ambe_plus_2/encoder.rs`; `fixed_ambe_plus_2_encoder_Encoder_next_frame`.
+
+### `SynthesisState::synthesize_frame_unenhanced` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_frame_unenhanced]
+
+Synthesizes a frame from already-final parameters, skipping spectral enhancement, V/UV smoothing and amplitude smoothing entirely (`amplitudes` and `voiced` go straight to Eq. 127 to 142). It exists for experiments comparing a mode's output with the real chip with those
+stages disabled. It records its parameters as the last final amplitudes, so a following repeated frame reuses them exactly, and it is deterministic.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `amplitudes` | `&[f64]` | Final amplitudes per harmonic |
+| `omega0_tilde` | `f64` | Fundamental, radians per sample |
+| `voiced` | `&[bool]` | Voicing per harmonic |
+
+**Returns:** `Option<[f64; N]>`; `None` when the slices differ in length.
+**Errors:** none raised.
+**Special concerns:** mutates the synthesis state; an experiment hook, not used by the normal decoder path.
+**Signature:** `pub fn synthesize_frame_unenhanced(&mut self, amplitudes: &[f64], omega0_tilde: f64, voiced: &[bool]) -> Option<[f64; N]>`
+**See also:** test in `src/ambe/float/tia_102_baba/synthesis.rs`; `synthesize_repeated_frame_scaled`.
 
 ## Codec2 1600 test-side reference helpers anchored in slice 11
 
-`FloatBoundaryEncoderFixed::encode` is the codec2 1600 encoder with the float analysis boundary (`analyse_lsps_and_energy_float_boundary` computes the LSPs and
-frame energy in float from the integer pitch analysis); the integer encoder is tested to produce the same frames as it. `decode_and_compare_to_reference`
-decodes a real captured 1600 bit/s stream and returns the correlation and RMS ratio against the real reference decoder's audio, which two tests require to
-be high and near one.
-  *(Reference: `src/codec2_1600/mod.rs` -> `[@ANCHOR: ham_digital_modes:codec2_1600_FloatBoundaryEncoderFixed_encode]`, `[@ANCHOR: ham_digital_modes:codec2_1600_analyse_lsps_and_energy_float_boundary]`, `[@ANCHOR: ham_digital_modes:codec2_1600_decode_and_compare_to_reference]`)*
+These three live inside the `#[cfg(all(test, feature = "std"))]` block of `src/codec2_1600/mod.rs`; they are reference helpers for the tests, not part of the shipped decoder or encoder.
+
+### `FloatBoundaryEncoderFixed::encode` [@ANCHOR: ham_digital_modes:codec2_1600_FloatBoundaryEncoderFixed_encode]
+
+The 1600 bit/s encoder as it was before it went integer end to end: the same analysis, but pitch, energy and line spectral pairs cross `f32` boundaries into the float quantisers. It is kept only to measure how the integer encoder differs. `encode` consumes four
+10 ms sub-frames of speech, runs pitch and voicing analysis on each, analyses LSPs and energy twice (quantising only the second pass's LSPs), and packs a 1600 frame.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `speech` | `&[i16; SAMPLES_PER_FRAME]` | One 40 ms frame of 8 kHz speech |
+
+**Returns:** `[u8; BYTES_PER_FRAME]`, the packed frame.
+**Errors:** none.
+**Special concerns:** test-only; stateful (sample window, pitch and voicing state).
+**Signature:** `pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME]`
+**See also:** the test comparing it with the integer encoder (a frame can differ by a quantiser step; the count is recorded and bounded).
+
+### `analyse_lsps_and_energy_float_boundary` [@ANCHOR: ham_digital_modes:codec2_1600_analyse_lsps_and_energy_float_boundary]
+
+The fixed-point sibling of `analyse_lsps_and_energy`: windowing, autocorrelation, white-noise correction, Levinson-Durbin, energy, bandwidth expansion and LSP conversion, returning float LSPs and energy. It was factored out because the 1600 encoder runs
+it twice per 40 ms frame. On failure of the LSP conversion it falls back to `fallback_lsp`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sn` | `&[i16; M_PITCH]` | Speech window |
+| `window_fixed` | `&[i32; M_PITCH]` | Analysis window |
+
+**Returns:** `([f32; LPC_ORD], f32)`: the LSPs and the frame energy.
+**Errors:** none; a failed conversion uses the fallback.
+**Special concerns:** test-only; pure.
+**Signature:** `fn analyse_lsps_and_energy_float_boundary(sn: &[i16; M_PITCH], window_fixed: &[i32; M_PITCH]) -> ([f32; LPC_ORD], f32)`
+**See also:** test in `src/codec2_1600/mod.rs`; `FloatBoundaryEncoderFixed::encode`.
+
+### `decode_and_compare_to_reference` [@ANCHOR: ham_digital_modes:codec2_1600_decode_and_compare_to_reference]
+
+Decodes a captured 1600 bit/s bitstream fixture with the crate's `Decoder` and compares its PCM with the real reference decoder's captured output for the same stream. It returns the Pearson correlation (shape agreement) and the RMS ratio (scale agreement; correlation alone is scale-invariant and would miss
+a gain bug). Two tests require the correlation to be high and the ratio near one.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `bits_path` | `&str` | Path of the bitstream fixture |
+| `pcm_path` | `&str` | Path of the reference decoder's PCM (little-endian `i16`) |
+
+**Returns:** `(f64, f64)`: (correlation, RMS ratio).
+**Errors:** panics if a file cannot be read, has fewer than 150 frames, or the frame counts of the two files disagree.
+**Special concerns:** test-only; reads files, no network.
+**Signature:** `fn decode_and_compare_to_reference(bits_path: &str, pcm_path: &str) -> (f64, f64)`
+**See also:** the two tests citing it in `src/codec2_1600/mod.rs`.
 
 ## Codec2 3200 synthesis (float and fixed)
 
