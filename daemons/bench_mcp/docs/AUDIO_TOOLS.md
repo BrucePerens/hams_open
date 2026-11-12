@@ -35,7 +35,7 @@ what is listed and allowed:
 * `capture_dir` (default `<BENCH_MCP_OUT>/audio`), `retention_files`, `retention_days`, `max_record_s`.
 * `verify_actions`: named commands (a program and its arguments, no shell) that `bench_audio_verify` may run as its action, for example `{"relay": ["/usr/local/bin/click", "--once"]}`. The tool accepts only these names; it does not accept an arbitrary command line from the caller, because that would make the tool a remote shell. To verify the effect of another tool, call both in parallel and give `bench_audio_verify` a `delay_s`.
 * `tts_engine` (`auto`, `speech-dispatcher`, `espeak-ng`, `piper`), `tts_voice`, `tts_language` (default `en-us`), `tts_rate` (words per minute, default 160), `piper_model` (path of a Piper voice model).
-* `reserved`: more `vid:pid` values or node-name fragments to leave alone. `08bb:29c0` (the two PCM2900C codecs inside the VNWA 3E) is always reserved: the VNA driver opens them exclusively, and a second opener breaks its sweeps. Reserved devices are listed and flagged, are refused by name everywhere, and are not even asked for their volume. The check uses the kernel's `/proc/asound/cardN/usbid`, never a card number, because a VNA power cycle renumbers the cards.
+* `reserved`: more `vid:pid` values or node-name fragments to leave alone. `08bb:29c0` (the two PCM2900C codecs inside the VNWA 3E) is always reserved: the VNA (vector network analyzer) driver opens them exclusively, and a second opener breaks its sweeps. Reserved devices are listed and flagged, are refused by name everywhere, and are not even asked for their volume. The check uses the kernel's `/proc/asound/cardN/usbid`, never a card number, because a VNA power cycle renumbers the cards.
 
 ## Tools
 
@@ -44,7 +44,7 @@ what is listed and allowed:
 | `bench_audio_devices` | read_only | Outputs and inputs with names, aliases, ALSA card/device, USB path and vid:pid, jack or port availability, defaults, rates, formats, channels, volume, mute, reserved flag. |
 | `bench_audio_status` | read_only | Helper programs found, safety limits, quiet hours now, capture directory, aliases. |
 | `bench_audio_levels` | read_only | Volume, gain in dB, mute and cap of one or all devices. |
-| `bench_audio_record` | read_config | Records an input for N seconds (or from a level threshold) to a WAV in the capture directory; peak, RMS, clipping, silence fraction, all-zero flag. Can record what an output plays (`monitor_of_output`). |
+| `bench_audio_record` | read_config | Records an input for N seconds (or from a level threshold) to a WAV in the capture directory; peak, RMS (root mean square), clipping, silence fraction, all-zero flag. Can record what an output plays (`monitor_of_output`). |
 | `bench_audio_meter` | read_config | Level readings (peak, RMS) every interval for N seconds; nothing saved. |
 | `bench_audio_verify` | read_config | Did a device under control make a sound: measures the noise floor, runs a configured action (or waits for a parallel call), judges level over the floor, pitch, duration, beep count and similarity to a stored reference; returns pass, reasons and evidence. |
 | `bench_audio_events` | read_config | Listens for N seconds and lists sound events (onset, offset, level, pitch); optional Morse decode. |
