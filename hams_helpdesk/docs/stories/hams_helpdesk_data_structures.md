@@ -470,3 +470,23 @@
 **Functions that touch it.** `report_exception` (the only reader and writer).
 
 **See also:** tests `test_the_reentry_flag_is_per_thread_and_cleared_after_each_report` and `test_a_failure_in_the_writer_is_not_reported_again` in `hams_helpdesk/tests/test_exception_tickets.py`.
+
+### `BrowserErrorReporter` [@ANCHOR: hams_helpdesk:hams_helpdesk_js_browser_error_reporter_browser_error_reporter]
+
+**Purpose and location.** Reports uncaught browser errors and unhandled promise rejections to the server so they become exception tickets, with limits that keep a broken page from flooding the server. Defined in `hams_helpdesk/static/src/js/browser_error_reporter.js`; one instance per page.
+
+**Constructor.** `new BrowserErrorReporter(options = {})` with `options.env` (the Owl env used to read the current page and user), `options.send` (the function that posts a report; default `sendReport`) and `options.now` (a clock; default `Date.now`). The last two are for tests.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `env` | object or function | The page environment `{origin, pathname, userAgent, scriptUrls}`, or a function returning it (`currentEnv()`). |
+| `send` | function | Posts one report to the server. |
+| `now` | function | Millisecond clock. |
+| `seen` | `Set` of strings | Keys `type|first frame` of reports already sent, so the same error is reported once per page. |
+| `sent` | number | Reports sent on this page; at most `MAX_REPORTS_PER_PAGE` (5). |
+| `lastSent` | number | Time of the last report; a new one needs `MIN_INTERVAL_MS` (1000 ms) since then. |
+| `busy` | boolean | True while `report` runs, so an error raised by reporting is never reported again. |
+
+**Behaviour.** `report(error, fallback)` builds the report with `buildReport` (the error type and message with URL queries removed, a reduced stack of at most `MAX_FRAMES` (8) frames; an Owl error wrapper is unwrapped up to `MAX_CAUSE_DEPTH` (3) levels), which returns nothing for an ignorable error, for one whose top frame is not one of this site's own scripts and for one with no known release; then it applies the limits above and calls `send`. It returns whether a report was sent and never throws. `onError` and `onRejection` are the handlers that the page setup function attaches to the window's `error` and `unhandledrejection` events.
+
+**See also:** the tests in `hams_helpdesk/static/tests/browser_error_reporter.test.js` and `hams_helpdesk/tests/test_browser_exceptions.py`.

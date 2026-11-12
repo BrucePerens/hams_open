@@ -49,6 +49,7 @@ describe("hams_helpdesk browser error reporter", () => {
     describe.current.tags("hams_helpdesk");
 
     test("stripQuery drops the query and the fragment", () => {
+        // Tests [@ANCHOR: hams_helpdesk_js_browser_error_reporter_browser_error_reporter]
         // Tests [@ANCHOR: hams_helpdesk:js_strip_query]
         expect(stripQuery("https://a/b.js?x=1#y")).toBe("https://a/b.js");
         expect(stripQuery("/a/b")).toBe("/a/b");

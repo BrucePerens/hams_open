@@ -26,6 +26,7 @@ describe("toast", () => {
     describe.current.tags("caching_toast");
 
     test("close() hides the toast by setting state.show to false", () => {
+        // Tests [@ANCHOR: caching_js_toast_swtoast]
         // Tests [@ANCHOR: caching:js_toast_close]
         const instance = Object.create(SWToast.prototype);
         instance.state = { show: true };

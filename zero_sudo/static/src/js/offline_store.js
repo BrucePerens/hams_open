@@ -28,6 +28,7 @@ export function isStorageFullError(err) {
     );
 }
 
+// [@ANCHOR: zero_sudo_js_offline_store_offline_store]
 export class OfflineStore {
     // [@ANCHOR: zero_sudo:js_offline_store_constructor]
     constructor(dbName = 'HamShackOfflineDB', storeName = 'offline_logs') {

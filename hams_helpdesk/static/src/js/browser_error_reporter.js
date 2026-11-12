@@ -221,6 +221,7 @@ export function sendReport(report, fetchImpl = globalThis.fetch && globalThis.fe
     }).catch(() => null);
 }
 
+// [@ANCHOR: hams_helpdesk_js_browser_error_reporter_browser_error_reporter]
 export class BrowserErrorReporter {
     // [@ANCHOR: hams_helpdesk:js_reporter_construct]
     constructor(options = {}) {

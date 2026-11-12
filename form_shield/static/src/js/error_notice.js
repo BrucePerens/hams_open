@@ -32,6 +32,7 @@ export function noticeText(reason) {
     return MESSAGES[reason] || DEFAULT_MESSAGE;
 }
 
+// [@ANCHOR: form_shield_js_error_notice_form_shield_error_notice]
 export class FormShieldErrorNotice extends Interaction {
     static selector = "#wrapwrap";
 

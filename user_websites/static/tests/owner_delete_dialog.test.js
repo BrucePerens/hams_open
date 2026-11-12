@@ -42,6 +42,7 @@ describe("owner_delete_dialog", () => {
     describe.current.tags("user_websites_owner_delete_dialog");
 
     test("start makes a click on a delete link fill in and open the dialog instead of following the link, and Cancel closes it", () => {
+        // Tests [@ANCHOR: user_websites_js_owner_delete_dialog_owner_delete_dialog]
         // Tests [@ANCHOR: user_websites:js_owner_delete_dialog_start]
         const { page, dialog, calls, cancel, link } = makePage();
         try {

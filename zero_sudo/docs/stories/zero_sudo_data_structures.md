@@ -505,3 +505,32 @@
 **Functions that touch it.** `OdooRpcError.__init__` and `OdooRpcClient.call`.
 
 **See also:** the test `TestUnixSocketEndToEnd` in `hams_rpc_guard/tests/test_unix_listener.py`, which makes a call that Odoo refuses and reads `status` from the raised error.
+
+### `SecurityDashboard` [@ANCHOR: zero_sudo:zero_sudo_js_security_dashboard_security_dashboard]
+
+**Purpose and location.** The security log dashboard for administrators: the latest login failures and denied requests, drifting slightly on screen to protect a permanent display. An Owl component registered as the backend action `zero_sudo.security_dashboard`, defined in `zero_sudo/static/src/components/security_dashboard/security_dashboard.js`.
+
+| State field | Type | Meaning |
+|---|---|---|
+| `state.logs` | array | Up to 100 rows of `zero_sudo.security.log` (id, date, user, login, IP address, reason), newest first. |
+| `state.isPaused` | boolean | When true the burn-in drift stops. |
+
+**Behaviour.** `onWillStart` runs `loadLogs` (a `searchRead` with `limit: 100, order: "create_date desc"`; access is decided by the model's rules for the signed-in user). A 20-second timer (an `useEffect`, cleared on unmount) moves the root element by up to 3 px in each direction unless paused. `togglePause` flips the flag. It never writes.
+
+**See also:** the tests in `zero_sudo/static/tests/security_dashboard.test.js`.
+
+### `OfflineStore` [@ANCHOR: zero_sudo:zero_sudo_js_offline_store_offline_store]
+
+**Purpose and location.** A small IndexedDB store for log entries made while the browser is offline, so they can be sent later. Defined in `zero_sudo/static/src/js/offline_store.js` (a plain class, not a component).
+
+**Constructor.** `new OfflineStore(dbName = 'HamShackOfflineDB', storeName = 'offline_logs')`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `dbName`, `storeName` | strings | The database and object store names. |
+| `dbVersion` | number | Always 1. |
+| `db` | `IDBDatabase` or null | The open database, set by `init()`. |
+
+**Methods.** `init()` opens (and on first use creates) the database, whose store is keyed by `uuid` and indexed by `timestamp`; it rejects on a database error. `saveLog(logData)` stores `{uuid (a random UUID), timestamp (now), data: logData}` and rejects on a database error or an aborted transaction (a full store aborts the transaction); `getPendingLogs()` returns every stored entry; `deleteLog(uuid)` removes one after it was sent. `isStorageFullError(err)` recognises a quota error (`QuotaExceededError` and the Firefox variant) so a caller can say "disk full". Entries stay in the browser until deleted; nothing here sends them.
+
+**See also:** the tests in `zero_sudo/static/tests/offline_store.test.js`.

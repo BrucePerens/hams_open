@@ -22,6 +22,8 @@ describe("form_shield", () => {
 
     // [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     test("pow_core.js hashes and solves exactly like tokens.py", () => {
+        // Tests [@ANCHOR: form_shield_js_shield_client_shield_session]
+        // Tests [@ANCHOR: form_shield_js_shield_client_shield_unavailable]
         // Tests [@ANCHOR: form_shield:pow_core_js]
         // Tests [@ANCHOR: form_shield:pow_rotr]
         // Tests [@ANCHOR: form_shield:pow_compress]

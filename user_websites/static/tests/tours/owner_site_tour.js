@@ -3,6 +3,7 @@ import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
 // [@ANCHOR: test_tour_owner_site]
+// Tests [@ANCHOR: user_websites_js_rich_editor_rich_editor]
 // Tests [@ANCHOR: user_websites:UX_OWNER_TOOLBAR]
 // Tests [@ANCHOR: user_websites:UX_RICH_EDITOR]
 // Tests [@ANCHOR: user_websites:rich_editor_apply_link]

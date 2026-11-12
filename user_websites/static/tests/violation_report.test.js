@@ -37,6 +37,7 @@ describe("violation_report", () => {
     describe.current.tags("user_websites_violation_report");
 
     test("_onModalShow injects the triggering button's data-url and clears prior input", () => {
+        // Tests [@ANCHOR: user_websites_js_violation_report_violation_report_modal]
         // Tests [@ANCHOR: user_websites:js_violation_report_on_modal_show]
         const instance = Object.create(ViolationReportModal.prototype);
         const modal = makeModal();

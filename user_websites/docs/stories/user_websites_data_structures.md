@@ -432,3 +432,43 @@
 **Functions that touch it.** `SiteResponse.__init__`, `_resolve_site`, `answers_site_response`.
 
 **See also:** tests `TestSiteResponse` in `user_websites/tests/test_site_response.py` (carries the response, is not an `HTTPException`, the decorator returns it and lets other errors through) and `test_03_owner_is_told_what_is_missing_and_cannot_create` in `user_websites/tests/test_site_eligibility_hook.py` (the real 403 page).
+
+### `OwnerDeleteDialog` [@ANCHOR: user_websites:user_websites_js_owner_delete_dialog_owner_delete_dialog]
+
+**Purpose and location.** The confirmation dialog for deleting a page or post on the owner's site. A public interaction defined in `user_websites/static/src/js/owner_delete_dialog.js`; it attaches to `#uw_delete_dialog` (a native `dialog` element).
+
+**Behaviour.** `start` does nothing when the browser has no `showModal`. Otherwise every `.uw-delete-link` gets a click handler that cancels the link, copies the link's `data-uw-action`, `data-uw-what` and `data-uw-title` into the dialog's form action and texts, opens the dialog and focuses the Cancel button. The Cancel button closes it. Submitting the dialog's form is the only thing that deletes; the server checks ownership and the CSRF token. The class has no fields.
+
+**See also:** the tests in `user_websites/static/tests/owner_delete_dialog.test.js`.
+
+### `RichEditor` [@ANCHOR: user_websites:user_websites_js_rich_editor_rich_editor]
+
+**Purpose and location.** The small rich-text editor of the owner's page and post editor: a toolbar over a contenteditable area that writes clean, limited HTML into a hidden field. A public interaction defined in `user_websites/static/src/js/rich_editor.js`; it attaches to `.uw-rich-editor`.
+
+**Behaviour.** `start` finds the editing area (`[data-uw-area]`), the hidden field, the toolbar and the link bar and wires the events. The methods: `syncField` copies the cleaned HTML into the hidden field; `onInput`, `recordHistory`, `stepHistory` and `onHistoryKey` keep an undo and redo history; `onToolbarClick` and `refreshToolbarState` run the formatting buttons; `wrapSelectionInCode`, `rememberRange` and `restoreRange` handle code spans and the selection; `openLinkBar`, `closeLinkBar`, `onLinkBarClick`, `onLinkKeydown` and `applyLink` make links (only addresses starting with `http://`, `https://`, `mailto:` or `/` are accepted); `onImagePicked` uploads a chosen image (at most 2 MB) to the upload address in `data-upload-url` with the page's CSRF token; `onPaste`, `onBeforeInput` and `cleanNode` strip pasted or typed markup down to the allowed elements and attributes; `say` writes a message to the live region for screen readers. All state is in the page and the hidden field; nothing is kept between page loads. This cleaning runs in the browser and is not a security boundary by itself; what the server re-checks is documented with the save route, not here.
+
+**See also:** the owner-site tour `owner_site_tour.js` in `user_websites/static/tests/tours/`, run by `test_ui_tours.py`.
+
+### `UrlToastNotification` [@ANCHOR: user_websites:user_websites_js_toast_notifications_url_toast_notification]
+
+**Purpose and location.** Shows a toast for the result of a redirect: the report form and the owner actions send the visitor back with a status in the query string. A public interaction in `user_websites/static/src/js/toast_notifications.js`; it attaches to `#wrapwrap`.
+
+**Behaviour.** `start` calls `_checkUrlForNotifications`, which reads the URL parameters: `report_error` (the value picks a text from `REPORT_ERRORS`, unknown values get the default text, as a "Report not sent" danger toast) or one of the success parameters `report_submitted`, `appeal_submitted`, `subscribed` and `erased` (each a fixed success text); it shows the notification and then removes the parameter from the address so a reload does not repeat it. Texts come from fixed tables, never from the URL value itself. The class has no fields.
+
+**See also:** the tests in `user_websites/static/tests/toast_notifications.test.js`.
+
+### `AdminViolationToast` [@ANCHOR: user_websites:user_websites_js_toast_notifications_admin_violation_toast]
+
+**Purpose and location.** Tells a site administrator on any page that content reports are waiting. A public interaction in `user_websites/static/src/js/toast_notifications.js`; it attaches to `#wrapwrap`.
+
+**Behaviour.** `start` calls `_checkPendingReports`, which fetches `/api/v1/user_websites/pending_reports`. A non-OK answer is treated as an error (nothing shown). With the data it asks `shouldShowToast(readSeen(), data, now)`: nothing is shown when the count is not above zero; otherwise the toast shows when it was never seen, when the remembered time is old (`MODERATION_TOAST_TTL_MS`) or when the pending count or newest id grew. The record of what was shown lives in the browser's `localStorage` (`readSeen`, `writeSeen`). The sticky warning toast says how many reports are pending, with a "Review reports" button (only when the endpoint's `url` is a path on this site) and "Dismiss". Network errors are ignored silently. Who gets a count is decided by the endpoint; the component displays what it is given. The class has no fields.
+
+**See also:** the tests in `user_websites/static/tests/toast_notifications.test.js`.
+
+### `ViolationReportModal` [@ANCHOR: user_websites:user_websites_js_violation_report_violation_report_modal]
+
+**Purpose and location.** Prepares the "report a violation" modal each time it opens. A public interaction in `user_websites/static/src/js/violation_report.js`; it attaches to `.user-websites-report-container`.
+
+**Behaviour.** `start` finds the modal `#reportViolationModal` and listens for Bootstrap's `show.bs.modal` event. `_onModalShow` reads the address from the opening button's `data-url`, puts it in the modal's `url` input and clears the description and email fields, so one report's text never carries into the next. If the event has no opening button it does nothing. The class has no fields; the report itself is posted by the form to the server, which validates it.
+
+**See also:** the tests in `user_websites/static/tests/violation_report.test.js` and the tour run by `test_ui_tours.py`.

@@ -292,3 +292,36 @@
 **Functions that touch it.** `_NoRedirect.redirect_request`, `_fetch_expiry_header`.
 
 **See also:** test `test_the_github_pat_expiry_check_refuses_a_redirect` in `pager_duty/tests/test_credential_redirect.py`.
+
+### `PagerBoard` [@ANCHOR: pager_duty:pager_duty_js_board_pager_board]
+
+**Purpose and location.** The pager status board shown on a wall display: active and resolved incidents, who is on duty and the check statistics, refreshed on bus notifications. An Owl component defined in `pager_duty/static/src/components/board/board.js`.
+
+| State field | Type | Meaning |
+|---|---|---|
+| `state.active_incidents`, `state.resolved_incidents` | arrays | The incidents returned by `pager.incident.get_board_data`. |
+| `state.on_duty` | string | Who is on duty (`Loading...` until the first load). |
+| `state.stats` | object | Counts `passing`, `failing`, `maintenance`, `never_run`. |
+| `state.transformStyle` | string | The CSS that shifts the whole board a few pixels to protect an OLED display from burn-in. |
+| `state.isPaused` | boolean | When true, bus notifications are ignored (an operator reading the board). |
+
+**Behaviour.** On mount it subscribes to the `pager_duty` bus channel, loads the data (with the website id from the `website_id` URL parameter) and starts a 60-second timer that applies a new random shift of up to 15 px with a 20 s transition. `onNotification` reloads when an `update_board` message arrives unless paused. `acknowledge(incidentId)` calls `action_acknowledge` and reloads. `togglePause` flips the pause flag. The timer is cleared on unmount.
+
+**See also:** the tests in `pager_duty/static/tests/board.test.js`.
+
+### `LogViewer` [@ANCHOR: pager_duty:pager_duty_js_log_viewer_log_viewer]
+
+**Purpose and location.** The log search page for pager administrators: choose one of the allowed log files, enter a regular expression, see the matching lines. An Owl component defined in `pager_duty/static/src/components/log_viewer/log_viewer.js`.
+
+| State field | Type | Meaning |
+|---|---|---|
+| `state.files` | array of strings | The log files the server allows, from `/api/v1/pager/logs/files`. |
+| `state.selectedFile` | string | The chosen file (the first one after loading). |
+| `state.regexQuery` | string | The regular expression typed in. |
+| `state.results` | array | The matching lines returned by `/api/v1/pager/logs/search`. |
+| `state.loading` | boolean | True while a search runs. |
+| `state.error` | string or null | The message shown for a failure. |
+
+**Behaviour.** On mount `fetchFiles` posts to the files endpoint; a failure sets the error "Failed to load configuration." `executeSearch` refuses an empty file or pattern, then posts `file_path` and `regex_query`; which files may be read and what a search returns are decided by the server endpoints (the component sends only the chosen file and the typed pattern). Enter in the pattern box runs the search (`onKeyup`).
+
+**See also:** the tests in `pager_duty/static/tests/log_viewer.test.js`.

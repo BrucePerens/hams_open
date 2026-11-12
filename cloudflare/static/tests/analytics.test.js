@@ -23,6 +23,7 @@ describe("cloudflare_analytics", () => {
     describe.current.tags("cloudflare_analytics");
 
     test("setup starts in the loading state and, once its half-second wait is over, shows the figures", async () => {
+        // Tests [@ANCHOR: cloudflare_js_analytics_cloudflare_analytics_dashboard]
         // Tests [@ANCHOR: cloudflare:js_analytics_setup]
         const pending = mountPlain(CloudflareAnalyticsDashboard);
         await animationFrame();

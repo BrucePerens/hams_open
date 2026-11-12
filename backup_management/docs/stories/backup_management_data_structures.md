@@ -162,3 +162,17 @@
 **Methods.** `init`.
 
 **See also:** test `test_01_kopia_s3_job_connects_before_snapshot_and_hides_secrets (daemon/test_main.py)`.
+
+### `BackupBoard` [@ANCHOR: backup_management:backup_management_js_board_backup_board]
+
+**Purpose and location.** The backup status board: an Owl component, registered as the backend action `backup_management.board`, that lists the website's backup configurations and lets an administrator start a backup or a snapshot sync from the page. Defined in `backup_management/static/src/components/board/board.js`; template `backup_management.BackupBoardTemplate`.
+
+| State field | Type | Meaning |
+|---|---|---|
+| `state.configs` | array of objects | The rows returned by `backup.config.get_board_data`, one per backup configuration. Empty until the first load. |
+| `state.isLoading` | boolean | True until the first `fetchData` has finished. |
+| `orm`, `website` | services | The Odoo `orm` service for the server calls and the `website` service for the current website. |
+
+**Behaviour.** `setup` loads the data when the component is mounted. `fetchData` passes the current website's id in the call context so the board shows only that website's backups. `triggerBackup(configId)` and `syncSnapshots(configId)` call `action_trigger_backup` and `action_sync_snapshots` on `backup.config` and then reload; the server checks access on those calls (the component only calls them). There is no polling and no state kept outside the component; it is created and destroyed with the action page.
+
+**See also:** the methods `setup`, `fetchData`, `triggerBackup`, `syncSnapshots` and the Hoot tests in `backup_management/static/tests/board.test.js`.

@@ -6,6 +6,7 @@ import { Component, useState, onMounted, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
+// [@ANCHOR: backup_management_js_board_backup_board]
 export class BackupBoard extends Component {
     // [@ANCHOR: backup_management:js_board_setup]
     setup() {
