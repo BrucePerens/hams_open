@@ -28,6 +28,7 @@ const CLIP: usize = 2000;
 /// The largest reply to a tool call that is passed to a program, bytes.
 const MAX_REPLY: usize = 8 << 20;
 
+// [@ANCHOR: bench_mcp_procedure_run_params]
 /// The parameters of a run after validation.
 pub struct Params {
     pub source: String,
@@ -40,6 +41,7 @@ pub struct Params {
     pub trace: bool,
 }
 
+// [@ANCHOR: bench_mcp_procedure_run_rec]
 /// The persisted record of a run (`state.json`).
 struct Rec {
     state: String,
@@ -63,6 +65,7 @@ struct Rec {
     awaiting: Option<Value>,
 }
 
+// [@ANCHOR: bench_mcp_procedure_run_run_ctx]
 pub struct RunCtx {
     pub id: String,
     pub dir: PathBuf,
@@ -81,6 +84,7 @@ pub struct RunCtx {
     answer: Mutex<Option<String>>,
 }
 
+// [@ANCHOR: bench_mcp_procedure_run_ask]
 /// An operator prompt a run is waiting on.
 struct Ask {
     id: Value,
@@ -88,6 +92,7 @@ struct Ask {
     limit: Duration,
 }
 
+// [@ANCHOR: bench_mcp_procedure_run_internal]
 /// What a worker thread tells the supervisor.
 enum Internal {
     Reply(Value),

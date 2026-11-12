@@ -9,6 +9,7 @@ use crate::example::testkit::{FakeDevice, Sim};
 use serde_json::json;
 use std::time::{Duration, Instant};
 
+// [@ANCHOR: bench_mcp_procedure_tests_bench]
 pub struct Bench {
     pub insts: Vec<Instrument>,
     pub dir: PathBuf,
@@ -130,6 +131,8 @@ fn the_runner_entry_is_read_with_defaults_and_bad_values_are_refused() {
 // Tests [@ANCHOR: proc_call]
 // Tests [@ANCHOR: proc_flag_arg]
 // Tests [@ANCHOR: proc_number_arg]
+// Tests [@ANCHOR: bench_mcp_procedure_tiers_tool_index]
+// Tests [@ANCHOR: bench_mcp_procedure_tiers_tool_info]
 #[test]
 fn tools_are_listed_by_tier_and_refused_above_it() {
     let names = |b: &Bench| {
@@ -194,6 +197,7 @@ fn tools_are_listed_by_tier_and_refused_above_it() {
 }
 
 // Tests [@ANCHOR: proc_run_params]
+// Tests [@ANCHOR: bench_mcp_procedure_run_params]
 #[test]
 fn run_arguments_are_checked_against_the_runner_before_anything_starts() {
     let b = bench_with("read_config", "");
@@ -302,6 +306,12 @@ fn tier_names_round_trip() {
 // Tests [@ANCHOR: proc_view_output]
 // Tests [@ANCHOR: proc_view_result]
 // Tests [@ANCHOR: proc_view_terminal]
+// Tests [@ANCHOR: bench_mcp_procedure_tests_bench]
+// Tests [@ANCHOR: bench_mcp_procedure_store_event_log]
+// Tests [@ANCHOR: bench_mcp_procedure_run_internal]
+// Tests [@ANCHOR: bench_mcp_procedure_run_run_ctx]
+// Tests [@ANCHOR: bench_mcp_procedure_cpython_py_session]
+// Tests [@ANCHOR: bench_mcp_procedure_backend_spawn_spec]
 #[test]
 fn a_procedure_runs_to_the_end_and_everything_it_did_can_be_read_back() {
     let b = bench();
@@ -607,6 +617,7 @@ while True:
     );
 }
 
+// Tests [@ANCHOR: bench_mcp_procedure_backend_incoming]
 #[test]
 fn the_wall_clock_budget_stops_a_run_and_a_program_that_ignores_the_request_is_killed_after_the_grace_time(
 ) {
@@ -742,6 +753,7 @@ bench.result(seen)
 // Tests [@ANCHOR: proc_cpython_limit]
 // Tests [@ANCHOR: proc_cpython_user_tasks]
 // Tests [@ANCHOR: proc_cpython_no_limits]
+// Tests [@ANCHOR: bench_mcp_procedure_backend_limits]
 #[test]
 fn limits_stop_runaway_memory_calls_and_output_and_numpy_scipy_work_inside_them() {
     let b = bench();
@@ -996,6 +1008,7 @@ fn dry_run_checks_the_source_and_lists_the_tools_with_their_tiers_and_starts_not
 }
 
 // Tests [@ANCHOR: proc_cpython_command_line]
+// Tests [@ANCHOR: bench_mcp_procedure_cpython_cpython]
 #[test]
 fn the_command_line_has_the_interpreter_flags_and_the_optional_systemd_wrapper() {
     let limits = backend::Limits {
@@ -1152,6 +1165,7 @@ fn the_safe_state_runs_when_a_run_ends_other_than_by_success_through_the_normal_
 }
 
 // Tests [@ANCHOR: proc_safe_action_for]
+// Tests [@ANCHOR: bench_mcp_procedure_safe_rule]
 #[test]
 fn the_safe_state_rules_name_real_tools_and_only_count_calls_that_change_something() {
     let cfg = Config::default();
@@ -1302,6 +1316,7 @@ bench.result(seen)
 // Tests [@ANCHOR: proc_run_recover_now]
 // Tests [@ANCHOR: proc_run_recover]
 // Tests [@ANCHOR: proc_run_start_ticks]
+// Tests [@ANCHOR: bench_mcp_procedure_run_rec]
 #[test]
 fn runs_left_active_by_a_dead_server_are_marked_lost_and_their_instruments_made_safe() {
     let b = bench();
@@ -1675,6 +1690,7 @@ bench.result({"answer": answer, "deadline_left": left})
     );
 }
 
+// Tests [@ANCHOR: bench_mcp_procedure_run_ask]
 #[test]
 fn a_prompt_nobody_answers_stops_the_run_at_the_operator_limit_and_a_cancel_ends_the_wait() {
     let b = bench_with("full", r#""operator_timeout_s":1"#);
@@ -1705,6 +1721,7 @@ fn a_prompt_nobody_answers_stops_the_run_at_the_operator_limit_and_a_cancel_ends
     assert_eq!(r["emitted"]["second"], "policy", "{r}");
 }
 
+// [@ANCHOR: bench_mcp_procedure_tests_world]
 /// The mock bench of the example procedures: three example instruments whose fake devices share one simulated world. `gen` is the
 /// generator (a pulse programs its level), `scope` reads that level, `vna` reads twice the level and can be broken until it is
 /// power-cycled (`OUTP OFF`, what bench_example_safe_state sends, plays the power cycle).
@@ -1716,6 +1733,7 @@ pub struct World {
     pub vna_reads: u32,
 }
 
+// [@ANCHOR: bench_mcp_procedure_tests_coupled]
 pub struct Coupled {
     pub bench: Bench,
     pub world: std::sync::Arc<std::sync::Mutex<World>>,
@@ -1815,6 +1833,9 @@ pub fn coupled_bench() -> Coupled {
 
 // Tests [@ANCHOR: proc_examples_find]
 // Tests [@ANCHOR: proc_py_series]
+// Tests [@ANCHOR: bench_mcp_procedure_tests_coupled]
+// Tests [@ANCHOR: bench_mcp_procedure_tests_world]
+// Tests [@ANCHOR: bench_mcp_procedure_examples_example]
 #[test]
 fn the_sweep_series_example_retries_power_cycles_and_tabulates_the_spread_on_the_mock_bench() {
     let c = coupled_bench();

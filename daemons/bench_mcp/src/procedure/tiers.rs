@@ -11,12 +11,14 @@ use std::collections::BTreeMap;
 /// run limit and the tier cap of its parent).
 pub const NOT_FOR_PROCEDURES: &str = "bench_proc_";
 
+// [@ANCHOR: bench_mcp_procedure_tiers_tool_info]
 pub struct ToolInfo {
     pub tier: Tier,
     pub description: String,
     pub schema: Value,
 }
 
+// [@ANCHOR: bench_mcp_procedure_tiers_tool_index]
 pub struct ToolIndex {
     tools: BTreeMap<String, ToolInfo>,
 }

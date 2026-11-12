@@ -15,6 +15,7 @@ use serde_json::{json, Value};
 use std::path::Path;
 use std::time::Duration;
 
+// [@ANCHOR: bench_mcp_procedure_safe_rule]
 pub(super) struct Rule {
     /// Tools whose call makes the safe state necessary.
     pub triggers: &'static [&'static str],
