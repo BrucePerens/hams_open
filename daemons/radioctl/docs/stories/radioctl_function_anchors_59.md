@@ -18,7 +18,7 @@ Turns the four digit bytes and the pulses-per-degree byte of a reply into degree
 
 ### `fn description(&self) -> &RotatorDescription` [@ANCHOR: radioctl:radioctl_station_rot2prog_description]
 
-Implementation of `RotatorEngine::description` for the Rot2Prog engine: a borrow of the description. Cannot fail.
+Implementation of `RotatorEngine::description` for the SPID Rot2Prog engine; takes `&self` and returns `&RotatorDescription`, a borrow of the description `Rot2ProgEngine::new` took ownership of. The fields that matter to this protocol are `az_min` to `el_max` (the travel that `encode` checks every position against before a frame exists), `has_elevation` (decides whether the elevation is parsed from a reply), `pulses_per_degree` (1 to 10, validated by `RotatorDescription::engine`; it goes into every set frame and is the divisor for reading the reply angle), `park`, and `reply_timeout_ms` (read by the rotator driver as the longest wait for the 12-byte reply). No I/O, no lock, no side effects, cannot fail. Immutable after construction, so any thread may call it (the trait is `Send + Sync`). Test: `rot2prog_encodes_and_parses_the_sheet_frames` in `rotator.rs`.
 
 ### `fn encode(&self, op: &RotOp) -> Result<Encoded, StationError>` [@ANCHOR: radioctl:radioctl_station_rot2prog_encode]
 
