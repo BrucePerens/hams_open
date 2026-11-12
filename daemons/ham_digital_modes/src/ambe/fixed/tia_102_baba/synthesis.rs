@@ -48,6 +48,7 @@ const TEN_Q16_16: i64 = 10i64 << 16;
 /// functions' own doc comments for why `i32` isn't wide enough). `s_e = 75000.0`, `tau_m = 20480.0`
 /// per Annex A / Eq. 115's own first-branch value, exactly as the float sibling's own doc comment
 /// derives.
+// [@ANCHOR: synthesis_synthesis_state_struct]
 pub struct SynthesisState {
     noise: NoiseState,
     unvoiced: UnvoicedState,

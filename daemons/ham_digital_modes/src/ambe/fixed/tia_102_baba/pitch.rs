@@ -73,6 +73,7 @@ fn lowpass_at(n: i32) -> i64 {
 
 /// One frame's pitch-analysis state: the normalised lowpass-filtered samples, `S`, and the integer-lag
 /// autocorrelation of `s * w^2`.
+// [@ANCHOR: pitch_pitch_analysis_frame_struct]
 pub struct PitchAnalysisFrame {
     /// `sum (s*w)^2` over the 301-tap window (block-normalised units).
     s_energy: i64,
@@ -190,6 +191,7 @@ impl PitchAnalysisFrame {
 }
 
 /// `E(P)` (Q16.16) for the 203 candidate pitches of one frame.
+// [@ANCHOR: pitch_error_table_struct]
 #[derive(Clone)]
 pub struct ErrorTable(pub [i32; CANDIDATES]);
 
@@ -313,6 +315,8 @@ pub fn choose_initial_pitch_estimate(idx_b: usize, ce_b: i32, idx_f: usize, ce_f
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: pitch_pitch_analysis_frame_struct]
+    // Tests [@ANCHOR: pitch_error_table_struct]
     use super::*;
 
     /// `tracking_range` is the contiguous run of candidate indices whose pitch lies within

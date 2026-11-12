@@ -129,3 +129,8 @@ fn integer_band_arithmetic_matches_the_real_definitions() {
         }
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: pitch_refinement_cplx_struct]
+// Tests [@ANCHOR: pitch_refinement_pitch_struct]
+// Tests [@ANCHOR: pitch_refinement_refinement_frame_struct]

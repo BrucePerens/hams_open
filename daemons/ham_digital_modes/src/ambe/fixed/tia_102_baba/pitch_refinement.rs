@@ -47,6 +47,7 @@ use super::pitch_refinement_tables::{
 pub const TWO_PI_Q30: i64 = 6_746_518_852;
 
 /// A complex number with `i64` parts; the scale is stated by whoever holds it.
+// [@ANCHOR: pitch_refinement_cplx_struct]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Cplx {
     pub re: i64,
@@ -84,6 +85,7 @@ pub fn p8_of_index(idx: usize) -> u32 {
 /// ([`Pitch::from_p8`]) `u = 2048 / P8` is exact (no `pi` at all); from an arbitrary `omega0`
 /// ([`Pitch::from_omega0_q30`]) `u = omega0 * (256 / 2 pi)` is formed with a Q40 constant, an
 /// integer product with no rounding beyond that of `omega0` itself.
+// [@ANCHOR: pitch_refinement_pitch_struct]
 #[derive(Clone, Copy, Debug)]
 pub struct Pitch {
     n: i128,
@@ -159,6 +161,7 @@ impl Pitch {
 }
 
 /// The 256-point windowed DFT of one frame: `S_w(m)` for `m = -127..=128`, Q10.
+// [@ANCHOR: pitch_refinement_refinement_frame_struct]
 pub struct RefinementFrame {
     sw: [Cplx; 256],
 }

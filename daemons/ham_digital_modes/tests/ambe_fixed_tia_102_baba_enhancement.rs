@@ -349,3 +349,6 @@ fn error_estimation_matches() {
         should_mute_frame_q16(&fixed_errors2)
     );
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: error_estimation_frame_errors_q16_struct]

@@ -32,6 +32,7 @@ use crate::ambe::float::tia_102_baba::{decode_code_vectors, decode_code_vectors_
 const ONE_Q16_16: i32 = 65536;
 
 /// The fixed-point equivalent of `DecodedParameters`.
+// [@ANCHOR: decode_decoded_parameters_struct]
 pub struct DecodedParameters {
     pub omega0_tilde_q16: i32,
     /// `omega0_tilde` at Q32 radians/sample -- the precision synthesis uses.
@@ -45,6 +46,7 @@ pub struct DecodedParameters {
 }
 
 /// The fixed-point equivalent of `FrameOutcome`.
+// [@ANCHOR: decode_frame_outcome_enum]
 pub enum FrameOutcome {
     Repeat,
     Mute,
@@ -57,6 +59,7 @@ const MAX_VALID_B0: u32 = 207;
 /// The fixed-point equivalent of `DecoderState`. `error_rate_prev` is `i32` Q16.16, matching
 /// `estimate_errors_q16`'s own domain; `spectral_amplitudes_prev` is `Vec<i32>` Q16.16, seeded to
 /// [`ONE_Q16_16`] per Annex A, matching the float sibling's own `1.0`.
+// [@ANCHOR: decode_decoder_state_struct]
 pub struct DecoderState {
     synthesis: SynthesisState,
     l_hat_prev: u32,

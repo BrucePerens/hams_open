@@ -132,3 +132,9 @@ fn streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech() {
     assert!(pct(stats.voicing_same, stats.harmonics) >= 99.0);
     assert!(stats.amp_db_worst < 0.5);
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: encoder_frame_analysis_struct]
+// Tests [@ANCHOR: encoder_frame_analyzer_struct]
+// Tests [@ANCHOR: encoder_high_pass_filter_struct]
+// Tests [@ANCHOR: tia_102_baba_encoder_encoder_struct]

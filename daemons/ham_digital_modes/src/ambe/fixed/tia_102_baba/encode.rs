@@ -28,6 +28,7 @@ use crate::ambe::float::tia_102_baba::tables::block_lengths_for_l;
 
 /// The per-frame state carried into the next [`encode_frame`] call: the energy tracker, the previous frame's band
 /// decisions and harmonic count, and its reconstructed amplitudes (Q16.16), i.e. what the decoder will hold.
+// [@ANCHOR: encode_frame_state_struct]
 pub struct FrameState {
     xi_max_q16: i128,
     l_hat: u32,

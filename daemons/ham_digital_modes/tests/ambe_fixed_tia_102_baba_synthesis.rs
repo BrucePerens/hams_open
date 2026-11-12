@@ -324,3 +324,6 @@ fn synthesize_frame_matches_float_with_a_moderate_error_record() {
         "moderate error record SNR too low: {snr} dB"
     );
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: synthesis_synthesis_state_struct]

@@ -356,3 +356,8 @@ fn a_persistently_high_error_rate_forces_a_mute_producing_real_comfort_noise_eve
         }
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: decode_decoded_parameters_struct]
+// Tests [@ANCHOR: decode_decoder_state_struct]
+// Tests [@ANCHOR: decode_frame_outcome_enum]

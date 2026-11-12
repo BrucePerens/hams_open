@@ -178,3 +178,6 @@ fn quantizer_b0_matches_the_float_formula_for_every_period() {
     );
     assert_eq!(differ_off_boundary, 0);
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: encode_frame_state_struct]
