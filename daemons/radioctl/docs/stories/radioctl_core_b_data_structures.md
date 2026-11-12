@@ -780,7 +780,7 @@
 
 **Functions that touch it.** `serve` (src/rig.rs:1391).
 
-**See also:** test `the_c_program_passes_against_the_shared_library (../radioctl-capi/tests/c_program.rs)`.
+**See also:** test `a_rig_tunes_over_the_usb_link_and_garbage_does_not_wedge_it (tests/usb_link.rs)`.
 
 ### `SessionEnd` [@ANCHOR: radioctl:radioctl_core_usb_link_session_end]
 

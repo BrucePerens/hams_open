@@ -364,6 +364,7 @@ async fn the_first_open_fails_cleanly_when_the_device_is_not_there() {
 // Tests [@ANCHOR: radioctl_core_usb_monitor_stats]
 // Tests [@ANCHOR: radioctl_core_usb_link_usb_link]
 // Tests [@ANCHOR: radioctl_core_usb_link_usb_stats]
+// Tests [@ANCHOR: radioctl_core_usb_link_command_type]
 #[tokio::test]
 async fn a_rig_tunes_over_the_usb_link_and_garbage_does_not_wedge_it() {
     let (bus, desc) = softrock();
