@@ -5,6 +5,7 @@ from odoo import http
 from odoo.http import request
 
 
+# [@ANCHOR: pager_duty_board_pager_board]
 class PagerBoard(http.Controller):
     @http.route("/pager/board", type="http", auth="user", website=True)
     # [@ANCHOR: pager_duty:pager_board_route]

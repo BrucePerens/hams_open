@@ -47,6 +47,9 @@ class TestOdooClientReloadsARotatedKey(unittest.TestCase):
             handle.write(text)
 
     # [@ANCHOR: pager_duty:test_odoo_client_reloads_a_rotated_key]
+    # Tests [@ANCHOR: pager_duty_pager_check_pager_check]
+    # Tests [@ANCHOR: pager_duty_pager_mcp_server_odoo_client]
+    # Tests [@ANCHOR: pager_duty_generalized_monitor_odoo_client]
     def test_odoo_client_reloads_a_rotated_key(self):
         # Tests [@ANCHOR: pager_duty:odoo_client_reload_key]
         # Tests [@ANCHOR: pager_duty:odoo_client_execute]

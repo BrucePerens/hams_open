@@ -38,6 +38,7 @@ class TestAuthCertSeverity(HamsTransactionCase):
         self.assertEqual(check_mod.severity_for_auth_cert(29.9), "low")
         self.assertEqual(check_mod.severity_for_auth_cert(14), "low")
 
+    # Tests [@ANCHOR: pager_duty_incident_pager_incident]
     def test_pages_under_fourteen_days(self):
         # `high` is the lowest severity that pages on-call (incident.py: low/medium are trend-tracked only),
         # so the shared 14-days-is-medium ladder would not have met the requirement.

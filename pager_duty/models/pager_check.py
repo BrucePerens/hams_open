@@ -19,6 +19,7 @@ from odoo.addons.zero_sudo import public_rpc
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: pager_duty_pager_check_pager_check]
 class PagerCheck(models.Model):
     """
     Configurable monitoring check.

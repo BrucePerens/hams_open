@@ -6,6 +6,7 @@ from odoo.exceptions import AccessError
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: pager_duty_log_analyzer_pager_log_pattern]
 class PagerLogPattern(models.Model):
     """
     Regex pattern for log analysis.
@@ -40,6 +41,7 @@ class PagerLogPattern(models.Model):
     _name_uniq = models.Constraint("UNIQUE(name, website_id)", "The pattern name must be unique per website!")
 
 
+# [@ANCHOR: pager_duty_log_analyzer_pager_log_file]
 class PagerLogFile(models.Model):
     """
     Log file to be analyzed by the daemon.
@@ -59,6 +61,7 @@ class PagerLogFile(models.Model):
 
     _path_uniq = models.Constraint("UNIQUE(filepath, website_id)", "The file path must be unique per website!")
 
+# [@ANCHOR: pager_duty_log_analyzer_pager_log_search_job]
 class PagerLogSearchJob(models.TransientModel):
     _name = "pager.log.search.job"
     _description = "Log Search Job State"

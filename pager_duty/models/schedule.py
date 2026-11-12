@@ -7,6 +7,7 @@ from odoo import models, fields, api
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: pager_duty_schedule_pager_schedule]
 class PagerSchedule(models.Model):
     """
     Extends calendar.event to support pager duty scheduling.

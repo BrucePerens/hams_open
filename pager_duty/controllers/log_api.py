@@ -14,6 +14,7 @@ from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: pager_duty_log_api_pager_log_api]
 class PagerLogAPI(http.Controller):
     @http.route("/api/v1/pager/logs/search", type="jsonrpc", auth="user")
     # [@ANCHOR: pager_duty:search_logs]

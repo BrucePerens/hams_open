@@ -110,6 +110,7 @@ class RedisKeyAndFileTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("not a time", msg)
 
+    # Tests [@ANCHOR: pager_duty_ping_api_pager_ping_api]
     def test_file_mtime(self):
         with tempfile.NamedTemporaryFile() as f:
             now = os.stat(f.name).st_mtime

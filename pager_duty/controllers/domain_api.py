@@ -14,6 +14,7 @@ MAX_FAILED_ATTEMPTS = 10
 FAILED_ATTEMPTS_WINDOW = 60
 
 
+# [@ANCHOR: pager_duty_domain_api_pager_duty_controller]
 class PagerDutyController(http.Controller):
 
     @http.route(
