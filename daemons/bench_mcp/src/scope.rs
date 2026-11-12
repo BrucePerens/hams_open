@@ -320,10 +320,11 @@ pub fn set(s: &mut Link, args: &Value) -> Result<Value, String> {
         cmd(s, format!("TRIG_MODE {v}"))?;
     }
     if let Some(t) = args.get("trigger_type").and_then(|v| v.as_str()) {
-        // The types this unit (firmware 1.3.27) accepted when probed: edge, slope (SLEW), pulse (GLIT), interval (INTV), runt (RUNT), TV. The
-        // pattern, window, drop-out and serial-bus triggers were not accepted with the tokens tried (licensed options or other names).
-        if !["EDGE", "SLEW", "GLIT", "INTV", "RUNT", "TV"].contains(&t) {
-            return Err("trigger_type must be EDGE, SLEW (slope), GLIT (pulse), INTV (interval), RUNT or TV".into());
+        // The types this unit (firmware 1.3.27) accepted when probed: edge, slope (SLEW), pulse (GLIT), interval (INTV), runt (RUNT), TV. DROP
+        // (drop-out) is the other type the programming guide lists for TRSE and is not yet probed; the serial and pattern triggers are
+        // `bench_scope_trigger`. The guide has no window trigger type.
+        if !["EDGE", "SLEW", "GLIT", "INTV", "RUNT", "TV", "DROP"].contains(&t) {
+            return Err("trigger_type must be EDGE, SLEW (slope), GLIT (pulse), INTV (interval), RUNT, TV or DROP (drop-out)".into());
         }
         let c = ch(args)?;
         cmd(s, format!("TRSE {t},SR,C{c}"))?;

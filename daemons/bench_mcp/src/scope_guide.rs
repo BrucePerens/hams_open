@@ -720,6 +720,294 @@ pub fn cursor_native(s: &mut Link, args: &Value) -> Result<Value, String> {
     Ok(r)
 }
 
+/// How one serial-trigger parameter's value is checked.
+#[derive(Clone, Copy)]
+enum Sv {
+    /// A source, `C1` or `C2`, optionally followed by `,` and a threshold in volts.
+    Src,
+    /// One of these words, or a number written as its digits.
+    Words(&'static [&'static str]),
+    /// A whole number in this range.
+    Int(i64, i64),
+    /// A time in seconds in this range.
+    Time(f64, f64),
+    /// A data pattern of `0`, `1` and `X`, up to 96 of them.
+    Bits,
+    /// A baud rate: one of the standard words, or any whole number in the range (sent as `CUSTOM,<n>`).
+    Baud(&'static [&'static str], i64, i64),
+}
+
+/// The serial-trigger parameters of the guide: bus, parameter (the command is `TR<BUS>:<PARAM>`), value. The argument name is the parameter in lower case with `:` as `_`.
+const SERIAL_PARAMS: &[(&str, &str, Sv)] = &[
+    ("IIC", "SCL", Sv::Src),
+    ("IIC", "SDA", Sv::Src),
+    (
+        "IIC",
+        "CON",
+        Sv::Words(&[
+            "START", "STOP", "RESTART", "NOACK", "EEPROM", "7ADDA", "10ADDA", "DALENTH",
+        ]),
+    ),
+    ("IIC", "ADDR", Sv::Int(0, 1024)),
+    ("IIC", "DATA", Sv::Int(0, 256)),
+    ("IIC", "DAT2", Sv::Int(0, 256)),
+    ("IIC", "QUAL", Sv::Words(&["EQUAL", "MORE", "LESS"])),
+    ("IIC", "RW", Sv::Words(&["READ", "WRITE", "DONT_CARE"])),
+    ("IIC", "ALEN", Sv::Words(&["7BIT", "10BIT"])),
+    ("IIC", "DLEN", Sv::Int(1, 12)),
+    ("SPI", "CLK", Sv::Src),
+    ("SPI", "CLK:EDGE", Sv::Words(&["RISING", "FALLING"])),
+    ("SPI", "CLK:TIM", Sv::Time(100e-9, 5e-3)),
+    ("SPI", "MOSI", Sv::Src),
+    ("SPI", "MISO", Sv::Src),
+    ("SPI", "CSTP", Sv::Words(&["CS", "NCS", "TIMEOUT"])),
+    ("SPI", "CS", Sv::Src),
+    ("SPI", "NCS", Sv::Src),
+    ("SPI", "TRTY", Sv::Words(&["MOSI", "MISO"])),
+    ("SPI", "DATA", Sv::Bits),
+    ("SPI", "DLEN", Sv::Int(4, 96)),
+    ("SPI", "BIT", Sv::Words(&["MSB", "LSB"])),
+    ("UART", "RX", Sv::Src),
+    ("UART", "TX", Sv::Src),
+    ("UART", "TRTY", Sv::Words(&["RX", "TX"])),
+    (
+        "UART",
+        "CON",
+        Sv::Words(&["START", "STOP", "DATA", "ERROR"]),
+    ),
+    ("UART", "QUAL", Sv::Words(&["EQUAL", "MORE", "LESS"])),
+    ("UART", "DATA", Sv::Int(0, 256)),
+    (
+        "UART",
+        "BAUD",
+        Sv::Baud(
+            &[
+                "600", "1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200",
+            ],
+            300,
+            5_000_000,
+        ),
+    ),
+    ("UART", "DLEN", Sv::Int(5, 8)),
+    ("UART", "PAR", Sv::Words(&["NONE", "ODD", "EVEN"])),
+    ("UART", "POL", Sv::Words(&["LOW", "HIGH"])),
+    ("UART", "STOP", Sv::Words(&["1", "1.5", "2"])),
+    ("UART", "BIT", Sv::Words(&["LSB", "MSB"])),
+    ("CAN", "CANH", Sv::Src),
+    (
+        "CAN",
+        "CON",
+        Sv::Words(&["START", "REMOTE", "ID", "ID_AND_DATA", "ERROR"]),
+    ),
+    ("CAN", "ID", Sv::Int(0, 536_870_912)),
+    ("CAN", "IDL", Sv::Words(&["11BITS", "29BITS"])),
+    ("CAN", "DATA", Sv::Int(0, 256)),
+    ("CAN", "DAT2", Sv::Int(0, 256)),
+    (
+        "CAN",
+        "BAUD",
+        Sv::Baud(
+            &[
+                "5K", "10K", "20K", "50K", "100K", "125K", "250K", "500K", "800K", "1M",
+            ],
+            5000,
+            1_000_000,
+        ),
+    ),
+    ("LIN", "SRC", Sv::Src),
+    (
+        "LIN",
+        "CON",
+        Sv::Words(&["BREAK", "ID", "ID_AND_DATA", "DATA_ERROR"]),
+    ),
+    ("LIN", "ID", Sv::Int(0, 255)),
+    ("LIN", "DATA", Sv::Int(0, 256)),
+    ("LIN", "DAT2", Sv::Int(0, 256)),
+    (
+        "LIN",
+        "BAUD",
+        Sv::Baud(
+            &["600", "1200", "2400", "4800", "9600", "19200"],
+            300,
+            20_000,
+        ),
+    ),
+];
+
+/// The text a serial-trigger value is sent as, or why it is refused.
+fn serial_value(kind: Sv, v: &Value) -> Result<String, String> {
+    // [@ANCHOR: bench_mcp_scope_serial_value]
+    let word = |v: &Value| {
+        v.as_str()
+            .map(str::to_uppercase)
+            .or_else(|| v.as_f64().map(|n| n.to_string()))
+    };
+    let range = |lo: f64, hi: f64| {
+        v.as_f64()
+            .filter(|x| x.is_finite() && (lo..=hi).contains(x))
+    };
+    match kind {
+        Sv::Src => {
+            let text = v
+                .as_str()
+                .ok_or("a source is a string such as C1 or C1,0.2V")?;
+            let (src, thr) = text
+                .split_once(',')
+                .map_or((text, None), |(a, b)| (a, Some(b)));
+            let src = src.trim().to_uppercase();
+            if src != "C1" && src != "C2" {
+                return Err("the source must be C1 or C2".into());
+            }
+            match thr {
+                None => Ok(src),
+                Some(t) => {
+                    let t = t.trim().to_lowercase();
+                    let (num, scale) = if let Some(n) = t.strip_suffix("mv") {
+                        (n, 1e-3)
+                    } else {
+                        (t.strip_suffix('v').unwrap_or(&t), 1.0)
+                    };
+                    let x = num
+                        .trim()
+                        .parse::<f64>()
+                        .ok()
+                        .filter(|x| x.abs() * scale <= 100.0)
+                        .ok_or("the threshold must be a voltage such as 0.2V")?;
+                    Ok(format!("{src},{:E}V", x * scale))
+                }
+            }
+        }
+        Sv::Words(w) => word(v)
+            .filter(|x| w.contains(&x.as_str()))
+            .ok_or(format!("must be one of {}", w.join(", "))),
+        Sv::Int(lo, hi) => v
+            .as_i64()
+            .filter(|x| (lo..=hi).contains(x))
+            .map(|x| x.to_string())
+            .ok_or(format!("must be a whole number from {lo} to {hi}")),
+        Sv::Time(lo, hi) => range(lo, hi)
+            .map(|x| format!("{x:E}S"))
+            .ok_or(format!("must be a time in seconds from {lo} to {hi}")),
+        Sv::Bits => {
+            let bits: Vec<char> = v
+                .as_str()
+                .ok_or("must be a string of 0, 1 and X")?
+                .chars()
+                .filter(|c| *c != ',' && *c != ' ')
+                .map(|c| c.to_ascii_uppercase())
+                .collect();
+            if bits.is_empty()
+                || bits.len() > 96
+                || bits.iter().any(|c| !matches!(c, '0' | '1' | 'X'))
+            {
+                return Err("must be 1 to 96 of 0, 1 and X".into());
+            }
+            Ok(bits
+                .iter()
+                .map(char::to_string)
+                .collect::<Vec<_>>()
+                .join(","))
+        }
+        Sv::Baud(w, lo, hi) => match word(v) {
+            Some(x) if w.contains(&x.as_str()) => Ok(x),
+            _ => v
+                .as_i64()
+                .filter(|x| (lo..=hi).contains(x))
+                .map(|x| format!("CUSTOM,{x}"))
+                .ok_or(format!(
+                    "must be one of {} or a whole number from {lo} to {hi}",
+                    w.join(", ")
+                )),
+        },
+    }
+}
+
+/// `bench_scope_trigger`: serial triggers and the pattern trigger. `serial` is `{bus, settings}` (bus i2c, spi, uart, can or lin; settings named as the guide's
+/// parameters in lower case, for example `scl`, `con`, `clk_edge`, `baud`): the trigger type is set to SERIAL (`TRSE SERIAL`) and each parameter is
+/// written (`TRIIC:SCL`, ...) and read back. `pattern` is `{c1, c2, state}` (each channel L, H or X; state AND, OR, NAND or NOR; `TRPA`). Which of
+/// these this unit has (they may be licensed options) is shown by the read-back.
+pub fn trigger(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_trigger]
+    let mut cmds: Vec<(String, String)> = Vec::new();
+    let mut names: Vec<(String, String)> = Vec::new();
+    if let Some(sp) = args.get("serial").filter(|v| !v.is_null()) {
+        let bus = sp
+            .get("bus")
+            .and_then(Value::as_str)
+            .map(str::to_uppercase)
+            .map(|b| if b == "I2C" { "IIC".to_string() } else { b });
+        let bus = bus
+            .filter(|b| SERIAL_PARAMS.iter().any(|p| p.0 == b))
+            .ok_or("serial.bus must be i2c, spi, uart, can or lin")?;
+        let settings = sp
+            .get("settings")
+            .and_then(Value::as_object)
+            .filter(|m| !m.is_empty())
+            .ok_or("serial.settings must name at least one parameter")?;
+        let table: Vec<_> = SERIAL_PARAMS.iter().filter(|p| p.0 == bus).collect();
+        if let Some(bad) = settings.keys().find(|k| {
+            !table
+                .iter()
+                .any(|p| p.1.to_lowercase().replace(':', "_") == **k)
+        }) {
+            let known: Vec<String> = table
+                .iter()
+                .map(|p| p.1.to_lowercase().replace(':', "_"))
+                .collect();
+            return Err(format!(
+                "serial.settings.{bad} is not a {bus} parameter ({})",
+                known.join(", ")
+            ));
+        }
+        cmds.push(("TRSE SERIAL".into(), "TRSE?".into()));
+        for (_, param, kind) in table {
+            let arg = param.to_lowercase().replace(':', "_");
+            if let Some(v) = settings.get(&arg) {
+                let text =
+                    serial_value(*kind, v).map_err(|e| format!("serial.settings.{arg} {e}"))?;
+                cmds.push((
+                    format!("TR{bus}:{param} {text}"),
+                    format!("TR{bus}:{param}?"),
+                ));
+                names.push((arg, format!("TR{bus}:{param}?")));
+            }
+        }
+    }
+    if let Some(p) = args.get("pattern").filter(|v| !v.is_null()) {
+        let state = p
+            .get("state")
+            .and_then(Value::as_str)
+            .map(str::to_uppercase)
+            .filter(|x| ["AND", "OR", "NAND", "NOR"].contains(&x.as_str()))
+            .ok_or("pattern.state must be AND, OR, NAND or NOR")?;
+        let mut parts = Vec::new();
+        for c in ["c1", "c2"] {
+            if let Some(v) = p.get(c) {
+                let l = v
+                    .as_str()
+                    .map(str::to_uppercase)
+                    .filter(|x| ["L", "H", "X"].contains(&x.as_str()))
+                    .ok_or(format!("pattern.{c} must be L, H or X"))?;
+                parts.push(format!("{},{l}", c.to_uppercase()));
+            }
+        }
+        parts.push(format!("STATE,{state}"));
+        cmds.push((format!("TRPA {}", parts.join(",")), "TRPA?".into()));
+    }
+    if cmds.is_empty() {
+        return Err("give serial or pattern".into());
+    }
+    let mut r = apply(s, cmds)?;
+    r["trigger"] = readback(s, "TRSE?");
+    r["settings"] = Value::Object(
+        names
+            .into_iter()
+            .map(|(arg, q)| (arg, readback(s, &q)))
+            .collect(),
+    );
+    Ok(r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1118,5 +1406,106 @@ mod tests {
             assert!(cursor_native(&mut l, &bad).is_err(), "{bad}");
         }
         assert_eq!(f.seen.lock().unwrap().len(), n);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_trigger]
+    // Tests [@ANCHOR: bench_mcp_scope_serial_value]
+    #[test]
+    fn serial_and_pattern_triggers_are_set_checked_and_read_back() {
+        let (f, mut l) = link();
+        let r = trigger(&mut l, &json!({"serial": {"bus": "i2c", "settings": {"con": "7adda", "sda": "C2,200mV", "scl": "C1", "addr": 80, "rw": "write"}}})).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!([
+                "TRSE SERIAL",
+                "TRIIC:SCL C1",
+                "TRIIC:SDA C2,2E-1V",
+                "TRIIC:CON 7ADDA",
+                "TRIIC:ADDR 80",
+                "TRIIC:RW WRITE"
+            ])
+        );
+        assert_eq!(r["settings"]["sda"], "TRIIC:SDA C2,2E-1V");
+        let r = trigger(&mut l, &json!({"serial": {"bus": "spi", "settings": {"clk_tim": 1e-6, "data": "1,0,x", "bit": "MSB", "clk_edge": "rising"}}})).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!([
+                "TRSE SERIAL",
+                "TRSPI:CLK:EDGE RISING",
+                "TRSPI:CLK:TIM 1E-6S",
+                "TRSPI:DATA 1,0,X",
+                "TRSPI:BIT MSB"
+            ])
+        );
+        let r = trigger(
+            &mut l,
+            &json!({"serial": {"bus": "uart", "settings": {"baud": 9600, "dlen": 8, "stop": 1.5}}}),
+        )
+        .unwrap();
+        assert_eq!(
+            r["sent"],
+            json!(["TRSE SERIAL", "TRUART:BAUD 9600", "TRUART:DLEN 8"]
+                .iter()
+                .chain(&["TRUART:STOP 1.5"])
+                .collect::<Vec<_>>())
+        );
+        let r = trigger(
+            &mut l,
+            &json!({"serial": {"bus": "can", "settings": {"baud": 33333, "idl": "29bits"}}}),
+        )
+        .unwrap();
+        assert!(r["sent"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("TRCAN:BAUD CUSTOM,33333")));
+        let r = trigger(
+            &mut l,
+            &json!({"pattern": {"c1": "h", "c2": "L", "state": "and"}}),
+        )
+        .unwrap();
+        assert_eq!(r["sent"], json!(["TRPA C1,H,C2,L,STATE,AND"]));
+        assert_eq!(r["readback"]["TRPA?"], "TRPA C1,H,C2,L,STATE,AND");
+        let n = f.seen.lock().unwrap().len();
+        for bad in [
+            json!({}),
+            json!({"serial": {"bus": "usb", "settings": {"con": "START"}}}),
+            json!({"serial": {"bus": "i2c", "settings": {}}}),
+            json!({"serial": {"bus": "i2c", "settings": {"baud": 1}}}),
+            json!({"serial": {"bus": "i2c", "settings": {"con": "GO"}}}),
+            json!({"serial": {"bus": "i2c", "settings": {"scl": "C3"}}}),
+            json!({"serial": {"bus": "i2c", "settings": {"scl": "C1,abc"}}}),
+            json!({"serial": {"bus": "spi", "settings": {"data": "12"}}}),
+            json!({"serial": {"bus": "uart", "settings": {"baud": 100}}}),
+            json!({"serial": {"bus": "i2c", "settings": {"dlen": 13}}}),
+            json!({"pattern": {"c1": "H"}}),
+            json!({"pattern": {"state": "XOR"}}),
+            json!({"pattern": {"c3": "H", "c1": "Q", "state": "OR"}}),
+        ] {
+            assert!(trigger(&mut l, &bad).is_err(), "{bad}");
+        }
+        assert_eq!(
+            f.seen.lock().unwrap().len(),
+            n,
+            "nothing sent for a bad call"
+        );
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_set]
+    #[test]
+    fn bench_set_takes_the_drop_out_trigger_and_refuses_unknown_types_unsent() {
+        let (f, mut l) = link();
+        let r = crate::scope::set(
+            &mut l,
+            &json!({"trigger_type": "DROP", "channel": 2, "timebase_s": 1e-3}),
+        )
+        .unwrap();
+        assert_eq!(r["sent"], json!(["TDIV 1E-3S", "TRSE DROP,SR,C2"]));
+        assert_eq!(f.got("TRSE"), ["TRSE DROP,SR,C2"]);
+        assert!(
+            crate::scope::set(&mut l, &json!({"trigger_type": "WINDOW", "channel": 1}))
+                .unwrap_err()
+                .contains("DROP")
+        );
+        assert_eq!(f.got("TRSE").len(), 1);
     }
 }

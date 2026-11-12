@@ -132,7 +132,7 @@ Sends `SCDP` and reads the raw reply with `Link::raw_until_idle` (stops after 1.
 | `args.coupling` | `A1M`, `D1M` or `GND` | `C<c>:CPL <value>`; anything else is `bad coupling`. |
 | `args.attenuation` | number | Probe ratio, `C<c>:ATTN <value>`. |
 | `args.trigger_mode` | `AUTO`, `NORM`, `SINGLE`, `STOP` | `TRIG_MODE <value>`; anything else is `bad trigger_mode`. |
-| `args.trigger_type` | `EDGE`, `SLEW`, `GLIT`, `INTV`, `RUNT`, `TV` | `TRSE <type>,SR,C<c>`. These are the types firmware 1.3.27 accepted when probed; pattern, window, drop-out and serial-bus triggers were not accepted with the tokens tried (licensed options or other names). Any other value is refused with a message listing them. |
+| `args.trigger_type` | `EDGE`, `SLEW`, `GLIT`, `INTV`, `RUNT`, `TV`, `DROP` | `TRSE <type>,SR,C<c>`. The first six are the types firmware 1.3.27 accepted when probed; `DROP` (drop-out) is the other type the programming guide lists and is not yet probed; the serial and pattern triggers are `bench_scope_trigger`, and the guide has no window type (the earlier tokens tried for them were not accepted). Any other value is refused with a message listing them. |
 
 Returns `{"sent": [the commands in order], "status": <status object>}` after a 500 ms pause, so the answer shows what the scope reports now. Errors: `channel must be 1 or 2` (when a channel-dependent key is present without a valid channel), `bad coupling`, `bad trigger_mode`, the `trigger_type` message, link errors. Commands already sent before an error stay in effect (no rollback). Numbers are not checked for being finite or in range by this function, so a non-finite or nonsensical value is passed through to the scope. Calling it with no recognised key sends nothing and just returns the status. Test: `settings_become_the_scopes_commands_and_bad_values_are_refused_before_sending`.
 
@@ -393,6 +393,29 @@ Everything is checked before the first command. Returns `sent`, `readback`, `not
 | `args.y1_v`, `args.y2_v` | number, volts | `VREF`, `VDIF` in the same command. |
 
 All values are checked before the first command (`<arg> must be a number from -1000 to 1000`). Returns `sent`, `readback` (including `C<c>:CRST?` for the positions), `note`, `settings` and `values`: `hrel` from `C<c>:CRVA? HREL` (`delta_s`, `inverse_hz`, `x1_s`, `x2_s`) and `vrel` from `C<c>:CRVA? VREL` (`delta_v`, `y1_v`, `y2_v`), each number being the reply field without its unit; a reply that does not have all the fields, or no reply within 3 s (cursors off), is `{no_answer: <text>}`. The positions are in the scope's own reference (the screen centre of the trace), not the first sample of the waveform memory as in `bench_scope_cursors`. Test: `the_scopes_own_cursors_are_set_and_their_values_read` against the fake scope, in manual and track mode and with the cursors off.
+
+### `bench_mcp_scope_serial_value` [@ANCHOR: bench_mcp_scope_serial_value]
+
+`serial_value(kind, v)` checks one value of a serial trigger parameter and returns the text the scope command takes, or a message that `trigger` puts after `serial.settings.<name>`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `kind` | the parameter's value type from the guide's table | A source (`C1` or `C2` with an optional threshold such as `C1,0.2V` or `C1,200mV`, at most 100 V), one of a list of words (a JSON number counts as its digits, so `1.5` is the word `1.5`), a whole number in a range, a time in seconds in a range, a data pattern of up to 96 of `0`, `1`, `X`, or a baud rate (a standard word, or a whole number in the range sent as `CUSTOM,<n>`). |
+| `v` | `&Value` | The value given by the caller. |
+
+Returns the text, for example `C2,2E-1V`, `7ADDA`, `1E-6S`, `1,0,X` or `CUSTOM,33333`, or an error such as `must be one of START, STOP, ...`. Pure: no I/O. Test: `serial_and_pattern_triggers_are_set_checked_and_read_back`, which sends one of each kind and refuses a bad value of each.
+
+### `bench_mcp_scope_trigger` [@ANCHOR: bench_mcp_scope_trigger]
+
+`trigger(s, args)` is `bench_scope_trigger` (tier `read_config`): serial triggers and the pattern trigger.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.serial.bus` | `i2c`, `spi`, `uart`, `can`, `lin` | Which `TR<BUS>:` commands. Otherwise `serial.bus must be i2c, spi, uart, can or lin`. |
+| `args.serial.settings` | object, at least one key | Parameter names of that bus in lower case; an unknown one is refused with the list of the bus's names. Each value is checked by `serial_value`. |
+| `args.pattern` | `{c1, c2, state}` | `TRPA C1,H,C2,L,STATE,AND`: each channel `L`, `H` or `X` (optional), `state` `AND`, `OR`, `NAND` or `NOR` (required). |
+
+Everything is checked before the first command. With `serial` the commands are `TRSE SERIAL` and then the settings in the guide's table order; with `pattern`, `TRPA ...`. Each is followed by 100 ms and a read-back. Returns `sent`, `readback`, `note`, `trigger` (`TRSE?`) and `settings`. Giving neither is `give serial or pattern`. The guide does not say how a pattern trigger is selected as the type, so only its channels and state are written. Test: `serial_and_pattern_triggers_are_set_checked_and_read_back` against the fake scope for each bus, a custom baud rate, a pattern, and thirteen refused calls that send nothing.
 
 ## The bench supply (`src/psu.rs`)
 
