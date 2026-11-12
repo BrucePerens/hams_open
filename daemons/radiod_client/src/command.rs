@@ -34,6 +34,7 @@ pub const GAIN_RANGE_DB: (f32, f32) = (-20.0, 160.0);
 
 /// Channel identifier (RTP SSRC). `0` addresses the front end and `0xffff_ffff` means "all
 /// channels" in `radiod`, so neither is constructible.
+// [@ANCHOR: radiod_client_command_ssrc_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ssrc(u32);
 
@@ -129,6 +130,7 @@ impl Mode {
 }
 
 /// Output encoding of the channel's RTP stream.
+// [@ANCHOR: radiod_client_command_encoding]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Encoding {
     /// 16-bit signed big-endian PCM, mono.
@@ -141,6 +143,7 @@ pub enum Encoding {
 }
 
 /// A narrow audio channel.
+// [@ANCHOR: radiod_client_command_audio_channel]
 #[derive(Debug, Clone, PartialEq)]
 pub struct AudioChannel {
     /// Channel id.
@@ -160,6 +163,7 @@ pub struct AudioChannel {
 }
 
 /// A spectrum (panadapter) channel.
+// [@ANCHOR: radiod_client_command_spectrum_channel]
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpectrumChannel {
     /// Channel id.
@@ -225,6 +229,7 @@ pub enum Command {
 }
 
 /// Site limits the gateway enforces before anything reaches the wire.
+// [@ANCHOR: radiod_client_command_policy]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Policy {
     /// Lowest allowed frequency, Hz.
@@ -560,6 +565,11 @@ impl Command {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radiod_client_command_ssrc_struct]
+    // Tests [@ANCHOR: radiod_client_command_encoding]
+    // Tests [@ANCHOR: radiod_client_command_audio_channel]
+    // Tests [@ANCHOR: radiod_client_command_spectrum_channel]
+    // Tests [@ANCHOR: radiod_client_command_policy]
     use super::*;
     use crate::tlv::{parse, Entry, Kind};
 

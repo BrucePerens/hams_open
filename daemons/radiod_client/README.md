@@ -748,3 +748,254 @@ The carrier lock of a synchronous channel, for a console's lock indicator.
 Borrows `self`; pure, no errors. A status is a snapshot: the lock is as fresh as the last status `radiod` sent
 for the channel (one per acknowledged command or poll). See also `radiod_client_status_decode` and the test
 `decodes_the_pll_fields_and_the_carrier_lock`.
+
+## Data structures
+
+Every data structure of this crate, explained in full (ADR 0113): purpose, fields, who builds and reads it. Each sits under the anchor on its definition in `src/`.
+
+### `Ssrc` [@ANCHOR: radiod_client:radiod_client_command_ssrc_struct]
+
+**Purpose.** Channel identifier (RTP SSRC). `0` addresses the front end and `0xffff_ffff` means "all channels" in `radiod`, so neither is constructible.
+
+**Definition.** `pub struct Ssrc(u32);` (struct) in `daemons/radiod_client/src/command.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Hash`.
+
+**Used by.** `ssrc` (functions whose signature names it).
+
+**Notes.** A newtype over the `u32` channel id; built only by `Ssrc::new`, which rejects the two reserved values (0 and `u32::MAX`), so every `Ssrc` in the system is a legal channel id. `Copy` and comparable; it is the tag the RTP stream and the status messages carry.
+
+### `Encoding` [@ANCHOR: radiod_client:radiod_client_command_encoding]
+
+**Purpose.** Output encoding of the channel's RTP stream.
+
+**Definition.** `pub enum Encoding` (enum) in `daemons/radiod_client/src/command.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Pcm16Be` | - | 16-bit signed big-endian PCM, mono. |
+| `Opus` | - | Opus at the given bit rate (bits per second). `radiod` always sends Opus at 48 kHz stereo. |
+
+### `AudioChannel` [@ANCHOR: radiod_client:radiod_client_command_audio_channel]
+
+**Purpose.** A narrow audio channel.
+
+**Definition.** `pub struct AudioChannel` (struct) in `daemons/radiod_client/src/command.rs`; derives `Debug`, `Clone`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ssrc` | `Ssrc` | Channel id. |
+| `mode` | `Mode` | Mode. |
+| `frequency_hz` | `f64` | Carrier (dial) frequency, Hz. |
+| `encoding` | `Encoding` | Output encoding. |
+| `lifetime_frames` | `u32` | Frames (20 ms each at the default block time) before an unrefreshed channel is removed. |
+| `bandwidth_hz` | `Option<u32>` | Audio passband width, Hz, placed by [`Mode::passband`]; `None` keeps the mode's own passband. Refused outside [`MIN_BANDWIDTH_HZ`]..=[`MAX_BANDWIDTH_HZ`]. |
+
+**Used by.** `base_audio` (functions whose signature names it).
+
+### `SpectrumChannel` [@ANCHOR: radiod_client:radiod_client_command_spectrum_channel]
+
+**Purpose.** A spectrum (panadapter) channel.
+
+**Definition.** `pub struct SpectrumChannel` (struct) in `daemons/radiod_client/src/command.rs`; derives `Debug`, `Clone`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ssrc` | `Ssrc` | Channel id. |
+| `center_hz` | `f64` | Center frequency, Hz. |
+| `bin_count` | `u32` | Number of output bins. |
+| `bin_hz` | `f32` | Bin width (resolution bandwidth), Hz. |
+| `averaging` | `u32` | FFTs averaged into each response (1 = none). |
+| `lifetime_frames` | `u32` | Frames before an unrefreshed channel is removed. |
+| `byte_format` | `bool` | Ask for one byte per bin (demodulator type 4) instead of a float per bin: a quarter of the datagram size and room for 65,000 bins instead of 16,000. |
+
+**Used by.** `spectrum` (functions whose signature names it).
+
+### `Policy` [@ANCHOR: radiod_client:radiod_client_command_policy]
+
+**Purpose.** Site limits the gateway enforces before anything reaches the wire.
+
+**Definition.** `pub struct Policy` (struct) in `daemons/radiod_client/src/command.rs`; derives `Debug`, `Clone`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `min_hz` | `f64` | Lowest allowed frequency, Hz. |
+| `max_hz` | `f64` | Highest allowed frequency, Hz. |
+| `max_bins` | `u32` | Largest spectrum bin count the site allows. It can only lower the hard ceilings [`MAX_FLOAT_BINS`] and [`MAX_BYTE_BINS`]; a larger value here changes nothing. |
+| `min_bin_hz` | `f32` | Smallest bin width, Hz. |
+| `max_lifetime_frames` | `u32` | Largest lifetime, frames. |
+| `max_averaging` | `u32` | Largest averaging count. |
+| `max_span_hz` | `Option<f64>` | Widest spectrum span (bin count times bin width), Hz, the front end can fill, from [`max_spectrum_span_hz`]; `None` when the front end is not known (no span check). A wider request comes back with zero bins, so it is refused instead. |
+
+**Used by.** `check_freq`, `check_life`, `encode`, `validate` (functions whose signature names it).
+
+### `NetError` [@ANCHOR: radiod_client:radiod_client_net_net_error]
+
+**Purpose.** Network or protocol failure.
+
+**Definition.** `pub enum NetError` (enum) in `daemons/radiod_client/src/net.rs`; derives `Debug`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Io` | `(io::Error)` | Socket error. |
+| `Command` | `(CommandError)` | The command was refused before sending. |
+| `Tlv` | `(TlvError)` | A received datagram was malformed (counted and skipped by the receive helpers). |
+| `NotMulticast` | `(Ipv4Addr)` | Group is not an IPv4 multicast address. |
+
+**Used by.** `front_end`, `open`, `open_group`, `open_on_port`, `recv`, `recv_status`, `register`, `request` (functions whose signature names it).
+
+### `Control` [@ANCHOR: radiod_client:radiod_client_net_control]
+
+**Purpose.** The control/status link to one `radiod` instance.
+
+**Definition.** `pub struct Control` (struct) in `daemons/radiod_client/src/net.rs`; derives `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `sock` | `UdpSocket` | The UDP socket bound for the control and status multicast group. |
+| `dest` | `SocketAddrV4` | The `radiod` status/control multicast address and port commands are sent to. |
+| `policy` | `Policy` | The site limits (`Policy`) every command is checked against before anything is sent. |
+| `next_tag` | `u32` | The tag of the next command; each command carries a tag and the matching status echoes it, so an acknowledgement can be recognised (starts at 1, advanced by `next_tag()`). |
+| `malformed` | `u64` | Datagrams skipped because they did not parse. |
+
+**Notes.** Opened by `Control::open`; one `Control` per `radiod` instance; its methods take `&mut self`, so a link is used by one task at a time.
+
+### `RtpSocket` [@ANCHOR: radiod_client:radiod_client_net_rtp_socket]
+
+**Purpose.** An RTP receiver for one multicast group.
+
+**Definition.** `pub struct RtpSocket` (struct) in `daemons/radiod_client/src/net.rs`; derives `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `sock` | `UdpSocket` | The UDP socket joined to the RTP multicast group. |
+
+**Notes.** Opened by `RtpSocket::open` for one multicast group on an interface; its datagrams are turned into packets by `RtpPacket::parse`.
+
+### `RtpError` [@ANCHOR: radiod_client:radiod_client_rtp_rtp_error]
+
+**Purpose.** Why a packet was rejected.
+
+**Definition.** `pub enum RtpError` (enum) in `daemons/radiod_client/src/rtp.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Truncated` | - | Shorter than the fixed header, or the CSRC list / extension / padding run past the end. |
+| `Version` | `(u8)` | RTP version other than 2. |
+| `Payload` | `(String)` | Payload bytes the codec cannot decode. |
+
+**Used by.** `decode`, `new`, `parse` (functions whose signature names it).
+
+### `RtpPacket` [@ANCHOR: radiod_client:radiod_client_rtp_rtp_packet]
+
+**Purpose.** A parsed RTP packet; the payload borrows from the datagram.
+
+**Definition.** `pub struct RtpPacket<'a>` (struct) in `daemons/radiod_client/src/rtp.rs`; derives `Debug`, `Clone`, `Copy`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `pt` | `u8` | Payload type. |
+| `marker` | `bool` | Marker bit (set at the start of a talk spurt after silence). |
+| `seq` | `u16` | Sequence number. |
+| `timestamp` | `u32` | Timestamp, in samples of the stream's rate (Opus: 48 kHz ticks). |
+| `ssrc` | `u32` | Synchronization source. |
+| `payload` | `&'a [u8]` | Payload. |
+
+### `Encoding` [@ANCHOR: radiod_client:radiod_client_rtp_encoding]
+
+**Purpose.** Output encodings from `rtp.h` that this client decodes.
+
+**Definition.** `pub enum Encoding` (enum) in `daemons/radiod_client/src/rtp.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `S16Be` | - | Signed 16-bit big-endian PCM (value 2 in `radiod`). |
+| `S16Le` | - | Signed 16-bit little-endian PCM (value 1). |
+| `Opus` | - | Opus (value 3), 48 kHz stereo. |
+
+**Used by.** `new` (functions whose signature names it).
+
+### `AudioDecoder` [@ANCHOR: radiod_client:radiod_client_rtp_audio_decoder]
+
+**Purpose.** Decoder for one stream. Output is mono `f32` (stereo is downmixed).
+
+**Definition.** `pub struct AudioDecoder` (struct) in `daemons/radiod_client/src/rtp.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `encoding` | `Encoding` | The payload encoding of the stream (`Encoding`). |
+| `channels` | `usize` | Number of channels in the payload (stereo is downmixed to mono on output). |
+| `opus` | `Option<opus::Decoder>` | The Opus decoder, present only for an Opus stream and only when the `opus` feature is built. |
+
+**Used by.** `unreachable_decoder` (functions whose signature names it).
+
+**Notes.** One per stream; decoding takes `&mut self`.
+
+### `SeqTracker` [@ANCHOR: radiod_client:radiod_client_rtp_seq_tracker]
+
+**Purpose.** Tracks sequence numbers to count loss, reordering and stream restarts.
+
+**Definition.** `pub struct SeqTracker` (struct) in `daemons/radiod_client/src/rtp.rs`; derives `Debug`, `Default`, `Clone`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `last` | `Option<u16>` | The newest sequence number seen, `None` before the first packet. |
+| `received` | `u64` | Packets seen. |
+| `lost` | `u64` | Packets missing in sequence (forward gaps). A restart adds nothing here: the new numbering says nothing about how many packets of the old stream were missed. A restart whose new sequence lands ahead of the old one cannot be told from loss by the sequence alone and is counted here. |
+| `out_of_order` | `u64` | Packets that arrived late (at most [`REORDER_WINDOW`] behind the newest) or duplicated. |
+| `restarts` | `u64` | Backward jumps beyond [`REORDER_WINDOW`]: the stream started again with a new sequence. Tracking resynchronises to the new sequence, so the packets after a restart are not out of order. |
+
+**Used by.** `track` (functions whose signature names it).
+
+**Notes.** Updated by `SeqTracker::push` for every packet of a stream; the public counters are read by the bridge for its statistics.
+
+### `TlvError` [@ANCHOR: radiod_client:radiod_client_tlv_tlv_error]
+
+**Purpose.** Why a datagram was rejected.
+
+**Definition.** `pub enum TlvError` (enum) in `daemons/radiod_client/src/tlv.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `TooShort` | - | Datagram shorter than a packet kind and one entry. |
+| `Truncated` | - | An entry's declared length runs past the end of the datagram. |
+| `BadLength` | - | A length-of-length field larger than four bytes. |
+| `BadKind` | `(u8)` | The packet-kind byte was neither 0 nor 1. |
+| `BadValue` | `(u8)` | A value had a length that its type cannot have. |
+
+**Used by.** `bool`, `f32`, `f32_vec`, `f64`, `parse`, `socket`, `uint` (functions whose signature names it).
+
+### `Kind` [@ANCHOR: radiod_client:radiod_client_tlv_kind]
+
+**Purpose.** Packet kind (first byte).
+
+**Definition.** `pub enum Kind` (enum) in `daemons/radiod_client/src/tlv.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Status` | - | Status from `radiod`. |
+| `Command` | - | Command to `radiod`. |
+
+**Used by.** `parse` (functions whose signature names it).
+
+### `Entry` [@ANCHOR: radiod_client:radiod_client_tlv_entry]
+
+**Purpose.** One decoded entry; `value` borrows from the datagram.
+
+**Definition.** `pub struct Entry<'a>` (struct) in `daemons/radiod_client/src/tlv.rs`; derives `Debug`, `Clone`, `Copy`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ty` | `u8` | Type identifier. |
+| `value` | `&'a [u8]` | Raw value bytes. |
+
+**Used by.** `parse` (functions whose signature names it).
+
+### `Writer` [@ANCHOR: radiod_client:radiod_client_tlv_writer]
+
+**Purpose.** Builder for a command datagram. Crate-private on purpose: callers go through [`crate::command::Command`].
+
+**Definition.** `pub(crate) struct Writer` (struct) in `daemons/radiod_client/src/tlv.rs`; derives `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `buf` | `Vec<u8>` | The datagram being built: the packet kind byte and the entries written so far. |
+
