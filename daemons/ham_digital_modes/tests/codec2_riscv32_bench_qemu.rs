@@ -6,7 +6,9 @@
 //! Needs `qemu-system-riscv32` and the rustup target `riscv32imc-unknown-none-elf` (`rustup target add ...`); without them the
 //! test fails with that instruction rather than passing silently.
 
-use ham_digital_modes::codec2_3200::{DecoderFixed, EncoderFixed, BYTES_PER_FRAME, SAMPLES_PER_FRAME};
+use ham_digital_modes::codec2_3200::{
+    DecoderFixed, EncoderFixed, BYTES_PER_FRAME, SAMPLES_PER_FRAME,
+};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -24,10 +26,15 @@ fn speech() -> Vec<i16> {
         .map(|i| {
             let t = i as f64 / 8000.0;
             let glide = 1.0 + 0.02 * (2.0 * std::f64::consts::PI * 3.0 * t).sin();
-            let v: f64 = [(120.0, 6000.0), (240.0, 4000.0), (360.0, 2500.0), (480.0, 1500.0)]
-                .iter()
-                .map(|(f, a)| (2.0 * std::f64::consts::PI * f * t * glide).sin() * a)
-                .sum();
+            let v: f64 = [
+                (120.0, 6000.0),
+                (240.0, 4000.0),
+                (360.0, 2500.0),
+                (480.0, 1500.0),
+            ]
+            .iter()
+            .map(|(f, a)| (2.0 * std::f64::consts::PI * f * t * glide).sin() * a)
+            .sum();
             seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
             let noise = ((seed >> 16) as f64 / 65536.0 - 0.5) * 1000.0;
             (v + noise) as i16
@@ -103,7 +110,18 @@ fn build_and_run(pcm: &[i16]) -> (String, Option<i32>) {
     );
     let elf = target_dir.join("riscv32imc-unknown-none-elf/release/codec2_riscv32_bench");
     let mut child = Command::new("qemu-system-riscv32")
-        .args(["-M", "virt", "-m", "64M", "-nographic", "-bios", "none", "-icount", "shift=0", "-kernel"])
+        .args([
+            "-M",
+            "virt",
+            "-m",
+            "64M",
+            "-nographic",
+            "-bios",
+            "none",
+            "-icount",
+            "shift=0",
+            "-kernel",
+        ])
         .arg(&elf)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -149,17 +167,38 @@ fn the_riscv32_firmware_runs_under_qemu_reports_its_counters_and_matches_the_hos
     // Stack high-water marks (paint_stack, stack_high_water): the codec's call tree uses some stack, but far less than the 64 MB.
     let enc_stack = number_after(&out, "peak stack during encode ");
     let dec_stack = number_after(&out, "peak stack during decode ");
-    assert!((256..60_000).contains(&enc_stack), "encode stack {enc_stack}");
-    assert!((256..60_000).contains(&dec_stack), "decode stack {dec_stack}");
+    assert!(
+        (256..60_000).contains(&enc_stack),
+        "encode stack {enc_stack}"
+    );
+    assert!(
+        (256..60_000).contains(&dec_stack),
+        "decode stack {dec_stack}"
+    );
 
     // Instruction counts (instret): an encoded frame is hundreds of thousands of instructions, the steady average never above the maximum.
-    let line = out.lines().find(|l| l.starts_with("ENCODE first-frame")).unwrap();
-    let nums: Vec<u64> = line.split_whitespace().filter_map(|w| w.parse().ok()).collect();
+    let line = out
+        .lines()
+        .find(|l| l.starts_with("ENCODE first-frame"))
+        .unwrap();
+    let nums: Vec<u64> = line
+        .split_whitespace()
+        .filter_map(|w| w.parse().ok())
+        .collect();
     let (first, avg, max) = (nums[0], nums[1], nums[2]);
     assert!(first > 100_000 && avg > 100_000 && avg <= max, "{line}");
-    let dline = out.lines().find(|l| l.starts_with("DECODE first-frame")).unwrap();
-    let dn: Vec<u64> = dline.split_whitespace().filter_map(|w| w.parse().ok()).collect();
-    assert!(dn[0] > 100_000 && dn[1] > 100_000 && dn[1] <= dn[2], "{dline}");
+    let dline = out
+        .lines()
+        .find(|l| l.starts_with("DECODE first-frame"))
+        .unwrap();
+    let dn: Vec<u64> = dline
+        .split_whitespace()
+        .filter_map(|w| w.parse().ok())
+        .collect();
+    assert!(
+        dn[0] > 100_000 && dn[1] > 100_000 && dn[1] <= dn[2],
+        "{dline}"
+    );
 
     // Per-stage marks (mark): the buckets split the frame, so every main stage is counted and together they do not exceed the frame.
     let enc_stage_sum: u64 = out
@@ -167,8 +206,14 @@ fn the_riscv32_firmware_runs_under_qemu_reports_its_counters_and_matches_the_hos
         .filter(|l| l.starts_with("  enc "))
         .map(|l| l.split_whitespace().last().unwrap().parse::<u64>().unwrap())
         .sum();
-    assert!(enc_stage_sum > 0 && enc_stage_sum <= avg, "stages {enc_stage_sum} of {avg}");
-    assert!(number_after(&out, "  enc nlp: 512-pt transform ") > 0, "{out}");
+    assert!(
+        enc_stage_sum > 0 && enc_stage_sum <= avg,
+        "stages {enc_stage_sum} of {avg}"
+    );
+    assert!(
+        number_after(&out, "  enc nlp: 512-pt transform ") > 0,
+        "{out}"
+    );
     assert!(number_after(&out, "  dec harmonic_amps(x2) ") > 0, "{out}");
 
     // The 32-bit build is bit-identical to the host build of the same codec.

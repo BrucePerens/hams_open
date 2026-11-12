@@ -526,7 +526,9 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
         ("bench_scope_passfail", Kind::Scope) => scope_guide::passfail(&mut l, args),
         ("bench_scope_measure_custom", Kind::Scope) => scope_guide::measure_custom(&mut l, args),
         ("bench_scope_counter", Kind::Scope) => scope_guide::counter(&mut l),
-        ("bench_scope_math_native", Kind::Scope) => scope_guide::math_native(&mut l, args, &out_dir()),
+        ("bench_scope_math_native", Kind::Scope) => {
+            scope_guide::math_native(&mut l, args, &out_dir())
+        }
         ("bench_scope_cursor_native", Kind::Scope) => scope_guide::cursor_native(&mut l, args),
         ("bench_scope_trigger", Kind::Scope) => scope_guide::trigger(&mut l, args),
         ("bench_scope_decode", Kind::Scope) => scope_guide::decode(&mut l, args),

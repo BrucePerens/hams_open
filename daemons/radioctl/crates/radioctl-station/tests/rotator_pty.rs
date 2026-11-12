@@ -172,7 +172,10 @@ async fn a_dcu_sets_a_bearing_stops_and_cannot_be_read() {
     let rot = open(path, &d).await;
     rot.set_position(270.0, 0.0).await.unwrap();
     std::thread::sleep(Duration::from_millis(100));
-    assert_eq!(virt.lock().unwrap().received().to_vec(), ["AP1270;", "AM1;"]);
+    assert_eq!(
+        virt.lock().unwrap().received().to_vec(),
+        ["AP1270;", "AM1;"]
+    );
     assert_eq!(virt.lock().unwrap().state(Duration::ZERO).target_az, 270.0);
     rot.stop().await.unwrap();
     assert_eq!(

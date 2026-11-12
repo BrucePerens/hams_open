@@ -1124,11 +1124,17 @@ mod tests {
         cfg: Config,
         s11_scale: f64,
         dead_reference: bool,
-    ) -> (Vna, (crate::capture::SyntheticFeed, crate::capture::SyntheticFeed)) {
+    ) -> (
+        Vna,
+        (crate::capture::SyntheticFeed, crate::capture::SyntheticFeed),
+    ) {
         let w = 2.0 * std::f64::consts::PI * cfg.if_hz / SAMPLE_RATE as f64;
         let s = move |scale: f64, i: u64| (8000.0 * scale * (w * i as f64).sin()) as i16;
         let (c1, f1) = crate::capture::synthetic_capture(move |i| {
-            [s(if dead_reference { 0.0 } else { 1.0 }, i), s(s11_scale, i)]
+            [
+                s(if dead_reference { 0.0 } else { 1.0 }, i),
+                s(s11_scale, i),
+            ]
         });
         let (c2, f2) = crate::capture::synthetic_capture(move |i| [s(1.0, i), s(1.0, i)]);
         (
@@ -1171,7 +1177,10 @@ mod tests {
             ..fast_config()
         };
         let (mut vna, _feed) = fake_vna(cfg, 1.0, false);
-        assert!(vna.sweep(1e6, 3e6, 0).unwrap_err().contains("at least one point"));
+        assert!(vna
+            .sweep(1e6, 3e6, 0)
+            .unwrap_err()
+            .contains("at least one point"));
         assert!(vna.attempt_timings().is_empty());
 
         let pts = vna.sweep(1e6, 3e6, 3).unwrap();

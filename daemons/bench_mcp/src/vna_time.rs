@@ -197,7 +197,8 @@ mod tests {
     // Tests [@ANCHOR: bench_vna_time_domain]
     // Tests [@ANCHOR: bench_vna_time_read_sweep]
     #[test]
-    fn the_through_peaks_at_zero_and_a_three_foot_open_stub_at_its_round_trip_delay_in_every_window() {
+    fn the_through_peaks_at_zero_and_a_three_foot_open_stub_at_its_round_trip_delay_in_every_window(
+    ) {
         let d = crate::testdir::TestDir::new("vna_time_stub");
         // 3 feet (0.9144 m) of cable at velocity factor 0.66, open at the end: the reflection returns after 2 l / (vf c) = 9.243 ns.
         let tau = 2.0 * 0.9144 / (0.66 * C);
@@ -218,7 +219,10 @@ mod tests {
                 d.path(),
             )
             .unwrap();
-            assert!(through["peak_time_s"].as_f64().unwrap().abs() < 0.2e-9, "{window}");
+            assert!(
+                through["peak_time_s"].as_f64().unwrap().abs() < 0.2e-9,
+                "{window}"
+            );
         }
     }
 

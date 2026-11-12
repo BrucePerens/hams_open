@@ -457,15 +457,31 @@ fn the_ic_7610_and_ic_9100_select_the_main_or_sub_band_as_their_command_tables_g
         wire(engine.as_mut(), Op::SelectReceiver(Receiver::Sub)),
         frame(d, 0x07, &[0xD1])
     );
-    assert_eq!(wire(engine.as_mut(), Op::GetReceiver), frame(d, 0x07, &[0xD2]));
-    assert_eq!(wire(engine.as_mut(), Op::SetDualWatch(true)), frame(d, 0x07, &[0xC1]));
-    assert_eq!(wire(engine.as_mut(), Op::SetDualWatch(false)), frame(d, 0x07, &[0xC0]));
-    assert_eq!(wire(engine.as_mut(), Op::GetDualWatch), frame(d, 0x07, &[0xC2]));
+    assert_eq!(
+        wire(engine.as_mut(), Op::GetReceiver),
+        frame(d, 0x07, &[0xD2])
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetDualWatch(true)),
+        frame(d, 0x07, &[0xC1])
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetDualWatch(false)),
+        frame(d, 0x07, &[0xC0])
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::GetDualWatch),
+        frame(d, 0x07, &[0xC2])
+    );
     assert_eq!(
         read(engine.as_mut(), &mut rig, &Op::GetReceiver),
         Observation::Receiver(Receiver::Main)
     );
-    write(engine.as_mut(), &mut rig, &Op::SelectReceiver(Receiver::Sub));
+    write(
+        engine.as_mut(),
+        &mut rig,
+        &Op::SelectReceiver(Receiver::Sub),
+    );
     assert_eq!(
         read(engine.as_mut(), &mut rig, &Op::GetReceiver),
         Observation::Receiver(Receiver::Sub)
@@ -497,7 +513,11 @@ fn the_ic_7610_and_ic_9100_select_the_main_or_sub_band_as_their_command_tables_g
         wire(engine.as_mut(), Op::SelectReceiver(Receiver::Sub)),
         frame(d, 0x07, &[0xD1])
     );
-    write(engine.as_mut(), &mut rig, &Op::SelectReceiver(Receiver::Main));
+    write(
+        engine.as_mut(),
+        &mut rig,
+        &Op::SelectReceiver(Receiver::Main),
+    );
     for op in [Op::GetReceiver, Op::SetDualWatch(true), Op::GetDualWatch] {
         assert_eq!(
             engine.encode(&op).expect_err("refused").kind,

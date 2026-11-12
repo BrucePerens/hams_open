@@ -967,7 +967,10 @@ async fn discovery_of_a_real_instances_entity_list() {
     assert_eq!(count("switch."), 31);
     assert_eq!(count("binary_sensor."), 1);
     assert!(found.iter().all(|f| f.friendly_name.is_some()));
-    assert!(found.iter().filter(|f| f.entity_id.starts_with("switch.")).all(|f| f.writable));
+    assert!(found
+        .iter()
+        .filter(|f| f.entity_id.starts_with("switch."))
+        .all(|f| f.writable));
     drop(d);
     ha.stop().await;
 }

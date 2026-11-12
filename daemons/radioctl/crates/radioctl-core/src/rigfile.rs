@@ -27,11 +27,12 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivCommandSet, CivMainSub, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
-    KenwoodDialect, KenwoodHhParams, KenwoodParams, KyForm, KyParams, KyStop, LegacyBlock,
-    LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams, PowerMeterParams,
-    ReceiverParams, ReceiverProtocol, RigDescription, ScopeParams, Timing, UsbParams, UsbProtocol,
-    VendorParams, VendorProtocol, YaesuClarifier, YaesuLegacyParams, YaesuParams,
+    CivCommandSet, CivMainSub, CivParams, ElecraftParams, Family, FlexParams, HhDialect,
+    HpsdrParams, KenwoodDialect, KenwoodHhParams, KenwoodParams, KyForm, KyParams, KyStop,
+    LegacyBlock, LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams,
+    PowerMeterParams, ReceiverParams, ReceiverProtocol, RigDescription, ScopeParams, Timing,
+    UsbParams, UsbProtocol, VendorParams, VendorProtocol, YaesuClarifier, YaesuLegacyParams,
+    YaesuParams,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};

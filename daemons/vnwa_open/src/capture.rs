@@ -368,7 +368,13 @@ pub fn synthetic_capture(
         ring,
         stream: Arc::new(Mutex::new(Some(Box::new(())))),
     };
-    (capture, SyntheticFeed { stop, thread: Some(thread) })
+    (
+        capture,
+        SyntheticFeed {
+            stop,
+            thread: Some(thread),
+        },
+    )
 }
 
 // [@ANCHOR: vnwa_open_capture_synthetic_feed]
@@ -416,13 +422,22 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_capture_cpal_host]
     #[test]
     fn the_input_ids_are_the_hosts_in_its_order_and_a_host_error_is_passed_on() {
-        let host = Fixed(Ok(vec!["alsa:hw:CARD=CODEC,DEV=0".into(), "alsa:default".into()]));
+        let host = Fixed(Ok(vec![
+            "alsa:hw:CARD=CODEC,DEV=0".into(),
+            "alsa:default".into(),
+        ]));
         assert_eq!(
             input_names_on(&host).unwrap(),
             ["alsa:hw:CARD=CODEC,DEV=0", "alsa:default"]
         );
-        assert_eq!(input_names_on(&Fixed(Ok(vec![]))).unwrap(), Vec::<String>::new());
-        assert_eq!(input_names_on(&Fixed(Err("audio: no host".into()))), Err("audio: no host".into()));
+        assert_eq!(
+            input_names_on(&Fixed(Ok(vec![]))).unwrap(),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            input_names_on(&Fixed(Err("audio: no host".into()))),
+            Err("audio: no host".into())
+        );
     }
 
     // Tests [@ANCHOR: vnwa_open_synthetic_capture]
@@ -432,7 +447,9 @@ mod tests {
         let (cap, feed) = synthetic_capture(|i| [(i % 1000) as i16, -((i % 1000) as i16)]);
         assert!(cap.is_open());
         let mark = cap.mark();
-        let frames = cap.frames_after(mark, 100, 480, Duration::from_secs(2)).unwrap();
+        let frames = cap
+            .frames_after(mark, 100, 480, Duration::from_secs(2))
+            .unwrap();
         assert_eq!(frames.len(), 480);
         // Consecutive generated frames, wherever the window fell.
         for w in frames.windows(2) {
@@ -444,7 +461,8 @@ mod tests {
         cap.close();
         assert!(!cap.is_open());
         assert_eq!(
-            cap.frames_after(mark, 0, 10, Duration::from_millis(10)).unwrap_err(),
+            cap.frames_after(mark, 0, 10, Duration::from_millis(10))
+                .unwrap_err(),
             "audio: the stream was closed"
         );
         drop(feed);

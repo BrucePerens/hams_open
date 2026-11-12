@@ -677,23 +677,20 @@ impl CivEngine {
         let level = self.params.main_sub;
         let full = level == CivMainSub::Full;
         Some(match op {
-            Op::SelectReceiver(rx) if level != CivMainSub::None => Ok(self.set(
-                0x07,
-                &[if *rx == Receiver::Sub { 0xD1 } else { 0xD0 }],
-            )),
-            Op::GetReceiver if full => Ok(self.get(0x07, &[0xD2], Field::Receiver)),
-            Op::SetDualWatch(on) if full => {
-                Ok(self.set(0x07, &[if *on { 0xC1 } else { 0xC0 }]))
+            Op::SelectReceiver(rx) if level != CivMainSub::None => {
+                Ok(self.set(0x07, &[if *rx == Receiver::Sub { 0xD1 } else { 0xD0 }]))
             }
+            Op::GetReceiver if full => Ok(self.get(0x07, &[0xD2], Field::Receiver)),
+            Op::SetDualWatch(on) if full => Ok(self.set(0x07, &[if *on { 0xC1 } else { 0xC0 }])),
             Op::GetDualWatch if full => Ok(self.get(0x07, &[0xC2], Field::DualWatch)),
             Op::SelectReceiver(_)
             | Op::GetReceiver
             | Op::SetTxReceiver(_)
             | Op::GetTxReceiver
             | Op::SetDualWatch(_)
-            | Op::GetDualWatch => {
-                Err(Self::unsupported("not a Main/Sub command on this Icom model"))
-            }
+            | Op::GetDualWatch => Err(Self::unsupported(
+                "not a Main/Sub command on this Icom model",
+            )),
             _ => return None,
         })
     }
