@@ -3705,29 +3705,186 @@ a gain bug). Two tests require the correlation to be high and the ratio near one
 
 ## Codec2 3200 synthesis (float and fixed)
 
-`synthesize_subframe` turns one decoded model into 10 ms of audio: it samples the LPC filter's phase
-response, sets harmonic phases (`synthesize_phase`: voiced harmonics follow one tracked fundamental
-phase, unvoiced ones get random phase), applies the `postfilter` (randomises the phase of harmonics that
-are quiet relative to the tracked background level during voiced frames, and tracks that level from
-unvoiced frames), inverse-transforms, and overlap-adds. `ear_protection` attenuates a whole frame by the
-square of the overshoot when any sample exceeds 30000, guarding against bit-error spikes. The
-`*_fixed` twins (`synthesize_subframe_fixed`, `synthesize_phase_fixed`, `postfilter_fixed`,
-`ear_protection_fixed`) do the same in integer Q23 arithmetic; `ear_protection_fixed` uses one exact
-integer division for the gain rather than a lookup-table round trip.
-*(Reference: `src/codec2_3200/synthesis.rs` -> `[@ANCHOR: SynthesisState::synthesize_subframe]`, `[@ANCHOR: ham_digital_modes:synthesize_phase]`, `[@ANCHOR: ham_digital_modes:postfilter]`, `[@ANCHOR: ham_digital_modes:ear_protection]`, `[@ANCHOR: SynthesisStateFixed::synthesize_subframe_fixed]`, `[@ANCHOR: ham_digital_modes:synthesize_phase_fixed]`, `[@ANCHOR: ham_digital_modes:postfilter_fixed]`, `[@ANCHOR: ham_digital_modes:ear_protection_fixed]`)*
+Each decoded 10 ms sub-frame of a Codec2 3200 model goes through the same pipeline: sample the LPC filter's phase response, set harmonic phases, apply the postfilter, inverse-transform, overlap-add, limit the level. The float path (`SynthesisState`, behind the `std` feature) and the
+fixed path (`SynthesisStateFixed`, integer Q23) must agree. They are in-memory computations (no I/O, locks or transmitter keying), so no PTT, band or transmit-gate logic applies.
 
-`fft_fixed` is the in-place radix-2 decimation-in-time FFT in Q23 integers used by the fixed synthesis, at
-512 points and, for the spectral bridge, 1024. Sizes must be a power of two with a cached bit-reversal
-table (anything else panics); `forward` selects the transform direction; there is no per-stage rescaling.
-*(Reference: `src/codec2_3200/fixed_fft.rs` -> `[@ANCHOR: ham_digital_modes:fft_fixed]`)*
+### `SynthesisState::synthesize_subframe` [@ANCHOR: SynthesisState::synthesize_subframe]
+
+Synthesizes one `N_SAMP`-sample (10 ms) sub-frame from `model` (amplitudes and the pitch already filled in by the envelope stage) and `aw`, the LPC synthesis filter's spectrum. It samples the filter's phase response (`sample_filter_phase`), sets the harmonic phases (`synthesize_phase`), applies the
+`postfilter`, slides the overlap-add buffer, places each harmonic `phi * a` at bin `round(l * wo / (2 pi / FFT_ENC))`, mirrors the spectrum to be Hermitian, runs a 512-point inverse FFT (scaled by `FFT_ENC` to keep an unnormalized convention), overlap-adds under the Parzen window, applies `ear_protection` and clamps to 16-bit PCM.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut Model` | Decoded model; `phi` is overwritten with the harmonic phases and the postfilter may change them |
+| `aw` | `&[Complex32]` | LPC synthesis filter spectrum for this sub-frame |
+
+**Returns:** `[i16; N_SAMP]` PCM samples.
+**Errors:** none.
+**Special concerns:** stateful (overlap-add buffer, excitation phase, background estimate, RNG seeded `0xC0FFEE`); sub-frames must be synthesized in order; a fixed-size stack buffer is used for real-time decode.
+**Signature:** `pub fn synthesize_subframe(&mut self, model: &mut Model, aw: &[Complex32]) -> [i16; N_SAMP]`
+**See also:** test in `src/codec2_3200/mod.rs`; `SynthesisStateFixed::synthesize_subframe_fixed`.
+
+### `synthesize_phase` [@ANCHOR: ham_digital_modes:synthesize_phase]
+
+Advances the voiced-excitation phase track by one frame (`ex_phase += wo * N_SAMP`, wrapped to one turn) and sets each harmonic's phase through the LPC synthesis filter's phase `h`. Voiced harmonics phase-lock to one tracked fundamental phase (`phi0 * m`, a zero-order-hold pitch model); unvoiced harmonics get an independent random phase from `next_rand`.
+The result is stored as a unit vector in `model.phi[m]`, with a `1e-12` floor on the magnitude.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut Model` | Uses `wo`, `l`, `voiced`; writes `phi[1..=l]` |
+| `h` | `&[Complex32; MAX_AMP + 1]` | Filter phase samples from `sample_filter_phase` |
+| `ex_phase` | `&mut f32` | Tracked excitation phase, radians |
+| `rng` | `&mut u32` | Random state (xorshift) |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** private, `std` only; mutates the phase and RNG state.
+**Signature:** `fn synthesize_phase(model: &mut Model, h, ex_phase: &mut f32, rng: &mut u32)`
+**See also:** test in `src/codec2_3200/mod.rs`; `synthesize_phase_fixed`.
+
+### `postfilter` [@ANCHOR: ham_digital_modes:postfilter]
+
+Randomizes the phase of harmonics that are quiet relative to the tracked background-noise level during voiced frames (making them sound noise-like, closer to real speech's mixed excitation), and tracks that background level from unvoiced frames' average energy. The decision logic lives in `postfilter_step`;
+this wrapper updates the background estimate and gives each flagged harmonic a random phase from `next_rand`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut Model` | Reads `voiced`, `l`, `a`; may write `phi` |
+| `bg_est` | `&mut f32` | Background level estimate, dB; updated |
+| `rng` | `&mut u32` | Random state |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** private, `std` only; stateful. The log-domain look-ups use `fixed_point::log2_lut` and `exp2_lut`.
+**Signature:** `fn postfilter(model: &mut Model, bg_est: &mut f32, rng: &mut u32)`
+**See also:** test in `src/codec2_3200/mod.rs`; `postfilter_fixed`.
+
+### `ear_protection` [@ANCHOR: ham_digital_modes:ear_protection]
+
+Attenuates a whole frame by the square of the overshoot when any sample exceeds 30000 (`gain = 1 / (max_abs / 30000)^2`), as a defensive measure against bit-error-induced amplitude spikes reaching ears or speakers. It is not a normal-operation limiter: frames at or below 30000 are untouched.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&mut [f32]` | One sub-frame of output samples; scaled in place |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** `pub(crate)`, `std` only; also used by the spectral bridge.
+**Signature:** `pub(crate) fn ear_protection(samples: &mut [f32])`
+**See also:** test in `src/codec2_3200/mod.rs`; `ear_protection_fixed`.
+
+### `SynthesisStateFixed::synthesize_subframe_fixed` [@ANCHOR: SynthesisStateFixed::synthesize_subframe_fixed]
+
+The fixed-point `synthesize_subframe`, integer end to end. It calls `prepare_subframe_fixed` (phases and postfilter), puts each harmonic `phi * a` into a `SparseInverse` at bin `round(l * k_q23)` (limited to `FFT_ENC/2 - 1`), runs the sparse inverse transform for the `N_SAMP` outputs the overlap-add reads, and finishes with `overlap_add_subframe`, which windows, adds, applies `ear_protection_fixed` and rounds to PCM.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut ModelFixed` | From `envelope::compute_harmonic_amplitudes_fixed`; `phi` and `a` updated |
+| `h` | `&[ComplexQ23; MAX_AMP + 1]` | Phase samples |
+
+**Returns:** `[i16; N_SAMP]`.
+**Errors:** none.
+**Special concerns:** `pub(crate)`; stateful (overlap buffer, phase, background estimate, RNG, transform scratch lent from `FftScratch`).
+**Signature:** `pub(crate) fn synthesize_subframe_fixed(&mut self, model: &mut ModelFixed, h: &[ComplexQ23; MAX_AMP + 1]) -> [i16; N_SAMP]`
+**See also:** test in `src/codec2_3200/mod.rs` (bit-exact match with the reference decoder); `SynthesisState::synthesize_subframe`.
+
+### `synthesize_phase_fixed` [@ANCHOR: ham_digital_modes:synthesize_phase_fixed]
+
+The fixed-point `synthesize_phase`: `h` and `model.phi` are `ComplexQ23`, and the excitation phase and random angles are `u32` turns (one turn is 2^32), so the wrap is free. Voiced harmonics use `sin_cos_q23` of the wrapped fractional angle times `m`, unvoiced a random angle from `next_rand_fixed`. The unit-vector normalization uses
+`exp2(-0.5 log2(mag_sq))` for `1/|a|` rather than a square-root primitive.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut ModelFixed` | Writes `phi[1..=l]` |
+| `h` | `&[ComplexQ23; MAX_AMP + 1]` | Filter phase samples |
+| `ex_phase_q32` | `&mut u32` | Excitation phase in turns |
+| `rng` | `&mut u32` | Random state |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** private; stateful.
+**Signature:** `fn synthesize_phase_fixed(model, h, ex_phase_q32, rng)`
+**See also:** test in `src/codec2_3200/mod.rs`; `synthesize_phase`.
+
+### `postfilter_fixed` [@ANCHOR: ham_digital_modes:postfilter_fixed]
+
+The fixed-point `postfilter`: it calls `postfilter_step_fixed` for the new background estimate and the per-harmonic decisions, stores the estimate, and during voiced frames replaces the phase of each flagged harmonic with `sin_cos_q23(next_rand_fixed(rng))`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut ModelFixed` | Reads `voiced`, `l`, `a`; may write `phi` |
+| `bg_est` | `&mut i64` | Background level, Q23 dB; updated |
+| `rng` | `&mut u32` | Random state |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** private; stateful; `postfilter_step_fixed` guards `l == 0` (not reachable through any real decode path).
+**Signature:** `fn postfilter_fixed(model: &mut ModelFixed, bg_est: &mut i64, rng: &mut u32)`
+**See also:** test in `src/codec2_3200/mod.rs`; `postfilter`.
+
+### `ear_protection_fixed` [@ANCHOR: ham_digital_modes:ear_protection_fixed]
+
+The fixed-point `ear_protection`: when the largest absolute sample exceeds the Q23 threshold `SYNTH_EAR_PROTECTION_THRESH_Q23`, every sample is multiplied by `(thresh / max_abs)^2`, computed with one exact `i128` division rather than a log2/exp2 round trip. This path exists only to bound amplitude, so it avoids look-up-table interpolation error.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&mut [i64]` | Sub-frame samples, Q23; scaled in place |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** `pub(crate)`; frames at or under the threshold are unchanged.
+**Signature:** `pub(crate) fn ear_protection_fixed(samples: &mut [i64])`
+**See also:** test in `src/codec2_3200/mod.rs`; `overlap_add_subframe`.
+
+### `fft_fixed` [@ANCHOR: ham_digital_modes:fft_fixed]
+
+The in-place radix-2 decimation-in-time FFT of exactly `N` points in Q23 integers, used at 512 points (8 kHz decoder) and 1024 (spectral bridge); each size has its own monomorphised copy with its own tables. `forward` true matches `rustfft`'s forward transform, false the unnormalized inverse. There is no per-stage rescaling: `i64`/`i128` headroom exceeds the real dynamic range.
+It permutes to bit-reversed order, picks the arithmetic mode from the input's value sum (`mode_for_sum`) and runs the dense stage loop. It is compiled only for tests (`#[cfg(test)]`) as the dense reference: production code uses the sparse transforms (`fft_fixed_sparse_prefix`, `pitch_fft_512`, `SparseInverse`), which are bit-identical to it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `re`, `im` | `&mut [i64; N]` | Real and imaginary parts, Q23, in natural order; replaced by the transform |
+| `forward` | `bool` | Direction |
+
+**Returns:** nothing.
+**Errors:** requires `Size<N>: FftTables` (a size with a bit-reversal and twiddle table); a size without tables does not compile.
+**Special concerns:** pure; test oracle.
+**Signature:** `pub(crate) fn fft_fixed<const N: usize>(re: &mut [i64; N], im: &mut [i64; N], forward: bool)`
+**See also:** test `optimized_fft_is_bit_identical_to_the_textbook_i128_loop` in `src/codec2_3200/fixed_fft.rs`; the `fixed_fft` kernel entries.
+
+*(Reference: `src/codec2_3200/synthesis.rs`; `src/codec2_3200/fixed_fft.rs`)*
 
 ## Codec2 3200 spectral bridge
 
-The spectral bridge synthesizes a higher-sample-rate frame from an already-decoded 8 kHz model.
-`make_synthesis_window_sb` builds its overlap-add synthesis window at the doubled frame size, and
-`synthesize_subframe_sb` synthesizes one 10 ms sub-frame at the higher rate from the unchanged base model,
-using extrapolated amplitudes and its own tracked phase.
-*(Reference: `src/codec2_3200/spectral_bridge.rs` -> `[@ANCHOR: ham_digital_modes:make_synthesis_window_sb]`, `[@ANCHOR: SpectralBridgeState::synthesize_subframe_sb]`)*
+The spectral bridge synthesizes a higher-sample-rate (twice the 8 kHz rate) frame from an already-decoded 8 kHz model, without changing the base decode. It is an in-memory computation: no I/O, locks or transmitter keying.
+
+### `make_synthesis_window_sb` [@ANCHOR: ham_digital_modes:make_synthesis_window_sb]
+
+Builds the overlap-add synthesis window for the doubled frame size: a trapezoid of length `SAMPLES_PER_FRAME_SB` that ramps linearly from 0 to 1 across `2 * TW_SB` samples centered on `N_SAMP_SB / 2`, stays at 1.0, and ramps back to 0 centered on `3 * N_SAMP_SB / 2`. `SpectralBridgeState` computes it once at construction. It is the doubled-rate analog of the base `make_synthesis_window`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| none | | |
+
+**Returns:** `[f32; SAMPLES_PER_FRAME_SB]`.
+**Errors:** none.
+**Special concerns:** `pub(crate)`, `std` only; pure.
+**Signature:** `pub(crate) fn make_synthesis_window_sb() -> [f32; SAMPLES_PER_FRAME_SB]`
+**See also:** test in `src/codec2_3200/spectral_bridge.rs`; `SpectralBridgeState::synthesize_subframe_sb`.
+
+### `SpectralBridgeState::synthesize_subframe_sb` [@ANCHOR: SpectralBridgeState::synthesize_subframe_sb]
+
+Synthesizes one 10 ms sub-frame (`N_SAMP_SB` samples) at `SAMPLE_RATE_SB` from the already-decoded base `model` (unchanged, the same object the normal 8 kHz decode produced). It extends the amplitudes above the base band with `extrapolate_amplitudes` (voiced frames only; skipped when `enabled` is false) and calls `synthesize_extended`, which uses the original harmonics as decoded and its own tracked excitation phase for the extension.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&Model` | Base decoded model, not modified |
+
+**Returns:** `[i16; N_SAMP_SB]`.
+**Errors:** none.
+**Special concerns:** stateful (overlap buffer, phase, its own RNG seed `0x5B_1D6E`, never shared with the base synthesis, so the 8 kHz output is unchanged); `enabled` false gives the plain base spectrum.
+**Signature:** `pub fn synthesize_subframe_sb(&mut self, model: &Model) -> [i16; N_SAMP_SB]`
+**See also:** test in `src/codec2_3200/spectral_bridge.rs`; `synthesize_subframe_sb_from_envelope`.
 
 ## Codec2 3200 integer encoder boundaries
 
