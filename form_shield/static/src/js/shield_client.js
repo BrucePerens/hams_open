@@ -18,6 +18,7 @@ export const WORKER_URL = "/form_shield/static/src/pow/pow_worker.js";
 // A little past the server's minimum age, so clock rounding never makes a fast machine too early.
 const AGE_MARGIN_MS = 400;
 
+// [@ANCHOR: form_shield_js_shield_client_shield_unavailable]
 export class ShieldUnavailable extends Error {}
 
 // [@ANCHOR: form_shield:fetch_challenge]
@@ -102,6 +103,7 @@ export function solve(challenge, formId, difficulty) {
 // Verified by [@ANCHOR: form_shield:test_default_wait_waits_then_resolves]
 export const defaultWait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+// [@ANCHOR: form_shield_js_shield_client_shield_session]
 export class ShieldSession {
     /**
      * @param {string|null} formId the form the answer is for, when known up front (then the

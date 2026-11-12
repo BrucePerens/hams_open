@@ -3,6 +3,7 @@ import { Component, useState, onMounted, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
+// [@ANCHOR: pager_duty_js_board_pager_board]
 export class PagerBoard extends Component {
     // [@ANCHOR: pager_duty:js_board_setup]
     setup() {

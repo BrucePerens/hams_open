@@ -27,6 +27,7 @@ export const REPORT_ERRORS = {
     default: "We could not send your report. Please try again.",
 };
 
+// [@ANCHOR: user_websites_js_toast_notifications_url_toast_notification]
 export class UrlToastNotification extends Interaction {
     static selector = '#wrapwrap';
 
@@ -115,6 +116,7 @@ export function shouldShowToast(seen, data, now) {
     return data.count > (seen.count || 0) || (data.latest_id || 0) > (seen.latest_id || 0);
 }
 
+// [@ANCHOR: user_websites_js_toast_notifications_admin_violation_toast]
 export class AdminViolationToast extends Interaction {
     static selector = '#wrapwrap';
 

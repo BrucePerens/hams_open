@@ -625,3 +625,18 @@
 **Methods.** `is_retry`.
 
 **See also:** test `test_08_retry_policy_excludes_non_idempotent_methods (tests/test_cloudflare_apis.py)`.
+
+### `CloudflareAnalyticsDashboard` [@ANCHOR: cloudflare:cloudflare_js_analytics_cloudflare_analytics_dashboard]
+
+**Purpose and location.** The Cloudflare analytics dashboard page: an Owl component registered as the backend action `cloudflare_analytics_dashboard` (template `cloudflare.AnalyticsDashboard`). Defined in `cloudflare/static/src/components/analytics/analytics.js`.
+
+| State field | Type | Meaning |
+|---|---|---|
+| `state.requests` | number | Request count shown. |
+| `state.bandwidth` | string | Bandwidth text shown, such as `45.2 GB`. |
+| `state.threats` | number | Threat count shown. |
+| `state.loading` | boolean | True until the data has "arrived". |
+
+**Behaviour and limit.** The data is a placeholder: `setup` waits 500 ms and then sets the fixed values 154200 requests, `45.2 GB` and 1205 threats (the code comment says "mock data"); it does not call Cloudflare or the server. A real data source is not built yet. No state is kept outside the component.
+
+**See also:** the test in `cloudflare/static/tests/analytics.test.js`.

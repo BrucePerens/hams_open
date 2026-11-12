@@ -69,3 +69,11 @@
 **Methods.** `_search_get_details`.
 
 **See also:** test `test_01_search_finds_a_published_article_by_title (tests/test_website_search.py)`.
+
+### `ManualTOC` [@ANCHOR: knowledge:knowledge_js_manual_toc_manual_toc]
+
+**Purpose and location.** The public-page interaction that builds the "On this page" table of contents of a manual article. Defined in `knowledge/static/src/js/manual_toc.js`; it attaches to `.o_manual_body`.
+
+**Behaviour.** `start` first turns a leading `h1` in the body that repeats the article title (the page already has the `h1`) into an `h2`. If the page has a `#manual_toc_container`, it scans the body for `h2` and `h3` headings, gives each a stable id (`toc-heading-<n>` when it has none) and fills the container with a list of links (level 2 bold, level 3 indented) under the heading "On this page". With no container or no headings it leaves the page alone. It reads and changes only the DOM of the page; no state is kept in fields.
+
+**See also:** the tour in `knowledge/static/tests/tours/manual_toc_tour.js`.

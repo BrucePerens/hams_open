@@ -53,6 +53,7 @@ describe("pager_duty_log_viewer", () => {
     describe.current.tags("pager_duty_log_viewer");
 
     test("setup loads the list of log files when mounted", async () => {
+        // Tests [@ANCHOR: pager_duty_js_log_viewer_log_viewer]
         // Tests [@ANCHOR: pager_duty:js_log_viewer_setup]
         const requests = stubApi({ "/api/v1/pager/logs/files": { result: { files: ["/var/log/a.log", "/var/log/b.log"] } } });
         const viewer = await mountPlain(LogViewer, { orm: {} });

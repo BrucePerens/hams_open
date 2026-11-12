@@ -3,6 +3,7 @@ import { Component, useState, onMounted } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
+// [@ANCHOR: pager_duty_js_log_viewer_log_viewer]
 export class LogViewer extends Component {
     // [@ANCHOR: pager_duty:js_log_viewer_setup]
     setup() {

@@ -5,6 +5,7 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { Component, onWillStart, useState, useRef, useEffect } from "@odoo/owl";
 
+// [@ANCHOR: zero_sudo_js_security_dashboard_security_dashboard]
 export class SecurityDashboard extends Component {
     // [@ANCHOR: zero_sudo:js_security_dashboard_setup]
     setup() {

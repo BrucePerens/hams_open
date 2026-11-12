@@ -48,6 +48,7 @@ describe("backup_management_board", () => {
     describe.current.tags("backup_management_board");
 
     test("setup loads the configurations when the board is mounted", async () => {
+        // Tests [@ANCHOR: backup_management_js_board_backup_board]
         // Tests [@ANCHOR: backup_management:js_board_setup]
         const calls = [];
         const board = await mountPlain(BackupBoard, { orm: stubOrm(calls), website: { currentWebsite: { id: 2 } } });

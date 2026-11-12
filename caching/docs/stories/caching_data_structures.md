@@ -77,3 +77,15 @@
 **Methods.** none.
 
 **See also:** test `test_01_quota_config_updates_sw (tests/test_settings_and_cache.py)`.
+
+### `SWToast` [@ANCHOR: caching:caching_js_toast_swtoast]
+
+**Purpose and location.** The "Update Available" toast of the website's service worker: an Owl component, added to the website's `main_components`, that tells the visitor a new version of the app was installed and offers a Reload button. Defined in `caching/static/src/js/toast.js` with an inline template.
+
+| State field | Type | Meaning |
+|---|---|---|
+| `state.show` | boolean | Whether the toast is visible. Starts false. |
+
+**Behaviour.** `setup` listens to service-worker messages; on a `NEW_VERSION_INSTALLED` message it calls `_showOnceModalClear`, which waits (using the Bootstrap `hidden.bs.modal` event) until no modal is open so the fixed-position toast never covers a modal's buttons (the cookie-consent bar), then shows the toast. `close` hides it; `reload` reloads the page. Nothing is stored; a visitor without a service worker never sees it.
+
+**See also:** the tests in `caching/static/tests/toast.test.js`.

@@ -63,6 +63,8 @@ describe("toast_notifications", () => {
     describe.current.tags("user_websites_toast_notifications");
 
     test("AdminViolationToast surfaces a warning toast when the API reports pending reports", async () => {
+        // Tests [@ANCHOR: user_websites_js_toast_notifications_admin_violation_toast]
+        // Tests [@ANCHOR: user_websites_js_toast_notifications_url_toast_notification]
         // Tests [@ANCHOR: user_websites:js_toast_notifications_check_pending_reports]
         // Tests [@ANCHOR: user_websites:js_toast_notifications_write_seen]
         // Tests [@ANCHOR: user_websites:js_toast_notifications_read_seen]

@@ -2,6 +2,7 @@
 import { registry } from "@web/core/registry";
 import { TourUtils } from "@zero_sudo/js/tour_utils";
 
+// Tests [@ANCHOR: knowledge_js_manual_toc_manual_toc]
 // Tests [@ANCHOR: story_manual_toc]
 
 // Tests [@ANCHOR: test_tour_manual_toc]

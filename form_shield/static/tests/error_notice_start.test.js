@@ -31,6 +31,7 @@ describe("form_shield_error_notice_start", () => {
     afterEach(() => { translatedTerms[translationLoaded] = false; });
 
     test("a refused form's reason is shown as a danger notification and removed from the address, keeping other parameters", () => {
+        // Tests [@ANCHOR: form_shield_js_error_notice_form_shield_error_notice]
         // Tests [@ANCHOR: form_shield:js_error_notice_start]
         const seen = runStart("?form_shield_error=too_fast&tab=2");
         expect(seen.notices.length).toBe(1);

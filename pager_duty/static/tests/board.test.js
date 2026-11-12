@@ -57,6 +57,7 @@ describe("pager_duty_board", () => {
     describe.current.tags("pager_duty_board");
 
     test("setup subscribes to the pager_duty channel, loads the board and shows the incidents on screen", async () => {
+        // Tests [@ANCHOR: pager_duty_js_board_pager_board]
         // Tests [@ANCHOR: pager_duty:js_board_setup]
         const seen = stubServices();
         const board = await mountPlain(PagerBoard, seen.services);

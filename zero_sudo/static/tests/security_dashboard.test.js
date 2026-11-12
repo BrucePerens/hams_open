@@ -45,6 +45,7 @@ describe("zero_sudo_security_dashboard", () => {
     describe.current.tags("zero_sudo_security_dashboard");
 
     test("setup loads the logs before showing, and shifts the display a few pixels every twenty seconds unless paused", async () => {
+        // Tests [@ANCHOR: zero_sudo_js_security_dashboard_security_dashboard]
         // Tests [@ANCHOR: zero_sudo:js_security_dashboard_setup]
         const { services } = stubServices();
         patchWithCleanup(Math, { random: () => 0 });

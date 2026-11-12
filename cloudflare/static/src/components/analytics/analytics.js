@@ -4,6 +4,7 @@
 import { Component, onWillStart, useState, onMounted, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 
+// [@ANCHOR: cloudflare_js_analytics_cloudflare_analytics_dashboard]
 export class CloudflareAnalyticsDashboard extends Component {
     // [@ANCHOR: cloudflare:js_analytics_setup]
     setup() {

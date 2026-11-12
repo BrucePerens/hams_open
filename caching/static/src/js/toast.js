@@ -4,6 +4,7 @@
 import { Component, useState, xml } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 
+// [@ANCHOR: caching_js_toast_swtoast]
 export class SWToast extends Component {
     static template = xml`
         <div t-if="state.show" class="position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">

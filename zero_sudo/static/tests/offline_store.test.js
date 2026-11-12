@@ -41,6 +41,7 @@ afterEach(() => {
 describe("offline_store", () => {
     describe.current.tags("zero_sudo_offline_store");
 
+    // Tests [@ANCHOR: zero_sudo_js_offline_store_offline_store]
     // Tests [@ANCHOR: is_storage_full_error]
     test("isStorageFullError() recognizes real quota errors and nothing else", () => {
         // A real DOMException, the exact type IndexedDB raises in Chrome when the disk is full.

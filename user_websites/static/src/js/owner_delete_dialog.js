@@ -8,6 +8,7 @@ import { registry } from "@web/core/registry";
  * ("page" or "post") and the title in data attributes; clicking it fills in and opens the dialog instead of following the link.
  * This was an inline script until the strict Content-Security-Policy (no executable inline scripts) blocked it.
  */
+// [@ANCHOR: user_websites_js_owner_delete_dialog_owner_delete_dialog]
 export class OwnerDeleteDialog extends Interaction {
     static selector = "#uw_delete_dialog";
 

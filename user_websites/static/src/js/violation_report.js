@@ -3,6 +3,7 @@
 import { Interaction } from "@web/public/interaction";
 import { registry } from "@web/core/registry";
 
+// [@ANCHOR: user_websites_js_violation_report_violation_report_modal]
 export class ViolationReportModal extends Interaction {
     static selector = '.user-websites-report-container';
 

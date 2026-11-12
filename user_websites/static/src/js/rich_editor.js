@@ -22,6 +22,7 @@ const TOGGLE_STATE = {
     justifyRight: "justifyRight",
 };
 
+// [@ANCHOR: user_websites_js_rich_editor_rich_editor]
 export class RichEditor extends Interaction {
     static selector = ".uw-rich-editor";
 

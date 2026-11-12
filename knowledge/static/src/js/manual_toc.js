@@ -10,6 +10,7 @@ import { registry } from "@web/core/registry";
  * Uses Vanilla JS to dynamically scan the article body for headings and
  * generates a sticky Table of Contents.
  */
+// [@ANCHOR: knowledge_js_manual_toc_manual_toc]
 export class ManualTOC extends Interaction {
     static selector = '.o_manual_body';
 
