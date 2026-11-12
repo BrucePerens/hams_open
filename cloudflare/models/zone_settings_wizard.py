@@ -3,6 +3,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from ..utils.cloudflare_api import get_zone_settings, update_zone_setting
+from odoo.addons.zero_sudo import public_rpc
 
 
 class CloudflareZoneSettingsWizard(models.TransientModel):
@@ -127,6 +128,7 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
         return res
 
     # [@ANCHOR: cloudflare:COMM_zone_settings_action_apply]
+    @public_rpc
     def action_apply_settings(self):
         self.ensure_one()
         token, zone_id = self.website_id._get_cloudflare_credentials()

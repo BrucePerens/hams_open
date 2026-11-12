@@ -6,6 +6,7 @@ from datetime import timedelta
 from odoo import models, fields, api, _
 from odoo.exceptions import AccessError
 from ..utils import cloudflare_api as cf_utils
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -279,6 +280,7 @@ class CloudflareHostnamePendingDelete(models.Model):
         return summary
 
     # [@ANCHOR: cloudflare:COMM_pending_delete_action_retry_now]
+    @public_rpc
     def action_retry_now(self):
         """Admin button: try the selected records immediately.
 
@@ -290,6 +292,7 @@ class CloudflareHostnamePendingDelete(models.Model):
         return True
 
     # [@ANCHOR: cloudflare:COMM_pending_delete_action_abandon]
+    @public_rpc
     def action_mark_abandoned(self):
         """Admin button: stop retrying, keep the record visible."""
         self._check_pending_delete_admin()

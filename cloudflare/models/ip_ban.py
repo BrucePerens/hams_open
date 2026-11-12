@@ -3,6 +3,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from ..utils.cloudflare_api import ban_ip, unban_ip
+from odoo.addons.zero_sudo import public_rpc
 
 
 class CloudflareIPBan(models.Model):
@@ -122,6 +123,7 @@ class CloudflareIPBan(models.Model):
         )
         return False
 
+    @public_rpc
     def action_lift_ban(self):
         # [@ANCHOR: COMM_cf_action_lift_ban]
 

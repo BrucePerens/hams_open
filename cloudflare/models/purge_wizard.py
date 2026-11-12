@@ -3,6 +3,7 @@
 from odoo import models, fields, _
 from odoo.exceptions import UserError
 from odoo.addons.cloudflare.utils.cloudflare_api import purge_everything, purge_urls, purge_tags
+from odoo.addons.zero_sudo import public_rpc
 
 
 class CloudflarePurgeWizard(models.TransientModel):
@@ -35,6 +36,7 @@ class CloudflarePurgeWizard(models.TransientModel):
     )
 
     # [@ANCHOR: cloudflare:COMM_purge_wizard_action_purge]
+    @public_rpc
     def action_purge(self):
         self.ensure_one()
         token, zone_id = self.website_id._get_cloudflare_credentials()

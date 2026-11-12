@@ -17,6 +17,7 @@ from ..utils.cloudflare_systemd import (
     start_tunnel_daemon,
     stop_tunnel_daemon,
 )
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -202,6 +203,7 @@ class CloudflareTunnel(models.Model):
         return []
 
     # [@ANCHOR: cloudflare:COMM_tunnel_action_push_configuration]
+    @public_rpc
     def action_push_configuration(self):
         # Pre-fetched once outside the loop below: the same global routes
         # (tunnel_id=False) apply to every tunnel in self, so searching for
@@ -284,6 +286,7 @@ class CloudflareTunnel(models.Model):
             },
         }
 
+    @public_rpc
     def action_delete_tunnel(self):
         # [@ANCHOR: COMM_cf_delete_tunnel]
 
@@ -354,6 +357,7 @@ class CloudflareTunnel(models.Model):
             },
         }
 
+    @public_rpc
     @api.model
     def action_sync_tunnels(self):
         # [@ANCHOR: COMM_cf_sync_tunnels]
