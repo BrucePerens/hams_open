@@ -52,7 +52,9 @@ class FormShieldRejection(models.Model):
     # Verified by [@ANCHOR: form_shield:test_counters_keep_no_personal_data]
     @api.model
     def _upsert(self, form_id, reason):
-        today = fields.Date.context_today(self)
+        # UTC day, not the visitor's time zone: the own-cursor path runs with an empty context, so a
+        # context-dependent day would split one day's counter in two depending on the path.
+        today = fields.Date.today()
         self.flush_model()
         # audit-ignore-sql: parameters are passed separately; Tested by [@ANCHOR: form_shield:test_counters_keep_no_personal_data]
         self.env.cr.execute(
@@ -75,7 +77,7 @@ class FormShieldRejection(models.Model):
         days = self.env["form.shield"]._int_param(
             "form_shield.retention_days", DEFAULT_RETENTION_DAYS
         )
-        cutoff = fields.Date.context_today(self) - timedelta(days=days)
+        cutoff = fields.Date.today() - timedelta(days=days)
         old = self.search([("day", "<", cutoff)], limit=100000)
         old.unlink()
         return len(old)
