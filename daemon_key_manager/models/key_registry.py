@@ -53,6 +53,7 @@ def key_directory_for_group(group):
     return os.path.join(KEY_ROOT_DIR, group[len(OS_GROUP_PREFIX):])
 
 
+# [@ANCHOR: daemon_key_manager_key_registry_daemon_key_registry]
 class DaemonKeyRegistry(models.Model):
     """
     Daemon API Key Registry.
