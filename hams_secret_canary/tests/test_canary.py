@@ -85,6 +85,7 @@ class TestDetector(CanaryCase):
             self.assertTrue(detector.is_token(detector.make_canary(label)))
         self.assertNotEqual(detector.new_salt(), detector.new_salt())
 
+    # Tests [@ANCHOR: hams_secret_canary_secret_canary_secret_canary]
     def test_registering_a_non_token_fails(self):
         for bad in ("", "short", "has space in the middle of it", "trailing.dot.token.value."):
             with self.assertRaises(ValueError):
@@ -118,6 +119,8 @@ class TestAlarm(CanaryCase):
             self.assertNotIn(SECRET, text)
         self.assertIn("[REDACTED:test_secret]", rows.user_agent)
 
+    # Tests [@ANCHOR: hams_secret_canary_security_log_security_log]
+    # Tests [@ANCHOR: hams_secret_canary_alerts_alarm]
     def test_pager_backend_opens_one_critical_incident_without_the_value(self):
         label = "test_pager_%s" % uuid.uuid4().hex[:8]  # report_incident rate-limits a source for 60 s in Redis: a fresh one each run
         alerts.pager_backend(self.env, alerts.Alarm(label, "secret", "response", "/leak/[REDACTED:%s]" % label))
@@ -264,6 +267,7 @@ class TestWsgiScan(HamsTransactionCase):
         self.assertEqual(seen, [(payload.decode(), "/xmlrpc/2/common")])
 
     # Tests [@ANCHOR: hams_secret_canary:mark_scanned]
+    # Tests [@ANCHOR: hams_secret_canary_ir_http_ir_http]
     def test_a_response_post_dispatch_already_scanned_is_not_scanned_again(self):
         def application(environ, start_response):
             wsgi_scan.mark_scanned()  # what `ir.http._post_dispatch` does while serving the request
