@@ -265,6 +265,9 @@ impl Link {
             if b == b'\n' {
                 break;
             }
+            if v.len() >= MAX_REPLY {
+                return Err("reply line too large".into());
+            }
             v.push(b);
         }
         Ok(String::from_utf8_lossy(&v).trim().to_string())
@@ -313,6 +316,9 @@ impl Link {
             n.push(self.byte()? as char);
         }
         let n: usize = n.parse().map_err(|_| "bad block length")?;
+        if n > MAX_REPLY {
+            return Err(format!("block of {n} bytes too large"));
+        }
         let mut data = vec![0u8; n];
         self.p
             .read_exact(&mut data)
@@ -359,6 +365,12 @@ impl Link {
         Ok(out)
     }
 }
+
+/// Longest reply line or binary block accepted from an instrument.
+#[cfg(not(test))]
+const MAX_REPLY: usize = 64 << 20;
+#[cfg(test)]
+const MAX_REPLY: usize = 1 << 20;
 
 #[cfg(test)]
 mod tests {
@@ -575,6 +587,24 @@ mod tests {
         l.send_block("PNSU ", &[0, 10, 13, 255, b'x']).unwrap();
         drop(l);
         assert_eq!(server.join().unwrap(), b"PNSU #9000000005\0\n\r\xffx\n");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_link_block]
+    // Tests [@ANCHOR: bench_mcp_link_line]
+    #[test]
+    fn an_absurd_block_length_or_endless_line_is_refused() {
+        let (port, server) = instrument(vec![("BIG?", b"#9999999999".to_vec())]);
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let e = l.block("BIG?").unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+        drop(l);
+        server.join().unwrap();
+        let (port, server) = instrument(vec![("X?", vec![b'a'; 2 << 20])]);
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let e = l.query("X?").unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+        drop(l);
+        let _ = server.join();
     }
 
     // Tests [@ANCHOR: bench_mcp_link_raw_until_idle]
