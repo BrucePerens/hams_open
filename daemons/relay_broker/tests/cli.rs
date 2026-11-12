@@ -6,6 +6,14 @@
 use std::os::unix::fs::MetadataExt;
 use std::process::Command;
 
+struct ScratchDir(std::path::PathBuf);
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 fn broker() -> Command {
     Command::new(env!("CARGO_BIN_EXE_hams-relay-broker"))
 }
@@ -13,9 +21,11 @@ fn broker() -> Command {
 // Tests [@ANCHOR: relay_broker_main]
 #[test]
 fn the_program_exits_2_on_bad_options_or_config_and_0_after_an_idle_run() {
+    // temp-dir-helper: `ScratchDir` removes the directory in its Drop, also while a failing test unwinds
     let dir = std::env::temp_dir().join(format!("relay_broker_cli_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    let _cleanup = ScratchDir(dir.clone());
 
     // An unknown option.
     let out = broker().arg("--bogus").output().unwrap();
@@ -72,5 +82,4 @@ fn the_program_exits_2_on_bad_options_or_config_and_0_after_an_idle_run() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
