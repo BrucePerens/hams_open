@@ -294,7 +294,10 @@ fn the_dual_band_yaesus_pick_the_transmit_band_with_ft_and_refuse_the_other_rece
     for id in ["yaesu-ftdx-5000", "yaesu-ftdx-9000"] {
         let desc = described(id);
         assert!(desc.capabilities.has(Capability::Receivers), "{id}");
-        assert!(!desc.capabilities.has(Capability::Split), "{id}: FT is not split here");
+        assert!(
+            !desc.capabilities.has(Capability::Split),
+            "{id}: FT is not split here"
+        );
         let mut engine = engine_for(&desc).expect("engine");
         let mut rig = VirtualRig::from_description(&desc).expect("virtual rig");
         // The Main band is the power-on state.
@@ -303,9 +306,13 @@ fn the_dual_band_yaesus_pick_the_transmit_band_with_ft_and_refuse_the_other_rece
             Observation::TxReceiver(Receiver::Main),
             "{id}"
         );
-        let sub = engine.encode(&Op::SetTxReceiver(Receiver::Sub)).expect("encode");
+        let sub = engine
+            .encode(&Op::SetTxReceiver(Receiver::Sub))
+            .expect("encode");
         assert_eq!(sub.bytes, b"FT3;", "{id}");
-        let main = engine.encode(&Op::SetTxReceiver(Receiver::Main)).expect("encode");
+        let main = engine
+            .encode(&Op::SetTxReceiver(Receiver::Main))
+            .expect("encode");
         assert_eq!(main.bytes, b"FT2;", "{id}");
         write(engine.as_mut(), &mut rig, &Op::SetTxReceiver(Receiver::Sub));
         assert_eq!(
@@ -318,7 +325,11 @@ fn the_dual_band_yaesus_pick_the_transmit_band_with_ft_and_refuse_the_other_rece
             Observation::TxReceiver(Receiver::Sub),
             "{id}"
         );
-        write(engine.as_mut(), &mut rig, &Op::SetTxReceiver(Receiver::Main));
+        write(
+            engine.as_mut(),
+            &mut rig,
+            &Op::SetTxReceiver(Receiver::Main),
+        );
         assert_eq!(
             read(engine.as_mut(), &mut rig, &Op::GetTxReceiver),
             Observation::TxReceiver(Receiver::Main),

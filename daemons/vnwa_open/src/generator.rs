@@ -620,7 +620,8 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_generator_level]
     // Tests [@ANCHOR: vnwa_open_am_fields]
     #[test]
-    fn every_level_from_minus_20_to_minus_50_is_within_its_count_rounding_and_modulation_scales_with_it() {
+    fn every_level_from_minus_20_to_minus_50_is_within_its_count_rounding_and_modulation_scales_with_it(
+    ) {
         let mut last = u16::MAX;
         for k in 0..=50 {
             let db = -f64::from(k);
@@ -630,12 +631,18 @@ mod tests {
             // The only error is rounding to a whole count: half a count out of `level`, in dB (0.083 dB at -50 dB where the count is 52).
             let got_db = 20.0 * (f64::from(level) / FULL_SCALE).log10();
             let limit = 20.0 * (1.0 + 0.5 / f64::from(level)).log10() + 1e-9;
-            assert!((got_db - db).abs() <= limit, "{db}: {got_db} dB, limit {limit}");
+            assert!(
+                (got_db - db).abs() <= limit,
+                "{db}: {got_db} dB, limit {limit}"
+            );
             // AM at 50 % depth: the modulation amplitude follows the level, never zero, one third of the level in the DDS's units.
             let f = am_fields(level, 500.0, 50.0).unwrap();
             let amp = (u32::from(f.amplitude_high) << 16) | u32::from(f.amplitude_low);
             let want = f64::from(level) / FULL_SCALE / 3.0 * 8_388_608.0;
-            assert!(amp > 0 && (f64::from(amp) - want).abs() <= 1.0, "{db}: {amp} vs {want}");
+            assert!(
+                amp > 0 && (f64::from(amp) - want).abs() <= 1.0,
+                "{db}: {amp} vs {want}"
+            );
         }
         assert_eq!(last, 52);
     }

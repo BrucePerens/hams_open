@@ -1193,9 +1193,7 @@ impl VirtualRig {
                 self.state.ptt = flag == "1";
                 None
             }
-            ("FT", "") if self.yaesu_tx_band_model() => {
-                Some(format!("FT{};", self.yaesu_tx_band))
-            }
+            ("FT", "") if self.yaesu_tx_band_model() => Some(format!("FT{};", self.yaesu_tx_band)),
             ("FT", flag @ ("2" | "3")) if self.yaesu_tx_band_model() => {
                 self.yaesu_tx_band = u8::from(flag == "3");
                 None
