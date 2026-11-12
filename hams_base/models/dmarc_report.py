@@ -6,6 +6,7 @@ import gzip
 import io
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ class DmarcReport(models.Model):
     record_ids = fields.One2many("hams_base.dmarc.record", "report_id", string="Records")
 
     # [@ANCHOR: hams_base:COMM_dmarc_message_new]
+    @public_rpc
     @api.model
     def message_new(self, msg_dict, custom_values=None):
         """
