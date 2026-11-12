@@ -271,6 +271,7 @@ class TestCompliancePagesHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('href="/compliance/dmca"', response.text)
 
+    # Tests [@ANCHOR: compliance_main_compliance_controller]
     def test_compliance_index_route_lists_only_active_documents(self):
         """Verify the actual /compliance HTTP route, not just its template."""
         # Tests [@ANCHOR: COMM_compliance_index_route]

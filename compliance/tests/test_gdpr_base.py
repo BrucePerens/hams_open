@@ -24,6 +24,8 @@ class TestComplianceGdprBase(HamsTransactionCase):
             }
         )
 
+    # Tests [@ANCHOR: compliance_res_users_res_users]
+    # Tests [@ANCHOR: compliance_compliance_document_compliance_document]
     def test_execute_gdpr_erasure_deactivates_the_account(self):
         # [@ANCHOR: COMM_test_execute_gdpr_erasure_deactivates_the_account]
 

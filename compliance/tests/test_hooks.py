@@ -9,6 +9,7 @@ from odoo.addons.compliance.hooks import post_init_hook
 @tagged("post_install", "-at_install")
 class TestComplianceHooks(HamsTransactionCase):
 
+    # Tests [@ANCHOR: compliance_compliance_config_website]
     def test_02_post_init_hook_cookie_bar(self):
         """
         Verify that the post_init_hook successfully enables the cookies_bar
