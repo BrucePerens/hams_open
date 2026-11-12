@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::os::{NodeKind, Os};
+use crate::os::{NodeKind, Os, UsbIdentity};
 use crate::wire::{DeviceClass, MAX_STRING};
 
 /// Why an open was refused. Short, fixed, loggable.
@@ -32,6 +32,8 @@ pub enum Denial {
     WrongClass,
     /// The USB vendor:product is protected (for example the VNWA codec).
     ProtectedUsb,
+    /// The USB identity could not be read (sysfs unreadable) and `allow_unreadable_usb` is off.
+    UsbUnreadable,
 }
 
 impl Denial {
@@ -48,6 +50,7 @@ impl Denial {
             Denial::NotCharDevice => "not a character device",
             Denial::WrongClass => "device class mismatch",
             Denial::ProtectedUsb => "protected usb device",
+            Denial::UsbUnreadable => "usb identity unreadable",
         }
     }
 }
@@ -63,6 +66,10 @@ pub struct Policy {
     pub audio_majors: Vec<u32>,
     /// USB vendor:product pairs never handed out.
     pub deny_usb: Vec<(u16, u16)>,
+    /// Hand out a node whose USB identity cannot be read (sysfs unreadable). Default false: the
+    /// check fails closed, so `deny_usb` cannot be bypassed by hiding sysfs. The one machine that
+    /// needs this (a container with no `/sys`, a VNWA-free host) sets `allow_unreadable_usb = true`.
+    pub allow_unreadable_usb: bool,
     /// Exact paths never handed out, whatever they are.
     pub deny_paths: Vec<PathBuf>,
 }
@@ -84,6 +91,7 @@ impl Default for Policy {
             // 116 is ALSA.
             audio_majors: vec![116],
             deny_usb: vec![VNWA_CODEC],
+            allow_unreadable_usb: false,
             deny_paths: [
                 "/dev/mem",
                 "/dev/kmem",
@@ -163,7 +171,7 @@ impl Policy {
     // [@ANCHOR: relay_broker_policy_check_node]
     /// The filesystem check: every directory on the way from the device root is a real
     /// directory (not a symlink), the final node is a character device of `class`, and its USB
-    /// identity is not protected. `clean` comes from `check_path`.
+    /// identity is not protected (an unreadable identity is refused unless `allow_unreadable_usb`). `clean` comes from `check_path`.
     pub fn check_node(&self, os: &dyn Os, clean: &Path, class: DeviceClass) -> Result<(), Denial> {
         let Ok(rel) = clean.strip_prefix(&self.device_root) else {
             return Err(Denial::OutsideRoot);
@@ -187,12 +195,13 @@ impl Policy {
                 self.check_kind(kind, class)?;
             }
         }
-        if let Some((vid, pid, _)) = os.usb_identity(clean) {
-            if self.deny_usb.contains(&(vid, pid)) {
-                return Err(Denial::ProtectedUsb);
+        match os.usb_identity(clean) {
+            UsbIdentity::Usb(vid, pid, _) if self.deny_usb.contains(&(vid, pid)) => {
+                Err(Denial::ProtectedUsb)
             }
+            UsbIdentity::Unreadable if !self.allow_unreadable_usb => Err(Denial::UsbUnreadable),
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     // [@ANCHOR: relay_broker_policy_check_fd]
