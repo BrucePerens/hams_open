@@ -586,6 +586,7 @@ class CloudflareTunnel(models.Model):
         start_tunnel_daemon(result, tunnel_key=tunnel.cf_tunnel_id)
         return "started"
 
+    @api.private
     @api.model
     def action_ensure_tunnel_running(self):
         # [@ANCHOR: cloudflare:COMM_ensure_tunnel_running]

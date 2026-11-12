@@ -141,6 +141,7 @@ class CloudflareRoutingDomain(models.Model):
                     )
 
     # [@ANCHOR: cloudflare:COMM_action_sync_ssl_status]
+    @api.private
     def action_sync_ssl_status(self):
         # edge.routing.domain grants perm_read=1 to base.group_public/base.group_portal/
         # base.group_user (ir.model.access.csv rows from edge_routing), so

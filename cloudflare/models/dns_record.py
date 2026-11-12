@@ -199,6 +199,7 @@ class CloudflareDNSRecord(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_dns_push_pending]
     # Verified by [@ANCHOR: COMM_test_dns_push_pending]
+    @api.private
     @api.model
     def action_push_pending(self):
         """The one-click path: opens the push wizard with the plan already made for the rows that have something
@@ -215,6 +216,7 @@ class CloudflareDNSRecord(models.Model):
         return wizard.action_plan()
 
     # [@ANCHOR: cloudflare:COMM_dns_push_plan]
+    @api.private
     def dns_push_plan(self):
         """What a push of these rows would do, computed from Cloudflare's current state with reads only.
 
@@ -346,6 +348,7 @@ class CloudflareDNSRecord(models.Model):
         return problems
 
     # [@ANCHOR: cloudflare:COMM_dns_push_apply]
+    @api.private
     def dns_push_apply(self, expected_hash):
         """Apply exactly the plan whose hash the administrator saw. The plan is recomputed first; if Cloudflare
         or Odoo changed since, nothing is applied. Returns a list of per-row result strings.
