@@ -37,6 +37,7 @@ fn unsupported(what: &str) -> RigError {
 }
 
 /// The two Alinco dialects.
+// [@ANCHOR: radioctl_alinco_dialect]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialect {
     /// DX-77: `AL` commands ended by CR, one 26-character status line.
@@ -76,6 +77,7 @@ pub fn decode_status(line: &[u8]) -> Option<(u8, Hz)> {
     Some((mode, Hz(hz)))
 }
 
+// [@ANCHOR: radioctl_alinco_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -84,6 +86,7 @@ enum Pending {
 }
 
 /// The Alinco client engine.
+// [@ANCHOR: radioctl_alinco_alinco_engine]
 #[derive(Debug)]
 pub struct AlincoEngine {
     desc: RigDescription,
@@ -240,6 +243,7 @@ impl ProtocolEngine for AlincoEngine {
 }
 
 /// A virtual Alinco radio.
+// [@ANCHOR: radioctl_alinco_alinco_twin]
 #[derive(Debug)]
 pub struct AlincoTwin {
     dialect: Dialect,
@@ -356,6 +360,10 @@ impl VendorTwin for AlincoTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_alinco_dialect]
+    // Tests [@ANCHOR: radioctl_alinco_pending]
+    // Tests [@ANCHOR: radioctl_alinco_alinco_engine]
+    // Tests [@ANCHOR: radioctl_alinco_alinco_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

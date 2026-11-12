@@ -85,6 +85,7 @@ pub fn decode_mode(mode: u8, width: u8) -> Option<Mode> {
     }
 }
 
+// [@ANCHOR: radioctl_drake_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -94,6 +95,7 @@ enum Pending {
 }
 
 /// The Drake client engine.
+// [@ANCHOR: radioctl_drake_drake_engine]
 #[derive(Debug)]
 pub struct DrakeEngine {
     desc: RigDescription,
@@ -188,6 +190,7 @@ impl ProtocolEngine for DrakeEngine {
 }
 
 /// A virtual Drake receiver.
+// [@ANCHOR: radioctl_drake_drake_twin]
 #[derive(Debug)]
 pub struct DrakeTwin {
     rx: RxBuffer,
@@ -285,6 +288,9 @@ impl VendorTwin for DrakeTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_drake_pending]
+    // Tests [@ANCHOR: radioctl_drake_drake_engine]
+    // Tests [@ANCHOR: radioctl_drake_drake_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

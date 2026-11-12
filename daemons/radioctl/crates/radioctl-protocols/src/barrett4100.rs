@@ -59,6 +59,7 @@ pub fn command(text: &str) -> Vec<u8> {
 }
 
 /// What the next answer is.
+// [@ANCHOR: radioctl_barrett4100_expect]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Expect {
     /// The answer to the remote-mode command.
@@ -70,6 +71,7 @@ enum Expect {
 }
 
 /// The Barrett 4100 client engine.
+// [@ANCHOR: radioctl_barrett4100_barrett4100_engine]
 #[derive(Debug)]
 pub struct Barrett4100Engine {
     desc: RigDescription,
@@ -193,6 +195,7 @@ impl ProtocolEngine for Barrett4100Engine {
 }
 
 /// A virtual Barrett 4100.
+// [@ANCHOR: radioctl_barrett4100_barrett4100_twin]
 #[derive(Debug)]
 pub struct Barrett4100Twin {
     rx: RxBuffer,
@@ -302,6 +305,9 @@ impl VendorTwin for Barrett4100Twin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_barrett4100_expect]
+    // Tests [@ANCHOR: radioctl_barrett4100_barrett4100_engine]
+    // Tests [@ANCHOR: radioctl_barrett4100_barrett4100_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

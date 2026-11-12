@@ -95,6 +95,7 @@ fn write_byte(value: u8) -> [u8; 2] {
 }
 
 /// The engine of the AR7030 and AR7030 Plus.
+// [@ANCHOR: radioctl_ar7030_ar7030_engine]
 #[derive(Debug)]
 pub struct Ar7030Engine {
     desc: RigDescription,
@@ -227,6 +228,7 @@ impl ProtocolEngine for Ar7030Engine {
 }
 
 /// The virtual AR7030 or AR7030 Plus: the radio's address, H and lock registers and page 0.
+// [@ANCHOR: radioctl_ar7030_ar7030_twin]
 #[derive(Debug)]
 pub struct Ar7030Twin {
     desc: RigDescription,
@@ -350,6 +352,8 @@ impl ReceiverTwin for Ar7030Twin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_ar7030_ar7030_engine]
+    // Tests [@ANCHOR: radioctl_ar7030_ar7030_twin]
     use radioctl_core::units::Mode;
 
     use super::*;

@@ -911,3 +911,7 @@ async fn the_funcube_gain_commands_follow_the_dongle_model() {
         .is_err());
     assert!(rig.execute(Op::GetSignal).await.is_err());
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_dwt_dwt_engine]
+// Tests [@ANCHOR: radioctl_dwt_dwt_twin]

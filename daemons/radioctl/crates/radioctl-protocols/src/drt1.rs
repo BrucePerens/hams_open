@@ -124,6 +124,7 @@ pub fn tune_steps(hz: Hz) -> Vec<LineStep> {
 }
 
 /// The DRT1 client engine. It has no bytes: its commands are line sequences.
+// [@ANCHOR: radioctl_drt1_drt1_engine]
 #[derive(Debug)]
 pub struct Drt1Engine {
     desc: RigDescription,
@@ -180,6 +181,7 @@ impl ProtocolEngine for Drt1Engine {
     }
 }
 
+// [@ANCHOR: radioctl_drt1_dds_state]
 #[derive(Debug)]
 struct DdsState {
     rts: bool,
@@ -216,6 +218,7 @@ impl DdsState {
 
 /// A virtual DRT1: the AD9951 serial port, decoded from the line changes. Clone it to hand one
 /// handle to the actor as its control lines and keep another to look at the tuning.
+// [@ANCHOR: radioctl_drt1_drt1_twin]
 #[derive(Debug, Clone)]
 pub struct Drt1Twin {
     state: Arc<Mutex<DdsState>>,
@@ -318,6 +321,9 @@ impl VendorTwin for Drt1Twin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_drt1_drt1_engine]
+    // Tests [@ANCHOR: radioctl_drt1_dds_state]
+    // Tests [@ANCHOR: radioctl_drt1_drt1_twin]
     use super::*;
 
     fn shipped() -> RigDescription {

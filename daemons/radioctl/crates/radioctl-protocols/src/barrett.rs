@@ -91,6 +91,7 @@ pub fn band_offset(hz: Hz) -> Option<u32> {
 }
 
 /// How the radio is tuned.
+// [@ANCHOR: radioctl_barrett_tuning]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Tuning {
     /// `TR` and `TC` (the 2050).
@@ -112,6 +113,7 @@ impl Tuning {
     }
 }
 
+// [@ANCHOR: radioctl_barrett_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -123,6 +125,7 @@ enum Pending {
 }
 
 /// The Barrett client engine.
+// [@ANCHOR: radioctl_barrett_barrett_engine]
 #[derive(Debug)]
 pub struct BarrettEngine {
     desc: RigDescription,
@@ -302,6 +305,7 @@ impl ProtocolEngine for BarrettEngine {
 }
 
 /// A virtual Barrett transceiver.
+// [@ANCHOR: radioctl_barrett_barrett_twin]
 #[derive(Debug)]
 pub struct BarrettTwin {
     tuning: Tuning,
@@ -446,6 +450,10 @@ impl VendorTwin for BarrettTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_barrett_tuning]
+    // Tests [@ANCHOR: radioctl_barrett_pending]
+    // Tests [@ANCHOR: radioctl_barrett_barrett_engine]
+    // Tests [@ANCHOR: radioctl_barrett_barrett_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

@@ -43,6 +43,7 @@ fn unsupported(what: &str) -> RigError {
 }
 
 /// The two modules.
+// [@ANCHOR: radioctl_dorji_band]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Band {
     /// DRA818U, 400 to 480 MHz.
@@ -97,6 +98,7 @@ pub fn parse_mhz(text: &str) -> Option<Hz> {
 }
 
 /// The DRA818 client engine.
+// [@ANCHOR: radioctl_dorji_dorji_engine]
 #[derive(Debug)]
 pub struct DorjiEngine {
     desc: RigDescription,
@@ -193,6 +195,7 @@ impl ProtocolEngine for DorjiEngine {
 }
 
 /// A virtual DRA818.
+// [@ANCHOR: radioctl_dorji_dorji_twin]
 #[derive(Debug)]
 pub struct DorjiTwin {
     band: Band,
@@ -281,6 +284,9 @@ impl VendorTwin for DorjiTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_dorji_band]
+    // Tests [@ANCHOR: radioctl_dorji_dorji_engine]
+    // Tests [@ANCHOR: radioctl_dorji_dorji_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

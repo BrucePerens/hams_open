@@ -110,6 +110,7 @@ pub fn frequency_answer(vfo: Vfo, hz: Hz) -> Vec<u8> {
 }
 
 /// The AnyTone D578A client engine.
+// [@ANCHOR: radioctl_anytone_anytone_engine]
 #[derive(Debug)]
 pub struct AnytoneEngine {
     desc: RigDescription,
@@ -201,6 +202,7 @@ impl ProtocolEngine for AnytoneEngine {
 }
 
 /// A virtual AnyTone D578A.
+// [@ANCHOR: radioctl_anytone_anytone_twin]
 #[derive(Debug)]
 pub struct AnytoneTwin {
     rx: RxBuffer,
@@ -283,6 +285,8 @@ impl VendorTwin for AnytoneTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_anytone_anytone_engine]
+    // Tests [@ANCHOR: radioctl_anytone_anytone_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

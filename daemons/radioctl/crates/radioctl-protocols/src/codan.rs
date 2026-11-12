@@ -64,6 +64,7 @@ pub fn parse_khz(text: &str) -> Option<Hz> {
     w.checked_mul(1000)?.checked_add(f).map(Hz)
 }
 
+// [@ANCHOR: radioctl_codan_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -74,6 +75,7 @@ enum Pending {
 }
 
 /// The CODAN client engine.
+// [@ANCHOR: radioctl_codan_codan_engine]
 #[derive(Debug)]
 pub struct CodanEngine {
     desc: RigDescription,
@@ -215,6 +217,7 @@ impl ProtocolEngine for CodanEngine {
 }
 
 /// A virtual CODAN radio.
+// [@ANCHOR: radioctl_codan_codan_twin]
 #[derive(Debug)]
 pub struct CodanTwin {
     rx: RxBuffer,
@@ -328,6 +331,9 @@ impl VendorTwin for CodanTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_codan_pending]
+    // Tests [@ANCHOR: radioctl_codan_codan_engine]
+    // Tests [@ANCHOR: radioctl_codan_codan_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

@@ -31,6 +31,7 @@ fn unsupported(what: &str) -> RigError {
 }
 
 /// The Digital World Traveller client engine.
+// [@ANCHOR: radioctl_dwt_dwt_engine]
 #[derive(Debug)]
 pub struct DwtEngine {
     desc: RigDescription,
@@ -114,6 +115,7 @@ impl ProtocolEngine for DwtEngine {
 }
 
 /// A virtual Traveller: remembers the last kilohertz it was tuned to.
+// [@ANCHOR: radioctl_dwt_dwt_twin]
 #[derive(Debug, Default)]
 pub struct DwtTwin {
     khz: Option<u16>,
