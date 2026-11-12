@@ -15,6 +15,7 @@ from odoo.addons.zero_sudo import public_rpc
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: database_management_db_stats_database_table_stat]
 class DatabaseTableStat(models.Model):
     # [@ANCHOR: COMM_db_security_prefetch]
     # This model is logically global as it tracks PostgreSQL internal statistics
@@ -150,6 +151,7 @@ class DatabaseTableStat(models.Model):
                 )
 
 
+# [@ANCHOR: database_management_db_stats_database_query_stat]
 class DatabaseQueryStat(models.Model):
     # [@ANCHOR: COMM_db_slow_queries]
     # This model is logically global as pg_stat_statements tracks all queries
@@ -324,6 +326,7 @@ class DatabaseQueryStat(models.Model):
             raise UserError(_("Could not generate explain plan: %s") % str(e))
 
 
+# [@ANCHOR: database_management_db_stats_database_activity]
 class DatabaseActivity(models.Model):
     # [@ANCHOR: COMM_db_active_sessions]
     # This model is logically global as it tracks all active PostgreSQL backends
@@ -379,6 +382,7 @@ class DatabaseActivity(models.Model):
         return True
 
 
+# [@ANCHOR: database_management_db_stats_database_index_stat]
 class DatabaseIndexStat(models.Model):
     # [@ANCHOR: COMM_db_index_stats]
     # This model is logically global as it tracks index performance at the PostgreSQL storage layer,
@@ -415,6 +419,7 @@ class DatabaseIndexStat(models.Model):
         )
 
 
+# [@ANCHOR: database_management_db_stats_database_replication_stat]
 class DatabaseReplicationStat(models.Model):
     # [@ANCHOR: COMM_db_replication_stats]
     # This model tracks PostgreSQL replication lag and status for the entire cluster.
@@ -466,6 +471,7 @@ class DatabaseReplicationStat(models.Model):
         )
 
 
+# [@ANCHOR: database_management_db_stats_database_index_advisor]
 class DatabaseIndexAdvisor(models.Model):
     # [@ANCHOR: COMM_db_index_advisor]
     # This model identifies tables with high sequential scan counts and large
@@ -503,6 +509,7 @@ class DatabaseIndexAdvisor(models.Model):
         )
 
 
+# [@ANCHOR: database_management_db_stats_pg_explain_wizard]
 class PgExplainWizard(models.TransientModel):
     _name = "pg.explain.wizard"
     name = fields.Char(string="Name", default=lambda self: self._description)

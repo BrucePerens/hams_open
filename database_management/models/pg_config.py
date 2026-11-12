@@ -12,6 +12,7 @@ import odoo.tools.sql
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: database_management_pg_config_database_pg_setting]
 class DatabasePgSetting(models.Model):
     # [@ANCHOR: COMM_db_settings_audit]
 
@@ -52,6 +53,7 @@ class DatabasePgSetting(models.Model):
         )
 
 
+# [@ANCHOR: database_management_pg_config_pg_optimize_wizard]
 class PgOptimizeWizard(models.TransientModel):
     _name = "pg.optimize.wizard"
     _description = "PostgreSQL Optimization Wizard"
@@ -122,6 +124,7 @@ class PgOptimizeWizard(models.TransientModel):
         }
 
 
+# [@ANCHOR: database_management_pg_config_pg_ha_wizard]
 class PgHaWizard(models.TransientModel):
     _name = "pg.ha.wizard"
     _description = "High Availability Failover Wizard"
