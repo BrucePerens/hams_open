@@ -53,6 +53,24 @@ application's body unchanged and, once the whole body has been sent, calls `scan
 (undecodable bytes replaced) and the request path; a response whose `Content-Type` is not text, or whose environ carries
 `hams_secret_canary.scanned`, is not scanned. It does not catch errors from `scan`; the installed one never raises. Test: `TestWsgiScan`.
 
+### `hams_secret_canary:is_text`
+
+**Purpose.** Decides whether a response is scanned. `_is_text(content_type)`: `content_type` the `Content-Type` header value. Returns
+`True` when its media type (parameters and case ignored) starts with `text/` or is in `detector.SCANNABLE_MIMETYPES`, else `False`.
+No errors. Pure. Test: `TestWsgiScan.test_binary_responses_are_not_scanned`.
+
+### `hams_secret_canary:pass_through`
+
+**Purpose.** Wraps a response body so it can be scanned without being changed. `_pass_through(body, path, scan)`: returns an iterator
+yielding exactly the chunks of `body`, scanned through `_scan_chunks`, that closes `body` when the server closes it. Test:
+`TestWsgiScan.test_text_is_scanned_after_it_is_sent_unchanged_even_when_split_in_chunks`.
+
+### `hams_secret_canary:scan_chunks`
+
+**Purpose.** The generator behind the scan. `_scan_chunks(chunks, path, scan)`: yields every chunk unchanged, keeps only the first
+`detector.MAX_SCAN_BYTES` bytes, and after the last chunk calls `scan(text, path)` with them decoded as UTF-8 (undecodable bytes
+replaced). It is not called if the client stops reading early. Test: `TestWsgiScan.test_only_the_first_megabyte_is_scanned`.
+
 ### `hams_secret_canary:scan_after_request`
 
 **Purpose.** The installed `scan` for `scan_wsgi`. `scan_after_request(text, where)`: `text` the response text, `where`

@@ -42,6 +42,7 @@ class WebsiteCloudflare(models.Model):
         return result
 
     def _register_secrets_with_canary(self, vals):
+        # [@ANCHOR: cloudflare:register_secrets_with_canary]
         """When the optional `hams_secret_canary` addon is installed, registers the fingerprint of a newly written API
         token or Turnstile secret so that its appearance in a response or a log line raises an alarm. Only a salted
         hash is kept. A value that is not a single token (too short, or has spaces) is skipped: saving never fails

@@ -27,6 +27,7 @@ class TestCanaryRegistration(HamsTransactionCase):
         self.assertNotIn(value, logs.output[0])
         return True
 
+    # Tests [@ANCHOR: cloudflare:register_secrets_with_canary]
     def test_a_written_token_and_turnstile_secret_are_registered(self):
         if "hams.secret.canary" not in self.env:
             return  # optional addon not installed in this database; the next test covers that case
@@ -34,6 +35,7 @@ class TestCanaryRegistration(HamsTransactionCase):
         self.assertTrue(self._registered(TOKEN))
         self.assertTrue(self._registered(SECRET))
 
+    # Tests [@ANCHOR: cloudflare:register_secrets_with_canary]
     def test_a_short_value_or_the_mask_never_fails_the_save(self):
         self.website.write({"cloudflare_api_token": "short"})
         self.website.write({"cloudflare_turnstile_secret": "********"})

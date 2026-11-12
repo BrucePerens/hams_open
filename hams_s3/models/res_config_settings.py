@@ -124,6 +124,7 @@ class ResConfigSettings(models.TransientModel):
                 env_svc['storage.backend'].create(vals)
 
     def _register_s3_secret_with_canary(self):
+        # [@ANCHOR: hams_s3_register_secret_with_canary]
         """When the optional `hams_secret_canary` addon is installed, registers the fingerprint of a newly entered S3
         secret key so that its appearance in a response or a log line raises an alarm. Only a salted hash is kept.
         An unchanged (masked) or empty value, or one that is not a single token, is skipped: saving never fails
