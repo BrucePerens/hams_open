@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from odoo import models, fields, api, _
 from odoo.exceptions import AccessError
+from odoo.addons.zero_sudo import public_rpc
 
 # How long a browser has to hand the redirected token to the export daemon
 # before it's refused. Short and single-use per
@@ -143,6 +144,7 @@ class HamGdprExportToken(models.Model):
 
     @api.model
     # [@ANCHOR: user_websites:COMM_gdpr_consume_and_export]
+    @public_rpc  # RPC by design: the gdpr_csv_export daemon calls it over RPC
     def consume_and_export(self, token):
         """The one RPC entrypoint the export daemon calls back into Odoo
         with. Validates+consumes the token, then materializes the full
