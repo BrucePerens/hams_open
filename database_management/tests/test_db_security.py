@@ -68,6 +68,8 @@ class TestDbSecurity(HamsTransactionCase):
             self.env["database.pg.setting"].with_user(self.admin).search([], limit=1)
         )
 
+    # Tests [@ANCHOR: database_management_pg_config_pg_ha_wizard]
+    # Tests [@ANCHOR: database_management_pg_config_pg_optimize_wizard]
     def test_01_security(self):
         # Tests [@ANCHOR: COMM_db_security_prefetch]
         self.assertIn("database.table.stat", self.env)
@@ -106,6 +108,7 @@ class TestDbSecurity(HamsTransactionCase):
                 )
                 self.env.flush_all()
 
+    # Tests [@ANCHOR: database_management_pg_config_database_pg_setting]
     def test_02_view_models_readonly(self):
         """
         Ensure `perm_write`, `perm_create`, and `perm_unlink` are set to `0` for view-backed models.

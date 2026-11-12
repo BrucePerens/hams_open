@@ -15,6 +15,9 @@ import logging
 _logger = logging.getLogger(__name__)
 @tagged("post_install", "-at_install")
 class TestDatabaseManagement(HamsTransactionCase):
+    # Tests [@ANCHOR: database_management_db_stats_database_index_advisor]
+    # Tests [@ANCHOR: database_management_db_stats_database_index_stat]
+    # Tests [@ANCHOR: database_management_db_stats_database_table_stat]
     def test_01_vacuum_analyze(self):
         # Tests [@ANCHOR: COMM_vacuum_analyze]
 
@@ -115,6 +118,7 @@ class TestDatabaseManagement(HamsTransactionCase):
         self.env["database.table.stat"].cron_check_bloat()
         mock_search.assert_called_once()
 
+    # Tests [@ANCHOR: database_management_db_stats_database_activity]
     def test_03_terminate_backend(self):
         # Tests [@ANCHOR: COMM_db_terminate_backend]
         self.env.cr.execute("SELECT pg_terminate_backend(999999)")
@@ -128,6 +132,9 @@ class TestDatabaseManagement(HamsTransactionCase):
                 mock_svc_env.cr.execute.assert_called()
         self.assertIn("database.activity", self.env)
 
+    # Tests [@ANCHOR: database_management_db_stats_pg_explain_wizard]
+    # Tests [@ANCHOR: database_management_db_stats_database_replication_stat]
+    # Tests [@ANCHOR: database_management_db_stats_database_query_stat]
     def test_04_views(self):
         # Tests [@ANCHOR: COMM_test_dba_view]
 
