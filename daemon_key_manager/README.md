@@ -37,10 +37,10 @@ The module follows a strict "minimum privilege" policy. It uses a dedicated serv
 
 To further protect the integrity of the host system, additional safety mechanisms are enforced across the platform.
 
-* **System Directory Protection:** Writing to sensitive system directories is explicitly forbidden regardless of the prefix check [@ANCHOR: COMM_write_secure_env_file_logic].
+* **System Directory Protection:** Writing to sensitive system directories is explicitly forbidden regardless of the prefix check. `_write_secure_env_file(path, login, key, group=None)` resolves the path with `os.path.realpath` and refuses (`UserError`) anything that does not start with `/opt/hams/etc/keys/`, even if the registry row predates the constraint. It writes through a fresh `0600` temporary file that is renamed over the target, so an existing file with loose permissions can never receive a live key and a failed write leaves the previous key in place; with a `hamsd_<family>` group the file ends `0640` with that group. Permission and OS errors are logged and re-raised [@ANCHOR: COMM_write_secure_env_file_logic].
 
 ### Automated Key Rotation
-Keys are automatically rotated every 60 days via an `ir.cron` job [@ANCHOR: COMM_cron_rotation_trigger].
+Keys are automatically rotated every 60 days via an `ir.cron` job. The scheduled action `ir_cron_rotate_daemon_keys` (`data/cron.xml`, `noupdate`) runs daily as the manager service account and calls `_cron_rotate_all_keys()`; that method rotates only registries whose key is older than 59 days, ten at a time, and re-triggers the cron while a full batch was found, so a daily run is a check and not a rotation of everything [@ANCHOR: COMM_cron_rotation_trigger].
 
 * **Graceful Failure:** Stateless batching (processing 10 records at a time and re-triggering) ensures that one failed file-write or database error does not block other rotations. Failures are logged, and the system attempts to continue.
 * **Buffer Period:** New keys are generated with a 90-day expiration, providing a 30-day "grace period" for the 60-day rotation cycle to succeed.
@@ -221,17 +221,17 @@ exists, not that Odoo answers a revoked key with 401 for every endpoint; the ful
 ---
 
 ## 🧪 Verification
-* **register_daemon_api**: The registration flow ensures that all daemon keys are properly provisioned for correct environments, verified by [@ANCHOR: COMM_test_register_daemon_api].
+* **register_daemon_api**: The registration flow ensures that all daemon keys are properly provisioned for correct environments, verified by [@ANCHOR: COMM_test_register_daemon_api]. `test_register_daemon_api` in `tests/test_key_registry.py` calls `register_daemon` as a Daemon Key Manager and checks that it returns True, the registry row exists with the requested `env_file_path`, the key file was written under `/opt/hams/etc/keys/`, and the service account now holds the key-usage group. It is the main test of the registration flow.
 
-* **force_provision_all**: Bootstrapping functionality is thoroughly tested to guarantee rapid restoration in an emergency, verified by [@ANCHOR: COMM_test_force_provisioning].
+* **force_provision_all**: Bootstrapping functionality is thoroughly tested to guarantee rapid restoration in an emergency, verified by [@ANCHOR: COMM_test_force_provisioning]. `test_force_provisioning` creates a registry whose key file does not exist, calls `action_force_provision_all` as a manager and requires the file to appear; a companion test makes one daemon fail and checks the others are still provisioned and the failure is reported, not raised. Together they cover the bootstrap path used at service start.
 
-* **security_constraints**: To prevent malicious behavior, strict sandboxing and directory path validation are verified by [@ANCHOR: COMM_test_security_constraints].
+* **security_constraints**: To prevent malicious behavior, strict sandboxing and directory path validation are verified by [@ANCHOR: COMM_test_security_constraints]. `test_security_constraints` tries to register a human (non-service) account and then a path outside `/opt/hams/etc/keys/` (`/opt/jules/test.env`) as a manager, and requires a `UserError` for each. Companion tests cover the OS-group name and the key-directory rules.
 
-* **ui_tour**: Interactive interface flows inside Odoo for key management are comprehensively verified by [@ANCHOR: COMM_test_daemon_key_manager_tour].
+* **ui_tour**: Interactive interface flows inside Odoo for key management are comprehensively verified by [@ANCHOR: COMM_test_daemon_key_manager_tour]. `test_daemon_key_manager_tour` gives the admin user the manager group and Technical Features, then runs the `daemon_key_manager_tour` browser tour from the registry action (`/odoo?debug=1&action=daemon_key_manager.action_daemon_key_registry`), exercising the registry form and its buttons. It needs a browser.
 
-* **unauthorized_access**: Zero-sudo barriers blocking non-system service accounts from escalating permissions are verified by [@ANCHOR: COMM_test_unauthorized_access].
+* **unauthorized_access**: Zero-sudo barriers blocking non-system service accounts from escalating permissions are verified by [@ANCHOR: COMM_test_unauthorized_access]. `test_unauthorized_access` creates a registry as a manager and then, as an ordinary internal user, calls `_rotate_key_and_write_file` and `action_force_provision_all`, requiring an `AccessError` from each, so no one without the Daemon Key Manager group can mint or write a key.
 
-* **key_ownership**: Finally, proper multi-tenant key isolation is checked and verified by [@ANCHOR: COMM_test_key_ownership].
+* **key_ownership**: Finally, proper multi-tenant key isolation is checked and verified by [@ANCHOR: COMM_test_key_ownership]. `test_key_ownership` registers a daemon for a fresh service account and checks that the generated API key belongs to that service account and not to the superuser, so a leaked key carries only the daemon's narrow rights.
 
 ## Function reference (ADR 0113): key lifetime and minting helpers (`models/key_registry.py`)
 
