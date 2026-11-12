@@ -4,6 +4,7 @@
 import datetime
 import logging
 from odoo import models, fields
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class BackupJob(models.Model):
     output_log = fields.Text(string="Live Output Log")
 
     # [@ANCHOR: backup_management:COMM_append_log]
+    @public_rpc
     def append_log(self, text_chunk):
         """Append text delta to the output_log to prevent resending large buffers."""
         for record in self:
@@ -135,6 +137,7 @@ class BackupJob(models.Model):
         return len(stale)
 
     # [@ANCHOR: backup_management:COMM_action_refresh_status]
+    @public_rpc
     def action_refresh_status(self):
         """
         Manually trigger a status refresh.

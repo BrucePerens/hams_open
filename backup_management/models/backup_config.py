@@ -12,6 +12,7 @@ from odoo.exceptions import UserError, AccessError, ValidationError
 from .utils import validate_backup_path, publish_to_rabbitmq
 
 from cryptography.fernet import Fernet, InvalidToken
+from odoo.addons.zero_sudo import public_rpc
 
 
 class BackupConfig(models.Model):
@@ -378,6 +379,7 @@ class BackupConfig(models.Model):
             }
         return True
 
+    @public_rpc
     def action_trigger_backup(self):
         # [@ANCHOR: backup_management:COMM_backup_trigger_execution]
 
@@ -391,6 +393,7 @@ class BackupConfig(models.Model):
                 res = action
         return res
 
+    @public_rpc
     def action_apply_policies(self):
         # [@ANCHOR: backup_management:COMM_backup_apply_policies]
         res = True
@@ -410,6 +413,7 @@ class BackupConfig(models.Model):
                 res = action
         return res
 
+    @public_rpc
     def action_test_connection(self):
         """
         Triggers a connection test for Kopia or pgBackRest.
@@ -432,6 +436,7 @@ class BackupConfig(models.Model):
             },
         }
 
+    @public_rpc
     def action_view_latest_job(self):
         # [@ANCHOR: backup_management:COMM_action_view_latest_job]
 
@@ -448,6 +453,7 @@ class BackupConfig(models.Model):
             "target": "current",
         }
 
+    @public_rpc
     def action_sync_snapshots(self):
         # [@ANCHOR: UX_BACKUP_SYNC]
 
@@ -474,6 +480,7 @@ class BackupConfig(models.Model):
             "restore_drill", {"script": self.restore_drill_script}
         )
 
+    @public_rpc
     def report_backup_failure(self, message):
         # [@ANCHOR: backup_management:COMM_backup_pager_synergy]
 
@@ -502,6 +509,7 @@ class BackupConfig(models.Model):
             body=message
         )  # audit-ignore-mail: Tested by [@ANCHOR: backup_management:COMM_backup_pager_synergy]  # fmt: skip
 
+    @public_rpc
     @api.model
     def get_board_data(self):
         # [@ANCHOR: backup_management:COMM_backup_board_data]
@@ -564,6 +572,7 @@ class BackupConfig(models.Model):
 
         return configs
 
+    @public_rpc
     def action_process_snapshot_data(self, data, engine):
         # [@ANCHOR: backup_management:COMM_action_process_snapshot_data]
         #

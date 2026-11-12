@@ -5,6 +5,7 @@ import json
 from odoo import models, fields, _
 from odoo.exceptions import UserError, AccessError
 from .utils import validate_backup_path, publish_to_rabbitmq
+from odoo.addons.zero_sudo import public_rpc
 
 
 class BackupRestoreWizard(models.TransientModel):
@@ -25,6 +26,7 @@ class BackupRestoreWizard(models.TransientModel):
     # see action_restore()'s own matching check for why pgbackrest restores are refused here.
     engine = fields.Selection(related="snapshot_id.config_id.engine", string="Backup Engine", readonly=True)
 
+    @public_rpc
     def action_restore(self):
         self.ensure_one()
         # [@ANCHOR: COMM_backup_trigger_restore]
