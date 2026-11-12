@@ -21,19 +21,62 @@ This module provides a unified interface for managing system backups using Kopia
 
 ### 1. Automated Volume Synchronization
 Copies the snapshot list reported by Kopia (`kopia snapshot list`) or pgBackRest (`pgbackrest info`) into `backup.snapshot`, from the hourly cron job or the **Sync Snapshots** button.
-* **Core Sync Anchor:** `[@ANCHOR: backup_management:COMM_backup_sync_kopia]`
+These are the anchors of the sync and retention features. Longer treatment of the sync flow is in
+[automated_sync](docs/stories/automated_sync.md); each entry here stands on its own.
 
-* **Database Target Sync Anchor:** `[@ANCHOR: backup_management:COMM_backup_sync_pgbackrest]`
+### `action_sync_snapshots` Kopia path [@ANCHOR: backup_management:COMM_backup_sync_kopia]
 
-* **Cron Routine Orchestration:** `[@ANCHOR: backup_management:COMM_cron_sync_all_backups]`
+`backup.config.action_sync_snapshots()` (`@public_rpc`, takes only `self`, returns `True`) queues a `sync_snapshots`
+job per configuration through `_publish_to_worker`. For a Kopia configuration the worker runs `kopia snapshot list
+--json`, and on success sends the parsed list to `action_process_snapshot_data(data, "kopia")`. Each item with an `id`
+becomes a snapshot row: id, start time (`startTime` cut to seconds), size (`summary.totalBytes`), status `completed`.
+Errors: `AccessError` unless the caller is a Backup Administrator or the service account; a parse failure is reported as
+"Sync Parse Error" through `report_backup_failure`. Odoo never runs Kopia itself. Test: `tests/test_backup.py::test_01b_sync_kopia_triggered`.
 
-* **Performance Bulk Upsert:** `[@ANCHOR: backup_management:COMM_upsert_snapshots_procedure]`
+### `action_sync_snapshots` pgBackRest path [@ANCHOR: backup_management:COMM_backup_sync_pgbackrest]
 
-### 2. Retention & Purge Governance
-Applies Kopia retention and exclusion policies (**Apply Policies**), and supplies the per-configuration data shown on the Backup Dashboard.
-* **Policy Application Engine:** `[@ANCHOR: backup_management:COMM_backup_apply_policies]`
+For a pgBackRest configuration the same method queues a job whose worker command is `pgbackrest info
+--stanza=<target_path> --output=json` (with `--repo=<n>` or S3/B2 repository flags as configured). `info` is read-only,
+so it runs in the unprivileged worker. `action_process_snapshot_data(data, "pgbackrest")` walks every stanza's `backup`
+list: `label` is the snapshot id, `timestamp.start` (Unix seconds) becomes a UTC start time, `info.size` the size. An
+out-of-range timestamp gives no start time rather than an error. Test: `tests/test_backup.py::test_02_sync_pgbackrest_triggered`.
 
-* **Interactive Dashboard Telemetry:** `[@ANCHOR: backup_management:COMM_backup_board_data]`
+### `cron_sync_all_backups` [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
+
+The hourly cron "Backup Management: Sync Snapshots" (`data/cron.xml`), running as the backup service account; no
+arguments, no return value. For up to 1000 configurations it queues a sync job, reports a stale-backup alert when the
+newest recorded snapshot started more than 26 hours ago (none recorded: no alert), reports the messages from
+`_backup_job_problems` (three failed jobs in a row, or no successful job in 26 hours), and queues the restore drill when
+the last drill is older than 7 days. It only queues and alerts; it never creates a backup. An exception for one
+configuration ends that run; the next hour retries. Test: `tests/test_backup.py::test_04_cron_trigger`.
+
+### `upsert_backup_snapshots` procedure [@ANCHOR: backup_management:COMM_upsert_snapshots_procedure]
+
+PL/pgSQL function created by `models/sql_views.py` `init()`: `upsert_backup_snapshots(p_config_id, p_website_id,
+p_company_id, p_snapshots JSONB, p_user_id) RETURNS TABLE(out_snapshot_id VARCHAR)`. It inserts every snapshot of one
+sync in a single statement, setting `name` to the snapshot id, and skips rows that already exist
+(`ON CONFLICT (config_id, snapshot_id) DO NOTHING`); existing rows are never updated. It returns only the newly inserted
+ids, which the caller uses to apply the minimum-size anomaly check to new snapshots only. Bound parameters only, so no
+SQL injection from snapshot text. Full table and notes in [automated_sync](docs/stories/automated_sync.md).
+
+### `action_apply_policies(self)` [@ANCHOR: backup_management:COMM_backup_apply_policies]
+
+The **Apply Policies** button of `backup.config` (`@public_rpc`, only `self`). For each configuration whose engine is
+Kopia it queues a `kopia_policy` job (`_publish_to_worker("kopia_policy")`); pgBackRest configurations are skipped,
+because policies are a Kopia concept and the job would only fail against the wrong tool. The worker runs `kopia policy set
+-- <target_path> --keep-latest=<keep_daily> --keep-daily --keep-weekly --keep-monthly` plus one `--add-ignore=<line>` per
+non-blank line of `exclude_patterns` (defaults 7, 4, 6 when absent). It overwrites the repository's policy. Returns `True`
+or, for a single record, the job form action. Errors as for `action_trigger_backup`. Test:
+`tests/test_backup.py::test_08_apply_policies_triggered` and `test_08b_apply_policies_skips_non_kopia_configs`.
+
+### `get_board_data(self)` [@ANCHOR: backup_management:COMM_backup_board_data]
+
+Source of the Backup Dashboard (`@public_rpc @api.model`; optional context `website_id`). Returns a list of at most
+10000 dicts, one per configuration visible to the caller: `id`, `name`, `engine`, `target_path`, `latest_snapshot`
+(newest row of `backup.latest.snapshot.view` or `False`), `is_stale` (no snapshot, or newest older than 26 hours) and
+`latest_job` (newest job's `id`, `config_id`, `state`, `job_type`, `create_date`, or `False`). Three queries however many
+configurations there are. Read-only; record rules limit the rows. Test:
+`tests/test_backup.py::test_09_board_data_rpc`; the component is `static/src/components/board/board.js`.
 
 ## Models
 
@@ -95,7 +138,7 @@ For Kopia, the typed directory is not used: the snapshot is always restored into
 
 ### Compliance Monitoring
 This module does not itself detect or report cross-tenant data leakage. Tenant isolation is enforced by the record rules in `security/security.xml`, which limit Backup Administrators to configurations, snapshots and jobs that belong to one of their companies and to either no website or their own website. Related reporting elsewhere:
-* **Tenant Violation Reports:** For tracking frontend moderation workflow alerts, see `[@ANCHOR: user_websites:UX_REPORT_VIOLATION]`.
+* **Tenant Violation Reports:** For tracking frontend moderation workflow alerts, see `[@ANCHOR: user_websites:UX_REPORT_VIOLATION]`: the public form endpoint `POST /website/report_violation` in `user_websites/controllers/main.py` (CSRF-protected, public auth). It silently discards a submission whose hidden honeypot field is filled, runs the `form.shield` checks, requires a URL and a description (description cut to 5000 characters), then creates a `content.violation.report` as the user_websites service account, recording the signed-in reporter's id from the session or the guest's email, and redirects with `report_submitted=1` or a `report_error` code. Details are in `user_websites/README.md`; this module does not handle it.
 * **Automated Escalation:** Backup failures, stale backups and undersized snapshots are escalated through `report_backup_failure()` to the `pager_duty` module (see Health Monitoring above).
 
 ## External Dependencies
