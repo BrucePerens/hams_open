@@ -4,6 +4,7 @@
 from odoo import fields, models
 
 
+# [@ANCHOR: hams_ai_safety_reporting_helpdesk_ticket_helpdesk_ticket]
 class HelpdeskTicket(models.Model):
     _inherit = "hams_helpdesk.ticket"
 

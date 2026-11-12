@@ -24,6 +24,7 @@ class TestAiSafetyReporting(HamsTransactionCase):
         )
 
     # [@ANCHOR: test_ai_safety_concern_ticket_type_survives_alongside_other_modules]
+    # Tests [@ANCHOR: hams_ai_safety_reporting_helpdesk_ticket_helpdesk_ticket]
     def test_ai_safety_concern_ticket_type_survives_alongside_other_modules(self):
         """selection_add, never a bare selection= -- see helpdesk_ticket.py's own comment for
         the bug this guards (a second module's selection= silently replacing the base field's
