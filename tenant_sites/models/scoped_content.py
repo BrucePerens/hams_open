@@ -66,6 +66,7 @@ class WebsitePage(models.Model):
         return info if own else None
 
 
+# [@ANCHOR: tenant_sites_scoped_content_website_rewrite]
 class WebsiteRewrite(models.Model):
     _name = "website.rewrite"
     _inherit = ["website.rewrite", "tenant.site.access.mixin"]
