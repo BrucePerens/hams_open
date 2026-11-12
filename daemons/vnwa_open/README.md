@@ -512,3 +512,39 @@ pub fn check(c: &Config) -> Result<(), String>
 **Returns.** `Ok(())`, or `Err` text for the first rule broken, in this order: `if_hz` not finite, not positive, not dividing 48 kHz into a whole number of samples of at least 4 (`does not divide 48 kHz`); `point_ms` outside 0.2 to 100 ms (from `point_time_fields`); `rf_level` above 0x3fff (`14-bit`); the analysis window (`settle` + `window`) ending later than 5 point times + 15 ms (`the analysis window ... must end by`); a window shorter than one IF period.
 
 **Special concerns.** Pure and instant; any thread; no panic (a NaN or zero IF is an error). Safe to call repeatedly. Test: `a_configuration_the_unit_or_the_analysis_cannot_use_is_refused_with_the_reason`.
+
+### `vnwa_open_input_names` [@ANCHOR: vnwa_open_input_names]
+
+**Purpose.** List the ids of the audio input devices (for example `alsa:hw:CARD=CODEC,DEV=0`) so a caller can choose a codec needle for `Capture::open`.
+
+```rust
+pub fn input_names() -> Result<Vec<String>, String>
+```
+
+**Returns.** The ids in the host's order, or `Err("audio: ...")` when the host cannot list devices. It asks the real sound host (`CpalHost`); `input_names_on(&dyn InputHost)` is the same function over any host, which is how the tests run it with a fixed list and never open a sound device.
+
+**Special concerns.** Reads only; opens no stream. Test: `the_input_ids_are_the_hosts_in_its_order_and_a_host_error_is_passed_on`.
+
+### `vnwa_open_vna_measure` [@ANCHOR: vnwa_open_vna_measure]
+
+**Purpose.** Measure one point (S11 and S21 at one frequency), measuring again when an attempt fails, and after one cold reset through the hub when the retries are used up.
+
+```rust
+pub fn measure(&mut self, freq_hz: f64, previous_hz: f64) -> Result<Point, String>
+```
+
+**Returns.** The `Point`, or an `Err` that lists every attempt with its evidence; a failed attempt's numbers are never returned. Every attempt is logged in `attempt_timings`.
+
+**Special concerns.** Sends the set-up block to the unit and reads two codecs; one caller at a time. The tests build the handle with `Vna::with_session` over a transport that accepts every transfer and two codecs fed by synthetic tones (`capture::fake_capture`), so no hardware is touched. Test: `a_point_is_the_measured_tone_over_the_reference_and_a_dead_reference_is_an_error`.
+
+### `vnwa_open_vna_sweep` [@ANCHOR: vnwa_open_vna_sweep]
+
+**Purpose.** Measure a linear sweep of `points` points from `start_hz` to `stop_hz`.
+
+```rust
+pub fn sweep(&mut self, start_hz: f64, stop_hz: f64, points: usize) -> Result<Vec<Point>, String>
+```
+
+**Returns.** One `Point` per step (a single point is measured at `start_hz`); `Err` for zero points or for the first point that fails after its recovery. `discard_points` throw-away measurements at the start frequency come first and are not returned.
+
+**Special concerns.** Same hardware use as `measure`, sequential. Test: `a_sweep_steps_linearly_discards_first_and_needs_a_point`.
