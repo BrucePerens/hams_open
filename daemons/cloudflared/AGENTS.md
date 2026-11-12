@@ -1,5 +1,11 @@
 # Cloudflared
 
+> **Note for this copy (hams_open, 2026-11-12).** This file is Cloudflare's own contributor guide, kept as shipped. Where it differs from how hams_open uses the tree, hams_open's `README.md` wins:
+> dependencies are **vendored** here (`vendor/`, built with `-mod=vendor`; see `build_hams.sh`), so "do not vendor dependencies" and the `-mod=readonly`/Athens/CI-cache lines under "Dependencies Management" do not apply;
+> there is no "Updating Go" section in this directory's README (the Go version is `go.mod`'s `go` line, currently 1.27.3); Cloudflare's CI configuration (`cfsetup.yaml`) and release scripts are in the tree but hams.com runs none of them;
+> and `make test lint` is Cloudflare's gate, not one run on every hams.com change (see `README.md` for how this copy is built and swapped into production).
+
+
 Cloudflare's command-line tool and networking daemon written in Go.
 Production-grade tunneling and network connectivity services used by millions of
 developers and organizations worldwide.

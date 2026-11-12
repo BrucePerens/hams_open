@@ -16,7 +16,7 @@ by hand, so a vendor bump is not live until someone rebuilds and swaps it.
    uses `git describe`, which prints an empty version here because the repository has no tags).
    It must end by printing `cloudflared version <YYYY.M.P> (built ...)`.
 2. Copy it to `hams1` next to the running binary under a new name, keep the old binary for
-   rollback, `mv` the new one into place, then `systemctl restart` the tunnel unit. Restarting drops
+   rollback (section 2 below gives the exact commands, including the timestamped backup name), `mv` the new one into place, then `systemctl restart` the tunnel unit. Restarting drops
    every visitor connection and websocket for a few seconds, and this tunnel is production's only web
    front end, so confirm `curl -sI https://hams.com/` returns 200 and `wss://hams.com/ws/firehose`
    upgrades right away, and move the old binary back if either fails.
@@ -26,7 +26,7 @@ by hand, so a vendor bump is not live until someone rebuilds and swaps it.
 
 Production (`hams1`, Debian 13, x86_64, glibc 2.41, the same as the dev box) runs
 `/opt/hams/src/hams_open/daemons/cloudflared/cloudflared` as the `odoo` user's `systemd --user` unit
-`cloudflared@<tunnel id>.service` (rendered from `hams_shared`'s template by `cloudflare/utils/cloudflare_systemd.py`).
+`cloudflared@<tunnel id>.service` (rendered by `cloudflare/utils/cloudflare_systemd.py` from `daemons/cloudflared-ffi/packaging/cloudflared@.service.template`, whose `ExecStart` is `<binary> tunnel --no-autoupdate run`, with `Restart=always` and `RestartSec=5`).
 `deploy_to_production.py` copies the vendored **source** only. The binary is untracked, so it is rebuilt by hand
 after every vendor bump (`vendor/` plus `RELEASE_NOTES` changed). Build on the dev box: the OS image and glibc match
 `hams1`, and it keeps the compile off the production CPU. `hams1` has Go (`/usr/local/go`, 1.27.1 on 2026-10-03), which
