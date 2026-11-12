@@ -9,6 +9,7 @@ import datetime
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, invalidate_zero_sudo_utils_cache
 from odoo.addons.pager_duty import hooks
+from odoo.addons.zero_sudo.rpc_public import MARK as PUBLIC_RPC_MARK
 from odoo.addons.pager_duty.models.incident import REPAGE_HOURS, TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
 from unittest.mock import MagicMock
 from odoo import fields, _
@@ -41,6 +42,13 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertEqual(len(note), 1)
         self.assertIn("#3 (a.service), #7 (b.service)", note.body)
         self.assertIn("no separate ticket was opened", note.body)
+
+    def test_00c_report_incident_is_public_rpc_because_the_monitor_daemon_calls_it_over_json2(self):
+        """The monitor daemons call pager.incident.report_incident over the JSON-2 API; Odoo refuses private methods there (403) and the
+        daemon then falls back to one SMTP email per report. 2026-11-12: an @api.private conversion did exactly that."""
+        method = type(self.incident_model).report_incident
+        self.assertTrue(method.__dict__[PUBLIC_RPC_MARK])
+        self.assertNotIn("_api_private", method.__dict__)
 
     def test_01_rate_limiting_blocks_spam_standard(self):
         # Tests [@ANCHOR: report_incident_rate_limit]
