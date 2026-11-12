@@ -414,3 +414,21 @@
 **Methods.** `_serve_page`, `_invalidate_cloudflare_cache`, `_sanitize_user_arch`, `_trigger_malicious_arch_violation`, `_malicious_arch_violation_targets`, `_file_malicious_arch_report`, `_get_page_id_by_url`, `create`, `check_access`, `write`, `unlink`, `_flush_redis_view_counters`.
 
 **See also:** test `test_01_blog_creation_is_blocked_past_the_configured_limit (tests/test_blog_limits.py)`.
+
+### `SiteResponse` [@ANCHOR: user_websites:user_websites_controllers_owner_site_site_response]
+
+**Purpose and location.** The exception that lets code deep inside an owner-site request end the request with a response of its own: a redirect from a retired slug, or the "what is missing" page shown to a member who is not yet eligible. Defined in `user_websites/controllers/owner_site.py`; raised by `_resolve_site()` and caught by the `answers_site_response` route decorator.
+
+**Definition.** `class SiteResponse(Exception)`, built as `SiteResponse(response)`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `response` | a werkzeug/Odoo response | The complete response the route must return. Set once in `__init__`; the exception message is the fixed text `owner site response`. |
+
+**Why it is not an `HTTPException`.** Odoo's frontend error handler turns any raised `HTTPException` into its own error page (a 301 becomes a 418) and throws the response away. A plain `Exception` subclass passes through until `answers_site_response` catches it, so the response arrives unchanged.
+
+**Invariants and concurrency.** It is raised and caught inside one request on one thread; it is never stored or sent. A route that is not wrapped by `answers_site_response` would let it escape as a server error, so a route that can reach `_resolve_site()` must carry the decorator.
+
+**Functions that touch it.** `SiteResponse.__init__`, `_resolve_site`, `answers_site_response`.
+
+**See also:** tests `TestSiteResponse` in `user_websites/tests/test_site_response.py` (carries the response, is not an `HTTPException`, the decorator returns it and lets other errors through) and `test_03_owner_is_told_what_is_missing_and_cannot_create` in `user_websites/tests/test_site_eligibility_hook.py` (the real 403 page).

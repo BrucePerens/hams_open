@@ -146,6 +146,7 @@ def _arch_body(arch_base):
     return inner, True
 
 
+# [@ANCHOR: user_websites_controllers_owner_site_site_response]
 class SiteResponse(Exception):
     """Raised by _resolve_site() to end a request with a response of its own (a redirect from a
     retired slug, the "what is missing" page for an ineligible member).
