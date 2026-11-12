@@ -178,6 +178,7 @@ fn in_range(name: &str, x: f64, lo: f64, hi: f64) -> Result<f64, String> {
 
 /// The sample rate check: within the radio's limits and, for the RTL-SDR, not in the 0.3 to 0.9 MS/s gap its driver cannot run.
 fn check_rate(c: &Config, l: &Limits, rate_hz: f64) -> Result<(), String> {
+    // [@ANCHOR: bench_mcp_sdr_check_rate]
     in_range("sample_rate_hz", rate_hz, l.min_rate, l.max_rate)?;
     if c.driver == "rtlsdr" && rate_hz > 0.3e6 && rate_hz < 0.9e6 {
         return Err("the RTL-SDR runs 0.225 to 0.3 or 0.9 to 3.2 MS/s, not between".into());
@@ -187,6 +188,7 @@ fn check_rate(c: &Config, l: &Limits, rate_hz: f64) -> Result<(), String> {
 
 /// The `ppm` argument: the dongle's crystal error, applied as a frequency correction. RTL-SDR only.
 fn ppm_arg(args: &Value, c: &Config) -> Result<f64, String> {
+    // [@ANCHOR: bench_mcp_sdr_ppm_arg]
     let ppm = number(args, "ppm")?;
     if ppm.is_some() && c.driver != "rtlsdr" {
         return Err("ppm applies to the RTL-SDR only".into());
@@ -428,13 +430,20 @@ fn load_api_from(names: &[&str]) -> Result<Api, String> {
 }
 
 fn api() -> Result<&'static Api, String> {
-    // The unit tests give each test thread its own fake SoapySDR (no library, no radio).
-    #[cfg(test)]
-    if let Some(a) = tests::fake_api() {
-        return Ok(a);
-    }
+    // [@ANCHOR: bench_mcp_sdr_api]
     static API: OnceLock<Result<Api, String>> = OnceLock::new();
-    API.get_or_init(load_api).as_ref().map_err(|e| e.clone())
+    fake_api().map(Ok).unwrap_or_else(|| API.get_or_init(load_api).as_ref().map_err(|e| e.clone()))
+}
+
+/// The unit tests give each test thread its own fake SoapySDR (no library, no radio); production has none.
+#[cfg(test)]
+fn fake_api() -> Option<&'static Api> {
+    tests::fake_api()
+}
+
+#[cfg(not(test))]
+fn fake_api() -> Option<&'static Api> {
+    None
 }
 
 fn last_error(a: &Api) -> String {
@@ -1046,6 +1055,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sdr_capture_args]
     // Tests [@ANCHOR: bench_mcp_sdr_survey_args]
     // Tests [@ANCHOR: bench_mcp_sdr_antenna_arg]
+    // Tests [@ANCHOR: bench_mcp_sdr_check_rate]
+    // Tests [@ANCHOR: bench_mcp_sdr_ppm_arg]
     #[test]
     fn the_rtl_sdr_is_receive_only_with_its_own_tuning_rate_gain_and_ppm_limits() {
         assert_eq!(
@@ -1313,6 +1324,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_sdr_load_api]
+    // Tests [@ANCHOR: bench_mcp_sdr_api]
     #[test]
     fn a_missing_library_and_a_library_without_the_soapy_symbols_are_clear_errors() {
         let e = load_api_from(&["libno_such_soapy.so.9"]).err().unwrap();
@@ -1320,6 +1332,9 @@ mod tests {
         // libc loads but has none of the SoapySDR functions.
         let e = load_api_from(&["libno_such_soapy.so.9", "libc.so.6"]).err().unwrap();
         assert_eq!(e, "libSoapySDR has no SoapySDRDevice_makeStrArgs");
+        // `api()` hands out the thread's fake while one is installed (the real library is never loaded in the tests).
+        fake(|_| {});
+        assert!(api().is_ok());
     }
 
     // Tests [@ANCHOR: bench_mcp_sdr_radio_open]
