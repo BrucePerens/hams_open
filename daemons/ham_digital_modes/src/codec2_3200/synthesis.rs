@@ -203,6 +203,7 @@ pub(crate) fn ear_protection(samples: &mut [f32]) {
     }
 }
 
+// [@ANCHOR: codec2_3200_synthesis_synthesis_state_struct]
 #[cfg(feature = "std")]
 /// Persistent per-decoder synthesis state.
 pub struct SynthesisState {
@@ -503,6 +504,7 @@ pub(crate) fn ear_protection_fixed(samples: &mut [i64]) {
 /// `rustfft`'s own unnormalized inverse convention, verified against it
 /// directly in `fixed_fft.rs`'s own tests) rather than an `Arc<dyn
 /// Fft<f32>>`, so there's no trait object or planner here at all.
+// [@ANCHOR: synthesis_synthesis_state_fixed_struct]
 pub(crate) struct SynthesisStateFixed {
     sn_: [i64; SAMPLES_PER_FRAME],
     ex_phase: u32,
@@ -658,6 +660,8 @@ pub(crate) fn overlap_add_subframe<const N: usize, const NS: usize, const SF: us
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: codec2_3200_synthesis_synthesis_state_struct]
+    // Tests [@ANCHOR: synthesis_synthesis_state_fixed_struct]
     use super::*;
 
     #[test]

@@ -128,6 +128,7 @@ pub const SAMPLES_PER_FRAME: usize = 4 * N_SAMP;
 /// underlying analysis pipeline (pitch/voicing/LPC) is identical; this
 /// mode just runs it across four 10ms steps instead of two, and
 /// quantizes/transmits LSPs from only the last of them.
+// [@ANCHOR: codec2_1600_encoder_struct]
 #[cfg(feature = "std")]
 pub struct Encoder {
     sn: [f32; M_PITCH],
@@ -266,6 +267,7 @@ fn initial_lsps() -> [f32; LPC_ORD] {
 /// `codec2_3200::Decoder` carries -- see `decode_16k` below and
 /// `codec2_3200::spectral_bridge`'s own doc comment; `.enabled` toggles
 /// it (on by default), the ordinary `decode()` above never touches it.
+// [@ANCHOR: codec2_1600_decoder_struct]
 #[cfg(feature = "std")]
 pub struct Decoder {
     prev_wo: f32,
@@ -790,6 +792,8 @@ impl DecoderFixed {
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
+    // Tests [@ANCHOR: codec2_1600_encoder_struct]
+    // Tests [@ANCHOR: codec2_1600_decoder_struct]
 
     /// The encoder this module had before it went integer end to end: the same analysis, but pitch,
     /// energy and line spectral pairs cross `f32` boundaries into the float quantisers. Kept only to

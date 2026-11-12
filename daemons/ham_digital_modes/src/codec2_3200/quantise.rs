@@ -167,6 +167,7 @@ pub(crate) fn dequantize_linear(index: u32, min: f32, max: f32, bits: u32) -> f3
     min + step * index as f32
 }
 
+// [@ANCHOR: quantise_lsp_dim_struct]
 #[cfg(feature = "std")]
 /// One dimension of the LSP delta-scalar quantizer: 32 levels (5 bits),
 /// `step1`Hz apart for the first `breakpoint` levels, `step2`Hz apart
@@ -228,6 +229,7 @@ pub fn decode_lsps_delta_scalar(indexes: &[u32; LPC_ORD]) -> [f32; LPC_ORD] {
 /// `50.0`), so unlike `HZ_PER_RAD` (a genuine irrational ratio, still a
 /// one-time float conversion below), these need no float conversion at
 /// all -- `25i64 << LSP_HZ_FRAC_BITS` is exact.
+// [@ANCHOR: quantise_lsp_dim_q16_struct]
 struct LspDimQ16 {
     step1_q16: i64,
     breakpoint: u32,
@@ -375,6 +377,8 @@ pub fn decode_lsps_delta_scalar_fixed(indexes: &[u32; LPC_ORD]) -> [i64; LPC_ORD
 // files.
 #[cfg(test)]
 pub(crate) mod tests {
+    // Tests [@ANCHOR: quantise_lsp_dim_struct]
+    // Tests [@ANCHOR: quantise_lsp_dim_q16_struct]
     use super::*;
 
     /// The integer line-spectral-pair quantizer: same indices as its

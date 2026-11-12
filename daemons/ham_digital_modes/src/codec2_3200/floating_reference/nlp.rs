@@ -47,6 +47,7 @@ use rustfft::num_complex::Complex32;
 use rustfft::FftPlanner;
 
 /// Persistent per-encoder pitch-estimator state.
+// [@ANCHOR: nlp_nlp_state_struct]
 pub struct NlpState {
     /// Squared, DC-notched signal history, one entry per original-rate
     /// sample across the `M_PITCH`-sample analysis window.
@@ -244,6 +245,7 @@ pub(crate) fn nlp(state: &mut NlpState, sn: &[f32; M_PITCH]) -> f32 {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    // Tests [@ANCHOR: nlp_nlp_state_struct]
     use super::*;
 
     /// Real speech is int16-scaled (this crate's own captured reference

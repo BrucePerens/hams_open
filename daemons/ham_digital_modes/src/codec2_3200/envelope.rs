@@ -23,6 +23,7 @@ use super::{LPCPF_GAMMA, LPCPF_TWO_BETA, SAMPLE_RATE};
 #[cfg(feature = "std")]
 use rustfft::num_complex::Complex32;
 
+// [@ANCHOR: envelope_model_struct]
 #[cfg(feature = "std")]
 /// Sinusoidal-synthesis model parameters for one 10ms sub-frame: pitch
 /// (`wo`, normalized angular frequency), harmonic count (`l`), per
@@ -202,6 +203,7 @@ const FRAC_BITS: u32 = 23;
 /// own comment on why "23 fractional bits" doesn't imply one shared
 /// Q-format name across domains) and `phi` (Q23 unit complex vectors,
 /// `ComplexQ23`) genuinely integer, no `f32` anywhere.
+// [@ANCHOR: envelope_model_fixed_struct]
 pub(crate) struct ModelFixed {
     pub(crate) wo: i64,
     /// `synth_k_q23(wo)`, the harmonic-to-bin scale, computed once here:
@@ -551,6 +553,8 @@ pub(crate) fn sample_filter_phase_fixed(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: envelope_model_struct]
+    // Tests [@ANCHOR: envelope_model_fixed_struct]
     use super::*;
 
     /// `mag_sq_q23` (fast 32-bit path, 64-bit path, exact 128-bit path) against the plain

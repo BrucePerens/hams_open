@@ -21,6 +21,7 @@
 /// dimension here, confirmed against each `lspN.txt`'s own `1 <m>`
 /// header). Every one of the ten real tables happens to be evenly
 /// spaced, so this is `start + step*index`, not a lookup array.
+// [@ANCHOR: lsp_quantiser_lsp_dim_struct]
 struct LspDim {
     start_hz: i64,
     step_hz: i64,
@@ -246,6 +247,7 @@ mod tests {
 
     #[test]
     // Tests [@ANCHOR: lsp_bits]
+    // Tests [@ANCHOR: lsp_quantiser_lsp_dim_struct]
     fn lsp_bits_sums_to_36_total_bits() {
         let total: u32 = (0..super::super::LPC_ORD).map(lsp_bits).sum();
         assert_eq!(

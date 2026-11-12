@@ -25,6 +25,7 @@
 //! reasonable one.
 
 /// Persistent per-encoder voicing-decision state.
+// [@ANCHOR: voicing_voicing_state_struct]
 pub struct VoicingState {
     /// Adaptively tracked background noise level, dB (updated only on
     /// frames judged unvoiced, the same "don't track during real
@@ -96,6 +97,7 @@ pub(crate) fn is_voiced(state: &mut VoicingState, samples: &[f32]) -> bool {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    // Tests [@ANCHOR: voicing_voicing_state_struct]
     use super::*;
 
     pub(crate) fn synthetic_tone(f0_hz: f32, amp: f32, n: usize, sample_rate: f32) -> Vec<f32> {

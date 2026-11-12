@@ -24,6 +24,7 @@
 use super::{bits, BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS};
 use super::{lpc, nlp, quantise, tables, voicing, window};
 
+// [@ANCHOR: encoder_fixed_encoder_fixed_struct]
 pub struct EncoderFixed {
     /// Raw sample history, `i16`-native. The whole encode path is integer:
     /// pitch, energy and line spectral pairs reach their quantizers as
@@ -191,6 +192,7 @@ impl EncoderFixed {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: encoder_fixed_encoder_fixed_struct]
     use super::*;
     use crate::codec2_3200::floating_reference;
     use crate::codec2_3200::Decoder;
