@@ -12,7 +12,7 @@ require (
 	github.com/getsentry/sentry-go v0.50.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
-	github.com/go-jose/go-jose/v4 v4.1.6
+	github.com/go-jose/go-jose/v4 v4.1.8
 	github.com/gobwas/ws v1.4.0
 	github.com/google/gopacket v1.1.19
 	github.com/google/uuid v1.6.0
