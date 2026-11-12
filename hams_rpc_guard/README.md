@@ -432,9 +432,9 @@ stores no key or certificate.
 
 ### Lint
 
-`hams_shared/tools/check_private_by_default.py` counts, per module, the public methods of our models that are neither
-listed nor marked. It reports first; the per-module renames to leading-underscore names are scheduled for a quiet
-merge queue (night_shift_todo medium).
+`hams_shared/tools/check_private_by_default.py` fails when any `rpc_exposure.json` lists a public method of our models under
+`internal`: each must be `@api.private` (or a leading-underscore name) or declared with `@public_rpc`. The list reached zero on
+2026-11-12.
 
 ## Anchor entries (whitelist)
 
