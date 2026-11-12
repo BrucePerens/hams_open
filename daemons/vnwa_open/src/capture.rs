@@ -29,6 +29,24 @@ struct Ring {
     storm: bool,
 }
 
+impl Ring {
+    fn shared() -> Arc<(Mutex<Ring>, Condvar)> {
+        Arc::new((
+            Mutex::new(Ring {
+                frames: std::collections::VecDeque::new(),
+                total: 0,
+                overruns: std::collections::VecDeque::new(),
+                overrun_count: 0,
+                last_delivery: None,
+                period: 0,
+                reports_since_delivery: 0,
+                storm: false,
+            }),
+            Condvar::new(),
+        ))
+    }
+}
+
 /// True once this many overrun reports have come with no audio between them (see `STORM_REPORTS`).
 fn is_storm(reports_since_delivery: u64) -> bool {
     reports_since_delivery >= STORM_REPORTS
@@ -55,7 +73,7 @@ const MAX_OVERRUNS_KEPT: usize = 4096;
 pub struct Capture {
     ring: Arc<(Mutex<Ring>, Condvar)>,
     /// `None` after `close`.
-    stream: Arc<Mutex<Option<cpal::Stream>>>,
+    stream: Arc<Mutex<Option<Box<dyn Send>>>>,
 }
 
 /// The ALSA period (frames; the buffer is two periods) the sweeps ask for. The driver's default of 241 frames (5 ms) gave 33 overruns in 15 minutes of continuous
@@ -70,14 +88,34 @@ pub struct Options {
     pub period_frames: Option<u32>,
 }
 
+/// Where the audio input device ids come from: the real sound host in production, a fixed list in tests.
+pub trait InputHost {
+    fn input_ids(&self) -> Result<Vec<String>, String>;
+}
+
+/// The default cpal host (ALSA on Linux).
+pub struct CpalHost;
+
+impl InputHost for CpalHost {
+    fn input_ids(&self) -> Result<Vec<String>, String> {
+        let host = cpal::default_host();
+        let devices = host.input_devices().map_err(|e| format!("audio: {e}"))?;
+        Ok(devices
+            .filter_map(|d| d.id().ok())
+            .map(|id| id.to_string())
+            .collect())
+    }
+}
+
 /// The input devices' ids (for the ALSA host, for example `alsa:hw:CARD=CODEC,DEV=0`), in the host's order.
 pub fn input_names() -> Result<Vec<String>, String> {
-    let host = cpal::default_host();
-    let devices = host.input_devices().map_err(|e| format!("audio: {e}"))?;
-    Ok(devices
-        .filter_map(|d| d.id().ok())
-        .map(|id| id.to_string())
-        .collect())
+    // [@ANCHOR: vnwa_open_input_names]
+    input_names_on(&CpalHost)
+}
+
+/// `input_names` for any host.
+pub fn input_names_on(host: &dyn InputHost) -> Result<Vec<String>, String> {
+    host.input_ids()
 }
 
 /// The start of the error text for a window that contains overruns; `is_overrun_error` recognises it.
@@ -115,22 +153,10 @@ impl Capture {
                 None => cpal::BufferSize::Default,
             },
         };
-        let ring = Arc::new((
-            Mutex::new(Ring {
-                frames: std::collections::VecDeque::new(),
-                total: 0,
-                overruns: std::collections::VecDeque::new(),
-                overrun_count: 0,
-                last_delivery: None,
-                period: 0,
-                reports_since_delivery: 0,
-                storm: false,
-            }),
-            Condvar::new(),
-        ));
+        let ring = Ring::shared();
         let writer = ring.clone();
         let reporter = ring.clone();
-        let slot: Arc<Mutex<Option<cpal::Stream>>> = Arc::new(Mutex::new(None));
+        let slot: Arc<Mutex<Option<Box<dyn Send>>>> = Arc::new(Mutex::new(None));
         let storm_slot = slot.clone();
         let stream = device
             .build_input_stream(
@@ -186,7 +212,7 @@ impl Capture {
             )
             .map_err(|e| format!("audio: {e}"))?;
         stream.play().map_err(|e| format!("audio: {e}"))?;
-        *slot.lock().unwrap() = Some(stream);
+        *slot.lock().unwrap() = Some(Box::new(stream));
         Ok(Capture { ring, stream: slot })
     }
 
@@ -300,6 +326,61 @@ impl Capture {
     }
 }
 
+/// A running capture fed by a thread at the real 48 kHz rate from `gen(frame_index)`, for tests that need audio without a codec. The
+/// returned guard stops the feeder when dropped.
+#[cfg(test)]
+pub(crate) fn fake_capture(
+    gen: impl Fn(u64) -> [i16; 2] + Send + 'static,
+) -> (Capture, FakeFeed) {
+    let ring = Ring::shared();
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (feed_ring, feed_stop) = (ring.clone(), stop.clone());
+    let thread = std::thread::spawn(move || {
+        let started = Instant::now();
+        let mut next: u64 = 0;
+        while !feed_stop.load(std::sync::atomic::Ordering::Relaxed) {
+            let due = (started.elapsed().as_secs_f64() * SAMPLE_RATE as f64) as u64;
+            if due > next {
+                let (lock, wake) = &*feed_ring;
+                let mut r = lock.lock().unwrap();
+                r.last_delivery = Some(Instant::now());
+                r.period = due - next;
+                for i in next..due {
+                    r.frames.push_back(gen(i));
+                    r.total += 1;
+                }
+                while r.frames.len() > KEEP_FRAMES {
+                    r.frames.pop_front();
+                }
+                wake.notify_all();
+                next = due;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    });
+    let capture = Capture {
+        ring,
+        stream: Arc::new(Mutex::new(Some(Box::new(())))),
+    };
+    (capture, FakeFeed { stop, thread: Some(thread) })
+}
+
+#[cfg(test)]
+pub(crate) struct FakeFeed {
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+#[cfg(test)]
+impl Drop for FakeFeed {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
 /// The frames that have passed since the last delivery of a period (the clock times the rate), at most one period.
 fn frames_since(last_delivery: Option<Instant>, period: u64) -> u64 {
     // [@ANCHOR: vnwa_open_capture_frames_since]
@@ -320,6 +401,25 @@ fn overruns_in(overruns: &std::collections::VecDeque<Overrun>, mark: u64, last: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Fixed(Result<Vec<String>, String>);
+    impl InputHost for Fixed {
+        fn input_ids(&self) -> Result<Vec<String>, String> {
+            self.0.clone()
+        }
+    }
+
+    // Tests [@ANCHOR: vnwa_open_input_names]
+    #[test]
+    fn the_input_ids_are_the_hosts_in_its_order_and_a_host_error_is_passed_on() {
+        let host = Fixed(Ok(vec!["alsa:hw:CARD=CODEC,DEV=0".into(), "alsa:default".into()]));
+        assert_eq!(
+            input_names_on(&host).unwrap(),
+            ["alsa:hw:CARD=CODEC,DEV=0", "alsa:default"]
+        );
+        assert_eq!(input_names_on(&Fixed(Ok(vec![]))).unwrap(), Vec::<String>::new());
+        assert_eq!(input_names_on(&Fixed(Err("audio: no host".into()))), Err("audio: no host".into()));
+    }
 
     // Tests [@ANCHOR: vnwa_open_capture_close]
     #[test]

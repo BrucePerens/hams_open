@@ -456,8 +456,14 @@ fn frames(ms: f64) -> usize {
 impl Vna {
     pub fn open(cfg: Config) -> Result<Vna, String> {
         check(&cfg)?;
-        Ok(Vna {
-            session: Session::open(&cfg)?,
+        let session = Session::open(&cfg)?;
+        Ok(Vna::with_session(cfg, session))
+    }
+
+    /// A handle over an already-open unit and codecs (`open` does this with the real ones).
+    pub(crate) fn with_session(cfg: Config, session: Session) -> Vna {
+        Vna {
+            session,
             cfg,
             recovery: Recovery::default(),
             failures: Vec::new(),
@@ -466,7 +472,7 @@ impl Vna {
             last_send_ms: std::sync::Mutex::new(0.0),
             last_send_end: std::sync::Mutex::new(None),
             attempt_log: std::sync::Mutex::new(Vec::new()),
-        })
+        }
     }
 
     /// Every failed attempt of the points that were recovered (re-measured or after a power cycle), with the error text of each
@@ -499,6 +505,7 @@ impl Vna {
     /// reference, an unsteady tone, missing audio), and, if the config names a hub port, after one cold reset of the unit when
     /// the retries are used up. The result is never a number from a failed attempt: the error lists every attempt.
     pub fn measure(&mut self, freq_hz: f64, previous_hz: f64) -> Result<Point, String> {
+        // [@ANCHOR: vnwa_open_vna_measure]
         let what = format!("point at {freq_hz} Hz");
         recover(self, &what, |v| {
             *v.last_levels.lock().unwrap() = String::new();
@@ -660,6 +667,7 @@ impl Vna {
         stop_hz: f64,
         points: usize,
     ) -> Result<Vec<Point>, String> {
+        // [@ANCHOR: vnwa_open_vna_sweep]
         if points == 0 {
             return Err("a sweep needs at least one point".into());
         }
@@ -1054,5 +1062,110 @@ mod tests {
             ..Config::default()
         })
         .is_ok());
+    }
+
+    /// A unit that accepts every transfer and answers every read with nothing (the real replies are not used).
+    struct Quiet;
+    impl crate::transport::Transport for Quiet {
+        fn reset(&self) -> Result<(), crate::transport::TransferError> {
+            Ok(())
+        }
+        fn write(
+            &self,
+            _t: u8,
+            _r: u8,
+            _v: u16,
+            _i: u16,
+            d: &[u8],
+        ) -> Result<usize, crate::transport::TransferError> {
+            Ok(d.len())
+        }
+        fn read(
+            &self,
+            _r: u8,
+            _v: u16,
+            _i: u16,
+            _b: &mut [u8],
+        ) -> Result<usize, crate::transport::TransferError> {
+            Ok(0)
+        }
+    }
+
+    fn fast_config() -> Config {
+        Config {
+            point_ms: 5.0,
+            retries: 1,
+            stall_pauses_ms: Vec::new(),
+            ..Config::default()
+        }
+    }
+
+    /// A handle over the quiet unit and two fake codecs. Codec 1 carries the reference on the left and S11 on the right, codec 2 S21
+    /// on the left and the reference on the right. `dead_reference` leaves codec 1's reference channel silent.
+    fn fake_vna(
+        cfg: Config,
+        s11_scale: f64,
+        dead_reference: bool,
+    ) -> (Vna, (crate::capture::FakeFeed, crate::capture::FakeFeed)) {
+        let w = 2.0 * std::f64::consts::PI * cfg.if_hz / SAMPLE_RATE as f64;
+        let s = move |scale: f64, i: u64| (8000.0 * scale * (w * i as f64).sin()) as i16;
+        let (c1, f1) = crate::capture::fake_capture(move |i| {
+            [s(if dead_reference { 0.0 } else { 1.0 }, i), s(s11_scale, i)]
+        });
+        let (c2, f2) = crate::capture::fake_capture(move |i| [s(1.0, i), s(1.0, i)]);
+        let session = Session {
+            usb: Vnwa::with_transport(Box::new(Quiet)),
+            s11: c1,
+            s21: c2,
+        };
+        (Vna::with_session(cfg, session), (f1, f2))
+    }
+
+    // Tests [@ANCHOR: vnwa_open_vna_measure]
+    #[test]
+    fn a_point_is_the_measured_tone_over_the_reference_and_a_dead_reference_is_an_error() {
+        let (mut vna, _feed) = fake_vna(fast_config(), 0.5, false);
+        let p = vna.measure(1e6, 1e6).unwrap();
+        assert_eq!(p.freq_hz, 1e6);
+        assert!((p.s11.abs() - 0.5).abs() < 0.01, "{:?}", p.s11);
+        assert!((p.s21.abs() - 1.0).abs() < 0.01, "{:?}", p.s21);
+        assert!(p.if_error_hz < 0.5 && p.level_change < 0.01, "{p:?}");
+        assert_eq!(vna.attempt_timings().len(), 1);
+        assert!(vna.attempt_timings()[0].1);
+
+        // No signal on codec 1's reference: every attempt fails (retries + 1 of them), nothing is returned as a result, and with no hub
+        // there is no power cycle.
+        let (mut dead, _feed) = fake_vna(fast_config(), 0.5, true);
+        let e = dead.measure(2e6, 2e6).unwrap_err();
+        assert!(e.contains("no signal on the reference"), "{e}");
+        assert!(e.contains("attempt 2 of round 1"), "{e}");
+        assert!(e.contains("[evidence: block send took"), "{e}");
+        let log = dead.attempt_timings();
+        assert_eq!(log.len(), 2);
+        assert!(log.iter().all(|(_, ok)| !ok));
+        assert_eq!(dead.recovery().power_cycles, 0);
+        assert_eq!(dead.recovery().remeasured, 1);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_vna_sweep]
+    #[test]
+    fn a_sweep_steps_linearly_discards_first_and_needs_a_point() {
+        let cfg = Config {
+            discard_points: 2,
+            ..fast_config()
+        };
+        let (mut vna, _feed) = fake_vna(cfg, 1.0, false);
+        assert!(vna.sweep(1e6, 3e6, 0).unwrap_err().contains("at least one point"));
+        assert!(vna.attempt_timings().is_empty());
+
+        let pts = vna.sweep(1e6, 3e6, 3).unwrap();
+        let freqs: Vec<f64> = pts.iter().map(|p| p.freq_hz).collect();
+        assert_eq!(freqs, [1e6, 2e6, 3e6]);
+        // Two discarded points plus the three that were returned were measured.
+        assert_eq!(vna.attempt_timings().len(), 5);
+
+        let one = vna.sweep(5e6, 9e6, 1).unwrap();
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].freq_hz, 5e6);
     }
 }
