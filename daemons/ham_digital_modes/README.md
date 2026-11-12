@@ -19,128 +19,469 @@ audio to text, the frame layouts) is in the user-visible stories under `docs/sto
 
 ## PSK31 receive internals
 
-`char_to_code` looks up the Varicode codeword and bit count for an ASCII byte below 128 and gives nothing for
-anything higher, which is how the encoder skips non-ASCII input.
-[@ANCHOR: char_to_code]
+All of these are private helpers in `src/psk31.rs`. They are pure functions or small state machines with no I/O, no locks, no
+threads and no hardware access, so they are safe to call from any thread; none of them keys a transmitter (the PSK31 transmit side
+is `psk31_encode_bits` and the modulator, which are separate anchors). The audio they see is signed 16-bit PCM (`i16`) at a caller
+chosen sample rate, and PSK31 itself runs at 31.25 baud (`PSK31_BAUD`).
 
-`correlate_symbol_iq` correlates one symbol's worth of samples against a cosine and a sine at the carrier and
-returns the two sums (I, Q). Each sample is weighted by the same raised-cosine envelope the modulator applied,
-and the carrier phase is computed from the absolute sample index of the stream (`sample_idx_start` plus the
-position in the chunk), so consecutive calls stay phase-continuous. Both the whole-buffer demodulator and the
-streaming decoder call it, so the constellation points shown to the operator are the numbers the bits were
+### `char_to_code` [@ANCHOR: char_to_code]
+
+Looks up the Varicode codeword (the variable-length bit pattern PSK31 uses for each character) and its length for one ASCII byte.
+It gives nothing for a byte of 128 or more, which is how `psk31_encode_bits` skips non-ASCII input instead of guessing a code. It is
+called by the encoder only; the decoder uses the inverse lookup `code_to_char`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `u8` | The character byte; only values 0 to 127 have a Varicode entry. |
+
+**Returns:** `Some((code, bitcount))` where `code` is the codeword as a `u16` (most significant bit sent first) and `bitcount` is its length in bits (1 to 10, at most `MAX_VARICODE_BITS`); `None` when `c >= 128`.
+
+**Errors:** None; the `None` return is the only failure form and nothing panics (the table has exactly 128 entries).
+
+**Special concerns:** Pure, non-blocking table lookup with no side effects. The table is `VARICODE`, a constant. It never transmits by itself.
+
+**Signature:** `fn char_to_code(c: u8) -> Option<(u16, u8)>`
+
+**See also:** test `varicode_matches_the_arrl_spec_sample_entries` in `src/psk31.rs` (spot-checks space, `A`, `a`, NUL and DEL against the ARRL published values); `psk31_encode_bits`.
+
+### `correlate_symbol_iq` [@ANCHOR: correlate_symbol_iq]
+
+Correlates one symbol's worth of samples against a cosine and a sine at the carrier frequency and returns the two sums (I, the
+in-phase part, and Q, the quadrature part). Each sample is weighted by the same raised-cosine envelope the modulator applied, which
+concentrates the estimate on the strong centre of the symbol. The carrier phase is computed from the absolute sample index of the
+stream (`sample_idx_start` plus the position in the chunk), so consecutive calls stay phase-continuous. Both the whole-buffer
+demodulator and the streaming decoder call it, so the constellation points shown to the operator are the numbers the bits were
 decided from.
-[@ANCHOR: correlate_symbol_iq]
 
-`phase_to_bit` makes the BPSK31 (binary phase-shift keying at 31.25 baud) bit decision: the phase change from the previous symbol, wrapped to
-[-pi, pi], decides 1 if its magnitude is under pi/2 and 0 otherwise. With no previous symbol it returns 1,
-which is correct because every codeword starts with a 1 and the modulator starts at zero phase.
-[@ANCHOR: phase_to_bit]
+| Argument | Type | Meaning |
+|---|---|---|
+| `chunk` | `&[i16]` | Exactly one symbol of samples; its length is taken as the samples-per-symbol (minimum 1) for the envelope. |
+| `carrier_hz` | `f64` | Audio carrier frequency in Hz. |
+| `sample_rate` | `u32` | Sample rate in Hz. |
+| `sample_idx_start` | `u64` | Absolute index, since the start of the stream, of the first sample in `chunk`. |
 
-`VaricodeAccumulator::push_bit` is the streaming form of the boundary logic in `psk31_decode_bits`. It takes one
-bit, and on the second consecutive zero it drops the first gap zero from the accumulator, looks the codeword
-up, resets, and returns the character if it matched. Otherwise it returns nothing. As in the batch decoder, a
-run beyond 11 accumulated bits resets the accumulator.
-[@ANCHOR: VaricodeAccumulator::push_bit]
+**Returns:** `(i_sum, q_sum)`, each an `f64`, with samples normalised by `i16::MAX`. The phase of the symbol is `atan2(q, i)` (done by `correlate_symbol_phase`).
+
+**Errors:** None. An empty chunk returns `(0.0, 0.0)`.
+
+**Special concerns:** Pure and non-blocking, cost proportional to the chunk length (one `cos`/`sin` pair per sample). It reads no state, so threads may call it freely. A caller that passes the wrong `sample_idx_start` loses phase continuity between symbols and the differential bit decision then fails.
+
+**Signature:** `fn correlate_symbol_iq(chunk: &[i16], carrier_hz: f64, sample_rate: u32, sample_idx_start: u64) -> (f64, f64)`
+
+**See also:** `phase_to_bit`, `Psk31Decoder::feed_with_iq`; test `full_modem_round_trips_through_synthesized_audio` (text to audio and back through this correlator).
+
+### `phase_to_bit` [@ANCHOR: phase_to_bit]
+
+Makes the BPSK31 (binary phase-shift keying at 31.25 baud) bit decision for one symbol. The phase change from the previous symbol,
+wrapped into [-pi, pi], decides 1 when its magnitude is under pi/2 (steady carrier) and 0 otherwise (phase reversal). With no previous
+symbol it returns 1, which is correct by design: every Varicode codeword starts with a 1 and the modulator starts at zero phase, so
+the first transmitted symbol is always a steady carrier relative to that reference.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `phase` | `f64` | This symbol's carrier phase in radians (from `atan2` of the I/Q sums). |
+| `prev_phase` | `Option<f64>` | The previous symbol's phase, or `None` for the first symbol of a stream. |
+
+**Returns:** `true` for bit 1 (steady), `false` for bit 0 (reversal).
+
+**Errors:** None; the difference is wrapped with loops, so any finite input is accepted. A NaN phase compares false and decodes as 0.
+
+**Special concerns:** Pure, no side effects. The decision is differential, so a constant carrier phase offset cancels and the receiver needs no absolute phase lock.
+
+**Signature:** `fn phase_to_bit(phase: f64, prev_phase: Option<f64>) -> bool`
+
+**See also:** `correlate_symbol_iq`; test `full_modem_round_trips_through_synthesized_audio`; the test `every_codeword_starts_with_a_one_bit` that backs the `None` case.
+
+### `VaricodeAccumulator::push_bit` [@ANCHOR: VaricodeAccumulator::push_bit]
+
+The streaming form of the character-boundary logic in `psk31_decode_bits`. A Varicode character ends with two consecutive zero bits
+(the inter-character gap), and no codeword contains two zeros in a row. `push_bit` takes one decoded bit; on the second consecutive
+zero it drops the first gap zero from the accumulator, looks the codeword up with `code_to_char`, resets, and returns the character if
+it matched. Otherwise it returns nothing. A run longer than `MAX_VARICODE_BITS + 1` (11) accumulated bits is treated as noise or signal
+loss and resets the accumulator, so a long run of garbage cannot grow without bound.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `&mut self` | `VaricodeAccumulator` | Fields: `acc` (`u16` bits so far), `count` (`u8` bits so far), `prev_was_zero` (`bool`). Owned by one `Psk31Decoder`. |
+| `bit` | `bool` | The next demodulated bit, `true` for 1. |
+
+**Returns:** `Some(char)` when this bit completed a valid character; `None` otherwise, including when the gap closed on an unknown codeword (the bits are discarded).
+
+**Errors:** None; unknown codewords and overlong runs are silently dropped, because live audio contains noise.
+
+**Special concerns:** Mutates only its own three fields; non-blocking; not thread-safe (one decoder, one caller; `Psk31Decoder::feed` takes `&mut self`). The state persists across `feed()` calls, which is what lets a character straddle two audio chunks.
+
+**Signature:** `fn push_bit(&mut self, bit: bool) -> Option<char>`
+
+**See also:** test `feed_with_iq_decodes_identically_to_feed` in `src/psk31.rs`; `psk31_decode_bits` (the batch version).
 
 ## RTTY framing and synthesis internals
 
-`push_framed_char` appends one character's seven bit periods to a bit vector: a SPACE start bit, the five
-data bits least significant first (true is MARK), and a MARK stop bit. The stop bit is one entry here; the
-audio stage stretches it to 1.5 bit periods.
-[@ANCHOR: push_framed_char]
+Both helpers are private to `src/rtty.rs`. RTTY here is 45.45 baud, 5-bit Baudot, with a 170 Hz shift (`RTTY_BAUD`, `RTTY_DEFAULT_SHIFT_HZ`) and a stop bit of 1.5 bit periods (`RTTY_STOP_BIT_UNITS`). They are pure and have no locks, I/O or hardware side effects; the produced audio is returned to the caller, which decides whether anything is ever transmitted.
 
-`framed_bits_to_audio` is the FSK (frequency-shift keying) synthesis behind `rtty_modulate`, kept separate so tests can feed it bit
-sequences that the text path would never produce. MARK is `mark_hz` and SPACE is `mark_hz + 170`. The phase
-accumulator runs across all bits so the waveform is continuous, and each bit lasts `sample_rate / 45.45`
-samples, rounded per bit. Every seventh bit (index modulo 7 equal to 6) is taken to be a stop bit and is
+### `push_framed_char` [@ANCHOR: push_framed_char]
+
+Appends one character's seven bit periods to a bit vector: a SPACE start bit, the five data bits least significant first (true is MARK),
+and a MARK stop bit. The stop bit is one entry here; the audio stage (`framed_bits_to_audio`) stretches it to 1.5 bit periods. It is
+called by `text_to_framed_bits` for every character and for every inserted LTRS/FIGS shift code, and directly by tests that build
+bit sequences the text path would never produce.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `bits` | `&mut Vec<bool>` | The output being built; seven entries are pushed. `true` is MARK, `false` is SPACE. |
+| `code` | `u8` | The 5-bit Baudot code; only the low five bits are used. |
+
+**Returns:** Nothing; the vector grows by exactly 7 entries.
+
+**Errors:** None.
+
+**Special concerns:** No I/O, no locking. The "every seventh entry is a stop bit" assumption in `framed_bits_to_audio` relies on this function always pushing exactly 7 bits.
+
+**Signature:** `fn push_framed_char(bits: &mut Vec<bool>, code: u8)`
+
+**See also:** `text_to_framed_bits`, `framed_bits_to_audio`; test `round_trips_a_real_cq_call_through_letters_and_figures_shifts`.
+
+### `framed_bits_to_audio` [@ANCHOR: framed_bits_to_audio]
+
+The FSK (frequency-shift keying) synthesis behind `rtty_modulate`, kept separate so tests can feed it bit sequences that the text path
+would never produce (for example a figures run with no unshift code, to exercise unshift-on-space). MARK is `mark_hz` and SPACE is
+`mark_hz + 170`. The phase accumulator runs across all bits so the waveform is continuous (no splatter from phase jumps), and each bit
+lasts `sample_rate / 45.45` samples, rounded per bit. Every seventh bit (index modulo 7 equal to 6) is taken to be a stop bit and is
 lengthened to 1.5 times, so it assumes the input is built from 7-bit frames.
-[@ANCHOR: framed_bits_to_audio]
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `bits` | `&[bool]` | One entry per bit period, `true` MARK, `false` SPACE; length should be a multiple of 7. |
+| `mark_hz` | `f64` | MARK tone frequency in Hz (the default in this module is 2125 Hz). |
+| `sample_rate` | `u32` | Output sample rate in Hz. |
+
+**Returns:** `Vec<i16>` of mono PCM at 0.9 of full scale. Empty input gives an empty vector.
+
+**Errors:** None; it does not validate the frame structure.
+
+**Special concerns:** Allocates the whole output; cost is linear in the output length; no I/O. This function only makes samples. Whoever sends them to a radio owns the transmit gate and band check; nothing in this crate keys a transmitter.
+
+**Signature:** `fn framed_bits_to_audio(bits: &[bool], mark_hz: f64, sample_rate: u32) -> Vec<i16>`
+
+**See also:** tests `unshift_on_space_recovers_a_letter_after_an_unsent_shift_code` and `implausible_figs_run_pre_emptively_unshifts_without_a_space` in `src/rtty.rs`; `rtty_modulate`.
 
 ## RTTY correlators
 
-`window_mark_space_energy` is the slow reference correlator. For one window it computes the quadrature
-(I and Q) correlation against the MARK and SPACE tones, recomputing sine and cosine for every sample, and
-returns whether MARK is stronger together with both energies (I squared plus Q squared). It is not used on the
-decode path; the tests compare it with the table-driven version.
-[@ANCHOR: window_mark_space_energy]
+The decoder decides every bit by correlating a window of audio against the MARK and SPACE tones and comparing the energies. These items are private to `src/rtty.rs`.
 
-`TrigTables::new` precomputes cosine and sine values for the MARK and SPACE tones at window-relative sample
-offsets 0 to `capacity`. The phase always counts from the window's first sample, so the tables serve a window
-starting anywhere in the stream.
-[@ANCHOR: TrigTables::new]
+### `window_mark_space_energy` [@ANCHOR: window_mark_space_energy]
 
-`TrigTables::window_evidence` correlates `samples[start..start+len]` against the tables and returns the
-signed MARK-to-SPACE ratio in dB (positive means MARK is stronger; energies are floored at 1e-15) together
-with the linear total MARK plus SPACE energy. It returns `None` if `len` is zero, the start is past the end,
-or more than 10 percent of the window is missing. A window short by up to 10 percent, and one longer than the
+The slow reference correlator. For one window it computes the quadrature (I and Q) correlation against the MARK and SPACE tones,
+recomputing sine and cosine for every sample, and returns whether MARK is stronger together with both energies (I squared plus Q
+squared). It is not used on the decode path; the tests compare it with the table-driven version so the two paths cross-check each
+other.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]` | The window; phase counts from its first sample. |
+| `mark_hz`, `space_hz` | `f64` | The two tone frequencies in Hz. |
+| `sample_rate` | `u32` | Sample rate in Hz. |
+
+**Returns:** `(mark_stronger, mark_energy, space_energy)`; energies are in normalised linear units (samples divided by `i16::MAX`).
+
+**Errors:** None; an empty window gives `(false, 0.0, 0.0)`.
+
+**Special concerns:** Pure; cost is one `cos` and `sin` pair per tone per sample, which is why `TrigTables` exists.
+
+**Signature:** `fn window_mark_space_energy(samples: &[i16], mark_hz: f64, space_hz: f64, sample_rate: u32) -> (bool, f64, f64)`
+
+**See also:** `TrigTables::window_evidence`; test `mark_space_ratio_separates_signal_from_noise_across_a_full_amplitude_sweep`.
+
+### `TrigTables::new` [@ANCHOR: TrigTables::new]
+
+Precomputes cosine and sine values for the MARK and SPACE tones at window-relative sample offsets 0 up to `capacity`. The phase
+always counts from the window's first sample, so one set of tables serves a window starting anywhere in the stream. Built once per
+decoder (or once per whole-buffer call) because recomputing trigonometry per window was the dominant cost.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `mark_hz`, `space_hz` | `f64` | Tone frequencies in Hz. |
+| `sample_rate` | `u32` | Sample rate in Hz. |
+| `capacity` | `usize` | Number of sample offsets to precompute; it is the longest window the tables can serve. |
+
+**Returns:** A `TrigTables` holding four `Vec<f64>` of length `capacity` (`cos_mark`, `sin_mark`, `cos_space`, `sin_space`).
+
+**Errors:** None. Memory is 4 x 8 x `capacity` bytes.
+
+**Special concerns:** Immutable after construction, so it can be shared between threads for reading. No I/O.
+
+**Signature:** `fn new(mark_hz: f64, space_hz: f64, sample_rate: u32, capacity: usize) -> Self`
+
+**See also:** `TrigBank::new_with_offsets`; test `round_trips_a_real_cq_call_through_letters_and_figures_shifts`.
+
+### `TrigTables::window_evidence` [@ANCHOR: TrigTables::window_evidence]
+
+Correlates `samples[start..start+len]` against the tables and returns the signed MARK-to-SPACE ratio in dB (positive means MARK is
+stronger; energies are floored at 1e-15 so the logarithm is finite) together with the linear total MARK plus SPACE energy. The ratio
+drives every bit decision; the energy is what the frequency search compares across candidates, because a dB value saturates and a
+linear energy tracks the correlator's real frequency-mismatch rolloff. A window short by up to 10 percent, and one longer than the
 tables, is shortened to what is available; this lets the last character of a whole-buffer decode through.
-[@ANCHOR: TrigTables::window_evidence]
 
-`TrigTables::signed_ratio_db` is `window_evidence` with the energy dropped, for the many callers that need only
-the ratio.
-[@ANCHOR: TrigTables::signed_ratio_db]
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]` | The audio buffer. |
+| `start` | `usize` | First sample of the window. |
+| `len` | `usize` | Wanted window length in samples. |
 
-`TrigBank::new_with_offsets` builds one `TrigTables` per carrier offset in the given list, each with MARK at
-the configured frequency plus that offset and SPACE 170 Hz above it. It keeps the offset list so a decoder
-can report the real offset of the table that won.
-[@ANCHOR: TrigBank::new_with_offsets]
+**Returns:** `Some((ratio_db, total_energy))`, or `None` when `len` is zero, `start` is past the end, or more than 10 percent of the window is missing.
 
-`TrigBank::new` is that bank over the standard nine offsets, -40 to +40 Hz in 10 Hz steps.
-[@ANCHOR: TrigBank::new]
+**Errors:** None beyond the `None` cases. A heavily shortened window would give an unreliable ratio, which is why it is refused.
+
+**Special concerns:** Pure and non-blocking; read-only access to the tables.
+
+**Signature:** `fn window_evidence(&self, samples: &[i16], start: usize, len: usize) -> Option<(f64, f64)>`
+
+**See also:** `TrigTables::signed_ratio_db`, `frame_score`; test `round_trips_a_real_cq_call_through_letters_and_figures_shifts`.
+
+### `TrigTables::signed_ratio_db` [@ANCHOR: TrigTables::signed_ratio_db]
+
+`window_evidence` with the energy dropped, for the many callers that need only the MARK-to-SPACE ratio: the persistence check, the
+data-bit decisions in `attempt_character` and `characterize_rtty_signature`. It has the same window rules, so it returns `None` for
+exactly the same inputs.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples`, `start`, `len` | `&[i16]`, `usize`, `usize` | As for `window_evidence`. |
+
+**Returns:** `Some(ratio_db)` (positive = MARK stronger), or `None` as described there.
+
+**Errors:** None.
+
+**Special concerns:** Pure; no side effects.
+
+**Signature:** `fn signed_ratio_db(&self, samples: &[i16], start: usize, len: usize) -> Option<f64>`
+
+**See also:** `TrigTables::window_evidence`; test `round_trips_a_real_cq_call_through_letters_and_figures_shifts`.
+
+### `TrigBank::new_with_offsets` [@ANCHOR: TrigBank::new_with_offsets]
+
+Builds one `TrigTables` per carrier offset in the given list, each with MARK at the configured frequency plus that offset and SPACE
+170 Hz above it. It keeps the offset list so a decoder can report the real offset of the table that won; indexing a one-table bank
+into the nine-entry default list would otherwise report the wrong value (-40 Hz instead of 0 Hz). A decoder that scans many channels
+passes the single-entry list `FIXED_OFFSET_HZ` (0 Hz) so each decoder does no inner frequency search.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `offsets` | `&'static [f64]` | Offsets in Hz relative to `mark_hz`. |
+| `mark_hz` | `f64` | Nominal MARK frequency in Hz. |
+| `sample_rate` | `u32` | Sample rate in Hz. |
+| `capacity` | `usize` | Table length per offset, in samples. |
+
+**Returns:** A `TrigBank` with `tables` (one per offset, same order) and `offsets`.
+
+**Errors:** None. Memory scales with offsets times capacity.
+
+**Special concerns:** Built once and then read-only. No I/O.
+
+**Signature:** `fn new_with_offsets(offsets: &'static [f64], mark_hz: f64, sample_rate: u32, capacity: usize) -> Self`
+
+**See also:** `TrigBank::new`, `RttyDecoder::new_fixed`; test `fixed_decoder_char_yield_vs_mismatch`.
+
+### `TrigBank::new` [@ANCHOR: TrigBank::new]
+
+The bank over the standard nine offsets, -40 to +40 Hz in 10 Hz steps (`AFC_OFFSETS_HZ`). The spacing keeps the worst residual
+mistuning after snapping to the nearest candidate at 5 Hz, well inside the roughly 20 Hz the sensitivity harness measured as still
+clean, while covering typical manual-tuning error and transmitter drift. Used by `rtty_demodulate` and `RttyDecoder::new`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `mark_hz` | `f64` | Nominal MARK frequency in Hz. |
+| `sample_rate` | `u32` | Sample rate in Hz. |
+| `capacity` | `usize` | Table length in samples (at least the stop-bit window length). |
+
+**Returns:** A `TrigBank` of nine tables.
+
+**Errors:** None.
+
+**Special concerns:** Nine tables of four vectors each, so memory is 9 x 4 x 8 x `capacity` bytes; build it once, not per window.
+
+**Signature:** `fn new(mark_hz: f64, sample_rate: u32, capacity: usize) -> Self`
+
+**See also:** `TrigBank::new_with_offsets`; test `rtty_decoder_tracks_a_real_off_air_frequency_offset`.
 
 ## RTTY edge detection and scan
 
-`pre_is_persistently_mark` checks that the bit period just before a candidate start edge is steady MARK: it
-splits that period into two sub-windows and requires each to read more than 4 dB toward MARK. This rejects
-candidates whose context is not an idle or previous stop bit. An edge within one bit period of the start of the
-buffer passes without a test.
-[@ANCHOR: pre_is_persistently_mark]
+These private functions in `src/rtty.rs` find character start edges by scoring a whole seven-bit frame, so noise and partial matches are rejected.
+All are pure functions of the audio and the tables except `rtty_scan`, which advances a `ScanState`.
 
-`frame_score` rates a candidate start edge using the whole 7-bit frame, after the persistence check. It
-correlates the start bit window, five data bit windows and the 1.5-bit stop window, each from the table passed
-in. It returns three numbers: an accept score, the sum of the start (SPACE-ward), stop (MARK-ward) and
-five data-bit ratios, each clipped to 18 dB, which decides whether a character is there; a raw unclipped
-start-plus-stop score, used to find the exact edge position; and the total linear energy, used to choose
-between frequency candidates. It returns `None` if the persistence check fails or any window runs past the
-buffered audio.
-[@ANCHOR: frame_score]
+### `pre_is_persistently_mark` [@ANCHOR: pre_is_persistently_mark]
 
-`best_frame_evidence` evaluates `frame_score` at one position for every table in the bank and keeps only those
-whose accept score is above 80 dB. Of those it returns the one with the greatest linear energy, with its index.
-The energy chooses the winner because a clipped score saturates and cannot tell neighbouring offsets apart.
-[@ANCHOR: best_frame_evidence]
+Checks that the bit period just before a candidate start edge is steady MARK: it splits that period into `PERSIST_SUBWINDOWS` (2)
+sub-windows and requires each to read more than `PERSIST_RATIO_THRESHOLD_DB` (4 dB) toward MARK. This rejects candidates whose
+context is not an idle or previous stop bit, because noise rarely sustains MARK across several independent windows. Where less than
+one bit of history exists, only the whole sub-windows that fit are checked; an edge within one sub-window of the buffer start passes
+without a test.
 
-`ScanState::new` creates the scan state for a decoder: position zero, letters shift, no non-digit figures run,
-and the given initial locked-offset index (the default state uses the middle, 0 Hz, entry).
-[@ANCHOR: ScanState::new]
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]` | The buffered audio. |
+| `edge_pos` | `usize` | Candidate start-bit edge, in samples. |
+| `geo` | `&FrameGeometry` | Bit and window lengths for the sample rate. |
+| `trig` | `&TrigTables` | The tables for the frequency hypothesis being tested. |
 
-`rtty_scan` is the loop shared by the whole-buffer and streaming decoders. It steps through the buffer in
-steps of one eighth of a bit period. At each position `best_frame_evidence` is tried against the full
-offset bank. When it finds a candidate, the table is fixed for that character, and the position is refined
-over plus or minus half a bit by taking the highest raw score. `attempt_character` then makes the hard decision,
-and on success the decoder emits the text, records the winning offset and jumps past the character. A failed
-attempt just moves on one step. In streaming mode it stops, leaving the position unchanged, when the
-character plus the refinement margin is not fully buffered yet, so the next call retries the same position. A
-zero-length bit window returns nothing.
-[@ANCHOR: rtty_scan]
+**Returns:** `true` when every checked sub-window is MARK-ward, `false` otherwise (including when a window cannot be evaluated).
+
+**Errors:** None.
+
+**Special concerns:** Pure. It exists to stop the position refinement sliding a first character whose first data bit equals its start bit late by up to half a bit.
+
+**Signature:** `fn pre_is_persistently_mark(samples: &[i16], edge_pos: usize, geo: &FrameGeometry, trig: &TrigTables) -> bool`
+
+**See also:** `frame_score`; test `round_trips_a_real_cq_call_through_letters_and_figures_shifts`.
+
+### `frame_score` [@ANCHOR: frame_score]
+
+Rates a candidate start edge using the whole 7-bit frame, after the persistence check. It correlates the start-bit window, the five
+data-bit windows and the 1.5-bit stop window, each from the table passed in. It returns three numbers in a `FrameEvidence`: an
+`accept_score`, the sum of the start (SPACE-ward), stop (MARK-ward) and five data-bit ratios, each clipped to `PER_WINDOW_CLIP_DB`
+(18 dB), which decides whether a character is there; a `raw_score`, the unclipped start-plus-stop ratio, used to find the exact edge
+position because clipping flattens a strong peak; and `magnitude`, the total linear energy, used to choose between frequency
+candidates. The scores are ratios, so the same thresholds work across amplitudes.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]` | The buffered audio. |
+| `edge_pos` | `usize` | Candidate start-bit edge, in samples. |
+| `geo` | `&FrameGeometry` | Window lengths. |
+| `trig` | `&TrigTables` | Tables for one frequency hypothesis. |
+
+**Returns:** `Some(FrameEvidence { accept_score, raw_score, magnitude })`, or `None` if the persistence check fails or any window runs past the buffered audio.
+
+**Errors:** None. A streaming caller must distinguish "not enough audio yet" from "not a character"; `rtty_scan` does this with its lookahead check.
+
+**Special concerns:** Pure, seven window correlations per call; it is the hot path of the decoder.
+
+**Signature:** `fn frame_score(samples: &[i16], edge_pos: usize, geo: &FrameGeometry, trig: &TrigTables) -> Option<FrameEvidence>`
+
+**See also:** `pre_is_persistently_mark`, `best_frame_evidence`, `rtty_scan`; test `round_trips_a_real_cq_call_through_letters_and_figures_shifts`.
+
+### `best_frame_evidence` [@ANCHOR: best_frame_evidence]
+
+Evaluates `frame_score` at one position for every table in the bank and keeps only candidates whose `accept_score` is above
+`FRAME_SCORE_THRESHOLD_DB` (80 dB). Of those it returns the one with the greatest linear `magnitude`, with its table index. Energy
+chooses the winner because the clipped score saturates and cannot tell neighbouring offsets apart, and a sum of dB ratios was
+measured to be the wrong physical quantity; the clipped score only gates noise. This is the automatic frequency control (AFC) search,
+run at every scan position so a drifted station is reacquired.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]` | Buffered audio. |
+| `edge_pos` | `usize` | Candidate edge position. |
+| `geo` | `&FrameGeometry` | Window lengths. |
+| `bank` | `&TrigBank` | The frequency hypotheses. |
+
+**Returns:** `Some((table_index, FrameEvidence))` for the winner, or `None` when no table clears the threshold.
+
+**Errors:** None.
+
+**Special concerns:** Pure; cost is the bank size (9 by default) times one `frame_score`.
+
+**Signature:** `fn best_frame_evidence(samples: &[i16], edge_pos: usize, geo: &FrameGeometry, bank: &TrigBank) -> Option<(usize, FrameEvidence)>`
+
+**See also:** `rtty_scan`; test `rtty_decoder_tracks_a_real_off_air_frequency_offset`.
+
+### `ScanState::new` [@ANCHOR: ScanState::new]
+
+Creates the scan state a decoder carries between `feed()` calls: position zero, letters shift, a zero count of consecutive
+non-digit figures characters (the evidence counter for the unshift-on-space heuristic), and the given initial locked-offset index.
+`ScanState::default()` uses the middle entry of the nine-offset list (0 Hz).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `locked_offset_idx` | `usize` | Index into the decoder's offset list; purely informational, it reports which offset last decoded a character and never narrows the search. |
+
+**Returns:** A `ScanState { pos, current_figs, figs_non_digit_run, locked_offset_idx }`.
+
+**Errors:** None. An index outside the bank's offset list would be a caller bug.
+
+**Special concerns:** Owned by one decoder; `rtty_scan` mutates it in place, so it needs `&mut` access and is not shared between threads.
+
+**Signature:** `fn new(locked_offset_idx: usize) -> Self`
+
+**See also:** `rtty_scan`; test `fixed_decoder_char_yield_vs_mismatch` (a one-table bank starts at index 0).
+
+### `rtty_scan` [@ANCHOR: rtty_scan]
+
+The loop shared by the whole-buffer decoder (`rtty_demodulate`) and the streaming decoder (`RttyDecoder::feed`). It steps through the
+buffer in steps of one eighth of a bit period (`SCAN_GRID_PER_BIT`). At each position `best_frame_evidence` is tried against the full
+offset bank. When it finds a candidate, the table is fixed for that character, and the position is refined over plus or minus half a
+bit by taking the highest raw score. `attempt_character` then makes the hard decision, and on success the decoder emits the text,
+records the winning offset and jumps past the character. A failed attempt just moves on one step. In streaming mode it stops,
+leaving the position unchanged, when the character plus the refinement margin is not fully buffered yet, so the next call retries
+the same position and no character is lost across a chunk boundary.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]` | The audio buffer; positions in `state` index into it. |
+| `geo` | `&FrameGeometry` | Bit and window lengths for the sample rate. |
+| `bank` | `&TrigBank` | Frequency hypotheses. |
+| `state` | `&mut ScanState` | Resume position, shift state and locked offset; updated in place. |
+| `stop_if_insufficient_lookahead` | `bool` | `false` for whole-buffer decoding, `true` for streaming. |
+
+**Returns:** The newly decoded characters as a `String` (empty when none).
+
+**Errors:** None. A zero-length bit window (a sample rate too low for one sample per bit) returns an empty string.
+
+**Special concerns:** Pure apart from mutating `state`; no I/O or locks. Cost per position is one bank search. It decodes only; it never transmits.
+
+**Signature:** `fn rtty_scan(samples: &[i16], geo: &FrameGeometry, bank: &TrigBank, state: &mut ScanState, stop_if_insufficient_lookahead: bool) -> String`
+
+**See also:** `attempt_character`, `RttyDecoder::feed`; tests `round_trips_a_real_cq_call_through_letters_and_figures_shifts`, `rtty_decoder_tracks_a_real_off_air_frequency_offset`.
 
 ## RTTY presence signature
 
-`characterize_rtty_signature` is a cheap, decode-free probe that is not wired into any decoder. It cuts the
-audio into whole one-bit-period hops and takes the sign of the MARK/SPACE ratio of each, and reports the
-fraction of adjacent hops that differ and a histogram of run lengths (runs of 8 hops or more share the last
-bucket). It returns `None` with fewer than two hops or when the sample rate is too low for one sample per bit.
-Measurement showed that keyed RTTY and noise both flip about half the time, so the one case it separates cleanly
-is a steady unkeyed carrier, which never flips.
-[@ANCHOR: characterize_rtty_signature]
+### `characterize_rtty_signature` [@ANCHOR: characterize_rtty_signature]
+
+A cheap, decode-free probe that is not wired into any decoder. It cuts the audio into whole one-bit-period hops and takes the sign of
+the MARK/SPACE ratio of each, and reports the fraction of adjacent hops that differ and a histogram of run lengths (runs of 8 hops or
+more share the last bucket). Measurement showed that keyed RTTY and noise both flip about half the time, so the one case it separates
+cleanly is a steady unkeyed carrier, which never flips. It is kept, with that negative result, so nobody re-derives it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]` | Audio to examine. |
+| `candidate_hz` | `f64` | MARK frequency to test; SPACE is 170 Hz above. |
+| `sample_rate` | `u32` | Sample rate in Hz. |
+
+**Returns:** `Some(RttySignature { sign_flip_rate: f64 in [0, 1], run_length_histogram: [usize; 8] })`, or `None` with fewer than two hops or when the sample rate is too low for one sample per bit.
+
+**Errors:** None beyond `None`.
+
+**Special concerns:** Pure; allocates one sign per hop. Not called by `RttyDecoder`, `rtty_scan` or any pipeline, so it affects no decode.
+
+**Signature:** `fn characterize_rtty_signature(samples: &[i16], candidate_hz: f64, sample_rate: u32) -> Option<RttySignature>`
+
+**See also:** test `rtty_signature_reports_flip_rate_run_lengths_and_degenerate_inputs`.
 
 ## FT8 waveform internals
 
-`gfsk_pulse` is the Gaussian-smoothed frequency pulse for one FT8 symbol, with a bandwidth-time product of
-2.0: half the difference of two error functions, `(erf(k*BT*(t+0.5)) - erf(k*BT*(t-0.5))) / (2T)`, where t is
-in symbol periods, T is the symbol period in seconds and k is pi times the square root of 2 over ln 2. It
-integrates to 1 over time, so a symbol's frequency offset adds up to the tone number.
-[@ANCHOR: gfsk_pulse]
+### `gfsk_pulse` [@ANCHOR: gfsk_pulse]
+
+The Gaussian-smoothed frequency pulse for one FT8 symbol, with a bandwidth-time product of 2.0 (`FT8_BT`): half the difference of two
+error functions, `(erf(k*BT*(t+0.5)) - erf(k*BT*(t-0.5))) / (2T)`, where t is in symbol periods, T is the symbol period in seconds and
+k is pi times the square root of 2 over ln 2, computed directly rather than as a literal. It integrates to 1 over time, so a symbol's
+frequency offset adds up to the tone number. `synthesize_waveform` passes it to `synthesize_waveform_with_pulse`, which integrates the
+deviation into phase.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `t_over_symbol_period` | `f64` | Time relative to the symbol centre, in symbol periods. |
+| `symbol_period_s` | `f64` | Symbol period in seconds (0.16 s for FT8). |
+
+**Returns:** The pulse value in 1/seconds (the area-normalised deviation).
+
+**Errors:** None; uses `libm::erf`, so it works in the same builds as the rest of the module.
+
+**Special concerns:** Pure and cheap. Smoothing the tone steps confines the spectrum; the waveform it shapes is what goes to the radio, and the caller of `synthesize_waveform` owns the transmit gate.
+
+**Signature:** `fn gfsk_pulse(t_over_symbol_period: f64, symbol_period_s: f64) -> f64`
+
+**See also:** test `gfsk_pulse_shaping_suppresses_out_of_band_energy_more_than_an_unfiltered_pulse` in `src/ft8.rs`.
 
 ## WSPR encode internals (`wspr.rs`)
 
