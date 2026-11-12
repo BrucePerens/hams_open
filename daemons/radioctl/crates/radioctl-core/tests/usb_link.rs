@@ -297,6 +297,11 @@ fn a_target_is_told_apart_by_ids_strings_and_serial() {
 // Tests [@ANCHOR: radioctl_core_fake_usb_open]
 // Tests [@ANCHOR: radioctl_core_fake_usb_handle_enter]
 // Tests [@ANCHOR: radioctl_core_fake_usb_handle_transfers]
+// Tests [@ANCHOR: radioctl_core_usb_device_fake_handle]
+// Tests [@ANCHOR: radioctl_core_usb_device_fake_usb_backend]
+// Tests [@ANCHOR: radioctl_core_usb_device_fake_shared]
+// Tests [@ANCHOR: radioctl_core_usb_device_fake_transfer]
+// Tests [@ANCHOR: radioctl_core_usb_link_session_end]
 #[test]
 fn the_fake_bus_logs_transfers_and_fails_when_unplugged() {
     let (bus, _) = softrock();
@@ -331,6 +336,8 @@ fn the_fake_bus_logs_transfers_and_fails_when_unplugged() {
 // Tests [@ANCHOR: radioctl_core_usb_open]
 // Tests [@ANCHOR: radioctl_core_usb_supervisor_run]
 // Tests [@ANCHOR: radioctl_core_usb_sleep_dropping]
+// Tests [@ANCHOR: radioctl_core_usb_link_supervisor]
+// Tests [@ANCHOR: radioctl_core_usb_link_usb_monitor]
 #[tokio::test]
 async fn the_first_open_fails_cleanly_when_the_device_is_not_there() {
     let (bus, _) = softrock();
@@ -355,6 +362,8 @@ async fn the_first_open_fails_cleanly_when_the_device_is_not_there() {
 // Tests [@ANCHOR: radioctl_core_usb_monitor_status]
 // Tests [@ANCHOR: radioctl_core_usb_monitor_watch]
 // Tests [@ANCHOR: radioctl_core_usb_monitor_stats]
+// Tests [@ANCHOR: radioctl_core_usb_link_usb_link]
+// Tests [@ANCHOR: radioctl_core_usb_link_usb_stats]
 #[tokio::test]
 async fn a_rig_tunes_over_the_usb_link_and_garbage_does_not_wedge_it() {
     let (bus, desc) = softrock();

@@ -11,6 +11,8 @@ use radioctl_core::usb_libusb::{failure, read_into, LibusbBackend};
 
 // Tests [@ANCHOR: radioctl_core_libusb_backend_new]
 // Tests [@ANCHOR: radioctl_core_libusb_backend_open]
+// Tests [@ANCHOR: radioctl_core_usb_device_usb_target]
+// Tests [@ANCHOR: radioctl_core_usb_libusb_libusb_backend]
 #[test]
 fn an_absent_device_is_reported_as_not_plugged_in() {
     let backend = LibusbBackend::new().expect("libusb initialises");
@@ -28,6 +30,7 @@ fn an_absent_device_is_reported_as_not_plugged_in() {
 }
 
 // Tests [@ANCHOR: radioctl_core_libusb_failure]
+// Tests [@ANCHOR: radioctl_core_usb_device_usb_failure]
 #[test]
 fn libusb_errors_map_to_what_the_link_does_about_them() {
     assert_eq!(failure(rusb::Error::Timeout), UsbFailure::Timeout);
@@ -38,6 +41,7 @@ fn libusb_errors_map_to_what_the_link_does_about_them() {
 }
 
 // Tests [@ANCHOR: radioctl_core_libusb_read_into]
+// Tests [@ANCHOR: radioctl_core_usb_libusb_libusb_device]
 #[test]
 fn a_read_returns_only_the_bytes_that_arrived() {
     let got = read_into(8, |buffer| {

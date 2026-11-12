@@ -22,6 +22,7 @@ use std::time::Duration;
 
 use crate::error::{ErrorKind, RigError};
 
+// [@ANCHOR: radioctl_core_usb_device_usb_target]
 /// How to find one USB device.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UsbTarget {
@@ -71,6 +72,7 @@ impl UsbTarget {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_device_usb_failure]
 /// Why one transfer failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UsbFailure {
@@ -156,6 +158,7 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+// [@ANCHOR: radioctl_core_usb_device_fake_transfer]
 /// A transfer a [`FakeUsbBackend`] device received, as the tests inspect it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FakeTransfer {
@@ -173,6 +176,7 @@ pub enum FakeTransfer {
     InterruptRead(u8, usize),
 }
 
+// [@ANCHOR: radioctl_core_usb_device_fake_shared]
 struct FakeShared {
     present: AtomicBool,
     opens: AtomicU32,
@@ -180,6 +184,7 @@ struct FakeShared {
     device: Mutex<Box<dyn UsbDevice>>,
 }
 
+// [@ANCHOR: radioctl_core_usb_device_fake_usb_backend]
 /// A backend that serves one in-memory device (a virtual twin, or a scripted fake) that can be
 /// unplugged and plugged back in. Clone it: all clones are the same bus.
 #[derive(Clone)]
@@ -243,6 +248,7 @@ impl UsbBackend for FakeUsbBackend {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_device_fake_handle]
 struct FakeHandle {
     shared: Arc<FakeShared>,
 }
