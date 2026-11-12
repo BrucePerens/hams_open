@@ -98,28 +98,47 @@ need to know about.
 
 ## What each entry point does
 
-- `codec2_create(mode)` [@ANCHOR: codec2_3200_capi:codec2_create] returns a new handle, which holds one encoder and one
-  decoder, for `CODEC2_MODE_3200`, and `NULL` for any other mode. The caller owns the handle until it passes it to
-  `codec2_destroy`.
-- `codec2_destroy(state)` [@ANCHOR: codec2_3200_capi:codec2_destroy] frees a handle from `codec2_create`; a `NULL` or
-  already-freed handle is a contract violation, and `NULL` aborts the process.
-- `codec2_encode(state, bytes, speech_in)` [@ANCHOR: codec2_3200_capi:codec2_encode] encodes one frame of 160 16-bit
-  samples into 8 bytes (64 bits); a `NULL` handle or buffer aborts the process.
-- `encode_impl` [@ANCHOR: codec2_3200_capi:codec2_encode_impl] is the body behind `codec2_encode`: it asserts the handle and both buffers are non-NULL,
-  encodes the 160 samples with the handle's encoder and copies the 8 bytes out.
-- `decode_ber_impl` [@ANCHOR: codec2_3200_capi:codec2_decode_ber_impl] is the body behind `codec2_decode` and `codec2_decode_ber`: it asserts the handle and
-  both buffers are non-NULL, decodes the 8 bytes with the handle's decoder and copies the 160 samples out.
-- `codec2_decode(state, speech_out, bytes)` [@ANCHOR: codec2_3200_capi:codec2_decode] decodes one 8-byte frame into 160
-  samples; it is `codec2_decode_ber` with a bit-error estimate of 0.
-- `codec2_decode_ber(state, speech_out, bytes, ber_est)` [@ANCHOR: codec2_3200_capi:codec2_decode_ber] decodes one
-  frame like `codec2_decode`; `ber_est` is accepted for source compatibility and ignored, as the reference library
-  ignores it at 3200 bit/s.
-- `codec2_samples_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_samples_per_frame] returns 160, the number of
-  speech samples in a frame.
-- `codec2_bits_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_bits_per_frame] returns 64, the number of bits in an
-  encoded frame.
-- `codec2_bytes_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_bytes_per_frame] returns 8, the number of bytes in
-  an encoded frame.
+All entries are in `src/lib.rs` and tested by the unit tests there (`// Tests [@ANCHOR: ...]`) and by the two C programs in `tests/`. Nothing here touches hardware, the network or a transmitter; it is pure sample and bit arithmetic on caller-supplied buffers. There is no locking and no global state: a handle is a plain owned struct, so one handle must not be used from two threads at once, while separate handles are independent. Every contract violation is an `assert!` that aborts the process (see "Panics abort the process" above), never an error code. Each public entry is a thin `extern "C"` trampoline over a private `*_impl` function so the checks can be unit-tested.
+
+### `codec2_create(mode)` [@ANCHOR: codec2_3200_capi:codec2_create]
+
+`struct CODEC2 *codec2_create(int mode)`. Purpose: make a codec handle, as the real library does. Argument `mode`: a `CODEC2_MODE_*` value; only `CODEC2_MODE_3200` (0) is supported. Returns an owned pointer to a handle holding one `EncoderFixed` and one `Decoder` (so one handle serves full duplex, as the reference documents), or `NULL` for every other mode, exactly like a real build with that mode compiled out. It never dereferences a pointer, never panics and has no other error. Allocation is the only side effect; the caller owns the handle until it passes it to `codec2_destroy`. Tests: the create/destroy unit tests and both C programs.
+
+### `codec2_destroy(state)` [@ANCHOR: codec2_3200_capi:codec2_destroy]
+
+`void codec2_destroy(struct CODEC2 *state)`. Purpose: free a handle from `codec2_create`. Argument `state`: that handle, not yet destroyed. Returns nothing. A `NULL` handle trips an `assert!` in the private `destroy_impl` and aborts the process (the reference also asserts rather than tolerating `NULL`). A double free or a pointer not from `codec2_create` is undefined behavior; the library cannot detect it. Frees the encoder and decoder state. Do not use the handle afterwards. Tests: the create/destroy unit tests and both C programs.
+
+### `codec2_encode(state, bytes, speech_in)` [@ANCHOR: codec2_3200_capi:codec2_encode]
+
+`void codec2_encode(struct CODEC2 *state, unsigned char *bytes, short speech_in[])`. Purpose: compress one frame of speech. Arguments: `state` a live handle; `bytes` a writable buffer of at least 8 bytes (`codec2_bytes_per_frame`); `speech_in` at least 160 readable 16-bit samples (`codec2_samples_per_frame`, 20 ms at 8 kHz). Returns nothing; the 8 encoded bytes (64 bits) are written to `bytes`. It forwards to `encode_impl`, so a `NULL` handle or buffer aborts the process. The encoder keeps analysis state in the handle between frames, so frames must be fed in order and one handle must not be shared between two audio streams. Buffers shorter than stated are undefined behavior. Tests: the encode unit tests, `tests/c_link_smoke_test.c`.
+
+### `encode_impl` [@ANCHOR: codec2_3200_capi:codec2_encode_impl]
+
+`unsafe fn encode_impl(state: *mut CODEC2, bytes: *mut u8, speech_in: *const i16)`. The private body behind `codec2_encode`, in plain Rust ABI so a test can call it and catch the panic (a panic cannot be caught through an `extern "C"` frame, it aborts). It asserts the handle, `bytes` and `speech_in` are non-NULL, in that order, each with its own message naming the argument; reinterprets `speech_in` as a 160-sample array; encodes it with the handle's `EncoderFixed`; and copies 8 bytes to `bytes` with `copy_nonoverlapping`, so `bytes` must not overlap the input. Safety: the caller guarantees the buffer lengths. Tests: the NULL-argument unit tests for each of the three arguments.
+
+### `decode_ber_impl` [@ANCHOR: codec2_3200_capi:codec2_decode_ber_impl]
+
+`unsafe fn decode_ber_impl(state: *mut CODEC2, speech_out: *mut i16, bytes: *const u8, _ber_est: f32)`. The private body behind both `codec2_decode` and `codec2_decode_ber`. It asserts the handle, `speech_out` and `bytes` are non-NULL (an abort with the argument named otherwise), reinterprets `bytes` as an 8-byte frame, decodes it with the handle's `Decoder` and copies 160 samples to `speech_out`. The bit-error estimate is ignored: the reference's 3200 bit/s mode installs a plain decode and never reads it. The decoder keeps synthesis state between frames, so frames must arrive in order on one handle. Buffer lengths are the caller's responsibility. Tests: the NULL-argument unit tests and the reference-bitstream C test.
+
+### `codec2_decode(state, speech_out, bytes)` [@ANCHOR: codec2_3200_capi:codec2_decode]
+
+`void codec2_decode(struct CODEC2 *state, short speech_out[], const unsigned char *bits)`. Purpose: decompress one frame. Arguments: `state` a live handle; `speech_out` a writable buffer of at least 160 16-bit samples; `bytes` 8 readable bytes. Returns nothing; the samples are written to `speech_out`. It calls `decode_ber_impl` with a bit-error estimate of 0, so the same aborts on `NULL` apply and nothing else can fail: any 8 bytes decode to something, so corrupt input yields noise, not an error. Updates the handle's decoder state. Tests: the decode unit tests, `tests/c_link_smoke_test.c`, and `tests/c_link_reference_bitstream_test.c` (correlation above 0.99 against the real decoder's output).
+
+### `codec2_decode_ber(state, speech_out, bytes, ber_est)` [@ANCHOR: codec2_3200_capi:codec2_decode_ber]
+
+`void codec2_decode_ber(struct CODEC2 *state, short speech_out[], const unsigned char *bits, float ber_est)`. Purpose: the soft-decision decode entry of the real API, kept so existing callers link. Arguments as `codec2_decode` plus `ber_est`, the caller's bit-error-rate estimate, which is accepted and ignored because the reference does the same at 3200 bit/s (inventing a treatment it does not apply would break bit-compatibility). Returns nothing; writes 160 samples. Forwards to `decode_ber_impl`, so a `NULL` handle or buffer aborts. Tests: the decode_ber unit tests and the smoke test.
+
+### `codec2_samples_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_samples_per_frame]
+
+`int codec2_samples_per_frame(struct CODEC2 *state)`. Returns 160, the number of 16-bit speech samples per frame (20 ms at 8 kHz), the size of the `speech_in` and `speech_out` buffers. The handle only has to be non-NULL: a `NULL` aborts through the private `samples_per_frame_impl`. The value is a constant because only the 3200 mode exists. No side effects. Tests: the frame-size unit test and the C smoke test.
+
+### `codec2_bits_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_bits_per_frame]
+
+`int codec2_bits_per_frame(struct CODEC2 *state)`. Returns 64, the number of bits in one encoded frame (8 bytes times 8; 3200 bit/s at 50 frames per second). A `NULL` handle aborts through `bits_per_frame_impl`; otherwise it cannot fail and has no side effects. Use it to size packing buffers that count bits. Tests: the frame-size unit test and the C smoke test.
+
+### `codec2_bytes_per_frame(state)` [@ANCHOR: codec2_3200_capi:codec2_bytes_per_frame]
+
+`int codec2_bytes_per_frame(struct CODEC2 *state)`. Returns 8, the size in bytes of the `bytes` buffer for `codec2_encode` and `codec2_decode`. A `NULL` handle aborts through `bytes_per_frame_impl`; otherwise it cannot fail and has no side effects. The value is the crate's `BYTES_PER_FRAME`, shared with the Rust codec port, so the two cannot disagree. Tests: the frame-size unit test and the C smoke test.
 
 ## Building and using
 
