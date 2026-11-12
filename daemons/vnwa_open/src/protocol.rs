@@ -9,6 +9,7 @@
 /// ten. Confirmed by the tuning words seen for 1, 2, 10 and 20 MHz.
 pub const DDS_CLOCK_HZ: f64 = 360_000_000.0;
 
+// [@ANCHOR: vnwa_open_protocol_request]
 /// A vendor control transfer, host to device (`bmRequestType` 0x40) or device to host (0xC0).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Request {
@@ -164,6 +165,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_if_word]
+    // Tests [@ANCHOR: vnwa_open_protocol_request]
     #[test]
     fn if_words_match_the_captured_setup_requests() {
         assert_eq!(if_word(12_000.0), 0x026d_60dd); // request 0x42, n = 1

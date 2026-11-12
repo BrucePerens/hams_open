@@ -23,6 +23,7 @@ pub const RETRY_PAUSE: Duration = Duration::from_millis(5);
 /// How many transfers `Vnwa::recent_transfers` remembers.
 pub const TRANSFER_LOG: usize = 16;
 
+// [@ANCHOR: vnwa_open_usb_vnwa]
 pub struct Vnwa {
     link: Box<dyn Transport>,
     resends: AtomicU32,
@@ -311,6 +312,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_transfer_classes]
+    // Tests [@ANCHOR: vnwa_open_transport_rusb_transport]
     #[test]
     fn libusb_errors_are_classified() {
         assert!(matches!(

@@ -11,6 +11,7 @@ const FULL_SCALE: f64 = 16383.0;
 /// The vendor program allows 0 dB down to -50 dB.
 pub const MIN_ATTENUATION_DB: f64 = -50.0;
 
+// [@ANCHOR: vnwa_open_generator_read]
 /// One device-to-host request of a sequence. The unit answers with no data of interest; the transfer itself is the command.
 struct Read {
     request: u8,
@@ -152,6 +153,7 @@ const FM_STEPS: f64 = 127.0;
 /// The largest FM deviation accepted (kHz in the Help file's example is 300; the field is 16 bits).
 pub const MAX_FM_DEVIATION_HZ: f64 = 300_000.0;
 
+// [@ANCHOR: vnwa_open_generator_am_fields]
 /// The fields of an AM start that depend on the settings (all others are constants of the sequence).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AmFields {
@@ -185,6 +187,7 @@ pub fn am_fields(level: u16, mod_hz: f64, depth_pct: f64) -> Result<AmFields, St
     })
 }
 
+// [@ANCHOR: vnwa_open_generator_fm_fields]
 /// The FM fields: 0x92 wValue (phase step) and 0x95 wValue (the deviation per step).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FmFields {
@@ -210,6 +213,7 @@ pub fn fm_fields(mod_hz: f64, deviation_hz: f64) -> Result<FmFields, String> {
     })
 }
 
+// [@ANCHOR: vnwa_open_generator_modulation]
 /// Which modulation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Modulation {
@@ -358,6 +362,8 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: vnwa_open_end_modulation]
+    // Tests [@ANCHOR: vnwa_open_usb_vnwa]
+    // Tests [@ANCHOR: vnwa_open_transport_transfer_error]
     #[test]
     fn a_usb_reset_ends_the_modulation_stall_and_a_unit_that_stays_stalled_is_reported() {
         use crate::transport::{TransferError, Transport};
@@ -429,6 +435,8 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_generator_on]
     // Tests [@ANCHOR: vnwa_open_generator_modulate]
     // Tests [@ANCHOR: vnwa_open_generator_set_frequency]
+    // Tests [@ANCHOR: vnwa_open_transport_scripted]
+    // Tests [@ANCHOR: vnwa_open_generator_modulation]
     #[test]
     fn a_frequency_whose_tuning_word_does_not_fit_is_refused_before_anything_is_sent() {
         use crate::transport::Scripted;
@@ -491,6 +499,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_am_fields]
+    // Tests [@ANCHOR: vnwa_open_generator_am_fields]
     #[test]
     fn the_am_fields_reproduce_every_captured_start() {
         // (level, modulation Hz, depth %, 0x92, 0x94 wValue, 0x94 wIndex), from usbmon captures of the vendor program on 2026-10-29.
@@ -519,6 +528,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_fm_fields]
+    // Tests [@ANCHOR: vnwa_open_generator_fm_fields]
     #[test]
     fn the_fm_fields_reproduce_every_captured_start() {
         // (modulation Hz, deviation Hz, 0x92, 0x95)
@@ -664,6 +674,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_generator_am_captured]
+    // Tests [@ANCHOR: vnwa_open_transport_seen]
+    // Tests [@ANCHOR: vnwa_open_generator_read]
     #[test]
     fn the_captured_am_sequence_is_sent_in_order_and_a_stalled_last_request_is_not_an_error() {
         use crate::transport::{Seen, TransferError};

@@ -8,6 +8,7 @@ use vnwa_open::power::{cold_reset, HubPort};
 // Tests [@ANCHOR: vnwa_open_capture_close]
 // Tests [@ANCHOR: vnwa_open_capture_open_with]
 // Tests [@ANCHOR: vnwa_open_power_cold_reset]
+// Tests [@ANCHOR: vnwa_open_capture_capture]
 #[test]
 #[ignore = "hil: needs the VNWA on hub 3-2 port 2; power cycles it"]
 fn closing_the_streams_before_a_power_cycle_reports_no_overruns_and_idle_capture_reports_none() {

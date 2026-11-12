@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+// [@ANCHOR: vnwa_open_soak_scope_scope_stream]
 /// A connected scope: a buffered reader and a writer on the same socket.
 pub type ScopeStream = (BufReader<TcpStream>, TcpStream);
 
@@ -124,6 +125,7 @@ mod tests {
 
     // Tests [@ANCHOR: vnwa_open_soak_scope_open_checked]
     // Tests [@ANCHOR: vnwa_open_soak_scope_try_once]
+    // Tests [@ANCHOR: vnwa_open_soak_scope_scope_stream]
     #[test]
     fn a_scope_that_resets_the_first_connections_is_waited_out_and_then_answers() {
         let (addr, server) = stale(2, 3);

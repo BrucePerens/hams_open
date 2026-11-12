@@ -8,6 +8,7 @@ use crate::capture::SAMPLE_RATE;
 use crate::setup::{setup_block, SetupParams};
 use crate::sweep::Vna;
 
+// [@ANCHOR: vnwa_open_trace_raw_point]
 /// One point's raw audio and timing.
 pub struct RawPoint {
     /// The frames of codec 1 and codec 2 from `before_ms` before the send began, `[left, right]` each.
@@ -80,6 +81,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: vnwa_open_emission_onset]
+    // Tests [@ANCHOR: vnwa_open_trace_raw_point]
     #[test]
     fn the_if_tone_starts_61_ms_and_the_18_khz_burst_1_ms_after_the_end_of_the_send_in_a_recorded_point(
     ) {

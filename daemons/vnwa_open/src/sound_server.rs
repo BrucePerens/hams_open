@@ -8,6 +8,7 @@ use std::path::Path;
 
 use crate::reserved::{vnwa_codec_paths, CODEC_PID, CODEC_VID};
 
+// [@ANCHOR: vnwa_open_sound_server_card]
 /// One card the sound server lists with the codec chip's USB id.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Card {
@@ -18,6 +19,7 @@ pub struct Card {
     pub id: Option<u64>,
 }
 
+// [@ANCHOR: vnwa_open_sound_server_exposure]
 /// What the check found.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Exposure {
@@ -214,6 +216,7 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_sound_server_pipewire]
     // Tests [@ANCHOR: vnwa_open_sound_server_port_of]
     // Tests [@ANCHOR: vnwa_open_sound_server_judge]
+    // Tests [@ANCHOR: vnwa_open_sound_server_exposure]
     #[test]
     fn a_pw_dump_with_the_unit_codec_is_exposed_but_a_dongle_elsewhere_is_not_the_units() {
         let cards = parse_pw_dump(PW_DUMP).unwrap();
@@ -245,6 +248,7 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_sound_server_check]
     // Tests [@ANCHOR: vnwa_open_sound_server_protected]
     // Tests [@ANCHOR: vnwa_open_sound_server_warning]
+    // Tests [@ANCHOR: vnwa_open_sound_server_card]
     #[test]
     fn pactl_cards_are_parsed_per_block_and_the_check_reports_what_it_could_not_inspect() {
         let cards = parse_pactl_cards(PACTL);

@@ -17,6 +17,7 @@
 use crate::audio::Complex;
 use std::f64::consts::PI;
 
+// [@ANCHOR: vnwa_open_timedomain_window]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Window {
     Rectangular,
@@ -61,12 +62,14 @@ impl Window {
     }
 }
 
+// [@ANCHOR: vnwa_open_timedomain_mode]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Mode {
     LowPass,
     BandPass,
 }
 
+// [@ANCHOR: vnwa_open_timedomain_response]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Response {
     Impulse,
@@ -297,6 +300,7 @@ mod tests {
 
     // Tests [@ANCHOR: vnwa_open_window]
     // Tests [@ANCHOR: vnwa_open_window_from_name]
+    // Tests [@ANCHOR: vnwa_open_timedomain_window]
     #[test]
     fn the_windows_have_their_textbook_shapes() {
         let n = 11;
@@ -320,6 +324,8 @@ mod tests {
 
     // Tests [@ANCHOR: vnwa_open_time_domain]
     // Tests [@ANCHOR: vnwa_open_time_domain_peak_time]
+    // Tests [@ANCHOR: vnwa_open_timedomain_response]
+    // Tests [@ANCHOR: vnwa_open_timedomain_mode]
     #[test]
     fn a_delay_line_gives_a_peak_at_its_delay_in_both_modes_and_windows_lower_the_sidelobes() {
         let tau = 10.3e-9;

@@ -9,6 +9,7 @@ use crate::protocol::{
     if_scaled_fields, if_word, point_time_byte, sweep_offset_tail, sweep_word, Request, VENDOR_OUT,
 };
 
+// [@ANCHOR: vnwa_open_setup_setup_params]
 /// What the set-up block depends on.
 #[derive(Clone, Copy, Debug)]
 pub struct SetupParams {
@@ -149,6 +150,7 @@ mod tests {
 
     // Tests [@ANCHOR: vnwa_open_setup_block]
     // Tests [@ANCHOR: vnwa_open_point_time_fields]
+    // Tests [@ANCHOR: vnwa_open_setup_setup_params]
     #[test]
     fn the_block_reproduces_every_captured_block_byte_for_byte() {
         for (n, v) in VECTORS.iter().enumerate() {

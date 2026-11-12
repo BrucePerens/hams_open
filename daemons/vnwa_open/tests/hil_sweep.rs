@@ -7,6 +7,7 @@ use vnwa_open::sweep::{Config, Recoverable, Vna};
 // Tests [@ANCHOR: vnwa_open_session_open]
 // Tests [@ANCHOR: vnwa_open_trace_point]
 // Tests [@ANCHOR: vnwa_open_meter_once]
+// Tests [@ANCHOR: vnwa_open_sweep_vna]
 #[test]
 #[ignore = "hil: needs the VNWA with TX looped back to RX"]
 fn a_session_opens_a_point_is_traced_and_a_loopback_tone_is_metered() {

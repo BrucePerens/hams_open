@@ -22,6 +22,7 @@ pub const UDEV_DEST: &str = "/etc/udev/rules.d/60-vnwa-codecs.rules";
 pub const HELPER_DEST: &str = "/usr/local/libexec/vnwa-is-codec";
 pub const BACKUP_SUFFIX: &str = ".vnwa-backup";
 
+// [@ANCHOR: vnwa_open_install_managed]
 /// One file we manage.
 #[derive(Clone, Debug)]
 pub struct Managed {
@@ -50,6 +51,7 @@ pub fn managed() -> Vec<Managed> {
     ]
 }
 
+// [@ANCHOR: vnwa_open_install_mode]
 /// What the installer was asked to do.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
@@ -58,6 +60,7 @@ pub enum Mode {
     Check,
 }
 
+// [@ANCHOR: vnwa_open_install_options]
 #[derive(Clone, Debug)]
 pub struct Options {
     pub mode: Mode,
@@ -68,6 +71,7 @@ pub struct Options {
     pub root: Option<PathBuf>,
 }
 
+// [@ANCHOR: vnwa_open_install_state_type]
 /// The state of one managed file.
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {
@@ -81,6 +85,7 @@ pub trait Exec {
     fn run(&self, argv: &[String]) -> Result<(), String>;
 }
 
+// [@ANCHOR: vnwa_open_install_process_exec_type]
 pub struct ProcessExec;
 
 impl Exec for ProcessExec {
@@ -139,6 +144,7 @@ pub fn allowed(argv: &[String], restart_audio: bool, root: Option<&Path>) -> boo
     }
 }
 
+// [@ANCHOR: vnwa_open_install_installer]
 /// The installer: options, an executor and the sysfs / proc locations.
 pub struct Installer<'a> {
     pub opts: Options,
@@ -444,6 +450,7 @@ impl Installer<'_> {
     }
 }
 
+// [@ANCHOR: vnwa_open_install_undo]
 #[derive(Clone, Copy)]
 enum Undo {
     Remove,
@@ -487,6 +494,7 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_install_run]
     // Tests [@ANCHOR: vnwa_open_install_state]
     // Tests [@ANCHOR: vnwa_open_install_path]
+    // Tests [@ANCHOR: vnwa_open_install_mode]
     #[test]
     fn a_dry_run_prints_the_files_and_changes_nothing_and_every_packaged_file_keeps_its_comment_block(
     ) {
@@ -527,6 +535,9 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_install_run]
     // Tests [@ANCHOR: vnwa_open_install_install]
     // Tests [@ANCHOR: vnwa_open_install_uninstall]
+    // Tests [@ANCHOR: vnwa_open_install_installer]
+    // Tests [@ANCHOR: vnwa_open_install_options]
+    // Tests [@ANCHOR: vnwa_open_install_managed]
     #[test]
     fn apply_installs_is_idempotent_backs_up_what_it_replaces_and_uninstall_restores_it() {
         let root = tmp("inst_apply");
@@ -642,6 +653,8 @@ mod tests {
 
     // Tests [@ANCHOR: vnwa_open_install_install]
     // Tests [@ANCHOR: vnwa_open_install_uninstall]
+    // Tests [@ANCHOR: vnwa_open_install_undo]
+    // Tests [@ANCHOR: vnwa_open_install_process_exec_type]
     #[test]
     fn a_failure_midway_is_a_clear_error_and_the_steps_done_are_undone() {
         let root = tmp("inst_fail");

@@ -3,10 +3,10 @@
 
 use crate::power::HubPort;
 
+// [@ANCHOR: vnwa_open_soak_topology_change]
 /// What a later `lsusb -t` shows compared with the first one.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Change {
-    // [@ANCHOR: vnwa_open_soak_topology_change]
     /// Nothing differs anywhere.
     None,
     /// Something differs outside the unit's part of the tree only (another device plugged in or removed): information, not a failure.

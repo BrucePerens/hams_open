@@ -89,6 +89,7 @@ pub fn tx_actual_hz(freq_hz: f64) -> f64 {
     f64::from(w) * (INPUT_CLOCK_HZ * 10.0) / 4_294_967_296.0
 }
 
+// [@ANCHOR: vnwa_open_meter_reading]
 #[derive(Clone, Copy, Debug)]
 pub struct Reading {
     /// The frequency the meter was centred on and the frequency the unit's TX DDS really produced for it (tuning word).
@@ -312,6 +313,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_meter_once]
+    // Tests [@ANCHOR: vnwa_open_meter_reading]
     #[test]
     fn a_simulated_unit_reads_1_10_and_50_mhz_within_1_ppm_and_never_returns_a_wrong_number() {
         // The signal on RX is the commanded frequency plus a known offset (0.5 ppm at 1 and 10 MHz, 0.2 ppm at 50 MHz).
