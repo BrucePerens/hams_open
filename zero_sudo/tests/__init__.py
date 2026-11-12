@@ -110,3 +110,4 @@ from . import test_navigator_overrides  # noqa: E402
 from . import test_svg_review_findings  # noqa: E402
 from . import test_harness_helpers  # noqa: E402
 from . import test_rpc_public  # noqa: E402
+from . import test_security_dashboard_hoot
