@@ -29,6 +29,7 @@ fn nearest_row<const N: usize>(table: &[[f64; N]], target: &[f64; N]) -> u32 {
 /// `decode::dequantize`'s own `f0`/`w0` formula run in reverse) -- picks the [`tables::L_TABLE`]
 /// index whose implied `w0` is closest, since `L_TABLE` itself (not a separate frequency table) is
 /// what a real decoder actually consults.
+// [@ANCHOR: ham_digital_modes:float_dstar_quantize_quantize_pitch]
 pub fn quantize_pitch(w0: f64) -> u32 {
     assert!(
         w0.is_finite() && w0 > 0.0,

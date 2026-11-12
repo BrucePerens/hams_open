@@ -134,6 +134,7 @@ pub enum FrameKind {
     Tone,
 }
 
+// [@ANCHOR: ham_digital_modes:float_dstar_decode_classify_b0]
 pub fn classify_b0(b0: u32) -> FrameKind {
     if b0 & 0x7E == 0x7E {
         FrameKind::Tone
@@ -162,6 +163,7 @@ pub enum ToneKind {
 /// comment for the full table) -- confirmed directly against a live chip capture: a plain 200Hz
 /// test tone produced `index=6`, which this function reads as `Single { hz: 187.5 }`, one
 /// quantization step (31.25Hz) below the true stimulus frequency.
+// [@ANCHOR: ham_digital_modes:float_dstar_decode_classify_tone_index]
 pub fn classify_tone_index(index: u32) -> ToneKind {
     match index {
         5..=122 => ToneKind::Single {
@@ -684,6 +686,7 @@ mod tests {
     /// silence frame to `b0=120`, a value mbelib itself does not special-case (see this module's own
     /// doc comment above `FrameKind`).
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:float_dstar_decode_classify_b0]
     fn classify_b0_matches_mbelib_exactly_not_the_wider_ambe_plus_2_range() {
         for b0 in 0u32..126 {
             assert_eq!(

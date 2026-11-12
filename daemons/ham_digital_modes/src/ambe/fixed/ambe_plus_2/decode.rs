@@ -63,6 +63,7 @@ fn speech_tables() -> SpeechTables<'static> {
 }
 
 /// The fixed-point equivalent of `ambe::float::ambe_plus_2::decode::dequantize`.
+// [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_decode_dequantize]
 pub fn dequantize(raw: &RawParameters, state: &mut MbeDecoderState) -> DequantizedFrame {
     match classify_b0(raw.b0) {
         FrameKind::Erasure => return DequantizedFrame::Erasure,

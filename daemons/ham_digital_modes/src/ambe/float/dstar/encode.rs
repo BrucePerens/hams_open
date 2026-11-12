@@ -85,6 +85,7 @@ pub fn build_tone_frame(index: u32, volume: u32) -> u128 {
 /// `C0`'s 12 data bits (with the even-parity bit of the extended Golay code appended as `C0`'s own LSB, `ambe_fr[0][0]`, not
 /// `ambe_fr[0][23]`; mbelib leaves it unchecked), whitens and Golay-encodes `C1`'s 12 data
 /// bits using `C0`'s own data as the whitening seed, and carries `C2`/`C3` raw.
+// [@ANCHOR: ham_digital_modes:float_dstar_encode_build_frame]
 pub fn build_frame(d: u64) -> u128 {
     let c0_data = ((d >> 37) & 0xFFF) as u16;
     let c1_data = ((d >> 25) & 0xFFF) as u16;
@@ -182,6 +183,7 @@ mod tests {
     /// own spare-bit convention and `interleave::frame_to_wire_bytes`'s that a purely-logical round
     /// trip (which never leaves `u128` frame space) wouldn't exercise.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:float_dstar_encode_build_frame]
     fn build_frame_round_trips_through_real_wire_bytes() {
         use crate::ambe::float::dstar::interleave::{frame_to_wire_bytes, wire_bytes_to_frame};
 

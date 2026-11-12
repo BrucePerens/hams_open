@@ -41,6 +41,7 @@ pub enum ToneKind {
 }
 
 /// The fixed-point equivalent of `ambe::float::dstar::decode::classify_tone_index`.
+// [@ANCHOR: ham_digital_modes:fixed_dstar_decode_classify_tone_index]
 pub fn classify_tone_index(index: u32) -> ToneKind {
     match index {
         5..=122 => ToneKind::Single {
@@ -75,6 +76,7 @@ fn speech_tables() -> SpeechTables<'static> {
 }
 
 /// The fixed-point equivalent of `ambe::float::dstar::decode::dequantize`.
+// [@ANCHOR: ham_digital_modes:fixed_dstar_decode_dequantize]
 pub fn dequantize(d: u64, state: &mut MbeDecoderState) -> DequantizedFrame {
     let raw = extract_raw_parameters(d);
     if classify_b0(raw.b0) == FrameKind::Tone {

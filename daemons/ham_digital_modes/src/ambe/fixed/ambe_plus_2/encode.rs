@@ -69,6 +69,7 @@ pub fn amplitude_field_q16(amplitude_q16: i64) -> u16 {
 
 /// `b0` for a pitch period of `p8 / 8` samples: the integer port of the float `quantize_pitch` (nearest entry of
 /// the 120-entry `W0_TABLE`, compared in `omega0` Q32 radians/sample, `omega0 = 2*pi*8/p8`).
+// [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encode_quantize_pitch_p8]
 pub fn quantize_pitch_p8(p8: u32) -> u32 {
     let p8 = p8.max(1) as i64;
     let target = (crate::ambe::fixed::dstar::encode::TWO_PI_Q32 * 8 + p8 / 2) / p8;

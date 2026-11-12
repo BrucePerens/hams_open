@@ -182,6 +182,7 @@ fn tone_round_trip_dtmf_and_one_kilohertz() {
 /// The integer pitch quantizer agrees with the float one on every refined period the analyzer can produce
 /// (`P = p8 / 8` samples, `21 <= P <= 122`, exact eighths).
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encode_quantize_pitch_p8]
 fn pitch_quantizer_matches_the_float_one_for_every_period() {
     use ham_digital_modes::ambe::fixed::ambe_plus_2::encode::quantize_pitch_p8;
     use ham_digital_modes::ambe::float::ambe_plus_2::quantize::quantize_pitch;

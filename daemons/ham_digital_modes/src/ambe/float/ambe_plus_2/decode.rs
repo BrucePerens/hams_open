@@ -85,6 +85,7 @@ pub enum FrameKind {
     Tone,
 }
 
+// [@ANCHOR: ham_digital_modes:float_ambe_plus_2_decode_classify_b0]
 pub fn classify_b0(b0: u32) -> FrameKind {
     match b0 {
         0..=119 => FrameKind::Speech,
@@ -968,6 +969,7 @@ mod tests {
     /// caller matching only on `FrameKind::Erasure` would previously drop real detected tones and
     /// Call Progress frames as if nothing had happened.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:float_ambe_plus_2_decode_classify_b0]
     fn classify_b0_separates_tone_bearing_subcodes_from_genuine_erasure() {
         assert_eq!(classify_b0(120), FrameKind::DetectedTone);
         assert_eq!(classify_b0(121), FrameKind::Erasure);
