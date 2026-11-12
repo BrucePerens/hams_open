@@ -247,7 +247,9 @@ Appends the evidence of a failed attempt to its error text: how long the block s
 
 The analysis window of a point is timed from the end of the block send (the send plus the 0x0d read), not from before it. The unit starts emitting when it has the block and the 0x0d read, and the send takes 7 to 27 ms: timing from before the send put the window start on the 60 ms level step whenever the send took over about 20 ms, which made 3 to 4 percent of attempts fail the steadiness check (measured 2026-10-29: every failed attempt had a send of 20.9 ms or more, no good one had more). The audio mark is taken right after the send ends, resends wait only 5 ms (`RETRY_PAUSE`) so they do not move the window, and an optional minimum gap between sends is honoured first. Errors are returned as strings and carry evidence via `with_evidence`.
 
-* The installer runs only the commands on its allow-list (with or without `sudo`), and refuses every other command before it is run. [@ANCHOR: vnwa_open_install_commands]
+### `install::allowed(argv: &[String], restart_audio: bool, root: Option<&Path>) -> bool` [@ANCHOR: vnwa_open_install_commands]
+
+The allow-list of commands the installer may run; everything else is refused before it is run. A leading `sudo` and `-n` are stripped, then the command must be exactly one of: `udevadm control --reload`; `systemctl --user restart wireplumber` (only when `restart_audio` is true); `install -D -m <mode> <src> <dest>` with `dest` one of the three managed files; `cp -p <src> <dest>` and `mv <src> <dest>` where both are managed files or their `.vnwa-backup` copies; and `rm -f <path>` of a managed file or its backup. A path counts as ours only when it is exactly a managed destination (or its backup), or, with `--root DIR`, that destination joined under DIR; a path that merely ends with one does not. Never `udevadm trigger` and no other audio-service action. Pure, no I/O. Security: this is the one gate between the installer and the system, with the `sudo -n` prefix never prompting. Tests: accepted and refused commands, including look-alike paths.
 
 ### `reserved::is_vnwa_codec(sys: &Path, usb_path: &str) -> bool` [@ANCHOR: vnwa_open_reserved_codec]
 
@@ -321,17 +323,49 @@ Lists the codec cards in sysfs: for each `class/sound/card*` it reads the card i
 
 Starts the captured AM at the vendor's defaults, a 500 Hz sine at 100 percent depth and -20 dB attenuation, on the caller's carrier frequency, by calling `modulate`. It is kept for the tests that compare the decoded sequence with the capture; the stalled status stage of the last request is not an error. Errors are those of `modulate` (carrier out of range, USB failure). Same side effects: the unit then modulates a low-level carrier until a USB reset or power cycle. Tests: the capture comparison in `generator.rs`.
 
-* A managed file lives under the staging root when one is given. [@ANCHOR: vnwa_open_install_path]
-* A managed file is missing, current or different from the packaged content. [@ANCHOR: vnwa_open_install_state]
-* A command runs under `sudo -n` unless there is a staging root or the user is root. [@ANCHOR: vnwa_open_install_sudo_prefix]
-* The installer runs a command only if it is on the allow-list, and logs it. [@ANCHOR: vnwa_open_install_do_run]
-* What the installer did is appended to its log. [@ANCHOR: vnwa_open_install_note]
-* The installer refuses while a codec is held open by a sweep or soak, unless forced. [@ANCHOR: vnwa_open_install_busy]
-* The dry run lists the files and commands, and changes nothing. [@ANCHOR: vnwa_open_install_plan]
-* The installer is run in install, check or uninstall mode, as a dry run or applied. [@ANCHOR: vnwa_open_install_run]
-* Installing backs up what it replaces, is idempotent, and undoes its steps on a failure midway. [@ANCHOR: vnwa_open_install_install]
-* Uninstalling removes what was installed and restores the backups. [@ANCHOR: vnwa_open_install_uninstall]
-* The production executor runs a real command and returns its failure text. [@ANCHOR: vnwa_open_install_process_exec]
+### `Installer::path(&self, dest: &str) -> PathBuf` (private) [@ANCHOR: vnwa_open_install_path]
+
+Maps a managed destination such as `/etc/udev/rules.d/60-vnwa-codecs.rules` to the real path to read or write: unchanged normally, or joined under the staging root (`--root DIR`, like DESTDIR, with the leading `/` removed) when one is given, so the installer can be tried and tested without touching `/etc`. Pure, no I/O. The allow-list uses the same joining, so a staged path is allowed only under the staging root.
+
+### `Installer::state(&self, m: &Managed) -> State` [@ANCHOR: vnwa_open_install_state]
+
+Classifies one managed file by reading it at its real path: `Missing` if it cannot be read, `Current` if its text equals the packaged content exactly, `Different` otherwise. It only reads. The plan, `--check` mode, idempotence (a `Current` file is left alone) and uninstall (a `Different` file is removed only with `--force` or restored from a backup) all depend on it. No locking, so a concurrent change by another program between this read and a later write is not detected.
+
+### `Installer::command(&self, argv: Vec<String>) -> Vec<String>` (private) [@ANCHOR: vnwa_open_install_sudo_prefix]
+
+Prefixes a command with `sudo -n` unless there is a staging root (`--root`) or the installer already runs as root. `-n` means sudo never prompts: without a rule it fails at once instead of hanging, and the error text says so. The prefixed command is what `allowed` checks and what `Exec` runs, and it is what the log records. Pure, no I/O.
+
+### `Installer::do_run(&self, argv: Vec<String>, done: &mut Vec<String>) -> Result<(), String>` (private) [@ANCHOR: vnwa_open_install_do_run]
+
+The single place the installer runs a command: it adds the sudo prefix, refuses with "refused to run a command that is not one of the installer's: ..." if `allowed` says no, runs it through the `Exec`, appends it to the log with `note`, and records it in `done`. An executor failure is returned as the error. Because every action goes through here, nothing outside the allow-list can run, and every command that did run is in the log.
+
+### `Installer::note(&self, line: &str)` (private) [@ANCHOR: vnwa_open_install_note]
+
+Appends a line, `<epoch seconds> <text>`, to the installer's log file (under `--root` at `var/log/vnwa_open-install.log`, otherwise `$XDG_STATE_HOME/vnwa_open/install.log`), creating its directory first. Failures to write the log are ignored: logging never blocks or fails an install. Called for every command run and for a failure with the number of steps undone. The log holds commands and paths only, no secrets.
+
+### `Installer::busy(&self) -> Vec<String>` [@ANCHOR: vnwa_open_install_busy]
+
+Lists the VNWA codecs currently held open, so system files are not changed in the middle of a sweep or soak. For each VNWA codec card (topology-checked with `reserved::is_vnwa_codec`) it finds the matching ALSA card in `/proc/asound` (by card id) and reads `pcm0c/sub0/status`; any status other than `closed` adds `"<card> (<first status line>)"`. Unreadable entries are ignored. Read-only. `run` refuses with the list in an apply run unless `--force` is given, because the udev and sound-server rules change how the codecs are claimed.
+
+### `Installer::plan(&self) -> String` [@ANCHOR: vnwa_open_install_plan]
+
+Builds the plan as text, which in a dry run is everything that happens: for each of the three managed files (WirePlumber rule, udev rule, helper script) its destination, mode and action (create, replace with the old file first copied to `.vnwa-backup`, unchanged, restore, remove, leave without `--force`, or the plain state in `--check`), the full content of each file to be written, and the follow-on commands (`udevadm control --reload` only if a udev file changed; and, only with `--restart-audio`, one `systemctl --user restart wireplumber` with a warning that it briefly drops every audio client). It also states that the rule takes effect at the next login or boot, or after replugging the unit. Read-only: it reads the files and changes nothing.
+
+### `Installer::run(&self) -> Result<String, String>` [@ANCHOR: vnwa_open_install_run]
+
+Does what was asked and returns the report. It always builds the plan; in `--check` mode, or without `--apply`, it returns the plan (with "DRY RUN: nothing was changed. Add --apply to do it.") and touches nothing. With `--apply` it first refuses, unless `--force`, if a measurement holds a codec open (`busy`), then runs `install` or `uninstall`. If a step fails it logs the failure and undoes the steps done so far in reverse (remove a file we created, restore a backup we made) and returns the error with "(the steps done before it were undone)". Errors are strings. Effects are limited to the three named files and `udevadm control --reload`; no network and no packages.
+
+### `Installer::install(&self, done: &mut Vec<(Managed, Undo)>) -> Result<(), String>` (private) [@ANCHOR: vnwa_open_install_install]
+
+Installs the three managed files that are not already current. For each, a file that exists and differs is first copied to `<dest>.vnwa-backup` (an existing backup is kept, never overwritten), then the packaged content is written to a private temporary directory and placed with `install -D -m <mode>`, and the undo action (remove, or restore the backup) is pushed on `done`. After the files, `udevadm control --reload` runs once if a udev file or the helper changed (not with a staging root), and `systemctl --user restart wireplumber` only with `--restart-audio`. It is idempotent: a second run finds every file `Current` and does nothing. The temporary directory is removed afterwards. Errors are strings from the commands.
+
+### `Installer::uninstall(&self) -> Result<(), String>` (private) [@ANCHOR: vnwa_open_install_uninstall]
+
+Reverses an install: for each managed file, if a `.vnwa-backup` exists it is moved back over the file; otherwise a file that is `Current` (ours) is removed, and a `Different` file is removed only with `--force`; anything else is left alone. Afterwards `udevadm control --reload` runs once if a udev file or the helper was touched (not with a staging root). Nothing outside the three named files is touched, and every command goes through `do_run` and its allow-list. Errors are strings from the commands, and `run` undoes the steps done so far.
+
+### `ProcessExec::run(&self, argv: &[String]) -> Result<(), String>` (`install.rs`) [@ANCHOR: vnwa_open_install_process_exec]
+
+The production `Exec`: runs one command with no shell (the first element is the program, the rest its arguments), waits for it, and returns Ok on exit status 0. Errors (strings): an empty command, a program that cannot be started (`"<command>: <os error>"`), or a non-zero exit, quoted as `"<command> failed: <stderr, trimmed>"`. It blocks until the process ends and has no timeout. It never decides what may run: the allow-list `allowed` is applied by `Installer::do_run` before this is called, and tests use a recording `Exec` so no test changes a system file. Side effects are those of the command (a `sudo -n` file install or `udevadm control --reload`).
 
 ### `Vna::meter_once(&mut self, center_hz: f64, point_ms: f64) -> Result<Reading, String>` (`meter.rs`, private) [@ANCHOR: vnwa_open_meter_once]
 
