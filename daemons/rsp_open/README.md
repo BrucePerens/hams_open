@@ -516,9 +516,18 @@ Validates settings for a model, then runs the open sequence on a transport. The 
 
 The ppb correction is clamped to +-1 000 000. Then `init()` writes the open sequence; any failure of it is returned and the transport is dropped. No locks. Test: `device.rs::rsp1a_open_sequence_matches_api_capture`.
 
-- [@ANCHOR: rsp_open:rsp_device_model_band] The band table of a model.
-- [@ANCHOR: rsp_open:rsp_device_model_table] The LNA-state table of a model for a band and port.
-- [@ANCHOR: rsp_open:rsp_device_check_model_options] Refuses settings a model does not have (RSP1A reference output, RSP2pro DAB notch).
+### `fn model_band(model: Model, rf_hz: u64) -> Result<Band, Error>` [@ANCHOR: rsp_open:rsp_device_model_band]
+
+Selects the band table of a model and looks the frequency up in it: for `Model::Rsp1a` it is `band_in(&rsp1a::BANDS, rf_hz)`, for every other model (the RSP2/RSP2pro, and the RSP1 in boot-ROM mode) it is `band_for(rf_hz)`, the RSP2pro table. `model` is by value, `rf_hz` is the RF frequency in Hz. Returns the `Band` (edges, tuner mode, first-LO plan, board filter code, gain table). Error: `Error::InvalidArgument` for a frequency outside 1 kHz-2 GHz. Pure; called at open and by `set_frequency`. Test: `device.rs::rsp1a_open_sequence_matches_api_capture`.
+
+### `fn model_table(model: Model, band: &Band, ant: Antenna) -> &'static [FrontEndStep]` [@ANCHOR: rsp_open:rsp_device_model_table]
+
+Returns the LNA-state table that applies to a model, band and antenna port: the RSP1A uses `rsp1a::lna_table(band.gain_table)` (which has a separate `AmDown` table and ignores the antenna, there being one port); the others use `lna_table(gain_table(band, ant))`, so the Hi-Z port below 60 MHz has its five-state table. The table length is the number of LNA states the user may select, so `set_gain`, `set_frequency`, `select_antenna`, `lna_states` and the open validation all use it. `band` is borrowed; the slice is static. Pure, no errors. Tests: `device.rs::rsp1a_gain_sequences`, `rsp1a_open_sequence_matches_api_capture`.
+
+### `fn check_model_options(model: Model, s: &Settings) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_check_model_options]
+
+Refuses settings that exist on one model only, at open: `ext_ref_out` on an RSP1A (it has no reference output) and `dab_notch` on an RSP2/RSP2pro (it has no DAB notch). Both give `Error::Unsupported` with a message naming the missing feature. `s` is borrowed; for other settings it returns `Ok(())`. Pure, called by `with_transport_state`; the runtime setters `set_ext_ref_out` and `set_dab_notch` apply the same rules. Test: `device.rs::rsp1a_toggles_match_capture`.
+
 ### `fn band_byte(&self) -> u8` [@ANCHOR: rsp_open:rsp_device_rsp_band_byte]
 
 Computes the port A value (byte 0x12) for the current band, antenna and LNA state: on the RSP1A `rsp1a::board_a_byte(band.filter, step.board_step)` (filter plus attenuator step); on the RSP2pro `board_band_byte(band.filter, antenna, ext_ref_out)` (antenna, filter and reference-output bit). Pure read of cached state, no I/O, no errors. Called by the full tune, the gain write (RSP1A) and `set_ext_ref_out`. Test: `device.rs::rsp1a_open_sequence_matches_api_capture`.
@@ -535,29 +544,101 @@ Gives the port B value the full tune writes between port A and the direction reg
 
 Writes one byte to a register of the board's MCP23S18 expander with vendor request 0x49 (`board_write_args`). `addr` is `MCP_GPIOA` (0x12), `MCP_GPIOB` (0x13), `MCP_IODIRA` (0x00) or `MCP_IODIRB` (0x01); `byte` is the value from `band_byte`, `front_byte`, `transient_b` or 0 for the direction registers. In boot-ROM mode nothing is sent (the ROM does not answer 0x49), but the bookkeeping still happens. When `addr` is GPIOB the byte is remembered in `last_b`, which the RSP1A reuses as the transient value of the next full tune. Error: the transport's `Error::Usb`. The caller holds `&mut self`, so writes are serialised. Test: `device.rs::rsp1a_open_sequence_matches_api_capture`.
 
-- [@ANCHOR: rsp_open:rsp_device_rsp_set_ext_ref_out] RSP2pro reference-clock output; refused on the RSP1A.
-- [@ANCHOR: rsp_open:rsp_device_rsp_write_gain] The gain write (r1, then the model's board bytes).
-- [@ANCHOR: rsp_open:rsp_device_rsp_set_dab_notch] RSP1A DAB notch (port B, then the gain write).
-- [@ANCHOR: rsp_open:rsp_device_rsp_set_bandwidth] IF bandwidth (RSP2pro r0 only; RSP1A the API's bandwidth sequence).
-- [@ANCHOR: rsp_open:rsp_device_rsp_write_bandwidth] The bandwidth writes themselves; `set_bandwidth` restores the cached bandwidth when they fail. The other setters (`set_gain`, `select_antenna`, `set_notch`, `set_dab_notch`, `set_bias_t`, `set_ext_ref_out`) likewise restore the cached value when their write fails, as `set_frequency` and `set_ppm` do, so a later full tune never builds port B (the bias-T bit included) from a value the hardware did not accept.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_init] The open sequence, in the order SDRplay's API uses.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_full_tune] The full tune sequence used on band, port and gain-table changes.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_set_frequency] Tunes (r3/r2 only inside a band, full sequence across bands), clamping the LNA state to the new band.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_set_gain] IF gain reduction and LNA state.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_select_antenna] Antenna A, B or Hi-Z (Hi-Z only below 60 MHz).
-- [@ANCHOR: rsp_open:rsp_device_check_antenna] Refuses Hi-Z at or above 60 MHz, and any port but A on the RSP1A.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_set_ppm] Reference correction applied to the ADC clock and the tuner PLL.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_set_sampling] Sample-rate and IF-mode changes, with the STOP/alt/restart sequence when the format changes.
+### `fn set_ext_ref_out(&mut self, on: bool) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_set_ext_ref_out]
+
+Enables or disables the RSP2pro's 24 MHz reference-clock output on its board port (GPA6, active low, so enabled means the bit is cleared). Checks the board is reachable (`need_board`, `Unsupported` in boot-ROM mode), refuses an RSP1A with `Error::Unsupported("the RSP1A has no reference output")`, caches the flag, writes port A (`band_byte`) with one request 0x49 and restores the old flag if that write fails, so later full tunes never rebuild port A from a value the hardware did not take. It does not interrupt a running stream. Tests: `device.rs::a_failed_board_write_leaves_the_cached_settings_unchanged_on_the_rsp2`, `rsp1a_toggles_match_capture`.
+
+### `fn write_gain(&mut self) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_write_gain]
+
+Writes the current gain state to the hardware: the tuner r1 word (`r1(if_gr_db, step)`: IF gain reduction plus the LNA state's mixer, LNA and AM-buffer bits), then on the RSP1A port A (the attenuator step is in its byte 0x12), then port B on both models. The RSP2pro therefore sends r1 and port B only; the RSP1A sends r1, port A, port B. It is the last step of every full tune, and also follows `set_dab_notch`, `set_gain`, sample-rate changes and bandwidth changes on the RSP1A. Errors: the transport's `Error::Usb`; the first failing write stops the sequence.
+
+Failure rule: the setters `set_bandwidth`, `set_gain`, `select_antenna`, `set_notch`, `set_dab_notch`, `set_bias_t` and `set_ext_ref_out` restore the cached value when their write fails, as `set_frequency` and `set_ppm` do, so a later full tune never builds port B (the bias-T bit included) from a value the hardware did not accept. Tests: `device.rs::rsp1a_gain_sequences`, `rsp1a_open_sequence_matches_api_capture`, `hil.rs::hil_rsp1a_toggles_and_gain`.
+
+### `pub fn set_dab_notch(&mut self, on: bool) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_set_dab_notch]
+
+Switches the RSP1A's DAB notch (`on = true` enables it). Sequence as the vendor API does it (PROTOCOL.md 2.7): port B (`front_byte`), then `write_gain`. Checks `need_board` first (boot-ROM mode gives `Unsupported`); on an RSP2/RSP2pro it returns `Error::Unsupported("the RSP2/RSP2pro has no DAB notch")`. The cached flag is restored if either write fails. Errors: `Unsupported` or the transport's `Usb`. Several requests (0x49, r1, 0x49), allowed while streaming without counter gaps in the tests. Tests: `device.rs::a_failed_write_leaves_the_dab_notch_and_bandwidth_unchanged_on_the_rsp1a`, `rsp1a_toggles_match_capture`, `hil.rs::hil_rsp1a_toggles_and_gain`.
+
+### `pub fn set_bandwidth(&mut self, bw: Bandwidth) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_set_bandwidth]
+
+Sets the tuner IF bandwidth (`Bandwidth::K200` to `M8`, codes 0-7). It caches `bw`, calls `write_bandwidth` and restores the old value if that fails. On the RSP2pro the write is r0 only (the sequence verified on hardware; the vendor API's longer sequence is a known difference, see Not implemented); on the RSP1A it is the API's full bandwidth sequence. Allowed while streaming. Error: the transport's `Error::Usb` or a PLL error from the RSP1A path. Tests: `device.rs::rsp1a_rate_and_bandwidth_sequences`, `rsp1a_only_observed_requests_are_emitted`, `a_failed_write_leaves_the_dab_notch_and_bandwidth_unchanged_on_the_rsp1a`.
+
+### `fn write_bandwidth(&mut self) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_write_bandwidth]
+
+Performs the writes for a bandwidth change from the cached settings. RSP2pro (and the boot-ROM RSP1): one tuner write of r0 (`r0_word`). RSP1A: the API's sequence, r0, port A, the transient port-B value, IODIRA and IODIRB zero, r3, r2, then `write_gain` (a full tune without r13/r14). `set_bandwidth` restores the cached bandwidth when these fail. The other setters (`set_gain`, `select_antenna`, `set_notch`, `set_dab_notch`, `set_bias_t`, `set_ext_ref_out`) likewise restore their cached value on a failed write, as `set_frequency` and `set_ppm` do, so a later full tune never builds port B (the bias-T bit included) from a value the hardware did not accept. Errors: PLL computation errors and transport `Usb` errors; stops at the first failure. Test: `device.rs::a_failed_write_leaves_the_dab_notch_and_bandwidth_unchanged_on_the_rsp1a`.
+
+### `fn init(&mut self) -> Result<(), Error>` (`rsp2_init`) [@ANCHOR: rsp_open:rsp_device_rsp2_init]
+
+The open sequence, in the order SDRplay's API uses (PROTOCOL.md 1.5, 2.4): register 0x08 open value, SET_INTERFACE to the stream's alt setting, two request-0x48 reads (skipped in boot-ROM mode; the last byte goes to `Rsp::read48`, meaning unknown), reg 0x05, tuner r14, reg 0x00, reg 0x02, tuner r5 (PLL modulus), reg 0x07 (stream format), tuner r6, a full tune (`full_tune`), then the ADC clock words reg 0x04 and reg 0x03 (with flag12 set). Called once from `with_transport_state`. Errors: any transport `Error::Usb` or encoding error aborts the open and the half-open receiver is dropped (its `Drop` runs the shutdown). No stream is started and bias-T stays off. Tests: `device.rs::open_sequence_matches_api_capture`, `open_sequence_matches_rsp2verify`.
+
+### `fn full_tune(&mut self) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_full_tune]
+
+The full tune sequence, used at open and on every band, antenna-port (Hi-Z) or gain-table change: it computes the PLL, then writes tuner r0 (mode, IF, bandwidth, LO plan), port A (`band_byte`), port B transient (`transient_b`), IODIRA and IODIRB 0, tuner r3, r2, r13, r14, and finally `write_gain`. A failure at any step returns the error with earlier writes already sent; callers (`set_frequency`, `select_antenna`) restore their cached state. Errors: PLL out of range, transport `Usb`. Takes `&mut self` and runs on the caller's thread; safe while streaming (tests check for no counter gaps). Tests: `device.rs::open_sequence_matches_api_capture`, `retune_sequences`, `rsp1a_retune_sequences`.
+
+### `pub fn set_frequency(&mut self, rf_hz: u64) -> Result<f64, Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_set_frequency]
+
+Tunes the receiver. Inside the current band it writes only tuner r3 and r2; if the band or the (clamped) LNA state changes it runs a full tune. If the new band has fewer LNA states than the current state, the state is clamped to the band's highest and `Settings::lna_state` shows it afterwards.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `rf_hz` | `u64` | RF frequency in Hz, 1000..=2_000_000_000 |
+
+Returns the RF frequency the LO words actually represent, in Hz (so the tuning error from the PLL grid is visible). Errors: `InvalidArgument` for an out-of-range frequency, for Hi-Z at 60 MHz or above (`check_antenna`), or a PLL failure; `Usb` from the writes. On any error the band, frequency and LNA state are restored to their previous cached values. Allowed while streaming. Tests: `device.rs::retune_sequences`, `lna_state_clamped_on_band_change`, `toggles_match_capture`, `rsp1a_retune_sequences`.
+
+### `pub fn set_gain(&mut self, if_gr_db: u8, lna_state: u8) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_set_gain]
+
+Sets the IF gain reduction and the LNA state, then writes them (`write_gain`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `if_gr_db` | `u8` | IF gain reduction in dB, 0..=59 (`IF_GR_MAX`) |
+| `lna_state` | `u8` | LNA state, 0 up to `lna_states() - 1` for the current band and port (RSP2pro 9/9/6/6, Hi-Z 5; RSP1A 7 to 10) |
+
+Errors: `InvalidArgument` for either value out of range (nothing is sent); `Usb` from the write. On a failed write both cached values are restored. More LNA state means more attenuation. Allowed while streaming. Tests: `device.rs::toggles_match_capture`, `lna_state_clamped_on_band_change`, `rsp1a_gain_sequences`.
+
+### `pub fn select_antenna(&mut self, ant: Antenna) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_select_antenna]
+
+Selects Antenna A, B or the Hi-Z port (Hi-Z only below 60 MHz). It checks the choice with `check_antenna` first (the RSP1A has one port, `Antenna::A`; others give `Unsupported`), returns `Ok(())` without sending anything if the port is unchanged, then needs the board (`Unsupported` in boot-ROM mode). Moving to or from Hi-Z changes the LNA table, so it clamps the LNA state and runs a full tune; between A and B it writes port A only. On failure the antenna and LNA state are restored. Errors: `Unsupported`, `InvalidArgument` (Hi-Z at or above 60 MHz), transport `Usb`. Allowed while streaming. Tests: `device.rs::toggles_match_capture`, `only_observed_requests_are_emitted`, `a_failed_board_write_leaves_the_cached_settings_unchanged_on_the_rsp2`.
+
+### `fn check_antenna(model: Model, ant: Antenna, rf_hz: u64) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_check_antenna]
+
+Validates an antenna choice for a model and frequency. The RSP1A and RSP1 have a single port, so any antenna but `Antenna::A` gives `Error::Unsupported`; on any model `Antenna::HiZ` at or above `HIZ_MAX_HZ` (60 MHz) gives `Error::InvalidArgument("the Hi-Z port works only below 60 MHz")`. Pure; called at open, by `set_frequency` (so a retune above 60 MHz with Hi-Z selected is refused before anything is written) and by `select_antenna`. Tests: `device.rs::toggles_match_capture`, `rsp1a_toggles_match_capture`.
+
+### `pub fn set_ppm(&mut self, ppm: f64) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_set_ppm]
+
+Applies a reference-oscillator correction. `ppm` is parts per million, positive when the reference runs fast, limited to |ppm| <= 1000 (`ppm_to_ppb`). The correction is applied to both the tuner PLL and the ADC clock, so it writes r3, r2 (recomputed for the same RF) and then MSi2500 reg 0x04 and 0x03 (flag12 set, as the API does on a ppm change). Errors: `InvalidArgument` for an invalid ppm, or an encoding failure; transport `Usb`. On failure the cached correction is restored. Allowed while streaming: +10 ppm moves the LO down 10 ppm, checked on hardware. Tests: `device.rs::toggles_match_capture`, `hil.rs::hil_live_reconfiguration`.
+
+### `fn set_sampling(&mut self, adc_hz: u32, if_mode: IfMode) -> Result<(), Error>` (behind `set_sample_rate` and `set_if_mode`) [@ANCHOR: rsp_open:rsp_device_rsp2_set_sampling]
+
+Changes the ADC clock and IF mode together. `set_sample_rate(adc_hz)` passes `IfMode::Zero`; `set_if_mode(mode)` passes the mode's own required clock (or the current clock for `Zero`). It first validates with `stream_config` and `adc_clock` (so nothing is sent for an unsupported combination). If the stream configuration and IF mode are unchanged it only rewrites reg 0x04 and 0x03 (no stream interruption). Otherwise: if streaming, STOP and cancel the transfers and sleep the settle time; write reg 0x03 (rate-change value), SET_INTERFACE to the new alt, reg 0x07, reg 0x04, reg 0x03; write tuner r0 when the IF mode changed; restart the stream with the same callback if it was running; then `write_gain`. Errors: `InvalidArgument` / `Unsupported` from validation (2.688-3 MHz and clocks above 10 MHz are refused; low-IF modes accept only their observed clock), transport `Usb`. A failure part-way can leave the stream stopped. Blocking for the settle time (300 ms on a real device). Tests: `device.rs::sample_rate_change_sequence`, `rsp1a_rate_and_bandwidth_sequences`, `hil.rs::hil_live_reconfiguration`.
+
 ### `pub fn output_rate(&self) -> f64` [@ANCHOR: rsp_open:rsp_device_rsp2_output_rate]
 
 Returns the sample rate of the delivered stream in samples per second: the ADC clock in `Settings::adc_hz`, halved when the current stream configuration decimates by 2 (the three low-IF modes: 450 kHz at 2 MHz gives 1 MS/s, 1.62 MHz at 6 MHz gives 3 MS/s, 2.048 MHz at 8.192 MHz gives 4.096 MS/s). The value is the nominal rate; it does not include the ppm correction. Pure read of the cached settings, no I/O, no errors. Test: `device.rs::sample_rate_change_sequence`.
 
-- [@ANCHOR: rsp_open:rsp_device_rsp2_sink_for] Packet sink that parses blocks and calls the user callback.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_restart_stream] (re)starts streaming: transfers first, then the START request.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_start_stream] Starts streaming to a callback.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_start_stream_iter] Starts streaming into a bounded channel and returns a blocking iterator.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_stop_stream] STOP request, then cancel the transfers.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_shutdown] Close: stop, bias-T off, tuner and ADC standby, alt 0, release (also on drop).
+### `fn sink_for(core: Arc<Mutex<Core>>) -> PacketSink` [@ANCHOR: rsp_open:rsp_device_rsp2_sink_for]
+
+Builds the packet sink that the transport calls for every isochronous packet. The returned boxed closure locks the shared `Core` (parser, user callback and scratch buffer), clears the buffer, runs `BlockParser::push_packet`, and when samples were produced calls the user callback with the sample slice and a copy of the running `StreamStats`. It runs on the USB event thread (the transport also holds its own sink mutex), so the callback must be quick and must not call back into the `Rsp`. A poisoned `Core` mutex makes the sink skip the packet silently. No errors. `restart_stream` creates it each time a stream (re)starts. Test: `device.rs::streaming_and_close`.
+
+### `fn restart_stream(&mut self) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_restart_stream]
+
+(Re)starts streaming with the stored callback. It needs a callback in `self.core` (else `Error::Stream("no stream callback")`), replaces the block parser with a fresh one for the current stream configuration (keeping the statistics so counts continue across a restart), submits the isochronous transfers with `start_iso(sink_for(core))` and only then sends the START request (0x43), so no samples are lost. If the START request fails the transfers are cancelled again so `streaming` stays false and a retry of `start_stream` works. Errors: `Stream`, transport `Usb`. Used by `start_stream` and `set_sampling`. Tests: `device.rs::streaming_and_close`, `a_failed_start_request_cancels_the_transfers_and_allows_a_retry`, `only_observed_requests_are_emitted`.
+
+### `pub fn start_stream<F>(&mut self, cb: F) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_start_stream]
+
+Starts streaming to a callback. `cb: FnMut(&[IqI16], &StreamStats) + Send + 'static` is called on the USB event thread with the samples of each packet (left-aligned 16-bit I/Q) and the running statistics, so it must return quickly (a slow callback makes the device overrun and shows up as counter gaps) and must not call the receiver. Error: `Error::Stream("already streaming")` if a stream runs; also the errors of `restart_stream` (including a failed START, after which the receiver is left stopped). The callback and parser are kept in a mutex-guarded `Core` shared with the USB thread. Tests: `device.rs::streaming_and_close`, `stream_iterator_delivers_packets`, `a_failed_start_request_cancels_the_transfers_and_allows_a_retry`.
+
+### `pub fn start_stream_iter(&mut self, capacity: usize) -> Result<SampleIter, Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_start_stream_iter]
+
+Starts streaming into a bounded channel and returns a `SampleIter` that the caller pulls from (`next_chunk` or the plain iterator). `capacity` is the channel size in chunks (at least 1, one chunk is one packet of up to 3 blocks). The producer side copies each packet's samples with a non-blocking `try_send`: when the consumer is behind and the channel is full the chunk is dropped and counted (`SampleIter::dropped`), so the USB thread never blocks. The iterator's wait timeout is 2 seconds. Errors as for `start_stream`. Test: `device.rs::stream_iterator_delivers_packets`.
+
+### `pub fn stop_stream(&mut self) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_stop_stream]
+
+Stops streaming: sends the STOP request (0x45) first, then cancels the transfers and joins the USB thread (`stop_iso`). Does nothing and returns `Ok(())` when not streaming, so it is safe to call twice. The streaming flag is cleared before either step, and both steps are attempted; the first error (`Error::Usb` from the request, or `Error::Stream` if the transfers would not cancel) is returned. A `SampleIter` sees `Error::Stream("stream ended")` afterwards. Blocking for the transfer cancellation. Test: `device.rs::streaming_and_close`.
+
+### `fn shutdown(&mut self) -> Result<(), Error>` (behind `close` and `Drop`) [@ANCHOR: rsp_open:rsp_device_rsp2_shutdown]
+
+Closes the receiver, once (a `closed` flag makes it idempotent; `close(self)` and the `Drop` implementation both call it). Sequence: stop the stream, force the cached bias-T off and write port B (DC off the antenna), tuner r12 close value, tuner r0 standby, reg 0x03 and reg 0x05 close values, SET_INTERFACE alt 0, release the interface. Every step is attempted even after a failure; the first error is returned from `close`, and ignored by `Drop`. In boot-ROM mode the port-B write only updates bookkeeping. It never sends a USB reset and never downloads firmware. Blocking. Tests: `device.rs::streaming_and_close`, `rsp1a_close_sequence`, `only_observed_requests_are_emitted`.
+
 
 ## Tests
 
