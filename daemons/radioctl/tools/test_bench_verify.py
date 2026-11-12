@@ -214,9 +214,14 @@ class BenchVerifyTests(unittest.TestCase):
         self.assertEqual(len(info["audio"]), 2)
         self.assertTrue(info["tools"]["radioctld"])
 
-    # Tests [@ANCHOR: radioctl_bench_verify] [@ANCHOR: radioctl_bench_run_all] [@ANCHOR: radioctl_bench_run_one]
-    # Tests [@ANCHOR: radioctl_bench_check_a5] [@ANCHOR: radioctl_bench_check_b2] [@ANCHOR: radioctl_bench_check_a6]
-    # Tests [@ANCHOR: radioctl_bench_check_a2] [@ANCHOR: radioctl_bench_check_b1]
+    # Tests [@ANCHOR: radioctl_bench_verify]
+    # Tests [@ANCHOR: radioctl_bench_run_all]
+    # Tests [@ANCHOR: radioctl_bench_run_one]
+    # Tests [@ANCHOR: radioctl_bench_check_a5]
+    # Tests [@ANCHOR: radioctl_bench_check_b2]
+    # Tests [@ANCHOR: radioctl_bench_check_a6]
+    # Tests [@ANCHOR: radioctl_bench_check_a2]
+    # Tests [@ANCHOR: radioctl_bench_check_b1]
     def test_a_default_run_never_transmits_and_writes_both_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = FakeEnv()
@@ -245,8 +250,12 @@ class BenchVerifyTests(unittest.TestCase):
             argv = [a for a in env.runs if "--description" in a][0]
             self.assertIn("--no-upload", argv)
 
-    # Tests [@ANCHOR: radioctl_bench_check_c1] [@ANCHOR: radioctl_bench_check_c2] [@ANCHOR: radioctl_bench_daemon_start]
-    # Tests [@ANCHOR: radioctl_bench_daemon_stop] [@ANCHOR: radioctl_bench_rigctl_cmd] [@ANCHOR: radioctl_bench_free_port]
+    # Tests [@ANCHOR: radioctl_bench_check_c1]
+    # Tests [@ANCHOR: radioctl_bench_check_c2]
+    # Tests [@ANCHOR: radioctl_bench_daemon_start]
+    # Tests [@ANCHOR: radioctl_bench_daemon_stop]
+    # Tests [@ANCHOR: radioctl_bench_rigctl_cmd]
+    # Tests [@ANCHOR: radioctl_bench_free_port]
     def test_a_confirmed_transmit_run_keys_briefly_and_the_watchdog_unkeys(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = FakeEnv()
@@ -310,7 +319,9 @@ class BenchVerifyTests(unittest.TestCase):
                 b.verify(env, opts(tmp, port="/dev/ttyUSB0"))
             self.assertEqual(env.procs, [])
 
-    # Tests [@ANCHOR: radioctl_bench_env_run] [@ANCHOR: radioctl_bench_env_read_text] [@ANCHOR: radioctl_bench_env_spawn]
+    # Tests [@ANCHOR: radioctl_bench_env_run]
+    # Tests [@ANCHOR: radioctl_bench_env_read_text]
+    # Tests [@ANCHOR: radioctl_bench_env_spawn]
     # Tests [@ANCHOR: radioctl_bench_env_ask]
     def test_the_real_env_runs_reads_and_spawns_without_touching_hardware(self):
         e = b.Env()
@@ -323,7 +334,9 @@ class BenchVerifyTests(unittest.TestCase):
         with mock.patch("builtins.input", return_value="x"):
             self.assertEqual(e.ask("?"), "x")
 
-    # Tests [@ANCHOR: radioctl_bench_cap_set] [@ANCHOR: radioctl_bench_render_report] [@ANCHOR: radioctl_bench_verified_proposal]
+    # Tests [@ANCHOR: radioctl_bench_cap_set]
+    # Tests [@ANCHOR: radioctl_bench_render_report]
+    # Tests [@ANCHOR: radioctl_bench_verified_proposal]
     def test_the_description_is_read_and_the_report_has_the_selftest_layout(self):
         name, caps = b.description_caps(b.RADIOCTL_DIR / "rigs", "icom-ic-7300")
         self.assertEqual(name, "Icom IC-7300")
