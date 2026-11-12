@@ -5,6 +5,7 @@ import json
 from odoo import api, fields, models
 
 from odoo.addons.distributed_redis_cache import redis_pool as _redis_pool_module
+from odoo.addons.zero_sudo import public_rpc
 
 
 SECRET_MASK = "********"
@@ -41,6 +42,7 @@ class ResConfigSettings(models.TransientModel):
 
     # [@ANCHOR: distributed_redis_cache:res_config_settings_set_values]
     # Verified by [@ANCHOR: test_b2_10_settings_save_invalidates_the_redis_pool_cache]
+    @public_rpc
     def set_values(self):
         # redis_pool.get_redis_connection() caches the resolved
         # (host, port, password) tuple per dbname in the module-level
