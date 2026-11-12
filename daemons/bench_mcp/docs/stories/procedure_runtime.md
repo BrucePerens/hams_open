@@ -381,9 +381,13 @@ Builds the structured description of how a procedure ended badly: it becomes the
 |---|---|---|
 | `error` | exception instance | The exception that ended the run (also a `SyntaxError` found when compiling, or `SystemExit`). Borrowed. |
 
-Returns a dict: `type` (class name), `message` (`str(error)`), `traceback` (formatted text, only the last 8000 characters), `frames` (a `frame_report` for each traceback entry whose file is `procedure.py`, outermost first; runtime and library frames are not listed), plus `context` for a `ProcedureFailure` (the context after a JSON round trip through `jsonable`), `tool` and `kind` for a `BenchError`, and `line` for a `SyntaxError`. The host adds its own `kind` (`exception`, `cancelled`, `timed_out`) afterwards. No I/O. Cannot fail on odd variables (uses `short`). Two oddities, reported rather than fixed: the context is encoded without `allow_nan=False` and then the text "NaN" is replaced by "null" everywhere, including inside strings, so a context string containing NaN is altered; and infinity in a context survives that round trip as a float and then makes the later `Wire.send` of the report raise `ValueError`, which ends the process with a crash instead of a report.
+Returns a dict: `type` (class name), `message` (`str(error)`), `traceback` (formatted text, only the last 8000 characters), `frames` (a `frame_report` for each traceback entry whose file is `procedure.py`, outermost first; runtime and library frames are not listed), plus `context` for a `ProcedureFailure` (the context after a JSON round trip through `jsonable`), `tool` and `kind` for a `BenchError`, and `line` for a `SyntaxError`. The host adds its own `kind` (`exception`, `cancelled`, `timed_out`) afterwards. No I/O. Cannot fail on odd variables (uses `short`). The context goes through `finite` (`proc_py_finite`), which replaces every NaN or infinity with `null` and leaves text alone, so the report can always be sent as strict JSON (an earlier version replaced the text "NaN" everywhere, including inside strings, and let infinity reach `Wire.send`, which then crashed the process instead of sending a report).
 
 See also: `proc_py_execute`, `proc_py_main`, `proc_py_failure_init`, `proc_py_frame_report`.
+
+### `finite` [@ANCHOR: proc_py_finite]
+
+`finite(value)`: returns the value with every float that is NaN or infinite replaced by `None`, walking dicts and lists; other values, including strings that contain the word NaN, are returned unchanged. Pure. Used by `failure_report` on the context of a `ProcedureFailure` after its JSON round trip, so the report can be sent by `Wire.send` (which refuses NaN and infinity). Test: `a_failure_context_with_infinity_or_the_word_nan_still_gives_a_report` in `src/procedure/tests.rs`.
 
 ## The audit hook (not a sandbox)
 

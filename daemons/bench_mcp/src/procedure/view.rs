@@ -61,7 +61,7 @@ pub fn result(cfg: &Config, id: &str) -> Result<Value, String> {
     let st = status(cfg, id)?;
     if let Ok(mut r) = store::read_json(&dir.join("result.json")) {
         r["finished"] = json!(true);
-        r["stderr_tail"] = json!(store::read_stream(&dir.join("stderr.txt"), 0, 2000).0);
+        r["stderr_tail"] = json!(store::read_tail(&dir.join("stderr.txt"), 2000));
         return Ok(r);
     }
     Ok(json!({

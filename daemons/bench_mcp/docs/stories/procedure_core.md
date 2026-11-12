@@ -388,7 +388,7 @@ See also: test `procedure/tests.rs` (cites `proc_view_output`); `proc_store_read
 
 Implements `bench_proc_result`. Signature: `pub fn result(cfg: &Config, id: &str) -> Result<Value, String>`. When `result.json` exists it is returned (the final value or the structured failure report: error, traceback, local variables of the procedure's own frames, the last tool calls, the emitted values and the safe-state outcomes) with `finished: true` and `stderr_tail` added. Otherwise it returns a record with `ok: false`, `value: null`, the state, `finished`, a `failure` of `{kind: state, message: note}` when the run is finished (null while running), what has been emitted so far and the `note` that no result exists yet, which also covers a run that ended before a result could be written. Errors: those of `status`. Read-only.
 
-Oddity, not changed here: `stderr_tail` is read with `read_stream(.., 0, 2000)`, which returns the first 2000 bytes of `stderr.txt`, not the last, so for a long error output it shows the beginning.
+`stderr_tail` is the last 2000 bytes of `stderr.txt` (`store::read_tail`; an earlier version read the first 2000 bytes, which for a long error output showed the beginning).
 
 See also: test `procedure/tests.rs` (cites `proc_view_result`); `proc_view_status`, `proc_safe_run`.
 
