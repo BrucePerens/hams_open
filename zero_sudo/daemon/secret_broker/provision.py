@@ -16,7 +16,7 @@ What it does (each step is printed; `--dry-run` prints and changes nothing):
    the file itself.
 3. `hams-secret-broker.service`, with `RuntimeDirectory=hams_secret_broker` (0750, group clients) for the socket
    and the usual sandboxing.
-4. With `--odoo-unit`, a drop-in for that unit setting `HAMS_SECRET_STORE=broker:<socket>` and adding the clients
+4. With `--odoo-unit`, a drop-in for that unit adding the clients
    group to it.
 
 Then: put `name=value` lines in the secrets file with `sudoedit`, list each secret's policy in `broker.json`, and
@@ -78,10 +78,12 @@ WantedBy=multi-user.target
 
 # [@ANCHOR: zero_sudo:secret_broker_provision_odoo_dropin_text]
 def odoo_dropin_text():
-    """The drop-in for the Odoo unit: the store spec and the clients group. Nothing secret."""
+    """The drop-in for the Odoo unit: the clients group, which can reach the broker's socket. Nothing secret. It does NOT
+    set `HAMS_SECRET_STORE`: that would replace the default store (`secret_store.default_spec`: the broker when its
+    socket exists, then systemd credentials, then the root-owned file) by a broker-only one, and the broker never hands
+    out a secret, so Odoo core's `database.secret` and VAPID key (`hams_core_secrets_from_store`) could no longer be read."""
     return f"""[Service]
 SupplementaryGroups={CLIENTS_GROUP}
-Environment=HAMS_SECRET_STORE=broker:{SOCKET}
 """
 
 

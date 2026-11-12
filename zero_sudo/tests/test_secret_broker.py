@@ -419,7 +419,7 @@ class TestSecretBrokerProvisioning(BaseCase):
             self.assertIn(line, unit)
         self.assertNotIn("EnvironmentFile", unit)  # no secret in the broker's environment either
         dropin = provision.odoo_dropin_text()
-        self.assertIn("HAMS_SECRET_STORE=broker:/run/hams_secret_broker/broker.sock", dropin)
+        self.assertNotIn("HAMS_SECRET_STORE", dropin)  # a broker-only spec would drop the Tier A store that core secrets need
         self.assertIn("SupplementaryGroups=hams_secret_broker_clients", dropin)
 
     def test_plan_keeps_the_secrets_file_root_only_and_never_overwrites_it(self):

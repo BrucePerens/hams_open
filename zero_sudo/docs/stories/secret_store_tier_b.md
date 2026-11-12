@@ -122,8 +122,11 @@ unix and inet, `MemoryDenyWriteExecute`, an empty capability bounding set, and `
 #### `odoo_dropin_text()` `[@ANCHOR: zero_sudo:secret_broker_provision_odoo_dropin_text]`
 
 No arguments. Returns the drop-in for the Odoo unit: `SupplementaryGroups=hams_secret_broker_clients` (so Odoo can reach the
-socket directory) and `Environment=HAMS_SECRET_STORE=broker:/run/hams_secret_broker/broker.sock` (so `default_store` finds the
-broker). Contains no secret. Written only when `--odoo-unit` is given; Odoo must be restarted to take it.
+socket directory) and nothing else. It deliberately does not set `HAMS_SECRET_STORE`: a broker-only spec would replace the default
+store (`default_spec`: the broker when its socket exists, then systemd credentials, then the root-owned file), and the broker never
+hands out a secret, so Odoo core's `database.secret` and VAPID key (`hams_core_secrets_from_store`) could no longer be read and the
+registry would refuse to load. With the socket present `default_spec` already lists the broker first and keeps the Tier A file.
+Contains no secret. Written only when `--odoo-unit` is given; Odoo must be restarted to take it.
 
 #### `main(argv=None)` `[@ANCHOR: zero_sudo:secret_broker_provision_main]`
 
