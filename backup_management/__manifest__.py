@@ -53,6 +53,7 @@
         ],
         "web.assets_unit_tests": [
             "backup_management/static/src/components/board/board.js",
+            "backup_management/static/tests/board.test.js",
         ],
         "web.assets_tests": [
             "backup_management/static/src/tests/tours/backup_dashboard.js",

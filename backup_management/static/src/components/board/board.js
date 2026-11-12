@@ -7,6 +7,7 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
 export class BackupBoard extends Component {
+    // [@ANCHOR: backup_management:js_board_setup]
     setup() {
         this.orm = useService("orm");
         this.website = useService("website");
@@ -23,16 +24,19 @@ export class BackupBoard extends Component {
         });
     }
 
+    // [@ANCHOR: backup_management:js_board_trigger_backup]
     async triggerBackup(configId) {
         await this.orm.call("backup.config", "action_trigger_backup", [configId]);
         await this.fetchData();
     }
 
+    // [@ANCHOR: backup_management:js_board_sync_snapshots]
     async syncSnapshots(configId) {
         await this.orm.call("backup.config", "action_sync_snapshots", [configId]);
         await this.fetchData();
     }
 
+    // [@ANCHOR: backup_management:js_board_fetch_data]
     async fetchData() {
         // Isolation by website_id
         const context = {};
