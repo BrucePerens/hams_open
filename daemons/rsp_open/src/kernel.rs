@@ -10,6 +10,7 @@ use crate::{DeviceInfo, Error};
 use std::path::{Path, PathBuf};
 
 /// A process that has the kernel driver's device node open.
+// [@ANCHOR: kernel_holder_struct]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Holder {
     pub pid: u32,
@@ -17,6 +18,7 @@ pub struct Holder {
 }
 
 /// A kernel driver bound to a receiver's interface 0.
+// [@ANCHOR: kernel_kernel_driver_use_struct]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KernelDriverUse {
     /// Driver name, e.g. `msi2500`.
@@ -148,6 +150,8 @@ fn holders_of(proc_: &Path, nodes: &[PathBuf]) -> (Vec<Holder>, bool) {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: kernel_holder_struct]
+    // Tests [@ANCHOR: kernel_kernel_driver_use_struct]
     use super::*;
     use std::os::unix::fs::symlink;
 

@@ -67,6 +67,7 @@ fn db(x: f64) -> f64 {
     10.0 * x.max(1e-30).log10()
 }
 
+// [@ANCHOR: rsp_measure_obs_struct]
 struct Obs {
     /// Spur power dBFS (integrated over +-4 bins, floor subtracted).
     spur_dbfs: f64,
@@ -406,4 +407,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     rx.close()?;
     println!("\nDone; receiver closed (tuner standby, bias-T off, alt 0).");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: rsp_measure_obs_struct]
+    #[test]
+    fn a_constant_block_measures_its_dc_and_peak_and_no_clipping() {
+        let x = vec![IqI16 { i: 100, q: -50 }; NFFT * 2];
+        let o = observe(&x, 2e6, None);
+        assert_eq!((o.mean_i, o.mean_q), (100.0, -50.0));
+        assert_eq!(o.max_abs, 100);
+        assert_eq!(o.clip_frac, 0.0);
+        assert!(o.rms < 1e-9, "a constant block has no AC power");
+        assert!(o.spur_dbfs.is_nan(), "no spur offset asked for");
+    }
 }

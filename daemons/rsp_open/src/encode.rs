@@ -15,6 +15,7 @@ pub const F_REF_HZ: u64 = 24_000_000;
 pub const REG_TUNER: u8 = 0x09;
 
 /// Antenna input.
+// [@ANCHOR: encode_antenna_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Antenna {
     A,
@@ -24,6 +25,7 @@ pub enum Antenna {
 }
 
 /// Tuner IF mode (MSi001 r0 bits 13:12, 1.6.1).
+// [@ANCHOR: encode_if_mode_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IfMode {
     Zero,
@@ -68,6 +70,7 @@ impl IfMode {
 }
 
 /// Tuner IF bandwidth (MSi001 r0 bits 16:14, 1.6.1).
+// [@ANCHOR: encode_bandwidth_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Bandwidth {
     K200,
@@ -115,6 +118,7 @@ impl Bandwidth {
 }
 
 /// MSi001 operating mode (band mode byte in r0 bits 11:4).
+// [@ANCHOR: encode_tuner_mode_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TunerMode {
     /// AM mode with the first IF of 120 MHz: up-conversion below 60 MHz,
@@ -141,6 +145,7 @@ impl TunerMode {
 }
 
 /// How the first local oscillator relates to RF in AM mode (1.6.2).
+// [@ANCHOR: encode_lo_plan_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoPlan {
     /// f_LO = f_RF (no first IF).
@@ -156,6 +161,7 @@ pub enum LoPlan {
 }
 
 /// Which LNA-state table applies (1.8).
+// [@ANCHOR: encode_gain_table_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GainTable {
     /// AM mode bands (below 60 MHz and, on the RSP2pro, 250-420 MHz) on Antenna A/B.
@@ -174,6 +180,7 @@ pub enum GainTable {
 }
 
 /// Everything that depends only on the RF frequency band (1.9).
+// [@ANCHOR: encode_band_struct]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Band {
     /// Inclusive lower edge, Hz.
@@ -393,6 +400,7 @@ pub const PLL_MOD: u64 = 3000;
 pub const PLL_SUB: u64 = 4096;
 
 /// Result of the PLL calculation.
+// [@ANCHOR: encode_pll_struct]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pll {
     pub n: u32,
@@ -474,6 +482,7 @@ pub fn r1(if_gr_db: u8, fe: &FrontEndStep) -> u32 {
 pub const IF_GR_MAX: u8 = 59;
 
 /// One LNA state: the board front-end step (byte 0x13 bits 5:2) and the tuner gain bits.
+// [@ANCHOR: encode_front_end_step_struct]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FrontEndStep {
     /// Byte 0x13 bits 5:2.
@@ -601,6 +610,7 @@ pub fn board_front_transient(bias_t: bool) -> u8 {
 }
 
 /// Stream sample format (1.7).
+// [@ANCHOR: encode_sample_format_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SampleFormat {
     /// 252 IQ pairs per block, 16-bit words carrying 14-bit signed samples.
@@ -626,6 +636,7 @@ impl SampleFormat {
 }
 
 /// Streaming configuration chosen for an ADC clock.
+// [@ANCHOR: encode_stream_config_struct]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StreamConfig {
     pub alt: u8,
@@ -734,6 +745,7 @@ pub fn stream_config(adc_hz: u32, if_mode: IfMode) -> Result<StreamConfig, Error
 }
 
 /// ADC clock synthesiser words (MSi2500 registers 0x03 and 0x04, 1.7).
+// [@ANCHOR: encode_adc_clock_struct]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AdcClock {
     pub reg03: u32,
@@ -833,6 +845,18 @@ pub fn ppm_to_ppb(ppm: f64) -> Result<i64, Error> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: encode_antenna_enum]
+    // Tests [@ANCHOR: encode_if_mode_enum]
+    // Tests [@ANCHOR: encode_bandwidth_enum]
+    // Tests [@ANCHOR: encode_tuner_mode_enum]
+    // Tests [@ANCHOR: encode_lo_plan_enum]
+    // Tests [@ANCHOR: encode_gain_table_enum]
+    // Tests [@ANCHOR: encode_band_struct]
+    // Tests [@ANCHOR: encode_pll_struct]
+    // Tests [@ANCHOR: encode_front_end_step_struct]
+    // Tests [@ANCHOR: encode_sample_format_enum]
+    // Tests [@ANCHOR: encode_stream_config_struct]
+    // Tests [@ANCHOR: encode_adc_clock_struct]
     use super::*;
 
     fn t2(rf: u64) -> (u32, u32) {

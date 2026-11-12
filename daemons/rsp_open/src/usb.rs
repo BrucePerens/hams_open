@@ -35,6 +35,7 @@ pub(crate) fn usb_err(what: &str, code: c_int) -> Error {
 }
 
 /// Owned libusb context.
+// [@ANCHOR: usb_context_struct]
 struct Context(*mut ffi::libusb_context);
 unsafe impl Send for Context {}
 unsafe impl Sync for Context {}
@@ -99,6 +100,7 @@ pub fn list_devices() -> Result<Vec<DeviceInfo>, Error> {
     })
 }
 
+// [@ANCHOR: usb_shared_struct]
 struct Shared {
     sink: Mutex<PacketSink>,
     running: AtomicBool,
@@ -107,6 +109,7 @@ struct Shared {
     pkt_len: usize,
 }
 
+// [@ANCHOR: usb_iso_stream_struct]
 struct IsoStream {
     shared: Arc<Shared>,
     transfers: Vec<*mut ffi::libusb_transfer>,
@@ -150,6 +153,7 @@ extern "system" fn iso_callback(t: *mut ffi::libusb_transfer) {
 }
 
 /// A claimed RSP over libusb.
+// [@ANCHOR: usb_usb_transport_struct]
 pub struct UsbTransport {
     ctx: Arc<Context>,
     handle: *mut ffi::libusb_device_handle,
@@ -160,6 +164,7 @@ pub struct UsbTransport {
 }
 unsafe impl Send for UsbTransport {}
 
+// [@ANCHOR: usb_ctx_ptr_struct]
 struct CtxPtr(*mut ffi::libusb_context);
 unsafe impl Send for CtxPtr {}
 
@@ -472,6 +477,11 @@ impl Drop for UsbTransport {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: usb_context_struct]
+    // Tests [@ANCHOR: usb_shared_struct]
+    // Tests [@ANCHOR: usb_iso_stream_struct]
+    // Tests [@ANCHOR: usb_usb_transport_struct]
+    // Tests [@ANCHOR: usb_ctx_ptr_struct]
     /// A USB reset of a wedged receiver hung its re-enumeration (docs/PROTOCOL.md 5.7): this
     /// crate must never issue one.
     #[test]

@@ -31,6 +31,7 @@ const REG00_OPEN: u32 = 0x000200;
 const REG02_OPEN: u32 = 0x004801;
 
 /// Current receiver settings.
+// [@ANCHOR: device_settings_struct]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
     pub rf_hz: u64,
@@ -69,8 +70,10 @@ impl Default for Settings {
     }
 }
 
+// [@ANCHOR: device_user_cb_struct]
 type UserCb = Box<dyn FnMut(&[IqI16], &StreamStats) + Send + 'static>;
 
+// [@ANCHOR: device_core_struct]
 struct Core {
     parser: BlockParser,
     cb: UserCb,
@@ -78,6 +81,7 @@ struct Core {
 }
 
 /// Blocking iterator over sample chunks (one chunk per isochronous packet).
+// [@ANCHOR: device_sample_iter_struct]
 pub struct SampleIter {
     rx: Receiver<Vec<IqI16>>,
     dropped: Arc<Mutex<u64>>,
@@ -115,6 +119,7 @@ impl Iterator for SampleIter {
 }
 
 /// An open receiver (RSP2/RSP2pro or RSP1A).
+// [@ANCHOR: device_rsp_struct]
 pub struct Rsp<T: Transport = UsbTransport> {
     t: T,
     model: Model,
@@ -139,6 +144,7 @@ pub struct Rsp<T: Transport = UsbTransport> {
 }
 
 /// The name the driver had when it drove only the RSP2pro; the same type.
+// [@ANCHOR: device_rsp2_struct]
 pub type Rsp2<T = UsbTransport> = Rsp<T>;
 
 impl Rsp<UsbTransport> {
@@ -983,6 +989,15 @@ fn check_antenna(model: Model, ant: Antenna, rf_hz: u64) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: transport_packet_sink_struct]
+    // Tests [@ANCHOR: transport_op_enum]
+    // Tests [@ANCHOR: transport_mock_transport_struct]
+    // Tests [@ANCHOR: device_settings_struct]
+    // Tests [@ANCHOR: device_user_cb_struct]
+    // Tests [@ANCHOR: device_core_struct]
+    // Tests [@ANCHOR: device_sample_iter_struct]
+    // Tests [@ANCHOR: device_rsp_struct]
+    // Tests [@ANCHOR: device_rsp2_struct]
     use super::*;
     use crate::stream::tests::s14_block;
     use crate::transport::{MockTransport, Op};

@@ -73,6 +73,7 @@ def wait_for(pred, timeout, step=0.2):
     return None
 
 
+# [@ANCHOR: power_cycle_stress_power]
 class Power:
     def __init__(self, a):
         self.a = a

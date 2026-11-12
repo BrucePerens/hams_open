@@ -5,6 +5,7 @@ use crate::Error;
 use std::sync::{Arc, Mutex};
 
 /// Callback receiving each completed isochronous packet's bytes (run on the USB event thread).
+// [@ANCHOR: transport_packet_sink_struct]
 pub type PacketSink = Box<dyn FnMut(&[u8]) + Send + 'static>;
 
 /// What the driver needs from a USB connection to the receiver.
@@ -30,6 +31,7 @@ pub trait Transport: Send {
 }
 
 /// One recorded operation.
+// [@ANCHOR: transport_op_enum]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
     Out {
@@ -51,6 +53,7 @@ pub enum Op {
 
 /// Mock transport: records every operation; `vendor_in` 0x48 answers 0x04 as the device does.
 /// Packets queued with [`MockTransport::queue_packet`] are delivered when streaming starts.
+// [@ANCHOR: transport_mock_transport_struct]
 #[derive(Clone, Default)]
 pub struct MockTransport {
     pub log: Arc<Mutex<Vec<Op>>>,

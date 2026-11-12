@@ -63,6 +63,7 @@ pub const BCD_RUNNING: u16 = 0x0207;
 
 /// Receiver models by USB product ID (public USB ID lists; only the RSP2 family and the RSP1A
 /// are driven).
+// [@ANCHOR: lib_model_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Model {
     Rsp1,
@@ -106,6 +107,7 @@ pub fn model_for_pid(pid: u16) -> Model {
 }
 
 /// A receiver found on the bus (from its device descriptor only).
+// [@ANCHOR: lib_device_info_struct]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeviceInfo {
     pub bus: u8,
@@ -123,6 +125,7 @@ impl DeviceInfo {
 }
 
 /// Errors.
+// [@ANCHOR: lib_error_enum]
 #[derive(Debug)]
 pub enum Error {
     /// No RSP found.
@@ -223,6 +226,9 @@ pub fn check_state(pid: u16, bcd_device: u16) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: lib_model_enum]
+    // Tests [@ANCHOR: lib_device_info_struct]
+    // Tests [@ANCHOR: lib_error_enum]
     use super::*;
 
     #[test]

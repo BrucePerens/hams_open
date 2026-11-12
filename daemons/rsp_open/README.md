@@ -651,3 +651,582 @@ cargo test -j 3 --release --test hil -- --ignored --nocapture --test-threads=1  
 The hardware tests skip a model that is not on the bus and open only PIDs 0x3010/0x3000 at
 bcdDevice 2.07. `cargo run --release --example rsp_spectrum -- 95.8 30 0 2 rsp1a` prints a
 coarse spectrum from an RSP1A.
+
+## Data structures
+
+Every data structure of this crate, explained in full (ADR 0113): purpose, fields, who builds and reads it. Each sits under the anchor on its definition in `src/` (and one in `examples/rsp_measure.rs`).
+
+### `Obs` [@ANCHOR: rsp_open:rsp_measure_obs_struct]
+
+**Purpose.** One measurement pass of the `rsp_measure` example: spur power, noise floor and sample statistics of a block of IQ samples.
+
+**Definition.** `struct Obs` (struct) in `daemons/rsp_open/examples/rsp_measure.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `spur_dbfs` | `f64` | Spur power dBFS (integrated over +-4 bins, floor subtracted). |
+| `floor_dbfs_hz` | `f64` | Noise floor, dBFS per Hz (median bin). |
+| `mean_i` | `f64` | Mean of the I samples (DC offset on I), in ADC counts. |
+| `mean_q` | `f64` | Mean of the Q samples (DC offset on Q), in ADC counts. |
+| `max_abs` | `u16` | Largest absolute sample value seen (full scale is 32768 for 16-bit samples). |
+| `clip_frac` | `f64` | Fraction of samples with I or Q at or above 32000 in absolute value. |
+| `rms` | `f64` | RMS amplitude about the mean (DC removed), in ADC counts. |
+
+**Used by.** `observe`, `rep` (functions whose signature names it).
+
+**Notes.** Example-local record of one measurement pass of `examples/rsp_measure.rs`; printed, never stored or sent.
+
+### `Settings` [@ANCHOR: rsp_open:device_settings_struct]
+
+**Purpose.** Current receiver settings.
+
+**Definition.** `pub struct Settings` (struct) in `daemons/rsp_open/src/device.rs`; derives `Clone`, `Debug`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `rf_hz` | `u64` | Tuned RF frequency in Hz (default 100 MHz); valid 1 kHz to 2 GHz. |
+| `antenna` | `Antenna` | Selected input (default `Antenna::A`). |
+| `if_mode` | `IfMode` | Tuner IF mode (default `IfMode::Zero`). |
+| `bandwidth` | `Bandwidth` | Tuner IF bandwidth (default `Bandwidth::K1536`). |
+| `adc_hz` | `u32` | ADC clock in Hz (default 2 MHz; accepted 2 to 10 MHz). |
+| `ppb` | `i64` | Reference-clock correction in parts per billion, positive meaning the reference runs fast (default 0). |
+| `if_gr_db` | `u8` | IF gain reduction in dB (default 40; the tuner word keeps 6 bits). |
+| `lna_state` | `u8` | LNA state index into the band's gain table (default 0, most gain); clamped to the table length. |
+| `notch` | `bool` | RSP2pro: the broadcast (MW/FM) notch. RSP1A: the FM/MW notch. |
+| `dab_notch` | `bool` | RSP1A only: the DAB notch. |
+| `bias_t` | `bool` | Bias-T power on the antenna port (RSP2/RSP2pro and RSP1A; default off). |
+| `ext_ref_out` | `bool` | RSP2pro only: 24 MHz reference output. |
+
+**Used by.** `check_model_options`, `open_1a`, `open_auto`, `open_boot_rom_filtered`, `open_boot_rom_model_with`, `open_boot_rom_with`, `open_device`, `open_mock` (functions whose signature names it).
+
+**Notes.** Held in `Rsp::s`; every setter updates it only after the write to the unit succeeded. `Settings::default()` is the state `Rsp::open` starts from.
+
+### `UserCb` [@ANCHOR: rsp_open:device_user_cb_struct]
+
+**Purpose.** The caller's sample callback (`Box<dyn FnMut(&[IqI16], &StreamStats) + Send>`), invoked from the USB event thread with each decoded chunk and the running statistics. Private alias; the public entry is `Rsp::start_callback`.
+
+**Definition.** `type UserCb = Box<dyn FnMut(&[IqI16], &StreamStats) + Send + 'static>;` (type) in `daemons/rsp_open/src/device.rs`.
+
+### `Core` [@ANCHOR: rsp_open:device_core_struct]
+
+**Purpose.** The state the packet sink works on: the block parser, the user callback and a scratch buffer, shared with the USB event thread. Private to `device.rs`.
+
+**Definition.** `struct Core` (struct) in `daemons/rsp_open/src/device.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `parser` | `BlockParser` | The `BlockParser` that turns packets into samples (and holds the stream statistics). |
+| `cb` | `UserCb` | The user callback (`UserCb`) given each decoded chunk. |
+| `buf` | `Vec<IqI16>` | Scratch vector of decoded samples, cleared for each packet. |
+
+**Used by.** `sink_for` (functions whose signature names it).
+
+**Notes.** Shared between the USB event thread and `Rsp` as `Arc<Mutex<Core>>`; the packet sink locks it for each packet.
+
+### `SampleIter` [@ANCHOR: rsp_open:device_sample_iter_struct]
+
+**Purpose.** Blocking iterator over sample chunks (one chunk per isochronous packet).
+
+**Definition.** `pub struct SampleIter` (struct) in `daemons/rsp_open/src/device.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `rx` | `Receiver<Vec<IqI16>>` | Channel receiver of decoded chunks, one per isochronous packet. |
+| `dropped` | `Arc<Mutex<u64>>` | Count of chunks the producer discarded because the channel was full (a slow consumer), read by `dropped()`. |
+| `timeout` | `Duration` | How long `next`/`recv` wait for a chunk before reporting `Error::Stalled` (2 s). |
+
+**Used by.** `start_stream_iter` (functions whose signature names it).
+
+**Notes.** Created by `Rsp::start_iter`; ends with `Error::Stream("stream ended")` when the producer side is gone.
+
+### `Rsp` [@ANCHOR: rsp_open:device_rsp_struct]
+
+**Purpose.** An open receiver (RSP2/RSP2pro or RSP1A).
+
+**Definition.** `pub struct Rsp<T: Transport = UsbTransport>` (struct) in `daemons/rsp_open/src/device.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `t` | `T` | The transport (`UsbTransport` or `MockTransport`) all device access goes through. |
+| `model` | `Model` | Which receiver this is (RSP2 family or RSP1A); selects the board's register layout. |
+| `last_b` | `Option<u8>` | Last value written to expander port B (byte 0x13), if any. |
+| `s` | `Settings` | The current `Settings`. |
+| `band` | `Band` | The `Band` row for the current RF frequency. |
+| `cfg` | `StreamConfig` | The `StreamConfig` chosen for the ADC clock and IF mode. |
+| `core` | `Option<Arc<Mutex<Core>>>` | The shared `Core` while a stream is running; `None` otherwise. |
+| `streaming` | `bool` | True between a successful start and stop. |
+| `closed` | `bool` | Set once `close` has run, so close is idempotent and a second call does nothing. |
+| `settle` | `Duration` | Pause after register writes that need the tuner to settle (zero in tests). |
+| `read48` | `u8` | Value returned by request 0x48 at open (API opens: 0x04 on the RSP2pro, 0x0d on the RSP1A; rsp_open opens of the RSP2pro: 0x09). Recorded only; its meaning is unknown. |
+| `serial` | `Option<String>` | Serial number string, if read. |
+| `boot_rom` | `bool` | Driven in the boot-ROM personality (bcdDevice 2.00, no firmware loaded). Requests 0x48 and 0x49 are not answered there, so the board (band filters, antenna, notch, bias-T, front-end steps) is not controlled; the tuner, ADC clock and stream are. |
+
+**Used by.** `open_1a`, `open_failing`, `retune_ops` (functions whose signature names it).
+
+**Notes.** One `Rsp` owns the interface; setters take `&mut self`. Dropping it closes the receiver. Receive only; no transmit path exists in this crate.
+
+### `Rsp2` [@ANCHOR: rsp_open:device_rsp2_struct]
+
+**Purpose.** The name the driver had when it drove only the RSP2pro; the same type. It is the same type as `Rsp`, kept so existing callers compile.
+
+**Definition.** `pub type Rsp2<T = UsbTransport> = Rsp<T>;` (type) in `daemons/rsp_open/src/device.rs`.
+
+**Used by.** `open_mock` (functions whose signature names it).
+
+### `Antenna` [@ANCHOR: rsp_open:encode_antenna_enum]
+
+**Purpose.** Antenna input.
+
+**Definition.** `pub enum Antenna` (enum) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `A` | - | Antenna port A (AM port 2 of the tuner). |
+| `B` | - | Antenna port B (AM port 2 of the tuner). |
+| `HiZ` | - | The high-impedance HF input (the MSi001's other AM input). Only below 60 MHz. |
+
+**Used by.** `board_band_byte`, `gain_table`, `mode_byte` (functions whose signature names it).
+
+### `IfMode` [@ANCHOR: rsp_open:encode_if_mode_enum]
+
+**Purpose.** Tuner IF mode (MSi001 r0 bits 13:12, 1.6.1).
+
+**Definition.** `pub enum IfMode` (enum) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Zero` | - | Zero-IF: complex baseband centred on the tuned frequency. |
+| `Low450k` | - | 450 kHz low IF (used with a 2.000 MHz ADC clock). |
+| `Low1620k` | - | 1.620 MHz low IF (used with a 6.000 MHz ADC clock). |
+| `Low2048k` | - | 2.048 MHz low IF (used with an 8.192 MHz ADC clock). |
+
+**Used by.** `r0`, `r0_plan`, `stream_config` (functions whose signature names it).
+
+### `Bandwidth` [@ANCHOR: rsp_open:encode_bandwidth_enum]
+
+**Purpose.** Tuner IF bandwidth (MSi001 r0 bits 16:14, 1.6.1).
+
+**Definition.** `pub enum Bandwidth` (enum) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `K200` | - | 200 kHz (code 0). |
+| `K300` | - | 300 kHz (code 1). |
+| `K600` | - | 600 kHz (code 2). |
+| `K1536` | - | 1.536 MHz (code 3). |
+| `M5` | - | 5 MHz (code 4). |
+| `M6` | - | 6 MHz (code 5). |
+| `M7` | - | 7 MHz (code 6). |
+| `M8` | - | 8 MHz (code 7). |
+
+**Used by.** `at_most`, `r0`, `r0_plan` (functions whose signature names it).
+
+**Notes.** The code is what goes into MSi001 r0 bits 16:14 (`Bandwidth::code`); `hz` gives the width and `at_most` picks the widest not above a request.
+
+### `TunerMode` [@ANCHOR: rsp_open:encode_tuner_mode_enum]
+
+**Purpose.** MSi001 operating mode (band mode byte in r0 bits 11:4).
+
+**Definition.** `pub enum TunerMode` (enum) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Am` | - | AM mode with the first IF of 120 MHz: up-conversion below 60 MHz, down-conversion from 250 MHz. Used with Antenna A/B (AM port 2). |
+| `Vhf` | - | VHF band mode, 60 to 120 MHz. |
+| `B3` | - | Band-3 mode, 120 to 250 MHz. |
+| `B45` | - | Bands 4 and 5 mode, 420 to 1000 MHz. |
+| `L` | - | L-band mode, 1000 MHz to 2 GHz. |
+
+**Used by.** `mode_byte` (functions whose signature names it).
+
+### `LoPlan` [@ANCHOR: rsp_open:encode_lo_plan_enum]
+
+**Purpose.** How the first local oscillator relates to RF in AM mode (1.6.2).
+
+**Definition.** `pub enum LoPlan` (enum) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Direct` | - | f_LO = f_RF (no first IF). |
+| `UpBy120M` | - | f_LO = f_RF + 120 MHz (below 60 MHz). |
+| `DownBy120M` | - | f_LO = f_RF - 120 MHz (250 to 375 MHz). |
+| `DownBy144M` | - | f_LO = f_RF - 144 MHz (about 375 to 395 MHz; first IF 144 MHz, r0 bits 19:17 = 1). |
+| `DownBy168M` | - | f_LO = f_RF - 168 MHz (about 395 to 420 MHz; first IF 168 MHz, r0 bits 19:17 = 0). |
+
+**Used by.** `r0_plan` (functions whose signature names it).
+
+### `GainTable` [@ANCHOR: rsp_open:encode_gain_table_enum]
+
+**Purpose.** Which LNA-state table applies (1.8).
+
+**Definition.** `pub enum GainTable` (enum) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Am` | - | AM mode bands (below 60 MHz and, on the RSP2pro, 250-420 MHz) on Antenna A/B. |
+| `AmDown` | - | AM-mode down-conversion band 250-420 MHz where it has its own table (RSP1A, 2.8). The RSP2pro's band table never selects it; its LNA table maps it to the AM table. |
+| `Vhf` | - | 60-250 MHz. |
+| `Uhf` | - | 420-1000 MHz. |
+| `L` | - | 1000-2000 MHz. |
+| `HiZ` | - | Hi-Z port below 60 MHz. |
+
+**Used by.** `gain_table`, `lna_table` (functions whose signature names it).
+
+### `Band` [@ANCHOR: rsp_open:encode_band_struct]
+
+**Purpose.** Everything that depends only on the RF frequency band (1.9).
+
+**Definition.** `pub struct Band` (struct) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `lo_hz` | `u64` | Inclusive lower edge, Hz. |
+| `hi_hz` | `u64` | Exclusive upper edge, Hz (the top band includes 2 GHz itself). |
+| `mode` | `TunerMode` | The tuner operating mode for this band. |
+| `lo_plan` | `LoPlan` | How the first LO relates to RF in this band. |
+| `filter` | `u8` | Byte 0x12 bits 5:3. |
+| `gain_table` | `GainTable` | Which LNA-state table applies. |
+
+**Used by.** `band_for`, `band_in`, `gain_table`, `lo_hz` (functions whose signature names it).
+
+**Notes.** The 13 rows of the constant `BANDS` cover 1 kHz to 2 GHz in order (the last row is a sentinel that never matches); `band_for` finds the row for a frequency.
+
+### `Pll` [@ANCHOR: rsp_open:encode_pll_struct]
+
+**Purpose.** Result of the PLL calculation.
+
+**Definition.** `pub struct Pll` (struct) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `n` | `u32` | Integer part of the VCO ratio (valid 1 to 255). |
+| `frac` | `u32` | Fractional part in units of 1/3000 of the 96 MHz reference. |
+| `sub` | `u32` | 12 further fraction bits (r3 bits 15:4). |
+| `r2` | `u32` | Tuner word for r2. |
+| `r3` | `u32` | Tuner word for r3. |
+| `lo_hz` | `f64` | LO actually produced by the words, Hz (nominal reference, before ppm). |
+
+**Used by.** `pll` (functions whose signature names it).
+
+**Notes.** Computed by `pll` from the first-LO frequency, divider and ppb correction; pure arithmetic, no device access.
+
+### `FrontEndStep` [@ANCHOR: rsp_open:encode_front_end_step_struct]
+
+**Purpose.** One LNA state: the board front-end step (byte 0x13 bits 5:2) and the tuner gain bits.
+
+**Definition.** `pub struct FrontEndStep` (struct) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `board_step` | `u8` | Byte 0x13 bits 5:2. |
+| `am_buf` | `u8` | r1 bits 11:10. |
+| `mixer_gr` | `bool` | Mixer gain reduction on (MSi001 r1 bit 12). |
+| `lna_gr` | `bool` | LNA gain reduction on (MSi001 r1 bit 13). |
+
+**Used by.** `lna_table`, `r1`, `st` (functions whose signature names it).
+
+### `SampleFormat` [@ANCHOR: rsp_open:encode_sample_format_enum]
+
+**Purpose.** Stream sample format (1.7).
+
+**Definition.** `pub enum SampleFormat` (enum) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `S14` | - | 252 IQ pairs per block, 16-bit words carrying 14-bit signed samples. |
+| `S12` | - | 336 IQ pairs per block, 12-bit packed. |
+| `S10x384` | - | 384 IQ pairs per block, 10-bit packed with a per-group shift. |
+| `S8` | - | 504 IQ pairs per block, 8-bit signed. |
+
+### `StreamConfig` [@ANCHOR: rsp_open:encode_stream_config_struct]
+
+**Purpose.** Streaming configuration chosen for an ADC clock.
+
+**Definition.** `pub struct StreamConfig` (struct) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `alt` | `u8` | USB alternate setting of interface 0 (1 carries three 1024-byte blocks per microframe, 2 carries one). |
+| `format` | `SampleFormat` | Sample wire format (`SampleFormat`). |
+| `reg07` | `u32` | MSi2500 register 0x07 value. |
+| `decim2` | `bool` | Device decimates by 2 (low-IF modes, reg 0x07 bit 10). |
+
+**Used by.** `stream_config` (functions whose signature names it).
+
+### `AdcClock` [@ANCHOR: rsp_open:encode_adc_clock_struct]
+
+**Purpose.** ADC clock synthesiser words (MSi2500 registers 0x03 and 0x04, 1.7).
+
+**Definition.** `pub struct AdcClock` (struct) in `daemons/rsp_open/src/encode.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `reg03` | `u32` | MSi2500 register 0x03 word (clock synthesiser integer part and flags). |
+| `reg04` | `u32` | MSi2500 register 0x04 word (fractional part). |
+| `actual_hz` | `f64` | Clock actually produced, Hz (nominal reference). |
+
+**Used by.** `adc_clock` (functions whose signature names it).
+
+**Notes.** Computed by `adc_clock` from the requested clock, ppb correction and the flag12 bit; limits `ADC_MIN_HZ` 2 MHz to `ADC_MAX_HZ` 10 MHz.
+
+### `Holder` [@ANCHOR: rsp_open:kernel_holder_struct]
+
+**Purpose.** A process that has the kernel driver's device node open.
+
+**Definition.** `pub struct Holder` (struct) in `daemons/rsp_open/src/kernel.rs`; derives `Clone`, `Debug`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `pid` | `u32` | Process id of the program holding the node open. |
+| `name` | `String` | Its process name as read from /proc. |
+
+**Used by.** `holders_of` (functions whose signature names it).
+
+### `KernelDriverUse` [@ANCHOR: rsp_open:kernel_kernel_driver_use_struct]
+
+**Purpose.** A kernel driver bound to a receiver's interface 0.
+
+**Definition.** `pub struct KernelDriverUse` (struct) in `daemons/rsp_open/src/kernel.rs`; derives `Clone`, `Debug`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `driver` | `String` | Driver name, e.g. `msi2500`. |
+| `nodes` | `Vec<PathBuf>` | `/dev` nodes created by that driver for this receiver, e.g. `/dev/swradio0`. |
+| `holders` | `Vec<Holder>` | Processes that have one of those nodes open (only processes this user may inspect). |
+| `holders_complete` | `bool` | False when some process could not be inspected (another user's), so `holders` may be incomplete. |
+
+**Used by.** `inspect`, `inspect_in`, `run` (functions whose signature names it).
+
+**Notes.** Produced by the kernel-driver check before the receiver is opened; when `holders` is not empty the open is refused with `Error::KernelDriverInUse` instead of taking the device from under that program.
+
+### `Model` [@ANCHOR: rsp_open:lib_model_enum]
+
+**Purpose.** Receiver models by USB product ID (public USB ID lists; only the RSP2 family and the RSP1A are driven).
+
+**Definition.** `pub enum Model` (enum) in `daemons/rsp_open/src/lib.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Rsp1` | - | SDRplay RSP1 (USB product id 0x2500); not driven. |
+| `Rsp1a` | - | RSP1A (0x3000); driven. |
+| `Rsp2` | - | RSP2 and RSP2pro (0x3010); driven. |
+| `RspDuo` | - | RSPduo (0x3020); not driven. |
+| `RspDx` | - | RSPdx (0x3030); not driven. |
+| `Rsp1b` | - | RSP1B (0x3050, unconfirmed id); not driven. |
+| `RspDxR2` | - | RSPdx-R2 (0x3060); not driven. |
+| `Unknown` | - | Any other SDRplay product id. |
+
+**Used by.** `model_for_pid` (functions whose signature names it).
+
+### `DeviceInfo` [@ANCHOR: rsp_open:lib_device_info_struct]
+
+**Purpose.** A receiver found on the bus (from its device descriptor only).
+
+**Definition.** `pub struct DeviceInfo` (struct) in `daemons/rsp_open/src/lib.rs`; derives `Clone`, `Debug`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `bus` | `u8` | USB bus number. |
+| `address` | `u8` | Device address on that bus. |
+| `vid` | `u16` | USB vendor id (SDRplay). |
+| `pid` | `u16` | USB product id. |
+| `bcd_device` | `u16` | Device release number: 2.00 means boot ROM (no firmware), 2.07 means firmware running. |
+| `model` | `Model` | The model derived from `pid` by `model_for_pid`. |
+
+### `Error` [@ANCHOR: rsp_open:lib_error_enum]
+
+**Purpose.** Errors.
+
+**Definition.** `pub enum Error` (enum) in `daemons/rsp_open/src/lib.rs`; derives `Debug`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `NotFound` | - | No RSP found. |
+| `NotRunning` | - | The receiver is in its boot-ROM state (bcdDevice 2.00). |
+| `UnknownState` | - | bcdDevice is neither 2.00 nor 2.07: an unknown personality, not driven. |
+| `UnsupportedModel` | - | An SDRplay receiver other than the RSP2 family and the RSP1A. |
+| `Usb` | - | A libusb call failed: `what` names the step, `code` is the libusb error code, `name` its libusb name. |
+| `InvalidArgument` | `(String)` | A caller argument was out of range; the text says which. |
+| `Unsupported` | `(String)` | A setting this driver does not implement (usually because its wire behaviour is not fully documented). |
+| `Stream` | `(String)` | A streaming problem (no callback, stream already ended); the text says which. |
+| `KernelDriverInUse` | - | A Linux kernel driver is bound to the receiver and a program is using its device node; the receiver is not taken from under that program. |
+| `Stalled` | - | The stream delivered no samples for `waited_ms` milliseconds. |
+
+**Used by.** `check_state` (functions whose signature names it).
+
+### `IqI16` [@ANCHOR: rsp_open:stream_iq_i16_struct]
+
+**Purpose.** One complex sample, I and Q left-aligned to 16 bits whatever the wire coding.
+
+**Definition.** `pub struct IqI16` (struct) in `daemons/rsp_open/src/stream.rs`; derives `Clone`, `Copy`, `Debug`, `Default`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `i` | `i16` | In-phase sample. |
+| `q` | `i16` | Quadrature sample. |
+
+**Used by.** `decode_payload`, `from`, `push_packet`, `to_f32` (functions whose signature names it).
+
+### `IqF32` [@ANCHOR: rsp_open:stream_iq_f32_struct]
+
+**Purpose.** One complex sample as floats in -1.0..1.0.
+
+**Definition.** `pub struct IqF32` (struct) in `daemons/rsp_open/src/stream.rs`; derives `Clone`, `Copy`, `Debug`, `Default`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `i` | `f32` | In-phase sample. |
+| `q` | `f32` | Quadrature sample. |
+
+**Used by.** `to_f32` (functions whose signature names it).
+
+### `StreamStats` [@ANCHOR: rsp_open:stream_stream_stats_struct]
+
+**Purpose.** Running statistics of a stream.
+
+**Definition.** `pub struct StreamStats` (struct) in `daemons/rsp_open/src/stream.rs`; derives `Clone`, `Copy`, `Debug`, `Default`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `blocks` | `u64` | Blocks accepted. |
+| `gaps` | `u64` | Discontinuities in the sample counter. |
+| `lost_samples` | `u64` | Samples (ADC clocks, in decimate-by-2 mode) missing according to the counter. |
+| `short_packets` | `u64` | Packets shorter than a block or with trailing bytes (ignored). |
+| `samples` | `u64` | Samples delivered. |
+
+### `BlockParser` [@ANCHOR: rsp_open:stream_block_parser_struct]
+
+**Purpose.** Splits packets into blocks, checks the counter and decodes samples.
+
+**Definition.** `pub struct BlockParser` (struct) in `daemons/rsp_open/src/stream.rs`; derives `Clone`, `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `format` | `SampleFormat` | The wire sample format being decoded. |
+| `step` | `u32` | Expected advance of the block sample counter per block (`StreamConfig::counter_step`). |
+| `next` | `Option<u32>` | The counter value the next block should carry; `None` before the first block, which sets the baseline. |
+| `stats` | `StreamStats` | Running `StreamStats`, public so callers can read it. |
+
+**Notes.** Fed one packet at a time by `push_packet`; a counter that does not match `next` adds to `gaps` and `lost_samples`.
+
+### `PacketSink` [@ANCHOR: rsp_open:transport_packet_sink_struct]
+
+**Purpose.** Callback receiving each completed isochronous packet's bytes (run on the USB event thread). It is the only way the USB event thread hands data to the rest of the driver.
+
+**Definition.** `pub type PacketSink = Box<dyn FnMut(&[u8]) + Send + 'static>;` (type) in `daemons/rsp_open/src/transport.rs`.
+
+**Used by.** `start_iso` (functions whose signature names it).
+
+### `Op` [@ANCHOR: rsp_open:transport_op_enum]
+
+**Purpose.** One recorded operation.
+
+**Definition.** `pub enum Op` (enum) in `daemons/rsp_open/src/transport.rs`; derives `Clone`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Out` | - | A vendor control OUT (`req`, `value`, `index`). |
+| `In` | - | A vendor control IN, with the length asked for. |
+| `Alt` | `(u8)` | Interface 0 alternate setting chosen. |
+| `IsoStart` | - | Isochronous streaming started. |
+| `IsoStop` | - | Isochronous streaming stopped. |
+| `Release` | - | Interface released and the handle closed. |
+
+**Used by.** `ops` (functions whose signature names it).
+
+### `MockTransport` [@ANCHOR: rsp_open:transport_mock_transport_struct]
+
+**Purpose.** Mock transport: records every operation; `vendor_in` 0x48 answers 0x04 as the device does. Packets queued with [`MockTransport::queue_packet`] are delivered when streaming starts.
+
+**Definition.** `pub struct MockTransport` (struct) in `daemons/rsp_open/src/transport.rs`; derives `Clone`, `Default`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `log` | `Arc<Mutex<Vec<Op>>>` | Every operation so far, in order. |
+| `packets` | `Arc<Mutex<Vec<Vec<u8>>>>` | Queued packet byte strings delivered to the sink when streaming starts. |
+
+**Notes.** Cloning shares both lists (they are behind `Arc`), so a test keeps one handle while the driver owns another.
+
+### `Context` [@ANCHOR: rsp_open:usb_context_struct]
+
+**Purpose.** Owned libusb context.
+
+**Definition.** `struct Context(*mut ffi::libusb_context);` (struct) in `daemons/rsp_open/src/usb.rs`.
+
+**Used by.** `new`, `with_devices` (functions whose signature names it).
+
+**Notes.** Created by `Context::new` (`libusb_init`) and freed by `libusb_exit` when dropped; shared between the transport and the device-scan helpers through an `Arc`. Not `Clone`; the raw pointer is never exposed outside `usb.rs`.
+
+### `Shared` [@ANCHOR: rsp_open:usb_shared_struct]
+
+**Purpose.** State shared between the libusb transfer callback (event thread) and the owner of an isochronous stream. Private to `usb.rs`.
+
+**Definition.** `struct Shared` (struct) in `daemons/rsp_open/src/usb.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `sink` | `Mutex<PacketSink>` | The packet sink the transfer callback calls, behind a mutex. |
+| `running` | `AtomicBool` | Cleared to stop resubmitting transfers. |
+| `active` | `AtomicUsize` | Number of transfers still in flight; streaming shuts down when it reaches zero. |
+| `packet_errors` | `AtomicU64` | Count of isochronous packets whose status was not completed. |
+| `pkt_len` | `usize` | Length in bytes reserved for each packet in a transfer buffer. |
+
+**Notes.** Shared by the libusb event thread and the owner of the `IsoStream` through an `Arc`; the fields are atomics or a mutex, so no further locking.
+
+### `IsoStream` [@ANCHOR: rsp_open:usb_iso_stream_struct]
+
+**Purpose.** One running isochronous receive stream: its transfers, buffers and the event-loop thread. Private to `usb.rs`.
+
+**Definition.** `struct IsoStream` (struct) in `daemons/rsp_open/src/usb.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `shared` | `Arc<Shared>` | The `Shared` state also seen by the callback. |
+| `transfers` | `Vec<*mut ffi::libusb_transfer>` | The libusb transfer objects submitted for the stream (raw pointers, freed at stop). |
+| `_buffers` | `Vec<Vec<u8>>` | The transfer buffers, kept alive until the transfers are freed (never read directly). |
+| `thread` | `Option<JoinHandle<()>>` | The thread that runs the libusb event loop; joined at stop. |
+
+**Notes.** `unsafe impl Send`; created by `start_iso` and removed by `stop_iso`.
+
+### `UsbTransport` [@ANCHOR: rsp_open:usb_usb_transport_struct]
+
+**Purpose.** A claimed RSP over libusb.
+
+**Definition.** `pub struct UsbTransport` (struct) in `daemons/rsp_open/src/usb.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ctx` | `Arc<Context>` | The libusb context, shared by `Arc` so it outlives the handle. |
+| `handle` | `*mut ffi::libusb_device_handle` | The claimed device handle (raw libusb pointer). |
+| `info` | `DeviceInfo` | The `DeviceInfo` of the opened receiver (public). |
+| `alt` | `u8` | Currently selected alternate setting. |
+| `stream` | `Option<IsoStream>` | The running isochronous stream, if any. |
+| `released` | `bool` | Set once the interface is released, so release and drop do it only once. |
+
+**Used by.** `open` (functions whose signature names it).
+
+**Notes.** `unsafe impl Send`; owns a claimed interface 0, released by `release` or on drop. One of the few places that touch real hardware.
+
+### `CtxPtr` [@ANCHOR: rsp_open:usb_ctx_ptr_struct]
+
+**Purpose.** A `Send` wrapper around the raw libusb context pointer so the event-loop thread can use it. Private to `usb.rs`.
+
+**Definition.** `struct CtxPtr(*mut ffi::libusb_context);` (struct) in `daemons/rsp_open/src/usb.rs`.
+
+**Notes.** The pointer stays valid because `UsbTransport` also holds the context in an `Arc<Context>`, which is freed only after the transport is dropped.
+
+### `Power` [@ANCHOR: rsp_open:power_cycle_stress_power]
+
+**Purpose.** The port-power switch of `tools/power_cycle_stress.py`: one object that turns the receiver's USB port off and on through the backend chosen on the command line. Defined in `daemons/rsp_open/tools/power_cycle_stress.py` as a plain class (a Python script, not part of the Rust crate).
+
+**Definition.** `class Power` with `__init__(self, a)` storing the parsed arguments, `off()`, `on()` and the private `_uhubctl(action)` and `_sysfs(val)`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `a` | `argparse.Namespace` | The parsed command line: `backend` (`none`, `uhubctl`, `sysfs`, `cmd`, `manual`), `location` and `port` (uhubctl hub and port), `uhubctl_extra` (extra uhubctl arguments, split on spaces), `sysfs_disable` (path written by the `sysfs` backend) and `cmd_off`/`cmd_on` (shell-split commands for the `cmd` backend). |
+
+**Invariants and behaviour.** `off()` and `on()` return `(ok, text)`: `ok` is True when the backend's command exited 0 (the last 300 characters of its output are returned as `text`); `none` always succeeds without doing anything, `manual` waits for Enter on the terminal, an unknown backend returns `(False, "unknown backend")`. The `sysfs` backend runs `sudo -n sh -c 'echo <0|1> > <sysfs_disable>'` and so needs passwordless sudo. Nothing is stored between calls; every call runs its command with a 30 s (uhubctl, cmd) or 10 s (sysfs) timeout.
+
+**Concurrency and safety.** Single-threaded script use only. The class switches port power on a machine the operator chose; it never transmits, and it is a bench tool, not part of the receiver driver.
+
+**Tests.** `tools/test_power_cycle_stress.py` covers the `none`, unknown, `uhubctl` and `cmd` backends with the command runner replaced.
