@@ -52,4 +52,39 @@ See https://docs.pytest.org/en/latest/logging.html#live-logs for more documentat
 
 # Quick tunnel readiness
 
-A quick tunnel's hostname is not reachable the moment cloudflared prints it. `wait_quicktunnel_ready(url)` in `util.py` [@ANCHOR: cloudflared:wait_quicktunnel_ready] waits for DNS to propagate and then calls `_wait_quicktunnel_ready(url)` [@ANCHOR: cloudflared:_wait_quicktunnel_ready], which requests the URL up to `MAX_RETRIES` times and fails unless it answers 200.
+A quick tunnel's hostname is not reachable the moment cloudflared prints it, so the quick-tunnel component tests wait for it with two helpers in `util.py`.
+
+### `wait_quicktunnel_ready` [@ANCHOR: cloudflared:wait_quicktunnel_ready]
+
+Gives a fresh quick tunnel's public hostname time to appear in DNS and then waits until it answers. It sleeps `DNS_BACKOFF_SECS` (15 seconds, from `constants.py`) first, because the name is created by Cloudflare when the tunnel starts and resolvers hold a negative answer for a while, then calls `_wait_quicktunnel_ready`. The tests `test_quick_tunnel` and `test_quick_tunnel_url` call it after `get_quicktunnel_url()`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `url` | str | full URL to probe, for example `https://<name>.trycloudflare.com`, or that URL plus `/ready` when the origin is the metrics server |
+
+**Returns:** Nothing.
+
+**Errors:** Whatever `_wait_quicktunnel_ready` raises once its attempts are used up (an `AssertionError` for a non-200 answer or a `requests` exception).
+
+**Special concerns:** Blocks the test thread for at least 15 seconds with a plain `sleep`, then up to the retry time of the second function. Network only: HTTPS GETs to the public internet through Cloudflare's edge, so it needs a working uplink and a running `cloudflared` started by the test. No files, no locks.
+
+**Signature:** `def wait_quicktunnel_ready(url)`
+
+**See also:** `test_quick_tunnel`, `test_quick_tunnel_url` in `test_quicktunnels.py`; `cloudflared:_wait_quicktunnel_ready`.
+### `_wait_quicktunnel_ready` [@ANCHOR: cloudflared:_wait_quicktunnel_ready]
+
+Probes a URL until it answers HTTP 200. It is wrapped in `retrying.retry` with `MAX_RETRIES` (5) attempts and a fixed `BACKOFF_SECS` (7 seconds) wait between them. Each attempt is a new `requests.Session` GET with a timeout of `DNS_BACKOFF_SECS` (15 seconds), and anything but status 200 fails the attempt.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `url` | str | URL to request |
+
+**Returns:** Nothing on success.
+
+**Errors:** After the fifth failed attempt the last exception propagates: an `AssertionError` reading `<url> returned <response>` for a non-200 answer, or a `requests` connection or timeout error.
+
+**Special concerns:** Worst case about 5 x 15 s of timeouts plus 4 x 7 s of waiting. Blocking, single-threaded, network only; the session is closed on exit. Do not call it directly from tests; use `wait_quicktunnel_ready`, which adds the DNS delay.
+
+**Signature:** `def _wait_quicktunnel_ready(url)` (decorated with `@retry(stop_max_attempt_number=MAX_RETRIES, wait_fixed=BACKOFF_SECS * 1000)`)
+
+**See also:** `test_quick_tunnel`, `test_quick_tunnel_url`; `cloudflared:wait_quicktunnel_ready`.
