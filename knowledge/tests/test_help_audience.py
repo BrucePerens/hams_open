@@ -217,6 +217,7 @@ class TestHelpAudience(HamsHttpCase):
         article = self.env["knowledge.article"].create({"name": "Hand Written"})
         self.assertEqual(article.audience, "member")
 
+    # Tests [@ANCHOR: knowledge_main_manual_library_controller]
     def test_12_a_lower_sequence_leads_its_help_heading(self):
         # Tests [@ANCHOR: knowledge:help_topics]
         Article = self.env["knowledge.article"]

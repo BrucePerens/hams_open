@@ -52,6 +52,7 @@ class TestKnowledgeArticleWebsiteSearch(HamsHttpCase):
             }
         )
 
+    # Tests [@ANCHOR: knowledge_website_website]
     def test_01_search_finds_a_published_article_by_title(self):
         # Tests [@ANCHOR: knowledge:COMM_search_get_detail]
 
