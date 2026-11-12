@@ -176,7 +176,12 @@ pub fn meter(cfg: &Config, args: &Value) -> Result<Value, String> {
 }
 
 /// The spectrum analyzer: power in the audio band around the LO at each frequency, in codec counts (uncalibrated). See `vnwa_open::spectrum`.
-pub fn spectrum(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String> {
+pub fn spectrum(
+    cfg: &Config,
+    args: &Value,
+    out_dir: &Path,
+    hw: &dyn crate::vna::Backend,
+) -> Result<Value, String> {
     // [@ANCHOR: bench_vna_spectrum]
     let start = num(args, "start_hz")?.ok_or("start_hz is required")?;
     let stop = num(args, "stop_hz")?.ok_or("stop_hz is required")?;
@@ -195,7 +200,7 @@ pub fn spectrum(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, Str
         Some(d) => vnwa_open::generator::level_for_attenuation(d)?,
     };
     vnwa_open::spectrum::spectrum_plan(start, stop, points, band, tracking)?;
-    let mut vna = Vna::open(Config {
+    let mut vna = hw.open_vna(Config {
         if_hz: vnwa_open::spectrum::SA_IF_HZ,
         point_ms: ms,
         ..cfg.clone()
@@ -341,14 +346,19 @@ pub fn store_standard(
     )
 }
 
-pub fn calibrate_measure(cfg: &Config, args: &Value, out: &Path) -> Result<Value, String> {
+pub fn calibrate_measure(
+    cfg: &Config,
+    args: &Value,
+    out: &Path,
+    hw: &dyn crate::vna::Backend,
+) -> Result<Value, String> {
     // [@ANCHOR: bench_vna_tools_calibrate_measure]
     let (session, standard, cable) = measure_names(args)?;
     let a = crate::vna::sweep_args(args, cfg)?;
     if a.points < 2 {
         return Err("a calibration needs at least 2 points".into());
     }
-    let mut vna = Vna::open(a.config.clone())?;
+    let mut vna = hw.open_vna(a.config.clone())?;
     let pts = vna.sweep(a.start_hz, a.stop_hz, a.points)?;
     let setup = Setup {
         if_hz: a.config.if_hz,
@@ -659,10 +669,54 @@ mod tests {
             json!({"session": "s s", "standard": "open", "cable": "c", "start_hz": 1e6, "stop_hz": 2e6, "points": 3}),
         ] {
             assert!(
-                calibrate_measure(&Config::default(), &bad, &dir).is_err(),
+                calibrate_measure(&Config::default(), &bad, &dir, &crate::vna::Hardware).is_err(),
                 "{bad}"
             );
         }
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Tests [@ANCHOR: bench_vna_spectrum]
+    #[test]
+    fn a_spectrum_reads_the_audio_band_of_each_point_from_a_simulated_unit() {
+        let dir = crate::testdir::TestDir::new("bench_vt_sa");
+        let sim = crate::vna::tests::Sim::healthy();
+        // The simulated audio is a 12 kHz tone of 8000 amplitude (5657 rms): a band to 15 kHz holds it, a band to 5 kHz does not.
+        let wide = json!({"start_hz": 1e6, "stop_hz": 1.01e6, "points": 3, "band_hz": 15000, "point_ms": 5});
+        let v = spectrum(&Config::default(), &wide, &dir, &sim).unwrap();
+        assert_eq!(v["points"], 3);
+        assert_eq!(v["tracking_generator"], false);
+        let rms = v["rows"][1]["rms_counts"].as_f64().unwrap();
+        assert!((rms - 5657.0).abs() < 300.0, "{v}");
+        let csv = std::fs::read_to_string(v["file"].as_str().unwrap()).unwrap();
+        assert_eq!(csv.lines().count(), 4, "{csv}");
+        let narrow = json!({"start_hz": 1e6, "stop_hz": 1.01e6, "points": 3, "band_hz": 5000, "point_ms": 5});
+        let v = spectrum(&Config::default(), &narrow, &dir, &sim).unwrap();
+        assert!(v["rows"][1]["rms_counts"].as_f64().unwrap() < 200.0, "{v}");
+        // Bad settings are refused before the unit is opened.
+        let opens = sim.vna_opens.get();
+        for bad in [
+            json!({"stop_hz": 2e6, "points": 3}),
+            json!({"start_hz": 1e6, "stop_hz": 2e6}),
+            json!({"start_hz": 1e6, "stop_hz": 2e6, "points": 1}),
+            json!({"start_hz": 1e6, "stop_hz": 2e6, "points": 3, "point_ms": 1}),
+            json!({"start_hz": 1e6, "stop_hz": 9e6, "points": 3, "band_hz": 5000}),
+        ] {
+            assert!(spectrum(&Config::default(), &bad, &dir, &sim).is_err(), "{bad}");
+        }
+        assert_eq!(sim.vna_opens.get(), opens);
+    }
+
+    // Tests [@ANCHOR: bench_vna_tools_calibrate_measure]
+    #[test]
+    fn a_standard_is_measured_with_a_simulated_unit_and_stored_for_the_build() {
+        let dir = crate::testdir::TestDir::new("bench_vt_cal");
+        let sim = crate::vna::tests::Sim::healthy();
+        let args = json!({"session": "s1", "standard": "open", "cable": "c1", "start_hz": 1e6, "stop_hz": 3e6, "points": 3, "point_ms": 5});
+        let v = calibrate_measure(&Config::default(), &args, &dir, &sim).unwrap();
+        assert_eq!(v["points"], 3);
+        assert_eq!(v["standard"], "open");
+        assert!(std::path::Path::new(v["file"].as_str().unwrap()).exists(), "{v}");
+        assert_eq!(sim.vna_opens.get(), 1);
     }
 }
