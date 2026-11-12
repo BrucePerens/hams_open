@@ -7,6 +7,7 @@ from odoo.addons.tenant_sites.utils import host_matches
 from .. import utils
 
 
+# [@ANCHOR: parking_parking_domain_parking_domain]
 class ParkingDomain(models.Model):
     _name = "parking.domain"
     _description = "Parked domain"

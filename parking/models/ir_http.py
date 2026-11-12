@@ -22,6 +22,7 @@ INQUIRY_GLOBAL_HOUR = 200
 MAX_BODY = 8192
 
 
+# [@ANCHOR: parking_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 

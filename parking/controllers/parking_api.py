@@ -15,6 +15,7 @@ from ..models.ir_http import INQUIRY_GLOBAL_HOUR, INQUIRY_PER_IP_HOUR, MAX_BODY
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: parking_parking_api_parking_controller]
 class ParkingController(http.Controller):
     # [@ANCHOR: parking:COMM_inquiry_controller]
     # Verified by [@ANCHOR: parking:COMM_test_inquiry_controller]
