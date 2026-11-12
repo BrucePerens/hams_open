@@ -4,6 +4,7 @@ from odoo import fields, models, _
 from odoo.exceptions import UserError
 
 from ..utils import dns_plan
+from odoo.addons.zero_sudo import public_rpc
 
 
 class CloudflareDnsPushWizard(models.TransientModel):
@@ -35,6 +36,7 @@ class CloudflareDnsPushWizard(models.TransientModel):
         }
 
     # [@ANCHOR: cloudflare:COMM_dns_push_wizard_plan]
+    @public_rpc
     def action_plan(self):
         self.ensure_one()
         records = self.record_ids or self.env["cloudflare.dns.record"].search([], limit=10000)
@@ -53,6 +55,7 @@ class CloudflareDnsPushWizard(models.TransientModel):
         return self._reopen()
 
     # [@ANCHOR: cloudflare:COMM_dns_push_wizard_apply]
+    @public_rpc
     def action_apply(self):
         self.ensure_one()
         if self.state != "planned" or not self.plan_hash:

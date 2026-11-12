@@ -5,6 +5,7 @@ from odoo import api, models, fields, _
 from odoo.exceptions import UserError
 import logging
 from ..utils.cloudflare_api import create_cfd_tunnel, get_cfd_tunnel_token
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -118,6 +119,7 @@ class ResConfigSettings(models.TransientModel):
         return res
 
     # [@ANCHOR: cloudflare:COMM_settings_set_values]
+    @public_rpc
     def set_values(self):
         super().set_values()
         # Publish the custom-ranges edit to Redis immediately, so it takes effect for the
@@ -126,6 +128,7 @@ class ResConfigSettings(models.TransientModel):
         self.env["cloudflare.trusted_ip_utils"]._publish_trusted_ip_ranges_to_redis()
 
     # [@ANCHOR: cloudflare:COMM_action_refresh_cloudflare_trusted_ip_ranges]
+    @public_rpc
     def action_refresh_cloudflare_trusted_ip_ranges(self):
         self.env["cloudflare.trusted_ip_utils"]._cron_refresh_cloudflare_ip_ranges()
         return {
@@ -134,6 +137,7 @@ class ResConfigSettings(models.TransientModel):
         }
 
     # [@ANCHOR: cloudflare:COMM_action_deploy_cf_waf]
+    @public_rpc
     def action_deploy_cf_waf(self):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_waf"
@@ -163,6 +167,7 @@ class ResConfigSettings(models.TransientModel):
             raise UserError(_("Failed to deploy WAF rules: %s") % msg)
 
     # [@ANCHOR: cloudflare:COMM_action_pull_cf_waf]
+    @public_rpc
     def action_pull_cf_waf(self):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_waf"
@@ -191,6 +196,7 @@ class ResConfigSettings(models.TransientModel):
         else:
             raise UserError(_("Failed to pull WAF rules: %s") % msg)
 
+    @public_rpc
     def action_generate_tunnel_command(self):
         # [@ANCHOR: COMM_cf_tunnel_setup]
 

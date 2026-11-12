@@ -2,6 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 
 from odoo import models, fields, _
+from odoo.addons.zero_sudo import public_rpc
 
 
 class CloudflareZoneSettings(models.Model):
@@ -84,6 +85,7 @@ class CloudflareCacheRule(models.Model):
     website_id = fields.Many2one("website", string="Website")
 
     # [@ANCHOR: cloudflare:COMM_cache_rule_plan_push]
+    @public_rpc
     def action_plan_cache_push(self):
         """Show what a push would do (reads Cloudflare, writes nothing)."""
         self.ensure_one()
@@ -102,6 +104,7 @@ class CloudflareCacheRule(models.Model):
         }
 
     # [@ANCHOR: cloudflare:COMM_cache_rule_push_to_cloudflare]
+    @public_rpc
     def action_push_to_cloudflare(self):
         """Push every active cache rule of this rule's website to Cloudflare."""
         self.ensure_one()
