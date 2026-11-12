@@ -37,6 +37,7 @@ pub const DUO_TUNE_READ: u8 = 0xF5;
 pub const DUO_STATUS: u8 = 0xFC;
 
 /// The supported units.
+// [@ANCHOR: protocol_model_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Model {
     /// FDM-DUO (also -DUOr): transceiver; only its receive interface is used here.
@@ -130,6 +131,7 @@ pub fn tuning_word(hz: f64, clock_hz: f64) -> u32 {
 }
 
 /// A control request ready for the transport.
+// [@ANCHOR: protocol_request_struct]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Request {
     /// `bRequest`.
@@ -225,6 +227,7 @@ pub fn is_send_request(r: &Request) -> bool {
 }
 
 /// Calibration read from the unit's EEPROM (dB offsets and a rate correction); unprogrammed (all-ones) values are absent.
+// [@ANCHOR: protocol_calibration_struct]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Calibration {
     /// Serial number text.

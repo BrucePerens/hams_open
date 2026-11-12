@@ -9,6 +9,7 @@ use crate::Error;
 use std::time::Duration;
 
 /// Options for [`Radio::open`].
+// [@ANCHOR: radio_open_options_struct]
 #[derive(Clone, Copy, Debug)]
 pub struct OpenOptions {
     /// What the caller says about the FPGA image.
@@ -18,6 +19,7 @@ pub struct OpenOptions {
 }
 
 /// Read counters.
+// [@ANCHOR: radio_stats_struct]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Stats {
     /// Complex samples decoded.
@@ -33,6 +35,7 @@ pub struct Stats {
 }
 
 /// What an open unit reports about itself.
+// [@ANCHOR: radio_device_info_struct]
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeviceInfo {
     /// The model.
@@ -44,6 +47,7 @@ pub struct DeviceInfo {
 }
 
 /// An open receiver.
+// [@ANCHOR: radio_radio_struct]
 pub struct Radio<T: Transport> {
     t: T,
     info: DeviceInfo,

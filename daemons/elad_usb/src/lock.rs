@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 /// Why a lock was not taken.
+// [@ANCHOR: lock_lock_error_enum]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LockError {
     /// Another process holds the receiver.
@@ -46,6 +47,7 @@ impl std::fmt::Display for LockError {
 impl std::error::Error for LockError {}
 
 /// A held lock on one receiver. Dropping it releases the receiver.
+// [@ANCHOR: lock_device_lock_struct]
 #[derive(Debug)]
 pub struct DeviceLock {
     file: File,
@@ -176,6 +178,7 @@ fn read_holder(file: &mut File) -> String {
 
 /// A transport that owns the receiver's lock: the lock lives exactly as long as the transport, so a `Radio` built on it keeps the
 /// receiver to itself until it is dropped.
+// [@ANCHOR: lock_locked_struct]
 pub struct Locked<T: Transport> {
     inner: T,
     _lock: DeviceLock,
@@ -218,6 +221,9 @@ impl<T: Transport> Transport for Locked<T> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: lock_lock_error_enum]
+    // Tests [@ANCHOR: lock_device_lock_struct]
+    // Tests [@ANCHOR: lock_locked_struct]
     use super::*;
 
     /// A scratch directory that removes itself when dropped, also while a failing test unwinds.

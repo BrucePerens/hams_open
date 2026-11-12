@@ -273,3 +273,285 @@ A locked transport's control OUT: passed straight through to the inner transport
 ### `Locked::bulk_in` (`lock.rs`, `Transport` impl) [@ANCHOR: elad_locked_bulk_in]
 
 A locked transport's bulk IN: passed straight through to the inner transport with the same buffer and timeout, returning the byte count or the inner error, including `Timeout`. Blocking behaviour is the inner transport's. The lock is held across the whole stream because the `Locked` value lives as long as the radio. No state. Tests: `a_locked_transport_keeps_the_lock_until_it_is_dropped_and_passes_requests_through` in `lock.rs`.
+
+## Data structures
+
+Every data structure of this crate, explained in full (ADR 0113): purpose, fields, who builds and reads it. Each sits under the anchor on its definition in `src/`.
+
+### `Format` [@ANCHOR: elad_usb:convert_format_enum]
+
+**Purpose.** The component width of a rate.
+
+**Definition.** `pub enum Format` (enum) in `daemons/elad_usb/src/convert.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `S32Le` | - | 32-bit signed little-endian components. |
+| `S16Le` | - | 16-bit signed little-endian components. |
+
+**Used by.** `for_rate`, `new` (functions whose signature names it).
+
+### `Decoder` [@ANCHOR: elad_usb:convert_decoder_struct]
+
+**Purpose.** Decodes a byte stream to interleaved I, Q floats in +-1.0, carrying a partial pair across calls.
+
+**Definition.** `pub struct Decoder` (struct) in `daemons/elad_usb/src/convert.rs`; derives `Debug`, `Clone`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `format` | `Format` | The component width of the stream (`Format`), fixed at construction. |
+| `carry` | `Vec<u8>` | Bytes of an incomplete I/Q pair left over from the last `push`; empty after `reset`. |
+
+**Used by.** `new` (functions whose signature names it).
+
+**Notes.** Created by `Decoder::new`, owned by one `Radio`; `push` takes `&mut self`, so there is no locking.
+
+### `FpgaState` [@ANCHOR: elad_usb:fpga_fpga_state_enum]
+
+**Purpose.** What the caller says about the FPGA.
+
+**Definition.** `pub enum FpgaState` (enum) in `daemons/elad_usb/src/fpga.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `LoadedExternally` | - | Someone else loaded the image for the sample rate in use (the caller's statement, not checked here). |
+| `Unknown` | - | Nothing is loaded or nothing is known. |
+
+### `LockError` [@ANCHOR: elad_usb:lock_lock_error_enum]
+
+**Purpose.** Why a lock was not taken.
+
+**Definition.** `pub enum LockError` (enum) in `daemons/elad_usb/src/lock.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Held` | - | Another process holds the receiver. |
+| `Io` | `(String)` | The lock file could not be created or locked. |
+
+**Used by.** `acquire`, `acquire_in`, `ensure_private_dir` (functions whose signature names it).
+
+### `DeviceLock` [@ANCHOR: elad_usb:lock_device_lock_struct]
+
+**Purpose.** A held lock on one receiver. Dropping it releases the receiver.
+
+**Definition.** `pub struct DeviceLock` (struct) in `daemons/elad_usb/src/lock.rs`; derives `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `file` | `File` | The open lock file; the advisory lock lives as long as this handle, so dropping the value releases the receiver. |
+| `path` | `PathBuf` | The lock file's path, reported in `LockError::Held` and used to write the holder's pid and name. |
+
+**Used by.** `acquire`, `acquire_in`, `new` (functions whose signature names it).
+
+**Notes.** Taken by `DeviceLock::acquire` in the directory from `lock_dir`; one lock per receiver. Not `Clone`.
+
+### `Locked` [@ANCHOR: elad_usb:lock_locked_struct]
+
+**Purpose.** A transport that owns the receiver's lock: the lock lives exactly as long as the transport, so a `Radio` built on it keeps the receiver to itself until it is dropped.
+
+**Definition.** `pub struct Locked<T: Transport>` (struct) in `daemons/elad_usb/src/lock.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `inner` | `T` | The wrapped transport that does the USB work. |
+| `_lock` | `DeviceLock` | The `DeviceLock` held for the lifetime of the transport (the leading underscore: it is never read, only kept alive). |
+
+**Used by.** `new` (functions whose signature names it).
+
+**Notes.** Forwards every `Transport` call to `inner`. Drop order releases the lock after the transport is closed.
+
+### `Model` [@ANCHOR: elad_usb:protocol_model_enum]
+
+**Purpose.** The supported units.
+
+**Definition.** `pub enum Model` (enum) in `daemons/elad_usb/src/protocol.rs`; derives `Clone`, `Copy`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Duo` | - | FDM-DUO (also -DUOr): transceiver; only its receive interface is used here. |
+| `S2` | - | FDM-S2. |
+| `S1` | - | FDM-S1. |
+
+**Used by.** `from_pid`, `level_offset_db` (functions whose signature names it).
+
+### `Request` [@ANCHOR: elad_usb:protocol_request_struct]
+
+**Purpose.** A control request ready for the transport.
+
+**Definition.** `pub struct Request` (struct) in `daemons/elad_usb/src/protocol.rs`; derives `Clone`, `Debug`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `request` | `u8` | `bRequest`. |
+| `value` | `u16` | `wValue`. |
+| `index` | `u16` | `wIndex`. |
+| `data` | `Vec<u8>` | Data stage bytes (OUT), empty when none. |
+
+**Used by.** `duo_request`, `is_receive_request`, `is_send_request`, `tune_request_duo`, `tune_request_sampler` (functions whose signature names it).
+
+### `Calibration` [@ANCHOR: elad_usb:protocol_calibration_struct]
+
+**Purpose.** Calibration read from the unit's EEPROM (dB offsets and a rate correction); unprogrammed (all-ones) values are absent.
+
+**Definition.** `pub struct Calibration` (struct) in `daemons/elad_usb/src/protocol.rs`; derives `Clone`, `Debug`, `Default`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `serial` | `Option<String>` | Serial number text. |
+| `hardware` | `Option<(u8, u8)>` | Hardware version (major, minor). |
+| `rate_correction_hz` | `Option<i32>` | Sample-rate correction in Hz. |
+| `global_db` | `Option<f32>` | Global level offset in dB. |
+| `lp_db` | `Option<f32>` | Low-pass filter level offset in dB. |
+| `att_db` | `Option<f32>` | Attenuator level offset in dB. |
+
+### `OpenOptions` [@ANCHOR: elad_usb:radio_open_options_struct]
+
+**Purpose.** Options for [`Radio::open`].
+
+**Definition.** `pub struct OpenOptions` (struct) in `daemons/elad_usb/src/radio.rs`; derives `Clone`, `Copy`, `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `fpga` | `FpgaState` | What the caller says about the FPGA image. |
+| `sample_rate_hz` | `u32` | The sample rate the unit streams at (for an FDM-DUO: the rate it is set to, which software cannot change). |
+
+**Used by.** `open` (functions whose signature names it).
+
+### `Stats` [@ANCHOR: elad_usb:radio_stats_struct]
+
+**Purpose.** Read counters.
+
+**Definition.** `pub struct Stats` (struct) in `daemons/elad_usb/src/radio.rs`; derives `Clone`, `Copy`, `Debug`, `Default`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `samples` | `u64` | Complex samples decoded. |
+| `bytes` | `u64` | Bytes read from the bulk endpoint. |
+| `reads` | `u64` | Bulk reads that returned data. |
+| `timeouts` | `u64` | Bulk reads that timed out. |
+| `empty_reads` | `u64` | Bulk reads that returned no bytes. |
+
+**Used by.** `stats` (functions whose signature names it).
+
+### `DeviceInfo` [@ANCHOR: elad_usb:radio_device_info_struct]
+
+**Purpose.** What an open unit reports about itself.
+
+**Definition.** `pub struct DeviceInfo` (struct) in `daemons/elad_usb/src/radio.rs`; derives `Clone`, `Debug`, `PartialEq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `model` | `Model` | The model. |
+| `firmware` | `Option<[u8; 2]>` | Firmware version, two bytes as the unit sends them. |
+| `calibration` | `Calibration` | EEPROM calibration. |
+
+**Used by.** `info` (functions whose signature names it).
+
+### `Radio` [@ANCHOR: elad_usb:radio_radio_struct]
+
+**Purpose.** An open receiver.
+
+**Definition.** `pub struct Radio<T: Transport>` (struct) in `daemons/elad_usb/src/radio.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `t` | `T` | The transport (real `UsbTransport` or `FakeTransport`) all device access goes through. |
+| `info` | `DeviceInfo` | The model, firmware and EEPROM calibration read at open. |
+| `rate_hz` | `u32` | The sample rate the caller declared in `OpenOptions`. |
+| `decoder` | `Decoder` | The byte-to-float converter for the rate's component format. |
+| `stats` | `Stats` | Running read counters. |
+| `tuned_hz` | `Option<f64>` | The last tuned frequency; `None` until the first `tune` (before which no front-end state is written to the unit). |
+| `filters` | `bool` | Wanted S2 band-filter state, recorded by `set_front_end`. |
+| `attenuator` | `bool` | Wanted S2 attenuator state, recorded by `set_front_end`. |
+| `streaming` | `bool` | True between a successful `start` and `stop`; `stop` is only sent when it is set, and dropping a streaming `Radio` stops the unit. |
+| `fpga` | `FpgaState` | The caller's statement about the FPGA image, checked before streaming. |
+| `bulk` | `Vec<u8>` | Scratch buffer a bulk read fills before decoding. |
+
+**Used by.** `open` (functions whose signature names it).
+
+**Notes.** Receive only; never transmits. All calls take `&mut self`, so one `Radio` is serialised by the borrow checker.
+
+### `Op` [@ANCHOR: elad_usb:transport_op_enum]
+
+**Purpose.** One recorded operation.
+
+**Definition.** `pub enum Op` (enum) in `daemons/elad_usb/src/transport.rs`; derives `Clone`, `Debug`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `In` | - | A control IN. |
+| `Out` | - | A control OUT. |
+
+**Used by.** `ops` (functions whose signature names it).
+
+### `ReplyTable` [@ANCHOR: elad_usb:transport_reply_table_struct]
+
+**Purpose.** Shared table from a control IN `(request, value)` to the bytes `FakeTransport` answers with (`Arc<Mutex<HashMap<(u8, u16), Vec<u8>>>>`). Private alias; test double only.
+
+**Definition.** `type ReplyTable = Arc<Mutex<HashMap<(u8, u16), Vec<u8>>>>;` (type) in `daemons/elad_usb/src/transport.rs`.
+
+### `BulkQueue` [@ANCHOR: elad_usb:transport_bulk_queue_struct]
+
+**Purpose.** Shared queue of results `FakeTransport` returns for bulk reads, oldest first (`Arc<Mutex<VecDeque<Result<Vec<u8>, Error>>>>`). Private alias; test double only.
+
+**Definition.** `type BulkQueue = Arc<Mutex<VecDeque<Result<Vec<u8>, Error>>>>;` (type) in `daemons/elad_usb/src/transport.rs`.
+
+### `FakeTransport` [@ANCHOR: elad_usb:transport_fake_transport_struct]
+
+**Purpose.** A scripted unit: records every control request, answers control IN by (request, value) from a table, and serves queued bulk chunks.
+
+**Definition.** `pub struct FakeTransport` (struct) in `daemons/elad_usb/src/transport.rs`; derives `Clone`, `Default`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `log` | `Arc<Mutex<Vec<Op>>>` | Everything sent, in order. |
+| `replies` | `ReplyTable` | The `ReplyTable` filled by `reply`. |
+| `chunks` | `BulkQueue` | The `BulkQueue` filled by `queue_bulk`. |
+
+**Used by.** `new` (functions whose signature names it).
+
+**Notes.** Cloning shares the log, the table and the queue (all behind `Arc`), so a test keeps one handle while the `Radio` owns another.
+
+### `Found` [@ANCHOR: elad_usb:usb_found_struct]
+
+**Purpose.** One ELAD receiver found on the bus.
+
+**Definition.** `pub struct Found` (struct) in `daemons/elad_usb/src/usb.rs`; derives `Clone`, `Debug`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `bus` | `u8` | Bus number. |
+| `address` | `u8` | Device address. |
+| `pid` | `u16` | Product id. |
+| `model` | `Model` | The model. |
+
+**Used by.** `find`, `is_found`, `open` (functions whose signature names it).
+
+### `UsbTransport` [@ANCHOR: elad_usb:usb_usb_transport_struct]
+
+**Purpose.** An open, claimed receiver.
+
+**Definition.** `pub struct UsbTransport` (struct) in `daemons/elad_usb/src/usb.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `handle` | `rusb::DeviceHandle<rusb::Context>` | The libusb device handle with interface 0 claimed and kernel-driver auto-detach requested. |
+
+**Used by.** `open` (functions whose signature names it).
+
+**Notes.** Opened by `UsbTransport::open` from a `Found`, after re-checking that the device at that bus address is still the receiver found. One of only a few places that touch real hardware.
+
+### `FailNthOut` [@ANCHOR: elad_usb:tests_fail_nth_out_struct]
+
+**Purpose.** A fake whose n-th control OUT (counting from 1) fails after the unit "accepted" it: the case a timed-out transfer makes.
+
+**Definition.** `struct FailNthOut` (struct) in `daemons/elad_usb/src/tests.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `inner` | `FakeTransport` | The scripted `FakeTransport` every call is forwarded to. |
+| `count` | `usize` | How many control OUTs have been sent so far. |
+| `fail_at` | `usize` | The 1-based control OUT that is reported as `Error::Timeout` after the inner fake has accepted it. |
+
+**Notes.** Test-only (`src/tests.rs`, compiled under `cfg(test)`): lets a test see what the driver does when a write reached the unit but the host saw a timeout.
+

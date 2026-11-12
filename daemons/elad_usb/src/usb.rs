@@ -18,6 +18,7 @@ fn err(e: rusb::Error) -> Error {
 }
 
 /// One ELAD receiver found on the bus.
+// [@ANCHOR: usb_found_struct]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Found {
     /// Bus number.
@@ -60,6 +61,7 @@ fn is_found(vendor_id: u16, product_id: u16, found: &Found) -> bool {
 }
 
 /// An open, claimed receiver.
+// [@ANCHOR: usb_usb_transport_struct]
 pub struct UsbTransport {
     handle: rusb::DeviceHandle<rusb::Context>,
 }
@@ -122,6 +124,8 @@ impl Transport for UsbTransport {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: usb_found_struct]
+    // Tests [@ANCHOR: usb_usb_transport_struct]
     use super::*;
 
     #[test]
