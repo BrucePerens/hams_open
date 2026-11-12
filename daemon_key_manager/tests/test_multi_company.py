@@ -110,6 +110,7 @@ class TestDaemonKeyRegistryMultiCompany(HamsTransactionCase):
             )
         )
 
+    # Tests [@ANCHOR: daemon_key_manager_res_company_res_company]
     def test_manager_group_has_intentional_cross_company_reach(self):
         seen = self.env["daemon.key.registry"].with_user(self.manager_user).search([])
         self.assertIn(self.record_a, seen)

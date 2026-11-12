@@ -5,6 +5,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: daemon_key_manager_res_users_res_users]
 class ResUsers(models.Model):
     _inherit = 'res.users'
 

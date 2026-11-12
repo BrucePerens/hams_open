@@ -103,6 +103,7 @@ class TestKeyRegistry(RealTransactionCase):
             except OSError as e:
                 _logger.warning("Cleanup error for %s: %s", directory, e)
 
+    # Tests [@ANCHOR: daemon_key_manager_key_registry_daemon_key_registry]
     def test_security_constraints(self):
         """Test that only service accounts and valid paths can be used."""
         # [@ANCHOR: COMM_test_security_constraints]
@@ -395,6 +396,7 @@ class TestKeyRegistry(RealTransactionCase):
             "Key should not be owned by SUPERUSER",
         )
 
+    # Tests [@ANCHOR: daemon_key_manager_res_users_res_users]
     def test_rotating_again_revokes_the_previous_key(self):
         # Tests [@ANCHOR: COMM_revoke_old_keys_logic]
 
