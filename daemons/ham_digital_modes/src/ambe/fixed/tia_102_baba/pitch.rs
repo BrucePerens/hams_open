@@ -83,6 +83,7 @@ pub struct PitchAnalysisFrame {
 
 impl PitchAnalysisFrame {
     /// `raw` is PCM; the window is centred on `raw[center]` and reads `center-160..=center+160`.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_new]
     pub fn new(raw: &[i32], center: usize) -> Self {
         // Eq. 9 lowpass, Q30 accumulator (|acc| < 2^46).
         let mut acc = [0i64; 301];
@@ -140,6 +141,7 @@ impl PitchAnalysisFrame {
 
     /// `E(P)` for candidate index `idx` (Q16.16). All-zero input scores the worst error, 1.0, as the
     /// float sibling does.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_function]
     pub fn error_function(&self, idx: usize) -> i32 {
         if self.silent || self.s_energy == 0 {
             return ONE_Q16 as i32;
@@ -177,6 +179,7 @@ impl PitchAnalysisFrame {
     }
 
     /// `E(P)` for every candidate.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_table]
     pub fn error_table(&self) -> ErrorTable {
         let mut t = [0i32; CANDIDATES];
         for (i, slot) in t.iter_mut().enumerate() {
@@ -214,6 +217,7 @@ fn tracking_range(ref_idx: usize) -> std::ops::RangeInclusive<usize> {
 
 /// Look-back tracking (5.1.2): returns `(index of P_hat_B, CE_B)`. `prev1`/`prev2` are the previous
 /// two frames' final `(pitch index, E)`; the defaults are `(DEFAULT_PITCH_INDEX, 0)`.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_back_pitch_tracking]
 pub fn look_back_pitch_tracking(
     table: &ErrorTable,
     prev1: (usize, i32),
@@ -237,6 +241,7 @@ pub fn look_back_pitch_tracking(
 
 /// Look-ahead tracking (5.1.3, including the smallest-sub-multiple-first order and the multiplied-out
 /// ratio tests of the float sibling): returns `(index of P_hat_F, CE_F)`.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_ahead_pitch_tracking]
 pub fn look_ahead_pitch_tracking(
     t0: &ErrorTable,
     t1: &ErrorTable,
@@ -297,6 +302,7 @@ pub fn look_ahead_pitch_tracking(
 }
 
 /// 5.1.4: choose between the backward and forward estimates; returns the pitch index.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_choose_initial_pitch_estimate]
 pub fn choose_initial_pitch_estimate(idx_b: usize, ce_b: i32, idx_f: usize, ce_f: i32) -> usize {
     if ce_b as i64 <= T_0_48 || ce_b <= ce_f {
         idx_b

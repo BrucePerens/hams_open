@@ -41,6 +41,7 @@ impl Default for AnalysisState {
 /// for harmonics `1..=l` at `pitch`, mirroring the float `analyze_at_pitch` exactly: bands from
 /// [`determine_voicing`] are padded to `K_hat(l)` with the last decision, then each harmonic takes
 /// its band's flag.
+// [@ANCHOR: ham_digital_modes:fixed_mbe_encode_analyze_at_pitch]
 pub fn analyze_at_pitch(
     refinement: &RefinementFrame,
     initial_pitch_error_q16: i32,

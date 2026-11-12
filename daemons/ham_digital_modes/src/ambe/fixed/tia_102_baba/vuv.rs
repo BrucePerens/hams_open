@@ -49,6 +49,7 @@ pub fn frequency_bands_count(l_hat: u32) -> u32 {
 }
 
 /// `sum |S_w(m)|^2 / W_R(0)^2` over bins `lo..=hi`, Q16.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_xi_over]
 fn xi_over(frame: &RefinementFrame, lo: i32, hi: i32) -> i128 {
     let wr0 = window_dft_16384_q22(0) as i128;
     let mut sum = 0i128; // Q20
@@ -97,6 +98,7 @@ pub fn energy_dependent_function_q30(xi_max: i128, xi_0: i128, xi_lf: i128, xi_h
 }
 
 /// `Theta_xi(k)` (Eq. 37) in Q30. `initial_pitch_error_q16` is `E(P_hat_I)`.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_threshold_q30]
 pub fn voicing_threshold_q30(
     k: u32,
     omega0_q30: i64,
@@ -132,6 +134,7 @@ fn ratio_q30(err: i128, real: i128) -> i64 {
 
 /// The band voicing measure `D_k` (Eq. 35/36) in Q30. A band with no spectral energy counts as
 /// maximally unvoiced (1.0), as in the float sibling.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_measure_q30]
 pub fn voicing_measure_q30(
     frame: &RefinementFrame,
     k: u32,
@@ -151,6 +154,7 @@ pub fn voicing_measure_q30(
 
 /// Per-band voicing decisions and the updated `xi_max` (Q16). `previous_v` are the previous frame's
 /// band decisions (empty for the first frame).
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_determine_voicing]
 pub fn determine_voicing(
     frame: &RefinementFrame,
     pitch: &Pitch,

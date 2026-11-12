@@ -152,6 +152,14 @@ fn report(label: &str, s: &Stats) {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_determine_voicing]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_measure_q30]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_threshold_q30]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_xi_over]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_estimate_spectral_amplitudes_q16]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_voiced_amplitude_q16]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_unvoiced_amplitude_q16]
+// Tests [@ANCHOR: ham_digital_modes:fixed_mbe_encode_analyze_at_pitch]
 fn fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0() {
     let mut s = Stats::default();
     run(false, &mut s);

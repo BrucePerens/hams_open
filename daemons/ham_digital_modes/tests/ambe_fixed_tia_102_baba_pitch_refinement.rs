@@ -23,6 +23,18 @@ fn env_usize(name: &str, default: usize) -> usize {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_new]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_table]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_choose_initial_pitch_estimate]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_ahead_pitch_tracking]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_back_pitch_tracking]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_RefinementFrame_new]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_RefinementFrame_sw_at]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_window_dft_16384_q22]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_harmonic_amplitude_q16]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_spectrum_error_and_energy]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_refine_pitch]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_refinement_error]
 fn fixed_pitch_refinement_matches_float_on_real_speech() {
     let max_frames = env_usize("MAX_FRAMES_PER_FILE", 500);
     let stride = env_usize("FRAME_STRIDE", 1);
