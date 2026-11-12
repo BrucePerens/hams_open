@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+// [@ANCHOR: radioctl_testdir_test_dir]
 pub struct TestDir(PathBuf);
 
 impl TestDir {

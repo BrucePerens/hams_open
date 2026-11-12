@@ -447,6 +447,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_record_new]
+    // Tests [@ANCHOR: radioctl_testdir_test_dir]
     // Tests [@ANCHOR: radioctl_station_record_validate]
     // Tests [@ANCHOR: radioctl_station_record_cached]
     // Tests [@ANCHOR: radioctl_station_store_new]
