@@ -1269,3 +1269,490 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Returns.** The bound, close-on-exec descriptor, owned by the caller. **Errors.** `io::Error` from `socket`, `setsockopt` or `bind` (address in use, permission denied for a privileged port when the broker has no `CAP_NET_BIND_SERVICE`); `EAFNOSUPPORT` on the IPv6 socket falls back to IPv4. **Side effects.** Takes the port system-wide until the descriptor is closed. **Tests.** `a_bound_udp_descriptor_is_a_real_socket_on_the_port_and_the_port_is_then_taken` (os.rs).
 
+
+## Data structures
+
+Every data structure of the broker, explained in full (ADR 0113): purpose, fields, who builds and reads it. Each sits under the anchor on its definition in `src/`.
+
+### `AuditEvent` [@ANCHOR: relay_broker:audit_audit_event_struct]
+
+**Purpose.** One audit record.
+
+**Definition.** `pub struct AuditEvent` (struct) in `daemons/relay_broker/src/audit.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `uid` | `u32` | Peer UID (`u32::MAX` when unknown). |
+| `pid` | `i32` | Peer PID. |
+| `action` | `&'static str` | The action name (`open_device`, `list_devices`, `grant_group`, `provision_groups`, `peer_rejected`, `malformed`). |
+| `outcome` | `&'static str` | `allowed`, `denied`, `dry_run`, `applied`, `rate_limited`, `failed`, `rejected`. |
+| `detail` | `String` | Free text, bounded by the caller (a path, a reason). |
+
+**Used by.** `record`, `record_at` (functions whose signature names it).
+
+### `AuditLog` [@ANCHOR: relay_broker:audit_audit_log_struct]
+
+**Purpose.** An open append-only log.
+
+**Definition.** `pub struct AuditLog` (struct) in `daemons/relay_broker/src/audit.rs`; derives `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `file` | `Option<File>` | The open log file (append mode, created with mode 0600); `None` when logging to a file is disabled (tests only). |
+| `path` | `Option<PathBuf>` | Where the file lives, kept so it can be rotated to `<path>.1`; `None` with no file. |
+| `size` | `u64` | Bytes in the file now (starts at the existing length, grows with every record). |
+| `max_bytes` | `u64` | The rotation cap, `MAX_LOG_BYTES`; reaching it rotates the file. |
+| `last_rejection` | `HashMap<u32, u64>` | UID to Unix time of the last `peer_rejected` line written, so a turned-away peer is logged at most once a minute. |
+
+**Used by.** `open` (functions whose signature names it).
+
+**Notes.** Created by `AuditLog::open`, written by `record`/`record_at`; owned by the `Broker` and used under the connection handling that owns the broker, so it needs no lock of its own. A write failure is reported to the caller but never stops the broker.
+
+### `AllowList` [@ANCHOR: relay_broker:auth_allow_list_struct]
+
+**Purpose.** The allow-list.
+
+**Definition.** `pub struct AllowList` (struct) in `daemons/relay_broker/src/auth.rs`; derives `Debug`, `Clone`, `Default`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `uids` | `Vec<u32>` | UIDs allowed. |
+| `gids` | `Vec<u32>` | GIDs allowed (the peer's primary GID). |
+
+### `Broker` [@ANCHOR: relay_broker:broker_broker_struct]
+
+**Purpose.** The broker state shared by every connection.
+
+**Definition.** `pub struct Broker` (struct) in `daemons/relay_broker/src/broker.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `allow` | `AllowList` | Peers allowed in. |
+| `policy` | `Policy` | The open policy. |
+| `apply_groups` | `bool` | Whether group changes are applied or only reported. |
+| `bind_udp_ports` | `Vec<u16>` | UDP ports `bind_udp` may bind (default: 123, the time service). |
+| `hub_enabled` | `bool` | Whether the hub requests are served at all (default: refused). |
+| `update_package` | `bool` | Whether `update_package` is served (default: refused). |
+| `set_time` | `bool` | Whether `set_system_time` is served (default: refused). |
+| `time_guard` | `TimeGuard` | The clock-step ceilings and circuit breaker (`TimeGuard`). |
+| `rate` | `RateLimiter` | The per-UID token buckets (`RateLimiter`). |
+| `audit` | `AuditLog` | The audit log every decision is written to (`AuditLog`). |
+| `os` | `Box<dyn Os + Send>` | The operating-system layer (`Os`, normally `LinuxOs`; a fake in tests) that opens nodes, reads sysfs, edits groups and sets the clock. |
+
+**Used by.** `new` (functions whose signature names it).
+
+**Notes.** Built once from `Config` by `Broker::new` and passed by `&mut` to `serve_connection` for each peer connection. The private members are not public API; the public fields are the policy the config set.
+
+### `Args` [@ANCHOR: relay_broker:cli_args_struct]
+
+**Purpose.** Command-line options.
+
+**Definition.** `struct Args` (struct) in `daemons/relay_broker/src/cli.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `config` | `PathBuf` | Path of the root-owned config file (default `/etc/hams-relay-broker.conf`). |
+| `socket` | `Option<PathBuf>` | Optional socket path overriding the default (`None` keeps the socket-activation descriptor). |
+| `config_owner` | `u32` | The UID the config file must belong to (default 0, root). |
+
+**Used by.** `parse_args` (functions whose signature names it).
+
+**Notes.** Built by `parse_args` from argv; unknown options are an error. Private to the binary's command-line handling.
+
+### `Config` [@ANCHOR: relay_broker:config_config_struct]
+
+**Purpose.** The parsed configuration.
+
+**Definition.** `pub struct Config` (struct) in `daemons/relay_broker/src/config.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `allow` | `AllowList` | Who may talk to the broker. |
+| `policy` | `Policy` | The open policy. |
+| `apply_groups` | `bool` | Whether `grant_group`/`provision_groups` change anything (default: report only). |
+| `audit_log` | `Option<PathBuf>` | Where the audit log goes; `None` logs nowhere (tests only). |
+| `bind_udp_ports` | `Vec<u16>` | UDP ports `bind_udp` may bind: the time service's 123 unless `bind_udp_port` lines replace it. |
+| `hub_enabled` | `bool` | Whether `hub_start`/`hub_stop` are served (`hub = true`; default off, a hub is something the owner sets up). |
+| `update_package` | `bool` | Whether `update_package` is served (`update_package = true`; default off, the packaged config turns it on). |
+| `set_time` | `bool` | Whether `set_system_time` is served (`set_time = true`; default off, the packaged config turns it on). |
+| `max_unproven_step_secs` | `u64` | The largest clock step (seconds) a request without a GPS source or two agreeing sources may make (`max_unproven_step_secs`). |
+| `max_time_steps_per_hour` | `u32` | Clock steps allowed per hour before the circuit breaker trips (`max_time_steps_per_hour`). |
+| `rate_per_minute` | `u32` | Requests per minute per peer. |
+| `idle_exit_secs` | `u64` | Exit after this many idle seconds (socket activation restarts the broker on demand). |
+
+**Used by.** `default`, `load`, `parse` (functions whose signature names it).
+
+### `ConfigError` [@ANCHOR: relay_broker:config_config_error_struct]
+
+**Purpose.** A configuration error, with the line number.
+
+**Definition.** `pub struct ConfigError` (struct) in `daemons/relay_broker/src/config.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `line` | `usize` | 1-based line, 0 for file-level problems. |
+| `message` | `String` | What was wrong. |
+
+**Used by.** `load`, `parse` (functions whose signature names it).
+
+### `HubSettings` [@ANCHOR: relay_broker:hub_hub_settings_struct]
+
+**Purpose.** The owner's hub settings.
+
+**Definition.** `pub struct HubSettings` (struct) in `daemons/relay_broker/src/hub.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `interface` | `String` | The wifi interface the access point uses, such as `wlan0`. |
+| `ssid` | `String` | The network name, 1 to 32 printable ASCII characters, for example `HAMS-EMERGENCY-K6BP`. |
+| `passphrase` | `String` | The WPA2 passphrase, 8 to 63 printable ASCII characters. The hub is never open. |
+| `channel` | `u8` | 2.4 GHz channel 1 to 13, or a 5 GHz channel (36 to 165) when `five_ghz`. |
+| `five_ghz` | `bool` | True for the 5 GHz band. |
+| `hub_address` | `Ipv4Addr` | The hub's address; the network is its /24. |
+| `relay_name` | `String` | The relay's DNS name, a single label such as `relay`; it resolves to the hub address. |
+| `uplink_dns` | `Option<Ipv4Addr>` | The uplink's resolver, when there is an uplink; without one names other than the hub's fail at once. |
+| `lease_minutes` | `u32` | Lease time in minutes (default 60). |
+
+**Used by.** `dnsmasq_conf`, `good`, `hostapd_conf`, `validate` (functions whose signature names it).
+
+### `TakeoverSettings` [@ANCHOR: relay_broker:hub_takeover_settings_struct]
+
+**Purpose.** Phase 0 takeover (RELAY_STANDALONE_EMERGENCY_HUB.md section 1a): the hub is a node of the user's own /24 and the router's DHCP is gone.
+
+**Definition.** `pub struct TakeoverSettings` (struct) in `daemons/relay_broker/src/hub.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `interface` | `String` | The bridge (or Ethernet) interface on the user's LAN. |
+| `hub_address` | `Ipv4Addr` | The hub's own fixed address on that LAN; the subnet is its /24. |
+| `gateway` | `Ipv4Addr` | The router, handed out as the default gateway so nothing changes for clients when it comes back. |
+| `relay_name` | `String` | The relay's DNS name, one label. |
+| `uplink_dns` | `Option<Ipv4Addr>` | The router's DNS server when it is still reachable; none means names other than the hub's fail at once. |
+
+**Used by.** `takeover`, `takeover_dnsmasq_conf` (functions whose signature names it).
+
+### `HubRunner` [@ANCHOR: relay_broker:hub_runner_hub_runner_struct]
+
+**Purpose.** Where the hub's programs and files are.
+
+**Definition.** `pub struct HubRunner` (struct) in `daemons/relay_broker/src/hub_runner.rs`; derives `Debug`, `Clone`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `dir` | `PathBuf` | Configuration and pid files. |
+| `hostapd` | `PathBuf` | The access-point program. |
+| `dnsmasq` | `PathBuf` | The DHCP and DNS program. |
+| `ip` | `PathBuf` | The `ip` program, used to give the wifi interface the hub's address. |
+
+**Used by.** `default`, `fake` (functions whose signature names it).
+
+### `UsbIdentity` [@ANCHOR: relay_broker:os_usb_identity_enum]
+
+**Purpose.** What the OS layer could find out about the USB identity behind a device node.
+
+**Definition.** `pub enum UsbIdentity` (enum) in `daemons/relay_broker/src/os.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Usb` | `(u16, u16, String)` | A USB device: vendor id, product id, product string. |
+| `NotUsb` | - | Readable, and not USB (a legacy serial port, a PCI sound card, a virtual console), or a node name with no sysfs home. |
+| `Unreadable` | - | The node's sysfs entry cannot be read (sysfs not mounted, hidden from a container). |
+
+**Used by.** `usb_identity` (functions whose signature names it).
+
+### `Peer` [@ANCHOR: relay_broker:os_peer_struct]
+
+**Purpose.** The credentials of the process at the other end of a Unix socket.
+
+**Definition.** `pub struct Peer` (struct) in `daemons/relay_broker/src/os.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `uid` | `u32` | Effective UID. |
+| `gid` | `u32` | Effective GID. |
+| `pid` | `i32` | Process id (informational; a pid can be reused). |
+
+**Used by.** `peer_credentials` (functions whose signature names it).
+
+### `NodeKind` [@ANCHOR: relay_broker:os_node_kind_enum]
+
+**Purpose.** What a filesystem node is, as far as the policy cares.
+
+**Definition.** `pub enum NodeKind` (enum) in `daemons/relay_broker/src/os.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Char` | - | A character device with its major and minor numbers. |
+| `Block` | - | A block device (disk): always refused. |
+| `Dir` | - | A directory. |
+| `Symlink` | - | A symbolic link (checked with lstat, so never followed). |
+| `Other` | - | Anything else (regular file, fifo, socket). |
+| `Missing` | - | Does not exist or cannot be examined. |
+
+**Used by.** `fd_kind`, `kind_of_mode`, `node_kind` (functions whose signature names it).
+
+### `LinuxOs` [@ANCHOR: relay_broker:os_linux_os_struct]
+
+**Purpose.** The Linux implementation: sysfs for enumeration, `/etc/group` for membership.
+
+**Definition.** `pub struct LinuxOs` (struct) in `daemons/relay_broker/src/os.rs`; derives `Debug`, `Clone`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `sysfs_root` | `PathBuf` | Normally `/sys`. |
+| `group_file` | `PathBuf` | Normally `/etc/group`. |
+| `hub` | `crate::hub_runner::HubRunner` | The stand-alone hub's programs and files. |
+| `update_request` | `PathBuf` | Normally `/var/lib/hams-relay-broker/update-requested`: the file `update_package` creates; the relay package's root-owned `hams-relay-update.path` unit watches it and runs the package upgrade, because this unprivileged service cannot. |
+
+**Used by.** `default` (functions whose signature names it).
+
+### `Denial` [@ANCHOR: relay_broker:policy_denial_enum]
+
+**Purpose.** Why an open was refused. Short, fixed, loggable.
+
+**Definition.** `pub enum Denial` (enum) in `daemons/relay_broker/src/policy.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `NotAbsolute` | - | Not an absolute path. |
+| `OutsideRoot` | - | Not under the device root. |
+| `Traversal` | - | Contains `.`/`..` or an empty component. |
+| `TooLong` | - | Longer than the wire allows or contains NUL. |
+| `DenyListed` | - | Explicitly on the deny list. |
+| `Symlink` | - | A symlink was found in the chain. |
+| `NotCharDevice` | - | Not a character device (a disk, a file, a directory, a missing node). |
+| `WrongClass` | - | A character device of another class than requested. |
+| `ProtectedUsb` | - | The USB vendor:product is protected (for example the VNWA codec). |
+| `UsbUnreadable` | - | The USB identity could not be read (sysfs unreadable) and `allow_unreadable_usb` is off. |
+
+**Used by.** `check_fd`, `check_kind`, `check_node`, `check_path` (functions whose signature names it).
+
+### `Policy` [@ANCHOR: relay_broker:policy_policy_struct]
+
+**Purpose.** The policy table. Loaded from the root-owned config; defaults are the Linux conventions.
+
+**Definition.** `pub struct Policy` (struct) in `daemons/relay_broker/src/policy.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `device_root` | `PathBuf` | Every allowed node lives under this directory (`/dev`). |
+| `serial_majors` | `Vec<u32>` | Character-device majors that are serial ttys. |
+| `audio_majors` | `Vec<u32>` | Character-device majors that are ALSA nodes. |
+| `deny_usb` | `Vec<(u16, u16)>` | USB vendor:product pairs never handed out. |
+| `allow_unreadable_usb` | `bool` | Hand out a node whose USB identity cannot be read (sysfs unreadable). Default false: the check fails closed, so `deny_usb` cannot be bypassed by hiding sysfs. The one machine that needs this (a container with no `/sys`, a VNWA-free host) sets `allow_unreadable_usb = true`. |
+| `deny_paths` | `Vec<PathBuf>` | Exact paths never handed out, whatever they are. |
+
+**Used by.** `default` (functions whose signature names it).
+
+### `RateLimiter` [@ANCHOR: relay_broker:ratelimit_rate_limiter_struct]
+
+**Purpose.** Token buckets keyed by UID.
+
+**Definition.** `pub struct RateLimiter` (struct) in `daemons/relay_broker/src/ratelimit.rs`; derives `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `capacity` | `u32` | Bucket size and burst: `per_minute`, at least 1. |
+| `refill_every` | `Duration` | Time to earn one token back: 60 seconds divided by `capacity`. |
+| `buckets` | `HashMap<u32, (u32, Instant, Instant)>` | uid -> (tokens, time up to which refills are accounted, time of the last request) |
+
+**Used by.** `new` (functions whose signature names it).
+
+**Notes.** Per-UID state is in the private `buckets` map (uid to tokens, time up to which refills are counted, time of the last request); at most 256 peers are tracked and the one that asked longest ago is dropped first. Time is passed in by the caller, so there is no clock inside.
+
+### `Outcome` [@ANCHOR: relay_broker:server_outcome_enum]
+
+**Purpose.** What happened on one connection, for the caller's bookkeeping and the tests.
+
+**Definition.** `pub enum Outcome` (enum) in `daemons/relay_broker/src/server.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `PeerRejected` | - | The peer was not on the allow-list; nothing was read. |
+| `Malformed` | - | The request did not parse; a `Malformed`/`UnsupportedVersion` answer was sent. |
+| `Answered` | - | A request was handled and answered (allowed or denied by policy). |
+| `IoError` | - | I/O failed (timeout, peer gone, oversize frame). |
+
+**Used by.** `serve_connection` (functions whose signature names it).
+
+### `TestDir` [@ANCHOR: relay_broker:testdir_test_dir_struct]
+
+**Purpose.** Test-only scratch directory: wraps a fresh, empty directory under the system temp dir, named `relay_broker_<tag>_<pid>`, and removes the whole tree when dropped, also while a failing test unwinds.
+
+**Definition.** `pub struct TestDir(PathBuf);` (struct) in `daemons/relay_broker/src/testdir.rs`.
+
+**Used by.** `new` (functions whose signature names it).
+
+**Notes.** Compiled only under `cfg(test)`. It dereferences to `Path`, so it is passed wherever a path is wanted.
+
+### `TimeDenial` [@ANCHOR: relay_broker:time_guard_time_denial_enum]
+
+**Purpose.** Why a step was refused. Short and loggable.
+
+**Definition.** `pub enum TimeDenial` (enum) in `daemons/relay_broker/src/time_guard.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `BeforeBuildDate` | - | The target is earlier than [`BUILD_DATE_UNIX_SECS`]. |
+| `UnprovenLargeStep` | - | A large step without a GPS source or two agreeing sources. |
+| `BreakerOpen` | - | The circuit breaker is open. |
+
+**Used by.** `check` (functions whose signature names it).
+
+### `TimeGuard` [@ANCHOR: relay_broker:time_guard_time_guard_struct]
+
+**Purpose.** The step history and the breaker.
+
+**Definition.** `pub struct TimeGuard` (struct) in `daemons/relay_broker/src/time_guard.rs`; derives `Debug`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `max_unproven_step_secs` | `u64` | Largest step (seconds) allowed without a GPS source or two agreeing sources. |
+| `max_steps_per_hour` | `usize` | Steps allowed per rolling hour before the breaker trips. |
+| `steps` | `VecDeque<Instant>` | Times of the completed steps in the last hour, oldest first; older ones are dropped by `expire`. |
+| `breaker_until` | `Option<Instant>` | When set, every step is refused until that instant (one hour after the trip). |
+
+**Used by.** `new` (functions whose signature names it).
+
+**Notes.** `check` decides and trips the breaker; `record_step` counts a completed step. The caller supplies `now`, so tests need no clock.
+
+### `WireError` [@ANCHOR: relay_broker:wire_wire_error_enum]
+
+**Purpose.** A parse failure. The variant names what was wrong so a fuzzer finding reads directly.
+
+**Definition.** `pub enum WireError` (enum) in `daemons/relay_broker/src/wire.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Truncated` | - | Fewer bytes than the schema needs at this point. |
+| `Trailing` | - | Bytes left over after a complete message. |
+| `BadTag` | `(u8)` | A tag, status or enum byte outside the closed set. |
+| `BadString` | - | A string field longer than `MAX_STRING`, not UTF-8, or containing a NUL. |
+| `BadLength` | `(u32)` | A frame length of zero or above `MAX_FRAME`. |
+| `Version` | `(u8)` | The version byte is not `VERSION`. |
+| `TooMany` | - | More list entries than `MAX_DEVICES`. |
+
+**Used by.** `bool`, `decode`, `device_class_from_tag`, `finish`, `ipv4`, `string`, `take`, `u16` (functions whose signature names it).
+
+### `DeviceClass` [@ANCHOR: relay_broker:wire_device_class_enum]
+
+**Purpose.** Device classes the broker knows. The numbers are the wire encoding and are never reused.
+
+**Definition.** `pub enum DeviceClass` (enum) in `daemons/relay_broker/src/wire.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Hash`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Serial` | `= 1` | A serial tty (CAT/PTT port). |
+| `Audio` | `= 2` | An ALSA sound node (`/dev/snd/*`). |
+
+**Used by.** `device_class_from_tag` (functions whose signature names it).
+
+### `Group` [@ANCHOR: relay_broker:wire_group_enum]
+
+**Purpose.** Groups the provisioning action may add the caller to. Closed set.
+
+**Definition.** `pub enum Group` (enum) in `daemons/relay_broker/src/wire.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Hash`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Dialout` | `= 1` | Serial ports. |
+| `Audio` | `= 2` | Sound devices. |
+
+### `Request` [@ANCHOR: relay_broker:wire_request_enum]
+
+**Purpose.** What a client may ask for. Nothing else exists.
+
+**Definition.** `pub enum Request` (enum) in `daemons/relay_broker/src/wire.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `ListDevices` | - | Enumerate devices of one class, or all classes. |
+| `OpenDevice` | - | Open a device node and return its descriptor. |
+| `GrantGroup` | - | Add the caller to one group (dry run unless the config enables apply). |
+| `ProvisionGroups` | - | Add the caller to every group the relay needs (dry run unless enabled). |
+| `BindUdp` | - | Bind a UDP socket on a privileged port the config lists (123 for the relay's time service) and pass the descriptor. |
+| `HubStart` | `(HubSettings)` | Start the stand-alone hub's access point and DHCP/DNS server from the validated settings and fixed templates. |
+| `HubStop` | - | Stop the hub and remove its files. |
+| `HubStatus` | - | Whether the hub's two programs are running. |
+| `UpdatePackage` | - | Upgrade the installed relay package through the system package manager (a fixed command, no arguments from the caller; only with `update_package = true`). |
+| `SetSystemTime` | - | Step the system clock to a UTC the relay decided on; the broker applies its own ceilings (`time_guard.rs`). |
+| `TimeStatus` | - | Read-only: the broker's clock and its time-step limits. |
+
+**Used by.** `decode`, `samples` (functions whose signature names it).
+
+### `TimeSource` [@ANCHOR: relay_broker:wire_time_source_enum]
+
+**Purpose.** The kind of source a clock step rests on.
+
+**Definition.** `pub enum TimeSource` (enum) in `daemons/relay_broker/src/wire.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Gps` | `= 1` | A GPS receiver with a fix. |
+| `Network` | `= 2` | A network time source. |
+| `Other` | `= 3` | Another relay or a person. |
+
+### `DeviceDescriptor` [@ANCHOR: relay_broker:wire_device_descriptor_struct]
+
+**Purpose.** One enumerated device.
+
+**Definition.** `pub struct DeviceDescriptor` (struct) in `daemons/relay_broker/src/wire.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `class` | `DeviceClass` | Class. |
+| `path` | `String` | Device node path. |
+| `vid` | `u16` | USB vendor id, 0 when not USB. |
+| `pid` | `u16` | USB product id, 0 when not USB. |
+| `product` | `String` | Product string from sysfs, possibly empty. |
+| `manufacturer` | `String` | Manufacturer string from sysfs, possibly empty (the relay's port list shows it next to the product). |
+
+### `Status` [@ANCHOR: relay_broker:wire_status_enum]
+
+**Purpose.** Result code of a response.
+
+**Definition.** `pub enum Status` (enum) in `daemons/relay_broker/src/wire.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Ok` | `= 0` | Done; the payload follows. |
+| `Denied` | `= 1` | Refused by policy. |
+| `RateLimited` | `= 2` | Too many requests from this peer. |
+| `Malformed` | `= 3` | The request did not parse. |
+| `UnsupportedVersion` | `= 4` | Wrong protocol version. |
+| `Failed` | `= 5` | The action was attempted and failed (OS error). |
+
+**Used by.** `error` (functions whose signature names it).
+
+### `Response` [@ANCHOR: relay_broker:wire_response_enum]
+
+**Purpose.** What the broker answers.
+
+**Definition.** `pub enum Response` (enum) in `daemons/relay_broker/src/wire.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `Devices` | `(Vec<DeviceDescriptor>)` | Answer to `ListDevices`. |
+| `Opened` | - | Answer to `OpenDevice` and `BindUdp`; the descriptor is in the ancillary data of the same frame. |
+| `GroupReport` | - | Answer to `GrantGroup`/`ProvisionGroups`. |
+| `Hub` | - | Answer to `HubStart`, `HubStop` and `HubStatus`: which of the hub's programs are running now. |
+| `Updated` | - | Answer to `UpdatePackage`: the package manager ran and exited successfully. |
+| `TimeStatus` | - | Answer to `TimeStatus`. |
+| `TimeSet` | - | Answer to `SetSystemTime`: the clock before and after. |
+| `Error` | - | Any non-`Ok` status with a short reason. |
+
+**Used by.** `decode`, `error` (functions whose signature names it).
+
+### `Reader` [@ANCHOR: relay_broker:wire_reader_struct]
+
+**Purpose.** A bounds-checked cursor over a byte slice.
+
+**Definition.** `struct Reader<'a>` (struct) in `daemons/relay_broker/src/wire.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `buf` | `&'a [u8]` | The bytes being parsed. |
+| `pos` | `usize` | Offset of the next unread byte; only moves forward and never passes `buf.len()`. |
+
+**Notes.** Every read checks bounds and returns `WireError::Truncated` instead of panicking; used by the request and response parsers in this file.
+

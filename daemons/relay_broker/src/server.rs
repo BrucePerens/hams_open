@@ -16,6 +16,7 @@ use crate::transport::{recv_frame, send_frame, set_timeouts};
 use crate::wire::{Request, Response, Status, WireError};
 
 /// What happened on one connection, for the caller's bookkeeping and the tests.
+// [@ANCHOR: server_outcome_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
     /// The peer was not on the allow-list; nothing was read.

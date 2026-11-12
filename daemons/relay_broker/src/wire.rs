@@ -25,6 +25,7 @@ pub const MAX_STRING: usize = 255;
 pub const MAX_DEVICES: usize = 64;
 
 /// A parse failure. The variant names what was wrong so a fuzzer finding reads directly.
+// [@ANCHOR: wire_wire_error_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WireError {
     /// Fewer bytes than the schema needs at this point.
@@ -44,6 +45,7 @@ pub enum WireError {
 }
 
 /// Device classes the broker knows. The numbers are the wire encoding and are never reused.
+// [@ANCHOR: wire_device_class_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeviceClass {
     /// A serial tty (CAT/PTT port).
@@ -53,6 +55,7 @@ pub enum DeviceClass {
 }
 
 /// Groups the provisioning action may add the caller to. Closed set.
+// [@ANCHOR: wire_group_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Group {
     /// Serial ports.
@@ -73,6 +76,7 @@ impl Group {
 }
 
 /// What a client may ask for. Nothing else exists.
+// [@ANCHOR: wire_request_enum]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
     /// Enumerate devices of one class, or all classes.
@@ -123,6 +127,7 @@ pub enum Request {
 }
 
 /// The kind of source a clock step rests on.
+// [@ANCHOR: wire_time_source_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimeSource {
     /// A GPS receiver with a fix.
@@ -134,6 +139,7 @@ pub enum TimeSource {
 }
 
 /// One enumerated device.
+// [@ANCHOR: wire_device_descriptor_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceDescriptor {
     /// Class.
@@ -151,6 +157,7 @@ pub struct DeviceDescriptor {
 }
 
 /// Result code of a response.
+// [@ANCHOR: wire_status_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     /// Done; the payload follows.
@@ -168,6 +175,7 @@ pub enum Status {
 }
 
 /// What the broker answers.
+// [@ANCHOR: wire_response_enum]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Response {
     /// Answer to `ListDevices`.
@@ -220,6 +228,7 @@ pub enum Response {
 }
 
 /// A bounds-checked cursor over a byte slice.
+// [@ANCHOR: wire_reader_struct]
 struct Reader<'a> {
     buf: &'a [u8],
     pos: usize,
@@ -706,6 +715,15 @@ pub fn frame_body_len(header: [u8; 4]) -> Result<usize, WireError> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: wire_wire_error_enum]
+    // Tests [@ANCHOR: wire_device_class_enum]
+    // Tests [@ANCHOR: wire_group_enum]
+    // Tests [@ANCHOR: wire_request_enum]
+    // Tests [@ANCHOR: wire_time_source_enum]
+    // Tests [@ANCHOR: wire_device_descriptor_struct]
+    // Tests [@ANCHOR: wire_status_enum]
+    // Tests [@ANCHOR: wire_response_enum]
+    // Tests [@ANCHOR: wire_reader_struct]
     use super::*;
 
     fn samples() -> Vec<Request> {

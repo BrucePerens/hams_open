@@ -20,6 +20,7 @@ pub const REJECTION_LOG_SECS: u64 = 60;
 const MAX_REMEMBERED_UIDS: usize = 1024;
 
 /// One audit record.
+// [@ANCHOR: audit_audit_event_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditEvent {
     /// Peer UID (`u32::MAX` when unknown).
@@ -36,6 +37,7 @@ pub struct AuditEvent {
 }
 
 /// An open append-only log.
+// [@ANCHOR: audit_audit_log_struct]
 #[derive(Debug)]
 pub struct AuditLog {
     file: Option<File>,
@@ -172,6 +174,9 @@ impl AuditLog {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: audit_audit_event_struct]
+    // Tests [@ANCHOR: audit_audit_log_struct]
+    // Tests [@ANCHOR: testdir_test_dir_struct]
     use super::*;
 
     // Tests [@ANCHOR: relay_broker_json_escape]

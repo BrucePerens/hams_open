@@ -16,6 +16,7 @@ use crate::os::LinuxOs;
 use crate::server::{activated_listener, run};
 
 /// Command-line options.
+// [@ANCHOR: cli_args_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Args {
     config: PathBuf,
@@ -134,6 +135,7 @@ pub fn run_main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: cli_args_struct]
     use super::*;
 
     // Tests [@ANCHOR: relay_broker_main_parse_args]

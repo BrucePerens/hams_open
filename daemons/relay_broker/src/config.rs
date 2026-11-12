@@ -18,6 +18,7 @@ use crate::auth::AllowList;
 use crate::policy::Policy;
 
 /// The parsed configuration.
+// [@ANCHOR: config_config_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     /// Who may talk to the broker.
@@ -66,6 +67,7 @@ impl Default for Config {
 }
 
 /// A configuration error, with the line number.
+// [@ANCHOR: config_config_error_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigError {
     /// 1-based line, 0 for file-level problems.
@@ -247,6 +249,8 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: config_config_struct]
+    // Tests [@ANCHOR: config_config_error_struct]
     use super::*;
 
     // Tests [@ANCHOR: relay_broker_config_parse]

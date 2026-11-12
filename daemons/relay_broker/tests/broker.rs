@@ -46,6 +46,8 @@ fn one_shot(
     (resp, fd, outcome)
 }
 
+// Tests [@ANCHOR: broker_broker_struct]
+// Tests [@ANCHOR: server_outcome_enum]
 // Tests [@ANCHOR: relay_broker_serve_connection]
 // Tests [@ANCHOR: relay_broker_broker_new]
 // Tests [@ANCHOR: relay_broker_broker_os]

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// Token buckets keyed by UID.
+// [@ANCHOR: ratelimit_rate_limiter_struct]
 #[derive(Debug)]
 pub struct RateLimiter {
     capacity: u32,
@@ -66,6 +67,7 @@ impl RateLimiter {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: ratelimit_rate_limiter_struct]
     use super::*;
 
     // Tests [@ANCHOR: relay_broker_rate_limiter_new]
