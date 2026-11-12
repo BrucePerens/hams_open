@@ -40,6 +40,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
+// [@ANCHOR: radioctl_bench_console_any_engine]
 /// `spawn` wants a sized engine type; this lets the engine of any family go through it.
 struct AnyEngine(Box<dyn ProtocolEngine>);
 
@@ -58,6 +59,7 @@ impl ProtocolEngine for AnyEngine {
 }
 
 /// Prints a line with the time since start and copies it to the log file.
+// [@ANCHOR: radioctl_bench_console_out]
 #[derive(Clone)]
 struct Out {
     started: Instant,
@@ -533,4 +535,35 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
     out.line(&format!("final stats: {:?}", rig.stats()));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: radioctl_bench_console_any_engine]
+    #[test]
+    fn the_wrapper_passes_description_encode_and_feed_to_the_boxed_engine() {
+        let description = rigfile::load("icom-ic-7300").unwrap().description;
+        let mut direct = engine_for(&description).unwrap();
+        let mut wrapped = AnyEngine(engine_for(&description).unwrap());
+        assert_eq!(wrapped.description().id, "icom-ic-7300");
+        let op = Op::GetFrequency(radioctl_core::units::Vfo::A);
+        assert_eq!(wrapped.encode(&op).unwrap().bytes, direct.encode(&op).unwrap().bytes);
+        assert_eq!(wrapped.feed(&[], Duration::ZERO).len(), direct.feed(&[], Duration::ZERO).len());
+    }
+
+    // Tests [@ANCHOR: radioctl_bench_console_out]
+    #[test]
+    fn a_line_goes_to_the_log_file_with_the_elapsed_time_and_a_closed_log_is_ignored() {
+        let path = std::env::temp_dir().join(format!("bench_console_out_{}.log", std::process::id()));
+        let out = Out { started: Instant::now(), log: Arc::new(Mutex::new(Some(File::create(&path).unwrap()))) };
+        out.clone().line("hello bench");
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.ends_with(" hello bench\n"), "{text:?}");
+        assert!(text.trim_start().chars().next().unwrap().is_ascii_digit());
+        let _ = std::fs::remove_file(&path);
+        let quiet = Out { started: Instant::now(), log: Arc::new(Mutex::new(None)) };
+        quiet.line("no log file");
+    }
 }
