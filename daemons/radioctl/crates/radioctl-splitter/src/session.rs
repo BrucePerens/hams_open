@@ -35,6 +35,7 @@ use crate::ts2000_personality::Ts2000Personality;
 const CHANNEL: usize = 64;
 const READ_BUFFER: usize = 256;
 
+// [@ANCHOR: radioctl_splitter_session_protocol]
 /// The protocol a splitter endpoint speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol {
@@ -49,6 +50,7 @@ pub enum Protocol {
     Ts2000,
 }
 
+// [@ANCHOR: radioctl_splitter_session_splitter_config]
 /// Splitter settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SplitterConfig {
@@ -93,6 +95,7 @@ impl SplitterConfig {
     }
 }
 
+// [@ANCHOR: radioctl_splitter_session_client_input]
 /// What a client delivers to its task.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientInput {
@@ -102,6 +105,7 @@ pub enum ClientInput {
     Disconnected,
 }
 
+// [@ANCHOR: radioctl_splitter_session_splitter_stats]
 /// Counters of a splitter.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SplitterStats {
@@ -121,6 +125,7 @@ pub struct SplitterStats {
     pub idle_disconnects: u64,
 }
 
+// [@ANCHOR: radioctl_splitter_session_counters]
 #[derive(Default)]
 struct Counters {
     requests: AtomicU64,
@@ -132,6 +137,7 @@ struct Counters {
     idle_disconnects: AtomicU64,
 }
 
+// [@ANCHOR: radioctl_splitter_session_inner]
 struct Inner {
     rig: RigHandle,
     config: SplitterConfig,
@@ -147,12 +153,14 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+// [@ANCHOR: radioctl_splitter_session_splitter]
 /// The splitter in front of one rig. Clone it freely.
 #[derive(Clone)]
 pub struct Splitter {
     inner: Arc<Inner>,
 }
 
+// [@ANCHOR: radioctl_splitter_session_client_handle]
 /// A running client.
 pub struct ClientHandle {
     /// The client's identifier (the PTT owner id).

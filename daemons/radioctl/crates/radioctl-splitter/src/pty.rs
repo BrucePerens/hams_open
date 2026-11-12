@@ -25,6 +25,7 @@ use crate::session::{ClientHandle, ClientInput, Splitter};
 const SLICE: Duration = Duration::from_millis(50);
 const CHANNEL: usize = 64;
 
+// [@ANCHOR: radioctl_splitter_pty_pty_endpoint]
 /// A pty endpoint. Hand [`PtyEndpoint::path`] to the outside program as its serial port.
 pub struct PtyEndpoint {
     slave: PathBuf,

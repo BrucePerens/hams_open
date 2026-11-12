@@ -11,6 +11,7 @@ use radioctl_core::event::Change;
 use radioctl_core::op::Observation;
 use radioctl_core::units::{Hz, Mode, Vfo};
 
+// [@ANCHOR: radioctl_splitter_personality_request]
 /// What a client asks of the rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
@@ -38,6 +39,7 @@ pub enum Request {
     StopCw,
 }
 
+// [@ANCHOR: radioctl_splitter_personality_status]
 /// The rig state a composite status answer (the Kenwood `IF`) is built from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Status {
@@ -59,6 +61,7 @@ pub struct Status {
     pub split: bool,
 }
 
+// [@ANCHOR: radioctl_splitter_personality_outcome]
 /// What the splitter did with a [`Request`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Outcome {
@@ -72,6 +75,7 @@ pub enum Outcome {
     Refused,
 }
 
+// [@ANCHOR: radioctl_splitter_personality_action]
 /// What the splitter must do for one parsed item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
@@ -90,6 +94,7 @@ pub enum Action {
     Ignore,
 }
 
+// [@ANCHOR: radioctl_splitter_personality_pending]
 /// One parsed item from a client.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pending {

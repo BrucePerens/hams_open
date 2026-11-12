@@ -27,6 +27,7 @@ use radioctl_protocols::civ::{
 
 use crate::personality::{Action, Outcome, Pending, Personality, Request};
 
+// [@ANCHOR: radioctl_splitter_civ_personality_civ_personality]
 /// The IC-7300 emulated by a CI-V endpoint.
 pub struct CivPersonality {
     address: u8,
@@ -232,6 +233,10 @@ mod tests {
     // Tests [@ANCHOR: radioctl_splitter_civ_mode_code]
     // Tests [@ANCHOR: radioctl_splitter_civ_parse]
     // Tests [@ANCHOR: radioctl_splitter_civ_classify]
+    // Tests [@ANCHOR: radioctl_splitter_personality_pending]
+    // Tests [@ANCHOR: radioctl_splitter_personality_action]
+    // Tests [@ANCHOR: radioctl_splitter_personality_request]
+    // Tests [@ANCHOR: radioctl_splitter_civ_personality_civ_personality]
     #[test]
     fn requests_become_rig_actions_and_the_rest_is_refused_or_ignored() {
         let mut p = CivPersonality::new(0x94, false);
@@ -290,6 +295,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_splitter_civ_reply]
     // Tests [@ANCHOR: radioctl_splitter_civ_status_frame]
+    // Tests [@ANCHOR: radioctl_splitter_personality_outcome]
     #[test]
     fn replies_carry_the_addresses_prefix_and_value() {
         let mut p = CivPersonality::new(0x94, false);
