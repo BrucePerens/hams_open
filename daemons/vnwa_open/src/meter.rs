@@ -252,4 +252,95 @@ mod tests {
             assert!((a - f).abs() < 0.09, "{f}: {a}");
         }
     }
+
+    /// A unit that accepts every transfer and answers every read with nothing.
+    struct Quiet;
+    impl crate::transport::Transport for Quiet {
+        fn reset(&self) -> Result<(), crate::transport::TransferError> {
+            Ok(())
+        }
+        fn write(
+            &self,
+            _t: u8,
+            _r: u8,
+            _v: u16,
+            _i: u16,
+            d: &[u8],
+        ) -> Result<usize, crate::transport::TransferError> {
+            Ok(d.len())
+        }
+        fn read(
+            &self,
+            _r: u8,
+            _v: u16,
+            _i: u16,
+            _b: &mut [u8],
+        ) -> Result<usize, crate::transport::TransferError> {
+            Ok(0)
+        }
+    }
+
+    /// A simulated unit whose RX carries a tone `delta1` (codec 1) and `delta2` (codec 2) Hz above the IF, the reference at the IF itself.
+    /// `ref_level` scales both reference channels (0 makes them silent).
+    fn simulated(
+        delta1: f64,
+        delta2: f64,
+        ref_level: f64,
+    ) -> (
+        Vna,
+        (crate::capture::SyntheticFeed, crate::capture::SyntheticFeed),
+    ) {
+        let cfg = crate::sweep::Config {
+            retries: 0,
+            stall_pauses_ms: Vec::new(),
+            ..crate::sweep::Config::default()
+        };
+        let if_hz = cfg.if_hz;
+        let w = move |extra: f64| 2.0 * std::f64::consts::PI * (if_hz + extra) / SAMPLE_RATE as f64;
+        let tone = move |extra: f64, level: f64, i: u64| {
+            (8000.0 * level * (w(extra) * i as f64).sin()) as i16
+        };
+        // Codec 1: reference left, measured right. Codec 2: measured left, reference right.
+        let (c1, f1) = crate::capture::synthetic_capture(move |i| {
+            [tone(0.0, ref_level, i), tone(delta1, 1.0, i)]
+        });
+        let (c2, f2) = crate::capture::synthetic_capture(move |i| {
+            [tone(delta2, 1.0, i), tone(0.0, ref_level, i)]
+        });
+        let usb = crate::usb::Vnwa::with_transport(Box::new(Quiet));
+        (Vna::with_parts(cfg, usb, c1, c2), (f1, f2))
+    }
+
+    // Tests [@ANCHOR: vnwa_open_meter_once]
+    #[test]
+    fn a_simulated_unit_reads_1_10_and_50_mhz_within_1_ppm_and_never_returns_a_wrong_number() {
+        // The signal on RX is the commanded frequency plus a known offset (0.5 ppm at 1 and 10 MHz, 0.2 ppm at 50 MHz).
+        for (center, offset) in [(1e6, 0.5), (10e6, 5.0), (50e6, 10.0)] {
+            let (mut vna, _feed) = simulated(offset, offset, 1.0);
+            let r = vna.meter(center, 8.0).unwrap();
+            let truth = tx_actual_hz(center) + offset;
+            assert!(
+                ((r.frequency_hz() - truth) / truth).abs() < 1e-7,
+                "{center}: {} vs {truth}",
+                r.frequency_hz()
+            );
+            assert!(
+                ((r.frequency_hz() - (center + offset)) / center).abs() < 1e-6,
+                "{center}: {}",
+                r.frequency_hz()
+            );
+        }
+        // No reference: an error, no reading.
+        let (mut dead, _feed) = simulated(1.0, 1.0, 0.0);
+        assert!(dead
+            .meter(10e6, 8.0)
+            .unwrap_err()
+            .contains("no signal on the reference"));
+        // The two codecs disagree by 2 Hz: an error naming both readings, not their mean.
+        let (mut split, _feed) = simulated(1.0, 3.0, 1.0);
+        assert!(split
+            .meter(10e6, 8.0)
+            .unwrap_err()
+            .contains("the two codecs disagree"));
+    }
 }
