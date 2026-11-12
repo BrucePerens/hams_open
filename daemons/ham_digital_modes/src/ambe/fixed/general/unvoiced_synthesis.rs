@@ -160,6 +160,7 @@ impl Default for NoiseState {
 /// `w_S(n)` (Annex I) in Q16.16: `clamp((105-|n|)/50, 0, 1)`, computed as one exact integer ratio
 /// (`1/50`, i.e. the spec's own `0.02` literal) rather than a pre-rounded `0.02` constant, so no
 /// extra rounding error is introduced beyond the final Q16.16 truncation.
+// [@ANCHOR: ham_digital_modes:unvoiced_synthesis_synthesis_window_q16]
 pub fn synthesis_window_q16(n: i32) -> i32 {
     let abs_n = n.unsigned_abs() as i64;
     if abs_n > 105 {

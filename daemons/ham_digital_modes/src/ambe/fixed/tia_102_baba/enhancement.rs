@@ -126,6 +126,7 @@ fn weight_q16(m_l_q16: i32, l: i32, omega0_q32: i64, r_m0: i64, r_m1: i64) -> i3
 }
 
 /// The fixed-point equivalent of `enhance_spectral_amplitudes` (Eq. 105-110).
+// [@ANCHOR: ham_digital_modes:enhancement_enhance_spectral_amplitudes_q16]
 pub fn enhance_spectral_amplitudes_q16(
     spectral_amplitudes_q16: &[i32],
     omega0_q32: i64,
@@ -164,6 +165,7 @@ pub fn enhance_spectral_amplitudes_q16(
 
 /// `S_E(0)` (Eq. 111), as an `i64` with 16 fractional bits: an EWMA of `R_M0`, floored at `10000.0`
 /// -- the same domain as [`energy_q16`]'s own `R_M0`, since Eq. 111 mixes the two directly.
+// [@ANCHOR: ham_digital_modes:enhancement_update_local_energy_q16]
 pub fn update_local_energy_q16(previous_s_e: i64, r_m0: i64) -> i64 {
     const POINT_95_Q16_16: i32 = 62259;
     const POINT_05_Q16_16: i32 = 3277;
@@ -187,6 +189,7 @@ pub fn update_local_energy_q16(previous_s_e: i64, r_m0: i64) -> i64 {
 /// `M_l` top out around `3600`, so once the final `exp2_q16` would saturate past `i32`'s own
 /// ceiling, `V_M > M_l` is already unconditionally false regardless of `V_M`'s exact saturated
 /// value -- that saturation is the correct answer, not a precision bug.
+// [@ANCHOR: ham_digital_modes:enhancement_adaptive_voicing_threshold_q16]
 pub fn adaptive_voicing_threshold_q16(errors: &FrameErrorsQ16, s_e: i64) -> i32 {
     if errors.rate_q16 <= POINT_005_Q16_16 && errors.total <= 4 {
         INFINITY_SENTINEL_Q16_16
@@ -225,6 +228,7 @@ pub fn amplitude_sum_q16(enhanced_q16: &[i32]) -> i64 {
 /// `tau_M(0)` (Eq. 115), as an `i64` with 16 fractional bits -- the same domain as [`amplitude_sum_q16`]'s
 /// own `A_M`, since Eq. 116 compares the two directly. **Eq. 115 specifically** (`epsilon_T <= 6`,
 /// not Eq. 112's own `epsilon_T <= 4` -- see this module's own doc comment).
+// [@ANCHOR: ham_digital_modes:enhancement_update_amplitude_threshold_q16]
 pub fn update_amplitude_threshold_q16(errors: &FrameErrorsQ16, previous_tau_m: i64) -> i64 {
     if errors.rate_q16 <= POINT_005_Q16_16 && errors.total <= 6 {
         20480i64 << 16
@@ -235,6 +239,7 @@ pub fn update_amplitude_threshold_q16(errors: &FrameErrorsQ16, previous_tau_m: i
 
 /// `gamma_M` (Eq. 116), returning an ordinary Q16.16 `i32` -- the ratio itself is always in
 /// `[0, 1]` by construction (the `tau_m > a_m` branch handles the only case it could exceed `1`).
+// [@ANCHOR: ham_digital_modes:enhancement_amplitude_smoothing_scale_q16]
 pub fn amplitude_smoothing_scale_q16(tau_m: i64, a_m: i64) -> i32 {
     if tau_m > a_m {
         65536

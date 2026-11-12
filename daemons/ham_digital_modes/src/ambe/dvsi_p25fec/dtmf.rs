@@ -55,6 +55,7 @@ pub const fn u4_from_column_index(column_index: u8) -> u16 {
 
 /// The inverse of [`u4_from_column_index`]: recovers the column index from a decoded `u4` value,
 /// or `None` if it doesn't fall in the confirmed DTMF column range.
+// [@ANCHOR: ham_digital_modes:dtmf_column_index_from_u4]
 pub fn column_index_from_u4(u4: u16) -> Option<u8> {
     let offset = u4.checked_sub(U4_COLUMN_BASE)?;
     if offset % U4_COLUMN_STEP != 0 {
@@ -141,6 +142,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:dtmf_column_index_from_u4]
     fn row_and_column_index_round_trip_through_their_own_encode_decode_pair() {
         for row_index in 0u8..4 {
             assert_eq!(

@@ -183,6 +183,7 @@ pub fn classify_b0(b0: u32) -> FrameKind {
 ///   all; see the note above about the DTMF-only rate-column mismatch). This function itself does not
 ///   inspect `b0`, so it decodes a Call Progress frame's `TONE_IDX` the same way as any other. `0xFF`
 ///   (inactive/invalid) was not tested.
+// [@ANCHOR: ham_digital_modes:decode_decode_tone_idx]
 pub fn decode_tone_idx(d: u64) -> Option<u8> {
     let low_copies = [
         bits(d, 16, 4),
@@ -212,6 +213,7 @@ pub fn decode_tone_idx(d: u64) -> Option<u8> {
 /// to the `(row, column)` pair of DVSI's own DTMF keypad layout, matching `ambe::dvsi_p25fec::dtmf`'s and
 /// `ambe_dstar::decode`'s own established convention: row 0-3 is 697/770/852/941 Hz, column 0-3 is
 /// 1209/1336/1477/1633 Hz. Returns `None` for any value outside `0x80..=0x8F`.
+// [@ANCHOR: ham_digital_modes:decode_dtmf_digit_from_tone_idx]
 pub fn dtmf_digit_from_tone_idx(tone_idx: u8) -> Option<(u8, u8)> {
     if tone_idx & 0xF0 != 0x80 {
         return None;
@@ -282,6 +284,7 @@ pub enum ToneIdentity {
 
 /// Classifies a [`decode_tone_idx`] result into its real-world meaning. See [`ToneIdentity`]'s own
 /// doc comment for which branches are chip-validated live.
+// [@ANCHOR: ham_digital_modes:decode_classify_tone_idx]
 pub fn classify_tone_idx(tone_idx: u8) -> ToneIdentity {
     if let Some((row, col)) = dtmf_digit_from_tone_idx(tone_idx) {
         return ToneIdentity::Dtmf { row, col };
@@ -520,6 +523,7 @@ mod tests {
     use crate::ambe::general::fec::golay_encode;
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:decode_dtmf_digit_from_tone_idx]
     fn dtmf_tone_idx_inverts_dtmf_digit_from_tone_idx() {
         for row in 0..4u8 {
             for col in 0..4u8 {
@@ -832,6 +836,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:decode_decode_tone_idx]
     fn real_chip_capture_dtmf_digits_decode_correctly_via_tone_idx() {
         for (label, hex, row, col) in REAL_DTMF_CAPTURES {
             let logical = super::super::interleave::interleaved_to_frame(hex_to_wire(hex));
@@ -971,6 +976,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:decode_classify_tone_idx]
     fn classify_tone_idx_covers_every_documented_subrange() {
         assert_eq!(
             classify_tone_idx(0x81),

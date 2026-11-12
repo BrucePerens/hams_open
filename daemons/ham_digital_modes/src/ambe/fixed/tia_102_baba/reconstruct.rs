@@ -118,6 +118,7 @@ pub fn reconstruct_higher_order_coefficients_q16(
 /// The fixed-point equivalent of `reconstruct_spectral_amplitudes` (Eq. 67-79): the full
 /// reconstruction pipeline from this frame's own quantizer values to reconstructed linear spectral
 /// amplitudes `M_tilde_l(0)` in Q16.16, for `1 <= l <= l_hat_curr`.
+// [@ANCHOR: ham_digital_modes:reconstruct_reconstruct_spectral_amplitudes_q16]
 pub fn reconstruct_spectral_amplitudes_q16(
     b2: u8,
     gain_values: [u32; 5],

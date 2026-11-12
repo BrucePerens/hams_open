@@ -111,6 +111,7 @@ fn representative_sequences() -> Vec<Vec<FrameInput>> {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:reconstruct_reconstruct_spectral_amplitudes_q16]
 fn fixed_reconstruct_spectral_amplitudes_matches_float_across_representative_sequences() {
     use ham_digital_modes::ambe::float::tia_102_baba::prediction::INITIAL_L_HAT_PREV;
 

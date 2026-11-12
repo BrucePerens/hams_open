@@ -13,6 +13,7 @@
 /// (`seed`, low 12 bits meaningful). Bit 22 (the mask's own MSB) is produced first, matching `C1`'s
 /// own MSB-first bit order, so the returned `u32`'s bit `22-i` is the `i`'th generated PRN output
 /// (`i` from 0..23).
+// [@ANCHOR: ham_digital_modes:whitening_c1_whitening_mask]
 pub fn c1_whitening_mask(seed: u16) -> u32 {
     let mut mask = 0u32;
     let mut p: u32 = 16 * (seed as u32 & 0x0FFF);
@@ -40,6 +41,7 @@ mod tests {
     /// the recurrence itself, not just a round-trip test that could pass even with the wrong
     /// direction applied symmetrically on both sides.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:whitening_c1_whitening_mask]
     fn c1_whitening_mask_matches_a_hand_computed_lcg_sequence() {
         let seed: u16 = 0x0AB; // an arbitrary, non-trivial 12-bit seed
         let mut p: u32 = 16 * (seed as u32);

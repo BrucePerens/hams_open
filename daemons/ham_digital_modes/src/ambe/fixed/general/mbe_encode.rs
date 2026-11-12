@@ -95,6 +95,7 @@ pub struct QuantizedSpeech {
 /// Converts Q16.16 linear amplitudes (`ml_q16`, 1-indexed, index 0 unused) into the decoder's log2 domain:
 /// `log2Ml = ln(eff) / 0.693` with `eff = m` for a voiced harmonic and `m / unvc` for an unvoiced one,
 /// `unvc = 0.2046 / sqrt(w0)` (`w0_q16` in radians/sample, Q16.16). Amplitudes are floored at `1e-3` like the float.
+// [@ANCHOR: ham_digital_modes:mbe_encode_target_log2_ml_q16]
 pub fn target_log2_ml_q16(w0_q16: i32, voiced: &[bool], ml_q16: &[i32]) -> Vec<i32> {
     // log2(m / unvc) = log2(m) + 0.5*log2(w0) - log2(0.2046)
     let unvoiced_boost = (log2_q16(w0_q16.max(1)) >> 1) as i64 - log2_q16(POINT_2046_Q16_16) as i64;

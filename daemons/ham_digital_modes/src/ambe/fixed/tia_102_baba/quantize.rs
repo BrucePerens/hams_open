@@ -36,6 +36,7 @@ pub fn partition_into_blocks_q16(residuals_q16: &[i32], l: u32) -> Option<[Vec<i
 }
 
 /// Eq. 60: `C_k = (1/J) sum_j c_j cos(pi (k-1)(j-1/2) / J)`, `k = 1..=J` (returned 0-indexed).
+// [@ANCHOR: ham_digital_modes:quantize_block_dct_q16]
 pub fn block_dct_q16(c_q16: &[i32]) -> Vec<i32> {
     let j = c_q16.len();
     if j == 0 {
@@ -54,6 +55,7 @@ pub fn block_dct_q16(c_q16: &[i32]) -> Vec<i32> {
 }
 
 /// Eq. 61: `G_m = (1/6) sum_i R_i cos(pi (m-1)(i-1/2) / 6)` for the six block DC terms.
+// [@ANCHOR: ham_digital_modes:quantize_gain_vector_dct_q16]
 pub fn gain_vector_dct_q16(r_hat_q16: &[i32; 6]) -> [i32; 6] {
     let mut g = [0i32; 6];
     for (m, slot) in g.iter_mut().enumerate() {
@@ -67,6 +69,7 @@ pub fn gain_vector_dct_q16(r_hat_q16: &[i32; 6]) -> [i32; 6] {
 }
 
 /// `b_hat_2`: the index of the gain quantizer level nearest `g_hat_1` (first minimum on ties, like the float).
+// [@ANCHOR: ham_digital_modes:quantize_quantize_gain_index_q16]
 pub fn quantize_gain_index_q16(g_hat_1_q16: i32) -> u8 {
     let mut best = (i64::MAX, 0usize);
     for (i, &level) in GAIN_QUANTIZER_LEVELS_Q16_16.iter().enumerate() {
@@ -80,6 +83,7 @@ pub fn quantize_gain_index_q16(g_hat_1_q16: i32) -> u8 {
 
 /// The shared saturating uniform quantizer of Eq. 62/63: `0` below `-2^(bits-1)`, `2^bits - 1` at or above
 /// `2^(bits-1)`, else the floored zero-offset index. `step_q16` must be positive.
+// [@ANCHOR: ham_digital_modes:quantize_saturating_uniform_quantize_q16]
 fn saturating_uniform_quantize_q16(value_q16: i32, bits: u8, step_q16: i32) -> u32 {
     let half_range = 1i64 << (bits - 1);
     let idx = (value_q16 as i64).div_euclid(step_q16.max(1) as i64);
@@ -137,6 +141,8 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:quantize_gain_vector_dct_q16]
+    // Tests [@ANCHOR: ham_digital_modes:quantize_block_dct_q16]
     fn dct_of_a_constant_block_is_zero_except_the_first_coefficient() {
         let dct = block_dct_q16(&[2 << 16; 7]);
         assert!((dct[0] - (2 << 16)).abs() < 8);
@@ -149,6 +155,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:quantize_saturating_uniform_quantize_q16]
     fn saturating_quantizer_follows_eq_62() {
         // 3 bits, step 1.0: indices -4..=3 map to 0..=7, saturating outside.
         let q = |v_q16: i32| saturating_uniform_quantize_q16(v_q16, 3, 65536);
@@ -168,6 +175,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:quantize_quantize_gain_index_q16]
     fn gain_index_is_the_nearest_level() {
         for (i, &level) in GAIN_QUANTIZER_LEVELS_Q16_16.iter().enumerate() {
             assert_eq!(quantize_gain_index_q16(level) as usize, i);

@@ -21,6 +21,7 @@ pub struct FrameErrorsQ16 {
 }
 
 /// The fixed-point equivalent of `estimate_errors` (Eq. 95-96).
+// [@ANCHOR: ham_digital_modes:error_estimation_estimate_errors_q16]
 pub fn estimate_errors_q16(
     corrected_error_counts: &[u32; 7],
     previous_rate_q16: i32,
@@ -37,6 +38,7 @@ pub fn estimate_errors_q16(
 }
 
 /// The fixed-point equivalent of `should_repeat_frame` (Eq. 97-98).
+// [@ANCHOR: ham_digital_modes:error_estimation_should_repeat_frame_q16]
 pub fn should_repeat_frame_q16(errors: &FrameErrorsQ16) -> bool {
     let total_q16 = (errors.total as i64) << 16;
     let threshold_q16 = (10i64 << 16) + 40 * (errors.rate_q16 as i64);

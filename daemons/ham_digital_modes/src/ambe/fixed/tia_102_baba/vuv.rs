@@ -79,6 +79,7 @@ pub fn update_xi_max(xi_max_prev: i128, xi_0: i128) -> i128 {
 }
 
 /// `M(xi)` (Eq. 42) in Q30.
+// [@ANCHOR: ham_digital_modes:vuv_energy_dependent_function_q30]
 pub fn energy_dependent_function_q30(xi_max: i128, xi_0: i128, xi_lf: i128, xi_hf: i128) -> i64 {
     // (0.0025 xi_max + xi_0) / (0.01 xi_max + xi_0), scaled by 400 top and bottom.
     let num = xi_max + 400 * xi_0;

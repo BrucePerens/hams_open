@@ -87,6 +87,7 @@ const fn natural_range(block: Block) -> (usize, usize) {
 
 /// Which of the 8 sub-blocks a given *natural* (pre-interleave) bit position belongs to, and its
 /// offset within that block (0-indexed from the block's own start).
+// [@ANCHOR: ham_digital_modes:wire_format_block_for_natural]
 pub fn block_for_natural(n: usize) -> (Block, usize) {
     assert!(n < TOTAL_BITS, "natural position {n} out of range");
     if n < 92 {
@@ -143,6 +144,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:wire_format_block_for_natural]
     fn block_for_natural_agrees_with_the_established_boundaries() {
         assert_eq!(block_for_natural(0).0, Block::Golay { index: 0 });
         assert_eq!(block_for_natural(91).0, Block::Golay { index: 3 });

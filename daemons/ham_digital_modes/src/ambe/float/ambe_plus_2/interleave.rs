@@ -64,6 +64,7 @@ pub const ANNEX_H: [((u8, u8), (u8, u8)); 36] = [
 /// `pos` (0-indexed from that codeword's own LSB, matching `ANNEX_H`'s own `c(pos)` notation),
 /// given the frame layout `super::parse_frame` expects: `C0` (24 bits) at the top, then `C1` (23),
 /// `C2` (11), `C3` (14).
+// [@ANCHOR: ham_digital_modes:interleave_codeword_frame_bit]
 fn codeword_frame_bit(c: u8, pos: u8) -> u32 {
     let base: u32 = match c {
         0 => 48,
@@ -79,6 +80,7 @@ fn codeword_frame_bit(c: u8, pos: u8) -> u32 {
 /// into the low 72 bits of `frame`, matching `super::parse_frame`'s input convention) into the
 /// 36-symbol/72-bit over-the-air bitstream, packed MSB-first (symbol 0's `Bit1` is the returned
 /// value's own bit 71).
+// [@ANCHOR: ham_digital_modes:interleave_frame_to_interleaved]
 pub fn frame_to_interleaved(frame: u128) -> u128 {
     let mut wire: u128 = 0;
     for (symbol, &((c1, p1), (c0, p0))) in ANNEX_H.iter().enumerate() {
@@ -94,6 +96,7 @@ pub fn frame_to_interleaved(frame: u128) -> u128 {
 
 /// The exact inverse of [`frame_to_interleaved`]: recovers the 72-bit logical frame from Annex
 /// H's own interleaved over-the-air bitstream.
+// [@ANCHOR: ham_digital_modes:interleave_interleaved_to_frame]
 pub fn interleaved_to_frame(wire: u128) -> u128 {
     let mut frame: u128 = 0;
     for (symbol, &((c1, p1), (c0, p0))) in ANNEX_H.iter().enumerate() {
@@ -115,6 +118,7 @@ mod tests {
     /// touched by `ANNEX_H` exactly once -- the same completeness invariant the generator script
     /// already checked once at generation time, re-verified here as a permanent regression guard.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:interleave_codeword_frame_bit]
     fn annex_h_covers_every_logical_frame_bit_exactly_once() {
         let mut seen = [false; 72];
         for &((c1, p1), (c0, p0)) in ANNEX_H.iter() {
@@ -137,6 +141,8 @@ mod tests {
     /// the exact original frame, checked across several structurally distinct bit patterns (all
     /// zero, all one, and two real frames built via `super::build_frame`), not just one example.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:interleave_interleaved_to_frame]
+    // Tests [@ANCHOR: ham_digital_modes:interleave_frame_to_interleaved]
     fn interleave_and_deinterleave_round_trip_several_frames() {
         let all_zero: u128 = 0;
         let all_one: u128 = (1u128 << 72) - 1;
