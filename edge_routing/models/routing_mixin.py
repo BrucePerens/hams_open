@@ -18,6 +18,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: edge_routing_routing_mixin_edge_routing_mixin]
 class EdgeRoutingMixin(models.AbstractModel):
     _name = "edge.routing.mixin"
     _description = "Edge Routing Mixin"

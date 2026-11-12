@@ -7,6 +7,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: edge_routing_res_users_res_users_edge_routing]
 class ResUsersEdgeRouting(models.Model):
     name = fields.Char(string="Name", required=True)
     """
