@@ -54,7 +54,7 @@ Returns `Ok(Config)` with every unset key at its default. Errors, all `Err(Strin
 No side effects: it reads only its argument. It is pure and safe to call from any thread. See also: `config_has_defaults_and_refuses_bad_values` in `src/glasgow/tests.rs`,
 `Config` (the struct this fills; every field is in the table above), `glasgow_serial_ok` (`src/glasgow/parse.rs`).
 
-Example entry: `"glasgow": {"driver": "glasgow", "tier": "full", "serial": "C3-20240904T183337Z", "max_volts": 3.6, "max_on_s": 300, "max_trip_a": 0.1, "max_capture_s": 30}`.
+Example entry: `"glasgow": {"driver": "glasgow", "tier": "full", "serial": "SN-0000", "max_volts": 3.6, "max_on_s": 300, "max_trip_a": 0.1, "max_capture_s": 30}`.
 
 ### `glasgow_install_dir` [@ANCHOR: glasgow_install_dir]
 
@@ -383,8 +383,7 @@ short; (8) the session record is stored (removed for 0) and, for a non-zero sett
 Concurrency: runs under the dispatcher's per-instrument mutex and the install's file lock; takes the session-table mutex only inside closures. Side effects: the device's supply
 and limit change, `control-gpio` is loaded (a gateware with all pins inputs), the session table changes and a thread is spawned. Setting the same port again is allowed; the new
 deadline replaces the old and the older watchdog finds nothing due. Setting one port to 0 does not touch the other port. Not idempotent in time (each call renews the
-`max_on_s` window). An oddity worth knowing: for a dry run with no configured `serial`, `revision` runs the read-only `glasgow list` even though the answer says `sent: []`
-and "nothing was sent to the device". See also: `a_port_is_set_with_the_limit_first_and_read_back` in `src/glasgow/tests.rs`, `sessions`, `spawn_watchdog`, `fail_closed`, `park`.
+`max_on_s` window). For a dry run with no configured `serial`, `revision` still runs the read-only `glasgow list` to learn the board revision and so the voltage range; `sent: []` means that no command that changes anything was sent (intended: the plan needs the limits). See also: `a_port_is_set_with_the_limit_first_and_read_back` in `src/glasgow/tests.rs`, `sessions`, `spawn_watchdog`, `fail_closed`, `park`.
 
 Example, `bench_glasgow_port_set` with `{"port": "A", "volts_v": 3.3, "trip_current_a": 0.05, "confirm": true}` powers port A at 3.3 V with a 50 mA trip and returns after the
 readback shows the supply and limit at 3.3 V; `{"port": "A", "volts_v": 0}` switches it off.

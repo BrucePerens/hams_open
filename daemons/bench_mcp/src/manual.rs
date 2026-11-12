@@ -617,7 +617,16 @@ fn clip_around(text: &str, query: &[String], max: usize) -> String {
         .filter_map(|q| lower.find(q.as_str()))
         .min()
         .unwrap_or(0);
-    let first_char = text[..first.min(text.len())].chars().count();
+    // `first` is a byte offset in the lower-cased text; find the character of `text` it falls in (a lower-cased character may
+    // have another byte length than the original).
+    let (mut seen, mut first_char) = (0usize, 0usize);
+    for ch in text.chars() {
+        if seen >= first {
+            break;
+        }
+        seen += ch.to_lowercase().map(char::len_utf8).sum::<usize>();
+        first_char += 1;
+    }
     let start = first_char.saturating_sub(60);
     let end = (start + max).min(chars.len());
     let mut s: String = chars[start..end].iter().collect();
