@@ -12,6 +12,7 @@ render for the whole site; here such a link simply answers 404."""
 
 from odoo import api, models
 from odoo.fields import Domain
+from odoo.addons.zero_sudo import public_rpc
 
 
 class TenantSiteAccessMixin(models.AbstractModel):
@@ -20,6 +21,7 @@ class TenantSiteAccessMixin(models.AbstractModel):
 
     # [@ANCHOR: tenant_sites:COMM_scoped_access]
     # Verified by [@ANCHOR: tenant_sites:COMM_test_scoped_access]
+    @public_rpc
     def can_access_from_current_website(self, website_id=False):
         tenant_website_id = self.env["tenant.site.host"]._tenant_request_website_id()
         if not tenant_website_id:
