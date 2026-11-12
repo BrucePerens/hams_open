@@ -125,6 +125,7 @@ class CloudflareConfigManager(models.AbstractModel):
         except (ValueError, OSError, RuntimeError, AccessError) as e:
             _logger.exception("Failed to process static mtime purge: %s", e)
 
+    @api.private
     @api.model
     # [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
     def initialize_cloudflare_state(self):
@@ -249,6 +250,7 @@ class CloudflareConfigManager(models.AbstractModel):
         ):
             raise AccessError(_("You are not authorized to manage the Cloudflare WAF."))
 
+    @api.private
     @api.model
     def action_pull_waf_rules(self, website_id=None):
         # [@ANCHOR: cf_action_pull_waf_rules]
@@ -295,6 +297,7 @@ class CloudflareConfigManager(models.AbstractModel):
             self.env["cloudflare.waf.rule"].create(vals_list)
         return True, f"Successfully pulled rules from Cloudflare for {website.name}."
 
+    @api.private
     @api.model
     def action_push_waf_rules(self, website_id=None):
         # [@ANCHOR: cf_action_push_waf_rules]
@@ -390,6 +393,7 @@ class CloudflareConfigManager(models.AbstractModel):
         return payload
 
     # [@ANCHOR: cloudflare:COMM_cache_plan_cache_rules]
+    @api.private
     @api.model
     def plan_cache_rules(self, website_id=None):
         """What pushing the Odoo cache rules would do. Reads Cloudflare (GET only), writes nothing.
@@ -424,6 +428,7 @@ class CloudflareConfigManager(models.AbstractModel):
             }
 
     # [@ANCHOR: cloudflare:COMM_cache_action_push_cache_rules]
+    @api.private
     @api.model
     def action_push_cache_rules(self, website_id=None, plan_hash=None):
         """Push the Odoo cache rules to Cloudflare's http_request_cache_settings phase.

@@ -13,6 +13,7 @@ class CloudflareUtils(models.AbstractModel):
     _description = "Cloudflare Edge Context Utilities"
     name = fields.Char(string="Name", default=lambda self: self._description)
 
+    @api.private
     @api.model
     # [@ANCHOR: cloudflare:COMM_get_current_website_id]
     def get_current_website_id(self):
@@ -30,6 +31,7 @@ class CloudflareUtils(models.AbstractModel):
                 return req_website.id
         return self.env["website"].get_current_website().id
 
+    @api.private
     @api.model
     def get_request_context(self):
         # [@ANCHOR: COMM_cf_get_request_context]

@@ -30,6 +30,7 @@ class CloudflarePurgeQueue(models.Model):
     )
     website_id = fields.Many2one("website", string="Website", ondelete="cascade")
 
+    @api.private
     @api.model
     # [@ANCHOR: cloudflare:COMM_enqueue_urls_batch]
     def enqueue_urls_batch(self, purge_map):
@@ -93,6 +94,7 @@ class CloudflarePurgeQueue(models.Model):
         if create_vals:
             self.env["cloudflare.purge.queue"].create(create_vals)
 
+    @api.private
     @api.model
     def enqueue_urls(self, urls, website_id=None):
         # [@ANCHOR: COMM_enqueue_urls_base_url]
@@ -102,6 +104,7 @@ class CloudflarePurgeQueue(models.Model):
             website_id = self.env["cloudflare.utils"].get_current_website_id()
         self.enqueue_urls_batch({website_id: urls})
 
+    @api.private
     @api.model
     def enqueue_tags(self, tags, website_id=None):
         # [@ANCHOR: COMM_cf_enqueue_tags_api]
@@ -120,6 +123,7 @@ class CloudflarePurgeQueue(models.Model):
         if create_vals:
             self.env["cloudflare.purge.queue"].create(create_vals)
 
+    @api.private
     @api.model
     def enqueue_everything(self, website_ids=None):
         # [@ANCHOR: COMM_cf_enqueue_everything]
@@ -196,6 +200,7 @@ class CloudflarePurgeQueue(models.Model):
         with self._pager_default_env(incidents):
             return incidents.auto_resolve_incidents(PURGE_INCIDENT_SOURCE, website_id=website.id)
 
+    @api.private
     @api.model
     def requeue_failed(self):
         # [@ANCHOR: cloudflare:COMM_requeue_failed_purges]

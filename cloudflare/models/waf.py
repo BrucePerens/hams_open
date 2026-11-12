@@ -9,6 +9,7 @@ class CloudflareWAF(models.AbstractModel):
     _description = "Cloudflare WAF Interface"
     name = fields.Char(string="Name", default=lambda self: self._description)
 
+    @api.private
     @api.model
     def ban_ip(
         # [@ANCHOR: COMM_cf_ban_ip_api]
