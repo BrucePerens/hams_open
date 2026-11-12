@@ -62,7 +62,7 @@ request that matched no route passes through.
 Effect: when `REQUEST_URI` is missing it is set to the request's `RAW_URI` if the server provided one, otherwise to `PATH_INFO` plus `?` and `QUERY_STRING`
 when there is a query string. A value that is already present is never changed. Errors: none; it needs an active `request`.
 
-**Special concerns.** Synchronous, no database, no locks, idempotent. It only adds a key to the request's own WSGI environment, so it cannot change which
+**Special concerns.** Synchronous, no database, no locks, idempotent. It only adds a key to the request's own WSGI (Python web-application interface) environment, so it cannot change which
 page is served; it is not a security check and the value is used only to look up redirects and to build canonical URLs.
 
 **See also.** Test `test_a_request_without_request_uri_is_a_404_not_a_server_error` in `tests/test_http.py` (a real request with the key removed from the server's environment);

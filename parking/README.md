@@ -3,7 +3,7 @@
 *Copyright (c) HAMS project. Licensed under AGPL-3.0-or-later.*
 
 Answers for any number of parked domains from one table, inside the Odoo that also serves the main
-site and its tenant sites (hams_shared ADR 0106). It is a small plug-in of `tenant_sites`, which decides
+site and its tenant sites (hams_shared ADR 0106, an architecture decision record in `hams_shared/docs/adrs/`). It is a small plug-in of `tenant_sites`, which decides
 which hostnames are parked: a request that arrives through Cloudflare for a hostname in `parking.domain`
 (and only for such a hostname) gets the page below; every other hostname is the main site's, a tenant
 website's, or an uncached 404, and never reaches this module's pages.

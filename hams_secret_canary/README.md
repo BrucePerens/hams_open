@@ -14,7 +14,7 @@ service: alerts go to the Odoo log, a `zero_sudo.security.log` row and an email 
 ## What it does
 
 * On install it generates a per-install salt and three decoys (never fixed strings in the repository): a Stripe-shaped
-  key, an S3-shaped secret and a Cloudflare-shaped token, stored as the system parameters `stripe_secret_key_old`,
+  key, an S3-shaped (Amazon Simple Storage Service) secret and a Cloudflare-shaped token, stored as the system parameters `stripe_secret_key_old`,
   `s3_secret_access_key_old` and `cloudflare_api_token_old`. A parameter of that name that already exists is left alone.
 * The same decoys are also placed where code reading the environment or the key directory looks: an environment
   variable `STRIPE_SECRET_KEY_OLD`, `S3_SECRET_ACCESS_KEY_OLD` or `CLOUDFLARE_API_TOKEN_OLD` in each Odoo process (one
@@ -30,7 +30,7 @@ service: alerts go to the Odoo log, a `zero_sudo.security.log` row and an email 
   anything else (quotes, spaces, `=`, `&`, `:`, `,`, `<`). A secret that is split, encoded, or embedded inside a longer
   run of those characters is not found.
 * Cost: one hash per distinct token, at most about 1 MiB of text per response (tested: under one second for 1 MiB).
-* A WSGI wrapper around `odoo.http.Application.__call__` scans the text responses that never reach
+* A WSGI (Web Server Gateway Interface, Python's standard web-application interface) wrapper around `odoo.http.Application.__call__` scans the text responses that never reach
   `_post_dispatch`: the XML-RPC fault a controller builds itself from an exception message (`/xmlrpc/*`) is the one
   that matters. It passes the body through unchanged, scans the first 1 MiB after it has been sent, and skips a response
   `_post_dispatch` already scanned, so no alarm is raised twice. The alarms run on a fresh cursor of every database this
