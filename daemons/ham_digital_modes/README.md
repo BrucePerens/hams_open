@@ -2773,104 +2773,426 @@ Computes the prediction-error energy `sum_i ak[i] * R[i]`. It has to be taken be
 ## Pitch estimation
 
 The pitch estimator squares the speech, removes DC, low-pass filters and decimates by 5, windows, transforms
-and searches the spectrum for the strongest bin in the 50 to 400 Hz range, then corrects octave errors.
+and searches the spectrum for the strongest bin in the 50 to 400 Hz range, then corrects octave errors. Constants: the analysis buffer `M_PITCH` is 320 samples, each call adds `N_SAMP` = 80 new samples (10 ms at 8 kHz), the decimation factor `NLP_DEC` is 5 (so `NDEC` = 64 decimated samples), the FFT size `PE_FFT_SIZE` is 512 and one bin is 3.125 Hz. Each function has its own entry.
 
-- `NlpState::default` (float reference) sets up the estimator state: empty squared history, zero filter
-  memory, a previous pitch of 100 Hz, and a planned 512-point FFT.
-  *(Reference: `src/codec2_3200/floating_reference/nlp.rs` -> `[@ANCHOR: NlpState::default]`)*
-- `decimate` (float) low-pass filters the squared signal with the 25-tap filter and keeps every fifth
-  sample, replicating the buffer edge at the borders.
-  *(Reference: `[@ANCHOR: decimate]`)*
-- `correct_sub_multiples` (float) walks down through integer sub-multiples of the strongest bin and prefers
-  one that is a local peak and above 0.3 of the global peak (half that when it is near the previous frame's
-  pitch).
-  *(Reference: `[@ANCHOR: correct_sub_multiples]`)*
-- `dc_notch` (float) is the first-order DC blocker `y = x - x_prev + 0.95 * y_prev`.
-  *(Reference: `[@ANCHOR: dc_notch]`)*
-- `nlp` (float) is the whole estimator for the newest 80 samples: square, notch, add 1, decimate, window,
-  FFT, power, peak search, sub-multiple correction; it returns the pitch in Hz and remembers it.
-  *(Reference: `[@ANCHOR: nlp]`)*
-- `lowpass_coeffs` returns the cached 25-tap Hann-windowed sinc low-pass (cut-off 0.1 cycles per sample).
-  *(Reference: `src/codec2_3200/nlp.rs` -> `[@ANCHOR: lowpass_coeffs]`)*
-- `decimate_fixed` is the integer decimation, with interior fast paths that fold the symmetric taps and give
-  bit-identical results to the clamped general form.
-  *(Reference: `[@ANCHOR: decimate_fixed]`)*
-- `nlp:fft_fixed` runs the estimator's 512-point transform on its 64 non-zero decimated inputs through the
-  shared size-specialised kernel; only the magnitude is used afterwards.
-  *(Reference: `[@ANCHOR: nlp:fft_fixed]`)*
-- `correct_sub_multiples_fixed` is the integer sub-multiple correction on the 128-bit power spectrum, with
-  0.8 and 1.2 as exact ratios 8/10 and 12/10 and the threshold kept in 128 bits.
-  *(Reference: `[@ANCHOR: correct_sub_multiples_fixed]`)*
-- `nlp_fixed` returns the integer estimator's pitch in Hz as an `f32` (bin times 3.125 Hz) for tests and the
-  other codec modes.
-  *(Reference: `[@ANCHOR: nlp_fixed]`)*
+### `NlpState::default` [@ANCHOR: NlpState::default]
+
+Sets up the float pitch estimator's state: an empty buffer of squared speech (`sq`, 320 samples), zero DC-notch memory, a previous pitch of 100 Hz, and a planned 512-point forward FFT with its work buffer.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** an `NlpState { sq, mem_x, mem_y, prev_f0, fft, fft_buf }`. **Errors:** none. **Special concerns:** allocates the FFT plan through `rustfft`'s planner (a heap allocation, done once per estimator). Not shared between threads while in use (it is mutated by `nlp`). No transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/nlp.rs`. **Signature:** `fn default() -> Self`. **See also:** `nlp`; test `estimate_synthetic_pitch_at_amp` (`codec2_3200/floating_reference/nlp.rs`).
+
+### `decimate` [@ANCHOR: decimate]
+
+Low-pass filters the squared signal with the 25-tap filter from `lowpass_coeffs` and keeps every fifth sample (`NLP_DEC` = 5), giving 64 values for the 320-sample buffer. The buffer edge is replicated at the borders (indexes are clamped).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sq` | `&[f32; 320]` | The squared, notched speech buffer. |
+
+**Returns:** `[f32; 64]`. **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/nlp.rs`. **Signature:** `pub(crate) fn decimate(sq: &[f32; M_PITCH]) -> [f32; NDEC]`. **See also:** `lowpass_coeffs`, `nlp`; test `dc_notch_fixed_matches_the_float_dc_notch_on_realistic_amplitude_input` (`codec2_3200/nlp.rs`).
+
+### `correct_sub_multiples` [@ANCHOR: correct_sub_multiples]
+
+Corrects octave errors of the pitch estimate. It walks down through integer sub-multiples of the strongest spectral bin (`gmax_bin / 2`, `/ 3`, and so on while at least `min_bin`) and, in a search window of 0.8 to 1.2 times each sub-multiple, looks for the largest peak. It moves the estimate to that peak when the peak is a local maximum and above `CNLP` (0.3) of the global peak, or half that when the window contains the previous frame's pitch bin. The last accepted sub-multiple wins.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `power` | `&[f32]` | Power spectrum bins 0 to 256. |
+| `gmax` | `f32` | Power of the strongest bin. |
+| `gmax_bin` | `usize` | Index of the strongest bin. |
+| `prev_f0_bin` | `usize` | Previous frame's pitch as a bin index. |
+| `min_bin` | `usize` | Lowest allowed bin (the 400 Hz limit). |
+
+**Returns:** `usize`, the corrected bin index (`gmax_bin` when no sub-multiple qualifies). **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/nlp.rs`. **Signature:** `pub(crate) fn correct_sub_multiples(power: &[f32], gmax: f32, gmax_bin: usize, prev_f0_bin: usize, min_bin: usize) -> usize`. **See also:** `nlp`, `correct_sub_multiples_fixed`; test `finds_the_fundamental_of_a_synthetic_voiced_like_signal_across_the_valid_pitch_range` (`codec2_3200/floating_reference/nlp.rs`).
+
+### `dc_notch` [@ANCHOR: dc_notch]
+
+The first-order DC blocker `y = x - x_prev + 0.95 * y_prev`, applied to the squared speech so the spectrum's DC term does not swamp the pitch peak. One sample in, one out; the two memory values are updated in place.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `f32` | Input sample. |
+| `mem_x` | `&mut f32` | Previous input; updated. |
+| `mem_y` | `&mut f32` | Previous output; updated. |
+
+**Returns:** `f32`, the filtered sample. **Errors:** none. **Special concerns:** `pub(crate)`; mutates only the two memory references. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/nlp.rs`. **Signature:** `pub(crate) fn dc_notch(x: f32, mem_x: &mut f32, mem_y: &mut f32) -> f32`. **See also:** `nlp`; test `correct_sub_multiples_leaves_the_global_peak_alone_when_no_sub_multiple_qualifies` (`codec2_3200/floating_reference/nlp.rs`).
+
+### `nlp` [@ANCHOR: nlp]
+
+The whole float pitch estimator for the newest 80 samples: square them, notch out DC, add 1, store in the history, decimate by 5, apply a Hann window, run the 512-point FFT, take the power, find the strongest bin between the 400 Hz and 50 Hz limits, correct sub-multiples, and convert the bin to hertz (bin times 3.125 Hz). It remembers the result as the previous pitch for the next frame.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `state` | `&mut NlpState` | Estimator state: history, notch memory, previous pitch, FFT; updated. |
+| `sn` | `&[f32; 320]` | The speech buffer; its last 80 samples are the new ones. |
+
+**Returns:** `f32`, the pitch in Hz. **Errors:** none. **Special concerns:** `pub(crate)`; mutates `state`, so the frames must be processed in order by one owner. Runs one 512-point FFT per call. No I/O. No transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/nlp.rs`. **Signature:** `pub(crate) fn nlp(state: &mut NlpState, sn: &[f32; M_PITCH]) -> f32`. **See also:** `decimate`, `dc_notch`, `correct_sub_multiples`; test `estimate_synthetic_pitch_at_amp` (`codec2_3200/floating_reference/nlp.rs`).
+
+### `lowpass_coeffs` [@ANCHOR: lowpass_coeffs]
+
+Returns the cached 25-tap Hann-windowed sinc low-pass filter (cut-off 0.1 cycles per sample, `0.5 / NLP_DEC`) used before decimation. It is designed on first use and kept in a `OnceLock`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** `&'static [f32; 25]`. **Errors:** none. **Special concerns:** `pub(crate)`; thread-safe lazy initialisation, read-only afterwards. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/nlp.rs`. **Signature:** `pub(crate) fn lowpass_coeffs() -> &'static [f32; LPF_TAPS]`. **See also:** `decimate`, `decimate_fixed`; test `dc_notch_fixed_matches_the_float_dc_notch_on_realistic_amplitude_input` (`codec2_3200/nlp.rs`).
+
+### `decimate_fixed` [@ANCHOR: decimate_fixed]
+
+The integer decimation of the squared signal by 5 with the 25-tap Q23 low-pass. It has two interior fast paths that fold the symmetric taps (when all values fit in 30 bits, or in 31 bits with a plain 32-bit multiply) and a general clamped form for the borders or large values; all three give bit-identical results. The sum is rounded and shifted back to the input scale.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sq` | `&[i64; 320]` | The squared, notched speech buffer in integer form. |
+
+**Returns:** `[i64; 64]`. **Errors:** none. **Special concerns:** private and pure; the fast paths are chosen from the largest magnitude in the buffer. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/nlp.rs`. **Signature:** `fn decimate_fixed(sq: &[i64; M_PITCH]) -> [i64; NDEC]`. **See also:** `decimate`, `lowpass_coeffs`; test `dc_notch_fixed_matches_the_float_dc_notch_on_realistic_amplitude_input` (`codec2_3200/nlp.rs`).
+
+### `nlp:fft_fixed` [@ANCHOR: nlp:fft_fixed]
+
+Runs the estimator's 512-point transform on its 64 non-zero decimated inputs through the shared size-specialised kernel (`fixed_fft::pitch_fft_512`), which skips the stages that only see zeros; a compile-time assertion keeps `PE_FFT_SIZE == 8 * NDEC`. Only the magnitude of the result is used afterwards.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `input` | `&[i64; 64]` | Windowed decimated samples. |
+| `re` | `&mut [i64; 512]` | Real output (and work) buffer. |
+| `im` | `&mut [i64; 512]` | Imaginary output (and work) buffer. |
+
+**Returns:** nothing; the result is in `re` and `im`. **Errors:** none. **Special concerns:** private; overwrites both buffers, no heap, no locks. No transmit side effects.
+
+**Location:** `src/codec2_3200/nlp.rs`. **Signature:** `fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE_FFT_SIZE])`. **See also:** `nlp_fixed`, `fixed_fft::pitch_fft_512`; tests `fft_fixed_full` (`codec2_3200/nlp.rs`), `pruned_pitch_transform_bins_match_the_dense_transform` (`codec2_3200/nlp.rs`).
+
+### `correct_sub_multiples_fixed` [@ANCHOR: correct_sub_multiples_fixed]
+
+The integer version of the sub-multiple correction, on the 128-bit power spectrum (through the `PowerSource` trait so the caller can compute power on demand): the 0.8 and 1.2 window factors are the exact ratios 8/10 and 12/10, and the threshold `CNLP * gmax` (halved when the window contains the previous pitch bin) is kept in 128 bits with rounding.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `power` | `&P` where `P: PowerSource + ?Sized` | Source of the power of each bin (`at`) and the number of bins (`len`). |
+| `gmax` | `i128` | Power of the strongest bin. |
+| `gmax_bin` | `usize` | Index of the strongest bin. |
+| `prev_f0_bin` | `usize` | Previous pitch as a bin index. |
+| `min_bin` | `usize` | Lowest allowed bin. |
+
+**Returns:** `usize`, the corrected bin index. **Errors:** none. **Special concerns:** private and pure apart from calling `power.at`. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/nlp.rs`. **Signature:** `fn correct_sub_multiples_fixed<P: PowerSource + ?Sized>(power: &P, gmax: i128, gmax_bin: usize, prev_f0_bin: usize, min_bin: usize) -> usize`. **See also:** `correct_sub_multiples`; tests `nlp_fixed_agrees_with_the_float_reference_across_a_wide_synthetic_sweep` (`codec2_3200/nlp.rs`), `decimate_fixed_matches_the_float_decimate_on_realistic_amplitude_input` (`codec2_3200/nlp.rs`).
+
+### `nlp_fixed` [@ANCHOR: nlp_fixed]
+
+Returns the integer pitch estimator's result in hertz as an `f32` (bin index times 3.125 Hz), for tests and for the other codec modes that want hertz. The estimate itself comes from `nlp_fixed_bin`, which uses only integer arithmetic.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `state` | `&mut NlpStateFixed` | Fixed-point estimator state; updated. |
+| `sn` | `&[i16; 320]` | The 16-bit speech buffer; its last 80 samples are the new ones. |
+
+**Returns:** `f32`, the pitch in Hz. **Errors:** none. **Special concerns:** public; mutates `state`, frames in order by one owner. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/nlp.rs`. **Signature:** `pub fn nlp_fixed(state: &mut NlpStateFixed, sn: &[i16; M_PITCH]) -> f32`. **See also:** `nlp`, `fft_fixed`; test `estimate_synthetic_pitch_fixed_at_amp` (`codec2_3200/nlp.rs`).
 
 ## Voicing decision
 
-- `is_voiced` (float) judges a 10 ms block voiced when its energy is more than 12 dB above a tracked noise
-  floor and its zero-crossing rate is below 0.15; the noise floor (starting at -20 dB) is updated only
-  during unvoiced blocks.
-  *(Reference: `src/codec2_3200/floating_reference/voicing.rs` -> `[@ANCHOR: is_voiced]`)*
-- `is_voiced_fixed` is the integer decision without logarithms: the dB margin becomes a linear energy ratio
-  (about 15.85), the zero-crossing test is a cross-multiplication, and an empty block is judged unvoiced.
-  *(Reference: `src/codec2_3200/voicing.rs` -> `[@ANCHOR: is_voiced_fixed]`)*
+### `is_voiced` [@ANCHOR: is_voiced]
+
+Judges a 10 ms block voiced when its energy is more than 12 dB above a tracked noise floor and its zero-crossing rate is below 0.15. The noise floor (starting at -20 dB) is updated, with weight 0.05, only during unvoiced blocks, so speech does not raise it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `state` | `&mut VoicingState` | Holds the noise floor in dB; updated for unvoiced blocks. |
+| `samples` | `&[f32]` | The 80-sample block. |
+
+**Returns:** `bool`, true when voiced. **Errors:** none; an empty block is not meaningful (callers pass the 80-sample block). **Special concerns:** `pub(crate)`; mutates `state`, blocks in order. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/voicing.rs`. **Signature:** `pub(crate) fn is_voiced(state: &mut VoicingState, samples: &[f32]) -> bool`. **See also:** `is_voiced_fixed`; test `white_noise` (`codec2_3200/floating_reference/voicing.rs`).
+
+### `is_voiced_fixed` [@ANCHOR: is_voiced_fixed]
+
+The integer voicing decision without logarithms: the 12 dB margin becomes a linear energy ratio (about 15.85) held in Q16, the zero-crossing test is the cross-multiplication `crossings * 20 < 3 * (n - 1)` (rate below 0.15), and an empty block is judged unvoiced. The noise floor energy is updated by a rounded 1/20 step during unvoiced blocks.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `state` | `&mut VoicingStateFixed` | Holds the noise floor energy; updated for unvoiced blocks. |
+| `samples` | `&[i16]` | The block of 16-bit samples. |
+
+**Returns:** `bool`, true when voiced. **Errors:** none; an empty block returns false. **Special concerns:** public; mutates `state`, blocks in order. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/voicing.rs`. **Signature:** `pub fn is_voiced_fixed(state: &mut VoicingStateFixed, samples: &[i16]) -> bool`. **See also:** `is_voiced`; test `is_voiced_fixed_does_not_panic_on_an_empty_slice` (`codec2_3200/voicing.rs`).
 
 ## Codec2 3200 quantisers
 
-`src/codec2_3200/quantise.rs` and `floating_reference/quantise.rs`.
+`src/codec2_3200/quantise.rs` and `floating_reference/quantise.rs`. Pitch (`Wo`) takes 7 bits over `2*pi/160` to `2*pi/20` radians, frame energy 5 bits over -10 to 40 dB, and the ten LSPs 5 bits each. Each function has its own entry.
 
-- `encode_wo` quantises a pitch (`Wo` in radians) to a 7-bit index over `2*pi/160` to `2*pi/20`.
-  *(Reference: `[@ANCHOR: encode_wo]`)*
-- `decode_wo` maps an index back to `min + step * index`.
-  *(Reference: `[@ANCHOR: decode_wo]`)*
-- `decode_wo_fixed` is the same in Q23, `w0_min + w0_step * index` with no rescale.
-  *(Reference: `[@ANCHOR: decode_wo_fixed]`)*
-- `encode_energy` turns a linear frame energy (floored at 1e-12) into dB with the log table and quantises it
-  to a 5-bit index over -10 to 40 dB.
-  *(Reference: `[@ANCHOR: encode_energy]`)*
-- `decode_energy` is the inverse, using the exp2 table.
-  *(Reference: `[@ANCHOR: decode_energy]`)*
-- `decode_energy_fixed` computes the exponent `y` from the index in Q23 and returns `exp2_q23(y)`.
-  *(Reference: `[@ANCHOR: decode_energy_fixed]`)*
-- `quantize_linear` is the shared uniform quantiser: `levels * (v - min) / (max - min) + 0.5`, truncated and
-  clamped to `0..levels`.
-  *(Reference: `[@ANCHOR: quantize_linear]`)*
-- `dequantize_linear` returns `min + step * index` with `step = (max - min) / levels`.
-  *(Reference: `[@ANCHOR: dequantize_linear]`)*
-- `encode_lsps_delta_scalar` (float) quantises ten LSPs as indexes of 5 bits: the first as an absolute
-  frequency, each later one as the delta from the previous reconstructed value.
-  *(Reference: `[@ANCHOR: encode_lsps_delta_scalar]`)*
-- `lsp_dim_nearest_level` (float) picks the closest of the 32 levels of one dimension, lowest index winning
-  an exact tie.
-  *(Reference: `[@ANCHOR: lsp_dim_nearest_level]`)*
-- `decode_lsps_delta_scalar` accumulates the dequantised deltas in Hz and converts each to radians.
-  *(Reference: `[@ANCHOR: decode_lsps_delta_scalar]`)*
-- `lsp_dim_value_hz_q16` is the frequency in Q16 Hz of one level of one dimension (uniform steps up to the
-  breakpoint, a second step size after it).
-  *(Reference: `[@ANCHOR: lsp_dim_value_hz_q16]`)*
-- `lsp_dim_nearest_level_q16` searches the 32 levels by Q16 distance, keeping the first level on a tie.
-  *(Reference: `[@ANCHOR: lsp_dim_nearest_level_q16]`)*
-- `encode_lsps_delta_scalar_fixed` converts float radians to Q23 and delegates to the integer encoder
-  (`encode_lsps_delta_scalar_q23`).
-  *(Reference: `[@ANCHOR: encode_lsps_delta_scalar_fixed]`)*
-- `decode_lsps_delta_scalar_fixed` accumulates Q16 Hz and converts to Q23 radians once per dimension.
-  *(Reference: `[@ANCHOR: decode_lsps_delta_scalar_fixed]`)*
+### `encode_wo` [@ANCHOR: encode_wo]
+
+Quantises a pitch (`Wo` in radians per sample) to a 7-bit index over `2*pi/160` to `2*pi/20` using the shared uniform quantiser. The value is clamped to the range.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `wo` | `f32` | Pitch in radians per sample. |
+
+**Returns:** `u32`, the index 0..=127. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn encode_wo(wo: f32) -> u32`. **See also:** `decode_wo`, `quantize_linear`; tests `read_dump` (`codec2_3200/quantise.rs`), `decode_energy_fixed_matches_decode_energy_on_every_valid_index` (`codec2_3200/quantise.rs`).
+
+### `decode_wo` [@ANCHOR: decode_wo]
+
+Maps a 7-bit pitch index back to radians per sample as `min + step * index`, `step = (max - min) / 128`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `index` | `u32` | The index 0..=127. |
+
+**Returns:** `f32`, the pitch. **Errors:** none; an index above 127 extrapolates past the range. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn decode_wo(index: u32) -> f32`. **See also:** `encode_wo`, `dequantize_linear`; test `read_dump` (`codec2_3200/quantise.rs`).
+
+### `decode_wo_fixed` [@ANCHOR: decode_wo_fixed]
+
+The Q23 version of `decode_wo`: `w0_min + w0_step * index` with the minimum and step held as Q23 constants, so no rescale is needed.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `index` | `u32` | The index 0..=127. |
+
+**Returns:** `i64`, the pitch in Q23 radians per sample. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn decode_wo_fixed(index: u32) -> i64`. **See also:** `decode_wo`; test `decode_lsps_delta_scalar_fixed_matches_the_float_version_within_quantization_noise_on_real_captured_indices` (`codec2_3200/quantise.rs`).
+
+### `encode_energy` [@ANCHOR: encode_energy]
+
+Turns a linear frame energy (floored at 1e-12) into decibels with the table-driven base-2 logarithm and quantises it to a 5-bit index over -10 to 40 dB.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `e_linear` | `f32` | Frame energy, linear scale. |
+
+**Returns:** `u32`, the index 0..=31. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn encode_energy(e_linear: f32) -> u32`. **See also:** `decode_energy`, `quantize_linear`; tests `wo_quantizer_round_trips_within_one_step` (`codec2_3200/quantise.rs`), `decode_energy_fixed_matches_decode_energy_on_every_valid_index` (`codec2_3200/quantise.rs`).
+
+### `decode_energy` [@ANCHOR: decode_energy]
+
+The inverse of `encode_energy`: dequantises the index to decibels and converts back to a linear energy with the exp2 table.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `index` | `u32` | The index 0..=31. |
+
+**Returns:** `f32`, the linear frame energy. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn decode_energy(index: u32) -> f32`. **See also:** `encode_energy`; test `wo_quantizer_round_trips_within_one_step` (`codec2_3200/quantise.rs`).
+
+### `decode_energy_fixed` [@ANCHOR: decode_energy_fixed]
+
+The Q23 version of `decode_energy`: computes the base-2 exponent `y` from the index in Q23 (`y_min + y_step * index`) and returns `exp2_q23(y)`, the linear energy in Q23.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `index` | `u32` | The index 0..=31. |
+
+**Returns:** `i64`, the energy in Q23. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn decode_energy_fixed(index: u32) -> i64`. **See also:** `decode_energy`, `exp2_q23`; test `decode_wo_fixed_matches_decode_wo_on_every_valid_index` (`codec2_3200/quantise.rs`).
+
+### `quantize_linear` [@ANCHOR: quantize_linear]
+
+The shared uniform quantiser: `levels * (v - min) / (max - min) + 0.5`, truncated toward zero and clamped to `0..levels`, with `levels = 2^bits`. Values outside the range saturate at the first or last index.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `value` | `f32` | The value to quantise. |
+| `min` | `f32` | Lowest value of the range. |
+| `max` | `f32` | Highest value of the range; must differ from `min`. |
+| `bits` | `u32` | Index width, at most 31. |
+
+**Returns:** `u32` index in `0..2^bits`. **Errors:** none (a NaN input gives index 0). **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub(crate) fn quantize_linear(value: f32, min: f32, max: f32, bits: u32) -> u32`. **See also:** `dequantize_linear`; tests `read_dump` (`codec2_3200/quantise.rs`), `decode_energy_fixed_matches_decode_energy_on_every_valid_index` (`codec2_3200/quantise.rs`).
+
+### `dequantize_linear` [@ANCHOR: dequantize_linear]
+
+Returns `min + step * index` with `step = (max - min) / levels`: the lower edge of the index's interval, not its centre. The inverse of `quantize_linear` up to the quantisation step.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `index` | `u32` | The index. |
+| `min` | `f32` | Lowest value of the range. |
+| `max` | `f32` | Highest value of the range. |
+| `bits` | `u32` | Index width. |
+
+**Returns:** `f32`. **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub(crate) fn dequantize_linear(index: u32, min: f32, max: f32, bits: u32) -> f32`. **See also:** `quantize_linear`; test `read_dump` (`codec2_3200/quantise.rs`).
+
+### `encode_lsps_delta_scalar` [@ANCHOR: encode_lsps_delta_scalar]
+
+Quantises the ten LSPs of a frame to ten 5-bit indexes (float reference): the first as an absolute frequency in hertz, each later one as the delta from the previous reconstructed (quantised) value, so quantisation errors do not accumulate. Each dimension has its own 32-level table.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp` | `&[f32; 10]` | The LSP frequencies in radians, increasing, 0 to pi. |
+
+**Returns:** `[u32; 10]`, indexes 0..=31. **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/quantise.rs`. **Signature:** `pub(crate) fn encode_lsps_delta_scalar(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD]`. **See also:** `lsp_dim_nearest_level`, `decode_lsps_delta_scalar`; test `lsp_dim_nearest_level` (`codec2_3200/floating_reference/quantise.rs`).
+
+### `lsp_dim_nearest_level` [@ANCHOR: lsp_dim_nearest_level]
+
+Picks the closest of the 32 levels of one LSP dimension to a target delta in hertz, searching all levels; on an exact tie the lowest index wins.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `dim` | `&LspDim` | The dimension's step description. |
+| `target_hz` | `f32` | The delta to represent, in hertz. |
+
+**Returns:** `u32`, the level 0..=31. **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/quantise.rs`. **Signature:** `pub(crate) fn lsp_dim_nearest_level(dim: &LspDim, target_hz: f32) -> u32`. **See also:** `encode_lsps_delta_scalar`; test `reference_encode` (`codec2_3200/floating_reference/quantise.rs`).
+
+### `decode_lsps_delta_scalar` [@ANCHOR: decode_lsps_delta_scalar]
+
+Rebuilds the ten LSPs from their indexes: it accumulates the dequantised deltas in hertz and converts each running sum to radians (times `pi / 4000`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `indexes` | `&[u32; 10]` | The ten indexes, 0..=31 each. |
+
+**Returns:** `[f32; 10]`, LSP frequencies in radians. **Errors:** none; an index above 31 extrapolates the table formula. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn decode_lsps_delta_scalar(indexes: &[u32; LPC_ORD]) -> [f32; LPC_ORD]`. **See also:** `encode_lsps_delta_scalar`; test `lsp_dim_nearest_level_q16_matches_the_float_version_across_a_dense_sweep` (`codec2_3200/quantise.rs`).
+
+### `lsp_dim_value_hz_q16` [@ANCHOR: lsp_dim_value_hz_q16]
+
+Gives the frequency in Q16 hertz of one level of one LSP dimension: uniform steps of `step1` up to the dimension's breakpoint, then a second step size `step2` after it. Level `n` is `(n + 1)` steps, so level 0 is not zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `dim` | `&LspDimQ16` | `step1_q16`, `step2_q16` and `breakpoint`. |
+| `level` | `u32` | The level 0..=31. |
+
+**Returns:** `i64`, hertz in Q16. **Errors:** none. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `fn lsp_dim_value_hz_q16(dim: &LspDimQ16, level: u32) -> i64`. **See also:** `lsp_dim_nearest_level_q16`; test `encode_lsps_delta_scalar_fixed_matches_the_float_version_exactly_on_real_captured_lsp_data` (`codec2_3200/quantise.rs`).
+
+### `lsp_dim_nearest_level_q16` [@ANCHOR: lsp_dim_nearest_level_q16]
+
+Searches the 32 levels of one dimension by Q16 distance to the target and returns the nearest, keeping the first level on a tie. The integer twin of `lsp_dim_nearest_level`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `dim` | `&LspDimQ16` | The dimension's steps. |
+| `target_q16` | `i64` | The target delta in Q16 hertz. |
+
+**Returns:** `u32`, the level 0..=31. **Errors:** none. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `fn lsp_dim_nearest_level_q16(dim: &LspDimQ16, target_q16: i64) -> u32`. **See also:** `lsp_dim_value_hz_q16`; tests `lsp_dim_nearest_level_q16_keeps_the_lower_index_on_an_exact_tie` (`codec2_3200/quantise.rs`), `decode_energy_fixed_matches_decode_energy_on_every_valid_index` (`codec2_3200/quantise.rs`).
+
+### `encode_lsps_delta_scalar_fixed` [@ANCHOR: encode_lsps_delta_scalar_fixed]
+
+Quantises the ten LSPs with integer arithmetic: it converts the float radians to Q23 (rounding) and delegates to the integer encoder `encode_lsps_delta_scalar_q23`. The result matches the float encoder except where rounding changes a nearest-level decision.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp` | `&[f32; 10]` | The LSP frequencies in radians. |
+
+**Returns:** `[u32; 10]`, indexes 0..=31. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn encode_lsps_delta_scalar_fixed(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD]`. **See also:** `encode_lsps_delta_scalar`; tests `lsp_dim_nearest_level_q16_matches_the_float_version_across_a_dense_sweep` (`codec2_3200/quantise.rs`), `decode_energy_fixed_matches_decode_energy_on_every_valid_index` (`codec2_3200/quantise.rs`).
+
+### `decode_lsps_delta_scalar_fixed` [@ANCHOR: decode_lsps_delta_scalar_fixed]
+
+Rebuilds the ten LSPs in fixed point: it accumulates the Q16 hertz values of the levels and converts to Q23 radians once per dimension (`hz_q16 * rad_per_hz_q23 >> 16`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `indexes` | `&[u32; 10]` | The ten indexes, 0..=31 each. |
+
+**Returns:** `[i64; 10]`, LSP frequencies in Q23 radians. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/quantise.rs`. **Signature:** `pub fn decode_lsps_delta_scalar_fixed(indexes: &[u32; LPC_ORD]) -> [i64; LPC_ORD]`. **See also:** `decode_lsps_delta_scalar`; test `lsp_dim_nearest_level_q16_matches_the_float_version_across_a_dense_sweep` (`codec2_3200/quantise.rs`).
 
 ## Decoder interpolation
 
-`src/codec2_3200/interp.rs`: the pitch, energy and LSPs arrive per 20 ms but synthesis runs per 10 ms.
+`src/codec2_3200/interp.rs`: the pitch, energy and LSPs arrive per 20 ms but synthesis runs per 10 ms, so the half-way values are interpolated. Each function has its own entry.
 
-- `interp_wo` gives the interpolated half-frame its pitch. If the interpolated half is flagged voiced but both
-  neighbours are unvoiced it is treated as unvoiced (the minimum pitch); otherwise it takes the midpoint of
-  two voiced neighbours or whichever neighbour is voiced.
-  *(Reference: `[@ANCHOR: interp_wo]`)*
-- `interp_energy` is the geometric mean `sqrt(prev * next)`.
-  *(Reference: `[@ANCHOR: interp_energy]`)*
-- `interp_wo_fixed` is `interp_wo` in Q23; the midpoint is `(prev + next) >> 1`.
-  *(Reference: `[@ANCHOR: interp_wo_fixed]`)*
-- `interp_energy_fixed` computes the geometric mean as `exp2((log2 a + log2 b) / 2)` with the Q23 primitives;
-  both inputs must be positive.
-  *(Reference: `[@ANCHOR: interp_energy_fixed]`)*
+### `interp_wo` [@ANCHOR: interp_wo]
+
+Gives the interpolated half-frame its pitch. If the interpolated half is flagged voiced but both neighbours are unvoiced it is treated as unvoiced and gets the minimum pitch; otherwise it takes the midpoint of two voiced neighbours or whichever neighbour is voiced.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `voiced0` | `bool` | Voicing flag of the interpolated half-frame. |
+| `prev_wo` | `f32` | Pitch of the previous frame, radians per sample. |
+| `prev_voiced` | `bool` | Whether the previous frame is voiced. |
+| `next_wo` | `f32` | Pitch of the next frame. |
+| `next_voiced` | `bool` | Whether the next frame is voiced. |
+| `w0_min` | `f32` | The minimum pitch, used for unvoiced. |
+
+**Returns:** `f32`, the pitch of the half-frame. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/interp.rs`. **Signature:** `pub fn interp_wo(voiced0: bool, prev_wo: f32, prev_voiced: bool, next_wo: f32, next_voiced: bool, w0_min: f32) -> f32`. **See also:** `interp_wo_fixed`; test `interpolate_lsp_fixed` (`codec2_3200/interp.rs`).
+
+### `interp_energy` [@ANCHOR: interp_energy]
+
+Interpolates the frame energy as the geometric mean `sqrt(prev * next)`, which is the midpoint in the decibel domain.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `prev_e` | `f32` | Previous frame's energy, linear, positive. |
+| `next_e` | `f32` | Next frame's energy, linear, positive. |
+
+**Returns:** `f32`. **Errors:** none (a negative product gives NaN). **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/interp.rs`. **Signature:** `pub fn interp_energy(prev_e: f32, next_e: f32) -> f32`. **See also:** `interp_energy_fixed`; test `a_voiced_flag_flanked_by_two_unvoiced_neighbors_is_corrected_to_unvoiced` (`codec2_3200/interp.rs`).
+
+### `interp_wo_fixed` [@ANCHOR: interp_wo_fixed]
+
+`interp_wo` in Q23: the same decision table, with the midpoint of two voiced neighbours as `(prev + next) >> 1`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `voiced0` | `bool` | Voicing flag of the interpolated half-frame. |
+| `prev_wo` | `i64` | Previous pitch in Q23. |
+| `prev_voiced` | `bool` | Whether the previous frame is voiced. |
+| `next_wo` | `i64` | Next pitch in Q23. |
+| `next_voiced` | `bool` | Whether the next frame is voiced. |
+| `w0_min` | `i64` | Minimum pitch in Q23. |
+
+**Returns:** `i64`, pitch in Q23. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/interp.rs`. **Signature:** `pub fn interp_wo_fixed(voiced0: bool, prev_wo: i64, prev_voiced: bool, next_wo: i64, next_voiced: bool, w0_min: i64) -> i64`. **See also:** `interp_wo`; test `from_q23` (`codec2_3200/interp.rs`).
+
+### `interp_energy_fixed` [@ANCHOR: interp_energy_fixed]
+
+Computes the geometric mean of two Q23 energies as `exp2((log2 a + log2 b) / 2)` with the Q23 primitives `log2_q23` and `exp2_q23`. Both inputs must be positive.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `prev_e` | `i64` | Previous energy in Q23, positive. |
+| `next_e` | `i64` | Next energy in Q23, positive. |
+
+**Returns:** `i64`, the geometric mean in Q23. **Errors:** panics in debug builds if either input is zero or negative (`log2_q23` is undefined there). **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/interp.rs`. **Signature:** `pub fn interp_energy_fixed(prev_e: i64, next_e: i64) -> i64`. **See also:** `interp_energy`, `log2_q23`, `exp2_q23`; test `wo_interpolation_fixed_falls_back_to_the_floor_when_unvoiced` (`codec2_3200/interp.rs`).
 
 ## Spectral bridge numerics
 
