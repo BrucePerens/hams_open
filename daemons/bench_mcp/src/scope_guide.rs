@@ -462,6 +462,33 @@ pub fn measure_custom(s: &mut Link, args: &Value) -> Result<Value, String> {
     Ok(r)
 }
 
+/// `bench_scope_counter`: the scope's hardware frequency counter (`CYMT?`, E-notation, and `CYMT_HW?`, full precision with kHz or MHz), each as the
+/// scope's text and as hertz. The counter counts trigger-level crossings of the trigger source. Below 10 Hz the scope answers `10Hz` or `<10Hz`, which
+/// has no hertz value here (`null`). The guide lists no histogram or DVM function for this series, so none is offered.
+pub fn counter(s: &mut Link) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_counter]
+    let hz = |text: &str| -> Option<f64> {
+        let t = Link::value(text);
+        let end = t
+            .find(|c: char| c.is_ascii_alphabetic() && !matches!(c, 'e' | 'E'))
+            .unwrap_or(t.len());
+        let v: f64 = t[..end].parse().ok()?;
+        match &t[end..] {
+            "Hz" => Some(v),
+            "kHz" => Some(v * 1e3),
+            "MHz" => Some(v * 1e6),
+            "GHz" => Some(v * 1e9),
+            _ => None,
+        }
+    };
+    let coarse = s.query("CYMT?")?;
+    let full = s.query("CYMT_HW?")?;
+    Ok(
+        json!({"counter": coarse, "counter_hz": hz(&coarse), "full_precision": full, "full_precision_hz": hz(&full),
+        "note": "counts the trigger source's level crossings; below 10 Hz the scope answers 10Hz or <10Hz; from the programming guide, not yet checked on firmware 1.3.27"}),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -713,5 +740,38 @@ mod tests {
             assert!(measure_custom(&mut l, &bad).is_err(), "{bad}");
         }
         assert_eq!(f.seen.lock().unwrap().len(), n);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_counter]
+    #[test]
+    fn the_counter_is_read_coarse_and_full_precision_and_a_low_frequency_has_no_hertz_value() {
+        let (_f, mut l) = link();
+        let r = counter(&mut l).unwrap();
+        assert_eq!(
+            (r["counter_hz"].as_f64(), r["full_precision_hz"].as_f64()),
+            (Some(1000.0), Some(1000.0))
+        );
+        assert_eq!(r["full_precision"], "CYMT 1.00000kHz");
+        // A scope that answers as the guide says for a signal under 10 Hz, and the header the guide's CYMOMETER? syntax shows.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            use std::io::{BufRead, Write};
+            let (sock, _) = listener.accept().unwrap();
+            let mut out = sock.try_clone().unwrap();
+            for l in std::io::BufReader::new(sock).lines() {
+                let reply = if l.unwrap() == "CYMT?" {
+                    "CYMOMETER <10Hz\n"
+                } else {
+                    "CYMT 94.5177261kHz\n"
+                };
+                out.write_all(reply.as_bytes()).unwrap();
+            }
+        });
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let r = counter(&mut l).unwrap();
+        assert!(r["counter_hz"].is_null());
+        assert_eq!(r["counter"], "CYMOMETER <10Hz");
+        assert!((r["full_precision_hz"].as_f64().unwrap() - 94517.7261).abs() < 1e-6);
     }
 }

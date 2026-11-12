@@ -337,6 +337,16 @@ Order sent: enable, source, tolerance, create, display, stop on fail, output, cl
 
 Everything is checked before the first command. Returns `sent`, `readback`, `note`, `gate`, `custom` (from `PAVA? CUSTALL`, which the guide shows as `CUST1:C1,PKPK,4.08E+00V;CUST2:OFF;...`) and, when statistics are on, `statistics`: for each installed slot `PAVA? STATn` is read and its text split into `cur`, `mean`, `min`, `max`, `std-dev` and `count`. The guide shows that answer on two lines; the function joins lines until the count arrives, so one line works too. A reply that cannot be parsed is returned as `unparsed` or `no_answer` text, not as an error. Test: `custom_measurements_are_installed_read_with_statistics_gates_and_delay` against the fake scope in both framings.
 
+### `bench_mcp_scope_counter` [@ANCHOR: bench_mcp_scope_counter]
+
+`counter(s)` is `bench_scope_counter` (tier `read_only`): the scope's frequency counter, read twice.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `s` | `&mut Link` | Open link to the scope; the tool takes no other argument. |
+
+Sends `CYMT?` and `CYMT_HW?` and converts each reply to hertz: the value is what follows the last space or comma, a number (plain or E-notation) followed by `Hz`, `kHz`, `MHz` or `GHz`. Returns `counter`, `counter_hz`, `full_precision`, `full_precision_hz` and a `note`. A reply with another unit or no number (`<10Hz`, `10Hz` is a number but the scope's own statement is that it is a floor) gives `null` for the hertz value and still returns the text, so the caller sees what the scope said. Errors: only link errors (`send`, `read`). The call changes nothing on the scope. Test: `the_counter_is_read_coarse_and_full_precision_and_a_low_frequency_has_no_hertz_value` against the fake scope and a one-off server that answers `CYMOMETER <10Hz`.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.
