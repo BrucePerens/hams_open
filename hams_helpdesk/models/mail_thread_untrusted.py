@@ -14,6 +14,7 @@ from odoo import api, models
 
 from . import untrusted_text as ut
 from .inbound_spam_filter import mail_signals, ses_verdicts
+from odoo.addons.zero_sudo import public_rpc
 
 MAIL_STASH_KEY = "hams_helpdesk_untrusted_mail"
 # [@ANCHOR: hams_helpdesk:inbound_reply_message_models]
@@ -31,6 +32,7 @@ class MailThread(models.AbstractModel):
     _inherit = "mail.thread"
 
     # [@ANCHOR: hams_helpdesk:inbound_message_parse]
+    @public_rpc
     @api.model
     def message_parse(self, message, save_original=False):
         msg_dict = super().message_parse(message, save_original=save_original)

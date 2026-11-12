@@ -23,6 +23,7 @@ from urllib.parse import quote
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+from odoo.addons.zero_sudo import public_rpc
 
 # Most members listed per fingerprint. A failure that hits more distinct members than this is a site-wide
 # fault, not a handful of people to write to; the rest are only counted (fingerprint.unlisted_member_count).
@@ -226,6 +227,7 @@ class ExceptionMember(models.Model):
         return contact.partner_id
 
     # [@ANCHOR: hams_helpdesk:exc_reply_to_member]
+    @public_rpc
     def action_reply_to_member(self):
         """Opens the message composer on the ticket, addressed to the member (or the guardian) and filled with a
         plain note that the site team is working on the problem. A draft only: nothing is sent until the staff
@@ -254,6 +256,7 @@ class ExceptionMember(models.Model):
         }
 
     # [@ANCHOR: hams_helpdesk:exc_action_mailto]
+    @public_rpc
     def action_mailto(self):
         """Opens the staff member's own mail program with the same note (the 'mailto:' link)."""
         self.ensure_one()

@@ -19,6 +19,7 @@ from odoo.exceptions import AccessError, UserError
 
 from . import exception_scrub as scrub
 from .exception_fingerprint import SERVICE_XMLID, _service_env, report_event
+from odoo.addons.zero_sudo import public_rpc
 
 
 _UNIT_SUFFIXES = (".service", ".timer", ".socket", ".target")
@@ -51,6 +52,7 @@ class ExceptionFingerprintDaemon(models.Model):
     _inherit = "hams_helpdesk.exception.fingerprint"
 
     # [@ANCHOR: hams_helpdesk:exc_report_daemon_failure]
+    @public_rpc
     @api.model
     def report_daemon_failure(self, unit, kind="unit_failed", result="", journal_tail=""):
         """Reports a failed daemon. Returns {"recorded": bool}; False means rate limited or de-duplicated.
