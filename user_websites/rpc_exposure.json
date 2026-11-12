@@ -9,7 +9,6 @@
       "consume_and_export"
     ],
     "res.users": [
-      "SELF_WRITEABLE_FIELDS",
       "action_pardon_user_websites"
     ],
     "user.websites.group": [
