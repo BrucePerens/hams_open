@@ -398,6 +398,18 @@ Loads SoapySDR at run time. `fn load_api_from(names: &[&str]) -> Result<Api, Str
 
 See also: `bench_mcp_sdr_radio_open`.
 
+### `api` [@ANCHOR: bench_mcp_sdr_api]
+
+`fn api() -> Result<&'static Api, String>` gives the SoapySDR function table, loading the library once with `load_api` and remembering the result (a load failure is remembered too, so the error is the same on every call). In the unit tests a per-thread fake table is returned instead (`fake_api`; there is none in a production build), so the radio code runs with no library and no radio. Takes no arguments, never panics, safe from any thread.
+
+### `check_rate` [@ANCHOR: bench_mcp_sdr_check_rate]
+
+`fn check_rate(c: &Config, l: &Limits, rate_hz: f64) -> Result<(), String>`: the sample rate must be inside the radio's `min_rate` to `max_rate` (error "sample_rate_hz <x> is outside <lo> to <hi>") and, for the RTL-SDR, not in the 0.3 to 0.9 MS/s gap its driver cannot run (error "the RTL-SDR runs 0.225 to 0.3 or 0.9 to 3.2 MS/s, not between"). Pure; both arguments are read only. Used by `capture_args`, `survey_args` and `coherence`.
+
+### `ppm_arg` [@ANCHOR: bench_mcp_sdr_ppm_arg]
+
+`fn ppm_arg(args: &Value, c: &Config) -> Result<f64, String>`: the optional `ppm` argument, the RTL-SDR crystal error in parts per million applied as a frequency correction. A missing value is 0; a value on any other radio is the error "ppm applies to the RTL-SDR only"; a value outside -200 to 200 is "ppm <x> is outside -200 to 200". Pure. Used by `capture_args` and `survey_args`.
+
 ### `Radio::open` [@ANCHOR: bench_mcp_sdr_radio_open]
 
 Opens the radio with the SoapySDR argument string of `soapy_args` (`SoapySDRDevice_makeStrArgs`). `Err("cannot open the <driver> (<args>): <SoapySDR error>")` when the library returns no device. The handle closes the radio when dropped. Receive only. The tests run it against a fake SoapySDR (a set of Rust `extern "C"` functions standing in for the library, installed per test thread), never a real radio.
