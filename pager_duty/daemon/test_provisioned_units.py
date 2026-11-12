@@ -7,7 +7,9 @@
 # Tests [@ANCHOR: pager_duty:units_not_in_operation]
 # Tests [@ANCHOR: pager_duty:provisioned_units_main]
 # Tests [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
+# Tests [@ANCHOR: pager_duty:units_expected_off]
 import os
+import tempfile
 import sys
 import unittest
 from unittest import mock
@@ -124,6 +126,45 @@ class MainTests(unittest.TestCase):
             code = check.main([])
         self.assertEqual(code, 1)
         self.assertIn("MANIFEST did not load", "".join(c.args[0] for c in err.write.call_args_list))
+
+
+class ExpectedOffTests(unittest.TestCase):
+    def listing(self, text):
+        handle = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False)
+        self.addCleanup(os.unlink, handle.name)
+        handle.write(text)
+        handle.close()
+        return handle.name
+
+    def test_file_lines_comments_and_blanks_are_parsed_and_env_is_added(self):
+        # Tests [@ANCHOR: pager_duty:units_expected_off]
+        path = self.listing("# header\n\na.service  # why, remove when installed\n   \n  b.timer\n#c.timer\n")
+        got = check.units_expected_off({"HAMS_UNITS_EXPECTED_OFF": "x.service, y.timer,"}, path)
+        self.assertEqual(got, {"a.service", "b.timer", "x.service", "y.timer"})
+
+    def test_a_missing_file_adds_nothing(self):
+        # Tests [@ANCHOR: pager_duty:units_expected_off]
+        self.assertEqual(check.units_expected_off({}, "/nonexistent/units_expected_off.txt"), set())
+
+    def test_the_tracked_file_ships_and_lists_only_manifest_unit_names(self):
+        # Tests [@ANCHOR: pager_duty:units_expected_off]
+        got = check.units_expected_off({})
+        self.assertTrue(got)
+        self.assertTrue(all(name.endswith(check.UNIT_SUFFIXES) for name in got))
+
+    def test_a_listed_missing_unit_is_skipped_but_an_unlisted_one_still_fails(self):
+        # Tests [@ANCHOR: pager_duty:units_expected_off]
+        units = check.expected_units(FakeInfra)
+        gone = {"LoadState": "not-found"}
+        show = shown(**{"a.timer": gone, "paid.timer": gone})
+        off = check.units_expected_off({}, self.listing("a.timer # planned\n"))
+        self.assertEqual(dict(check.units_not_in_operation(units, show=show, expected_off=off)), {"paid.timer": "not installed"})
+
+    def test_a_listed_unit_that_is_installed_is_fine(self):
+        # Tests [@ANCHOR: pager_duty:units_expected_off]
+        units = check.expected_units(FakeInfra)
+        off = check.units_expected_off({}, self.listing("a.timer\n"))
+        self.assertEqual(check.units_not_in_operation(units, show=shown(), expected_off=off), [])
 
 
 class SystemctlShowTests(unittest.TestCase):
