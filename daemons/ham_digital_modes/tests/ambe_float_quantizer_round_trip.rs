@@ -23,6 +23,9 @@ impl Lcg {
 const FRAMES: usize = 4000;
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:float_mbe_encode_quantize_speech]
+// Tests [@ANCHOR: ham_digital_modes:float_mbe_encode_nearest]
+// Tests [@ANCHOR: ham_digital_modes:float_mbe_encode_prev_at]
 fn dstar_quantizer_inverts_the_decoder() {
     use ham_digital_modes::ambe::float::dstar::decode::{
         dequantize, extract_raw_parameters, f0_from_b0, DStarDecoderState, DequantizedFrame,

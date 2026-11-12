@@ -111,6 +111,7 @@ pub fn target_log2_ml_q16(w0_q16: i32, voiced: &[bool], ml_q16: &[i32]) -> Vec<i
     out
 }
 
+// [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_prev_at]
 fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i64 {
     // mbelib sets the previous frame's log2Ml[0] to log2Ml[1].
     let idx = if idx == 0 { 1 } else { idx };
@@ -120,6 +121,7 @@ fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i64 {
         .unwrap_or_else(|| *log2_ml_q16.last().unwrap_or(&0)) as i64
 }
 
+// [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_nearest]
 fn nearest<const N: usize>(
     table: &[[i32; N]],
     target: &[i32; N],
@@ -151,6 +153,7 @@ fn voicing_slot(h: usize, f0_q16: i32) -> usize {
 }
 
 /// Fixed-point `quantize_speech`; see the module doc and the float sibling for the algorithm.
+// [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_quantize_speech]
 pub fn quantize_speech(
     target: &SpeechTarget,
     prev: &PrevState,

@@ -486,6 +486,7 @@ pub fn quantize_spectral_amplitudes(
 /// format, so any semantic claim about which `u_hat` vector or bit carries which parameter (e.g.
 /// section 9's "pitch is in `u2`") needs re-checking against the real chip's own
 /// [`dvsi_p25fec::wire_format`]/[`dvsi_p25fec::fec`] deinterleave, not assumed to still hold.
+// [@ANCHOR: ham_digital_modes:float_tia_102_baba_mod_encode_prioritized_bits]
 pub fn encode_prioritized_bits(
     frame: &pitch_refinement::RefinementFrame,
     omega0_hat: f64,

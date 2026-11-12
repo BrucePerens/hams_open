@@ -104,6 +104,7 @@ pub struct SpeechParameters {
 /// Reads `log2_ml_q16` at `idx`, clamping to the last element for an out-of-range index -- matches
 /// the float sibling's own `.get(idx).copied().unwrap_or(*last)` resampling behavior exactly (needed
 /// because the previous frame's own `L` can differ from this frame's `L`).
+// [@ANCHOR: ham_digital_modes:fixed_general_mbe_speech_prev_at]
 fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i32 {
     // mbelib sets the previous frame's log2Ml[0] to log2Ml[1] (read when L grows).
     let idx = if idx == 0 { 1 } else { idx };
@@ -117,6 +118,7 @@ fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i32 {
 /// `FrameKind::Speech` branch. `l`/`w0_q16` are the caller's own already-resolved table lookups (or,
 /// for D-STAR, formula results); `raw`/`tables` supply everything else. Advances `state` in place,
 /// exactly mirroring the float sibling's own side effect.
+// [@ANCHOR: ham_digital_modes:fixed_general_mbe_speech_dequantize_speech]
 pub fn dequantize_speech(
     l: u32,
     w0_q16: i32,

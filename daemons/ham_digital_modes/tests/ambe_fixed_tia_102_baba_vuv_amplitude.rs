@@ -152,6 +152,8 @@ fn report(label: &str, s: &Stats) {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:float_mbe_encode_analyze_at_pitch]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_frequency_bands_count]
 // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_determine_voicing]
 // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_measure_q30]
 // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_threshold_q30]

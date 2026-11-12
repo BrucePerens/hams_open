@@ -234,6 +234,7 @@ impl SynthesisState {
 
     /// A repeated frame with every amplitude multiplied by `scale` (a fade), leaving the stored last frame untouched so the caller's
     /// cumulative fade is applied to the original amplitudes each time.
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_repeated_frame_scaled]
     pub fn synthesize_repeated_frame_scaled(&mut self, scale: f64) -> Option<[f64; N]> {
         let (omega0_tilde, voiced, final_amplitudes) = self.last_final_amplitudes.clone()?;
         let scaled: Vec<f64> = final_amplitudes.iter().map(|a| a * scale).collect();

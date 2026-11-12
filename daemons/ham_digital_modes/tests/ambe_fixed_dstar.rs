@@ -82,6 +82,8 @@ fn classify_tone_index_hz_matches_the_float_sibling_exactly() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_speech_dequantize_speech]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_speech_prev_at]
 // Tests [@ANCHOR: ham_digital_modes:fixed_dstar_decode_dequantize]
 fn fixed_dequantize_matches_float_across_representative_sequences() {
     for sequence in representative_sequences() {

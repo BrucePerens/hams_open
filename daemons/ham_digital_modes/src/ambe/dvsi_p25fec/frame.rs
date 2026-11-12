@@ -43,6 +43,7 @@ pub struct Ratet27Frame {
 /// Decodes a RATET(27) channel frame's 18 protected/unprotected data bytes (the `CHAND` field's own
 /// 144 bits, MSB-first within each byte -- the same layout every capture tool in this project reads
 /// starting at `BITS_OFFSET` in the raw DVSI packet) into all 8 confirmed sub-blocks.
+// [@ANCHOR: ham_digital_modes:dvsi_p25fec_frame_decode_frame]
 pub fn decode_frame(wire_bytes: &[u8; 18]) -> Ratet27Frame {
     let mut wire_frame_bits = [false; 144];
     for (byte_idx, &byte) in wire_bytes.iter().enumerate() {
@@ -115,6 +116,7 @@ mod tests {
     /// One real captured DTMF digit ('1': row 697Hz, column 1209Hz) from `real_dtmf_sweep.tsv`,
     /// with known decoded values per section 25's own fully-resolved DTMF characterization.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:dvsi_p25fec_frame_decode_frame]
     fn decode_frame_recovers_a_real_captured_dtmf_digit() {
         let wire = wire_bytes_from_hex("d08f00b08a00d00d00100400000108000400");
         let frame = decode_frame(&wire);
@@ -134,6 +136,7 @@ mod tests {
     /// One real captured genuine-silence frame from `dtx_silence_sweep.tsv` (`dtxon_silence`,
     /// section 31/35's own confirmed constant).
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:dvsi_p25fec_frame_decode_frame]
     fn decode_frame_recognizes_a_real_captured_dtx_silence_frame() {
         let wire = wire_bytes_from_hex("e0298bcddad32575cd6d44cd4c126302c88e");
         let frame = decode_frame(&wire);

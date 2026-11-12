@@ -61,6 +61,9 @@ macro_rules! policy_tests {
             }
 
             #[test]
+            // Tests [@ANCHOR: ham_digital_modes:fixed_general_concealment_Concealer_continuity_cost_q16]
+            // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_repeated_frame_scaled]
+            // Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_repeated_frame_scaled]
             // Tests [@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_frame]
             // Tests [@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]
             // Tests [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]

@@ -40,6 +40,7 @@ pub fn harmonics_count(pitch: &Pitch) -> u32 {
 }
 
 /// `K_hat`, the number of frequency bands (Eq. 34).
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_frequency_bands_count]
 pub fn frequency_bands_count(l_hat: u32) -> u32 {
     if l_hat <= 36 {
         l_hat.div_ceil(3)
