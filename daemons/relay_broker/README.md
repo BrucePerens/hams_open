@@ -513,12 +513,82 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 - [@ANCHOR: relay_broker:relay_broker_linux_username] (os.rs) fn username(&self, uid: u32) -> Option<String> {
 - [@ANCHOR: relay_broker:relay_broker_linux_groups_of] (os.rs) fn groups_of(&self, user: &str) -> Vec<String> {
 - [@ANCHOR: relay_broker:relay_broker_linux_add_to_group] (os.rs) fn add_to_group(&self, user: &str, group: &str) -> io::Result<()> {
-- [@ANCHOR: relay_broker:relay_broker_denial_reason] (policy.rs) A stable short reason for the audit log and the response.
-- [@ANCHOR: relay_broker:relay_broker_policy_check_path] (policy.rs) The lexical check. Returns the normalised path on success. No filesystem access.
-- [@ANCHOR: relay_broker:relay_broker_policy_class_of_major] (policy.rs) The class a character-device major belongs to under this policy.
-- [@ANCHOR: relay_broker:relay_broker_policy_check_kind] (policy.rs) Accepts a node kind only when it is a character device of `class`.
-- [@ANCHOR: relay_broker:relay_broker_policy_check_node] (policy.rs) The filesystem check: every directory on the way from the device root is a real
-- [@ANCHOR: relay_broker:relay_broker_policy_check_fd] (policy.rs) The post-open check on the descriptor itself.
+### `Denial::reason` (policy.rs) [@ANCHOR: relay_broker:relay_broker_denial_reason]
+
+**Purpose.** A stable short reason for the audit log and the response when an open is refused. `Denial` is the closed enum of refusals: `NotAbsolute`, `OutsideRoot`, `Traversal`, `TooLong` (over `MAX_STRING` bytes or a NUL), `DenyListed`, `Symlink`, `NotCharDevice`, `WrongClass`, `ProtectedUsb`, `UsbUnreadable`. `Broker::open_device` sends the text as the `Denied` reason and logs it.
+
+**Signature.** `pub fn reason(self) -> &'static str`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `self` | `Denial` | The refusal, by value (`Copy`). |
+
+**Returns.** A fixed string per variant, for example "path traversal", "symlink in device path", "protected usb device", "usb identity unreadable". **Errors.** None. **Side effects.** None; pure. **Security.** The text is fixed, so the response never reflects peer input and never reveals which of several protected devices matched. **Tests.** `lexical_check_refuses_traversal_relative_and_deny_listed_paths` (policy.rs).
+
+### `Policy::check_path` (policy.rs) [@ANCHOR: relay_broker:relay_broker_policy_check_path]
+
+**Purpose.** The lexical first check of three: it decides from the text of the path alone, touching no file. `Policy` is the policy table loaded from the root-owned config: `device_root` (`/dev`), `serial_majors` (4, 166, 188, 204, 207), `audio_majors` (116), `deny_usb` (the VNWA codec `08bb:29c0`), `allow_unreadable_usb` (false) and `deny_paths` (`/dev/mem`, `/dev/kmem`, `/dev/port`, `/dev/console`, `/dev/tty`).
+
+**Signature.** `pub fn check_path(&self, path: &str) -> Result<PathBuf, Denial>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&str` | The peer-supplied path; borrowed. Must be absolute, at most `MAX_STRING` bytes, without NUL, no empty, `.` or `..` segment (so also no trailing slash), strictly under `device_root`, not in `deny_paths`. |
+
+**Returns.** The path as a `PathBuf`, byte for byte what will be opened (it is split textually because `Path::components` silently drops `.` segments). **Errors.** `TooLong`, `NotAbsolute`, `Traversal`, `OutsideRoot` (including the root itself), `DenyListed`. **Side effects.** None; pure. **Tests.** `lexical_check_refuses_traversal_relative_and_deny_listed_paths` (policy.rs).
+
+### `Policy::class_of_major` (policy.rs) [@ANCHOR: relay_broker:relay_broker_policy_class_of_major]
+
+**Purpose.** The class a character-device major belongs to under this policy, so a serial tty cannot be opened as audio or the reverse. Used by `check_kind`.
+
+**Signature.** `pub fn class_of_major(&self, major: u32) -> Option<DeviceClass>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `major` | `u32` | The device major number from `st_rdev`. |
+
+**Returns.** `Some(Serial)` when the major is in `serial_majors` (checked first), `Some(Audio)` when in `audio_majors`, `None` for any other major (disks, memory devices, input devices). **Errors.** None. **Side effects.** None; pure. **Tests.** `kinds_are_matched_to_the_requested_class_and_disks_refused` (policy.rs).
+
+### `Policy::check_kind` (policy.rs) [@ANCHOR: relay_broker:relay_broker_policy_check_kind]
+
+**Purpose.** Accepts a node kind only when it is a character device of `class`. The shared test behind the node walk (`check_node`) and the post-open check (`check_fd`).
+
+**Signature.** `pub fn check_kind(&self, kind: NodeKind, class: DeviceClass) -> Result<(), Denial>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `kind` | `NodeKind` | `Char { major, minor }`, `Symlink`, `Dir` or other, from `lstat` or `fstat`. |
+| `class` | `DeviceClass` | The class requested (`Serial` or `Audio`). |
+
+**Returns.** `Ok(())` for a character device whose major maps to `class`. **Errors.** `WrongClass` for another class or for a virtual console (major 4 with minor below 64 is `/dev/tty0..63`, the local keyboard and screen, never handed out); `Symlink`; `NotCharDevice` for everything else (a disk is a block device and fails here). **Side effects.** None; pure. **Tests.** `kinds_are_matched_to_the_requested_class_and_disks_refused` and `virtual_consoles_share_the_serial_major_but_are_never_handed_out` (policy.rs).
+
+### `Policy::check_node` (policy.rs) [@ANCHOR: relay_broker:relay_broker_policy_check_node]
+
+**Purpose.** The filesystem check: every directory on the way from the device root is a real directory (not a symlink), the final node is a character device of `class`, and its USB identity is not protected. `/dev/stdin`, `/dev/fd/0`, `/dev/serial/by-id/...` and a planted link are therefore all refused.
+
+**Signature.** `pub fn check_node(&self, os: &dyn Os, clean: &Path, class: DeviceClass) -> Result<(), Denial>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `os` | `&dyn Os` | The OS layer used for `node_kind` and `usb_identity`; borrowed. |
+| `clean` | `&Path` | The path returned by `check_path`; must be under `device_root`. |
+| `class` | `DeviceClass` | The class requested. |
+
+**Returns.** `Ok(())`. **Errors.** `OutsideRoot` (also for the root itself), `Symlink` (any component), `NotCharDevice` (a non-directory intermediate or missing node), `WrongClass`, `ProtectedUsb` (vendor:product on `deny_usb`), `UsbUnreadable` (sysfs unreadable and `allow_unreadable_usb` false: the check fails closed so hiding sysfs cannot bypass `deny_usb`). **Side effects.** `lstat` and sysfs reads through the OS layer. **Concurrency.** The node can change between this check and the open, which is why `check_fd` follows. **Tests.** `node_walk_uses_the_real_dev_null_without_root` (policy.rs); `an_unreadable_usb_identity_is_refused_unless_the_config_allows_it` (tests/broker.rs).
+
+### `Policy::check_fd` (policy.rs) [@ANCHOR: relay_broker:relay_broker_policy_check_fd]
+
+**Purpose.** The post-open check on the descriptor itself. A swap between the node walk and the open (a time-of-check to time-of-use race) still fails closed because the kind is re-read from the open descriptor with `fstat`.
+
+**Signature.** `pub fn check_fd(&self, kind: NodeKind, class: DeviceClass) -> Result<(), Denial>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `kind` | `NodeKind` | From `Os::fd_kind` of the descriptor just opened. |
+| `class` | `DeviceClass` | The class requested. |
+
+**Returns.** `Ok(())` when it is a character device of the class. **Errors.** As `check_kind`. **Side effects.** None; the caller closes the descriptor (by drop) on error. **Tests.** `an_allowed_open_passes_a_working_descriptor_and_never_the_path` (tests/broker.rs) and the `check_kind` tests in policy.rs.
+
 ### `RateLimiter::new` (ratelimit.rs) [@ANCHOR: relay_broker:relay_broker_rate_limiter_new]
 
 **Purpose.** Builds the per-UID token-bucket limiter: `per_minute` requests sustained, with a burst of the same size. Zero means one a minute. `RateLimiter` holds `capacity`, `refill_every` and a map uid to `(tokens, refill accounted up to, last request)`, so a worker looping on a refused open cannot turn the broker into a log flood or a CPU sink.
@@ -544,32 +614,299 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Returns.** `true` if a token was taken, `false` when empty. **Errors.** None; time going backwards is saturated. **Memory bound.** At most 256 peers are tracked; beyond that the peer that asked longest ago is dropped (not the one refilled longest ago). **Tests.** `a_burst_is_allowed_then_refused_until_time_passes_per_uid`, `the_peer_evicted_is_the_one_that_asked_longest_ago` (ratelimit.rs); `a_peer_over_its_rate_is_refused_and_logged` (tests/broker.rs).
 
-- [@ANCHOR: relay_broker:relay_broker_serve_connection] (server.rs) Serves one connection to completion. Never panics; every failure is an `Outcome`.
-- [@ANCHOR: relay_broker:relay_broker_run] (server.rs) Accepts connections until `idle` passes with none, or until `max_connections` have been
-- [@ANCHOR: relay_broker:relay_broker_activated_listener] (server.rs) The listener systemd passed (`LISTEN_PID` is this process and `LISTEN_FDS` is 1), if any.
-- [@ANCHOR: relay_broker:relay_broker_set_timeouts] (transport.rs) Applies `IO_TIMEOUT` as the receive and send timeout of a socket.
-- [@ANCHOR: relay_broker:relay_broker_send_frame] (transport.rs) Writes `body` as one frame, passing `fd` (if any) with the first bytes.
-- [@ANCHOR: relay_broker:relay_broker_recv_exact] (transport.rs) Fills `buf` with `recvmsg`, appending any passed descriptors to `fds`. Descriptors beyond
-- [@ANCHOR: relay_broker:relay_broker_adopt_received_fd] (transport.rs) Wraps a descriptor that `recvmsg` just received as SCM_RIGHTS. This is the crate's only
-- [@ANCHOR: relay_broker:relay_broker_recv_frame] (transport.rs) Reads one frame: the body bytes and any descriptors passed with it. The announced length is
-- [@ANCHOR: relay_broker:relay_broker_group_name] (wire.rs) The system group name.
-- [@ANCHOR: relay_broker:relay_broker_reader_take] (wire.rs) The next `n` bytes, or `Truncated`.
-- [@ANCHOR: relay_broker:relay_broker_reader_u8] (wire.rs) One byte.
-- [@ANCHOR: relay_broker:relay_broker_reader_u16] (wire.rs) A big-endian u16.
-- [@ANCHOR: relay_broker:relay_broker_reader_string] (wire.rs) A length-prefixed string of at most `MAX_STRING` bytes, UTF-8, no NUL.
-- [@ANCHOR: relay_broker:relay_broker_reader_finish] (wire.rs) Succeeds only when every byte was consumed.
-- [@ANCHOR: relay_broker:relay_broker_put_string] (wire.rs) Appends a length-prefixed string, truncating at a character boundary to `MAX_STRING` bytes
-- [@ANCHOR: relay_broker:relay_broker_device_class_from_tag] (wire.rs) The class for a wire tag.
-- [@ANCHOR: relay_broker:relay_broker_request_encode] (wire.rs) The body bytes (no frame header) for this request.
-- [@ANCHOR: relay_broker:relay_broker_request_decode] (wire.rs) Parses a body. Every failure is a `WireError`; no input panics.
-- [@ANCHOR: relay_broker:relay_broker_response_error] (wire.rs) Shorthand for an error response.
-- [@ANCHOR: relay_broker:relay_broker_response_encode] (wire.rs) The body bytes (no frame header). Device lists are cut at `MAX_DEVICES`.
-- [@ANCHOR: relay_broker:relay_broker_response_decode] (wire.rs) Parses a response body. Used by the client and by the fuzz/property tests.
-- [@ANCHOR: relay_broker:relay_broker_frame_encode] (wire.rs) Prefixes a body with its length. Bodies above `MAX_FRAME` are an encoder bug and are cut to
-- [@ANCHOR: relay_broker:relay_broker_frame_body_len] (wire.rs) The body length announced by a 4-byte header, if it is within bounds.
-- [@ANCHOR: relay_broker:relay_broker_reader_bool] (wire.rs) `Reader::bool`: reads one byte and returns `false` for 0 and `true` for 1. Any other byte is `WireError::BadTag(byte)`, and an empty buffer is `Truncated`, so a flag field cannot carry a third value past the parser. Used for the 5 GHz flag, the optional-DNS flag and the hub and breaker status flags.
-- [@ANCHOR: relay_broker:relay_broker_reader_ipv4] (wire.rs) `Reader::ipv4`: takes four bytes and returns them as an `Ipv4Addr` in network order. Fewer than four bytes left is `WireError::Truncated`; the reader position only advances on success. Used for the hub address and the optional uplink DNS address in a hub start request.
-- [@ANCHOR: relay_broker:relay_broker_reader_u32] (wire.rs) `Reader::u32`: takes four bytes and returns a big-endian u32, or `WireError::Truncated` when fewer than four remain. Used for the lease length in minutes of a hub start request. It never panics and never reads past the end of the body.
+### `serve_connection` (server.rs) [@ANCHOR: relay_broker:relay_broker_serve_connection]
+
+**Purpose.** Serves one connection to completion: one request per connection. Authenticates the peer with `SO_PEERCRED` before reading anything, reads one bounded frame, decodes, calls `Broker::handle`, answers and returns. Never panics; every failure is an `Outcome` (`PeerRejected`, `Malformed`, `Answered`, `IoError`).
+
+**Signature.** `pub fn serve_connection(broker: &mut Broker, stream: &UnixStream) -> Outcome`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `broker` | `&mut Broker` | The shared state. |
+| `stream` | `&UnixStream` | The accepted connection; borrowed, closed by the caller. |
+
+**Returns.** The `Outcome`. A peer not on the allow-list (or whose credentials cannot be read) gets no response and no byte is read; a rejected peer is audited. A descriptor sent by the client is closed unread. A bad version gets `UnsupportedVersion`, any other parse error `Malformed`. **Errors.** Read or write failures (timeouts after 5 s, peer gone, oversize frame) give `IoError`. **Concurrency.** Blocking; single-threaded. **Tests.** `an_unlisted_peer_is_closed_before_any_byte_is_read` and `oversize_and_malformed_frames_are_refused_without_a_panic` (tests/broker.rs).
+
+### `run` (server.rs) [@ANCHOR: relay_broker:relay_broker_run]
+
+**Purpose.** The accept loop. It accepts connections until `idle` passes with none, which lets systemd socket activation restart the broker on demand, or until `max_connections` have been served (`None` for no limit; the tests use it).
+
+**Signature.** `pub fn run(broker: &mut Broker, listener: &UnixListener, idle: Duration, max_connections: Option<usize>) -> io::Result<usize>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `broker` | `&mut Broker` | Shared state. |
+| `listener` | `&UnixListener` | The bound or activated listening socket. |
+| `idle` | `Duration` | How long to wait for a connection (`poll`); config `idle_exit_secs`. |
+| `max_connections` | `Option<usize>` | Stop after this many, or never. |
+
+**Returns.** The number of connections served. **Errors.** `io::Error` from `poll` or a hard `accept` failure; `EINTR`, `WouldBlock` and `Interrupted` are retried. **Concurrency.** Blocking, strictly one connection at a time, each bounded by the 5 s frame deadline, so a slow peer delays others for at most that. **Tests.** `the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_when_idle` (tests/broker.rs).
+
+### `activated_listener` (server.rs) [@ANCHOR: relay_broker:relay_broker_activated_listener]
+
+**Purpose.** The listener systemd passed (`LISTEN_PID` is this process and `LISTEN_FDS` is 1), if any. Adopting descriptor 3 (SD_LISTEN_FDS_START) is the crate's second and last `unsafe` block, with a `SAFETY` comment: systemd's protocol guarantees fd 3 is the listening socket and `run_main` calls this first, so ownership is taken exactly once.
+
+**Signature.** `pub fn activated_listener() -> Option<UnixListener>`
+
+**Arguments.** None; reads the environment variables `LISTEN_PID` and `LISTEN_FDS`. **Returns.** `Some(listener)` set to blocking mode, or `None` when the variables are missing, malformed, name another pid, or `LISTEN_FDS` is not 1. **Errors.** None; every failure is `None`. **Side effects.** Takes ownership of fd 3, so call it at most once per process. **Tests.** `the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_when_idle` (tests/broker.rs) runs the loop on a listener the test made itself; whether it also exercises the environment-variable path is unknown (to-do: add a direct test of `activated_listener` with `LISTEN_PID`/`LISTEN_FDS` set).
+
+### `set_timeouts` (transport.rs) [@ANCHOR: relay_broker:relay_broker_set_timeouts]
+
+**Purpose.** Applies `IO_TIMEOUT` (5 seconds) as the receive and send timeout of a socket, so a stalled peer cannot hold the single-threaded broker or a client forever.
+
+**Signature.** `pub fn set_timeouts(socket: BorrowedFd<'_>) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `socket` | `BorrowedFd` | A connected stream socket; borrowed. |
+
+**Returns.** `Ok(())`. **Errors.** The `io::Error` of `setsockopt` for `SO_RCVTIMEO` or `SO_SNDTIMEO`; callers ignore it. **Side effects.** Changes the two socket options. **Tests.** `a_frame_and_a_descriptor_cross_a_socketpair_and_oversize_is_refused` (transport.rs).
+
+### `send_frame` (transport.rs) [@ANCHOR: relay_broker:relay_broker_send_frame]
+
+**Purpose.** Writes `body` as one length-prefixed frame, passing `fd` (if any) with the first bytes as SCM_RIGHTS ancillary data. Used for every response and every request.
+
+**Signature.** `pub fn send_frame(socket: BorrowedFd<'_>, body: &[u8], fd: Option<BorrowedFd<'_>>) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `socket` | `BorrowedFd` | A connected Unix stream socket. |
+| `body` | `&[u8]` | The message body; framed by `frame_encode` (bodies over `MAX_FRAME` are cut). |
+| `fd` | `Option<BorrowedFd>` | At most one descriptor to pass; borrowed, the caller keeps ownership and closes it afterwards. |
+
+**Returns.** `Ok(())` when the whole frame was sent. **Errors.** `io::Error` from `sendmsg`; `WriteZero` if it accepts no bytes. **Side effects.** Uses `MSG_NOSIGNAL`, so a vanished peer gives an error instead of `SIGPIPE`; loops over partial writes, attaching the descriptor only to the first chunk. **Tests.** `a_frame_and_a_descriptor_cross_a_socketpair_and_oversize_is_refused` (transport.rs).
+
+### `recv_exact` (transport.rs) [@ANCHOR: relay_broker:relay_broker_recv_exact]
+
+**Purpose.** Fills `buf` with `recvmsg`, appending any passed descriptors to `fds`. The whole fill must finish by `deadline`: the socket's own receive timeout restarts on every byte, so alone it would let a peer that sends one byte just inside each timeout hold the single-threaded broker for hours. Before each `recvmsg` the socket timeout is cut to the time that remains.
+
+**Signature.** `fn recv_exact(socket: BorrowedFd<'_>, buf: &mut [u8], fds: &mut Vec<OwnedFd>, deadline: Instant) -> io::Result<()>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `socket` | `BorrowedFd` | The connected socket. |
+| `buf` | `&mut [u8]` | Filled completely; mutated. |
+| `fds` | `&mut Vec<OwnedFd>` | Receives descriptors; at most four are kept, any beyond are closed on the spot, never leaked. |
+| `deadline` | `Instant` | Latest completion time. |
+
+**Returns.** `Ok(())` with `buf` full. **Errors.** `TimedOut` past the deadline, `UnexpectedEof` when the peer closes, other `io::Error` from `recvmsg` or `setsockopt`. **Side effects.** Rewrites `SO_RCVTIMEO` (never zero, which would mean wait forever); received descriptors are close-on-exec. **Tests.** `a_peer_dribbling_one_byte_per_second_cannot_outlast_the_whole_frame_deadline` (transport.rs).
+
+### `adopt_received_fd` (transport.rs) [@ANCHOR: relay_broker:relay_broker_adopt_received_fd]
+
+**Purpose.** Wraps a descriptor that `recvmsg` just received as SCM_RIGHTS in an `OwnedFd`, so it is closed when dropped whether kept or not. This is the crate's first `unsafe` block: nix 0.31 returns passed descriptors as plain integers, and `OwnedFd::from_raw_fd` is `unsafe` only because the caller must promise sole ownership.
+
+**Signature.** `fn adopt_received_fd(raw: RawFd) -> OwnedFd` (private, `#[allow(unsafe_code)]`)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `raw` | `RawFd` | A descriptor number created by the kernel in the `recvmsg` call that just returned. |
+
+**Returns.** The owning wrapper. **Errors.** None. **Safety.** Sound only when `raw` is fresh and held by nothing else; the only call site is in `recv_exact`. **Security.** A hostile peer's extra descriptors cannot accumulate, since every one is wrapped at once. **Tests.** `a_frame_and_a_descriptor_cross_a_socketpair_and_oversize_is_refused` (transport.rs).
+
+### `recv_frame` (transport.rs) [@ANCHOR: relay_broker:relay_broker_recv_frame]
+
+**Purpose.** Reads one frame: the body bytes and any descriptors passed with it. The announced length is checked against `MAX_FRAME` before the body is read, so an oversize frame costs the peer a closed connection and the broker four bytes. The whole frame, header and body together, must arrive within `IO_TIMEOUT`, however the peer paces its bytes.
+
+**Signature.** `pub fn recv_frame(socket: BorrowedFd<'_>) -> io::Result<(Vec<u8>, Vec<OwnedFd>)>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `socket` | `BorrowedFd` | A connected Unix stream socket. |
+
+**Returns.** `(body, descriptors)`; the descriptors (at most four) are owned by the caller; the server drops them, the client keeps the one that comes with `Opened`. **Errors.** `InvalidData` for a length of 0 or above 4096, `TimedOut`, `UnexpectedEof`, other `io::Error`. **Side effects.** Blocks up to 5 s and changes the receive timeout. **Tests.** `oversize_and_malformed_frames_are_refused_without_a_panic` (tests/broker.rs); the two transport tests in transport.rs.
+
+### `Group::name` (wire.rs) [@ANCHOR: relay_broker:relay_broker_group_name]
+
+**Purpose.** The system group name for the closed `Group` enum (`Dialout = 1`, `Audio = 2`, the wire encoding, never reused). `Broker::grant` compares it with the account's groups and gives it to `gpasswd` as a fixed argument, so no group name from the peer ever reaches a command.
+
+**Signature.** `pub fn name(self) -> &'static str`
+
+**Arguments.** `self` by value. **Returns.** `"dialout"` or `"audio"`. **Errors.** None. **Side effects.** None. **Tests.** `frames_are_bounded_and_tags_closed` (wire.rs).
+
+### `Reader::take` (wire.rs) [@ANCHOR: relay_broker:relay_broker_reader_take]
+
+**Purpose.** The bounds-checked primitive under every other `Reader` method. `Reader<'a> { buf: &'a [u8], pos: usize }` is a cursor over one message body; nothing reads the slice except through `take`, so no input can index out of range.
+
+**Signature.** `fn take(&mut self, n: usize) -> Result<&'a [u8], WireError>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `n` | `usize` | Bytes wanted; `pos + n` is computed with `checked_add`. |
+
+**Returns.** The next `n` bytes (borrowed from the body) and advances `pos`. **Errors.** `WireError::Truncated` when fewer than `n` remain or the sum overflows; `pos` is unchanged then. **Side effects.** Advances the cursor only. **Tests.** `strings_are_bounded_utf8_and_nul_free` (wire.rs) and the parser property test in tests/fuzz_parser.rs.
+
+### `Reader::u8` (wire.rs) [@ANCHOR: relay_broker:relay_broker_reader_u8]
+
+**Purpose.** Reads one byte: a version, a tag, a boolean-ish flag or a count. **Signature.** `fn u8(&mut self) -> Result<u8, WireError>` (private).
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (none) | | Reads from the cursor. |
+
+**Returns.** The byte and advances one. **Errors.** `Truncated` when the body is exhausted. **Side effects.** Advances the cursor. **Tests.** `strings_are_bounded_utf8_and_nul_free` (wire.rs); the round-trip properties in tests/fuzz_parser.rs.
+
+### `Reader::u16` (wire.rs) [@ANCHOR: relay_broker:relay_broker_reader_u16]
+
+**Purpose.** Reads a big-endian `u16`: a string length, a port, a vendor or product id or a device count. **Signature.** `fn u16(&mut self) -> Result<u16, WireError>` (private).
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (none) | | Reads from the cursor. |
+
+**Returns.** The value, most significant byte first, and advances two. **Errors.** `Truncated` when fewer than two bytes remain. **Side effects.** Advances the cursor. **Tests.** `strings_are_bounded_utf8_and_nul_free` (wire.rs); tests/fuzz_parser.rs.
+
+### `Reader::string` (wire.rs) [@ANCHOR: relay_broker:relay_broker_reader_string]
+
+**Purpose.** A length-prefixed string field: a `u16` length then that many bytes, of at most `MAX_STRING` (255) bytes, UTF-8, no NUL. Used for device paths, names, the wifi settings and reasons.
+
+**Signature.** `fn string(&mut self) -> Result<String, WireError>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (none) | | Reads from the cursor. |
+
+**Returns.** An owned `String`. **Errors.** `BadString` for a length above 255 (checked before the bytes are taken), an embedded NUL or invalid UTF-8; `Truncated` when the body is short. **Side effects.** Advances the cursor. **Security.** Rejecting NUL stops a truncation attack on later C-string use; the length bound keeps allocation small. **Tests.** `strings_are_bounded_utf8_and_nul_free` (wire.rs).
+
+### `Reader::finish` (wire.rs) [@ANCHOR: relay_broker:relay_broker_reader_finish]
+
+**Purpose.** Ends a decode: succeeds only when every byte was consumed, so a message with trailing bytes is refused rather than half read. **Signature.** `fn finish(&self) -> Result<(), WireError>` (private).
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (none) | | Compares `pos` with the body length. |
+
+**Returns.** `Ok(())` when `pos == buf.len()`. **Errors.** `WireError::Trailing`. **Side effects.** None. **Tests.** `every_request_round_trips_and_trailing_bytes_are_rejected` (wire.rs).
+
+### `put_string` (wire.rs) [@ANCHOR: relay_broker:relay_broker_put_string]
+
+**Purpose.** Appends a length-prefixed string to an outgoing body, truncating at a character boundary to `MAX_STRING` bytes and dropping NUL bytes, so what the encoder writes always passes `Reader::string`.
+
+**Signature.** `fn put_string(out: &mut Vec<u8>, s: &str)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `out` | `&mut Vec<u8>` | The body being built; appended to. |
+| `s` | `&str` | The text; cut to 255 bytes at a UTF-8 boundary, NULs removed (the length counts the cleaned bytes). |
+
+**Returns.** Nothing. **Errors.** None. **Side effects.** Appends to `out`. **Tests.** `strings_are_bounded_utf8_and_nul_free` (wire.rs).
+
+### `device_class_from_tag` (wire.rs) [@ANCHOR: relay_broker:relay_broker_device_class_from_tag]
+
+**Purpose.** The class for a wire tag: 1 is `Serial`, 2 is `Audio`. The set is closed, and numbers are never reused. **Signature.** `fn device_class_from_tag(tag: u8) -> Result<DeviceClass, WireError>` (private).
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `tag` | `u8` | The byte from the body. |
+
+**Returns.** The `DeviceClass`. **Errors.** `WireError::BadTag(tag)` for anything else. 0 means "all classes" only in `ListDevices`, handled by the caller. **Side effects.** None. **Tests.** `frames_are_bounded_and_tags_closed` (wire.rs).
+
+### `Request::encode` (wire.rs) [@ANCHOR: relay_broker:relay_broker_request_encode]
+
+**Purpose.** Produces the body bytes (no frame header) for a request: the version byte (1), a tag, then typed fields, big-endian. Tags: 1 `ListDevices` (class 0 = all), 2 `OpenDevice` (class, read-only flag, path), 3 `GrantGroup`, 4 `ProvisionGroups`, 5 `BindUdp` (u16 port), 6 `HubStart` (interface, ssid, passphrase, channel, 5 GHz flag, hub IPv4, relay name, optional DNS, `u32` lease minutes), 7 `HubStop`, 8 `HubStatus`, 9 `UpdatePackage`, 10 `SetSystemTime` (u64 target, source, agreeing), 11 `TimeStatus`.
+
+**Signature.** `pub fn encode(&self) -> Vec<u8>`
+
+**Arguments.** `&self`, the request. **Returns.** A fresh body, which `send_frame` frames. **Errors.** None; over-long strings are cut by `put_string`. **Side effects.** None. **Concurrency.** Pure. **Tests.** `every_request_round_trips_and_trailing_bytes_are_rejected` (wire.rs); `every_request_round_trips` (tests/fuzz_parser.rs).
+
+### `Request::decode` (wire.rs) [@ANCHOR: relay_broker:relay_broker_request_decode]
+
+**Purpose.** Parses a request body. Every failure is a `WireError`; no input panics. It is the first thing that sees peer bytes, after the allow-list, so it is also the fuzzing target.
+
+**Signature.** `pub fn decode(body: &[u8]) -> Result<Request, WireError>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `body` | `&[u8]` | One frame body of 1 to 4096 bytes; borrowed, strings are copied. |
+
+**Returns.** The typed `Request`. **Errors.** `Version(v)` for a version other than 1 (checked first, nothing else parsed), `BadTag(b)` for an unknown tag, class, group, source or a flag byte other than 0 or 1, `Truncated`, `BadString`, `Trailing`. **Side effects.** None; pure. **Tests.** `every_request_round_trips_and_trailing_bytes_are_rejected` (wire.rs); `arbitrary_bytes_never_panic_the_parsers` (tests/fuzz_parser.rs).
+
+### `Response::error` (wire.rs) [@ANCHOR: relay_broker:relay_broker_response_error]
+
+**Purpose.** Shorthand for an error response: builds `Response::Error { status, reason }`. `Status` is the closed enum `Ok = 0`, `Denied = 1`, `RateLimited = 2`, `Malformed = 3`, `UnsupportedVersion = 4`, `Failed = 5`.
+
+**Signature.** `pub fn error(status: Status, reason: impl Into<String>) -> Response`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `status` | `Status` | The non-`Ok` code (the type does not forbid `Ok`, but an `Ok` error would not decode back as an error). |
+| `reason` | `impl Into<String>` | Short text; cut to 255 bytes at encode time. |
+
+**Returns.** The response value. **Errors.** None. **Side effects.** None. **Tests.** `every_response_round_trips` (wire.rs).
+
+### `Response::encode` (wire.rs) [@ANCHOR: relay_broker:relay_broker_response_encode]
+
+**Purpose.** Produces the response body (no frame header): the version, a status byte, and for `Ok` a payload tag (1 `Devices`, 2 `Opened`, 3 `GroupReport`, 4 `Hub`, 5 `Updated`, 6 `TimeStatus`, 7 `TimeSet`) then fields; an error is the status then a reason string. The `Opened` descriptor is not in the body: it rides in SCM_RIGHTS.
+
+**Signature.** `pub fn encode(&self) -> Vec<u8>`
+
+**Arguments.** `&self`. **Returns.** The body. Device lists are cut at `MAX_DEVICES` (64) and at whole entries that fit within `MAX_FRAME`, so an oversized list loses its tail and not the whole list; a group report lists at most eight groups. **Errors.** None. **Side effects.** None. **Tests.** `every_response_round_trips` and `a_device_list_too_big_for_one_frame_loses_its_tail_not_the_whole_list` (wire.rs); `every_response_round_trips_modulo_truncation` (tests/fuzz_parser.rs).
+
+### `Response::decode` (wire.rs) [@ANCHOR: relay_broker:relay_broker_response_decode]
+
+**Purpose.** Parses a response body. Used by the client (`call`) and by the fuzz and property tests, so a malicious or broken server cannot crash the relay.
+
+**Signature.** `pub fn decode(body: &[u8]) -> Result<Response, WireError>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `body` | `&[u8]` | One frame body; borrowed. |
+
+**Returns.** The `Response`. **Errors.** `Version`, `BadTag` (status, payload tag, class or boolean), `TooMany` (more than 64 devices or 8 groups), `Truncated`, `BadString`, `Trailing`. **Side effects.** None; pure. **Tests.** `every_response_round_trips` (wire.rs); `arbitrary_bytes_never_panic_the_parsers` (tests/fuzz_parser.rs).
+
+### `frame_encode` (wire.rs) [@ANCHOR: relay_broker:relay_broker_frame_encode]
+
+**Purpose.** Prefixes a body with its length: `u32` big-endian, then the body. The frame is `length` (1 to 4096) plus that many body bytes. Bodies above `MAX_FRAME` are an encoder bug and are cut to it.
+
+**Signature.** `pub fn frame_encode(body: &[u8]) -> Vec<u8>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `body` | `&[u8]` | The message body; copied. |
+
+**Returns.** `4 + len` bytes. **Errors.** None. An empty body gives a header of zero, which `frame_body_len` refuses. **Side effects.** None. **Tests.** `frames_are_bounded_and_tags_closed` and `a_device_list_too_big_for_one_frame_loses_its_tail_not_the_whole_list` (wire.rs).
+
+### `frame_body_len` (wire.rs) [@ANCHOR: relay_broker:relay_broker_frame_body_len]
+
+**Purpose.** The body length announced by a 4-byte header, if it is within bounds. Run on the first four bytes of a frame before anything is allocated, so a hostile length costs only four bytes.
+
+**Signature.** `pub fn frame_body_len(header: [u8; 4]) -> Result<usize, WireError>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `header` | `[u8; 4]` | The big-endian length prefix. |
+
+**Returns.** The length, 1 to `MAX_FRAME` (4096). **Errors.** `WireError::BadLength(n)` for 0 or above 4096. **Side effects.** None. **Tests.** `frames_are_bounded_and_tags_closed` (wire.rs); `no_header_above_the_bound_is_accepted` (tests/fuzz_parser.rs).
+
+### `Reader::bool` (wire.rs) [@ANCHOR: relay_broker:relay_broker_reader_bool]
+
+**Purpose.** Reads one byte as a strict boolean: used for the hub flags (5 GHz, optional DNS present), `breaker_open`, `access_point` and `dhcp`. Anything but 0 or 1 is refused rather than read as truthy, so the closed schema stays closed. **Signature.** `fn bool(&mut self) -> Result<bool, WireError>` (private).
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (none) | | Reads one byte from the cursor via `u8`. |
+
+**Returns.** `false` for 0, `true` for 1. **Errors.** `WireError::BadTag(byte)` for any other byte, `Truncated` on an empty remainder. **Side effects.** Advances the cursor. **Tests.** `flags_addresses_and_counts_are_read_exactly_or_refused` (wire.rs).
+
+### `Reader::ipv4` (wire.rs) [@ANCHOR: relay_broker:relay_broker_reader_ipv4]
+
+**Purpose.** Reads an IPv4 address as four bytes in network order: the hub address and the optional upstream DNS server of `HubStart`. **Signature.** `fn ipv4(&mut self) -> Result<Ipv4Addr, WireError>` (private).
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (none) | | Reads four bytes from the cursor. |
+
+**Returns.** The `Ipv4Addr`; any four bytes are accepted here (range checks such as private-network membership belong to `hub::validate`). **Errors.** `WireError::Truncated` when fewer than four bytes remain. **Side effects.** Advances the cursor by four. **Tests.** `flags_addresses_and_counts_are_read_exactly_or_refused` (wire.rs).
+
+### `Reader::u32` (wire.rs) [@ANCHOR: relay_broker:relay_broker_reader_u32]
+
+**Purpose.** Reads a big-endian `u32`: the DHCP lease length in minutes of `HubStart`. **Signature.** `fn u32(&mut self) -> Result<u32, WireError>` (private).
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (none) | | Reads four bytes from the cursor. |
+
+**Returns.** The value; its range is checked later by `hub::validate`. **Errors.** `WireError::Truncated` when fewer than four bytes remain. **Side effects.** Advances the cursor by four. **Tests.** `flags_addresses_and_counts_are_read_exactly_or_refused` (wire.rs).
+
 ### `TimeDenial::reason` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_denial_reason]
 
 **Purpose.** Gives the fixed text for each reason a clock step is refused; the same text goes to the relay in the `Denied` response and into the audit log `detail`, so the two always agree. `TimeDenial` is a small closed enum (`BeforeBuildDate`, `UnprovenLargeStep`, `BreakerOpen`), `Copy`, with no data.
