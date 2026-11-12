@@ -59,6 +59,7 @@ class TestTokens(HamsTransactionCase):
         self.assertEqual(tokens.leading_zero_bits(bytes(32)), 256)
 
     # [@ANCHOR: form_shield:test_tampered_challenge_is_refused]
+    # Tests [@ANCHOR: form_shield_tokens_parsed]
     def test_tampered_challenge_is_refused(self):
         # Tests [@ANCHOR: form_shield:mac]
         # Tests [@ANCHOR: form_shield:make_challenge]

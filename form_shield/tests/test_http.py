@@ -19,6 +19,9 @@ class TestFormShieldHttp(HamsHttpCase):
         reset_shield_state(self.env)
 
     # [@ANCHOR: form_shield:test_challenge_endpoint_issues_signed_uncacheable_json]
+    # Tests [@ANCHOR: form_shield_form_shield_rejection_form_shield_rejection]
+    # Tests [@ANCHOR: form_shield_form_shield_form_shield]
+    # Tests [@ANCHOR: form_shield_form_shield_api_form_shield_controller]
     def test_challenge_endpoint_issues_signed_uncacheable_json(self):
         # Tests [@ANCHOR: form_shield:client_address]
         # Tests [@ANCHOR: form_shield:challenge_route]

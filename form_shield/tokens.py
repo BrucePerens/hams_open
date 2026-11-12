@@ -105,6 +105,7 @@ def make_challenge(key, address, now, difficulty, kind, ttl):
     return body + "." + _mac(key, body)[:SIGNATURE_CHARS]
 
 
+# [@ANCHOR: form_shield_tokens_parsed]
 class Parsed:
     """The fields of a challenge whose signature has been checked."""
 
