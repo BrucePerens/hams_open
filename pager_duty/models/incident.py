@@ -9,6 +9,7 @@ from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
 from odoo.addons.hams_helpdesk.models import untrusted_text as ut
 from odoo.addons.hams_helpdesk.models.inbound_spam_filter import HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY, inbound_spam_reasons
 from odoo.addons.hams_helpdesk.models.mail_thread_untrusted import stash_for
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -538,6 +539,7 @@ class PagerIncident(models.Model):
             self._notify_on_duty(incident, website_id, _("New Incident Created"))
         return incident.id
 
+    @public_rpc
     def message_new(self, msg_dict, custom_values=None):
         """Called by Odoo's own mailgateway (message_process -> message_route
         -> here, via a mail.alias pointing at this model -- see
@@ -606,6 +608,7 @@ class PagerIncident(models.Model):
             ticket._untrusted_record(parked["findings"], parked["removed"], parked["score"], {}, "mail")
         return incident
 
+    @public_rpc
     @api.model
     def auto_resolve_incidents(self, source, website_id=None):
         # [@ANCHOR: auto_resolve_incidents]
@@ -647,11 +650,13 @@ class PagerIncident(models.Model):
             self.env["bus.bus"]._sendone("pager_duty", "update_board", {})
         return records
 
+    @public_rpc
     def action_acknowledge(self):
         # [@ANCHOR: action_acknowledge_incident]
         self.write({"status": "acknowledged"})
         return True
 
+    @public_rpc
     @api.model
     def get_board_data(self):
         # [@ANCHOR: pager_board_data]
@@ -681,6 +686,7 @@ class PagerIncident(models.Model):
     # see PAGER_DUTY_MCP_AI_TRIAGE.md's own slice 1a for why that one needs
     # its own explicit go/no-go before it's ever built.
 
+    @public_rpc
     @api.model
     # [@ANCHOR: pager_duty:mcp_list_incidents]
     def mcp_list_incidents(self, status=None, severity=None, limit=50):
@@ -723,6 +729,7 @@ class PagerIncident(models.Model):
         return rows
 
     # [@ANCHOR: pager_duty:mcp_get_incident_detail]
+    @public_rpc
     def mcp_get_incident_detail(self):
         """Full detail for the MCP triage server's get_incident tool --
         source/severity/description/status plus a simplified chatter
@@ -783,6 +790,7 @@ class PagerIncident(models.Model):
         }
 
     # [@ANCHOR: pager_duty:mcp_add_note]
+    @public_rpc
     def mcp_add_note(self, text):
         """Posts `text` to this incident's own chatter for the MCP triage
         server's add_incident_note tool, tagged so it's visually
