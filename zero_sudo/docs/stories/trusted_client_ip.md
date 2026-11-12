@@ -7,13 +7,30 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 As a **Platform Operator**, I want everything that limits or records a visitor by network address (sign-up throttles, event-report spam filters, audit logs) to use the visitor's real address, and I want a visitor who sends their own `CF-Connecting-IP` or `X-Forwarded-For` header to be unable to pick the address that is recorded.
 
-`zero_sudo.security.utils` `_get_trusted_client_ip(request_obj=None)` is the single place that decides this. [@ANCHOR: zero_sudo:get_trusted_client_ip]
+`zero_sudo.security.utils` `_get_trusted_client_ip(request_obj=None)` is the single place that decides this.
+
+## `_get_trusted_client_ip` `[@ANCHOR: zero_sudo:get_trusted_client_ip]`
+
+**Purpose.** The one decision about which network address a rate limit or a log row uses for a visitor.
+
+**Call interface.** `@api.model`; `env["zero_sudo.security.utils"]._get_trusted_client_ip(request_obj=None)`
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `request_obj` | request or `None` | an already-unwrapped Odoo request (tests, or a caller that has one); `None` uses the current request |
+
+Returns the client address as a `str`, or `None` when no request is active (a cron job or a shell). Raises nothing of its own.
+
+**How it decides.**
 
 * It looks at the transport-level peer of the request (`remote_addr`), never at a header first.
 * This deployment reaches Odoo only through a Cloudflare Tunnel whose daemon runs on the same host, so a loopback peer (`127.0.0.1`, `::1`, or the IPv4-mapped `::ffff:127.0.0.1` that a dual-stack listener reports) is the tunnel and the headers it injected are genuine. Then the address is `CF-Connecting-IP` if present, otherwise the first entry of `X-Forwarded-For`, otherwise the peer itself.
 * Any other peer did not come through the tunnel, so those headers are attacker-controlled and are ignored entirely: the peer address is returned.
 * With no request object given it uses the current request, and returns nothing when there is none (a cron job or a shell).
-* If a website ever moves from the Tunnel to Cloudflare's classic direct proxy, this single loopback test must become a per-website deployment-mode check; the reasoning is in `docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md`.
+
+**Special concerns.** Security: the value keys sign-up throttles, spam filters and the audit log, so a visitor who sends their own `CF-Connecting-IP` or `X-Forwarded-For` header must not be able to choose it; the loopback test is what prevents that. The returned text is not validated as an IP literal, so a caller that needs an address object passes it through `parse_peer_address`. It reads the request only: no database access and no side effect. If a website ever moves from the Tunnel to Cloudflare's classic direct proxy, this single loopback test must become a per-website deployment-mode check; the reasoning is in `docs/bug_hunt_claims/hams_open/cloudflare/models/claims/cf_get_request_context.md`.
+
+**See also.** `is_loopback_peer`, `parse_peer_address`; the web-login block in `controllers/main.py`, which records this value in the security log; tests below.
 
 ## `parse_peer_address` [@ANCHOR: zero_sudo:parse_peer_address]
 

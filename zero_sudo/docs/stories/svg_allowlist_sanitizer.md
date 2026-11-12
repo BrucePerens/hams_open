@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 As an **Author** of a manual article, forum post or blog post, I want a circuit schematic written as
 inline SVG to render, so that a diagram is not an empty box. As a **Security Reviewer**, I want that
 to cost nothing in XSS protection: every SVG that reaches a stored `fields.Html` value has been
-rebuilt from a strict allowlist `[@ANCHOR: zero_sudo:svg_allowlist_sanitizer]`.
+rebuilt from a strict allowlist (the contract below).
 
 ## The Problem
 
@@ -18,6 +18,26 @@ empty box (seen on the live site in `ham_schematics`). Switching the sanitizer o
 adding the SVG tag names to the global list, would also admit `script`, `foreignObject`, `use`,
 `animate`/`set` (which can set `href` to `javascript:`), `style` with `url()`, `feImage` and event
 handlers.
+
+## The Contract
+
+### The SVG allowlist sanitizer `[@ANCHOR: zero_sudo:svg_allowlist_sanitizer]`
+
+Module `zero_sudo/svg_sanitizer.py`, installed by `zero_sudo/__init__.py`. Callers use four things; everything else in the file is
+plumbing documented in the README.
+
+| Function | Input | Returns |
+|---|---|---|
+| `install()` | none | `None`; replaces `odoo.tools.mail._Cleaner.__call__` once, idempotent (see Design) |
+| `clean_document(doc, run_cleaner, dropped_attributes=())` | a parsed lxml tree, the stock cleaner as a callable, attribute names the field refuses (`style`, `class`) | the cleaner's result, with each `<svg>` rebuilt |
+| `sanitize_svg_element(source, dropped_attributes=(), _totals=None)` | one `<svg>` element | a rebuilt element, or `None` when it cannot be validated or passes a cap |
+| `sanitize_xml_svgs(root)` | an XML-parsed tree (QWeb arch), mutated in place | `True` when something hostile was found, so the caller can strike the author |
+
+Guarantee: whatever an author writes, an SVG that leaves these functions was built from an allowlist of elements, attributes and
+values, so it holds no script, no outbound request and no event handler. Nothing is raised for hostile input: a block that fails is
+dropped whole (a cap is logged as a warning), never truncated and never passed through. The patch is process-wide, takes no lock
+and does no I/O. Content outside `<svg>` is handled by the unchanged stock cleaner. Tests: `tests/test_svg_sanitizer.py`,
+corpus `tests/svg_corpus.py`.
 
 ## Design
 

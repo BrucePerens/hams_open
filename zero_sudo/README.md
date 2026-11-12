@@ -98,11 +98,29 @@ Safely retrieves the database ID of a Service Account. Only the XML ID to user I
 **No default-env flush** `[@ANCHOR: zero_sudo:COMM_get_service_uid_no_transaction_flush]`. The live check in `_get_service_uid` runs its SELECT inside a savepoint opened with `flush=False`, after flushing through the caller's own environment. The default savepoint flushes the transaction's `default_env`, and a public request has none yet when a service account is resolved before authentication (the case on every anonymous page view), which made Odoo log "Missing default_env, flushing as public user" and look up the public user each time. Flushing the caller's environment still makes a pending ORM write to the service user visible to the check.
 
 #### `_get_deterministic_hash(input_string)` `[@ANCHOR: deterministic_hash]`
-Generates a deterministic 32-bit integer hash for `pg_advisory_xact_lock`.
-* **Returns:** `int`.
+Generates a deterministic 31-bit integer hash for `pg_advisory_xact_lock`, so every worker that locks the same logical resource computes the same lock number.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `input_string` | `str` (anything else is converted with `str()`) | the name of the resource to lock, for example a model and key |
+
+* **Returns:** `int` from 0 to 2147483646: the first 8 hex digits of the SHA-256 of the UTF-8 text, modulo 2147483647. The same text always gives the same number, in every process and on every host (Python's built-in `hash()` is not used because it is randomised per process).
+* **Errors:** none. Pure function: no database access, no lock taken; the caller passes the number to `pg_advisory_xact_lock`.
+* **Special concerns:** two different names can collide (a 31-bit space), which only means two unrelated operations wait for each other, never that the lock fails. Not a security hash: do not use it for anything secret.
+* **Tests:** `test_06_get_deterministic_hash` in `tests/test_security_utils.py`.
 
 #### `_get_system_param(key, default=None)` `[@ANCHOR: get_system_param]`
 Safely retrieves a whitelisted system configuration parameter, reading it as `zero_sudo.config_service_internal`. A key not on the read whitelist is logged as `param_access_denied` and raises `AccessError`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `key` | `str` | the `ir.config_parameter` key; it must be in `_get_param_read_whitelist()` |
+| `default` | any | returned when the parameter is not set |
+
+* **Returns:** the stored value (a `str`) or `default`. The result goes through the distributed cache decorator, so it can be a cached value.
+* **Errors:** `AccessError` for a key not on the whitelist. When the key also contains `secret`, `key`, `password`, `token`, `auth`, `crypt` or `cert` the message says it matches restricted cryptographic patterns (the mechanical secret block); either way a `zero_sudo.security.log` row with reason `param_access_denied` is written first, through the facility service account, with the key in the login column.
+* **Security:** the whitelist and the banned-substring check are this function's boundary; the read itself is done as `zero_sudo.config_service_internal`, never with `.sudo()`. A secret belongs in the secret store, never in a whitelisted parameter. Writing is `_set_system_param`, which has its own, shorter write whitelist and logs `param_write_denied`.
+* **Tests:** `tests/test_security_utils.py` (the whitelist and the secret block).
 
 #### `_notify_cache_invalidation(model_name, key_value)` `[@ANCHOR: coherent_cache_signal]`
 Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches. It delegates to `distributed_redis_cache`'s `notify_model_invalidation()`, which signals on the `distributed_cache_invalidation` channel that the `distributed_redis_cache` cache-manager daemon listens on. Invalidation is for the whole model; `key_value` must be non-empty but does not narrow it. What this signal does and does not reach on other workers is spelled out in [docs/stories/cache_signaling.md](docs/stories/cache_signaling.md).
@@ -115,6 +133,16 @@ Securely invalidates the entire cache for a specific model. Requires the user to
 
 #### `_set_kv(key, value)` `[@ANCHOR: set_kv_procedure]`
 High-performance atomic key-value update using an optimized Postgres procedure (`zero_sudo_set_kv`, a single `INSERT ... ON CONFLICT (key) DO UPDATE` upsert).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `key` | `str` | the key in `zero_sudo.kv` (unique) |
+| `value` | `str` | the text to store; replaces any previous value |
+
+* **Returns:** nothing. A missing key is created, an existing one is overwritten, in one statement, so there is no read-then-write race between workers and no Python-side existence check.
+* **Side effects:** the direct SQL bypasses the ORM cache, so the method then invalidates the `zero_sudo.kv` model, clears this worker's cache entries for `zero_sudo.security.utils` and sends the cross-worker invalidation signal, so a following `_get_kv` on any worker reads the new value. It does not commit; the write belongs to the caller's transaction.
+* **Errors:** a database error propagates. The procedure is installed by `data/postgres_procedures.xml` when the module is installed or updated.
+* **Tests:** `tests/test_security_utils.py` (the procedure and the cache invalidation).
 </python_api>
 
 ---
