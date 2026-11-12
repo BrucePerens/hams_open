@@ -175,6 +175,92 @@ pub fn setup(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> {
     Ok(r)
 }
 
+/// What `bench_scope_passfail` sets, in the order the guide needs: the test on and its source, then how failures are shown and reported, then the run state.
+const PASSFAIL_ITEMS: [Item; 6] = [
+    Item {
+        arg: "enable",
+        cmd: "PFEN",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "source",
+        cmd: "PFSC",
+        ty: Ty::Words(&["C1", "C2"]),
+    },
+    Item {
+        arg: "display",
+        cmd: "PFDS",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "stop_on_fail",
+        cmd: "PFFS",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "output",
+        cmd: "PFBF",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "run",
+        cmd: "PFOP",
+        ty: Ty::Flag,
+    },
+];
+
+/// `bench_scope_passfail`: the mask test. It switches the test on and picks its source, sets the mask tolerance (`x_mask_div`, `y_mask_div`, 0.04 to 4 in
+/// steps of 0.04, given together), builds the mask round the source waveform (`create_mask`, only while the test is on and stopped), clears the counts
+/// (`clear`), runs or stops the test, and always returns the counts (`PFDD?`: failed, passed, total). Saving and loading mask files is not offered: the
+/// guide says a two-channel scope does not support it.
+pub fn passfail(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_passfail]
+    let flag = |k: &str| match args.get(k) {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(_) => Err(format!("{k} must be true or false")),
+    };
+    let (create, clear) = (flag("create_mask")?, flag("clear")?);
+    let tol = |k: &str| match args.get(k) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_f64()
+            .filter(|x| (0.04..=4.0).contains(x) && ((x / 0.04).round() - x / 0.04).abs() < 1e-6)
+            .map(Some)
+            .ok_or(format!("{k} must be from 0.04 to 4.0 in steps of 0.04")),
+    };
+    let mask = match (tol("x_mask_div")?, tol("y_mask_div")?) {
+        (None, None) => None,
+        (Some(x), Some(y)) => Some(format!("PFST XMASK,{x},YMASK,{y}")),
+        _ => return Err("x_mask_div and y_mask_div go together".into()),
+    };
+    let mut cmds = item_cmds(args, &PASSFAIL_ITEMS[..2], 1)?;
+    cmds.extend(mask.map(|m| (m, "PFST?".to_string())));
+    if create {
+        cmds.push(("PFCM".into(), "PFEN?".into()));
+    }
+    cmds.extend(item_cmds(args, &PASSFAIL_ITEMS[2..5], 1)?);
+    if clear {
+        cmds.push(("PACL".into(), "PFDD?".into()));
+    }
+    cmds.extend(item_cmds(args, &PASSFAIL_ITEMS[5..], 1)?);
+    let mut r = apply(s, cmds)?;
+    r["settings"] = read_items(s, &PASSFAIL_ITEMS, 1);
+    r["mask_tolerance"] = readback(s, "PFST?");
+    let counts = readback(s, "PFDD?");
+    let nums: Vec<u64> = counts
+        .as_str()
+        .unwrap_or("")
+        .split(',')
+        .filter_map(|t| t.trim().parse().ok())
+        .collect();
+    r["result"] = match nums.as_slice() {
+        [fail, pass, total] => json!({"failed": fail, "passed": pass, "total": total}),
+        _ => json!({"unparsed": counts}),
+    };
+    Ok(r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,5 +398,48 @@ mod tests {
             n,
             "nothing sent for a bad call"
         );
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_passfail]
+    #[test]
+    fn a_mask_test_is_set_up_created_run_and_its_counts_are_read() {
+        let (f, mut l) = link();
+        let r = passfail(&mut l, &json!({"enable": true, "source": "C1", "x_mask_div": 0.4, "y_mask_div": 0.52, "create_mask": true, "stop_on_fail": false, "display": true})).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!([
+                "PFEN ON",
+                "PFSC C1",
+                "PFST XMASK,0.4,YMASK,0.52",
+                "PFCM",
+                "PFDS ON",
+                "PFFS OFF"
+            ])
+        );
+        assert_eq!(r["mask_tolerance"], "PFST XMASK,0.4,YMASK,0.52");
+        assert_eq!(
+            r["result"],
+            json!({"failed": 0, "passed": 0, "total": 0}),
+            "stopped: nothing counted"
+        );
+        let r = passfail(&mut l, &json!({"run": true})).unwrap();
+        assert_eq!(r["settings"]["run"], "PFOP ON");
+        // While it runs, each read of the counts sees 10 more frames, 1 of them failed (the fake's rule).
+        assert_eq!(r["result"], json!({"failed": 1, "passed": 9, "total": 10}));
+        let r = passfail(&mut l, &json!({"clear": true})).unwrap();
+        assert_eq!(r["sent"], json!(["PACL"]));
+        let r = passfail(&mut l, &json!({"run": false})).unwrap();
+        assert_eq!(r["settings"]["run"], "PFOP OFF");
+        let n = f.seen.lock().unwrap().len();
+        for bad in [
+            json!({"x_mask_div": 0.4}),
+            json!({"x_mask_div": 0.41, "y_mask_div": 1}),
+            json!({"y_mask_div": 5, "x_mask_div": 1}),
+            json!({"source": "C3"}),
+            json!({"create_mask": 1}),
+        ] {
+            assert!(passfail(&mut l, &bad).is_err(), "{bad}");
+        }
+        assert_eq!(f.seen.lock().unwrap().len(), n);
     }
 }
