@@ -130,6 +130,8 @@ async fn next_change_ends_with_none_when_the_rig_stops() {
 
 // Tests [@ANCHOR: radioctl_core_easy_start_scope]
 // Tests [@ANCHOR: radioctl_core_easy_stop_scope]
+// Tests [@ANCHOR: radioctl_core_rig_filter_scope_stream]
+// Tests [@ANCHOR: radioctl_core_rig_scope_stream]
 #[tokio::test(start_paused = true)]
 async fn a_scope_stream_starts_subscribed_and_stops() {
     let (rig, control) = ic7300();

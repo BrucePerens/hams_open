@@ -867,6 +867,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_net_counters]
     // Tests [@ANCHOR: radioctl_core_serial_counters]
     // Tests [@ANCHOR: radioctl_core_usb_link_counters]
+    // Tests [@ANCHOR: radioctl_core_rig_counters]
     #[test]
     fn small_helpers() {
         let counters = Counters::default();

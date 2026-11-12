@@ -63,6 +63,7 @@ const UNKEY_BACKOFF: Duration = Duration::from_millis(100);
 /// The transmit time limit a rig gets when the owner sets none: three minutes.
 pub const DEFAULT_MAX_TRANSMIT: Duration = Duration::from_secs(180);
 
+// [@ANCHOR: radioctl_core_rig_rig_options]
 /// Options for a rig.
 #[derive(Clone)]
 pub struct RigOptions {
@@ -114,6 +115,7 @@ impl Default for RigOptions {
     }
 }
 
+// [@ANCHOR: radioctl_core_rig_transmit_permit]
 /// Proof that someone decided transmitting is allowed on one rig. There is no bool shortcut.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransmitPermit {
@@ -136,6 +138,7 @@ impl TransmitPermit {
     }
 }
 
+// [@ANCHOR: radioctl_core_rig_freshness]
 /// How fresh a read must be.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Freshness {
@@ -147,6 +150,7 @@ pub enum Freshness {
     Fresh,
 }
 
+// [@ANCHOR: radioctl_core_rig_cached]
 /// A value with the age of the information.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cached<T> {
@@ -156,6 +160,7 @@ pub struct Cached<T> {
     pub age: Duration,
 }
 
+// [@ANCHOR: radioctl_core_rig_rig_stats]
 /// Counters of one rig.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RigStats {
@@ -203,6 +208,7 @@ pub struct RigStats {
     pub unkeys_coalesced: u64,
 }
 
+// [@ANCHOR: radioctl_core_rig_counters]
 #[derive(Default)]
 struct Counters {
     commands_ok: AtomicU64,
@@ -226,11 +232,13 @@ struct Counters {
     unkeys_coalesced: AtomicU64,
 }
 
+// [@ANCHOR: radioctl_core_rig_cache_entry]
 struct CacheEntry {
     value: Observation,
     at: Instant,
 }
 
+// [@ANCHOR: radioctl_core_rig_shared]
 struct Shared {
     id: String,
     capabilities: CapabilitySet,
@@ -260,8 +268,10 @@ fn guard<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+// [@ANCHOR: radioctl_core_rig_reply]
 type Reply = Result<Option<Observation>, RigError>;
 
+// [@ANCHOR: radioctl_core_rig_command]
 struct Command {
     op: Op,
     deadline: Instant,
@@ -269,11 +279,13 @@ struct Command {
     reply: oneshot::Sender<Reply>,
 }
 
+// [@ANCHOR: radioctl_core_rig_senders]
 struct Senders {
     normal: mpsc::Sender<Command>,
     emergency: mpsc::Sender<Command>,
 }
 
+// [@ANCHOR: radioctl_core_rig_rig_handle]
 /// A handle to a running rig. Clone it freely; every clone talks to the same actor.
 #[derive(Clone)]
 pub struct RigHandle {
@@ -363,6 +375,7 @@ pub fn spawn_current<E: ProtocolEngine, T: Transport>(
     spawn(&runtime, engine, transport, options)
 }
 
+// [@ANCHOR: radioctl_core_rig_owned_rig]
 /// A rig together with the small runtime that runs it.
 #[cfg(feature = "owned-runtime")]
 pub struct OwnedRig {
@@ -818,6 +831,7 @@ impl RigHandle {
     }
 }
 
+// [@ANCHOR: radioctl_core_rig_scope_stream]
 /// An async stream of scope sweeps.
 pub struct ScopeStream {
     rx: broadcast::Receiver<ScopeFrame>,
@@ -846,6 +860,7 @@ impl ScopeStream {
     }
 }
 
+// [@ANCHOR: radioctl_core_rig_filter_scope_stream]
 /// An async stream of filter-scope sweeps.
 pub struct FilterScopeStream {
     rx: broadcast::Receiver<FilterScopeFrame>,
@@ -874,6 +889,7 @@ impl FilterScopeStream {
     }
 }
 
+// [@ANCHOR: radioctl_core_rig_event_recv]
 type EventRecv = Pin<
     Box<
         dyn Future<
@@ -885,6 +901,7 @@ type EventRecv = Pin<
     >,
 >;
 
+// [@ANCHOR: radioctl_core_rig_event_stream]
 /// The status changes of one rig: a `futures_core::Stream<Item = RigEvent>` backed by a tokio
 /// broadcast channel. Each subscriber owns its stream and drives it from its own task, so a slow
 /// or panicking subscriber never touches the actor, the unkey path or other subscribers. A
@@ -972,6 +989,7 @@ impl Stream for EventStream {
     }
 }
 
+// [@ANCHOR: radioctl_core_rig_wait]
 enum Wait {
     Done(Reply),
     TimedOut,
@@ -1003,6 +1021,7 @@ fn drive_lines(
     Ok(())
 }
 
+// [@ANCHOR: radioctl_core_rig_actor]
 struct Actor<E, T> {
     engine: E,
     transport: T,
@@ -1036,6 +1055,7 @@ struct Actor<E, T> {
     command_seq: u64,
 }
 
+// [@ANCHOR: radioctl_core_rig_outstanding]
 /// A request on the wire whose reply has not been seen.
 struct Outstanding {
     kind: ReplyKind,

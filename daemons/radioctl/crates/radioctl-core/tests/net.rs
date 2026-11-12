@@ -203,6 +203,7 @@ async fn a_virtual_flexradio_is_read_through_the_network_link() {
 
 // Tests [@ANCHOR: radioctl_core_net_sleep_dropping]
 // Tests [@ANCHOR: radioctl_core_net_sleep_until]
+// Tests [@ANCHOR: radioctl_core_rig_transmit_permit]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_cut_connection_is_reconnected_and_the_rig_is_unkeyed_first() {
     let desc = RigDescription::ts2000();

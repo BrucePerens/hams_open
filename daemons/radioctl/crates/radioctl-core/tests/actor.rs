@@ -77,6 +77,7 @@ fn permit() -> TransmitPermit {
 // Tests [@ANCHOR: radioctl_core_actor_await_reply]
 // Tests [@ANCHOR: radioctl_core_actor_log]
 // Tests [@ANCHOR: radioctl_core_handle_read]
+// Tests [@ANCHOR: radioctl_core_rig_freshness]
 #[tokio::test(start_paused = true)]
 async fn commands_round_trip_and_the_cache_reports_age() {
     let (rig, control) = civ(quiet(), Duration::ZERO);
@@ -446,6 +447,7 @@ async fn a_reply_that_never_comes_stops_being_expected_and_does_not_eat_the_next
 // Tests [@ANCHOR: radioctl_core_actor_poll_reserved]
 // Tests [@ANCHOR: radioctl_core_actor_poll_entry]
 // Tests [@ANCHOR: radioctl_core_poll_take_starved]
+// Tests [@ANCHOR: radioctl_core_rig_rig_options]
 #[tokio::test(start_paused = true)]
 async fn the_transmit_state_is_still_polled_under_a_flood_of_client_commands() {
     let options = RigOptions {
@@ -587,6 +589,7 @@ async fn an_emergency_unkey_does_not_wait_for_inter_command_spacing() {
 
 // Tests [@ANCHOR: radioctl_core_actor_note_unsolicited]
 // Tests [@ANCHOR: radioctl_core_actor_absorb]
+// Tests [@ANCHOR: radioctl_core_rig_rig_stats]
 #[tokio::test(start_paused = true)]
 async fn a_late_reply_on_a_polled_rig_is_not_taken_for_transceive() {
     let mut desc = RigDescription::ts2000();
@@ -660,6 +663,8 @@ fn freq_of(event: &RigEvent) -> Option<Hz> {
 // Tests [@ANCHOR: radioctl_core_event_stream_poll_next]
 // Tests [@ANCHOR: radioctl_core_event_stream_poll]
 // Tests [@ANCHOR: radioctl_core_handle_events]
+// Tests [@ANCHOR: radioctl_core_rig_event_stream]
+// Tests [@ANCHOR: radioctl_core_rig_event_recv]
 #[tokio::test(start_paused = true)]
 async fn stream_trait_delivers_events_in_order_with_old_and_new() {
     let (rig, _control) = civ(quiet(), Duration::ZERO);
@@ -975,6 +980,13 @@ async fn a_dead_transport_ends_in_link_down() {
 // Tests [@ANCHOR: radioctl_core_rig_spawn]
 // Tests [@ANCHOR: radioctl_core_handle_id]
 // Tests [@ANCHOR: radioctl_core_handle_capabilities]
+// Tests [@ANCHOR: radioctl_core_rig_outstanding]
+// Tests [@ANCHOR: radioctl_core_rig_wait]
+// Tests [@ANCHOR: radioctl_core_rig_owned_rig]
+// Tests [@ANCHOR: radioctl_core_rig_senders]
+// Tests [@ANCHOR: radioctl_core_rig_reply]
+// Tests [@ANCHOR: radioctl_core_rig_shared]
+// Tests [@ANCHOR: radioctl_core_rig_cache_entry]
 #[test]
 fn two_rigs_on_two_runtimes_work_and_a_handle_works_with_no_runtime_at_all() {
     let build = || {
@@ -1138,6 +1150,7 @@ async fn a_key_the_rig_never_answers_is_unkeyed_fail_closed() {
 
 // Tests [@ANCHOR: radioctl_core_actor_unkey_on_stop]
 // Tests [@ANCHOR: radioctl_core_actor_run]
+// Tests [@ANCHOR: radioctl_core_rig_rig_handle]
 #[tokio::test(start_paused = true)]
 async fn dropping_the_last_handle_unkeys_a_keyed_rig() {
     let (rig, control) = civ(quiet(), Duration::ZERO);

@@ -1337,6 +1337,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_usbprotocol_from_name]
     // Tests [@ANCHOR: radioctl_core_description_usb_params]
     // Tests [@ANCHOR: radioctl_core_description_usb_protocol]
+    // Tests [@ANCHOR: radioctl_core_rigfile_usb_section]
     #[test]
     fn usb_protocol_names_round_trip() {
         for p in UsbProtocol::ALL {
@@ -1349,6 +1350,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_vendorprotocol_name]
     // Tests [@ANCHOR: radioctl_core_description_vendor_params]
     // Tests [@ANCHOR: radioctl_core_description_vendor_protocol]
+    // Tests [@ANCHOR: radioctl_core_rigfile_vendor_section]
     #[test]
     fn vendor_protocol_names_round_trip() {
         assert_eq!(
@@ -1471,6 +1473,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_receiver_protocol_from_name]
     // Tests [@ANCHOR: radioctl_core_description_receiver_params]
     // Tests [@ANCHOR: radioctl_core_description_receiver_protocol]
+    // Tests [@ANCHOR: radioctl_core_rigfile_receiver_section]
     #[test]
     fn receiver_protocol_names_round_trip() {
         for p in [

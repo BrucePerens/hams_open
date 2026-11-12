@@ -217,6 +217,12 @@ async fn a_key_on_in_split_is_allowed_on_every_engine_with_a_second_vfo() {
 // Tests [@ANCHOR: radioctl_core_description_legacy_command]
 // Tests [@ANCHOR: radioctl_core_description_legacy_freq_form]
 // Tests [@ANCHOR: radioctl_core_description_yaesu_legacy_params]
+// Tests [@ANCHOR: radioctl_core_rigfile_legacy_read_entry]
+// Tests [@ANCHOR: radioctl_core_rigfile_legacy_flag_entry]
+// Tests [@ANCHOR: radioctl_core_rigfile_legacy_mode_entry]
+// Tests [@ANCHOR: radioctl_core_rigfile_legacy_freq_entry]
+// Tests [@ANCHOR: radioctl_core_rigfile_legacy_command_entry]
+// Tests [@ANCHOR: radioctl_core_rigfile_yaesu_legacy_section]
 #[tokio::test(start_paused = true)]
 async fn yaesu_legacy_in_split_refuses_a_key_on_because_vfo_b_is_unreadable() {
     use radioctl_core::error::ErrorKind;
