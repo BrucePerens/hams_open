@@ -58,6 +58,7 @@ class BinaryTenantLink(models.Model):
                 continue
             record.symlink_path = os.path.join(tenant_dir, record.manifest_id.name)
 
+    @api.private
     def apply_symlink(self):
         """Creates or updates the OS-level symlink pointing to the central version pool."""
         self.ensure_one()
