@@ -52,6 +52,7 @@ pub enum BadFrameAction {
 
 impl ErrorPolicy {
     /// Whether a speech frame with these corrected-error counts is treated as damaged.
+    // [@ANCHOR: ham_digital_modes_mbe:ErrorPolicy_is_bad]
     pub fn is_bad(self, epsilon_c0: u32, epsilon_c1: u32) -> bool {
         match self {
             ErrorPolicy::Clean | ErrorPolicy::Concealing => epsilon_c0 + epsilon_c1 > 3,
@@ -60,6 +61,7 @@ impl ErrorPolicy {
     }
 
     /// The action for the `consecutive_bad`-th damaged frame in a row (1 for the first).
+    // [@ANCHOR: ham_digital_modes_mbe:ErrorPolicy_bad_frame_action]
     pub fn bad_frame_action(self, consecutive_bad: u32) -> BadFrameAction {
         match (self, consecutive_bad <= 3) {
             (_, true) => BadFrameAction::Repeat,
@@ -161,5 +163,69 @@ impl MbeSynthesizer {
 impl Default for MbeSynthesizer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `is_bad` calls a frame damaged when the corrected-error total exceeds 3 (clean and concealing
+    /// policies) or when the golay-protected part alone corrected 3 or more (chip-compatible policy,
+    /// which ignores the second code word's count).
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes_mbe:ErrorPolicy_is_bad]
+    fn is_bad_follows_each_policys_threshold() {
+        for policy in [ErrorPolicy::Clean, ErrorPolicy::Concealing] {
+            assert!(!policy.is_bad(0, 0));
+            assert!(
+                !policy.is_bad(2, 1),
+                "three corrected errors in total is tolerated"
+            );
+            assert!(policy.is_bad(2, 2), "four is damaged");
+            assert!(policy.is_bad(0, 4));
+        }
+        let chip = ErrorPolicy::ChipCompatible;
+        assert!(!chip.is_bad(2, 0));
+        assert!(
+            !chip.is_bad(2, 9),
+            "the second code word's count is ignored"
+        );
+        assert!(chip.is_bad(3, 0));
+        assert!(chip.is_bad(5, 0));
+    }
+
+    /// `bad_frame_action` repeats the first three damaged frames in a row under every policy, then
+    /// mutes (clean and concealing) or decodes the damaged frame anyway (chip-compatible).
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes_mbe:ErrorPolicy_bad_frame_action]
+    fn bad_frame_action_repeats_three_times_then_mutes_or_decodes() {
+        for policy in [
+            ErrorPolicy::Clean,
+            ErrorPolicy::Concealing,
+            ErrorPolicy::ChipCompatible,
+        ] {
+            for consecutive in 1..=3 {
+                assert_eq!(
+                    policy.bad_frame_action(consecutive),
+                    BadFrameAction::Repeat,
+                    "{policy:?} #{consecutive}"
+                );
+            }
+        }
+        for consecutive in [4, 5, 100] {
+            assert_eq!(
+                ErrorPolicy::Clean.bad_frame_action(consecutive),
+                BadFrameAction::Mute
+            );
+            assert_eq!(
+                ErrorPolicy::Concealing.bad_frame_action(consecutive),
+                BadFrameAction::Mute
+            );
+            assert_eq!(
+                ErrorPolicy::ChipCompatible.bad_frame_action(consecutive),
+                BadFrameAction::Decode
+            );
+        }
     }
 }

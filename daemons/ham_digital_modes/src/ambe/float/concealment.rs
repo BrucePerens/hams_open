@@ -28,6 +28,7 @@ pub struct Descriptor {
 
 impl Descriptor {
     /// `voiced` and `ml` are 1-indexed by harmonic (index 0 unused), as the decoders' parameter structs carry them.
+    // [@ANCHOR: ham_digital_modes_float_conceal:Descriptor_new]
     pub fn new(w0: f64, voiced: &[bool], ml: &[f64]) -> Self {
         let l = ml.len() - 1;
         let level_db = 20.0
@@ -133,6 +134,7 @@ impl Concealer {
         self.ber
     }
 
+    // [@ANCHOR: ham_digital_modes_float_conceal:Concealer_continuity_cost]
     fn continuity_cost(&self, c: &Descriptor) -> f64 {
         let Some(p) = &self.previous else { return 0.0 };
         let widen = 1.0 + self.params.widen_per_repeat * self.repeats as f64;
@@ -207,5 +209,101 @@ impl Concealer {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A descriptor of a flat spectrum: sixteen harmonics of equal amplitude, all voiced or all not.
+    fn flat(w0: f64, amplitude: f64, voiced: bool) -> Descriptor {
+        let mut ml = vec![0.0];
+        ml.extend(std::iter::repeat_n(amplitude, 16));
+        Descriptor::new(w0, &[voiced; 17], &ml)
+    }
+
+    fn close(a: f64, b: f64) -> bool {
+        (a - b).abs() < 1e-9
+    }
+
+    /// `Descriptor::new` summarises a frame as its pitch, its level in dB (20 log10 of the rms
+    /// amplitude), the dB amplitude at sixteen evenly spaced harmonics and the voicing of eight
+    /// bands; a silent harmonic is floored at -60 dB, and the band voicing samples harmonics
+    /// `1 + 2b` for sixteen harmonics.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes_float_conceal:Descriptor_new]
+    fn descriptor_new_reports_level_spectrum_and_band_voicing() {
+        let d = flat(0.1, 10.0, true);
+        assert!(close(d.w0, 0.1));
+        assert!(close(d.level_db, 20.0));
+        assert!(d.spectrum.iter().all(|&s| close(s, 20.0)));
+        assert!(d.voicing.iter().all(|&v| v));
+        let silent = flat(0.1, 0.0, false);
+        assert!(close(silent.level_db, -60.0));
+        assert!(silent.spectrum.iter().all(|&s| close(s, -60.0)));
+        assert!(silent.voicing.iter().all(|&v| !v));
+        let mut voiced = vec![false; 17];
+        for b in (0..8).step_by(2) {
+            voiced[1 + 2 * b] = true;
+        }
+        let mut ml = vec![0.0];
+        ml.extend((1..=16).map(|k| k as f64));
+        let d = Descriptor::new(0.2, &voiced, &ml);
+        assert_eq!(
+            d.voicing,
+            [true, false, true, false, true, false, true, false]
+        );
+        assert!(close(d.spectrum[0], 20.0 * 1.0f64.log10()));
+        assert!(close(d.spectrum[15], 20.0 * 16.0f64.log10()));
+    }
+
+    /// `continuity_cost` is zero with no previous frame and for an identical frame; a level step of
+    /// `x` dB costs `x / level_scale_db`, each differing voicing band costs `voicing_cost`, a pitch
+    /// ratio costs `|ln ratio| / pitch_scale`, and every prior widens with the number of repeats.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes_float_conceal:Concealer_continuity_cost]
+    fn continuity_cost_adds_level_voicing_and_pitch_terms_and_widens_with_repeats() {
+        let params = ConcealParams::default();
+        let mut c = Concealer::new(params);
+        let base = flat(0.1, 10.0, true);
+        assert!(close(c.continuity_cost(&base), 0.0), "no previous frame");
+        c.previous = Some(base.clone());
+        assert!(close(c.continuity_cost(&base), 0.0), "identical frame");
+
+        let mut louder = base.clone();
+        louder.level_db += 7.0;
+        louder.spectrum = base.spectrum;
+        assert!(close(
+            c.continuity_cost(&louder),
+            7.0 / params.level_scale_db
+        ));
+
+        let mut flipped = base.clone();
+        flipped.voicing[0] = false;
+        flipped.voicing[5] = false;
+        assert!(close(
+            c.continuity_cost(&flipped),
+            2.0 * params.voicing_cost
+        ));
+
+        let mut higher = base.clone();
+        higher.w0 = base.w0 * std::f64::consts::E;
+        assert!(close(c.continuity_cost(&higher), 1.0 / params.pitch_scale));
+
+        c.repeats = 4;
+        let widen = 1.0 + params.widen_per_repeat * 4.0;
+        assert!(close(
+            c.continuity_cost(&louder),
+            7.0 / (params.level_scale_db * widen)
+        ));
+        assert!(close(
+            c.continuity_cost(&higher),
+            1.0 / (params.pitch_scale * widen)
+        ));
+        assert!(
+            close(c.continuity_cost(&flipped), 2.0 * params.voicing_cost),
+            "voicing cost does not widen"
+        );
     }
 }

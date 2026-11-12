@@ -112,6 +112,19 @@ small helpers choose between equivalent forms; each is tested against the plain 
   `partition_into_blocks_q16` splits the `L` prediction residuals into Annex J's six blocks.
   *(Reference: `src/ambe/fixed/general/unvoiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:NoiseState_new]`, `[@ANCHOR: ham_digital_modes:NoiseState_step]`, `[@ANCHOR: ham_digital_modes:NoiseState_advance_frame]`, `[@ANCHOR: ham_digital_modes:NoiseState_at]`, `[@ANCHOR: ham_digital_modes:ComplexQ16_norm_sqr_q16]`, `[@ANCHOR: ham_digital_modes:mul_div_wide]`, `[@ANCHOR: ham_digital_modes:twiddle_q16]`; `src/ambe/fixed/general/voiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:phase_dither_q16]`; `src/ambe/fixed/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: ham_digital_modes:dequantize_uniform_q16]`; `src/ambe/fixed/tia_102_baba/prediction.rs` -> `[@ANCHOR: ham_digital_modes:previous_log2_amplitude_q16]`; `src/ambe/fixed/tia_102_baba/quantize.rs` -> `[@ANCHOR: ham_digital_modes:partition_into_blocks_q16]`)*
 
+## Damaged-frame handling in the float AMBE decoder (slice 5)
+
+- `ErrorPolicy::is_bad` decides whether a speech frame counts as damaged: more than three corrected errors in total under the clean and
+  concealing policies, three or more in the first code word under the chip-compatible policy, which ignores the second.
+- `ErrorPolicy::bad_frame_action` answers what to do with the n-th damaged frame in a row: repeat the previous frame for the first three
+  under every policy, then mute (clean, concealing) or decode the damaged frame anyway (chip-compatible).
+- `Descriptor::new` condenses a decoded frame to what the concealer compares between frames: the pitch, the level in dB, the dB amplitude
+  at sixteen evenly spaced harmonics (floored at -60 dB) and the voicing of eight bands.
+- `Concealer::continuity_cost` is the cost in nats of accepting a candidate frame given the previous accepted one: a level term, a spectral
+  shape term, a cost per voicing band that differs, and a pitch-ratio term when both frames are voiced; the level, shape and pitch priors
+  widen with the number of frames repeated in a row, the voicing cost does not.
+  *(Reference: `src/ambe/float/mbe_synthesis.rs` -> `[@ANCHOR: ham_digital_modes_mbe:ErrorPolicy_is_bad]`, `[@ANCHOR: ham_digital_modes_mbe:ErrorPolicy_bad_frame_action]`; `src/ambe/float/concealment.rs` -> `[@ANCHOR: ham_digital_modes_float_conceal:Descriptor_new]`, `[@ANCHOR: ham_digital_modes_float_conceal:Concealer_continuity_cost]`)*
+
 ## Codec2 3200 synthesis (float and fixed)
 
 `synthesize_subframe` turns one decoded model into 10 ms of audio: it samples the LPC filter's phase
