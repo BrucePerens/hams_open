@@ -2193,6 +2193,9 @@ fn the_safe_state_unkeys_reads_it_back_lowers_the_power_and_works_while_another_
     let v = txtools::safe_state(&mut c, &b.insts[0], &json!({"lower_power": false})).unwrap();
     assert!(v["power_set_to_minimum"].is_null() && b.sim.lock().unwrap().rfpower == 0.3);
     assert!(txtools::safe_state(&mut c, &b.insts[0], &json!({"lower_power": "yes"})).is_err());
+    // The release through a new connection lowers the power only when asked to.
+    assert_eq!(txtools::power_floor(true, Some(0.05)), Some(0.05));
+    assert_eq!(txtools::power_floor(false, Some(0.05)), None);
     // Through the server's dispatch it takes no instrument lock, so it runs while the lock is held.
     let held = crate::instrument_lock("tx_safe");
     let _g = held.lock().unwrap();

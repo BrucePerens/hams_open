@@ -207,8 +207,7 @@ gone but the daemon lives) and is about to terminate that daemon.
 | `port` | `u16` | The localhost port the leftover daemon listens on. |
 
 Return value: `true` when `guard::unkey("127.0.0.1", port, None)` succeeded, `false` when it did not. No minimum power is set (the `None`). Errors: none; a failure is the `false`.
-The one caller in `rigd.rs` ignores the return value and sends the leftover daemon SIGTERM either way, so a failed release does not stop the daemon from being killed (code oddity,
-reported, not changed). Blocking: up to eight rounds of connect, `set_ptt 0`, read-back with 250 ms sleeps. No lock. Transmitter: only un-keys. See also: test
+The one caller in `rigd.rs` ignores the return value and sends the leftover daemon SIGTERM either way, so a failed release does not stop the daemon from being killed (intended: the daemon belongs to a dead server and must go so that the rig can be managed again). Blocking: up to eight rounds of connect, `set_ptt 0`, read-back with 250 ms sleeps. No lock. Transmitter: only un-keys. See also: test
 `releasing_after_a_crash_sends_ptt_off_to_the_daemon`; related anchors `radioctl_tx_startup_check`, `radioctl_guard_unkey`.
 
 ### `startup_check` [@ANCHOR: radioctl_tx_startup_check]
@@ -521,8 +520,7 @@ Steps: read the minimum setting from `dump_state`, the PTT state before, and the
 attempts); if that also fails the error is `SAFE STATE NOT CONFIRMED: ... The rig may be transmitting. Do this now: switch the rig off at its front panel or pull its power or its antenna feed. Do not use it again until
 the owner has looked at it.` After a verified release it lowers the power (only when asked, and only when a minimum is known) and writes a `safe_state` log line. Return value: `{keyed_interval_was_running_here,
 ptt: "receive", verified, ptt_was ("on", "off", "unknown"), power_setting_before, power_set_to_minimum, power_lowered_ok, note}`; `verified: false` with a note to look at the rig is the case of a rig that cannot
-report PTT. Via the fresh-connection path the result is `{ptt: "receive", verified: true, via: "a new connection"}`. Code oddities (reported, not changed): on the fresh-connection path the power is set to the
-minimum even when `lower_power` is false; the daemon address is looked up twice. Blocking, a few round trips. Transmitter: only un-keys; no gate applies. See also: test
+report PTT. Via the fresh-connection path the result is `{ptt: "receive", verified: true, via: "a new connection"}`. On the fresh-connection path the power is set to the minimum only when `lower_power` is true. Blocking, a few round trips. Transmitter: only un-keys; no gate applies. See also: test
 `the_safe_state_unkeys_reads_it_back_lowers_the_power_and_works_while_another_call_runs`; related anchors `radioctl_tx_release`, `radioctl_tx_startup_check`, `radioctl_guard_unkey`.
 
 ## Watching the dial (`watch.rs`)
@@ -532,9 +530,7 @@ minimum even when `lower_power` is false; the daemon address is looked up twice.
 One poll of the values `bench_radioctl_watch` follows. Private to `watch.rs`. Argument: `c` (`&mut Client`, the connection). Return value: `Ok(Vec<(name, text)>)` with these entries, in this order: `frequency_hz`
 (`get_freq`, the number printed in Hz with no decimals), `mode` and `passband_hz` (`get_mode`; the passband entry is present only when the mode was read), `vfo` (`get_vfo`) and `ptt` (`get_ptt`:
 `receive` for 0, `TRANSMIT` for any other value, `unknown` when the reply has no `PTT` value). A value that the rig refuses (any `RPRT` error other than a link failure) is the text `unavailable`; a field missing
-from a reply is `?`. `Err(text)` only when the link to `radioctld` fails (`tolerate` turns a link error into `Err`). Blocking: four round trips. Read only: it never sets anything and never keys. Code oddity
-(reported, not changed): when `get_mode` is unavailable the list has no `passband_hz` entry, so it is one entry shorter than a poll where the mode was read, and `watch` compares two polls with `zip`, which
-pairs entries by position; a poll where the mode appears or disappears therefore compares `vfo` and `ptt` against the wrong names and can report events that did not happen. See also: test
+from a reply is `?`. `Err(text)` only when the link to `radioctld` fails (`tolerate` turns a link error into `Err`). Blocking: four round trips. Read only: it never sets anything and never keys. Code note: when `get_mode` is unavailable the list has no `passband_hz` entry, so it is one entry shorter than a poll where the mode was read; `watch` therefore compares two polls by entry name, not by position, and a poll where the mode appears or disappears reports only the entries that changed. See also: test
 `the_watch_reports_the_changes_of_the_dial_with_their_times`; related anchors `radioctl_watch`, `radioctl_tolerate`.
 
 ### `watch` [@ANCHOR: radioctl_watch]
@@ -552,7 +548,7 @@ Out of range or non-numeric values are errors from `bounded`. A first poll is ta
 to one interval, plus the polling time, after `seconds`; the result's `seconds` is the real elapsed time). Each difference between a poll and the previous one is an event `{t_s, what, from, to}` (`t_s` seconds since
 the start, two decimals). At most 200 events are kept; more set `events_truncated: true`. Return value: `{seconds, polls, interval_ms, initial: {name: text, ...}, events, events_truncated, note}`, the note stating
 that a change which reverts between two polls is not seen and that `frequency_hz` is a text of the reading in Hz. Errors: the argument errors, and a link failure in any poll (the events found so far are then lost, because
-the error is returned with `?`; code oddity, reported, not changed). Blocking: sleeps on the calling thread for up to the whole time, holding the instrument lock, so a long watch delays other calls to the same rig.
+the error is returned with `?`; intended: a rig that stops answering is an error with its next step, not a partial result). Blocking: sleeps on the calling thread for up to the whole time, holding the instrument lock, so a long watch delays other calls to the same rig.
 See also: test `the_watch_reports_the_changes_of_the_dial_with_their_times`; related anchors `radioctl_watch_poll`, `radioctl_bounded`.
 
 ## The rig's receive audio (`audio_in.rs`)
