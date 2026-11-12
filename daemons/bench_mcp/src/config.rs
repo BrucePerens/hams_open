@@ -108,6 +108,8 @@ pub struct Instrument {
     pub max_amps: f64,
     /// Supply only: the longest the output may stay on after one switch-on, seconds.
     pub max_on_s: f64,
+    /// Scope only: the pause after each failed connection attempt (`connect_waits_s`), seconds; one more attempt than there are pauses.
+    pub connect_waits_s: Vec<f64>,
     /// VNA only: the settings of `vnwa_open::sweep::Config` (defaults for the other kinds, unused).
     pub vna: vnwa_open::sweep::Config,
     /// NanoVNA only (driver `nanovna`).
@@ -280,6 +282,18 @@ fn reject_shared_claims(insts: &[Instrument]) -> Result<(), String> {
     Ok(())
 }
 
+/// The `connect_waits_s` of a scope entry: up to eight pauses of 0 to 3600 s between connection attempts; 2, 5, 10 and 20 s when omitted.
+fn connect_waits(c: &Value) -> Result<Vec<f64>, String> {
+    // [@ANCHOR: bench_mcp_config_connect_waits]
+    let Some(v) = c.get("connect_waits_s") else {
+        return Ok(vec![2.0, 5.0, 10.0, 20.0]);
+    };
+    v.as_array()
+        .filter(|a| a.len() <= 8)
+        .and_then(|a| a.iter().map(|x| x.as_f64().filter(|w| (0.0..=3600.0).contains(w))).collect())
+        .ok_or_else(|| "connect_waits_s must be up to eight numbers from 0 to 3600 (seconds)".to_string())
+}
+
 pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
     // [@ANCHOR: bench_mcp_config]
     let v: Value = serde_json::from_str(text).map_err(|e| format!("config: {e}"))?;
@@ -322,6 +336,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             max_volts: c.get("max_volts").and_then(|m| m.as_f64()).unwrap_or(5.5),
             max_amps: c.get("max_amps").and_then(|m| m.as_f64()).unwrap_or(1.0),
             max_on_s: c.get("max_on_s").and_then(|m| m.as_f64()).unwrap_or(600.0),
+            connect_waits_s: connect_waits(c).map_err(|e| format!("{name}: {e}"))?,
             vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
             sdr: sdr_config(&driver_name, c).map_err(|e| format!("{name}: {e}"))?,
             usb: crate::usb_hub::parse_config(c).map_err(|e| format!("{name}: {e}"))?,
@@ -404,6 +419,22 @@ mod tests {
             (p.kind, p.tier, p.baud, p.max_amps),
             (Kind::Psu, Tier::Full, 115200, 1.0)
         );
+    }
+
+    // Tests [@ANCHOR: bench_mcp_config_connect_waits]
+    // Tests [@ANCHOR: bench_mcp_config]
+    #[test]
+    fn connect_waits_default_to_37_seconds_and_are_bounded() {
+        let waits = |extra: &str| {
+            parse(&format!(r#"{{"instruments":{{"s":{{"driver":"siglent_sds","host":"h"{extra}}}}}}}"#)).map(|v| v[0].connect_waits_s.clone())
+        };
+        assert_eq!(waits("").unwrap(), [2.0, 5.0, 10.0, 20.0]);
+        assert_eq!(waits(r#","connect_waits_s":[300,600,1800]"#).unwrap(), [300.0, 600.0, 1800.0]);
+        assert_eq!(waits(r#","connect_waits_s":[]"#).unwrap(), Vec::<f64>::new());
+        for bad in ["[-1]", "[3601]", r#"["5"]"#, "5", "[1,1,1,1,1,1,1,1,1]"] {
+            let e = waits(&format!(r#","connect_waits_s":{bad}"#)).unwrap_err();
+            assert!(e.contains("connect_waits_s must be"), "{bad}: {e}");
+        }
     }
 
     // Tests [@ANCHOR: bench_mcp_config_vna]
