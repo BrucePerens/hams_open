@@ -17,6 +17,7 @@
 use crate::op::{Field, Observation};
 use crate::units::{Hz, Vfo};
 
+// [@ANCHOR: radioctl_core_txstate_tx_state]
 /// The cached values the derivation reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct TxState {
@@ -159,6 +160,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_txstate_from_cache]
     // Tests [@ANCHOR: radioctl_core_rig_cached]
+    // Tests [@ANCHOR: radioctl_core_txstate_tx_state]
     #[test]
     fn the_inputs_come_from_the_cached_observations() {
         let get = |field| match field {

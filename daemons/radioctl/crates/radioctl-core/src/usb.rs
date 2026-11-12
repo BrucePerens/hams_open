@@ -22,6 +22,7 @@ pub const VID_SILABS: u16 = 0x10C4;
 /// Vendor id of WCH (CH340, CH341, CH9102).
 pub const VID_WCH: u16 = 0x1A86;
 
+// [@ANCHOR: radioctl_core_usb_chip]
 /// The family of the USB-to-serial chip behind a port.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chip {
@@ -37,6 +38,7 @@ pub enum Chip {
     Unknown,
 }
 
+// [@ANCHOR: radioctl_core_usb_port_info]
 /// What is known about one serial port.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PortInfo {
@@ -54,6 +56,7 @@ pub struct PortInfo {
     pub cdc_acm: bool,
 }
 
+// [@ANCHOR: radioctl_core_usb_usb_matcher]
 /// What to look for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UsbMatcher {
@@ -233,6 +236,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_usb_classify]
     // Tests [@ANCHOR: radioctl_core_usb_port_chip]
+    // Tests [@ANCHOR: radioctl_core_usb_chip]
     #[test]
     fn known_vendor_ids_name_their_chip() {
         assert_eq!(classify(0x0403, 0x6001, false), Chip::Ftdi);
@@ -249,6 +253,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_usb_select_port]
+    // Tests [@ANCHOR: radioctl_core_usb_usb_matcher]
     #[test]
     fn selection_needs_exactly_one_match() {
         let ports = vec![

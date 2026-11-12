@@ -5,6 +5,7 @@
 
 use std::time::Duration;
 
+// [@ANCHOR: radioctl_core_backoff_backoff]
 /// An exponential backoff schedule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Backoff {
@@ -48,6 +49,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctl_core_backoff_delay]
+    // Tests [@ANCHOR: radioctl_core_backoff_backoff]
     #[test]
     fn delays_grow_to_the_ceiling_and_stay_there() {
         let backoff = Backoff {

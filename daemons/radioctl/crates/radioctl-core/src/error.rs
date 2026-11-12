@@ -4,6 +4,7 @@
 use std::fmt;
 use std::time::Duration;
 
+// [@ANCHOR: radioctl_core_error_error_kind]
 /// What went wrong, in terms a caller can act on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ErrorKind {
@@ -29,6 +30,7 @@ pub enum ErrorKind {
     QueueFull,
 }
 
+// [@ANCHOR: radioctl_core_error_retry_hint]
 /// Whether and when a caller may usefully try again.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetryHint {
@@ -40,6 +42,7 @@ pub enum RetryHint {
     After(Duration),
 }
 
+// [@ANCHOR: radioctl_core_error_rig_error]
 /// The error type of every radioctl operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RigError {
@@ -97,6 +100,9 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctl_core_error_new]
+    // Tests [@ANCHOR: radioctl_core_error_rig_error]
+    // Tests [@ANCHOR: radioctl_core_error_retry_hint]
+    // Tests [@ANCHOR: radioctl_core_error_error_kind]
     #[test]
     fn retry_hints_follow_the_kind() {
         assert_eq!(RigError::new(ErrorKind::Timeout, "x").retry, RetryHint::Now);

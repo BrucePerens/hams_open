@@ -16,6 +16,7 @@
 
 use crate::units::Hz;
 
+// [@ANCHOR: radioctl_core_scope_scope_axis]
 /// How the scope's frequency axis is anchored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScopeAxis {
@@ -29,6 +30,7 @@ pub enum ScopeAxis {
     ScrollFixed,
 }
 
+// [@ANCHOR: radioctl_core_scope_scope_setting]
 /// A scope setting that is a small choice code of the rig's own (a switch or a short list), as
 /// opposed to the span, axis, reference level and edges that have operations of their own.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -69,6 +71,7 @@ pub enum ScopeSetting {
     Overflow,
 }
 
+// [@ANCHOR: radioctl_core_scope_scope_action]
 /// A one-shot scope command that has no value to set or read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScopeAction {
@@ -78,6 +81,7 @@ pub enum ScopeAction {
     MarkerShift,
 }
 
+// [@ANCHOR: radioctl_core_scope_scope_frame]
 /// One complete sweep of a rig's scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeFrame {
@@ -99,6 +103,7 @@ pub struct ScopeFrame {
     pub samples: Vec<u8>,
 }
 
+// [@ANCHOR: radioctl_core_scope_filter_scope_frame]
 /// One sweep of a rig's filter scope (the passband display, not the band): a few hundred pixels
 /// of amplitude with no frequency axis, since the rig draws it around the receive passband.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +146,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_scope_frame_span]
     // Tests [@ANCHOR: radioctl_core_scope_frame_centre]
+    // Tests [@ANCHOR: radioctl_core_scope_scope_frame]
+    // Tests [@ANCHOR: radioctl_core_scope_scope_axis]
     #[test]
     fn span_and_centre_come_from_the_edges() {
         let frame = ScopeFrame {
@@ -158,6 +165,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_filter_scope_frame_peak]
+    // Tests [@ANCHOR: radioctl_core_scope_filter_scope_frame]
     #[test]
     fn filter_scope_peak_is_the_largest_sample() {
         let mut frame = FilterScopeFrame {

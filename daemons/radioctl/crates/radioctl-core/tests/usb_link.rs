@@ -111,6 +111,10 @@ impl UsbDevice for Broken {
 // Tests [@ANCHOR: radioctl_core_usb_status_code]
 // Tests [@ANCHOR: radioctl_core_usb_status_from_code]
 // Tests [@ANCHOR: radioctl_core_usb_put_header]
+// Tests [@ANCHOR: radioctl_core_usb_wire_usb_reply]
+// Tests [@ANCHOR: radioctl_core_usb_wire_frame_error]
+// Tests [@ANCHOR: radioctl_core_usb_wire_usb_transfer]
+// Tests [@ANCHOR: radioctl_core_usb_wire_usb_status]
 #[test]
 fn every_frame_round_trips_and_partial_or_bad_frames_are_told_apart() {
     let transfers = [
