@@ -67,6 +67,7 @@ pub const HAMMING_PARITY_CHIP: [u8; 11] = [
 /// Encodes 11 data bits (low 11 bits of `data`, MSB-first -- bit 10 is natural offset 0) into this
 /// chip's real 15-bit Hamming codeword, systematic (`data` in the high 11 bits, parity in the low
 /// 4), using [`HAMMING_PARITY_CHIP`] rather than `fec.rs`'s own `HAMMING_PARITY`.
+// [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_hamming_encode_chip]
 pub fn hamming_encode_chip(data: u16) -> u16 {
     let data = data & 0x07FF;
     let mut parity: u8 = 0;
@@ -120,6 +121,7 @@ const G3_GENERATOR: [u32; 8] = [
 /// Encodes 8 data bits (low 8 bits of `data`, MSB-first) into a `g3` codeword using
 /// [`G3_GENERATOR`]. Unlike [`super::fec::golay_encode`], this is not a standard systematic
 /// construction -- it's `data`'s own linear combination of `G3_GENERATOR`'s 8 basis rows.
+// [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_g3_encode]
 pub fn g3_encode(data: u8) -> u32 {
     let mut codeword = 0u32;
     for (i, &row) in G3_GENERATOR.iter().enumerate() {
@@ -187,11 +189,13 @@ mod tests {
     use crate::ambe::general::fec::golay_encode;
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_hamming_encode_chip]
     fn hamming_encode_chip_of_zero_is_zero() {
         assert_eq!(hamming_encode_chip(0), 0);
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_hamming_encode_chip]
     fn hamming_chip_weight_distribution_matches_the_known_enumerator() {
         // Same real, independent check as fec.rs's own: a different labeling of a genuine
         // [15,11,3] Hamming code has the identical weight distribution as any other labeling,
@@ -357,11 +361,13 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_g3_encode]
     fn g3_encode_of_zero_is_zero() {
         assert_eq!(g3_encode(0), 0);
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_g3_encode]
     // Tests [@ANCHOR: ham_digital_modes:fec_g3_decode]
     fn g3_decode_round_trips_every_one_of_its_256_real_codewords_with_zero_distance() {
         for data in 0u16..256 {

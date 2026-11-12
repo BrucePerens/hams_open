@@ -80,6 +80,7 @@ fn representative_sequences() -> Vec<Vec<RawParameters>> {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_decode_dequantize]
 fn fixed_dequantize_matches_float_across_representative_sequences() {
     for sequence in representative_sequences() {
         let mut float_state = DecoderState::initial();

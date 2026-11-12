@@ -62,6 +62,8 @@ fn representative_sequences() -> Vec<Vec<u64>> {
 /// `Single { hz }` (converted to Q16.16) for every valid index -- an exact check, not a tolerance,
 /// since `31.25` has no rounding error in Q16.16 (see `fixed::dstar::decode`'s own doc comment).
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_dstar_decode_classify_tone_index]
+// Tests [@ANCHOR: ham_digital_modes:float_dstar_decode_classify_tone_index]
 fn classify_tone_index_hz_matches_the_float_sibling_exactly() {
     for index in 5..=122u32 {
         let float_kind = float_decode::classify_tone_index(index);
@@ -80,6 +82,7 @@ fn classify_tone_index_hz_matches_the_float_sibling_exactly() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_dstar_decode_dequantize]
 fn fixed_dequantize_matches_float_across_representative_sequences() {
     for sequence in representative_sequences() {
         let mut float_state = DStarDecoderState::initial();

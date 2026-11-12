@@ -44,6 +44,7 @@ pub const TWO_PI_Q32: i64 = 26_986_075_409;
 /// `b0` for a pitch period of `p8 / 8` samples: the integer port of the float `quantize_pitch` (inverse of the chip's
 /// pitch map `f0 = 2^(-4.258618 - 0.021766 * b0)`, rounded to nearest and clamped to `0..=125`). Since
 /// `f0 = 8 / p8`, `b0 = (log2(p8) - 3 - 4.258618) / 0.021766`, evaluated with the table-interpolated `log2`.
+// [@ANCHOR: ham_digital_modes:fixed_dstar_encode_quantize_pitch_p8]
 pub fn quantize_pitch_p8(p8: u32) -> u32 {
     const OFFSET_Q16: i64 = (7_258_618i64 * 65536 + 500_000) / 1_000_000;
     const INV_STEP_Q16: i64 = (65536i64 * 1_000_000 + 10_883) / 21_766;

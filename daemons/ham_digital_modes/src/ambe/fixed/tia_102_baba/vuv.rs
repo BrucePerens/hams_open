@@ -69,6 +69,7 @@ pub fn xi_hf(frame: &RefinementFrame) -> i128 {
 }
 
 /// `xi_max` update (Eq. 41), Q16.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_update_xi_max]
 pub fn update_xi_max(xi_max_prev: i128, xi_0: i128) -> i128 {
     if xi_0 > xi_max_prev {
         (xi_max_prev + xi_0) / 2

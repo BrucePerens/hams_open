@@ -47,6 +47,7 @@ const D_X: [usize; 72] = [
 /// Converts 9 raw CHAND bytes (chip wire order: bytes as received, each byte's bits LSB-first) into
 /// this crate's logical 72-bit frame value -- `C0(24)||C1(23)||C2(11)||C3(14)`, each block packed
 /// MSB-first, matching [`super::decode::parse_frame`]'s own input convention.
+// [@ANCHOR: ham_digital_modes:float_dstar_interleave_wire_bytes_to_frame]
 pub fn wire_bytes_to_frame(bytes: &[u8; 9]) -> u128 {
     let mut ambe_fr = [[false; 24]; 4];
     let mut wire_bit = 0usize;
@@ -67,6 +68,7 @@ pub fn wire_bytes_to_frame(bytes: &[u8; 9]) -> u128 {
 }
 
 /// The exact inverse of [`wire_bytes_to_frame`].
+// [@ANCHOR: ham_digital_modes:float_dstar_interleave_frame_to_wire_bytes]
 pub fn frame_to_wire_bytes(frame: u128) -> [u8; 9] {
     let frame = frame & ((1u128 << 72) - 1);
     let mut ambe_fr = [[false; 24]; 4];
@@ -115,6 +117,8 @@ mod tests {
     /// `frame_to_wire_bytes` must be the exact inverse of `wire_bytes_to_frame` in both directions --
     /// the real property this whole module exists for.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:float_dstar_interleave_frame_to_wire_bytes]
+    // Tests [@ANCHOR: ham_digital_modes:float_dstar_interleave_wire_bytes_to_frame]
     fn wire_bytes_and_frame_round_trip() {
         let bytes: [u8; 9] = [0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x0F];
         let frame = wire_bytes_to_frame(&bytes);
