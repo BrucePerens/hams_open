@@ -52,7 +52,38 @@ describe("offline_store", () => {
         expect(isStorageFullError(undefined)).toBe(false);
     });
 
+    test("a new store names its database and object store, with the ham shack's names as the defaults", () => {
+        // Tests [@ANCHOR: zero_sudo:js_offline_store_constructor]
+        const named = new OfflineStore("MyDB", "my_store");
+        expect([named.dbName, named.storeName, named.dbVersion, named.db]).toEqual(["MyDB", "my_store", 1, null]);
+        const defaults = new OfflineStore();
+        expect([defaults.dbName, defaults.storeName]).toEqual(["HamShackOfflineDB", "offline_logs"]);
+    });
+
+    test("init() opens the database with an object store keyed by uuid, and reports an open error", async () => {
+        // Tests [@ANCHOR: zero_sudo:js_offline_store_init]
+        const store = makeStore();
+        openDatabases.push(store.dbName);
+        await store.init();
+        expect(store.db.objectStoreNames.contains("test_logs")).toBe(true);
+        const transaction = store.db.transaction(["test_logs"], "readonly");
+        expect(transaction.objectStore("test_logs").keyPath).toBe("uuid");
+        expect(transaction.objectStore("test_logs").indexNames.contains("timestamp")).toBe(true);
+        store.db.close();
+        const broken = makeStore();
+        broken.dbVersion = 0; // IndexedDB refuses version 0 with a TypeError raised synchronously inside the promise
+        let failure = null;
+        try {
+            await broken.init();
+        } catch (error) {
+            failure = error;
+        }
+        expect(failure).toBeInstanceOf(Error);
+    });
+
     test("saveLog() resolves with a real uuid, and getPendingLogs() finds it", async () => {
+        // Tests [@ANCHOR: zero_sudo:js_offline_store_save_log]
+        // Tests [@ANCHOR: zero_sudo:js_offline_store_get_pending_logs]
         const store = makeStore();
         openDatabases.push(store.dbName);
 
@@ -82,6 +113,7 @@ describe("offline_store", () => {
     });
 
     test("deleteLog() removes exactly the targeted entry, leaving the rest", async () => {
+        // Tests [@ANCHOR: zero_sudo:js_offline_store_delete_log]
         const store = makeStore();
         openDatabases.push(store.dbName);
 
