@@ -5,6 +5,7 @@
 
 use std::time::{Duration, Instant};
 
+// [@ANCHOR: vnwa_open_power_hub_port]
 /// A port of a power-switching hub, as `uhubctl -l <hub> -p <port>` names it (for example hub `3-2`, port 2).
 #[derive(Clone, Debug, PartialEq)]
 pub struct HubPort {
@@ -17,6 +18,7 @@ pub trait Runner {
     fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String>;
 }
 
+// [@ANCHOR: vnwa_open_power_process_runner_type]
 pub struct ProcessRunner;
 
 impl Runner for ProcessRunner {
@@ -156,6 +158,7 @@ pub fn power_cycle_escalating(
     Err(failures.join("; "))
 }
 
+// [@ANCHOR: vnwa_open_power_cycle_hook]
 /// A power-cycle implementation supplied by the program that embeds this crate: given the hub port and the ladder of (off time, wait for the unit), it cycles
 /// until the unit is back. `bench_mcp` installs its USB hub module's here, so that the recovery inside a measurement, the generator-off recovery and
 /// the `bench_vna_power_cycle` tool all run one implementation (verification of re-enumeration, the hub protection rules, the evidence record). This crate cannot depend
@@ -247,6 +250,8 @@ mod tests {
 
     // Tests [@ANCHOR: vnwa_open_cycle_hook]
     // Tests [@ANCHOR: vnwa_open_power_cycle_with]
+    // Tests [@ANCHOR: vnwa_open_power_cycle_hook]
+    // Tests [@ANCHOR: vnwa_open_power_hub_port]
     #[test]
     fn an_installed_cycle_implementation_gets_the_port_and_the_ladder_and_its_error_is_returned() {
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -498,6 +503,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_power_process_runner]
+    // Tests [@ANCHOR: vnwa_open_power_process_runner_type]
     #[test]
     fn the_process_runner_gives_the_exit_status_and_both_output_streams_of_a_real_program() {
         let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();

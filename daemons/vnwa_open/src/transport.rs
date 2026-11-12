@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use rusb::UsbContext;
 
+// [@ANCHOR: vnwa_open_transport_transfer_error]
 /// Why a control transfer failed, as far as recovery is concerned.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TransferError {
@@ -67,6 +68,7 @@ pub fn classify(e: rusb::Error) -> TransferError {
     }
 }
 
+// [@ANCHOR: vnwa_open_transport_rusb_transport]
 pub struct RusbTransport {
     handle: rusb::DeviceHandle<rusb::Context>,
 }
@@ -113,6 +115,7 @@ impl Transport for RusbTransport {
     }
 }
 
+// [@ANCHOR: vnwa_open_transport_seen]
 /// One transfer seen by `Scripted`: the request number and whether it was a write.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Seen {
@@ -120,6 +123,7 @@ pub struct Seen {
     pub request: u8,
 }
 
+// [@ANCHOR: vnwa_open_transport_scripted]
 /// Plays back outcomes in order; once the script is used up every transfer succeeds with the bytes of the last `Ok` (or none).
 pub struct Scripted {
     outcomes: Mutex<VecDeque<Result<Vec<u8>, TransferError>>>,

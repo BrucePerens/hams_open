@@ -12,6 +12,7 @@ pub const SAMPLE_RATE: u32 = 48_000;
 /// How many frames the ring keeps (eight seconds: a frequency-meter measurement runs for several seconds).
 const KEEP_FRAMES: usize = 8 * SAMPLE_RATE as usize;
 
+// [@ANCHOR: vnwa_open_capture_ring]
 struct Ring {
     frames: std::collections::VecDeque<[i16; 2]>,
     /// Frames received since the stream started (not reduced when old frames are dropped).
@@ -56,6 +57,7 @@ fn is_storm(reports_since_delivery: u64) -> bool {
 /// overran: `frames_after` then closes the stream and fails.
 pub const STORM_REPORTS: u64 = 100;
 
+// [@ANCHOR: vnwa_open_capture_overrun]
 /// One buffer overrun reported by the audio layer: the capture ring lost frames at this point. `at_frame` is the running frame
 /// count when it was reported (frames before it were delivered; the lost ones would have followed), `at` the instant.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -70,6 +72,7 @@ pub const OVERRUN_GUARD_FRAMES: u64 = 960;
 /// The most overruns kept on record (the count is exact beyond it).
 const MAX_OVERRUNS_KEPT: usize = 4096;
 
+// [@ANCHOR: vnwa_open_capture_capture]
 pub struct Capture {
     ring: Arc<(Mutex<Ring>, Condvar)>,
     /// `None` after `close`.
@@ -81,6 +84,7 @@ pub struct Capture {
 /// is exact for any period (`mark`), so the longer period costs nothing in timing.
 pub const DEFAULT_PERIOD_FRAMES: u32 = 1024;
 
+// [@ANCHOR: vnwa_open_capture_options]
 /// How a stream is opened.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Options {
@@ -93,6 +97,7 @@ pub trait InputHost {
     fn input_ids(&self) -> Result<Vec<String>, String>;
 }
 
+// [@ANCHOR: vnwa_open_capture_cpal_host]
 /// The default cpal host (ALSA on Linux).
 pub struct CpalHost;
 
@@ -366,6 +371,7 @@ pub fn synthetic_capture(
     (capture, SyntheticFeed { stop, thread: Some(thread) })
 }
 
+// [@ANCHOR: vnwa_open_capture_synthetic_feed]
 pub struct SyntheticFeed {
     stop: Arc<std::sync::atomic::AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
@@ -407,6 +413,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_input_names]
+    // Tests [@ANCHOR: vnwa_open_capture_cpal_host]
     #[test]
     fn the_input_ids_are_the_hosts_in_its_order_and_a_host_error_is_passed_on() {
         let host = Fixed(Ok(vec!["alsa:hw:CARD=CODEC,DEV=0".into(), "alsa:default".into()]));
@@ -419,6 +426,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_synthetic_capture]
+    // Tests [@ANCHOR: vnwa_open_capture_synthetic_feed]
     #[test]
     fn a_synthetic_capture_delivers_the_generated_frames_after_a_mark_until_it_is_closed() {
         let (cap, feed) = synthetic_capture(|i| [(i % 1000) as i16, -((i % 1000) as i16)]);
@@ -443,6 +451,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_capture_close]
+    // Tests [@ANCHOR: vnwa_open_capture_ring]
     #[test]
     fn a_storm_of_reports_is_told_from_single_overruns_by_the_count_without_audio_between() {
         // One overrun every few hundred ms (a loaded host) never reaches the bound; 100 in a row with no audio is a stream that cannot run.
@@ -465,6 +474,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_overrun_window]
+    // Tests [@ANCHOR: vnwa_open_capture_overrun]
     #[test]
     fn an_overrun_counts_against_a_window_only_from_just_before_the_mark_to_its_end() {
         let at = Instant::now();

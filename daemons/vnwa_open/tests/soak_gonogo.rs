@@ -32,6 +32,7 @@ fn good_log() -> String {
 }
 
 // Tests [@ANCHOR: vnwa_open_soak_scope_open_checked]
+// Tests [@ANCHOR: vnwa_open_install_state_type]
 #[test]
 fn a_scope_that_never_answered_is_a_no_go_that_names_the_evidence_and_the_action_and_a_clean_log_is_go(
 ) {

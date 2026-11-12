@@ -18,6 +18,7 @@ use crate::audio::Complex;
 const ONE: Complex = Complex { re: 1.0, im: 0.0 };
 const ZERO: Complex = Complex { re: 0.0, im: 0.0 };
 
+// [@ANCHOR: vnwa_open_cal_setup]
 /// The measurement settings a calibration is valid for. A calibration holds only at the settings it was made with; applying it at
 /// other ones is refused (`Calibration::check_setup`).
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -31,6 +32,7 @@ pub struct Setup {
 
 const Z0: f64 = 50.0;
 
+// [@ANCHOR: vnwa_open_cal_offset]
 /// One standard's published model: the polynomial of its reactance and the offset line in front of it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Offset {
@@ -39,6 +41,7 @@ pub struct Offset {
     pub loss_gohm_s: f64,
 }
 
+// [@ANCHOR: vnwa_open_cal_kit_definition]
 /// A calibration kit definition: open capacitance coefficients C0 to C3 (F, F/Hz, F/Hz^2, F/Hz^3), short inductance L0 to L3 (H, ...),
 /// the load's resistance and inductance, an offset line for each, and the through's delay. The default is the ideal kit.
 #[derive(Clone, Debug, PartialEq)]
@@ -259,6 +262,7 @@ pub const IDEAL_OPEN: Complex = ONE;
 pub const IDEAL_SHORT: Complex = Complex { re: -1.0, im: 0.0 };
 pub const IDEAL_LOAD: Complex = ZERO;
 
+// [@ANCHOR: vnwa_open_cal_calibrated_point]
 /// A point after correction; a parameter the calibration does not cover is `None`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CalibratedPoint {
@@ -267,6 +271,7 @@ pub struct CalibratedPoint {
     pub s21: Option<Complex>,
 }
 
+// [@ANCHOR: vnwa_open_cal_one_port_type]
 /// The one-port error terms at every calibrated frequency.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OnePort {
@@ -275,6 +280,7 @@ pub struct OnePort {
     pub tracking: Vec<Complex>,
 }
 
+// [@ANCHOR: vnwa_open_cal_calibration]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Calibration {
     /// When it was made (text, as the caller wrote it), the kit and the settings it holds for.
@@ -724,6 +730,8 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_cal_build]
     // Tests [@ANCHOR: vnwa_open_cal_s11]
     // Tests [@ANCHOR: vnwa_open_cal_locate]
+    // Tests [@ANCHOR: vnwa_open_cal_calibration]
+    // Tests [@ANCHOR: vnwa_open_cal_one_port_type]
     #[test]
     fn the_one_port_terms_are_recovered_and_a_known_load_is_corrected() {
         let f = freqs();
@@ -841,6 +849,9 @@ mod tests {
 
     // Tests [@ANCHOR: vnwa_open_cal_kit]
     // Tests [@ANCHOR: vnwa_open_cal_through_offset]
+    // Tests [@ANCHOR: vnwa_open_cal_kit_definition]
+    // Tests [@ANCHOR: vnwa_open_cal_offset]
+    // Tests [@ANCHOR: vnwa_open_cal_setup]
     #[test]
     fn a_real_kit_is_modelled_and_the_calibration_removes_its_imperfections() {
         let kit = KitDefinition {
@@ -1008,6 +1019,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_cal_correct]
+    // Tests [@ANCHOR: vnwa_open_sweep_point]
+    // Tests [@ANCHOR: vnwa_open_cal_calibrated_point]
     #[test]
     fn a_point_is_corrected_in_each_parameter_the_calibration_covers() {
         let f = freqs();

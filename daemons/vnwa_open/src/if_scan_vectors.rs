@@ -1,3 +1,4 @@
+// [@ANCHOR: vnwa_open_if_scan_vectors_if_scan]
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // IF scan, 2026-10-26: TX connected to RX, single-point sweep at 10 MHz at six more IFs (VNWA_SamplesPerPeriod 16 to 48). Per IF the
 // vendor program's S21 (mean of two runs) and, for each codec, 960 frames (left, right) 20 ms after the tone starts.

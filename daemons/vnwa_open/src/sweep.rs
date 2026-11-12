@@ -18,6 +18,7 @@ use crate::power::HubPort;
 use crate::setup::{setup_block, SetupParams};
 use crate::usb::Vnwa;
 
+// [@ANCHOR: vnwa_open_sweep_config]
 /// Everything that is fixed for a session.
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -173,6 +174,7 @@ pub fn stability(x: &[f64], fs: f64, if_hz: f64) -> (f64, f64) {
     (df, change)
 }
 
+// [@ANCHOR: vnwa_open_sweep_point]
 /// One measured point.
 #[derive(Clone, Copy, Debug)]
 pub struct Point {
@@ -197,6 +199,7 @@ pub fn agreement(reference: Complex, measured: Complex) -> (f64, f64) {
     ((ratio.abs() - 1.0) * 100.0, ratio.phase_deg())
 }
 
+// [@ANCHOR: vnwa_open_sweep_recovery]
 /// What the unit needed to get a result, for the caller to report.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Recovery {
@@ -213,6 +216,7 @@ pub struct Recovery {
     pub overruns_reported: u64,
 }
 
+// [@ANCHOR: vnwa_open_sweep_session]
 /// The unit and its two codecs, opened together; all three are reopened after a power cycle.
 pub(crate) struct Session {
     pub(crate) usb: Vnwa,
@@ -394,6 +398,7 @@ impl Recoverable for Vna {
     }
 }
 
+// [@ANCHOR: vnwa_open_sweep_vna]
 pub struct Vna {
     pub(crate) session: Session,
     pub(crate) cfg: Config,
@@ -414,6 +419,7 @@ const ATTEMPT_LOG: usize = 20_000;
 /// How many recovered failures `Vna::failure_log` keeps (the newest).
 const MAX_FAILURE_LOG: usize = 200;
 
+// [@ANCHOR: vnwa_open_sweep_failure_record]
 /// A point that needed more than one attempt (or a power cycle) and was measured in the end: every failed attempt with its evidence.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FailureRecord {
@@ -424,6 +430,7 @@ pub struct FailureRecord {
     pub attempts: Vec<String>,
 }
 
+// [@ANCHOR: vnwa_open_sweep_power_record]
 /// A power cycle the recovery did by itself (a scheduled one is the caller's).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PowerRecord {
@@ -807,6 +814,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_recovery]
+    // Tests [@ANCHOR: vnwa_open_sweep_session]
     #[test]
     fn a_failed_attempt_is_repeated_and_only_a_success_is_returned() {
         let mut f = fake(true);
@@ -826,6 +834,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: vnwa_open_sweep_power_record]
     #[test]
     fn when_the_retries_are_used_up_the_unit_is_power_cycled_once_and_then_tried_again() {
         let mut f = fake(true);
@@ -914,6 +923,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_failure_log]
+    // Tests [@ANCHOR: vnwa_open_sweep_failure_record]
+    // Tests [@ANCHOR: vnwa_open_sweep_recovery]
     #[test]
     fn a_recovery_that_worked_still_reports_every_failure_it_had() {
         struct Noting {
@@ -966,6 +977,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_capture_mark]
+    // Tests [@ANCHOR: vnwa_open_sweep_config]
+    // Tests [@ANCHOR: vnwa_open_capture_options]
     #[test]
     fn the_sweep_asks_the_audio_layer_for_a_1024_frame_period() {
         assert_eq!(Config::default().capture.period_frames, Some(1024));

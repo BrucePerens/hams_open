@@ -24,6 +24,7 @@ pub const DC_GUARD_HZ: f64 = 100.0;
 /// The widest band the audio carries (the codec's Nyquist is 24 kHz).
 pub const MAX_BAND_HZ: f64 = 20_000.0;
 
+// [@ANCHOR: vnwa_open_spectrum_sa_point]
 /// One point of a spectrum.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SaPoint {
@@ -161,6 +162,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_sa_band_rms]
+    // Tests [@ANCHOR: vnwa_open_spectrum_sa_point]
     #[test]
     fn the_band_rms_of_a_tone_is_its_rms_inside_the_band_and_nothing_outside_it() {
         let n = 5760;

@@ -1,3 +1,4 @@
+// [@ANCHOR: vnwa_open_if_reference_vectors_if_ref]
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // IF response check, 2026-10-26: TX connected to RX; per IF the vendor program's S21 at 5 MHz (mean of two single-point sweeps)
 // and, for each codec, 720 frames recorded 10 ms after the tone starts in a single-point sweep at 5 MHz.

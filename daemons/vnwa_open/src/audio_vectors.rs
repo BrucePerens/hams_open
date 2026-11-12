@@ -1,3 +1,4 @@
+// [@ANCHOR: vnwa_open_audio_vectors_real_excerpt]
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Real codec samples (48 kHz, 16 bit, left then right) from the 10 MHz TX-to-RX loopback sweeps, 96 frames each,
 // picked where both channels carry a strong tone, with the left/right ratio of the tone at the IF computed

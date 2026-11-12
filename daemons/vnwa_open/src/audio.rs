@@ -8,6 +8,7 @@
 
 use std::f64::consts::PI;
 
+// [@ANCHOR: vnwa_open_audio_complex]
 /// A complex number (no dependency for this).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Complex {
@@ -120,6 +121,7 @@ pub fn vendor_convention(c: Complex) -> Complex {
     }
 }
 
+// [@ANCHOR: vnwa_open_audio_reference]
 /// Which channel of a codec carries the reference signal (the vendor program's "Reference = Right Channel" setting). On the
 /// observed unit the second codec has it on the right and the first codec on the left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -190,6 +192,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_measure_point]
+    // Tests [@ANCHOR: vnwa_open_audio_reference]
     #[test]
     fn the_ratio_of_two_tones_is_their_amplitude_ratio_and_phase_difference() {
         let l = tone(0.5, 100.0, 48_000.0, 12_000.0, 40);
@@ -213,6 +216,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_vendor_convention]
+    // Tests [@ANCHOR: vnwa_open_reference_vectors_chunk]
+    // Tests [@ANCHOR: vnwa_open_audio_complex]
     #[test]
     fn against_the_vendor_programs_own_s21_in_a_sweep_laid_out_in_time() {
         // The loopback path is flat in frequency (the vendor's single-point S21 is the same from 1 to 30 MHz), and the
@@ -242,6 +247,7 @@ mod tests {
         assert!(residual < 0.03, "residual {residual}");
     }
 
+    // Tests [@ANCHOR: vnwa_open_reference_vectors_point_ref]
     #[test]
     fn against_the_vendor_programs_own_s21_at_four_single_frequencies() {
         for p in POINTS.iter() {
@@ -268,6 +274,7 @@ mod tests {
         assert!((a.phase_deg() + b.phase_deg()).abs() < 1e-9);
     }
 
+    // Tests [@ANCHOR: vnwa_open_if_scan_vectors_if_scan]
     #[test]
     fn at_other_ifs_both_codecs_match_the_vendor_programs_s21_with_their_reference_channels() {
         // The unit's own response differs by IF (|S21| 0.874 at 172.3 degrees at 12 kHz, 0.799 at 174.7 at 6 kHz, 0.782 at
@@ -326,6 +333,7 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: vnwa_open_if_reference_vectors_if_ref]
     #[test]
     fn the_ifs_response_over_12_to_1_khz_matches_the_vendor_programs_s21_on_both_codecs() {
         // Six IFs from 3 kHz to 1 kHz (with 12, 6 and 4 kHz above, nine in all): the unit's own response is not flat (|S21| 0.874 to
@@ -385,6 +393,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: vnwa_open_audio_vectors_real_excerpt]
     #[test]
     fn real_loopback_samples_give_the_independently_computed_ratio_and_the_expected_phase() {
         for e in EXCERPTS {

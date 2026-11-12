@@ -21,7 +21,9 @@ pub const VENDOR_S21: [(f64, f64); 15] = [
     (-0.8000529999999999, -0.07718418333333332),
     (-0.7980228, -0.08558993333333333),
 ];
+// [@ANCHOR: vnwa_open_reference_vectors_chunk]
 pub type Chunk = [[i16; 2]; 720];
+// [@ANCHOR: vnwa_open_reference_vectors_point_ref]
 pub struct PointRef {
     pub f_mhz: f64,
     pub vendor: (f64, f64),

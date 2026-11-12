@@ -10,6 +10,7 @@ use std::path::Path;
 pub const CODEC_VID: &str = "08bb";
 pub const CODEC_PID: &str = "29c0";
 
+// [@ANCHOR: vnwa_open_topology_codec_card]
 /// One ALSA card on a USB codec: its card id and its USB port path (for example `3-2.2.3`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct CodecCard {
@@ -17,6 +18,7 @@ pub struct CodecCard {
     pub usb_path: String,
 }
 
+// [@ANCHOR: vnwa_open_topology_codecs]
 /// The ALSA ids (`hw:CARD=<id>,`) of the two codecs.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Codecs {
@@ -121,6 +123,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_codec_topology]
+    // Tests [@ANCHOR: vnwa_open_topology_codecs]
+    // Tests [@ANCHOR: vnwa_open_topology_codec_card]
     #[test]
     fn the_codec_on_the_lower_port_is_s11_whatever_the_card_order() {
         // As observed on the unit: CODEC at 3-2.2.2 and CODEC_1 at 3-2.2.3.
@@ -157,6 +161,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: vnwa_open_codec_find_cards]
+    // Tests [@ANCHOR: vnwa_open_testdir_test_dir]
     #[test]
     fn sysfs_is_read_for_the_codec_vendor_only() {
         let root = crate::testdir::TestDir::new("topo");
