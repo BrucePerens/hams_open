@@ -11,6 +11,7 @@ use rusb::UsbContext;
 use vnwa_open::generator::{self, Modulation};
 use vnwa_open::usb::Vnwa;
 
+// [@ANCHOR: vnwa_open:mod_probe_scope_struct]
 struct Scope {
     r: BufReader<TcpStream>,
     w: TcpStream,
@@ -365,4 +366,29 @@ fn main() -> Result<(), String> {
     measure(&mut sc, "after the stop attempt");
     println!("  resends {}", usb.resends());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: vnwa_open:mod_probe_scope_struct]
+    #[test]
+    fn the_scope_handle_sends_newline_terminated_commands_and_reads_one_line_back() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        let server = std::thread::spawn(move || {
+            let (sock, _) = listener.accept().unwrap();
+            let mut r = BufReader::new(sock.try_clone().unwrap());
+            let mut w = sock;
+            let mut line = String::new();
+            r.read_line(&mut line).unwrap();
+            w.write_all(b"reply to: ").unwrap();
+            w.write_all(line.as_bytes()).unwrap();
+        });
+        let mut scope = Scope::open(&addr).unwrap();
+        assert_eq!(scope.q("*IDN?").unwrap(), "reply to: *IDN?");
+        server.join().unwrap();
+        assert!(Scope::open("127.0.0.1:1").is_err());
+    }
 }
