@@ -104,3 +104,19 @@ pulses_per_degree = 10
 park = { az = 0.0, el = 0.0 }
 reply_timeout_ms = 1500
 verified = false
+
+# Hy-Gain DCU controllers (Hy-Gain's DCU-3 manual; azimuth only, no position read; the stop command
+# is Hamlib's, not in that manual).
+
+[[rotators]]
+id = "hygain-dcu3"
+name = "Hy-Gain DCU-3 / HAM-IV / T2X azimuth (DCU protocol, 4800 8N1)"
+protocol = "dcu"
+az_min = 0.0
+az_max = 360.0
+el_min = 0.0
+el_max = 0.0
+has_elevation = false
+slew_deg_per_s = 1.5
+reply_timeout_ms = 1500
+verified = false
