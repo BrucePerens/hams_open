@@ -20,6 +20,7 @@ _start:
 3:  j 3b
 "#);
 
+// [@ANCHOR: main_uart_struct]
 struct Uart;
 impl Write for Uart {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {

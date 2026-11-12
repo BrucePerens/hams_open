@@ -44,7 +44,7 @@ As a developer changing this code, I want every data structure in `examples/ambe
 
 **Definition.** `struct Rng(u64);` (struct) in `daemons/ham_digital_modes/examples/tia_102_baba_cross_validation_dump.rs`.
 
-**Notes.** One `u64` of state. Test: the example's `tests` module checks the first outputs for seed 1.
+**Notes.** One `u64` of state. It makes the cross-validation dump's reproducible random choices: noise lengths (seed `0x1234_5678_9abc_def1`) and random test vectors (seed `0x9e37_79b9_7f4a_7c15`); both seeds are non-zero, as the generator requires. Test: the example's `tests` module checks the first outputs for seed 1.
 
 ## `Rng` [@ANCHOR: ham_digital_modes:tia_102_baba_oracle_bits_dump_rng_struct]
 
