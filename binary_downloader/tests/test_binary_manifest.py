@@ -136,6 +136,9 @@ class TestBinaryManifest(HamsTransactionCase):
             }
         )
 
+    # Tests [@ANCHOR: binary_downloader_binary_version_binary_version]
+    # Tests [@ANCHOR: binary_downloader_binary_utils_binary_downloader_mixin]
+    # Tests [@ANCHOR: binary_downloader_binary_manifest_binary_manifest]
     def test_01_already_installed(self):
         # [@ANCHOR: test_binary_manifest_standard]
 
@@ -233,6 +236,7 @@ class TestBinaryManifest(HamsTransactionCase):
         v1 = self.env["binary.version"].get_view(view_type="form")
         self.assertIn("version_number", v1["arch"])
 
+    # Tests [@ANCHOR: binary_downloader_binary_tenant_link_binary_tenant_link]
     def test_05_2_tenant_link_views_render(self):
         # [@ANCHOR: test_tenant_link_form]
         v1 = self.env["binary.tenant.link"].get_view(view_type="form")
