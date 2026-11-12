@@ -27,6 +27,7 @@ That is the bench this manual was written against (aliases `scope`, `psu`, `vna`
 | `vnwa_open` | DG8SAQ VNWA vector network analyser | [instruments/vna](instruments/vna) |
 | `bladerf` | Nuand bladeRF with optional XB-200 | [instruments/bladerf](instruments/bladerf) |
 | `limesdr` | LimeSDR-USB | [instruments/limesdr](instruments/limesdr) |
+| `rtlsdr` | RTL-SDR dongle (R820T), receive only | [instruments/rtlsdr](instruments/rtlsdr) |
 | `usb_hub` | the host's USB tree and switchable hub ports | [instruments/usb-hubs](instruments/usb-hubs) |
 | `audio` | the host's sound devices | [instruments/sound](instruments/sound) |
 

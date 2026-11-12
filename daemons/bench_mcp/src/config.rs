@@ -29,6 +29,7 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("procedure", Kind::Procedure),
     ("radioctl", Kind::Radioctl),
     ("rotator", Kind::Rotator),
+    ("rtlsdr", Kind::Sdr),
     ("rx888", Kind::Rx888),
     ("siglent_sds", Kind::Scope),
     ("siglent_ssa", Kind::Sa),
@@ -180,17 +181,20 @@ fn sdr_config(driver: &str, c: &Value) -> Result<crate::sdr::Config, String> {
     let text = |k: &str| c.get(k).and_then(|x| x.as_str()).map(String::from);
     let cfg = crate::sdr::Config {
         driver: driver.to_string(),
-        serial: if matches!(driver, "bladerf" | "limesdr") {
+        serial: if matches!(driver, "bladerf" | "limesdr" | "rtlsdr") {
             text("serial")
         } else {
             None
         },
         xb200: text("xb200"),
+        direct_samp: text("direct_samp"),
     };
-    if matches!(driver, "bladerf" | "limesdr") {
+    if matches!(driver, "bladerf" | "limesdr" | "rtlsdr") {
         crate::sdr::check_config(&cfg)?;
     } else if cfg.xb200.is_some() {
         return Err("xb200 applies to the bladeRF only".into());
+    } else if cfg.direct_samp.is_some() {
+        return Err("direct_samp applies to the RTL-SDR only".into());
     }
     Ok(cfg)
 }
@@ -509,6 +513,12 @@ mod tests {
         assert!(sdr(r#","xb200":"auto""#, "limesdr")
             .unwrap_err()
             .contains("bladeRF only"));
+        let rtl = sdr(r#","serial":"ca3e","direct_samp":"2""#, "rtlsdr").unwrap();
+        assert_eq!(rtl[0].kind, Kind::Sdr);
+        assert_eq!(rtl[0].sdr.direct_samp.as_deref(), Some("2"));
+        assert!(sdr(r#","direct_samp":"2""#, "limesdr").is_err());
+        assert!(sdr(r#","direct_samp":"5""#, "rtlsdr").is_err());
+        assert!(sdr(r#","xb200":"auto""#, "rtlsdr").is_err());
         assert!(sdr(r#","serial":"not hex""#, "bladerf").is_err());
         assert!(sdr(r#","xb200":"enabled""#, "bladerf").is_err());
         // A non-SDR driver does not read the SDR keys at all.

@@ -2,7 +2,7 @@
 
 One MCP (Model Context Protocol, the way AI tools call outside tools) server (official `rmcp` SDK, the software development kit; stdio) for the bench: about 100 tools, each with a manual page served through the MCP itself.
 It drives a Siglent **oscilloscope** (SDS1000X-E, over the LAN), a Siglent **spectrum analyzer** with tracking generator (SSA3000X), a bench **power supply** (Abestop ATM6301), a **vector network
-analyser** (DG8SAQ VNWA 3E, no vendor software), **SDRs** (bladeRF, LimeSDR), **USB hubs** (topology, diagnosis, and port power
+analyser** (DG8SAQ VNWA 3E, no vendor software), **SDRs** (bladeRF, LimeSDR, RTL-SDR), **USB hubs** (topology, diagnosis, and port power
 cycling to reset a device), **sound devices** (play, record, meter, loopback, speech, with discovery by signature), **radios**
 through radioctl's `radioctld`, **antenna rotators**, and a **procedure runner**: long multi-step **Python programs** (CPython 3 with numpy and scipy) that run next to the server and call any
 bench tool through the normal tier and safety checks, with structured failure reports and safe-state cleanup, so a soak or a
@@ -16,7 +16,7 @@ calibration does not pass through the agent's context step by step. There is als
 | `atm6301` | Abestop ATM6301 bench supply (0-60 V, 0-10 A), CH340 USB-serial | setpoints with caps, output switch with `confirm_load_connected`, `max_on_s` and a safe-state tool | [Tools](#tools) |
 | `nanovna` (VNA) | NanoVNA-H (ChibiOS USB serial shell) behind the same `bench_vna_*` tools; NOT verified on hardware (the unit on the dev box did not answer 2026-10-31), tested against a fake, a pty fake and a synthetic transcript | S11/S21 sweeps (101 points on the H, 401 on the H4, 50 kHz to 900 MHz on the H), software SOLT (short-open-load-through) calibration shared with the VNWA, power cycle with a hub; generator, AM, FM, meter and spectrum return `not supported by this instrument` | [manual page](manual/instruments/vna/nanovna.md) |
 | `vnwa_open` (VNA) | DG8SAQ VNWA 3E vector network analyser through the `vnwa_open` crate, no vendor software | S11/S21 sweeps, calibration (open, short, load, through), generator (CW, level, AM, FM), frequency meter, spectrum analyser, firmware and temperature, reliability ladder with hub power cycle | [The VNA's functions](#the-vnas-functions-as-tools-2026-10-28) |
-| `bladerf`, `limesdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers) | capture, survey, coherence; receive only | [Tools](#tools) |
+| `bladerf`, `limesdr`, `rtlsdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers, RTL-SDR dongle) | capture, survey, coherence (LimeSDR); receive only | [Tools](#tools) |
 | `rx888` | RX-888 MkII direct-sampling HF receiver (0 to 30 MHz) through ka9q-radio's `radiod` on loopback; verified on the unit with no antenna | firmware boot, radiod start and stop, front end (overrange, RF gain, attenuation), channel level and SNR, spectrum CSV, I/Q or audio WAV; receive only | [RX-888](#rx-888-receiver-rx888-driver) |
 | `glasgow` | Glasgow Interface Explorer (1BitSquared, USB 20b7:9db1) FPGA digital multi-tool through a pinned `glasgow` install; identify and port-voltage readback measured on a revC3, everything that drives pins fixtures only | list, status, port voltage set with limit and watchdog, I2C scan/read/write, SPI flash ID, UART transact and sniff, logic capture to VCD (value change dump, a logic-analyzer file format) with summary, GPIO, pattern generator, JTAG scan (a chip-testing interface), SWD (Serial Wire Debug) DPIDR (debug port identification register); parks all pins after each call | [Glasgow](#glasgow-interface-explorer-glasgow-driver), `manual/instruments/glasgow` |
 | `glasgow` (logic analyzer) | The `bench_gla_*` tools on the Glasgow driver: host-side trigger, pre-trigger window, sample rate, VCD, CSV and sigrok `.sr` files, glitch report, UART, I2C and SPI decode, and a bounded pattern generator; the unit links at 12 Mb/s so no capture has run on it; fixtures only | limits, analyze (a VCD file, no device), capture, pattern, safe state | [Logic analyzer tools](#glasgow-logic-analyzer-and-pattern-generator-bench_gla-tools), `docs/GLASGOW_LOGIC_TOOLS.md` |
@@ -55,6 +55,7 @@ Licence: AGPL-3.0-or-later. Not published to crates.io.
       "nano_alone":  {"driver": "nanovna", "tier": "read_config", "serial": "/dev/serial/by-id/usb-STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_400-if00"},
       "blade": {"driver": "bladerf", "tier": "read_config", "xb200": "auto1db"},
       "lime":  {"driver": "limesdr", "tier": "read_config"},
+      "rtl":   {"driver": "rtlsdr", "tier": "read_config"},
       "rx888": {"driver": "rx888", "tier": "read_config", "radiod": "/usr/local/sbin/radiod",
                 "driver_library": "/usr/local/lib/ka9q-radio/rx888.so", "boot": "/usr/local/sbin/rx888_boot",
                 "firmware": "/usr/local/share/ka9q-radio/W1EUJ_0.1.0_FX3.img", "presets": "/usr/local/share/ka9q-radio/presets.conf",
@@ -70,12 +71,13 @@ fails after `retries` (default 2) re-measurements gets one cold reset through `s
 `if_hz` (a divisor of 48 kHz: 12000, 6000 or 4000), `point_ms` (0.2 to 100),
 `rf_level` (0 to 16383), `settle_ms` and `window_ms`. A bad value is refused when the file is read.
 
-The SDR entries need SoapySDR with the radio's module (`libsoapysdr0.8`, `soapysdr-module-bladerf`, `soapysdr-module-lms7`); the
+The SDR entries need SoapySDR with the radio's module (`libsoapysdr0.8`, `soapysdr-module-bladerf`, `soapysdr-module-lms7`, `soapysdr-module-rtlsdr`); the
 library is loaded at run time, so the server runs without it and the SDR tools then say so. Optional: `serial` (hex digits, to
 pick one board of several) and, for the bladeRF only, `xb200` (`50M`, `144M`, `222M`, `auto`, `auto1db`, `auto3db`, `custom`),
 which switches on the XB-200 transverter and its filter bank so the receiver tunes from 9 kHz instead of 237.5 MHz.
 The bladeRF needs its FPGA loaded (`bladeRF-cli -L hostedx115.rbf` writes it to flash for autoloading) and firmware 2.4 or later
 for the FPGA 0.16; the LimeSDR needs firmware 4 and gateware 2.23 (`LimeUtil --update`).
+The RTL-SDR (`rtlsdr`, an RTL2832U with an R820T tuner) is **receive only; the hardware cannot transmit**. It tunes 24 to 1766 MHz at 0.225 to 0.3 or 0.9 to 3.2 MS/s with gain 0 to 49.6 dB; `ppm` (-200 to 200) on a capture corrects its crystal, and `direct_samp` (`"1"` or `"2"`) in its entry makes it tune 0.1 to 28.8 MHz. The kernel DVB drivers must be blacklisted (`/etc/modprobe.d/rtl-sdr-blacklist.conf`), as the `rtl-sdr` package does. It has one channel, so `bench_sdr_coherence` and `antenna` do not apply.
 
 `BENCH_MCP_OUT` is the directory for captures and screenshots (default: the temp dir). Each
 instrument has its own permission tier (`read_only` when omitted). There is no raw-SCPI (raw instrument command) tool. The
@@ -230,6 +232,7 @@ The Glasgow Interface Explorer (USB 20b7:9db1; UART, I2C, SPI, JTAG, SWD, logic 
 
 ## Checks this crate makes for the SDRs (anchors)
 
+* The RTL-SDR is receive only, takes its own tuning, rate (not 0.3 to 0.9 MS/s), gain and `ppm` limits and a `direct_samp` of 1 or 2, and is refused a second channel or an antenna.
 * The SoapySDR argument string is built from the config and a serial or XB-200 value cannot carry another argument. [@ANCHOR: bench_mcp_sdr_args]
 * A capture's arguments are checked against each radio's tuning, rate and gain limits before the radio is opened. [@ANCHOR: bench_mcp_sdr_capture_args]
 * A survey is bounded to 400 steps and a power-of-two FFT length. [@ANCHOR: bench_mcp_sdr_survey_args]
@@ -262,6 +265,8 @@ Checks this crate makes for the manual (anchors):
 * The five tools (index, read with sections and cutting, BM25 (a text-relevance ranking function) search with filters, for-tool, whats-new) and the resources. [@ANCHOR: bench_mcp_manual_index] [@ANCHOR: bench_mcp_manual_read] [@ANCHOR: bench_mcp_manual_search] [@ANCHOR: bench_mcp_manual_for_tool] [@ANCHOR: bench_mcp_manual_whats_new] [@ANCHOR: bench_mcp_manual_resources]
 
 ## Tests
+
+`BENCH_MCP_RTLSDR_CONFIG=<file> cargo test --test hil -- --ignored rtlsdr` opens the RTL-SDR dongle (an `rtlsdr` entry named "rtl"), captures the NOAA weather radio channels at 162.4 to 162.55 MHz and checks for a carrier over the noise floor (FM broadcast as the fallback); nothing is transmitted.
 
 `cargo test` runs the pure checks. `BENCH_MCP_CONFIG=<file> cargo test -- --ignored` needs the real
 instruments: it starts the server binary, does the MCP handshake and calls tools; it never switches

@@ -511,7 +511,7 @@ fn the_manual_has_the_documented_top_level() {
         assert!(m().get(path).is_some(), "missing {path}");
     }
     for name in [
-        "vna", "scope", "psu", "bladerf", "limesdr", "usb-hubs", "sound",
+        "vna", "scope", "psu", "bladerf", "limesdr", "rtlsdr", "usb-hubs", "sound",
     ] {
         assert!(
             m().get(&format!("instruments/{name}")).is_some(),
