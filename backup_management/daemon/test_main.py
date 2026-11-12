@@ -110,6 +110,7 @@ class TestStripEndpointScheme(unittest.TestCase):
 class TestPgbackrestS3RepoArgs(unittest.TestCase):
     # Tests [@ANCHOR: backup_management:COMM_pgbackrest_s3_repo_args]
 
+    # Tests [@ANCHOR: backup_management_backup_config_backup_config]
     def test_01_builds_real_repo1_flags_no_secrets(self):
         config = {
             "storage_type": "s3",
@@ -459,6 +460,7 @@ class TestEnsureKopiaS3Repository(unittest.TestCase):
 # [@ANCHOR: backup_management:COMM_test_redact_payload]
 class TestRedactPayload(unittest.TestCase):
     # Tests [@ANCHOR: backup_management:COMM_redact_payload]
+    # Tests [@ANCHOR: backup_management_restore_wizard_backup_restore_wizard]
     def test_01_every_secret_key_is_masked_and_the_rest_is_kept(self):
         payload = {
             "job_id": 7,
@@ -512,6 +514,9 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         proc.wait.return_value = 0
         return proc
 
+    # Tests [@ANCHOR: backup_management_sql_views_backup_latest_snapshot_view]
+    # Tests [@ANCHOR: backup_management_backup_snapshot_backup_snapshot]
+    # Tests [@ANCHOR: backup_management_backup_job_backup_job]
     @patch("main._json2_call")
     @patch("main.subprocess.Popen")
     @patch("main.subprocess.run")
@@ -978,6 +983,7 @@ class TestJson2CallReloadsARotatedKey(unittest.TestCase):
         backup_worker._json2_call("backup.job", "get_jobs")
         self.assertEqual(self.seen, [self.NEW])  # the next call uses it at once
 
+    # Tests [@ANCHOR: backup_management_main_odoo_apierror]
     def test_a_401_with_an_unchanged_or_unreadable_key_file_is_still_an_error_without_a_retry_loop(self):
         # Tests [@ANCHOR: backup_management:reload_odoo_key]
         for content in (f"ODOO_RPC_KEY={self.OLD}\n", "NOTHING=here\n", None):
@@ -1103,6 +1109,7 @@ class _RedirectProbe:
 
 
 class TestJson2CallRefusesARedirect(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management_main_no_redirect]
     def test_a_redirect_from_odoo_is_refused_and_the_key_never_reaches_the_second_host(self):
         # Tests [@ANCHOR: backup_management:no_redirect]
         # Tests [@ANCHOR: backup_management:COMM_json2_call]

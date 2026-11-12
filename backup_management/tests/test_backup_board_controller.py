@@ -7,6 +7,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 @tagged("post_install", "-at_install")
 class TestBackupBoardController(HamsHttpCase):
+    # Tests [@ANCHOR: backup_management_board_backup_board]
     def test_board_security_and_render(self):
         # Tests [@ANCHOR: backup_management:COMM_backup_board]
         # auth="user": an unauthenticated request must be redirected to login.

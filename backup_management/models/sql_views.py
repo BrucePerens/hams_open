@@ -4,6 +4,7 @@
 from odoo import models, fields, tools
 
 
+# [@ANCHOR: backup_management_sql_views_backup_latest_snapshot_view]
 class BackupLatestSnapshotView(models.Model):
     _name = "backup.latest.snapshot.view"
     _description = "Latest Backup Snapshot View"

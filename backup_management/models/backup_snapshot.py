@@ -4,6 +4,7 @@
 from odoo import models, fields, api
 
 
+# [@ANCHOR: backup_management_backup_snapshot_backup_snapshot]
 class BackupSnapshot(models.Model):
     _name = "backup.snapshot"
     _description = "Backup Snapshot"
