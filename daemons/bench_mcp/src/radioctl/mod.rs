@@ -482,7 +482,16 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
                     Source::Existing { .. } => None,
                 })
                 .map_or_else(
-                    || rigd::rigs_dir(&Managed { rig: String::new(), device: None, speed: None, port: None, rigs_dir: None, full_power_w: None }),
+                    || {
+                        rigd::rigs_dir(&Managed {
+                            rig: String::new(),
+                            device: None,
+                            speed: None,
+                            port: None,
+                            rigs_dir: None,
+                            full_power_w: None,
+                        })
+                    },
                     rigd::rigs_dir,
                 )?;
             models::tool(&dir, args)

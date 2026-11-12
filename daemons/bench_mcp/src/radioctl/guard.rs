@@ -84,7 +84,10 @@ pub fn run(
     {
         Ok(_) => {}
         Err(e) => {
-            let _ = writeln!(report, "guard: cannot reach radioctld at {host}:{port}: {e}");
+            let _ = writeln!(
+                report,
+                "guard: cannot reach radioctld at {host}:{port}: {e}"
+            );
             return 3;
         }
     }

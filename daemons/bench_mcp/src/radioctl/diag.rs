@@ -49,7 +49,9 @@ fn check(name: &str, ok: Option<bool>, detail: impl Into<String>, next: &str) ->
 fn lines_note(cfg: &Config) -> Value {
     // [@ANCHOR: radioctl_lines_note]
     let detail = match &cfg.source {
-        Source::Managed(_) => "radioctld opens the port 8N1 with DTR and RTS inactive and does not change them",
+        Source::Managed(_) => {
+            "radioctld opens the port 8N1 with DTR and RTS inactive and does not change them"
+        }
         Source::Existing { .. } => "an existing radioctld owns the port; its own settings apply",
     };
     check("DTR and RTS lines", None, detail, "")
@@ -79,12 +81,27 @@ pub fn diagnose(run: &dyn Run, name: &str, cfg: &Config) -> Result<Value, String
     match &cfg.source {
         Source::Managed(m) => {
             checks.push(match rigd::rigs_dir(m) {
-                Err(e) => check("rig description", Some(false), e, "set rigs_dir or RADIOCTL_RIGS"),
+                Err(e) => check(
+                    "rig description",
+                    Some(false),
+                    e,
+                    "set rigs_dir or RADIOCTL_RIGS",
+                ),
                 Ok(dir) => {
                     let file = dir.join(format!("{}.toml", m.rig));
                     match super::models::description_name(&file) {
-                        Ok(name) => check("rig description", Some(true), format!("{} ({})", name, file.display()), ""),
-                        Err(e) => check("rig description", Some(false), e, "search with bench_radioctl_models"),
+                        Ok(name) => check(
+                            "rig description",
+                            Some(true),
+                            format!("{} ({})", name, file.display()),
+                            "",
+                        ),
+                        Err(e) => check(
+                            "rig description",
+                            Some(false),
+                            e,
+                            "search with bench_radioctl_models",
+                        ),
                     }
                 }
             });

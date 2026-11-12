@@ -44,7 +44,12 @@ impl Daemon {
             assert!(Instant::now() < until, "radioctld did not start");
             std::thread::sleep(Duration::from_millis(50));
         }
-        Daemon { child, port, dir, keyer: None }
+        Daemon {
+            child,
+            port,
+            dir,
+            keyer: None,
+        }
     }
 
     /// One command over a new connection, tried again a few times: a connection can be dropped under a burst of short ones, as it was

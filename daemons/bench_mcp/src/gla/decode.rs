@@ -281,18 +281,24 @@ pub fn run(w: &Wave, spec: &Value) -> Result<Value, String> {
     let num = |k: &str, d: f64| -> Result<f64, String> {
         match spec.get(k) {
             None | Some(Value::Null) => Ok(d),
-            Some(v) => v.as_f64().ok_or_else(|| format!("decode {k} must be a number")),
+            Some(v) => v
+                .as_f64()
+                .ok_or_else(|| format!("decode {k} must be a number")),
         }
     };
     let flag = |k: &str, d: bool| -> Result<bool, String> {
         match spec.get(k) {
             None | Some(Value::Null) => Ok(d),
-            Some(v) => v.as_bool().ok_or_else(|| format!("decode {k} must be true or false")),
+            Some(v) => v
+                .as_bool()
+                .ok_or_else(|| format!("decode {k} must be true or false")),
         }
     };
     let parity = match spec.get("parity") {
         None | Some(Value::Null) => "none",
-        Some(p) => p.as_str().ok_or("decode parity must be text: none, even or odd")?,
+        Some(p) => p
+            .as_str()
+            .ok_or("decode parity must be text: none, even or odd")?,
     };
     match spec.get("type").and_then(|t| t.as_str()) {
         Some("uart") => uart(

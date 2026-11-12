@@ -12,11 +12,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[path = "support/radioctld_binary.rs"]
+mod radioctld_binary;
 #[allow(dead_code)]
 #[path = "../src/testdir.rs"]
 mod testdir;
-#[path = "support/radioctld_binary.rs"]
-mod radioctld_binary;
 
 struct Bench {
     dir: PathBuf,
@@ -193,7 +193,8 @@ fn a_whole_transmit_test_through_the_server_with_the_watchdog_process() {
         s.receive_raw(id)
     };
     assert!(
-        listed.contains("bench_radioctl_tx_key_test") && listed.contains("bench_radioctl_safe_state")
+        listed.contains("bench_radioctl_tx_key_test")
+            && listed.contains("bench_radioctl_safe_state")
     );
     // No baseline yet: refused, and the rig is never keyed.
     let e = s
