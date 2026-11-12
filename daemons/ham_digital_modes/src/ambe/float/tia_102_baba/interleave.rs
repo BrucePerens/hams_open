@@ -54,6 +54,7 @@
 /// bit_index)` -- `vector_index` selects which of `c_hat_0..c_hat_7` the bit comes from, and
 /// `bit_index` is that vector's own bit position (bit 0 = LSB, matching this codec's existing
 /// convention throughout `fec.rs`/`modulation.rs`).
+// [@ANCHOR: interleave_bit_source_struct]
 type BitSource = (u8, u8);
 
 /// Annex H's own 72-row table, in symbol order (`BIT_FRAME_FORMAT[n]` is symbol `n`'s own
@@ -174,6 +175,7 @@ pub fn deinterleave_from_dibit_symbols(symbols: [(bool, bool); 72]) -> [u32; 8] 
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: interleave_bit_source_struct]
     use super::*;
 
     /// The real, load-bearing structural check: Annex H's own table, taken as a whole, must be a

@@ -28,6 +28,7 @@ const MARGIN: usize = 160;
 const CANDIDATES: usize = 203;
 
 /// One frame's error function `E(P)` sampled at every candidate pitch (`21, 21.5, ..., 122`).
+// [@ANCHOR: encoder_error_table_struct]
 struct ErrorTable(Vec<f64>);
 
 impl ErrorTable {
@@ -48,6 +49,7 @@ impl ErrorTable {
 
 /// One frame's pitch analysis result: the refined fundamental, the initial estimate's error `E(P_hat_I)`, and the
 /// frame's own windowed spectrum ready for voicing/amplitude analysis.
+// [@ANCHOR: tia_102_baba_encoder_frame_analysis_struct]
 pub struct FrameAnalysis {
     pub omega0_hat: f64,
     /// The initial pitch estimate `P_hat_I` (samples, before refinement).
@@ -61,6 +63,7 @@ pub struct FrameAnalysis {
 
 /// Streaming pitch analysis shared by every mode's encoder: buffers input, runs the spec's two-frame lookahead
 /// pitch tracking and half/quarter-sample refinement, and yields one [`FrameAnalysis`] per 20 ms frame.
+// [@ANCHOR: tia_102_baba_encoder_frame_analyzer_struct]
 pub struct FrameAnalyzer {
     /// `LEAD` zeros followed by every input sample received (older samples are trimmed, see `trimmed`).
     raw: Vec<f64>,
@@ -199,6 +202,7 @@ impl Default for FrameAnalyzer {
 /// residual D.C. before analysis. Without it a constant offset in the input (common in recordings) makes quiet frames
 /// look strongly periodic at every lag, corrupting the pitch error function `E(P)` (found by comparing against the
 /// OP25 `imbe_vocoder` encoder, which applies it; see `docs/references/tia_102_baba_cross_validation.md`).
+// [@ANCHOR: tia_102_baba_encoder_high_pass_filter_struct]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HighPassFilter {
     prev_input: i64,
@@ -222,6 +226,7 @@ impl HighPassFilter {
     }
 }
 
+// [@ANCHOR: tia_102_baba_encoder_encoder_struct_alt]
 pub struct Encoder {
     high_pass: HighPassFilter,
     analyzer: FrameAnalyzer,
@@ -329,6 +334,11 @@ impl Default for Encoder {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: encoder_error_table_struct]
+    // Tests [@ANCHOR: tia_102_baba_encoder_frame_analysis_struct]
+    // Tests [@ANCHOR: tia_102_baba_encoder_frame_analyzer_struct]
+    // Tests [@ANCHOR: tia_102_baba_encoder_high_pass_filter_struct]
+    // Tests [@ANCHOR: tia_102_baba_encoder_encoder_struct_alt]
     use super::*;
     use crate::ambe::float::tia_102_baba::decode::DecoderState;
 
