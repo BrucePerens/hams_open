@@ -21,6 +21,7 @@ from cryptography.fernet import Fernet
 from odoo import fields
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
+from odoo.tools import mute_logger
 from odoo.addons.cloudflare.models.hostname_pending_delete import (
     BACKOFF_MINUTES,
     MAX_DELETE_ATTEMPTS,
@@ -236,6 +237,30 @@ class TestHostnamePendingDelete(RealTransactionCase):
         calls_before = mock_delete.call_count
         self.Pending._cron_retry_pending_deletes()
         self.assertEqual(mock_delete.call_count, calls_before)
+
+    def test_07b_a_delete_that_raises_backs_off_and_is_abandoned_at_the_cap(self):
+        # Tests [@ANCHOR: COMM_pending_delete_attempt]
+        # Tests [@ANCHOR: COMM_pending_delete_fail_attempt]
+        record = self.Pending._record_failed_delete(
+            "https://boom.example", "hostname_boom", self.website, "API Error"
+        )
+        mock_delete = self.safe_patch(
+            "odoo.addons.cloudflare.models.hostname_pending_delete.cf_utils."
+            "delete_custom_hostname"
+        )
+        mock_delete.side_effect = RuntimeError("boom")
+        record.next_attempt_at = False
+        with mute_logger("odoo.addons.cloudflare.models.hostname_pending_delete"):
+            summary = self.Pending._cron_retry_pending_deletes()
+        self.assertEqual(summary["retrying"], 1)
+        self.assertEqual(record.attempt_count, 1)
+        self.assertGreater(record.next_attempt_at, fields.Datetime.now())
+        self.assertIn("boom", record.last_error)
+        for _attempt in range(MAX_DELETE_ATTEMPTS):
+            record.next_attempt_at = False
+            with mute_logger("odoo.addons.cloudflare.models.hostname_pending_delete"):
+                self.Pending._cron_retry_pending_deletes()
+        self.assertEqual(record.state, "abandoned")
 
     def test_08_the_backoff_grows_and_is_capped(self):
         # Tests [@ANCHOR: COMM_pending_delete_next_attempt_at]
