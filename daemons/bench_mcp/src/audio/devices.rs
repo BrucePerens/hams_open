@@ -390,6 +390,7 @@ mod tests {
 
     // Tests [@ANCHOR: audio_devices_parse]
     // Tests [@ANCHOR: bench_mcp_audio_devices_dir_type]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_testkit_dir]
     #[test]
     fn the_recorded_devbox_lists_its_sinks_and_sources_with_defaults() {
         let devs = devbox_devices();
@@ -433,6 +434,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_devices_device_type]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_device]
     #[test]
     fn hdmi_ports_without_a_monitor_report_unavailable_as_evidence() {
         let devs = devbox_devices();

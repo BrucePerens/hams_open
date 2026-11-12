@@ -40,6 +40,7 @@ pub fn power_budget(t: &Tree, d: &Device) -> Value {
     })
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_diagnose_finding]
 struct Finding {
     level: &'static str,
     what: String,
@@ -490,6 +491,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_missing_target]
     // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_present_checks]
     // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_rank]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_testkit_fake_hub]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_testkit_behaviour]
     #[test]
     fn an_empty_powered_port_is_a_powered_port_with_nothing_connected() {
         let (_d, sys) = writable_sys();
@@ -531,6 +534,8 @@ mod tests {
         assert_eq!(v["verdict"], "a problem was found");
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_port]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_diagnose_finding]
     #[test]
     fn a_powered_off_port_and_a_deauthorized_device_are_found() {
         let (_d, sys) = writable_sys();

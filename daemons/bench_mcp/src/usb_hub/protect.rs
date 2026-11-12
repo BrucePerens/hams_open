@@ -14,15 +14,18 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+// [@ANCHOR: bench_mcp_usb_hub_protect_why]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Why {
     pub text: String,
     pub overridable: bool,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_protect_critical]
 /// Device path to the reasons it is critical.
 pub type Critical = BTreeMap<String, Vec<Why>>;
 
+// [@ANCHOR: bench_mcp_usb_hub_protect_bench_ref]
 /// What a bench instrument uses on the USB tree: a serial device path (a power supply), the hub port its unit hangs from and its
 /// vid:pid (the VNA).
 pub struct BenchRef {
@@ -187,6 +190,7 @@ pub fn critical_set(
     c
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_protect_verdict]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Verdict {
     pub reasons: Vec<Why>,
@@ -334,6 +338,7 @@ pub mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_protect_add]
     // Tests [@ANCHOR: bench_mcp_usb_hub_protect_block_names]
     // Tests [@ANCHOR: bench_mcp_usb_hub_protect_check_port]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_why]
     #[test]
     fn a_hub_uplink_is_refused_unless_the_config_says_it_is_the_target() {
         let t = Tree::read(&fixture()).unwrap();
@@ -386,6 +391,7 @@ pub mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_protect_check_device]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_node]
     #[test]
     fn the_root_filesystem_device_and_mounts_on_usb_storage_are_found_through_dm_and_partitions() {
         let t = Tree::read(&fixture()).unwrap();
@@ -433,6 +439,8 @@ pub mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_protect_report]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_bench_ref]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_critical]
     #[test]
     fn keyboards_and_bench_serial_adapters_are_critical() {
         let t = Tree::read(&fixture()).unwrap();
@@ -469,6 +477,7 @@ pub mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_protect_verdict]
     #[test]
     fn the_vna_hub_port_and_everything_below_it_is_protected_but_overridable() {
         let t = Tree::read(&fixture()).unwrap();

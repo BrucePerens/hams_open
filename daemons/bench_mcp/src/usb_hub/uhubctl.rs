@@ -11,6 +11,7 @@ pub trait Runner {
     fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String>;
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_uhubctl_process_runner]
 pub struct ProcessRunner;
 
 impl Runner for ProcessRunner {
@@ -63,6 +64,7 @@ pub fn sudo(run: &dyn Runner, tool: &str, args: &[&str]) -> Result<String, Strin
     }
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching]
 /// How uhubctl describes a hub's power switching (its `lpsm` field).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Switching {
@@ -104,6 +106,7 @@ pub fn link_state(n: u16) -> &'static str {
     }
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_uhubctl_port_bits]
 /// A port status word decoded. USB 2 and USB 3 hubs lay the word out differently.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PortBits {
@@ -171,6 +174,7 @@ impl PortBits {
     }
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_uhubctl_uport]
 #[derive(Clone, Debug, PartialEq)]
 pub struct UPort {
     pub number: u32,
@@ -180,6 +184,7 @@ pub struct UPort {
     pub device_text: Option<String>,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_uhubctl_uhub]
 /// One hub block of `uhubctl` output.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UHub {
@@ -294,6 +299,7 @@ pub fn status(run: &dyn Runner) -> Result<Vec<UHub>, String> {
     parse_status(&text)
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_uhubctl_hub_descriptor_type]
 /// The hub class descriptor fields only `lsusb -v` as root shows.
 #[derive(Clone, Debug, PartialEq)]
 pub struct HubDescriptor {
@@ -399,6 +405,9 @@ pub mod tests {
     // Tests [@ANCHOR: usb_hub_uhubctl_parse]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_bracket]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_of]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_uhub]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_uport]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching]
     #[test]
     fn the_recorded_uhubctl_output_parses_with_and_without_descriptions() {
         for name in ["uhubctl.txt", "uhubctl_nodesc.txt"] {
@@ -439,6 +448,7 @@ pub mod tests {
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_decode_port]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_link_state]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_port_bits]
     #[test]
     fn port_words_decode_for_usb2_and_usb3() {
         let b = decode_port(0x0503, false);
@@ -470,6 +480,7 @@ pub mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_hubdescriptor_over_current]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_hubdescriptor_switching]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_parse_hub_descriptor]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_hub_descriptor_type]
     #[test]
     fn the_hub_descriptor_from_lsusb_gives_switching_overcurrent_and_think_time() {
         let d = parse_hub_descriptor(&fx("lsusb_v_hub_3-2.txt")).unwrap();
@@ -500,6 +511,7 @@ pub mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_processrunner_run]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_explain_failure]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_sudo]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_process_runner]
     #[test]
     fn sudo_failures_say_what_to_fix() {
         let e = sudo(

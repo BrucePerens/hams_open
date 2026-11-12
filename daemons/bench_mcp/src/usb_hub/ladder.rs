@@ -38,6 +38,7 @@ fn run_helper(run: &dyn Runner, exe: &str, args: &[&str]) -> Result<String, Stri
     }
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_ladder_target_type]
 /// What every rung needs: the tree, the device named by the arguments, and the protection verdict for acting on it.
 struct Target {
     tree: Tree,
@@ -367,6 +368,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_helper_command]
     // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_run_helper]
     // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_target]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_ladder_target_type]
     #[test]
     fn protected_devices_are_refused_before_the_helper_runs_and_dry_run_changes_nothing() {
         let (_d, sys) = writable_sys();

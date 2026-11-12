@@ -24,6 +24,7 @@ pub const GONE_TIMEOUT: Duration = Duration::from_secs(10);
 pub const DEFAULT_BACK_TIMEOUT: Duration = Duration::from_secs(45);
 const POLL: Duration = Duration::from_millis(100);
 
+// [@ANCHOR: bench_mcp_usb_hub_power_port_ref]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PortRef {
     pub hub: String,
@@ -49,6 +50,7 @@ impl PortRef {
     }
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_power_seen]
 /// A device as the tree shows it right now: its device number and ids, read straight from its sysfs directory.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Seen {
@@ -71,6 +73,7 @@ pub fn probe(sysfs: &Path, path: &str) -> Option<Seen> {
     })
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_power_evidence]
 /// What a session has proved about a port by cycling it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Evidence {
@@ -439,6 +442,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_power_report_level]
     // Tests [@ANCHOR: bench_mcp_usb_hub_power_uhubctl]
     // Tests [@ANCHOR: bench_mcp_usb_hub_power_wait_until]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_power_evidence]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_power_seen]
     #[test]
     fn a_cycle_is_off_then_on_through_sudo_uhubctl_and_proves_re_enumeration() {
         let _evidence = crate::usb_hub::testkit::evidence_lock();
@@ -580,6 +585,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: bench_mcp_usb_hub_power_port_ref]
     #[test]
     fn the_exact_flag_reaches_the_uhubctl_command() {
         let (_d, sys) = writable_sys();
