@@ -131,3 +131,23 @@
 **Methods.** `__init__`, `ctrl_in`, `ctrl_out`.
 
 **See also:** test `test_readback_mismatch_leaves_cpu_in_reset (fx2_station_io/tests/test_fx2_host.py)`.
+
+### `Heartbeater` [@ANCHOR: hardware:hardware_hams_fx2_heartbeater]
+
+**Purpose and location.** The host side of the FX2 station-I/O board's heartbeat: it sends sequence-numbered heartbeats that carry the commanded state of every channel, the way the relay's transmit task does. If the heartbeats stop, the board's firmware releases the channels (drops PTT) after the configured time-out, so this is a transmit-safety path on the host. Defined in `hardware/fx2_station_io/tools/hams_fx2.py`; used by the behaviour tests (`tests/test_fx2_ptt.py`) and by the command-line tool.
+
+**Definition.** `class Heartbeater`, built as `Heartbeater(t)`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `t` | `Transport` | The control-transfer transport the heartbeats go through (`UsbTransport` for a real board, the simulator in tests). |
+| `seq` | `int` | The sequence number of the last heartbeat sent, 16 bits; starts at 0. `beat()` adds 1 modulo 65536 before sending, so the first heartbeat carries 1. |
+| `commanded` | `int` | The commanded state, one bit per channel (a PTT channel and its key line share a bit); only the low 8 bits are sent. Set it before calling `beat()`; starts at 0. |
+
+**Method.** `beat() -> Status`: increments `seq`, sends one vendor control IN request `REQ_HEARTBEAT` (request type `0xC0`) with `seq` as the value and `commanded` as the index, and returns the board's reply parsed as a `Status` (including `last_seq`, which echoes the sequence number the board saw). A transfer error or a short reply raises `Fx2Error` or `Stalled` from the transport or from `parse_status`.
+
+**Concurrency and safety.** Not thread safe: one thread owns a `Heartbeater` and calls `beat()` at the rate the board's heartbeat time-out requires; the object keeps no clock of its own, so the caller's schedule decides when the board's heartbeat window is met. Real hardware is only touched through `t`.
+
+**Functions that touch it.** `Heartbeater.beat` and `heartbeat`.
+
+**See also:** tests `HeartbeaterTests` in `hardware/fx2_station_io/tests/test_fx2_host.py` (sequence numbers, commanded state, wrap at 16 bits) and `tests/test_fx2_ptt.py` (the whole PTT behaviour, against the simulator and optionally the real board).
