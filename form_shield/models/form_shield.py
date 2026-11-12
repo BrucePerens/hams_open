@@ -94,6 +94,7 @@ class FormShield(models.AbstractModel):
 
     # [@ANCHOR: form_shield:issue]
     # Verified by [@ANCHOR: form_shield:test_challenge_endpoint_issues_signed_uncacheable_json]
+    @api.private
     @api.model
     def issue(self, kind=tokens.KIND_POW):
         """A new challenge for the current visitor, as the dict the challenge endpoint returns."""
@@ -162,6 +163,7 @@ class FormShield(models.AbstractModel):
 
     # [@ANCHOR: form_shield:refuse]
     # Verified by [@ANCHOR: user_websites:test_report_problem_reasons]
+    @api.private
     @api.model
     def refuse(self, form_id, reason, outcome=RETRY):
         """Counts a refusal the caller decided on itself (a field a form checks after the
@@ -171,6 +173,7 @@ class FormShield(models.AbstractModel):
     # [@ANCHOR: form_shield:check]
     # Verified by [@ANCHOR: form_shield:test_check_accepts_a_solved_challenge_once]
     # Verified by [@ANCHOR: form_shield:test_check_refusal_table]
+    @api.private
     @api.model
     def check(
         self,
@@ -219,6 +222,7 @@ class FormShield(models.AbstractModel):
 
     # [@ANCHOR: form_shield:check_form]
     # Verified by [@ANCHOR: form_shield:test_check_form_reads_the_standard_fields]
+    @api.private
     @api.model
     def check_form(self, form_id, post, honeypots=(), target=None, limits=None):
         """`check()` for a submitted HTML form: reads the standard fields off `post` (a dict of
