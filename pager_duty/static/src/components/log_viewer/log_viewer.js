@@ -4,6 +4,7 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
 export class LogViewer extends Component {
+    // [@ANCHOR: pager_duty:js_log_viewer_setup]
     setup() {
         this.orm = useService("orm"); // Updated to conform to OWL deprecation mandate
         this.state = useState({
@@ -20,6 +21,7 @@ export class LogViewer extends Component {
         });
     }
 
+    // [@ANCHOR: pager_duty:js_log_viewer_fetch_files]
     async fetchFiles() {
         try {
             const res = await fetch("/api/v1/pager/logs/files", {
@@ -37,12 +39,14 @@ export class LogViewer extends Component {
         }
     }
 
+    // [@ANCHOR: pager_duty:js_log_viewer_on_keyup]
     onKeyup(ev) {
         if (ev.key === "Enter") {
             void this.executeSearch();
         }
     }
 
+    // [@ANCHOR: pager_duty:js_log_viewer_execute_search]
     async executeSearch() {
         if (!this.state.selectedFile || !this.state.regexQuery) {
             this.state.error = "Please select a file and enter a regex pattern.";

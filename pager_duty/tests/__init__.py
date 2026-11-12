@@ -36,3 +36,4 @@ from . import test_amqp_check
 from . import test_unit_ticket_dedup
 from . import test_rpc_exposure
 from . import test_board_hoot
+from . import test_log_viewer_hoot

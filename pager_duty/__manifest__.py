@@ -68,6 +68,7 @@
         # holds the component sources.
         "web.assets_unit_tests": [
             "pager_duty/static/tests/board.test.js",
+            "pager_duty/static/tests/log_viewer.test.js",
         ],
         "web.assets_tests": [
             "pager_duty/static/src/tours/incident_tour.js",
