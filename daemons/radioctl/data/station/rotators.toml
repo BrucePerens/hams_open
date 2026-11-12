@@ -42,3 +42,48 @@ slew_deg_per_s = 2.0
 park = { az = 0.0, el = 0.0 }
 reply_timeout_ms = 1500
 verified = false
+
+# Easycomm controllers (written from the Easycomm specification, no controller on the bench).
+# The travel is a generic az/el rotator's; set the real one with a copy of the entry.
+
+[[rotators]]
+id = "easycomm1-azel"
+name = "Generic az/el controller, Easycomm I (set-only)"
+protocol = "easycomm1"
+az_min = 0.0
+az_max = 360.0
+el_min = 0.0
+el_max = 90.0
+has_elevation = true
+slew_deg_per_s = 3.0
+park = { az = 0.0, el = 0.0 }
+reply_timeout_ms = 1000
+verified = false
+
+[[rotators]]
+id = "easycomm2-azel"
+name = "Generic az/el controller, Easycomm II"
+protocol = "easycomm2"
+az_min = 0.0
+az_max = 360.0
+el_min = 0.0
+el_max = 90.0
+has_elevation = true
+slew_deg_per_s = 3.0
+park = { az = 0.0, el = 0.0 }
+reply_timeout_ms = 1500
+verified = false
+
+[[rotators]]
+id = "easycomm3-satnogs"
+name = "SatNOGS-style az/el controller, Easycomm III"
+protocol = "easycomm3"
+az_min = 0.0
+az_max = 360.0
+el_min = 0.0
+el_max = 180.0
+has_elevation = true
+slew_deg_per_s = 3.0
+park = { az = 0.0, el = 0.0 }
+reply_timeout_ms = 1500
+verified = false

@@ -188,8 +188,11 @@ pub async fn position(&self) -> Result<(f32, f32), StationError>
 pub async fn stop(&self) -> Result<(), StationError>
 ```
 
-- Two protocols: `rotctld` (Hamlib's text protocol, which fronts every Hamlib rotator backend) and
-  the Yaesu GS-232A/B ASCII family.
+- Protocols: `rotctld` (Hamlib's text protocol, which fronts every Hamlib rotator backend), the
+  Yaesu GS-232A/B ASCII family, and Easycomm I, II and III (`AZaaa.a ELeee.e`, a bare `AZ EL` to
+  read, `SA SE` to stop; Easycomm I cannot read; the Easycomm III extras are not used). Easycomm is
+  written from the public specification (AMSAT WiSP text, Hamlib's copy) and was driven by Hamlib's
+  own `rotctl -m 201/202/204` against the virtual rotator on a pty; no controller was on the bench.
 - A position outside the description's travel is **refused**, never clamped, and nothing is written.
 - Every wait is bounded (the description's reply timeout); commands are serialised; stale bytes are
   drained before and after a failure so a late reply is never taken for the next one.
