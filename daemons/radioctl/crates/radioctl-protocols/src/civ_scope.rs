@@ -57,6 +57,7 @@ pub const SUB_SPEED: u8 = 0x1A;
 pub const SUB_EDGES: u8 = 0x1E;
 
 /// How the scope's frequency axis is anchored.
+// [@ANCHOR: radioctl_civ_scope_scope_mode]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeMode {
     /// Centred on the receive frequency.
@@ -119,6 +120,7 @@ impl From<ScopeAxis> for ScopeMode {
 }
 
 /// Sweep speed.
+// [@ANCHOR: radioctl_civ_scope_scope_speed]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeSpeed {
     /// Fast sweep.
@@ -153,6 +155,7 @@ impl ScopeSpeed {
 }
 
 /// A scope setting or query. `receiver` is 0 (Main) or 1 (Sub).
+// [@ANCHOR: radioctl_civ_scope_scope_command]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeCommand {
     /// Scope display on or off.
@@ -263,6 +266,7 @@ pub fn decode_reference(bytes: &[u8]) -> Option<i16> {
 }
 
 /// One waveform frame, decoded.
+// [@ANCHOR: radioctl_civ_scope_scope_segment]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeSegment {
     /// 0 (Main) or 1 (Sub).
@@ -278,6 +282,7 @@ pub struct ScopeSegment {
 }
 
 /// The first frame's description of the sweep.
+// [@ANCHOR: radioctl_civ_scope_scope_header]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeHeader {
     /// How the axis is anchored.
@@ -329,6 +334,7 @@ pub fn parse_segment(data: &[u8]) -> Option<ScopeSegment> {
 }
 
 /// One complete sweep.
+// [@ANCHOR: radioctl_civ_scope_scope_line]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScopeLine {
     /// 0 (Main) or 1 (Sub).
@@ -347,6 +353,7 @@ pub struct ScopeLine {
 
 /// Rebuilds sweeps from waveform frames, one receiver at a time. A frame out of order discards the
 /// sweep in progress; a sweep with the wrong number of samples is never delivered.
+// [@ANCHOR: radioctl_civ_scope_scope_assembler]
 #[derive(Debug, Clone)]
 pub struct ScopeAssembler {
     params: ScopeParams,
@@ -354,6 +361,7 @@ pub struct ScopeAssembler {
     dropped: u64,
 }
 
+// [@ANCHOR: radioctl_civ_scope_partial]
 #[derive(Debug, Clone)]
 struct Partial {
     header: ScopeHeader,
@@ -454,6 +462,7 @@ fn line_from(receiver: u8, partial: Partial) -> ScopeLine {
 }
 
 /// A virtual scope's answer to a command.
+// [@ANCHOR: radioctl_civ_scope_scope_answer]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScopeAnswer {
     /// Accepted; the CI-V OK frame follows.
@@ -465,6 +474,7 @@ pub enum ScopeAnswer {
 }
 
 /// State of one receiver's scope in a virtual rig.
+// [@ANCHOR: radioctl_civ_scope_sim_scope]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SimScope {
     mode: ScopeMode,
@@ -475,6 +485,7 @@ struct SimScope {
 }
 
 /// The scope of a virtual rig: settings per receiver and a synthetic sweep generator.
+// [@ANCHOR: radioctl_civ_scope_scope_sim]
 #[derive(Debug, Clone)]
 pub struct ScopeSim {
     params: ScopeParams,
@@ -678,6 +689,17 @@ pub fn sample_value(index: usize, sweep: u32, amplitude_max: u16) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_mode]
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_speed]
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_command]
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_segment]
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_header]
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_line]
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_assembler]
+    // Tests [@ANCHOR: radioctl_civ_scope_partial]
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_answer]
+    // Tests [@ANCHOR: radioctl_civ_scope_sim_scope]
+    // Tests [@ANCHOR: radioctl_civ_scope_scope_sim]
     use super::*;
 
     fn params() -> ScopeParams {

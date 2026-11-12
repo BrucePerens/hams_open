@@ -215,3 +215,9 @@ async fn nothing_that_can_key_reaches_the_wire_while_the_gate_is_closed() {
 // Data-structure anchors (ADR 0113) exercised by the tests above.
 // Tests [@ANCHOR: radioctl_flex_io_shared]
 // Tests [@ANCHOR: radioctl_flex_io_virtual_flex_control]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_virtual_flex_flex_panel]
+// Tests [@ANCHOR: radioctl_virtual_flex_flex_rig_state]
+// Tests [@ANCHOR: radioctl_virtual_flex_order]
+// Tests [@ANCHOR: radioctl_virtual_flex_virtual_flex]

@@ -747,3 +747,6 @@ fn a_serial_description_asks_for_com_output_and_assembles_the_split_frames() {
 // Tests [@ANCHOR: radioctl_kenwood_ts890_scope_wire]
 // Tests [@ANCHOR: radioctl_kenwood_ts890_splits]
 // Tests [@ANCHOR: radioctl_kenwood_ts890_ts890_engine]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_virtual_ts890_ts890_scope]

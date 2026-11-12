@@ -59,6 +59,7 @@ const KEYED_METERS: [(Meter, u16); 5] = [
 const CIV_FILTER_NUMBER: u8 = 0x01;
 
 /// The mutable state of a virtual rig.
+// [@ANCHOR: radioctl_virtual_rig_rig_state]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RigState {
     /// VFO A.
@@ -133,6 +134,7 @@ mod virtual_ts890;
 #[path = "virtual_ts990.rs"]
 mod virtual_ts990;
 
+// [@ANCHOR: radioctl_virtual_rig_wire]
 #[derive(Debug)]
 enum Wire {
     Civ {
@@ -163,6 +165,7 @@ enum Wire {
 }
 
 /// One virtual radio.
+// [@ANCHOR: radioctl_virtual_rig_virtual_rig]
 #[derive(Debug)]
 pub struct VirtualRig {
     desc: RigDescription,
@@ -427,6 +430,7 @@ impl VirtualRig {
 }
 
 /// A change made at the radio itself rather than over the wire.
+// [@ANCHOR: radioctl_virtual_rig_panel_change]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelChange {
     /// The tuning knob moved VFO A.
@@ -1855,6 +1859,7 @@ impl VirtualRig {
     }
 }
 
+// [@ANCHOR: radioctl_virtual_rig_civ_reply]
 enum CivReply {
     Ok,
     Ng,
@@ -1900,6 +1905,11 @@ fn meter_reply(sub: u8, value: u16) -> CivReply {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_virtual_rig_rig_state]
+    // Tests [@ANCHOR: radioctl_virtual_rig_wire]
+    // Tests [@ANCHOR: radioctl_virtual_rig_virtual_rig]
+    // Tests [@ANCHOR: radioctl_virtual_rig_panel_change]
+    // Tests [@ANCHOR: radioctl_virtual_rig_civ_reply]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);
