@@ -7,6 +7,7 @@ class Website(models.Model):
     _inherit = "website"
 
     # [@ANCHOR: hams_base:website_email_delivery_notice]
+    @api.private
     @api.model
     def email_delivery_notice(self):
         """Plain text shown on /email-policy and /unsubscribe while outgoing email is limited (for example an AWS SES
