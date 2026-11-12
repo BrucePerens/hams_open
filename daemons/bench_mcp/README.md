@@ -40,6 +40,8 @@ USB cable testing is left to other contributors.
 
 Licence: AGPL-3.0-or-later. Not published to crates.io.
 
+Every function and data structure of the crate has a full ADR 0113 entry (purpose, arguments, return, errors, concurrency and safety) in `docs/stories/`, one file per source area; the code's `[@ANCHOR: id]` markers point there.
+
 ## Configuration
 
 `BENCH_MCP_CONFIG` names a JSON file (see `src/config.rs`):
@@ -154,16 +156,16 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 
 ## Checks this crate makes for the VNA (anchors)
 
-* The arguments of a sweep are checked and override the instrument's settings for that sweep. [@ANCHOR: bench_mcp_vna_sweep_args]
-* The hub port and retries of the VNA entry are read, and only as a pair. [@ANCHOR: bench_mcp_config]
-* The power-cycle tool needs a hub in the config and read_config, and the VNA's lock does not hold up the scope or the supply. [@ANCHOR: bench_mcp_vna_power_cycle]
-* The host FFT finds a tone's frequency and level in every window, and the spectrum tool does so through a scope link. [@ANCHOR: bench_mcp_spectrum]
-* A calibration is built from stored standards and refused at other settings, cable or range; measuring a standard needs a valid session, standard and cable. [@ANCHOR: bench_mcp_vna_cal_build] [@ANCHOR: bench_mcp_vna_cal_apply]
-* Several instances: an entry whose members are all instrument objects is a group of named instances (`"vnas": {"vnwa": {...}, "nano": {...}}`), the old single-object entry is one instance named by its key, every tool that takes `instrument` also takes `device`, omitting both with several fitting instances is an error that lists the names, `bench_identify` and `bench_status` without a device list every instance, each instance has its own tier and lock, and a config in which two instances claim one serial port, scope host, VNWA unit or hub port is refused. This dev box can run both VNAs: the VNWA 3E on its USB hub and the NanoVNA-H on `/dev/serial/by-id/usb-STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_400-if00`. [@ANCHOR: bench_mcp_config_flatten] [@ANCHOR: bench_mcp_config_shared_claims] [@ANCHOR: bench_mcp_main_device_arg] [@ANCHOR: bench_mcp_main_survey] [@ANCHOR: bench_mcp_main_device_property]
-* A VNWA that is not connected fails its tools with `device not present` before anything is attempted. [@ANCHOR: bench_vna_ensure_present]
-* A sweep is written as a CSV with a header and one row per point; calibrated values go to a second CSV. [@ANCHOR: bench_mcp_vna_csv] [@ANCHOR: bench_mcp_vna_calibrated_csv]
-* A `nanovna` entry reads its settings, parses the shell's replies (echo, prompt, partial reads, garbage, unknown commands, timeouts), reads identity and limits from `version`, `info` and `help`, checks sweep arguments against the unit's limits, sweeps by `scan` or by `sweep`/`data` and restores the range, and returns typed errors for what it cannot do. [@ANCHOR: bench_nanovna_parse_config] [@ANCHOR: bench_nanovna_parse_reply] [@ANCHOR: bench_nanovna_command] [@ANCHOR: bench_nanovna_identify] [@ANCHOR: bench_nanovna_limits] [@ANCHOR: bench_nanovna_parse_sweep_query] [@ANCHOR: bench_nanovna_parse_columns] [@ANCHOR: bench_nanovna_check_range] [@ANCHOR: bench_nanovna_measure] [@ANCHOR: bench_nanovna_sweep_args] [@ANCHOR: bench_nanovna_call] [@ANCHOR: bench_nanovna_error_display] [@ANCHOR: bench_nanovna_scan_points] [@ANCHOR: bench_nanovna_sweep_and_read] [@ANCHOR: bench_nanovna_open_shell] [@ANCHOR: bench_nanovna_sweep_tool] [@ANCHOR: bench_nanovna_power_cycle] [@ANCHOR: bench_nanovna_calibrate_measure]
-* Calibration standards are stored, and a calibration applied, for any instrument. [@ANCHOR: bench_vna_tools_measure_names] [@ANCHOR: bench_vna_tools_store_standard] [@ANCHOR: bench_vna_tools_apply_setup]
+* The arguments of a sweep are checked and override the instrument's settings for that sweep.
+* The hub port and retries of the VNA entry are read, and only as a pair.
+* The power-cycle tool needs a hub in the config and read_config, and the VNA's lock does not hold up the scope or the supply.
+* The host FFT finds a tone's frequency and level in every window, and the spectrum tool does so through a scope link.
+* A calibration is built from stored standards and refused at other settings, cable or range; measuring a standard needs a valid session, standard and cable.
+* Several instances: an entry whose members are all instrument objects is a group of named instances (`"vnas": {"vnwa": {...}, "nano": {...}}`), the old single-object entry is one instance named by its key, every tool that takes `instrument` also takes `device`, omitting both with several fitting instances is an error that lists the names, `bench_identify` and `bench_status` without a device list every instance, each instance has its own tier and lock, and a config in which two instances claim one serial port, scope host, VNWA unit or hub port is refused. This dev box can run both VNAs: the VNWA 3E on its USB hub and the NanoVNA-H on `/dev/serial/by-id/usb-STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_400-if00`.
+* A VNWA that is not connected fails its tools with `device not present` before anything is attempted.
+* A sweep is written as a CSV with a header and one row per point; calibrated values go to a second CSV.
+* A `nanovna` entry reads its settings, parses the shell's replies (echo, prompt, partial reads, garbage, unknown commands, timeouts), reads identity and limits from `version`, `info` and `help`, checks sweep arguments against the unit's limits, sweeps by `scan` or by `sweep`/`data` and restores the range, and returns typed errors for what it cannot do.
+* Calibration standards are stored, and a calibration applied, for any instrument.
 
 ## Glasgow Interface Explorer (`glasgow` driver)
 
@@ -171,75 +173,75 @@ The Glasgow Interface Explorer (USB 20b7:9db1; UART, I2C, SPI, JTAG, SWD, logic 
 
 ## Checks this crate makes for the Glasgow (anchors)
 
-* The applet table lists every tool's applet and what is never provided. [@ANCHOR: glasgow_applets]
-* A tool above the tier or unknown is refused before any command. [@ANCHOR: glasgow_call_with]
-* The `glasgow` entry is read with its limits, and a bad value, a relative venv path, a bad serial or a max_volts above 5.5 is refused when the file is read. [@ANCHOR: glasgow_config]
-* A file lock in the install keeps a second process out of the device while a call runs. [@ANCHOR: glasgow_device_lock]
-* The one path of every pin tool: port set by this server, device read back, link speed checked, run, parked. [@ANCHOR: glasgow_execute]
-* Any disagreement or failure switches every port off, proves it, and says so. [@ANCHOR: glasgow_fail_closed]
-* A flag argument is true, false or absent, nothing else. [@ANCHOR: glasgow_flag]
-* The install directory is the config's `venv` or the pinned default under `~/.local/share/bench_mcp`. [@ANCHOR: glasgow_install_dir]
-* The program and the bitstream cache are inside the install directory. [@ANCHOR: glasgow_install_paths]
-* An instrument is picked by name or implicitly when exactly one fits. [@ANCHOR: glasgow_instrument]
-* The list tool reports the device, revision, link speed and install without driving anything. [@ANCHOR: glasgow_list]
-* A number argument is finite and within a range whose source the error names. [@ANCHOR: glasgow_number]
-* Driving tools need confirm, results are structured, a failed run still ends with the pins parked. [@ANCHOR: glasgow_ops_call]
-* After a pin tool every used port is parked: all pins inputs, pulls released. [@ANCHOR: glasgow_park]
-* The serials in `glasgow list` are separated from its log lines. [@ANCHOR: glasgow_parse_device_list]
-* Hex text becomes bytes or an error. [@ANCHOR: glasgow_parse_hex_bytes]
-* The TAPs of a JTAG scan are parsed with their IDCODE fields. [@ANCHOR: glasgow_parse_jtag_taps]
-* Warnings and errors of the glasgow log are passed on to the caller. [@ANCHOR: glasgow_parse_log_problems]
-* Pin specs expand to ports A and B, 16 pins at most, no duplicates. [@ANCHOR: glasgow_parse_pins]
-* The helper script's single result line is found, and its absence is an error. [@ANCHOR: glasgow_parse_result_line]
-* The voltage table of a real device parses, a short or fault row is flagged, and an unreadable table is an error. [@ANCHOR: glasgow_parse_voltage_table]
-* A pin argument is one pin of port A or B, with a default from the applet's role table. [@ANCHOR: glasgow_pin_arg]
-* Every applet tool's arguments are checked and turned into a plan before anything is sent. [@ANCHOR: glasgow_plan]
-* A port is set only with confirm, within the config and revision limits, limit register first when raising, supply first when lowering, pins made inputs beforehand, and verified by readback. [@ANCHOR: glasgow_port_set]
-* The gateware of a tool's applet is built into the cache without a device or a voltage. [@ANCHOR: glasgow_prepare]
-* `glasgow voltage` is read and parsed; a failure names the udev rule when permissions are missing. [@ANCHOR: glasgow_read_ports]
-* The real runner starts the pinned `glasgow` as a child with its own cache, captures both streams, ends it by SIGINT then SIGTERM only, and never signals a process it did not start or sends SIGKILL. [@ANCHOR: glasgow_real_runner]
-* The hardware revision comes from the configured serial or the single listed device. [@ANCHOR: glasgow_revision]
-* The revision and the port voltage range come from the serial. [@ANCHOR: glasgow_revision_limits]
-* A child that did not end, or that the runner had to interrupt, is an error that says what to do. [@ANCHOR: glasgow_run]
-* `glasgow safe` is followed by a readback that must show 0 V on every port, and the session record is cleared first. [@ANCHOR: glasgow_safe]
-* The safe-state tool proves 0 V or says to unplug the USB cable. [@ANCHOR: glasgow_safe_state]
-* A Glasgow serial has Glasgow's own pattern. [@ANCHOR: glasgow_serial_ok]
-* The server records which ports a person set, to what voltage, and until when. [@ANCHOR: glasgow_sessions]
-* When the server stops, every port it powered is switched off. [@ANCHOR: glasgow_shutdown]
-* The status tool reports the device's own port readings and the server's record. [@ANCHOR: glasgow_status]
-* Tools are listed by the configured tier. [@ANCHOR: glasgow_tool_defs]
-* A uart-analyzer CSV is summarised per channel with error counts and a cut-off. [@ANCHOR: glasgow_uart_csv_summary]
-* The device and its link speed are read from sysfs, so a full-speed link is known without opening it. [@ANCHOR: glasgow_usb_device]
-* A VCD capture is summarised per pin: transitions, fraction high, pulse widths, edge frequency, overrun marker. [@ANCHOR: glasgow_vcd_summary]
-* After max_on_s a watchdog switches the ports off by itself. [@ANCHOR: glasgow_watchdog]
-* The serial of the config is passed to every command, so one of several devices is chosen. [@ANCHOR: glasgow_base_args]
-* The real context puts the lock, the program and the cache in the install and reads the kernel's USB tree. [@ANCHOR: glasgow_real_ctx]
-* One pin never fills two roles. [@ANCHOR: glasgow_distinct_pins]
-* A tool's answer says its pins are parked, that the rail is still on and how long the call took. [@ANCHOR: glasgow_done]
-* The I/O voltage of a call is the recorded one, or the call is refused (and an expired port is switched off). [@ANCHOR: glasgow_volt_spec]
-* A number in the voltage table must be finite. [@ANCHOR: glasgow_parse_num]
-* The process runner gives glasgow its own cache and a clean environment. [@ANCHOR: glasgow_runner_command]
-* The helper script runs inside the applet's context through a one-line entry, prints one result line, and reports a device that does not acknowledge as a result, not a crash. [@ANCHOR: glasgow_ops_main]
-* An I2C scan probes each address of the range with an empty write. [@ANCHOR: glasgow_ops_i2c_scan]
-* An I2C read writes the register bytes and reads in one transaction (repeated start). [@ANCHOR: glasgow_ops_i2c_read]
-* An I2C write reports acknowledgement and the number of bytes written. [@ANCHOR: glasgow_ops_i2c_write]
-* A UART transaction sends, then collects until the terminator, silence, the byte limit or the time limit, and says which. [@ANCHOR: glasgow_ops_uart_transact]
-* A pattern is timed from the host, bounded in time, and releases every pin even when it fails. [@ANCHOR: glasgow_ops_gpio_pattern]
-* The SWD tool reads DPIDR and its fields and nothing else. [@ANCHOR: glasgow_ops_swd_idcode]
-* The installer refuses a source archive whose sha256 is not the pinned one before creating any venv, never reuses a directory, and hashes files in blocks. [@ANCHOR: glasgow_install_main] [@ANCHOR: glasgow_install_sha256] [@ANCHOR: glasgow_install_run]
-* The installer copies the archive (given or downloaded, at most the pinned size plus 1 MiB) into DEST and hashes and extracts that copy, so the original cannot change between check and use. [@ANCHOR: glasgow_install_copy_bounded]
-* The pin generator keeps only Linux wheels and sdists, with their sha256, and prints every pinned package. [@ANCHOR: glasgow_pin_hashes] [@ANCHOR: glasgow_pin_main]
+* The applet table lists every tool's applet and what is never provided.
+* A tool above the tier or unknown is refused before any command.
+* The `glasgow` entry is read with its limits, and a bad value, a relative venv path, a bad serial or a max_volts above 5.5 is refused when the file is read.
+* A file lock in the install keeps a second process out of the device while a call runs.
+* The one path of every pin tool: port set by this server, device read back, link speed checked, run, parked.
+* Any disagreement or failure switches every port off, proves it, and says so.
+* A flag argument is true, false or absent, nothing else.
+* The install directory is the config's `venv` or the pinned default under `~/.local/share/bench_mcp`.
+* The program and the bitstream cache are inside the install directory.
+* An instrument is picked by name or implicitly when exactly one fits.
+* The list tool reports the device, revision, link speed and install without driving anything.
+* A number argument is finite and within a range whose source the error names.
+* Driving tools need confirm, results are structured, a failed run still ends with the pins parked.
+* After a pin tool every used port is parked: all pins inputs, pulls released.
+* The serials in `glasgow list` are separated from its log lines.
+* Hex text becomes bytes or an error.
+* The TAPs of a JTAG scan are parsed with their IDCODE fields.
+* Warnings and errors of the glasgow log are passed on to the caller.
+* Pin specs expand to ports A and B, 16 pins at most, no duplicates.
+* The helper script's single result line is found, and its absence is an error.
+* The voltage table of a real device parses, a short or fault row is flagged, and an unreadable table is an error.
+* A pin argument is one pin of port A or B, with a default from the applet's role table.
+* Every applet tool's arguments are checked and turned into a plan before anything is sent.
+* A port is set only with confirm, within the config and revision limits, limit register first when raising, supply first when lowering, pins made inputs beforehand, and verified by readback.
+* The gateware of a tool's applet is built into the cache without a device or a voltage.
+* `glasgow voltage` is read and parsed; a failure names the udev rule when permissions are missing.
+* The real runner starts the pinned `glasgow` as a child with its own cache, captures both streams, ends it by SIGINT then SIGTERM only, and never signals a process it did not start or sends SIGKILL.
+* The hardware revision comes from the configured serial or the single listed device.
+* The revision and the port voltage range come from the serial.
+* A child that did not end, or that the runner had to interrupt, is an error that says what to do.
+* `glasgow safe` is followed by a readback that must show 0 V on every port, and the session record is cleared first.
+* The safe-state tool proves 0 V or says to unplug the USB cable.
+* A Glasgow serial has Glasgow's own pattern.
+* The server records which ports a person set, to what voltage, and until when.
+* When the server stops, every port it powered is switched off.
+* The status tool reports the device's own port readings and the server's record.
+* Tools are listed by the configured tier.
+* A uart-analyzer CSV is summarised per channel with error counts and a cut-off.
+* The device and its link speed are read from sysfs, so a full-speed link is known without opening it.
+* A VCD capture is summarised per pin: transitions, fraction high, pulse widths, edge frequency, overrun marker.
+* After max_on_s a watchdog switches the ports off by itself.
+* The serial of the config is passed to every command, so one of several devices is chosen.
+* The real context puts the lock, the program and the cache in the install and reads the kernel's USB tree.
+* One pin never fills two roles.
+* A tool's answer says its pins are parked, that the rail is still on and how long the call took.
+* The I/O voltage of a call is the recorded one, or the call is refused (and an expired port is switched off).
+* A number in the voltage table must be finite.
+* The process runner gives glasgow its own cache and a clean environment.
+* The helper script runs inside the applet's context through a one-line entry, prints one result line, and reports a device that does not acknowledge as a result, not a crash.
+* An I2C scan probes each address of the range with an empty write.
+* An I2C read writes the register bytes and reads in one transaction (repeated start).
+* An I2C write reports acknowledgement and the number of bytes written.
+* A UART transaction sends, then collects until the terminator, silence, the byte limit or the time limit, and says which.
+* A pattern is timed from the host, bounded in time, and releases every pin even when it fails.
+* The SWD tool reads DPIDR and its fields and nothing else.
+* The installer refuses a source archive whose sha256 is not the pinned one before creating any venv, never reuses a directory, and hashes files in blocks.
+* The installer copies the archive (given or downloaded, at most the pinned size plus 1 MiB) into DEST and hashes and extracts that copy, so the original cannot change between check and use.
+* The pin generator keeps only Linux wheels and sdists, with their sha256, and prints every pinned package.
 
 ## Checks this crate makes for the SDRs (anchors)
 
 * The RTL-SDR is receive only, takes its own tuning, rate (not 0.3 to 0.9 MS/s), gain and `ppm` limits and a `direct_samp` of 1 or 2, and is refused a second channel or an antenna.
-* The SoapySDR argument string is built from the config and a serial or XB-200 value cannot carry another argument. [@ANCHOR: bench_mcp_sdr_args]
-* A capture's arguments are checked against each radio's tuning, rate and gain limits before the radio is opened. [@ANCHOR: bench_mcp_sdr_capture_args]
-* A survey is bounded to 400 steps and a power-of-two FFT length. [@ANCHOR: bench_mcp_sdr_survey_args]
-* The coherence tool checks its arguments before touching hardware. [@ANCHOR: bench_mcp_sdr_coherence_args]
-* The averaged spectrum reads a tone's amplitude and offset, and peaks skip the DC spike. [@ANCHOR: bench_mcp_sdr_spectrum_math]
-* The phase between two channels is measured block by block with its stability and coherence. [@ANCHOR: bench_mcp_sdr_phase_math]
-* A capture that takes longer than its signal lasts is flagged as having lost samples. [@ANCHOR: bench_mcp_sdr_continuous]
+* The SoapySDR argument string is built from the config and a serial or XB-200 value cannot carry another argument.
+* A capture's arguments are checked against each radio's tuning, rate and gain limits before the radio is opened.
+* A survey is bounded to 400 steps and a power-of-two FFT length.
+* The coherence tool checks its arguments before touching hardware.
+* The averaged spectrum reads a tone's amplitude and offset, and peaks skip the DC spike.
+* The phase between two channels is measured block by block with its stability and coherence.
+* A capture that takes longer than its signal lasts is flagged as having lost samples.
 
 ## The manual (every tool and instrument function ships its page)
 
@@ -255,14 +257,14 @@ The documentation is part of the server: `manual/` holds one markdown page per t
 
 Checks this crate makes for the manual (anchors):
 
-* Every file is a page with the required front matter, an honest `verified` line and a known tier. [@ANCHOR: bench_mcp_manual_front_matter]
-* Every registered tool has a page under `tools/` with its own tier, every `tools:` entry names a registered tool. [@ANCHOR: bench_mcp_manual_tool_pages]
-* The argument tables are generated from the schemas and every argument is explained. [@ANCHOR: bench_mcp_manual_arguments]
-* Every tool description ends with its manual path. [@ANCHOR: bench_mcp_manual_pointers]
-* `see_also` entries and links resolve. [@ANCHOR: bench_mcp_manual_links]
-* Every directory has an index page that lists all its children, and every page is reachable from the top. [@ANCHOR: bench_mcp_manual_index_pages]
-* Pages are valid markdown of bounded length. [@ANCHOR: bench_mcp_manual_markdown]
-* The five tools (index, read with sections and cutting, BM25 (a text-relevance ranking function) search with filters, for-tool, whats-new) and the resources. [@ANCHOR: bench_mcp_manual_index] [@ANCHOR: bench_mcp_manual_read] [@ANCHOR: bench_mcp_manual_search] [@ANCHOR: bench_mcp_manual_for_tool] [@ANCHOR: bench_mcp_manual_whats_new] [@ANCHOR: bench_mcp_manual_resources]
+* Every file is a page with the required front matter, an honest `verified` line and a known tier.
+* Every registered tool has a page under `tools/` with its own tier, every `tools:` entry names a registered tool.
+* The argument tables are generated from the schemas and every argument is explained.
+* Every tool description ends with its manual path.
+* `see_also` entries and links resolve.
+* Every directory has an index page that lists all its children, and every page is reachable from the top.
+* Pages are valid markdown of bounded length.
+* The five tools (index, read with sections and cutting, BM25 (a text-relevance ranking function) search with filters, for-tool, whats-new) and the resources.
 
 ## Tests
 
@@ -274,10 +276,10 @@ the supply output on.
 
 ## Checks this crate makes (anchors)
 
-* The supply's limits refuse out-of-range and non-finite values before any command is sent. [@ANCHOR: bench_mcp_psu_caps]
-* An instrument is picked by name, or implicitly when exactly one configured instrument fits the tool. [@ANCHOR: bench_mcp_pick]
-* The configuration file parses both drivers (scope over TCP, supply over serial) with their defaults. [@ANCHOR: bench_mcp_config]
-* The scope waveform analysis returns the edges and the frequency of a square wave. [@ANCHOR: scope_mcp_analyse]
+* The supply's limits refuse out-of-range and non-finite values before any command is sent.
+* An instrument is picked by name, or implicitly when exactly one configured instrument fits the tool.
+* The configuration file parses both drivers (scope over TCP, supply over serial) with their defaults.
+* The scope waveform analysis returns the edges and the frequency of a square wave.
 
 ## Scope functions probed on the SDS1202X-E (firmware 1.3.27, 2026-10-28)
 
@@ -308,92 +310,92 @@ overlap (the burst overwrites the generator's settings): one VNA call at a time 
 Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`. Tests read a recording of this development machine's `/sys`, `uhubctl`, `lsusb` and kernel journal in
 `tests/usb_fixtures/devbox` (made by `tests/usb_fixtures/capture.py`).
 
-* The USB tree, its per-device JSON and the label lookup are checked against the recorded tree. [@ANCHOR: usb_hub_sysfs_tree]
-* The `usb_hub` config entry (labels, critical ports and devices) parses and refuses bad entries. [@ANCHOR: usb_hub_config]
-* `uhubctl` output (with and without descriptions) and the hub class descriptor parse from recordings. [@ANCHOR: usb_hub_uhubctl_parse]
-* The protection list: root filesystem, mounts, keyboards, config, bench serial adapters, hubs on the path, hub uplinks. [@ANCHOR: usb_hub_protection]
-* A power cycle removes and restores the port's device in a copy of sysfs, with the measured times and the new device number. [@ANCHOR: usb_hub_power_cycle]
-* A unit that does not come back gets a second cycle with a longer off time. [@ANCHOR: usb_hub_power_escalation]
-* Port power: tiers, dry run, protection refusals, ganged and unlisted hubs refused. [@ANCHOR: usb_hub_port_power]
-* The verification levels 1 to 4 and their honest note. [@ANCHOR: usb_hub_verification_levels]
-* The root helper accepts only its four operations and refuses every other argument before a write. [@ANCHOR: usb_hub_privileged_ops]
-* The escalation ladder (reset, authorize, driver, autosuspend) goes through the helper, honours protection and dry run. [@ANCHOR: usb_hub_ladder]
-* Kernel journal lines are classified (connect, disconnect, reset, enumeration failure, errno) and counted per device, with flapping detection, against the recorded journal. [@ANCHOR: usb_hub_history_parse]
-* A watch reports a device leaving and returning with a new device number, and the watch checks its arguments (1 to 120 s) and runs for its duration; a test drives the same loop by poll count instead of by sleeping, so a loaded machine cannot miss the outage. [@ANCHOR: usb_hub_watch] [@ANCHOR: usb_hub_watch_with]
-* Bandwidth: the VNWA's four full-speed devices share one translator and the endpoint arithmetic follows the USB reservation rules. [@ANCHOR: usb_hub_bandwidth]
-* Diagnose: missing, powered-off, deauthorized and journal-backed findings. [@ANCHOR: usb_hub_diagnose]
-* The power budget flags a bus-powered hub asked for more current than it has. [@ANCHOR: usb_hub_power_budget]
+* The USB tree, its per-device JSON and the label lookup are checked against the recorded tree.
+* The `usb_hub` config entry (labels, critical ports and devices) parses and refuses bad entries.
+* `uhubctl` output (with and without descriptions) and the hub class descriptor parse from recordings.
+* The protection list: root filesystem, mounts, keyboards, config, bench serial adapters, hubs on the path, hub uplinks.
+* A power cycle removes and restores the port's device in a copy of sysfs, with the measured times and the new device number.
+* A unit that does not come back gets a second cycle with a longer off time.
+* Port power: tiers, dry run, protection refusals, ganged and unlisted hubs refused.
+* The verification levels 1 to 4 and their honest note.
+* The root helper accepts only its four operations and refuses every other argument before a write.
+* The escalation ladder (reset, authorize, driver, autosuspend) goes through the helper, honours protection and dry run.
+* Kernel journal lines are classified (connect, disconnect, reset, enumeration failure, errno) and counted per device, with flapping detection, against the recorded journal.
+* A watch reports a device leaving and returning with a new device number, and the watch checks its arguments (1 to 120 s) and runs for its duration; a test drives the same loop by poll count instead of by sleeping, so a loaded machine cannot miss the outage.
+* Bandwidth: the VNWA's four full-speed devices share one translator and the endpoint arithmetic follows the USB reservation rules.
+* Diagnose: missing, powered-off, deauthorized and journal-backed findings.
+* The power budget flags a bus-powered hub asked for more current than it has.
 
 ## Audio tools (`audio` driver)
 
 `bench_audio_*` tools work with the host's sound devices through PipeWire: device list, status and limits, then record, play, verify a sound, detect events, speak, alert and discovery by listening.
 Registration, tiers, the volume cap, quiet hours and the reserved VNWA codecs are in `docs/AUDIO_TOOLS.md`. Tests read a recording of this development machine's PipeWire graph in `tests/audio_fixtures/devbox`.
 
-* The `audio` config entry parses and refuses bad entries; the VNWA codec is always reserved. [@ANCHOR: audio_config]
-* The device list comes from `pw-dump`; the VNWA codecs are reserved by usb id. [@ANCHOR: audio_devices_parse]
-* `wpctl get-volume` output parses. [@ANCHOR: audio_levels_parse]
-* WAV, tones, level statistics and the tone-heard decision are tested on synthetic recordings. [@ANCHOR: audio_wav] [@ANCHOR: audio_tones] [@ANCHOR: audio_analysis] [@ANCHOR: audio_heard_tone]
-* The volume limits, the restoring volume guard and the managed capture directory. [@ANCHOR: audio_safety_limits] [@ANCHOR: audio_safety_guard] [@ANCHOR: audio_store_managed] [@ANCHOR: audio_store_retention]
-* `tests/hil_audio.rs` (ignored by default) runs record, play, loopback and volume tools against the real PipeWire through a silent virtual sink and source. [@ANCHOR: audio_record_tool] [@ANCHOR: audio_play_tool] [@ANCHOR: audio_loopback_tool] [@ANCHOR: audio_set_volume_tool]
-* Sound events (beeps, clicks, quiet rooms), Morse decoding, the verification judgment, and the verify and events tools end to end on a virtual sink. [@ANCHOR: audio_events_detect] [@ANCHOR: audio_events_tool] [@ANCHOR: audio_morse] [@ANCHOR: audio_verify_judge] [@ANCHOR: audio_verify_tool]
-* A stream aimed at a missing node fails instead of falling back to the default device (which could be a reserved one). [@ANCHOR: audio_engine_no_fallback]
-* Speech: engine choice, voice list from a recording of `espeak-ng --voices`, command lines with the text on stdin; speaking to a WAV file and to a virtual output. [@ANCHOR: audio_speak_choose] [@ANCHOR: audio_speak_voices] [@ANCHOR: audio_speak_tool]
-* Alerts: volume by severity and quiet hours; the text is returned also when no sound can be made. [@ANCHOR: audio_alert_volume] [@ANCHOR: audio_alert_tool]
-* Audio path discovery: conclusions on synthetic observations (heard, not heard, dead input, no microphone, HDMI last, crosstalk), the volume ladder, staleness by device fingerprint, `auto` selection, and a run against a virtual output and input. [@ANCHOR: audio_discover_conclude] [@ANCHOR: audio_discover_ladder] [@ANCHOR: audio_discover_stale] [@ANCHOR: audio_select_auto] [@ANCHOR: audio_discover_auto_rerun] [@ANCHOR: audio_discover_tool]
+* The `audio` config entry parses and refuses bad entries; the VNWA codec is always reserved.
+* The device list comes from `pw-dump`; the VNWA codecs are reserved by usb id.
+* `wpctl get-volume` output parses.
+* WAV, tones, level statistics and the tone-heard decision are tested on synthetic recordings.
+* The volume limits, the restoring volume guard and the managed capture directory.
+* `tests/hil_audio.rs` (ignored by default) runs record, play, loopback and volume tools against the real PipeWire through a silent virtual sink and source.
+* Sound events (beeps, clicks, quiet rooms), Morse decoding, the verification judgment, and the verify and events tools end to end on a virtual sink.
+* A stream aimed at a missing node fails instead of falling back to the default device (which could be a reserved one).
+* Speech: engine choice, voice list from a recording of `espeak-ng --voices`, command lines with the text on stdin; speaking to a WAV file and to a virtual output.
+* Alerts: volume by severity and quiet hours; the text is returned also when no sound can be made.
+* Audio path discovery: conclusions on synthetic observations (heard, not heard, dead input, no microphone, HDMI last, crosstalk), the volume ladder, staleness by device fingerprint, `auto` selection, and a run against a virtual output and input.
 
 ## Radioctl rigs (`radioctl` driver)
 
 `bench_radioctl_*` tools drive radios through the `radioctld` daemon of `daemons/radioctl` (a separate program, started by this server on 127.0.0.1 or already running; it serves the `rigctld` line protocol): the rig list, the rigs and their state, a receiver's status in one call, single values and signal readings, receiver control (frequency, mode, VFO, split, RIT/XIT, levels, functions, memory recall, a bounded scan), a connection test, a polling watch of the dial, the reference station table, a receiver test with the rig's audio (through the sound module's input names), the dummy-load plausibility check and its baseline (evidence, not proof; for rigs with the owner's transmit attestation), and the managed daemon (`bench_radioctl_daemon`). An entry is `{"driver": "radioctl", "tier": "read_only", "rig": "elecraft-kx3"}` (a virtual rig made from the radioctl rig description `elecraft-kx3`, no hardware), `{"driver": "radioctl", "tier": "read_only", "rig": "icom-ic-7300", "device": "/dev/serial/by-id/usb-EXAMPLE_rig-if00-port0", "speed": 19200}` (a real rig; `full_power_w` is the rig's full-scale RF watts and is required with a `transmit` block, because radioctld has no power conversion and the power cap is turned into a power setting with it; `rigs_dir`, or the `RADIOCTL_RIGS` variable, names the directory of the description files, and `BENCH_MCP_RADIOCTLD` the program if it is not on the search path) or `{"driver": "radioctl", "tier": "read_only", "radioctld_port": 4532}` (a radioctld that already runs). The old `"hamlib"` driver and its `model` and `set_conf` settings were removed and give an error that names the new ones; the Hamlib `rigctld` is no longer started or needed. Keys, tiers and the safety model are in `docs/RADIOCTL_TOOLS.md` and the manual pages `instruments/radioctl/*`. Tests run against virtual radioctl rigs through a managed radioctld on a free localhost port (the test code builds `radioctld` from this repository when `BENCH_MCP_RADIOCTLD` is not set), and against a scripted fake of radioctld for faults; nothing here has run on a real rig through radioctl yet (`bench-mcp-hardware-checks-after-legacy-hardening`). radioctld does not serve memory channels (`RPRT -4`), so `bench_radioctl_memory` and `get` with `item` memory or channel report that.
 
-* The config takes a managed or an existing radioctld, refuses remote daemons and bad values. [@ANCHOR: radioctl_config]
-* Return codes have names and next steps; arguments cannot carry a second command. [@ANCHOR: radioctl_error_codes] [@ANCHOR: radioctl_arg_check]
-* A command gets its reply or a bounded error; a read is tried once more, a write never. [@ANCHOR: radioctl_command] [@ANCHOR: radioctl_read_retry]
-* The managed daemon is a radioctld with a generated configuration (a virtual or a serial rig, reads never cached), binds localhost, starts on demand, is stopped on request, and a leftover of a dead server is stopped (a live owner is never touched). [@ANCHOR: radioctl_daemon_args] [@ANCHOR: radioctl_daemon_start] [@ANCHOR: radioctl_daemon_ensure] [@ANCHOR: radioctl_daemon_tool] [@ANCHOR: radioctl_reap_stale] [@ANCHOR: radioctl_release_after_crash]
-* A missing or unusable serial device is reported before a daemon starts. [@ANCHOR: radioctl_device_check]
-* The rig list and capabilities are read from the radioctl rig description files; a description names its rig, the rigs directory comes from the config or `RADIOCTL_RIGS`. [@ANCHOR: radioctl_models_parse] [@ANCHOR: radioctl_models_description_name] [@ANCHOR: radioctl_models_list] [@ANCHOR: radioctl_models_tool] [@ANCHOR: radioctl_rigs_dir]
-* Status, single values and signal readings; what the rig lacks is reported, not hidden. [@ANCHOR: radioctl_s_units] [@ANCHOR: radioctl_capability_query] [@ANCHOR: radioctl_status] [@ANCHOR: radioctl_get] [@ANCHOR: radioctl_signal_readings]
-* The tools open the rig, run under the tier check and list the rigs. [@ANCHOR: radioctl_open] [@ANCHOR: radioctl_call] [@ANCHOR: radioctl_rigs]
-* Receiver control: the receive ranges come from the rig and the owner's limits and a frequency outside them is refused with the source of the limit; arguments are checked before anything is sent and transmit-side settings are refused; every change is read back; a keyed rig is left alone. [@ANCHOR: radioctl_dump_ranges] [@ANCHOR: radioctl_rx_ranges] [@ANCHOR: radioctl_freq_guard] [@ANCHOR: radioctl_set_plan] [@ANCHOR: radioctl_set] [@ANCHOR: radioctl_memory]
-* A scan is bounded in steps and time, ranks the strongest and restores the rig, also after a failure. [@ANCHOR: radioctl_scan]
-* The connection test reads the system and opens no serial port. [@ANCHOR: radioctl_device_holders] [@ANCHOR: radioctl_diagnose]
-* The transmit attestation is required in full, defaults nothing wider and refuses a false or future-dated one; the station table ships WWV, WWVH, AM samples and weather radio (not CHU), is edited by the owner, and records last heard from detections. [@ANCHOR: radioctl_attest_config] [@ANCHOR: radioctl_attest_number] [@ANCHOR: radioctl_stations_defaults] [@ANCHOR: radioctl_stations_recent] [@ANCHOR: radioctl_stations_select] [@ANCHOR: radioctl_stations_edit] [@ANCHOR: radioctl_stations_save] [@ANCHOR: radioctl_stations_load] [@ANCHOR: radioctl_stations_heard] [@ANCHOR: radioctl_station_check] [@ANCHOR: radioctl_station_class] [@ANCHOR: radioctl_station_days] [@ANCHOR: radioctl_station_from_json] [@ANCHOR: radioctl_stations_tool] [@ANCHOR: radioctl_station_set_tool]
-* Time-station detection on synthetic audio: the one-second tick rhythm with and without noise, 440/500/600 Hz tones, a carrier beat note, silence, and mains hum that must not trigger. [@ANCHOR: radioctl_detect_hum] [@ANCHOR: radioctl_detect_tones] [@ANCHOR: radioctl_detect_ticks] [@ANCHOR: radioctl_detect_beats] [@ANCHOR: radioctl_detect_analyze]
-* The load plausibility check: the decision on readings (at the baseline, above it, unsteady, no baseline, other settings, a station heard, a dead or unreadable input), the baseline files, the measurement that restores the rig, and the tools. [@ANCHOR: radioctl_load_decide] [@ANCHOR: radioctl_verdict_word] [@ANCHOR: radioctl_baseline_load] [@ANCHOR: radioctl_baseline_save] [@ANCHOR: radioctl_load_audio_seconds] [@ANCHOR: radioctl_load_mode_for] [@ANCHOR: radioctl_load_read_original] [@ANCHOR: radioctl_load_restore] [@ANCHOR: radioctl_load_read_point] [@ANCHOR: radioctl_load_measure] [@ANCHOR: radioctl_load_note_heard] [@ANCHOR: radioctl_loadtools_measure] [@ANCHOR: radioctl_loadtools_prepare] [@ANCHOR: radioctl_baseline_problems] [@ANCHOR: radioctl_load_check_tool] [@ANCHOR: radioctl_load_baseline_tool]
-* The receiver test with the rig's audio, and how the audio input is found from the sound module's names. [@ANCHOR: radioctl_rx_check] [@ANCHOR: radioctl_rx_listen] [@ANCHOR: radioctl_audio_resolve] [@ANCHOR: radioctl_audio_capture]
-* Transmitting into the attested dummy load: the arguments against the attestation, the rig read first (transmit range, PTT, split, XIT, the power setting against the cap, the lowest power), the load check as a gate, the operator alert, the low-power SWR probe, the keyed interval with its watchdog, release and read-back on every path, the keyed-interval log, the power sweep and the safe state. [@ANCHOR: radioctl_dump_state] [@ANCHOR: radioctl_startup_note] [@ANCHOR: radioctl_tx_alert] [@ANCHOR: radioctl_tx_args] [@ANCHOR: radioctl_tx_gate] [@ANCHOR: radioctl_tx_key] [@ANCHOR: radioctl_tx_key_test] [@ANCHOR: radioctl_tx_keyed_drop] [@ANCHOR: radioctl_tx_keyed_released_flag] [@ANCHOR: radioctl_tx_log] [@ANCHOR: radioctl_tx_min_power] [@ANCHOR: radioctl_tx_operator_alert] [@ANCHOR: radioctl_tx_full_scale] [@ANCHOR: radioctl_tx_power_convert] [@ANCHOR: radioctl_tx_preflight] [@ANCHOR: radioctl_tx_probe] [@ANCHOR: radioctl_tx_release] [@ANCHOR: radioctl_tx_release_all] [@ANCHOR: radioctl_tx_safe_state] [@ANCHOR: radioctl_tx_startup_check] [@ANCHOR: radioctl_tx_sweep] [@ANCHOR: radioctl_tx_swr_valid] [@ANCHOR: radioctl_tx_take_note]
-* The transmit watchdog process: its unkey, its run loop (deadline, closed pipe, abort, done), its entry point and how the tool starts it. [@ANCHOR: radioctl_guard_main] [@ANCHOR: radioctl_guard_run] [@ANCHOR: radioctl_guard_spawn] [@ANCHOR: radioctl_guard_unkey] [@ANCHOR: radioctl_load_gate]
-* Plumbing of the transmit path: the meter readings, the verified settings, the restore, the keyed call, the summary, the watchdog's stand-down, `dump_state` read to its `done` line and the shutdown of all rigs. [@ANCHOR: radioctl_guard_stand_down] [@ANCHOR: radioctl_shutdown_all] [@ANCHOR: radioctl_tx_keyed] [@ANCHOR: radioctl_tx_read_meters] [@ANCHOR: radioctl_tx_restore] [@ANCHOR: radioctl_tx_set_verified] [@ANCHOR: radioctl_tx_summary]
-* Watching the dial by polling, and releasing a possibly keyed rig before its daemon is stopped. [@ANCHOR: radioctl_tx_release_rig] [@ANCHOR: radioctl_watch] [@ANCHOR: radioctl_watch_poll]
-* Internals of the client and the daemon manager: connection, exchange, error text, daemon directory, endpoint, start, stop, status, log tail, shutdown, the rig choice and file-safe names. [@ANCHOR: radioctl_connect] [@ANCHOR: radioctl_reopen] [@ANCHOR: radioctl_exchange] [@ANCHOR: radioctl_reply_number] [@ANCHOR: radioctl_error_display] [@ANCHOR: radioctl_code_next_step] [@ANCHOR: radioctl_managed_dir] [@ANCHOR: radioctl_endpoint] [@ANCHOR: radioctl_kill_slot] [@ANCHOR: radioctl_log_tail] [@ANCHOR: radioctl_shutdown] [@ANCHOR: radioctl_daemon_explicit_start] [@ANCHOR: radioctl_daemon_status] [@ANCHOR: radioctl_daemon_stop] [@ANCHOR: radioctl_instrument] [@ANCHOR: radioctl_safe_name]
-* Helpers of the status and control tools: argument bounds, level text, tolerated rig refusals, applied-change reporting, the keyed-rig check, range combination, scan stepping, and the connection test's note on the DTR and RTS lines. [@ANCHOR: radioctl_bounded] [@ANCHOR: radioctl_level_json] [@ANCHOR: radioctl_s_text] [@ANCHOR: radioctl_tolerate] [@ANCHOR: radioctl_apply] [@ANCHOR: radioctl_ptt_is_on] [@ANCHOR: radioctl_combine_ranges] [@ANCHOR: radioctl_scan_steps] [@ANCHOR: radioctl_lines_note]
+* The config takes a managed or an existing radioctld, refuses remote daemons and bad values.
+* Return codes have names and next steps; arguments cannot carry a second command.
+* A command gets its reply or a bounded error; a read is tried once more, a write never.
+* The managed daemon is a radioctld with a generated configuration (a virtual or a serial rig, reads never cached), binds localhost, starts on demand, is stopped on request, and a leftover of a dead server is stopped (a live owner is never touched).
+* A missing or unusable serial device is reported before a daemon starts.
+* The rig list and capabilities are read from the radioctl rig description files; a description names its rig, the rigs directory comes from the config or `RADIOCTL_RIGS`.
+* Status, single values and signal readings; what the rig lacks is reported, not hidden.
+* The tools open the rig, run under the tier check and list the rigs.
+* Receiver control: the receive ranges come from the rig and the owner's limits and a frequency outside them is refused with the source of the limit; arguments are checked before anything is sent and transmit-side settings are refused; every change is read back; a keyed rig is left alone.
+* A scan is bounded in steps and time, ranks the strongest and restores the rig, also after a failure.
+* The connection test reads the system and opens no serial port.
+* The transmit attestation is required in full, defaults nothing wider and refuses a false or future-dated one; the station table ships WWV, WWVH, AM samples and weather radio (not CHU), is edited by the owner, and records last heard from detections.
+* Time-station detection on synthetic audio: the one-second tick rhythm with and without noise, 440/500/600 Hz tones, a carrier beat note, silence, and mains hum that must not trigger.
+* The load plausibility check: the decision on readings (at the baseline, above it, unsteady, no baseline, other settings, a station heard, a dead or unreadable input), the baseline files, the measurement that restores the rig, and the tools.
+* The receiver test with the rig's audio, and how the audio input is found from the sound module's names.
+* Transmitting into the attested dummy load: the arguments against the attestation, the rig read first (transmit range, PTT, split, XIT, the power setting against the cap, the lowest power), the load check as a gate, the operator alert, the low-power SWR probe, the keyed interval with its watchdog, release and read-back on every path, the keyed-interval log, the power sweep and the safe state.
+* The transmit watchdog process: its unkey, its run loop (deadline, closed pipe, abort, done), its entry point and how the tool starts it.
+* Plumbing of the transmit path: the meter readings, the verified settings, the restore, the keyed call, the summary, the watchdog's stand-down, `dump_state` read to its `done` line and the shutdown of all rigs.
+* Watching the dial by polling, and releasing a possibly keyed rig before its daemon is stopped.
+* Internals of the client and the daemon manager: connection, exchange, error text, daemon directory, endpoint, start, stop, status, log tail, shutdown, the rig choice and file-safe names.
+* Helpers of the status and control tools: argument bounds, level text, tolerated rig refusals, applied-change reporting, the keyed-rig check, range combination, scan stepping, and the connection test's note on the DTR and RTS lines.
 
 ## Rotators (`rotator` driver)
 
 `bench_rotator_*` tools drive an antenna rotator through a `radioctld` that serves it in a `[[rotator]]` section (a separate program that the owner starts; it speaks the `rotctld` line protocol; radioctld has the commands this module uses: `set_pos`, `get_pos`, `stop`, `park`, `get_info`), with the same client as the radioctl module: position and limits, a move inside the limits (the rotator's own narrowed by the owner's `min_az`, `max_az`, `min_el`, `max_el`) with `dry_run`, and the safe-state pair stop and park. An entry is `{"driver": "rotator", "tier": "read_config", "radioctld_port": 4533, "min_az": 0, "max_az": 360, "min_el": 0, "max_el": 90}` (`radioctld_host` and `allow_remote_radioctld` as for rigs; the old `rotctld_*` keys give an error that names these). A managed radioctld for rotators is not done. Tests run against a radioctld with a virtual Yaesu G-5500 rotator and a scripted fake; no real rotator. Pages: `instruments/rotator/*`.
 
-* The config needs a port, keeps radioctld on this machine and refuses bad limits; the instrument is chosen by name; errors end with a rotator's next action. [@ANCHOR: rotator_config] [@ANCHOR: rotator_instrument] [@ANCHOR: rotator_error_text] [@ANCHOR: rotator_call] [@ANCHOR: rotator_degrees] [@ANCHOR: rotator_wait_arg]
-* Position, limits (narrowed by the owner's), the target check and the motion test. [@ANCHOR: rotator_position] [@ANCHOR: rotator_limits] [@ANCHOR: rotator_target_check] [@ANCHOR: rotator_moving] [@ANCHOR: rotator_status]
-* A move is checked before it is sent, honours `dry_run`, waits for arrival and says when it did not arrive; the stop confirms the motion ended and works while another call runs; the park. [@ANCHOR: rotator_point] [@ANCHOR: rotator_wait] [@ANCHOR: rotator_stop] [@ANCHOR: rotator_park]
+* The config needs a port, keeps radioctld on this machine and refuses bad limits; the instrument is chosen by name; errors end with a rotator's next action.
+* Position, limits (narrowed by the owner's), the target check and the motion test.
+* A move is checked before it is sent, honours `dry_run`, waits for arrival and says when it did not arrive; the stop confirms the motion ended and works while another call runs; the park.
 
 ## Template instrument (`example` driver)
 
-`src/example/` is a working skeleton for adding an instrument: an imaginary SCPI signal source with four tools (`bench_example_status`, `bench_example_measure`, `bench_example_safe_state`, `bench_example_pulse`), its manual pages, a recorded-session fixture, a fake device for the tests and an ignored hardware check (`tests/hil_example.rs`). It is listed only when the config has an entry such as `{"driver": "example", "tier": "read_config", "host": "192.0.2.10", "port": 5025, "max_level_v": 1.0, "max_pulse_s": 2.0}`; no real instrument answers to it. `python3 tools/new_instrument.py <name>` copies it as the start of a new driver. The checks in `src/checklist.rs` (a page for every tool, the standard instrument pages, `dry_run` on every new `full` tool, anchors that pair up, no addresses or credentials in fixtures and pages) run with `cargo test`. [@ANCHOR: bench_mcp_checklist]
+`src/example/` is a working skeleton for adding an instrument: an imaginary SCPI signal source with four tools (`bench_example_status`, `bench_example_measure`, `bench_example_safe_state`, `bench_example_pulse`), its manual pages, a recorded-session fixture, a fake device for the tests and an ignored hardware check (`tests/hil_example.rs`). It is listed only when the config has an entry such as `{"driver": "example", "tier": "read_config", "host": "192.0.2.10", "port": 5025, "max_level_v": 1.0, "max_pulse_s": 2.0}`; no real instrument answers to it. `python3 tools/new_instrument.py <name>` copies it as the start of a new driver. The checks in `src/checklist.rs` (a page for every tool, the standard instrument pages, `dry_run` on every new `full` tool, anchors that pair up, no addresses or credentials in fixtures and pages) run with `cargo test`.
 
 Checks this crate makes for the template instrument (anchors):
 
-* The config takes limits with defaults and refuses bad ones. [@ANCHOR: example_config]
-* Arguments must be present, finite and in range, with the cause of the limit in the error. [@ANCHOR: example_args]
-* A reply that is not a finite number is an error, never a zero. [@ANCHOR: example_readings]
-* An address that does not answer as the expected model is sent nothing else. [@ANCHOR: example_identity]
-* A query is retried a bounded number of times and then reported with the next step. [@ANCHOR: example_retry]
-* Pulse arguments are checked against the rating and the owner's limits before anything is sent. [@ANCHOR: example_pulse_args]
-* A pulse needs `confirm`, honours `dry_run`, and ends with the output off and verified off. [@ANCHOR: example_pulse]
-* The safe state is verified by reading it back, and a failure says what to do by hand. [@ANCHOR: example_safe_state]
-* The VNWA power-cycle hook is the hub module's one implementation, installed on the VNA. [@ANCHOR: bench_vna_power_hook]
-* `bench_vna_spectrum` captures a spectrum and `bench_vna_modulation_stop` stops a running modulation; both are exercised on real hardware by `tests/hil.rs` (ignored by default). [@ANCHOR: bench_vna_spectrum] [@ANCHOR: bench_vna_modulation_stop]
-* `bench_vna_time_domain` transforms a stored sweep CSV (impulse or step, windows, optional time gate) on the host, without the unit, and reads only a `.csv` in the output directory. [@ANCHOR: bench_vna_time_domain] [@ANCHOR: bench_vna_time_read_sweep] [@ANCHOR: bench_vna_time_file] [@ANCHOR: bench_vna_time_text] [@ANCHOR: bench_vna_time_number]
-* The scope's channel math and cursors are computed on the host from the waveform memory (one frozen frame for the two channels), its acquisition, channel and display settings are read back after being set, and `bench_measure` can repeat a reading for statistics. [@ANCHOR: bench_mcp_scope_math] [@ANCHOR: bench_mcp_scope_combine] [@ANCHOR: bench_mcp_scope_read_waveform] [@ANCHOR: bench_mcp_scope_cursors] [@ANCHOR: bench_mcp_scope_value_at] [@ANCHOR: bench_mcp_scope_acquire] [@ANCHOR: bench_mcp_scope_channel] [@ANCHOR: bench_mcp_scope_display] [@ANCHOR: bench_mcp_scope_statistics]
-* A sound node reserved by its USB topology (the VNWA codecs, found by bus path as well as by id) is refused as a target. [@ANCHOR: audio_reserved_by_topology]
+* The config takes limits with defaults and refuses bad ones.
+* Arguments must be present, finite and in range, with the cause of the limit in the error.
+* A reply that is not a finite number is an error, never a zero.
+* An address that does not answer as the expected model is sent nothing else.
+* A query is retried a bounded number of times and then reported with the next step.
+* Pulse arguments are checked against the rating and the owner's limits before anything is sent.
+* A pulse needs `confirm`, honours `dry_run`, and ends with the output off and verified off.
+* The safe state is verified by reading it back, and a failure says what to do by hand.
+* The VNWA power-cycle hook is the hub module's one implementation, installed on the VNA.
+* `bench_vna_spectrum` captures a spectrum and `bench_vna_modulation_stop` stops a running modulation; both are exercised on real hardware by `tests/hil.rs` (ignored by default).
+* `bench_vna_time_domain` transforms a stored sweep CSV (impulse or step, windows, optional time gate) on the host, without the unit, and reads only a `.csv` in the output directory.
+* The scope's channel math and cursors are computed on the host from the waveform memory (one frozen frame for the two channels), its acquisition, channel and display settings are read back after being set, and `bench_measure` can repeat a reading for statistics.
+* A sound node reserved by its USB topology (the VNWA codecs, found by bus path as well as by id) is refused as a target.
 
 ## Spectrum analyzer and tracking generator (`siglent_ssa` driver)
 
@@ -429,8 +431,6 @@ Every I/O error ends with the next step (check the LAN cable and host, call `ben
 
 #### `bench_mcp_sa_config` - `Config`
 
-[@ANCHOR: bench_mcp_sa_config]
-
 The `siglent_ssa` settings of an instrument entry, in `src/sa/mod.rs`; held in `Instrument.sa` (`src/config.rs`) for the life of the process.
 
 | Field | Type | Meaning |
@@ -440,8 +440,6 @@ The `siglent_ssa` settings of an instrument entry, in `src/sa/mod.rs`; held in `
 Invariants: finite and inside the rating whenever it came from `parse_config`. Created when the config file is read, immutable afterwards, shared read-only by all tool calls. Wire form: the optional key `max_tg_dbm` in the instrument's JSON entry; no versioning (an absent key means the default). Concurrency: none, it is never mutated.
 
 #### `bench_mcp_sa_limits` - fixed limits
-
-[@ANCHOR: bench_mcp_sa_limits]
 
 Constants in `src/sa/mod.rs` and `src/sa/sweep.rs` and `src/sa/tg.rs` that bound what the driver does.
 
@@ -460,8 +458,6 @@ Plain compile-time constants: no ownership, no wire form, no locking.
 
 #### `bench_mcp_sa_spec` - `Spec`
 
-[@ANCHOR: bench_mcp_sa_spec]
-
 One tool's definition, in `src/sa/mod.rs`; created at compile time as an element of `SPECS`.
 
 | Field | Type | Meaning |
@@ -476,13 +472,9 @@ Invariants: names are unique; `props` parses as a JSON object. Read-only, shared
 
 #### `bench_mcp_sa_specs` - `SPECS`
 
-[@ANCHOR: bench_mcp_sa_specs]
-
 The table of the nine tools (`bench_sa_status`, `_sweep`, `_marker`, `_screenshot`, `_tg_on`, `_tg_off`, `_tg_level`, `_tg_normalize`, `_tg_s21`) as `&[Spec]`. The sweep arguments shared by `bench_sa_sweep`, `bench_sa_tg_normalize` and `bench_sa_tg_s21` come from the macro `sweep_props!` (`instrument`, `start_hz`, `stop_hz`, `center_hz`, `span_hz`, `rbw_hz`, `vbw_hz`, `ref_level_dbm`, `attenuation_db`, `detector`, `average_count`, `continuous_after`). Adding a tool means one entry here, one arm in `call_with`, one manual page and a test. Read by `tool_defs` and `call_with`.
 
 #### `bench_mcp_sa_ident` - `Ident`
-
-[@ANCHOR: bench_mcp_sa_ident]
 
 What `open` learned from `*IDN?`, in `src/sa/mod.rs`; created per call, dropped when the call returns.
 
@@ -496,13 +488,9 @@ What `open` learned from `*IDN?`, in `src/sa/mod.rs`; created per call, dropped 
 
 #### `bench_mcp_sa_connector` - `Connector`
 
-[@ANCHOR: bench_mcp_sa_connector]
-
 `type Connector = dyn Fn(&Instrument) -> Result<Link, String>`: how a call reaches the instrument. Production passes `tcp`; the tests pass a closure to a fake instrument on a local socket, so the full path is the production one. It is called once per tool call (and by nothing else), borrowed, and must be safe to call from the tool thread. A failure to connect is the returned error text.
 
 #### `bench_mcp_sa_span` - `Span`
-
-[@ANCHOR: bench_mcp_sa_span]
 
 The frequency range of a sweep, in `src/sa/sweep.rs`.
 
@@ -514,8 +502,6 @@ The frequency range of a sweep, in `src/sa/sweep.rs`.
 Copied by value; created by `sweep_args`.
 
 #### `bench_mcp_sa_sweep_req` - `SweepReq`
-
-[@ANCHOR: bench_mcp_sa_sweep_req]
 
 A checked sweep request, created by `sweep_args` and read by `run_sweep`; a `None` field means "leave the instrument as it is".
 
@@ -532,8 +518,6 @@ A checked sweep request, created by `sweep_args` and read by `run_sweep`; a `Non
 
 #### `bench_mcp_sa_trace` - `Trace`
 
-[@ANCHOR: bench_mcp_sa_trace]
-
 One trace and the settings the unit itself reported for it (read back after they were set), in `src/sa/sweep.rs`. Created by `run_sweep`, consumed by `find_peaks`, `trace_summary`, `write_csv` and the S21 code; stored (cloned) inside a `Reference`.
 
 | Field | Type | Meaning |
@@ -549,13 +533,9 @@ One trace and the settings the unit itself reported for it (read back after they
 
 #### `bench_mcp_sa_peak` - `Peak`
 
-[@ANCHOR: bench_mcp_sa_peak]
-
 A spectral peak: `freq_hz` (`f64`, Hz, from the bin position) and `level_dbm` (`f64`, dBm). Created by `find_peaks`, serialised by `trace_summary` as `{"freq_hz", "level_dbm"}`.
 
 #### `bench_mcp_sa_reference` - `Reference`
-
-[@ANCHOR: bench_mcp_sa_reference]
 
 A through reference, in `src/sa/tg.rs`: the trace taken with the TG cabled straight to the RF input.
 
@@ -572,8 +552,6 @@ Lives in the process-wide `refs()` map under `"<instrument>:<name>"` until the s
 
 #### `bench_mcp_sa_parse_config` - `parse_config(c: &Value) -> Result<Config, String>`
 
-[@ANCHOR: bench_mcp_sa_parse_config]
-
 Reads the optional `max_tg_dbm` from an instrument's JSON entry when the config file is loaded.
 
 | Argument | Type | Meaning |
@@ -584,25 +562,17 @@ Returns the `Config` (default when the key is absent). Errors: not a number, or 
 
 #### `bench_mcp_sa_instrument` - `instrument(insts, args) -> Result<&Instrument, String>`
 
-[@ANCHOR: bench_mcp_sa_instrument]
-
 Picks the analyzer for a call: the one named by `args.instrument`, or the only configured analyzer (`Kind::Sa`). Errors: no such name, none configured, or several and no name (the message lists them). Pure.
 
 #### `bench_mcp_sa_tool_defs` - `tool_defs(insts: &[Instrument]) -> Vec<Tool>`
-
-[@ANCHOR: bench_mcp_sa_tool_defs]
 
 The tool list for the MCP: every `SPECS` entry whose tier is at or below the tier of at least one configured analyzer, with the description prefixed by the tier. Called by the server when a client lists tools (`bench_mcp_main_all_tool_defs`). Pure; panics only if a `props` text is not JSON, which the tests rule out.
 
 #### `bench_mcp_sa_flag` - `flag(args, key, default) -> Result<bool, String>`
 
-[@ANCHOR: bench_mcp_sa_flag]
-
 A boolean argument. Absent or null gives `default`; `true`/`false` gives itself; anything else (a string, a number) is an error naming the key. No coercion.
 
 #### `bench_mcp_sa_number` - `number(args, key, lo, hi, why) -> Result<Option<f64>, String>`
-
-[@ANCHOR: bench_mcp_sa_number]
 
 A numeric argument that may be absent.
 
@@ -617,67 +587,45 @@ Returns `Ok(None)` when absent or null, `Ok(Some(x))` for a finite number inside
 
 #### `bench_mcp_sa_next_step` - `next_step(what: &str) -> String`
 
-[@ANCHOR: bench_mcp_sa_next_step]
-
 Ends an I/O error message with the ordered next steps (check the LAN cable, host and port 5025; call `bench_sa_status`; power-cycle the unit; do not use USB). Pure.
 
 #### `bench_mcp_sa_ask` - `ask(l: &mut Link, cmd, tries, secs) -> Result<String, String>`
-
-[@ANCHOR: bench_mcp_sa_ask]
 
 Sends a query and returns its reply, trying up to `tries` times in all with a `secs` second reply timeout each (the timeout is set on the link before each try). An empty reply counts as a failure. **Only for reads**: repeating a read changes nothing, and a command that changes the instrument is never passed through it. Blocking for up to `tries * secs` seconds. Error: the last failure text plus the next steps. The link is exclusively borrowed.
 
 #### `bench_mcp_sa_ask_f64` - `ask_f64(l: &mut Link, cmd: &str) -> Result<f64, String>`
 
-[@ANCHOR: bench_mcp_sa_ask_f64]
-
 `ask` with 3 tries of 5 s, then the reply must parse as a finite number (SCPI scientific notation such as `+2.1E+09` is accepted). Error: no reply, or a reply that is not a finite number (quoted in the message).
 
 #### `bench_mcp_sa_on_off` - `on_off(cmd: &str, reply: &str) -> Result<bool, String>`
-
-[@ANCHOR: bench_mcp_sa_on_off]
 
 Reads a state reply: `1`, `ON` or `1.000000` is true; `0`, `OFF` or `0.000000` is false (case and surrounding space ignored). Anything else is an error, not a guess; `cmd` is used for the message. Pure. Used to verify the generator's state, so a garbled reply can never be taken as "off".
 
 #### `bench_mcp_sa_model_max_hz` - `model_max_hz(model: &str) -> Option<f64>`
 
-[@ANCHOR: bench_mcp_sa_model_max_hz]
-
 The top frequency in Hz from a model name: `SSA3021X` is 2.1e9 (the two digits after `SSA30` times 100 MHz), `SSA3032X` 3.2e9, `SSA3015X` 1.5e9. `None` when the name does not carry two positive digits after `SSA30`. Pure.
 
 #### `bench_mcp_sa_open` - `open(connect, inst) -> Result<(Link, Ident), String>`
-
-[@ANCHOR: bench_mcp_sa_open]
 
 Connects, asks `*IDN?` and returns the link and the `Ident`. If the reply has fewer than four fields or the model is not an `SSA3...` with a known top frequency, it returns an error that names the host and port and says nothing else was sent. Blocking. Every tool calls it first, so a mistyped address never receives a command.
 
 #### `bench_mcp_sa_options` - `options(l: &mut Link) -> Result<Vec<String>, String>`
 
-[@ANCHOR: bench_mcp_sa_options]
-
 The installed options from `:SYSTem:OPTions?`, split at spaces and commas (for example `Meas EMI TG CAT`). Used to check that `TG` is present; the other names are only reported, never required.
 
 #### `bench_mcp_sa_status` - `status(connect, inst) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_sa_status]
 
 `bench_sa_status`: identity, options, the generator (`state`, `level_dbm`, `max_tg_dbm`, `level_offset_db`; `not installed` when `TG` is not listed) and the sweep settings (`start_hz`, `stop_hz`, `rbw_hz`, `vbw_hz`, `ref_level_dbm`, `attenuation_db`, `detector`, `sweep_time_s`, `continuous`, `points`), all read back. Reads only; it never changes the instrument or the generator.
 
 #### `bench_mcp_sa_tcp` - `tcp(inst: &Instrument) -> Result<Link, String>`
 
-[@ANCHOR: bench_mcp_sa_tcp]
-
 The production `Connector`: opens `Link::tcp(host, port)`. Error: connection refused or timed out (the text of the link error).
 
 #### `bench_mcp_sa_call` - `call(insts, name, args) -> Result<Value, String>`
 
-[@ANCHOR: bench_mcp_sa_call]
-
 The entry point used by the server's dispatcher: `call_with` over `tcp`.
 
 #### `bench_mcp_sa_call_with` - `call_with(connect, insts, name, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_sa_call_with]
 
 Looks the tool up in `SPECS`, picks the instrument, refuses a tool above the instrument's tier (before any connection), and dispatches by name to `status`, `sweep::sweep`, `sweep::marker`, `sweep::screenshot`, `tg::tg_on`, `tg::tg_off`, `tg::tg_level`, `tg::normalize` or `tg::s21`. Errors: unknown tool, no or ambiguous instrument, tier too low, or the tool's own error. Blocking for the tool's duration.
 
@@ -686,8 +634,6 @@ Looks the tool up in `SPECS`, picks the instrument, refuses a tool above the ins
 <a id="sa-sweeprs-functions"></a>
 
 #### `bench_mcp_sa_sweep_args` - `sweep_args(args: &Value, max_hz: f64) -> Result<SweepReq, String>`
-
-[@ANCHOR: bench_mcp_sa_sweep_args]
 
 Checks the sweep arguments before anything is sent to the unit.
 
@@ -700,73 +646,49 @@ Returns a `SweepReq`. Errors: neither or both frequency forms, a range outside 0
 
 #### `bench_mcp_sa_parse_trace` - `parse_trace(reply: &str) -> Result<Vec<f64>, String>`
 
-[@ANCHOR: bench_mcp_sa_parse_trace]
-
 Parses the comma-separated ASCII trace of `:TRACe:DATA? 1`. Empty fields are skipped; every other field must be a finite number; at least two points. Error names the bad field or the count.
 
 #### `bench_mcp_sa_bin_hz` - `bin_hz(t_start, t_stop, n, i) -> f64`
-
-[@ANCHOR: bench_mcp_sa_bin_hz]
 
 The frequency of point `i` (0-based) of `n` evenly spaced from `t_start` to `t_stop` inclusive: `t_start + (t_stop - t_start) * i / (n - 1)`. `n` must be at least 2. Pure.
 
 #### `bench_mcp_sa_find_peaks` - `find_peaks(t: &Trace, count: usize, threshold_db: f64) -> Vec<Peak>`
 
-[@ANCHOR: bench_mcp_sa_find_peaks]
-
 The local maxima of `t.dbm` that are at least `threshold_db` above the trace median, strongest first, at most `count` of them, none within two points of a stronger one already taken. `count` 0 gives none. Pure; O(n log n).
 
 #### `bench_mcp_sa_new_path` - `new_path(out: &Path, stem: &str, ext: &str) -> PathBuf`
-
-[@ANCHOR: bench_mcp_sa_new_path]
 
 `<out>/<stem>_<milliseconds since the epoch>_<counter>.<ext>`; the process-wide atomic counter makes two calls in the same millisecond differ. Does not touch the disk.
 
 #### `bench_mcp_sa_write_csv` - `write_csv(out, stem, comments, header, start, stop, cols) -> Result<PathBuf, String>`
 
-[@ANCHOR: bench_mcp_sa_write_csv]
-
 Writes a CSV into `out` (created if missing): `# key=value` comment lines, the `header` line, then one row per point with the frequency (from `bin_hz`, one decimal) and one column per entry of `cols` (three decimals). Errors: no columns, fewer than two points, columns of unequal length, or a failed write. Returns the new path.
 
 #### `bench_mcp_sa_run_sweep` - `run_sweep(l: &mut Link, req: &SweepReq) -> Result<Trace, String>`
-
-[@ANCHOR: bench_mcp_sa_run_sweep]
 
 Runs one measurement (see `sweep_inner`) and then, on every path including failure, puts the unit back into continuous sweep when `req.continuous_after`. Blocking for the sweep time times the average count (at most 120 s) plus the readbacks. Does not touch the tracking generator.
 
 #### `bench_mcp_sa_sweep_inner` - `sweep_inner(l, req) -> Result<Trace, String>`
 
-[@ANCHOR: bench_mcp_sa_sweep_inner]
-
 Continuous sweep off, dBm, logarithmic scale, ASCII trace format; start, stop, start (so the unit's clamping cannot leave the wrong end); RBW, VBW, attenuation (before the reference level: the unit moves the reference level when the attenuator is set), reference level, detector, averaging; then reads everything back. Errors: the range the unit holds differs from the request by more than 1 Hz (it clamps); the sweep would take more than 120 s; the reference level or attenuation read back differs by more than 0.05 from the request ("coupled": choose a value that fits the other settings); `*OPC?` does not answer within twice the sweep time plus ten seconds; the trace is not exactly 751 points. In every error case no sweep was started unless the error is the `*OPC?` timeout.
 
 #### `bench_mcp_sa_trace_summary` - `trace_summary(t: &Trace, peaks: &[Peak]) -> Value`
-
-[@ANCHOR: bench_mcp_sa_trace_summary]
 
 The JSON summary of a trace: points, start, stop, bin width, the unit's own settings, `min_dbm`, `median_dbm`, `max_dbm` and the peaks. Pure.
 
 #### `bench_mcp_sa_sweep` - `sweep(connect, inst, args) -> Result<Value, String>`
 
-[@ANCHOR: bench_mcp_sa_sweep]
-
 `bench_sa_sweep`. Arguments: those of `sweep_args`, plus `peaks` (0 to 50, default 5), `peak_threshold_db` (0 to 200, default 10) and `tg_off_after` (default false). Opens the unit, runs the sweep, reads the generator state, switches the generator off and verifies it when `tg_off_after` (also when the sweep failed; an off failure is the error returned), writes `sa_sweep_*.csv` (`freq_hz,level_dbm`) into `BENCH_MCP_OUT` and returns the summary with `file` and `tracking_generator`. Without `tg_off_after` the generator is reported and left as it is.
 
 #### `bench_mcp_sa_marker` - `marker(connect, inst, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_sa_marker]
 
 `bench_sa_marker`. Arguments: `marker` (1 to 4, default 1), `search` (`max`, `next`, `left`, `right`) or `freq_hz` (0 to the model's top), not both. Switches the marker on, in position mode, on trace 1, runs the search or places it, and returns `marker`, `trace`, `freq_hz` and `level_dbm` as read. Works on the trace the unit currently holds.
 
 #### `bench_mcp_sa_screenshot` - `screenshot(connect, inst) -> Result<Value, String>`
 
-[@ANCHOR: bench_mcp_sa_screenshot]
-
 `bench_sa_screenshot`. Reads `:HCOPy:SDUMp:DATA?` as raw bytes (the answer has no length header and no line end, so the read ends when the unit has been quiet 1.5 s, at most 40 s), checks the BMP header's size against what arrived and saves `sa_screen_*.bmp`. Returns `file`, `bytes`, `width`, `height` and `format`. Error: not a BMP, or fewer bytes than the header says (call again).
 
 #### `bench_mcp_sa_bmp_header` - `bmp_header(raw: &[u8]) -> Result<(u32, u32, usize), String>`
-
-[@ANCHOR: bench_mcp_sa_bmp_header]
 
 Width, height and total size from a BMP header: at least 54 bytes, starting `BM`, size at least 54, width and height 1 to 4096. Error otherwise. Pure.
 
@@ -776,115 +698,77 @@ Width, height and total size from a BMP header: at least 54 bytes, starting `BM`
 
 #### `bench_mcp_sa_tg_state` - `tg_state(l: &mut Link) -> Result<(bool, f64), String>`
 
-[@ANCHOR: bench_mcp_sa_tg_state]
-
 The generator's output state (`:OUTPut:STATe?`) and level in dBm (`:SOURce:POWer?`) as the unit reports them. Reads only; a state reply that is not clearly on or off is an error.
 
 #### `bench_mcp_sa_ensure_tg_off` - `ensure_tg_off(l: &mut Link) -> Result<(), String>`
-
-[@ANCHOR: bench_mcp_sa_ensure_tg_off]
 
 Sends `:OUTPut:STATe OFF` and reads the state back, up to 3 times; `Ok` only when the unit itself says off. Otherwise the error begins `SAFE STATE NOT CONFIRMED` and gives the manual remedy. Safe to call at any time and idempotent; this is the only place that switches the generator off, and it is attempted on every path that switched it on.
 
 #### `bench_mcp_sa_finish` - `finish<T>(work: Result<T, String>, off: Option<Result<(), String>>) -> Result<T, String>`
 
-[@ANCHOR: bench_mcp_sa_finish]
-
 Combines a piece of work with the switch-off that followed it (`None`: none asked for). Work and switch-off fine: the work's value. Work failed, off fine: the work's error. Work fine, off failed: the off error. Both failed: `"<work error>; <off error>"`. A failed switch-off is never lost. Pure.
 
 #### `bench_mcp_sa_level_arg` - `level_arg(inst, args) -> Result<Option<f64>, String>`
-
-[@ANCHOR: bench_mcp_sa_level_arg]
 
 `tg_level_dbm` checked against -20 dBm and the lower of 0 dBm and the instrument's `max_tg_dbm`; `None` when absent. Error: not a number or outside the range (names the range). Pure.
 
 #### `bench_mcp_sa_require_tg` - `require_tg(l: &mut Link) -> Result<(), String>`
 
-[@ANCHOR: bench_mcp_sa_require_tg]
-
 Refuses unless `:SYSTem:OPTions?` lists `TG`. This is the only option the driver depends on besides the base analyzer.
 
 #### `bench_mcp_sa_set_level` - `set_level(l: &mut Link, dbm: f64) -> Result<(), String>`
-
-[@ANCHOR: bench_mcp_sa_set_level]
 
 Sets `:SOURce:POWer`, reads it back and fails when the difference exceeds 0.05 dB. Does not change whether the output is on.
 
 #### `bench_mcp_sa_switch_on` - `switch_on(l, inst, level: Option<f64>) -> Result<Value, String>`
 
-[@ANCHOR: bench_mcp_sa_switch_on]
-
 Sets and verifies `level` (or, when `None`, checks that the level the unit already holds is not above `max_tg_dbm`), sends `:OUTPut:STATe ON` and requires the unit to report on. **Any failure switches the output off again** (through `ensure_tg_off`) before the error is returned. Returns `{"tracking_generator": "on", "level_dbm"}`. The level is always set before the output goes on.
 
 #### `bench_mcp_sa_tg_on` - `tg_on(connect, inst, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_sa_tg_on]
 
 `bench_sa_tg_on`: `tg_level_dbm` (optional, -20 to the cap). Checks the argument, opens the unit, requires `TG`, calls `switch_on`. The output stays on until `bench_sa_tg_off` or a tool with `tg_off_after`.
 
 #### `bench_mcp_sa_tg_off` - `tg_off(connect, inst) -> Result<Value, String>`
 
-[@ANCHOR: bench_mcp_sa_tg_off]
-
 `bench_sa_tg_off`: `ensure_tg_off`, then the level; returns `{"tracking_generator": "off", "verified": true, "level_dbm"}`. Does not require `TG` to be listed.
 
 #### `bench_mcp_sa_tg_level` - `tg_level(connect, inst, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_sa_tg_level]
 
 `bench_sa_tg_level`: `tg_level_dbm` (required). Sets and verifies the level without changing on or off; returns the state and level as read back.
 
 #### `bench_mcp_sa_refs` - `refs() -> &'static Mutex<HashMap<String, Reference>>`
 
-[@ANCHOR: bench_mcp_sa_refs]
-
 The process-wide store of through references, created on first use and kept until the server exits. Key `"<instrument>:<name>"`. The lock is held only for an insert or a clone; it is never held across I/O.
 
 #### `bench_mcp_sa_ref_name` - `ref_name(v: Option<&str>) -> Result<String, String>`
-
-[@ANCHOR: bench_mcp_sa_ref_name]
 
 A reference name: absent is `default`; otherwise 1 to 40 characters of letters, digits, `-` and `_`, so a name can never make a path. Error otherwise.
 
 #### `bench_mcp_sa_reference_comments` - `comments(r: &Reference) -> Vec<(String, String)>`
 
-[@ANCHOR: bench_mcp_sa_reference_comments]
-
 The `# key=value` header lines of a reference CSV: `tool`, `tg_level_dbm`, `start_hz`, `stop_hz`, `rbw_hz`, `vbw_hz`, `attenuation_db`, `detector`, `average_count`. The keys are exactly those `parse_reference` reads and `check_same` compares.
 
 #### `bench_mcp_sa_parse_reference` - `parse_reference(text: &str) -> Result<Reference, String>`
-
-[@ANCHOR: bench_mcp_sa_parse_reference]
 
 Reads a reference CSV (see `Reference`). Errors: a missing or non-numeric key, a data row that is not a finite number, or a count other than 751. For a file from an earlier session (`reference_file`); the file's text is read by `s21`, not here.
 
 #### `bench_mcp_sa_check_same` - `check_same(r, t, tg_level_dbm) -> Result<(), String>`
 
-[@ANCHOR: bench_mcp_sa_check_same]
-
 Refuses a measurement taken with other settings than the reference: compares start, stop, RBW, VBW, attenuation, average count and TG level (relative tolerance 1e-6) and the detector name, and names the first that differs and what to do. The reference level is not compared (it does not change the measured dBm).
 
 #### `bench_mcp_sa_with_defaults` - `with_defaults(args: &Value, r: &Reference) -> Value`
-
-[@ANCHOR: bench_mcp_sa_with_defaults]
 
 A copy of the arguments with the ones the caller left out filled from the reference: the range (only when the caller gave none of `start_hz`, `stop_hz`, `center_hz`, `span_hz`), RBW, VBW, attenuation, detector, average count and TG level. Explicit arguments win (and are then checked by `check_same`). Pure.
 
 #### `bench_mcp_sa_tg_sweep` - `tg_sweep(l, inst, req, level, leave_on) -> Result<Trace, String>`
 
-[@ANCHOR: bench_mcp_sa_tg_sweep]
-
 Generator on at `level` (`switch_on`), one sweep (`run_sweep`) and, unless `leave_on`, the verified switch-off, which is attempted on every path, including a failed switch-on or sweep. Result combined by `finish`. The generator is on only for the duration of the call.
 
 #### `bench_mcp_sa_normalize` - `normalize(connect, inst, args) -> Result<Value, String>`
 
-[@ANCHOR: bench_mcp_sa_normalize]
-
 `bench_sa_tg_normalize`, step 1 of a through-normalised S21: the TG cabled straight to the RF input. Arguments: the sweep arguments, `name` (default `default`), `tg_level_dbm` (default -20), `leave_tg_on` (default false). Sweeps with the generator on, stores the `Reference` in memory under `<instrument>:<name>` and writes `sa_tg_reference_<name>_*.csv`. Returns the trace summary with `name`, `tg_level_dbm`, `file` and `tracking_generator`. Replaces an earlier reference of the same name.
 
 #### `bench_mcp_sa_s21` - `s21(connect, inst, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_sa_s21]
 
 `bench_sa_tg_s21`: a scalar transmission sweep of what is between the TG output and the RF input. Arguments: the sweep arguments, `tg_level_dbm`, `reference` (name from `normalize`) or `reference_file` (not both), `leave_tg_on`. With a reference, unset sweep arguments come from it (`with_defaults`), the settings are checked (`check_same`) and `s21_db` is the measured level minus the through, point by point; without one it is the measured level minus the TG level, and the answer says `uncalibrated: cable and generator flatness included`. Writes `sa_tg_s21_*.csv` (`freq_hz,s21_db,measured_dbm`) and returns the summary, `s21` (`relative_to`, `max_db` and `max_at_hz`, `min_db` and `min_at_hz`, `mean_db`), `tg_level_dbm`, `file` and `tracking_generator`. The generator is off again afterwards unless `leave_tg_on`, also when the settings check refused the comparison.
 
@@ -908,8 +792,6 @@ Every tool is a blocking call on the server's tool thread. A call that talks to 
 
 #### `bench_mcp_rx888_config` - `Config` and `parse_config(c: &Value) -> Result<Config, String>`
 
-[@ANCHOR: bench_mcp_rx888_config]
-
 The `rx888` settings of an instrument entry. They are parsed when the config file is loaded, held in `Instrument.rx888`, and never change afterwards.
 
 | Field (config key) | Type | Default | Meaning and check |
@@ -927,97 +809,65 @@ The `rx888` settings of an instrument entry. They are parsed when the config fil
 
 #### `bench_mcp_rx888_instrument` - `instrument(insts, args) -> Result<&Instrument, String>`
 
-[@ANCHOR: bench_mcp_rx888_instrument]
-
 The RX-888 a call is for. This is the one named in `instrument`, or the only one configured. An unknown name, no RX-888, or several RX-888s with no name are errors.
 
 #### `bench_mcp_rx888_tool_defs` - `tool_defs(insts: &[Instrument]) -> Vec<Tool>`
-
-[@ANCHOR: bench_mcp_rx888_tool_defs]
 
 The `SPECS` entries listed for this config: a tool appears when an RX-888 is configured at or above its tier. At `read_only` that is `status` and `frontend`; at `read_config` all eight. Each description is prefixed with its tier.
 
 #### `bench_mcp_rx888_number` - `number(args, key, default: Option<f64>, lo, hi) -> Result<f64, String>`
 
-[@ANCHOR: bench_mcp_rx888_number]
-
 A numeric argument. Absent or null gives `default`, and is an error when there is none. Present, it must be a finite number in `lo..=hi`; the error names the key and the range.
 
 #### `bench_mcp_rx888_find_usb` - `find_usb(root: &Path) -> Vec<UsbSeen>`
-
-[@ANCHOR: bench_mcp_rx888_find_usb]
 
 Scans `root` (production: `/sys/bus/usb/devices`) for devices with `idVendor` 04b4 and `idProduct` 00f3 (unbooted) or 00f1 (booted), sorted by sysfs name. `UsbSeen` has these fields: `path` (sysfs name such as `2-3.2`), `product_id` (`00f3` or `00f1`), `speed_mbps` (`Option<u32>`, the kernel's `speed`: 480 is USB 2, 5000 is USB 3) and `product`. Read only; a missing or unreadable tree gives an empty list.
 
 #### `bench_mcp_rx888_usb_json` - `usb_json(seen: &[UsbSeen]) -> Value`
 
-[@ANCHOR: bench_mcp_rx888_usb_json]
-
 The USB part of a status. `state` is `booted`, `unbooted (FX3 loader)...` or `not on the USB bus`. `devices` lists each device with `sysfs`, `usb_id`, `speed_mbps`, `superspeed` and `product`. Pure.
 
 #### `bench_mcp_rx888_running` and `bench_mcp_rx888_running_pid` - the started `radiod`s
-
-[@ANCHOR: bench_mcp_rx888_running] [@ANCHOR: bench_mcp_rx888_running_pid]
 
 `running()` is a process-wide `Mutex<HashMap<instrument name, Running>>` holding each `radiod` this server started. `Running` holds the `Child`, the config path, the log path and the start time. `running_pid(name) -> Option<u32>` returns the child's pid if it is still alive. A child that has exited is reaped and removed. The mutex is held only for the lookup.
 
 #### `bench_mcp_rx888_tail` - `tail(path: &Path, n: usize) -> Vec<String>`
 
-[@ANCHOR: bench_mcp_rx888_tail]
-
 The last `n` lines of a file, empty when it cannot be read. Used for `radiod` log tails in errors and in the stop result.
 
 #### `bench_mcp_rx888_loopback_multicast` - `loopback_multicast(sys_class_net: &Path) -> bool`
-
-[@ANCHOR: bench_mcp_rx888_loopback_multicast]
 
 True when `<sys_class_net>/lo/flags` has `IFF_MULTICAST` (0x1000) set. Production passes `/sys/class/net`. `radiod` runs on `lo` only, so this must be on (`ip link set dev lo multicast on`, as root, until reboot).
 
 #### `bench_mcp_rx888_radiod_config_text` - `radiod_config_text(cfg, description, sample_rate_hz, rf_gain_db: Option<f64>, rf_atten_db: Option<f64>, fft_threads) -> String`
 
-[@ANCHOR: bench_mcp_rx888_radiod_config_text]
-
 The `radiod` config: `[global]` with `hardware = rx888`, the two groups, `iface = lo`, `ttl = 0`, `mode = usb`, `advertise = no`, the presets file, `fft-threads` and `verbose = 1`, and `[rx888]` with `device`, `library` (the driver path), `description` (quotes and newlines replaced by spaces) and `samprate`. `gain =` and `att =` are written only when given. Pure.
 
 #### `bench_mcp_rx888_runtime` - `runtime() -> Result<Runtime, String>`
-
-[@ANCHOR: bench_mcp_rx888_runtime]
 
 A current-thread tokio runtime with I/O and timers, built per call. Tool calls run under `spawn_blocking`, outside any runtime, so blocking on it is allowed.
 
 #### `bench_mcp_rx888_control` - `control(cfg, rt) -> Result<Control, String>`
 
-[@ANCHOR: bench_mcp_rx888_control]
-
 Joins `radiod`'s status group on 127.0.0.1 with `radiod_client`'s default policy (10 kHz to 30 MHz, at most 8192 bins). The socket sends with TTL 0. The error says to check loopback multicast.
 
 #### `bench_mcp_rx888_front_end` - `front_end(cfg, rt, wait: Duration) -> Result<ChannelStatus, String>`
-
-[@ANCHOR: bench_mcp_rx888_front_end]
 
 Polls the front end (SSRC 0, no channel created; the reply carries no tag) for up to `wait`. The error says `radiod` does not answer and names the next tools to call.
 
 #### `bench_mcp_rx888_front_end_json` - `front_end_json(fe: &ChannelStatus) -> Value`
 
-[@ANCHOR: bench_mcp_rx888_front_end_json]
-
 The front-end fields as JSON: `input_sample_rate_hz`, `real_samples`, `ad_bits`, `ad_overrange_count`, `samples_since_overrange`, `rf_gain_db`, `rf_atten_db`, `rf_agc`, `if_power_dbfs`, `front_end_running`, `rf_level_cal_db`, `usable_low_hz`, `usable_high_hz` and `description`. Non-finite levels become null. While no channel exists the front end idles, so `if_power_dbfs` is null and `front_end_running` is false. Pure.
 
 #### `bench_mcp_rx888_status` - `status(inst, usb_root) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_rx888_status]
 
 `bench_rx888_status`: `usb` (`usb_json`), `radiod` (running, pid, config, log, uptime of the one this server started), `front_end` (`front_end_json`, or `answering: false` with the reason after 0.8 s), `loopback_multicast` and `groups`. Changes nothing.
 
 #### `bench_mcp_rx888_frontend` - `frontend(inst) -> Result<Value, String>`
 
-[@ANCHOR: bench_mcp_rx888_frontend]
-
 `bench_rx888_frontend`: `front_end_json` of a front-end poll with 2 s to answer. Changes nothing.
 
 #### `bench_mcp_rx888_boot` - `boot(inst, usb_root) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_rx888_boot]
 
 `bench_rx888_boot`. It checks, in order:
 1. this server runs no `radiod` for the instrument;
@@ -1028,8 +878,6 @@ The front-end fields as JSON: `input_sample_rate_hz`, `real_samples`, `ad_bits`,
 It then runs `<boot> <firmware>`, waits up to 20 s for `04b4:00f1`, and returns `booted`, `sysfs`, `speed_mbps`, `superspeed`, a `note` about the link and the loader's output. Side effect: the device leaves the bus and re-enumerates; the firmware is loaded to RAM only. If it does not come back, the error tells the person to power-cycle its hub port, not to unbind the USB controller.
 
 #### `bench_mcp_rx888_radiod_start` - `radiod_start(inst, args, usb_root) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_rx888_radiod_start]
 
 `bench_rx888_radiod_start`.
 
@@ -1050,67 +898,45 @@ It writes `rx888-<name>.conf`, `.log` and `.pid` in `BENCH_MCP_OUT` and starts `
 
 #### `bench_mcp_rx888_is_our_radiod` - `is_our_radiod(pid: u32, radiod: &Path, config: &Path) -> bool`
 
-[@ANCHOR: bench_mcp_rx888_is_our_radiod]
-
 True when `/proc/<pid>/cmdline` has `radiod` as its first argument and `config` as one of its arguments. This keeps a stale pid file from naming another process. Read only.
 
 #### `bench_mcp_rx888_stop_pid` - `stop_pid(inst) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_rx888_stop_pid]
 
 Stops the instrument's `radiod`. That is the child this server holds; failing that, the pid in `rx888-<name>.pid` when `is_our_radiod` confirms it, and otherwise the stale pid file is removed and nothing is signalled. It sends `SIGTERM` (a `libc::kill` on that one pid only, never by name or pattern), waits up to 5 s, then sends `SIGKILL`. It removes the pid file and returns `stopped`, `pid`, `exit`, `sigkill_needed` and `log_tail`. Error when no `radiod` was started.
 
 #### `bench_mcp_rx888_radiod_stop` - `radiod_stop(inst) -> Result<Value, String>`
 
-[@ANCHOR: bench_mcp_rx888_radiod_stop]
-
 `bench_rx888_radiod_stop`: `stop_pid`.
 
 #### `bench_mcp_rx888_call` / `bench_mcp_rx888_call_with` - `call(insts, name, args)` and `call_with(usb_root, insts, name, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_rx888_call] [@ANCHOR: bench_mcp_rx888_call_with]
 
 The dispatcher. It finds the tool in `SPECS` and the instrument, and refuses a tool above the instrument's tier before anything runs. `call` passes `/sys/bus/usb/devices` as the USB root.
 
 #### `bench_mcp_rx888_ssrc` - `ssrc(cfg, which: u32) -> Result<Ssrc, String>`
 
-[@ANCHOR: bench_mcp_rx888_ssrc]
-
 The SSRC `ssrc_base + which`: 0 tune, 1 spectrum, 2 capture. Each call uses a fixed SSRC, so a repeated call reuses the same `radiod` channel slot.
 
 #### `bench_mcp_rx888_mode_arg` - `mode_arg(args, default: Mode) -> Result<Mode, String>`
-
-[@ANCHOR: bench_mcp_rx888_mode_arg]
 
 `mode`: `usb`, `lsb`, `cw`, `am` or `fm` (`radiod_client` modes); absent gives `default`. I/Q is chosen by `kind`, not `mode`.
 
 #### `bench_mcp_rx888_edges` - `edges(mode, width: f64) -> (f32, f32)`
 
-[@ANCHOR: bench_mcp_rx888_edges]
-
 Passband edges in Hz from the carrier for a width: USB `(50, 50+w)`, LSB `(-50-w, -50)`, CW `(600-w/2, 600+w/2)`, AM, FM and I/Q `(-w/2, w/2)`. These match radioctl's radiod channel. Pure.
 
 #### `bench_mcp_rx888_ask` - `ask(rt, c, cmd, wait) -> Result<ChannelStatus, String>`
-
-[@ANCHOR: bench_mcp_rx888_ask]
 
 Sends one `radiod_client` command and waits up to `wait` for the status that echoes its tag. The client re-sends every 200 ms; commands are idempotent. Opening a channel uses 10 s, because the first channel after `radiod` starts waits for FFT planning; other commands use 1 s.
 
 #### `bench_mcp_rx888_remove` - `remove(rt, c, s: Ssrc)`
 
-[@ANCHOR: bench_mcp_rx888_remove]
-
 Removes a channel (lifetime 1), best effort: an unacknowledged removal still expires by the 5 s lifetime.
 
 #### `bench_mcp_rx888_snr_db` - `snr_db(baseband_db: f64, noise_in_band_db: f64) -> f64`
 
-[@ANCHOR: bench_mcp_rx888_snr_db]
-
 SNR from the channel's power (signal plus noise) and the noise in its passband: `10 log10(10^((P-N)/10) - 1)`. It returns -30 when the power is at or within 0.004 dB of the noise. Pure.
 
 #### `bench_mcp_rx888_tune` - `tune(inst, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_rx888_tune]
 
 `bench_rx888_tune`.
 
@@ -1129,19 +955,13 @@ It opens the channel, sets the passband if one was given, waits 0.5 s, then take
 
 #### `bench_mcp_rx888_out_path` - `out_path(stem, ext) -> PathBuf`
 
-[@ANCHOR: bench_mcp_rx888_out_path]
-
 `<BENCH_MCP_OUT>/<stem>_<milliseconds since the epoch>.<ext>`. Does not create the file.
 
 #### `bench_mcp_rx888_peaks` - `peaks(bins: &[(f64, f32)], floor: f64, above_db: f64, count: usize) -> Vec<(f64, f64)>`
 
-[@ANCHOR: bench_mcp_rx888_peaks]
-
 Local maxima (frequency, dB) at least `above_db` over `floor`, strongest first, at most `count`, none within 2 bins of a stronger one. A non-finite neighbour does not hide a peak. Pure.
 
 #### `bench_mcp_rx888_spectrum` - `spectrum(inst, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_rx888_spectrum]
 
 `bench_rx888_spectrum`.
 
@@ -1163,13 +983,9 @@ It reads the front end first and refuses a span the front end cannot fill: more 
 
 #### `bench_mcp_rx888_wav_header` - `wav_header(rate: u32, channels: u16, frames: u32) -> Vec<u8>`
 
-[@ANCHOR: bench_mcp_rx888_wav_header]
-
 The 44-byte RIFF/WAVE header for 16-bit little-endian PCM. Pure.
 
 #### `bench_mcp_rx888_capture` - `capture(inst, args) -> Result<Value, String>`
-
-[@ANCHOR: bench_mcp_rx888_capture]
 
 `bench_rx888_capture`.
 
@@ -1189,101 +1005,101 @@ A program, written by the agent or saved earlier, that calls bench tools in loop
 
 ### Checks the procedure runner makes (anchors)
 
-* The procedure runner entry is read with defaults, bad values are refused, and the runner's tools are listed by tier, checked and dispatched by name. [@ANCHOR: proc_config] [@ANCHOR: proc_instrument] [@ANCHOR: proc_tool_defs] [@ANCHOR: proc_call] [@ANCHOR: proc_number_arg] [@ANCHOR: proc_flag_arg] [@ANCHOR: proc_run_params] [@ANCHOR: proc_backend_for] [@ANCHOR: proc_run_tool]
-* A procedure's tools and tier cap: the tools it may call come from the same listing the clients see, the procedure tools themselves are never among them, and a tool above the cap is refused with the tier it needs. [@ANCHOR: proc_tier_name] [@ANCHOR: proc_tier_parse] [@ANCHOR: proc_tool_index] [@ANCHOR: proc_tool_allow] [@ANCHOR: proc_tool_index_json]
-* Everything a run produces is kept in its directory: atomic JSON files, an append-only capped event list read by cursor, capped output streams read by offset, a run id that cannot escape the directory, and retention. [@ANCHOR: proc_store_now] [@ANCHOR: proc_store_root] [@ANCHOR: proc_store_write_json] [@ANCHOR: proc_store_read_json] [@ANCHOR: proc_store_new_run_dir] [@ANCHOR: proc_store_run_dir] [@ANCHOR: proc_store_event_open] [@ANCHOR: proc_store_event_append] [@ANCHOR: proc_store_event_count] [@ANCHOR: proc_store_event_dropped] [@ANCHOR: proc_store_read_events] [@ANCHOR: proc_store_append_stream] [@ANCHOR: proc_store_read_stream] [@ANCHOR: proc_store_purge] [@ANCHOR: proc_store_list_runs]
-* A run has a supervisor that starts the program, forwards its tool calls through the dispatcher under the tier cap and the call budget, records events, enforces the wall-clock budget and a cancel request (grace time, then kill), and writes the final state and result with the failure report. [@ANCHOR: proc_run_registry] [@ANCHOR: proc_run_lookup] [@ANCHOR: proc_run_active_in] [@ANCHOR: proc_run_clip] [@ANCHOR: proc_run_is_active] [@ANCHOR: proc_run_event] [@ANCHOR: proc_run_persist] [@ANCHOR: proc_run_set_state] [@ANCHOR: proc_run_request_cancel] [@ANCHOR: proc_run_cancel_reason] [@ANCHOR: proc_run_exec_call] [@ANCHOR: proc_run_count_error] [@ANCHOR: proc_run_handle] [@ANCHOR: proc_run_supervise] [@ANCHOR: proc_run_finish] [@ANCHOR: proc_run_start]
-* Status, output since a cursor, the result, cancel and the list read the managed directory, so they answer for live runs, finished runs and runs of an earlier server process. [@ANCHOR: proc_view_terminal] [@ANCHOR: proc_view_status] [@ANCHOR: proc_view_output] [@ANCHOR: proc_view_result] [@ANCHOR: proc_view_cancel] [@ANCHOR: proc_view_list]
-* The CPython backend starts `python3 -I` with a stripped environment, a process group, resource limits and a parent-death signal, speaks the run protocol on pipes, and kills the whole group. [@ANCHOR: proc_cpython_env] [@ANCHOR: proc_cpython_user_tasks] [@ANCHOR: proc_cpython_limit] [@ANCHOR: proc_cpython_command_line] [@ANCHOR: proc_cpython_pump] [@ANCHOR: proc_cpython_check] [@ANCHOR: proc_cpython_start] [@ANCHOR: proc_cpython_no_limits] [@ANCHOR: proc_cpython_send] [@ANCHOR: proc_cpython_recv] [@ANCHOR: proc_cpython_kill] [@ANCHOR: proc_cpython_exit_status] [@ANCHOR: proc_cpython_pid] [@ANCHOR: proc_cpython_drop]
-* The program side of the protocol: the wire, `bench.call`, `emit`, `log`, `step`, `sleep`, `checkpoint`, `cleanup`, `tools`, `deadline`, `result`, the program's captured output, the entry point and the way it ends. [@ANCHOR: proc_py_wire_init] [@ANCHOR: proc_py_wire_send] [@ANCHOR: proc_py_wire_request] [@ANCHOR: proc_py_wire_reader] [@ANCHOR: proc_py_check_cancel] [@ANCHOR: proc_py_jsonable] [@ANCHOR: proc_py_call] [@ANCHOR: proc_py_emit] [@ANCHOR: proc_py_log] [@ANCHOR: proc_py_step] [@ANCHOR: proc_py_sleep] [@ANCHOR: proc_py_checkpoint] [@ANCHOR: proc_py_cleanup] [@ANCHOR: proc_py_tools] [@ANCHOR: proc_py_deadline] [@ANCHOR: proc_py_result] [@ANCHOR: proc_py_output_init] [@ANCHOR: proc_py_output_write] [@ANCHOR: proc_py_output_flush] [@ANCHOR: proc_py_output_isatty] [@ANCHOR: proc_py_make_bench] [@ANCHOR: proc_py_run_cleanups] [@ANCHOR: proc_py_execute] [@ANCHOR: proc_py_check_source] [@ANCHOR: proc_py_main]
-* The helpers `retry`, `expect`, `stats` and `series`, and the exceptions a procedure sees. [@ANCHOR: proc_py_retry] [@ANCHOR: proc_py_expect] [@ANCHOR: proc_py_stats] [@ANCHOR: proc_py_series] [@ANCHOR: proc_py_bench_error_init] [@ANCHOR: proc_py_failure_init]
-* A failure is reported with the traceback, the local variables of the procedure's own frames (bounded) and the context given to `expect`; `trace` records the lines reached. [@ANCHOR: proc_py_short] [@ANCHOR: proc_py_frame_report] [@ANCHOR: proc_py_failure_report] [@ANCHOR: proc_py_tracer] [@ANCHOR: proc_py_flush_trace]
-* The audit hook refuses subprocesses, sockets, device nodes, ctypes and writes outside the scratch directory, and says to use `bench.call`. IT IS NOT A SANDBOX. [@ANCHOR: proc_py_path_inside] [@ANCHOR: proc_py_open_refusal] [@ANCHOR: proc_py_make_hook]
-* The safe-state routine: the tools that change an instrument have a row naming the tool that undoes it, a call is recorded before it is dispatched, and when a run ends other than by success the recorded undo calls are run through the dispatcher and their outcome is part of the result. [@ANCHOR: proc_safe_action_for] [@ANCHOR: proc_safe_record] [@ANCHOR: proc_safe_run]
-* Instrument reservations between runs: a tool that changes an instrument reserves it with a lock file, reads share, several instruments are taken in sorted order all or none with a timeout, and a refusal names the run that holds the instrument. [@ANCHOR: proc_locks_instrument_of] [@ANCHOR: proc_locks_owner_text] [@ANCHOR: proc_locks_path] [@ANCHOR: proc_locks_release] [@ANCHOR: proc_locks_reserve] [@ANCHOR: proc_py_release] [@ANCHOR: proc_py_reserve] [@ANCHOR: proc_py_reserved] [@ANCHOR: proc_run_hold] [@ANCHOR: proc_run_reserve_op]
-* A restart: runs left active by a server process that no longer exists are marked lost and their instruments are put in the safe state; a shutdown cancels every live run and waits for its cleanup and safe state. [@ANCHOR: proc_run_recover] [@ANCHOR: proc_run_recover_now] [@ANCHOR: proc_run_shutdown] [@ANCHOR: proc_run_start_ticks] [@ANCHOR: proc_run_stop_all]
-* The program's handle on its pipe. [@ANCHOR: proc_py_wire]
-* Saved procedures: a name that cannot make a path, versions (the last 20 kept), the declared tier checked against the tools the source names, load, delete and list. [@ANCHOR: proc_saved_delete] [@ANCHOR: proc_saved_dir_of] [@ANCHOR: proc_saved_list] [@ANCHOR: proc_saved_load] [@ANCHOR: proc_saved_save] [@ANCHOR: proc_saved_valid_name]
-* The operator prompt: a run waits for an answer through `bench_proc_input` in the state `waiting_operator`, the wait is left out of the wall-clock budget, has its own limit, and ends with a cancel. [@ANCHOR: proc_py_ask_operator] [@ANCHOR: proc_run_answer] [@ANCHOR: proc_run_clear_ask] [@ANCHOR: proc_run_paused] [@ANCHOR: proc_run_poll_ask]
-* The shipped example procedures (sweep series with retries and a power cycle, soak round against a baseline, calibration with operator steps) are program text with reserved `example-` names, parameterised by their arguments, identical to their manual pages, and run in the tests against a mock bench whose fake devices share a simulated world. [@ANCHOR: proc_examples_find]
+* The procedure runner entry is read with defaults, bad values are refused, and the runner's tools are listed by tier, checked and dispatched by name.
+* A procedure's tools and tier cap: the tools it may call come from the same listing the clients see, the procedure tools themselves are never among them, and a tool above the cap is refused with the tier it needs.
+* Everything a run produces is kept in its directory: atomic JSON files, an append-only capped event list read by cursor, capped output streams read by offset, a run id that cannot escape the directory, and retention.
+* A run has a supervisor that starts the program, forwards its tool calls through the dispatcher under the tier cap and the call budget, records events, enforces the wall-clock budget and a cancel request (grace time, then kill), and writes the final state and result with the failure report.
+* Status, output since a cursor, the result, cancel and the list read the managed directory, so they answer for live runs, finished runs and runs of an earlier server process.
+* The CPython backend starts `python3 -I` with a stripped environment, a process group, resource limits and a parent-death signal, speaks the run protocol on pipes, and kills the whole group.
+* The program side of the protocol: the wire, `bench.call`, `emit`, `log`, `step`, `sleep`, `checkpoint`, `cleanup`, `tools`, `deadline`, `result`, the program's captured output, the entry point and the way it ends.
+* The helpers `retry`, `expect`, `stats` and `series`, and the exceptions a procedure sees.
+* A failure is reported with the traceback, the local variables of the procedure's own frames (bounded) and the context given to `expect`; `trace` records the lines reached.
+* The audit hook refuses subprocesses, sockets, device nodes, ctypes and writes outside the scratch directory, and says to use `bench.call`. IT IS NOT A SANDBOX.
+* The safe-state routine: the tools that change an instrument have a row naming the tool that undoes it, a call is recorded before it is dispatched, and when a run ends other than by success the recorded undo calls are run through the dispatcher and their outcome is part of the result.
+* Instrument reservations between runs: a tool that changes an instrument reserves it with a lock file, reads share, several instruments are taken in sorted order all or none with a timeout, and a refusal names the run that holds the instrument.
+* A restart: runs left active by a server process that no longer exists are marked lost and their instruments are put in the safe state; a shutdown cancels every live run and waits for its cleanup and safe state.
+* The program's handle on its pipe.
+* Saved procedures: a name that cannot make a path, versions (the last 20 kept), the declared tier checked against the tools the source names, load, delete and list.
+* The operator prompt: a run waits for an answer through `bench_proc_input` in the state `waiting_operator`, the wait is left out of the wall-clock budget, has its own limit, and ends with a cancel.
+* The shipped example procedures (sweep series with retries and a power cycle, soak round against a baseline, calibration with operator steps) are program text with reserved `example-` names, parameterised by their arguments, identical to their manual pages, and run in the tests against a mock bench whose fake devices share a simulated world.
 
 ## Checks the functions of every driver make (anchors)
 
 One line per group of functions; each anchor is also on its functions in `src/`.
 
-* An alert's severity word is parsed and sets the tone pattern (one soft beep, two beeps, or a fast two-tone siren) and the share of the volume limit it uses. [@ANCHOR: bench_mcp_audio_alert_severity_parse] [@ANCHOR: bench_mcp_audio_alert_severity_word] [@ANCHOR: bench_mcp_audio_alert_severity_volume_share] [@ANCHOR: bench_mcp_audio_alert_pattern]
-* Audio analysis gives level in dB, RMS and statistics, a Hann-windowed Welch spectrum by radix-2 FFT (a power-of-two length), spectrum peaks, the median noise floor, one tone's amplitude and the similarity of two spectra. [@ANCHOR: bench_mcp_audio_analysis_db] [@ANCHOR: bench_mcp_audio_analysis_rms] [@ANCHOR: bench_mcp_audio_analysis_stats] [@ANCHOR: bench_mcp_audio_analysis_fft] [@ANCHOR: bench_mcp_audio_analysis_spectrum_range] [@ANCHOR: bench_mcp_audio_analysis_spectrum] [@ANCHOR: bench_mcp_audio_analysis_peaks] [@ANCHOR: bench_mcp_audio_analysis_median_db] [@ANCHOR: bench_mcp_audio_analysis_tone_amp] [@ANCHOR: bench_mcp_audio_analysis_similarity]
-* Audio devices are read from `pw-dump` and `/proc/asound` with their transport, rates and formats, and are resolved by alias, node name or a unique fragment; a reserved device is never returned. [@ANCHOR: bench_mcp_audio_devices_dir_word] [@ANCHOR: bench_mcp_audio_devices_device_transport] [@ANCHOR: bench_mcp_audio_devices_rates_of] [@ANCHOR: bench_mcp_audio_devices_formats_of] [@ANCHOR: bench_mcp_audio_devices_list] [@ANCHOR: bench_mcp_audio_devices_resolve]
-* Audio discovery fingerprints the candidate devices, stores and loads its result, and reports whether the result is stale and what `auto` selects now. [@ANCHOR: bench_mcp_audio_discover_fingerprint] [@ANCHOR: bench_mcp_audio_discover_load] [@ANCHOR: bench_mcp_audio_discover_save] [@ANCHOR: bench_mcp_audio_discover_report]
-* A recording is started on one channel of a node (or on the monitor of an output), waits for its samples, and is shut down. [@ANCHOR: bench_mcp_audio_engine_recorder_start] [@ANCHOR: bench_mcp_audio_engine_recorder_wait_samples] [@ANCHOR: bench_mcp_audio_engine_recorder_shutdown]
-* A playback is started on a node at a stream volume, waited for until a limit after which it is killed, and stopped when dropped. [@ANCHOR: bench_mcp_audio_engine_playing_start] [@ANCHOR: bench_mcp_audio_engine_playing_wait] [@ANCHOR: bench_mcp_audio_engine_playing_drop]
-* Event detection measures the level of a tone, or of the whole signal, in short windows and takes percentiles of those levels. [@ANCHOR: bench_mcp_audio_events_tone_levels] [@ANCHOR: bench_mcp_audio_events_levels_for] [@ANCHOR: bench_mcp_audio_events_percentile]
-* The tones heard in a recording are grouped into tracks. [@ANCHOR: bench_mcp_audio_heard_tracks]
-* A device's volume and mute are read and set. [@ANCHOR: bench_mcp_audio_levels_get] [@ANCHOR: bench_mcp_audio_levels_set_volume] [@ANCHOR: bench_mcp_audio_levels_set_mute]
-* An audio helper process is run and its outcome returned. [@ANCHOR: bench_mcp_audio_process_run]
-* Quiet hours say whether a time of day falls inside them. [@ANCHOR: bench_mcp_audio_quiethours_contains]
-* A device's alias is looked up and its volume cap is never above the global cap. [@ANCHOR: bench_mcp_audio_config_alias_of] [@ANCHOR: bench_mcp_audio_config_cap_for]
-* Quiet-hour times are read as HH:MM. [@ANCHOR: bench_mcp_audio_hhmm]
-* The ports of an audio device are listed. [@ANCHOR: bench_mcp_audio_ports]
-* The local minutes since midnight are taken for the quiet-hours test. [@ANCHOR: bench_mcp_audio_local_minute_of_day]
-* The audio instrument is built from its configuration entry. [@ANCHOR: bench_mcp_audio_instrument]
-* The device-listing tool returns the live devices. [@ANCHOR: bench_mcp_audio_list_devices]
-* An audio tool call is dispatched by name to its tool. [@ANCHOR: bench_mcp_audio_call_with]
-* The volume guard saves the volume and mute before a sound is made and puts them back, once, when released or dropped. [@ANCHOR: bench_mcp_audio_safety_volumeguard_restore] [@ANCHOR: bench_mcp_audio_safety_volumeguard_drop]
-* Speech is synthesized with espeak-ng or Piper from a request whose voice and language codes are limited to the characters such codes use, and is played on the chosen device. [@ANCHOR: bench_mcp_audio_speak_engine_name] [@ANCHOR: bench_mcp_audio_speak_safe_code] [@ANCHOR: bench_mcp_audio_speak_spd_args] [@ANCHOR: bench_mcp_audio_speak_run_with_stdin] [@ANCHOR: bench_mcp_audio_speak_request] [@ANCHOR: bench_mcp_audio_speak_synthesize] [@ANCHOR: bench_mcp_audio_speak_say] [@ANCHOR: bench_mcp_audio_speak_synthesizers]
-* Captured audio is stored in an owner-only directory under a timestamped file name made of letters, digits and dashes. [@ANCHOR: bench_mcp_audio_store_timestamp] [@ANCHOR: bench_mcp_audio_store_slug] [@ANCHOR: bench_mcp_audio_store_new_path]
-* A tone (sine, sweep, two tone or noise) is read from tool arguments, with its level limited to the maximum dBFS. [@ANCHOR: bench_mcp_audio_tones_hz] [@ANCHOR: bench_mcp_audio_tones_parse] [@ANCHOR: bench_mcp_audio_tones_level]
-* The audio tools bound their numeric arguments, take their devices and sources, meter levels, and play under the volume guard. [@ANCHOR: bench_mcp_audio_tools_bounded] [@ANCHOR: bench_mcp_audio_tools_take] [@ANCHOR: bench_mcp_audio_tools_meter] [@ANCHOR: bench_mcp_audio_tools_source] [@ANCHOR: bench_mcp_audio_tools_play_guarded] [@ANCHOR: bench_mcp_audio_tools_levels_get]
-* The audio verification tool bounds its arguments, states its expectations, and runs a configured action and waits for it. [@ANCHOR: bench_mcp_audio_verify_bounded] [@ANCHOR: bench_mcp_audio_verify_expectations] [@ANCHOR: bench_mcp_audio_verify_run_action]
-* WAV files are written as 16-bit PCM with samples beyond full scale clipped, and a channel set can be averaged into one. [@ANCHOR: bench_mcp_audio_wav_wav_mono] [@ANCHOR: bench_mcp_audio_wav_encode]
-* The template instrument shows the checks a driver makes: a boolean argument is exact, ON/OFF is exact, and a pulse returns the unit to its safe state. [@ANCHOR: bench_mcp_example_instrument] [@ANCHOR: bench_mcp_example_flag] [@ANCHOR: bench_mcp_example_on_off] [@ANCHOR: bench_mcp_example_status] [@ANCHOR: bench_mcp_example_measure] [@ANCHOR: bench_mcp_example_safe_state] [@ANCHOR: bench_mcp_example_run_pulse] [@ANCHOR: bench_mcp_example_call_with]
-* The tool definitions the server lists are built from each instrument's tools. [@ANCHOR: bench_mcp_main_tool_defs]
-* The manual is parsed from its embedded pages (front matter, lists, page paths, parent index), rendered with its generated argument tables, searched by lower-case tokens with an excerpt and a section, truncated by characters, and served as tools and as MCP resources; a missing page is a clear error. [@ANCHOR: bench_mcp_manual_tool_registry] [@ANCHOR: bench_mcp_manual_manual_build] [@ANCHOR: bench_mcp_manual_manual_render_body] [@ANCHOR: bench_mcp_manual_searchindex_build] [@ANCHOR: bench_mcp_manual_tokens] [@ANCHOR: bench_mcp_manual_manual_up_of] [@ANCHOR: bench_mcp_manual_not_found] [@ANCHOR: bench_mcp_manual_section_of] [@ANCHOR: bench_mcp_manual_str_arg] [@ANCHOR: bench_mcp_manual_truncate_chars] [@ANCHOR: bench_mcp_manual_uint_arg] [@ANCHOR: bench_mcp_manual_searchindex_score] [@ANCHOR: bench_mcp_manual_call] [@ANCHOR: bench_mcp_manual_excerpt] [@ANCHOR: bench_mcp_manual_releases] [@ANCHOR: bench_mcp_manual_split_front_matter] [@ANCHOR: bench_mcp_manual_parse_list] [@ANCHOR: bench_mcp_manual_path_of_file] [@ANCHOR: bench_mcp_manual_type_of] [@ANCHOR: bench_mcp_manual_notes_of] [@ANCHOR: bench_mcp_manual_notes_for] [@ANCHOR: bench_mcp_manual_clip_around] [@ANCHOR: bench_mcp_manual_page_text_for_resource] [@ANCHOR: bench_mcp_manual_read_resource] The embedded page table names each page relative to the crate (`CARGO_MANIFEST_DIR`), never by an absolute path, so a shared target directory cannot point at a removed worktree. [@ANCHOR: bench_mcp_manual_embedded_paths]
-* The scope's spectrum is computed on the host from the channel's waveform. [@ANCHOR: bench_mcp_scope_spectrum]
-* The host spectrum applies a named window, an in-place radix-2 FFT and a strongest-peaks search. [@ANCHOR: bench_mcp_spectrum_window_parse] [@ANCHOR: bench_mcp_spectrum_window_weight] [@ANCHOR: bench_mcp_spectrum_fft] [@ANCHOR: bench_mcp_spectrum_peaks]
-* USB bandwidth is estimated from the periodic endpoints of every alternate setting, with the protocol overhead of each packet, per bus domain and against its capacity. [@ANCHOR: bench_mcp_usb_hub_bandwidth_overhead] [@ANCHOR: bench_mcp_usb_hub_bandwidth_endpoint_load] [@ANCHOR: bench_mcp_usb_hub_bandwidth_interval_us] [@ANCHOR: bench_mcp_usb_hub_bandwidth_potential_streams] [@ANCHOR: bench_mcp_usb_hub_bandwidth_potential_load] [@ANCHOR: bench_mcp_usb_hub_bandwidth_domain_of] [@ANCHOR: bench_mcp_usb_hub_bandwidth_capacity]
-* The missing-device diagnosis names the port the device would be on and runs the checks that apply. [@ANCHOR: bench_mcp_usb_hub_diagnose_rank] [@ANCHOR: bench_mcp_usb_hub_diagnose_missing_target] [@ANCHOR: bench_mcp_usb_hub_diagnose_finish] [@ANCHOR: bench_mcp_usb_hub_diagnose_missing] [@ANCHOR: bench_mcp_usb_hub_diagnose_present_checks]
-* The USB history reads the kernel journal into events, finds a device that connected repeatedly in a window, summarizes events and compares two snapshots. [@ANCHOR: bench_mcp_usb_hub_history_port_target] [@ANCHOR: bench_mcp_usb_hub_history_errno_of] [@ANCHOR: bench_mcp_usb_hub_history_parse] [@ANCHOR: bench_mcp_usb_hub_history_flaps] [@ANCHOR: bench_mcp_usb_hub_history_analyze] [@ANCHOR: bench_mcp_usb_hub_history_journal] [@ANCHOR: bench_mcp_usb_hub_history_num] [@ANCHOR: bench_mcp_usb_hub_history_history] [@ANCHOR: bench_mcp_usb_hub_history_snapshot] [@ANCHOR: bench_mcp_usb_hub_history_diff]
-* Hubs are listed and a port is named by hub and port, by label or by the device plugged into it. [@ANCHOR: bench_mcp_usb_hub_hubs_hub_json] [@ANCHOR: bench_mcp_usb_hub_hubs_hubs] [@ANCHOR: bench_mcp_usb_hub_hubs_resolve_port] [@ANCHOR: bench_mcp_usb_hub_hubs_secs] [@ANCHOR: bench_mcp_usb_hub_hubs_flag] [@ANCHOR: bench_mcp_usb_hub_hubs_plan] [@ANCHOR: bench_mcp_usb_hub_hubs_protection]
-* The reset ladder runs its privileged steps through `sudo -n` on this binary. [@ANCHOR: bench_mcp_usb_hub_ladder_helper_command] [@ANCHOR: bench_mcp_usb_hub_ladder_run_helper] [@ANCHOR: bench_mcp_usb_hub_ladder_target] [@ANCHOR: bench_mcp_usb_hub_ladder_authorize] [@ANCHOR: bench_mcp_usb_hub_ladder_driver] [@ANCHOR: bench_mcp_usb_hub_ladder_autosuspend]
-* A port is keyed as hub and port. [@ANCHOR: bench_mcp_usb_hub_port_key]
-* The USB hub instrument is built from its configuration entry. [@ANCHOR: bench_mcp_usb_hub_instrument]
-* A device argument is a path in the USB tree or a port label. [@ANCHOR: bench_mcp_usb_hub_resolve_device]
-* The topology tool returns the USB tree. [@ANCHOR: bench_mcp_usb_hub_topology]
-* The find tool locates devices in the USB tree. [@ANCHOR: bench_mcp_usb_hub_find]
-* A USB hub tool call is dispatched by name to its tool. [@ANCHOR: bench_mcp_usb_hub_call_with]
-* Port power is probed and set through `uhubctl`, waited for until it takes effect, and reported. [@ANCHOR: bench_mcp_usb_hub_power_probe] [@ANCHOR: bench_mcp_usb_hub_power_uhubctl] [@ANCHOR: bench_mcp_usb_hub_power_wait_until] [@ANCHOR: bench_mcp_usb_hub_power_report_level] [@ANCHOR: bench_mcp_usb_hub_power_set]
-* The privileged helper resolves a device directory, interface and driver in sysfs, resets, and prints the outcome with an exit code. [@ANCHOR: bench_mcp_usb_hub_privileged_device_dir] [@ANCHOR: bench_mcp_usb_hub_privileged_interface_name] [@ANCHOR: bench_mcp_usb_hub_privileged_driver_dir] [@ANCHOR: bench_mcp_usb_hub_privileged_reset] [@ANCHOR: bench_mcp_usb_hub_privileged_main]
-* A protected device or port blocks power-off, cycle, reset and deauthorize unless the caller overrides, and the verdict says what blocks. [@ANCHOR: bench_mcp_usb_hub_protect_add] [@ANCHOR: bench_mcp_usb_hub_protect_block_names] [@ANCHOR: bench_mcp_usb_hub_protect_verdict_permit] [@ANCHOR: bench_mcp_usb_hub_protect_check_device] [@ANCHOR: bench_mcp_usb_hub_protect_check_port] [@ANCHOR: bench_mcp_usb_hub_protect_report]
-* The USB tree is read from sysfs: devices with their speed class, hub transaction-translator mode, parent port, children, endpoints and interfaces, a speed finding, and the tree as JSON. [@ANCHOR: bench_mcp_usb_hub_sysfs_device_speed_name] [@ANCHOR: bench_mcp_usb_hub_sysfs_device_tt_mode] [@ANCHOR: bench_mcp_usb_hub_sysfs_is_device_name] [@ANCHOR: bench_mcp_usb_hub_sysfs_parent_of] [@ANCHOR: bench_mcp_usb_hub_sysfs_child_path] [@ANCHOR: bench_mcp_usb_hub_sysfs_parse_interval_us] [@ANCHOR: bench_mcp_usb_hub_sysfs_endpoints_of] [@ANCHOR: bench_mcp_usb_hub_sysfs_dev_path] [@ANCHOR: bench_mcp_usb_hub_sysfs_collect_nodes] [@ANCHOR: bench_mcp_usb_hub_sysfs_class_nodes] [@ANCHOR: bench_mcp_usb_hub_sysfs_interface_of] [@ANCHOR: bench_mcp_usb_hub_sysfs_ports_of] [@ANCHOR: bench_mcp_usb_hub_sysfs_controller_of] [@ANCHOR: bench_mcp_usb_hub_sysfs_device_at] [@ANCHOR: bench_mcp_usb_hub_sysfs_path_key] [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_children] [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_roots] [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_ancestry] [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_subtree] [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_sorted] [@ANCHOR: bench_mcp_usb_hub_sysfs_speed_finding] [@ANCHOR: bench_mcp_usb_hub_sysfs_device_json] [@ANCHOR: bench_mcp_usb_hub_sysfs_tree_json]
-* `uhubctl` and `lsusb` output is parsed (hub line, switching mode, over-current mode, port status and link state), and a failed `sudo -n` is explained. [@ANCHOR: bench_mcp_usb_hub_uhubctl_processrunner_run] [@ANCHOR: bench_mcp_usb_hub_uhubctl_explain_failure] [@ANCHOR: bench_mcp_usb_hub_uhubctl_sudo] [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_name] [@ANCHOR: bench_mcp_usb_hub_uhubctl_link_state] [@ANCHOR: bench_mcp_usb_hub_uhubctl_decode_port] [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching_of] [@ANCHOR: bench_mcp_usb_hub_uhubctl_bracket] [@ANCHOR: bench_mcp_usb_hub_uhubctl_hubdescriptor_switching] [@ANCHOR: bench_mcp_usb_hub_uhubctl_hubdescriptor_over_current] [@ANCHOR: bench_mcp_usb_hub_uhubctl_parse_hub_descriptor] [@ANCHOR: bench_mcp_usb_hub_uhubctl_hub_descriptor]
-* The VNA's firmware version and internal temperature are read. [@ANCHOR: bench_vna_instrument_monitoring]
-* The VNA is cold-reset through its hub port and waited for with its codecs. [@ANCHOR: bench_vna_power_cycle]
-* The VNA tools parse their numeric, level and modulation arguments, name the generator and meter, and read and measure calibration standards. [@ANCHOR: bench_vna_tools_num] [@ANCHOR: bench_vna_tools_level_db] [@ANCHOR: bench_vna_tools_freq_hz] [@ANCHOR: bench_vna_tools_generator_on] [@ANCHOR: bench_vna_tools_generator_level] [@ANCHOR: bench_vna_tools_mod_args] [@ANCHOR: bench_vna_tools_generator_am] [@ANCHOR: bench_vna_tools_generator_fm] [@ANCHOR: bench_vna_tools_meter] [@ANCHOR: bench_vna_tools_name_ok] [@ANCHOR: bench_vna_tools_parse_meta] [@ANCHOR: bench_vna_tools_calibrate_measure] [@ANCHOR: bench_vna_tools_read_standard]
+* An alert's severity word is parsed and sets the tone pattern (one soft beep, two beeps, or a fast two-tone siren) and the share of the volume limit it uses.
+* Audio analysis gives level in dB, RMS and statistics, a Hann-windowed Welch spectrum by radix-2 FFT (a power-of-two length), spectrum peaks, the median noise floor, one tone's amplitude and the similarity of two spectra.
+* Audio devices are read from `pw-dump` and `/proc/asound` with their transport, rates and formats, and are resolved by alias, node name or a unique fragment; a reserved device is never returned.
+* Audio discovery fingerprints the candidate devices, stores and loads its result, and reports whether the result is stale and what `auto` selects now.
+* A recording is started on one channel of a node (or on the monitor of an output), waits for its samples, and is shut down.
+* A playback is started on a node at a stream volume, waited for until a limit after which it is killed, and stopped when dropped.
+* Event detection measures the level of a tone, or of the whole signal, in short windows and takes percentiles of those levels.
+* The tones heard in a recording are grouped into tracks.
+* A device's volume and mute are read and set.
+* An audio helper process is run and its outcome returned.
+* Quiet hours say whether a time of day falls inside them.
+* A device's alias is looked up and its volume cap is never above the global cap.
+* Quiet-hour times are read as HH:MM.
+* The ports of an audio device are listed.
+* The local minutes since midnight are taken for the quiet-hours test.
+* The audio instrument is built from its configuration entry.
+* The device-listing tool returns the live devices.
+* An audio tool call is dispatched by name to its tool.
+* The volume guard saves the volume and mute before a sound is made and puts them back, once, when released or dropped.
+* Speech is synthesized with espeak-ng or Piper from a request whose voice and language codes are limited to the characters such codes use, and is played on the chosen device.
+* Captured audio is stored in an owner-only directory under a timestamped file name made of letters, digits and dashes.
+* A tone (sine, sweep, two tone or noise) is read from tool arguments, with its level limited to the maximum dBFS.
+* The audio tools bound their numeric arguments, take their devices and sources, meter levels, and play under the volume guard.
+* The audio verification tool bounds its arguments, states its expectations, and runs a configured action and waits for it.
+* WAV files are written as 16-bit PCM with samples beyond full scale clipped, and a channel set can be averaged into one.
+* The template instrument shows the checks a driver makes: a boolean argument is exact, ON/OFF is exact, and a pulse returns the unit to its safe state.
+* The tool definitions the server lists are built from each instrument's tools.
+* The manual is parsed from its embedded pages (front matter, lists, page paths, parent index), rendered with its generated argument tables, searched by lower-case tokens with an excerpt and a section, truncated by characters, and served as tools and as MCP resources; a missing page is a clear error. The embedded page table names each page relative to the crate (`CARGO_MANIFEST_DIR`), never by an absolute path, so a shared target directory cannot point at a removed worktree.
+* The scope's spectrum is computed on the host from the channel's waveform.
+* The host spectrum applies a named window, an in-place radix-2 FFT and a strongest-peaks search.
+* USB bandwidth is estimated from the periodic endpoints of every alternate setting, with the protocol overhead of each packet, per bus domain and against its capacity.
+* The missing-device diagnosis names the port the device would be on and runs the checks that apply.
+* The USB history reads the kernel journal into events, finds a device that connected repeatedly in a window, summarizes events and compares two snapshots.
+* Hubs are listed and a port is named by hub and port, by label or by the device plugged into it.
+* The reset ladder runs its privileged steps through `sudo -n` on this binary.
+* A port is keyed as hub and port.
+* The USB hub instrument is built from its configuration entry.
+* A device argument is a path in the USB tree or a port label.
+* The topology tool returns the USB tree.
+* The find tool locates devices in the USB tree.
+* A USB hub tool call is dispatched by name to its tool.
+* Port power is probed and set through `uhubctl`, waited for until it takes effect, and reported.
+* The privileged helper resolves a device directory, interface and driver in sysfs, resets, and prints the outcome with an exit code.
+* A protected device or port blocks power-off, cycle, reset and deauthorize unless the caller overrides, and the verdict says what blocks.
+* The USB tree is read from sysfs: devices with their speed class, hub transaction-translator mode, parent port, children, endpoints and interfaces, a speed finding, and the tree as JSON.
+* `uhubctl` and `lsusb` output is parsed (hub line, switching mode, over-current mode, port status and link state), and a failed `sudo -n` is explained.
+* The VNA's firmware version and internal temperature are read.
+* The VNA is cold-reset through its hub port and waited for with its codecs.
+* The VNA tools parse their numeric, level and modulation arguments, name the generator and meter, and read and measure calibration standards.
 
-* The supply's OFF is recognised from its reply (`OFF` or `0`); the safe state switches the output off and reads it back, and succeeds only when the supply itself says off. [@ANCHOR: bench_mcp_psu_is_off] [@ANCHOR: bench_mcp_psu_safe_state]
-* How long the output may stay on comes from `for_s`, never above `max_on_s`; switching on is refused unless the setpoints stored in the supply are within the caps, a plan of it (`plan_on`) reads only and switches nothing, and a timed switch-off is armed when the output goes on. [@ANCHOR: bench_mcp_psu_on_seconds] [@ANCHOR: bench_mcp_psu_stored_setpoints] [@ANCHOR: bench_mcp_psu_plan_on] [@ANCHOR: bench_mcp_psu_output_on] [@ANCHOR: bench_mcp_psu_arm_switch_off]
-* The supply's timer and output tools dispatch to those functions. [@ANCHOR: bench_mcp_main_psu_timer] [@ANCHOR: bench_mcp_main_psu_output]
-* The scope's self-calibration runs only when it is asked for, and a dry run changes nothing. [@ANCHOR: bench_mcp_scope_self_cal]
-* Checklist dates are worked out from civil dates and read as ISO dates. [@ANCHOR: bench_mcp_checklist_days_from_civil] [@ANCHOR: bench_mcp_checklist_iso_dates]
-* The configuration names the drivers it accepts. [@ANCHOR: bench_mcp_config_driver_names]
-* A tool call is dispatched by name, and the server lists every tool definition. [@ANCHOR: bench_mcp_main_call] [@ANCHOR: bench_mcp_main_all_tool_defs]
-* The audio tools plan a sound and a volume change without making them (dry run), and their safe state stops this server's own `pw-play` streams and lowers any output above its volume cap, without muting, unmuting or touching a reserved device. [@ANCHOR: bench_mcp_audio_tools_dry_plan] [@ANCHOR: bench_mcp_audio_tools_set_volume_plan] [@ANCHOR: bench_mcp_audio_tools_safe_state]
-* The config reads each instrument's permission tier, the VNA settings (an unknown tier or a bad setting is refused), and the SDR serial and XB-200 setting (the XB-200 for the bladeRF only), and `BENCH_MCP_CONFIG` names the file the server loads. [@ANCHOR: bench_mcp_config_tier_of] [@ANCHOR: bench_mcp_config_vna] [@ANCHOR: bench_mcp_config_sdr] [@ANCHOR: bench_mcp_config_load]
-* The host DSP finds a tone's amplitude and offset with its radix-2 FFT, windowed blocks, noise floor, strongest peaks and level statistics, and refuses FFT lengths that are not a power of two. [@ANCHOR: bench_mcp_dsp_fft] [@ANCHOR: bench_mcp_dsp_check_len] [@ANCHOR: bench_mcp_dsp_block_fft] [@ANCHOR: bench_mcp_dsp_noise_floor] [@ANCHOR: bench_mcp_dsp_peaks] [@ANCHOR: bench_mcp_dsp_stats]
-* Serial devices are checked before they are opened: the config's top-level `reserved_serial` list (`/dev/serial/by-id/...` paths or `usb:<bus-port>`) names devices no bench tool opens (the SainSmart relay board's place), and a supply is refused on a bare `/dev/ttyUSBn` or `/dev/ttyACMn` when a `/dev/serial/by-id` name points at that device. The checks read the file system and never open the device. [@ANCHOR: bench_mcp_serial_guard_parse_reserved] [@ANCHOR: bench_mcp_serial_guard_set_reserved] [@ANCHOR: bench_mcp_serial_guard_reserved_reason] [@ANCHOR: bench_mcp_serial_guard_by_id_name] [@ANCHOR: bench_mcp_serial_guard_check_supply] [@ANCHOR: bench_mcp_serial_guard_usb_port_of] [@ANCHOR: bench_mcp_serial_guard_check_reserved_open]
-* The SCPI link opens a TCP socket or a serial port, sends terminated commands, and reads lines, numbers (with units and either header setting), length-prefixed blocks and headerless streams; a refused connection, a peer that hangs up, a silent device and a port that is not a serial port are errors. [@ANCHOR: bench_mcp_link_tcp] [@ANCHOR: bench_mcp_link_new] [@ANCHOR: bench_mcp_link_byte] [@ANCHOR: bench_mcp_link_line] [@ANCHOR: bench_mcp_link_number] [@ANCHOR: bench_mcp_link_block] [@ANCHOR: bench_mcp_link_raw_until_idle] [@ANCHOR: bench_mcp_link_serial_open] [@ANCHOR: bench_mcp_link_serial_read]
-* The supply tool reads volts, amps and power, and sends a setpoint only within the configured caps. [@ANCHOR: bench_mcp_psu_measure] [@ANCHOR: bench_mcp_psu_set]
-* The scope tools read the trigger, timebase and channels, measure per channel, capture a waveform to a file with its edges (refusing a stopped scope), save a screenshot by image type, and send settings only when they are valid. [@ANCHOR: bench_mcp_scope_status] [@ANCHOR: bench_mcp_scope_ch] [@ANCHOR: bench_mcp_scope_measure] [@ANCHOR: bench_mcp_scope_capture] [@ANCHOR: bench_mcp_scope_screenshot] [@ANCHOR: bench_mcp_scope_set]
-* The SDR tools check a radio's configuration and its tuning, rate and gain limits, parse numeric and whole-number arguments and the receive input, and write raw I/Q as little-endian f32 pairs. [@ANCHOR: bench_mcp_sdr_check_config] [@ANCHOR: bench_mcp_sdr_limits] [@ANCHOR: bench_mcp_sdr_number] [@ANCHOR: bench_mcp_sdr_whole] [@ANCHOR: bench_mcp_sdr_in_range] [@ANCHOR: bench_mcp_sdr_antenna_arg] [@ANCHOR: bench_mcp_sdr_write_iq]
-* The VNA sweep tool reads its numeric arguments strictly. [@ANCHOR: bench_mcp_vna_number]
-* The server connects a scope over TCP and a supply over serial, takes one lock per instrument name, creates its output directory, and serves tool calls over MCP until it is terminated. [@ANCHOR: bench_mcp_main_connect] [@ANCHOR: bench_mcp_main_instrument_lock] [@ANCHOR: bench_mcp_main_out_dir] [@ANCHOR: bench_mcp_main_out_dir_for] [@ANCHOR: bench_mcp_main_serve] [@ANCHOR: bench_mcp_main_call_tool]
+* The supply's OFF is recognised from its reply (`OFF` or `0`); the safe state switches the output off and reads it back, and succeeds only when the supply itself says off.
+* How long the output may stay on comes from `for_s`, never above `max_on_s`; switching on is refused unless the setpoints stored in the supply are within the caps, a plan of it (`plan_on`) reads only and switches nothing, and a timed switch-off is armed when the output goes on.
+* The supply's timer and output tools dispatch to those functions.
+* The scope's self-calibration runs only when it is asked for, and a dry run changes nothing.
+* Checklist dates are worked out from civil dates and read as ISO dates.
+* The configuration names the drivers it accepts.
+* A tool call is dispatched by name, and the server lists every tool definition.
+* The audio tools plan a sound and a volume change without making them (dry run), and their safe state stops this server's own `pw-play` streams and lowers any output above its volume cap, without muting, unmuting or touching a reserved device.
+* The config reads each instrument's permission tier, the VNA settings (an unknown tier or a bad setting is refused), and the SDR serial and XB-200 setting (the XB-200 for the bladeRF only), and `BENCH_MCP_CONFIG` names the file the server loads.
+* The host DSP finds a tone's amplitude and offset with its radix-2 FFT, windowed blocks, noise floor, strongest peaks and level statistics, and refuses FFT lengths that are not a power of two.
+* Serial devices are checked before they are opened: the config's top-level `reserved_serial` list (`/dev/serial/by-id/...` paths or `usb:<bus-port>`) names devices no bench tool opens (the SainSmart relay board's place), and a supply is refused on a bare `/dev/ttyUSBn` or `/dev/ttyACMn` when a `/dev/serial/by-id` name points at that device. The checks read the file system and never open the device.
+* The SCPI link opens a TCP socket or a serial port, sends terminated commands, and reads lines, numbers (with units and either header setting), length-prefixed blocks and headerless streams; a refused connection, a peer that hangs up, a silent device and a port that is not a serial port are errors.
+* The supply tool reads volts, amps and power, and sends a setpoint only within the configured caps.
+* The scope tools read the trigger, timebase and channels, measure per channel, capture a waveform to a file with its edges (refusing a stopped scope), save a screenshot by image type, and send settings only when they are valid.
+* The SDR tools check a radio's configuration and its tuning, rate and gain limits, parse numeric and whole-number arguments and the receive input, and write raw I/Q as little-endian f32 pairs.
+* The VNA sweep tool reads its numeric arguments strictly.
+* The server connects a scope over TCP and a supply over serial, takes one lock per instrument name, creates its output directory, and serves tool calls over MCP until it is terminated.
 
 ## Scope connection recovery
 
 Both anchors are in `src/link.rs`; `connect` in `src/main.rs` uses them for every scope tool call.
 
-### `bench_mcp_link_tcp_checked` [@ANCHOR: bench_mcp_link_tcp_checked]
+### `bench_mcp_link_tcp_checked`
 
 **Purpose.** Opens a scope link and proves the scope answers before any tool uses it. The Siglent scope serves one SCPI client at a time. After the dev box lost power on 2026-10-29 the scope kept power and, probably, the dead session: it accepted TCP on 5025 and reset every connection on `*IDN?` until it was power-cycled (cause unconfirmed). This function waits and retries, and when the scope still does not answer it reports NO-GO with evidence and the action, instead of a bare "Connection reset by peer".
 
@@ -1311,7 +1127,7 @@ let link = Link::tcp_checked("192.168.10.51", 5025, &waits, &|h, p| Link::scope_
 
 **See also.** `bench_mcp_link_tcp` (one plain connect), `bench_mcp_link_scope_state`, `bench_mcp_main_connect`. Tests: `a_scope_that_resets_the_first_connections_is_waited_out_and_then_answers` and `a_scope_that_never_answers_gives_a_no_go_with_the_evidence_and_the_action` in `src/link.rs` (a fake scope on loopback that resets with linger 0). Follow-up needing the real scope: confirm or refute the stale-session cause if it recurs (wait out its idle timeout before power-cycling).
 
-### `bench_mcp_link_scope_state` [@ANCHOR: bench_mcp_link_scope_state]
+### `bench_mcp_link_scope_state`
 
 **Purpose.** The evidence for a failed scope connection: is the scope on the network, and which of its ports accept TCP.
 
@@ -1334,95 +1150,95 @@ Link::scope_state(host: &str, ports: &[u16]) -> String
 
 `src/elad/` drives an ELAD FDM-S2, FDM-DUO or FDM-S1 directly over USB through the `elad_usb` crate (`daemons/elad_usb`, AGPL, no vendor library). It is receive only, so none of its five tools is tier `full`. Manual: `instruments/elad`. An example entry: `{"driver": "elad", "tier": "read_config", "capture_dir": "/var/tmp/bench_elad", "fpga_loaded": false, "max_capture_s": 5}`. Verified on an FDM-S2 (USB firmware 3.0, hardware 1.3) on 2026-11-08 for discovery, descriptors, firmware, hardware version and EEPROM calibration; I/Q streamed from the real unit on 2026-11-10 at 768 kS/s (capture, level and spectrum tools: exact requested sample count, no bulk timeouts, non-zero data, no antenna known to be attached), after ELAD's own loader (`elad-firmware-2.0-intel + 3`, run by the owner; the loader is neither included nor run by this project) programmed the FPGA for that rate; set `"fpga_loaded": true` only after loading it yourself, and ask for the rate the loader was given. The printed `measured_rate_hz` includes start-up time and reads 10 to 15 % low. The streaming tools are tested against a fake unit that replays the recorded control replies and serves a synthetic tone; the hardware check is `tests/hil_elad.rs` (`--ignored`).
 
-* The config takes `capture_dir`, `fpga_loaded` and `max_capture_s` and refuses bad values. [@ANCHOR: elad_config]
-* Tools are dispatched by tier and instrument name. [@ANCHOR: bench_mcp_elad_call_with]
-* One instrument is chosen by name, or the only one. [@ANCHOR: bench_mcp_elad_instrument]
-* `bench_elad_list` opens nothing. [@ANCHOR: bench_mcp_elad_list]
-* `bench_elad_identify` sends only read requests. [@ANCHOR: bench_mcp_elad_identify]
-* `bench_elad_capture` writes a cf32 file and a summary. [@ANCHOR: bench_mcp_elad_capture]
-* `bench_elad_spectrum` writes a CSV and finds peaks. [@ANCHOR: bench_mcp_elad_spectrum]
-* `bench_elad_level` returns the level in dBFS with the calibration offset. [@ANCHOR: bench_mcp_elad_level]
-* Numeric arguments must be present or defaulted, finite and in range, naming the cause of the limit. [@ANCHOR: elad_args]
-* A boolean argument may be absent but not anything else. [@ANCHOR: elad_flag]
-* The rate must be one the model streams. [@ANCHOR: elad_rate_arg]
-* The sample count is capped by memory and by the config. [@ANCHOR: elad_target_samples]
-* A file name is checked and an existing file is never overwritten. [@ANCHOR: elad_new_file]
-* The FFT length must be a power of two. [@ANCHOR: elad_fft_len]
-* `bench_elad_tune` applies a tuning and front-end state and streams nothing. [@ANCHOR: bench_mcp_elad_tune]
-* `bench_elad_detect` reports peaks over the noise floor with frequency refined below one bin, level and SNR. [@ANCHOR: bench_mcp_elad_detect]
-* `bench_elad_sweep` retunes in steps to a CSV. [@ANCHOR: bench_mcp_elad_sweep]
-* A sweep's steps, running time and range are checked before the receiver is opened. [@ANCHOR: elad_sweep_plan]
-* The sweep's strongest local maxima over the floor, centre bins excluded. [@ANCHOR: elad_sweep_peaks]
-* A peak's frequency refined by a parabola through three bins. [@ANCHOR: elad_refine_peak]
-* A receiver opened and tuned, not streaming. [@ANCHOR: elad_open_tuned]
-* Starting the stream refuses an undeclared FPGA image before anything is sent. [@ANCHOR: elad_start_stream]
-* Reading a started stream until a sample count or a deadline. [@ANCHOR: elad_stream_samples]
-* Taking the single-owner lock for a receiver; a refusal names the holder (the relay or another call). [@ANCHOR: elad_take_lock]
-* The real bus opens a receiver only after taking its lock; exercised by the hardware run in `tests/hil_elad.rs`, not by `cargo test`. [@ANCHOR: bench_mcp_elad_usb_open]
-* A radio over a transport that holds the lock until the radio is dropped. [@ANCHOR: elad_open_locked]
-* The common summary of every streaming tool: samples, measured rate, timeouts, RMS, peak, DC and clipping. [@ANCHOR: elad_summary]
-* An acquisition refuses an undeclared FPGA image before streaming, always stops the stream, and reports silence as a missing FPGA image. [@ANCHOR: elad_acquire]
+* The config takes `capture_dir`, `fpga_loaded` and `max_capture_s` and refuses bad values.
+* Tools are dispatched by tier and instrument name.
+* One instrument is chosen by name, or the only one.
+* `bench_elad_list` opens nothing.
+* `bench_elad_identify` sends only read requests.
+* `bench_elad_capture` writes a cf32 file and a summary.
+* `bench_elad_spectrum` writes a CSV and finds peaks.
+* `bench_elad_level` returns the level in dBFS with the calibration offset.
+* Numeric arguments must be present or defaulted, finite and in range, naming the cause of the limit.
+* A boolean argument may be absent but not anything else.
+* The rate must be one the model streams.
+* The sample count is capped by memory and by the config.
+* A file name is checked and an existing file is never overwritten.
+* The FFT length must be a power of two.
+* `bench_elad_tune` applies a tuning and front-end state and streams nothing.
+* `bench_elad_detect` reports peaks over the noise floor with frequency refined below one bin, level and SNR.
+* `bench_elad_sweep` retunes in steps to a CSV.
+* A sweep's steps, running time and range are checked before the receiver is opened.
+* The sweep's strongest local maxima over the floor, centre bins excluded.
+* A peak's frequency refined by a parabola through three bins.
+* A receiver opened and tuned, not streaming.
+* Starting the stream refuses an undeclared FPGA image before anything is sent.
+* Reading a started stream until a sample count or a deadline.
+* Taking the single-owner lock for a receiver; a refusal names the holder (the relay or another call).
+* The real bus opens a receiver only after taking its lock; exercised by the hardware run in `tests/hil_elad.rs`, not by `cargo test`.
+* A radio over a transport that holds the lock until the radio is dropped.
+* The common summary of every streaming tool: samples, measured rate, timeouts, RMS, peak, DC and clipping.
+* An acquisition refuses an undeclared FPGA image before streaming, always stops the stream, and reports silence as a missing FPGA image.
 
 ## Glasgow logic analyzer and pattern generator (`bench_gla_*` tools)
 
 Four tools plus a safe-state companion on top of the Glasgow driver (`src/gla/`, entries for every function and data structure in `docs/GLASGOW_LOGIC_TOOLS.md`, manual `instruments/glasgow/logic-analyzer`). The revision C analyzer records every pin change with a 48 MHz timestamp and has no trigger or rate setting; the trigger, pre-trigger window, sample rate, statistics, files and UART, I2C and SPI decoding are done on the host. Capture needs the 480 Mb/s link; at 12 Mb/s the backend refuses. Tests are hardware-free: known waveforms, frames and a simulated Glasgow.
 
-* [@ANCHOR: gla_analyze]
-* [@ANCHOR: gla_auto_rate]
-* [@ANCHOR: gla_backend_trait]
-* [@ANCHOR: gla_call]
-* [@ANCHOR: gla_capture]
-* [@ANCHOR: gla_crc32]
-* [@ANCHOR: gla_ctx_struct]
-* [@ANCHOR: gla_decode_i2c]
-* [@ANCHOR: gla_decode_run]
-* [@ANCHOR: gla_decode_spi]
-* [@ANCHOR: gla_decode_uart]
-* [@ANCHOR: gla_describe]
-* [@ANCHOR: gla_inside]
-* [@ANCHOR: gla_instrument]
-* [@ANCHOR: gla_limits]
-* [@ANCHOR: gla_parse_vcd]
-* [@ANCHOR: gla_pattern_backend_args]
-* [@ANCHOR: gla_pattern_hold]
-* [@ANCHOR: gla_pattern_num]
-* [@ANCHOR: gla_pattern_plan]
-* [@ANCHOR: gla_pattern_plan_struct]
-* [@ANCHOR: gla_pattern_quantize]
-* [@ANCHOR: gla_pattern_tool]
-* [@ANCHOR: gla_pin_names]
-* [@ANCHOR: gla_process]
-* [@ANCHOR: gla_rate_text]
-* [@ANCHOR: gla_read_wave]
-* [@ANCHOR: gla_real_backend]
-* [@ANCHOR: gla_resample]
-* [@ANCHOR: gla_sampled_struct]
-* [@ANCHOR: gla_summarize]
-* [@ANCHOR: gla_tool_defs]
-* [@ANCHOR: gla_trigger_apply]
-* [@ANCHOR: gla_trigger_enum]
-* [@ANCHOR: gla_trigger_find]
-* [@ANCHOR: gla_trigger_find_state]
-* [@ANCHOR: gla_trigger_parse]
-* [@ANCHOR: gla_wave_pin_index]
-* [@ANCHOR: gla_wave_struct]
-* [@ANCHOR: gla_wave_value_at]
-* [@ANCHOR: gla_wave_value_before]
-* [@ANCHOR: gla_window]
-* [@ANCHOR: gla_write_csv]
-* [@ANCHOR: gla_write_sr]
-* [@ANCHOR: gla_write_vcd]
-* [@ANCHOR: gla_zip_store]
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
+*
 
 ## Scratch directories in tests
 
 Every test that needs a scratch directory makes it through `src/testdir.rs` (the integration tests under `tests/` include the same file), never by building a path under the temporary directory by hand: a hand-built directory is not removed when the test fails, and the temporary directory may be memory. The lint step `check_test_temp_dirs` fails a new `temp_dir().join(` in test code.
 
-* `TestDir::new(tag)` is a fresh empty directory that removes itself, also while a failing test unwinds. [@ANCHOR: bench_mcp_test_dir_new]
-* `TestDir::path`, its `Deref` and `AsRef` give the path. [@ANCHOR: bench_mcp_test_dir_path] [@ANCHOR: bench_mcp_test_dir_deref] [@ANCHOR: bench_mcp_test_dir_as_ref]
-* Dropping a `TestDir` removes the tree, read-only subdirectories included. [@ANCHOR: bench_mcp_test_dir_drop]
-* `scratch(tag)` is a directory inside the process directory for helpers and structs that pass a `PathBuf` around; it is removed when the test process exits, failing or not. [@ANCHOR: bench_mcp_test_scratch]
-* `process_dir()` is the one directory the whole test process shares, and what `out_dir()` returns in the tests when `BENCH_MCP_OUT` is not set (so no test writes into the real default output directory). [@ANCHOR: bench_mcp_test_process_dir]
-* `default_out_dir()` is the product default outside the tests and the process directory inside them. [@ANCHOR: bench_mcp_main_default_out_dir]
-* `product_default_out_dir()` is the product default, `bench_mcp` under the temporary directory. [@ANCHOR: bench_mcp_main_product_default_out_dir]
+* `TestDir::new(tag)` is a fresh empty directory that removes itself, also while a failing test unwinds.
+* `TestDir::path`, its `Deref` and `AsRef` give the path.
+* Dropping a `TestDir` removes the tree, read-only subdirectories included.
+* `scratch(tag)` is a directory inside the process directory for helpers and structs that pass a `PathBuf` around; it is removed when the test process exits, failing or not.
+* `process_dir()` is the one directory the whole test process shares, and what `out_dir()` returns in the tests when `BENCH_MCP_OUT` is not set (so no test writes into the real default output directory).
+* `default_out_dir()` is the product default outside the tests and the process directory inside them.
+* `product_default_out_dir()` is the product default, `bench_mcp` under the temporary directory.
 
