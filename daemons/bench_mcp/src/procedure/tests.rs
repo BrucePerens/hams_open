@@ -312,6 +312,8 @@ fn tier_names_round_trip() {
 // Tests [@ANCHOR: bench_mcp_procedure_run_run_ctx]
 // Tests [@ANCHOR: bench_mcp_procedure_cpython_py_session]
 // Tests [@ANCHOR: bench_mcp_procedure_backend_spawn_spec]
+// Tests [@ANCHOR: proc_py_wire_class]
+// Tests [@ANCHOR: proc_py_output_class]
 #[test]
 fn a_procedure_runs_to_the_end_and_everything_it_did_can_be_read_back() {
     let b = bench();
@@ -477,6 +479,8 @@ bench.result({"dry": plan["dry_run"], "refused": refused})
 // Tests [@ANCHOR: proc_py_frame_report]
 // Tests [@ANCHOR: proc_py_short]
 // Tests [@ANCHOR: proc_py_expect]
+// Tests [@ANCHOR: proc_py_bench_error_class]
+// Tests [@ANCHOR: proc_py_procedure_failure_class]
 #[test]
 fn an_uncaught_error_gives_a_report_with_the_locals_of_the_procedures_own_frames_and_the_last_calls(
 ) {
@@ -579,6 +583,7 @@ outer()
 // Tests [@ANCHOR: proc_view_cancel]
 // Tests [@ANCHOR: proc_cpython_kill]
 // Tests [@ANCHOR: proc_cpython_drop]
+// Tests [@ANCHOR: proc_py_bench_cancelled_class]
 #[test]
 fn cancel_ends_a_run_after_its_cleanup_handlers_have_made_their_tool_calls() {
     let b = bench();
@@ -662,6 +667,7 @@ fn the_wall_clock_budget_stops_a_run_and_a_program_that_ignores_the_request_is_k
 // Tests [@ANCHOR: proc_py_make_hook]
 // Tests [@ANCHOR: proc_py_open_refusal]
 // Tests [@ANCHOR: proc_py_path_inside]
+// Tests [@ANCHOR: proc_py_policy_error_class]
 #[test]
 fn the_audit_hook_blocks_processes_sockets_devices_and_writes_outside_scratch_and_allows_bench_call(
 ) {
