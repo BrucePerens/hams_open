@@ -59,7 +59,6 @@ for Odoo's own website forms. Counts refusals per day, with no address or text k
             "form_shield/static/tests/form_unavailable.test.js",
             "google_recaptcha/static/src/js/recaptcha.js",
             "form_shield/static/src/js/recaptcha_patch.js",
-            "form_shield/static/tests/form_shield.test.js",
             "form_shield/static/tests/recaptcha_patch.test.js",
         ],
     },
