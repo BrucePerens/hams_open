@@ -1,0 +1,5544 @@
+[
+{
+"attributes": {
+"auto_update": true,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 1",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": "x",
+"skipped_version": null,
+"supported_features": 5,
+"title": "x",
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_1",
+"state": "off"
+},
+{
+"attributes": {
+"auto_update": false,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 2",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": "x",
+"skipped_version": null,
+"supported_features": 15,
+"title": "x",
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_2",
+"state": "on"
+},
+{
+"attributes": {
+"auto_update": false,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 3",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": "x",
+"skipped_version": null,
+"supported_features": 27,
+"title": "x",
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_3",
+"state": "on"
+},
+{
+"attributes": {
+"auto_update": true,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 4",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 29,
+"title": "x",
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_4",
+"state": "off"
+},
+{
+"attributes": {
+"auto_update": false,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 5",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 29,
+"title": "x",
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_5",
+"state": "off"
+},
+{
+"attributes": {
+"auto_update": false,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 6",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 29,
+"title": "x",
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_6",
+"state": "on"
+},
+{
+"attributes": {
+"auto_update": false,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 7",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 29,
+"title": "x",
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_7",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon conversation 1",
+"supported_features": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "conversation.anon_1",
+"state": "x"
+},
+{
+"attributes": {
+"backup_stage": null,
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x"
+],
+"failed_reason": null,
+"friendly_name": "Anon event 1"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_1",
+"state": "x"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 1",
+"options": [
+"x",
+"x",
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_1",
+"state": "idle"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 2"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_2",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 3"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_3",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 4"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_4",
+"state": "0"
+},
+{
+"attributes": {
+"device_trackers": [],
+"editable": true,
+"icon": "x",
+"latitude": 0.0,
+"longitude": 0.0,
+"passive": false,
+"persons": [],
+"radius": 1000.0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "zone.anon_1",
+"state": "0"
+},
+{
+"attributes": {
+"device_trackers": [],
+"editable": true,
+"friendly_name": "Anon zone 2",
+"icon": "x",
+"latitude": 0.0,
+"longitude": 0.0,
+"passive": false,
+"persons": [],
+"radius": 100
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "zone.anon_2",
+"state": "0"
+},
+{
+"attributes": {
+"device_trackers": [
+"x"
+],
+"editable": true,
+"friendly_name": "Anon person 1",
+"id": "x",
+"in_zones": [],
+"user_id": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "person.anon_1",
+"state": "unknown"
+},
+{
+"attributes": {
+"azimuth": 0,
+"elevation": 0,
+"friendly_name": "Anon sun 1",
+"next_dawn": "x",
+"next_dusk": "x",
+"next_midnight": "x",
+"next_noon": "x",
+"next_rising": "x",
+"next_setting": "x",
+"rising": true
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sun.anon_1",
+"state": "x"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 5"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_5",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 6"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_6",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 7"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_7",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 8"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_8",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 9"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_9",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 10"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_10",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon media_player 1",
+"supported_features": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "media_player.anon_1",
+"state": "unavailable"
+},
+{
+"attributes": {
+"friendly_name": "Anon media_player 2",
+"is_volume_muted": false,
+"media_content_id": "x",
+"media_duration": 0,
+"media_position": 0,
+"media_position_updated_at": "x",
+"media_track": 0,
+"repeat": "x",
+"shuffle": false,
+"sound_mode_list": [
+"x"
+],
+"supported_features": 217663,
+"volume_level": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "media_player.anon_2",
+"state": "idle"
+},
+{
+"attributes": {
+"friendly_name": "Anon device_tracker 1",
+"in_zones": [],
+"source_type": "x",
+"tracking_type": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "device_tracker.anon_1",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon notify 1",
+"supported_features": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "notify.anon_1",
+"state": "unknown"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 11",
+"icon": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_11",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 12",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_12",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 13",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_13",
+"state": "0"
+},
+{
+"attributes": {
+"auto_update": false,
+"display_precision": 0,
+"friendly_name": "Anon update 8",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": "x",
+"skipped_version": null,
+"supported_features": 23,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_8",
+"state": "off"
+},
+{
+"attributes": {
+"auto_update": false,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 9",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": "x",
+"skipped_version": null,
+"supported_features": 23,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_9",
+"state": "off"
+},
+{
+"attributes": {
+"auto_update": false,
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 10",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": "x",
+"skipped_version": null,
+"supported_features": 23,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_10",
+"state": "off"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon binary_sensor 1"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "binary_sensor.anon_1",
+"state": "off"
+},
+{
+"attributes": {
+"current": 0,
+"friendly_name": "Anon automation 1",
+"id": "x",
+"last_triggered": "x",
+"mode": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "automation.anon_1",
+"state": "on"
+},
+{
+"attributes": {
+"current": 0,
+"friendly_name": "Anon automation 2",
+"id": "x",
+"last_triggered": "x",
+"mode": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "automation.anon_2",
+"state": "on"
+},
+{
+"attributes": {
+"current": 0,
+"friendly_name": "Anon automation 3",
+"id": "x",
+"last_triggered": null,
+"mode": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "automation.anon_3",
+"state": "on"
+},
+{
+"attributes": {
+"current": 0,
+"friendly_name": "Anon automation 4",
+"id": "x",
+"last_triggered": "x",
+"mode": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "automation.anon_4",
+"state": "on"
+},
+{
+"attributes": {
+"current": 0,
+"friendly_name": "Anon automation 5",
+"id": "x",
+"last_triggered": "x",
+"max": 10,
+"mode": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "automation.anon_5",
+"state": "on"
+},
+{
+"attributes": {
+"current": 0,
+"friendly_name": "Anon automation 6",
+"id": "x",
+"last_triggered": "x",
+"max": 10,
+"mode": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "automation.anon_6",
+"state": "on"
+},
+{
+"attributes": {
+"friendly_name": "Anon media_player 3",
+"group_members": [
+"x"
+],
+"icon": "x",
+"sound_mode_list": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"source_list": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"supported_features": 888716
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "media_player.anon_3",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon media_player 4",
+"group_members": [
+"x"
+],
+"icon": "x",
+"source_list": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"supported_features": 888716
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "media_player.anon_4",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon number 1",
+"icon": "x",
+"max": 12,
+"min": -12,
+"mode": "x",
+"step": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "number.anon_1",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon number 2",
+"icon": "x",
+"max": 12,
+"min": -12,
+"mode": "x",
+"step": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "number.anon_2",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon number 3",
+"icon": "x",
+"max": 3,
+"min": 0,
+"mode": "x",
+"step": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "number.anon_3",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon number 4",
+"icon": "x",
+"max": 5,
+"min": 0,
+"mode": "x",
+"step": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "number.anon_4",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon number 5",
+"icon": "x",
+"max": 12,
+"min": -12,
+"mode": "x",
+"step": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "number.anon_5",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon number 6",
+"icon": "x",
+"max": 6,
+"min": 0,
+"mode": "x",
+"step": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "number.anon_6",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon number 7",
+"icon": "x",
+"max": 12,
+"min": -12,
+"mode": "x",
+"step": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "number.anon_7",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon number 8",
+"icon": "x",
+"max": 12,
+"min": -12,
+"mode": "x",
+"step": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "number.anon_8",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 1",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_1",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 2",
+"icon": "x",
+"options": [
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_2",
+"state": "manual"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 3",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_3",
+"state": "standard"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 4",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_4",
+"state": "lip_sync"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 5",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_5",
+"state": "auto"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 6",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_6",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 7",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_7",
+"state": "auto"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 8",
+"icon": "x",
+"options": [
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_8",
+"state": "standard"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 1",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_1",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 2",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_2",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 3",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_3",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 4",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_4",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 5",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_5",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 6",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_6",
+"state": "on"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 7",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_7",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon tts 1"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "tts.anon_1",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon todo 1",
+"supported_features": 15
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "todo.anon_1",
+"state": "0"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 11",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": "x",
+"skipped_version": null,
+"supported_features": 17,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_11",
+"state": "off"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 14",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_14",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 15",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_15",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 16",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_16",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 17",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_17",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 18",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_18",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 19",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_19",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 20",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_20",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 21",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_21",
+"state": "0"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 12",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": "x",
+"release_url": "x",
+"skipped_version": null,
+"supported_features": 5,
+"title": "x",
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_12",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 22",
+"marker_high_level": 100,
+"marker_low_level": 15,
+"marker_type": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_22",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 23",
+"marker_high_level": 100,
+"marker_low_level": 15,
+"marker_type": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_23",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 24",
+"marker_high_level": 100,
+"marker_low_level": 15,
+"marker_type": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_24",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 25",
+"marker_high_level": 100,
+"marker_low_level": 15,
+"marker_type": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_25",
+"state": "0"
+},
+{
+"attributes": {
+"command_set": "x",
+"device_class": "x",
+"friendly_name": "Anon sensor 26",
+"info": "x",
+"location": "x",
+"options": [
+"x",
+"x",
+"x"
+],
+"serial": "x",
+"state_message": null,
+"state_reason": "x",
+"uri_supported": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_26",
+"state": "idle"
+},
+{
+"attributes": {
+"attribution": "x",
+"cloud_coverage": 15.6,
+"dew_point": 0,
+"friendly_name": "Anon weather 1",
+"humidity": 0,
+"precipitation_unit": "x",
+"pressure": 0,
+"pressure_unit": "x",
+"supported_features": 3,
+"temperature": 0,
+"temperature_unit": "x",
+"uv_index": 1.2,
+"visibility_unit": "x",
+"wind_bearing": 0,
+"wind_speed": 0,
+"wind_speed_unit": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "weather.anon_1",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon device_tracker 2",
+"restored": true,
+"supported_features": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "device_tracker.anon_2",
+"state": "unavailable"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 27",
+"restored": true,
+"state_class": "x",
+"supported_features": 0,
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_27",
+"state": "unavailable"
+},
+{
+"attributes": {
+"friendly_name": "Anon device_tracker 3",
+"restored": true,
+"supported_features": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "device_tracker.anon_3",
+"state": "unavailable"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 28",
+"restored": true,
+"state_class": "x",
+"supported_features": 0,
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_28",
+"state": "unavailable"
+},
+{
+"attributes": {
+"friendly_name": "Anon device_tracker 4",
+"restored": true,
+"supported_features": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "device_tracker.anon_4",
+"state": "unavailable"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 29",
+"restored": true,
+"state_class": "x",
+"supported_features": 0,
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_29",
+"state": "unavailable"
+},
+{
+"attributes": {
+"friendly_name": "Anon ai_task 1",
+"supported_features": 3
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "ai_task.anon_1",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon conversation 2",
+"supported_features": 1
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "conversation.anon_2",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 30"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_30",
+"state": "0"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 13",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_13",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 31"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_31",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 1"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_1",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 8",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_8",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 2",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_2",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 3",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_3",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 4",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_4",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 5",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_5",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 6",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_6",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 7"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_7",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 2"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_2",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 14",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_14",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 32"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_32",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 3"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_3",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 9",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_9",
+"state": "on"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 8",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_8",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 9"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_9",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 10",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_10",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 11"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_11",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 12",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_12",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 4"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_4",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 15",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_15",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 33"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_33",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 5"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_5",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 10",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_10",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 13"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_13",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 14"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_14",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 15"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_15",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 16",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_16",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 17",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_17",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 18"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_18",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 6"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_6",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 16",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_16",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 34"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_34",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 7"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_7",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 11",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_11",
+"state": "on"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 19"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_19",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 20",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_20",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 21",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_21",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 17",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_17",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 35"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_35",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 8"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_8",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 36"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_36",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 9"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_9",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 12",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_12",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 22"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_22",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 23",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_23",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 24",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_24",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 18",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_18",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 13",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_13",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 25"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_25",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 26",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_26",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 27",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_27",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 19",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_19",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 37"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_37",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 10"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_10",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 14",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_14",
+"state": "on"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 28"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_28",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 29"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_29",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 30",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_30",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 31",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_31",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 32",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_32",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 33"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_33",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 11"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_11",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 20",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_20",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 38"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_38",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 12"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_12",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 15",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_15",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 34",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_34",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 35"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_35",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 36",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_36",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 37",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_37",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 38",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_38",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 39"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_39",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 13"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_13",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 21",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_21",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 39"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_39",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 14"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_14",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 16",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_16",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 40"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_40",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 41",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_41",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 42",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_42",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 22",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_22",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 40"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_40",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 15"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_15",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 17",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_17",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 43"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_43",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 44",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_44",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 45",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_45",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 23",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_23",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 41"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_41",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 16"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_16",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 18",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_18",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 46"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_46",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 47",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_47",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 48",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_48",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 24",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_24",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 42"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_42",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 17"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_17",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 19",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_19",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 49",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_49",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 50"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_50",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 51",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_51",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 52"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_52",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 53",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_53",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 54"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_54",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 18"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_18",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 25",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_25",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 43"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_43",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 19"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_19",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 20",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_20",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 55"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_55",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 56",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_56",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 57",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_57",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 26",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_26",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 44"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_44",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 20"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_20",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 21",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_21",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 58"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_58",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 59"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_59",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 60"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_60",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 61"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_61",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 62",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_62",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 63"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_63",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 21"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_21",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 27",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_27",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 45"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_45",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 22"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_22",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 22",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_22",
+"state": "on"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 46",
+"meter_type": 1,
+"meter_type_name": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_46",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 47",
+"meter_type": 1,
+"meter_type_name": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_47",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 23"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_23",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 64"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_64",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 65",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_65",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 66",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_66",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 9",
+"options": [
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_9",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 10",
+"options": [
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_10",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 28",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_28",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 48"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_48",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 24"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_24",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 23",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_23",
+"state": "off"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 49",
+"meter_type": 1,
+"meter_type_name": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_49",
+"state": "0"
+},
+{
+"attributes": {
+"device_class": "x",
+"friendly_name": "Anon sensor 50",
+"meter_type": 1,
+"meter_type_name": "x",
+"state_class": "x",
+"unit_of_measurement": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_50",
+"state": "0"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 25"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_25",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 67",
+"value": 3
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_67",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 68",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_68",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 69"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_69",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 11",
+"options": [
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_11",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon select 12",
+"options": [
+"x",
+"x",
+"x"
+]
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "select.anon_12",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 29",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_29",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 51"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_51",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 26"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_26",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 24",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_24",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 70"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_70",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 71",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_71",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 72",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_72",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 30",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_30",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 52"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_52",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 27"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_27",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 25",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_25",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 73"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_73",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 74",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_74",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 75",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_75",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 31",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_31",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 53"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_53",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 28"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_28",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 26",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_26",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 76"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_76",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 77",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_77",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 78",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_78",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 32",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_32",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 54"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_54",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 29"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_29",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 27",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_27",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 79"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_79",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 80"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_80",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 81",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_81",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 33",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_33",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 55"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_55",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 30"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_30",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 28",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_28",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 82"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_82",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 83"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_83",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 84"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_84",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 85",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_85",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 86",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_86",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 87"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_87",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 31"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_31",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 34",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_34",
+"state": "off"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 56"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_56",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 32"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_32",
+"state": "x"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 29",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_29",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 88"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_88",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 89",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_89",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 90",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_90",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 35",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_35",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 91"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_91",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 57"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_57",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 33"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_33",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 30",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_30",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 92"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_92",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 93",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_93",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 94",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_94",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 95",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_95",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 96"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_96",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 34"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_34",
+"state": "unknown"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 36",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_36",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 97"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_97",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon sensor 58"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "sensor.anon_58",
+"state": "alive"
+},
+{
+"attributes": {
+"friendly_name": "Anon button 35"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "button.anon_35",
+"state": "unknown"
+},
+{
+"attributes": {
+"friendly_name": "Anon switch 31",
+"icon": "x"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "switch.anon_31",
+"state": "off"
+},
+{
+"attributes": {
+"event_type": null,
+"event_types": [
+"x"
+],
+"friendly_name": "Anon event 98"
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_98",
+"state": "unknown"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 99",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_99",
+"state": "x"
+},
+{
+"attributes": {
+"event_type": "x",
+"event_types": [
+"x",
+"x",
+"x",
+"x",
+"x"
+],
+"friendly_name": "Anon event 100",
+"value": 0
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "event.anon_100",
+"state": "x"
+},
+{
+"attributes": {
+"auto_update": false,
+"device_class": "x",
+"display_precision": 0,
+"entity_picture": "x",
+"friendly_name": "Anon update 37",
+"in_progress": false,
+"installed_version": "x",
+"latest_version": "x",
+"release_summary": null,
+"release_url": null,
+"skipped_version": null,
+"supported_features": 21,
+"title": null,
+"update_percentage": null
+},
+"context": {
+"id": "x",
+"parent_id": null,
+"user_id": null
+},
+"entity_id": "update.anon_37",
+"state": "off"
+}
+]

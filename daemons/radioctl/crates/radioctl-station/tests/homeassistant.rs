@@ -54,6 +54,7 @@ struct Fake {
     mute_pings: bool,
     reject_rest: bool,
     ws_connections: u32,
+    raw_states: Option<Vec<Json>>,
 }
 
 enum Push {
@@ -298,9 +299,9 @@ async fn websocket(mut stream: impl Io, state: Arc<Mutex<Fake>>) {
                             Some(json!({"id": id, "type": "result", "success": true, "result": null}))
                         }
                         "get_states" => {
-                            let list: Vec<Json> = state.lock().unwrap().entities.iter()
+                            let list: Vec<Json> = { let g = state.lock().unwrap(); g.raw_states.clone().unwrap_or_else(|| g.entities.iter()
                                 .map(|(e, (s, n))| json!({"entity_id": e, "state": s, "attributes": {"friendly_name": n}}))
-                                .collect();
+                                .collect()) };
                             Some(json!({"id": id, "type": "result", "success": true, "result": list}))
                         }
                         "ping" => {
@@ -930,6 +931,31 @@ async fn a_certificate_the_owner_did_not_choose_is_refused_and_plain_http_is_not
     let d = driver(&ha, &audit);
     sleep(Duration::from_millis(300)).await;
     assert!(!d.is_synced());
+    drop(d);
+    ha.stop().await;
+}
+
+// Tests [@ANCHOR: radioctl_station_ha_discover]
+// Tests [@ANCHOR: radioctl_station_ha_apply_state]
+/// A recorded, anonymised `get_states` reply of a real Home Assistant 2026.10.4 (307 entities in 20 domains, extra attributes such
+/// as icon and device_class, `unknown` and `unavailable` states): discovery lists only the 31 switches and the one binary sensor.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn discovery_of_a_real_instances_entity_list() {
+    let mut ha = Ha::start().await;
+    let list: Vec<Json> =
+        serde_json::from_str(include_str!("data/ha_get_states_real_shape.json")).unwrap();
+    assert_eq!(list.len(), 307);
+    ha.state.lock().unwrap().raw_states = Some(list);
+    let audit = Arc::new(MemoryAudit::new());
+    let d = driver(&ha, &audit);
+    until("synced", || d.is_synced()).await;
+    let found = d.discover().expect("discover");
+    let count = |p: &str| found.iter().filter(|f| f.entity_id.starts_with(p)).count();
+    assert_eq!(found.len(), 32);
+    assert_eq!(count("switch."), 31);
+    assert_eq!(count("binary_sensor."), 1);
+    assert!(found.iter().all(|f| f.friendly_name.is_some()));
+    assert!(found.iter().filter(|f| f.entity_id.starts_with("switch.")).all(|f| f.writable));
     drop(d);
     ha.stop().await;
 }
