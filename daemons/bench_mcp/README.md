@@ -1,6 +1,6 @@
 # bench_mcp
 
-One MCP server (official `rmcp` SDK, stdio) for the bench: about 100 tools, each with a manual page served through the MCP itself.
+One MCP (Model Context Protocol, the way AI tools call outside tools) server (official `rmcp` SDK, the software development kit; stdio) for the bench: about 100 tools, each with a manual page served through the MCP itself.
 It drives a Siglent **oscilloscope** (SDS1000X-E, over the LAN), a Siglent **spectrum analyzer** with tracking generator (SSA3000X), a bench **power supply** (Abestop ATM6301), a **vector network
 analyser** (DG8SAQ VNWA 3E, no vendor software), **SDRs** (bladeRF, LimeSDR), **USB hubs** (topology, diagnosis, and port power
 cycling to reset a device), **sound devices** (play, record, meter, loopback, speech, with discovery by signature), **radios**
@@ -14,11 +14,11 @@ calibration does not pass through the agent's context step by step. There is als
 | `siglent_sds` | Siglent SDS1000X-E oscilloscope over the LAN (written against an SDS1202X-E, firmware 1.3.27) | capture, screenshot, measure, spectrum, self-calibration | [Tools](#tools), [Scope functions](#scope-functions-probed-on-the-sds1202x-e-firmware-1327-2026-10-28) |
 | `siglent_ssa` | Siglent SSA3000X spectrum analyzer with its tracking generator over the LAN (written against an SSA3021X, firmware 1.3.9.10); only the base analyzer and the TG option are used, nothing depends on the lapsing trial options (Meas, EMI, CAT) | status, screenshot, sweeps with a CSV and peaks, markers, tracking generator on, off and level (read_config, no confirm flags), through-normalised scalar S21 | [Spectrum analyzer](#spectrum-analyzer-and-tracking-generator-siglent_ssa-driver), [Tools](#tools) |
 | `atm6301` | Abestop ATM6301 bench supply (0-60 V, 0-10 A), CH340 USB-serial | setpoints with caps, output switch with `confirm_load_connected`, `max_on_s` and a safe-state tool | [Tools](#tools) |
-| `nanovna` (VNA) | NanoVNA-H (ChibiOS USB serial shell) behind the same `bench_vna_*` tools; NOT verified on hardware (the unit on the dev box did not answer 2026-10-31), tested against a fake, a pty fake and a synthetic transcript | S11/S21 sweeps (101 points on the H, 401 on the H4, 50 kHz to 900 MHz on the H), software SOLT calibration shared with the VNWA, power cycle with a hub; generator, AM, FM, meter and spectrum return `not supported by this instrument` | [manual page](manual/instruments/vna/nanovna.md) |
+| `nanovna` (VNA) | NanoVNA-H (ChibiOS USB serial shell) behind the same `bench_vna_*` tools; NOT verified on hardware (the unit on the dev box did not answer 2026-10-31), tested against a fake, a pty fake and a synthetic transcript | S11/S21 sweeps (101 points on the H, 401 on the H4, 50 kHz to 900 MHz on the H), software SOLT (short-open-load-through) calibration shared with the VNWA, power cycle with a hub; generator, AM, FM, meter and spectrum return `not supported by this instrument` | [manual page](manual/instruments/vna/nanovna.md) |
 | `vnwa_open` (VNA) | DG8SAQ VNWA 3E vector network analyser through the `vnwa_open` crate, no vendor software | S11/S21 sweeps, calibration (open, short, load, through), generator (CW, level, AM, FM), frequency meter, spectrum analyser, firmware and temperature, reliability ladder with hub power cycle | [The VNA's functions](#the-vnas-functions-as-tools-2026-10-28) |
 | `bladerf`, `limesdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers) | capture, survey, coherence; receive only | [Tools](#tools) |
 | `rx888` | RX-888 MkII direct-sampling HF receiver (0 to 30 MHz) through ka9q-radio's `radiod` on loopback; verified on the unit with no antenna | firmware boot, radiod start and stop, front end (overrange, RF gain, attenuation), channel level and SNR, spectrum CSV, I/Q or audio WAV; receive only | [RX-888](#rx-888-receiver-rx888-driver) |
-| `glasgow` | Glasgow Interface Explorer (1BitSquared, USB 20b7:9db1) FPGA digital multi-tool through a pinned `glasgow` install; identify and port-voltage readback measured on a revC3, everything that drives pins fixtures only | list, status, port voltage set with limit and watchdog, I2C scan/read/write, SPI flash ID, UART transact and sniff, logic capture to VCD with summary, GPIO, pattern generator, JTAG scan, SWD DPIDR; parks all pins after each call | [Glasgow](#glasgow-interface-explorer-glasgow-driver), `manual/instruments/glasgow` |
+| `glasgow` | Glasgow Interface Explorer (1BitSquared, USB 20b7:9db1) FPGA digital multi-tool through a pinned `glasgow` install; identify and port-voltage readback measured on a revC3, everything that drives pins fixtures only | list, status, port voltage set with limit and watchdog, I2C scan/read/write, SPI flash ID, UART transact and sniff, logic capture to VCD (value change dump, a logic-analyzer file format) with summary, GPIO, pattern generator, JTAG scan (a chip-testing interface), SWD (Serial Wire Debug) DPIDR (debug port identification register); parks all pins after each call | [Glasgow](#glasgow-interface-explorer-glasgow-driver), `manual/instruments/glasgow` |
 | `glasgow` (logic analyzer) | The `bench_gla_*` tools on the Glasgow driver: host-side trigger, pre-trigger window, sample rate, VCD, CSV and sigrok `.sr` files, glitch report, UART, I2C and SPI decode, and a bounded pattern generator; the unit links at 12 Mb/s so no capture has run on it; fixtures only | limits, analyze (a VCD file, no device), capture, pattern, safe state | [Logic analyzer tools](#glasgow-logic-analyzer-and-pattern-generator-bench_gla-tools), `docs/GLASGOW_LOGIC_TOOLS.md` |
 | `usb_hub` | USB topology and hub port power (uhubctl) | topology, find, diagnose, bandwidth, watch, history, port power (verified cold reset), protection of devices | [USB hub tools](#usb-hub-tools-usb_hub-driver), `docs/USB_HUB_TOOLS.md` |
 | `audio` | Sound devices, with discovery by signature | play, record, meter, loopback, speak, alert, verify, synthesizers; never the system default device; `dry_run` and a safe state | [Audio tools](#audio-tools-audio-driver), `docs/AUDIO_TOOLS.md` |
@@ -78,7 +78,7 @@ The bladeRF needs its FPGA loaded (`bladeRF-cli -L hostedx115.rbf` writes it to 
 for the FPGA 0.16; the LimeSDR needs firmware 4 and gateware 2.23 (`LimeUtil --update`).
 
 `BENCH_MCP_OUT` is the directory for captures and screenshots (default: the temp dir). Each
-instrument has its own permission tier (`read_only` when omitted). There is no raw-SCPI tool. The
+instrument has its own permission tier (`read_only` when omitted). There is no raw-SCPI (raw instrument command) tool. The
 server, not the model, refuses a tool above an instrument's tier and does not list a tool that no
 instrument may use.
 
@@ -119,7 +119,7 @@ vendor program cannot use them at the same time.
 
 `bench_identify` and `bench_status` answer for an SDR with its driver's hardware key and info (firmware, gateware, serial) and
 receive channel count. `bench_sdr_capture` tunes to `freq_hz`, captures `samples` (up to 16 777 216) at `sample_rate_hz` and
-`gain_db`, saves the raw I/Q (little-endian f32 pairs, full scale 1.0) into `BENCH_MCP_OUT` and returns RMS, peak, DC offset,
+`gain_db`, saves the raw I/Q (little-endian f32 pairs, full scale 1.0) into `BENCH_MCP_OUT` and returns RMS (root-mean-square level), peak, DC offset,
 clipping, the noise floor, the strongest peaks and `stream_seconds` against `real_time_seconds` and `continuous`, whether the samples arrived at the sample rate (the bladeRF
 with a newer FPGA than libbladeRF knows reports an overrun about every 504 samples without losing any, so the timing is trusted
 and the driver's count is only reported). `bench_sdr_survey` steps the tuning over `start_hz` to `stop_hz` (at most 400 steps,
@@ -259,7 +259,7 @@ Checks this crate makes for the manual (anchors):
 * `see_also` entries and links resolve. [@ANCHOR: bench_mcp_manual_links]
 * Every directory has an index page that lists all its children, and every page is reachable from the top. [@ANCHOR: bench_mcp_manual_index_pages]
 * Pages are valid markdown of bounded length. [@ANCHOR: bench_mcp_manual_markdown]
-* The five tools (index, read with sections and cutting, BM25 search with filters, for-tool, whats-new) and the resources. [@ANCHOR: bench_mcp_manual_index] [@ANCHOR: bench_mcp_manual_read] [@ANCHOR: bench_mcp_manual_search] [@ANCHOR: bench_mcp_manual_for_tool] [@ANCHOR: bench_mcp_manual_whats_new] [@ANCHOR: bench_mcp_manual_resources]
+* The five tools (index, read with sections and cutting, BM25 (a text-relevance ranking function) search with filters, for-tool, whats-new) and the resources. [@ANCHOR: bench_mcp_manual_index] [@ANCHOR: bench_mcp_manual_read] [@ANCHOR: bench_mcp_manual_search] [@ANCHOR: bench_mcp_manual_for_tool] [@ANCHOR: bench_mcp_manual_whats_new] [@ANCHOR: bench_mcp_manual_resources]
 
 ## Tests
 

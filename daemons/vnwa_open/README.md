@@ -37,7 +37,7 @@ reproduces the unit's IF-dependent response (|S21| 0.874 at IF 12 kHz down to 0.
 (`Reference::Left` for codec 1, `Reference::Right` for codec 2). Not covered: a device under test with a frequency-dependent response, the open/short/load/through calibration (now `cal`, see below); the low-frequency range needs no special filtering down to 200 Hz
 and the time-domain transforms with their windows and time gating (`timedomain::gate`) are in `timedomain` (details in `docs/PROTOCOL.md`).
 
-The two DDS chips are an AD9859 and an AD9951 (identical register maps, no sweep engine), clocked from a 12 MHz TCXO
+The two DDS (direct digital synthesis, programmable signal generator) chips are an AD9859 and an AD9951 (identical register maps, no sweep engine), clocked from a 12 MHz TCXO (temperature-compensated crystal oscillator)
 times a premultiplier of 3, then times nRF = 10 (RF, 360 MHz) and nLO = 9 (LO, 324 MHz).
 
 ## Modes this hardware can serve (per the vendor's Help file)
@@ -74,7 +74,7 @@ the unit goes dark, keeps no settings, and is back about 9 s after power-on). Th
 ## Safety
 
 The first-run overclock offer of the vendor program was declined; this crate assumes the stock clocks (360 / 324 MHz,
-inside the data sheets' 400 MSPS limit). The identity table the vendor program reads at start-up is not used.
+inside the data sheets' 400 MSPS (million samples per second) limit). The identity table the vendor program reads at start-up is not used.
 
 ## Tests
 
@@ -115,7 +115,7 @@ Each is a test against bytes or samples recorded from the vendor program.
 * The tone offset between the measured and reference channels is recovered with its sign, the codec drift cancels. [@ANCHOR: vnwa_open_meter_offset]
 * A unit that does not come back from a power cycle gets a second cycle with a longer power-off. [@ANCHOR: vnwa_open_power_escalation]
 * The soak run compares every sweep with the first, and counts errors, wrong results and hangs separately: `examples/soak.rs`.
-* A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL, a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]
+* A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL (phase-locked loop), a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]
 * A window that contains a buffer overrun is an error and never frames; the point is measured again from a separate budget and never power cycles the unit. [@ANCHOR: vnwa_open_overrun_window]
 * The streams are closed before the unit's power is cut (an open stream on a vanishing codec reports about 5,000 overruns a second). [@ANCHOR: vnwa_open_capture_close]
 * The mark is the frame count at this instant, not at the last delivery, so any ALSA period works. [@ANCHOR: vnwa_open_capture_mark]
@@ -186,13 +186,13 @@ plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that basel
 * AM and FM: the settings-dependent fields of the vendor's start sequence reproduce every captured start, and the output was checked on a scope. [@ANCHOR: vnwa_open_am_fields] [@ANCHOR: vnwa_open_fm_fields] [@ANCHOR: vnwa_open_modulation_sequence]
 * A modulating unit refuses every request; a USB reset of its control chip ends the modulation, and a power cycle ladder is the fallback. [@ANCHOR: vnwa_open_end_modulation] [@ANCHOR: vnwa_open_usb_reset] [@ANCHOR: vnwa_open_modulation_recovery]
 * A program that embeds this crate can install its own power-cycle implementation (bench_mcp installs its USB hub module's), used by the recovery and the generator-off recovery. [@ANCHOR: vnwa_open_cycle_hook]
-* Spectrum analyzer: the audio power around the LO at each frequency (TX chip silent or a 12 kHz tracking generator), band power by DFT, settings refused if they would leave holes. [@ANCHOR: vnwa_open_sa_band_rms] [@ANCHOR: vnwa_open_sa_spectrum]
+* Spectrum analyzer: the audio power around the LO at each frequency (TX chip silent or a 12 kHz tracking generator), band power by DFT (discrete Fourier transform), settings refused if they would leave holes. [@ANCHOR: vnwa_open_sa_band_rms] [@ANCHOR: vnwa_open_sa_spectrum]
 * A point with all four channels dead says nothing leaves the TX port and names the TX connector, pad, tee and leads first. [@ANCHOR: vnwa_open_no_reference_message]
 * The functions that modulate, choose the power-cycle implementation, climb the modulation ladder and measure one spectrum point are anchored. [@ANCHOR: vnwa_open_generator_modulate] [@ANCHOR: vnwa_open_power_cycle_with] [@ANCHOR: vnwa_open_power_modulation_ladder] [@ANCHOR: vnwa_open_spectrum_sa_once]
 
 ## Soak scope connection (`soak_scope`)
 
-`src/soak_scope.rs` is the soak harness's scope connection; `examples/soak.rs` uses it, and `tools/soak_gonogo.sh` reports its failure. It follows the same rule as bench_mcp's `Link::tcp_checked`: a Siglent scope that still holds a dead single-client SCPI session (after a host power loss, as on 2026-10-29) resets queries, so the harness waits and retries, then says NO-GO with the evidence and the action.
+`src/soak_scope.rs` is the soak harness's scope connection; `examples/soak.rs` uses it, and `tools/soak_gonogo.sh` reports its failure. It follows the same rule as bench_mcp's `Link::tcp_checked`: a Siglent scope that still holds a dead single-client SCPI (the text command language of lab instruments) session (after a host power loss, as on 2026-10-29) resets queries, so the harness waits and retries, then says NO-GO with the evidence and the action.
 
 ### `vnwa_open_soak_scope_open_checked` [@ANCHOR: vnwa_open_soak_scope_open_checked]
 

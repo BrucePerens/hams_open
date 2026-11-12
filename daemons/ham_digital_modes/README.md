@@ -1,12 +1,12 @@
 # ham_digital_modes
 
-Amateur-radio digital-mode encoders and decoders as a library crate (LGPL-3.0-or-later): PSK31, RTTY, FT8, WSPR, the D-STAR header,
+Amateur-radio digital-mode encoders and decoders as a library crate (LGPL-3.0-or-later): PSK31, RTTY, FT8, WSPR (digital amateur-radio modes), the D-STAR header,
 Codec2 1600/3200 voice frames, and the AMBE voice codec family (D-STAR, P25 and, behind the `ambe_plus_2` feature, AMBE+2 half-rate).
 The hams_local_relay daemon depends on it as a pinned git dependency. `--no-default-features` builds only the fixed-point Codec2 3200
 path as `no_std` (see `docs/CODEC2_NO_STD.md`); everything else needs the default `std` feature. `cargo test` runs the unit and
 integration tests; `cargo test --features ambe_plus_2` also builds the gated half-rate code.
 
-This README holds the plumbing documentation: the internal DSP steps, tables and arithmetic helpers that no operator ever calls
+This README holds the plumbing documentation: the internal DSP (digital signal processing) steps, tables and arithmetic helpers that no operator ever calls
 directly, each cited by its semantic anchor (ADR 0090). What an operator gets from each mode (encode a message to audio or bits, decode
 audio to text, the frame layouts) is in the user-visible stories under `docs/stories/`:
 
@@ -31,7 +31,7 @@ streaming decoder call it, so the constellation points shown to the operator are
 decided from.
 [@ANCHOR: correlate_symbol_iq]
 
-`phase_to_bit` makes the BPSK31 bit decision: the phase change from the previous symbol, wrapped to
+`phase_to_bit` makes the BPSK31 (binary phase-shift keying at 31.25 baud) bit decision: the phase change from the previous symbol, wrapped to
 [-pi, pi], decides 1 if its magnitude is under pi/2 and 0 otherwise. With no previous symbol it returns 1,
 which is correct because every codeword starts with a 1 and the modulator starts at zero phase.
 [@ANCHOR: phase_to_bit]
@@ -49,7 +49,7 @@ data bits least significant first (true is MARK), and a MARK stop bit. The stop 
 audio stage stretches it to 1.5 bit periods.
 [@ANCHOR: push_framed_char]
 
-`framed_bits_to_audio` is the FSK synthesis behind `rtty_modulate`, kept separate so tests can feed it bit
+`framed_bits_to_audio` is the FSK (frequency-shift keying) synthesis behind `rtty_modulate`, kept separate so tests can feed it bit
 sequences that the text path would never produce. MARK is `mark_hz` and SPACE is `mark_hz + 170`. The phase
 accumulator runs across all bits so the waveform is continuous, and each bit lasts `sample_rate / 45.45`
 samples, rounded per bit. Every seventh bit (index modulo 7 equal to 6) is taken to be a stop bit and is
@@ -159,7 +159,7 @@ register ANDed with `POLY1` (`0xF2D05351`) and then with `POLY2` (`0xE4613C47`).
 38 zero bits (6 to the byte boundary and 32 to flush the register), giving 176 coded bits of which only the first 162
 are transmitted.
 
-[@ANCHOR: wrap_mono_i16_as_wav] writes the WAV container used by the test fixtures: `RIFF` with length
+[@ANCHOR: wrap_mono_i16_as_wav] writes the WAV (a common audio file format) container used by the test fixtures: `RIFF` with length
 `36 + data`, `WAVE`, a 16-byte PCM `fmt ` chunk (mono, the given sample rate, byte rate twice the sample rate, block
 align 2, 16 bits) and a `data` chunk with the samples in little-endian order, so `data` always starts at byte 36 and
 the samples at byte 44.
@@ -546,7 +546,7 @@ multiplied by 2. It then stores the frame's parameters as the history. It return
 harmonics.
 *(Reference: `src/ambe/float/tia_102_baba/voiced_synthesis.rs` -> `[@ANCHOR: VoicedState::synthesize]`)*
 
-## Codec2 1600 decoder LSP post-processing
+## Codec2 1600 decoder LSP (line spectral pair, a way of representing the speech filter) post-processing
 
 The 1600 bps mode transmits one set of line spectral pairs (LSPs) per 40 ms, so after the scalar indexes are
 dequantised the decoder repairs and spreads them, then interpolates them across the four 10 ms sub-frames.
@@ -1695,7 +1695,7 @@ fn round_div_to_u32(numerator: i128, denominator: i128) -> u32
 
 ## AMBE tone detection and tone synthesis (`src/ambe/{float,fixed/general}/tone_detect.rs`, `tone_synthesis.rs`)
 
-The D-STAR and AMBE+2 encoders recognise a DTMF digit or one sustained tone in a 20 ms frame (160 samples at 8 kHz) and send a tone frame in place of
+The D-STAR and AMBE+2 encoders recognise a DTMF (touch-tone) digit or one sustained tone in a 20 ms frame (160 samples at 8 kHz) and send a tone frame in place of
 a speech frame; the decoders turn a tone frame back into PCM. The float versions are the reference; the fixed versions are integer-only ports that
 agree with them (identical decisions on 449 synthetic frames, amplitude within 0.002 percent). Rules matched to the real chip: a DTMF digit has index
 `128 + row + 4 * col`; a single tone has index `round(f / 31.25)` for 400 to 3800 Hz and exactly 200 Hz (index 6, a purer fit required), and none at
