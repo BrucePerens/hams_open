@@ -259,6 +259,7 @@ class DatabaseQueryStat(models.Model):
                 % str(e)
             )
 
+    @api.private
     def action_reset_stats(self):
         # [@ANCHOR: COMM_db_reset_stats]
         # micro-privilege: Use service account for stats reset
