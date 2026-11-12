@@ -1,6 +1,6 @@
 # Daemon failure reporting (`hams_helpdesk/daemon/`)
 
-Failures inside external daemons (RabbitMQ consumers such as the SES ingest, the ADIF processor,
+Failures inside external daemons (RabbitMQ consumers such as the SES (Amazon Simple Email Service) ingest, the ADIF (Amateur Data Interchange Format, the standard log-file format) processor,
 `dx.firehose`, the club crawlers, the sync daemons, the Rust daemons) happen outside Odoo, so no Odoo
 hook sees them. They reach the same server-exception tickets (Helpdesk > Server Exceptions, source
 "External daemon") by one authenticated Odoo call. Nothing here deploys itself; an operator installs the

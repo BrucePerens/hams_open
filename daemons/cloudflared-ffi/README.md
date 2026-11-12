@@ -3,6 +3,8 @@
 
 # Cloudflared FFI
 
+FFI is a Foreign Function Interface: a way for code in one language to call functions written in another. `cloudflared` is Cloudflare's tunnel client program.
+
 This directory contains a Go-based wrapper (`main.go`) that exposes Foreign Function Interface (FFI) bindings for `cloudflared`.
 
 ### Functions

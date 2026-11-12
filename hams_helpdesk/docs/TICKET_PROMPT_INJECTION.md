@@ -1,7 +1,7 @@
 # Ticket prompt injection: policy for operators
 
 Tickets, mail to the support aliases, and report forms are text written by strangers. Anything an AI,
-an MCP tool or an agent session reads from them is untrusted data. An attacker who can hide an
+an MCP (Model Context Protocol, the way AI tools call outside tools) tool or an agent session reads from them is untrusted data. An attacker who can hide an
 instruction in a ticket can try to steer whatever reads it later. This policy is part of the shipped
 code, so it protects every operator of the open-source modules, not only hams.com.
 
@@ -15,7 +15,7 @@ code, so it protects every operator of the open-source modules, not only hams.co
    new path cannot forget the filter. Nothing a caller sends can set the suspicion fields.
 2. **Structural defence first.** HTML goes through a strict allow-list sanitizer: only the text of
    allow-listed tags survives; all `style`, `class`, `hidden` and event attributes are dropped; scripts,
-   styles, templates, SVG, MathML, comments, CDATA, forms, images and data URIs are removed; content a
+   styles, templates, SVG, MathML, comments, CDATA (raw-text sections in XML), forms, images and data URIs are removed; content a
    browser would not show (display none, visibility hidden, opacity 0, tiny fonts, text colour equal or
    close to the background, off-screen positioning, zero-size overflow-hidden boxes, closed details,
    `aria-hidden`) is dropped. Its text is counted and a short escaped excerpt is recorded.
@@ -23,7 +23,7 @@ code, so it protects every operator of the open-source modules, not only hams.co
    unassigned characters are removed. Tag characters (U+E0000 to U+E007F, "ASCII smuggling") are decoded
    into a finding. Runs of combining marks are cut. Mixed-script words (Latin plus Cyrillic or Greek) are
    flagged, and homoglyphs and compatibility forms are folded for scanning only.
-4. **Scanning, never rewriting.** Base64, hex, percent-encoding, entities, quoted-printable, ROT13,
+4. **Scanning, never rewriting.** Base64, hex, percent-encoding, entities, quoted-printable, ROT13 (a letter-rotation cipher),
    reversed and leetspeak variants are decoded for scanning. The decoded text never reaches a reader.
    Phrases that look like fake system messages, chat-template tokens, delimiter closers, tool-call JSON,
    "ignore previous instructions" (also in several languages), conceal requests and exfiltration requests
@@ -62,7 +62,7 @@ code, so it protects every operator of the open-source modules, not only hams.co
     source, description and every chatter message are filtered and returned only inside the block; the
     AI's own note is output-filtered), and the scraped event text that the event enrichment daemon and its
     MCP server give a model. A daemon fails closed: no safe view means the text is withheld, never raw.
-11. **A rule keeps it that way.** `ai_reader_rule.py` is a static AST rule, run by
+11. **A rule keeps it that way.** `ai_reader_rule.py` is a static AST (abstract syntax tree, the parsed structure of code) rule, run by
     `tests/test_ai_reader_sites.py` here (and over hams_com by its `daemons/test_ticket_ai_reads.py`). It
     fails when an `mcp_*` method on a ticket-like model reads free text without the filter, or when a
     daemon that talks to a model reads a ticket-like model's text fields without the safe view. Silence a
