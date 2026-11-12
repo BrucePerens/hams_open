@@ -357,9 +357,11 @@ fn the_ft_450_reads_its_po_meter_with_rm5_as_its_cat_book_says() {
         .feed(&answer, NOW)
         .iter()
         .any(|i| matches!(i, Inbound::Observation(Observation::Power(_)))));
-    // The book has no XT command: no rit-xit. Its MG and PC are 000-255, stated in the file, so
+    // The book has RT, RC, RU and RD but no XT: rit-xit is claimed with XIT refused
+    // (`yaesu.clarifier = "rt-receive"`). Its MG and PC are 000-255, stated in the file, so
     // the levels are claimed with those ranges.
-    assert!(!desc.capabilities.has(Capability::RitXit));
+    assert!(desc.capabilities.has(Capability::RitXit));
+    assert!(engine.encode(&Op::SetXit(true)).is_err());
     assert!(desc.capabilities.has(Capability::Levels));
     assert_eq!(
         radioctl_protocols::yaesu::level_range(&desc, Level::MicGain),
