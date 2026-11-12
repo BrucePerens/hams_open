@@ -436,8 +436,8 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
         vna::ensure_present(name, &vnwa_open::power::unit_present)?;
         return match name {
             "bench_identify" => Ok(vna::identify(&inst.vna)),
-            "bench_status" => vna::status(&inst.vna),
-            "bench_vna_sweep" => vna::sweep(&inst.vna, args, &out_dir()),
+            "bench_status" => vna::status(&inst.vna, &vna::Hardware),
+            "bench_vna_sweep" => vna::sweep(&inst.vna, args, &out_dir(), &vna::Hardware),
             "bench_vna_power_cycle" => vna::power_cycle(&inst.vna, args),
             "bench_vna_generator_on" => vna_tools::generator_on(args),
             "bench_vna_generator_off" => vna_tools::generator_off(&inst.vna),

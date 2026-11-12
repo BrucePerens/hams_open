@@ -419,6 +419,30 @@ Returns a `String`: header `freq_hz,s11_re,s11_im,s11_db,s11_deg,s21_re,s21_im,s
 
 Tools that need the unit: `bench_vna_sweep`, `bench_vna_generator_on`, `_off`, `_level`, `_am`, `_fm`, `bench_vna_meter`, `bench_vna_spectrum`, `bench_vna_calibrate_measure`. Power cycling, calibration building, identify and status do not. Returns `Ok(())` when the tool does not need it or the unit is present; otherwise `device not present: the VNWA (<vid>:<pid>) is not on the USB bus (not connected, or switched off at its hub port); <tool> was not attempted`. The lookup is by name in a fixed list, so a new tool must be added there. Only reads the bus. Test: `an_absent_vnwa_fails_its_tools_with_a_typed_error_and_leaves_the_rest_alone`.
 
+### `bench_vna_status` [@ANCHOR: bench_vna_status]
+
+`status(cfg, hw)` is `bench_status` for the VNWA: what is connected and the settings a sweep starts from. `hw` is a `Backend` (the trait that reaches the unit, the codecs and the sound server): `Hardware` in production, a simulated unit in the tests.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `cfg` | `&Config` | The instrument's configured settings; codec names given here win over the ones found. |
+| `hw` | `&dyn Backend` | Where the unit, the codec ids and the sound-server state come from. |
+
+Returns a JSON object: `usb` ("present", "present but not answering" or "not found or no permission") with `usb_read` (the two bytes of a harmless read, request 0x3a, or the error), `instrument_monitoring` (firmware and temperature, null unless the read answered), the codec ids (`codec_s11`, `codec_s21`, null with `codecs_error` when none were found), `codecs_protected_from_sound_server` with `codecs_protection_detail` and `codecs_protection_warning`, the hub, the power cycles this server did, `if_hz`, `point_ms`, `rf_level`, and `calibrated: false`. It never fails for a missing unit; that is reported in the value. Reads only (a USB control read, the USB tree, the sound server); it transmits nothing. Test: `status_reports_the_unit_its_codecs_and_the_sound_server_without_a_real_unit`.
+
+### `bench_vna_sweep` [@ANCHOR: bench_vna_sweep]
+
+`sweep(cfg, args, out_dir, hw)` is `bench_vna_sweep` (tier `read_config`: it puts RF on the TX port). It checks the arguments (`sweep_args`), opens the unit and both codecs through `hw.open_vna`, measures the points, writes the raw CSV to `out_dir/vna_sweep_<unix seconds>.csv` and, when `calibration` and `cable` are given, a corrected `..._calibrated.csv` (refused with "cable is required with calibration" when `cable` is missing, and by the calibration check when the settings differ).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `cfg` | `&Config` | The instrument's settings; the call's arguments override them. |
+| `args` | `&Value` | `start_hz`, `stop_hz`, `points`, optional settings, `calibration`, `cable`. |
+| `out_dir` | `&Path` | Where the CSV files go. |
+| `hw` | `&dyn Backend` | `Hardware` in production, a simulated unit in the tests. |
+
+Returns the point count, the span, the S21 minimum and maximum, the rows (up to 51 points), the file paths, the recovery tally, the worst IF error and level change, the last recovered failures, and the unit's temperature after the sweep. A bad argument never opens the unit; a failed point is the error of the whole sweep (no number from a failed attempt). Test: `a_sweep_measures_the_points_and_writes_the_csv_with_a_simulated_unit`.
+
 ### `bench_vna_instrument_monitoring` [@ANCHOR: bench_vna_instrument_monitoring]
 
 `instrument_monitoring(u)` reports the unit's firmware version and internal temperature sensor (the vendor's Instrument Monitoring), used inside `status`.
