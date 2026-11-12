@@ -71,7 +71,7 @@ Applies the transport's current link status (from `RigOptions::link_watch`; with
 
 ### `async fn link_changed(watch: Option<&mut watch::Receiver<LinkStatus>>) -> bool` [@ANCHOR: radioctl:radioctl_core_link_changed]
 
-Waits for the next change of the link status. `watch` is the optional receiver from `RigOptions::link_watch`, borrowed mutably. Returns true when a change arrived and false when the watch's sender is gone (the serial supervisor ended). What the actor does on a false result is `unknown` here (check the call site in the actor's main loop). With `None` it never completes, which disables that branch of the actor's `select` for transports that cannot report status. Cancel-safe.
+Waits for the next change of the link status. `watch` is the optional receiver from `RigOptions::link_watch`, borrowed mutably. Returns true when a change arrived and false when the watch's sender is gone (the serial supervisor ended). On a false result the actor's main loop treats the link as gone for good: it drops the watch (so this branch is never selected again) and marks the link down with the reason "link status watch closed". With `None` it never completes, which disables that branch of the actor's `select` for transports that cannot report status. Cancel-safe.
 
 ### `fn link_down(&mut self, why: &str)` [@ANCHOR: radioctl:radioctl_core_actor_link_down]
 
