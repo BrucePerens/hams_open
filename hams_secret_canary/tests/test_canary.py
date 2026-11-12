@@ -7,6 +7,7 @@ import stat
 import tempfile
 import sys
 import time
+import uuid
 import xmlrpc.client
 from unittest.mock import patch
 
@@ -102,6 +103,7 @@ class TestAlarm(CanaryCase):
     # Tests [@ANCHOR: hams_secret_canary:logging_backend]
     # Tests [@ANCHOR: hams_secret_canary:record_backend]
     # Tests [@ANCHOR: hams_secret_canary:mail_backend]
+    # Tests [@ANCHOR: hams_secret_canary:pager_backend]
 
     def test_secret_in_a_response_body_raises_the_alarm_without_the_value(self):
         mails_before = self.env["mail.mail"].search([]).ids
@@ -115,6 +117,21 @@ class TestAlarm(CanaryCase):
         for text in (*logs.output, rows.user_agent, mails.subject, mails.body_html, mails.email_to):
             self.assertNotIn(SECRET, text)
         self.assertIn("[REDACTED:test_secret]", rows.user_agent)
+
+    def test_pager_backend_opens_one_critical_incident_without_the_value(self):
+        if "pager.incident" not in self.env:
+            self.skipTest("pager_duty is not installed")
+        label = "test_pager_%s" % uuid.uuid4().hex[:8]  # report_incident rate-limits a source for 60 s in Redis: a fresh one each run
+        alerts.pager_backend(self.env, alerts.Alarm(label, "secret", "response", "/leak/[REDACTED:%s]" % label))
+        found = self.env["pager.incident"].sudo().search([("source", "=", "Secret canary: %s" % label)])
+        self.assertEqual(found.mapped("severity"), ["critical"])
+        self.assertIn(label, found.description)
+        self.assertIn("/leak/[REDACTED:%s]" % label, found.description)
+        with self.assertLogs("hams_secret_canary.alarm", "WARNING") as warned, patch.object(
+                type(self.env["pager.incident"]), "report_incident", side_effect=ValueError(SECRET)):
+            alerts.pager_backend(self.env, alerts.Alarm(label, "secret", "response", "/x"))  # must not raise
+        self.assertNotIn(SECRET, "\n".join(warned.output))
+        alerts.pager_backend(None, alerts.Alarm(label, "secret", "log", "some.logger"))  # a log hit has no env
 
     def test_a_clean_response_raises_nothing(self):
         with self.assertNoLogs("hams_secret_canary.alarm"):
