@@ -13,6 +13,7 @@ from odoo import http
 from odoo.http import request
 
 
+# [@ANCHOR: edge_cache_csrf_token_cloudflare_csrf_token]
 class CloudflareCsrfToken(http.Controller):
 
     @http.route(

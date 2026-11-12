@@ -5,6 +5,7 @@ from odoo import http, models
 from .ir_http import EDGE_CACHEABLE_MARKER
 
 
+# [@ANCHOR: edge_cache_website_page_website_page]
 class WebsitePage(models.Model):
     _inherit = "website.page"
 
