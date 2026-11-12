@@ -38,6 +38,13 @@ pub enum RotatorProtocol {
     Rotctld,
     /// Yaesu GS-232A/B ASCII.
     Gs232,
+    /// Easycomm I: set-only `AZaaa.a ELeee.e` lines.
+    Easycomm1,
+    /// Easycomm II: `AZ`/`EL` set and read, `SA SE` stop.
+    Easycomm2,
+    /// Easycomm III: the Easycomm II commands radioctl uses (the velocity, status and
+    /// configuration extensions are not used).
+    Easycomm3,
 }
 
 /// A park position.
@@ -183,6 +190,9 @@ impl RotatorDescription {
         Ok(match self.protocol {
             RotatorProtocol::Rotctld => Box::new(RotctldEngine::new(self.clone())),
             RotatorProtocol::Gs232 => Box::new(Gs232Engine::new(self.clone())),
+            RotatorProtocol::Easycomm1
+            | RotatorProtocol::Easycomm2
+            | RotatorProtocol::Easycomm3 => Box::new(EasycommEngine::new(self.clone())),
         })
     }
 }
@@ -506,6 +516,136 @@ impl RotatorEngine for Gs232Engine {
     }
 }
 
+/// The Easycomm I, II and III ASCII protocols (Chris Jackson G7UPN; Easycomm III by Alexander
+/// Schultze), from the specification the AMSAT WiSP programs ship and Hamlib carries:
+/// `AZaaa.a ELeee.e` moves, a bare `AZ EL` reads (the controller echoes `AZaaa.a ELeee.e`),
+/// `SA SE` stops both axes. Easycomm I has no read.
+pub struct EasycommEngine {
+    desc: RotatorDescription,
+}
+
+impl EasycommEngine {
+    // [@ANCHOR: radioctl_station_easycomm_new]
+    /// An engine for `desc` (its protocol picks the Easycomm version).
+    pub fn new(desc: RotatorDescription) -> EasycommEngine {
+        EasycommEngine { desc }
+    }
+}
+
+// [@ANCHOR: radioctl_station_easycomm_parse_position]
+/// Looks for `AZ<number>` and `EL<number>` words (separated by space, CR or LF, each complete
+/// only once its separator has arrived) in `buf`. `Ok(None)` while a wanted word is missing or
+/// unfinished; the bytes used end after the separator of the later wanted word. An `AL` alarm
+/// word is an error. Words that are neither (an echo, a version) are skipped.
+fn easycomm_position(buf: &[u8], want_el: bool) -> Result<Option<(RotReply, usize)>, StationError> {
+    let (mut az, mut el) = (None, None);
+    let mut start = 0;
+    for (i, b) in buf.iter().enumerate() {
+        if !matches!(*b, b' ' | b'\r' | b'\n') {
+            continue;
+        }
+        let word = String::from_utf8_lossy(buf.get(start..i).unwrap_or(&[])).to_string();
+        start = i + 1;
+        let number = |t: &str| {
+            t.parse::<f32>()
+                .ok()
+                .filter(|v| v.is_finite())
+                .ok_or_else(|| {
+                    rot_err(
+                        StationErrorKind::Driver,
+                        format!("\"{word}\" is not a position"),
+                    )
+                })
+        };
+        if let Some(t) = word.strip_prefix("AZ") {
+            az = Some(number(t)?);
+        } else if let Some(t) = word.strip_prefix("EL") {
+            el = Some(number(t)?);
+        } else if let Some(t) = word.strip_prefix("AL") {
+            return Err(rot_err(
+                StationErrorKind::Driver,
+                format!("the controller raised alarm \"{t}\""),
+            ));
+        }
+        if let (Some(a), true) = (az, !want_el || el.is_some()) {
+            return Ok(Some((
+                RotReply::Position {
+                    az: a,
+                    el: el.unwrap_or(0.0),
+                },
+                i + 1,
+            )));
+        }
+    }
+    Ok(None)
+}
+
+impl RotatorEngine for EasycommEngine {
+    // [@ANCHOR: radioctl_station_easycomm_description]
+    fn description(&self) -> &RotatorDescription {
+        &self.desc
+    }
+
+    // [@ANCHOR: radioctl_station_easycomm_encode]
+    fn encode(&self, op: &RotOp) -> Result<Encoded, StationError> {
+        let pos = target(&self.desc, op)?;
+        let el = self.desc.has_elevation;
+        let v1 = self.desc.protocol == RotatorProtocol::Easycomm1;
+        Ok(match (op, pos) {
+            (RotOp::SetPosition { .. } | RotOp::Park, Some((az, elv))) => Encoded {
+                bytes: match (el, v1) {
+                    (true, true) => format!("AZ{az:.1} EL{elv:.1} UP000 XXX DN000 XXX\n"),
+                    (true, false) => format!("AZ{az:.1} EL{elv:.1}\n"),
+                    (false, _) => format!("AZ{az:.1}\n"),
+                }
+                .into_bytes(),
+                expect: RotExpect::Nothing,
+            },
+            (RotOp::GetPosition, _) if v1 => {
+                return Err(rot_err(
+                    StationErrorKind::Refused,
+                    format!(
+                        "{} speaks Easycomm I, which cannot report a position",
+                        self.desc.id
+                    ),
+                ))
+            }
+            (RotOp::GetPosition, _) => Encoded {
+                bytes: if el {
+                    b"AZ EL\n".to_vec()
+                } else {
+                    b"AZ\n".to_vec()
+                },
+                expect: RotExpect::Position,
+            },
+            _ => Encoded {
+                bytes: if el {
+                    b"SA SE\n".to_vec()
+                } else {
+                    b"SA\n".to_vec()
+                },
+                expect: RotExpect::Nothing,
+            },
+        })
+    }
+
+    // [@ANCHOR: radioctl_station_easycomm_parse]
+    fn parse(
+        &self,
+        expect: RotExpect,
+        buf: &[u8],
+    ) -> Result<Option<(RotReply, usize)>, StationError> {
+        match expect {
+            RotExpect::Nothing => Ok(Some((RotReply::Done, 0))),
+            RotExpect::Status => Err(rot_err(
+                StationErrorKind::Driver,
+                "Easycomm has no status replies",
+            )),
+            RotExpect::Position => easycomm_position(buf, self.desc.has_elevation),
+        }
+    }
+}
+
 /// A rotator on a transport: commands are serialised, every wait is bounded, and a down link
 /// fails at once.
 pub struct Rotator {
@@ -721,7 +861,7 @@ mod tests {
     #[test]
     fn the_shipped_descriptions_are_valid_and_bad_ones_are_refused() {
         let all = RotatorDescription::builtin();
-        assert_eq!(all.len(), 3);
+        assert_eq!(all.len(), 6);
         assert!(all.iter().all(|d| d.validate().is_ok() && !d.verified));
         for d in &all {
             assert_eq!(d.engine().unwrap().description().id, d.id);
@@ -839,6 +979,80 @@ mod tests {
         assert_eq!(
             e.parse(RotExpect::Nothing, b"").unwrap(),
             Some((RotReply::Done, 0))
+        );
+    }
+
+    // Tests [@ANCHOR: radioctl_station_easycomm_new]
+    // Tests [@ANCHOR: radioctl_station_easycomm_description]
+    // Tests [@ANCHOR: radioctl_station_easycomm_encode]
+    // Tests [@ANCHOR: radioctl_station_easycomm_parse]
+    // Tests [@ANCHOR: radioctl_station_easycomm_parse_position]
+    #[test]
+    fn easycomm_encodes_and_parses_the_specification_shapes() {
+        let e1 = EasycommEngine::new(desc("easycomm1-azel"));
+        let e2 = EasycommEngine::new(desc("easycomm2-azel"));
+        assert_eq!(e2.description().protocol, RotatorProtocol::Easycomm2);
+        let set = RotOp::SetPosition {
+            az: 123.46,
+            el: 6.0,
+        };
+        assert_eq!(
+            e1.encode(&set).unwrap().bytes,
+            b"AZ123.5 EL6.0 UP000 XXX DN000 XXX\n"
+        );
+        assert_eq!(e2.encode(&set).unwrap().bytes, b"AZ123.5 EL6.0\n");
+        assert_eq!(e2.encode(&RotOp::Park).unwrap().bytes, b"AZ0.0 EL0.0\n");
+        assert_eq!(e2.encode(&RotOp::Stop).unwrap().bytes, b"SA SE\n");
+        assert_eq!(e2.encode(&RotOp::GetPosition).unwrap().bytes, b"AZ EL\n");
+        assert_eq!(
+            e1.encode(&RotOp::GetPosition).unwrap_err().kind,
+            StationErrorKind::Refused
+        );
+        assert_eq!(
+            e2.encode(&RotOp::SetPosition { az: 361.0, el: 0.0 })
+                .unwrap_err()
+                .kind,
+            StationErrorKind::Refused
+        );
+        // One line or two, in pieces, with an echo word in front.
+        let want = Some((RotReply::Position { az: 12.5, el: 3.0 }, 13));
+        assert_eq!(
+            e2.parse(RotExpect::Position, b"AZ12.5 EL3.0\r\n").unwrap(),
+            want
+        );
+        assert_eq!(
+            e2.parse(RotExpect::Position, b"AZ12.5 EL3.0").unwrap(),
+            None
+        );
+        assert_eq!(e2.parse(RotExpect::Position, b"AZ12.5\nEL3").unwrap(), None);
+        assert_eq!(
+            e2.parse(RotExpect::Position, b"VE1.0\nAZ12.5\nEL3.0\n")
+                .unwrap(),
+            Some((RotReply::Position { az: 12.5, el: 3.0 }, 19))
+        );
+        assert!(e2.parse(RotExpect::Position, b"ALjam\n").is_err());
+        assert!(e2.parse(RotExpect::Position, b"AZxx EL1\n").is_err());
+        assert!(e2.parse(RotExpect::Status, b"x").is_err());
+        assert_eq!(
+            e2.parse(RotExpect::Nothing, b"").unwrap(),
+            Some((RotReply::Done, 0))
+        );
+        // Azimuth only.
+        let mut d = desc("easycomm2-azel");
+        d.has_elevation = false;
+        d.el_max = 0.0;
+        let az = EasycommEngine::new(d);
+        assert_eq!(
+            az.encode(&RotOp::SetPosition { az: 10.0, el: 50.0 })
+                .unwrap()
+                .bytes,
+            b"AZ10.0\n"
+        );
+        assert_eq!(az.encode(&RotOp::GetPosition).unwrap().bytes, b"AZ\n");
+        assert_eq!(az.encode(&RotOp::Stop).unwrap().bytes, b"SA\n");
+        assert_eq!(
+            az.parse(RotExpect::Position, b"AZ10.0\n").unwrap(),
+            Some((RotReply::Position { az: 10.0, el: 0.0 }, 7))
         );
     }
 

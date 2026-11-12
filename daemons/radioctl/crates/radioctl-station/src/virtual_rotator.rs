@@ -124,10 +124,12 @@ impl VirtualRotator {
             self.buffer.clear();
         }
         let mut out = Vec::new();
-        let end = if self.desc.protocol == RotatorProtocol::Rotctld {
-            b'\n'
-        } else {
-            b'\r'
+        let end = match self.desc.protocol {
+            RotatorProtocol::Rotctld
+            | RotatorProtocol::Easycomm1
+            | RotatorProtocol::Easycomm2
+            | RotatorProtocol::Easycomm3 => b'\n',
+            _ => b'\r',
         };
         while let Some(at) = self.buffer.iter().position(|b| *b == end) {
             let raw: Vec<u8> = self.buffer.drain(..=at).collect();
@@ -139,6 +141,9 @@ impl VirtualRotator {
             let reply = match self.desc.protocol {
                 RotatorProtocol::Rotctld => self.rotctld(&text),
                 RotatorProtocol::Gs232 => self.gs232(&text),
+                RotatorProtocol::Easycomm1
+                | RotatorProtocol::Easycomm2
+                | RotatorProtocol::Easycomm3 => self.easycomm(&text),
             };
             if !self.silent {
                 out.extend_from_slice(&reply);
@@ -175,6 +180,54 @@ impl VirtualRotator {
                 }
             }
             _ => b"RPRT -4\n".to_vec(),
+        }
+    }
+
+    // [@ANCHOR: radioctl_station_vrot_easycomm]
+    /// One Easycomm line of space-separated words: `AZaaa.a` and `ELeee.e` set (together, one
+    /// move), a bare `AZ` or `EL` reads (the answer is `AZaaa.a ELeee.e`, one line), `SA` and `SE`
+    /// stop an axis, `UP`/`DN`/`XXX` words (Easycomm I's radio fields) are skipped. A target
+    /// outside the travel is refused with an `AL` alarm line, as a controller raises one.
+    fn easycomm(&mut self, text: &str) -> Vec<u8> {
+        let (mut az, mut el) = (None, None);
+        let (mut ask_az, mut ask_el) = (false, false);
+        for word in text.split_whitespace() {
+            if let Some(v) = word.strip_prefix("AZ") {
+                match v.parse::<f32>() {
+                    Ok(n) => az = Some(n),
+                    Err(_) => ask_az = v.is_empty(),
+                }
+            } else if let Some(v) = word.strip_prefix("EL") {
+                match v.parse::<f32>() {
+                    Ok(n) => el = Some(n),
+                    Err(_) => ask_el = v.is_empty(),
+                }
+            } else if word == "SA" {
+                self.state.target_az = self.state.az;
+            } else if word == "SE" {
+                self.state.target_el = self.state.el;
+            }
+        }
+        if az.is_some() || el.is_some() {
+            let (a, e) = (
+                az.unwrap_or(self.state.target_az),
+                el.unwrap_or(self.state.target_el),
+            );
+            if !self.set_target(a, e) {
+                return b"ALout of range\n".to_vec();
+            }
+        }
+        let mut reply = Vec::new();
+        if ask_az {
+            reply.push(format!("AZ{:.1}", self.state.az));
+        }
+        if ask_el {
+            reply.push(format!("EL{:.1}", self.state.el));
+        }
+        if reply.is_empty() {
+            Vec::new()
+        } else {
+            format!("{}\n", reply.join(" ")).into_bytes()
         }
     }
 
@@ -343,6 +396,21 @@ mod tests {
         assert_eq!(r.received().len(), 8);
         // Time never runs backwards.
         assert_eq!(r.state(t(1)).az, 90.0);
+    }
+
+    // Tests [@ANCHOR: radioctl_station_vrot_easycomm]
+    #[test]
+    fn it_speaks_easycomm() {
+        let mut r = rot("easycomm2-azel");
+        let t = Duration::from_secs;
+        assert_eq!(r.feed(b"AZ90.0 EL30.0\n", t(0)), b"");
+        assert_eq!(r.state(t(0)).target_az, 90.0);
+        assert_eq!(r.feed(b"AZ EL\n", t(1000)), b"AZ90.0 EL30.0\n");
+        assert_eq!(r.feed(b"AZ\n", t(1000)), b"AZ90.0\n");
+        assert_eq!(r.feed(b"AZ400.0 EL0.0\n", t(1000)), b"ALout of range\n");
+        assert_eq!(r.feed(b"AZ10.0 EL0.0\nSA SE\n", t(1000)), b"");
+        assert_eq!(r.state(t(2000)).az, 90.0, "stop froze it");
+        assert_eq!(r.feed(b"UP000 XXX\n", t(2000)), b"");
     }
 
     // Tests [@ANCHOR: radioctl_station_vrot_gs232]

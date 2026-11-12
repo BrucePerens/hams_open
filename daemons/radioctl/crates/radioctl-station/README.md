@@ -96,7 +96,7 @@ or unknown line refuses. Powering an amplifier off puts it in standby first, and
 
 ## Rotators
 
-`rotator` holds the descriptions (`data/station/rotators.toml`), the `rotctld` and GS-232 engines and
+`rotator` holds the descriptions (`data/station/rotators.toml`), the `rotctld`, GS-232 and Easycomm engines and
 the `Rotator` command handle; `virtual_rotator` is the virtual rotator and a loopback server for it.
 See the manual, chapter 14. Positions outside the travel are refused, never clamped; every wait is
 bounded; nothing is written to a down link; nothing is restored after a reconnect.
