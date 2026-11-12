@@ -85,23 +85,74 @@ offset, IF word).
 
 Each is a test against bytes or samples recorded from the vendor program.
 
-* Frequency to the generator's tuning word. [@ANCHOR: vnwa_open_tuning_word]
-* The generator amplitude for an attenuation of 0 to -50 dB. [@ANCHOR: vnwa_open_generator_level]
-* The sweep word (start, step and count) of a captured sweep. [@ANCHOR: vnwa_open_sweep_word]
-* The per-chip tuning word of the RF chip equals the generator read-back. [@ANCHOR: vnwa_open_chip_tuning_word]
-* The IF word of the set-up request. [@ANCHOR: vnwa_open_if_word]
-* The fields of request 0x41 that follow the IF. [@ANCHOR: vnwa_open_if_scaled_fields]
-* The point-time byte that follows the time per point. [@ANCHOR: vnwa_open_point_time_byte]
-* The offset tails of captured sweeps. [@ANCHOR: vnwa_open_sweep_offset]
-* The generator payload: four zero bytes, then the little-endian word. [@ANCHOR: vnwa_open_generator_frequency]
-* The RF level is fourteen bits. [@ANCHOR: vnwa_open_rf_level]
-* The time-per-point fields reproduce all 84 observed settings. [@ANCHOR: vnwa_open_point_time_fields]
-* The set-up block reproduces every captured block byte for byte. [@ANCHOR: vnwa_open_setup_block]
-* Amplitude and phase of a tone at the IF are exact on a synthetic tone. [@ANCHOR: vnwa_open_tone_at_if]
-* The ratio of two tones is their amplitude ratio and phase difference, in the vendor program's convention. [@ANCHOR: vnwa_open_vendor_convention]
-* A measurement of a recorded sweep agrees with the vendor program's own S21, and the reference channel can be swapped. [@ANCHOR: vnwa_open_measure_point]
-* A transient transfer error is sent again a bounded number of times, a vanished unit is reported, others are not repeated. [@ANCHOR: vnwa_open_transfer_retry]
-* libusb errors are classified as transient, no device or other. [@ANCHOR: vnwa_open_transfer_classes]
+### `protocol::tuning_word(freq_hz: f64) -> u32` [@ANCHOR: vnwa_open_tuning_word]
+
+Converts a frequency in Hz to the 32-bit DDS (direct digital synthesis) tuning word of the RF chip: `round(f * 2^32 / 360 MHz)`, where 360 MHz is `DDS_CLOCK_HZ` (the stock clock of the observed unit). Argument `freq_hz` is the wanted generator frequency. It returns the word with no error path: the cast saturates, so a negative or NaN input gives 0 and a frequency beyond the clock gives a word for a different frequency, which is why `generator::check_frequency` guards the generator path before this is used. Pure, no I/O. Evidence: the test checks the words the vendor program sent for 1, 2, 10 and 20 MHz (`0x00b60b61`, `0x016c16c1`, `0x071c71c7`, `0x0e38e38e`).
+
+### `generator::level_for_attenuation(db: f64) -> Result<u16, String>` [@ANCHOR: vnwa_open_generator_level]
+
+Turns a generator attenuation into the unit's 14-bit amplitude: `round(16383 * 10^(dB/20))`. Argument `db` runs from 0 down to -50 dB (`MIN_ATTENUATION_DB`); anything outside, or NaN, is an error string naming the range. The vendor program sent 52, 163 and 518 for -50, -40 and -30 dB, within one count of this formula (its own rounding is not known). Returns the count only; sending is done by `generator::on`. Pure. Output level note: the generator is a low-level RF source on the TX port, about -17 dBm at full scale; this is the amplitude limit that keeps it so.
+
+### `protocol::sweep_word(freq_hz: f64, n_rf: u8, n_lo: u8) -> u64` [@ANCHOR: vnwa_open_sweep_word]
+
+Builds the 40-bit sweep-frequency word carried in bytes 4 to 8 of request 0x49: `round(f * 2^40 / (36 MHz * nRF * nLO))`, the frequency normalised to both chips' clock multipliers so that each chip's own tuning word is one integer multiply of it (`chip_tuning_word`). Arguments: `freq_hz` the point's frequency, `n_rf` and `n_lo` the two chips' clock multipliers (10 and 9 on the observed unit). Returns the word as a `u64`; the caller (`setup::setup_block`) refuses one that does not fit in 40 bits. Pure, no I/O, no error path. Evidence: matches the words of the captured sweeps at 1 to 100 MHz.
+
+### `protocol::chip_tuning_word(sweep_word: u64, n_other: u8) -> u32` [@ANCHOR: vnwa_open_chip_tuning_word]
+
+Derives one chip's 32-bit tuning word from the sweep word: `floor(word * n_other / 256)`, where `n_other` is the OTHER chip's multiplier (nLO for the RF chip, nRF for the LO chip). The multiply is done in 128 bits so it cannot overflow. For the RF chip the result equals the word the unit reports when the generator setting is read back (request 0x35), which is how the formula was confirmed; the LO-chip use follows the same rule and is checked against the captured per-chip words. Pure, no I/O, no error path.
+
+### `protocol::if_word(if_hz: f64) -> u32` [@ANCHOR: vnwa_open_if_word]
+
+Encodes an intermediate frequency as the 32-bit little-endian word of request 0x42 (bytes 0 to 3): `round(if * 256 * 2^32 / 324 MHz)`, where 324 MHz is the LO chip's clock. The same encoding is used for request 0x43 (the 18 kHz burst before a sweep) and 0x44 (300 kHz). Argument `if_hz` is the IF (12 kHz and 6 kHz confirmed by the tones in the codec audio). Pure, no I/O, no error path: out-of-range values saturate in the cast, so callers choose sane IFs.
+
+### `protocol::if_scaled_fields(if_hz: f64) -> (u32, u16)` [@ANCHOR: vnwa_open_if_scaled_fields]
+
+Returns the two fields of request 0x41 that scale with the IF: a 32-bit word `round(IF * 10944 * 2^32 / 324 MHz)` and a 16-bit field `round(IF * 0.466)`. The request's payload is the 32-bit word, the 16-bit field and the byte 0x02, all little endian, assembled by `setup::setup_block`. Confirmed for IF 12 kHz, 6 kHz and 4 kHz. What the fields drive on the unit is not known, and the constants 10944 and 0.466 are unexplained (fits to captured data), so an IF other than the three confirmed ones is unverified. Pure, no I/O, no error path.
+
+### `protocol::point_time_byte(milliseconds: f64) -> u8` [@ANCHOR: vnwa_open_point_time_byte]
+
+Computes the first byte of request 0x40's payload for a time per point: `ceil(1.5 * ms)` clamped to 1 to 255 (units of about 0.667 ms, the program's counting unit; a tiny epsilon stops floating-point error pushing exact multiples up). Argument `milliseconds` is the time per point (0.2 to 100 in practice). Pure, no error path. It replaced an earlier rounding rule that fitted only the settings seen then; the test now reproduces 84 observed settings from 0.2 to 100 ms. `setup::point_time_fields` derives the other two timing bytes from this one.
+
+### `protocol::sweep_offset_tail(previous_hz: f64, new_hz: f64, counter: u8) -> [u8; 6]` [@ANCHOR: vnwa_open_sweep_offset]
+
+Builds the six-byte signed little-endian tail of request 0x49's payload, the offset between the old and the new frequency: `round((previous - new) / divisor * 2^48 / 360 MHz)` with `divisor = 3 * max(counter - 1, 1)` (6 when the payload's first byte is 3, 9 when it is 4). Arguments: the frequency before the sweep started, this point's frequency, and the step counter. Returns the low six bytes of the 64-bit result. Pure, no error path. The divisor rule is unexplained and verified only for counters 3 and 4, so `setup::setup_block` refuses other counters when the frequency changes. Evidence: 14 captured offset values.
+
+### `protocol::generator_frequency(freq_hz: f64, value: u16) -> Request` [@ANCHOR: vnwa_open_generator_frequency]
+
+Builds the control request that sets the generator frequency (vendor request 0x4c, host to device, type 0x40): an eight-byte payload of four zero bytes then the little-endian `tuning_word`. Argument `value` is the `wValue`, 0x090a as the vendor program sends it while stepping the generator, and 0 or 0x00c8 in the first set-up; its meaning is not decoded. Returns the `Request` only, nothing is sent here; it is sent by `Vnwa::send`. It does not range-check the frequency (`generator::check_frequency` does). Pure. Evidence: the generator payload test against captured bytes.
+
+### `protocol::rf_level_value(level: u16) -> Result<u16, String>` [@ANCHOR: vnwa_open_rf_level]
+
+Validates an RF level for request 0x58, which carries it in `wValue` (a device-to-host read with no data stage): 14 bits, 0 to 0x3fff. Argument `level` is the count. Returns it unchanged when it fits; otherwise an error string naming the value and the maximum 0x3fff, so a value that would silently wrap in a 14-bit field is refused before anything is sent. Pure, no I/O. The generator output is low level (about -17 dBm at the TX port at full scale), and this is the range check on the amplitude word. Tests: the protocol unit tests.
+
+### `setup::point_time_fields(point_ms: f64) -> Result<(u8, u8), String>` [@ANCHOR: vnwa_open_point_time_fields]
+
+Returns bytes 2 and 5 of request 0x40 for a time per point: `timing_pair(point_time_byte(ms))`. Argument `point_ms` must be 0.2 to 100 ms (the vendor program's range), otherwise an error string naming the range, so a nonsense value never reaches the unit. The rule (byte 5 is `ceil(16 / b0)`, byte 2 the same except 3 at b0 = 5 and both 1 from 16 up) is the one that reproduces all 84 captured settings; why the program carries two such counts is not known. Pure, no I/O. Tests: the timing test in `setup.rs` over `TIMING_OBSERVED`.
+
+### `setup::setup_block(p: &SetupParams) -> Result<Vec<Request>, String>` [@ANCHOR: vnwa_open_setup_block]
+
+Builds the nine vendor requests the vendor program sends for each measurement point, always in the order 0x40, 0x41, 0x42, 0x43, 0x44, 0x47, 0x4b, 0x49, 0x64. `SetupParams` carries the point and previous frequency, the chips' multipliers, the IF, time per point, step counter, `mode` (`wValue` of 0x40 and 0x41, meaning unknown) and the 14-bit RF level that goes into `wIndex` of the first seven. Errors (strings): RF level above 0x3fff, a step counter other than 3 or 4 when the frequency changes, a time per point outside 0.2 to 100 ms, or a sweep word that does not fit in 40 bits. Fields not decoded are written as the constants seen on the wire. Pure; it builds the block and does not send it. Tests: the block matches eight captured blocks byte for byte (`VECTORS`).
+
+### `audio::tone_at_if(x: &[f64], fs: f64, if_hz: f64) -> Complex` [@ANCHOR: vnwa_open_tone_at_if]
+
+Finds the complex amplitude of the component at `if_hz` in the samples `x` taken at `fs`: a single-bin discrete Fourier sum scaled by 2/N, so a cosine of amplitude A and phase p returns `A e^(jp)`. It is exact when `x` holds a whole number of IF periods (the caller arranges that with `analysis_span`); otherwise there is leakage. An empty slice divides by zero and gives NaN, so callers pass at least one period. Pure, no I/O, no error path. Tests: exactness on synthetic tones at 12, 6 and 4 kHz to 1e-12 in amplitude.
+
+### `audio::vendor_convention(c: Complex) -> Complex` [@ANCHOR: vnwa_open_vendor_convention]
+
+Returns the complex conjugate of a measurement, which is the vendor program's sign convention for the same quantity (its phase has the opposite sign, as for a mixer whose LO is above the RF). Argument `c` is `measure_point`'s result. Pure, total. It exists so that results can be compared with the vendor program's own S21; established by the reference test against recorded loopback samples, where the two agree to 0.7 to 0.9 percent in magnitude and phase.
+
+### `audio::measure_point(left, right, fs, if_hz, presamples, postsamples, reference, min_reference) -> Result<Complex, String>` [@ANCHOR: vnwa_open_measure_point]
+
+Measures one point from the two channels of a codec: finds the tone at the IF in each channel over whole IF periods between the presamples and postsamples, then divides the measured channel by the reference channel. `Reference::Right` means the left channel is measured (the observed unit's second codec); `Reference::Left` swaps them. `min_reference` is the smallest reference amplitude, in sample counts, accepted as a signal. Errors (strings): channels of different length, too few samples for one IF period plus the pre and post samples, or a reference amplitude below the minimum ("no signal"). Pure, no I/O. Tests: the ratio of two synthetic tones and the agreement with the vendor program's S21.
+
+### `Vnwa::attempt(&self, what, op) -> Result<T, String>` (`usb.rs`, private) [@ANCHOR: vnwa_open_transfer_retry]
+
+The retry wrapper for every control transfer. It runs `op` up to 1 + `TRANSFER_RETRIES` (3) times: a success is returned; a `Transient` error (the intermittent EPROTO, a stall, a timeout) is recorded, counted as a resend if another try follows, and retried after `RETRY_PAUSE` (5 ms, kept short because a long pause shifted the analysis window and made a third of the points unsteady); `NoDevice` and `Other` errors fail at once without a retry. The final error names `what` and the last message. Every try is written to the transfer log. Side effects: a thread sleep per resend and an atomic resend counter; `&self` with an internal mutex, so one handle can be shared. Tests: the scripted-transport tests in `usb.rs`.
+
+### `transport::classify(e: rusb::Error) -> TransferError` [@ANCHOR: vnwa_open_transfer_classes]
+
+Sorts a libusb error into what recovery should do. `Io` (libusb's name for the kernel's EPROTO), `Pipe` (a stall), `Timeout` and `Overflow` are `Transient` (worth sending again); `NoDevice` and `NotFound` are `NoDevice` (the unit left the bus, so a cold reset is the remedy, not a resend); every other error, such as a permission problem or invalid argument, is `Other` and is not repeated. Carries the libusb error text. Pure, total. Tests: the classification test in `transport.rs`.
+
 * The S11 and S21 codecs are told apart by their USB port, whatever order the kernel named the cards in. [@ANCHOR: vnwa_open_codec_topology]
 * The power cycle is off, wait, on through `sudo -n uhubctl`, then waits for the unit; failures are clear errors. [@ANCHOR: vnwa_open_power_cycle]
 * A failing point is measured again, then after one cold reset, and only a success is returned. [@ANCHOR: vnwa_open_recovery]
@@ -120,7 +171,12 @@ Each is a test against bytes or samples recorded from the vendor program.
 * The streams are closed before the unit's power is cut (an open stream on a vanishing codec reports about 5,000 overruns a second). [@ANCHOR: vnwa_open_capture_close]
 * The mark is the frame count at this instant, not at the last delivery, so any ALSA period works. [@ANCHOR: vnwa_open_capture_mark]
 * The firmware version (0xff) and the internal temperature counts (0x85) are read, the temperature refused on a firmware older than v5.16. [@ANCHOR: vnwa_open_firmware_version] [@ANCHOR: vnwa_open_temperature]
-* A failure that a retry or power cycle cured keeps its evidence (error text, raw channel levels, block send time, overruns, the last 16 transfers), and so does every power cycle of the recovery. [@ANCHOR: vnwa_open_failure_log] [@ANCHOR: vnwa_open_failure_evidence] [@ANCHOR: vnwa_open_transfer_log]
+
+### `Vnwa::recent_transfers(&self) -> Vec<String>` [@ANCHOR: vnwa_open_transfer_log]
+
+Returns the last 16 transfer tries (oldest first), each as epoch milliseconds, what was sent and the outcome (`ok` or the error text), for the evidence record of a failure: `sweep.rs` includes it when a point failed and a retry or power cycle cured it. It copies the ring under a mutex and has no other side effect; it cannot fail beyond a poisoned lock. Not persistent: the log lives as long as the `Vnwa` handle. Tests: the transfer-log test in `usb.rs`.
+
+* A failure that a retry or power cycle cured keeps its evidence (error text, raw channel levels, block send time, overruns, the last 16 transfers), and so does every power cycle of the recovery. [@ANCHOR: vnwa_open_failure_log] [@ANCHOR: vnwa_open_failure_evidence]
 * The analysis window is timed from the end of the block send, not from before it. [@ANCHOR: vnwa_open_window_from_send_end]
 * The installer runs only the commands on its allow-list (with or without `sudo`), and refuses every other command before it is run. [@ANCHOR: vnwa_open_install_commands]
 * A USB device is the VNWA's codec only when it is a PCM2900C that has a VNWA control chip as a sibling on the same parent hub; no other sound card is reserved. [@ANCHOR: vnwa_open_reserved_codec]
@@ -157,8 +213,15 @@ Each is a test against bytes or samples recorded from the vendor program.
 * The production runner returns the exit status and both output streams of a real program. [@ANCHOR: vnwa_open_power_process_runner]
 * The hub port is switched through `sudo -n uhubctl`; a failure is a clear error, and a hub name that is not a USB hub location (`3-2`, `3-2.4`) is refused before `uhubctl` runs. [@ANCHOR: vnwa_open_power_uhubctl] [@ANCHOR: vnwa_open_power_valid_hub_name]
 * A condition is polled until it is true or the timeout passes. [@ANCHOR: vnwa_open_power_wait_until]
-* The unit is opened through libusb by vendor and product id. (Hardware test.) [@ANCHOR: vnwa_open_rusb_transport_open]
-* The scripted transport plays back read outcomes in order, then succeeds. [@ANCHOR: vnwa_open_scripted_read]
+
+### `RusbTransport::open(vid: u16, pid: u16) -> Result<RusbTransport, String>` [@ANCHOR: vnwa_open_rusb_transport_open]
+
+Opens the VNWA through libusb by vendor and product id (20a0:4118 in production): creates a libusb context and opens the first matching device. It does not claim an interface, reset the device or select a configuration; only endpoint 0 control transfers are made afterwards, with a 1 second timeout. Errors: a libusb context failure, or "no VNWA ... found, or no permission to open it", which usually means a missing udev rule. Needs the real unit, so there is no `cargo test` coverage; the hardware tests and examples (`probe`, `sweep`) exercise it.
+
+### `Scripted::read` (`transport.rs`, `Transport` impl) [@ANCHOR: vnwa_open_scripted_read]
+
+The test transport's control read: it plays the next scripted outcome for a read of the given request, copying at most the buffer length of its bytes into the buffer and returning the count, or returning the scripted error (transient, no device or other). When the script is exhausted it succeeds, so a test only scripts the failures it cares about. It records what was asked in the shared log. No hardware, no timing. This is what lets the retry and recovery logic be tested on the same code path that production uses. Tests: the usb retry tests.
+
 * A session opens the unit and both codecs (found by topology unless named). (Hardware test.) [@ANCHOR: vnwa_open_session_open]
 * The sound server is asked (`pw-dump`, else `pactl`) and judged; what could not be inspected is reported as unknown. [@ANCHOR: vnwa_open_sound_server_check]
 * Only the cards on the USB port of a codec that has the control chip beside it are the VNWA's. [@ANCHOR: vnwa_open_sound_server_judge]
@@ -170,8 +233,15 @@ Each is a test against bytes or samples recorded from the vendor program.
 * The delay of the largest peak is found by parabolic interpolation. [@ANCHOR: vnwa_open_time_domain_peak_time]
 * A time gate keeps what arrives between two times (shaped by a window across the gate) and returns that part's frequency response on the same grid; the impulse response is taken with a rectangular window so nothing needs undoing. [@ANCHOR: vnwa_open_time_domain_gate]
 * One point is traced raw: the audio of both codecs around the set-up block send. (Hardware test.) [@ANCHOR: vnwa_open_trace_point]
-* A transfer error reads as its message, with `(transient)` when it is worth sending again. [@ANCHOR: vnwa_open_transfer_error_text]
-* Every transfer try is remembered with its time, name and outcome, the last 16 kept. [@ANCHOR: vnwa_open_transfer_remember]
+
+### `impl Display for TransferError` (`transport.rs`) [@ANCHOR: vnwa_open_transfer_error_text]
+
+The text of a transfer error as it appears in messages and the transfer log: a `Transient` error reads as its message followed by `(transient)`, so a reader can tell a failure worth sending again from a final one; `NoDevice` and `Other` read as their message alone. Pure formatting, cannot fail. `Vnwa::attempt` and `recent_transfers` rely on the `(transient)` marker to explain why a transfer was repeated. Tests: the error-text test in `transport.rs`.
+
+### `Vnwa::remember(&self, what: &str, outcome: &str)` (`usb.rs`, private) [@ANCHOR: vnwa_open_transfer_remember]
+
+Appends one line, `<epoch ms> <what>: <outcome>`, to the ring of recent transfers, dropping the oldest when 16 are held (`TRANSFER_LOG`). Called by `attempt`, `read_patient` and `reset_device` for every try, success or failure. The time is read from the system clock, 0 if it cannot be read. Takes the mutex of the ring, so concurrent transfers record in the order they finish. No I/O. Tests: the transfer-log tests in `usb.rs`.
+
 * The recovery's cold reset closes the streams, power cycles the hub port and reopens the session. (Hardware test.) [@ANCHOR: vnwa_open_vna_cold_reset]
 * A window is chosen by name, several spellings each; an unknown name is refused with the list. [@ANCHOR: vnwa_open_window_from_name]
 
@@ -180,11 +250,20 @@ Each is a test against bytes or samples recorded from the vendor program.
 The sensor of the unit shows a warm-up of about 100 counts in the first 5 minutes after a power-up, during which a loopback sweep changes by less than 0.04 % and 0.01 degrees on average
 (`docs/PROTOCOL.md`). `examples/soak.rs` therefore judges a sweep against two baselines (the first of the run and one taken right after each power cycle) with a tolerance of 0.3 % and 0.3 degrees
 plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that baseline, and records an event for every deviation (the constants are to be refined from the second soak's data).
-* A stalled 0x0d read is tried again after growing pauses, up to 6 times. [@ANCHOR: vnwa_open_patient_read]
+
+### `Vnwa::read_patient(&self, request, value, index, len, pauses_ms: &[u64]) -> Result<Vec<u8>, String>` [@ANCHOR: vnwa_open_patient_read]
+
+A device-to-host vendor read for the 0x0d request, which the unit stalls while it is busy: after a transient error it waits the given pauses (milliseconds), one per resend, instead of the default 3 resends of 5 ms; the caller's table gives growing pauses, up to 6 resends. Returns the bytes read (truncated to what arrived). A `NoDevice` or `Other` error fails at once; running out of pauses returns an error naming the count and the last message. Every try is logged and each resend counted. It sleeps the calling thread for the pauses. Tests: the growing-pause test over the scripted transport in `usb.rs`.
+
 * The IF tone starts 61 ms and the 18 kHz burst about 1 ms after the end of the send, in a recorded point. [@ANCHOR: vnwa_open_emission_onset]
 * A storm of overrun reports with no audio between them closes the stream and fails the window at once. [@ANCHOR: vnwa_open_capture_close]
 * AM and FM: the settings-dependent fields of the vendor's start sequence reproduce every captured start, and the output was checked on a scope. [@ANCHOR: vnwa_open_am_fields] [@ANCHOR: vnwa_open_fm_fields] [@ANCHOR: vnwa_open_modulation_sequence]
-* A modulating unit refuses every request; a USB reset of its control chip ends the modulation, and a power cycle ladder is the fallback. [@ANCHOR: vnwa_open_end_modulation] [@ANCHOR: vnwa_open_usb_reset] [@ANCHOR: vnwa_open_modulation_recovery]
+
+### `Vnwa::reset_device(&self) -> Result<(), String>` [@ANCHOR: vnwa_open_usb_reset]
+
+Performs a USB port reset of the unit's control chip through the transport: no power change and the device number stays. Measured on 2026-10-29, after AM or FM every request stalls until this reset, and every request is answered after it, so it ends the modulation lock-up without a power cycle (the power cycle ladder is the fallback). The result is logged to the transfer log; an error is returned as `usb reset: <error>`. Side effect: the unit re-initialises its USB state and loses nothing the host holds. No transmit gate is involved. Tests: the reset test over the scripted transport in `usb.rs`.
+
+* A modulating unit refuses every request; a USB reset of its control chip ends the modulation, and a power cycle ladder is the fallback. [@ANCHOR: vnwa_open_end_modulation] [@ANCHOR: vnwa_open_modulation_recovery]
 * A program that embeds this crate can install its own power-cycle implementation (bench_mcp installs its USB hub module's), used by the recovery and the generator-off recovery. [@ANCHOR: vnwa_open_cycle_hook]
 * Spectrum analyzer: the audio power around the LO at each frequency (TX chip silent or a 12 kHz tracking generator), band power by DFT (discrete Fourier transform), settings refused if they would leave holes. [@ANCHOR: vnwa_open_sa_band_rms] [@ANCHOR: vnwa_open_sa_spectrum]
 * A point with all four channels dead says nothing leaves the TX port and names the TX connector, pad, tee and leads first. [@ANCHOR: vnwa_open_no_reference_message]
