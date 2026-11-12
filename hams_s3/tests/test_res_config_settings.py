@@ -14,6 +14,7 @@ class TestHamsS3ConfigSettings(HamsTransactionCase):
         self.ConfigSettings = self.env['res.config.settings']
 
     # Tests [@ANCHOR: COMM_hams_s3_config]
+    # Tests [@ANCHOR: hams_s3_res_config_settings_res_config_settings]
     def test_set_and_get_values(self):
         # We need to simulate that the storage.backend model exists.
         # Since hams_s3 doesn't strictly depend on it in __manifest__.py (it uses it conditionally),

@@ -12,6 +12,7 @@ _logger = logging.getLogger(__name__)
 SECRET_MASK = "********"
 
 
+# [@ANCHOR: hams_s3_res_config_settings_res_config_settings]
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 
