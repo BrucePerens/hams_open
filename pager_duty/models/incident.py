@@ -436,7 +436,7 @@ class PagerIncident(models.Model):
 
     @public_rpc
     @api.model
-    def report_incident(self, vals):
+    def report_incident(self, vals):  # boundary-hazard-ignore: rpc-service-identity: public by design, the monitor daemons call it over JSON-2 and it is rate limited per source (bacc262d2)
         """
         Reports a new incident. Supports multi-website partitioning.
         """
