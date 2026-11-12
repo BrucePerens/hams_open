@@ -82,6 +82,7 @@ fn parity(name: &str, start: usize, frames: usize) -> Parity {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_mbe_encode_analyze_and_quantize]
 // Tests [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_next_frame]
 // Tests [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_finish]
 // Tests [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_new]

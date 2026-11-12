@@ -132,6 +132,7 @@ impl Concealer {
         }
     }
 
+    // [@ANCHOR: ham_digital_modes:fixed_general_concealment_Concealer_continuity_cost_q16]
     fn continuity_cost_q16(&self, c: &Descriptor) -> i64 {
         let Some(p) = &self.previous else { return 0 };
         let q = &self.params;

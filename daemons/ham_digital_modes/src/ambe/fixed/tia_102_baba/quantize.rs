@@ -98,6 +98,7 @@ fn saturating_uniform_quantize_q16(value_q16: i32, bits: u8, step_q16: i32) -> u
 }
 
 /// Eq. 62: quantizes `G_hat_2..G_hat_6` into `(value, bits)` pairs.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_quantize_quantize_gain_vector_q16]
 pub fn quantize_gain_vector_q16(g_hat_q16: &[i32; 6], l: u32) -> Option<[(u32, u8); 5]> {
     let l_index = (l as usize).checked_sub(9).filter(|&i| i < 48)?;
     let mut out = [(0u32, 0u8); 5];
@@ -114,6 +115,7 @@ pub fn quantize_gain_vector_q16(g_hat_q16: &[i32; 6], l: u32) -> Option<[(u32, u
 
 /// Eq. 63: quantizes every transmitted higher-order coefficient (zero-bit allocations are skipped), in the flat
 /// `[C_1,2, ..., C_6,J6]` order, each paired with its bit width.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_quantize_quantize_higher_order_coefficients_q16]
 pub fn quantize_higher_order_coefficients_q16(
     dct_blocks_q16: &[Vec<i32>; 6],
     l: u32,

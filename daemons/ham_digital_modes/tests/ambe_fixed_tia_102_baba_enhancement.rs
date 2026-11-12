@@ -97,6 +97,7 @@ fn energy_and_scaled_energy_match() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_enhancement_weight_q16]
 // Tests [@ANCHOR: ham_digital_modes:enhancement_enhance_spectral_amplitudes_q16]
 fn enhance_spectral_amplitudes_matches() {
     for (l, peak) in sweep_cases() {

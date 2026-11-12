@@ -98,6 +98,7 @@ pub fn analyze_frame_at_pitch(
 /// decoder state. `f0_q16` is the table fundamental in cycles/sample (Q16.16). `w0` and the V/UV pitch are derived
 /// exactly as the fixed decoder derives them (`mul_q16(f0, 2*pi)` and `div_q16(w0, 2*pi)`), so the search inverts the
 /// fixed decoder.
+// [@ANCHOR: ham_digital_modes:fixed_mbe_encode_analyze_and_quantize]
 pub fn analyze_and_quantize(
     frame: &FrameAnalysis,
     l: u32,

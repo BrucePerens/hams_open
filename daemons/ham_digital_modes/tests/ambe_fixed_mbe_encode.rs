@@ -499,6 +499,9 @@ mod dstar_mode {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_quantize_speech]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_nearest]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_prev_at]
 fn fixed_dstar_quantizer_matches_float() {
     run(&dstar_mode::mode(), 0x5EED_D57A, false);
     run(&dstar_mode::mode(), 0x5EED_D57B, true);
@@ -596,6 +599,9 @@ mod ambe_plus_2_mode {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_quantize_speech]
+    // Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_nearest]
+    // Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_prev_at]
     fn fixed_ambe_plus_2_quantizer_matches_float() {
         run(&mode(), 0x5EED_A2B2, false);
         run(&mode(), 0x5EED_A2B3, true);

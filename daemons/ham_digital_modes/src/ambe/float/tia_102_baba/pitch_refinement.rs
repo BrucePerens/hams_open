@@ -71,6 +71,7 @@ pub(crate) fn window_dft_16384(m: i32) -> f64 {
     }
 }
 
+// [@ANCHOR: ham_digital_modes:float_tia_102_baba_pitch_refinement_window_dft_16384_direct]
 fn window_dft_16384_direct(m: i32) -> f64 {
     let mut acc = 0.0;
     for n in -110i32..=110 {
@@ -180,6 +181,7 @@ impl<'a> SyntheticSpectrum<'a> {
     }
 
     /// `S_w(m, omega0)` for bin `m`.
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_pitch_refinement_SyntheticSpectrum_at]
     pub(crate) fn at(&mut self, m: i32) -> Complex {
         let omega0 = self.omega0;
         for l in 0..=self.max_l {

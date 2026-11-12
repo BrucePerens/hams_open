@@ -67,6 +67,7 @@ pub fn encode_frame(
 }
 
 /// [`encode_frame`] stopping before FEC: the prioritized bit vectors `u_hat_0..u_hat_7` and the next state.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encode_encode_prioritized_bits]
 pub fn encode_prioritized_bits(
     frame: &RefinementFrame,
     pitch: &Pitch,

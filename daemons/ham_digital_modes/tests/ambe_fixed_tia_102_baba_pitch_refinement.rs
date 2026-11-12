@@ -23,6 +23,8 @@ fn env_usize(name: &str, default: usize) -> usize {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_pitch_refinement_SyntheticSpectrum_at]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_pitch_refinement_window_dft_16384_direct]
 // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_new]
 // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_table]
 // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_choose_initial_pitch_estimate]

@@ -46,6 +46,7 @@ fn previous_log2_amplitude_q16(previous_m_q16: &[i32], l_hat_prev: u32, j: u32) 
 /// The fixed-point equivalent of `predicted_and_bias_correction` -- shared by (a future)
 /// fixed-point `prediction_residual` and [`reconstruct_log2_amplitude_q16`] below, same reasoning as
 /// the float sibling's own doc comment on why the two must share one implementation.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_prediction_predicted_and_bias_correction_q16]
 fn predicted_and_bias_correction_q16(
     l: u32,
     l_hat_curr: u32,

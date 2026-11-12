@@ -67,6 +67,7 @@ pub struct QuantizedSpeech {
 /// `0.693`: the constant the decoder uses to turn `log2Ml` into a linear amplitude (`exp(0.693 * log2Ml)`).
 const LN2_APPROX: f64 = 0.693;
 
+// [@ANCHOR: ham_digital_modes:float_mbe_encode_prev_at]
 fn prev_at(prev: &PrevState, idx: usize) -> f64 {
     // mbelib sets the previous frame's log2Ml[0] to log2Ml[1].
     let idx = if idx == 0 { 1 } else { idx };
@@ -76,6 +77,7 @@ fn prev_at(prev: &PrevState, idx: usize) -> f64 {
         .unwrap_or_else(|| *prev.log2_ml.last().unwrap_or(&0.0))
 }
 
+// [@ANCHOR: ham_digital_modes:float_mbe_encode_nearest]
 fn nearest<const N: usize>(
     table: &[[f64; N]],
     target: &[f64; N],
@@ -102,6 +104,7 @@ fn nearest<const N: usize>(
 /// [`super::dstar::quantize::quantize_pitch`]/[`super::ambe_plus_2::quantize::quantize_pitch`]'s own
 /// finiteness check on the pitch half of this same encode path (the pitch half
 /// was guarded in `d1bc1ea4`; this amplitude half needs the same guard).
+// [@ANCHOR: ham_digital_modes:float_mbe_encode_quantize_speech]
 pub fn quantize_speech(
     target: &SpeechTarget,
     prev: &PrevState,
@@ -279,6 +282,7 @@ impl Default for AnalysisState {
 /// harmonics, reusing TIA-102.BABA's analysis (`vuv::determine_voicing`, `spectral_amplitude`), whose amplitude scale is
 /// the one this crate's shared synthesis expects. Both returned vectors are 1-indexed (index 0 unused), length
 /// `l + 1`.
+// [@ANCHOR: ham_digital_modes:float_mbe_encode_analyze_at_pitch]
 pub fn analyze_at_pitch(
     frame: &crate::ambe::float::tia_102_baba::encoder::FrameAnalysis,
     w0: f64,

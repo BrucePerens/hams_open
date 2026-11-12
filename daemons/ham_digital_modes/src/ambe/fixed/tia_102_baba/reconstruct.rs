@@ -32,6 +32,7 @@ fn dequantize_uniform_q16(quantizer_value: u32, bits: u8, step_size_q16: i32) ->
 }
 
 /// The fixed-point equivalent of `reconstruct_gain_vector` (Eq. 68).
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_reconstruct_gain_vector_q16]
 pub fn reconstruct_gain_vector_q16(b2: u8, gain_values: [u32; 5], l: u32) -> Option<[i32; 6]> {
     let g1_q16 = *GAIN_QUANTIZER_LEVELS_Q16_16.get(b2 as usize)?;
     let l_index = (l as usize).checked_sub(9).filter(|&i| i < 48)?;
@@ -48,6 +49,7 @@ pub fn reconstruct_gain_vector_q16(b2: u8, gain_values: [u32; 5], l: u32) -> Opt
 
 /// The fixed-point equivalent of `inverse_gain_vector_dct` (Eq. 69-70): the fixed 6-point inverse
 /// DCT reconstructing `R_hat_1..R_hat_6` from `G_hat_1..G_hat_6`.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_inverse_gain_vector_dct_q16]
 pub fn inverse_gain_vector_dct_q16(g_hat: &[i32; 6]) -> [i32; 6] {
     let mut r_hat = [0i32; 6];
     for (i, slot) in r_hat.iter_mut().enumerate() {
@@ -65,6 +67,7 @@ pub fn inverse_gain_vector_dct_q16(g_hat: &[i32; 6]) -> [i32; 6] {
 
 /// The fixed-point equivalent of `inverse_block_dct` (Eq. 73-74): the inverse DCT for an arbitrary
 /// block length, reconstructing one block's own `c` values from its DCT coefficients.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_inverse_block_dct_q16]
 pub fn inverse_block_dct_q16(dct_coeffs: &[i32]) -> Vec<i32> {
     let j = dct_coeffs.len();
     if j == 0 {
@@ -85,6 +88,7 @@ pub fn inverse_block_dct_q16(dct_coeffs: &[i32]) -> Vec<i32> {
 }
 
 /// The fixed-point equivalent of `reconstruct_higher_order_coefficients` (Eq. 71-72).
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_reconstruct_higher_order_coefficients_q16]
 pub fn reconstruct_higher_order_coefficients_q16(
     quantized_values: &[u32],
     l: u32,

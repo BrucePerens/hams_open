@@ -75,6 +75,10 @@ fn parity(name: &str, start: usize, frames: usize) -> Parity {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encode_encode_prioritized_bits]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_mod_encode_prioritized_bits]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_quantize_quantize_gain_vector_q16]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_quantize_quantize_higher_order_coefficients_q16]
 // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_next_frame]
 // Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_finish]
 // Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_next_frame]

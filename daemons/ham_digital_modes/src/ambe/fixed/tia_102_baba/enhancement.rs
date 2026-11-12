@@ -88,6 +88,7 @@ pub fn scaled_energy_q16(spectral_amplitudes_q16: &[i32], omega0_q32: i64) -> i6
 /// module's own doc comment for the algebraic rewrite that avoids ever computing `r_m0^2`. Returns
 /// the raw (not yet clamped to `[0.5, 1.2]`) weight; the caller clamps, exactly as the float sibling
 /// separates `weight` from `enhance_spectral_amplitudes`'s own clamp.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_enhancement_weight_q16]
 fn weight_q16(m_l_q16: i32, l: i32, omega0_q32: i64, r_m0: i64, r_m1: i64) -> i32 {
     if m_l_q16 <= 0 {
         return 0; // sqrt(0) = 0 -> weight = 0, matching the float formula's own `sqrt(m_l)` factor.
