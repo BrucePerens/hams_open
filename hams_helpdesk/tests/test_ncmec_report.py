@@ -339,6 +339,23 @@ class TestNcmecReport(HamsTransactionCase):
         self.assertIn(str(ticket.id), mails.subject)
         self.assertIn(ticket.ncmec_report_packet or "", mails.body_html)
 
+    def test_action_ncmec_report_fallback_email_refused_by_the_mail_server_stays_pending(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
+        # mail.send() swallows a refusal and leaves the mail in state "exception"; the ticket must not then claim the
+        # packet was emailed.
+        ticket = self._create_csam_ticket()
+
+        def refused(mail_self, *args, **kwargs):
+            mail_self.write({"state": "exception", "failure_reason": "smtp down"})
+            return True
+
+        self.safe_patch_object(type(self.env["mail.mail"]), "send", refused)
+        with self.assertRaises(UserError):
+            ticket.with_user(self.system_user).action_ncmec_report()
+        ticket.invalidate_recordset()
+        self.assertNotEqual(ticket.ncmec_report_state, "emailed_fallback")
+        self.assertFalse(ticket.ncmec_report_submitted_at)
+
     def test_action_ncmec_report_email_fallback_is_not_terminal(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]
         # The email fallback must NOT permanently block
