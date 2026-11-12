@@ -54,6 +54,11 @@
             "cloudflare/static/src/components/analytics/analytics.js",
             "cloudflare/static/src/components/analytics/analytics.xml",
         ],
+        # Run by tests/test_analytics_hoot.py via browser_js(); /web/tests builds its bundle from web.assets_backend, which already
+        # holds the component source.
+        "web.assets_unit_tests": [
+            "cloudflare/static/tests/analytics.test.js",
+        ],
         "web.assets_tests": [
             "cloudflare/static/tests/tours/ip_ban_tour.js",
             "cloudflare/static/tests/tours/purge_wizard_tour.js",
