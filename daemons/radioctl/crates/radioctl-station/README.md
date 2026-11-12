@@ -141,35 +141,6 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 
 Function anchors whose full entries (purpose, signature, arguments, returns, errors, special concerns; ADR 0113) are one `###` heading each in the story files [`docs/stories/radioctl_function_anchors_44.md`](../../docs/stories/) onwards are not repeated here; the rest are listed below.
 
-- [@ANCHOR: radioctl:radioctl_station_vbank_new] (radioctl-station) A bank whose lines all start off, with read-back.
-- [@ANCHOR: radioctl:radioctl_station_vbank_no_readback] (radioctl-station) A bank that cannot be read back.
-- [@ANCHOR: radioctl:radioctl_station_vbank_set_fault] (radioctl-station) Injects a fault.
-- [@ANCHOR: radioctl:radioctl_station_vbank_line] (radioctl-station) The real (virtual) state of a line.
-- [@ANCHOR: radioctl:radioctl_station_vbank_set_physical] (radioctl-station) Sets a line behind the switchboard's back (a sensor changing, a hand-flipped switch).
-- [@ANCHOR: radioctl:radioctl_station_vbank_log] (radioctl-station) Every write the bank accepted or ignored, in order.
-- [@ANCHOR: radioctl:radioctl_station_vbank_default] (radioctl-station) Same as [`VirtualBank::new`].
-- [@ANCHOR: radioctl:radioctl_station_vbank_write_line] (radioctl-station) Applies a write unless a fault says otherwise.
-- [@ANCHOR: radioctl:radioctl_station_vbank_read_line] (radioctl-station) Reads a line unless a fault or the lack of read-back says otherwise.
-- [@ANCHOR: radioctl:radioctl_station_vbank_can_read_back] (radioctl-station) Whether this bank reads back.
-- [@ANCHOR: radioctl:radioctl_station_debouncer_new] (radioctl-station) A debouncer with nothing believed yet.
-- [@ANCHOR: radioctl:radioctl_station_debouncer_sample] (radioctl-station) Feeds one raw sample taken at `now` (time since any fixed start). Returns the new stable
-- [@ANCHOR: radioctl:radioctl_station_debouncer_stable] (radioctl-station) The believed level, if any.
-- [@ANCHOR: radioctl:radioctl_station_board_default] (radioctl-station) An empty switchboard.
-- [@ANCHOR: radioctl:radioctl_station_board_new] (radioctl-station) An empty switchboard.
-- [@ANCHOR: radioctl:radioctl_station_board_add_channel] (radioctl-station) Adds a validated channel on `driver`. Nothing is written.
-- [@ANCHOR: radioctl:radioctl_station_board_subscribe] (radioctl-station) A receiver of every event from now on.
-- [@ANCHOR: radioctl:radioctl_station_board_emit] (radioctl-station) Publishes an event (nobody listening is fine).
-- [@ANCHOR: radioctl:radioctl_station_board_def] (radioctl-station) The definition of a channel.
-- [@ANCHOR: radioctl:radioctl_station_board_ids] (radioctl-station) Every channel name, sorted.
-- [@ANCHOR: radioctl:radioctl_station_board_status] (radioctl-station) Commanded and confirmed state of a channel.
-- [@ANCHOR: radioctl:radioctl_station_board_store] (radioctl-station) Records commanded and/or confirmed state, noting when a channel went off.
-- [@ANCHOR: radioctl:radioctl_station_board_read_value] (radioctl-station) Reads a binary channel, or a selector's lines, as one value. `Ok(None)`: ambiguous
-- [@ANCHOR: radioctl:radioctl_station_board_read_back] (radioctl-station) Reads the real state of a channel from the driver and records it as confirmed, leaving the
-- [@ANCHOR: radioctl:radioctl_station_board_verify] (radioctl-station) Compares the read-back with `want`, records and reports it.
-- [@ANCHOR: radioctl:radioctl_station_board_set] (radioctl-station) Sets a power, output or selector channel and confirms it by read-back. A power-on inside
-- [@ANCHOR: radioctl:radioctl_station_board_pulse] (radioctl-station) Pulses a momentary channel: the line goes on for the channel's pulse width, then off.
-- [@ANCHOR: radioctl:radioctl_station_board_force_off] (radioctl-station) Drives a power, output or selector channel to off without waiting for any operation in
-- [@ANCHOR: radioctl:radioctl_station_board_spawn_input] (radioctl-station) Starts a task on `runtime` that samples an input channel every `interval`, debounces it by
 - [@ANCHOR: radioctl:radioctl_station_modbus_sainsmart] (radioctl-station) The SainSmart 16-channel 9-36 V USB relay module (sku 101-70-208): Modbus ASCII, 9600
 - [@ANCHOR: radioctl:radioctl_station_modbus_from_toml] (radioctl-station) Parses a board description.
 - [@ANCHOR: radioctl:radioctl_station_modbus_lrc] (radioctl-station) The Modbus ASCII checksum: the two's complement of the byte sum, low byte.
@@ -190,12 +161,6 @@ Function anchors whose full entries (purpose, signature, arguments, returns, err
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_write_line] (radioctl-station) Function 5 on the line's coil.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_read_line] (radioctl-station) Function 1 on the line's coil.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_can_read_back] (radioctl-station) Whether the board description reads coils back.
-- [@ANCHOR: radioctl:radioctl_station_driver_safe_line] (radioctl-station) The level that means "safe" for a line in the emergency all-off (off unless the board description says otherwise).
-- [@ANCHOR: radioctl:radioctl_station_driver_force_safe] (radioctl-station) Drives a line to its safe level for the emergency all-off: never held back by a retry delay.
-- [@ANCHOR: radioctl:radioctl_station_driver_recorded_line] (radioctl-station) The driver's own record of a line (`None`: this driver keeps none); what was last acknowledged, not a confirmation.
-- [@ANCHOR: radioctl:radioctl_station_board_recorded] (radioctl-station) The driver's own record of a binary channel's line: what the board last acknowledged, its age, or unknown. Recorded, not confirmed.
-- [@ANCHOR: radioctl:radioctl_station_board_known] (radioctl-station) The state the station may act on: the confirmed value, or, for a channel on a `Recorded` driver, the driver's own record of acknowledged writes (`None`: unknown). The recorded-not-confirmed caveat stays in `ChannelStatus`.
-- [@ANCHOR: radioctl:radioctl_station_board_record_value] (radioctl-station) A channel's value from the driver's record of its lines (binary level, or a selector's single closed way); `None` when a line is unknown or several ways are closed.
 - [@ANCHOR: radioctl:radioctl_station_modbus_safe_bits] (radioctl-station) The safe level of every coil, in coil order: `safe_state`, or all off when it is empty.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_reopen] (radioctl-station) Replaces the byte stream after a reconnect or reopen: every coil becomes unknown and the safe state is required again before any other command.
 - [@ANCHOR: radioctl:radioctl_station_modbus_relay_exchange] (radioctl-station) Sends one request PDU on the locked stream and returns the validated reply; read coils is refused for a board whose status is not readable.
@@ -231,8 +196,6 @@ Function anchors whose full entries (purpose, signature, arguments, returns, err
 - [@ANCHOR: radioctl:radioctl_station_station_classify_channel] (radioctl-station) The class of setting a channel by hand: off on a power channel is [`Action::PowerOff`]; on
 - [@ANCHOR: radioctl:radioctl_station_station_classify_pulse] (radioctl-station) The class of pulsing a momentary line: a device's off line is [`Action::PowerOff`], its on
 
-- [@ANCHOR: radioctl:radioctl_station_driver_assurance] (radioctl-station) The assurance level of channels on a driver; host-supervised unless the driver says otherwise.
-- [@ANCHOR: radioctl:radioctl_station_board_assurance] (radioctl-station) The assurance level of a channel's driver.
 - [@ANCHOR: radioctl:radioctl_station_station_power_assurance] (radioctl-station) The assurance level of the channel that powers a device.
 - [@ANCHOR: radioctl:radioctl_station_station_check_operate] (radioctl-station) The refusals for putting an amplifier in operate: its device must be known powered on, and its fault input, when it has one, must be confirmed clear (a tripped or unknown fault line refuses: fail closed).
 - [@ANCHOR: radioctl:radioctl_station_station_check_amp_powered] (radioctl-station) Refuses unless the amplifier or tuner is known powered on (confirmed, or recorded on a board that cannot be read back).
