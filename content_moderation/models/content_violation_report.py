@@ -4,6 +4,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, _
 from odoo.exceptions import UserError
+from odoo.addons.zero_sudo import public_rpc
 
 
 class ContentViolationReport(models.Model):
@@ -85,6 +86,7 @@ class ContentViolationReport(models.Model):
     # re-process a report a second time with no server-side check at all.
 
     # [@ANCHOR: user_websites:COMM_action_mark_under_review]
+    @public_rpc
     def action_mark_under_review(self):
         for report in self:
             if report.state in ("action_taken", "dismissed"):
@@ -97,6 +99,7 @@ class ContentViolationReport(models.Model):
         self.write({"state": "under_review"})
 
     # [@ANCHOR: user_websites:COMM_report_action_dismiss]
+    @public_rpc
     def action_dismiss(self):
         for report in self:
             if report.state in ("action_taken", "dismissed"):
@@ -108,6 +111,7 @@ class ContentViolationReport(models.Model):
                 )
         self.write({"state": "dismissed"})
 
+    @public_rpc
     def action_take_action_and_strike(self):
         # [@ANCHOR: action_take_action_and_strike]
 
