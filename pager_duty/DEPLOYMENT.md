@@ -1,10 +1,10 @@
 # Pager-Duty Deployment Guide
 
-This document outlines the steps required to deploy the `pager_duty` module and its accompanying standalone monitoring daemons in a strict DevSecOps environment.
+This document outlines the steps required to deploy the `pager_duty` module and its accompanying standalone monitoring daemons in a strict DevSecOps (development, security and operations combined) environment.
 
 ## 1. Prerequisites & Dependencies
 
-The OS monitoring daemon requires specific system packages to perform full-chain DNS resolution (`dig`) and Application-Layer PostgreSQL checks.
+The OS monitoring daemon requires specific system packages to perform full-chain DNS resolution (`dig`) and application-layer PostgreSQL checks (a real query, not just an open port).
 
 ### Ubuntu/Debian:
 ```bash
@@ -17,15 +17,15 @@ sudo apt-get install -y dnsutils libpq-dev python3-dev smartmontools
 sudo dnf install -y bind-utils postgresql-devel python3-devel smartmontools
 ```
 
-### Python Dependencies (PEP-668 Virtual Environment):
+### Python Dependencies (PEP-668 Virtual Environment; PEP 668 is the Python rule that blocks system-wide installs, so a virtual environment is used):
 Switch to your Odoo user and activate your virtual environment before installing:
 ```bash
 pip install psutil psycopg2
 ```
-*Note: If `psycopg2` fails to install, the daemon will gracefully fall back to a Layer-4 TCP socket check for PostgreSQL.*
+*Note: If `psycopg2` fails to install, the daemon will gracefully fall back to a Layer-4 (transport-level) TCP socket check for PostgreSQL, which only confirms the port accepts connections.*
 
 ## 2. Log Monitor Permissions
-The `log_monitor.py` daemon runs under the `odoo` user but needs read access to system logs. On Debian/Ubuntu systems, you must add the `odoo` user to the `adm` group:
+The `log_monitor.py` daemon runs under the `odoo` user but needs read access to system logs. On Debian/Ubuntu systems, you must add the `odoo` user to the `adm` group (the group allowed to read system logs):
 ```bash
 sudo usermod -aG adm odoo
 ```
@@ -63,6 +63,6 @@ sudo journalctl -u pager-os-monitor.service -f
 ```
 
 ## 5. External WAF Configuration
-To ensure the external HTTP checks do not trigger WAF blocks or rate limits:
+A WAF is a web application firewall. To ensure the external HTTP checks do not trigger WAF blocks or rate limits:
 1. Log into your WAF dashboard.
 2. Create a rule to `Skip` rate limiting and WAF checks if the incoming request matches both the Origin Server IP of the monitoring node AND the HTTP User-Agent equals `Pager-Daemon/1.0`.
