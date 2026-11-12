@@ -669,3 +669,15 @@ Arguments: `ctx: &Ctx` (borrowed: the device list and the stored result), `_args
 (list from `Stored::changes`), age_s (seconds since the run, 0 if the clock went backwards), result (the stored JSON), auto_selects_now {alert_output, verify_input}}`. The two `auto_selects_now` values are what `tools::pick` returns for no
 named device now (the configured alert output or verify input, else the discovered one, and `null` when nothing is usable). No errors (a failure to pick is shown as `null`). Pure apart from reading the clock; no locks.
 Tested in `discover.rs` (`Tests [@ANCHOR: bench_mcp_audio_discover_report]`).
+
+### `play_command` [@ANCHOR: bench_mcp_audio_engine_play_command]
+
+`play_command(node, path, stream_volume)` builds, but does not run, the `pw-play` command line of one playback. `Playing::start` runs it, and `bench_audio_safe_state` later finds stray playbacks by the signature this line begins with.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `node` | `&str`, borrowed | Output node name from `devices::resolve`, passed as `--target`. |
+| `path` | `&Path`, borrowed | The WAV file to play, passed last. |
+| `stream_volume` | `f64` | The stream volume factor, written as `--volume` with three decimals; 1.0 keeps the file's own level. |
+
+Returns a `Command` for `pw-play -P <NO_FALLBACK> --target <node> --volume <v> <path>` with no stdio set yet. It cannot fail and does no I/O, so nothing is heard until the caller spawns it. Test: `a_playback_command_line_starts_with_the_signature_that_safe_state_stops` checks the argument order and that the no-fallback property is present, without running pw-play.

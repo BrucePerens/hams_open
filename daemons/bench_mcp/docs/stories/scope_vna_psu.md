@@ -531,3 +531,41 @@ Returns `out/name`. Errors: `file "<name>" must be the name of a .csv sweep file
 | `out` | `&Path` | The output directory. |
 
 The sweep must have at least four points; the step is `(last - first) / (n - 1)` hertz. Writes `<sweep name>_<trace>_time.csv` (`time_s,re,im,magnitude`) and returns `trace`, `window`, `mode`, `response`, `points`, `step_hz`, `time_resolution_s`, `unaliased_until_s` (1 / step), `peak_time_s`, `peak_magnitude`, `time_file` and a `note`. With `velocity_factor`, `distance_m = c * vf * peak_time / 2` for S11 (round trip) or `/ 1` for S21. With a gate it also writes `<name>_<trace>_gated.csv` (`freq_hz,re,im,db,deg`, in the unit's phase convention again, the same as `bench_vna_sweep` writes) and adds `gated_file` and `gate`. Errors: the messages of the helpers above; `trace must be s11 or s21`; `mode ... must be lowpass or bandpass`; `response ... must be impulse or step`; `the sweep has fewer than four points`; `time_points must be a whole number from 8 to 8192`; `t_max_s must be positive`; `velocity_factor must be from 0.1 to 1`; `gate_start_s and gate_stop_s go together`; errors from `vnwa_open::timedomain` (transform, gate); `no peak in the time response`; file-write errors. No instrument is touched; the instrument lock is still held while it runs. The delay is a round trip for a reflection, and a calibrated sweep is what gives true reflection sizes (the note says so). Test: `a_stored_sweep_gives_its_delay_a_distance_and_a_gated_response_and_bad_input_is_refused`.
+
+### `bench_mcp_rigd_program` [@ANCHOR: bench_mcp_rigd_program]
+
+`rigd::program()` names the executable that serves a managed rig: the value of the environment variable `BENCH_MCP_RADIOCTLD` when it is set and not empty, otherwise `radioctld` found on the search path. Unit tests, built with `cfg(test)`, use the radioctld built from this repository when the variable is not set, so they never depend on an installed copy.
+
+Takes no arguments and returns an `OsString`; it cannot fail, does no I/O and starts nothing itself (the daemon spawn and the diagnostics call it). A wrong path only shows up when the spawn fails. Test: `the_rig_daemon_program_is_never_empty`.
+
+### `summary` [@ANCHOR: bench_mcp_scope_more_summary]
+
+`summary(v)` in `scope_more.rs` reduces a waveform to its minimum, maximum, mean and RMS value, used by `bench_scope_math` to describe the combined trace.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `v` | `&[f32]`, volts | The samples; an empty slice is allowed and yields a mean and RMS of 0 because the divisor is held at 1. |
+
+Returns `(min, max, mean, rms)` as `(f32, f32, f64, f64)`; sums run in `f64`. An empty slice gives `(f32::MAX, f32::MIN, 0, 0)`. Pure, no errors, no I/O. Test: `summary_gives_min_max_mean_and_rms`.
+
+### `readback` [@ANCHOR: bench_mcp_scope_more_readback]
+
+`readback(s, query)` asks the scope for one setting and returns what it answered as a JSON value, so a caller can see whether a setting was accepted. It lowers the link timeout to 3 seconds for the question and restores 10 seconds afterwards.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `s` | `&mut Link` | Open link to the scope. |
+| `query` | `&str` | A query command such as `TRIG_MODE?`. |
+
+Returns the trimmed reply as a JSON string, `"(empty reply)"` for a blank answer, or `"no answer to <query>: <error>"` when the query fails; it never returns an error so one silent setting does not hide the others. Test: `apply_sends_each_command_and_reads_its_setting_back`.
+
+### `apply` [@ANCHOR: bench_mcp_scope_more_apply]
+
+`apply(s, cmds)` sends a list of scope commands one by one and reads each related setting back, so the answer shows what the scope really accepted rather than what was requested. It waits 100 milliseconds after each command before the readback.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `s` | `&mut Link` | Open link to the scope. |
+| `cmds` | `Vec<(String, String)>` | Pairs of (command to send, query that reads the setting). |
+
+Returns `{sent, readback, note}`: the commands in order, a map from each query to its `readback` result, and a note that these commands come from the programming guide and are not all confirmed on firmware 1.3.27. Errors: a failed send returns its text and stops. Test: `apply_sends_each_command_and_reads_its_setting_back`.
