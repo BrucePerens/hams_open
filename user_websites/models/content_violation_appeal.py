@@ -2,6 +2,7 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
 from odoo import api, models, fields, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.addons.zero_sudo import public_rpc
 
 
 class ContentViolationAppeal(models.Model):
@@ -66,6 +67,7 @@ class ContentViolationAppeal(models.Model):
                 )
 
     # [@ANCHOR: user_websites:COMM_appeal_action_approve]
+    @public_rpc
     def action_approve(self):
         # Verified by [@ANCHOR: user_websites:test_tour_moderation_appeal]
         """Approves the appeal and pardons the user or group.
@@ -104,6 +106,7 @@ class ContentViolationAppeal(models.Model):
             )
 
     # [@ANCHOR: user_websites:COMM_appeal_action_reject]
+    @public_rpc
     def action_reject(self):
         """Rejects the appeal.
 

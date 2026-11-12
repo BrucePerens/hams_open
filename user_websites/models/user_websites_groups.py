@@ -19,6 +19,7 @@ import time
 import os
 import odoo
 from odoo.modules.registry import Registry
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -427,6 +428,7 @@ class UserWebsitesGroup(models.Model):
         return result
 
     # [@ANCHOR: user_websites:COMM_action_suspend_group_websites]
+    @public_rpc
     def action_suspend_group_websites(self):
         """Forcefully unpublishes all group content and flags them as suspended."""
         group_ids = self.ids
@@ -504,6 +506,7 @@ class UserWebsitesGroup(models.Model):
             )
 
     # [@ANCHOR: user_websites:COMM_action_pardon_group_websites]
+    @public_rpc
     def action_pardon_group_websites(self):
         """Resets strikes and lifts the suspension (Does NOT automatically republish content)."""
         for group in self:

@@ -5,6 +5,7 @@
 from odoo import api, models, fields, _
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from .res_users import _async_unpublish_content, BACKGROUND_EXECUTOR
+from odoo.addons.zero_sudo import public_rpc
 
 
 class ResUsersModeration(models.Model):
@@ -120,6 +121,7 @@ class ResUsersModeration(models.Model):
             )
 
     # [@ANCHOR: user_websites:COMM_action_pardon_user_websites]
+    @public_rpc
     def action_pardon_user_websites(self):
         """Resets strikes and lifts the suspension (Does NOT automatically republish content)."""
         for user in self:
