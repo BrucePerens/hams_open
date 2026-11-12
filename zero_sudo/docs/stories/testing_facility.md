@@ -8,69 +8,182 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 The `zero_sudo` module provides a comprehensive testing framework that enables true transaction testing and isolated daemon integration.
 
 ## Base Test Classes
-- **HamsTransactionCase** `[@ANCHOR: zero_sudo:COMM_hams_transaction_case]`: The foundational class for tests requiring raw transaction context.
-The testing facility provides a safe environment.
+### HamsTransactionCase `[@ANCHOR: zero_sudo:COMM_hams_transaction_case]`
 
+**Purpose.** The base class for module tests that need the ORM in an isolated transaction plus this project's helpers. Defined in `zero_sudo/tests/common.py` as `class HamsTransactionCase(TransactionCase, SafePatchMixin, PersonaMixin)`: Odoo's `TransactionCase` (every test method in a savepoint that is rolled back; a `commit()` only releases a savepoint), the safe-mock helpers (`safe_patch`, `safe_patch_object`) and the persona helpers (`@personas`, `assert_persona_access`). Use it for tests that stay inside one process and one cursor; use `RealTransactionCase` when a thread, daemon or second connection has to see committed data.
 
-- **HamsHttpCase** `[@ANCHOR: zero_sudo:COMM_hams_http_case]`: Extended class for running UI tours and HTTP cases under true transactional isolation.
-- **invalidate_zero_sudo_utils_cache(test_class)** `[@ANCHOR: zero_sudo:invalidate_zero_sudo_utils_cache]`: Called at the end of `HamsTransactionCase.setUpClass` and `HamsHttpCase.setUpClass`, after the class has written its `ir_config_parameter` rows, to drop the cached `zero_sudo.security.utils` entries. Takes the test class (its `registry` and `env`) and returns nothing. When the registry has no `zero_sudo.security.utils` model it does nothing: a module that deliberately does not depend on zero_sudo (`edge_cache`, which a Redis-less tenant instance installs) still uses these base classes, and its own run (`-u edge_cache`) used to end in a `KeyError` in `setUpClass` because Redis settings are read through that model.
+**Class data.** `_active_daemons` (list of `subprocess.Popen`, default `[]`): the daemons started by `start_daemon`. `setUpClass` gives each class its own list, because the class-body list is shared by every subclass that does not shadow it.
+
+**Added behaviour.** `setUpClass` makes a test Fernet key, patches the secret readers, writes the frozen `web.base.url` rows and clears caches; `setUp` flushes the Redis cache; `start_daemon` starts a real daemon process; `tearDownClass` stops them. Each is documented in its own entry below.
+
+**Errors and side effects.** Nothing is raised by the class itself. It touches the database (config parameter rows, inside the class transaction), the process environment (`HAMS_CRYPTO_KEY` if unset) and Redis (`flushall` per test). Not thread-safe: Odoo runs the tests of one process one after another.
+
+**See also.** Tests `zero_sudo/tests/test_facility.py`, `test_harness_helpers.py`.
+
+### HamsHttpCase `[@ANCHOR: zero_sudo:COMM_hams_http_case]`
+
+**Purpose.** The base class for HTTP, tour (UI) and browser tests: `class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin)` in `zero_sudo/tests/common.py`. It keeps Odoo's `HttpCase` isolation (the server thread and the test share one `TestCursor` over the class's savepoint transaction, so nothing a test writes survives it) and adds this project's setup and teardown, a TLS proxy, the Chrome pool and the browser patches described below.
+
+**Class data.** `_hams_tour_failed` (bool, default `False`; set by `start_tour` when a tour raises, and read by `tearDown` to decide whether to clear V8 hang logs), `server_thread`, `server`, `browser` (the test's `ChromeBrowser`, `None` until a test asks for one), `_socat_proc` (the HTTPS proxy process of the class), and the two class-level defaults `http_request_key = ""` and `http_request_allow_all = False`, which exist so that a health poll arriving between `current_test` being set and the first `setUp` does not crash Odoo's cursor check with an `AttributeError`.
+
+**Special concerns.** It starts a real `socat` process on port 8443 per class and a headless Chrome on demand, so it needs those binaries and the `/opt/hams/test` directories; nothing else is mocked. A tour or browser test that fails leaves nothing behind: teardown kills the browser tree and reaps headless Chrome of this run.
+
+**See also.** `HamsHttpCase Class Set-Up`, `Setup`, `Teardown` and `Tour Runner` below; tests `test_facility.py`, `test_views.py`.
+
+### invalidate_zero_sudo_utils_cache(test_class) `[@ANCHOR: zero_sudo:invalidate_zero_sudo_utils_cache]`
+
+Called at the end of `HamsTransactionCase.setUpClass` and `HamsHttpCase.setUpClass`, after the class has written its `ir_config_parameter` rows, to drop the cached `zero_sudo.security.utils` entries. Takes the test class (its `registry` and `env`) and returns nothing. When the registry has no `zero_sudo.security.utils` model it does nothing: a module that deliberately does not depend on zero_sudo (`edge_cache`, which a Redis-less tenant instance installs) still uses these base classes, and its own run (`-u edge_cache`) used to end in a `KeyError` in `setUpClass` because Redis settings are read through that model.
 
 ## The Leak Detection Mechanism
 The [module README](../../README.md) attributes the end-of-test Database Leak Prevention checks to `RealTransactionCase` (`tests/real_transaction.py`). A table is exempt from the final comparison below when it is registered in `zero_sudo.noisy_table` (tables with high-frequency or technically necessary writes, such as `ir_logging` and `bus_bus`), and `RealTransactionCase` also keeps its own built-in exemption list.
 
-- **Cursor Hijacking** `[@ANCHOR: zero_sudo:COMM_cursor_hijacking]`: The facility intercepts the test cursor to provision a real, committable PostgreSQL connection.
-The testing facility provides a safe environment.
+### Cursor Hijacking `[@ANCHOR: zero_sudo:COMM_cursor_hijacking]`
 
+**Purpose.** `RealTransactionCase.setUp` (in `zero_sudo/tests/real_transaction.py`) replaces the savepoint cursor that Odoo's test harness hands out with a real, committable PostgreSQL connection, so that a test behaves like production: its `commit()` is a real `COMMIT` that background threads, daemons and other connections can see.
 
-- **Leak Snapshotting** `[@ANCHOR: zero_sudo:COMM_leak_snapshotting]`: Prior to the test, the system records the exact sizes of all active database tables. Counting runs in small batches, each committed on its own short connection, so no more than a few dozen relation locks are held at once (`[@ANCHOR: zero_sudo:COMM_count_rows_in_batches]`); a single query over every table ran Postgres out of shared lock slots when shards ran in parallel.
-The testing facility provides a safe environment.
+**How.** `_real_cursor_factory(readonly=False)` returns `odoo.sql_db.db_connect(registry.db_name).cursor()`. If `registry.cursor` is a `unittest.mock.Mock` (the harness installs one under `--test-enable`), its `side_effect` is swapped for the factory, not its attribute deleted, so Werkzeug threads do not deadlock and mock teardown still works; otherwise `registry.cursor` is replaced by the factory. A cleanup restores the original side effect or attribute. `self.cr` is then a real cursor and `self.env` an environment for the `admin` user (id 2 when not found), not the banned superuser id.
 
+**Errors and concurrency.** None raised here. Each test owns one real connection, closed in `_real_teardown` with a rollback first. The original `HttpCase` test cursor is kept in `_test_cursor` and restored last so Odoo's own teardown works.
 
-- **ORM Instrumentation** `[@ANCHOR: zero_sudo:COMM_orm_instrumentation]`: The framework actively intercepts and tracks all records created natively via the ORM.
-The testing facility provides a safe environment.
+**See also.** Test `COMM_test_cursor_hijacking` in `test_facility.py`.
 
+### Leak Snapshotting `[@ANCHOR: zero_sudo:COMM_leak_snapshotting]`
 
-- **Automated Cleanup** `[@ANCHOR: zero_sudo:COMM_automated_cleanup]`: A multi-pass algorithm attempts to cleanly unlink all tracked ORM records at the end of the test execution.
-The testing facility provides a safe environment.
+**Purpose.** Before the test body runs, `RealTransactionCase.setUp` records the exact row count of every table so that the teardown can prove the test left nothing behind.
 
+**How.** It selects every table name in `information_schema.tables` for schema `public` except `pg_stat_statements*` into `self._tables`, then calls `count_rows_in_batches` and keeps the result in `self._initial_counts` (`dict[str, int]`; `{}` when there are no tables). `self._tracked_records` (a `defaultdict(set)` of model name to ids) is created at the same time.
 
-- **Leak Verification** `[@ANCHOR: zero_sudo:COMM_leak_verification]`: The system compares the final table sizes against the initial snapshots. Any discrepancies (indicative of raw SQL inserts bypassing the ORM) instantly fail the test.
+**Cost and limits.** A count of every table (several hundred) runs at the start of each test, in batches. Views are included in `information_schema.tables`, which is why the statistics views are in `LEAK_CHECK_FALLBACK_TABLES`. Counts are exact, so any other writer on the same database while the test runs shows up as a leak.
 
-- **Leak Check Fallback Tables** `[@ANCHOR: zero_sudo:COMM_leak_check_fallback_tables]`: `LEAK_CHECK_FALLBACK_TABLES` in `zero_sudo/tests/real_transaction.py`, a module-level `frozenset[str]` of table and view names (no schema, no quoting) that the leak check in the teardown skips regardless of the `zero_sudo.noisy_table` records. Two kinds of name belong in it: tables Odoo itself writes during any test (`bus_bus`, `mail_*`, `ir_cron*`, `http_session`, `ir_config_parameter` and similar) and the `database_management` views over `pg_stat_*` (`database_table_stat`, `database_query_stat`, `database_activity`, `database_index_stat`, `database_index_advisor`, `database_replication_stat`, `database_pg_setting`), whose row count follows server statistics, not test writes. `database_index_advisor` lists tables with more than 100 sequential scans and over 10 MB, so any module's queries can add a row mid-test; that is what failed `cloudflare` `test_content_hook_multi_website` in the 66-module whole-system run (`Leaked records: database_index_advisor (+1)`) while it passed with cloudflare installed alone.
+**See also.** Test `COMM_test_leak_snapshotting`; `Leak Verification` below compares against this snapshot.
+
+### count_rows_in_batches `[@ANCHOR: zero_sudo:COMM_count_rows_in_batches]`
+
+**Signature.** `count_rows_in_batches(db_name, tables, batch_size=COUNT_BATCH_SIZE, on_batch=None) -> dict[str, int]` in `zero_sudo/tests/real_transaction.py`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `db_name` | `str` | Database to count in. |
+| `tables` | iterable of `str` | Table or view names (safely quoted with `sql.Identifier`). |
+| `batch_size` | `int` | Tables per transaction; default `COUNT_BATCH_SIZE` = 8. |
+| `on_batch` | callable or `None` | Called with the cursor after each batch's query and before its transaction ends (the test uses it to read `pg_locks`). |
+
+**Returns.** `{table: exact count}` for every table given. **Why.** One `UNION ALL` over all public tables (about 776 tables, 3,700 relations with indexes) inside one transaction held all those relation locks until it ended and exhausted Postgres's shared lock table (`max_locks_per_transaction=64`) when several test shards ran together ("out of shared memory"). Here each batch of eight runs on one short-lived connection and is rolled back, which releases its locks before the next batch. **Errors.** Database errors propagate (the cursor is closed in a `finally`). A table that does not exist raises. No writes. **See also.** Test `COMM_test_count_rows_in_batches`.
+
+### ORM Instrumentation `[@ANCHOR: zero_sudo:COMM_orm_instrumentation]`
+
+**Purpose.** Records every record the test creates through the ORM, so that teardown can delete them and distinguish them from raw-SQL inserts.
+
+**How.** `RealTransactionCase.setUp` replaces `odoo.models.BaseModel.create` with `tracking_create(model_self, *args, **kwargs)`, which calls the saved original (`_original_create`, captured once at import to avoid descriptor binding problems), and for a non-empty result adds the new ids to `self._tracked_records[model_self._name]`. A cleanup restores the original `create` after the test. The tracking covers every model and every connection in the process, including records created by server threads during the test.
+
+**Limits and security.** Only `create` is tracked: rows written by raw SQL, `INSERT ... SELECT`, or by a separate process are not, and are what `Leak Verification` reports. The patch is process-wide while a test runs, so a `RealTransactionCase` test must not run concurrently with another test in the same process (Odoo does not).
+
+**See also.** Test `COMM_test_orm_instrumentation`; `Automated Cleanup`.
+
+### Automated Cleanup `[@ANCHOR: zero_sudo:COMM_automated_cleanup]`
+
+**Purpose.** At the end of a `RealTransactionCase` test, removes every record the test created, since its commits are real and nothing rolls them back.
+
+**Algorithm (`_real_teardown`).** First it waits for Werkzeug request threads (`wait_for_werkzeug_threads`, 5 s) and tracked thread-pool jobs (`wait_for_background_futures`, 10 s), then rolls back the cursor. It makes up to 5 passes over the tracked models in reverse creation order: in a savepoint, with `odoo.sql_db` and `odoo.models.unlink` logging muted, it `browse`s the ids with `active_test=False`, keeps those that still `exists()`, and `unlink`s them as user 2. Foreign-key blockers are retried on the next pass (so children go before parents). On the fifth failing attempt it logs and falls back to a raw `DELETE FROM <table> WHERE id IN (...)` in its own savepoint, so one model's failure cannot poison the rest. Handled errors: `IntegrityError`, `OperationalError`, `AccessError`, `UserError`, `RedirectWarning`, `ValidationError`; anything else is logged with a traceback and counts as pending. The result is committed.
+
+**Special.** Runs on the test's real connection; never raises for a cleanup failure, which instead shows up as a leak in `Leak Verification`. **See also.** Test `COMM_test_automated_cleanup`.
+
+### Leak Verification `[@ANCHOR: zero_sudo:COMM_leak_verification]`
+
+**Purpose.** After cleanup, `_real_teardown` compares the final table counts with the snapshot and fails the test when they differ, which catches raw SQL inserts and cleanup failures.
+
+**Algorithm.** It reads the active `zero_sudo.noisy_table` names (limit 1,000; a failure to read is logged and ignored), unions them with `LEAK_CHECK_FALLBACK_TABLES`, and counts the remaining snapshot tables with `count_rows_in_batches`. Every table whose final count differs from its initial count is reported as `name (+n)` or `name (-n)`.
+
+**Errors.** Raises `AssertionError("Database pollution detected! Auto-cleanup failed or raw SQL was used. Leaked records: ...")` listing the leaks. In every case (`finally`) it then rolls back, clears the registry cache and environment, closes the real connection and restores the original `HttpCase` cursor, logging, not raising, any failure to close.
+
+**Special.** A fall in a count (a test that deleted existing data) also fails. Exempt tables are the noisy ones that production code writes on its own; add a table to `zero_sudo.noisy_table` rather than weakening the check. **See also.** Test `COMM_test_leak_verification`, `test_facility.py`.
+
+### Leak Check Fallback Tables `[@ANCHOR: zero_sudo:COMM_leak_check_fallback_tables]`
+
+`LEAK_CHECK_FALLBACK_TABLES` in `zero_sudo/tests/real_transaction.py`, a module-level `frozenset[str]` of table and view names (no schema, no quoting) that the leak check in the teardown skips regardless of the `zero_sudo.noisy_table` records. Two kinds of name belong in it: tables Odoo itself writes during any test (`bus_bus`, `mail_*`, `ir_cron*`, `http_session`, `ir_config_parameter` and similar) and the `database_management` views over `pg_stat_*` (`database_table_stat`, `database_query_stat`, `database_activity`, `database_index_stat`, `database_index_advisor`, `database_replication_stat`, `database_pg_setting`), whose row count follows server statistics, not test writes. `database_index_advisor` lists tables with more than 100 sequential scans and over 10 MB, so any module's queries can add a row mid-test; that is what failed `cloudflare` `test_content_hook_multi_website` in the 66-module whole-system run (`Leaked records: database_index_advisor (+1)`) while it passed with cloudflare installed alone.
   - **Fields:** a set, so no fields; each element is a lowercase PostgreSQL relation name in schema `public`. Created at import time, immutable, shared read-only by every `RealTransactionCase`; nothing mutates it.
   - **Used by:** `RealTransactionCase._real_teardown`, which unions it with the active `zero_sudo.noisy_table` names before comparing final to initial row counts.
   - **Invariant:** every `public` view whose definition reads `pg_stat_*`, `pg_settings` or `pg_locks` is in the set. Add a new statistics view here in the same change that creates it.
   - **Verified by:** `zero_sudo:COMM_test_leak_check_fallback_tables` (`test_09_statistics_views_are_never_counted_as_leaks`), which queries `information_schema.views` for the views installed in the database and fails on any that is missing. Related: `zero_sudo:COMM_leak_verification`.
 
 ## Integration Services
-- **Real Transaction Service** `[@ANCHOR: zero_sudo:COMM_user_real_transaction_service]`: Ensures background workers operate against unmocked, durable database states.
-The testing facility provides a safe environment.
+### Real Transaction Service `[@ANCHOR: zero_sudo:COMM_user_real_transaction_service]`
 
+**Purpose.** `RealTransactionCase` (`zero_sudo/tests/real_transaction.py`, `class RealTransactionCase(HttpCase, SafePatchMixin)`) is the test base class for code that depends on real commits: background workers, daemons, thread-pool jobs after commit, `pg_notify`, a browser on another connection. Its tests run against the unmocked, durable database, so the code under test behaves as in production, and the class then removes what the test created and fails if anything is left.
 
-- **Integration Daemon Testing** `[@ANCHOR: zero_sudo:COMM_integration_daemon_testing]`: Supports spinning up and health-checking isolated Python daemons alongside the Odoo test suite to guarantee end-to-end integration safety.
+**Interface.** Subclass it; use `self.env` and `self.cr` (real, committable). Extra methods: `authenticate(user, password)`, which commits after sign-in (see its entry). `setUpClass` commits the frozen `web.base.url` rows on a separate connection (see its entry). Class-level `http_request_key` and `http_request_allow_all` defaults cover the pre-setUp window.
 
-- **Real Dummy Daemon** `[@ANCHOR: zero_sudo:dummy_daemon_do_head]`: `tests/dummy_daemon.py` is a real, tiny standalone `HEAD`-only HTTP server started as a subprocess by the daemon-lifecycle integration test above, so the health-check machinery is proven against a genuine process, not a mock.
+**Concerns.** Slower than a savepoint test (a full table-count snapshot and a cleanup pass per test), and it must tolerate other writers, so use it only where real commits matter. See the entries Cursor Hijacking, Leak Snapshotting, ORM Instrumentation, Automated Cleanup and Leak Verification for each step.
+
+### Integration Daemon Testing `[@ANCHOR: zero_sudo:COMM_integration_daemon_testing]`
+
+**Purpose.** Lets a test start a real standalone Python daemon next to the Odoo test, wait until it answers, and be sure it is stopped afterwards, so daemon-to-Odoo integration is tested against a genuine process and not a mock.
+
+**Interface.** `HamsTransactionCase.start_daemon(script_path, args=None, env_vars=None, health_url=None, timeout=600)` (see its entry in the harness section) starts the process through `zero_sudo.daemon.utils._start_daemon_process` (its own session, so the whole group can be signalled), records it in the class's `_active_daemons`, and with `health_url` polls every 0.5 s until HTTP 200 or 204; `tearDownClass` sends SIGTERM to the process group, escalates to SIGKILL after 2 s, and clears the list.
+
+**Errors.** `RuntimeError` when the daemon exits before it is healthy, `TimeoutError` when it never answers within `timeout` seconds. **Tests.** `test_integration.py` starts `dummy_daemon.py` and checks the lifecycle (`COMM_test_integration_daemon_testing`).
+
+### Real Dummy Daemon `[@ANCHOR: zero_sudo:dummy_daemon_do_head]`
+
+`Handler.do_HEAD(self)` in `zero_sudo/tests/dummy_daemon.py` answers every `HEAD` request with status 200 and no body (`send_response(200)`, `end_headers()`); it takes no arguments beyond the request handler's own and returns nothing. The file is a tiny standalone HTTP server (`socketserver.TCPServer` on `0.0.0.0` port 1234, `serve_forever`), started as a subprocess by the daemon-lifecycle integration test in `test_integration.py`, so the health-check machinery in `start_daemon` is proven against a genuine process, not a mock. It has no authentication and listens on all interfaces, which is acceptable only because it runs briefly on a test box; it does not run in production.
 
 ## Base Class Lifecycle, In Detail
-- **HamsTransactionCase Setup** `[@ANCHOR: zero_sudo:hams_transaction_case_setup]`: Flushes the distributed Redis cache at the start of every test using this base class, so a leftover key from a prior test can never leak into the next one's assertions.
+### HamsTransactionCase Setup `[@ANCHOR: zero_sudo:hams_transaction_case_setup]`
 
-- **HamsTransactionCase Teardown** `[@ANCHOR: zero_sudo:hams_transaction_case_teardown_class]`: Stops the crypto-secret patchers and forcibly terminates any daemon subprocess this test class itself started (escalating SIGTERM to SIGKILL if needed), once per class, after its last test finishes.
+`HamsTransactionCase.setUp(self)` runs Odoo's own `setUp`, then obtains the Redis connection through `get_redis_connection(self.env)` and calls `flushall()` on it when one is configured, so a leftover key from a prior test can never leak into the next one's assertions. Any exception from Redis is logged at warning level and swallowed: a Redis-less install (a tenant instance) runs the same tests. It has no arguments and returns nothing. The flush is global to the Redis server (`flushall`, not `flushdb`), which is safe only on a test box with no other Redis users. The global `BaseCase` teardown patch (below) flushes the database again afterwards.
 
-- **Global BaseCase Teardown Patch** `[@ANCHOR: zero_sudo:patched_basecase_teardown]`: Replaces `BaseCase.tearDown` itself (Odoo's own ultimate test-class ancestor), so cache-flushing and local-cache clearing happen on the teardown of literally every test in the whole process, not only ones using this module's own base classes.
+### HamsTransactionCase Teardown `[@ANCHOR: zero_sudo:hams_transaction_case_teardown_class]`
 
-- **HamsHttpCase Setup** `[@ANCHOR: zero_sudo:hams_http_case_setup]` **/ Browser Startup** `[@ANCHOR: zero_sudo:hams_http_case_start_hams_browser]`: `setUp` starts no browser (until 2026-11-08 it started a headless Chrome for every test of every HTTP class, whether or not the test navigated anywhere, and a tour's `browser_js()` then built a second one whose spawn reaped the first). `self.browser` stays `None` until a test calls `start_hams_browser()` (or `navigate_and_screenshot()`, which does), which builds a `ChromeBrowser` and caches it on the test for the rest of that test. A tour needs no call: `browser_js()` builds its own browser.
+`HamsTransactionCase.tearDownClass(cls)` runs once after the class's last test. It stops every daemon in `cls._active_daemons`: it sends SIGTERM to the daemon's whole process group (the daemon was started in its own session, so children it forked are included) and waits 2 s; if the daemon has not exited it sends SIGKILL to the group and then `kill()`s the process; an already-exited process is ignored and any other error is logged. Then it clears the list and calls the parent `tearDownClass`. It does not stop the crypto-secret patchers itself: they were registered with `startClassPatcher`, and unittest's class cleanup stops them, so a second `stop()` would raise. It signals only the daemons this class started.
 
-- **HamsHttpCase Teardown** `[@ANCHOR: zero_sudo:hams_http_case_teardown]` **/ Teardown Class** `[@ANCHOR: zero_sudo:hams_http_case_teardown_class]`: Per-test and per-class Chrome/proxy cleanup, symmetric with the setup above. A test's own browser (`self.browser`) is torn down in `tearDown`, except that a browser leased from the class's Chrome pool (below) only has its browser context disposed: the Chrome process belongs to the pool, which `tearDownClass` closes.
+### Global BaseCase Teardown Patch `[@ANCHOR: zero_sudo:patched_basecase_teardown]`
 
-- **url_open Wrapper** `[@ANCHOR: zero_sudo:hams_http_case_url_open]`: A thin wrapper around core Odoo's own `url_open` that strips a stray `verify` kwarg and supports a `head=True` shortcut for HEAD requests -- used by essentially every controller-route test in both repos.
+`_patched_basecase_teardown(self, *args, **kwargs)` replaces `BaseCase.tearDown` itself (Odoo's own ultimate test-class ancestor), so the clean-up runs on the teardown of literally every test in the process, not only ones using this module's own base classes. It calls `flushdb()` on the distributed Redis connection (`get_redis_connection(self.env)`), clears the in-process `_local_cache` of `distributed_redis_cache`, and then calls the saved original `tearDown`. A Redis or cache error is logged at info level and swallowed, so a Redis-less install still tears down. It takes no other arguments and returns nothing. It flushes the whole Redis database, which is safe only because test boxes do not share Redis with production.
 
-- **Screenshot Helper** `[@ANCHOR: zero_sudo:hams_http_case_navigate_and_screenshot]`: Navigates to a real URL in the managed Chrome instance and saves a screenshot, used by UI-persona-style tests that need a visual record rather than a tour's own pass/fail assertions.
+### HamsHttpCase Setup `[@ANCHOR: zero_sudo:hams_http_case_setup]` / Browser Startup `[@ANCHOR: zero_sudo:hams_http_case_start_hams_browser]`
 
-- **Tour Runner** `[@ANCHOR: zero_sudo:hams_http_case_start_tour]` **/ browser_js Wrapper** `[@ANCHOR: zero_sudo:hams_http_case_browser_js]`: `start_tour` optionally forces a `debug=` query param (via `HAMS_TOUR_TOUR_DEBUG`) before delegating to core Odoo, which in turn calls this class's own `browser_js` override to actually drive the tour through the DevTools protocol.
+`setUp` starts no browser (until 2026-11-08 it started a headless Chrome for every test of every HTTP class, whether or not the test navigated anywhere, and a tour's `browser_js()` then built a second one whose spawn reaped the first). `self.browser` stays `None` until a test calls `start_hams_browser()` (or `navigate_and_screenshot()`, which does), which builds a `ChromeBrowser` and caches it on the test for the rest of that test. A tour needs no call: `browser_js()` builds its own browser.
 
-- **Empty-Run Guard** `[@ANCHOR: zero_sudo:hoot_empty_run_detector_emit]`: A logging handler the `browser_js` wrapper attaches to the browser-console logger for the duration of each run, so that a hoot suite which executed NO tests fails instead of passing silently. Hoot reports an empty run as `Passed 0 tests` followed by `Test suite succeeded` -- and `Test suite succeeded` is exactly the signal `browser_js` waits for, so before this guard a wrapper over an empty suite passed every time while testing nothing. A deliberately empty run must say so by passing `expect_empty=True`; see the `linter-compliance` skill's own hoot rules for why deleting the wrapper is usually the better answer. Note this guard lives on `HamsHttpCase`'s override and therefore does NOT cover the separate module-level patch immediately below, which `RealTransactionCase` reaches instead.
+### HamsHttpCase Teardown `[@ANCHOR: zero_sudo:hams_http_case_teardown]`
 
-- **Global HttpCase.browser_js Patch** `[@ANCHOR: zero_sudo:patched_browser_js]`: A SEPARATE, module-level monkeypatch applied directly to core Odoo's `HttpCase.browser_js` (not `HamsHttpCase`'s own override above) -- reached specifically by `RealTransactionCase`, which extends `HttpCase` directly rather than `HamsHttpCase`, so it has no subclass override of its own to shadow the patched parent method.
+`HamsHttpCase.tearDown(self)` runs after each test. It calls the parent `tearDown` (tolerating the "socket is already closed", `WebSocketConnectionClosedException` and `BrokenPipeError` errors a closing browser causes, and logging others), then in a `finally`: sends one `Connection: close` request to `/odoo/health` and closes the HTTP opener; closes the browser's cleanup stack and, for a browser that owns its Chrome (not one leased from the pool, whose Chrome belongs to the pool), kills its process tree with `_kill_browser_tree`, then terminates and kills the process; neuters the receiver thread's `join`; truncates `v8_hang*.log` files under the log directory unless a tour failed; and finally reaps every headless Chrome of this run with `_kill_all_headless_chrome_for_this_uid`. Each step catches and logs its own errors so a later step still runs. Nothing is raised for cleanup failures.
+
+### HamsHttpCase Teardown Class `[@ANCHOR: zero_sudo:hams_http_case_teardown_class]`
+
+`HamsHttpCase.tearDownClass(cls)` runs once after the class. It closes the class's pooled Chrome (`_chrome_pool.close()`), stops the two crypto-secret patchers, then, holding the per-class lock file `/opt/hams/test/socat_certs/hams_test_proxy_<uid>_<class>.lock` exclusively, stops the `socat` TLS proxy of the class: SIGTERM to its process group (unless that group is ours), `terminate()`, a 2 s wait, then SIGKILL of the group and `kill()`; it closes the proxy's log file and releases the lock. Errors are logged, never raised, and `_socat_proc` is set to `None`. It never signals its own process group.
+
+### url_open Wrapper `[@ANCHOR: zero_sudo:hams_http_case_url_open]`
+
+**Signature.** `url_open(self, url, data=None, timeout=30, headers=None, allow_redirects=True, head=False, **kwargs) -> requests.Response`.
+
+| Argument | Meaning |
+|---|---|
+| `url`, `data`, `headers`, `allow_redirects` | Passed to core `HttpCase.url_open` unchanged. |
+| `timeout` | Seconds, default 30 (core's is 10): the first request after Odoo rebuilds its routing map waits for that rebuild (11.8 s was measured), and a slow answer is not a failure. A hang still is. |
+| `head` | `True` sends a `HEAD` request (`method="HEAD"`). |
+| `**kwargs` | Passed on, except `verify`, which is dropped (the opener's `verify` is already `False` for the self-signed proxy). |
+
+**Returns** the response of core's `url_open`. **Errors** are core's (`requests` exceptions, timeouts). Used by essentially every controller-route test in both repositories. No state.
+
+### Screenshot Helper `[@ANCHOR: zero_sudo:hams_http_case_navigate_and_screenshot]`
+
+**Signature.** `navigate_and_screenshot(self, url_path, prefix="screenshot_")`; `url_path` is a path on the test server (appended to `base_url()`), `prefix` the screenshot file prefix. It starts the test's browser with `start_hams_browser()` if there is none, then, inside `allow_requests(browser=browser)` (so the test cursor is available to the server), navigates there waiting for the page to stop loading, sleeps 1 s, and takes a screenshot, waiting up to 10 s for the file to be written. A failure to take the screenshot is logged as a warning and does not fail the test. Returns nothing. Used by UI-persona tests that want a visual record rather than a tour's pass/fail. The file is saved through the patched `save_test_file`, so it only appears when `SAVE_LOGS=1`.
+
+### Tour Runner `[@ANCHOR: zero_sudo:hams_http_case_start_tour]`
+
+**Signature.** `start_tour(self, *args, **kwargs)`: takes the arguments of core `HttpCase.start_tour` (the URL path first, then the tour name and options). If the environment variable `HAMS_TOUR_TOUR_DEBUG` is set and the first argument is a string URL path, its `debug=` query parameter is set to that value (replacing an existing one, else appended with `?` or `&`). It then calls core's `start_tour`, which drives the tour through `browser_js`. If anything is raised it logs the error, sets the class flag `_hams_tour_failed = True` (which keeps the V8 hang logs for inspection) and re-raises the same exception (`from None`). Returns nothing. Errors: whatever core raises (`AssertionError` for a failed tour, `ChromeBrowserException`).
+
+### browser_js Wrapper `[@ANCHOR: zero_sudo:hams_http_case_browser_js]`
+
+**Signature.** `browser_js(self, *args, expect_empty=False, **kwargs)`: the arguments of core `HttpCase.browser_js` plus `expect_empty`. Before running, a run of `/web/tests` or `/web/tests/legacy` sets `content_security_policy.allow_developer_pages` to `True` (the test is asking for that page; the test transaction rolls it back). It attaches an empty-run detector to the browser console logger, prepends the navigator overrides and a set of suppressions for known harmless page errors to the `ready` script, delegates to core, and in a `finally` detaches the detector. If the detector saw "Passed 0 tests" and `expect_empty` is false, the test fails (see Empty-Run Guard). Returns nothing; raises what core raises. A tour reaches this method through `start_tour`; the `ChromeBrowser` it builds is pooled per class unless the pool does not apply.
+
+### Empty-Run Guard `[@ANCHOR: zero_sudo:hoot_empty_run_detector_emit]`
+
+A logging handler the `browser_js` wrapper attaches to the browser-console logger for the duration of each run, so that a hoot suite which executed NO tests fails instead of passing silently. Hoot reports an empty run as `Passed 0 tests` followed by `Test suite succeeded` -- and `Test suite succeeded` is exactly the signal `browser_js` waits for, so before this guard a wrapper over an empty suite passed every time while testing nothing. A deliberately empty run must say so by passing `expect_empty=True`; see the `linter-compliance` skill's own hoot rules for why deleting the wrapper is usually the better answer. Note this guard lives on `HamsHttpCase`'s override and therefore does NOT cover the separate module-level patch immediately below, which `RealTransactionCase` reaches instead.
+
+### Global HttpCase.browser_js Patch `[@ANCHOR: zero_sudo:patched_browser_js]`
+
+`_patched_browser_js(self, *args, **kwargs)` is a SEPARATE, module-level monkeypatch of core Odoo's `HttpCase.browser_js` (not `HamsHttpCase`'s own override), reached by `RealTransactionCase`, which extends `HttpCase` directly and has no override to shadow it. It calls the original; on any exception, when `HAMS_PAUSE_ON_FAIL=1` (set by the `--pause-on-fail` option of `test.py`) it logs that the tour failed and sleeps in a loop of 60 s forever so a developer can attach DevTools to the fixed port 9222 of the frozen headless Chrome; with the variable unset it re-raises the exception unchanged. It adds no empty-run guard: that lives only in the `HamsHttpCase` wrapper. Never use the pause mode in an unattended run; it never returns.
 
 ## Chrome/DevTools Protocol Monkeypatches
 A cluster of module-level patches make headless-Chrome tour testing reliable in this sandboxed environment, each addressing one real, previously-observed failure mode:
