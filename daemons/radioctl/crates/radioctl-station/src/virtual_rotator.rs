@@ -40,6 +40,8 @@ pub struct VirtualRotator {
     pub stuck: bool,
     /// Never answers.
     pub silent: bool,
+    /// Rot2Prog replies carry digit bytes 0 to 9 (as Hamlib reads them) instead of ASCII digits.
+    pub raw_digits: bool,
     received: Vec<String>,
     buffer: Vec<u8>,
 }
@@ -72,6 +74,7 @@ impl VirtualRotator {
             last: Duration::ZERO,
             stuck: false,
             silent: false,
+            raw_digits: true,
             received: Vec::new(),
             buffer: Vec::new(),
         }
@@ -123,6 +126,9 @@ impl VirtualRotator {
         if self.buffer.len() > 4096 {
             self.buffer.clear();
         }
+        if self.desc.protocol == RotatorProtocol::Rot2Prog {
+            return self.rot2prog_frames();
+        }
         let mut out = Vec::new();
         let end = match self.desc.protocol {
             RotatorProtocol::Rotctld
@@ -144,6 +150,7 @@ impl VirtualRotator {
                 RotatorProtocol::Easycomm1
                 | RotatorProtocol::Easycomm2
                 | RotatorProtocol::Easycomm3 => self.easycomm(&text),
+                RotatorProtocol::Rot2Prog => Vec::new(), // served by rot2prog_frames
             };
             if !self.silent {
                 out.extend_from_slice(&reply);
@@ -180,6 +187,70 @@ impl VirtualRotator {
                 }
             }
             _ => b"RPRT -4\n".to_vec(),
+        }
+    }
+
+    // [@ANCHOR: radioctl_station_vrot_rot2prog]
+    /// Serves every complete 13-byte Rot2Prog frame in the buffer (bytes before a `W` are
+    /// dropped): set `0x2F` moves (a target outside the travel is ignored, nothing is answered),
+    /// status `0x1F` and stop `0x0F` answer the 12-byte position reply (stop first freezes the
+    /// rotator). The pulses-per-degree byte of a reply is the description's.
+    fn rot2prog_frames(&mut self) -> Vec<u8> {
+        let mut out = Vec::new();
+        loop {
+            while self.buffer.first().is_some_and(|b| *b != 0x57) {
+                self.buffer.remove(0);
+            }
+            if self.buffer.len() < 13 {
+                return out;
+            }
+            let f: Vec<u8> = self.buffer.drain(..13).collect();
+            self.received.push(
+                f.iter()
+                    .map(|b| format!("{b:02X}"))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            );
+            let ppd = self.desc.pulses_per_degree.unwrap_or(10).max(1);
+            let reply = match f[11] {
+                0x2F => {
+                    let value = |d: &[u8]| {
+                        d.iter().fold(0u32, |a, b| {
+                            a * 10 + u32::from(if *b >= 0x30 { b - 0x30 } else { *b })
+                        })
+                    };
+                    let az = value(&f[1..5]) as f32 / f32::from(f[5].max(1)) - 360.0;
+                    let el = value(&f[6..10]) as f32 / f32::from(f[10].max(1)) - 360.0;
+                    self.set_target(az, el);
+                    None
+                }
+                cmd @ (0x1F | 0x0F) => {
+                    if cmd == 0x0F {
+                        self.state.target_az = self.state.az;
+                        self.state.target_el = self.state.el;
+                    }
+                    let digits = |angle: f32| {
+                        let v = ((360.0 + angle) * f32::from(ppd)).round() as u32;
+                        let d = format!("{v:04}").into_bytes();
+                        if self.raw_digits {
+                            d.iter().map(|c| c - b'0').collect::<Vec<u8>>()
+                        } else {
+                            d
+                        }
+                    };
+                    let mut r = vec![0x57];
+                    r.extend(digits(self.state.az));
+                    r.push(ppd);
+                    r.extend(digits(self.state.el));
+                    r.push(ppd);
+                    r.push(0x20);
+                    Some(r)
+                }
+                _ => None,
+            };
+            if let (Some(r), false) = (reply, self.silent) {
+                out.extend(r);
+            }
         }
     }
 
@@ -411,6 +482,37 @@ mod tests {
         assert_eq!(r.feed(b"AZ10.0 EL0.0\nSA SE\n", t(1000)), b"");
         assert_eq!(r.state(t(2000)).az, 90.0, "stop froze it");
         assert_eq!(r.feed(b"UP000 XXX\n", t(2000)), b"");
+    }
+
+    // Tests [@ANCHOR: radioctl_station_vrot_rot2prog]
+    #[test]
+    fn it_speaks_rot2prog() {
+        let mut r = rot("spid-rot2prog");
+        let t = Duration::from_secs;
+        let set = [
+            0x57, b'3', b'6', b'5', b'5', 10, b'3', b'7', b'0', b'0', 10, 0x2F, 0x20,
+        ];
+        let status = [0x57, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1F, 0x20];
+        assert_eq!(r.feed(&set[..7], t(0)), b"", "half a frame waits");
+        assert_eq!(r.feed(&set[7..], t(0)), b"");
+        assert_eq!(r.state(t(0)).target_az, 5.5);
+        // Status after the slew: 5.5 and 10.0, plain digit bytes.
+        let reply = r.feed(&status, t(1000));
+        assert_eq!(reply, [0x57, 3, 6, 5, 5, 10, 3, 7, 0, 0, 10, 0x20]);
+        r.raw_digits = false;
+        assert_eq!(
+            r.feed(&[0xFF, 0xFF], t(1000)),
+            b"",
+            "junk before W is dropped"
+        );
+        assert_eq!(&r.feed(&status, t(1000))[1..5], b"3655");
+        // Stop freezes; an out-of-travel set is ignored.
+        let far = [
+            0x57, b'9', b'9', b'9', b'9', 10, b'3', b'6', b'0', b'0', 10, 0x2F, 0x20,
+        ];
+        r.feed(&far, t(1000));
+        assert_eq!(r.state(t(1000)).target_az, 5.5);
+        assert_eq!(r.received().len(), 4);
     }
 
     // Tests [@ANCHOR: radioctl_station_vrot_gs232]

@@ -45,6 +45,9 @@ pub enum RotatorProtocol {
     /// Easycomm III: the Easycomm II commands radioctl uses (the velocity, status and
     /// configuration extensions are not used).
     Easycomm3,
+    /// SPID Rot2Prog / MD-01/02 (13-byte command frames, 12-byte replies).
+    #[serde(rename = "rot2prog")]
+    Rot2Prog,
 }
 
 /// A park position.
@@ -82,6 +85,10 @@ pub struct RotatorDescription {
     pub park: Option<ParkPosition>,
     /// Longest wait for a reply.
     pub reply_timeout_ms: u64,
+    /// Pulses per degree the controller counts in (Rot2Prog: 1 to 10; a reply carries the
+    /// controller's own value, which is used to read it).
+    #[serde(default)]
+    pub pulses_per_degree: Option<u8>,
     /// Whether any of this has been checked on the rotator.
     #[serde(default)]
     pub verified: bool,
@@ -142,6 +149,17 @@ impl RotatorDescription {
         {
             return bad("GS-232 carries azimuth 0 to 450 and elevation 0 to 180".into());
         }
+        if self.protocol == RotatorProtocol::Rot2Prog {
+            let Some(ppd) = self.pulses_per_degree.filter(|p| (1..=10).contains(p)) else {
+                return bad("Rot2Prog needs pulses_per_degree from 1 to 10".into());
+            };
+            if self.az_min < 0.0
+                || (360.0 + self.az_max) * f32::from(ppd) > 9999.0
+                || (360.0 + self.el_max) * f32::from(ppd) > 9999.0
+            {
+                return bad("Rot2Prog carries four digits of 360 plus the angle".into());
+            }
+        }
         if let Some(p) = self.park {
             if !self.contains(p.az, p.el) {
                 return bad("the park position is outside the travel".into());
@@ -193,6 +211,7 @@ impl RotatorDescription {
             RotatorProtocol::Easycomm1
             | RotatorProtocol::Easycomm2
             | RotatorProtocol::Easycomm3 => Box::new(EasycommEngine::new(self.clone())),
+            RotatorProtocol::Rot2Prog => Box::new(Rot2ProgEngine::new(self.clone())),
         })
     }
 }
@@ -646,6 +665,140 @@ impl RotatorEngine for EasycommEngine {
     }
 }
 
+/// The SPID Rot2Prog / MD-01/02 binary protocol, from SPID's "ROT2PROG Protocol" sheet: every
+/// command is 13 bytes `W` + 10 payload bytes + command + `0x20` (set: two groups of four ASCII
+/// digits of `(360 + angle) * pulses` each followed by the pulses-per-degree byte, command `0x2F`;
+/// status `0x1F`; stop `0x0F`), and status and stop answer 12 bytes `W` + four digit bytes + PH +
+/// four digit bytes + PV + `0x20`. A digit byte is read as ASCII (`0x30` to `0x39`) or as a plain
+/// 0 to 9, because the sheet and Hamlib disagree on which a controller sends.
+pub struct Rot2ProgEngine {
+    desc: RotatorDescription,
+}
+
+impl Rot2ProgEngine {
+    // [@ANCHOR: radioctl_station_rot2prog_new]
+    /// An engine for `desc`.
+    pub fn new(desc: RotatorDescription) -> Rot2ProgEngine {
+        Rot2ProgEngine { desc }
+    }
+}
+
+/// The Rot2Prog command byte for a status read.
+const R2P_STATUS: u8 = 0x1F;
+/// The Rot2Prog command byte for stop.
+const R2P_STOP: u8 = 0x0F;
+/// The Rot2Prog command byte for set.
+const R2P_SET: u8 = 0x2F;
+
+// [@ANCHOR: radioctl_station_rot2prog_frame]
+/// A 13-byte Rot2Prog command frame. `angles` is `(azimuth, elevation, pulses per degree)` for a
+/// set, which fills the four digits and the pulses byte of each axis.
+fn r2p_frame(command: u8, angles: Option<(f32, f32, u8)>) -> Vec<u8> {
+    let mut f = vec![0u8; 13];
+    f[0] = 0x57;
+    if let Some((az, el, ppd)) = angles {
+        let digits =
+            |angle: f32| format!("{:04}", ((360.0 + angle) * f32::from(ppd)).round() as u32);
+        f[1..5].copy_from_slice(digits(az).as_bytes());
+        f[5] = ppd;
+        f[6..10].copy_from_slice(digits(el).as_bytes());
+        f[10] = ppd;
+    }
+    f[11] = command;
+    f[12] = 0x20;
+    f
+}
+
+// [@ANCHOR: radioctl_station_rot2prog_reading]
+/// One axis of a reply: four digit bytes and the pulses-per-degree byte to degrees.
+fn r2p_angle(digits: &[u8], ppd: u8) -> Result<f32, StationError> {
+    if ppd == 0 {
+        return Err(rot_err(
+            StationErrorKind::Driver,
+            "the controller reported 0 pulses per degree",
+        ));
+    }
+    let mut value = 0u32;
+    for b in digits {
+        let d = if (0x30..=0x39).contains(b) {
+            b - 0x30
+        } else {
+            *b
+        };
+        if d > 9 {
+            return Err(rot_err(
+                StationErrorKind::Driver,
+                format!("byte {b:#04x} is not a digit"),
+            ));
+        }
+        value = value * 10 + u32::from(d);
+    }
+    Ok(value as f32 / f32::from(ppd) - 360.0)
+}
+
+impl RotatorEngine for Rot2ProgEngine {
+    // [@ANCHOR: radioctl_station_rot2prog_description]
+    fn description(&self) -> &RotatorDescription {
+        &self.desc
+    }
+
+    // [@ANCHOR: radioctl_station_rot2prog_encode]
+    fn encode(&self, op: &RotOp) -> Result<Encoded, StationError> {
+        let pos = target(&self.desc, op)?;
+        let ppd = self.desc.pulses_per_degree.unwrap_or(10);
+        Ok(match (op, pos) {
+            (RotOp::SetPosition { .. } | RotOp::Park, Some((az, el))) => Encoded {
+                bytes: r2p_frame(R2P_SET, Some((az, el, ppd))),
+                expect: RotExpect::Nothing,
+            },
+            (RotOp::GetPosition, _) => Encoded {
+                bytes: r2p_frame(R2P_STATUS, None),
+                expect: RotExpect::Position,
+            },
+            _ => Encoded {
+                bytes: r2p_frame(R2P_STOP, None),
+                expect: RotExpect::Position,
+            },
+        })
+    }
+
+    // [@ANCHOR: radioctl_station_rot2prog_parse]
+    fn parse(
+        &self,
+        expect: RotExpect,
+        buf: &[u8],
+    ) -> Result<Option<(RotReply, usize)>, StationError> {
+        match expect {
+            RotExpect::Nothing => Ok(Some((RotReply::Done, 0))),
+            RotExpect::Status => Err(rot_err(
+                StationErrorKind::Driver,
+                "Rot2Prog has no status replies",
+            )),
+            RotExpect::Position => {
+                let Some(start) = buf.iter().position(|b| *b == 0x57) else {
+                    return Ok(None);
+                };
+                let Some(f) = buf.get(start..start + 12) else {
+                    return Ok(None);
+                };
+                if f[11] != 0x20 {
+                    return Err(rot_err(
+                        StationErrorKind::Driver,
+                        "a Rot2Prog reply does not end with 0x20",
+                    ));
+                }
+                let az = r2p_angle(&f[1..5], f[5])?;
+                let el = if self.desc.has_elevation {
+                    r2p_angle(&f[6..10], f[10])?
+                } else {
+                    0.0
+                };
+                Ok(Some((RotReply::Position { az, el }, start + 12)))
+            }
+        }
+    }
+}
+
 /// A rotator on a transport: commands are serialised, every wait is bounded, and a down link
 /// fails at once.
 pub struct Rotator {
@@ -861,7 +1014,7 @@ mod tests {
     #[test]
     fn the_shipped_descriptions_are_valid_and_bad_ones_are_refused() {
         let all = RotatorDescription::builtin();
-        assert_eq!(all.len(), 6);
+        assert_eq!(all.len(), 7);
         assert!(all.iter().all(|d| d.validate().is_ok() && !d.verified));
         for d in &all {
             assert_eq!(d.engine().unwrap().description().id, d.id);
@@ -1054,6 +1207,82 @@ mod tests {
             az.parse(RotExpect::Position, b"AZ10.0\n").unwrap(),
             Some((RotReply::Position { az: 10.0, el: 0.0 }, 7))
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_station_rot2prog_new]
+    // Tests [@ANCHOR: radioctl_station_rot2prog_description]
+    // Tests [@ANCHOR: radioctl_station_rot2prog_encode]
+    // Tests [@ANCHOR: radioctl_station_rot2prog_parse]
+    // Tests [@ANCHOR: radioctl_station_rot2prog_frame]
+    // Tests [@ANCHOR: radioctl_station_rot2prog_reading]
+    #[test]
+    fn rot2prog_encodes_and_parses_the_sheet_frames() {
+        let e = Rot2ProgEngine::new(desc("spid-rot2prog"));
+        assert_eq!(e.description().protocol, RotatorProtocol::Rot2Prog);
+        // The sheet's set example: 5.5 degrees and 10 degrees at divisor 10 is "3655" and "3700".
+        assert_eq!(
+            e.encode(&RotOp::SetPosition { az: 5.5, el: 10.0 })
+                .unwrap()
+                .bytes,
+            [0x57, b'3', b'6', b'5', b'5', 10, b'3', b'7', b'0', b'0', 10, 0x2F, 0x20]
+        );
+        assert_eq!(
+            e.encode(&RotOp::GetPosition).unwrap().bytes,
+            [0x57, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1F, 0x20]
+        );
+        assert_eq!(
+            e.encode(&RotOp::Stop).unwrap().bytes,
+            [0x57, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x0F, 0x20]
+        );
+        assert_eq!(
+            e.encode(&RotOp::SetPosition { az: 361.0, el: 0.0 })
+                .unwrap_err()
+                .kind,
+            StationErrorKind::Refused
+        );
+        // The sheet's reply example: "3823" and "3605", divisor 10: azimuth 22.3, elevation 0.5.
+        let ascii = [
+            0x57, b'3', b'8', b'2', b'3', 10, b'3', b'6', b'0', b'5', 10, 0x20,
+        ];
+        let plain = [0x57, 3, 8, 2, 3, 10, 3, 6, 0, 5, 10, 0x20];
+        for wire in [ascii, plain] {
+            let Some((RotReply::Position { az, el }, used)) =
+                e.parse(RotExpect::Position, &wire).unwrap()
+            else {
+                panic!("no position");
+            };
+            assert!((az - 22.3).abs() < 1e-3 && (el - 0.5).abs() < 1e-3 && used == 12);
+        }
+        // Junk before the frame, a short frame, a bad end, a bad digit, a zero divisor.
+        let mut junk = vec![0x00, 0x13];
+        junk.extend_from_slice(&ascii);
+        assert_eq!(e.parse(RotExpect::Position, &junk).unwrap().unwrap().1, 14);
+        assert_eq!(e.parse(RotExpect::Position, &ascii[..11]).unwrap(), None);
+        assert_eq!(e.parse(RotExpect::Position, b"").unwrap(), None);
+        let mut bad = ascii;
+        bad[11] = 0x21;
+        assert!(e.parse(RotExpect::Position, &bad).is_err());
+        let mut bad = ascii;
+        bad[2] = b'x';
+        assert!(e.parse(RotExpect::Position, &bad).is_err());
+        let mut bad = ascii;
+        bad[5] = 0;
+        assert!(e.parse(RotExpect::Position, &bad).is_err());
+        assert!(e.parse(RotExpect::Status, b"x").is_err());
+        assert_eq!(
+            e.parse(RotExpect::Nothing, b"").unwrap(),
+            Some((RotReply::Done, 0))
+        );
+        // The description needs its resolution.
+        let mut d = desc("spid-rot2prog");
+        d.pulses_per_degree = None;
+        assert!(d
+            .validate()
+            .unwrap_err()
+            .detail
+            .contains("pulses_per_degree"));
+        d.pulses_per_degree = Some(11);
+        assert!(d.validate().is_err());
     }
 
     // Tests [@ANCHOR: radioctl_station_gs232_new]

@@ -193,6 +193,10 @@ pub async fn stop(&self) -> Result<(), StationError>
   read, `SA SE` to stop; Easycomm I cannot read; the Easycomm III extras are not used). Easycomm is
   written from the public specification (AMSAT WiSP text, Hamlib's copy) and was driven by Hamlib's
   own `rotctl -m 201/202/204` against the virtual rotator on a pty; no controller was on the bench.
+  SPID Rot2Prog / MD-01/02 (`rot2prog`: 13-byte frames, `0x2F` set, `0x1F` status, `0x0F` stop,
+  `pulses_per_degree` in the description) is written from SPID's public protocol sheet and driven by
+  `rotctl -m 901` the same way; a reply's digit bytes are read as ASCII or as plain 0 to 9, because
+  the sheet and Hamlib disagree and the bench has to say which a controller sends.
 - A position outside the description's travel is **refused**, never clamped, and nothing is written.
 - Every wait is bounded (the description's reply timeout); commands are serialised; stale bytes are
   drained before and after a failure so a late reply is never taken for the next one.
