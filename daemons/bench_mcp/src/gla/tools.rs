@@ -15,9 +15,9 @@ pub trait Backend {
     fn call(&self, tool: &str, args: &Value) -> Result<Value, String>;
 }
 
+// [@ANCHOR: gla_ctx_struct]
 /// Everything a tool call needs besides its arguments.
 pub struct Ctx<'a> {
-    // [@ANCHOR: gla_ctx_struct]
     pub backend: &'a dyn Backend,
     /// Where captures and exports are written and read (the server's `BENCH_MCP_OUT`).
     pub out_dir: PathBuf,

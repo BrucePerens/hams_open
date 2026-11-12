@@ -104,6 +104,7 @@ pub fn i2c(w: &Wave, scl: usize, sda: usize) -> Result<Value, String> {
     if scl == sda {
         return Err("scl and sda must be different pins".into());
     }
+    // [@ANCHOR: bench_mcp_gla_decode_cur]
     struct Cur {
         start: u64,
         repeated: bool,
@@ -195,6 +196,7 @@ pub fn spi(
     }
     let sample_rising = (mode >> 1) == (mode & 1);
     let active = |v: u32| cs.is_none_or(|c| bit!(v, c) != cs_active_low);
+    // [@ANCHOR: bench_mcp_gla_decode_x]
     struct X {
         start: u64,
         o: Vec<u32>,

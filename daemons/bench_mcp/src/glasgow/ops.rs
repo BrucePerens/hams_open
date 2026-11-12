@@ -92,6 +92,7 @@ fn pin(args: &Value, key: &str, default: Option<&str>) -> Result<(String, char),
     Ok((spec, p[0].0))
 }
 
+// [@ANCHOR: bench_mcp_glasgow_ops_plan]
 /// What a tool will run.
 struct Plan {
     tool: &'static str,

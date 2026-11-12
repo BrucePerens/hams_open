@@ -1030,6 +1030,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_main_survey]
     // Tests [@ANCHOR: bench_mcp_main_device_property]
     // Tests [@ANCHOR: bench_mcp_main_call]
+    // Tests [@ANCHOR: bench_mcp_gla_tests_fake]
     #[test]
     fn two_vnas_are_driven_at_once_by_device_name_each_with_its_own_tier() {
         use crate::nanovna::testkit::{Fake, PtyServer};

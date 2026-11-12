@@ -10,6 +10,7 @@ use std::sync::Mutex;
 
 pub const SERIAL: &str = "C3-20200101T000000Z";
 
+// [@ANCHOR: bench_mcp_glasgow_testkit_state]
 #[derive(Default)]
 pub struct State {
     /// port -> (supply, limit, trip)
@@ -37,6 +38,7 @@ pub struct State {
     pub fail_pattern: bool,
 }
 
+// [@ANCHOR: bench_mcp_glasgow_testkit_sim]
 pub struct Sim {
     pub st: Mutex<State>,
     pub tmp: PathBuf,

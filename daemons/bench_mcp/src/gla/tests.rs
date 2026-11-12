@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::path::PathBuf;
 
+// [@ANCHOR: bench_mcp_gla_tests_b]
 /// Builds a waveform change by change.
 struct B {
     w: Wave,
@@ -98,6 +99,7 @@ fn uart_frame(
 
 const VCD: &str = "$timescale 1 ns $end\n$scope module glasgow $end\n$var wire 1 ! A0 $end\n$var wire 1 \" A1 $end\n$upscope $end\n$enddefinitions $end\n#0\n$dumpvars\n0!\n1\"\n$end\n#100\n1!\n#100\n0\"\n#300\n0!\n#400\n";
 
+// Tests [@ANCHOR: bench_mcp_gla_wave_edge]
 #[test]
 fn vcd_is_parsed_with_initial_state_coalesced_changes_and_the_overrun_marker() {
     // Tests [@ANCHOR: gla_parse_vcd]
@@ -188,6 +190,7 @@ fn a_window_is_rebased_and_keeps_where_it_came_from() {
     assert_eq!(beyond.end_ns, 0);
 }
 
+// Tests [@ANCHOR: bench_mcp_gla_tests_b]
 #[test]
 fn resampling_follows_the_wave_and_counts_the_pulses_it_cannot_show() {
     // Tests [@ANCHOR: gla_resample]
@@ -714,6 +717,7 @@ fn i2c_bytes(b: &mut B, t0: u64, bytes: &[(u8, bool)], stop: bool) -> u64 {
     t + 5 * q
 }
 
+// Tests [@ANCHOR: bench_mcp_gla_decode_cur]
 #[test]
 fn i2c_transactions_are_decoded_with_addresses_acks_repeated_starts_and_stops() {
     // Tests [@ANCHOR: gla_decode_i2c]
@@ -801,6 +805,7 @@ fn spi_frame(b: &mut B, t0: u64, mode: u8, out: &[u8], inp: &[u8], msb: bool) ->
     t + 2 * q
 }
 
+// Tests [@ANCHOR: bench_mcp_gla_decode_x]
 #[test]
 fn spi_words_are_decoded_in_every_mode_and_bit_order() {
     // Tests [@ANCHOR: gla_decode_spi]
@@ -1019,6 +1024,7 @@ fn the_backend_arguments_carry_pins_steps_and_repeat() {
 
 // ---------- tools ----------
 
+// [@ANCHOR: bench_mcp_gla_tests_fake]
 /// A backend that plays the Glasgow: a capture writes the VCD it was told to hold (a fixed waveform), a pattern is rendered into the
 /// waveform the next capture returns, so a pattern run loops back into a capture.
 struct Fake {
@@ -1345,6 +1351,7 @@ use crate::config::Instrument;
 use crate::glasgow::testkit::{Sim, SERIAL};
 use std::sync::Arc;
 
+// [@ANCHOR: bench_mcp_gla_tests_stack]
 /// The Glasgow module's own tools over its simulated device: what `bench_gla_*` really sees in production, minus the USB cable.
 struct Stack {
     ctx: crate::glasgow::Ctx,
@@ -1429,6 +1436,7 @@ fn the_capture_and_the_pattern_refuse_until_the_port_voltage_is_set_through_the_
     let _ = std::fs::remove_dir_all(&s.dir);
 }
 
+// Tests [@ANCHOR: bench_mcp_gla_tests_stack]
 #[test]
 fn a_capture_after_the_port_is_set_is_decoded_and_the_pins_are_parked() {
     // Tests [@ANCHOR: gla_capture]
@@ -1520,6 +1528,7 @@ fn a_full_speed_link_stops_the_capture_in_the_backend_before_anything_runs() {
 
 // ---------- the tool entry points ----------
 
+// Tests [@ANCHOR: bench_mcp_gla_spec]
 #[test]
 fn tools_are_listed_by_tier_the_instrument_is_found_and_the_tier_is_enforced() {
     // Tests [@ANCHOR: gla_tool_defs]
@@ -1606,6 +1615,7 @@ fn tools_are_listed_by_tier_the_instrument_is_found_and_the_tier_is_enforced() {
     assert!(e.contains("does_not_exist_gla.vcd"), "{e}");
 }
 
+// Tests [@ANCHOR: bench_mcp_gla_real]
 #[test]
 fn the_production_backend_hands_the_call_to_the_glasgow_module() {
     // Tests [@ANCHOR: gla_real_backend]
