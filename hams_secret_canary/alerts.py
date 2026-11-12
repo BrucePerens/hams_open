@@ -6,6 +6,8 @@ the label and where it was seen and never carries the matched value."""
 import logging
 from dataclasses import dataclass
 
+from odoo import fields
+
 _logger = logging.getLogger("hams_secret_canary.alarm")
 BACKENDS = {}
 
@@ -75,3 +77,26 @@ def mail_backend(env, alarm):
         "email_to": address,
         "auto_delete": False,
     })
+
+
+@register_backend("pager")
+# [@ANCHOR: hams_secret_canary:pager_backend]
+def pager_backend(env, alarm):
+    """Opens (or adds an occurrence to) a critical `pager.incident` whose source is `Secret canary: <label>`, when the
+    `pager_duty` addon is installed. The description is metadata only: kind, label, place and UTC time, never the value.
+    `report_incident` does not read the `pagerduty-maintenance` flag, so a hit during maintenance still pages. Skipped
+    when `env` is None (log hits) or `pager_duty` is not installed. A failure is logged and never reaches the response
+    (the other backends have already run, and this one runs last)."""
+    if env is None or "pager.incident" not in env:
+        return
+    try:
+        with env.cr.savepoint():
+            pager_uid = env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
+            env["pager.incident"].with_user(pager_uid).report_incident({
+                "source": "Secret canary: %s" % alarm.label,
+                "severity": "critical",
+                "description": "A %s (%s) was seen in %s: %s, %s UTC." % (
+                    alarm.kind, alarm.label, alarm.source, alarm.where, fields.Datetime.now()),
+            })
+    except Exception as error:  # audit-ignore-catch-all: alerting must not break the response it is watching
+        _logger.warning("Secret canary alarm for %s: the pager incident was not opened (%s).", alarm.label, type(error).__name__)

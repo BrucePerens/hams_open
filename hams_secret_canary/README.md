@@ -40,8 +40,8 @@ service: alerts go to the Odoo log, a `zero_sudo.security.log` row and an email 
 
 Every backend in `alerts.BACKENDS` runs for every alarm; add one with `alerts.register_backend(name)`. Shipped: `logging`
 (one CRITICAL line on the logger `hams_secret_canary.alarm`), `record` (a `zero_sudo.security.log` row, reason
-`secret_canary`) and `mail` (one `mail.mail` to the `base.user_admin` partner). A log-line hit has no database
-environment, so only `logging` runs for it.
+`secret_canary`), `mail` (one `mail.mail` to the `base.user_admin` partner) and `pager` (a critical `pager.incident`
+when `pager_duty` is installed). A log-line hit has no database environment, so only `logging` runs for it.
 
 ## Anchor entries
 
@@ -189,6 +189,15 @@ Test: `TestAlarm`.
 
 **Purpose.** A `zero_sudo.security.log` row, reason `secret_canary`, `login` = label, `user_agent` = `source: place`,
 created as `zero_sudo.odoo_facility_service_internal`. Does nothing when `env` is `None`. Test: `TestAlarm`.
+
+### `hams_secret_canary:pager_backend`
+
+**Purpose.** A critical `pager.incident` with source `Secret canary: <label>` and a description of kind, label, source, place
+and UTC time (no value), made through `report_incident` as `pager_duty.user_pager_service_internal`. `report_incident` does not
+read the `pagerduty-maintenance` flag, so a hit during maintenance still pages; it drops a repeat of the same source within
+60 seconds and then adds an occurrence to the open incident. Does nothing when `env` is `None` or `pager_duty` is not
+installed. A failure is logged (a warning naming the exception type) and swallowed, inside a savepoint. Test:
+`TestAlarm.test_pager_backend_opens_one_critical_incident_without_the_value`.
 
 ### `hams_secret_canary:mail_backend`
 

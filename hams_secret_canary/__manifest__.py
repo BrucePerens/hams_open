@@ -10,7 +10,7 @@
 Plants decoy credentials (generated per install) where a bug-hunter or attacker looks first, and raises an alarm when a
 decoy, or the fingerprint of any secret registered with the module, shows up in an HTTP response body or a log line.
 Detects a leak after it happens; it does not prevent one. Needs nothing but Odoo core and zero_sudo: alerts go to the
-Odoo log, a security-log row and an email to the administrator.
+Odoo log, a security-log row, an email to the administrator and, when pager_duty is installed, a critical pager incident.
     """,
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",

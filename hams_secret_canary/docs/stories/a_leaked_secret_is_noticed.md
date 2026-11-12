@@ -27,11 +27,11 @@ secret is noticed when it happens and not months later.
    `hams_secret_canary:scan_wsgi` `hams_secret_canary:scan_after_request`
    The wrapper scans only text media types, passes the body through unchanged and closes it, and looks at the first megabyte.
    `hams_secret_canary:is_text` `hams_secret_canary:pass_through` `hams_secret_canary:scan_chunks`
-4. A hit runs every alert backend: a CRITICAL log line, a security-log row and an email to the administrator. A log
+4. A hit runs every alert backend: a CRITICAL log line, a security-log row, an email to the administrator and, with `pager_duty` installed, a critical pager incident. A log
    line that held the value is rewritten with the value removed. No alarm carries the matched value.
    `hams_secret_canary:redact` `hams_secret_canary:raise_alarm`
    `hams_secret_canary:register_backend` `hams_secret_canary:logging_backend`
-   `hams_secret_canary:record_backend` `hams_secret_canary:mail_backend`
+   `hams_secret_canary:record_backend` `hams_secret_canary:mail_backend` `hams_secret_canary:pager_backend`
 
 This detects a leak after it has happened. It does not prevent one.
 
@@ -162,6 +162,10 @@ Returns the list of `(label, kind)` found, empty when nothing is registered yet 
 ### `hams_secret_canary:record_backend` [@ANCHOR: hams_secret_canary:record_backend]
 
 `record_backend(env, alarm)` in `alerts.py`, registered as `record`. Does nothing when `env` is `None`. Otherwise it resolves the facility service account `zero_sudo.odoo_facility_service_internal` and creates one `zero_sudo.security.log` row with `reason = "secret_canary"` (a selection value this module adds), `login` set to the alarm label and `user_agent` set to `"<source>: <where>"`. The row joins the caller's transaction. Errors, such as a missing service account, propagate. No value is written. Test: `test_secret_in_a_response_body_raises_the_alarm_without_the_value`.
+
+### `hams_secret_canary:pager_backend` [@ANCHOR: hams_secret_canary:pager_backend]
+
+`pager_backend(env, alarm)` in `alerts.py`, registered as `pager` (it runs after the other three). Does nothing when `env` is `None` (a log hit) or when the `pager.incident` model does not exist (`pager_duty` not installed). Otherwise, inside a savepoint and as `pager_duty.user_pager_service_internal`, it calls `report_incident` with source `Secret canary: <label>`, severity `critical` and a description naming kind, label, source, the (already redacted) place and the UTC time; the matched value never appears. `report_incident` ignores the `pagerduty-maintenance` flag, drops a repeat of the same source for 60 seconds and then adds an occurrence to the open incident. Any exception is logged as a warning naming only its type and swallowed, so a pager failure cannot break the response being scanned. Test: `test_pager_backend_opens_one_critical_incident_without_the_value`.
 
 ### `hams_secret_canary:mail_backend` [@ANCHOR: hams_secret_canary:mail_backend]
 
