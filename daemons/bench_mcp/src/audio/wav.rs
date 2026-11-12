@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+// [@ANCHOR: bench_mcp_audio_wav_wav_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Wav {
     pub rate: u32,
@@ -140,6 +141,7 @@ mod tests {
 
     // Tests [@ANCHOR: audio_wav]
     // Tests [@ANCHOR: bench_mcp_audio_wav_encode]
+    // Tests [@ANCHOR: bench_mcp_audio_wav_wav_type]
     #[test]
     fn a_wav_round_trips_within_one_sixteen_bit_step() {
         let w = Wav {

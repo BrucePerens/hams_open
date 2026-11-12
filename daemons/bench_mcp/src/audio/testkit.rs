@@ -16,6 +16,7 @@ pub fn devbox_devices() -> Vec<Device> {
     devices::parse(&dump, &recorded(), &Config::default()).unwrap()
 }
 
+// [@ANCHOR: bench_mcp_audio_testkit_scripted_type]
 /// Answers `pw-dump` with the recording and `wpctl get-volume` from a table, and records every other call.
 pub struct Scripted {
     pub volumes: RefCell<Vec<(u32, f64, bool)>>,

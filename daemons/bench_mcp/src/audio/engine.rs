@@ -17,6 +17,7 @@ const NO_FALLBACK: &str = "node.dont-fallback=true node.dont-reconnect=true";
 /// The start of the command line of every playback this server starts, for `bench_audio_safe_state`.
 pub const PLAY_SIGNATURE: &str = "pw-play -P node.dont-fallback=true node.dont-reconnect=true";
 
+// [@ANCHOR: bench_mcp_audio_engine_recorder_type]
 pub struct Recorder {
     child: Child,
     buf: Arc<Mutex<Vec<f32>>>,
@@ -174,6 +175,7 @@ fn play_command(node: &str, path: &Path, stream_volume: f64) -> Command {
     c
 }
 
+// [@ANCHOR: bench_mcp_audio_engine_playing_type]
 /// A `pw-play` process playing one file.
 pub struct Playing {
     child: Child,
@@ -253,6 +255,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_audio_engine_playing_start]
     // Tests [@ANCHOR: bench_mcp_audio_engine_recorder_start]
     // Tests [@ANCHOR: bench_mcp_audio_engine_recorder_wait_samples]
+    // Tests [@ANCHOR: bench_mcp_audio_engine_recorder_type]
     #[test]
     #[ignore]
     fn a_missing_target_fails_and_never_falls_back_to_the_default_device() {
@@ -279,6 +282,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_engine_playing_drop]
+    // Tests [@ANCHOR: bench_mcp_audio_engine_playing_type]
     #[test]
     fn dropping_a_playback_stops_the_process_that_is_still_running() {
         let child = Command::new("sleep")

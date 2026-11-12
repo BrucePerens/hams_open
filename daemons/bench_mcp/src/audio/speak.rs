@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 pub const MAX_TEXT: usize = 600;
 pub const MAX_SPEECH_S: f64 = 30.0;
 
+// [@ANCHOR: bench_mcp_audio_speak_engine_type]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Engine {
     SpeechDispatcher,
@@ -38,6 +39,7 @@ impl Engine {
     }
 }
 
+// [@ANCHOR: bench_mcp_audio_speak_found_type]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Found {
     pub espeak_ng: bool,
@@ -104,6 +106,7 @@ pub fn choose(want: &str, f: &Found, target: &Device, cfg_default: &str) -> Resu
     }
 }
 
+// [@ANCHOR: bench_mcp_audio_speak_voice_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Voice {
     pub language: String,
@@ -231,6 +234,7 @@ fn run_with_stdin(
     }
 }
 
+// [@ANCHOR: bench_mcp_audio_speak_request_type]
 /// What a speaking request asks for, after validation.
 pub struct Request {
     pub text: String,
@@ -446,6 +450,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_speak_choose]
+    // Tests [@ANCHOR: bench_mcp_audio_speak_engine_type]
     #[test]
     fn auto_prefers_speech_dispatcher_only_for_a_running_server_and_the_default_output() {
         let all = found(true, true, true, true);
@@ -535,6 +540,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_speak_voices]
+    // Tests [@ANCHOR: bench_mcp_audio_speak_voice_type]
     #[test]
     fn the_recorded_espeak_voice_list_parses() {
         let text = std::fs::read_to_string(recorded().join("espeak-voices.txt")).unwrap();
@@ -634,6 +640,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_speak_request]
+    // Tests [@ANCHOR: bench_mcp_audio_speak_request_type]
     #[test]
     fn a_request_is_validated_and_takes_its_defaults_from_the_config() {
         let fakes = fake_programs();
@@ -757,6 +764,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_speak_synthesizers]
+    // Tests [@ANCHOR: bench_mcp_audio_speak_found_type]
     #[test]
     fn the_synthesizer_report_lists_installed_engines_and_the_espeak_voices() {
         fake_programs();

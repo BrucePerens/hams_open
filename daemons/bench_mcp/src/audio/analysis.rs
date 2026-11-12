@@ -17,6 +17,7 @@ pub fn db(amplitude: f64) -> f64 {
     }
 }
 
+// [@ANCHOR: bench_mcp_audio_analysis_stats_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stats {
     pub samples: usize,
@@ -113,6 +114,7 @@ fn hann(n: usize) -> Vec<f64> {
         .collect()
 }
 
+// [@ANCHOR: bench_mcp_audio_analysis_spectrum_type]
 #[derive(Clone, Debug)]
 pub struct Spectrum {
     pub bin_hz: f64,
@@ -173,6 +175,7 @@ pub fn spectrum(s: &[f32], rate: u32, fft_len: usize) -> Result<Spectrum, String
     })
 }
 
+// [@ANCHOR: bench_mcp_audio_analysis_peak_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Peak {
     pub hz: f64,
@@ -355,6 +358,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_audio_analysis_spectrum_range]
     // Tests [@ANCHOR: bench_mcp_audio_analysis_peaks]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_spectrum_type]
     #[test]
     fn a_tone_between_bins_is_still_found_and_two_tones_are_separate_peaks() {
         let s = add(&sine(R, 1.0, 1234.5, 0.1), &sine(R, 1.0, 3000.0, 0.05));
@@ -368,6 +372,7 @@ mod tests {
         assert!(p[0].dbfs > p[1].dbfs);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_stats_type]
     #[test]
     fn digital_silence_clipping_and_silence_fraction_are_counted() {
         let z = stats(&vec![0.0; 4800], R, -60.0);

@@ -6,6 +6,7 @@ use super::devices::Device;
 use super::levels::{self, Level};
 use super::{Config, Run};
 
+// [@ANCHOR: bench_mcp_audio_safety_limits_type]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Limits {
     /// The highest wpctl volume allowed now.
@@ -29,6 +30,7 @@ pub fn limits(cfg: &Config, dev: &Device, urgent: bool, minute: u32) -> Limits {
     }
 }
 
+// [@ANCHOR: bench_mcp_audio_safety_want_type]
 /// What to do with the volume before making sound.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Want {
@@ -38,6 +40,7 @@ pub enum Want {
     Level(f64),
 }
 
+// [@ANCHOR: bench_mcp_audio_safety_applied_type]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Applied {
     pub before: Level,
@@ -45,6 +48,7 @@ pub struct Applied {
     pub muted: bool,
 }
 
+// [@ANCHOR: bench_mcp_audio_safety_volume_guard_type]
 pub struct VolumeGuard<'a> {
     run: &'a dyn Run,
     id: u32,
@@ -143,6 +147,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_safety_limits]
+    // Tests [@ANCHOR: bench_mcp_audio_safety_limits_type]
     #[test]
     fn quiet_hours_lower_the_limit_unless_urgent_and_a_port_cap_wins() {
         let mut cfg = Config::default();
@@ -192,6 +197,9 @@ mod tests {
 
     // Tests [@ANCHOR: audio_safety_guard]
     // Tests [@ANCHOR: bench_mcp_audio_safety_volumeguard_drop]
+    // Tests [@ANCHOR: bench_mcp_audio_safety_volume_guard_type]
+    // Tests [@ANCHOR: bench_mcp_audio_safety_applied_type]
+    // Tests [@ANCHOR: bench_mcp_audio_safety_want_type]
     #[test]
     fn the_guard_lowers_to_the_cap_unmutes_and_restores_both() {
         let d = speaker();

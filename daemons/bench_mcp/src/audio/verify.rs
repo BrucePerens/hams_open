@@ -28,6 +28,7 @@ fn bounded(args: &Value, k: &str, default: f64, lo: f64, hi: f64) -> Result<f64,
     Ok(v)
 }
 
+// [@ANCHOR: bench_mcp_audio_verify_check_type]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Check {
     pub name: &'static str,
@@ -41,6 +42,7 @@ impl Check {
     }
 }
 
+// [@ANCHOR: bench_mcp_audio_verify_expect_type]
 /// What the caller expects of the sound.
 #[derive(Debug, Clone, Default)]
 pub struct Expect {
@@ -93,6 +95,7 @@ pub fn expectations(args: &Value) -> Result<Expect, String> {
     })
 }
 
+// [@ANCHOR: bench_mcp_audio_verify_evidence_type]
 /// The evidence the judgment is made from.
 pub struct Evidence<'a> {
     pub input_all_zero: bool,
@@ -556,6 +559,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_verify_judge]
+    // Tests [@ANCHOR: bench_mcp_audio_verify_check_type]
     #[test]
     fn a_beep_that_matches_every_expectation_passes_with_reasons() {
         let events = [ev(0.5, 0.7, -20.0, Some(1800.0))];
@@ -568,6 +572,7 @@ mod tests {
         assert!(reason.contains("1805.0 Hz"));
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_verify_evidence_type]
     #[test]
     fn nothing_heard_fails_and_says_how_far_over_the_floor_it_looked() {
         let (ok, _, reason) = judge(&expect(json!({})), &evidence(&[], None));
@@ -636,6 +641,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_audio_verify_bounded]
     // Tests [@ANCHOR: bench_mcp_audio_verify_expectations]
+    // Tests [@ANCHOR: bench_mcp_audio_verify_expect_type]
     #[test]
     fn expectation_arguments_are_validated_and_the_tolerance_defaults_to_five_percent() {
         assert_eq!(expect(json!({"expect_hz": 2000})).tolerance_hz, 100.0);
