@@ -1,7 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from odoo import models, fields
+from odoo import api, models, fields
 
 
 class CalendarEvent(models.Model):
@@ -10,6 +10,7 @@ class CalendarEvent(models.Model):
     helpdesk_ticket_ids = fields.One2many("hams_helpdesk.ticket", "calendar_event_id", string="Helpdesk Tickets")
 
     # [@ANCHOR: hams_helpdesk:COMM_get_current_on_duty_admin]
+    @api.private
     def get_current_on_duty_admin(self):
         """
         Base implementation for on-duty admin resolution.
@@ -18,5 +19,6 @@ class CalendarEvent(models.Model):
         return False
 
     # [@ANCHOR: hams_helpdesk:COMM_get_upcoming_duty_shifts]
+    @api.private
     def get_upcoming_duty_shifts(self):
         return self.env["calendar.event"].browse()

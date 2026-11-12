@@ -222,6 +222,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
     # ---- the safe view every AI reader uses ----
 
     # [@ANCHOR: hams_helpdesk:untrusted_safe_view]
+    @api.private
     def safe_view(self, max_chars=0):
         """One dict per ticket with only filtered, visible text, the findings, and an untrusted
         wrapper. No AI reads a raw ticket body, raw HTML or raw metadata: use this."""

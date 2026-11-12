@@ -883,6 +883,7 @@ class HelpdeskTicket(models.Model):
             },
         }
 
+    @api.private
     def action_portal_close(self):
         """Allows portal users to close their own tickets."""
         # [@ANCHOR: COMM_helpdesk_portal_close]
