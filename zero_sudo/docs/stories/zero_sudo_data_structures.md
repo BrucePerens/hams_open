@@ -486,3 +486,22 @@
 **Methods.** `__init__`, `element`, `spend`.
 
 **See also:** test `test_02_many_svgs_interleaved_with_elements_are_linear_too (tests/test_svg_review_findings.py)`.
+
+### `OdooRpcError` [@ANCHOR: zero_sudo:zero_sudo_odoo_rpc_client_odoo_rpc_error]
+
+**Purpose and location.** The exception `OdooRpcClient.call` raises when a JSON-2 call to Odoo over the local Unix socket did not succeed. Defined in `zero_sudo/daemon/odoo_rpc_client.py` as a plain `Exception` subclass; raised by `OdooRpcClient.call` and caught by the daemons that use the client (and by the Unix-socket tests in `hams_rpc_guard`).
+
+**Definition.** `class OdooRpcError(Exception)`, built as `OdooRpcError(status, body)`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `status` | `int` | The HTTP status of the answer; `0` when no answer arrived. `call` raises it for any status other than 200. |
+| `body` | `str` | The first 500 characters of the answer decoded as UTF-8 (undecodable bytes replaced), for the daemon's own log. Odoo's error answers carry no secret. |
+
+**Message.** `JSON-2 call failed with HTTP <status>: <body>`.
+
+**Invariants and concurrency.** Immutable in practice: the two attributes are set once in `__init__`, which makes no system call. Plain Python exception, so it can be raised and caught on any thread. Not serialized anywhere; the daemon logs it and treats it as a failed call.
+
+**Functions that touch it.** `OdooRpcError.__init__` and `OdooRpcClient.call`.
+
+**See also:** the test `TestUnixSocketEndToEnd` in `hams_rpc_guard/tests/test_unix_listener.py`, which makes a call that Odoo refuses and reads `status` from the raised error.
