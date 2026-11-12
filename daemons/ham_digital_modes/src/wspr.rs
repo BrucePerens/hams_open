@@ -507,6 +507,7 @@ pub fn wspr_encode_wav_bytes(
 /// self-contained rather than pulling in the `rand` crate for this one
 /// narrow, test-only need (this crate otherwise has zero runtime
 /// dependencies beyond `libm`).
+// [@ANCHOR: wspr_split_mix64_struct]
 struct SplitMix64(u64);
 
 impl SplitMix64 {
@@ -592,6 +593,7 @@ pub fn wspr_encode_wav_bytes_with_noise(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: wspr_split_mix64_struct]
     use super::*;
 
     #[test]

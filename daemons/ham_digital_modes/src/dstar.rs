@@ -112,6 +112,7 @@ const DSTAR_HEADER_BODY_LEN: usize = 39;
 /// own suffixed callsign) -- represented as owned `String`s here (already trimmed of the padding
 /// used only on the wire), not fixed-size byte arrays, since nothing in this module needs to
 /// avoid the allocation and a `String` is far easier for a caller to work with correctly.
+// [@ANCHOR: dstar_dstar_header_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DStarHeader {
     pub flags: [u8; 3],
@@ -128,6 +129,7 @@ pub struct DStarHeader {
 }
 
 /// Why [`DStarHeader::pack`] refused to build a header.
+// [@ANCHOR: dstar_dstar_header_error_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DStarHeaderError {
     /// A field held a real character (or byte) outside 7-bit ASCII printable range -- D-STAR
@@ -212,6 +214,8 @@ impl DStarHeader {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: dstar_dstar_header_struct]
+    // Tests [@ANCHOR: dstar_dstar_header_error_enum]
     use super::*;
 
     // Tests [@ANCHOR: dstar_checksum]

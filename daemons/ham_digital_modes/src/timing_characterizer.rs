@@ -71,6 +71,7 @@
 //! whatever rate was convenient to test at.
 
 /// One measured symbol-clock hypothesis.
+// [@ANCHOR: timing_characterizer_symbol_clock_struct]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SymbolClock {
     /// The best-fit symbol rate, in baud (symbols/second).
@@ -296,6 +297,7 @@ pub fn two_tone_hop_len(window_len: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: timing_characterizer_symbol_clock_struct]
     use super::*;
     use crate::rtty::rtty_modulate;
 

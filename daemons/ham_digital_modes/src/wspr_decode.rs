@@ -87,6 +87,7 @@ pub const WSPR_DECODABLE_INPUT_BITS: usize = WSPR_NUM_SYMBOLS / 2;
 /// path as if it were a real decode (that's exactly the failure mode
 /// that would look like a rare/spurious wrong decode in the field,
 /// indistinguishable from a real one without this signal).
+// [@ANCHOR: wspr_decode_gave_up_struct]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GaveUp {
     pub cycles: u64,
@@ -98,6 +99,7 @@ pub struct GaveUp {
 /// trellis fits comfortably in a u128, and the stack algorithm can
 /// generate many thousands of nodes on a noisy channel, so avoiding a
 /// per-node allocation is a real, not premature, efficiency concern.
+// [@ANCHOR: wspr_decode_stack_node_struct]
 struct StackNode {
     metric: f64,
     depth: usize,
@@ -340,6 +342,7 @@ pub const MIN_ACCEPTABLE_METRIC: f64 = 0.0;
 /// discarding a too-uncertain result). The rejected bits are included,
 /// not discarded, for callers that want to log/inspect a low-confidence
 /// guess rather than treat it as pure noise.
+// [@ANCHOR: wspr_decode_confidence_gate_error_enum]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConfidenceGateError {
     GaveUp { cycles: u64 },
@@ -398,6 +401,9 @@ pub fn deinterleave_symbol_values(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: wspr_decode_gave_up_struct]
+    // Tests [@ANCHOR: wspr_decode_stack_node_struct]
+    // Tests [@ANCHOR: wspr_decode_confidence_gate_error_enum]
     use super::*;
     use crate::wspr::{pack_call, pack_grid4_power, wspr_encode_symbols};
 
