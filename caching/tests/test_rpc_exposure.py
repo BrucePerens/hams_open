@@ -11,6 +11,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 @tagged("post_install", "-at_install")
 class TestRpcRefusesServiceOnlyMethods(HamsTransactionCase):
+    # Tests [@ANCHOR: caching_caching_mixin_caching_mixin]
     def test_service_only_methods_cannot_be_called_over_rpc(self):
         for model, name in (
             ('caching.mixin', 'get_fs_stats'),

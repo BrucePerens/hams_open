@@ -5,6 +5,7 @@ from odoo import http
 from odoo.http import request
 
 
+# [@ANCHOR: caching_pwa_pwacontroller]
 class PWAController(http.Controller):
 
     # [@ANCHOR: caching:COMM_pwa_manifest]
