@@ -64,6 +64,22 @@ small helpers choose between equivalent forms; each is tested against the plain 
   word pairs; `round_shift` and `round_shift_neg` turn such a pair into the Q23-rounded value of the sum and of its negation.
   *(Reference: `src/codec2_3200/fixed_fft.rs` -> `[@ANCHOR: fixed_fft:ComplexQ23_mag_sq_raw]`, `[@ANCHOR: fixed_fft:twiddle_mul]`, `[@ANCHOR: fixed_fft:mode_for_sum]`, `[@ANCHOR: fixed_fft:mul_w_x]`, `[@ANCHOR: fixed_fft:umul_x]`, `[@ANCHOR: fixed_fft:mul_round_i64]`, `[@ANCHOR: fixed_fft:twiddle_sums]`, `[@ANCHOR: fixed_fft:round_shift]`, `[@ANCHOR: fixed_fft:round_shift_neg]`)*
 
+## Codec2 3200 small integer helpers (fixed_point, nlp, envelope, synthesis)
+
+- `clz_nonzero` counts the leading zeros of a nonzero `u32` with two range steps and a 256-byte table, because a core without a
+  count-leading-zeros instruction expands `leading_zeros` into a long sequence and `log2_q23` runs it about a thousand times per frame;
+  it must equal `leading_zeros` for every nonzero input.
+- `table_is_non_decreasing` is the `const fn` that proves at compile time that the log2 and exp2 interpolation tables never step down,
+  which the interpolation arithmetic relies on.
+- `window_fits_i32` and `window_is_bounded` are the `const fn` checks that a window table fits `i32` (so a 32-bit kernel may use it) and
+  stays within +-1.0 in Q23 (so a product with it cannot overflow).
+- `square_words` squares a 64-bit magnitude into two 64-bit words from three 32-bit products, `power_bin` is `re^2 + im^2` as an exact
+  `i128` (dispatching to the native 128-bit form or the 32-bit-limb form by target), and `mag_sq_q23` is the squared magnitude of an
+  LPC-spectrum bin rounded to Q23 on whichever of three paths fits the operands.
+- `mul_q23` multiplies a transform output by a Q23 window value, in `i64` unless the output is large enough that the product could
+  overflow, in which case it widens to `i128`.
+  *(Reference: `src/codec2_3200/fixed_point.rs` -> `[@ANCHOR: ham_digital_modes:clz_nonzero]`, `[@ANCHOR: ham_digital_modes:table_is_non_decreasing]`; `src/codec2_3200/nlp.rs` -> `[@ANCHOR: ham_digital_modes:window_fits_i32]`, `[@ANCHOR: ham_digital_modes:square_words]`, `[@ANCHOR: ham_digital_modes:power_bin]`; `src/codec2_3200/envelope.rs` -> `[@ANCHOR: ham_digital_modes:mag_sq_q23]`; `src/codec2_3200/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:mul_q23]`, `[@ANCHOR: ham_digital_modes:window_is_bounded]`)*
+
 ## Codec2 3200 synthesis (float and fixed)
 
 `synthesize_subframe` turns one decoded model into 10 ms of audio: it samples the LPC filter's phase

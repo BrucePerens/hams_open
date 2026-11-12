@@ -593,6 +593,7 @@ impl SynthesisStateFixed {
 /// magnitude, checked at compile time for both windows below) and a
 /// transform output `x`: plain `i64` unless `x` is so large that the
 /// product could overflow it.
+// [@ANCHOR: ham_digital_modes:mul_q23]
 #[inline(always)]
 fn mul_q23(x: i64, w: i64) -> i64 {
     if x.unsigned_abs() < (1u64 << 40) {
@@ -602,6 +603,7 @@ fn mul_q23(x: i64, w: i64) -> i64 {
     }
 }
 
+// [@ANCHOR: ham_digital_modes:window_is_bounded]
 const fn window_is_bounded(w: &[i64]) -> bool {
     let mut i = 0;
     while i < w.len() {
@@ -869,5 +871,44 @@ mod tests {
             max_bg_drift_db < 0.5,
             "bg_est drifted {max_bg_drift_db}dB between fixed and float over the replay"
         );
+    }
+
+    /// `mul_q23` is `(x * w) >> 23` exactly, on both sides of the 2^40 switch to 128-bit arithmetic
+    /// (the unit window passes `x` through, a half window halves it).
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:mul_q23]
+    fn mul_q23_equals_the_exact_product_either_side_of_the_i64_switch() {
+        let one = 1i64 << FRAC_BITS;
+        for &x in &[
+            0i64,
+            1,
+            -1,
+            12345,
+            -98765,
+            (1 << 40) - 1,
+            1 << 40,
+            -(1 << 40),
+            (1 << 50) + 3,
+            -(1 << 55) - 9,
+        ] {
+            assert_eq!(mul_q23(x, one), x, "unit window x={x}");
+            assert_eq!(mul_q23(x, one / 2), x >> 1, "half window x={x}");
+            for &w in &[0i64, 1, -1, one - 1, -one, 5_000_000, -3_333_333] {
+                let want = ((x as i128 * w as i128) >> FRAC_BITS) as i64;
+                assert_eq!(mul_q23(x, w), want, "x={x} w={w}");
+            }
+        }
+    }
+
+    /// `window_is_bounded` accepts values up to and including +-2^23 and rejects one count beyond
+    /// either end; an empty window is bounded.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:window_is_bounded]
+    fn window_is_bounded_accepts_the_q23_unit_range_and_rejects_beyond() {
+        let one = 1i64 << FRAC_BITS;
+        assert!(window_is_bounded(&[]));
+        assert!(window_is_bounded(&[0, one, -one, 12345]));
+        assert!(!window_is_bounded(&[0, one + 1]));
+        assert!(!window_is_bounded(&[-one - 1]));
     }
 }
