@@ -200,3 +200,15 @@
 **Methods.** `_get_current_website_id`.
 
 **See also:** test `test_tenant_hostnames_select_the_tenant_website (tests/test_models.py)`.
+
+### `WebsiteRewrite` [@ANCHOR: tenant_sites:tenant_sites_scoped_content_website_rewrite]
+
+**Purpose and location.** Makes Odoo's URL redirect rules (`website.rewrite`) obey the tenant boundary: a redirect rule whose website is not the tenant website that is being served must not be found for that tenant's visitors. Defined in `tenant_sites/models/scoped_content.py` as an extension of the stock model.
+
+**Definition.** `class WebsiteRewrite(models.Model)` with `_name = "website.rewrite"` and `_inherit = ["website.rewrite", "tenant.site.access.mixin"]`. It declares no fields and no methods of its own: everything comes from `tenant.site.access.mixin` (`TenantSiteAccessMixin`), whose `can_access_from_current_website` returns, during a tenant request, true only when every record's `website_id` is that tenant's website (so a shared rule with no website is refused for a tenant; outside a tenant request it defers to Odoo's own rule).
+
+**Invariants and concurrency.** Stored in the stock `website_rewrite` table with its stock columns; this module adds nothing to the schema. Reads and writes go through the ORM in the caller's own transaction, with the caller's access rights; nothing here is shared between threads except through the database.
+
+**Functions that touch it.** `TenantSiteAccessMixin.can_access_from_current_website` (inherited), which applies the same rule when Odoo asks whether a rewrite record may be used on the current website, and `IrHttp._serve_redirect`, which filters the rules found for a request down to the tenant's own (`record.website_id.id == website_id`) before one is served.
+
+**See also:** test `test_tenant_redirects_are_its_own` in `tenant_sites/tests/test_http.py`: the tenant's own rule answers 301 with its target in `Location`, and a rule with no website answers 404 on the tenant host.

@@ -102,8 +102,10 @@ class TestTenantSitesHttp(HamsHttpCase):
     def test_tenant_redirects_are_its_own(self):
         # Tests [@ANCHOR: tenant_sites:COMM_scoped_page_info]
         # Tests [@ANCHOR: tenant_sites:COMM_serve_redirect]
+        # Tests [@ANCHOR: tenant_sites_scoped_content_website_rewrite]
         own = self.get("/old", TENANT)
         self.assertEqual(own.status_code, 301)
+        self.assertTrue(own.headers["Location"].endswith("/tenant-only"), own.headers["Location"])
         self.assertEqual(self.get("/shared-old", TENANT).status_code, 404)
 
     # [@ANCHOR: tenant_sites:test_ensure_request_uri]
