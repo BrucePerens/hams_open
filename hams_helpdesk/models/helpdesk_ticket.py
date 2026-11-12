@@ -1864,6 +1864,14 @@ class HelpdeskTicket(models.Model):
             }
         )
         mail.send()
+        # `mail.send()` does not raise when the outgoing server refuses the mail: it marks the mail "exception". Recording
+        # "emailed_fallback" then would tell the administrator a mandatory report reached a human when it did not.
+        if mail.state == "exception":
+            raise UserError(
+                _("The report packet could not be emailed to %(email)s (the outgoing mail server refused it), so the "
+                  "report is still pending. Fix the mail setup and press Report again, or file it by hand.",
+                  email=fallback_email)
+            )
         self.write(
             {
                 "ncmec_report_state": "emailed_fallback",
