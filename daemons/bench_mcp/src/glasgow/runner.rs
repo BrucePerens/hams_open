@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+// [@ANCHOR: bench_mcp_glasgow_runner_req]
 /// One command line to run.
 #[derive(Clone, Debug)]
 pub struct Req {
@@ -26,6 +27,7 @@ pub struct Req {
     pub full_speed: Option<PathBuf>,
 }
 
+// [@ANCHOR: bench_mcp_glasgow_runner_out]
 /// What came back.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Out {
@@ -44,6 +46,7 @@ pub trait Runner: Send + Sync {
     fn run(&self, req: &Req) -> Result<Out, String>;
 }
 
+// [@ANCHOR: bench_mcp_glasgow_runner_real_runner]
 /// The runner that starts the real `glasgow`.
 pub struct RealRunner {
     pub program: PathBuf,

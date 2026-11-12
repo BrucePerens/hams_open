@@ -16,6 +16,7 @@ pub mod tools;
 pub mod trigger;
 pub mod wave;
 
+// [@ANCHOR: bench_mcp_gla_spec]
 struct Spec {
     name: &'static str,
     tier: Tier,
@@ -65,6 +66,7 @@ pub fn tool_defs(insts: &[Instrument]) -> Vec<Tool> {
         .collect()
 }
 
+// [@ANCHOR: bench_mcp_gla_real]
 /// The production backend: the Glasgow module's own `call`, with the same instrument list.
 struct Real<'a>(&'a [Instrument]);
 

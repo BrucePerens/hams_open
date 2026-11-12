@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+// [@ANCHOR: bench_mcp_glasgow_parse_port_row]
 /// One row of `glasgow voltage`: Port, Vsupply, Vlimit, Isupply, Ialert, Vsense, Vsense(alert).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PortRow {
@@ -259,6 +260,7 @@ pub fn vcd_summary(text: &str) -> Result<Value, String> {
     let mut now: u64 = 0;
     let mut start: Option<u64> = None;
     let mut state: BTreeMap<String, (char, u64)> = BTreeMap::new();
+    // [@ANCHOR: bench_mcp_glasgow_parse_acc]
     struct Acc {
         transitions: u64,
         high_ns: u64,

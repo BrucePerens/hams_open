@@ -15,10 +15,10 @@ pub const MAX_STEPS: usize = 256;
 /// The most rounds.
 pub const MAX_REPEAT: u64 = 100_000;
 
+// [@ANCHOR: gla_pattern_plan_struct]
 /// A planned pattern: `steps` of (pin mask, hold in ms) played `repeat` times; `achieved` says what will come out.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plan {
-    // [@ANCHOR: gla_pattern_plan_struct]
     pub steps: Vec<(u32, f64)>,
     pub repeat: u64,
     pub total_s: f64,

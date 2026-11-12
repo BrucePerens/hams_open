@@ -16,6 +16,7 @@ fn bench(name: &str, extra: &str) -> Vec<Instrument> {
     .unwrap()
 }
 
+// [@ANCHOR: bench_mcp_glasgow_tests_rig]
 struct Rig {
     sim: Arc<Sim>,
     ctx: Ctx,
@@ -146,6 +147,7 @@ fn install_dir_is_configured_or_the_pinned_default() {
 
 // Tests [@ANCHOR: glasgow_parse_voltage_table]
 // Tests [@ANCHOR: glasgow_parse_num]
+// Tests [@ANCHOR: bench_mcp_glasgow_parse_port_row]
 #[test]
 fn the_voltage_table_of_a_real_device_parses_and_garbage_does_not() {
     let rows = parse::voltage_table(&fixture("voltage_idle.txt")).unwrap();
@@ -283,6 +285,7 @@ fn applet_log_lines_result_lines_and_hex_parse() {
 }
 
 // Tests [@ANCHOR: glasgow_vcd_summary]
+// Tests [@ANCHOR: bench_mcp_glasgow_parse_acc]
 #[test]
 fn a_vcd_capture_is_summarised_per_pin() {
     let s = parse::vcd_summary(&fixture("capture.vcd")).unwrap();
@@ -355,6 +358,9 @@ fn rq(args: &[&str], secs: u64) -> Req {
 
 // Tests [@ANCHOR: glasgow_real_runner]
 // Tests [@ANCHOR: glasgow_runner_command]
+// Tests [@ANCHOR: bench_mcp_glasgow_runner_real_runner]
+// Tests [@ANCHOR: bench_mcp_glasgow_runner_out]
+// Tests [@ANCHOR: bench_mcp_glasgow_runner_req]
 #[test]
 fn the_real_runner_captures_output_stops_with_sigint_and_never_kills() {
     let dir = crate::testdir::scratch("bench_glasgow_runner");
@@ -838,6 +844,7 @@ fn the_applet_list_names_every_tool_and_what_is_not_provided() {
 
 // Tests [@ANCHOR: glasgow_pin_arg]
 // Tests [@ANCHOR: glasgow_plan]
+// Tests [@ANCHOR: bench_mcp_glasgow_ops_plan]
 #[test]
 fn applet_arguments_are_checked_before_anything_is_sent() {
     let r = rig("g_args", "");
@@ -919,6 +926,7 @@ fn applet_arguments_are_checked_before_anything_is_sent() {
 // Tests [@ANCHOR: glasgow_volt_spec]
 // Tests [@ANCHOR: glasgow_ops_call]
 // Tests [@ANCHOR: glasgow_park]
+// Tests [@ANCHOR: bench_mcp_glasgow_tests_rig]
 #[test]
 fn an_applet_tool_needs_the_port_set_uses_that_voltage_and_parks_afterwards() {
     let r = rig("g_i2c", "");
@@ -1323,6 +1331,8 @@ fn gpio_and_pattern_release_every_pin_even_when_the_run_fails() {
     assert!(r.sim.calls().last().unwrap().contains("A0=Z"));
 }
 
+// Tests [@ANCHOR: bench_mcp_glasgow_testkit_sim]
+// Tests [@ANCHOR: bench_mcp_glasgow_testkit_state]
 #[test]
 fn a_hung_or_failed_applet_ends_with_the_pins_parked() {
     let r = rig("g_hang", "");

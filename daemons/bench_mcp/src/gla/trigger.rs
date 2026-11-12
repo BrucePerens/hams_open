@@ -6,10 +6,10 @@
 use super::wave::{window, Wave};
 use serde_json::Value;
 
+// [@ANCHOR: gla_trigger_enum]
 /// What starts the window.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Trigger {
-    // [@ANCHOR: gla_trigger_enum]
     /// The start of the capture.
     Immediate,
     /// A change of one pin: `rising` true, false, or either (None).

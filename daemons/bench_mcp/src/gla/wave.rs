@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 /// The most pins one capture holds (the analyzer applet's limit).
 pub const MAX_PINS: usize = 16;
 
+// [@ANCHOR: bench_mcp_gla_wave_edge]
 /// One change of the pins: at `t_ns` the pins take `value` (bit n = pin n). Changes with the same timestamp are one entry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Edge {
@@ -15,12 +16,12 @@ pub struct Edge {
     pub value: u32,
 }
 
+// [@ANCHOR: gla_wave_struct]
 /// A captured waveform. `init` is the state at time 0, `edges` are strictly increasing in time, `end_ns` is when the capture ended.
 /// `origin_ns` is where time 0 of this wave lies in the original capture (non-zero after `window`); `overrun_ns` is set when the
 /// analyzer reported a FIFO overrun (samples after it are lost).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Wave {
-    // [@ANCHOR: gla_wave_struct]
     pub names: Vec<String>,
     pub init: u32,
     pub edges: Vec<Edge>,
@@ -29,10 +30,10 @@ pub struct Wave {
     pub overrun_ns: Option<u64>,
 }
 
+// [@ANCHOR: gla_sampled_struct]
 /// A wave sampled at a fixed rate: sample i is the pin state at `i * 1e9 / rate_hz` ns.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sampled {
-    // [@ANCHOR: gla_sampled_struct]
     pub rate_hz: f64,
     pub data: Vec<u32>,
     /// Pulses that began and ended between two samples: present in the source, invisible at this rate.
