@@ -84,6 +84,7 @@ fn json_str(s: &str) -> String {
     o
 }
 
+// [@ANCHOR: vnwa_open:soak_shared_struct]
 /// State shared with the side-channel threads and the watchdog.
 struct Shared {
     dir: PathBuf,
@@ -253,6 +254,7 @@ fn start_host_monitor() {
     });
 }
 
+// [@ANCHOR: vnwa_open:soak_scope_struct]
 struct Scope {
     r: BufReader<TcpStream>,
     w: TcpStream,
@@ -988,5 +990,55 @@ mod tests {
             json_str("a\"b\\c\nd\te\u{1}"),
             "\"a\\\"b\\\\c\\nd\\te\\u0001\""
         );
+    }
+
+    /// A one-connection fake scope on loopback that answers every line with `reply`.
+    fn fake_scope(reply: &'static str) -> String {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            let (sock, _) = listener.accept().unwrap();
+            let mut r = BufReader::new(sock.try_clone().unwrap());
+            let mut w = sock;
+            let mut line = String::new();
+            while r.read_line(&mut line).unwrap_or(0) > 0 {
+                let _ = w.write_all(format!("{reply}\n").as_bytes());
+                line.clear();
+            }
+        });
+        addr
+    }
+
+    // Tests [@ANCHOR: vnwa_open:soak_scope_struct]
+    #[test]
+    fn the_scope_handle_opens_checks_idn_and_answers_queries() {
+        let mut scope = Scope::open(&fake_scope("IDN,fake,1")).unwrap();
+        assert_eq!(scope.q("C1:VDIV?").unwrap(), "IDN,fake,1");
+        scope.send("TRMD STOP").unwrap();
+    }
+
+    // Tests [@ANCHOR: vnwa_open:soak_shared_struct]
+    #[test]
+    fn events_are_counted_per_class_and_written_to_the_events_file() {
+        let dir = std::env::temp_dir().join(format!("soak_shared_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let events = std::fs::File::create(dir.join("events.jsonl")).unwrap();
+        let made = SHARED.set(Arc::new(Shared {
+            dir: dir.clone(),
+            events: Mutex::new(events),
+            counts: Mutex::new(BTreeMap::new()),
+            journal: Mutex::new(VecDeque::new()),
+            disconnects: Mutex::new(Vec::new()),
+            windows: Mutex::new(Vec::new()),
+        }));
+        assert!(made.is_ok(), "no other test sets the shared state");
+        shared().journal.lock().unwrap().push_back((100.0, "usb 1-1: USB disconnect".to_string()));
+        event("usb_disconnect", "one", "detail", 100.0);
+        event("usb_disconnect", "two", "detail", 101.0);
+        assert_eq!(shared().counts.lock().unwrap()["usb_disconnect"], 2);
+        let written = std::fs::read_to_string(dir.join("events.jsonl")).unwrap();
+        assert_eq!(written.lines().count(), 2);
+        assert!(written.contains("USB disconnect"), "the journal slice is attached: {written}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
