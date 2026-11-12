@@ -17,6 +17,7 @@ use crate::names::{
     LevelSource,
 };
 
+// [@ANCHOR: radioctl_d_caps_caps_view]
 /// Everything the text needs besides the description.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapsView<'a> {
@@ -459,6 +460,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_caps_dump_caps]
+    // Tests [@ANCHOR: radioctl_d_caps_caps_view]
     #[test]
     fn dump_caps_summarises_the_rig_and_the_gate() {
         let desc = kx3_like();

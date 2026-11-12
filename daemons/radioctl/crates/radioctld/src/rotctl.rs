@@ -21,6 +21,7 @@ use crate::command::Line;
 use crate::reply::{render, Body, Header, ECONF, EINVAL, EIO, ENAVAIL, ENIMPL, EPROTO, ETIMEOUT};
 use crate::server::{BoxFuture, LineService};
 
+// [@ANCHOR: radioctl_d_rotctl_rot_command]
 /// A rotator command the server executes.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RotCommand {
@@ -45,6 +46,7 @@ pub enum RotCommand {
     Quit,
 }
 
+// [@ANCHOR: radioctl_d_rotctl_rot_parsed]
 /// What a request line turned into.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RotParsed {
@@ -198,6 +200,7 @@ pub fn rot_error_code(error: &StationError, command: RotCommand) -> i32 {
     }
 }
 
+// [@ANCHOR: radioctl_d_rotctl_rotator_service]
 /// The service behind a rotator's listener: one [`Rotator`] handle, shared by every client.
 pub struct RotatorService {
     rotator: Rotator,
@@ -305,6 +308,7 @@ impl LineService for RotatorService {
     }
 }
 
+// [@ANCHOR: radioctl_d_rotctl_shared_rotator_service]
 /// A shared rotator service.
 pub type SharedRotatorService = Arc<RotatorService>;
 
@@ -319,6 +323,8 @@ mod tests {
     // Tests [@ANCHOR: radioctld_rotctl_parse_line]
     // Tests [@ANCHOR: radioctld_rotctl_resolve]
     // Tests [@ANCHOR: radioctld_rotctl_degrees]
+    // Tests [@ANCHOR: radioctl_d_rotctl_rot_parsed]
+    // Tests [@ANCHOR: radioctl_d_rotctl_rot_command]
     #[test]
     fn requests_parse_strictly() {
         assert_eq!(parse_rot_line("  "), None);

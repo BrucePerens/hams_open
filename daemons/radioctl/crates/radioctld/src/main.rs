@@ -13,6 +13,7 @@ use radioctld::config::Config;
 use radioctld::daemon;
 use radioctld::rigs::load_description;
 
+// [@ANCHOR: radioctl_d_main_cli]
 /// What the command line asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Cli {
@@ -202,6 +203,7 @@ mod tests {
     // Tests [@ANCHOR: radioctld_main_load]
     // Tests [@ANCHOR: radioctld_main_run]
     // Tests [@ANCHOR: radioctld_main]
+    // Tests [@ANCHOR: radioctl_d_main_cli]
     #[test]
     fn loading_a_missing_file_fails_and_check_mode_does_not_listen() {
         assert!(load(Path::new("/nonexistent/radioctld.toml")).is_err());

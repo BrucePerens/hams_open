@@ -4,6 +4,7 @@
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
+// [@ANCHOR: radioctl_d_access_net]
 /// One network: an address and a prefix length.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Net {
@@ -11,6 +12,7 @@ struct Net {
     prefix: u8,
 }
 
+// [@ANCHOR: radioctl_d_access_allow_list]
 /// The set of networks allowed to connect.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllowList {
@@ -128,6 +130,7 @@ mod tests {
     // Tests [@ANCHOR: radioctld_access_loopback_only]
     // Tests [@ANCHOR: radioctld_access_allows]
     // Tests [@ANCHOR: radioctld_access_normalise]
+    // Tests [@ANCHOR: radioctl_d_access_allow_list]
     #[test]
     fn the_default_allows_only_this_machine() {
         let allow = AllowList::loopback_only();
@@ -142,6 +145,7 @@ mod tests {
     // Tests [@ANCHOR: radioctld_access_parse]
     // Tests [@ANCHOR: radioctld_access_prefix_matches]
     // Tests [@ANCHOR: radioctld_access_octets]
+    // Tests [@ANCHOR: radioctl_d_access_net]
     #[test]
     fn networks_match_by_prefix_and_an_empty_list_allows_nobody() {
         let allow = list(&["192.168.1.0/24", "10.0.0.5", "fd00::/8"]);

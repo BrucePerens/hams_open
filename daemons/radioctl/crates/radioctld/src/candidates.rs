@@ -13,6 +13,7 @@ use std::path::Path;
 use radioctl_core::rigfile::{self, LoadedDescription, Verified};
 use radioctl_core::usb::{classify, PortInfo};
 
+// [@ANCHOR: radioctl_d_candidates_rig_summary]
 /// What a listing needs to know about one rig description file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RigSummary {
@@ -231,6 +232,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_candidates_summaries_from]
+    // Tests [@ANCHOR: radioctl_d_candidates_rig_summary]
     #[test]
     fn summaries_come_from_text_and_a_bad_one_names_its_label() {
         let embedded = crate::builtin::embedded_texts();

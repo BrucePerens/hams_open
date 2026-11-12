@@ -12,6 +12,7 @@ use common::{config_text, start, Client};
 // Tests [@ANCHOR: radioctld_server_serve]
 // Tests [@ANCHOR: radioctld_server_local_addr]
 // Tests [@ANCHOR: radioctld_server_stats]
+// Tests [@ANCHOR: radioctl_d_server_server_handle]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_default_listener_is_on_loopback() {
     let daemon = start(&config_text("", "kx3", "elecraft-kx3.toml", false, false)).await;
@@ -23,6 +24,7 @@ async fn the_default_listener_is_on_loopback() {
     daemon.stop().await;
 }
 
+// Tests [@ANCHOR: radioctl_d_server_box_future]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_peer_outside_the_allow_list_is_dropped_before_any_byte_is_read() {
     let text = config_text(
@@ -42,6 +44,8 @@ async fn a_peer_outside_the_allow_list_is_dropped_before_any_byte_is_read() {
     daemon.stop().await;
 }
 
+// Tests [@ANCHOR: radioctl_d_server_counters]
+// Tests [@ANCHOR: radioctl_d_server_server_stats]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_client_limit_is_enforced_and_slots_are_freed() {
     let text = config_text(
@@ -88,6 +92,7 @@ async fn an_over_long_line_gets_an_error_and_the_connection_is_closed() {
     daemon.stop().await;
 }
 
+// Tests [@ANCHOR: radioctl_d_server_shared]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn silent_and_stalled_clients_are_dropped() {
     let text = config_text(

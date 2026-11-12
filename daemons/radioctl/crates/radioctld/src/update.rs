@@ -27,6 +27,7 @@ pub const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(180);
 /// The largest bundle accepted.
 pub const MAX_BUNDLE: usize = 256 * 1024 * 1024;
 
+// [@ANCHOR: radioctl_d_update_update_config]
 /// Everything the update needs to know; the relay's wrapper binary supplies it.
 #[derive(Debug, Clone)]
 pub struct UpdateConfig {
@@ -40,6 +41,7 @@ pub struct UpdateConfig {
     pub exe: PathBuf,
 }
 
+// [@ANCHOR: radioctl_d_update_latest]
 /// What the release channel says is newest.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Latest {
@@ -312,6 +314,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_update_fetch_latest]
     // Tests [@ANCHOR: radioctld_update_download]
+    // Tests [@ANCHOR: radioctl_d_update_latest]
     #[tokio::test]
     async fn the_channel_answers_the_version_and_the_bundle_and_offline_is_an_error() {
         let base = channel(info("0.4.0", "ab"), b"BUNDLE".to_vec()).await;
@@ -362,6 +365,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_update_replace_exe]
+    // Tests [@ANCHOR: radioctl_d_update_update_config]
     #[test]
     fn replacing_keeps_the_old_program_as_prev_and_failure_leaves_it_alone() {
         let dir = crate::testdir::TestDir::new("update-replace");

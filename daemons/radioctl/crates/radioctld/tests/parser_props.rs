@@ -128,6 +128,7 @@ proptest! {
     // Tests [@ANCHOR: radioctld_reply_render]
     // Tests [@ANCHOR: radioctld_reply_header_line]
     // Tests [@ANCHOR: radioctld_command_sanitise]
+    // Tests [@ANCHOR: radioctl_d_reply_header]
     #[test]
     fn rendered_replies_hold_no_control_characters_whatever_the_client_sent(line in ".{0,120}") {
         if let Some(parsed) = parse_line(&format!("+{line}")) {

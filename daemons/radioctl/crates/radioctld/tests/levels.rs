@@ -14,6 +14,7 @@ use radioctld::names::{level_range, served_levels, LevelSource};
 
 // Tests [@ANCHOR: radioctld_names_level_range]
 // Tests [@ANCHOR: radioctld_names_served_levels]
+// Tests [@ANCHOR: radioctl_d_names_level_source]
 #[test]
 fn level_ranges_match_what_each_engine_accepts() {
     let rigs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rigs");

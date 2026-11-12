@@ -19,6 +19,7 @@ use tokio::runtime::Handle;
 use crate::config::{RotatorConfig, RotatorTransportConfig};
 use crate::rotctl::RotatorService;
 
+// [@ANCHOR: radioctl_d_rotators_built_rotator]
 /// A rotator that is up: its service, and the control of its virtual stand-in if it is one.
 pub struct BuiltRotator {
     /// The service clients talk to.

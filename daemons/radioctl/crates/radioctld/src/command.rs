@@ -22,6 +22,7 @@ pub const MAX_MORSE_CHARS: usize = 64;
 /// Largest frequency accepted, in hertz.
 pub const MAX_HZ: u64 = 99_999_999_999;
 
+// [@ANCHOR: radioctl_d_command_command]
 /// A parsed command, independent of the VFO token and of the response format.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
@@ -128,6 +129,7 @@ pub enum Command {
     Quit,
 }
 
+// [@ANCHOR: radioctl_d_command_parsed]
 /// What a line turned into.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parsed {
@@ -143,6 +145,7 @@ pub struct Parsed {
     pub command: Result<Command, i32>,
 }
 
+// [@ANCHOR: radioctl_d_command_line]
 /// A line from a client.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Line {
@@ -152,10 +155,12 @@ pub enum Line {
     Invalid,
 }
 
+// [@ANCHOR: radioctl_d_command_line_too_long]
 /// A line grew past the limit before its newline arrived.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LineTooLong;
 
+// [@ANCHOR: radioctl_d_command_line_buffer]
 /// Assembles lines from a byte stream with a hard bound on the length of a line.
 #[derive(Debug)]
 pub struct LineBuffer {
@@ -617,6 +622,8 @@ mod tests {
     // Tests [@ANCHOR: radioctld_command_linebuffer_push]
     // Tests [@ANCHOR: radioctld_command_linebuffer_has_partial]
     // Tests [@ANCHOR: radioctld_command_into_line]
+    // Tests [@ANCHOR: radioctl_d_command_line_buffer]
+    // Tests [@ANCHOR: radioctl_d_command_line]
     #[test]
     fn lines_are_assembled_across_reads_and_crlf_is_trimmed() {
         let mut buffer = LineBuffer::new(32);
@@ -634,6 +641,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_command_linebuffer_push]
+    // Tests [@ANCHOR: radioctl_d_command_line_too_long]
     #[test]
     fn a_line_over_the_limit_is_an_error_and_is_never_buffered() {
         let mut buffer = LineBuffer::new(8);
@@ -676,6 +684,7 @@ mod tests {
     // Tests [@ANCHOR: radioctld_command_parse_line]
     // Tests [@ANCHOR: radioctld_command_resolve]
     // Tests [@ANCHOR: radioctld_command_build]
+    // Tests [@ANCHOR: radioctl_d_command_command]
     #[test]
     fn the_common_commands_parse_with_and_without_a_vfo_token() {
         let cmd = |line: &str| parse_line(line).expect("a command").command;
@@ -732,6 +741,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_command_parse_line]
     // Tests [@ANCHOR: radioctld_command_sanitise]
+    // Tests [@ANCHOR: radioctl_d_command_parsed]
     #[test]
     fn the_extended_prefix_the_echo_and_blank_lines() {
         assert_eq!(parse_line(""), None);

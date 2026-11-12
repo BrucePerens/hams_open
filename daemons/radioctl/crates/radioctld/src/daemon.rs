@@ -19,6 +19,7 @@ use crate::server::{serve, Limits, ServerHandle};
 use crate::service::RigService;
 use radioctl_core::serial::SerialMonitor;
 
+// [@ANCHOR: radioctl_d_daemon_served_rotator]
 /// One rotator being served.
 pub struct ServedRotator {
     /// The rotator's name from the configuration.
@@ -33,6 +34,7 @@ pub struct ServedRotator {
     pub net_link: Option<NetMonitor>,
 }
 
+// [@ANCHOR: radioctl_d_daemon_served]
 /// One rig being served.
 pub struct Served {
     /// The rig's name from the configuration.
@@ -59,6 +61,7 @@ pub struct Served {
     pub radiod: Option<radioctl_protocols::radiod_io::RadiodControl>,
 }
 
+// [@ANCHOR: radioctl_d_daemon_daemon]
 /// The running daemon.
 pub struct Daemon {
     /// Every rig being served, in configuration order.

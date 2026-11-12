@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 /// `(file stem, text)` of every embedded description, sorted by stem.
 const EMBEDDED: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/builtin_rigs.rs"));
 
+// [@ANCHOR: radioctl_d_builtin_rig_source]
 /// Where descriptions are read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RigSource {
@@ -77,6 +78,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_builtin_choose_source]
+    // Tests [@ANCHOR: radioctl_d_builtin_rig_source]
     #[test]
     fn the_flag_beats_the_environment_beats_the_embedded_set() {
         let (a, b) = (Path::new("/a"), OsStr::new("/b"));
