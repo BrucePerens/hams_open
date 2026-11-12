@@ -66,6 +66,38 @@ LEAK_CHECK_FALLBACK_TABLES = frozenset({
     "ir_cron_trigger",
 })
 
+# [@ANCHOR: zero_sudo:COMM_count_rows_in_batches]
+# Exact row counts for many tables without holding many relation locks at once. One UNION ALL over every public table
+# (776 tables, about 3700 relations with indexes) inside one transaction locks them all until it ends, which exhausted
+# Postgres' shared lock table (max_locks_per_transaction=64) when several test shards ran together ("out of shared memory").
+# Here each small batch runs on a separate short connection and is committed, which releases its locks before the next
+# batch. Counts are still exact. Verified by [@ANCHOR: zero_sudo:COMM_test_count_rows_in_batches].
+COUNT_BATCH_SIZE = 8
+
+
+def count_rows_in_batches(db_name, tables, batch_size=COUNT_BATCH_SIZE, on_batch=None):
+    """Returns {table: exact row count} for `tables`, counting `batch_size` tables per short transaction.
+    `on_batch(cr)`, if given, is called after each batch's query and before its transaction ends (the test uses it to
+    read pg_locks)."""
+    counts = {}
+    tables = list(tables)
+    cr = odoo.sql_db.db_connect(db_name).cursor()
+    try:
+        for start in range(0, len(tables), batch_size):
+            parts = [
+                sql.SQL("SELECT {}, count(1) FROM {}").format(sql.Literal(t), sql.Identifier(t))
+                for t in tables[start:start + batch_size]
+            ]
+            cr.execute(sql.SQL(" UNION ALL ").join(parts))  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_count_rows_in_batches] # fmt: skip
+            counts.update((row[0], row[1]) for row in cr.fetchall())
+            if on_batch:
+                on_batch(cr)
+            cr.rollback()  # ends the read-only transaction, releasing this batch's relation locks
+    finally:
+        cr.close()
+    return counts
+
+
 # Store the original create method globally to avoid descriptor binding issues
 _original_create = odoo.models.BaseModel.create
 
@@ -250,16 +282,7 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name NOT LIKE 'pg_stat_statements%'"
         )
         self._tables = [r[0] for r in self.cr.fetchall()]
-        self._initial_counts = {}
-        if self._tables:
-            query_parts = []
-            for t in self._tables:
-                query_parts.append(sql.SQL("SELECT {}, count(1) FROM {}").format(sql.Literal(t), sql.Identifier(t)))
-            
-            union_query = sql.SQL(" UNION ALL ").join(query_parts)
-            self.cr.execute(union_query)  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_leak_snapshotting] # fmt: skip
-            for row in self.cr.fetchall():
-                self._initial_counts[row[0]] = row[1]
+        self._initial_counts = count_rows_in_batches(self.registry.db_name, self._tables) if self._tables else {}
 
         self._tracked_records = collections.defaultdict(set)
 
@@ -426,16 +449,9 @@ class RealTransactionCase(HttpCase, SafePatchMixin):
             if self._tables:
                 tables_to_check = [t for t in self._tables if t not in noisy_tables]
                 if tables_to_check:
-                    query_parts = []
-                    for t in tables_to_check:
-                        query_parts.append(sql.SQL("SELECT {}, count(1) FROM {}").format(sql.Literal(t), sql.Identifier(t)))
-                    
-                    union_query = sql.SQL(" UNION ALL ").join(query_parts)
-                    self.cr.execute(union_query)  # audit-ignore-sql: # Tested by [@ANCHOR: zero_sudo:COMM_test_automated_cleanup] # fmt: skip
-                    for row in self.cr.fetchall():
-                        t_name, final_count = row
-                        initial_count = self._initial_counts.get(t_name, 0)
-                        diff = final_count - initial_count
+                    final_counts = count_rows_in_batches(self.registry.db_name, tables_to_check)
+                    for t_name, final_count in final_counts.items():
+                        diff = final_count - self._initial_counts.get(t_name, 0)
                         if diff != 0:
                             leaks.append(f"{t_name} ({diff:+d})")
 
