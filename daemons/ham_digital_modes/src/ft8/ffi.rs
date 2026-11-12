@@ -10,6 +10,7 @@ use std::os::raw::{c_char, c_float, c_int, c_uchar};
 pub const FTX_MAX_MESSAGE_LENGTH: usize = 35;
 pub const FT8_NN: usize = 79;
 
+// [@ANCHOR: ffi_ft8_session_struct]
 #[repr(C)]
 pub struct Ft8Session {
     _private: [u8; 0],

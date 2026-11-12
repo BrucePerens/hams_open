@@ -441,6 +441,7 @@ pub fn psk31_demodulate(samples: &[i16], carrier_hz: f64, sample_rate: u32) -> V
 /// logic `psk31_decode_bits` uses, factored out so `Psk31Decoder` can
 /// feed it one bit at a time across many separate `feed()` calls instead
 /// of needing the whole bitstream up front.
+// [@ANCHOR: psk31_varicode_accumulator_struct]
 struct VaricodeAccumulator {
     acc: u16,
     count: u8,
@@ -509,6 +510,7 @@ impl VaricodeAccumulator {
 /// every single chunk boundary, corrupting anything that didn't happen
 /// to align with one). Carries symbol timing, carrier phase, and
 /// partially-accumulated Varicode bits across `feed()` calls.
+// [@ANCHOR: psk31_psk31_decoder_struct]
 pub struct Psk31Decoder {
     carrier_hz: f64,
     sample_rate: u32,
@@ -593,6 +595,8 @@ pub fn psk31_decode_audio(samples: &[i16], carrier_hz: f64, sample_rate: u32) ->
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: psk31_varicode_accumulator_struct]
+    // Tests [@ANCHOR: psk31_psk31_decoder_struct]
     use super::*;
 
     /// Real bug found 2026-09-11 while root-causing a long-standing test failure

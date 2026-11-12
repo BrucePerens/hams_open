@@ -35,6 +35,7 @@
 
 mod ffi;
 
+// [@ANCHOR: ft8_ft8_decoder_struct]
 pub struct Ft8Decoder {
     session: *mut ffi::Ft8Session,
     pending: Vec<f32>,
@@ -332,6 +333,8 @@ impl Drop for Ft8Decoder {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: ft8_ft8_decoder_struct]
+    // Tests [@ANCHOR: ffi_ft8_session_struct]
     use super::*;
 
     #[test]

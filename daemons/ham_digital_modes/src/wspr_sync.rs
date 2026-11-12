@@ -409,6 +409,7 @@ pub const MIN_SYNC_SCORE: f64 = 0.4;
 /// not itself a calibrated probability or SNR estimate, just a ranking
 /// statistic across candidates within one search). Guaranteed `>=` the
 /// `min_sync_score` the caller passed to `find_sync()`.
+// [@ANCHOR: wspr_sync_sync_result_struct]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SyncResult {
     pub base_hz: f64,
@@ -1005,6 +1006,7 @@ pub fn sync_search_and_decode(
 /// own `unpack_wspr_message()` returned `None`) -- a real "confident in
 /// something that isn't a real encodable message" outcome, not the same
 /// as either a low-confidence reject or a search give-up.
+// [@ANCHOR: wspr_sync_wspr_message_error_enum]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WsprMessageError {
     GaveUp { cycles: u64 },
@@ -1065,6 +1067,8 @@ pub fn sync_search_and_decode_message(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: wspr_sync_sync_result_struct]
+    // Tests [@ANCHOR: wspr_sync_wspr_message_error_enum]
     use super::*;
     use crate::wspr::{
         add_awgn, pack_call, pack_grid4_power, unpack_wspr_message, wspr_encode_audio,

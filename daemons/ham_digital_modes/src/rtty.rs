@@ -254,6 +254,7 @@ fn window_mark_space_energy(
 /// (see `frame_score`'s own doc comment) evaluates the same shape of window at many nearby
 /// offsets -- recomputing `cos`/`sin` from scratch each time was pure waste once the frame-
 /// matched detector replaced the old single-window-per-candidate design.
+// [@ANCHOR: rtty_trig_tables_struct]
 struct TrigTables {
     cos_mark: Vec<f64>,
     sin_mark: Vec<f64>,
@@ -390,6 +391,7 @@ const FIXED_OFFSET_HZ: [f64; 1] = [0.0];
 /// right value regardless of which offset list this particular decoder was built with -- a real
 /// bug this shape avoids: indexing a fixed single-table bank's `locked_offset_idx` (always 0)
 /// into the 9-entry `AFC_OFFSETS_HZ` array would silently report -40.0Hz instead of the true 0.0Hz.
+// [@ANCHOR: rtty_trig_bank_struct]
 struct TrigBank {
     tables: Vec<TrigTables>,
     offsets: &'static [f64],
@@ -477,6 +479,7 @@ fn best_frame_evidence(
 
 /// Real sample-domain geometry for one bit period at a given sample rate, computed once per
 /// scan rather than re-derived at every candidate position.
+// [@ANCHOR: rtty_frame_geometry_struct]
 struct FrameGeometry {
     samples_per_bit: f64,
     window_len: usize,      // one data-bit-period window, rounded
@@ -626,6 +629,7 @@ fn pre_is_persistently_mark(
 /// real, physical statement about linear energy (`sinc`-shaped in frequency offset), and only
 /// shows up as a small, noise-comparable difference once compressed into dB and clipped/summed
 /// the way `accept_score` is.
+// [@ANCHOR: rtty_frame_evidence_struct]
 struct FrameEvidence {
     accept_score: f64,
     raw_score: f64,
@@ -828,6 +832,7 @@ fn attempt_character(
 
 /// Resumable scan state, carried across `RttyDecoder::feed()` calls (a
 /// fresh, default one is used for the one-shot `rtty_demodulate`).
+// [@ANCHOR: rtty_scan_state_struct]
 struct ScanState {
     pos: usize,
     current_figs: bool,
@@ -1030,6 +1035,7 @@ pub fn rtty_demodulate(samples: &[i16], mark_hz: f64, sample_rate: u32) -> Strin
 /// would otherwise repeat on every single `feed()` call from a live pipeline -- for
 /// `digital_decoder.rs`'s own ~20ms callback cadence, that is real, avoidable, per-callback
 /// work for a value that never changes after construction.
+// [@ANCHOR: rtty_rtty_decoder_struct]
 pub struct RttyDecoder {
     sample_rate: u32,
     pending_samples: Vec<i16>,
@@ -1184,6 +1190,7 @@ impl RttyDecoder {
 /// Deliberately NOT wired into `RttyDecoder`, `rtty_scan`, or any pipeline: this is the
 /// measurement step, not a shipped gating policy, and per the finding above, not yet a policy
 /// that would work if it were wired in.
+// [@ANCHOR: rtty_rtty_signature_struct]
 #[derive(Debug, Clone, PartialEq)]
 struct RttySignature {
     /// Fraction of adjacent hops whose sign differs, in `[0.0, 1.0]`.
@@ -1247,6 +1254,13 @@ fn characterize_rtty_signature(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: rtty_trig_tables_struct]
+    // Tests [@ANCHOR: rtty_trig_bank_struct]
+    // Tests [@ANCHOR: rtty_frame_geometry_struct]
+    // Tests [@ANCHOR: rtty_frame_evidence_struct]
+    // Tests [@ANCHOR: rtty_scan_state_struct]
+    // Tests [@ANCHOR: rtty_rtty_decoder_struct]
+    // Tests [@ANCHOR: rtty_rtty_signature_struct]
     use super::*;
 
     #[test]
