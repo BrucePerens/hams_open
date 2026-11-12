@@ -154,7 +154,11 @@ The retry wrapper for every control transfer. It runs `op` up to 1 + `TRANSFER_R
 Sorts a libusb error into what recovery should do. `Io` (libusb's name for the kernel's EPROTO), `Pipe` (a stall), `Timeout` and `Overflow` are `Transient` (worth sending again); `NoDevice` and `NotFound` are `NoDevice` (the unit left the bus, so a cold reset is the remedy, not a resend); every other error, such as a permission problem or invalid argument, is `Other` and is not repeated. Carries the libusb error text. Pure, total. Tests: the classification test in `transport.rs`.
 
 * The S11 and S21 codecs are told apart by their USB port, whatever order the kernel named the cards in. [@ANCHOR: vnwa_open_codec_topology]
-* The power cycle is off, wait, on through `sudo -n uhubctl`, then waits for the unit; failures are clear errors. [@ANCHOR: vnwa_open_power_cycle]
+
+### `power::power_cycle(run, port, off_time, back, ready) -> Result<(), String>` [@ANCHOR: vnwa_open_power_cycle]
+
+Cold-resets the unit by cutting power to its hub port: `uhubctl off`, sleep `off_time` (3 s by default so the supply capacitors discharge), `uhubctl on`, then wait up to `back` for `ready` (the unit and both codecs present; about 8 s in practice). Errors name the failing step: an `uhubctl` failure, or "the unit did not come back within N s of power-on on hub H port P". After it the unit has lost its set-up and generator state, and its device numbers change. The caller must have closed audio streams first. Blocking for seconds. Tests: scripted-runner tests of the order of commands and each failure; the real thing is a hardware test.
+
 * A failing point is measured again, then after one cold reset, and only a success is returned. [@ANCHOR: vnwa_open_recovery]
 * This driver's S11 and S21 agree with the vendor program's on the same cables to 0.25 % and 0.6 degrees (S11) and 1 % and 0.6 degrees (S21, a constant 0.8 % offset). [@ANCHOR: vnwa_open_vendor_agreement]
 * The one-port error terms are recovered from open, short and load, and a known load is corrected. [@ANCHOR: vnwa_open_cal_one_port]
@@ -163,14 +167,37 @@ Sorts a libusb error into what recovery should do. `Io` (libusb's name for the k
 * A calibration survives its text file and a damaged file is refused. [@ANCHOR: vnwa_open_cal_file]
 * The windows have their textbook shapes. [@ANCHOR: vnwa_open_window]
 * A delay line peaks at its delay in low-pass and band-pass mode, windows lower the sidelobes, a reflection's step settles at its coefficient. [@ANCHOR: vnwa_open_time_domain]
-* The tone offset between the measured and reference channels is recovered with its sign, the codec drift cancels. [@ANCHOR: vnwa_open_meter_offset]
-* A unit that does not come back from a power cycle gets a second cycle with a longer power-off. [@ANCHOR: vnwa_open_power_escalation]
+
+### `meter::tone_offset(measured: &[f64], reference: &[f64], fs: f64, if_hz: f64) -> Result<(f64, f64), String>` [@ANCHOR: vnwa_open_meter_offset]
+
+Returns the measured tone's frequency minus the reference tone's, in Hz, and the standard error of the fit. It cuts both channels into 20 ms segments of whole IF periods, takes the ratio of the tone in each segment (`tone_at_if`), unwraps the phase against the previous segment (valid while the offset stays under 25 Hz), and fits a line to phase against time; the slope over 2 pi is the offset. Dividing by the reference tone is what cancels the codec's clock drift. Errors: fewer than 8 segments ("too little data"), or a segment whose measured or reference tone is nearly zero ("no signal"). The sign follows from the signs of the channels; the sign against a real external signal is NOT verified on the unit. Pure, no I/O. Tests: synthetic tones with drift and noise.
+
+### `power::power_cycle_escalating(run, port, schedule, ready) -> Result<(), String>` [@ANCHOR: vnwa_open_power_escalation]
+
+Runs `power_cycle` for each (off time, wait for the unit) pair in the schedule in turn and stops at the first success. If a cycle fails, the next one uses the next pair, normally a longer off time: the control chip once failed to enumerate after a 3 s off that followed a modulation lock-up, and a second cycle with a longer off time brought it back. If every pair fails the error joins all the failures ("cycle 1 (off 3 s): ...; cycle 2 ..."). An empty schedule gives an empty error. Blocking for the sum of the cycles. Tests: scripted-runner tests of the escalation.
+
 * The soak run compares every sweep with the first, and counts errors, wrong results and hangs separately: `examples/soak.rs`.
 * A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL (phase-locked loop), a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]
-* A window that contains a buffer overrun is an error and never frames; the point is measured again from a separate budget and never power cycles the unit. [@ANCHOR: vnwa_open_overrun_window]
-* The streams are closed before the unit's power is cut (an open stream on a vanishing codec reports about 5,000 overruns a second). [@ANCHOR: vnwa_open_capture_close]
-* The mark is the frame count at this instant, not at the last delivery, so any ALSA period works. [@ANCHOR: vnwa_open_capture_mark]
-* The firmware version (0xff) and the internal temperature counts (0x85) are read, the temperature refused on a firmware older than v5.16. [@ANCHOR: vnwa_open_firmware_version] [@ANCHOR: vnwa_open_temperature]
+
+### `Capture::frames_after(&self, mark: u64, skip: usize, n: usize, timeout: Duration) -> Result<Vec<[i16; 2]>, String>` [@ANCHOR: vnwa_open_overrun_window]
+
+Returns `n` stereo frames starting `skip` frames after `mark`, waiting up to `timeout` for them to arrive. If the audio layer reported an overrun anywhere from `OVERRUN_GUARD_FRAMES` before the mark to the end of the window, audio was lost and the timing from the mark is wrong, so the result is an error that `is_overrun_error` recognises ("audio overrun"), never frames; the caller measures the point again from a separate budget and never power cycles for it. Other errors: the stream closed (with a special text when a storm closed it), a storm of overrun reports detected while waiting (it closes the stream), or too few frames in time (naming overruns so far). Blocks on a condition variable up to `timeout`. Tests: capture unit tests with overruns injected.
+
+### `Capture::close(&self)` (`capture.rs`) [@ANCHOR: vnwa_open_capture_close]
+
+Stops the audio stream and releases the codec. It must happen before the unit's power is cut: a stream left open on a codec that vanishes keeps restarting and failing, and the audio layer reports an overrun for each try (about a thousand a second, seen as three storms of roughly 16,700 reports in the 2026-10-29 soak). `frames_after` also calls it itself when it sees a storm of overrun reports with no audio between them, so the window fails at once instead of waiting out its timeout. The stream is dropped outside every other lock, because its worker thread takes the ring lock in its callback and the drop waits for that thread. Idempotent, no error path. After it `is_open` is false and `frames_after` fails. Tests: capture unit tests with the synthetic feed.
+
+### `Capture::mark(&self) -> u64` [@ANCHOR: vnwa_open_capture_mark]
+
+Returns the frame count at this instant, the reference point for `frames_after`. Audio arrives one period at a time (5 ms at the driver default, 85 ms at a 4096-frame period), so frames delivered so far lag real time by up to a period; the mark adds the frames that have passed since the last delivery, computed from the clock by `frames_since`, which makes it equally exact for any ALSA period. Takes the ring lock briefly; no error path. Call it just before the set-up block is sent, so that "skip N frames after the mark" is measured from the send. Tests: capture unit tests, including different periods.
+
+### `monitor::parse_version(b: &[u8]) -> Result<(u8, u8), String>` [@ANCHOR: vnwa_open_firmware_version]
+
+Decodes the reply of request 0xff (`wValue` 3), the unit's firmware version: exactly two bytes, minor then major, returned as `(major, minor)`; the unit under test sends `16 05`, which is version 5.16. Any other length is an error string naming the length received, so a short read is never misread as a version. Pure, no I/O. `Vnwa::firmware_version` reads and parses it, and `temperature_counts` uses it to refuse a unit whose firmware predates the sensor. Tests: the monitor unit tests.
+
+### `monitor::parse_temperature(b: &[u8]) -> Result<u16, String>` [@ANCHOR: vnwa_open_temperature]
+
+Decodes the reply of request 0x85 (`wValue` 3), the unit's internal temperature sensor: exactly two bytes, little endian, as raw counts that rise as the unit warms. The counts are uncalibrated, so only differences are meaningful (the soak uses a change of counts to widen its tolerance). Any other length gives an error string. Pure, no I/O. Tests: the monitor unit tests.
 
 ### `Vnwa::recent_transfers(&self) -> Vec<String>` [@ANCHOR: vnwa_open_transfer_log]
 
@@ -192,11 +219,22 @@ Returns the last 16 transfer tries (oldest first), each as epoch milliseconds, w
 * A measured point is corrected in each parameter the calibration covers and left `None` in the other. [@ANCHOR: vnwa_open_cal_correct]
 * A calibration is written as a text file (header, frequency count, one line per frequency). [@ANCHOR: vnwa_open_cal_to_text]
 * A kit definition is written as a text file that reads back to the same definition. [@ANCHOR: vnwa_open_kit_to_text]
-* A codec is found by (part of) its name and opened with the chosen ALSA period. (Hardware test.) [@ANCHOR: vnwa_open_capture_open_with]
-* The frames since the last delivery of a period are the clock times the rate, at most one period. [@ANCHOR: vnwa_open_capture_frames_since]
+
+### `Capture::open_with(needle: &str, options: Options) -> Result<Capture, String>` [@ANCHOR: vnwa_open_capture_open_with]
+
+Opens the audio input whose id contains `needle` (case-insensitive, for example `hw:CARD=CODEC,`) at 48 kHz, stereo, 16 bit, with the ALSA period in `options`, and starts the stream into a ring buffer that records the frame total, the time of the last delivery and every overrun. Errors (strings): no input device with that text in its id, or the stream failing to build or play. It only listens; nothing is transmitted. The needle must be unique to one codec; `topology` finds which card is which. Needs a real codec, so the tests are hardware tests, while `synthetic_capture` covers the logic.
+
+### `capture::frames_since(last_delivery: Option<Instant>, period: u64) -> u64` (private) [@ANCHOR: vnwa_open_capture_frames_since]
+
+Estimates how many frames have passed since the last delivery of a period: the elapsed seconds since that delivery times 48,000, capped at one period, and 0 when nothing has been delivered yet. Used by `Capture::mark` so the mark does not trail real time by the delivery granularity. Pure apart from reading the clock, no error path. Tests: the capture unit tests that check the mark against the clock.
+
 * The `vnwa_open` command line: `is-vnwa-codec` answers by exit status, `install-system-config` runs the installer, anything else prints the usage and exits 2. [@ANCHOR: vnwa_open_cli_main]
 * The codec cards in sysfs are listed with their USB paths, and only the codec vendor is read. [@ANCHOR: vnwa_open_codec_find_cards]
-* The captured AM sequence (500 Hz, 100 %) is sent in the captured order and its stalled last request is not an error. [@ANCHOR: vnwa_open_generator_am_captured]
+
+### `generator::am_captured_500hz_100pct(usb: &Vnwa, freq_hz: f64) -> Result<(), String>` [@ANCHOR: vnwa_open_generator_am_captured]
+
+Starts the captured AM at the vendor's defaults, a 500 Hz sine at 100 percent depth and -20 dB attenuation, on the caller's carrier frequency, by calling `modulate`. It is kept for the tests that compare the decoded sequence with the capture; the stalled status stage of the last request is not an error. Errors are those of `modulate` (carrier out of range, USB failure). Same side effects: the unit then modulates a low-level carrier until a USB reset or power cycle. Tests: the capture comparison in `generator.rs`.
+
 * A managed file lives under the staging root when one is given. [@ANCHOR: vnwa_open_install_path]
 * A managed file is missing, current or different from the packaged content. [@ANCHOR: vnwa_open_install_state]
 * A command runs under `sudo -n` unless there is a staging root or the user is root. [@ANCHOR: vnwa_open_install_sudo_prefix]
@@ -208,11 +246,30 @@ Returns the last 16 transfer tries (oldest first), each as epoch milliseconds, w
 * Installing backs up what it replaces, is idempotent, and undoes its steps on a failure midway. [@ANCHOR: vnwa_open_install_install]
 * Uninstalling removes what was installed and restores the backups. [@ANCHOR: vnwa_open_install_uninstall]
 * The production executor runs a real command and returns its failure text. [@ANCHOR: vnwa_open_install_process_exec]
-* One frequency-meter measurement (the recovery repeats it): the set-up block is sent and the tone offset is fitted. Tested on the simulated unit at 1, 10 and 50 MHz within 1 ppm, and a dead reference or disagreeing codecs give an error, not a number. [@ANCHOR: vnwa_open_meter_once]
-* The cold reset of the unit through its hub port, waiting for the unit and both codecs. (Hardware test.) [@ANCHOR: vnwa_open_power_cold_reset]
-* The production runner returns the exit status and both output streams of a real program. [@ANCHOR: vnwa_open_power_process_runner]
-* The hub port is switched through `sudo -n uhubctl`; a failure is a clear error, and a hub name that is not a USB hub location (`3-2`, `3-2.4`) is refused before `uhubctl` runs. [@ANCHOR: vnwa_open_power_uhubctl] [@ANCHOR: vnwa_open_power_valid_hub_name]
-* A condition is polled until it is true or the timeout passes. [@ANCHOR: vnwa_open_power_wait_until]
+
+### `Vna::meter_once(&mut self, center_hz: f64, point_ms: f64) -> Result<Reading, String>` (`meter.rs`, private) [@ANCHOR: vnwa_open_meter_once]
+
+One frequency-meter measurement, called by `Vna::meter` inside the recovery wrapper (which repeats it after a failure). It builds the set-up block with the meter's step counter (31), reads request 0x58, marks both codecs, sends the block, does the 0x0d read, then collects about 28 point times of audio from both codecs starting two stages in, checks each codec's reference tone against `min_reference`, and fits the tone offset on each. Errors (strings): no signal on a reference channel, no or too few frames, or the two codecs disagreeing by more than `0.02 + 5 * (e1 + e2)` Hz, which is an error and never a number. Returns a `Reading` with the TX DDS's real frequency, both offsets and their mean. Blocking: up to 10 s per codec for audio. It makes the unit's generator emit a low-level RF tone (about -17 dBm at the TX port); there is no antenna transmit path. Tests: the simulated-unit tests at 1, 10 and 50 MHz within 1 ppm.
+
+### `power::cold_reset(port: &HubPort) -> Result<(), String>` [@ANCHOR: vnwa_open_power_cold_reset]
+
+The production cold reset: cycle the hub port's power through the installed hook or `sudo -n uhubctl`, wait for the unit and its codecs, and if the unit does not come back try once more with a 12 s off time (the ladder is 3 s off with up to 25 s for the unit, then 12 s off with up to 45 s). After the unit is listed it sleeps 8 s more, because a request sent 3 s after enumeration stalled. Error: the failure text of the cycle. Blocking for tens of seconds. The caller must close the audio streams first (`Capture::close`) and must resend all set-up afterwards. Tests: a hardware test; `cold_reset_via` is tested with a recording hook.
+
+### `ProcessRunner::run(&self, program: &str, args: &[String]) -> Result<(bool, String), String>` [@ANCHOR: vnwa_open_power_process_runner]
+
+The production `Runner`: starts a real process with the arguments (no shell, so nothing is interpreted), waits for it, and returns whether it exited successfully plus its standard output and standard error as one string. Failure to start the program is an error `"<program>: <os error>"`. It blocks until the process exits and has no timeout of its own. Used to run `sudo -n uhubctl ...` for a hub port power cycle; tests substitute a scripted `Runner`, so no test touches real power. Tests: a test runs a real harmless program and checks status and both streams.
+
+### `power::uhubctl(run: &dyn Runner, port: &HubPort, action: &str) -> Result<(), String>` (private) [@ANCHOR: vnwa_open_power_uhubctl]
+
+Switches one hub port with `sudo -n uhubctl -l <hub> -p <port> -a <action>` through the `Runner` (action is `off` or `on`). It first refuses a hub name that fails `valid_hub_name`, returning "...is not a USB hub location such as 3-2 or 3-2.4; nothing was switched" without running anything. A non-zero exit is an error quoting the output. `sudo -n` never prompts, so without a sudo rule the call fails at once rather than hanging. Side effect: real power removal from the port in production, which is why the unit's streams must be closed first. Tests: scripted-runner tests check the exact argument list and both error cases.
+
+### `power::valid_hub_name(name: &str) -> bool` [@ANCHOR: vnwa_open_power_valid_hub_name]
+
+True when `name` looks like a USB hub location as `uhubctl -l` takes it: digits joined by `-` for the bus and ports, then optional dot-separated digit groups, so `3-2` and `3-2.4` pass. Empty parts, letters, spaces and a leading `-` fail; the last matters because `uhubctl` would read a name starting with `-` as an option. Called by `uhubctl` before any command is built, so a bad configured name never reaches `sudo`. Pure, total. Security: this is the input check for the one argument that comes from configuration. Tests: valid and invalid names in the power unit tests.
+
+### `power::wait_until(timeout: Duration, every: Duration, ready: impl FnMut() -> bool) -> bool` [@ANCHOR: vnwa_open_power_wait_until]
+
+Polls `ready` until it returns true (result true) or the timeout has passed (result false). The condition is checked first, so an already-true condition returns immediately with no sleep; between checks the thread sleeps `every`. No error path. It blocks the calling thread for up to `timeout` plus one interval. Used by `power_cycle` to wait for the unit and both codecs (polling every 500 ms). Tests: the power unit tests with a counting condition.
 
 ### `RusbTransport::open(vid: u16, pid: u16) -> Result<RusbTransport, String>` [@ANCHOR: vnwa_open_rusb_transport_open]
 
@@ -228,7 +285,11 @@ The test transport's control read: it plays the next scripted outcome for a read
 * The USB port is read from the card's bus path. [@ANCHOR: vnwa_open_sound_server_port_of]
 * The exposure is stated plainly: protected, exposed or unknown. [@ANCHOR: vnwa_open_sound_server_protected]
 * An exposed codec gives a warning that names the fixes. [@ANCHOR: vnwa_open_sound_server_warning]
-* The internal temperature counts are read from request 0x85 and refused on a firmware that has no sensor. [@ANCHOR: vnwa_open_temperature_counts]
+
+### `Vnwa::temperature_counts(&self) -> Result<u16, String>` [@ANCHOR: vnwa_open_temperature_counts]
+
+Reads the internal temperature in raw counts. It first reads the firmware version and refuses with an error naming both versions when the firmware is older than v5.16 (`SENSOR_MIN_VERSION`, the first with the sensor), then does a vendor read of request 0x85 and parses it with `parse_temperature`. Two USB control reads, each with the retry wrapper; a transport error is returned as a string. No state changes on the unit. `Vna::temperature_counts` forwards to it for the sweep session. Tests: the monitor tests over the scripted transport.
+
 * A time-domain transform needs at least four points on a uniform, rising frequency grid. [@ANCHOR: vnwa_open_time_domain_check_grid]
 * The delay of the largest peak is found by parabolic interpolation. [@ANCHOR: vnwa_open_time_domain_peak_time]
 * A time gate keeps what arrives between two times (shaped by a window across the gate) and returns that part's frequency response on the same grid; the impulse response is taken with a rectangular window so nothing needs undoing. [@ANCHOR: vnwa_open_time_domain_gate]
@@ -256,18 +317,51 @@ plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that basel
 A device-to-host vendor read for the 0x0d request, which the unit stalls while it is busy: after a transient error it waits the given pauses (milliseconds), one per resend, instead of the default 3 resends of 5 ms; the caller's table gives growing pauses, up to 6 resends. Returns the bytes read (truncated to what arrived). A `NoDevice` or `Other` error fails at once; running out of pauses returns an error naming the count and the last message. Every try is logged and each resend counted. It sleeps the calling thread for the pauses. Tests: the growing-pause test over the scripted transport in `usb.rs`.
 
 * The IF tone starts 61 ms and the 18 kHz burst about 1 ms after the end of the send, in a recorded point. [@ANCHOR: vnwa_open_emission_onset]
-* A storm of overrun reports with no audio between them closes the stream and fails the window at once. [@ANCHOR: vnwa_open_capture_close]
-* AM and FM: the settings-dependent fields of the vendor's start sequence reproduce every captured start, and the output was checked on a scope. [@ANCHOR: vnwa_open_am_fields] [@ANCHOR: vnwa_open_fm_fields] [@ANCHOR: vnwa_open_modulation_sequence]
+
+### `generator::am_fields(level: u16, mod_hz: f64, depth_pct: f64) -> Result<AmFields, String>` [@ANCHOR: vnwa_open_am_fields]
+
+Computes the settings-dependent fields of an AM start: the modulation phase step `round(mod_hz * 65536 / 18,750 Hz)` (the 0x92 field) and the 32-bit modulation amplitude `round(level / 16383 * m / (1 + m) * 2^23)` with `m = depth / 100`, split into a high and a low 16-bit half (the 0x94 field). Arguments: the output amplitude word, the modulating frequency (1 to 3000 Hz) and the depth (1 to 100 percent); anything outside is an error string naming the range. Matches the 0x94 fields of seven vendor captures to within one count. Pure, no I/O. Tests: the captured-values test in `generator.rs`.
+
+### `generator::fm_fields(mod_hz: f64, deviation_hz: f64) -> Result<FmFields, String>` [@ANCHOR: vnwa_open_fm_fields]
+
+Computes the settings-dependent fields of an FM start: the phase step `round(mod_hz * 65536 / 15,625 Hz)` (0x92) and the deviation step word `round(deviation * 2^32 / 360 MHz / 127)` (0x95). The modulation frequency must be 1 to 3000 Hz and the deviation 100 Hz to 300 kHz, otherwise an error string names the range. The values reproduce the captured starts at 500 and 1000 Hz (phase 2097 and 4194) and deviations of 5, 10 and 20 kHz (470, 939 and 1879). Pure, no I/O. Tests: the captured-values test in `generator.rs`.
+
+### `generator::modulation_reads(level: u16, m: Modulation) -> Result<Vec<(u8, u16, u16)>, String>` [@ANCHOR: vnwa_open_modulation_sequence]
+
+Builds the vendor's 23-step start sequence for AM or FM as (request, `wValue`, `wIndex`) tuples in the captured order: switch-off, two carrier-frequency writes (request 0x4c, with `wValue` 0 and then 0x0080, which `modulate` replaces with real frequency payloads), the phase, level and amplitude or step fields from `am_fields` or `fm_fields`, a few constant requests, and last the start request 0x90 (0x0a for AM, 0x0c for FM). Errors come from the field functions (out-of-range modulation frequency, depth or deviation). Pure, builds only. Tests: the sequence reproduces every captured start.
 
 ### `Vnwa::reset_device(&self) -> Result<(), String>` [@ANCHOR: vnwa_open_usb_reset]
 
 Performs a USB port reset of the unit's control chip through the transport: no power change and the device number stays. Measured on 2026-10-29, after AM or FM every request stalls until this reset, and every request is answered after it, so it ends the modulation lock-up without a power cycle (the power cycle ladder is the fallback). The result is logged to the transfer log; an error is returned as `usb reset: <error>`. Side effect: the unit re-initialises its USB state and loses nothing the host holds. No transmit gate is involved. Tests: the reset test over the scripted transport in `usb.rs`.
 
-* A modulating unit refuses every request; a USB reset of its control chip ends the modulation, and a power cycle ladder is the fallback. [@ANCHOR: vnwa_open_end_modulation] [@ANCHOR: vnwa_open_modulation_recovery]
-* A program that embeds this crate can install its own power-cycle implementation (bench_mcp installs its USB hub module's), used by the recovery and the generator-off recovery. [@ANCHOR: vnwa_open_cycle_hook]
+### `generator::end_modulation_with(usb: Vnwa, reopen, tries: u32, pause: Duration) -> Result<(), String>` [@ANCHOR: vnwa_open_end_modulation]
+
+Ends AM or FM without a power cycle: a USB reset of the control chip (which the vendor program does not try), after which it waits `pause` and reopens the unit up to `tries` times, because the reset sometimes makes the unit re-enumerate with a new device number. When the reopened unit answers request 0x91 (`answers`), it runs the normal switch-off (`off`). If it never answers the error says how many seconds were waited, shows the reset result, and says it needs a power cycle (`power::cold_reset_after_modulation`). Takes the unit by value and drops it before the pause. `end_modulation` calls it with 24 tries of 500 ms. Measured on 2026-10-29: after the reset every request answered again. Tests: scripted tests of both outcomes.
+
+### `power::cold_reset_after_modulation(port: &HubPort) -> Result<(), String>` [@ANCHOR: vnwa_open_modulation_recovery]
+
+The cold reset to use when the unit is in, or may be in, a modulation lock-up (during AM or FM the unit's microcontroller stalls every control request, including switch-off): it runs `modulation_ladder` through `cycle_with` (the installed hook or `sudo -n uhubctl`) and then sleeps 8 s for the unit to settle. Error: the cycle failure text, listing each attempt. Blocking for up to minutes in the worst case. The softer first remedy, a USB reset of the control chip, is `generator::end_modulation`; this is the fallback. Tests: hardware test; the ladder and hook are unit-tested.
+
+### `power::set_cycle_hook(hook: CycleHook) -> bool` [@ANCHOR: vnwa_open_cycle_hook]
+
+Lets a program that embeds this crate install its own power-cycle implementation (`bench_mcp` installs its USB hub module's), a boxed closure taking the hub port and the (off time, wait) ladder and returning when the unit is back. It is stored once in a process-wide `OnceLock`: the first call wins and returns true, a later call returns false and changes nothing. The recovery inside a measurement, the generator-off recovery and the power-cycle tool then all run one implementation with its hub protection rules and evidence record. This crate cannot depend on `bench_mcp`, so standalone programs use the built-in `sudo -n uhubctl` path. Tests: the hook test in `power.rs`.
+
 * Spectrum analyzer: the audio power around the LO at each frequency (TX chip silent or a 12 kHz tracking generator), band power by DFT (discrete Fourier transform), settings refused if they would leave holes. [@ANCHOR: vnwa_open_sa_band_rms] [@ANCHOR: vnwa_open_sa_spectrum]
 * A point with all four channels dead says nothing leaves the TX port and names the TX connector, pad, tee and leads first. [@ANCHOR: vnwa_open_no_reference_message]
-* The functions that modulate, choose the power-cycle implementation, climb the modulation ladder and measure one spectrum point are anchored. [@ANCHOR: vnwa_open_generator_modulate] [@ANCHOR: vnwa_open_power_cycle_with] [@ANCHOR: vnwa_open_power_modulation_ladder] [@ANCHOR: vnwa_open_spectrum_sa_once]
+
+### `generator::modulate(usb: &Vnwa, carrier_hz: f64, attenuation_db: f64, m: Modulation) -> Result<(), String>` [@ANCHOR: vnwa_open_generator_modulate]
+
+Starts AM or FM on the generator by sending `modulation_reads` over USB. It checks the carrier (`check_frequency`) and the attenuation first, so a bad value sends nothing. The carrier writes use `generator_frequency`; the last request's status stage is often stalled and that is not an error. Afterwards the unit modulates in real time and stalls every control request, including switch-off, so the only ways to end it are `generator::end_modulation` (a USB reset) or a power cycle. Output is a low-level modulated RF carrier on the TX port (about -17 dBm at 0 dB attenuation, flat to 10 MHz), never an antenna transmission by this crate. Errors: validation strings or a USB failure. Tests: scripted-transport tests and a scope check recorded in the README.
+
+### `power::cycle_with(hook: Option<&CycleHook>, port, schedule) -> Result<(), String>` (private) [@ANCHOR: vnwa_open_power_cycle_with]
+
+Chooses the power-cycle implementation: with a hook installed it calls the hook with the port and the ladder and returns its result unchanged (so the hook's error text reaches the caller); without one it runs `power_cycle_escalating` with the real `ProcessRunner` and `unit_present` as the readiness test. Taking the hook as an argument keeps tests independent of the process-wide hook. Blocking, with the side effects of whichever implementation runs (removing power from the hub port). Tests: the hook test in `power.rs`.
+
+### `power::modulation_ladder() -> Vec<(Duration, Duration)>` [@ANCHOR: vnwa_open_power_modulation_ladder]
+
+Returns the power-cycle schedule used after AM or FM: five cycles with 3, 12, 12, 30 and 12 s off, each waiting up to 25 s (for the 3 s cycle) or 45 s (`BACK_TIMEOUT`, for the others) for the unit. It is that long because in 11 of 25 recoveries from a modulation lock-up measured on 2026-10-29 the control chip failed to come back after one or more cycles (1 cycle 14 times, 2 cycles 6 times, 3 cycles 3 times, 4 or more twice). The extra cycles cost time only when the unit does not come back. Pure, no I/O. Tests: the ladder shape test in `power.rs`.
+
+* The functions that modulate, choose the power-cycle implementation, climb the modulation ladder and measure one spectrum point are anchored. [@ANCHOR: vnwa_open_spectrum_sa_once]
 
 ## Soak scope connection (`soak_scope`)
 
