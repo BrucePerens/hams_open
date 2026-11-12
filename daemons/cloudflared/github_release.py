@@ -23,6 +23,7 @@ logging.basicConfig(format=FORMAT, level=logging.INFO)
 CLOUDFLARED_REPO = os.environ.get("GITHUB_REPO", "cloudflare/cloudflared")
 GITHUB_CONFLICT_CODE = "already_exists"
 BASE_KV_URL = 'https://api.cloudflare.com/client/v4/accounts/'
+KV_TIMEOUT_SECONDS = 60  # a stalled Workers KV must not hang the release job
 UPDATER_PREFIX = 'update'
 
 # [@ANCHOR: github_release:get_sha256]
@@ -45,7 +46,8 @@ def send_hash(pkg_hash, name, version, account, namespace, api_token):
     response = requests.put(
             BASE_KV_URL + account + "/storage/kv/namespaces/" + namespace + "/values/" + quote(key, safe=""),
             headers=headers,
-            data=pkg_hash
+            data=pkg_hash,
+            timeout=KV_TIMEOUT_SECONDS,
     )
 
     # The original check only raised when the error body's

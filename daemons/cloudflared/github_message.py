@@ -18,6 +18,7 @@ logging.basicConfig(format=FORMAT, level=logging.INFO)
 CLOUDFLARED_REPO = os.environ.get("GITHUB_REPO", "cloudflare/cloudflared")
 GITHUB_CONFLICT_CODE = "already_exists"
 BASE_KV_URL = 'https://api.cloudflare.com/client/v4/accounts/'
+KV_TIMEOUT_SECONDS = 60  # a stalled Workers KV must not hang the release job
 
 
 # [@ANCHOR: github_message:_raise_for_kv_error]
@@ -54,6 +55,7 @@ def kv_get_keys(prefix, account, namespace, api_token):
             "Authorization": "Bearer " + api_token,
         },
         params={"prefix": prefix},
+        timeout=KV_TIMEOUT_SECONDS,
     )
     _raise_for_kv_error(response, "get checksums")
     return response.json()["result"]
@@ -68,6 +70,7 @@ def kv_get_value(key, account, namespace, api_token):
             "Content-Type": "application/json",
             "Authorization": "Bearer " + api_token,
         },
+        timeout=KV_TIMEOUT_SECONDS,
     )
     _raise_for_kv_error(response, "get checksums")
     return response.text

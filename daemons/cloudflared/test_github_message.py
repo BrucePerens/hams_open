@@ -54,6 +54,7 @@ class KvReadTest(unittest.TestCase):
         self.assertEqual(args[0], gm.BASE_KV_URL + "acct/storage/kv/namespaces/ns/keys")
         self.assertEqual(kwargs["params"], {"prefix": "update_1_"})
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer tok")
+        self.assertGreater(kwargs["timeout"], 0)  # a stalled Workers KV must not hang the release job
 
     # Tests [@ANCHOR: github_message:kv_get_keys]
     def test_a_failed_listing_raises_instead_of_returning_nothing(self):
@@ -66,6 +67,7 @@ class KvReadTest(unittest.TestCase):
         with mock.patch.object(gm.requests, "get", return_value=FakeResponse(200, text="abc123")) as get:
             value = gm.kv_get_value("update_1/x y", "acct", "ns", "tok")
         self.assertEqual(value, "abc123")
+        self.assertGreater(get.call_args[1]["timeout"], 0)
         self.assertEqual(get.call_args[0][0],
                          gm.BASE_KV_URL + "acct/storage/kv/namespaces/ns/values/update_1%2Fx%20y")
 

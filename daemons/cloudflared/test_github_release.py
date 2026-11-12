@@ -60,6 +60,7 @@ class SendHashTest(unittest.TestCase):
                          "acct/storage/kv/namespaces/ns/values/update_2026.1.0_cloudflared-linux-amd64")
         self.assertEqual(kwargs["data"], "deadbeef")
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer tok")
+        self.assertGreater(kwargs["timeout"], 0)  # a stalled Workers KV must not hang the release job
 
     # Tests [@ANCHOR: github_release:send_hash]
     def test_a_rejected_upload_raises_even_when_the_errors_array_is_empty(self):
