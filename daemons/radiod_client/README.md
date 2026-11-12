@@ -38,9 +38,10 @@ The tests open real multicast sockets on `127.0.0.1` (TTL 0); nothing leaves the
 
 ## Anchors
 
-Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test carries
-`// Tests [@ANCHOR: id]`, and this README cites it as `[@ANCHOR: radiod_client:id]` below.
-The tag is the crate name, a colon and the function id; the code form drops the crate prefix. A README entry is a
+Anchors (ADR 0090): a function carries an anchor tag in a source comment (an at sign and the word ANCHOR, a colon and
+the function id, all in square brackets), its test carries the same tag after the word `Tests`, and this README cites it
+with the crate name and a colon in front of the id (for example crate `radiod_client`, id `command_build`, written
+`radiod_client:command_build` inside the tag brackets). The tag is the crate name, a colon and the function id; the code form drops the crate prefix. A README entry is a
 `###` heading that carries the tag, followed by what the function does, its arguments, what it returns, its errors,
 its async and locking behaviour, and the tests that cite it, so a reader never has to open the source to use it.
 
