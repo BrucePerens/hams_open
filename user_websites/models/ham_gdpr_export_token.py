@@ -52,6 +52,7 @@ class HamGdprExportToken(models.Model):
                 record.user_id.name or record.user_id.login or record.user_id.id
             )
 
+    @api.private
     @api.model
     # [@ANCHOR: user_websites:COMM_create_for_current_user]
     def create_for_current_user(self):
