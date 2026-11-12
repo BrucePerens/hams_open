@@ -139,13 +139,13 @@ The module is the default so that every installer is protected. An operator can 
 location ~ ^/(xmlrpc/|jsonrpc$) { return 404; }
 ```
 
-On Cloudflare, a WAF custom rule `(starts_with(http.request.uri.path, "/xmlrpc/")) or (http.request.uri.path eq "/jsonrpc")`
+On Cloudflare, a WAF (web application firewall) custom rule `(starts_with(http.request.uri.path, "/xmlrpc/")) or (http.request.uri.path eq "/jsonrpc")`
 with action Block (the `cloudflare` module's default WAF rules already block `/xmlrpc`). Both are stopgaps in the
 sense of the project's security rule: they protect only the hosts that have them; the module is what protects everyone.
 
 ## Unix socket
 
-Odoo 19's own HTTP server creates only TCP sockets, but it is a WSGI application behind a small accept loop, so the
+Odoo 19's own HTTP server creates only TCP sockets, but it is a WSGI (Web Server Gateway Interface, Python's standard web-application interface) application behind a small accept loop, so the
 module adds a second listener of its own (`unix_listener.py`) that hands each connection to the same application and
 puts the kernel-verified credentials of the connecting process (`SO_PEERCRED`: pid, uid, gid) in the request. Only the
 external RPC endpoints are served on it (every other path answers 404 there), forwarding headers are dropped, and
@@ -303,7 +303,7 @@ proxy, only from the one configured header, only as a single address. **Test:** 
 
 ### `hams_rpc_guard:network_class`
 
-`network_class(address)` returns the counter class: `loopback`, `link-local`, `private` (RFC 1918, ULA, and the
+`network_class(address)` returns the counter class: `loopback`, `link-local`, `private` (RFC 1918, the standard for private IPv4 ranges; ULA, unique local IPv6 addresses; and the
 documentation ranges Python counts as private), `public`, or `unknown` for `None`. Pure. **Test:**
 `test_endpoint_gate.TestJudgement`.
 
