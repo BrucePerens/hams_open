@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import errno
 import grp
 import os
 import pwd
 import shutil
 import socket
 import stat
+import sys
 import tempfile
 import threading
 import urllib.parse
@@ -156,6 +158,29 @@ class TestListenerSocket(HamsTransactionCase):
         self.assertIs(odoo_server.WorkerHTTP.sleep, sleep)
         self.assertTrue(unix_listener._state["patched"])
         self.assertIsNone(unix_listener.listener_socket(), "no socket unless the configuration names one")
+
+    def test_the_tcp_fallback_of_a_worker_runs_outside_the_except_block(self):
+        """With the Unix socket idle (EAGAIN) the worker falls back to Odoo's own TCP accept and request. That must not run inside
+        the `except` block of the Unix accept: a traceback Odoo then logs was chained to a spurious BlockingIOError
+        ("During handling of the above exception..."), found in the log of the 2026-11-12 rehearsal."""
+        # Tests [@ANCHOR: hams_rpc_guard:install_server_patches]
+        unix_listener.install_server_patches()
+        seen = []
+
+        class IdleUnixSocket:
+            def accept(self):
+                raise BlockingIOError(errno.EAGAIN, "idle")
+
+        class TcpSocket:
+            def accept(self):
+                seen.append(sys.exception())  # None unless called from inside an except block
+                raise BlockingIOError(errno.EAGAIN, "idle")
+
+        worker = SimpleNamespace(multi=SimpleNamespace(socket=TcpSocket()), request_count=0)
+        self.safe_patch_object(unix_listener, "listener_socket", new=lambda: IdleUnixSocket())
+        self.safe_patch_object(unix_listener, "_state", new={"server": object(), "socket": None, "patched": True})
+        odoo_server.WorkerHTTP.process_work(worker)
+        self.assertEqual(seen, [None])
 
     def test_ensure_listener_without_a_path_or_with_a_bad_one_opens_nothing(self):
         # Tests [@ANCHOR: hams_rpc_guard:ensure_listener]
