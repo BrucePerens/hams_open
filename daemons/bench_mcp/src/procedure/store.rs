@@ -234,6 +234,12 @@ pub fn read_stream(path: &Path, from: u64, max: usize) -> (String, u64, bool) {
     )
 }
 
+/// The last `max` bytes of a stream file (all of it when it is shorter).
+pub fn read_tail(path: &Path, max: usize) -> String {
+    let len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    read_stream(path, len.saturating_sub(max as u64), max).0
+}
+
 /// Deletes finished runs older than the retention time and, beyond `keep_runs`, the oldest finished ones.
 pub fn purge(cfg: &Config) -> usize {
     // [@ANCHOR: proc_store_purge]
@@ -246,7 +252,10 @@ pub fn purge(cfg: &Config) -> usize {
         let Ok(st) = read_json(&e.path().join("state.json")) else {
             continue;
         };
-        let state = st.get("state").and_then(|s| s.as_str()).unwrap_or("");
+        // A state file without a state is not known to be finished: leave it.
+        let Some(state) = st.get("state").and_then(|s| s.as_str()) else {
+            continue;
+        };
         if matches!(
             state,
             "starting" | "running" | "waiting_operator" | "cancelling"

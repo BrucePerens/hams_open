@@ -2067,3 +2067,43 @@ fn the_calibration_example_waits_for_the_operator_at_each_standard_and_stops_on_
     );
     assert_eq!(r["failure"]["context"]["measured"], json!(["open"]));
 }
+
+// Tests [@ANCHOR: proc_store_read_stream]
+// Tests [@ANCHOR: proc_store_purge]
+// Tests [@ANCHOR: proc_view_result]
+#[test]
+fn the_error_tail_is_the_end_of_the_output_and_a_run_without_a_state_is_not_purged() {
+    let dir = std::env::temp_dir().join(format!("bench_proc_tail_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("runs/odd")).unwrap();
+    let f = dir.join("stderr.txt");
+    std::fs::write(&f, format!("{}END", "x".repeat(5000))).unwrap();
+    let tail = store::read_tail(&f, 2000);
+    assert!(tail.len() == 2000 && tail.ends_with("END"), "the tail is the last bytes");
+    std::fs::write(&f, "short").unwrap();
+    assert_eq!(store::read_tail(&f, 2000), "short");
+    assert_eq!(store::read_tail(&dir.join("none"), 2000), "");
+    // A state file with no `state` field is left alone even with retention 0.
+    std::fs::write(dir.join("runs/odd/state.json"), "{}").unwrap();
+    let cfg = parse_config(&json!({"dir": dir.display().to_string(), "retention_days": 0})).unwrap();
+    assert_eq!(store::purge(&cfg), 0);
+    assert!(dir.join("runs/odd").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// Tests [@ANCHOR: proc_py_failure_report]
+// Tests [@ANCHOR: proc_py_finite]
+#[test]
+fn a_failure_context_with_infinity_or_the_word_nan_still_gives_a_report() {
+    let b = bench();
+    let source = r#"
+bench.expect(False, "bad", gain=float("inf"), low=float("nan"), word="NaN is a word", seq=[float("-inf"), 1.5])
+"#;
+    let r = run(&b, source, json!({}));
+    assert_eq!(r["state"], "failed", "{r}");
+    let c = &r["failure"]["context"];
+    assert_eq!(c["gain"], json!(null), "{r}");
+    assert_eq!(c["low"], json!(null));
+    assert_eq!(c["word"], json!("NaN is a word"));
+    assert_eq!(c["seq"], json!([null, 1.5]));
+}

@@ -97,6 +97,21 @@ def jsonable(value):
     return repr(value)
 
 
+def finite(value):
+    """The value with every NaN or infinity replaced by None, so the
+        report can be sent as strict JSON (text that merely contains the
+    word NaN is left alone)."""
+    # [@ANCHOR: proc_py_finite]
+
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [finite(v) for v in value]
+    return value
+
+
 class BenchError(Exception):
     """A bench tool call failed; ``kind`` says why (tool, tier,
     budget, lock, policy)."""
@@ -554,8 +569,9 @@ def failure_report(error):
         "frames": frames,
     }
     if isinstance(error, ProcedureFailure):
-        text = json.dumps(error.context, default=jsonable)
-        report["context"] = json.loads(text.replace("NaN", "null"))
+        report["context"] = finite(
+            json.loads(json.dumps(error.context, default=jsonable))
+        )
     if isinstance(error, BenchError):
         report["tool"] = error.tool
         report["kind"] = error.kind
