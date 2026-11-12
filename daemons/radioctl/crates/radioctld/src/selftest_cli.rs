@@ -47,6 +47,7 @@ const USAGE: &str = "usage: radioctl-selftest [--list] [--version] [--no-discove
        [ID PORT [BAUD]]
 With no --description/--port it discovers the radios on this computer and tests each one.";
 
+// [@ANCHOR: radioctl_d_selftest_cli_baud_arg]
 /// The baud rate to use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaudArg {
@@ -56,6 +57,7 @@ pub enum BaudArg {
     Auto,
 }
 
+// [@ANCHOR: radioctl_d_selftest_cli_options]
 /// What the command line asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Options {
@@ -173,6 +175,7 @@ pub fn parse_baud(text: &str) -> Result<BaudArg, String> {
     }
 }
 
+// [@ANCHOR: radioctl_d_selftest_cli_host]
 /// What the program needs from the machine it runs on (injected so tests need no hardware).
 pub struct Host {
     /// The serial ports present.
@@ -193,6 +196,7 @@ pub struct Host {
     pub enter_pressed: Option<EnterPoll>,
 }
 
+// [@ANCHOR: radioctl_d_selftest_cli_target]
 /// One rig to test.
 #[derive(Debug, Clone)]
 struct Target {
@@ -200,6 +204,7 @@ struct Target {
     port: Option<PortInfo>,
 }
 
+// [@ANCHOR: radioctl_d_selftest_cli_tested]
 /// What a tested rig leaves for the upload.
 struct Tested {
     results: Vec<CheckResult>,
@@ -778,9 +783,11 @@ pub async fn run(o: Options, mut host: Host, input: &mut dyn BufRead, out: &mut 
     status
 }
 
+// [@ANCHOR: radioctl_d_selftest_cli_enter_poll]
 /// A poll that is true once the volunteer pressed Enter.
 pub type EnterPoll = Box<dyn FnMut() -> bool + Send>;
 
+// [@ANCHOR: radioctl_d_selftest_cli_stdin_lines]
 /// Standard input read by one thread, one line at a time, so the program can both wait for a line
 /// (a prompt) and ask whether one has arrived (the knob check's Enter to skip).
 pub struct StdinLines {
@@ -955,6 +962,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_cli_parse_args]
     // Tests [@ANCHOR: radioctld_cli_parse_baud]
+    // Tests [@ANCHOR: radioctl_d_selftest_cli_options]
+    // Tests [@ANCHOR: radioctl_d_selftest_cli_baud_arg]
     #[test]
     fn flags_and_the_old_positional_spelling_parse() {
         let o = parse_args(&args(&[
@@ -988,6 +997,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_cli_probe_baud]
     // Tests [@ANCHOR: radioctld_cli_test_one]
+    // Tests [@ANCHOR: radioctl_d_selftest_cli_target]
     #[tokio::test]
     async fn an_unopenable_port_is_an_error_not_a_hang() {
         let loaded = rigfile::parse(&crate::builtin::embedded_texts()[0].1).expect("parse");
@@ -1020,6 +1030,8 @@ mod tests {
     // Tests [@ANCHOR: radioctld_cli_stdin_lines_fill_buf]
     // Tests [@ANCHOR: radioctld_cli_stdin_lines_from]
     // Tests [@ANCHOR: radioctld_cli_stdin_lines_spawn]
+    // Tests [@ANCHOR: radioctl_d_selftest_cli_stdin_lines]
+    // Tests [@ANCHOR: radioctl_d_selftest_cli_enter_poll]
     #[test]
     fn a_line_can_be_read_by_a_prompt_or_taken_by_the_poll_but_not_both() {
         let (tx, rx) = std::sync::mpsc::channel();
@@ -1149,6 +1161,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_cli_render_summary]
+    // Tests [@ANCHOR: radioctl_d_selftest_cli_tested]
     #[test]
     fn the_summary_has_the_table_and_a_line_per_rig() {
         let text = render_summary(
@@ -1180,6 +1193,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_cli_run]
     // Tests [@ANCHOR: radioctld_cli_main_from_env]
+    // Tests [@ANCHOR: radioctl_d_selftest_cli_host]
     #[tokio::test]
     async fn version_list_and_usage_errors_need_no_radio() {
         let host = || Host {

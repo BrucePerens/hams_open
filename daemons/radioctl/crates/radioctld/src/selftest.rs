@@ -34,6 +34,7 @@ use tokio::runtime::Handle;
 /// description, not the user; the one hint about the user's side is a hint, not the explanation.
 pub const FAILURE_NOTE: &str = "A check that did not pass is a problem in radioctl or the rig description, not something you did wrong. It could be the radio is off or the port differs; if so, run again.";
 
+// [@ANCHOR: radioctl_d_selftest_verdict]
 /// How one check ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
@@ -45,6 +46,7 @@ pub enum Verdict {
     Fail(String),
 }
 
+// [@ANCHOR: radioctl_d_selftest_check_result]
 /// One executed check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckResult {
@@ -61,6 +63,7 @@ pub struct CheckResult {
     pub wire: String,
 }
 
+// [@ANCHOR: radioctl_d_selftest_report_header]
 /// What the report header states about the run.
 #[derive(Debug, Clone)]
 pub struct ReportHeader {
@@ -340,6 +343,7 @@ where
     actor_side
 }
 
+// [@ANCHOR: radioctl_d_selftest_any_engine]
 /// `spawn_current` wants a sized engine type; this lets the engine of any family go through it.
 pub(crate) struct AnyEngine(pub(crate) Box<dyn ProtocolEngine>);
 
@@ -541,6 +545,9 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_selftest_render_report]
+    // Tests [@ANCHOR: radioctl_d_selftest_report_header]
+    // Tests [@ANCHOR: radioctl_d_selftest_check_result]
+    // Tests [@ANCHOR: radioctl_d_selftest_verdict]
     #[test]
     fn a_check_that_did_not_pass_is_never_blamed_on_the_user() {
         let header = ReportHeader {
@@ -577,6 +584,7 @@ mod tests {
     // Tests [@ANCHOR: radioctld_selftest_render_report]
     // Tests [@ANCHOR: radioctld_selftest_any_engine_encode]
     // Tests [@ANCHOR: radioctld_selftest_any_engine_feed]
+    // Tests [@ANCHOR: radioctl_d_selftest_any_engine]
     #[tokio::test]
     async fn virtual_ic7300_passes_and_the_wire_log_has_both_directions() {
         let description = RigDescription::ic7300();

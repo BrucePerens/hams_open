@@ -34,6 +34,7 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 const ACCEPT_ERROR_PAUSE: Duration = Duration::from_millis(100);
 const SHUTDOWN_WAIT: Duration = Duration::from_secs(3);
 
+// [@ANCHOR: radioctl_d_server_box_future]
 /// A boxed future, for the object-safe [`LineService`].
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -60,6 +61,7 @@ impl LineService for RigService {
     }
 }
 
+// [@ANCHOR: radioctl_d_server_limits]
 /// The bounds a server enforces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
@@ -86,6 +88,7 @@ impl Limits {
     }
 }
 
+// [@ANCHOR: radioctl_d_server_server_stats]
 /// Counters of a server.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ServerStats {
@@ -103,6 +106,7 @@ pub struct ServerStats {
     pub timeouts: u64,
 }
 
+// [@ANCHOR: radioctl_d_server_counters]
 #[derive(Default)]
 struct Counters {
     accepted: AtomicU64,
@@ -114,6 +118,7 @@ struct Counters {
     next_client: AtomicU64,
 }
 
+// [@ANCHOR: radioctl_d_server_shared]
 struct Shared {
     service: Arc<dyn LineService>,
     access: Arc<AllowList>,
@@ -122,6 +127,7 @@ struct Shared {
     shutdown: watch::Receiver<bool>,
 }
 
+// [@ANCHOR: radioctl_d_server_server_handle]
 /// A running server.
 pub struct ServerHandle {
     local_addr: SocketAddr,
@@ -341,6 +347,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctld_server_limits_from_config]
+    // Tests [@ANCHOR: radioctl_d_server_limits]
     #[test]
     fn limits_follow_the_configuration() {
         let text =

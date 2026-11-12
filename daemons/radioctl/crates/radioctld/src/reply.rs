@@ -29,6 +29,7 @@ pub const ENAVAIL: i32 = -11;
 /// Bus busy.
 pub const EBUSBUSY: i32 = -14;
 
+// [@ANCHOR: radioctl_d_reply_body]
 /// What a successful command answers with.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Body {
@@ -47,6 +48,7 @@ pub enum Body {
     Close,
 }
 
+// [@ANCHOR: radioctl_d_reply_header]
 /// The parts of a request that shape its response header.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Header {
@@ -176,6 +178,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_reply_render]
     // Tests [@ANCHOR: radioctld_reply_header_line]
+    // Tests [@ANCHOR: radioctl_d_reply_body]
     #[test]
     fn plain_format_matches_hamlib() {
         let get = header(false, "get_freq", None, "");

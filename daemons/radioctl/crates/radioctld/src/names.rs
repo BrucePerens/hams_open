@@ -9,6 +9,7 @@
 use radioctl_core::description::{Family, RigDescription};
 use radioctl_core::units::{Level, Mode, Vfo};
 
+// [@ANCHOR: radioctl_d_names_mode_entry]
 /// One mode in Hamlib's vocabulary.
 struct ModeEntry {
     mode: Mode,
@@ -152,6 +153,7 @@ pub fn nominal_width(mode: Mode) -> u32 {
         .map_or(0, |e| e.nominal_width_hz)
 }
 
+// [@ANCHOR: radioctl_d_names_vfo_sel]
 /// A VFO as a client names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VfoSel {
@@ -201,6 +203,7 @@ pub fn vfo_name(vfo: Vfo) -> &'static str {
     }
 }
 
+// [@ANCHOR: radioctl_d_names_level_source]
 /// Where a level's value comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LevelSource {
@@ -221,6 +224,7 @@ pub enum LevelSource {
     Meter(radioctl_core::units::Meter),
 }
 
+// [@ANCHOR: radioctl_d_names_level_info]
 /// A level radioctld can serve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LevelInfo {
@@ -371,6 +375,7 @@ const OTHER_LEVELS: [&str; 18] = [
     "TEMP_METER",
 ];
 
+// [@ANCHOR: radioctl_d_names_level_lookup]
 /// A level name lookup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LevelLookup {
@@ -531,6 +536,7 @@ pub fn served_levels(description: &RigDescription) -> Vec<LevelInfo> {
         .collect()
 }
 
+// [@ANCHOR: radioctl_d_names_func_kind]
 /// A function (on/off switch) in Hamlib's vocabulary that radioctld serves.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FuncKind {
@@ -550,6 +556,7 @@ const OTHER_FUNCS: [&str; 30] = [
     "SATMODE", "SCOPE", "RESUME", "TBURST", "TUNER",
 ];
 
+// [@ANCHOR: radioctl_d_names_func_lookup]
 /// A function name lookup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FuncLookup {
@@ -600,6 +607,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_names_mode_from_hamlib]
     // Tests [@ANCHOR: radioctld_names_mode_to_hamlib]
+    // Tests [@ANCHOR: radioctl_d_names_mode_entry]
     #[test]
     fn every_mode_round_trips_through_its_hamlib_name() {
         for entry in &MODES {
@@ -634,6 +642,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_names_parse_vfo]
+    // Tests [@ANCHOR: radioctl_d_names_vfo_sel]
     #[test]
     fn vfo_tokens_are_recognised_and_other_words_are_not() {
         assert_eq!(parse_vfo("VFOA"), Some(VfoSel::A));
@@ -654,6 +663,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_names_level_lookup]
+    // Tests [@ANCHOR: radioctl_d_names_level_lookup]
+    // Tests [@ANCHOR: radioctl_d_names_level_info]
     #[test]
     fn level_names_are_known_unserved_or_unknown() {
         assert!(matches!(level_lookup("keyspd"), LevelLookup::Known(i) if i.bit == 14));
@@ -735,6 +746,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_names_func_lookup]
     // Tests [@ANCHOR: radioctld_names_func_mask]
+    // Tests [@ANCHOR: radioctl_d_names_func_lookup]
+    // Tests [@ANCHOR: radioctl_d_names_func_kind]
     #[test]
     fn functions_are_known_unserved_or_unknown() {
         assert_eq!(func_lookup("rit"), FuncLookup::Known(FuncKind::Rit));

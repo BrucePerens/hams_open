@@ -30,6 +30,7 @@ pub const MAX_RAW_HEX: usize = 2048;
 /// The whole upload gives up after this long.
 pub const UPLOAD_TIMEOUT: Duration = Duration::from_secs(10);
 
+// [@ANCHOR: radioctl_d_upload_contact]
 /// What the volunteer chose to tell hams.com so it can contact them about the rig.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Contact {
@@ -39,6 +40,7 @@ pub struct Contact {
     pub email: Option<String>,
 }
 
+// [@ANCHOR: radioctl_d_upload_payload_input]
 /// Everything the payload is built from. It has no field for a path, serial number or host name.
 #[derive(Debug, Clone)]
 pub struct PayloadInput<'a> {
@@ -185,6 +187,7 @@ pub fn build_payload(input: &PayloadInput<'_>) -> Vec<u8> {
     }
 }
 
+// [@ANCHOR: radioctl_d_upload_saved_contact]
 /// What is kept between runs: whether the volunteer was asked, and the answers.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SavedContact {
@@ -307,6 +310,7 @@ pub fn resolve_contact(
     (contact, to_save)
 }
 
+// [@ANCHOR: radioctl_d_upload_server_url]
 /// Where to POST: parsed `--server` or default URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerUrl {
@@ -549,6 +553,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_upload_build_payload]
+    // Tests [@ANCHOR: radioctl_d_upload_payload_input]
+    // Tests [@ANCHOR: radioctl_d_upload_contact]
     #[test]
     fn the_payload_has_the_contract_fields_and_nothing_private() {
         let results = [
@@ -613,6 +619,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_upload_save]
     // Tests [@ANCHOR: radioctld_upload_load_saved]
+    // Tests [@ANCHOR: radioctl_d_upload_saved_contact]
     #[test]
     fn saved_answers_round_trip_and_are_private() {
         let dir = crate::testdir::TestDir::new("upload-save");
@@ -713,6 +720,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_upload_parse_server]
+    // Tests [@ANCHOR: radioctl_d_upload_server_url]
     #[test]
     fn plain_http_is_loopback_only() {
         assert_eq!(

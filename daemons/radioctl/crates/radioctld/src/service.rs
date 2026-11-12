@@ -33,6 +33,7 @@ use crate::names::{
 };
 use crate::reply::{error_code, Body, EINVAL, EIO, ENAVAIL, ERJCTED};
 
+// [@ANCHOR: radioctl_d_service_service_config]
 /// Per-rig service settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ServiceConfig {
@@ -52,6 +53,7 @@ pub struct ServiceConfig {
     pub tx_power_mw: u32,
 }
 
+// [@ANCHOR: radioctl_d_service_service_stats]
 /// Counters of a service.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ServiceStats {
@@ -65,6 +67,7 @@ pub struct ServiceStats {
     pub ptt_conflicts: u64,
 }
 
+// [@ANCHOR: radioctl_d_service_counters]
 #[derive(Default)]
 struct Counters {
     commands: AtomicU64,
@@ -79,6 +82,7 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+// [@ANCHOR: radioctl_d_service_rig_service]
 /// The service for one rig. Share it between client tasks behind an `Arc`.
 pub struct RigService {
     rig: RigHandle,

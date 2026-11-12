@@ -45,6 +45,7 @@ const NOT_RADIO_WORDS: [&str; 9] = [
     "stlink",
 ];
 
+// [@ANCHOR: radioctl_d_discovery_outcome]
 /// What discovery concluded about one port.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
@@ -63,6 +64,7 @@ pub enum Outcome {
     Ambiguous(Vec<String>),
 }
 
+// [@ANCHOR: radioctl_d_discovery_finding]
 /// One serial port and what was concluded.
 #[derive(Debug, Clone)]
 pub struct Finding {
@@ -72,6 +74,7 @@ pub struct Finding {
     pub outcome: Outcome,
 }
 
+// [@ANCHOR: radioctl_d_discovery_net_finding]
 /// A radio found on the network.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NetFinding {
@@ -345,6 +348,8 @@ mod tests {
     // Tests [@ANCHOR: radioctld_discovery_discover_ports]
     // Tests [@ANCHOR: radioctld_discovery_ask_radio]
     // Tests [@ANCHOR: radioctld_discovery_identified]
+    // Tests [@ANCHOR: radioctl_d_discovery_finding]
+    // Tests [@ANCHOR: radioctl_d_discovery_outcome]
     #[tokio::test]
     async fn ports_are_skipped_named_or_left_ambiguous_without_writing_to_non_radios() {
         let texts = embedded_texts();
@@ -398,6 +403,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_discovery_render_table]
+    // Tests [@ANCHOR: radioctl_d_discovery_net_finding]
     #[test]
     fn the_table_lists_network_radios_and_says_when_nothing_was_found() {
         assert!(render_table(&[], &[]).contains("nothing found"));

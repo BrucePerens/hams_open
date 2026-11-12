@@ -18,6 +18,7 @@
 /// True only when the points below have been checked against a radio and a known load.
 pub const CALIBRATION_VERIFIED: bool = false;
 
+// [@ANCHOR: radioctl_d_meter_cal_meter_cal]
 /// The scale points of one model: ascending `(raw deflection, value)` pairs.
 #[derive(Debug, Clone, Copy)]
 pub struct MeterCal {
@@ -211,6 +212,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_meter_cal_swr_ratio]
     // Tests [@ANCHOR: radioctld_meter_cal_for_rig]
+    // Tests [@ANCHOR: radioctl_d_meter_cal_meter_cal]
     #[test]
     fn swr_passes_through_each_models_printed_points() {
         let nine = for_rig("icom-ic-9100");

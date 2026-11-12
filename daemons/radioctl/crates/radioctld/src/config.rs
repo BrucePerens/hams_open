@@ -62,6 +62,7 @@ const BASE_PORT: u16 = 4532;
 /// The first port used when a rotator has no `listen` (Hamlib's `rotctld` default).
 const ROTATOR_BASE_PORT: u16 = 4533;
 
+// [@ANCHOR: radioctl_d_config_file_doc]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FileDoc {
@@ -72,6 +73,7 @@ struct FileDoc {
     rotator: Vec<RotatorSection>,
 }
 
+// [@ANCHOR: radioctl_d_config_rotator_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RotatorSection {
@@ -81,6 +83,7 @@ struct RotatorSection {
     transport: RotatorTransportSection,
 }
 
+// [@ANCHOR: radioctl_d_config_rotator_transport_section]
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 enum RotatorTransportSection {
@@ -96,6 +99,7 @@ enum RotatorTransportSection {
     },
 }
 
+// [@ANCHOR: radioctl_d_config_server_section]
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct ServerSection {
@@ -111,6 +115,7 @@ struct ServerSection {
     secrets_dir: Option<String>,
 }
 
+// [@ANCHOR: radioctl_d_config_rig_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RigSection {
@@ -129,6 +134,7 @@ struct RigSection {
     transport: TransportSection,
 }
 
+// [@ANCHOR: radioctl_d_config_transport_section]
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase", deny_unknown_fields)]
 enum TransportSection {
@@ -171,6 +177,7 @@ enum TransportSection {
     },
 }
 
+// [@ANCHOR: radioctl_d_config_baud_section]
 /// `baud = 19200` or `baud = "auto"`.
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -179,6 +186,7 @@ enum BaudSection {
     Word(String),
 }
 
+// [@ANCHOR: radioctl_d_config_usb_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct UsbSection {
@@ -187,6 +195,7 @@ struct UsbSection {
     serial: Option<String>,
 }
 
+// [@ANCHOR: radioctl_d_config_server_config]
 /// Server-wide settings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerConfig {
@@ -209,6 +218,7 @@ pub struct ServerConfig {
     pub secrets_dir: Option<PathBuf>,
 }
 
+// [@ANCHOR: radioctl_d_config_tcp_framing]
 /// What a TCP transport wraps the CAT stream in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TcpFraming {
@@ -226,6 +236,7 @@ pub enum TcpFraming {
     },
 }
 
+// [@ANCHOR: radioctl_d_config_baud_setting]
 /// A serial rig's baud rate: the default is a fixed rate and nothing probes unless the file
 /// says `baud = "auto"` or gives a `baud_probe` list.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,6 +248,7 @@ pub enum BaudSetting {
     Probe(Vec<u32>),
 }
 
+// [@ANCHOR: radioctl_d_config_transport_config]
 /// How a rig is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransportConfig {
@@ -312,6 +324,7 @@ pub struct RadiodTransport {
     pub max_hz: u64,
 }
 
+// [@ANCHOR: radioctl_d_config_rig_config]
 /// One rig to serve.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RigConfig {
@@ -339,6 +352,7 @@ pub struct RigConfig {
     pub transport: TransportConfig,
 }
 
+// [@ANCHOR: radioctl_d_config_rotator_transport_config]
 /// How a rotator is reached.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RotatorTransportConfig {
@@ -362,6 +376,7 @@ pub enum RotatorTransportConfig {
     },
 }
 
+// [@ANCHOR: radioctl_d_config_rotator_config]
 /// One rotator to serve.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RotatorConfig {
@@ -375,6 +390,7 @@ pub struct RotatorConfig {
     pub transport: RotatorTransportConfig,
 }
 
+// [@ANCHOR: radioctl_d_config_config]
 /// A validated configuration.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
@@ -999,6 +1015,10 @@ kind = "virtual"
     // Tests [@ANCHOR: radioctld_config_rig]
     // Tests [@ANCHOR: radioctld_config_transport]
     // Tests [@ANCHOR: radioctld_config_in_range]
+    // Tests [@ANCHOR: radioctl_d_config_rig_config]
+    // Tests [@ANCHOR: radioctl_d_config_server_config]
+    // Tests [@ANCHOR: radioctl_d_config_rig_section]
+    // Tests [@ANCHOR: radioctl_d_config_server_section]
     #[test]
     fn a_minimal_file_gets_safe_defaults() {
         let config = parse(MINIMAL).expect("config");
@@ -1060,6 +1080,7 @@ kind = "virtual"
 
     // Tests [@ANCHOR: radioctld_config_parse]
     // Tests [@ANCHOR: radioctld_config_in_range]
+    // Tests [@ANCHOR: radioctl_d_config_file_doc]
     #[test]
     fn unknown_keys_bad_values_and_duplicates_are_errors() {
         assert!(parse("").is_err());
@@ -1094,6 +1115,10 @@ kind = "virtual"
     // Tests [@ANCHOR: radioctld_config_listen_address]
     // Tests [@ANCHOR: radioctld_config_check_host_port]
     // Tests [@ANCHOR: radioctld_config_parse]
+    // Tests [@ANCHOR: radioctl_d_config_rotator_config]
+    // Tests [@ANCHOR: radioctl_d_config_rotator_transport_config]
+    // Tests [@ANCHOR: radioctl_d_config_rotator_transport_section]
+    // Tests [@ANCHOR: radioctl_d_config_rotator_section]
     #[test]
     fn rotators_are_validated_and_share_the_address_space_with_rigs() {
         // A file of rotators only is enough to serve.
@@ -1173,6 +1198,9 @@ kind = "virtual"
     }
 
     // Tests [@ANCHOR: radioctld_config_transport]
+    // Tests [@ANCHOR: radioctl_d_config_config]
+    // Tests [@ANCHOR: radioctl_d_config_transport_config]
+    // Tests [@ANCHOR: radioctl_d_config_usb_section]
     #[test]
     fn a_usb_transport_takes_optional_ids_a_serial_and_a_bounded_timeout() {
         let with = |transport: &str| parse(&MINIMAL.replace("kind = \"virtual\"", transport));
@@ -1218,6 +1246,9 @@ kind = "virtual"
     // Tests [@ANCHOR: radioctld_config_baud_setting]
     // Tests [@ANCHOR: radioctld_config_serial_target]
     // Tests [@ANCHOR: radioctld_config_line_control]
+    // Tests [@ANCHOR: radioctl_d_config_baud_setting]
+    // Tests [@ANCHOR: radioctl_d_config_baud_section]
+    // Tests [@ANCHOR: radioctl_d_config_transport_section]
     #[test]
     fn transports_are_validated() {
         let with = |transport: &str| parse(&MINIMAL.replace("kind = \"virtual\"", transport));
@@ -1287,6 +1318,7 @@ kind = "virtual"
     // Tests [@ANCHOR: radioctld_config_tcp_framing]
     // Tests [@ANCHOR: radioctld_config_server]
     // Tests [@ANCHOR: radioctld_config_transport]
+    // Tests [@ANCHOR: radioctl_d_config_tcp_framing]
     #[test]
     fn the_ts890_lan_framing_needs_an_account_a_secret_name_and_a_secret_store() {
         let tcp = |extra: &str, server: &str| {

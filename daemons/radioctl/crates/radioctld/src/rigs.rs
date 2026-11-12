@@ -41,6 +41,7 @@ use crate::service::{RigService, ServiceConfig};
 /// The rate in the serial configuration the baud probe is handed; it replaces it at every open.
 const PROBE_TEMPLATE_BAUD: u32 = 9600;
 
+// [@ANCHOR: radioctl_d_rigs_boxed_engine]
 /// A protocol engine behind a box, so one `spawn` serves every family.
 struct BoxedEngine(Box<dyn ProtocolEngine>);
 
@@ -78,6 +79,7 @@ impl ProtocolEngine for BoxedEngine {
     }
 }
 
+// [@ANCHOR: radioctl_d_rigs_built_rig]
 /// A rig that is up: its service, and the control of its virtual stand-in if it is one.
 pub struct BuiltRig {
     /// The service clients talk to.
@@ -482,6 +484,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctld_rigs_radiod_link]
+    // Tests [@ANCHOR: radioctl_d_rigs_built_rig]
     #[test]
     fn a_radiod_transport_becomes_the_bridge_settings_with_the_descriptions_start() {
         let path = format!(
@@ -530,6 +533,7 @@ mod tests {
     // Tests [@ANCHOR: radioctld_rigs_boxed_open_requests]
     // Tests [@ANCHOR: radioctld_rigs_boxed_link_restored]
     // Tests [@ANCHOR: radioctld_rigs_boxed_encode_lines]
+    // Tests [@ANCHOR: radioctl_d_rigs_boxed_engine]
     #[test]
     fn the_daemons_boxed_engine_forwards_every_engine_hook() {
         let path = format!(

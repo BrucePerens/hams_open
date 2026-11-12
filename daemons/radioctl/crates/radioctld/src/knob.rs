@@ -24,6 +24,7 @@ pub const KNOB_WAIT: Duration = Duration::from_secs(15);
 /// What is said when nothing arrived: a hint about the radio's menu, never the explanation alone.
 pub const NOT_SEEN: &str = "No unsolicited update was seen. Some radios need this turned on in the menu (for example the KX3's auto-info/transceive setting, or CI-V Transceive on an Icom); if yours has it, enable it and run this again. If it is on, this is a problem in our software.";
 
+// [@ANCHOR: radioctl_d_knob_knob_outcome]
 /// What watching the knob found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KnobOutcome {
@@ -176,6 +177,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctld_knob_watch]
     // Tests [@ANCHOR: radioctld_knob_result]
+    // Tests [@ANCHOR: radioctl_d_knob_knob_outcome]
     #[tokio::test]
     async fn a_knob_turn_on_a_transceive_rig_is_seen_with_its_frequency_delta() {
         let (_, rig, control) = rig_for("icom-ic-7300");

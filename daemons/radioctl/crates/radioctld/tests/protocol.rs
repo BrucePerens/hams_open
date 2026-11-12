@@ -83,6 +83,7 @@ async fn the_virtual_kx3_transcript() {
 // Tests [@ANCHOR: radioctld_service_meter]
 // Tests [@ANCHOR: radioctld_meter_cal_swr_ratio]
 // Tests [@ANCHOR: radioctld_meter_cal_alc_fraction]
+// Tests [@ANCHOR: radioctl_d_service_service_config]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_virtual_ic7300_transcript() {
     let text = config_text("", "ic7300", "icom-ic-7300.toml", false, false);

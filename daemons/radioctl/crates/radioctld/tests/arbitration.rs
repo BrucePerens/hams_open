@@ -111,6 +111,7 @@ async fn the_dump_state_of_a_closed_rig_advertises_no_transmit() {
 // Tests [@ANCHOR: radioctld_service_ptt_owner]
 // Tests [@ANCHOR: radioctld_service_send_morse]
 // Tests [@ANCHOR: radioctld_rigs_build_rig]
+// Tests [@ANCHOR: radioctl_d_service_rig_service]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn one_transmitter_one_owner_and_a_departing_owner_unkeys() {
     let daemon = start(&config_text("", "kx3", "elecraft-kx3.toml", true, false)).await;
@@ -170,6 +171,8 @@ async fn stopping_the_daemon_unkeys_a_rig_a_client_was_keying() {
 // Tests [@ANCHOR: radioctld_service_read]
 // Tests [@ANCHOR: radioctld_service_set]
 // Tests [@ANCHOR: radioctld_service_frequency]
+// Tests [@ANCHOR: radioctl_d_service_counters]
+// Tests [@ANCHOR: radioctl_d_service_service_stats]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_second_client_reads_what_the_first_set_from_the_cache() {
     let daemon = start(&config_text("", "kx3", "elecraft-kx3.toml", false, false)).await;

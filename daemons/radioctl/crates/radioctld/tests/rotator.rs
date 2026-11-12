@@ -58,6 +58,8 @@ async fn arrives(client: &mut Client, az: f32, el: f32) {
 // Tests [@ANCHOR: radioctld_rotctl_service_answer]
 // Tests [@ANCHOR: radioctld_rotctl_service_disconnect]
 // Tests [@ANCHOR: radioctld_daemon_stop]
+// Tests [@ANCHOR: radioctl_d_rotctl_shared_rotator_service]
+// Tests [@ANCHOR: radioctl_d_rotctl_rotator_service]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_rotctld_rotator_moves_stops_and_refuses_what_is_out_of_travel() {
     // The generic rotctld model slews at 3 degrees a second; too slow for a test, so the
@@ -163,6 +165,9 @@ async fn a_gs232_rotator_parks_and_an_azimuth_only_one_reports_its_type() {
 
 // Tests [@ANCHOR: radioctld_config_parse]
 // Tests [@ANCHOR: radioctld_daemon_start]
+// Tests [@ANCHOR: radioctl_d_rotators_built_rotator]
+// Tests [@ANCHOR: radioctl_d_daemon_served]
+// Tests [@ANCHOR: radioctl_d_daemon_served_rotator]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_rig_and_a_rotator_are_served_from_one_file() {
     let text = format!(
@@ -237,6 +242,7 @@ async fn hamlib_rotctl_reads_and_moves_the_served_rotator() {
 // Tests [@ANCHOR: radioctl_station_vrot_serve]
 // Tests [@ANCHOR: radioctl_station_vrot_control_stop]
 // Tests [@ANCHOR: radioctl_station_vrot_control_address]
+// Tests [@ANCHOR: radioctl_d_daemon_daemon]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stopping_the_daemon_stops_the_virtual_rotators_listener() {
     let daemon = start(&rotator_text("rot", "generic-rotctld")).await;
