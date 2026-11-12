@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo import fields, models
 
+# [@ANCHOR: ses_webhook_ses_webhook_log_ses_webhook_log]
 class SesWebhookLog(models.Model):
     _name = 'ses.webhook.log'
     _description = 'SES Webhook Log'

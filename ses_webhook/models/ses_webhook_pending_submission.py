@@ -7,6 +7,7 @@ from odoo import _, api, fields, models
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: ses_webhook_ses_webhook_pending_submission_ses_webhook_pending_submission]
 class SesWebhookPendingSubmission(models.Model):
     """docs/proposals/SES_WEBHOOK_SENDER_REGISTRATION.md section 3: holds an
     unregistered/unmatched sender's original inbound email content while

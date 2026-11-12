@@ -2,6 +2,7 @@
 import secrets
 from odoo import api, fields, models
 
+# [@ANCHOR: ses_webhook_ses_webhook_domain_ses_webhook_domain]
 class SesWebhookDomain(models.Model):
     _name = 'ses.webhook.domain'
     _description = 'SES Webhook Domain Configuration'
