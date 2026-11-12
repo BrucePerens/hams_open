@@ -12,6 +12,7 @@ _logger = logging.getLogger("hams_secret_canary.alarm")
 BACKENDS = {}
 
 
+# [@ANCHOR: hams_secret_canary_alerts_alarm]
 @dataclass(frozen=True)
 class Alarm:
     label: str

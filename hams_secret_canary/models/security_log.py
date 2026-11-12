@@ -4,6 +4,7 @@
 from odoo import fields, models
 
 
+# [@ANCHOR: hams_secret_canary_security_log_security_log]
 class SecurityLog(models.Model):
     _inherit = "zero_sudo.security.log"
 

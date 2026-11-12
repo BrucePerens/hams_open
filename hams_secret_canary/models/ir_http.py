@@ -7,6 +7,7 @@ from odoo.http import request
 from .. import detector, wsgi_scan
 
 
+# [@ANCHOR: hams_secret_canary_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 

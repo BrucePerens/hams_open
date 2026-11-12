@@ -70,6 +70,7 @@ def scan_after_request(text, where):
         _logger.exception("Secret canary: scanning a response failed")
 
 
+# [@ANCHOR: hams_secret_canary_secret_canary_secret_canary]
 class SecretCanary(models.AbstractModel):
     _name = "hams.secret.canary"
     _description = "Secret Canary"
