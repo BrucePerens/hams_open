@@ -3,6 +3,7 @@
 
 from odoo import _, fields, models
 import markupsafe
+from odoo.addons.zero_sudo import public_rpc
 
 
 class ShiftHandoffWizard(models.TransientModel):
@@ -21,6 +22,7 @@ class ShiftHandoffWizard(models.TransientModel):
         help="Detailed context for the incoming operator.",
     )
 
+    @public_rpc
     def action_confirm_handoff(self):
         # [@ANCHOR: COMM_helpdesk_handoff_execution]
 

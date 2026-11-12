@@ -17,6 +17,7 @@ from odoo import api, fields, models
 
 from . import untrusted_text as ut
 from .mail_thread_untrusted import stash_for
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -158,6 +159,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
         return result
 
     # [@ANCHOR: hams_helpdesk:untrusted_message_post]
+    @public_rpc
     def message_post(self, **kwargs):
         # Not "if body": a message with only a subject is still text from outside.
         body = kwargs.get("body")

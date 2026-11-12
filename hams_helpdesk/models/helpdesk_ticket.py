@@ -21,6 +21,7 @@ from .link_defang import DEFANG_WARNING_TEXT, defang_html
 from .mail_thread_untrusted import stash_for
 from . import untrusted_text as ut
 from .triage_wakeup import write_triage_wakeups
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -865,6 +866,7 @@ class HelpdeskTicket(models.Model):
                     )
         return res
 
+    @public_rpc
     def action_shift_handoff(self):
         """Opens the formal shift handoff wizard."""
         # [@ANCHOR: COMM_helpdesk_shift_handoff]
@@ -930,6 +932,7 @@ class HelpdeskTicket(models.Model):
     # or how, it only makes the action easier to find.
     # Verified by [@ANCHOR: test_action_close_sets_stage_and_is_usable_by_non_manager_staff]
     # Verified by [@ANCHOR: test_action_close_button_is_present_on_the_ticket_form]
+    @public_rpc
     def action_close(self):
         """Explicit "Close Ticket" header button for staff -- see the anchor comment above
         for why this exists alongside the already-clickable stage statusbar."""
@@ -1122,6 +1125,7 @@ class HelpdeskTicket(models.Model):
             raise AccessError(_("Only the triage service and helpdesk staff can do this."))
 
     # [@ANCHOR: hams_helpdesk:mcp_record_verdict]
+    @public_rpc
     def mcp_record_verdict(self, verdict, reason):
         """The external-AI triage agent's verdict on a ticket still in "new": spam, phishing, real or unsure, with the reasons
         recorded on the ticket and as an internal note (filtered like every note the agent writes). A verdict in
@@ -1158,6 +1162,7 @@ class HelpdeskTicket(models.Model):
         return True
 
     # [@ANCHOR: hams_helpdesk:COMM_mcp_post_internal_note]
+    @public_rpc
     def mcp_post_internal_note(self, note):
         """Posts ``note`` to this ticket's own chatter as an internal
         (admin-only, mail.mt_note) note, for the external-AI ticket-triage
@@ -1203,6 +1208,7 @@ class HelpdeskTicket(models.Model):
         return True
 
     # [@ANCHOR: hams_helpdesk:COMM_mcp_mark_spam]
+    @public_rpc
     def mcp_mark_spam(self, reason):
         """Moves this ticket from "new" to the "spam" quarantine stage and records ``reason`` as an
         internal note, for the external-AI ticket-triage MCP server's mark_spam tool
@@ -1224,6 +1230,7 @@ class HelpdeskTicket(models.Model):
             raise UserError(_("Only a ticket in the New stage can be marked as spam by the triage agent."))
         return self.mcp_record_verdict("spam", reason)
 
+    @public_rpc
     def mcp_safe_read(self, max_chars=0):
         """The ONLY ticket view the external-AI triage server reads: for each ticket in self, the
         subject, callsign and description as plain visible text that went through the shared filter
@@ -1254,6 +1261,7 @@ class HelpdeskTicket(models.Model):
             rows.append(row)
         return rows
 
+    @public_rpc
     @api.model
     def mcp_customer_followups(self, cutoffs):  # boundary-hazard-ignore: rpc-service-identity: the ticket search runs as the caller, so the ir.rule allow-list decides what it can see; the service environment only reads messages of those tickets
         """Read-only lookup for the external-AI ticket-triage MCP server
@@ -1339,6 +1347,7 @@ class HelpdeskTicket(models.Model):
                 found[str(ticket.id)] = shown
         return found
 
+    @public_rpc
     def message_new(self, msg_dict, custom_values=None):
         """Overrides mail.thread's own default so a ticket created from an
         inbound email (see ingest_inbound_email() below) actually gets
@@ -1760,6 +1769,7 @@ class HelpdeskTicket(models.Model):
 
     # [@ANCHOR: hams_helpdesk:COMM_ncmec_action_apply_legal_hold_manually]
     # Verified by [@ANCHOR: test_action_apply_legal_hold_manually_requires_group_system]
+    @public_rpc
     def action_ncmec_apply_legal_hold_manually(self):
         """The real fallback path for the AccessError case _ncmec_apply_recording_legal_hold_
         best_effort's own docstring describes: gated to base.group_system, matching ham_
@@ -1784,6 +1794,7 @@ class HelpdeskTicket(models.Model):
     # Verified by [@ANCHOR: test_action_ncmec_report_refuses_a_second_submission]
     # Verified by [@ANCHOR: test_action_ncmec_report_without_credentials_explains_manual_fallback]
     # Verified by [@ANCHOR: test_action_ncmec_report_submits_via_the_real_api_when_configured]
+    @public_rpc
     def action_ncmec_report(self):
         """The admin-facing "Report" button (section G). Gated to base.group_system for the
         same reason action_ncmec_apply_legal_hold_manually is: filing a federal mandatory report
@@ -2007,6 +2018,7 @@ class HelpdeskTicket(models.Model):
     # [@ANCHOR: hams_helpdesk:COMM_ncmec_action_mark_report_filed_manually]
     # Verified by [@ANCHOR: test_action_mark_report_filed_manually_requires_group_system]
     # Verified by [@ANCHOR: test_action_mark_report_filed_manually_refuses_a_second_submission]
+    @public_rpc
     def action_ncmec_mark_report_filed_manually(self):
         """The fallback half of the "Report" button flow (section G): after an admin has
         copied ncmec_report_packet into NCMEC's own reporting portal by hand (no API
