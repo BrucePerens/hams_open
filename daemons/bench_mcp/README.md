@@ -97,7 +97,7 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_list`, `bench_identify`, `bench_status`, `bench_measure` | read_only | both |
 | `bench_capture`, `bench_screenshot` | read_only | scope |
 | `bench_scope_spectrum` | read_config (it may set the timebase and memory depth) | scope |
-| `bench_scope_math`, `bench_scope_acquire`, `bench_scope_channel`, `bench_scope_display`, `bench_scope_history`, `bench_scope_reference`, `bench_scope_setup`, `bench_scope_passfail` | read_config (they set the scope and read it back; math stops a running scope for one frame and puts it back) | scope |
+| `bench_scope_math`, `bench_scope_acquire`, `bench_scope_channel`, `bench_scope_display`, `bench_scope_history`, `bench_scope_reference`, `bench_scope_setup`, `bench_scope_passfail`, `bench_scope_measure_custom` | read_config (they set the scope and read it back; math stops a running scope for one frame and puts it back) | scope |
 | `bench_scope_cursors` | read_only | scope |
 | `bench_set` | read_config | both (supply setpoints are capped by `max_volts`/`max_amps`) |
 | `bench_psu_output` | **full** (needs `confirm_load_connected: true`, has `dry_run`, switches itself off after `for_s`, at most `max_on_s`) | supply |
@@ -294,7 +294,7 @@ the supply output on.
   prediction), with the 360 MHz DDS clock line 36 dB down and 350 and 370 MHz images (the scope's 200 MHz bandwidth makes these lower than the real levels). Second and third
   harmonics were below the 8-bit floor. Level is rms at the 1 MOhm input; dBm assumes the 50 ohm source into 50 ohms.
 * **Measurements**: `bench_measure` takes every parameter the scope's `PAVA?` answers (PKPK, MAX, MIN, AMPL, TOP, BASE, CMEAN, MEAN, RMS, CRMS, OVSN, FPRE, OVSP, RPRE, PER,
-  FREQ, PWID, NWID, RISE, FALL, WID, DUTY, NDUTY). `PAVA? ALL` and the statistics query `PACU?` did not answer; the counter is wrong above about 150 MHz.
+  FREQ, PWID, NWID, RISE, FALL, WID, DUTY, NDUTY). `PAVA? ALL` and the statistics query `PACU?` did not answer (the guide says `PACU` is a command that installs a measurement; statistics come from `PASTAT ON` and `PAVA? STATn`, which `bench_scope_measure_custom` uses); the counter is wrong above about 150 MHz.
 * **Triggers**: `bench_set` takes `trigger_type` EDGE, SLEW (slope), GLIT (pulse), INTV (interval), RUNT and TV, which the unit accepted; window, pattern, drop-out and the serial-bus
   (I2C, SPI, UART, CAN, LIN) triggers were not accepted with the tokens tried, so they are either licensed options or named differently. Serial decode was not found.
 * **Cursors** exist (`CRMS?` answers) but are not wrapped. Channel math (add, subtract, multiply, divide) is not wrapped: only channel 1 is connected here.

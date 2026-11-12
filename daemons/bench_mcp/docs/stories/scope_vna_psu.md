@@ -322,6 +322,21 @@ The order is save, recall, export, import, so a slot can be saved and exported i
 
 Order sent: enable, source, tolerance, create, display, stop on fail, output, clear, run. Everything is checked before the first command. Each command is followed by 100 ms and a read-back. Returns `sent`, `readback`, `note`, `settings` (all six read back), `mask_tolerance` and `result` (`failed`, `passed`, `total` from `PFDD?`). The scope accepts `PFCM` only with the test on and stopped, and counts only while running with a mask, so an out-of-order request shows as unchanged counts. Test: `a_mask_test_is_set_up_created_run_and_its_counts_are_read` against the fake scope.
 
+### `bench_mcp_scope_measure_custom` [@ANCHOR: bench_mcp_scope_measure_custom]
+
+`measure_custom(s, args)` is `bench_scope_measure_custom` (tier `read_config`): the scope's own installed measurements, statistics, delay and gate.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.clear` | boolean | Sends `MEACL` first. |
+| `args.install` | array of up to 5 `{item, channel 1 or 2}` | One `PACU <item>,C<c>` each; an item outside the guide's list is `install must be up to 5 of {item, channel 1 or 2}, item one of ...`. |
+| `args.statistics` | `on`, `off`, `reset` | `PASTAT ON/OFF/RESET`; otherwise `statistics must be on, off or reset`. |
+| `args.delay` | `{type, sources}` | `MEAD <type>,<sources>` and a read of `<sources>:MEAD? <type>`; type one of PHA, FRR, FRF, FFR, FFF, LRR, LRF, LFR, LFF, SKEW, sources `C1-C2` or `C2-C1`. |
+| `args.gate`, `args.gate_a_s`, `args.gate_b_s` | boolean, numbers | `MEGS`, `MEGA`, `MEGB` through `item_cmds`. |
+| `args.snapshot` | 1 or 2 | Reads `C<c>:PAVA? ALL` with a 3 s limit and splits it into item and value. |
+
+Everything is checked before the first command. Returns `sent`, `readback`, `note`, `gate`, `custom` (from `PAVA? CUSTALL`, which the guide shows as `CUST1:C1,PKPK,4.08E+00V;CUST2:OFF;...`) and, when statistics are on, `statistics`: for each installed slot `PAVA? STATn` is read and its text split into `cur`, `mean`, `min`, `max`, `std-dev` and `count`. The guide shows that answer on two lines; the function joins lines until the count arrives, so one line works too. A reply that cannot be parsed is returned as `unparsed` or `no_answer` text, not as an error. Test: `custom_measurements_are_installed_read_with_statistics_gates_and_delay` against the fake scope in both framings.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.
