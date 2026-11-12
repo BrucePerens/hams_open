@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo import http
 
+# [@ANCHOR: compliance_main_compliance_controller]
 class ComplianceController(http.Controller):
     # [@ANCHOR: COMM_compliance_index_route]
     @http.route('/compliance', type='http', auth='public', website=True)

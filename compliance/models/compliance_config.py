@@ -4,6 +4,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: compliance_compliance_config_website]
 class Website(models.Model):
     _inherit = "website"
 

@@ -4,6 +4,7 @@
 
 from odoo import models, fields
 
+# [@ANCHOR: compliance_compliance_document_compliance_document]
 class ComplianceDocument(models.Model):
     _name = "compliance.document"
     _description = "Compliance Document"
