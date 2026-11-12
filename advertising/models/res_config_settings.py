@@ -3,6 +3,7 @@
 from odoo import fields, models
 
 
+# [@ANCHOR: advertising_res_config_settings_res_config_settings]
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
