@@ -8,6 +8,7 @@
 # Tests [@ANCHOR: pager_duty:provisioned_units_main]
 # Tests [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
 # Tests [@ANCHOR: pager_duty:units_expected_off]
+import io
 import os
 import tempfile
 import sys
@@ -182,6 +183,21 @@ class SystemctlShowTests(unittest.TestCase):
         # Tests [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
         with mock.patch.object(check.subprocess, "run", return_value=mock.Mock(stdout="")):
             self.assertEqual(check.systemctl_show("nope.timer"), {})
+
+    def test_systemctl_is_given_a_timeout_and_a_hang_fails_the_check_loudly(self):
+        # Tests [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
+        # Tests [@ANCHOR: pager_duty:provisioned_units_main]
+        with mock.patch.object(check.subprocess, "run", return_value=mock.Mock(stdout="")) as run:
+            check.systemctl_show("a.timer")
+        self.assertGreater(run.call_args.kwargs["timeout"], 0)
+        hang = check.subprocess.TimeoutExpired(["systemctl"], 10)
+        err = io.StringIO()
+        with mock.patch.object(check, "expected_units", return_value={"a.timer": {"opt_in": False, "oneshot": False}}), \
+                mock.patch.object(check.subprocess, "run", side_effect=hang), mock.patch("sys.stderr", err):
+            code = check.main()
+        self.assertEqual(code, 1)
+        self.assertIn("SEVERITY:high", err.getvalue())
+        self.assertIn("systemctl", err.getvalue())
 
 
 if __name__ == "__main__":
