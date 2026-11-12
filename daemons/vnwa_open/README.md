@@ -548,3 +548,19 @@ pub fn sweep(&mut self, start_hz: f64, stop_hz: f64, points: usize) -> Result<Ve
 **Returns.** One `Point` per step (a single point is measured at `start_hz`); `Err` for zero points or for the first point that fails after its recovery. `discard_points` throw-away measurements at the start frequency come first and are not returned.
 
 **Special concerns.** Same hardware use as `measure`, sequential. Test: `a_sweep_steps_linearly_discards_first_and_needs_a_point`.
+
+### `vnwa_open_synthetic_capture` [@ANCHOR: vnwa_open_synthetic_capture]
+
+**Purpose.** A capture that runs without a codec: a thread feeds the ring at the real 48 kHz rate from a generator of frames, so the code above the ring (`mark`, `frames_after`, `Vna::measure`) can be tested or demonstrated with no hardware. `Vna::with_parts` builds a handle from a `usb::Vnwa::with_transport` unit and two of these.
+
+```rust
+pub fn synthetic_capture(gen: impl Fn(u64) -> [i16; 2] + Send + 'static) -> (Capture, SyntheticFeed)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `gen` | closure | Moved into the feeder thread; called once per frame with the running frame index and returns the `[left, right]` samples. |
+
+**Returns.** The open `Capture` and a guard; dropping the guard stops and joins the feeder thread (the capture then stops receiving frames).
+
+**Special concerns.** Never opens an audio device. The feeder wakes every 2 ms and delivers the frames due by the clock. Test: `a_synthetic_capture_delivers_the_generated_frames_after_a_mark_until_it_is_closed`.
