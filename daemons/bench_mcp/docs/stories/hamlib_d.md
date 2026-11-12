@@ -325,8 +325,7 @@ used by `key_test` and (for its highest step) by `power_sweep`. The result is `T
 
 Return value: `Ok(TestArgs)` or `Err(text)`, the first failing check, in the order above, each text saying what to change; examples: `<hz> Hz is outside transmit.frequency_ranges, the owner's list
 of frequencies for dummy-load tests (...)`, `mode <m> is not in transmit.allowed_modes (...)`, `power_w <w> is above transmit.max_power_w <cap> (the owner's cap)`, `seconds <s> is above
-transmit.max_seconds <cap>`. Pure: no I/O, no lock, nothing is sent. Code oddities (reported, not changed): a present but non-numeric `frequency_hz`, `power_w` or `seconds` is reported as "is
-required" rather than "must be a number"; the length rule is on bytes while the message says characters. Example: `{"frequency_hz": 7040000, "power_w": 5, "seconds": 2, "reason": "tuner check",
+transmit.max_seconds <cap>`. Pure: no I/O, no lock, nothing is sent. A present but non-numeric `frequency_hz`, `power_w` or `seconds` is reported as "must be a number" (only a missing one is "is required"), and the `reason` length rule counts characters. Example: `{"frequency_hz": 7040000, "power_w": 5, "seconds": 2, "reason": "tuner check",
 "dry_run": true}` with a 7 to 7.1 MHz range and a 20 W, 2 s cap gives a plan; `power_w: 50` gives the cap error. See also: test
 `a_test_is_refused_above_the_power_cap_outside_the_ranges_in_a_mode_not_allowed_or_too_long`; related anchors `radioctl_attest_config`, `radioctl_tx_preflight`, `radioctl_bounded`.
 
@@ -403,9 +402,7 @@ anything is set on the rig.
 Return value: `Ok(None)` when the owner did not ask for an alert (nothing is played); `Ok(Some(reply))` when the alert was sounded and the reply says `audible: true`. Errors (all mean nothing was sent):
 the alert is on but there is no audio instrument to alert with; the alert call failed (`the operator alert failed (...); the owner configured an alert, so nothing was sent`); the reply was not
 audible (`... was not audible (<error or "no sound">); ... Text to send by another channel: <text>`). The message is `Transmitting into the dummy load on <hz> for <s> seconds at <w> watts: <reason or rig
-name>`. Side effects: sound through the audio instrument (in production). Blocking for the duration of the alert. Code oddity (reported, not changed): `parse_transmit` in `attest.rs` reads
-`operator_alert` but its list of known keys does not contain it, so a config file that sets `transmit.operator_alert` appears to be rejected with `not a known key`; the tests set the field directly on the
-parsed struct and do not meet this (verified by reading, not by running). See also: test `a_key_test_is_refused_without_confirmation_without_a_reason_without_a_baseline_and_when_the_alert_cannot_be_heard`;
+name>`. Side effects: sound through the audio instrument (in production). Blocking for the duration of the alert. `operator_alert` is in the list of known keys, so a config that sets `transmit.operator_alert` is accepted (an earlier version left it out and rejected such a config as `not a known key`; the config test now parses it). See also: test `a_key_test_is_refused_without_confirmation_without_a_reason_without_a_baseline_and_when_the_alert_cannot_be_heard`;
 related anchors `radioctl_tx_alert`, `radioctl_attest_config`.
 
 ### `gate` [@ANCHOR: radioctl_tx_gate]

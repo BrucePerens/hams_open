@@ -177,6 +177,7 @@ pub fn parse_transmit(c: &Value) -> Result<Transmit, String> {
         "swr_probe",
         "swr_probe_s",
         "allow_lowering_power",
+        "operator_alert",
         "load_check",
     ];
     if let Some(k) = obj.keys().find(|k| !known.contains(&k.as_str())) {
@@ -243,6 +244,12 @@ mod tests {
         );
         assert_eq!(t.range_of(7.005e6), Some(0));
         assert_eq!(t.range_of(14.0e6), None);
+        let mut with_alert = good();
+        with_alert["operator_alert"] = json!(true);
+        assert!(
+            parse_transmit(&with_alert).unwrap().operator_alert,
+            "operator_alert is a known key"
+        );
         let without = |k: &str| {
             let mut v = good();
             v.as_object_mut().unwrap().remove(k);

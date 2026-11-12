@@ -1459,6 +1459,17 @@ fn a_test_is_refused_above_the_power_cap_outside_the_ranges_in_a_mode_not_allowe
     assert!(with("seconds", json!(0)).is_err() && with("seconds", json!(-1)).is_err());
     assert!(with("power_w", json!(0)).is_err() && with("power_w", json!("x")).is_err());
     assert!(with("reason", json!("x".repeat(121))).is_err());
+    assert!(
+        with("reason", json!("é".repeat(100))).is_ok(),
+        "the length rule counts characters, not bytes"
+    );
+    for k in ["frequency_hz", "power_w", "seconds"] {
+        let e = with(k, json!("x")).unwrap_err();
+        assert!(
+            e.contains("must be a number") && !e.contains("is required"),
+            "{k}: a present but non-numeric value is not reported as missing: {e}"
+        );
+    }
     assert!(with("confirm_dummy_load", json!("yes")).is_err());
     let mut none = good_args();
     none.as_object_mut().unwrap().remove("frequency_hz");
