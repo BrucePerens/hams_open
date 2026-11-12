@@ -4,6 +4,7 @@
 import logging
 import os
 from odoo import models, fields, api, tools, _
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -120,6 +121,7 @@ class BinaryTenantLink(models.Model):
         return super().unlink()
 
     # [@ANCHOR: binary_tenant_link_action_upgrade_to_latest]
+    @public_rpc
     def action_upgrade_to_latest(self):
         """Finds the most recent upstream release and automatically repoints the tenant symlink."""
         self.ensure_one()

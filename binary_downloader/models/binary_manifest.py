@@ -7,6 +7,7 @@ import os
 import shutil
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ class BinaryManifest(models.Model):
             else:
                 record.is_installed = False
 
+    @public_rpc
     def action_install(self):
         # [@ANCHOR: binary_action_install]
 
