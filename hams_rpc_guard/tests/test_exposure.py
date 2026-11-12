@@ -35,6 +35,10 @@ class Thing(models.Model):
     def static_one():
         pass
 
+    @property
+    def SELF_WRITEABLE_FIELDS(self):
+        return []
+
     def write(self, vals):
         return super().write(vals)
 
@@ -156,6 +160,7 @@ class TestScanner(HamsTransactionCase):
         self.assertEqual(found["x.thing"]["marked"], {"declared_one"})
         self.assertEqual(found["res.partner"]["public"], {"extra"}, "the first _inherit is the model")
         self.assertNotIn("write", found["x.thing"]["public"])
+        self.assertNotIn("SELF_WRITEABLE_FIELDS", found["x.thing"]["public"], "a property is not a callable method")
         self.assertNotIn("NotAModel", json.dumps(sorted(found)))
 
     def test_an_addon_is_scanned_and_rendered_and_the_check_notices_staleness(self):

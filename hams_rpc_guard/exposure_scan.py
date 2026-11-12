@@ -6,7 +6,7 @@
 Run it from a checkout: `python3 hams_rpc_guard/exposure_scan.py --write .` (every managed addon under `.`) or
 `--check .` (exit 1 when a file is out of date). It needs no database: the addon's Python is parsed, never imported.
 A method counts when it is a plain `def` in a class that sets `_name` or `_inherit`, its name does not start with `_`,
-it is not a `staticmethod`/`classmethod` (core refuses those over RPC), not `@api.private` (core refuses it), and not a
+it is not a `staticmethod`/`classmethod` (core refuses those over RPC) nor a `property` (not a method: `SELF_WRITEABLE_FIELDS`), not `@api.private` (core refuses it), and not a
 standard ORM method (`write`, `search_read`, ... : the web client needs those and core behaviour is kept).
 """
 import argparse
@@ -87,7 +87,7 @@ def scan_source(source, standard):
             if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)) or statement.name.startswith("_"):
                 continue
             decorators = _decorator_names(statement)
-            if decorators & {"staticmethod", "classmethod", "private"} or statement.name in standard:
+            if decorators & {"staticmethod", "classmethod", "private", "property", "cached_property"} or statement.name in standard:
                 continue
             entry = found.setdefault(model, {"public": set(), "marked": set()})
             entry["public"].add(statement.name)
