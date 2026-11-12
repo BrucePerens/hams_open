@@ -214,7 +214,12 @@ fn ports(c: &Value, key: &str) -> Result<BTreeMap<String, Port>, String> {
                     .and_then(|m| m.as_str())
                     .ok_or(format!("{key}.{alias}: no \"match\""))?
                     .to_string(),
-                p.get("volume_cap").and_then(|x| x.as_f64()),
+                match p.get("volume_cap") {
+                    None | Some(Value::Null) => None,
+                    Some(x) => Some(x.as_f64().ok_or(format!(
+                        "{key}.{alias}: volume_cap must be a number"
+                    ))?),
+                },
             ),
             _ => return Err(format!("{key}.{alias} must be a string or an object")),
         };
@@ -252,6 +257,42 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
         inputs: ports(c, "inputs")?,
         ..Config::default()
     };
+    // A value of the wrong type is an error, not a silent fall back to the default (a mistyped volume cap would otherwise
+    // leave the default cap in force).
+    for (k, whole) in [
+        ("volume_cap", false),
+        ("quiet_volume", false),
+        ("retention_files", true),
+        ("retention_days", true),
+        ("max_record_s", false),
+        ("max_play_s", false),
+        ("tts_rate", true),
+    ] {
+        match c.get(k) {
+            None | Some(Value::Null) => {}
+            Some(x) if whole && x.as_u64().is_some() => {}
+            Some(x) if !whole && x.as_f64().is_some() => {}
+            Some(_) => {
+                return Err(format!(
+                    "{k} must be {}",
+                    if whole { "a whole number" } else { "a number" }
+                ))
+            }
+        }
+    }
+    for k in [
+        "alert_output",
+        "verify_input",
+        "capture_dir",
+        "tts_engine",
+        "tts_voice",
+        "tts_language",
+        "piper_model",
+    ] {
+        if c.get(k).is_some_and(|x| !x.is_null() && !x.is_string()) {
+            return Err(format!("{k} must be text"));
+        }
+    }
     let text = |k: &str| c.get(k).and_then(|x| x.as_str()).map(String::from);
     let num = |k: &str| c.get(k).and_then(|x| x.as_f64());
     if let Some(a) = text("alert_output") {
@@ -812,6 +853,14 @@ mod tests {
         assert!(bad(r#","alert_output":"nope""#));
         assert!(bad(r#","verify_input":"nope""#));
         assert!(bad(r#","volume_cap":1.5"#));
+        // A value of the wrong type is refused, not replaced by the default.
+        assert!(bad(r#","volume_cap":"0.2""#));
+        assert!(bad(r#","outputs":{"tv":{"match":"HDMI","volume_cap":"loud"}}"#));
+        assert!(bad(r#","retention_days":"x""#));
+        assert!(bad(r#","retention_files":1.5"#));
+        assert!(bad(r#","tts_rate":"fast""#));
+        assert!(bad(r#","tts_engine":5"#));
+        assert!(!bad(r#","volume_cap":null"#));
         assert!(bad(r#","volume_cap":0"#));
         assert!(bad(r#","quiet_hours":{"start":"25:00","end":"07:00"}"#));
         assert!(bad(r#","quiet_hours":{"start":"07:00","end":"07:00"}"#));
