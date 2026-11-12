@@ -32,6 +32,7 @@ fn printable(text: &str) -> bool {
     text.bytes().all(|b| (0x20..0x7F).contains(&b))
 }
 
+// [@ANCHOR: relay_broker_hub_validate]
 /// Checks the settings; the error says which one is wrong. Free text is limited to printable ASCII, so a value cannot add a line to a configuration file.
 pub fn validate(s: &HubSettings) -> Result<(), String> {
     let interface_ok = !s.interface.is_empty()
@@ -116,6 +117,7 @@ pub fn hostapd_conf(s: &HubSettings) -> Result<String, String> {
     ))
 }
 
+// [@ANCHOR: relay_broker_hub_dnsmasq_conf]
 /// The `dnsmasq.conf` text: DHCP for the /24 (hub at the given address, pool .20 to .250), the hub as DNS server (option 6) and NTP server (option 42), the
 /// relay's name and the OS connectivity-probe names resolving to the hub (so phones open the console instead of declaring "no internet"), and everything else
 /// forwarded to the uplink resolver or, with none, refused at once.
@@ -179,6 +181,7 @@ pub struct TakeoverSettings {
 /// Takeover leases are short so clients move back to the router quickly after the hand-back, minutes.
 pub const TAKEOVER_LEASE_MINUTES: u32 = 5;
 
+// [@ANCHOR: relay_broker_hub_takeover_dnsmasq_conf]
 /// The `dnsmasq.conf` text for a takeover: DHCP for the same /24 from a high pool (.200 to .250, away from the router's own and static addresses),
 /// short leases, the router as gateway, the hub as DNS and NTP server, the relay's own name. dnsmasq checks an address with a ping before it offers it
 /// (we leave that on), which keeps it from handing out one that a still-running machine holds.
@@ -252,6 +255,7 @@ mod tests {
             lease_minutes: 60,
         }
     }
+    // Tests [@ANCHOR: relay_broker_hub_validate]
     #[test]
     fn settings_that_could_add_a_line_or_leave_the_hub_open_are_refused() {
         assert_eq!(validate(&good()), Ok(()));
@@ -308,6 +312,7 @@ mod tests {
         open.passphrase.clear();
         assert!(hostapd_conf(&open).is_err());
     }
+    // Tests [@ANCHOR: relay_broker_hub_dnsmasq_conf]
     #[test]
     fn the_dhcp_and_dns_config_points_clients_at_the_hub_for_time_names_and_probes() {
         let text = dnsmasq_conf(&good()).unwrap();
@@ -336,6 +341,7 @@ mod tests {
             uplink_dns: None,
         }
     }
+    // Tests [@ANCHOR: relay_broker_hub_takeover_dnsmasq_conf]
     #[test]
     fn the_takeover_serves_the_same_subnet_from_a_high_pool_with_short_leases() {
         let text = takeover_dnsmasq_conf(&takeover()).unwrap();

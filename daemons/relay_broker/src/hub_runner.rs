@@ -54,6 +54,7 @@ fn is_running(pid: i32, comm: &str) -> bool {
         .unwrap_or(false)
 }
 
+// [@ANCHOR: relay_broker_hub_runner_write_private]
 /// Writes a file readable by root only.
 fn write_private(path: &Path, text: &str) -> io::Result<()> {
     use std::io::Write;
@@ -71,6 +72,8 @@ impl HubRunner {
         self.dir.join(format!("{name}.pid"))
     }
 
+    // [@ANCHOR: relay_broker_hub_runner_run]
+    /// Runs one program to completion with a cleared environment and a fixed PATH; a non-zero exit is an error naming the program.
     fn run(&self, program: &Path, args: &[&std::ffi::OsStr]) -> io::Result<()> {
         let status = Command::new(program)
             .args(args)
@@ -94,6 +97,7 @@ impl HubRunner {
         (up("hostapd"), up("dnsmasq"))
     }
 
+    // [@ANCHOR: relay_broker_hub_runner_start]
     /// Writes the two configuration files, gives the interface the hub's /24 address and starts both programs. A failure stops what was started.
     pub fn start(
         &self,
@@ -144,6 +148,7 @@ impl HubRunner {
         Ok(())
     }
 
+    // [@ANCHOR: relay_broker_hub_runner_stop]
     /// Stops both programs and removes the files and the interface address. Stopping a hub that is not running succeeds.
     pub fn stop(&self) -> io::Result<()> {
         for name in ["hostapd", "dnsmasq"] {
@@ -229,6 +234,10 @@ mod tests {
         (runner, root)
     }
 
+    // Tests [@ANCHOR: relay_broker_hub_runner_write_private]
+    // Tests [@ANCHOR: relay_broker_hub_runner_run]
+    // Tests [@ANCHOR: relay_broker_hub_runner_start]
+    // Tests [@ANCHOR: relay_broker_hub_runner_stop]
     #[test]
     fn start_runs_both_programs_and_stop_ends_them_and_removes_the_files() {
         let (hub, root) = fake("cycle");

@@ -251,6 +251,7 @@ impl<'a> Reader<'a> {
         }
     }
 
+    // [@ANCHOR: relay_broker_reader_bool]
     /// A byte that is 0 or 1.
     fn bool(&mut self) -> Result<bool, WireError> {
         match self.u8()? {
@@ -260,6 +261,7 @@ impl<'a> Reader<'a> {
         }
     }
 
+    // [@ANCHOR: relay_broker_reader_ipv4]
     /// Four bytes as an IPv4 address.
     fn ipv4(&mut self) -> Result<Ipv4Addr, WireError> {
         let b = self.take(4)?;
@@ -269,6 +271,7 @@ impl<'a> Reader<'a> {
         }
     }
 
+    // [@ANCHOR: relay_broker_reader_u32]
     /// A big-endian u32.
     fn u32(&mut self) -> Result<u32, WireError> {
         let b = self.take(4)?;
@@ -842,6 +845,28 @@ mod tests {
             body.len() + 4,
             "frame_encode cuts nothing"
         );
+    }
+
+    // Tests [@ANCHOR: relay_broker_reader_bool]
+    // Tests [@ANCHOR: relay_broker_reader_ipv4]
+    // Tests [@ANCHOR: relay_broker_reader_u32]
+    #[test]
+    fn flags_addresses_and_counts_are_read_exactly_or_refused() {
+        let mut r = Reader {
+            buf: &[0, 1, 2, 192, 168, 50, 1, 0, 0, 1, 44, 9, 9, 9],
+            pos: 0,
+        };
+        assert_eq!(r.bool(), Ok(false));
+        assert_eq!(r.bool(), Ok(true));
+        assert_eq!(r.bool(), Err(WireError::BadTag(2)));
+        assert_eq!(r.ipv4(), Ok(Ipv4Addr::new(192, 168, 50, 1)));
+        assert_eq!(r.u32(), Ok(300));
+        // Three bytes left: neither an address nor a count, and nothing is consumed.
+        assert_eq!(r.ipv4(), Err(WireError::Truncated));
+        assert_eq!(r.u32(), Err(WireError::Truncated));
+        assert_eq!(r.u8(), Ok(9));
+        let mut empty = Reader { buf: &[], pos: 0 };
+        assert_eq!(empty.bool(), Err(WireError::Truncated));
     }
 
     // Tests [@ANCHOR: relay_broker_reader_take]

@@ -483,6 +483,7 @@ fn the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_noth
     ));
 }
 
+// Tests [@ANCHOR: relay_broker_broker_bind_udp]
 #[test]
 fn bind_udp_serves_only_listed_ports_and_passes_a_descriptor() {
     let os = FakeOs::typical();
@@ -527,6 +528,8 @@ fn hub_settings() -> relay_broker::hub::HubSettings {
     }
 }
 
+// Tests [@ANCHOR: relay_broker_broker_hub_start]
+// Tests [@ANCHOR: relay_broker_broker_hub_stop]
 #[test]
 fn the_hub_is_refused_unless_enabled_and_then_written_from_the_templates() {
     let now = Instant::now();
@@ -597,6 +600,7 @@ fn the_hub_is_refused_unless_enabled_and_then_written_from_the_templates() {
     assert!(hub.lock().unwrap().is_none());
 }
 
+// Tests [@ANCHOR: relay_broker_broker_update_package]
 #[test]
 fn update_package_runs_only_when_the_config_enables_it() {
     let peer = Peer {

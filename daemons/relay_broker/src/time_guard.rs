@@ -26,6 +26,7 @@ pub enum TimeDenial {
 }
 
 impl TimeDenial {
+    // [@ANCHOR: relay_broker_time_denial_reason]
     /// The reason text sent to the relay and written to the audit log.
     pub fn reason(self) -> &'static str {
         match self {
@@ -57,6 +58,7 @@ impl TimeGuard {
         }
     }
 
+    // [@ANCHOR: relay_broker_time_guard_expire]
     /// Forgets steps older than an hour and closes an expired breaker.
     fn expire(&mut self, now: Instant) {
         while self
@@ -129,6 +131,8 @@ mod tests {
     // Tests [@ANCHOR: relay_broker_time_guard_check]
     // Tests [@ANCHOR: relay_broker_time_guard_record_step]
     // Tests [@ANCHOR: relay_broker_time_guard_status]
+    // Tests [@ANCHOR: relay_broker_time_denial_reason]
+    // Tests [@ANCHOR: relay_broker_time_guard_expire]
     #[test]
     fn the_ceilings_hold_and_the_breaker_trips_and_resets() {
         let t0 = Instant::now();
