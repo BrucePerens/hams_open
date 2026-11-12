@@ -69,6 +69,7 @@ pub enum Block {
 }
 
 /// The natural-order `(start, len)` range for a given block.
+// [@ANCHOR: ham_digital_modes:natural_range]
 const fn natural_range(block: Block) -> (usize, usize) {
     // An out-of-range `index` would address past the 144-bit frame; it is a programming error, reported here
     // instead of surfacing later as an out-of-bounds array access.
@@ -265,5 +266,49 @@ mod tests {
             G0_TRANSFORM_PREDICTED.to_vec(),
             "g0",
         );
+    }
+
+    /// `natural_range` places the four Golay blocks, three Hamming blocks and the raw tail back to
+    /// back so that together they cover the 144-bit frame exactly once, and refuses an index past
+    /// the last block of its kind.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:natural_range]
+    fn natural_range_tiles_the_144_bit_frame_exactly_once() {
+        let mut blocks = Vec::new();
+        for index in 0..4u8 {
+            blocks.push(natural_range(Block::Golay { index }));
+        }
+        for index in 0..3u8 {
+            blocks.push(natural_range(Block::Hamming { index }));
+        }
+        blocks.push(natural_range(Block::Raw));
+        assert_eq!(blocks[0], (0, 23));
+        assert_eq!(blocks[3], (69, 23));
+        assert_eq!(blocks[4], (92, 15));
+        assert_eq!(blocks[6], (122, 15));
+        assert_eq!(blocks[7], (137, 7));
+        let mut next = 0;
+        for (start, len) in blocks {
+            assert_eq!(
+                start, next,
+                "block starting at {start} leaves a gap or an overlap"
+            );
+            next = start + len;
+        }
+        assert_eq!(next, 144);
+    }
+
+    #[test]
+    #[should_panic(expected = "Golay block index must be 0..4")]
+    // Tests [@ANCHOR: ham_digital_modes:natural_range]
+    fn natural_range_refuses_a_golay_index_past_the_last_block() {
+        let _ = natural_range(Block::Golay { index: 4 });
+    }
+
+    #[test]
+    #[should_panic(expected = "Hamming block index must be 0..3")]
+    // Tests [@ANCHOR: ham_digital_modes:natural_range]
+    fn natural_range_refuses_a_hamming_index_past_the_last_block() {
+        let _ = natural_range(Block::Hamming { index: 3 });
     }
 }

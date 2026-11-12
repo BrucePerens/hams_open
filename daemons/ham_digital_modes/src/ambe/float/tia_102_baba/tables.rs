@@ -103,6 +103,7 @@ pub fn gain_bit_allocation(l: u32, m: u32) -> Option<(u8, f64)> {
 /// FPU instruction should be reachable, not merely "the f64 result goes unused" -- a compiler is not
 /// guaranteed to elide the construction just because a caller discards it). Same underlying table,
 /// same validity range, just narrowed to the field the fixed-point port can actually touch.
+// [@ANCHOR: ham_digital_modes:gain_vector_bits]
 pub fn gain_vector_bits(l: u32, m: u32) -> Option<u8> {
     if !(9..=56).contains(&l) || !(2..=6).contains(&m) {
         return None;
@@ -1143,5 +1144,27 @@ mod tests {
                  (73 - K_hat), got {total} (gain={gain_bits}, higher_order={higher_order_bits})"
             );
         }
+    }
+
+    /// `gain_vector_bits` is the `bits` half of `gain_bit_allocation` for every `(L, M)` pair, and `None`
+    /// outside L 9..=56 and M 2..=6; the first table entry (L 9, M 2) is 10 bits.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:gain_vector_bits]
+    fn gain_vector_bits_agrees_with_the_full_allocation_table_and_refuses_out_of_range() {
+        for l in 0..70u32 {
+            for m in 0..9u32 {
+                assert_eq!(
+                    gain_vector_bits(l, m),
+                    gain_bit_allocation(l, m).map(|(bits, _)| bits),
+                    "L={l} M={m}"
+                );
+            }
+        }
+        assert_eq!(gain_vector_bits(9, 2), Some(10));
+        assert_eq!(gain_vector_bits(8, 2), None);
+        assert_eq!(gain_vector_bits(57, 2), None);
+        assert_eq!(gain_vector_bits(9, 1), None);
+        assert_eq!(gain_vector_bits(9, 7), None);
+        assert!(gain_vector_bits(56, 6).is_some());
     }
 }

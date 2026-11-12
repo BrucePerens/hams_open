@@ -275,6 +275,7 @@ pub fn envelope_feature(samples: &[i16], frame_len: usize) -> Vec<f64> {
 /// window at all (e.g. too narrow a shift for too high a baud at this sample rate) -- callers
 /// must treat that as "this configuration can't be characterized this way," not force a bad
 /// window through anyway.
+// [@ANCHOR: ham_digital_modes:two_tone_window_len]
 pub fn two_tone_window_len(sample_rate: u32, shift_hz: f64, max_baud: f64) -> Option<usize> {
     let min_window = (sample_rate as f64 / shift_hz).ceil() as usize;
     let max_window_exclusive = (sample_rate as f64 / max_baud).floor() as usize;
@@ -954,5 +955,20 @@ mod tests {
             "corroboration check: {per_call_us:.1}us/call against a 1-second window \
              ({budget_fraction:.6}x that window's own real-time budget)"
         );
+    }
+
+    /// `two_tone_window_len` picks the midpoint of the band between `sample_rate / shift_hz` (rounded
+    /// up) and `sample_rate / max_baud` (rounded down), and gives `None` when the band is empty.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:two_tone_window_len]
+    fn two_tone_window_len_is_the_midpoint_of_the_valid_band_or_none() {
+        // min = ceil(48000/170) = 283, max (exclusive) = floor(48000/100) = 480: midpoint 381.
+        assert_eq!(two_tone_window_len(48_000, 170.0, 100.0), Some(381));
+        let w = two_tone_window_len(48_000, 170.0, 100.0).unwrap();
+        assert!(w >= 283 && w < 480);
+        // Too narrow a shift for too high a baud: 8000/170 -> 48 needed, 8000/300 -> only 26 allowed.
+        assert_eq!(two_tone_window_len(8_000, 170.0, 300.0), None);
+        // An empty band (min == max) is also None.
+        assert_eq!(two_tone_window_len(1_000, 100.0, 100.0), None);
     }
 }
