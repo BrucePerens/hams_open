@@ -177,6 +177,8 @@ pub struct Signal {
 pub struct Sim {
     pub freq: f64,
     pub mode: String,
+    /// A rig that accepts `set_mode` but keeps its mode.
+    pub mode_locked: bool,
     pub width: f64,
     pub ptt: bool,
     pub af: f64,
@@ -215,6 +217,7 @@ impl Sim {
         Sim {
             freq: 7_100_000.0,
             mode: "USB".into(),
+            mode_locked: false,
             width: 2400.0,
             ptt: false,
             af: 0.3,
@@ -302,6 +305,10 @@ impl Sim {
                 &format!("Mode: {}", self.mode),
                 &format!("Passband: {}", self.width),
             ]),
+            ("set_mode", Some(m)) if self.mode_locked => {
+                let _ = m;
+                ok(&[])
+            }
             ("set_mode", Some(m)) => {
                 self.mode = m.to_string();
                 self.width = b.and_then(|x| x.parse().ok()).unwrap_or(self.width);

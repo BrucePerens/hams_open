@@ -1568,6 +1568,14 @@ fn the_rig_is_read_first_and_a_split_xit_keyed_or_over_cap_rig_is_refused_withou
         (rig.f_min, rig.f_req, rig.f_prev, rig.w_full),
         (0.05, 0.1, 0.1, 100.0)
     );
+    // More watts than the rig's full scale, under a generous owner cap, is refused here and not only at the set_level.
+    let mut wide = tx_cfg.clone();
+    wide.max_power_w = 500.0;
+    let mut over = good_args();
+    over["power_w"] = json!(150);
+    let a_over = txtools::check_args(&over, &wide).unwrap();
+    let e = txtools::preflight(&mut c, &wide, &a_over).unwrap_err();
+    assert!(e.contains("full-scale") && e.contains("Nothing was sent"), "{e}");
     assert_eq!(
         txtools::rfpower_min(&["level_gran=0=0,0,0;12=0.05,1,0.002;".into()]),
         Some(0.05)
@@ -2280,6 +2288,16 @@ fn a_power_sweep_keys_each_step_separately_stops_at_an_abort_and_obeys_the_same_
         .filter(|l| l["event"] == "end")
         .count();
     assert_eq!(ends, 4);
+    assert!(steps.iter().all(|s| s["raised_to_minimum"] == false));
+    // A rig that keeps its mode is not keyed, as in the single test.
+    b.sim.lock().unwrap().mode_locked = true;
+    b.sim.lock().unwrap().mode = "LSB".into();
+    let before_ptt = b.ptt_log().len();
+    let e = txtools::power_sweep(&mut c, &b.insts[0], &b.deps(None), &args).unwrap_err();
+    assert!(e.contains("the rig reports mode"), "{e}");
+    assert_eq!(b.ptt_log().len(), before_ptt, "nothing was keyed");
+    b.sim.lock().unwrap().mode_locked = false;
+    b.sim.lock().unwrap().mode = "USB".into();
     // The rules of the single test apply: a power above the cap, falling steps, no confirmation, too much keyed time.
     let mut run = |a: Value| txtools::power_sweep(&mut c, &b.insts[0], &b.deps(None), &a);
     let with = |k: &str, v: Value| {

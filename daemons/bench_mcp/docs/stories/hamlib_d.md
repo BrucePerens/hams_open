@@ -347,8 +347,7 @@ already on (refused; who keyed it must be found out, `bench_radioctl_safe_state`
 shifts the transmit frequency); the lowest power setting known (`rfpower_min`); the setting for the requested power not below that lowest setting; the requested setting, converted by the rig's full
 scale, not over 1.02 times the owner's cap; the current setting readable, and not over 1.02 times the cap unless `allow_lowering_power` is true (then the tool lowers it and restores it afterwards). A
 rig that refuses `get_ptt`, `get_split_vfo` or `get_xit` as unsupported is let through on that check (the refusal is data, not an error); a link failure on any read is an error. Blocking; one round
-trip per read; the instrument lock is held by the caller. Never keys. Code oddity (reported, not changed): the cap check uses `f_req.min(1.0)`, so a request for more watts than the rig's full scale
-but still under the owner's cap passes this check and is stopped only later, when `set_level RFPOWER` above 1 is refused or does not read back. See also: test
+trip per read; the instrument lock is held by the caller. Never keys. A request for more watts than the rig's full scale (setting above 1.0) is refused here with "Nothing was sent", even when it is under the owner's cap. See also: test
 `the_rig_is_read_first_and_a_split_xit_keyed_or_over_cap_rig_is_refused_without_a_byte_sent`; related anchors `radioctl_tx_args`, `radioctl_tx_min_power`, `radioctl_tx_power_convert`.
 
 ### `set_verified` [@ANCHOR: radioctl_tx_set_verified]
@@ -503,9 +502,7 @@ The checks of a single test are made for the highest step (`power_w` is the last
 setting (`watts_to_fraction`), raises it to the rig's minimum setting if it would be lower, and runs `keyed` with kind `sweep step`; the loop stops when a step reports an abort. Return value: with
 `dry_run`: `{dry_run, sent: [], plan, steps_w, dwell_s, total_keyed_seconds, note}`; else `{plan, load_check, operator_alert, swr_probe, steps: [{power_w, setting, meters, aborted,
 ptt_read_back_off}], rig_settings_not_restored, keyed_interval_log, note}`. Errors: the argument errors (`powers_w is required ...`, `powers_w takes 1 to 8 power levels`, `powers_w must rise`, `... make <t> s
-of keyed time; the most in one call is 60 s`) and all those of `key_test`. Code oddities (reported, not changed): the total keyed time of a sweep is limited to 60 s, not to `transmit.max_seconds` (only each
-step is), so a sweep may key longer in total than the owner's per-test cap; a step below the rig's minimum setting is silently raised to it, so the meters reflect a higher power than the `power_w` in the
-result; unlike the key test the sweep does not read the mode back after setting it. In tests the rig is simulated. See also: test
+of keyed time; the most in one call is 60 s`) and all those of `key_test`. The total keyed time of a sweep is limited to 60 s, and `transmit.max_seconds` limits each step, not the total (intended: each step is one keyed interval; a sweep may therefore key longer in total than one test). A step below the rig's minimum setting is raised to it; its entry says so (`raised_to_minimum: true`) and `setting` is the setting actually used. Like the key test, the sweep reads the mode back after setting it and does not key a rig that kept another mode. In tests the rig is simulated. See also: test
 `a_power_sweep_keys_each_step_separately_stops_at_an_abort_and_obeys_the_same_gates`; related anchors `radioctl_tx_key_test`, `radioctl_tx_keyed`.
 
 ### `safe_state` [@ANCHOR: radioctl_tx_safe_state]
