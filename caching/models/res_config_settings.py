@@ -2,6 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 from odoo import api, fields, models
 import logging
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class ResConfigSettings(models.TransientModel):
     caching_pwa_background_color = fields.Char(related="website_id.caching_pwa_background_color", readonly=False)
 
     # [@ANCHOR: caching:COMM_settings_get_values]
+    @public_rpc
     @api.model
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
@@ -54,12 +56,14 @@ class ResConfigSettings(models.TransientModel):
         return res
 
     # [@ANCHOR: caching:COMM_settings_set_values]
+    @public_rpc
     def set_values(self):
         super(ResConfigSettings, self).set_values()
         if self.website_id:
             self.website_id.caching_safe_quota_mb = self.caching_safe_quota_mb
 
     # [@ANCHOR: caching:COMM_settings_force_cache_invalidation]
+    @public_rpc
     def action_force_cache_invalidation(self):
         """Increments the cache version for the current website."""
         self.ensure_one()
