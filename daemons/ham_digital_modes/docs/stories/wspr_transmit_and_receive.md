@@ -49,11 +49,27 @@ returns the bytes of a standard 44-byte-header PCM WAV file, or nothing for an o
 A receiver is given a buffer of mono 16-bit audio that is at least one full transmission long, and has to find the
 signal in time and frequency before it can decode it.
 
-**Getting the audio ready.** The search is tuned and tested at 12 kHz. A caller that records at 48 kHz first calls
-[@ANCHOR: decimate_4x_box_average], which replaces every group of four samples by their average (dropping an
-incomplete trailing group). To size the search, [@ANCHOR: required_window_samples] gives the number of samples a full
-162-symbol transmission occupies at a sample rate; a caller must subtract it from its buffer length to get
-`max_start_sample`, because no later start can contain a whole transmission.
+**Getting the audio ready.** The search is tuned and tested at 12 kHz, so a caller that records at 48 kHz decimates first, and sizes the search with the window helper below.
+
+### `decimate_4x_box_average` [@ANCHOR: decimate_4x_box_average]
+
+Converts 48 kHz mono audio to WSPR's native 12 kHz by replacing every group of four samples with their average. It is a crude low-pass, not a proper decimating filter, kept because every threshold in this module was measured at 12 kHz and decimating first keeps production audio on that tested path. Called by the relay's digital-mode pipeline before `find_sync`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]`, borrowed | Mono PCM at four times the target rate. |
+
+**Returns:** `Vec<i16>` of `samples.len() / 4` values (integer division of the sum by four, so each is rounded toward zero); an incomplete trailing group of one to three samples is dropped, not padded. **Errors:** none. **Special concerns:** pure and allocation-only, no locks; the aliasing a box filter lets through has not been measured on real captures (to-do if real recordings show it). **Signature:** `pub fn decimate_4x_box_average(samples: &[i16]) -> Vec<i16>`. **See also:** the test tagged `decimate_4x_box_average`.
+
+### `required_window_samples` [@ANCHOR: required_window_samples]
+
+Says how many samples one complete 162-symbol transmission occupies at a given sample rate. A caller subtracts it from the length of its buffer to get `max_start_sample` for `find_sync`, because a later start cannot contain a whole transmission; without it the search wastes an order of magnitude more transform work on offsets that cannot hold a signal.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sample_rate` | `u32` | Samples per second of the audio. |
+
+**Returns:** `usize`, `162 * samples_per_symbol(sample_rate)`: 1,327,104 at 12 kHz, 162 x 5461 at 8 kHz, and 0 for a rate of 0. **Errors:** none. **Special concerns:** pure arithmetic; no I/O or locks. **Signature:** `pub fn required_window_samples(sample_rate: u32) -> usize`. **See also:** the test tagged `required_window_samples`, `find_sync`.
 
 **Finding the signal.** [@ANCHOR: find_sync] searches the given audio-frequency band (in steps of the 1.4648 Hz tone
 spacing, each tried at eight offsets inside the step) and the start offsets from sample 0 to `max_start_sample` (in
@@ -85,11 +101,32 @@ threshold, returning `LowConfidence` with the rejected bits and metric so the ca
 a higher one). [@ANCHOR: decode_from_symbol_evidence] chains it all for one set of evidence: convert, deinterleave the
 values and both estimates, and run the gated decoder.
 
-**End to end.** [@ANCHOR: sync_search_and_decode] searches, extracts the evidence at the winning candidate and
-decodes it. It returns nothing when no signal clears the sync threshold; otherwise it returns the detected audio
-frequency together with the decoder result, which keeps the frequency even when the decode failed (a caller doing
-auto-tune wants to know where the signal was). [@ANCHOR: sync_search_and_decode_message] goes one step further and
-unpacks the bits into `(callsign, grid, power, base_hz)`. Its failure type, `WsprMessageError`, has the decoder's two
-failures plus `UnpackFailed`, for a decode that was confident but does not make a valid Type 1 message;
-[@ANCHOR: WsprMessageError::from] converts the gate's `GaveUp` and `LowConfidence` errors into the matching variants
-unchanged.
+**End to end.** Two functions chain the search, evidence and decode; they differ in whether they unpack the bits into text.
+
+### `sync_search_and_decode` [@ANCHOR: sync_search_and_decode]
+
+Runs `find_sync`, then `extract_symbol_evidence` at the winning candidate, then `decode_from_symbol_evidence`. It keeps the detected audio frequency even when the decode failed, because an auto-tune caller wants to know where the signal was.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[i16]`, borrowed | Mono PCM at 12 kHz (decimate first). |
+| `sample_rate` | `u32` | Samples per second. |
+| `freq_lo_hz`, `freq_hi_hz` | `f64` | Audio band searched, in hertz; see `find_sync` for the rejected values. |
+| `max_start_sample` | `usize` | Last start offset tried; `samples.len()` minus `required_window_samples`. |
+| `min_sync_score` | `f64` | Sync threshold, normally `MIN_SYNC_SCORE` (0.4). |
+| `max_cycles` | `u64` | Tree-node budget for the sequential decoder. |
+| `min_acceptable_metric` | `f64` | Confidence gate, at least `MIN_ACCEPTABLE_METRIC` (0.0); higher for public spots. |
+
+**Returns:** `Option<(f64, Result<u128, ConfidenceGateError>)>`: `None` when no signal clears the sync threshold; otherwise the detected `base_hz` and either the 81 decoded bits (in a `u128`) or the gate's `GaveUp` or `LowConfidence` error. **Special concerns:** pure and CPU-bound (it can run for seconds on a full buffer, so run it off the audio thread); no I/O, no locks. **See also:** the test tagged `sync_search_and_decode`.
+
+### `sync_search_and_decode_message` [@ANCHOR: sync_search_and_decode_message]
+
+The call a real receiver makes: `sync_search_and_decode` followed by `unpack_wspr_message`. It takes the same eight arguments in the same order and meaning.
+
+**Returns:** `Option<Result<(String, String, i32, f64), WsprMessageError>>`: `None` when no signal was found; `Ok((callsign, grid, power_dbm, base_hz))` for a decoded Type 1 message; else a `WsprMessageError`. **Errors:** `GaveUp { cycles }` (node budget exhausted), `LowConfidence { bits, metric }` (path metric under the gate) and `UnpackFailed { bits }` (confident decode that is not a valid Type 1 message, for example a power outside 0 to 60 dBm). **Special concerns:** as `sync_search_and_decode`; the frequency is returned only on success, so an auto-tune caller wanting it after a failure should use the lower-level function. **See also:** the test tagged `sync_search_and_decode_message`.
+
+### `WsprMessageError::from` [@ANCHOR: WsprMessageError::from]
+
+The `From<ConfidenceGateError>` conversion that lets `sync_search_and_decode_message` use `?`-style propagation. `WsprMessageError` is the decoder's two failures plus `UnpackFailed`; this conversion maps `GaveUp { cycles }` and `LowConfidence { bits, metric }` to the variants of the same names with their data unchanged.
+
+**Call interface:** `fn from(e: ConfidenceGateError) -> WsprMessageError`; `e` is moved in. **Returns:** the matching variant. **Errors and concerns:** none; total, pure, no allocation. **Data:** `WsprMessageError` has the variants `GaveUp { cycles: u64 }`, `LowConfidence { bits: u128, metric: f64 }` and `UnpackFailed { bits: u128 }`. **See also:** the test tagged `WsprMessageError::from`, which checks that pure noise never produces a confident `Ok`.
