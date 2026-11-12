@@ -58,7 +58,7 @@ header can only narrow a daemon, never widen it. `[@ANCHOR: hams_rpc_guard:certi
 ## How an addon declares what it exposes
 
 * In code: `@public_rpc` above a method (`@public_rpc(portal=True)`, `@public_rpc(clients=("login",))`).
-  `[@ANCHOR: hams_rpc_guard:public_rpc]` `[@ANCHOR: hams_rpc_guard:decorator_marks]`
+  The decorator lives in `zero_sudo` (`from odoo.addons.zero_sudo import public_rpc`), so an addon needs no dependency on this one. `[@ANCHOR: zero_sudo:public_rpc]` `[@ANCHOR: hams_rpc_guard:decorator_marks]`
 * In a file: `rpc_exposure.json` in the addon's root. The installed addons' files are merged once per registry.
   `[@ANCHOR: hams_rpc_guard:load_exposure]` `[@ANCHOR: hams_rpc_guard:exposure_init]`
   `[@ANCHOR: hams_rpc_guard:exposure_merge]` `[@ANCHOR: hams_rpc_guard:pairs]` `[@ANCHOR: hams_rpc_guard:manifest_of]`

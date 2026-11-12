@@ -8,7 +8,8 @@ import tempfile
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
-from odoo.addons.hams_rpc_guard import exposure, exposure_scan, public_rpc
+from odoo.addons.hams_rpc_guard import exposure, exposure_scan
+from odoo.addons.zero_sudo import public_rpc
 
 SAMPLE = '''
 from odoo import api, models
@@ -63,7 +64,7 @@ class NotAModel:
 @tagged("post_install", "-at_install")
 class TestDecorator(HamsTransactionCase):
     """The `@public_rpc` decorator and the lookup of its marks."""
-    # Tests [@ANCHOR: hams_rpc_guard:public_rpc]
+    # Tests [@ANCHOR: zero_sudo:public_rpc]
     # Tests [@ANCHOR: hams_rpc_guard:decorator_marks]
 
     def test_marks_are_found_through_the_mro(self):

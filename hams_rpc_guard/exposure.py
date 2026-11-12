@@ -7,7 +7,7 @@ Odoo core already refuses a method whose name starts with `_` and one marked `@a
 callable over `/web/dataset/call_kw` by any signed-in user, which is far more than a web page needs. This module lets
 an addon say exactly what it exposes:
 
-* the decorator `@public_rpc` on a method (below), or
+* the decorator `@public_rpc` on a method (it lives in `zero_sudo`: `from odoo.addons.zero_sudo import public_rpc`), or
 * a file `rpc_exposure.json` in the addon's root directory (format in the README).
 
 The files of every installed addon are merged into one `Exposure` per registry. Nothing here decides anything: the
@@ -21,28 +21,15 @@ import types
 
 from odoo.modules.module import Manifest, get_module_path
 
+from odoo.addons.zero_sudo.rpc_public import MARK
+
 _logger = logging.getLogger(__name__)
 
 EXPOSURE_FILE = "rpc_exposure.json"
-MARK = "_hams_public_rpc"
 SECTIONS = ("internal", "portal", "stock")
 
 CACHE_ATTRIBUTE = "_hams_rpc_guard_exposure"  # kept on the Registry object: a new registry (module change) starts empty
 _cache_lock = threading.Lock()
-
-
-# [@ANCHOR: hams_rpc_guard:public_rpc]
-def public_rpc(func=None, *, portal=False, clients=()):
-    """Declare a model method callable over RPC.
-
-    Use bare (`@public_rpc`) for a method any signed-in internal user may call, or with arguments:
-    `@public_rpc(portal=True)` also admits portal and public users (strict mode), `@public_rpc(clients=("login",))`
-    additionally admits those service-account logins. Put it above `@api.model`/`@api.depends`... and below nothing
-    that wraps the function in a new object: it only sets an attribute on the function it is given."""
-    def mark(function):
-        setattr(function, MARK, {"portal": bool(portal), "clients": tuple(clients)})
-        return function
-    return mark(func) if callable(func) else mark
 
 
 # [@ANCHOR: hams_rpc_guard:decorator_marks]
