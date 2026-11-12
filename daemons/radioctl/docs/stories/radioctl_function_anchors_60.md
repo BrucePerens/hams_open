@@ -6,11 +6,23 @@ Function anchors for the Hy-Gain DCU rotator engine in `radioctl-station` and th
 
 ### `pub fn new(desc: RotatorDescription) -> DcuEngine` [@ANCHOR: radioctl:radioctl_station_dcu_new]
 
-Builds the DCU engine for `desc`, taking ownership. No I/O, cannot fail; `RotatorDescription::engine` validates first (a DCU description is azimuth only, 0 to 360).
+Builds the Hy-Gain DCU engine for `desc`, taking ownership of the description (no clone and no borrow is kept by the caller).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `desc` | `RotatorDescription` | The rotator's description: protocol `Dcu`, an azimuth-only travel of 0 to 360 degrees, speeds and port settings. Moved in. |
+
+Returns the `DcuEngine`. There is no error path and no I/O; the engine is plain data and is `Send + Sync`, so one engine can serve a task on any thread. It does not validate `desc` itself: `RotatorDescription::engine` calls `validate()` first and then constructs this engine for a description whose protocol is `Dcu` (a DCU description has azimuth only). Constructing it keys nothing and moves no antenna; commands reach a rotator only through `encode`. Test: `dcu_encodes_the_manual_commands_and_reads_nothing` in `rotator.rs`.
 
 ### `fn description(&self) -> &RotatorDescription` [@ANCHOR: radioctl:radioctl_station_dcu_description]
 
-Implementation of `RotatorEngine::description` for the DCU engine: a borrow of the description. Cannot fail.
+Implementation of the trait method `RotatorEngine::description` for the DCU engine.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `&self` | `&DcuEngine` | The engine; only borrowed. |
+
+Returns a shared borrow of the `RotatorDescription` the engine was built with, valid as long as the engine lives, so a caller can read the travel limits and protocol without cloning. It cannot fail, does no I/O, takes no lock and has no side effect. The station code uses it to range-check a bearing before encoding and to report the protocol. Test: `dcu_encodes_the_manual_commands_and_reads_nothing`, which asserts the protocol is `Dcu`.
 
 ### `fn encode(&self, op: &RotOp) -> Result<Encoded, StationError>` [@ANCHOR: radioctl:radioctl_station_dcu_encode]
 
