@@ -17,6 +17,7 @@ use ham_digital_modes::ambe::float::tia_102_baba::tables::higher_order_bit_alloc
 use ham_digital_modes::ambe::float::tia_102_baba::vuv::harmonics_count;
 use std::fmt::Write as _;
 
+// [@ANCHOR: tia_102_baba_oracle_quant_dump_rng_struct]
 struct Rng(u64);
 impl Rng {
     fn next(&mut self) -> u64 {
@@ -91,4 +92,33 @@ fn main() {
     }
     std::fs::write(format!("{prefix}.sa"), sa_txt).unwrap();
     std::fs::write(format!("{prefix}.q"), q_txt).unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: tia_102_baba_oracle_quant_dump_rng_struct]
+    #[test]
+    fn the_xorshift_generator_follows_its_known_sequence_and_never_reaches_zero() {
+        let mut r = Rng(1);
+        assert_eq!(r.next(), 1082269761);
+        assert_eq!(r.next(), 1152992998833853505);
+        for _ in 0..1000 {
+            assert_ne!(r.next(), 0);
+        }
+    }
+
+    // Tests [@ANCHOR: tia_102_baba_oracle_quant_dump_rng_struct]
+    #[test]
+    fn uniform_draws_are_in_the_unit_interval_and_normal_draws_are_centred() {
+        let mut r = Rng(0x2545_f491_4f6c_dd1d);
+        let mut sum = 0.0;
+        for _ in 0..4000 {
+            let u = r.uniform();
+            assert!((0.0..1.0).contains(&u), "{u}");
+            sum += r.normal();
+        }
+        assert!((sum / 4000.0).abs() < 0.1, "mean {}", sum / 4000.0);
+    }
 }

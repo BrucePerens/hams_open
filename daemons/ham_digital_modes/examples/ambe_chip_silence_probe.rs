@@ -96,6 +96,7 @@ fn wire_bytes_to_a2_frame(b: &[u8; 9]) -> u128 {
     interleaved_to_frame(wire)
 }
 
+// [@ANCHOR: ambe_chip_silence_probe_lcg_struct]
 struct Lcg(u64);
 impl Lcg {
     fn next(&mut self) -> f64 {
@@ -234,6 +235,24 @@ fn main() {
                     text
                 );
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ambe_chip_silence_probe_lcg_struct]
+    #[test]
+    fn the_lcg_repeats_for_a_seed_and_stays_in_minus_one_to_one() {
+        let (mut a, mut b) = (Lcg(1), Lcg(1));
+        let first = a.next();
+        assert_eq!(first, b.next());
+        assert!((first - -0.15358165837824345).abs() < 1e-12, "{first}");
+        for _ in 0..1000 {
+            let v = a.next();
+            assert!((-1.0..1.0).contains(&v), "{v}");
         }
     }
 }
