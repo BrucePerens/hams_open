@@ -359,6 +359,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_audio_analysis_spectrum_range]
     // Tests [@ANCHOR: bench_mcp_audio_analysis_peaks]
     // Tests [@ANCHOR: bench_mcp_audio_analysis_spectrum_type]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_peak_type]
     #[test]
     fn a_tone_between_bins_is_still_found_and_two_tones_are_separate_peaks() {
         let s = add(&sine(R, 1.0, 1234.5, 0.1), &sine(R, 1.0, 3000.0, 0.05));

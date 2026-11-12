@@ -72,7 +72,7 @@
 
 **Functions that touch it.** `peaks` (src/spectrum.rs:133), `peaks` (src/audio/analysis.rs:184), `dominant` (src/audio/analysis.rs:224), `find_peaks` (src/sa/sweep.rs:161), `trace_summary` (src/sa/sweep.rs:358).
 
-**See also:** test `peaks_are_local_maxima_above_the_median_strongest_first_and_not_adjacent (src/sa/sweep.rs)`.
+**See also:** test `a_tone_between_bins_is_still_found_and_two_tones_are_separate_peaks (src/audio/analysis.rs)`.
 
 ### `Dir` [@ANCHOR: bench_mcp:bench_mcp_audio_devices_dir_type]
 
@@ -372,7 +372,7 @@
 
 **Functions that touch it.** `hear_tone` (src/audio/heard.rs:67).
 
-**See also:** test `the_owner_adds_retires_restores_and_removes_and_the_rules_hold (src/radioctl/stations.rs)`.
+**See also:** test `a_clear_tone_over_room_noise_is_heard_with_its_times (src/audio/heard.rs)`.
 
 ### `Level` [@ANCHOR: bench_mcp:bench_mcp_audio_levels_level_type]
 
@@ -629,7 +629,7 @@
 
 **Functions that touch it.** `source` (src/audio/tools.rs:247).
 
-**See also:** test `config_takes_a_managed_or_an_existing_radioctld_and_refuses_the_rest (src/radioctl/tests.rs)`.
+**See also:** test `a_source_is_a_managed_file_within_the_limit_or_a_generated_tone (src/audio/tools.rs)`.
 
 ### `Check` [@ANCHOR: bench_mcp:bench_mcp_audio_verify_check_type]
 

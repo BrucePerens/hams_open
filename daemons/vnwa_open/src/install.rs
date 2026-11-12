@@ -538,6 +538,7 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_install_installer]
     // Tests [@ANCHOR: vnwa_open_install_options]
     // Tests [@ANCHOR: vnwa_open_install_managed]
+    // Tests [@ANCHOR: vnwa_open_install_state_type]
     #[test]
     fn apply_installs_is_idempotent_backs_up_what_it_replaces_and_uninstall_restores_it() {
         let root = tmp("inst_apply");
