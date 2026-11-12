@@ -13,6 +13,7 @@ const POINT_0875_Q16_16: i32 = 5734;
 
 /// The fixed-point equivalent of `FrameErrors` -- `total`/`golay_init`/`hamming_init` are already
 /// plain integer counts in the float sibling, unchanged here; only `rate` becomes Q16.16.
+// [@ANCHOR: error_estimation_frame_errors_q16_struct]
 pub struct FrameErrorsQ16 {
     pub total: u32,
     pub rate_q16: i32,

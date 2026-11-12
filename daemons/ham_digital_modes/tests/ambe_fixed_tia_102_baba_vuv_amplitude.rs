@@ -240,3 +240,6 @@ fn harmonics_count_matches_eq31() {
         );
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: mbe_encode_analysis_state_struct]

@@ -17,6 +17,7 @@ use crate::ambe::fixed::tia_102_baba::vuv::{
 
 /// Frame-to-frame state of the voicing/amplitude analysis (energy tracker, `Q16`, and the previous
 /// frame's band decisions).
+// [@ANCHOR: mbe_encode_analysis_state_struct]
 pub struct AnalysisState {
     xi_max_q16: i128,
     prev_bands: Vec<bool>,

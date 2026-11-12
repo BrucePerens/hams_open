@@ -36,6 +36,7 @@ const LEAD: usize = 200;
 const MARGIN: usize = 160;
 
 /// Everything downstream stages need for one frame.
+// [@ANCHOR: encoder_frame_analysis_struct]
 pub struct FrameAnalysis {
     /// Refined pitch period in eighths of a sample (`P = p8 / 8`).
     pub p8: u32,
@@ -50,6 +51,7 @@ pub struct FrameAnalysis {
 }
 
 /// Streaming analyzer; feed PCM with [`Self::push_samples`], pull frames with [`Self::next_analysis`].
+// [@ANCHOR: encoder_frame_analyzer_struct]
 pub struct FrameAnalyzer {
     raw: Vec<i32>,
     trimmed: usize,
@@ -196,6 +198,7 @@ impl Default for FrameAnalyzer {
 /// the recursive state is kept in Q16 with the pole in Q30, so the output is the exact filter response rounded to
 /// an integer sample without accumulating rounding error. Fixed-point sibling of the float
 /// `tia_102_baba::encoder::HighPassFilter`.
+// [@ANCHOR: encoder_high_pass_filter_struct]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HighPassFilter {
     prev_input: i64,
@@ -217,6 +220,7 @@ impl HighPassFilter {
     }
 }
 
+// [@ANCHOR: tia_102_baba_encoder_encoder_struct]
 pub struct Encoder {
     high_pass: HighPassFilter,
     analyzer: FrameAnalyzer,
