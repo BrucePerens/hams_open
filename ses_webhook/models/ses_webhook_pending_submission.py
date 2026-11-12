@@ -44,6 +44,7 @@ class SesWebhookPendingSubmission(models.Model):
             record.name = _('Pending submission from %s', record.sender_email) if record.sender_email else _('New')
 
     # [@ANCHOR: ses_webhook:COMM_create_and_notify]
+    @api.private
     @api.model
     def create_and_notify(self, sender_email, raw_content, domain):
         """SES_WEBHOOK_SENDER_REGISTRATION.md sections 1-4: creates the
