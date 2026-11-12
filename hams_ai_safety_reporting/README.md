@@ -5,9 +5,9 @@ Adds the `ai_safety_concern` ticket type to `hams_helpdesk.ticket` and a narrow,
 safety ticket (`docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md` in hams_com, section G, Phase 7). The account's design is
 documented in `security/security.xml`; this file documents the daemon key it uses.
 
-## `register_ai_safety_reporting_key(env)`: the account's daemon key
+## `register_ai_safety_reporting_key(env)`: the account's daemon key [@ANCHOR: hams_ai_safety_reporting:register_ai_safety_reporting_key]
 
-`from odoo.addons.hams_ai_safety_reporting.hooks import register_ai_safety_reporting_key` [@ANCHOR: hams_ai_safety_reporting:register_ai_safety_reporting_key]
+`from odoo.addons.hams_ai_safety_reporting.hooks import register_ai_safety_reporting_key`
 
 The daemons that file a safety ticket authenticate as the service account with an API key in
 `/opt/hams/etc/keys/ai_safety_reporting_service_internal.env` (`hooks.KEY_FILE`; the units `hams.simulated.bots` and
@@ -36,9 +36,9 @@ family key directory, `os_group`) is a later step of `docs/proposals/DAEMON_OS_I
 `tests/test_ai_safety_reporting_key.py` (the row, the key, the file mode and content, a second call, and a hand-made row under another
 name).
 
-## `post_init_hook(env)`: registering the key on a fresh install
+## `post_init_hook(env)`: registering the key on a fresh install [@ANCHOR: hams_ai_safety_reporting:post_init_hook]
 
-`hooks.post_init_hook`, named in the manifest [@ANCHOR: hams_ai_safety_reporting:post_init_hook]
+`hooks.post_init_hook`, named in the manifest
 
 Odoo calls it once, after the module's data has loaded on a **fresh install** (never on an upgrade; `migrations/1.1` covers an installed
 database). It does one thing: it calls `register_ai_safety_reporting_key(env)` (above), so a new site has the key the bots and the
@@ -57,9 +57,9 @@ Behaviour worth knowing: it writes `/opt/hams/etc/keys/ai_safety_reporting_servi
 installs the module gets that file (the same is true of every module that registers a daemon key). It is not idempotent in effect (each
 call mints a new key) but it runs only once per install. Tests: `tests/test_ai_safety_reporting_key.py`.
 
-## `migrate(cr, version)`: registering the key on an installed database
+## `migrate(cr, version)`: registering the key on an installed database [@ANCHOR: hams_ai_safety_reporting:migrate]
 
-`migrations/1.1/post-register-ai-safety-reporting-key.py`, run by Odoo's upgrade machinery [@ANCHOR: hams_ai_safety_reporting:migrate]
+`migrations/1.1/post-register-ai-safety-reporting-key.py`, run by Odoo's upgrade machinery
 
 Version 1.0 never registered the service account's daemon key (it was added by hand on hams.com), and `post_init_hook` runs only on a fresh install, so an already installed database gets the key here when it is upgraded to 1.1. It looks up the service account (`hooks.SERVICE_XMLID`) in `ir_model_data` with a plain SQL query, then calls `register_ai_safety_reporting_key` with an environment for that user. Odoo calls it once per upgrade past 1.1; it takes no other action.
 
