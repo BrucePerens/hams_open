@@ -970,143 +970,428 @@ Packs the per-band voiced flags into the quantizer value `b_hat_1` (Eq. 49): ban
 
 ### Spectral amplitude estimation (section 5.3)
 
-`voiced_amplitude` (Eq. 43) is the square root of the ratio of the signal's energy in the harmonic's band to the window spectrum's
-energy over the same bins, so a pure sinusoid yields its amplitude. A band without window energy gives zero.
-*(Reference: `src/ambe/float/tia_102_baba/spectral_amplitude.rs` -> `[@ANCHOR: voiced_amplitude]`)*
+#### `voiced_amplitude` [@ANCHOR: voiced_amplitude]
 
-`unvoiced_amplitude` (Eq. 44) is the root of the band's mean energy per bin divided by the window's tap sum, a flat noise-like
-level; an empty band gives zero.
-*(Reference: `src/ambe/float/tia_102_baba/spectral_amplitude.rs` -> `[@ANCHOR: unvoiced_amplitude]`)*
+Estimates the spectral amplitude of harmonic `l` for a voiced band (Eq. 43): the square root of the ratio of the signal's energy in the harmonic's band (bins `ceil(a_l)` up to but not including `ceil(b_l)`) to the window spectrum's energy over the same bins, so a pure sinusoid yields its amplitude. A band without window energy gives zero.
 
-`estimate_spectral_amplitudes` estimates `M_hat_l` for every harmonic `1..=L`, picking the voiced or unvoiced estimator by the
-harmonic's band, `min(ceil(l/3), K)`.
-*(Reference: `src/ambe/float/tia_102_baba/spectral_amplitude.rs` -> `[@ANCHOR: estimate_spectral_amplitudes]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | The frame spectrum `S_w(m)`. |
+| `l` | `u32` | Harmonic number, 1 or more. |
+| `omega0_hat` | `f64` | Refined fundamental in radians per sample. |
+
+**Returns:** `f64`, the amplitude `M_l` (0 or more). **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/spectral_amplitude.rs`. **Signature:** `pub fn voiced_amplitude(frame: &RefinementFrame, l: u32, omega0_hat: f64) -> f64`. **See also:** `unvoiced_amplitude`, `estimate_spectral_amplitudes`; test `harmonic_signal` (`ambe/float/tia_102_baba/spectral_amplitude.rs`).
+
+#### `unvoiced_amplitude` [@ANCHOR: unvoiced_amplitude]
+
+Estimates the spectral amplitude of harmonic `l` for an unvoiced band (Eq. 44): the square root of the band's mean energy per bin divided by the window's tap sum, a flat noise-like level. An empty band (zero or negative width) gives zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | The frame spectrum `S_w(m)`. |
+| `l` | `u32` | Harmonic number, 1 or more. |
+| `omega0_hat` | `f64` | Refined fundamental in radians per sample. |
+
+**Returns:** `f64`, the amplitude `M_l` (0 or more). **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/spectral_amplitude.rs`. **Signature:** `pub fn unvoiced_amplitude(frame: &RefinementFrame, l: u32, omega0_hat: f64) -> f64`. **See also:** `voiced_amplitude`, `estimate_spectral_amplitudes`; test `voiced_amplitude_scales_linearly_with_signal_amplitude` (`ambe/float/tia_102_baba/spectral_amplitude.rs`).
+
+#### `estimate_spectral_amplitudes` [@ANCHOR: estimate_spectral_amplitudes]
+
+Estimates `M_hat_l` for every harmonic `1..=L`, choosing the voiced or unvoiced estimator by the harmonic's band, `min(ceil(l/3), K)`. A band missing from `voiced` reads as unvoiced.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | The frame spectrum `S_w(m)`. |
+| `l_hat` | `u32` | Number of harmonics `L`. |
+| `k_hat` | `u32` | Number of voiced/unvoiced bands `K`. |
+| `omega0_hat` | `f64` | Refined fundamental in radians per sample. |
+| `voiced` | `&[bool]` | Per-band flags from `determine_voicing`, band 1 first. |
+
+**Returns:** `Vec<f64>` of `l_hat` amplitudes, harmonic 1 first. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/spectral_amplitude.rs`. **Signature:** `pub fn estimate_spectral_amplitudes(frame: &RefinementFrame, l_hat: u32, k_hat: u32, omega0_hat: f64, voiced: &[bool]) -> Vec<f64>`. **See also:** `voiced_amplitude`, `unvoiced_amplitude`, `determine_voicing`; test `unvoiced_amplitude_is_positive_for_a_real_signal` (`ambe/float/tia_102_baba/spectral_amplitude.rs`).
 
 ### Prediction, gain/block transforms and quantization (section 6)
 
 The encoder does not send amplitudes directly; it sends the change from a prediction made out of the previous frame.
-`prediction_coefficient` is `rho` (Eq. 55): 0.4 for up to 15 harmonics, `0.03 L - 0.05` for 16 to 24, and 0.7 above.
-*(Reference: `src/ambe/float/tia_102_baba/prediction.rs` -> `[@ANCHOR: prediction_coefficient]`)*
+#### `prediction_coefficient` [@ANCHOR: prediction_coefficient]
 
-`previous_log2_amplitude` returns `log2` of the previous frame's amplitude at index `j`, applying the standard's boundary rules:
-index 0 gives exactly 0 (Eq. 56) and indexes past the previous frame's last harmonic repeat that last value (Eq. 57).
-*(Reference: `src/ambe/float/tia_102_baba/prediction.rs` -> `[@ANCHOR: previous_log2_amplitude]`)*
+Returns the prediction coefficient `rho` (Eq. 55): the weight given to the previous frame's spectral amplitudes when predicting this frame's. It is 0.4 for up to 15 harmonics, `0.03 L - 0.05` for 16 to 24 harmonics, and 0.7 above 24. The encoder does not send amplitudes directly; it sends the change from this prediction.
 
-`predicted_and_bias_correction` returns the two terms that the encoder (Eq. 54) and decoder (Eq. 77) both need, once: the previous
-log amplitude interpolated at harmonic `l`'s position in the previous frame's harmonic scale (Eq. 52-53) times `rho`, and the
-frame-wide bias, `rho / L` times the same interpolation summed over all harmonics. The two directions use them with opposite signs.
-*(Reference: `src/ambe/float/tia_102_baba/prediction.rs` -> `[@ANCHOR: predicted_and_bias_correction]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `l_hat_curr` | `u32` | Number of harmonics `L` of the current frame. |
 
-`gain_vector_dct` is the second-stage 6-point transform of Eq. 61: `G_m = (1/6) sum R_i cos(pi (m-1)(i-0.5) / 6)` over the six
-per-block DC terms.
-*(Reference: `src/ambe/float/tia_102_baba/mod.rs` -> `[@ANCHOR: gain_vector_dct]`)*
+**Returns:** `f64` between 0.4 and 0.7. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
 
-`partition_into_blocks` splits the `L` prediction residuals into six consecutive blocks whose lengths come from Annex J
-(Eq. 58-59). It returns `None` for `L` outside 9 to 56 or a residual slice of the wrong length.
-*(Reference: `src/ambe/float/tia_102_baba/quantize.rs` -> `[@ANCHOR: partition_into_blocks]`)*
+**Location:** `src/ambe/float/tia_102_baba/prediction.rs`. **Signature:** `pub fn prediction_coefficient(l_hat_curr: u32) -> f64`. **See also:** `predicted_and_bias_correction`; test `reconstruct_log2_amplitude` (`ambe/float/tia_102_baba/prediction.rs`).
 
-`block_dct` is the per-block DCT of Eq. 60: `C_k = (1/J) sum c_j cos(pi (k-1)(j-0.5) / J)` for a block of any length `J`; an empty
-block gives an empty result.
-*(Reference: `src/ambe/float/tia_102_baba/quantize.rs` -> `[@ANCHOR: block_dct]`)*
+#### `previous_log2_amplitude` [@ANCHOR: previous_log2_amplitude]
 
-`saturating_uniform_quantize` is the quantizer shared by Eq. 62 and 63: it divides by the step size, floors, and offsets by
-`2^(bits-1)`, with values below the range going to 0 and values above to `2^bits - 1`. It needs at least 1 bit: Annex F never allocates 0 bits to a gain element, and the higher-order caller skips 0-bit entries before calling it.
-*(Reference: `src/ambe/float/tia_102_baba/quantize.rs` -> `[@ANCHOR: saturating_uniform_quantize]`)*
+Returns `log2` of the previous frame's spectral amplitude at index `j`, applying the standard's boundary rules: index 0 gives exactly 0 (Eq. 56) and indexes past the previous frame's last harmonic repeat that last value (Eq. 57).
 
-`quantize_gain_vector` quantizes the five non-DC gain elements `G_2..G_6` with the Annex F bit count and step size for the frame's
-`L`, returning each value together with its width so the bit-prioritization step cannot be given mismatched widths. `None` for
-`L` outside 9 to 56.
-*(Reference: `src/ambe/float/tia_102_baba/quantize.rs` -> `[@ANCHOR: quantize_gain_vector]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `previous_m` | `&[f64]` | The previous frame's amplitudes, harmonic 1 first; borrowed. |
+| `l_hat_prev` | `u32` | Number of harmonics of the previous frame (the length of `previous_m` used). |
+| `j` | `u32` | Harmonic index, 0 or more. |
 
-`higher_order_coefficient_positions` lists the `(block, position)` of every higher-order DCT coefficient `C_{i,k}` for
-`k >= 2`, in the order Annex G allocates bits: all of block 1 first, then block 2, and so on.
-*(Reference: `src/ambe/float/tia_102_baba/quantize.rs` -> `[@ANCHOR: higher_order_coefficient_positions]`)*
+**Returns:** `f64`, the base-2 logarithm. **Errors:** panics if `previous_m` is shorter than `l_hat_prev` or empty while `j` is 1 or more; a non-positive amplitude gives `-inf` or NaN (the caller keeps amplitudes positive). **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
 
-`quantize_higher_order_coefficients` quantizes those coefficients (Eq. 63). The step size is the Table 3 multiplier for the
-coefficient's bit count times the Table 4 standard deviation for its position. Coefficients allocated 0 bits are not transmitted
-and are left out of the result. It returns `None` for an out-of-range `L` or inconsistent tables.
-*(Reference: `src/ambe/float/tia_102_baba/quantize.rs` -> `[@ANCHOR: quantize_higher_order_coefficients]`)*
+**Location:** `src/ambe/float/tia_102_baba/prediction.rs`. **Signature:** `fn previous_log2_amplitude(previous_m: &[f64], l_hat_prev: u32, j: u32) -> f64`. **See also:** `predicted_and_bias_correction`; test `prediction_coefficient_matches_eq55_in_all_three_branches` (`ambe/float/tia_102_baba/prediction.rs`).
+
+#### `predicted_and_bias_correction` [@ANCHOR: predicted_and_bias_correction]
+
+Returns the two terms that the encoder (Eq. 54) and the decoder (Eq. 77) both need, computed once: the previous frame's log amplitude interpolated at harmonic `l`'s position on the previous frame's harmonic scale (Eq. 52-53) times `rho`, and the frame-wide bias, `rho / L` times the same interpolation summed over all harmonics. The two directions use them with opposite signs.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `l` | `u32` | Harmonic of the current frame, 1 to `l_hat_curr`. |
+| `l_hat_curr` | `u32` | Number of harmonics of the current frame. |
+| `l_hat_prev` | `u32` | Number of harmonics of the previous frame. |
+| `previous_m` | `&[f64]` | The previous frame's amplitudes. |
+
+**Returns:** `(f64, f64)`: the predicted log2 amplitude of harmonic `l` and the bias correction. **Errors:** panics under the same conditions as `previous_log2_amplitude`. **Special concerns:** private and pure; the bias sum is recomputed for each `l`, which costs `L` interpolations per harmonic. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/prediction.rs`. **Signature:** `fn predicted_and_bias_correction(l: u32, l_hat_curr: u32, l_hat_prev: u32, previous_m: &[f64]) -> (f64, f64)`. **See also:** `prediction_coefficient`, `previous_log2_amplitude`; test `previous_log2_amplitude_applies_both_spec_boundary_assumptions` (`ambe/float/tia_102_baba/prediction.rs`).
+
+#### `gain_vector_dct` [@ANCHOR: gain_vector_dct]
+
+The second-stage 6-point transform of Eq. 61: `G_m = (1/6) sum_i R_i cos(pi (m-1)(i-0.5) / 6)` over the six per-block DC terms `R_i`, giving the gain vector `G_1..G_6`. `G_1` is the mean level and is quantized separately.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `r_hat` | `&[f64; 6]` | The six block DC terms `R_i`. |
+
+**Returns:** `[f64; 6]`, `G_1..G_6`. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/mod.rs`. **Signature:** `pub fn gain_vector_dct(r_hat: &[f64; 6]) -> [f64; 6]`. **See also:** `inverse_gain_vector_dct`; test `gain_vector_dct_of_a_constant_input_is_zero_except_the_first_coefficient` (`ambe/float/tia_102_baba/mod.rs`).
+
+#### `partition_into_blocks` [@ANCHOR: partition_into_blocks]
+
+Splits the `L` prediction residuals into six consecutive blocks whose lengths come from Annex J (Eq. 58-59), so that each block can be transformed and quantized on its own.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `residuals` | `&[f64]` | The `L` residuals, harmonic 1 first; copied into the blocks. |
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+
+**Returns:** `Option<[Vec<f64>; 6]>`. **Errors:** `None` for `l` outside 9 to 56 or a residual slice whose length is not `l`. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/quantize.rs`. **Signature:** `pub fn partition_into_blocks(residuals: &[f64], l: u32) -> Option<[Vec<f64>; 6]>`. **See also:** `block_dct`, `block_lengths_for_l`; test `quantize_higher_order_coefficients` (`ambe/float/tia_102_baba/quantize.rs`).
+
+#### `block_dct` [@ANCHOR: block_dct]
+
+The per-block DCT of Eq. 60: `C_k = (1/J) sum_j c_j cos(pi (k-1)(j-0.5) / J)` for a block of any length `J`. An empty block gives an empty result. The first coefficient is the block's mean and becomes the DC term `R_i` for `gain_vector_dct`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `&[f64]` | The block's residuals. |
+
+**Returns:** `Vec<f64>` of the same length, `C_1..C_J`. **Errors:** none. **Special concerns:** public and pure; cost is `J` squared cosines. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/quantize.rs`. **Signature:** `pub fn block_dct(c: &[f64]) -> Vec<f64>`. **See also:** `inverse_block_dct`, `partition_into_blocks`; test `partition_into_blocks_refuses_a_mismatched_residual_count` (`ambe/float/tia_102_baba/quantize.rs`).
+
+#### `saturating_uniform_quantize` [@ANCHOR: saturating_uniform_quantize]
+
+The quantizer shared by Eq. 62 and 63: it divides by the step size, floors, and offsets by `2^(bits-1)`, with values below the range going to 0 and values above to `2^bits - 1` (saturation, never wrap). It needs at least 1 bit: Annex F never allocates 0 bits to a gain element, and the higher-order caller skips 0-bit entries before calling it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `value` | `f64` | The value to quantize. |
+| `bits` | `u8` | Width of the result, 1 to 31. |
+| `step_size` | `f64` | Quantizer step, positive. |
+
+**Returns:** `u32` in `0..2^bits`. **Errors:** panics (shift overflow) if `bits` is 0; a zero `step_size` gives infinite quotient and saturates. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/quantize.rs`. **Signature:** `fn saturating_uniform_quantize(value: f64, bits: u8, step_size: f64) -> u32`. **See also:** `dequantize_uniform`; test `block_dct_of_a_constant_block_is_zero_except_the_first_coefficient` (`ambe/float/tia_102_baba/quantize.rs`).
+
+#### `quantize_gain_vector` [@ANCHOR: quantize_gain_vector]
+
+Quantizes the five non-DC gain elements `G_2..G_6` with the Annex F bit count and step size for the frame's `L`, returning each value together with its width so the bit-prioritization step cannot be given mismatched widths.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `g_hat` | `&[f64; 6]` | The gain vector from `gain_vector_dct`; `G_1` is not quantized here. |
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+
+**Returns:** `Option<[(u32, u8); 5]>`: (quantizer value, bit width) for `G_2..G_6`. **Errors:** `None` for `l` outside 9 to 56. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/quantize.rs`. **Signature:** `pub fn quantize_gain_vector(g_hat: &[f64; 6], l: u32) -> Option<[(u32, u8); 5]>`. **See also:** `reconstruct_gain_vector`, `gain_bit_allocation`; test `end_to_end_pipeline_with_a_constant_residual_input_quantizes_to_the_zero_bin` (`ambe/float/tia_102_baba/quantize.rs`).
+
+#### `higher_order_coefficient_positions` [@ANCHOR: higher_order_coefficient_positions]
+
+Lists the `(block, position)` of every higher-order DCT coefficient `C_{i,k}` for `k >= 2`, in the order Annex G allocates bits: all of block 1 first, then block 2, and so on. The quantizer and the reconstruction both zip this list with the bit allocation table, so they agree on which value belongs where.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+
+**Returns:** `Option<Vec<(usize, usize)>>`: block index (0-based) and position `k` (1-based, from 2). **Errors:** `None` for `l` outside 9 to 56. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/quantize.rs`. **Signature:** `pub fn higher_order_coefficient_positions(l: u32) -> Option<Vec<(usize, usize)>>`. **See also:** `quantize_higher_order_coefficients`, `reconstruct_higher_order_coefficients`; test `quantize_gain_vector_element_uses_annex_f_and_stays_in_range` (`ambe/float/tia_102_baba/quantize.rs`).
+
+#### `quantize_higher_order_coefficients` [@ANCHOR: quantize_higher_order_coefficients]
+
+Quantizes the higher-order DCT coefficients (Eq. 63). The step size is the Table 3 multiplier for the coefficient's bit count times the Table 4 standard deviation for its position. Coefficients allocated 0 bits are not transmitted and are left out of the result.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `dct_blocks` | `&[Vec<f64>; 6]` | The six blocks of DCT coefficients from `block_dct`. |
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+
+**Returns:** `Option<Vec<(u32, u8)>>`: (quantizer value, bit width) for each coefficient that carries bits, in Annex G order. **Errors:** `None` for an out-of-range `l` or inconsistent tables (the allocation and position lists differ in length, or a block is shorter than expected). **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/quantize.rs`. **Signature:** `pub fn quantize_higher_order_coefficients(dct_blocks: &[Vec<f64>; 6], l: u32) -> Option<Vec<(u32, u8)>>`. **See also:** `higher_order_coefficient_positions`, `reconstruct_higher_order_coefficients`; test `quantize_gain_vector_element_uses_annex_f_and_stays_in_range` (`ambe/float/tia_102_baba/quantize.rs`).
 
 ### Reconstruction (decoder, and the encoder's local decoder)
 
-`dequantize_uniform` is the reverse of the quantizer, for Eq. 68 and 71: the centre of the quantizer bin, `step * (q - 2^(bits-1) +
-0.5)`, and 0 when no bits were sent.
-*(Reference: `src/ambe/float/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: dequantize_uniform]`)*
+#### `dequantize_uniform` [@ANCHOR: dequantize_uniform]
 
-`reconstruct_gain_vector` rebuilds `G_1..G_6` (Eq. 68): `G_1` is the Annex E level at index `b_hat_2`, and `G_2..G_6` are
-dequantized with the same widths and steps the quantizer used. `None` for an invalid `b2` or `L`.
-*(Reference: `src/ambe/float/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: reconstruct_gain_vector]`)*
+The reverse of the quantizer, for Eq. 68 and 71: the centre of the quantizer bin, `step * (q - 2^(bits-1) + 0.5)`, and 0 when no bits were sent.
 
-`inverse_gain_vector_dct` recovers the six block DC terms `R_i` from `G` (Eq. 69-70), the inverse of `gain_vector_dct`.
-*(Reference: `src/ambe/float/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: inverse_gain_vector_dct]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `quantizer_value` | `u32` | The received integer. |
+| `bits` | `u8` | Width in bits; 0 means nothing was sent. |
+| `step_size` | `f64` | The step the quantizer used. |
 
-`inverse_block_dct` is the inverse of `block_dct` for one block of any length (Eq. 73-74).
-*(Reference: `src/ambe/float/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: inverse_block_dct]`)*
+**Returns:** `f64`, the reconstructed value. **Errors:** none. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
 
-`reconstruct_higher_order_coefficients` dequantizes all higher-order coefficients (Eq. 71-72) into six blocks, taking one value per
-position that was allocated bits and leaving zero-bit positions at 0. The first slot of each block, the DC term, stays 0 here and is
-filled in by the caller from `R_i`. It returns `None` if the number of values does not match the positions that carry bits.
-*(Reference: `src/ambe/float/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: reconstruct_higher_order_coefficients]`)*
+**Location:** `src/ambe/float/tia_102_baba/reconstruct.rs`. **Signature:** `fn dequantize_uniform(quantizer_value: u32, bits: u8, step_size: f64) -> f64`. **See also:** `saturating_uniform_quantize`; test `reconstruct_spectral_amplitudes` (`ambe/float/tia_102_baba/reconstruct.rs`).
 
-`reconstruct_spectral_amplitudes` is the full chain (Eq. 67-79): gain vector, inverse gain DCT, higher-order coefficients with
-`R_i` inserted as each block's DC term, inverse block DCTs to the residuals `T_l`, then adding the prediction from the previous
-frame in the log2 domain and exponentiating to get `M_l` for `l = 1..=L`. The encoder runs it too so its history matches the
-decoder's. `None` for invalid inputs.
-*(Reference: `src/ambe/float/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: reconstruct_spectral_amplitudes]`)*
+#### `reconstruct_gain_vector` [@ANCHOR: reconstruct_gain_vector]
+
+Rebuilds `G_1..G_6` (Eq. 68): `G_1` is the Annex E level at index `b_hat_2`, and `G_2..G_6` are dequantized with the same widths and steps the quantizer used.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `b2` | `u8` | The `b_hat_2` index into the Annex E gain levels. |
+| `gain_values` | `[u32; 5]` | Quantizer values of `G_2..G_6`. |
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+
+**Returns:** `Option<[f64; 6]>`. **Errors:** `None` for an invalid `b2` or `l`. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/reconstruct.rs`. **Signature:** `pub fn reconstruct_gain_vector(b2: u8, gain_values: [u32; 5], l: u32) -> Option<[f64; 6]>`. **See also:** `quantize_gain_vector`; test `block_dct_and_its_inverse_round_trip_real_asymmetric_inputs_of_varying_length` (`ambe/float/tia_102_baba/reconstruct.rs`).
+
+#### `inverse_gain_vector_dct` [@ANCHOR: inverse_gain_vector_dct]
+
+Recovers the six block DC terms `R_i` from the gain vector `G` (Eq. 69-70), the inverse of `gain_vector_dct`: a cosine sum with weight 1 for `G_1` and 2 for the rest.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `g_hat` | `&[f64; 6]` | The gain vector `G_1..G_6`. |
+
+**Returns:** `[f64; 6]`, `R_1..R_6`. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/reconstruct.rs`. **Signature:** `pub fn inverse_gain_vector_dct(g_hat: &[f64; 6]) -> [f64; 6]`. **See also:** `gain_vector_dct`; test `dequantize_uniform_matches_eq68_71_and_treats_zero_bits_as_zero` (`ambe/float/tia_102_baba/reconstruct.rs`).
+
+#### `inverse_block_dct` [@ANCHOR: inverse_block_dct]
+
+The inverse of `block_dct` for one block of any length (Eq. 73-74): a cosine sum with weight 1 for the first coefficient and 2 for the rest. An empty block gives an empty result.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `dct_coeffs` | `&[f64]` | The block's DCT coefficients `C_1..C_J`. |
+
+**Returns:** `Vec<f64>` of `J` residuals. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/reconstruct.rs`. **Signature:** `pub fn inverse_block_dct(dct_coeffs: &[f64]) -> Vec<f64>`. **See also:** `block_dct`; test `gain_vector_dct_and_its_inverse_round_trip_a_real_asymmetric_input` (`ambe/float/tia_102_baba/reconstruct.rs`).
+
+#### `reconstruct_higher_order_coefficients` [@ANCHOR: reconstruct_higher_order_coefficients]
+
+Dequantizes all higher-order coefficients (Eq. 71-72) into six blocks, taking one value per position that was allocated bits and leaving zero-bit positions at 0. The first slot of each block, the DC term, stays 0 here and is filled in by the caller from `R_i`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `quantized_values` | `&[u32]` | One value per position with a non-zero bit allocation, in Annex G order. |
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+
+**Returns:** `Option<[Vec<f64>; 6]>`. **Errors:** `None` if `l` is out of range, the tables are inconsistent, or the number of values does not match the positions that carry bits (too few, or values left over). **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/reconstruct.rs`. **Signature:** `pub fn reconstruct_higher_order_coefficients(quantized_values: &[u32], l: u32) -> Option<[Vec<f64>; 6]>`. **See also:** `quantize_higher_order_coefficients`; test `reconstruct_gain_vector_uses_annex_e_for_g1_and_annex_f_for_the_rest` (`ambe/float/tia_102_baba/reconstruct.rs`).
+
+#### `reconstruct_spectral_amplitudes` [@ANCHOR: reconstruct_spectral_amplitudes]
+
+The full decoding chain for the spectral amplitudes (Eq. 67-79): gain vector, inverse gain DCT, higher-order coefficients with `R_i` inserted as each block's DC term, inverse block DCTs to the residuals `T_l`, then adding the prediction from the previous frame in the log2 domain and exponentiating to get `M_l` for `l = 1..=L`. The encoder runs it too, so its history matches the decoder's.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `b2` | `u8` | `b_hat_2`, the gain level index. |
+| `gain_values` | `[u32; 5]` | Quantizer values of `G_2..G_6`. |
+| `higher_order_quantized_values` | `&[u32]` | Values of the higher-order coefficients. |
+| `l_hat_curr` | `u32` | Harmonics in this frame. |
+| `l_hat_prev` | `u32` | Harmonics in the previous frame. |
+| `previous_m` | `&[f64]` | The previous frame's amplitudes. |
+
+**Returns:** `Option<Vec<f64>>` of `l_hat_curr` amplitudes. **Errors:** `None` for invalid inputs (any step above returning `None`, or a residual count that differs from `l_hat_curr`). **Special concerns:** public and pure; the caller keeps the previous frame's amplitudes between frames. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/reconstruct.rs`. **Signature:** `pub fn reconstruct_spectral_amplitudes(b2: u8, gain_values: [u32; 5], higher_order_quantized_values: &[u32], l_hat_curr: u32, l_hat_prev: u32, previous_m: &[f64]) -> Option<Vec<f64>>`. **See also:** `predicted_and_bias_correction`, `reconstruct_gain_vector`, `inverse_block_dct`; test `reconstruct_gain_vector_uses_annex_e_for_g1_and_annex_f_for_the_rest` (`ambe/float/tia_102_baba/reconstruct.rs`).
 
 ### Annex tables and lookups
 
-`quantize_gain_index` returns `b_hat_2`: the index of the Annex E level (64 of them) closest to `G_1`. On an exact tie the lower
-index wins.
-*(Reference: `src/ambe/float/tia_102_baba/tables.rs` -> `[@ANCHOR: quantize_gain_index]`)*
+#### `quantize_gain_index` [@ANCHOR: quantize_gain_index]
 
-`block_lengths_for_l` returns the six block lengths of Annex J for `L` in 9 to 56 (they sum to `L` and never decrease with
-frequency), and `None` outside that range.
-*(Reference: `src/ambe/float/tia_102_baba/tables.rs` -> `[@ANCHOR: block_lengths_for_l]`)*
+Returns `b_hat_2`, the index of the Annex E gain level (64 levels) closest to `G_1`, the mean level of the frame. On an exact tie the lower index wins. It is a linear search over the table.
 
-`gain_bit_allocation` returns Annex F's bit count and step size for gain element `m` (2 to 6) at harmonic count `L`; `None`
-outside those ranges.
-*(Reference: `src/ambe/float/tia_102_baba/tables.rs` -> `[@ANCHOR: gain_bit_allocation]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `g_hat_1` | `f64` | The gain vector's first element. |
 
-`higher_order_bit_allocation` returns Annex G's list of `L - 6` bit counts, one per higher-order coefficient in the order of
-`higher_order_coefficient_positions`. Some entries are 0 (not transmitted). `None` outside 9 to 56.
-*(Reference: `src/ambe/float/tia_102_baba/tables.rs` -> `[@ANCHOR: higher_order_bit_allocation]`)*
+**Returns:** `u8`, an index 0..=63. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
 
-`higher_order_step_multiplier` is Table 3: the step size, as a multiple of the coefficient's standard deviation, for 1 to 10 bits
-(for example 0.40 at 4 bits). `None` for 0 bits or more than 10.
-*(Reference: `src/ambe/float/tia_102_baba/tables.rs` -> `[@ANCHOR: higher_order_step_multiplier]`)*
+**Location:** `src/ambe/float/tia_102_baba/tables.rs`. **Signature:** `pub fn quantize_gain_index(g_hat_1: f64) -> u8`. **See also:** `reconstruct_gain_vector`; test `gain_quantizer_levels_is_strictly_monotonically_increasing` (`ambe/float/tia_102_baba/tables.rs`).
 
-`higher_order_coefficient_sigma` is Table 4: the standard deviation of the `k`th coefficient of a block, for `k` 2 to 10, the same
-for every block. `None` otherwise.
-*(Reference: `src/ambe/float/tia_102_baba/tables.rs` -> `[@ANCHOR: higher_order_coefficient_sigma]`)*
+#### `block_lengths_for_l` [@ANCHOR: block_lengths_for_l]
+
+Returns the six block lengths of Annex J for a frame with `L` harmonics. The lengths sum to `L` and never decrease with frequency. Quantization and reconstruction both use it to split and join the residual blocks.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+
+**Returns:** `Option<[u32; 6]>`. **Errors:** `None` outside 9 to 56. **Special concerns:** public and pure; a table lookup. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/tables.rs`. **Signature:** `pub fn block_lengths_for_l(l: u32) -> Option<[u32; 6]>`. **See also:** `partition_into_blocks`; test `gain_and_higher_order_bit_allocation_match_annex_f_g_for_recurring_l_values` (`ambe/float/tia_102_baba/tables.rs`).
+
+#### `gain_bit_allocation` [@ANCHOR: gain_bit_allocation]
+
+Returns Annex F's bit count and quantizer step size for gain element `m` of a frame with `L` harmonics. The quantizer and the reconstruction read the same table, which is how both sides agree on the widths.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+| `m` | `u32` | Gain element number, 2 to 6 (element 1 is coded with the Annex E levels instead). |
+
+**Returns:** `Option<(u8, f64)>`: (bits, step size). **Errors:** `None` outside those ranges. **Special concerns:** public and pure; a table lookup. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/tables.rs`. **Signature:** `pub fn gain_bit_allocation(l: u32, m: u32) -> Option<(u8, f64)>`. **See also:** `quantize_gain_vector`, `reconstruct_gain_vector`; test `block_lengths_for_l_refuses_out_of_range_values_rather_than_guessing` (`ambe/float/tia_102_baba/tables.rs`).
+
+#### `higher_order_bit_allocation` [@ANCHOR: higher_order_bit_allocation]
+
+Returns Annex G's list of `L - 6` bit counts, one per higher-order coefficient, in the order of `higher_order_coefficient_positions`. Some entries are 0, meaning the coefficient is not transmitted.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `l` | `u32` | Number of harmonics, 9 to 56. |
+
+**Returns:** `Option<&'static [u8]>`, borrowed from the static table. **Errors:** `None` outside 9 to 56. **Special concerns:** public and pure; a table lookup. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/tables.rs`. **Signature:** `pub fn higher_order_bit_allocation(l: u32) -> Option<&'static [u8]>`. **See also:** `higher_order_coefficient_positions`; test `gain_bit_allocation_refuses_out_of_range_values_rather_than_guessing` (`ambe/float/tia_102_baba/tables.rs`).
+
+#### `higher_order_step_multiplier` [@ANCHOR: higher_order_step_multiplier]
+
+Returns Table 3, the quantizer step size as a multiple of the coefficient's standard deviation, for 1 to 10 bits (for example 0.40 at 4 bits).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `bits` | `u8` | Bits allocated to the coefficient, 1 to 10. |
+
+**Returns:** `Option<f64>`. **Errors:** `None` for 0 bits or more than 10. **Special concerns:** public and pure; a table lookup. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/tables.rs`. **Signature:** `pub fn higher_order_step_multiplier(bits: u8) -> Option<f64>`. **See also:** `higher_order_coefficient_sigma`; test `higher_order_bit_allocation_refuses_out_of_range_values_rather_than_guessing` (`ambe/float/tia_102_baba/tables.rs`).
+
+#### `higher_order_coefficient_sigma` [@ANCHOR: higher_order_coefficient_sigma]
+
+Returns Table 4, the standard deviation of the `k`th DCT coefficient of a block, for `k` 2 to 10, the same for every block. The step size of a coefficient is this times `higher_order_step_multiplier`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `k` | `u32` | Coefficient position within the block, 2 to 10. |
+
+**Returns:** `Option<f64>`. **Errors:** `None` for `k` outside 2 to 10. **Special concerns:** public and pure; a table lookup. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/tables.rs`. **Signature:** `pub fn higher_order_coefficient_sigma(k: u32) -> Option<f64>`. **See also:** `higher_order_step_multiplier`; test `higher_order_step_multiplier_matches_table_3_and_refuses_out_of_range_bits` (`ambe/float/tia_102_baba/tables.rs`).
 
 ### Spectral amplitude enhancement and smoothing (sections 8 and 9)
 
 The decoder improves the reconstructed amplitudes before synthesis, without feeding the result back into its prediction history.
-`weight` is `W_l` of Eq. 107, the raw enhancement factor for a harmonic, computed from its amplitude and the two frame energies
-`R_M0` and `R_M1`. It must not be called with `R_M0 = 0`.
-*(Reference: `src/ambe/float/tia_102_baba/enhancement.rs` -> `[@ANCHOR: weight]`)*
+#### `weight` [@ANCHOR: weight]
 
-`enhance_spectral_amplitudes` (Eq. 105-110) leaves harmonics up to `L/8` alone, multiplies the others by `W_l` limited to 0.5 to
-1.2, and then rescales everything so the total energy equals the input's. A silent frame is returned unchanged, since the formulas
-would otherwise divide zero by zero.
-*(Reference: `src/ambe/float/tia_102_baba/enhancement.rs` -> `[@ANCHOR: enhance_spectral_amplitudes]`)*
+Computes `W_l` of Eq. 107, the raw spectral enhancement factor of one harmonic from its amplitude and the two frame energies `R_M0` and `R_M1`: `sqrt(M_l) * (0.96 pi (R_M0^2 + R_M1^2 - 2 R_M0 R_M1 cos(omega0 l)) / (omega0 R_M0 (R_M0^2 - R_M1^2)))^0.25`. The caller limits it to 0.5 to 1.2.
 
-`adaptive_voicing_threshold` is `V_M` (Eq. 112): infinite (never force a decision) for a clean frame (rate at most 0.005 and at most
-4 errors), `45.255 S_E^0.375 / exp(277.26 rate)` for a mildly damaged one (rate at most 0.0125 and no errors corrected in `u_hat_4`), and `1.414 S_E^0.375` otherwise.
-*(Reference: `src/ambe/float/tia_102_baba/enhancement.rs` -> `[@ANCHOR: adaptive_voicing_threshold]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `m_l` | `f64` | Amplitude of the harmonic. |
+| `l` | `f64` | Harmonic number. |
+| `omega0_hat` | `f64` | Fundamental in radians per sample. |
+| `r_m0` | `f64` | Frame energy `R_M0`. |
+| `r_m1` | `f64` | Energy weighted by the harmonic's cosine, `R_M1`. |
 
-`update_amplitude_threshold` is `tau_M` (Eq. 115): 20480 for a clean frame (rate at most 0.005 and at most 6 errors), otherwise
-`6000 - 300 * errors + previous tau_M`.
-*(Reference: `src/ambe/float/tia_102_baba/enhancement.rs` -> `[@ANCHOR: update_amplitude_threshold]`)*
+**Returns:** `f64`, the unlimited weight (may be NaN or infinite when `R_M0^2 = R_M1^2`). **Errors:** none; it must not be called with `R_M0 = 0` (`enhance_spectral_amplitudes` returns early for a silent frame). **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
 
-`amplitude_smoothing_scale` is `gamma_M` (Eq. 116): 1 when `tau_M` exceeds the amplitude sum, otherwise `tau_M / A_M`.
-*(Reference: `src/ambe/float/tia_102_baba/enhancement.rs` -> `[@ANCHOR: amplitude_smoothing_scale]`)*
+**Location:** `src/ambe/float/tia_102_baba/enhancement.rs`. **Signature:** `fn weight(m_l: f64, l: f64, omega0_hat: f64, r_m0: f64, r_m1: f64) -> f64`. **See also:** `enhance_spectral_amplitudes`; test `enhance_spectral_amplitudes_preserves_total_energy` (`ambe/float/tia_102_baba/enhancement.rs`).
 
-`SynthesisState::finalize_parameters` chains those steps into the final synthesis inputs: enhancement, then the `S_E` update and
-the voicing smoothing with `V_M`, then the amplitude sum, `tau_M` and `gamma_M` scaling. It stores the result for a later frame
-repeat and returns the smoothed voicing and final amplitudes, or `None` if the two input lengths differ.
-*(Reference: `src/ambe/float/tia_102_baba/synthesis.rs` -> `[@ANCHOR: SynthesisState::finalize_parameters]`)*
+#### `enhance_spectral_amplitudes` [@ANCHOR: enhance_spectral_amplitudes]
+
+Improves the reconstructed amplitudes before synthesis (Eq. 105-110), without feeding the result back into the decoder's prediction history. Harmonics up to `L/8` are left alone, the others are multiplied by `W_l` limited to 0.5 to 1.2, and then everything is rescaled so the total energy equals the input's. A silent frame is returned unchanged, since the formulas would otherwise divide zero by zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `spectral_amplitudes` | `&[f64]` | The reconstructed amplitudes `M_l`, harmonic 1 first; the length is `L`. |
+| `omega0_hat` | `f64` | Fundamental in radians per sample. |
+
+**Returns:** `Vec<f64>` of the same length. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/enhancement.rs`. **Signature:** `pub fn enhance_spectral_amplitudes(spectral_amplitudes: &[f64], omega0_hat: f64) -> Vec<f64>`. **See also:** `weight`, `SynthesisState::finalize_parameters`; test `energy_and_scaled_energy_match_eq105_106_at_a_hand_computed_value` (`ambe/float/tia_102_baba/enhancement.rs`).
+
+#### `adaptive_voicing_threshold` [@ANCHOR: adaptive_voicing_threshold]
+
+Computes `V_M` (Eq. 112), the level above which a harmonic's voiced/unvoiced decision is forced to voiced when the frame is damaged. The value is infinite (never force a decision) for a clean frame (error rate at most 0.005 and at most 4 errors), `45.255 S_E^0.375 / exp(277.26 rate)` for a mildly damaged one (rate at most 0.0125 and no errors corrected in `u_hat_4`), and `1.414 S_E^0.375` otherwise.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `errors` | `&FrameErrors` | This frame's error estimate: `total`, `rate`, `golay_init`, `hamming_init`. |
+| `s_e` | `f64` | The running local energy `S_E`. |
+
+**Returns:** `f64`, the threshold; `f64::INFINITY` for a clean frame. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/enhancement.rs`. **Signature:** `pub fn adaptive_voicing_threshold(errors: &FrameErrors, s_e: f64) -> f64`. **See also:** `estimate_errors`, `SynthesisState::finalize_parameters`; test `errors_with` (`ambe/float/tia_102_baba/enhancement.rs`).
+
+#### `update_amplitude_threshold` [@ANCHOR: update_amplitude_threshold]
+
+Computes `tau_M` (Eq. 115), the limit on the amplitude sum used to smooth a damaged frame: 20480 for a clean frame (rate at most 0.005 and at most 6 errors), otherwise `6000 - 300 * errors + previous tau_M`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `errors` | `&FrameErrors` | This frame's error estimate. |
+| `previous_tau_m` | `f64` | `tau_M` of the previous frame. |
+
+**Returns:** `f64`, the new `tau_M`; the caller stores it for the next frame. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/enhancement.rs`. **Signature:** `pub fn update_amplitude_threshold(errors: &FrameErrors, previous_tau_m: f64) -> f64`. **See also:** `amplitude_smoothing_scale`; test `smooth_voicing_decision_only_ever_forces_voiced_never_unvoiced` (`ambe/float/tia_102_baba/enhancement.rs`).
+
+#### `amplitude_smoothing_scale` [@ANCHOR: amplitude_smoothing_scale]
+
+Computes `gamma_M` (Eq. 116), the scale that keeps the amplitude sum within `tau_M`: 1 when `tau_M` exceeds the amplitude sum, otherwise `tau_M / A_M`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `tau_m` | `f64` | The threshold from `update_amplitude_threshold`. |
+| `a_m` | `f64` | The sum of the enhanced amplitudes `A_M`; must be positive when `tau_m` is not larger. |
+
+**Returns:** `f64` in 0..=1. **Errors:** none; a zero `a_m` is not divided by unless `tau_m` is also zero or negative, so for normal inputs the result is finite. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/enhancement.rs`. **Signature:** `pub fn amplitude_smoothing_scale(tau_m: f64, a_m: f64) -> f64`. **See also:** `update_amplitude_threshold`; test `update_amplitude_threshold_matches_eq115_in_both_branches` (`ambe/float/tia_102_baba/enhancement.rs`).
+
+#### `SynthesisState::finalize_parameters` [@ANCHOR: SynthesisState::finalize_parameters]
+
+Chains the enhancement and smoothing steps into the final synthesis inputs: spectral amplitude enhancement (section 8), then the `S_E` update and the voiced/unvoiced smoothing with `V_M`, then the amplitude sum, `tau_M` and `gamma_M` scaling (section 9). It stores the result in `last_final_amplitudes` so a later repeated frame can reuse it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut SynthesisState` | Updated: `s_e`, `tau_m` and `last_final_amplitudes`. |
+| `reconstructed_amplitudes` | `&[f64]` | The decoded amplitudes `M_l`. |
+| `omega0_tilde` | `f64` | The decoded fundamental in radians per sample. |
+| `decoded_voiced` | `&[bool]` | Per-harmonic voiced flags; same length as the amplitudes. |
+| `errors` | `&FrameErrors` | This frame's error estimate. |
+
+**Returns:** `Option<(Vec<bool>, Vec<f64>)>`: the smoothed voiced flags and the final amplitudes. **Errors:** `None` if the two input lengths differ. **Special concerns:** private; mutates the decoder's cross-frame state, so frames must be fed in order and one `SynthesisState` belongs to one call stream (not shared between threads without outer locking). No I/O. No transmit side effects (the output is audio parameters).
+
+**Location:** `src/ambe/float/tia_102_baba/synthesis.rs`. **Signature:** `fn finalize_parameters(&mut self, reconstructed_amplitudes: &[f64], omega0_tilde: f64, decoded_voiced: &[bool], errors: &FrameErrors) -> Option<(Vec<bool>, Vec<f64>)>`. **See also:** `enhance_spectral_amplitudes`, `adaptive_voicing_threshold`, `update_amplitude_threshold`, `amplitude_smoothing_scale`; test `synthesize_comfort_frame_does_not_perturb_the_shared_noise_state` (`ambe/float/tia_102_baba/synthesis.rs`).
 
 ### Speech synthesis (section 11)
 
