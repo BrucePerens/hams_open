@@ -102,6 +102,7 @@ class DmarcReport(models.Model):
         return super().message_new(msg_dict, custom_values=vals)
 
     # [@ANCHOR: hams_base:COMM_process_dmarc_attachment]
+    @api.private
     @api.model
     def process_dmarc_attachment(self, attachment_name, attachment_data):
         """
