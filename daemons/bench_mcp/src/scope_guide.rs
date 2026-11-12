@@ -122,6 +122,59 @@ pub fn reference(s: &mut Link, args: &Value) -> Result<Value, String> {
     Ok(r)
 }
 
+/// `bench_scope_setup`: saves the scope's complete setup in one of its 20 internal slots (`save_slot`, `*SAV`) or recalls one (`recall_slot`, `*RCL`; 0 is
+/// the default setup), exports it to a file in the output directory (`export`, the `PNSU?` block) or restores it from a file there (`import`, a file name
+/// only, as `export` wrote it). The scope's USB file functions are not used.
+pub fn setup(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_setup]
+    let slot = |k: &str, lo: u64| match args.get(k) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .filter(|n| (lo..=20).contains(n))
+            .map(Some)
+            .ok_or(format!("{k} must be a whole number from {lo} to 20")),
+    };
+    let (save, recall) = (slot("save_slot", 1)?, slot("recall_slot", 0)?);
+    let export = args.get("export").and_then(Value::as_bool) == Some(true);
+    let import = match args.get("import") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(f)) if !f.is_empty() && !f.contains(['/', '\\']) && !f.starts_with('.') => Some(out.join(f)),
+        Some(_) => return Err("import must be the name of a file in the output directory, as export wrote it (no path)".into()),
+    };
+    let bytes = match &import {
+        Some(p) => Some(std::fs::read(p).map_err(|e| format!("read {}: {e}", p.display()))?),
+        None => None,
+    };
+    let mut r = json!({});
+    if let Some(n) = save {
+        s.send(&format!("*SAV {n}"))?;
+        r["saved_slot"] = json!(n);
+    }
+    if let Some(n) = recall {
+        s.send(&format!("*RCL {n}"))?;
+        r["recalled_slot"] = json!(n);
+    }
+    if export {
+        s.set_timeout_secs(30);
+        let data = s.block("PNSU?");
+        s.set_timeout_secs(10);
+        let data = data?;
+        let path = out.join(format!("setup_{}.set", stamp()));
+        std::fs::write(&path, &data).map_err(|e| format!("write {}: {e}", path.display()))?;
+        r["exported"] = json!({"file": path, "bytes": data.len()});
+    }
+    if let Some(b) = bytes {
+        s.send_block("PNSU ", &b)?;
+        r["imported_bytes"] = json!(b.len());
+    }
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    r["after"] =
+        json!({"timebase": readback(s, "TDIV?"), "trigger_mode": readback(s, "TRIG_MODE?")});
+    r["note"] = json!("a setup slot or file the scope refused shows in `after` as unchanged settings; the commands are from the SDS1000X-E programming guide and not yet checked on firmware 1.3.27");
+    Ok(r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,5 +261,56 @@ mod tests {
             assert!(reference(&mut l, &bad).is_err(), "{bad}");
         }
         assert_eq!(f.got("REF").len(), n);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_setup]
+    #[test]
+    fn a_setup_is_saved_recalled_exported_and_restored_from_a_file() {
+        let (f, mut l) = link();
+        let out = crate::testdir::scratch("scope_guide_setup");
+        l.send("TDIV 5us").unwrap();
+        let r = setup(&mut l, &json!({"save_slot": 3, "export": true}), &out).unwrap();
+        assert_eq!(r["saved_slot"], 3);
+        let file = r["exported"]["file"].as_str().unwrap().to_string();
+        assert!(std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("TDIV=5.00E-06S"));
+        l.send("TDIV 1ms").unwrap();
+        let name = std::path::Path::new(&file)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        let r = setup(&mut l, &json!({"import": name}), &out).unwrap();
+        assert_eq!(
+            r["after"]["timebase"], "TDIV 5.00E-06S",
+            "the file restored the setup"
+        );
+        l.send("TDIV 2ms").unwrap();
+        assert_eq!(
+            setup(&mut l, &json!({"recall_slot": 3}), &out).unwrap()["after"]["timebase"],
+            "TDIV 5.00E-06S"
+        );
+        assert_eq!(
+            setup(&mut l, &json!({"recall_slot": 0}), &out).unwrap()["after"]["timebase"],
+            "TDIV 1.00E-03S",
+            "slot 0 is the default"
+        );
+        let n = f.seen.lock().unwrap().len();
+        for bad in [
+            json!({"save_slot": 0}),
+            json!({"recall_slot": 21}),
+            json!({"import": "../x"}),
+            json!({"import": "missing.set"}),
+            json!({"save_slot": 2, "import": "/etc/passwd"}),
+        ] {
+            assert!(setup(&mut l, &bad, &out).is_err(), "{bad}");
+        }
+        assert_eq!(
+            f.seen.lock().unwrap().len(),
+            n,
+            "nothing sent for a bad call"
+        );
     }
 }

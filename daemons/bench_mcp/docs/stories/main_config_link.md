@@ -549,6 +549,17 @@ default timeout. Returns the payload. Errors: `bad block header` (the byte after
 indefinite-length form, which this function does not support), `block: <error>` when the data is short, and the errors of `send` and `byte`. A very
 large length asks for that much memory before reading. Tests: the block tests in `link.rs`.
 
+### `Link::send_block` [@ANCHOR: bench_mcp_link_send_block]
+
+Sends a command whose argument is binary data in the IEEE 488.2 definite-length format, the counterpart of `Link::block`. The scope's `PNSU` setup restore is the user: its data may hold any byte, including newlines, so it cannot go through `send`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `head` | `&str` | The command text before the block, for example `PNSU ` (the trailing space is the caller's). |
+| `data` | `&[u8]` | The payload, at most 999 999 999 bytes. |
+
+Writes `head`, then `#9` and the length as nine decimal digits, then the data unchanged, then the link's terminator (`\n` for the scope), in one write. Returns `Ok(())` or `send: <error>`. It reads nothing: a command that answers is read by the caller afterwards. Tests: `a_binary_block_goes_out_with_its_length_and_every_byte_intact` in `link.rs`, which checks the bytes a loopback server receives, newline and 0xFF included.
+
 ### `Link::raw_until_idle` [@ANCHOR: bench_mcp_link_raw_until_idle]
 
 Sends a command and reads a raw stream that has no header, such as the scope screenshot command `SCDP`, until the instrument goes quiet.

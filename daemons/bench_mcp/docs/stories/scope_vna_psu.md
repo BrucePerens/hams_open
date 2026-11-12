@@ -295,6 +295,20 @@ Every value is checked before the first command is sent. Returns `sent`, `readba
 
 Any value of the wrong type or range is refused (`<arg> must be ...`) before the first command is sent. Order sent: location, source, save, display, position, scale, close. Returns `sent`, `readback`, `note` and `settings` (every setting read back with `REFLA?`, `REFSR?`, `REFDS?`, `REFPO?`, `REFSC?`). There is no read of the stored trace and no compare in the guide, so none is offered. Test: `a_reference_is_selected_stored_shown_scaled_and_closed_in_the_guides_order` against the fake scope, which ignores display settings for a location with nothing stored, as the guide says.
 
+### `bench_mcp_scope_setup` [@ANCHOR: bench_mcp_scope_setup]
+
+`setup(s, args, out)` is `bench_scope_setup` (tier `read_config`): internal setup slots and a setup file through the SCPI link.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.save_slot` | integer 1 to 20 | `*SAV <n>`. |
+| `args.recall_slot` | integer 0 to 20 | `*RCL <n>`; 0 is the default setup. |
+| `args.export` | boolean | `PNSU?` read as a block (30 s limit) and written to `setup_<time>.set` in `out`. |
+| `args.import` | string, a file name | A file in `out` (no `/`, `\\`, or leading dot; otherwise `import must be the name of a file in the output directory...`) sent back as `PNSU #9<length><data>` with `Link::send_block`. |
+| `out` | `&Path` | The output directory. |
+
+The order is save, recall, export, import, so a slot can be saved and exported in one call. All values are checked and the import file is read before anything is sent. After the commands and 300 ms it reads `TDIV?` and `TRIG_MODE?` into `after`. Returns `saved_slot`, `recalled_slot`, `exported` (`file`, `bytes`), `imported_bytes`, `after`, `note`. The scope's reply to a refused slot or setup is nothing at all, so `after` is how the caller sees a refusal. Test: `a_setup_is_saved_recalled_exported_and_restored_from_a_file` against the fake scope.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.
