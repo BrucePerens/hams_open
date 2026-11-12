@@ -175,6 +175,8 @@ pub struct VirtualRig {
     /// Kenwood: the VFO `FR` selected for receive (0 A, 1 B) and `FT` for transmit; split is
     /// when they differ.
     kenwood_rx_vfo: u8,
+    /// The band the transmitter follows on a Yaesu with `yaesu.tx_band`: 0 Main, 1 Sub.
+    yaesu_tx_band: u8,
     kenwood_tx_vfo: u8,
     /// TS-890S: the bandscope settings and the sweep counter.
     ts890_scope: virtual_ts890::Ts890Scope,
@@ -219,6 +221,7 @@ impl VirtualRig {
                     level_ranges: Vec::new(),
                     clarifier: YaesuClarifier::RtXt,
                     split_st: false,
+                    tx_band: false,
                 }),
                 tokenizer: Tokenizer::default(),
             },
@@ -270,6 +273,7 @@ impl VirtualRig {
             scope: desc.scope.as_ref().map(ScopeSim::new),
             civ_b_selected: false,
             kenwood_rx_vfo: 0,
+            yaesu_tx_band: 0,
             kenwood_tx_vfo: 0,
             ts890_scope: virtual_ts890::Ts890Scope::default(),
         })
@@ -1170,6 +1174,13 @@ impl VirtualRig {
                 self.state.ptt = flag == "1";
                 None
             }
+            ("FT", "") if self.yaesu_tx_band_model() => {
+                Some(format!("FT{};", self.yaesu_tx_band))
+            }
+            ("FT", flag @ ("2" | "3")) if self.yaesu_tx_band_model() => {
+                self.yaesu_tx_band = u8::from(flag == "3");
+                None
+            }
             ("FT", "") => Some(format!("FT{};", u8::from(self.state.split))),
             ("FT", flag @ ("2" | "3")) => {
                 self.state.split = flag == "3";
@@ -1257,6 +1268,12 @@ impl VirtualRig {
             _ => Some("?;".to_string()),
         };
         reply.map(String::into_bytes).unwrap_or_default()
+    }
+
+    // [@ANCHOR: radioctl_virtual_yaesu_tx_band]
+    /// True when this Yaesu model's `FT` picks the transmitting band, Main or Sub (`yaesu.tx_band`).
+    fn yaesu_tx_band_model(&self) -> bool {
+        matches!(&self.wire, Wire::Yaesu { params, .. } if params.tx_band)
     }
 
     // [@ANCHOR: radioctl_virtual_yaesu_cf]

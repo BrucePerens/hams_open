@@ -5,7 +5,7 @@
 # Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
 # Gaps and open questions: Dual receiver: no split (FT selects the main or sub band transmitter), no read-power, levels (MG and PC are 000-255 here). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "levels", "identify", "receivers"]
 
 [rig]
 id = "yaesu-ftdx-5000"
@@ -15,6 +15,7 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 362
 frequency_digits = 8
+tx_band = true
 levels = { mic-gain = [0, 255], rf-power = [0, 255] }
 
 [timing]
@@ -69,6 +70,11 @@ code = "C"
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "this repository's radioctl design (family naming) and the model name in the guide and in Hamlib 4.6.2", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 1032 --dump-caps`." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.tx_band"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX5000 Series CAT Operation Reference Book', file FTDX5000_CAT_OM_ENG_1907-D.pdf, sha256 0641c84700fe6e38f58e91ebff542d8de6181e5bc7cf819ef089d15c35dd7532: FT FUNCTION TX, PDF p. 11 (set FT P1: 2 TX band is the Main (VFO-A) band, 3 the Sub (VFO-B) band; read FT; answer FT P2: 0 Main, 1 Sub)", note = "FT picks the transmitting band on this dual-receiver model, so `SetTxReceiver` sends FT2 or FT3 and `GetTxReceiver` reads FT. It is not split (no `split` capability). Unverified." }
 verified = { state = "unverified" }
 
 [[facts]]

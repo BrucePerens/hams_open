@@ -754,6 +754,10 @@ pub struct YaesuParams {
     /// True when split is the `ST` command (FT-891, FT-710, FTDX10, FTDX101: `ST1;` is on) instead
     /// of `FT2;`/`FT3;` (FT-991A and the models where `FT` picks the transmit VFO).
     pub split_st: bool,
+    /// True when `FT` picks the transmitting band, Main or Sub (`FT2;` Main, `FT3;` Sub; the read
+    /// answers `FT0;` or `FT1;`) instead of the VFO: FTDX5000 and FTDX9000. Read and set through
+    /// `Op::GetTxReceiver` and `Op::SetTxReceiver`.
+    pub tx_band: bool,
 }
 
 /// The command that switches the clarifier on a Yaesu newcat model.

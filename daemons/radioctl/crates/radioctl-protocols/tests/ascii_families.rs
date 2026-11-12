@@ -17,7 +17,7 @@ use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind};
 use radioctl_core::error::ErrorKind;
 use radioctl_core::op::{Observation, Op};
 use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Level, Vfo};
+use radioctl_core::units::{Hz, Level, Receiver, Vfo};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::virtual_rig::VirtualRig;
 
@@ -285,6 +285,59 @@ fn the_batch_ids_and_frequency_widths_match_the_sources_and_no_two_files_share_a
             "{id}"
         );
     }
+}
+
+// Tests [@ANCHOR: radioctl_yaesu_engine_tx_band]
+// Tests [@ANCHOR: radioctl_virtual_yaesu_tx_band]
+#[test]
+fn the_dual_band_yaesus_pick_the_transmit_band_with_ft_and_refuse_the_other_receiver_ops() {
+    for id in ["yaesu-ftdx-5000", "yaesu-ftdx-9000"] {
+        let desc = described(id);
+        assert!(desc.capabilities.has(Capability::Receivers), "{id}");
+        assert!(!desc.capabilities.has(Capability::Split), "{id}: FT is not split here");
+        let mut engine = engine_for(&desc).expect("engine");
+        let mut rig = VirtualRig::from_description(&desc).expect("virtual rig");
+        // The Main band is the power-on state.
+        assert_eq!(
+            read(engine.as_mut(), &mut rig, &Op::GetTxReceiver),
+            Observation::TxReceiver(Receiver::Main),
+            "{id}"
+        );
+        let sub = engine.encode(&Op::SetTxReceiver(Receiver::Sub)).expect("encode");
+        assert_eq!(sub.bytes, b"FT3;", "{id}");
+        let main = engine.encode(&Op::SetTxReceiver(Receiver::Main)).expect("encode");
+        assert_eq!(main.bytes, b"FT2;", "{id}");
+        write(engine.as_mut(), &mut rig, &Op::SetTxReceiver(Receiver::Sub));
+        assert_eq!(
+            engine.encode(&Op::GetTxReceiver).expect("encode").bytes,
+            b"FT;",
+            "{id}"
+        );
+        assert_eq!(
+            read(engine.as_mut(), &mut rig, &Op::GetTxReceiver),
+            Observation::TxReceiver(Receiver::Sub),
+            "{id}"
+        );
+        write(engine.as_mut(), &mut rig, &Op::SetTxReceiver(Receiver::Main));
+        assert_eq!(
+            read(engine.as_mut(), &mut rig, &Op::GetTxReceiver),
+            Observation::TxReceiver(Receiver::Main),
+            "{id}"
+        );
+        // Selecting a band to operate on and dual watch are not in these books.
+        for op in [
+            Op::SelectReceiver(Receiver::Sub),
+            Op::GetReceiver,
+            Op::SetDualWatch(true),
+            Op::GetDualWatch,
+        ] {
+            let err = engine.encode(&op).expect_err("refused");
+            assert_eq!(err.kind, ErrorKind::Unsupported, "{id} {op:?}");
+        }
+    }
+    // A model without the capability refuses it too.
+    let mut plain = engine_for(&described("yaesu-ftdx-3000")).expect("engine");
+    assert!(plain.encode(&Op::SetTxReceiver(Receiver::Sub)).is_err());
 }
 
 /// A description by id.
