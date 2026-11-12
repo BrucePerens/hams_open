@@ -22,6 +22,7 @@ use std::sync::OnceLock;
 
 use super::pitch::pitch_refinement_window;
 
+// [@ANCHOR: pitch_refinement_complex_struct]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Complex {
     re: f64,
@@ -84,6 +85,7 @@ fn window_dft_16384_direct(m: i32) -> f64 {
 /// A single analysis frame's own `S_w(m)` (Eq. 29): the 256-point DFT of `s(n)*w_R(n)`, for `m` in
 /// `-127..=128` (precomputed once per frame, the same "expensive input, compute once" reasoning
 /// `pitch::PitchAnalysisFrame` already uses for `s_LPF`).
+// [@ANCHOR: tia_102_baba_pitch_refinement_refinement_frame_struct]
 pub struct RefinementFrame {
     sw: [Complex; 256],
 }
@@ -248,6 +250,8 @@ pub fn refine_pitch(frame: &RefinementFrame, p_hat_i: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: pitch_refinement_complex_struct]
+    // Tests [@ANCHOR: tia_102_baba_pitch_refinement_refinement_frame_struct]
     use super::*;
 
     /// A synthetic signal built from real, exact sinusoidal harmonics of a known fundamental --

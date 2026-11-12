@@ -116,6 +116,7 @@ fn lowpass_filtered_sample(raw: &[f64], center: usize, n: i32) -> f64 {
 /// candidate set can reach. `r(-t) = r(t)` (shift `j` by `t`), so lags `0..=R_LAGS` are enough for every `n * P`
 /// in Eq. 5 and the linear interpolation of Eq. 8; tabulating them once turns the 203-candidate error table from
 /// roughly ten million multiply-adds into about fifty thousand.
+// [@ANCHOR: tia_102_baba_pitch_pitch_analysis_frame_struct]
 pub struct PitchAnalysisFrame {
     energy: f64,
     r_table: Vec<f64>,
@@ -355,6 +356,7 @@ pub fn choose_initial_pitch_estimate(p_hat_b: f64, ce_b: f64, p_hat_f: f64, ce_f
 
 #[cfg(test)]
 mod pitch_analysis_tests {
+    // Tests [@ANCHOR: tia_102_baba_pitch_pitch_analysis_frame_struct]
     use super::*;
 
     /// A synthetic periodic pulse train at period `period_samples` -- the simplest real signal

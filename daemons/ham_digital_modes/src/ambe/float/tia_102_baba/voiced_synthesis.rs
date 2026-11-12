@@ -93,6 +93,7 @@ fn phase_dither(noise: &NoiseState, l: u32) -> f64 {
 /// own encoder-side `FrameState::initial()` choice of a unity (not silent) starting spectral history:
 /// Annex A's own `M~_l(-1) = 1` (the *unenhanced* reconstructed amplitude, distinct from this
 /// struct's own `M_bar_l(-1)` the *enhanced* one) matches exactly.
+// [@ANCHOR: tia_102_baba_voiced_synthesis_voiced_state_struct]
 pub struct VoicedState {
     psi: [f64; MAX_HARMONICS],
     phi: [f64; MAX_HARMONICS],
@@ -281,6 +282,7 @@ impl Default for VoicedState {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: tia_102_baba_voiced_synthesis_voiced_state_struct]
     use super::*;
 
     /// `theta_l(N)` must land exactly on `phi_l(0)` (mod `2*pi`) -- that's the entire point of

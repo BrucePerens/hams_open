@@ -26,6 +26,7 @@ use super::pitch::pitch_refinement_window;
 /// `N` (section 11.1): the number of PCM samples in one synthesis frame, 20 ms at 8 kHz.
 pub const N: usize = 160;
 
+// [@ANCHOR: unvoiced_synthesis_complex_struct]
 #[derive(Clone, Copy)]
 struct Complex {
     re: f64,
@@ -94,6 +95,7 @@ pub(crate) fn advance_noise(u: i64) -> i64 {
 /// of the most recent 209 values -- `u(n)` for `n` in the current frame's own `-104..=104` -- built by
 /// [`Self::new`] for the first frame and shifted forward by [`Self::advance_frame`] (160 new samples,
 /// "shifted by 20 ms.") for every frame after that.
+// [@ANCHOR: tia_102_baba_unvoiced_synthesis_noise_state_struct]
 pub struct NoiseState {
     last: i64,
     window: VecDeque<i64>,
@@ -335,6 +337,7 @@ fn time_domain_at(samples: &[f64; 256], n: i32) -> f64 {
 /// window ("the shifted noise sequence for the current frame, described in Section 11.2" -- the
 /// spec's own words), not an independent one, so a single [`NoiseState`] must be shared between both
 /// halves of synthesis rather than each owning its own.
+// [@ANCHOR: tia_102_baba_unvoiced_synthesis_unvoiced_state_struct]
 pub struct UnvoicedState {
     previous_time_domain: [f64; 256],
 }
@@ -389,6 +392,9 @@ impl Default for UnvoicedState {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: unvoiced_synthesis_complex_struct]
+    // Tests [@ANCHOR: tia_102_baba_unvoiced_synthesis_noise_state_struct]
+    // Tests [@ANCHOR: tia_102_baba_unvoiced_synthesis_unvoiced_state_struct]
     use super::*;
 
     #[test]

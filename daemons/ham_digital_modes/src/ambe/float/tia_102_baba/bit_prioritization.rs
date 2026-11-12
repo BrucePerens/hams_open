@@ -208,6 +208,7 @@ fn read_bits(bits: &[bool], idx: &mut usize, n: usize) -> Option<u32> {
 
 /// [`deprioritize_bits`]'s own decoded parameters, one field per quantizer value
 /// [`prioritize_bits`] originally packed together.
+// [@ANCHOR: bit_prioritization_deprioritized_bits_struct]
 #[derive(Debug, PartialEq)]
 pub struct DeprioritizedBits {
     pub b0: u32,
@@ -289,6 +290,7 @@ pub fn deprioritize_bits(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: bit_prioritization_deprioritized_bits_struct]
     use super::*;
     use crate::ambe::float::tia_102_baba::tables;
 

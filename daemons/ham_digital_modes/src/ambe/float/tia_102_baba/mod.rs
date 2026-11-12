@@ -316,6 +316,7 @@ pub fn decode_code_vectors_chip(c: [u32; 8]) -> ([u32; 8], [u32; 7]) {
 /// [`Self::initial`] and `encode_frame`'s own returned state are the only ways to construct or
 /// advance one, so a caller can't build a `FrameState` with a `voiced`/`spectral_amplitudes` length
 /// that doesn't match its own `l_hat`.
+// [@ANCHOR: tia_102_baba_frame_state_struct]
 pub struct FrameState {
     xi_max: f64,
     l_hat: u32,
@@ -409,6 +410,7 @@ pub fn encode_frame_chip_wire(
 
 /// One frame's spectral amplitudes after prediction, block transforms and quantization (Eq. 54-64), and the amplitudes
 /// the decoder will reconstruct from them.
+// [@ANCHOR: tia_102_baba_quantized_amplitudes_struct]
 pub struct QuantizedAmplitudes {
     /// `b_hat_2`, the gain quantizer index.
     pub b2: u8,
@@ -565,6 +567,8 @@ pub fn encode_prioritized_bits(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: tia_102_baba_frame_state_struct]
+    // Tests [@ANCHOR: tia_102_baba_quantized_amplitudes_struct]
     use super::*;
 
     #[test]

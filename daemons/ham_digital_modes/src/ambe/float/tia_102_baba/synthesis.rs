@@ -33,6 +33,7 @@ use super::voiced_synthesis::VoicedState;
 /// first-branch value, which any real first frame (zero accumulated FEC errors, the only case that
 /// actually matters before a previous `tau_M` exists) reduces to regardless of the seed -- a reasoned
 /// default, not a guess.
+// [@ANCHOR: tia_102_baba_synthesis_synthesis_state_struct]
 pub struct SynthesisState {
     noise: NoiseState,
     unvoiced: UnvoicedState,
@@ -251,6 +252,7 @@ impl Default for SynthesisState {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: tia_102_baba_synthesis_synthesis_state_struct]
     use super::*;
 
     fn zero_errors() -> FrameErrors {

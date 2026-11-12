@@ -70,6 +70,7 @@ use crate::ambe::dvsi_p25fec::pitch_map::dequantize_fundamental_frequency_chip;
 /// own (rather than only fed straight into synthesis) so a caller -- notably this module's own
 /// round-trip test -- can assert exact parameter fidelity against what was encoded, not just that
 /// synthesis produced *some* finite PCM.
+// [@ANCHOR: tia_102_baba_decode_decoded_parameters_struct]
 pub struct DecodedParameters {
     pub omega0_tilde: f64,
     pub l_hat: u32,
@@ -87,6 +88,7 @@ pub struct DecodedParameters {
 /// repeat reuses the last real frame's own final parameters for actual speech synthesis; a mute
 /// bypasses speech synthesis entirely and emits real comfort noise instead
 /// ([`SynthesisState::synthesize_comfort_frame`]).
+// [@ANCHOR: tia_102_baba_decode_frame_outcome_enum]
 pub enum FrameOutcome {
     Repeat,
     Mute,
@@ -107,6 +109,7 @@ const MAX_VALID_B0: u32 = 207;
 /// `L~(-1) = 30` ([`INITIAL_L_HAT_PREV`]), `M~_l(-1) = 1` for all `l` (unity, not silent -- matching
 /// this codebase's own encoder-side `FrameState::initial()` choice, itself independently confirmed
 /// against Annex A when `voiced_synthesis.rs` was built), `epsilon_R(-1) = 0.0`.
+// [@ANCHOR: tia_102_baba_decode_decoder_state_struct]
 pub struct DecoderState {
     synthesis: SynthesisState,
     l_hat_prev: u32,
@@ -317,6 +320,9 @@ impl Default for DecoderState {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: tia_102_baba_decode_decoded_parameters_struct]
+    // Tests [@ANCHOR: tia_102_baba_decode_frame_outcome_enum]
+    // Tests [@ANCHOR: tia_102_baba_decode_decoder_state_struct]
     use super::*;
     use crate::ambe::float::tia_102_baba::{
         bit_prioritization::prioritize_bits, encode_code_vectors, parameter_encoding, tables,

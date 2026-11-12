@@ -24,6 +24,7 @@
 /// comment, so its own error count is a meaningful signal on its own, not just folded into the
 /// total); `hamming_init` is `epsilon_4`, the error count for `u_hat_4` (the first Hamming-coded
 /// vector) -- used by `super::enhancement`'s own Eq. 112 threshold, not by anything in this module.
+// [@ANCHOR: error_estimation_frame_errors_struct]
 pub struct FrameErrors {
     pub total: u32,
     pub rate: f64,
@@ -71,6 +72,7 @@ pub fn should_mute_frame(errors: &FrameErrors) -> bool {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: error_estimation_frame_errors_struct]
     use super::*;
 
     #[test]
