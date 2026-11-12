@@ -892,98 +892,540 @@ harmonics.
 The 1600 bps mode transmits one set of line spectral pairs (LSPs) per 40 ms, so after the scalar indexes are
 dequantised the decoder repairs and spreads them, then interpolates them across the four 10 ms sub-frames.
 All of these live in `src/codec2_1600/lsp_post.rs`; each has a float form and a Q23 integer twin that is
-checked against it.
+checked against it. LSP vectors have `LPC_ORD` = 10 entries, in radians (float) or Q23 radians (`i64`, 23
+fractional bits). None of these functions does I/O, takes a lock, spawns a task or touches a transmitter; they
+are pure transforms on a caller-owned array, called from the 1600 decoder (`Decoder::decode`,
+`DecoderFixed::decode`, `DecoderFixed::decode_16k_fixed`).
 
-- `check_lsp_order` forces ascending order after dequantisation: whenever an adjacent pair is out of order it
-  swaps them and pushes the pair apart by 0.1 rad (the lower slot becomes `old_upper - 0.1`, the upper slot
-  `old_lower + 0.1`), and returns the number of swaps. The scan restarts after a swap in the same quirky way
-  the reference does (the restart lands on index 2, not 1), reproduced on purpose rather than "fixed".
-  *(Reference: `[@ANCHOR: check_lsp_order]`)*
-- `check_lsp_order_fixed` is the same logic on `i64` Q23 angles, with the 0.1 rad nudge as the constant
-  838861.
-  *(Reference: `[@ANCHOR: check_lsp_order_fixed]`)*
-- `bw_expand_lsps` enforces a minimum gap between neighbouring LSPs in one upward pass: gaps at indexes 1 to 3
-  are widened to `min_sep_low` Hz and gaps at indexes 4 to 9 to `min_sep_high` Hz (the decoder passes 50 and
-  100), converting Hz to radians with `pi/4000`.
-  *(Reference: `[@ANCHOR: bw_expand_lsps]`)*
-- `bw_expand_lsps_fixed` is the Q23 twin; the margins arrive already in Q23 (`min_sep_low_q23()` and
-  `min_sep_high_q23()`, 329420 and 658840).
-  *(Reference: `[@ANCHOR: bw_expand_lsps_fixed]`)*
-- `interpolate_lsp_ver2` blends the previous frame's last LSPs with the new ones element by element,
-  `(1 - w) * prev + w * next`; the decoder uses weights 0.25, 0.5 and 0.75 for sub-frames 0 to 2 (the 3200
-  decoder's `interpolate_lsp` is the fixed 0.5 case).
-  *(Reference: `[@ANCHOR: interpolate_lsp_ver2]`)*
-- `interpolate_lsp_ver2_fixed` restricts the weight to `quarters` of 1, 2 or 3 (debug-asserted), so the blend
-  is `((4 - q) * prev + q * next + 2) >> 2`: exact integer arithmetic with a single rounding.
-  *(Reference: `[@ANCHOR: interpolate_lsp_ver2_fixed]`)*
+### `check_lsp_order` [@ANCHOR: check_lsp_order]
+
+Forces ascending order after dequantisation: whenever an adjacent pair is out of order it swaps them and pushes the pair
+apart by 0.1 rad (the lower slot becomes `old_upper - 0.1`, the upper slot `old_lower + 0.1`). The scan restarts after a
+swap in the same quirky way the reference does (the restart lands on index 2, not 1), reproduced on purpose rather than
+"fixed", so the output matches the reference decoder bit for bit. Called by the 1600 float decoder on freshly dequantised LSPs.
+Present only with the `std` feature.
+
+```rust
+pub fn check_lsp_order(lsp: &mut [f32; LPC_ORD]) -> usize
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp` | `&mut [f32; 10]` | LSPs in radians, edited in place. Any values, including NaN, are accepted. |
+
+**Returns:** the number of swaps made (0 means the vector was already ascending and is untouched).
+
+**Errors:** none; it never panics.
+
+**Special concerns:** pure and synchronous, no locks, no I/O, nothing keys a transmitter. The restart loop has no explicit
+iteration cap; an adversarial probe (200,000 random vectors plus reversed, sawtooth and all-equal patterns) found at most
+129 iterations and 37 swaps for 10 entries, and a test guards against a regression into an infinite loop with a 2 second
+wall-clock budget.
+
+**Signature:** see the block above.
+
+**See also:** `check_lsp_order_fixed`; tests `check_lsp_order_fixes_a_single_out_of_order_pair`,
+`check_lsp_order_leaves_an_already_ordered_vector_unchanged`,
+`check_lsp_order_terminates_promptly_on_the_worst_case_fully_reversed_input`.
+
+### `check_lsp_order_fixed` [@ANCHOR: check_lsp_order_fixed]
+
+The same logic as `check_lsp_order` on `i64` Q23 angles, including the same restart-at-index-2 behaviour, with the 0.1 rad
+nudge as the constant 838861 (`SWAP_NUDGE_Q23`, the value `f32_to_q_exact_round` gives for 0.1; a test checks it). Always
+compiled (no `std` needed), so it serves the no-FPU decoder.
+
+```rust
+pub fn check_lsp_order_fixed(lsp: &mut [i64; LPC_ORD]) -> usize
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp` | `&mut [i64; 10]` | LSPs in Q23 radians, edited in place. |
+
+**Returns:** the number of swaps.
+
+**Errors:** none in release builds. The nudge adds or subtracts from `i64` values; inputs near the `i64` limits are
+unrealistic (LSPs are below pi, about 2.6e7 in Q23) and are not checked.
+
+**Special concerns:** pure, no allocation, no I/O, no transmitter involvement.
+
+**Signature:** see the block above.
+
+**See also:** `check_lsp_order`; test `check_lsp_order_fixed_matches_the_float_version_on_an_out_of_order_pair`.
+
+### `bw_expand_lsps` [@ANCHOR: bw_expand_lsps]
+
+Enforces a minimum gap between neighbouring LSPs in one upward pass: gaps at indexes 1 to 3 are widened to `min_sep_low`
+Hz and gaps at indexes 4 to 9 to `min_sep_high` Hz (the decoder passes 50 and 100, the reference decoder's values),
+converting Hz to radians with `pi/4000`. Widening is done by raising `lsp[i]` to `lsp[i-1] + gap`; because the pass walks
+upward, a raised entry that crowds its successor is repaired in the same pass. Without it, two LSPs that collapse together
+make the synthesis filter nearly unstable. Present only with the `std` feature.
+
+```rust
+pub fn bw_expand_lsps(lsp: &mut [f32; LPC_ORD], min_sep_low: f32, min_sep_high: f32)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp` | `&mut [f32; 10]` | Ascending LSPs in radians, edited in place; index 0 is never changed. |
+| `min_sep_low` | `f32` | Minimum gap in Hz for indexes 1 to 3 (decoder: 50). |
+| `min_sep_high` | `f32` | Minimum gap in Hz for indexes 4 to 9 (decoder: 100). |
+
+**Returns:** nothing. **Errors:** none; never panics.
+
+**Special concerns:** pure, no I/O, no locks. It assumes `check_lsp_order` ran first; on an unordered vector the result is
+still deterministic but not meaningful. It can push the last LSP above pi; the decoder tolerates that.
+
+**Signature:** see the block above.
+
+**See also:** `bw_expand_lsps_fixed`; test `bw_expand_lsps_separates_two_lsps_that_start_too_close`.
+
+### `bw_expand_lsps_fixed` [@ANCHOR: bw_expand_lsps_fixed]
+
+The Q23 twin of `bw_expand_lsps`: the margins arrive already in Q23 radians, from `min_sep_low_q23()` and
+`min_sep_high_q23()` (329420 and 658840, the Q23 values of `50 * pi/4000` and `100 * pi/4000`; a test checks them against
+`f32_to_q_exact_round`). Called by `DecoderFixed::decode` and `DecoderFixed::decode_16k_fixed` with the same margins.
+
+```rust
+pub fn bw_expand_lsps_fixed(lsp: &mut [i64; LPC_ORD], min_sep_low_q23: i64, min_sep_high_q23: i64)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp` | `&mut [i64; 10]` | Ascending LSPs in Q23 radians, edited in place. |
+| `min_sep_low_q23` | `i64` | Minimum gap, Q23 radians, for indexes 1 to 3. |
+| `min_sep_high_q23` | `i64` | Minimum gap, Q23 radians, for indexes 4 to 9. |
+
+**Returns:** nothing. **Errors:** none.
+
+**Special concerns:** pure integer code, no allocation, no I/O, no transmitter involvement.
+
+**Signature:** see the block above.
+
+**See also:** `bw_expand_lsps`; test `bw_expand_lsps_fixed_matches_the_float_version`.
+
+### `interpolate_lsp_ver2` [@ANCHOR: interpolate_lsp_ver2]
+
+Blends the previous frame's last LSPs with the new ones element by element, `(1 - w) * prev + w * next`. The 1600 decoder
+uses weights 0.25, 0.5 and 0.75 for sub-frames 0 to 2 (and the new frame itself for sub-frame 3), because LSPs arrive once
+per 40 ms but synthesis runs every 10 ms; the 3200 decoder's `interpolate_lsp` is the fixed 0.5 case. Present only with
+the `std` feature.
+
+```rust
+pub fn interpolate_lsp_ver2(prev: &[f32; LPC_ORD], next: &[f32; LPC_ORD], weight: f32) -> [f32; LPC_ORD]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `prev` | `&[f32; 10]` | Previous frame's LSPs, radians. |
+| `next` | `&[f32; 10]` | Current frame's LSPs, radians. |
+| `weight` | `f32` | Weight of `next`, normally 0.0 to 1.0; not clamped, so values outside extrapolate. |
+
+**Returns:** a new array; the inputs are not modified. **Errors:** none.
+
+**Special concerns:** pure, no I/O, no locks; the arrays are tiny and live on the stack. Interpolating between two ordered
+vectors with a weight in 0 to 1 yields an ordered vector, so no re-check is needed.
+
+**Signature:** see the block above.
+
+**See also:** `interpolate_lsp_ver2_fixed`; test `interpolate_lsp_ver2_at_weight_zero_and_one_returns_the_endpoints`.
+
+### `interpolate_lsp_ver2_fixed` [@ANCHOR: interpolate_lsp_ver2_fixed]
+
+Restricts the weight to `quarters` of 1, 2 or 3 (0.25, 0.5, 0.75; debug-asserted), so the blend is
+`((4 - q) * prev + q * next + 2) >> 2`: exact integer arithmetic with a single round-to-nearest shift and no division. It is
+the only interpolation the integer decoders ever need.
+
+```rust
+pub fn interpolate_lsp_ver2_fixed(prev: &[i64; LPC_ORD], next: &[i64; LPC_ORD], quarters: i64) -> [i64; LPC_ORD]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `prev` | `&[i64; 10]` | Previous frame's LSPs, Q23 radians. |
+| `next` | `&[i64; 10]` | Current frame's LSPs, Q23 radians. |
+| `quarters` | `i64` | Weight of `next` in quarters: 1, 2 or 3. |
+
+**Returns:** a new Q23 array. **Errors:** in debug builds a `quarters` outside 1 to 3 panics (`debug_assert`); in release it
+computes the formula anyway.
+
+**Special concerns:** pure, no I/O, no transmitter involvement.
+
+**Signature:** see the block above.
+
+**See also:** `interpolate_lsp_ver2`; test `interpolate_lsp_ver2_fixed_matches_the_float_version_at_all_three_real_weights`.
 
 ## Codec2 1600 scalar LSP quantiser
 
 `src/codec2_1600/lsp_quantiser.rs`. The ten LSP dimensions each have an evenly spaced codebook
-(`start_hz + step_hz * index`), so quantising is a rounded division, not a table search.
+(`start_hz + step_hz * index`), so quantising is a rounded division, not a table search. The codebooks are the
+published Codec2 tables (`LSP_CB`: starts 225, 325, 500, 700, 950, 1100, 1500, 2300, 2500, 2900 Hz; steps 25, 25, 50,
+100, 100, 100, 100, 100, 100, 200 Hz; 16 levels for dimensions 0 to 6, 8 for 7 and 8, 4 for 9). Every function is
+pure and synchronous: no I/O, no locks, no transmitter involvement.
 
-- `lsp_bits` gives the bit width of dimension `i`: 4 for dimensions 0 to 6, 3 for 7 and 8, 2 for 9
-  (36 bits total); the frame packer uses it for the LSP field widths.
-  *(Reference: `[@ANCHOR: lsp_bits]`)*
-- `quantise_dim` (float) maps one target frequency in Hz to the nearest level of one dimension: round
-  `(target - start) / step` and clamp into `0..levels`.
-  *(Reference: `[@ANCHOR: quantise_dim]`)*
-- `encode_lsps_scalar` converts ten LSPs from radians to Hz (`4000/pi`) and quantises each dimension
-  independently with `quantise_dim`.
-  *(Reference: `[@ANCHOR: encode_lsps_scalar]`)*
-- `decode_lsps_scalar` is the inverse: `start + step * index` in Hz, converted back to radians. This is the
-  table any compliant decoder must reproduce.
-  *(Reference: `[@ANCHOR: decode_lsps_scalar]`)*
-- `q_mul_q23` multiplies two Q23 numbers in `i128` and shifts the product back to Q23 (rounding toward minus infinity); the
-  fixed LSP encoder and decoder use it for the radian/Hz conversions.
-  *(Reference: `[@ANCHOR: q_mul_q23]`)*
-- `encode_lsps_scalar_fixed` is the integer encoder: each Q23 radian angle goes to Hz with `q_mul_q23` and
-  `4000/pi`, then through the integer nearest-level search (`quantise_dim_fixed`).
-  *(Reference: `[@ANCHOR: encode_lsps_scalar_fixed]`)*
-- `decode_lsps_scalar_fixed` computes `start + step * index` in Q23 Hz and converts to Q23 radians with
-  `q_mul_q23` and `pi/4000`.
-  *(Reference: `[@ANCHOR: decode_lsps_scalar_fixed]`)*
+### `lsp_bits` [@ANCHOR: lsp_bits]
+
+The bit width of dimension `i`: 4 for dimensions 0 to 6, 3 for 7 and 8, 2 for 9 (36 bits total); the frame packer uses it
+for the LSP field widths, so the packed 64-bit frame and the codebook sizes cannot disagree.
+
+```rust
+pub fn lsp_bits(i: usize) -> u32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `i` | `usize` | LSP dimension, 0 to 9. |
+
+**Returns:** the width in bits (the codebook's `log2m`). **Errors:** `i >= 10` panics (array index).
+
+**Special concerns:** pure, const-table lookup.
+
+**Signature:** see the block above.
+
+**See also:** test `lsp_bits_sums_to_36_total_bits`; `encode_lsps_scalar`.
+
+### `quantise_dim` [@ANCHOR: quantise_dim]
+
+Maps one target frequency in Hz to the nearest level of one dimension: round `(target - start) / step` and clamp into
+`0..levels`. Because every real table is evenly spaced this equals the reference's linear scan for a one-dimensional
+codebook, without the O(levels) search. Private; `std` only; called by `encode_lsps_scalar`.
+
+```rust
+fn quantise_dim(dim: &LspDim, target_hz: f32) -> u32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `dim` | `&LspDim` | The dimension's `start_hz`, `step_hz`, `levels`. |
+| `target_hz` | `f32` | Frequency to quantise, Hz; out-of-range values clamp to the first or last level. |
+
+**Returns:** the codebook index, `0..levels`. **Errors:** none; a NaN input rounds to NaN and the clamp/cast gives index 0.
+
+**Special concerns:** pure float; the integer path is `quantise_dim_fixed`.
+
+**Signature:** see the block above.
+
+**See also:** test `encode_then_decode_recovers_the_same_quantised_value_for_every_real_index`.
+
+### `encode_lsps_scalar` [@ANCHOR: encode_lsps_scalar]
+
+Converts ten LSPs from radians to Hz (`4000/pi`) and quantises each dimension independently with `quantise_dim`. The
+1600 float encoder calls it once per 40 ms frame on the second analysis pass's LSPs. Present only with the `std` feature.
+
+```rust
+pub fn encode_lsps_scalar(lsp: &[f32; LPC_ORD]) -> [u32; LPC_ORD]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp` | `&[f32; 10]` | Unquantised LSPs, radians, ascending. |
+
+**Returns:** ten indexes, each below the dimension's level count (fit `lsp_bits(i)` bits). **Errors:** none; out-of-range
+LSPs clamp.
+
+**Special concerns:** pure; the quantiser is not vector or delta coded, so a bit error in one index affects only that
+dimension.
+
+**Signature:** see the block above.
+
+**See also:** `decode_lsps_scalar`, `encode_lsps_scalar_fixed`; test
+`encode_then_decode_recovers_the_same_quantised_value_for_every_real_index`.
+
+### `decode_lsps_scalar` [@ANCHOR: decode_lsps_scalar]
+
+The inverse of `encode_lsps_scalar`: `start + step * index` in Hz, converted back to radians with `pi/4000`. This is the
+table any compliant decoder must reproduce, so it is a wire-format fact, not a design choice. Present only with the `std`
+feature.
+
+```rust
+pub fn decode_lsps_scalar(indexes: &[u32; LPC_ORD]) -> [f32; LPC_ORD]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `indexes` | `&[u32; 10]` | One index per dimension, as unpacked from the frame. |
+
+**Returns:** ten LSPs in radians. **Errors:** none; an index at or above the level count is not checked and simply
+extrapolates the table (the frame unpacker's field width already bounds it).
+
+**Special concerns:** pure. Run `check_lsp_order` and `bw_expand_lsps` on the result.
+
+**Signature:** see the block above.
+
+**See also:** `decode_lsps_scalar_fixed`; tests `decode_matches_the_real_upstream_codebook_tables_at_specific_indices`,
+`encode_then_decode_recovers_the_same_quantised_value_for_every_real_index`.
+
+### `q_mul_q23` [@ANCHOR: q_mul_q23]
+
+Multiplies two Q23 numbers in `i128` and shifts the product back to Q23 (arithmetic shift, so rounding toward minus
+infinity). The fixed LSP encoder and decoder use it for the radian/Hz conversions. Private to `lsp_quantiser.rs`.
+
+```rust
+fn q_mul_q23(a: i64, b: i64) -> i64
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a`, `b` | `i64` | Q23 operands. |
+
+**Returns:** `(a * b) >> 23` as `i64`; the intermediate cannot overflow, the final cast truncates only if the result
+exceeds `i64`, which the callers' ranges never reach. **Errors:** none.
+
+**Special concerns:** pure, no float.
+
+**Signature:** see the block above.
+
+**See also:** `encode_lsps_scalar_fixed`, `decode_lsps_scalar_fixed`; test
+`decode_lsps_scalar_fixed_matches_the_float_version_for_every_real_index`.
+
+### `encode_lsps_scalar_fixed` [@ANCHOR: encode_lsps_scalar_fixed]
+
+The integer encoder: each Q23 radian angle goes to Q23 Hz with `q_mul_q23` and the constant `4000/pi` (10680707072), then
+through the integer nearest-level search `quantise_dim_fixed` (round-half-up division, clamped to `0..levels`, with
+differences at or below zero giving index 0). No `f32` is touched, so it runs on cores without an FPU.
+
+```rust
+pub fn encode_lsps_scalar_fixed(lsp_q23: &[i64; LPC_ORD]) -> [u32; LPC_ORD]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp_q23` | `&[i64; 10]` | Unquantised LSPs, Q23 radians. |
+
+**Returns:** ten codebook indexes. **Errors:** none; out-of-range values clamp.
+
+**Special concerns:** pure, no allocation, no I/O, no transmitter involvement. Used by `codec2_1600::EncoderFixed::encode`.
+
+**Signature:** see the block above.
+
+**See also:** `encode_lsps_scalar`; test `encode_then_decode_recovers_the_same_quantised_value_for_every_real_index_fixed`.
+
+### `decode_lsps_scalar_fixed` [@ANCHOR: decode_lsps_scalar_fixed]
+
+Computes `start + step * index` in Q23 Hz (the table entries are whole Hz shifted left 23, built at compile time by
+`lsp_cb_q23`) and converts to Q23 radians with `q_mul_q23` and `pi/4000` (6588 in Q23). It reads the same table as
+`decode_lsps_scalar`, never touching `f32`.
+
+```rust
+pub fn decode_lsps_scalar_fixed(indexes: &[u32; LPC_ORD]) -> [i64; LPC_ORD]
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `indexes` | `&[u32; 10]` | One index per dimension. |
+
+**Returns:** ten Q23 radian LSPs. **Errors:** none; indexes are not range-checked.
+
+**Special concerns:** pure integer code; the result still needs `check_lsp_order_fixed` and `bw_expand_lsps_fixed`.
+
+**Signature:** see the block above.
+
+**See also:** `decode_lsps_scalar`; tests `decode_lsps_scalar_fixed_matches_the_float_version_for_every_real_index`,
+`encode_then_decode_recovers_the_same_quantised_value_for_every_real_index_fixed`.
 
 ## Codec2 1600 encoder internals
 
-- `analyse_lsps_and_energy` (float) is one linear-prediction pass over the 320-sample history window: apply
-  the analysis window, autocorrelate, apply the white-noise correction, run Levinson-Durbin, measure the
-  prediction energy on the uncorrected autocorrelation, expand bandwidth with `bw_gamma`, and convert to LSPs
-  (evenly spaced fallback if the root search fails). The encoder runs it twice per frame but sends the LSPs
-  of the second pass only; the first pass exists for its energy.
-  *(Reference: `src/codec2_1600/mod.rs` -> `[@ANCHOR: analyse_lsps_and_energy]`)*
-- `analyse_lsps_and_energy_fixed` (the function `analyse_energy_and_ak_fixed`) is the integer version of the
-  same pass: Q30 window times samples (shifted to Q8.23), integer autocorrelation, integer white-noise
-  correction and Levinson-Durbin, energy before bandwidth expansion, then `apply_bw_gamma_fixed`. It returns
-  the Q23 energy and the expanded coefficients; the LSP root search is a separate step.
-  *(Reference: `[@ANCHOR: analyse_lsps_and_energy_fixed]`)*
-- `codec2_1600:Encoder::shift_in` slides the float history window left by 80 samples and appends the next
-  80 new samples as floats; it asserts the slice is exactly 80 samples long instead of silently truncating.
-  *(Reference: `[@ANCHOR: codec2_1600:Encoder::shift_in]`)*
-- `codec2_1600:EncoderFixed::shift_in` does the same on the `i16` history, failing on a length mismatch
-  through `copy_from_slice`.
-  *(Reference: `[@ANCHOR: codec2_1600:EncoderFixed::shift_in]`)*
+`src/codec2_1600/mod.rs`. The 1600 encoder keeps a 320-sample (40 ms) history window `sn` and processes four 10 ms
+sub-frames of 80 samples per 40 ms frame. The helpers below are private to the module and run only inside
+`Encoder::encode` / `EncoderFixed::encode`; they are synchronous, take no locks and do no I/O.
+
+### `analyse_lsps_and_energy` [@ANCHOR: analyse_lsps_and_energy]
+
+One linear-prediction pass over the 320-sample history window: apply the analysis window, autocorrelate, apply the
+white-noise correction, run Levinson-Durbin, measure the prediction energy on the uncorrected autocorrelation, expand
+bandwidth with `bw_gamma`, and convert to LSPs (an evenly spaced fallback, `pi/10 * i`, if the root search fails). The
+encoder runs it twice per frame but sends the LSPs of the second pass only; the first pass exists for its energy. The
+energy is taken before bandwidth expansion because afterwards it can come out negative.
+
+```rust
+fn analyse_lsps_and_energy(sn: &[f32; M_PITCH], analysis_window: &[f32; M_PITCH]) -> ([f32; LPC_ORD], f32)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sn` | `&[f32; 320]` | History window, newest sample last. |
+| `analysis_window` | `&[f32; 320]` | The analysis window, `window::make_analysis_window()`. |
+
+**Returns:** `(lsp, e)`: ten LSPs in radians and the frame energy. **Errors:** none; a failed root search falls back to
+the even LSPs. Present only with the `std` feature.
+
+**Special concerns:** pure float computation, no allocation beyond the stack.
+
+**Signature:** see the block above.
+
+*(Reference: `src/codec2_1600/mod.rs`)*
+
+**See also:** `analyse_lsps_and_energy_fixed`; test `encode_decode_round_trip_produces_finite_reasonably_scaled_audio`.
+
+### `analyse_lsps_and_energy_fixed` [@ANCHOR: analyse_lsps_and_energy_fixed]
+
+The integer version of the same pass, implemented by the function `analyse_energy_and_ak_fixed`: the analysis window (Q30)
+times the samples is shifted down 7 bits into a `Q8.23`-style `i32` buffer, then integer autocorrelation, integer
+white-noise correction and Levinson-Durbin, the energy before bandwidth expansion, then `apply_bw_gamma_fixed`. The LSP
+root search is a separate step (`lpc::lpc_to_lsp_q23_from_integer_ak`), run by the caller on the second pass only.
+
+```rust
+fn analyse_energy_and_ak_fixed(sn: &[i16; M_PITCH]) -> (i64, [i64; LPC_ORD + 1])
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sn` | `&[i16; 320]` | History window, newest sample last. |
+
+**Returns:** `(e_q23, a_q23)`: the Q23 energy and the eleven bandwidth-expanded Q23 coefficients. **Errors:** none.
+
+**Special concerns:** integer end to end, no allocation, no I/O.
+
+**Signature:** see the block above.
+
+*(Reference: `src/codec2_1600/mod.rs`)*
+
+**See also:** `analyse_lsps_and_energy`; test `fixed_encode_decode_round_trip_produces_finite_reasonably_scaled_audio`.
+
+### `codec2_1600:Encoder::shift_in` [@ANCHOR: codec2_1600:Encoder::shift_in]
+
+Slides the float history window left by 80 samples and appends the next 80 new samples as `f32` (converted from `i16`);
+it asserts the slice is exactly 80 samples long (`N_SAMP`) instead of silently truncating or padding, as a `zip` loop
+would. Called four times per 40 ms frame (once per 10 ms sub-frame) from `Encoder::encode`.
+
+```rust
+fn shift_in(&mut self, new_samples: &[i16])
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `new_samples` | `&[i16]` | Exactly 80 new samples at 8000 Hz. |
+
+**Returns:** nothing. **Errors:** a slice of any other length panics (`assert_eq!`); every current caller passes 80.
+
+**Special concerns:** mutates `self.sn` in place; the encoder is single-owner and not `Sync`. Float, `std` only.
+
+**Signature:** see the block above.
+
+**See also:** `codec2_1600:EncoderFixed::shift_in`; test `encode_decode_round_trip_produces_finite_reasonably_scaled_audio`.
+
+### `codec2_1600:EncoderFixed::shift_in` [@ANCHOR: codec2_1600:EncoderFixed::shift_in]
+
+Does the same on the `i16` history (called four times per frame from `EncoderFixed::encode`): `copy_within` moves the newest 240 samples to the front, `copy_from_slice` writes the 80
+new ones at the end. A wrong slice length panics through `copy_from_slice`.
+
+```rust
+fn shift_in(&mut self, new_samples: &[i16])
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `new_samples` | `&[i16]` | Exactly 80 new samples at 8000 Hz. |
+
+**Returns:** nothing. **Errors:** length not 80 panics.
+
+**Special concerns:** mutates the history in place; no allocation; the caller owns the encoder.
+
+**Signature:** see the block above.
+
+**See also:** `codec2_1600:Encoder::shift_in`; tests `fixed_shift_in_drops_the_oldest_samples_and_appends_the_new_ones_at_the_end`,
+`fixed_shift_in_panics_on_a_wrong_length_slice`.
 
 ## Bit packing primitives (3200 and 1600)
 
-`src/codec2_3200/bits.rs`, shared by both frame formats.
+`src/codec2_3200/bits.rs`, shared by both frame formats. Bits are packed MSB-first within each byte, and any field wider
+than one bit is Gray-coded; both are interoperability requirements of the Codec2 wire format.
 
-- `gray_to_binary` undoes a Gray code with five XOR-folds (shifts of 16, 8, 4, 2, 1); the encoding direction
-  is `x ^ (x >> 1)`. Round trips are checked over the full 32-bit range at boundary values.
-  *(Reference: `[@ANCHOR: gray_to_binary]`)*
-- `BitWriter::write` appends a field of `width` bits MSB-first into a zeroed byte buffer, Gray-coding it when
-  the width is greater than one bit. Bits are only OR-ed in, so a value that does not fit its width would
-  corrupt neighbouring fields; that is a debug-asserted precondition.
-  *(Reference: `[@ANCHOR: BitWriter::write]`)*
-- `BitReader::read` is the reverse: it gathers `width` bits MSB-first across byte boundaries and un-Grays
-  fields wider than one bit.
-  *(Reference: `[@ANCHOR: BitReader::read]`)*
+### `gray_to_binary` [@ANCHOR: gray_to_binary]
+
+Undoes a Gray code with five XOR-folds (shifts of 16, 8, 4, 2, 1); the encoding direction is `binary_to_gray`, `x ^ (x >> 1)`.
+Round trips are checked over every value up to 10 bits and at 32-bit boundary and pattern values. Private; used by
+`BitReader::read`.
+
+```rust
+fn gray_to_binary(g: u32) -> u32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `g` | `u32` | A Gray-coded value. |
+
+**Returns:** the binary value. **Errors:** none; defined for all 32-bit inputs.
+
+**Special concerns:** pure, constant time.
+
+**Signature:** see the block above.
+
+**See also:** tests `gray_code_round_trips_over_every_value_up_to_10_bits`,
+`gray_code_round_trips_at_full_32_bit_boundary_and_pattern_values`.
+
+### `BitWriter::write` [@ANCHOR: BitWriter::write]
+
+Appends a field of `width` bits MSB-first into a zeroed byte buffer, Gray-coding it when the width is greater than one bit.
+Bits are only OR-ed in, so a value that does not fit its width would corrupt neighbouring fields already in the same byte;
+that is a debug-asserted precondition. A field may straddle byte boundaries.
+
+```rust
+pub fn write(&mut self, field: u32, width: u32)
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `field` | `u32` | The value, which must be below `1 << width` (width 32 is allowed). |
+| `width` | `u32` | Number of bits, 1 to 32; 0 writes nothing. |
+
+**Returns:** nothing; the writer's bit position advances by `width`. **Errors:** a field that does not fit panics in debug
+builds (silently corrupts in release); writing past the end of the buffer panics on the slice index.
+
+**Special concerns:** the buffer given to `BitWriter::new` must already be zeroed. Not thread-safe; owned by the packer.
+
+**Signature:** see the block above.
+
+**See also:** `BitReader::read`; test `bit_writer_reader_round_trip_arbitrary_field_widths`.
+
+### `BitReader::read` [@ANCHOR: BitReader::read]
+
+The reverse of `BitWriter::write`: gathers `width` bits MSB-first across byte boundaries and un-Grays fields wider than one
+bit.
+
+```rust
+pub fn read(&mut self, width: u32) -> u32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `width` | `u32` | Number of bits, 1 to 32. |
+
+**Returns:** the decoded field value; the reader's position advances by `width`. **Errors:** reading beyond the end of the
+buffer panics (slice index); callers pass fixed-size frames.
+
+**Special concerns:** no state besides the bit position; any bit pattern decodes to some value, so a corrupted frame is not
+detected here.
+
+**Signature:** see the block above.
+
+**See also:** `BitWriter::write`; test `bit_writer_reader_round_trip_arbitrary_field_widths`.
 
 ## Codec2 3200 fixed-point encoder
 
-- `encoder_fixed:shift_in` slides the `i16` pitch history left by one 10 ms step and appends the new samples;
-  a wrong length panics. `pub(super)`: `EncoderMbe` drives the same history.
-  *(Reference: `src/codec2_3200/encoder_fixed.rs` -> `[@ANCHOR: encoder_fixed:shift_in]`)*
+### `encoder_fixed:shift_in` [@ANCHOR: encoder_fixed:shift_in]
+
+Slides the `i16` pitch history left by one 10 ms step (`copy_within` of the newest 240 samples to the front) and appends
+the 80 new samples at the end. `pub(super)`: `EncoderMbe` drives the same history through its inner `EncoderFixed`.
+Called twice per 20 ms frame by `EncoderFixed::encode`.
+
+```rust
+pub(super) fn shift_in(&mut self, new_samples: &[i16])
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `new_samples` | `&[i16]` | Exactly 80 new samples at 8000 Hz. |
+
+**Returns:** nothing. **Errors:** a wrong length panics (`copy_from_slice`).
+
+**Special concerns:** mutates the history in place, no allocation, no I/O; single owner.
+
+**Signature:** see the block above.
+
+*(Reference: `src/codec2_3200/encoder_fixed.rs`)*
+
+**See also:** test `shift_in_drops_the_oldest_samples_and_appends_the_new_ones_at_the_end`.
 
 ### `EncoderFixed::lpc_fields` [@ANCHOR: EncoderFixed::lpc_fields]
 
@@ -1125,7 +1567,23 @@ Immutable after `new`; shareable between threads by reference.
 
 ### `MbeAnalyser::new` [@ANCHOR: MbeAnalyser::new]
 
-**Purpose.** Builds the window and its spectrum. **Returns.** The analyser. Pure, one FFT, no panics.
+**Purpose.** Builds the analysis window (`window::make_analysis_window()`, the 279-sample Hann window centred in the 320-sample
+history) and its spectrum. The window is laid out centred on time zero (its middle at index 0, its first half wrapped to the end
+of a 512-point buffer) so its spectrum is real, transformed with one 512-point `microfft` complex FFT, and rotated so DC sits at
+index 256; the real parts are kept as `window_spectrum`. `EncoderMbe::new` calls it once per stream, and `Default` does the same.
+
+```rust
+pub fn new() -> Self
+```
+
+**Returns.** The analyser, immutable from then on. **Errors.** None; no panics.
+
+**Special concerns.** Pure CPU, about one FFT of work, no I/O, no allocation on the heap, no locks. Nothing about it keys a
+transmitter; it feeds only the encoder's pitch and voicing decision.
+
+**Signature.** See the block above.
+
+**See also.** `MbeAnalyser`, `MbeAnalyser::spectrum`; test `window_spectrum_peaks_at_dc_in_the_middle_and_is_symmetric`.
 
 ### `MbeAnalyser::spectrum` [@ANCHOR: MbeAnalyser::spectrum]
 
@@ -1168,18 +1626,68 @@ against `VOICING_SNR_DB` (6 dB), then `apply_energy_ratio_rules`. Pure, no panic
 
 ### `mbe_bin_of` [@ANCHOR: mbe_bin_of]
 
-`fn bin_of(x: f32) -> f32`: the spectrum bin of angular frequency `x` (radians per sample), `x * 512 / (2 pi)`, as a
-real number for the caller to round or take the ceiling of. Pure.
+**Purpose.** Converts an angular frequency to a position in the encoder's 512-point spectrum, as a real number, so each
+caller chooses its own rounding (round to nearest in `harmonic_sum` and `harmonic_amplitudes`, ceiling in
+`harmonic_fit_snr_db`). The source function is named `bin_of` and is private.
+
+```rust
+fn bin_of(x: f32) -> f32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `f32` | Angular frequency in radians per sample (`2 pi f / 8000`). |
+
+**Returns.** `x * 512 / (2 pi)`: bin 256 is 4 kHz. Negative or huge inputs give correspondingly negative or huge values; the
+callers bound them.
+
+**Errors.** None. **Special concerns.** Pure, no state.
+
+**See also.** `mbe_harmonic_sum`, `mbe_harmonic_amplitudes`, `mbe_harmonic_fit_snr_db`; test
+`pitch_refinement_lands_on_the_true_fundamental_from_a_coarse_start`.
 
 ### `mbe_harmonic_count` [@ANCHOR: mbe_harmonic_count]
 
-`pub fn harmonic_count(wo: f32) -> usize`: harmonics below 4 kHz for fundamental `wo` (radians per sample, > 0):
-`floor(pi / wo)`, minus one if `l * wo >= 0.95 pi` (a rounding guard), at least 1. Pure.
+**Purpose.** How many harmonics of a fundamental fit below 4 kHz, the `L` of the Codec2 model, with a guard against rounding
+at the band edge. Called by `MbeAnalyser::analyse` after the pitch is refined.
+
+```rust
+pub fn harmonic_count(wo: f32) -> usize
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `wo` | `f32` | Fundamental in radians per sample, greater than 0 (the analysis clamps it to 50 to 400 Hz first). |
+
+**Returns.** `floor(pi / wo)`, minus one when that is more than 1 and `l * wo >= 0.95 pi` (the last harmonic is within 5
+percent of 4 kHz), and never less than 1.
+
+**Errors.** None, but `wo` of 0 or less is outside the contract: division by zero gives infinity, which casts to the largest
+`usize`. **Special concerns.** Pure.
+
+**See also.** `MbeFrame`; test `pitch_refinement_lands_on_the_true_fundamental_from_a_coarse_start`.
 
 ### `mbe_harmonic_sum` [@ANCHOR: mbe_harmonic_sum]
 
-`fn harmonic_sum(sw, wo, l) -> f32`: the spectral power at the rounded bins of harmonics `1..=l` of `wo`; a bin past
-the spectrum's end adds nothing. The pitch search maximizes it. Pure.
+**Purpose.** The score the pitch search maximises: the spectral power at the harmonic bins of a candidate fundamental. The
+private function is `harmonic_sum`; `refine_pitch` calls it about 50 times per analysis.
+
+```rust
+fn harmonic_sum(sw: &[Complex32; FFT_ENC], wo: f32, l: usize) -> f32
+```
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sw` | `&[Complex32; 512]` | The frame's spectrum from `MbeAnalyser::spectrum`. |
+| `wo` | `f32` | Candidate fundamental, radians per sample. |
+| `l` | `usize` | Number of harmonics to add, `1..=l`. |
+
+**Returns.** The sum over `m` in `1..=l` of `|sw[round(bin_of(m * wo))]|^2`; a bin at or past index 512 adds nothing (checked
+with `get`, so it cannot panic).
+
+**Errors.** None. **Special concerns.** Pure, allocation free, `O(l)`.
+
+**See also.** `mbe_refine_pitch`, `mbe_bin_of`; test `pitch_refinement_lands_on_the_true_fundamental_from_a_coarse_start`.
 
 ### `mbe_refine_pitch` [@ANCHOR: mbe_refine_pitch]
 
