@@ -121,6 +121,9 @@ class BinaryDownloaderMixin(models.AbstractModel):
         if not url.startswith("https://"):
             raise UserError(_("Only https:// URLs are allowed."))
 
+        # A vendor may publish the digest in capitals or with a trailing newline; hexdigest() is lower case.
+        expected_digest = checksum.strip().lower()
+
         data_dir = tools.config.get("data_dir", "/var/lib/odoo")
         bin_dir = os.path.join(data_dir, "hams_bin")
 
@@ -155,7 +158,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                 with open(target_bin, "rb") as f:  # audit-ignore-path  # fmt: skip
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
-                if hasher.hexdigest() == checksum:
+                if hasher.hexdigest() == expected_digest:
                     if not os.access(target_bin, os.X_OK):
                         os.chmod(target_bin, 0o750)
                     return target_bin
@@ -255,7 +258,7 @@ class BinaryDownloaderMixin(models.AbstractModel):
                     for chunk in iter(lambda: f.read(4096), b""):
                         hasher.update(chunk)
 
-                if hasher.hexdigest() != checksum:
+                if hasher.hexdigest() != expected_digest:
                     _logger.error(
                         "Checksum mismatch for %s. Expected %s, got %s",
                         cmd_name, checksum, hasher.hexdigest(),

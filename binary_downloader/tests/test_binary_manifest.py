@@ -216,6 +216,22 @@ class TestBinaryManifest(HamsTransactionCase):
                 "[!] DIAGNOSTIC FOR AI: Content of installed binary must match downloaded content.",
             )
 
+    def test_04_1_checksum_is_compared_without_regard_to_case_or_padding(self):
+        # Tests [@ANCHOR: binary_utils_download_and_extract]
+        self.safe_patch("shutil.which", return_value=None)
+        self.safe_patch("platform.system", return_value="Linux")
+        self.safe_patch("platform.machine", return_value="x86_64")
+        self.manifest.checksum = " " + self.manifest.checksum.upper() + "\n"
+        mock_urlopen = self.safe_patch("odoo.addons.binary_downloader.models.binary_utils._urlopen_ssrf_safe")
+        mock_response_get = MagicMock()
+        del mock_response_get.readinto
+        mock_response_get.read.side_effect = [b"1234", b""]
+        mock_response_get.__enter__.return_value = mock_response_get
+        mock_urlopen.return_value = mock_response_get
+        path = self.env["binary.manifest"].ensure_executable("testbin")
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), b"1234")
+
     def test_05_views_render(self):
         # [@ANCHOR: COMM_test_binary_manifest_views]
         v1 = self.env["binary.manifest"].get_view(view_type="list")
