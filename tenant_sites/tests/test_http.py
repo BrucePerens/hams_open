@@ -107,6 +107,7 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertEqual(self.get("/shared-old", TENANT).status_code, 404)
 
     # [@ANCHOR: tenant_sites:test_ensure_request_uri]
+    # Tests [@ANCHOR: tenant_sites_ir_http_ir_http]
     def test_a_request_without_request_uri_is_a_404_not_a_server_error(self):
         # Tests [@ANCHOR: tenant_sites:ensure_request_uri]
         # Tickets 134 and 136 (2026-11-03): nginx's prefix `location /websocket` also sends /websocket.js and
@@ -127,6 +128,7 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertEqual(self.get("/websocket.js", MAIN).status_code, 404)
         self.assertEqual(self.get("/old", TENANT).status_code, 301)  # the tenant's own redirect still works
 
+    # Tests [@ANCHOR: tenant_sites_scoped_content_blog_post]
     def test_tenant_blog_shows_only_its_own_posts(self):
         response = self.get("/blog", TENANT)
         if response.status_code == 302:  # a website with one blog goes straight to it
@@ -142,6 +144,8 @@ class TestTenantSitesHttp(HamsHttpCase):
 
     # [@ANCHOR: tenant_sites:COMM_test_scoped_search]
     # [@ANCHOR: tenant_sites:COMM_test_scoped_access]
+    # Tests [@ANCHOR: tenant_sites_scoped_content_blog_blog]
+    # Tests [@ANCHOR: tenant_sites_scoped_content_tenant_site_scoped_mixin]
     def test_a_post_named_in_the_url_must_belong_to_the_tenant_website(self):
         # Tests [@ANCHOR: tenant_sites:COMM_scoped_search]
         # Tests [@ANCHOR: tenant_sites:COMM_scoped_access]
@@ -189,6 +193,11 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertIn('href="/web/login"', main.text)
 
     # [@ANCHOR: tenant_sites:COMM_test_site_hides_foreign_layout]
+    # Tests [@ANCHOR: tenant_sites_tenant_site_own_host_tenant_site_own_host]
+    # Tests [@ANCHOR: tenant_sites_tenant_site_kept_module_tenant_site_kept_module]
+    # Tests [@ANCHOR: tenant_sites_tenant_site_host_tenant_site_host]
+    # Tests [@ANCHOR: tenant_sites_tenant_site_tenant_site]
+    # Tests [@ANCHOR: tenant_sites_scoped_content_website_page]
     def test_a_tenant_site_gets_the_plain_layout_without_other_authors_additions(self):
         # Tests [@ANCHOR: tenant_sites:COMM_apply_public_layout]
         # Tests [@ANCHOR: tenant_sites:hide_foreign_layout_views]

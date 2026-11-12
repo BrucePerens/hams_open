@@ -15,6 +15,7 @@ from odoo.fields import Domain
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: tenant_sites_scoped_content_tenant_site_access_mixin]
 class TenantSiteAccessMixin(models.AbstractModel):
     _name = "tenant.site.access.mixin"
     _description = "A record named in a URL on a tenant website must belong to that website"
@@ -29,6 +30,7 @@ class TenantSiteAccessMixin(models.AbstractModel):
         return all(record.website_id.id == tenant_website_id for record in self)
 
 
+# [@ANCHOR: tenant_sites_scoped_content_tenant_site_scoped_mixin]
 class TenantSiteScopedMixin(models.AbstractModel):
     _name = "tenant.site.scoped.mixin"
     _inherit = ["tenant.site.access.mixin"]
@@ -44,6 +46,7 @@ class TenantSiteScopedMixin(models.AbstractModel):
         return super()._search(domain, offset=offset, limit=limit, order=order, **kwargs)
 
 
+# [@ANCHOR: tenant_sites_scoped_content_website_page]
 class WebsitePage(models.Model):
     _name = "website.page"
     _inherit = ["website.page", "tenant.site.access.mixin"]
@@ -68,11 +71,13 @@ class WebsiteRewrite(models.Model):
     _inherit = ["website.rewrite", "tenant.site.access.mixin"]
 
 
+# [@ANCHOR: tenant_sites_scoped_content_blog_blog]
 class BlogBlog(models.Model):
     _name = "blog.blog"
     _inherit = ["blog.blog", "tenant.site.scoped.mixin"]
 
 
+# [@ANCHOR: tenant_sites_scoped_content_blog_post]
 class BlogPost(models.Model):
     _name = "blog.post"
     _inherit = ["blog.post", "tenant.site.scoped.mixin"]

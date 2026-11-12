@@ -2,6 +2,7 @@
 from odoo import models
 
 
+# [@ANCHOR: tenant_sites_cloudflare_tunnel_cloudflare_tunnel]
 class CloudflareTunnel(models.Model):
     _inherit = "cloudflare.tunnel"
 

@@ -32,6 +32,7 @@ PLAIN_MARKER = "X-Tenant-Sites-Plain"
 UNROUTABLE_PATH = "/_tenant_sites_/no/route/here"
 
 
+# [@ANCHOR: tenant_sites_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 

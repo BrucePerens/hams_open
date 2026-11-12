@@ -88,6 +88,7 @@ class TestTenantSitesModels(HamsTransactionCase):
 
     # [@ANCHOR: tenant_sites:COMM_test_website_id_for_host]
     # [@ANCHOR: tenant_sites:COMM_test_current_website_id]
+    # Tests [@ANCHOR: tenant_sites_website_website]
     def test_tenant_hostnames_select_the_tenant_website(self):
         # Tests [@ANCHOR: tenant_sites:COMM_website_id_for_host]
         # Tests [@ANCHOR: tenant_sites:COMM_current_website_id]
@@ -123,6 +124,7 @@ class TestTenantSitesModels(HamsTransactionCase):
         self.assertFalse(Host._tenant_hosts_exist())
 
     # [@ANCHOR: tenant_sites:COMM_test_service_account_acl]
+    # Tests [@ANCHOR: tenant_sites_scoped_content_tenant_site_access_mixin]
     def test_the_public_user_cannot_read_any_tenant_table(self):
         # Tests [@ANCHOR: tenant_sites:COMM_service_account_acl]
         public = self.env.ref("base.public_user")
@@ -142,6 +144,7 @@ class TestTenantSitesModels(HamsTransactionCase):
         post_init_hook(self.env)
 
     # [@ANCHOR: tenant_sites:COMM_test_ingress_problems]
+    # Tests [@ANCHOR: tenant_sites_cloudflare_tunnel_cloudflare_tunnel]
     def test_an_unscoped_path_rule_is_refused_while_tenants_exist(self):
         # Tests [@ANCHOR: tenant_sites:COMM_ingress_problems]
         odoo_service = "http://odoo-test-service:8069"
@@ -263,6 +266,7 @@ class TestTenantSitesModels(HamsTransactionCase):
         clear.assert_any_call("assets")
         clear.assert_any_call()
 
+    # Tests [@ANCHOR: tenant_sites_ir_asset_ir_asset]
     def test_changing_or_removing_a_site_clears_the_asset_and_registry_caches(self):
         # Tests [@ANCHOR: tenant_sites:site_write]
         # Tests [@ANCHOR: tenant_sites:site_unlink]

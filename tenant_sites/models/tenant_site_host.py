@@ -8,6 +8,7 @@ SERVICE_XMLID = "tenant_sites.user_tenant_sites_service"
 OWN_HOST_LIMIT = 1000
 
 
+# [@ANCHOR: tenant_sites_tenant_site_host_tenant_site_host]
 class TenantSiteHost(models.Model):
     _name = "tenant.site.host"
     _description = "Hostname of a tenant website"

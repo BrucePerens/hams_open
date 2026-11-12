@@ -2,6 +2,7 @@
 from odoo import api, fields, models
 
 
+# [@ANCHOR: tenant_sites_website_website]
 class Website(models.Model):
     _inherit = "website"
 

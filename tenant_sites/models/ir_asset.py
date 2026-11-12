@@ -2,6 +2,7 @@
 from odoo import models
 
 
+# [@ANCHOR: tenant_sites_ir_asset_ir_asset]
 class IrAsset(models.Model):
     _inherit = "ir.asset"
 
