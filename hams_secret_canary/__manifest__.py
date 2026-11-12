@@ -16,6 +16,7 @@ Odoo log, a security-log row, an email to the administrator and, when pager_duty
     "website": "https://perens.com/",
     "license": "AGPL-3",
     "depends": ["base", "mail", "zero_sudo"],
+    "test_depends": ["pager_duty"],
     "data": [],
     "post_init_hook": "post_init_hook",
     "installable": True,

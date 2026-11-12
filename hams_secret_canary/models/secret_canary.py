@@ -40,8 +40,9 @@ def _watch_log_records(factory):
                         for label, kind in matches:
                             alerts.logging_backend(None, alerts.Alarm(label, kind, "log", record.name))
                         break
-            except Exception:  # audit-ignore-catch-all: a detector must not break the logging call it is watching
-                pass
+            except Exception as error:  # audit-ignore-catch-all: a detector must not break the logging call it is watching
+                # This module's loggers are skipped by the scan above, so logging here cannot recurse.
+                _logger.warning("Secret canary: scanning a log record failed: %s", type(error).__name__)
         return record
     return make_record
 
