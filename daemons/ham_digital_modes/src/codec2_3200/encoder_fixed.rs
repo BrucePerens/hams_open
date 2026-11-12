@@ -245,6 +245,7 @@ mod tests {
     /// here as each stage migrates so a regression is caught immediately
     /// rather than discovered later.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_3200_lpc_levinson_durbin_q23_from_integer_r]
     // Tests [@ANCHOR: EncoderFixed::encode]
     // Tests [@ANCHOR: levinson_durbin_fixed_from_integer_r]
     fn encode_decode_round_trip_produces_finite_reasonably_scaled_audio() {

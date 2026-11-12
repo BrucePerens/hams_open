@@ -578,6 +578,7 @@ pub fn levinson_durbin_fixed_from_integer_r(
 
 /// Integer-only form of `levinson_durbin_fixed_from_integer_r`: just the Q8.23 coefficients, no
 /// `f32` anywhere, so it builds without floating point (`no_std`).
+// [@ANCHOR: ham_digital_modes:codec2_3200_lpc_levinson_durbin_q23_from_integer_r]
 pub fn levinson_durbin_q23_from_integer_r(r_q: &[i64; LPC_ORD + 1]) -> [i64; LPC_ORD + 1] {
     let r_norm_q = r0_normalize_fixed(r_q);
     let (a_q23, _fired) = levinson_durbin_fixed_core_from_r_norm(&r_norm_q);
@@ -690,6 +691,7 @@ fn cheb_poly_eval_fixed_core(coef_q: &[i32; 6], x: f32) -> i32 {
 }
 
 /// The Chebyshev evaluation proper, with `x` already in Q29.
+// [@ANCHOR: ham_digital_modes:codec2_3200_lpc_cheb_poly_eval_q29]
 fn cheb_poly_eval_q29(coef_q: &[i32; 6], x_q: i32) -> i32 {
     let mut t_prev2: i32 = 1i32 << CHEB_FRAC_BITS; // T_0 = 1.0, Q2.29
     let mut t_prev1: i32 = x_q; // T_1 = x, Q2.29
@@ -1541,6 +1543,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_3200_lpc_cheb_poly_eval_q29]
     // Tests [@ANCHOR: cheb_poly_eval_fixed_core]
     fn cheb_poly_eval_fixed_matches_the_plain_float_sign_on_a_dense_sweep_of_real_captured_p_q_coefficients(
     ) {
@@ -2018,6 +2021,33 @@ pub(crate) mod tests {
             max_abs_err < 1e-4,
             "apply_bw_gamma_fixed diverged from applying bw_gamma in float by more than ordinary Q8.23 quantization noise should allow: {max_abs_err}"
         );
+    }
+
+    /// For the autocorrelation of a first-order process, `r[k] = r0 * rho^k`, the Levinson-Durbin predictor is
+    /// exactly `[1, -rho, 0, ...]`: the integer-only recursion returns `a[0] = 1.0` and `a[1] = -rho` in Q8.23, with
+    /// the higher coefficients near zero; an all-zero autocorrelation gives the identity filter.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_3200_lpc_levinson_durbin_q23_from_integer_r]
+    fn levinson_durbin_q23_recovers_a_first_order_predictor() {
+        let rho = 0.5f64;
+        let mut r = [0i64; LPC_ORD + 1];
+        for (k, v) in r.iter_mut().enumerate() {
+            *v = ((1i64 << 30) as f64 * rho.powi(k as i32)).round() as i64;
+        }
+        let a = levinson_durbin_q23_from_integer_r(&r);
+        let one = (1i64 << COEF_FRAC_BITS) as f64;
+        assert_eq!(a[0], 1i64 << COEF_FRAC_BITS);
+        assert!(
+            (a[1] as f64 / one + rho).abs() < 1e-3,
+            "a1 = {}",
+            a[1] as f64 / one
+        );
+        for (k, &v) in a.iter().enumerate().skip(2) {
+            assert!((v as f64 / one).abs() < 1e-3, "a{k} = {}", v as f64 / one);
+        }
+        let silent = levinson_durbin_q23_from_integer_r(&[0i64; LPC_ORD + 1]);
+        assert_eq!(silent[0], 1i64 << COEF_FRAC_BITS);
+        assert!(silent[1..].iter().all(|&v| v == 0));
     }
 }
 

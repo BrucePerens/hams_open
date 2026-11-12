@@ -540,6 +540,7 @@ impl SynthesisStateFixed {
     /// 8 kHz synthesis are not needed for it (`decode_16k_fixed` used to run them and throw the
     /// samples away).
     #[inline(always)]
+    // [@ANCHOR: ham_digital_modes:codec2_3200_synthesis_SynthesisStateFixed_prepare_subframe_fixed]
     pub(crate) fn prepare_subframe_fixed(
         &mut self,
         model: &mut ModelFixed,
@@ -625,6 +626,7 @@ const _: () = assert!(window_is_bounded(&super::tables::SB_PARZEN_Q23));
 /// first `NS - 1` entries, `re[..= NS]` into the entries from `NS - 1` on)
 /// under the window, then limits the level of the first `NS` samples and
 /// rounds them to 16-bit PCM.
+// [@ANCHOR: ham_digital_modes:codec2_3200_synthesis_overlap_add_subframe]
 pub(crate) fn overlap_add_subframe<const N: usize, const NS: usize, const SF: usize>(
     sn: &mut [i64; SF],
     re: &[i64; N],

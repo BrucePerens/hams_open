@@ -144,6 +144,7 @@ const FRAC_BITS: u32 = 23;
 /// Per-dimension `(start_hz, step_hz)` in Q23. Every value is a whole number of Hz, so the
 /// conversion is an exact shift (`fixed_tables_match_the_computed_values` checks this against
 /// `f32_to_q_exact_round`).
+// [@ANCHOR: ham_digital_modes:codec2_1600_lsp_quantiser_lsp_cb_q23]
 const fn lsp_cb_q23() -> [(i64, i64); super::LPC_ORD] {
     let mut out = [(0i64, 0i64); super::LPC_ORD];
     let mut i = 0;
@@ -227,6 +228,7 @@ mod tests {
     use crate::codec2_3200::fixed_point::f32_to_q_exact_round;
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_1600_lsp_quantiser_lsp_cb_q23]
     fn committed_q23_constants_match_the_computed_values() {
         assert_eq!(HZ_PER_RAD_Q23, f32_to_q_exact_round(HZ_PER_RAD, FRAC_BITS));
         assert_eq!(RAD_PER_HZ_Q23, f32_to_q_exact_round(RAD_PER_HZ, FRAC_BITS));
