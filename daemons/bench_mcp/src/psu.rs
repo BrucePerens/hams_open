@@ -65,14 +65,23 @@ fn in_range(name: &str, v: f64, max: f64) -> Result<f64, String> {
 
 pub fn set(l: &mut Link, args: &Value, lim: &Limits) -> Result<Value, String> {
     // [@ANCHOR: bench_mcp_psu_set]
+    // Both values are checked before anything is sent, so a refused current does not leave the voltage already changed.
+    let given = |k: &str| match args.get(k) {
+        None | Some(Value::Null) => Ok(None),
+        Some(x) => x.as_f64().map(Some).ok_or(format!("{k} must be a number")),
+    };
+    let volts = given("voltage_v")?
+        .map(|v| in_range("voltage_v", v, lim.max_volts))
+        .transpose()?;
+    let amps = given("current_a")?
+        .map(|a| in_range("current_a", a, lim.max_amps))
+        .transpose()?;
     let mut sent = Vec::new();
-    if let Some(v) = args.get("voltage_v").and_then(|v| v.as_f64()) {
-        let v = in_range("voltage_v", v, lim.max_volts)?;
+    if let Some(v) = volts {
         l.send(&format!("VOLT {v:.3}"))?;
         sent.push(format!("VOLT {v:.3}"));
     }
-    if let Some(a) = args.get("current_a").and_then(|v| v.as_f64()) {
-        let a = in_range("current_a", a, lim.max_amps)?;
+    if let Some(a) = amps {
         l.send(&format!("CURR {a:.3}"))?;
         sent.push(format!("CURR {a:.3}"));
     }
@@ -396,5 +405,11 @@ mod tests {
             set(&mut l, &json!({}), &lim()).unwrap_err(),
             "give voltage_v and/or current_a"
         );
+        // A valid voltage with a refused current sends nothing; a value that is not a number is an error, not "not given".
+        let before = dev.received().len();
+        assert!(set(&mut l, &json!({"voltage_v": 3.3, "current_a": 2.0}), &lim()).is_err());
+        let e = set(&mut l, &json!({"voltage_v": "5", "current_a": 0.5}), &lim()).unwrap_err();
+        assert!(e.contains("must be a number"), "{e}");
+        assert_eq!(dev.received().len(), before, "nothing was sent");
     }
 }

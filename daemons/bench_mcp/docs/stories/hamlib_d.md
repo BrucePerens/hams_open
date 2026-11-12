@@ -314,7 +314,7 @@ used by `key_test` and (for its highest step) by `power_sweep`. The result is `T
 | Argument (JSON key) | Type | Rules |
 |---|---|---|
 | `frequency_hz` | number, required | Hz; 1 to 1e12 and inside one of `transmit.frequency_ranges` (`Transmit::range_of`); there is no default range list. |
-| `mode` | string, optional | Case-insensitive; must be in `MODES` and in `transmit.allowed_modes`; default is the first allowed mode. A non-string value is ignored and the default used. |
+| `mode` | string, optional | Case-insensitive; must be in `MODES` and in `transmit.allowed_modes`; default is the first allowed mode. A value that is not text is refused (`mode must be text`). |
 | `power_w` | number, required | 0.001 to 1000 W, and at most `transmit.max_power_w` (itself at most 200 W). |
 | `seconds` | number, required | 0.1 to 60 s, and at most `transmit.max_seconds`. |
 | `sample_every_ms` | number, optional, default 250 | 100 to 2000 ms; stored as `every_ms`. |

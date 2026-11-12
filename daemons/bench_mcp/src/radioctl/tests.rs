@@ -1471,6 +1471,10 @@ fn a_test_is_refused_above_the_power_cap_outside_the_ranges_in_a_mode_not_allowe
         );
     }
     assert!(with("confirm_dummy_load", json!("yes")).is_err());
+    assert!(
+        with("mode", json!(5)).unwrap_err().contains("mode must be text"),
+        "a mode that is not text is refused, not replaced by the default"
+    );
     let mut none = good_args();
     none.as_object_mut().unwrap().remove("frequency_hz");
     assert!(txtools::check_args(&none, tx_cfg)

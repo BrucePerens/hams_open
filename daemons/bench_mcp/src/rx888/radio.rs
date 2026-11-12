@@ -44,6 +44,11 @@ fn ssrc(cfg: &Config, which: u32) -> Result<Ssrc, String> {
 /// The mode argument (`usb`, `lsb`, `cw`, `am`, `fm`), `default` when absent.
 pub(crate) fn mode_arg(args: &Value, default: Mode) -> Result<Mode, String> {
     // [@ANCHOR: bench_mcp_rx888_mode_arg]
+    match args.get("mode") {
+        None | Some(Value::Null) => return Ok(default),
+        Some(m) if !m.is_string() => return Err("mode must be text: usb, lsb, cw, am or fm".into()),
+        _ => {}
+    }
     match args.get("mode").and_then(|m| m.as_str()) {
         None => Ok(default),
         Some("usb") => Ok(Mode::Usb),
@@ -599,6 +604,8 @@ mod tests {
         assert_eq!(mode_arg(&json!({}), Mode::Am), Ok(Mode::Am));
         assert_eq!(mode_arg(&json!({"mode": "lsb"}), Mode::Am), Ok(Mode::Lsb));
         assert!(mode_arg(&json!({"mode": "iq"}), Mode::Am).is_err());
+        assert!(mode_arg(&json!({"mode": 5}), Mode::Am).is_err(), "a mode that is not text is refused, not defaulted");
+        assert_eq!(mode_arg(&json!({"mode": null}), Mode::Am), Ok(Mode::Am));
         let cfg = Config::default();
         assert_eq!(ssrc(&cfg, 2).map(|s| s.get()), Ok(cfg.ssrc_base + 2));
         let p = out_path("x", "csv");

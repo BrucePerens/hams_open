@@ -129,9 +129,10 @@ pub fn check_args(args: &Value, tx: &Transmit) -> Result<TestArgs, String> {
             tx.frequency_ranges.iter().map(|r| format!("{:.0} to {:.0} Hz", r.0, r.1)).collect::<Vec<_>>().join(", ")
         ));
     }
-    let mode = match args.get("mode").and_then(|m| m.as_str()) {
-        Some(m) => m.to_ascii_uppercase(),
-        None => tx.allowed_modes[0].clone(),
+    let mode = match args.get("mode") {
+        None | Some(Value::Null) => tx.allowed_modes[0].clone(),
+        Some(Value::String(m)) => m.to_ascii_uppercase(),
+        Some(_) => return Err("mode must be text".into()),
     };
     if !MODES.contains(&mode.as_str()) || !tx.allowed_modes.contains(&mode) {
         return Err(format!(
