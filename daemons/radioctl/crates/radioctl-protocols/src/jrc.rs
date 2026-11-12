@@ -39,6 +39,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The JRC engine.
+// [@ANCHOR: radioctl_jrc_jrc_engine]
 pub type JrcEngine = LineEngine<JrcDialect>;
 
 // [@ANCHOR: radioctl_jrc_engine]
@@ -48,6 +49,7 @@ pub fn engine(desc: RigDescription) -> Result<JrcEngine, RigError> {
 }
 
 /// Which JRC command set a model speaks.
+// [@ANCHOR: radioctl_jrc_kind]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     /// NRD-535D and NRD-545 DSP: digits of hertz, state through `I`.
@@ -63,6 +65,7 @@ enum Kind {
 }
 
 /// The JRC command set of one model.
+// [@ANCHOR: radioctl_jrc_jrc_dialect]
 #[derive(Debug, Clone, Copy)]
 pub struct JrcDialect {
     kind: Kind,
@@ -227,6 +230,7 @@ impl JrcDialect {
 }
 
 /// The virtual JRC radio.
+// [@ANCHOR: radioctl_jrc_jrc_twin]
 #[derive(Debug)]
 pub struct JrcTwin {
     desc: RigDescription,
@@ -297,6 +301,10 @@ impl JrcTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_jrc_jrc_engine]
+    // Tests [@ANCHOR: radioctl_jrc_kind]
+    // Tests [@ANCHOR: radioctl_jrc_jrc_dialect]
+    // Tests [@ANCHOR: radioctl_jrc_jrc_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;

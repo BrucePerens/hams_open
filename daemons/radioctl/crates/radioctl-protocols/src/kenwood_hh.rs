@@ -76,6 +76,7 @@ pub fn th_step_and_frequency(hz: u64) -> (u64, u8) {
 }
 
 /// What the engine is waiting for.
+// [@ANCHOR: radioctl_kenwood_hh_pending]
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -87,6 +88,7 @@ enum Pending {
 }
 
 /// The Kenwood handheld/mobile client engine for one rig.
+// [@ANCHOR: radioctl_kenwood_hh_kenwood_hh_engine]
 #[derive(Debug)]
 pub struct KenwoodHhEngine {
     desc: RigDescription,
@@ -380,6 +382,7 @@ impl ProtocolEngine for KenwoodHhEngine {
 }
 
 /// The virtual handheld: the radio side of a kenwood-hh description, kept apart from the engine.
+// [@ANCHOR: radioctl_kenwood_hh_hh_sim]
 #[derive(Debug)]
 pub struct HhSim {
     dialect: HhDialect,
@@ -515,6 +518,9 @@ impl HhSim {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_kenwood_hh_pending]
+    // Tests [@ANCHOR: radioctl_kenwood_hh_kenwood_hh_engine]
+    // Tests [@ANCHOR: radioctl_kenwood_hh_hh_sim]
     use super::*;
     use crate::virtual_rig::VirtualRig;
     use radioctl_core::units::Mode;

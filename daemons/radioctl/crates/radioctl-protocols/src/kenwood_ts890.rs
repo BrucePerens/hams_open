@@ -106,6 +106,7 @@ const DD3_SPLIT_DIGITS: usize = 38;
 const DD3_LAST_DIGITS: usize = 8;
 
 /// A serial scope sweep arriving in splits: the digits so far and the split expected next.
+// [@ANCHOR: radioctl_kenwood_ts890_splits]
 #[derive(Debug, Default)]
 struct Splits {
     next: u8,
@@ -154,6 +155,7 @@ impl Splits {
 }
 
 /// How a level is written: the command and the guide's range.
+// [@ANCHOR: radioctl_kenwood_ts890_level_wire]
 struct LevelWire {
     name: &'static str,
     min: u16,
@@ -225,6 +227,7 @@ pub fn lan_reply(text: &str) -> Option<bool> {
 }
 
 /// The TS-890S client engine for one rig.
+// [@ANCHOR: radioctl_kenwood_ts890_ts890_engine]
 #[derive(Debug)]
 pub struct Ts890Engine {
     desc: RigDescription,
@@ -243,6 +246,7 @@ pub struct Ts890Engine {
 }
 
 /// What a `##DD2` frame (which has no frequency) is placed with.
+// [@ANCHOR: radioctl_kenwood_ts890_scope_context]
 #[derive(Debug, Default)]
 struct ScopeContext {
     freq_a: Option<Hz>,
@@ -466,6 +470,7 @@ fn scope_reference_code(hundredths: i16) -> Option<u16> {
 
 /// How a scope setting is written: the `BS` letter, the smallest and largest digit the guide
 /// allows, and whether the guide has a set form.
+// [@ANCHOR: radioctl_kenwood_ts890_scope_wire]
 struct ScopeWire {
     letter: char,
     min: u8,

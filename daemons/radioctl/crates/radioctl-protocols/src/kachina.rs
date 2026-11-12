@@ -72,6 +72,7 @@ fn frame(letter: u8, data: &[u8]) -> Vec<u8> {
 }
 
 /// The Kachina client engine.
+// [@ANCHOR: radioctl_kachina_kachina_engine]
 #[derive(Debug)]
 pub struct KachinaEngine {
     desc: RigDescription,
@@ -148,6 +149,7 @@ impl ProtocolEngine for KachinaEngine {
 }
 
 /// A virtual Kachina 505DSP.
+// [@ANCHOR: radioctl_kachina_kachina_twin]
 #[derive(Debug)]
 pub struct KachinaTwin {
     rx: RxBuffer,
@@ -259,6 +261,8 @@ impl VendorTwin for KachinaTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_kachina_kachina_engine]
+    // Tests [@ANCHOR: radioctl_kachina_kachina_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

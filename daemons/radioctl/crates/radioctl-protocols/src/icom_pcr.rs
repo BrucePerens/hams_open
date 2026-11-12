@@ -40,6 +40,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The PCR engine.
+// [@ANCHOR: radioctl_icom_pcr_pcr_engine]
 pub type PcrEngine = LineEngine<PcrDialect>;
 
 // [@ANCHOR: radioctl_pcr_engine]
@@ -54,6 +55,7 @@ const FILTER_15_KHZ: u8 = b'2';
 const MAX_HZ: u64 = 9_999_999_999;
 
 /// The PCR command set: it remembers what it last set because the radio cannot say.
+// [@ANCHOR: radioctl_icom_pcr_pcr_dialect]
 #[derive(Debug, Clone)]
 pub struct PcrDialect {
     /// The PCR1000 puts one extra character in front of each answer (`reply_offset` 1 in Hamlib).
@@ -205,6 +207,7 @@ impl Dialect for PcrDialect {
 }
 
 /// The virtual PCR receiver.
+// [@ANCHOR: radioctl_icom_pcr_pcr_twin]
 #[derive(Debug)]
 pub struct PcrTwin {
     lead: bool,
@@ -288,6 +291,9 @@ impl ReceiverTwin for PcrTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_icom_pcr_pcr_engine]
+    // Tests [@ANCHOR: radioctl_icom_pcr_pcr_dialect]
+    // Tests [@ANCHOR: radioctl_icom_pcr_pcr_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;

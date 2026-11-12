@@ -66,6 +66,7 @@ pub fn parse_mhz(text: &str) -> Option<Hz> {
 }
 
 /// The MDS client engine.
+// [@ANCHOR: radioctl_mds_mds_engine]
 #[derive(Debug)]
 pub struct MdsEngine {
     desc: RigDescription,
@@ -140,6 +141,7 @@ impl ProtocolEngine for MdsEngine {
 }
 
 /// A virtual MDS radio.
+// [@ANCHOR: radioctl_mds_mds_twin]
 #[derive(Debug)]
 pub struct MdsTwin {
     rx: RxBuffer,
@@ -212,6 +214,8 @@ impl VendorTwin for MdsTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_mds_mds_engine]
+    // Tests [@ANCHOR: radioctl_mds_mds_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

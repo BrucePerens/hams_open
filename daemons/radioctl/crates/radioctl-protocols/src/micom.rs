@@ -116,6 +116,7 @@ pub fn decode_frequency(frame: &[u8]) -> Option<Hz> {
 }
 
 /// The MICOM client engine.
+// [@ANCHOR: radioctl_micom_micom_engine]
 #[derive(Debug)]
 pub struct MicomEngine {
     desc: RigDescription,
@@ -185,6 +186,7 @@ impl ProtocolEngine for MicomEngine {
 }
 
 /// A virtual MICOM.
+// [@ANCHOR: radioctl_micom_micom_twin]
 #[derive(Debug)]
 pub struct MicomTwin {
     rx: RxBuffer,
@@ -267,6 +269,8 @@ impl VendorTwin for MicomTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_micom_micom_engine]
+    // Tests [@ANCHOR: radioctl_micom_micom_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

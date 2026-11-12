@@ -740,3 +740,10 @@ fn a_serial_description_asks_for_com_output_and_assembles_the_split_frames() {
         .replace("\n[kenwood]\n", "\n[kenwood]\nscope_link = \"usb\"\n");
     assert!(rigfile::parse(&bad).is_err());
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_kenwood_ts890_level_wire]
+// Tests [@ANCHOR: radioctl_kenwood_ts890_scope_context]
+// Tests [@ANCHOR: radioctl_kenwood_ts890_scope_wire]
+// Tests [@ANCHOR: radioctl_kenwood_ts890_splits]
+// Tests [@ANCHOR: radioctl_kenwood_ts890_ts890_engine]

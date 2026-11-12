@@ -35,6 +35,7 @@ const MAX_FRAME: usize = 4096;
 pub const KEEPALIVE_EVERY: Duration = Duration::from_secs(4);
 
 /// A LAN account for the radio.
+// [@ANCHOR: radioctl_kenwood_ts890_lan_lan_credentials]
 #[derive(Clone)]
 pub struct LanCredentials {
     administrator: bool,
@@ -77,6 +78,7 @@ impl fmt::Debug for LanCredentials {
     }
 }
 
+// [@ANCHOR: radioctl_kenwood_ts890_lan_phase]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Phase {
     AwaitConnect,
@@ -85,6 +87,7 @@ enum Phase {
 }
 
 /// The TS-890S LAN session framing.
+// [@ANCHOR: radioctl_kenwood_ts890_lan_ts890_lan_framing]
 #[derive(Debug)]
 pub struct Ts890LanFraming {
     credentials: LanCredentials,
@@ -215,6 +218,9 @@ impl Framing for Ts890LanFraming {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_kenwood_ts890_lan_lan_credentials]
+    // Tests [@ANCHOR: radioctl_kenwood_ts890_lan_phase]
+    // Tests [@ANCHOR: radioctl_kenwood_ts890_lan_ts890_lan_framing]
     use super::*;
 
     fn session() -> Ts890LanFraming {
