@@ -5,6 +5,7 @@
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
+// [@ANCHOR: testdir_test_dir_struct]
 pub struct TestDir(PathBuf);
 
 impl TestDir {

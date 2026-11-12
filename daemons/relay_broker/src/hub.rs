@@ -5,6 +5,7 @@
 use std::net::Ipv4Addr;
 
 /// The owner's hub settings.
+// [@ANCHOR: hub_hub_settings_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HubSettings {
     /// The wifi interface the access point uses, such as `wlan0`.
@@ -164,6 +165,7 @@ pub fn dnsmasq_conf(s: &HubSettings) -> Result<String, String> {
 }
 
 /// Phase 0 takeover (RELAY_STANDALONE_EMERGENCY_HUB.md section 1a): the hub is a node of the user's own /24 and the router's DHCP is gone.
+// [@ANCHOR: hub_takeover_settings_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TakeoverSettings {
     /// The bridge (or Ethernet) interface on the user's LAN.
@@ -240,6 +242,8 @@ pub fn takeover_dnsmasq_conf(t: &TakeoverSettings) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: hub_hub_settings_struct]
+    // Tests [@ANCHOR: hub_takeover_settings_struct]
     use super::*;
 
     fn good() -> HubSettings {

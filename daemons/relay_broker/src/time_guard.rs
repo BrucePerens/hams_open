@@ -15,6 +15,7 @@ pub const BUILD_DATE_UNIX_SECS: u64 = 1_793_491_200;
 const HOUR: Duration = Duration::from_secs(3600);
 
 /// Why a step was refused. Short and loggable.
+// [@ANCHOR: time_guard_time_denial_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimeDenial {
     /// The target is earlier than [`BUILD_DATE_UNIX_SECS`].
@@ -38,6 +39,7 @@ impl TimeDenial {
 }
 
 /// The step history and the breaker.
+// [@ANCHOR: time_guard_time_guard_struct]
 #[derive(Debug)]
 pub struct TimeGuard {
     max_unproven_step_secs: u64,
@@ -123,6 +125,8 @@ impl TimeGuard {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: time_guard_time_denial_enum]
+    // Tests [@ANCHOR: time_guard_time_guard_struct]
     use super::*;
 
     const T: u64 = BUILD_DATE_UNIX_SECS + 1000;

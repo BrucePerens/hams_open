@@ -14,6 +14,7 @@ use nix::sys::signal::{kill, Signal};
 use nix::unistd::Pid;
 
 /// Where the hub's programs and files are.
+// [@ANCHOR: hub_runner_hub_runner_struct]
 #[derive(Debug, Clone)]
 pub struct HubRunner {
     /// Configuration and pid files.
@@ -188,6 +189,7 @@ impl HubRunner {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: hub_runner_hub_runner_struct]
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 

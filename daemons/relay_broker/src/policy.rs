@@ -12,6 +12,7 @@ use crate::os::{NodeKind, Os, UsbIdentity};
 use crate::wire::{DeviceClass, MAX_STRING};
 
 /// Why an open was refused. Short, fixed, loggable.
+// [@ANCHOR: policy_denial_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Denial {
     /// Not an absolute path.
@@ -56,6 +57,7 @@ impl Denial {
 }
 
 /// The policy table. Loaded from the root-owned config; defaults are the Linux conventions.
+// [@ANCHOR: policy_policy_struct]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Policy {
     /// Every allowed node lives under this directory (`/dev`).
@@ -213,6 +215,8 @@ impl Policy {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: policy_denial_enum]
+    // Tests [@ANCHOR: policy_policy_struct]
     use super::*;
 
     // Tests [@ANCHOR: relay_broker_policy_check_path]

@@ -20,6 +20,7 @@ use crate::time_guard::{TimeGuard, BUILD_DATE_UNIX_SECS};
 use crate::wire::{DeviceClass, Group, Request, Response, Status, TimeSource};
 
 /// The broker state shared by every connection.
+// [@ANCHOR: broker_broker_struct]
 pub struct Broker {
     /// Peers allowed in.
     pub allow: AllowList,

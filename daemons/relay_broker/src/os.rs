@@ -17,6 +17,7 @@ use nix::sys::stat::{fstat, lstat, major, minor, Mode, SFlag};
 use crate::wire::{DeviceClass, DeviceDescriptor};
 
 /// What the OS layer could find out about the USB identity behind a device node.
+// [@ANCHOR: os_usb_identity_enum]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UsbIdentity {
     /// A USB device: vendor id, product id, product string.
@@ -29,6 +30,7 @@ pub enum UsbIdentity {
 }
 
 /// The credentials of the process at the other end of a Unix socket.
+// [@ANCHOR: os_peer_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Peer {
     /// Effective UID.
@@ -40,6 +42,7 @@ pub struct Peer {
 }
 
 /// What a filesystem node is, as far as the policy cares.
+// [@ANCHOR: os_node_kind_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeKind {
     /// A character device with its major and minor numbers.
@@ -106,6 +109,7 @@ pub trait Os {
 }
 
 /// The Linux implementation: sysfs for enumeration, `/etc/group` for membership.
+// [@ANCHOR: os_linux_os_struct]
 #[derive(Debug, Clone)]
 pub struct LinuxOs {
     /// Normally `/sys`.
@@ -441,6 +445,10 @@ impl LinuxOs {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: os_usb_identity_enum]
+    // Tests [@ANCHOR: os_peer_struct]
+    // Tests [@ANCHOR: os_node_kind_enum]
+    // Tests [@ANCHOR: os_linux_os_struct]
     use super::*;
     use std::os::fd::AsFd;
 

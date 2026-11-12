@@ -6,6 +6,7 @@
 use crate::os::Peer;
 
 /// The allow-list.
+// [@ANCHOR: auth_allow_list_struct]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AllowList {
     /// UIDs allowed.
@@ -25,6 +26,7 @@ impl AllowList {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: auth_allow_list_struct]
     use super::*;
 
     // Tests [@ANCHOR: relay_broker_allow_list_permits]
