@@ -18,32 +18,86 @@ A site is every `website.page` whose address is `/<slug>` or starts with `/<slug
 * **Applying the policy on create and write** `[@ANCHOR: user_websites:fn_users_apply_slug_policy]`. `ResUsers._apply_slug_policy(record, vals)` runs from `create()` (`record` is `None`) and from `write()` on one member. It changes nothing unless the policy is `callsign` and the account is not a service account. When the identity is known and `vals` touch the slug or an identity field, it checks the slug is free (`ValidationError` if another member or group holds it) and sets `vals["website_slug"]` to the slugified identity, in place. It returns `True` only when the member has no callsign yet and no slug, which tells the caller to stop the mixin deriving a slug from the name; every other path returns `False`. An explicit slug for a member with no callsign is kept.
 * **Who may write the slug themselves** `[@ANCHOR: user_websites:fn_users_self_writeable_fields]`. `ResUsers.SELF_WRITEABLE_FIELDS` is Odoo's list of fields a user may change on their own record. This module adds `privacy_show_in_directory` and `website_slug` to the inherited list and nothing else; `website_ineligible` is deliberately not on it, so no member can lift their own hiding.
 
-## Language Codes Are Not Slugs `[@ANCHOR: user_websites:site_slug_converter]`
+## Language Codes Are Not Slugs
 
-The `/<slug>` routes see every one-segment path. Odoo's language handling only runs for a path no route matched, so a slug route that matched `/en_US/` or `/fr/blog` would hide the language prefix and answer 404. The route converter `SiteSlugConverter` refuses a value that is an installed language's code, which makes werkzeug treat the rule as not matching, so those paths reach the language handling as before. `to_python()` `[@ANCHOR: user_websites:fn_site_slug_converter_to_python]` does the check at match time, so installing a language needs no restart, and the converter is registered under the name `uwslug` by the `ir.http` override `[@ANCHOR: user_websites:fn_ir_http_get_converters]`.
+The `/<slug>` routes see every one-segment path. Odoo's language handling only runs for a path no route matched, so a slug route that matched `/en_US/` or `/fr/blog` would hide the language prefix and answer 404. The route converter refuses a value that is an installed language's code, which makes werkzeug treat the rule as not matching, so those paths reach the language handling as before. The three entries below describe the converter class, its matching method and its registration; all live in `models/ir_http.py`.
+
+### `class SiteSlugConverter(UnicodeConverter)` [@ANCHOR: user_websites:site_slug_converter]
+
+The werkzeug route converter used by every `/<uwslug:website_slug>` route of this module. It behaves exactly like the stock string converter (one path segment, no slash) except that a value which is an installed language code is refused. It holds no state of its own and is created by werkzeug when the routing map is built; the list of language codes is looked up per request, so installing a language needs no restart. It exists because `/en_US/` once matched a slug route and broke the language-prefixed tours (found 2026-10-13). Tests: `tests/test_member_site_home_url.py` (language-prefixed paths still work).
+
+### `to_python(self, value)` [@ANCHOR: user_websites:fn_site_slug_converter_to_python]
+
+Called by werkzeug at match time with the path segment text `value` (str). When a request with an environment exists and `value.lower()` is one of `language_slugs(request.env)` (from `edge_routing.utils`), it raises werkzeug's `ValidationError`, which tells the router this rule does not match, so another rule or Odoo's language handling takes the path. Otherwise it returns what `UnicodeConverter.to_python` returns, the value unchanged. With no request (during routing-map construction) it never refuses. It reads the language list on every call, which is cheap because the helper caches it per environment; it has no side effects. Tests: `tests/test_member_site_home_url.py` lines for `/en_US/` and `/fr/blog`.
+
+### `IrHttp._get_converters(cls)` [@ANCHOR: user_websites:fn_ir_http_get_converters]
+
+Class method on the `ir.http` inheritance. Returns the stock converter dictionary with one extra entry, `"uwslug"` mapped to `SiteSlugConverter`, so route declarations may write `<uwslug:website_slug>`. No arguments. Odoo calls it once when it builds the routing map; nothing is cached by this module. Without this registration the routes using `uwslug` would fail to load. Test: `tests/test_member_site_home_url.py` checks that the name is registered and the converter is the module's own class.
 
 ## Reserved Words
 
 Every first segment of a platform route is reserved, and the list is also derived from the live routing map. A slug claimed before that and equal to such a word is a site nobody can reach. The 0.6 migration `[@ANCHOR: user_websites:migrate_report_reserved_slug_collisions]` reads the member and group slugs, logs each one that is on the fixed reserved list at ERROR level and returns them, and changes nothing, since renaming moves a member's address and that is a decision for a person.
 
-## Who May Have a Site `[@ANCHOR: user_websites:site_eligibility]`
+## Who May Have a Site
 
-By default every account is eligible. A deployment narrows this by overriding `ResUsers._website_eligibility_gaps()` `[@ANCHOR: user_websites:COMM_website_eligibility_gaps]`, which returns one `{"code", "message", "url"}` dict per missing requirement and an empty list when the member is eligible. `_hams_website_eligible()` `[@ANCHOR: user_websites:COMM_hams_website_eligible]` is true when the list is empty, and `_website_publicly_visible()` `[@ANCHOR: user_websites:COMM_website_publicly_visible]` is true when the member is both eligible and not suspended from websites. Administrators and internal users have no exemption on the public site.
+By default every account is eligible. A deployment narrows this by overriding the gaps method described first below. Administrators and internal users have no exemption on the public site. Ineligibility hides and never deletes: public routes answer 404, stored state is reconciled by the entries below, and the owner is told what is missing. The code is in `models/site_eligibility.py` (module docstring), with the page check in `models/ir_http.py`, the field in `models/user_websites_owned_mixin.py` and the owner message in `controllers/owner_site.py`. Test: `test_site_eligibility_hook` in `tests/test_site_eligibility_hook.py` covers all of them.
 
-Ineligibility hides and never deletes:
+### The eligibility extension point [@ANCHOR: user_websites:site_eligibility]
 
-* Public routes ask the live answer and answer 404. A page under a member's slug is not served while the site is hidden `[@ANCHOR: user_websites:fn_ir_http_serve_page_eligibility]`, because Odoo's page lookup knows nothing about owners; this closes the gap before the next reconcile.
-* `reconcile_website_eligibility()` `[@ANCHOR: user_websites:COMM_reconcile_website_eligibility]` brings stored state in line with the live answer. For a newly ineligible member it unpublishes the member's pages and posts and marks each `hidden_by_eligibility` `[@ANCHOR: user_websites:field_hidden_by_eligibility]`, and it sets the read-only mirror `res.users.website_ineligible`. For a member who is eligible again it republishes exactly the marked pieces, and never a page the member unpublished themselves, nor anything while the member is suspended. It returns `{user_id: "hidden" | "shown"}` for the members that changed and is safe to repeat.
-* It runs from a scheduled job every ten minutes, `_cron_reconcile_website_eligibility()` `[@ANCHOR: user_websites:COMM_cron_reconcile_website_eligibility]`, installed as `[@ANCHOR: user_websites:ir_cron_reconcile_website_eligibility]` and run as the user-websites service account. It also runs from the state-change hooks a deployment supplies and lazily from the owner's dashboard.
-* Which members the reconciler looks at `[@ANCHOR: user_websites:fn_eligibility_site_user_ids]`. With no list given, `reconcile_website_eligibility()` calls `_website_site_user_ids()`, which returns the ids of active members that have a non-empty `website_slug` and are not service accounts: only those can have a site to hide. A plain SQL read with no arguments.
-* Hiding `[@ANCHOR: user_websites:fn_eligibility_hide_site_content]`. `_hide_site_content(env_svc, user)` unpublishes every published page and post owned by the member and marks each `hidden_by_eligibility`, using the service-account environment `env_svc`. It deletes nothing, and running it again with nothing published does nothing.
-* Showing again `[@ANCHOR: user_websites:fn_eligibility_show_site_content]`. `_show_site_content(env_svc, user)` republishes exactly the pages and posts marked `hidden_by_eligibility` and clears the mark; a page the member unpublished themselves was never marked and stays unpublished. A member who is suspended from websites gets nothing republished (the suspension keeps the site hidden).
-* The owner is told what is missing instead of getting a 404 `[@ANCHOR: user_websites:owner_site_ineligible]`: the owner's tools answer 403 with the list of requirements and a link to fix each, hide anything still public, and refuse to create new pages, posts or images while ineligible.
+The concept and module `models/site_eligibility.py`, which adds the field `res.users.website_ineligible` (Boolean, default False, readonly, indexed, `prefetch="user_websites"`, never written from the web and not in `SELF_WRITEABLE_FIELDS`). That field mirrors the last reconciled answer so SQL views (the directory, slug routing) can use it without calling Python. Open source ships with nothing required; hams.com overrides the gaps method to ask for a verified amateur who has accepted the current agreement. While ineligible, no new page, post, blog or image is accepted. Test: `tests/test_site_eligibility_hook.py`.
+
+### `_website_eligibility_gaps(self)` [@ANCHOR: user_websites:COMM_website_eligibility_gaps]
+
+The one method a deployment overrides. `ensure_one()` is called, so it takes a single member record. It returns a list with one `{"code": str, "message": str, "url": str}` dict for each missing requirement: `code` is a stable machine name, `message` is shown to the owner, `url` is where the member fixes it (empty string if nowhere). An empty list means eligible. This version returns `[]`. It must not write and should be cheap, since the public routes ask it for every request to a member's site. Test: `tests/test_site_eligibility_hook.py`.
+
+### `_hams_website_eligible(self)` [@ANCHOR: user_websites:COMM_hams_website_eligible]
+
+Returns True when the member currently has no eligibility gaps (`not self._website_eligibility_gaps()`). Takes one record (`ensure_one()`), no other arguments, no side effects, no database write. The name keeps the original hams.com spelling; open source uses it only through `_website_publicly_visible`. It is the live answer, not the stored `website_ineligible` mirror, which can lag by up to the cron interval. Test: `tests/test_site_eligibility_hook.py` overrides the gaps method and checks the answer flips.
+
+### `_website_publicly_visible(self)` [@ANCHOR: user_websites:COMM_website_publicly_visible]
+
+True when visitors may see this member's site right now: the member is not suspended from websites (`is_suspended_from_websites`) and `_hams_website_eligible()` is true. One record only (`ensure_one()`), no arguments, no writes. Both public routes and the page-serving hook call it, so a site is hidden the moment either condition fails, without waiting for the reconciler. It does not distinguish the reason; the owner's own tools do, through the suspended and ineligible responses below. Test: `tests/test_site_eligibility_hook.py`.
+
+### `IrHttp._serve_page(cls)` for member pages [@ANCHOR: user_websites:fn_ir_http_serve_page_eligibility]
+
+Class method override of Odoo's page-serving step in `models/ir_http.py`. Odoo's own page lookup knows nothing about owners, so a page under `/<slug>/...` would be served even while the member's site is hidden. This override takes the first path segment, lowercased; if it is not an installed language code it looks the member up by slug through the service account, and when that member exists and `_website_publicly_visible()` is false it returns `False` (the page is not served and Odoo answers 404). Anything else goes to the stock implementation. Read only, no locks. It closes the gap before the next reconcile. Test: `tests/test_site_eligibility_hook.py`.
+
+### `reconcile_website_eligibility(self, user_ids=None)` [@ANCHOR: user_websites:COMM_reconcile_website_eligibility]
+
+Brings stored state in line with the live eligibility answer. `@api.private` and `@api.model`, so it cannot be called from RPC. `user_ids` (list of ints, optional) restricts the work to those members; `None` means all members with a site, from `_website_site_user_ids()`. It runs as the user-websites service account. For each existing member it compares `bool(_website_eligibility_gaps())` with the stored `website_ineligible`: newly ineligible gets `_hide_site_content` and the flag set; eligible again gets `_show_site_content` and the flag cleared; still ineligible gets another hide pass to catch content published in a race. Returns `{user_id: "hidden" | "shown"}` for members that changed, and logs the dictionary at info level. Idempotent and safe to repeat. Called by the cron below, by deployment state-change hooks, by the owner dashboard and by the owner routes. Tests: `tests/test_site_eligibility_hook.py` and `tests/test_slug_resolution_cache_and_filters.py`.
+
+### `hidden_by_eligibility` field [@ANCHOR: user_websites:field_hidden_by_eligibility]
+
+A Boolean on the owned-record mixin (`models/user_websites_owned_mixin.py`, inherited by `website.page` and `blog.post`), string "Hidden While Ineligible", default False, not copied, indexed. It is set by the hide step when a published page or post is unpublished because its owner may not have a site, and cleared when the show step republishes it. It is what lets the reconciler republish exactly what it hid and never a piece the owner unpublished themselves. Only the reconciler writes it; any code that republishes content must leave marked pieces to the reconciler. Test: `tests/test_site_eligibility_hook.py`.
+
+### `_cron_reconcile_website_eligibility(self)` and its cron record [@ANCHOR: user_websites:COMM_cron_reconcile_website_eligibility]
+
+The scheduled entry point on `res.users` (`@api.model`): it calls `reconcile_website_eligibility()` with no arguments and returns its result dict. The cron record is `ir_cron_reconcile_website_eligibility` [@ANCHOR: user_websites:ir_cron_reconcile_website_eligibility] in `data/user_websites_data.xml`: named "User Websites: Hide and Show Sites by Eligibility", run as the user-websites service account, every 10 minutes, active, state `code`. A failure of one run changes nothing permanent and the next run repeats it. This is the safety net for a requirement lost without any hook firing. Tests: `tests/test_site_eligibility_hook.py` (both anchors).
+
+### `_website_site_user_ids(self)` [@ANCHOR: user_websites:fn_eligibility_site_user_ids]
+
+`@api.model` helper returning the ids (list of int) of the members the reconciler should look at when no list is given: active users whose `website_slug` is set and non-empty and who are not service accounts, since only those can have a site to hide. It uses one static SQL query with no parameters (marked audit-ignore-sql), so it is fast on a large user table and does not load records. No arguments, no side effects. Test: `tests/test_site_eligibility_hook.py`.
+
+### `_hide_site_content(self, env_svc, user)` [@ANCHOR: user_websites:fn_eligibility_hide_site_content]
+
+`@api.model` helper. `env_svc` is the service-account environment, `user` the member. It finds every published `website.page` (`website_published`) and `blog.post` (`is_published`) owned by `owner_user_id == user.id`, and writes unpublished plus `hidden_by_eligibility = True` in one write per model. Nothing is deleted and nothing else changes; run again with nothing published it does nothing, so it is safe to repeat. Returns nothing. Called only by the reconciler. Writing as the service account bypasses the owner's own rights on purpose. Test: `tests/test_site_eligibility_hook.py`.
+
+### `_show_site_content(self, env_svc, user)` [@ANCHOR: user_websites:fn_eligibility_show_site_content]
+
+`@api.model` helper, the inverse of hiding. If `user.is_suspended_from_websites` it returns at once and republishes nothing, because the suspension keeps the site hidden. Otherwise, using `env_svc`, it finds the member's pages and posts marked `hidden_by_eligibility`, sets them published and clears the mark. A page the member unpublished themselves was never marked and stays unpublished. Returns nothing; idempotent. Called only by the reconciler when a member becomes eligible again. Test: `tests/test_site_eligibility_hook.py`.
+
+### The owner is told what is missing [@ANCHOR: user_websites:owner_site_ineligible]
+
+A branch of `_resolve_site(self, site_slug)` in `controllers/owner_site.py`, which every owner-tools route calls. When the signed-in owner's `_website_eligibility_gaps()` is not empty it first runs `reconcile_website_eligibility([profile_user.id])` to hide anything still public, then raises `SiteResponse` carrying the template `user_websites.owner_site_ineligible` rendered with HTTP status 403 and the context `gaps` (the list of code, message, url), `site_slug` and `main_object`. The owner therefore sees what to fix and a link for each, and tools that create pages, posts or images are refused. Other members get 404 before reaching this branch. Test: `tests/test_site_eligibility_hook.py`.
 
 ## When an Owner-Site Route Must End Early `[@ANCHOR: user_websites:fn_answers_site_response]`
 
 Resolving the owner's site can end the request with a response of its own: a redirect from a retired slug, or the "what is missing" page. Raising an HTTP exception for that would be turned by Odoo's frontend error handler into its own error page (a 301 becomes a 418), so the resolver raises `SiteResponse` instead, and the `answers_site_response` decorator on each owner route returns that response as the route's result.
 
-## A Suspended Owner Is Told Why `[@ANCHOR: user_websites:owner_site_suspended]`
+## A Suspended Owner Is Told Why
 
-When a member's site is suspended, the owner's tools answer 403 with a page that explains the suspension and where to appeal. Nobody else learns that the site exists.
+See the entry below.
+
+### A suspended owner is told why [@ANCHOR: user_websites:owner_site_suspended]
+
+A branch of `_resolve_site(self, site_slug)` in `controllers/owner_site.py`. It is reached only by the signed-in owner of the site (another member gets 404 first, so nobody else learns the site exists). If the member `is_suspended_from_websites`, it raises `SiteResponse` with the `user_websites.owner_site_suspended` template, HTTP status 403, context `site_slug` and `main_object`. The page explains the suspension and where to appeal (the appeal form of the moderation story). The check runs before the eligibility check, so a suspended member sees the suspension, not a requirements list. Test: `tests/test_owner_site.py` (`test_owner_site_suspended_explains_and_points_to_appeal`).
