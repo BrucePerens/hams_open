@@ -19,6 +19,7 @@ UNIX_SCHEME = "unix"
 UNIX_HOST = "unix-socket"  # the Host header on the socket; Odoo serves no virtual host by it there
 
 
+# [@ANCHOR: zero_sudo_odoo_rpc_client_odoo_rpc_error]
 class OdooRpcError(Exception):
     """A JSON-2 call that did not succeed: `status` (int, the HTTP status; 0 when no answer arrived) and `body` (the
     first 500 characters of the answer, for the daemon's own log; Odoo's error answers carry no secret)."""

@@ -208,6 +208,7 @@ class TestUnixSocketEndToEnd(HamsHttpCase):
     # Tests [@ANCHOR: zero_sudo:unix_http_connection_init]
     # Tests [@ANCHOR: zero_sudo:unix_http_connection_connect]
     # Tests [@ANCHOR: zero_sudo:odoo_rpc_error_init]
+    # Tests [@ANCHOR: zero_sudo:zero_sudo_odoo_rpc_client_odoo_rpc_error]
     # Tests [@ANCHOR: zero_sudo:odoo_rpc_client_init]
     # Tests [@ANCHOR: zero_sudo:odoo_rpc_client_connection]
 
