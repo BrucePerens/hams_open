@@ -2,6 +2,7 @@
 from odoo import models, api
 import email.utils
 import logging
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -9,6 +10,7 @@ class MailThread(models.AbstractModel):
     _inherit = 'mail.thread'
 
     # [@ANCHOR: hams_base:COMM_message_route]
+    @public_rpc
     @api.model
     def message_route(self, message, message_dict, model=None, thread_id=None, custom_values=None):
         """
