@@ -45,6 +45,7 @@ const TEST_HOOKS_ENABLED = __TEST_HOOKS_ENABLED__;
 // docs/proposals/SERVICE_WORKER_TESTING.md
 let __testForceIdbError = false;
 
+// [@ANCHOR: caching:js_sw_open_db]
 function openDB() {
     return new Promise((resolve, reject) => {
         if (__testForceIdbError) {
@@ -64,6 +65,7 @@ function openDB() {
     });
 }
 
+// [@ANCHOR: caching:js_sw_update_lru_metadata]
 async function updateLRUMetadata(url) {
     try {
         const db = await openDB();
@@ -80,6 +82,7 @@ async function updateLRUMetadata(url) {
     }
 }
 
+// [@ANCHOR: caching:js_sw_enforce_lru_quota]
 async function enforceLRUQuota(cache) {
     try {
         if (!navigator.storage || !navigator.storage.estimate) return;
@@ -163,6 +166,7 @@ function cleanupStaleCaches() {
 // True when an older version of THIS worker left its cache behind, i.e. this activation is an update.
 // The activate handler must not tell open pages "NEW_VERSION_INSTALLED" on the very first install, or
 // every first-time visitor would see "Update Available: a new version of this app is available".
+// [@ANCHOR: caching:js_sw_previous_version_cache_exists]
 function previousVersionCacheExists() {
     return caches.keys().then((names) => names.some((n) => n.startsWith(CACHE_NAME_PREFIX) && n !== CACHE_NAME));
 }

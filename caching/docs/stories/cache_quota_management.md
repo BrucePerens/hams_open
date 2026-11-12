@@ -20,3 +20,9 @@ This ensures that the most critical, lightweight UI assets (JS/CSS) are always c
 
 ## Client-Side LRU Bookkeeping
 Enforcing the quota client-side (`enforceLRUQuota`, triggered whenever `navigator.storage.estimate()` reports usage past `MAX_STORAGE_BYTES`) requires knowing which cached URL was least recently used, so the Service Worker keeps its own `LRUMetadata` IndexedDB store (one row per cached URL, with a `timestamp` index) alongside the Cache Storage entries themselves. Opening that database (`openDB()`) is expected to settle normally on every real browser ([@ANCHOR: sw_idb_open_db_normal]); a real IndexedDB open failure (private-browsing quota exhaustion, corrupted database, etc.) must make `openDB()` reject cleanly rather than hang the Service Worker forever ([@ANCHOR: sw_idb_open_db_forced_error]).
+
+## Service worker functions, each tested by `tests/test_sw_unit.py`
+- `openDB()` opens the `LRUCacheDB` database, creating the `LRUMetadata` store with its timestamp index the first time, and rejects when the browser cannot open it. [@ANCHOR: caching:js_sw_open_db]
+- `updateLRUMetadata()` records a cached URL and the time it was last used, and only logs when the database cannot be opened. [@ANCHOR: caching:js_sw_update_lru_metadata]
+- `enforceLRUQuota()` does nothing while storage use is within the quota, and over it deletes the ten least recently used entries from the cache and from the bookkeeping. [@ANCHOR: caching:js_sw_enforce_lru_quota]
+- `previousVersionCacheExists()` is true only when an older version of this worker left a cache of its own behind (never for another worker's cache), so the "Update Available" toast is not shown on a first visit. [@ANCHOR: caching:js_sw_previous_version_cache_exists]
