@@ -341,14 +341,12 @@ pub fn measure_custom(s: &mut Link, args: &Value) -> Result<Value, String> {
                 .and_then(Value::as_str)
                 .map(str::to_uppercase)
                 .filter(|x| x == "C1-C2" || x == "C2-C1");
-            Some(
-                (t.zip(src).ok_or_else(|| {
-                    format!(
-                        "delay must be {{type one of {}, sources C1-C2 or C2-C1}}",
-                        DELAY_TYPES.join(", ")
-                    )
-                })?),
-            )
+            Some(t.zip(src).ok_or_else(|| {
+                format!(
+                    "delay must be {{type one of {}, sources C1-C2 or C2-C1}}",
+                    DELAY_TYPES.join(", ")
+                )
+            })?)
         }
     };
     let snapshot = match args.get("snapshot") {
@@ -1722,5 +1720,35 @@ mod tests {
             n,
             "nothing sent for a bad call"
         );
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_status]
+    // Tests [@ANCHOR: bench_mcp_scope_measure]
+    // Tests [@ANCHOR: bench_mcp_scope_capture]
+    // Tests [@ANCHOR: bench_mcp_scope_spectrum]
+    // Tests [@ANCHOR: bench_mcp_scope_screenshot]
+    // Tests [@ANCHOR: bench_mcp_scope_read_waveform]
+    #[test]
+    fn the_older_scope_tools_read_status_measurements_waveform_spectrum_and_screen_from_the_fake() {
+        let (_f, mut l) = link();
+        let out = crate::testdir::scratch("scope_guide_older");
+        let st = crate::scope::status(&mut l).unwrap();
+        assert_eq!(st["trigger_mode"], "AUTO");
+        assert_eq!(st["channels"].as_array().unwrap().len(), 2);
+        let m = crate::scope::measure(&mut l, &json!({"channel": 1, "items": ["PKPK", "FREQ"]}))
+            .unwrap();
+        assert!(m.to_string().matches("E+").count() >= 2, "{m}");
+        let c = crate::scope::capture(&mut l, &json!({"channel": 1}), &out).unwrap();
+        assert_eq!(c["samples"], 1000);
+        assert!((c["pkpk_v"].as_f64().unwrap() - 4.0).abs() < 0.05, "{c}");
+        let sp = crate::scope::spectrum(
+            &mut l,
+            &json!({"channel": 1, "points": 512, "window": "hanning"}),
+            &out,
+        )
+        .unwrap();
+        assert!(!sp["peaks"].as_array().unwrap().is_empty(), "{sp}");
+        let shot = crate::scope::screenshot(&mut l, &out).unwrap();
+        assert!(shot["file"].as_str().unwrap().ends_with(".bmp"));
     }
 }

@@ -300,6 +300,10 @@ the supply output on.
 * **Cursors** exist (`CRMS?` answers) but are not wrapped. Channel math (add, subtract, multiply, divide) is not wrapped: only channel 1 is connected here.
 * The display sleeps after 30 minutes (`SCSV 30MIN`); SCPI measurements and `SCDP` screenshots still work while it sleeps. `SCSV OFF` was not changed.
 
+## Scope functions written from the programming guide (2026-11-12)
+
+The tools `bench_scope_history`, `_reference`, `_setup`, `_passfail`, `_measure_custom`, `_counter`, `_math_native`, `_cursor_native`, `_trigger` and `_decode` (and the `xy`, `persistence`, `dot_join` and `menu` arguments of `bench_scope_display`, and `DROP` in `bench_set`) are written from the SDS1000X-E programming guide (Siglent EN02E, kept in `/storage/manuals/siglent/SDS1202X-E`, not in this repository) and tested against `src/fake_scope.rs`, a fake SCPI server that keeps the guide's settings and answers in its formats. The real unit's answers to them are not yet compared with the guide: each tool reads back what the scope holds after a change, and a value the unit did not accept shows as its old value or as no answer. The list of replies the lab must confirm is in the to-do `bench-mcp-scope-remaining-functions`. The guide has no command for reference-waveform read-back or compare, DVM, histogram, a window trigger, decoded-frame read-out, or switching the math trace on, so those are not offered.
+
 ## The VNA's functions as tools (2026-10-28)
 
 `bench_vna_sweep` (optionally corrected with `calibration=<file>` and the same `cable` text), `bench_vna_calibrate_measure` and `_build` (open, short, load, thru; a kit file with

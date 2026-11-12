@@ -364,24 +364,53 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
             return vec![];
         }
         ("SARA?", _) => {
-            let depth = match st.vals["MSIZ"].as_str() { "7K" | "14K" => 7e3, "70K" | "140K" => 7e4, "700K" | "1.4M" => 7e5, _ => 7e6 };
+            let depth = match st.vals["MSIZ"].as_str() {
+                "7K" | "14K" => 7e3,
+                "70K" | "140K" => 7e4,
+                "700K" | "1.4M" => 7e5,
+                _ => 7e6,
+            };
             let tdiv = parse_num(&st.vals["TDIV"]).unwrap().0;
-            return text(format!("SARA {}", e((depth / (14.0 * tdiv)).min(1e9), "Sa/s")));
+            return text(format!(
+                "SARA {}",
+                e((depth / (14.0 * tdiv)).min(1e9), "Sa/s")
+            ));
         }
-        ("SCDP", _) => return b"BM\x1e\0\0\0\0\0\0\0\x1a\0\0\0\x0c\0\0\0\x01\0\x01\0\x01\0\x18\0\xff\xff\xff\0".to_vec(),
+        ("SCDP", _) => {
+            // A small bitmap: the header the scope sends and 200 bytes of pixels.
+            let mut bmp =
+                b"BM\x1e\0\0\0\0\0\0\0\x1a\0\0\0\x0c\0\0\0\x01\0\x01\0\x01\0\x18\0".to_vec();
+            bmp.extend((0..200u8).map(|i| i.wrapping_mul(7)));
+            return bmp;
+        }
         ("DEFINE", _) => {
             st.vals.insert("DEFINE".into(), arg.to_string());
             return vec![];
         }
-        ("DEFINE?", _) => return text(format!("DEFINE {}", st.vals.get("DEFINE").map_or("EQN,'C1+C2'", |v| v))),
+        ("DEFINE?", _) => {
+            return text(format!(
+                "DEFINE {}",
+                st.vals.get("DEFINE").map_or("EQN,'C1+C2'", |v| v)
+            ))
+        }
         ("FRAM", _) => {
             st.frame = arg.parse::<u32>().unwrap_or(0).min(100);
             return vec![];
         }
         ("FRAM?", _) => return text(format!("FRAM {}", st.frame)),
-        ("FTIM?", _) => return text(format!("FTIM 00: 05: {:02}. {:06}", st.frame % 60, 650_814 + st.frame * 1000)),
+        ("FTIM?", _) => {
+            return text(format!(
+                "FTIM 00: 05: {:02}. {:06}",
+                st.frame % 60,
+                650_814 + st.frame * 1000
+            ))
+        }
         ("CYMT?", _) | ("CYMT_HW?", _) => {
-            return text(if name == "CYMT?" { format!("CYMT {}", e(1e3, "Hz")) } else { "CYMT 1.00000kHz".into() });
+            return text(if name == "CYMT?" {
+                format!("CYMT {}", e(1e3, "Hz"))
+            } else {
+                "CYMT 1.00000kHz".into()
+            });
         }
         ("PACU", _) => {
             if let Some((p, c)) = arg.split_once(',') {
@@ -402,7 +431,12 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
             }
             return vec![];
         }
-        ("PASTAT?", _) => return text(format!("PASTAT {}", st.vals.get("PASTAT").map_or("OFF", |v| v))),
+        ("PASTAT?", _) => {
+            return text(format!(
+                "PASTAT {}",
+                st.vals.get("PASTAT").map_or("OFF", |v| v)
+            ))
+        }
         ("MEAD", _) => return vec![],
         ("PFOP", _) => {
             if st.vals["PFEN"] == "ON" {
@@ -425,7 +459,12 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
                 st.pf.1 += 10;
                 st.pf.2 += 1;
             }
-            return text(format!("PFDD FAIL,{},PASS,{},TOTAL,{}", st.pf.2, st.pf.1 - st.pf.2, st.pf.1));
+            return text(format!(
+                "PFDD FAIL,{},PASS,{},TOTAL,{}",
+                st.pf.2,
+                st.pf.1 - st.pf.2,
+                st.pf.1
+            ));
         }
         ("REFSA", _) => {
             st.ref_saved.push(st.vals["REFLA"].clone());
