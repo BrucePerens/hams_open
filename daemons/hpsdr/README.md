@@ -71,8 +71,9 @@ revision 1.3 fixed the order to big-endian, which is what is implemented.
 Licence: AGPL-3.0-or-later. The toolchain is pinned in `rust-toolchain.toml` (as for `daemons/radioctl`).
 Build and test: `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`.
 
-Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test carries
-`// Tests [@ANCHOR: id]`, and this README cites it as `[@ANCHOR: hpsdr:id]` below.
+Anchors (ADR 0090): a function carries an anchor comment (the word ANCHOR and its id in square brackets after an at sign) in
+source, its test carries the same tag after the word Tests, and this README cites it, with the crate name and a colon in front of the id, in the
+heading of its entry below.
 
 ### `broadcast_target` [@ANCHOR: hpsdr:hpsdr_discovery_broadcast_target]
 
