@@ -39,6 +39,7 @@ pub const INVALID_SLICE: u32 = 0x5000_000D;
 pub const PAN_STREAM: u32 = 0x4000_0000;
 
 /// Whether a status line follows or precedes the reply that caused it.
+// [@ANCHOR: radioctl_virtual_flex_order]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Order {
     /// `R` first, then `S`.
@@ -48,6 +49,7 @@ pub enum Order {
 }
 
 /// A change made at the radio itself (the GUI or the front panel), not by this client.
+// [@ANCHOR: radioctl_virtual_flex_flex_panel]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlexPanel {
     /// The slice was tuned.
@@ -59,6 +61,7 @@ pub enum FlexPanel {
 }
 
 /// What the virtual radio holds.
+// [@ANCHOR: radioctl_virtual_flex_flex_rig_state]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlexRigState {
     /// Frequency of slice 0.
@@ -88,6 +91,7 @@ pub struct FlexRigState {
 }
 
 /// The radio.
+// [@ANCHOR: radioctl_virtual_flex_virtual_flex]
 pub struct VirtualFlex {
     handle: u32,
     model: String,

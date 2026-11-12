@@ -115,6 +115,7 @@ fn panel_change(panel: Panel) -> PanelChange {
 
 /// The radio's stand-in a transcript replays against: the family's virtual radio, or, for an
 /// OpenHPSDR description, a stand-in for the `hpsdr_io` bridge the engine really talks to.
+// [@ANCHOR: radioctl_conformance_stand_in]
 enum StandIn {
     Rig(Box<VirtualRig>),
     Flex(Box<VirtualFlex>),
@@ -128,6 +129,7 @@ enum StandIn {
 /// PTT and attenuator are kept; forward power reads 0 and SWR 1.0 (`10` tenths), as the bridge
 /// reports with no forward power. Transcripts for the ANAN files are of this protocol, not of
 /// the radio's UDP wire (chapter 7 of the manual).
+// [@ANCHOR: radioctl_conformance_bridge_stand_in]
 struct BridgeStandIn {
     freq: u64,
     ptt: bool,
@@ -199,6 +201,7 @@ impl BridgeStandIn {
 /// does); the signal reads a fixed noise level, `S 729` (-127.1 dB re full scale, the RX-888's
 /// 2.95 kHz noise with no antenna). Transcripts for `radiod-channel` files are of this protocol, not
 /// of `radiod`'s multicast wire.
+// [@ANCHOR: radioctl_conformance_radiod_stand_in]
 struct RadiodStandIn {
     freq: u64,
     mode: &'static str,
@@ -447,6 +450,9 @@ fn check_decoding(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_conformance_stand_in]
+    // Tests [@ANCHOR: radioctl_conformance_bridge_stand_in]
+    // Tests [@ANCHOR: radioctl_conformance_radiod_stand_in]
     use super::*;
     use radioctl_core::transcript;
 

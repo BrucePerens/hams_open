@@ -72,6 +72,7 @@ const MAX_BCD_HZ: u64 = 9_999_999_999;
 const MAX_CW_CHARS: usize = 30;
 
 /// One decoded frame.
+// [@ANCHOR: radioctl_civ_frame]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
     /// Destination address.
@@ -96,6 +97,7 @@ impl Frame {
 }
 
 /// What the frame parser found.
+// [@ANCHOR: radioctl_civ_parsed]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Parsed {
     /// A well-formed frame.
@@ -177,6 +179,7 @@ pub fn encode_bcd_meter(value: u16) -> [u8; 2] {
 }
 
 /// Splits a byte stream into CI-V frames. Holds partial frames between calls.
+// [@ANCHOR: radioctl_civ_frame_parser]
 #[derive(Debug, Default)]
 pub struct FrameParser {
     pending: Vec<u8>,
@@ -258,6 +261,7 @@ fn frame_or_junk(raw: Vec<u8>) -> Parsed {
 }
 
 /// The CI-V client engine for one rig.
+// [@ANCHOR: radioctl_civ_civ_engine]
 #[derive(Debug)]
 pub struct CivEngine {
     desc: RigDescription,
@@ -1039,6 +1043,10 @@ impl CivEngine {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_civ_frame]
+    // Tests [@ANCHOR: radioctl_civ_parsed]
+    // Tests [@ANCHOR: radioctl_civ_frame_parser]
+    // Tests [@ANCHOR: radioctl_civ_civ_engine]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

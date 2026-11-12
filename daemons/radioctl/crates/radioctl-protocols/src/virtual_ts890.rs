@@ -23,6 +23,7 @@ const FILTER_SWEEP_SAMPLES: usize = 213;
 
 /// The bandscope settings of a virtual TS-890S (every `BS` command the guide has up to `BSC`, kept
 /// as the digits the guide defines) and the sweep counter.
+// [@ANCHOR: radioctl_virtual_ts890_ts890_scope]
 #[derive(Debug)]
 pub(super) struct Ts890Scope {
     display: u8,
