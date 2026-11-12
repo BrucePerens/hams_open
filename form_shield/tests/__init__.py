@@ -6,3 +6,4 @@ from . import test_http
 from . import test_refusal
 from . import test_form_shield_hoot
 from . import test_error_notice_start_hoot
+from . import test_form_unavailable_hoot

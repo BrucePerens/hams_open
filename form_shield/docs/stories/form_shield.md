@@ -75,3 +75,7 @@ challenge may be used once [@ANCHOR: form_shield:claim_nonce]; the limits count 
 ## Page script: the refusal notice
 
 - `FormShieldErrorNotice.start()` runs on each page; when the address carries `form_shield_error=<reason>` it shows the reason's words in a danger notification and removes the parameter from the address, keeping the others, so a reload does not repeat it; without the parameter it does nothing. Tests: `static/tests/error_notice_start.test.js`. [@ANCHOR: form_shield:js_error_notice_start]
+
+## Page script: a form whose check cannot run
+
+- `FormShieldForm.unavailable()` is what a shielded form does when the browser cannot run the automatic check: it shows the link to the simple question page when the form has one; otherwise it asks the question inside the form and lets the form be sent with the answer; with neither, or when the question cannot be fetched, it says so in the form's status line. Tests: `static/tests/form_unavailable.test.js`. [@ANCHOR: form_shield:js_form_unavailable]
