@@ -171,6 +171,7 @@ mod tests {
 
     // Tests [@ANCHOR: audio_heard_tone]
     // Tests [@ANCHOR: bench_mcp_audio_heard_tracks]
+    // Tests [@ANCHOR: bench_mcp_audio_heard_heard_type]
     #[test]
     fn a_clear_tone_over_room_noise_is_heard_with_its_times() {
         let h = hear_tone(&rec(Some(-30.0), 0.003, 1300.0), R, 1300.0, 0.5, 12.0);

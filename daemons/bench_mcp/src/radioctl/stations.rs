@@ -512,7 +512,6 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_stations_edit]
-    // Tests [@ANCHOR: bench_mcp_audio_heard_heard_type]
     #[test]
     fn the_owner_adds_retires_restores_and_removes_and_the_rules_hold() {
         let mut t = Table {

@@ -456,7 +456,7 @@
 
 **Functions that touch it.** `state` (src/install.rs:161).
 
-**See also:** test `a_scope_that_never_answered_is_a_no_go_that_names_the_evidence_and_the_action_and_a_clean_log_is_go (tests/soak_gonogo.rs)`.
+**See also:** test `apply_installs_is_idempotent_backs_up_what_it_replaces_and_uninstall_restores_it (src/install.rs)`.
 
 ### `ProcessExec` [@ANCHOR: vnwa_open:vnwa_open_install_process_exec_type]
 

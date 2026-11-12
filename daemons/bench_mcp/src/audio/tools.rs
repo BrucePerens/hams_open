@@ -686,6 +686,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_tools_source]
+    // Tests [@ANCHOR: bench_mcp_audio_tools_source_type]
     #[test]
     fn a_source_is_a_managed_file_within_the_limit_or_a_generated_tone() {
         let d = scratch("source");
