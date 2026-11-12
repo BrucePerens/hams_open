@@ -150,6 +150,12 @@ def opts(tmp, **kw):
 
 
 class BenchVerifyTests(unittest.TestCase):
+    # Tests [@ANCHOR: radioctl_bench_verify_check]
+    # Tests [@ANCHOR: radioctl_bench_verify_result]
+    # Tests [@ANCHOR: radioctl_bench_verify_env]
+    # Tests [@ANCHOR: radioctl_bench_verify_rigctl]
+    # Tests [@ANCHOR: radioctl_bench_verify_options]
+    # Tests [@ANCHOR: radioctl_bench_verify_runner]
     # Tests [@ANCHOR: radioctl_bench_load_checks]
     def test_the_runbook_index_and_sections_are_read(self):
         checks = b.load_checks(b.RUNBOOK.read_text())
@@ -179,6 +185,7 @@ class BenchVerifyTests(unittest.TestCase):
             os.close(master)
             os.close(slave)
 
+    # Tests [@ANCHOR: radioctl_bench_verify_daemon]
     # Tests [@ANCHOR: radioctl_bench_daemon_config]
     def test_the_config_opens_the_gate_only_when_asked_and_only_briefly(self):
         closed = tomllib.loads(b.daemon_config("icom-ic-7300", "usb:10c4:ea60", 19200, 4999, False, 5))["rig"][0]

@@ -53,6 +53,7 @@ INDEX_ID = re.compile(r"^[A-Z]\d+$")
 SECTION = re.compile(r"^#### ([A-Z]\d+)\. (.+)$")
 
 
+# [@ANCHOR: radioctl_bench_verify_check]
 @dataclass
 class Check:
     """One row of the runbook index plus its section text."""
@@ -71,6 +72,7 @@ class Check:
         return self.phase == "C"
 
 
+# [@ANCHOR: radioctl_bench_verify_result]
 @dataclass
 class Result:
     """The outcome of one check: PASS, FAIL, NA, SKIPPED or REFUSED, with a one-line detail."""
@@ -124,6 +126,7 @@ def port_refusal(port: str) -> str | None:
     return f"{port!r} is not a by-id path, usb:VID:PID, a pty or 'virtual'"
 
 
+# [@ANCHOR: radioctl_bench_verify_env]
 class Env:
     """Everything the tool does to the outside world, so tests can replace it."""
 
@@ -203,6 +206,7 @@ def daemon_config(rig_id: str, port: str, baud: int, listen_port: int, transmit:
     return "\n".join(lines) + "\n"
 
 
+# [@ANCHOR: radioctl_bench_verify_rigctl]
 class Rigctl:
     """A client of the rigctld text protocol (radioctld speaks it); one line out, the reply lines back."""
 
@@ -254,6 +258,7 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
+# [@ANCHOR: radioctl_bench_verify_daemon]
 class Daemon:
     """One radioctld started for one phase and always stopped again."""
 
@@ -295,6 +300,7 @@ class Daemon:
         self.proc = None
 
 
+# [@ANCHOR: radioctl_bench_verify_options]
 @dataclass
 class Options:
     rig: str
@@ -338,6 +344,7 @@ def description_caps(rigs_dir: Path, rig: str) -> tuple[str, set[str]]:
     return data.get("rig", {}).get("name", rig), set(data.get("capabilities", []))
 
 
+# [@ANCHOR: radioctl_bench_verify_runner]
 class Runner:
     """Runs the checks of one rig in order and collects results."""
 
