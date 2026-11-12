@@ -98,7 +98,7 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_capture`, `bench_screenshot` | read_only | scope |
 | `bench_scope_spectrum` | read_config (it may set the timebase and memory depth) | scope |
 | `bench_scope_math`, `bench_scope_acquire`, `bench_scope_channel`, `bench_scope_display`, `bench_scope_history`, `bench_scope_reference`, `bench_scope_setup`, `bench_scope_passfail`, `bench_scope_measure_custom` | read_config (they set the scope and read it back; math stops a running scope for one frame and puts it back) | scope |
-| `bench_scope_cursors` | read_only | scope |
+| `bench_scope_cursors`, `bench_scope_counter` | read_only | scope |
 | `bench_set` | read_config | both (supply setpoints are capped by `max_volts`/`max_amps`) |
 | `bench_psu_output` | **full** (needs `confirm_load_connected: true`, has `dry_run`, switches itself off after `for_s`, at most `max_on_s`) | supply |
 | `bench_psu_safe_state` | read_config (output off, read back) | supply |
