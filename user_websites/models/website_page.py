@@ -49,6 +49,7 @@ def _remove_keeping_tail(element):
     parent.remove(element)
 
 
+# [@ANCHOR: user_websites_website_page_website_page]
 class WebsitePage(models.Model):
     _name = "website.page"
     name = fields.Char(string="Name", default=lambda self: self._description)

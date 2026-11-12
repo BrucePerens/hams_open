@@ -149,6 +149,7 @@ class TestBlogPostOwnership(odoo.tests.common.HttpCase):
             "Public user should not be able to trigger blog creation",
         )
 
+    # Tests [@ANCHOR: user_websites_owner_site_user_websites_owner_controller]
     def test_05_owner_can_create_blog_post(self):
         # Tests [@ANCHOR: user_websites:COMM_create_blog_post]
         # blog_index's own template must offer a way to add a

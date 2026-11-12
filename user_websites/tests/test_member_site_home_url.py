@@ -53,6 +53,7 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         )
         self.env.flush_all()
 
+    # Tests [@ANCHOR: user_websites_ir_http_ir_http]
     def test_01_home_served_at_slug(self):
         # Tests [@ANCHOR: user_websites:fn_ir_http_get_converters]
         # Tests [@ANCHOR: user_websites:COMM_user_home_fallback]
@@ -134,6 +135,7 @@ class TestMemberSiteHomeUrl(HamsHttpCase):
         addon_path = get_module_path(parts[2])
         return not addon_path or os.path.dirname(addon_path) == open_source_root
 
+    # Tests [@ANCHOR: user_websites_ir_http_site_slug_converter]
     def test_09_reserved_slugs_cover_static_single_segment_routes(self):
         # Tests [@ANCHOR: user_websites:COMM_res_users_check_reserved_slugs]
         # A static route beats the /<slug> converter route, so a member who claimed one of these

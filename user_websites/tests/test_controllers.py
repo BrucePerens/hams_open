@@ -74,6 +74,7 @@ class TestUserWebsitesControllers(RealTransactionCase):
         # Commit to ensure the concurrent HTTP worker can see the database state
         self.env.cr.commit()
 
+    # Tests [@ANCHOR: user_websites_main_user_websites_controller]
     def test_01_api_pending_reports_admin_access(self):
         # Tests [@ANCHOR: user_websites:COMM_pending_reports]
         """
@@ -203,6 +204,7 @@ class TestUserWebsitesControllers(RealTransactionCase):
             "CRITICAL PRIVACY VIOLATION: User opted out of the directory but was exposed!",
         )
 
+    # Tests [@ANCHOR: user_websites_res_users_moderation_res_users_moderation]
     def test_05_community_directory_excludes_suspended_user(self):
         """
         See docs/bug_hunt_claims/.../public_directory_view_init.md.

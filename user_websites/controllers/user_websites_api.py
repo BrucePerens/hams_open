@@ -9,6 +9,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: user_websites_user_websites_api_user_websites_api]
 class UserWebsitesApi(http.Controller):
 
     @http.route(

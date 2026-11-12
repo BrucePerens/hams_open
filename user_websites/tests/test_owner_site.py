@@ -58,6 +58,7 @@ class TestMemberHtmlSanitizer(BaseCase):
             self.assertNotIn(needle, clean)
         self.assertIn("Hi", clean)
 
+    # Tests [@ANCHOR: user_websites_sql_views_user_websites_db_functions]
     def test_helper_functions_are_exercised(self):
         # The helpers below are exercised through the sanitizer and the owner routes tested in
         # this module (test_owner_page_create_edit_publish and friends).

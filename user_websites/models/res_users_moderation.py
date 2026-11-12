@@ -8,6 +8,7 @@ from .res_users import _async_unpublish_content, BACKGROUND_EXECUTOR
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: user_websites_res_users_moderation_res_users_moderation]
 class ResUsersModeration(models.Model):
     """
     Feature-specific extension of res.users to handle the

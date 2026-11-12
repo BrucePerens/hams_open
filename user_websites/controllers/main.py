@@ -298,6 +298,7 @@ def _serve_core_fallback():
     return request.env["ir.http"]._serve_fallback()
 
 
+# [@ANCHOR: user_websites_main_user_websites_controller]
 class UserWebsitesController(http.Controller):
 
     # [@ANCHOR: user_websites:report_violation_page]

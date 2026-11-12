@@ -33,6 +33,7 @@ _logger = logging.getLogger(__name__)
 SVC = "user_websites.user_websites_service_account"
 
 
+# [@ANCHOR: user_websites_site_eligibility_res_users_site_eligibility]
 class ResUsersSiteEligibility(models.Model):
     _inherit = "res.users"
 

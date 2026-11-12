@@ -5,6 +5,7 @@ from odoo import models, api, fields, _
 from odoo.exceptions import AccessError, ValidationError
 
 
+# [@ANCHOR: user_websites_blog_blog_blog_blog]
 class BlogBlog(models.Model):
     _name = "blog.blog"
     name = fields.Char(string="Name", default=lambda self: self._description)

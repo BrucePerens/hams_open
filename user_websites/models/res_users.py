@@ -109,6 +109,7 @@ def _async_unpublish_content(db_name, user_ids):
         cr.close()
 
 
+# [@ANCHOR: user_websites_res_users_res_users]
 class ResUsers(models.Model):
     """
     Inherits from `res.users` to add features for personal user websites.

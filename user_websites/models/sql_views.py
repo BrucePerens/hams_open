@@ -5,6 +5,7 @@
 from odoo import models, fields, tools
 
 
+# [@ANCHOR: user_websites_sql_views_user_websites_public_directory_view]
 class UserWebsitesPublicDirectoryView(models.Model):
     _name = "user_websites.public_directory_view"
     _description = "Community Directory SQL View"
@@ -58,6 +59,7 @@ class UserWebsitesPublicDirectoryView(models.Model):
         )
 
 
+# [@ANCHOR: user_websites_sql_views_user_websites_content_routing_view]
 class UserWebsitesContentRoutingView(models.Model):
     _name = "user_websites.content_routing_view"
     _description = "Content Routing SQL View"
@@ -130,6 +132,7 @@ class UserWebsitesContentRoutingView(models.Model):
         )
 
 
+# [@ANCHOR: user_websites_sql_views_user_websites_weekly_digest_view]
 class UserWebsitesWeeklyDigestView(models.Model):
     _name = "user_websites.weekly_digest_view"
     name = fields.Char(string="Name", default=lambda self: self._description)
@@ -189,6 +192,7 @@ class UserWebsitesWeeklyDigestView(models.Model):
         )
 
 
+# [@ANCHOR: user_websites_sql_views_user_websites_db_functions]
 class UserWebsitesDbFunctions(models.AbstractModel):
     _name = "user_websites.db_functions"
     name = fields.Char(string="Name", default=lambda self: self._description)

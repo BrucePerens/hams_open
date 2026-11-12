@@ -8,6 +8,7 @@ from odoo.exceptions import AccessError, ValidationError
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: user_websites_user_websites_owned_mixin_user_websites_owned_mixin]
 class UserWebsitesOwnedMixin(models.AbstractModel):
     """
     An abstract mixin that provides the 'Proxy Ownership' pattern to any model.

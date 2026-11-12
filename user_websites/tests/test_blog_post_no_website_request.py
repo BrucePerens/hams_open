@@ -51,6 +51,8 @@ class TestBlogPostWithoutWebsiteRequest(HamsHttpCase):
         fake._get_current_object = lambda: fake
         self.safe_patch("odoo.addons.cloudflare.models.edge_context.request", new=fake)
 
+    # Tests [@ANCHOR: user_websites_sql_views_user_websites_content_routing_view]
+    # Tests [@ANCHOR: user_websites_sql_views_user_websites_public_directory_view]
     def test_create_with_request_lacking_website_attribute(self):
         self._fake_backend_request()
         post = self.env["blog.post"].create(self._vals("orm"))
@@ -83,6 +85,7 @@ class TestBlogPostWithoutWebsiteRequest(HamsHttpCase):
         self.assertEqual(body["result"][0]["name"], f"Post {self.uid_} rpc")
         self.assertTrue(self.env["blog.post"].search([("name", "=", f"Post {self.uid_} rpc")]))
 
+    # Tests [@ANCHOR: user_websites_blog_urls_user_blog_redirects]
     def test_enqueue_failure_never_fails_create_or_write(self):
         self.safe_patch(
             "odoo.addons.cloudflare.models.purge_queue.CloudflarePurgeQueue.enqueue_tags",

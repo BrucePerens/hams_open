@@ -76,6 +76,7 @@ class TestUserBlogUrls(HamsHttpCase):
         self.assertNotIn("'", self.post.website_url)
         self.assertNotIn("-s-blog", self.post.website_url)
 
+    # Tests [@ANCHOR: user_websites_blog_urls_site_blog_url]
     def test_02_post_is_served_at_the_callsign_address(self):
         # Tests [@ANCHOR: user_websites:COMM_user_blog_owner]
         # Tests [@ANCHOR: user_websites:COMM_user_blog_post]
@@ -93,6 +94,7 @@ class TestUserBlogUrls(HamsHttpCase):
         self.assertEqual(upper.status_code, 301)
         self.assertEqual(self._location(upper), self.post.website_url)
 
+    # Tests [@ANCHOR: user_websites_blog_urls_user_blog_pages]
     def test_04_a_post_is_only_found_under_its_own_site(self):
         # Tests [@ANCHOR: user_websites:COMM_user_blog_owner]
         # Tests [@ANCHOR: user_websites:COMM_user_blog_post]
