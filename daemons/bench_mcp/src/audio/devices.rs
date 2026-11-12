@@ -475,6 +475,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_reserved_by_topology]
+    // Tests [@ANCHOR: bench_mcp_rotator_config]
     #[test]
     fn a_dongle_with_the_codec_id_is_reserved_only_beside_the_vnwa_control_chip() {
         let root = crate::testdir::TestDir::new("bench_audio_topology");

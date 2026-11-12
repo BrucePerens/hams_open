@@ -47,6 +47,7 @@ const ARGUMENTS_MARKER: &str = "<!-- arguments -->";
 const CHILDREN_MARKER: &str = "<!-- children -->";
 const DEFAULT_MAX_CHARS: usize = 24_000;
 
+// [@ANCHOR: bench_mcp_manual_page]
 #[derive(Debug, Clone)]
 pub struct Page {
     /// Path from the root without `.md`; a directory's page has the directory's path.
@@ -189,6 +190,7 @@ pub fn normalize(path: &str) -> String {
 // ---------------------------------------------------------------------------------------------
 // The tree
 
+// [@ANCHOR: bench_mcp_manual_manual]
 pub struct Manual {
     pub pages: Vec<Page>,
     by_path: HashMap<String, usize>,
@@ -327,6 +329,7 @@ impl Manual {
 // ---------------------------------------------------------------------------------------------
 // Tool schemas (the argument tables)
 
+// [@ANCHOR: bench_mcp_manual_tool_info]
 /// What the registered tools look like: name, tier spelled as in the front matter, schema.
 pub struct ToolInfo {
     pub tier: String,
@@ -485,6 +488,7 @@ pub fn with_pointers(tools: Vec<Tool>) -> Vec<Tool> {
 // ---------------------------------------------------------------------------------------------
 // Search (BM25 over the rendered pages)
 
+// [@ANCHOR: bench_mcp_manual_search_index]
 #[derive(Default)]
 struct SearchIndex {
     docs: Vec<HashMap<String, f32>>,
@@ -642,6 +646,7 @@ fn clip_around(text: &str, query: &[String], max: usize) -> String {
 // ---------------------------------------------------------------------------------------------
 // Sections
 
+// [@ANCHOR: bench_mcp_manual_heading]
 struct Heading {
     level: usize,
     text: String,
@@ -721,6 +726,7 @@ fn truncate_chars(text: &str, max: usize) -> (String, bool) {
 // ---------------------------------------------------------------------------------------------
 // The five tools
 
+// [@ANCHOR: bench_mcp_manual_spec]
 struct Spec {
     name: &'static str,
     desc: &'static str,

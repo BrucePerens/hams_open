@@ -14,6 +14,7 @@ use std::net::TcpListener;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+// [@ANCHOR: bench_mcp_example_testkit_reply]
 /// What the far end does with one command.
 pub enum Reply {
     Text(String),
@@ -23,6 +24,7 @@ pub enum Reply {
     Hangup,
 }
 
+// [@ANCHOR: bench_mcp_example_testkit_fake_device]
 pub struct FakeDevice {
     port: u16,
     log: Arc<Mutex<Vec<String>>>,
@@ -121,6 +123,7 @@ impl FakeDevice {
     }
 }
 
+// [@ANCHOR: bench_mcp_example_testkit_sim]
 /// A simulator of the example dialect, with fault switches.
 #[derive(Default)]
 pub struct Sim {

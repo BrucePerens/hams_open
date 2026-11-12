@@ -978,6 +978,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_rx888_running]
     // Tests [@ANCHOR: bench_mcp_rx888_loopback_multicast]
     // Tests [@ANCHOR: bench_mcp_rx888_tool_defs]
+    // Tests [@ANCHOR: bench_mcp_rx888_testkit_fake_radiod]
     #[test]
     fn status_and_frontend_read_the_usb_tree_and_the_front_end() {
         let fake = FakeRadiod::start();
@@ -1040,6 +1041,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_rx888_number]
     // Tests [@ANCHOR: bench_mcp_rx888_ask]
     // Tests [@ANCHOR: bench_mcp_rx888_remove]
+    // Tests [@ANCHOR: bench_mcp_rx888_testkit_chan]
+    // Tests [@ANCHOR: bench_mcp_rx888_testkit_seen]
     #[test]
     fn tune_reports_levels_snr_and_rate_and_removes_its_channel() {
         let fake = FakeRadiod::start();

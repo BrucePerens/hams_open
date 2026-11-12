@@ -20,6 +20,7 @@ pub const NOISE_DENSITY_DB: f32 = -161.4;
 pub const TONE_DB: f32 = -90.0;
 pub const FLOOR_DB: f32 = -122.7;
 
+// [@ANCHOR: bench_mcp_rx888_testkit_seen]
 /// One command the fake received.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Seen {
@@ -28,6 +29,7 @@ pub struct Seen {
     pub demod: Option<u64>,
 }
 
+// [@ANCHOR: bench_mcp_rx888_testkit_chan]
 #[derive(Clone, Debug, Default)]
 struct Chan {
     freq: f64,
@@ -41,6 +43,7 @@ struct Chan {
     bin_hz: f32,
 }
 
+// [@ANCHOR: bench_mcp_rx888_testkit_fake_radiod]
 pub struct FakeRadiod {
     pub status_group: Ipv4Addr,
     pub data_group: Ipv4Addr,

@@ -14,6 +14,7 @@ use std::net::TcpListener;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+// [@ANCHOR: bench_mcp_sa_testkit_reply]
 /// What the far end does with one command.
 pub enum Reply {
     Text(String),
@@ -23,6 +24,7 @@ pub enum Reply {
     Hangup,
 }
 
+// [@ANCHOR: bench_mcp_sa_testkit_fake_device]
 pub struct FakeDevice {
     port: u16,
     log: Arc<Mutex<Vec<String>>>,
@@ -110,6 +112,7 @@ impl FakeDevice {
     }
 }
 
+// [@ANCHOR: bench_mcp_sa_testkit_sim]
 /// A simulator of the SSA3000X dialect, with fault switches. It keeps the settings it is given, rounds the RBW up like the
 /// unit, clamps the stop frequency to 2.1 GHz, and makes a 751-point trace: a floor near -90 dBm, a tone of -30 dBm at point
 /// 100 (only while the generator is off), and, while the generator is on, the generator level minus the shared `dut_db` loss at every point (an extra 10 dB dip

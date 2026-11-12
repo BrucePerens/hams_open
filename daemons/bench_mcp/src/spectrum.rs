@@ -6,6 +6,7 @@
 
 use std::f64::consts::PI;
 
+// [@ANCHOR: bench_mcp_spectrum_window]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Window {
     Rect,
@@ -79,6 +80,7 @@ fn fft(re: &mut [f64], im: &mut [f64]) {
     }
 }
 
+// [@ANCHOR: bench_mcp_spectrum_peak]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Peak {
     pub freq_hz: f64,
@@ -87,6 +89,7 @@ pub struct Peak {
     pub dbm_50: f64,
 }
 
+// [@ANCHOR: bench_mcp_spectrum_spectrum]
 pub struct Spectrum {
     pub bin_hz: f64,
     /// rms amplitude of each bin from 0 to Nyquist (a sine's whole power is in the bin or bins around it; see `peaks`).
@@ -185,6 +188,9 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_spectrum_window_weight]
     // Tests [@ANCHOR: bench_mcp_spectrum_fft]
     // Tests [@ANCHOR: bench_mcp_spectrum_peaks]
+    // Tests [@ANCHOR: bench_mcp_spectrum_spectrum]
+    // Tests [@ANCHOR: bench_mcp_spectrum_peak]
+    // Tests [@ANCHOR: bench_mcp_spectrum_window]
     #[test]
     fn a_tone_is_found_at_its_frequency_and_level_in_every_window() {
         let (n, fs) = (1 << 16, 500e6);

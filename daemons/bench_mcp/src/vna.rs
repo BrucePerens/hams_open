@@ -13,6 +13,7 @@ const MAX_POINTS: usize = 401;
 /// The unit's range: the vendor program sweeps up to 1.3 GHz.
 const MAX_HZ: f64 = 1.3e9;
 
+// [@ANCHOR: bench_mcp_vna_sweep_args_type]
 #[derive(Debug)]
 pub struct SweepArgs {
     pub start_hz: f64,
@@ -159,6 +160,7 @@ pub trait Backend {
     fn open_vna(&self, cfg: Config) -> Result<Vna, String>;
 }
 
+// [@ANCHOR: bench_mcp_vna_hardware]
 /// The real VNWA on this machine.
 pub struct Hardware;
 
@@ -470,6 +472,7 @@ pub(crate) mod tests {
 
     // Tests [@ANCHOR: bench_mcp_vna_number]
     // Tests [@ANCHOR: bench_mcp_vna_sweep_args]
+    // Tests [@ANCHOR: bench_mcp_vna_sweep_args_type]
     #[test]
     fn sweep_arguments_are_checked_and_override_the_instrument_settings() {
         let base = Config::default();

@@ -103,6 +103,7 @@ pub fn detect(bench: &dyn Bench, cfg: &Config, args: &Value) -> Result<Value, St
     Ok(out)
 }
 
+// [@ANCHOR: bench_mcp_elad_measure_sweep_plan]
 /// What a sweep needs from its arguments, checked before the receiver is opened.
 struct SweepPlan {
     start: f64,

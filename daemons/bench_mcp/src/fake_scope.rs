@@ -10,6 +10,7 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+// [@ANCHOR: bench_mcp_fake_scope_kind]
 /// How a setting is stored and validated.
 #[derive(Clone, Copy)]
 enum Kind {
@@ -115,6 +116,7 @@ const BUS_PREFIXES: &[&str] = &[
     "TRIIC:", "TRSPI:", "TRUART:", "TRCAN:", "TRLIN:", "B1:DC", "B2:DC",
 ];
 
+// [@ANCHOR: bench_mcp_fake_scope_opts]
 /// What the fake does besides answering.
 #[derive(Clone, Default)]
 pub struct Opts {
@@ -124,6 +126,7 @@ pub struct Opts {
     pub stat_one_line: bool,
 }
 
+// [@ANCHOR: bench_mcp_fake_scope_state]
 #[derive(Clone)]
 struct State {
     vals: HashMap<String, String>,
@@ -135,6 +138,7 @@ struct State {
     ref_saved: Vec<String>,
 }
 
+// [@ANCHOR: bench_mcp_fake_scope_fake_scope]
 /// A running fake scope: the port it listens on and every line received, in order.
 pub struct FakeScope {
     pub port: u16,
@@ -765,6 +769,7 @@ mod tests {
     use super::*;
     use crate::link::Link;
 
+    // Tests [@ANCHOR: bench_mcp_fake_scope_fake_scope]
     #[test]
     fn it_answers_like_the_guide_for_identity_settings_and_units() {
         let f = FakeScope::start();
@@ -842,6 +847,7 @@ mod tests {
         assert_eq!(l.query("PFDD?").unwrap(), "PFDD FAIL,1,PASS,9,TOTAL,10");
     }
 
+    // Tests [@ANCHOR: bench_mcp_fake_scope_opts]
     #[test]
     fn a_new_connection_is_reset_while_it_pretends_to_hold_a_dead_session() {
         let f = FakeScope::start_with(Opts {

@@ -55,6 +55,7 @@ macro_rules! module_config {
     };
 }
 
+// [@ANCHOR: bench_mcp_config_tier]
 #[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
 pub enum Tier {
     ReadOnly = 0,
@@ -62,6 +63,7 @@ pub enum Tier {
     Full = 2,
 }
 
+// [@ANCHOR: bench_mcp_config_kind]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Kind {
     Scope,
@@ -94,6 +96,7 @@ pub enum Kind {
 /// The longest `max_on_s` a config may ask for (one day).
 pub const MAX_ON_S_LIMIT: f64 = 86_400.0;
 
+// [@ANCHOR: bench_mcp_config_instrument]
 #[derive(Clone, Debug)]
 pub struct Instrument {
     pub name: String,
@@ -408,6 +411,9 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_config_tier_of]
     // Tests [@ANCHOR: bench_mcp_config]
+    // Tests [@ANCHOR: bench_mcp_fake_scope_kind]
+    // Tests [@ANCHOR: bench_mcp_config_kind]
+    // Tests [@ANCHOR: bench_mcp_config_tier]
     #[test]
     fn parses_both_drivers_with_defaults() {
         let v = parse(

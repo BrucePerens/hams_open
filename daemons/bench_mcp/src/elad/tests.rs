@@ -35,6 +35,7 @@ fn config_defaults_and_refusals() {
     assert!(parse_config(&json!({"fpga_loaded": "yes"})).is_err());
 }
 
+// Tests [@ANCHOR: bench_mcp_elad_testkit_fake_bench]
 #[test]
 fn list_reports_the_receivers_and_whether_they_stream() {
     // Tests [@ANCHOR: bench_mcp_elad_list]
@@ -147,6 +148,7 @@ fn a_silent_unit_is_reported_as_a_missing_fpga_not_as_an_empty_capture() {
     );
 }
 
+// Tests [@ANCHOR: bench_mcp_elad_testkit_synth]
 #[test]
 fn capture_writes_cf32_and_a_summary_that_finds_the_tone() {
     // Tests [@ANCHOR: bench_mcp_elad_capture]
@@ -482,6 +484,7 @@ fn detect_reports_nothing_in_noise_and_ignores_a_tone_outside_the_usable_span() 
     .is_err());
 }
 
+// Tests [@ANCHOR: bench_mcp_elad_measure_sweep_plan]
 #[test]
 fn sweep_finds_each_tone_at_its_frequency_across_steps_and_writes_the_csv() {
     // Tests [@ANCHOR: bench_mcp_elad_sweep]

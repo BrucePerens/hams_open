@@ -11,6 +11,7 @@ use std::sync::Mutex;
 
 pub const FIXTURE: &str = include_str!("../../tests/elad_fixtures/fdm_s2_fw3_0_open.txt");
 
+// [@ANCHOR: bench_mcp_elad_testkit_fake_bench]
 pub struct FakeBench {
     pub devices: Vec<Found>,
     /// The tone: offset from the centre in Hz and amplitude (full scale 1.0).
@@ -139,6 +140,7 @@ impl Bench for FakeBench {
     }
 }
 
+// [@ANCHOR: bench_mcp_elad_testkit_synth]
 /// A receiver that synthesises its samples on demand: tones at absolute RF frequencies seen through the tuning word the driver last
 /// sent, plus deterministic Gaussian noise. Control requests go to a recording `FakeTransport`.
 pub struct Synth {
