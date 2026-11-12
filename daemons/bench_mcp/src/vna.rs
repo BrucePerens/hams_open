@@ -418,7 +418,7 @@ pub fn sweep(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use vnwa_open::audio::Complex;
 
@@ -585,17 +585,17 @@ mod tests {
     }
 
     /// A simulated VNWA: no USB bus, no sound card, no sound server.
-    struct Sim {
+    pub(crate) struct Sim {
         usb: bool,
         read_error: Option<vnwa_open::transport::TransferError>,
         codecs: Result<vnwa_open::topology::Codecs, String>,
         exposure: vnwa_open::sound_server::Exposure,
-        vna_opens: std::cell::Cell<u32>,
+        pub(crate) vna_opens: std::cell::Cell<u32>,
         /// The simulated codecs' feeder threads, stopped when the `Sim` drops.
         feeds: std::cell::RefCell<Vec<vnwa_open::capture::SyntheticFeed>>,
     }
     impl Sim {
-        fn healthy() -> Sim {
+        pub(crate) fn healthy() -> Sim {
             Sim {
                 usb: true,
                 read_error: None,
