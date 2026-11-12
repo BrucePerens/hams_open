@@ -62,6 +62,7 @@ fn field_a2(i: usize) -> String {
     }
 }
 
+// [@ANCHOR: ham_digital_modes:ambe_bit_sensitivity_decoder_struct]
 type Decoder = Box<dyn Fn(&[u128]) -> Vec<f64>>;
 
 fn db(x: &[f64]) -> f64 {
@@ -217,5 +218,18 @@ fn main() {
             "| d[{i}] | {name} | {} | {lsd:.2} | {exc:.2} |",
             if i < 24 { "Golay" } else { "raw" }
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ham_digital_modes:ambe_bit_sensitivity_decoder_struct]
+    #[test]
+    fn a_decoder_maps_a_slice_of_wire_frames_to_one_pcm_vector() {
+        let decode: Decoder = Box::new(|frames: &[u128]| frames.iter().map(|&f| f as f64).collect());
+        assert_eq!(decode(&[1, 2, 3]), vec![1.0, 2.0, 3.0]);
+        assert!(decode(&[]).is_empty());
     }
 }

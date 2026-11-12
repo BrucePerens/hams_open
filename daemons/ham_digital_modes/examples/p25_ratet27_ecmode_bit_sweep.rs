@@ -94,6 +94,7 @@ fn sawtooth(freq: f64, amp: f64) -> Vec<i16> {
         .collect()
 }
 
+// [@ANCHOR: ham_digital_modes:p25_ratet27_ecmode_bit_sweep_blocks_struct]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Blocks {
     g0: u16,
@@ -213,4 +214,21 @@ fn main() {
     }
     // Reset to a known-clean state for whoever/whatever uses the chip next.
     run_with_ecmode(&sock, &mut buf, 0x0000);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ham_digital_modes:p25_ratet27_ecmode_bit_sweep_blocks_struct]
+    #[test]
+    fn a_default_blocks_value_is_all_zero_and_copies_compare_equal() {
+        let zero = Blocks::default();
+        assert_eq!((zero.g0, zero.g1, zero.g2, zero.g3), (0, 0, 0, 0));
+        assert_eq!((zero.u4, zero.u5, zero.u6, zero.c7), (0, 0, 0, 0));
+        let changed = Blocks { c7: 0x1ff, ..zero };
+        let copy = changed;
+        assert_eq!(copy, changed);
+        assert_ne!(copy, zero);
+    }
 }

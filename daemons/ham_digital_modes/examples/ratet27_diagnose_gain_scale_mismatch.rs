@@ -150,6 +150,21 @@ fn wire_bytes_to_c(bytes: &[u8; FRAME_BYTES]) -> [u32; 8] {
     ]
 }
 
+// [@ANCHOR: ham_digital_modes:ratet27_diagnose_gain_scale_mismatch_row_struct]
+struct Row {
+    idx: usize,
+    chip_rms: f64,
+    float_rms: f64,
+    ratio: f64,
+    b2: u32,
+    l_hat: u32,
+    voiced_frac: f64,
+    r_m0: f64,
+    outcome: &'static str,
+    header_bytes: Vec<u8>,
+    u0_bits5_3: u32,
+}
+
 fn main() {
     let host = std::env::args()
         .nth(1)
@@ -184,19 +199,6 @@ fn main() {
         channel_payloads.push(payload.to_vec());
     }
 
-    struct Row {
-        idx: usize,
-        chip_rms: f64,
-        float_rms: f64,
-        ratio: f64,
-        b2: u32,
-        l_hat: u32,
-        voiced_frac: f64,
-        r_m0: f64,
-        outcome: &'static str,
-        header_bytes: Vec<u8>,
-        u0_bits5_3: u32,
-    }
     let mut rows: Vec<Row> = Vec::with_capacity(n_frames);
 
     for (i, channel_payload) in channel_payloads.iter().enumerate() {
@@ -415,5 +417,33 @@ fn main() {
             "frame {} (chip_rms={:.0}, QUIET): header={:02x?}",
             r.idx, r.chip_rms, r.header_bytes
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ham_digital_modes:ratet27_diagnose_gain_scale_mismatch_row_struct]
+    #[test]
+    fn rows_split_into_louder_and_quieter_than_the_float_decoder_by_ratio() {
+        let row = |idx, ratio| Row {
+            idx,
+            chip_rms: 1000.0 * ratio,
+            float_rms: 1000.0,
+            ratio,
+            b2: 0,
+            l_hat: 20,
+            voiced_frac: 0.5,
+            r_m0: 1.0,
+            outcome: "Decoded",
+            header_bytes: vec![0x80, 0x00],
+            u0_bits5_3: 0b101,
+        };
+        let rows = vec![row(0, 3.0), row(1, 1.0), row(2, 0.5)];
+        let louder: Vec<usize> = rows.iter().filter(|r| r.ratio > 2.0).map(|r| r.idx).collect();
+        let quieter: Vec<usize> = rows.iter().filter(|r| r.ratio < 0.7).map(|r| r.idx).collect();
+        assert_eq!((louder, quieter), (vec![0], vec![2]));
+        assert_eq!(rows[0].header_bytes, [0x80, 0x00]);
     }
 }
