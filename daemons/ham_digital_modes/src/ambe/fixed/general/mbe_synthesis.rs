@@ -17,6 +17,7 @@ const HIGH_LIFT_WEIGHT_Q16_16: i64 = 6554;
 /// `round(0.87 * 65536)`: the unvoiced gain, `float::mbe_synthesis::UNVOICED_GAIN`.
 const UNVOICED_GAIN_Q16_16: i64 = 57016;
 
+// [@ANCHOR: mbe_synthesis_mbe_synthesizer_struct]
 pub struct MbeSynthesizer {
     synthesis: SynthesisState,
     error_rate_prev_q16: i32,

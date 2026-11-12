@@ -21,6 +21,7 @@ use super::wire_format::Block;
 
 /// One decoded value plus its FEC distance (corrected-bit count for Golay/Hamming blocks, always 0
 /// for the unprotected [`Block::Raw`] `c7` field).
+// [@ANCHOR: frame_decoded_block_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DecodedBlock {
     pub value: u16,
@@ -28,6 +29,7 @@ pub struct DecodedBlock {
 }
 
 /// Every one of RATET(27)'s 8 confirmed sub-blocks, decoded from one 144-bit channel frame.
+// [@ANCHOR: frame_ratet27_frame_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ratet27Frame {
     pub g0: DecodedBlock,
@@ -103,6 +105,8 @@ impl Ratet27Frame {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: frame_decoded_block_struct]
+    // Tests [@ANCHOR: frame_ratet27_frame_struct]
     use super::*;
 
     fn wire_bytes_from_hex(hexstr: &str) -> [u8; 18] {

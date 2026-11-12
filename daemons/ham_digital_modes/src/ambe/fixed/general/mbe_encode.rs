@@ -34,6 +34,7 @@ const LN2_OVER_POINT_693_Q16_16: i32 = 65550;
 const MIN_LOG_AMPLITUDE_Q16_16: i32 = 66;
 
 /// The per-mode tables the quantizer searches (Q16.16 counterparts of the float `ModeTables`).
+// [@ANCHOR: mbe_encode_mode_tables_struct]
 pub struct ModeTables<'a> {
     pub vuv: &'a [[bool; 8]],
     pub dg_q16: &'a [i32],
@@ -52,6 +53,7 @@ pub struct ModeTables<'a> {
 
 /// What the frame's analysis wants the decoder to reproduce. `voiced`, `ml_q16` and `log2_ml_q16` are 1-indexed by
 /// harmonic (index 0 unused), length `l + 1`.
+// [@ANCHOR: mbe_encode_speech_target_struct]
 pub struct SpeechTarget<'a> {
     pub l: u32,
     /// Fundamental for the V/UV slot lookup `jl = floor(h * 16 * f0)`, in cycles/sample, Q16.16.
@@ -64,6 +66,7 @@ pub struct SpeechTarget<'a> {
 }
 
 /// The decoder-side state the recursion predicts from (mirrors [`MbeDecoderState`]).
+// [@ANCHOR: mbe_encode_prev_state_struct]
 pub struct PrevState<'a> {
     pub l: u32,
     pub log2_ml_q16: &'a [i32],
@@ -80,6 +83,7 @@ impl<'a> PrevState<'a> {
     }
 }
 
+// [@ANCHOR: mbe_encode_quantized_speech_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QuantizedSpeech {
     pub b1: u32,

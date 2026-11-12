@@ -58,6 +58,7 @@ pub const fn natural_position(m: usize) -> usize {
 
 /// One of the 8 FEC sub-blocks that RATET(27)'s 144 bits split into, in natural (pre-interleave)
 /// order, ordered by decreasing error-protection strength per DVSI's own manual.
+// [@ANCHOR: wire_format_block_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Block {
     /// Golay(23,12), one of `g0..g3` (`index` 0..4).
@@ -121,6 +122,7 @@ pub fn block_wire_members(block: Block) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: wire_format_block_enum]
     use super::*;
 
     #[test]

@@ -197,3 +197,6 @@ fn pitch_quantizer_matches_the_float_one_for_every_period() {
     }
     assert_eq!(differ, 0);
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: encoder_encoder_struct]

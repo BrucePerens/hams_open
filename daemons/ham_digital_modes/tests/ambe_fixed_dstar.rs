@@ -152,3 +152,11 @@ fn fixed_dequantize_matches_float_across_representative_sequences() {
         }
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: decode_tone_kind_enum]
+// Tests [@ANCHOR: dstar_decode_dequantized_frame_enum]
+// Tests [@ANCHOR: mbe_speech_mbe_decoder_state_struct]
+// Tests [@ANCHOR: mbe_speech_raw_speech_parameters_struct]
+// Tests [@ANCHOR: mbe_speech_speech_parameters_struct]
+// Tests [@ANCHOR: mbe_speech_speech_tables_struct]

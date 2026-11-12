@@ -96,6 +96,7 @@ fn phase_step(hz_q16: i32) -> u32 {
 }
 
 /// Two phase accumulators (turns); a tone uses one or both.
+// [@ANCHOR: tone_synthesis_tone_synthesizer_struct]
 pub struct ToneSynthesizer {
     phase: [u32; 2],
 }
@@ -157,6 +158,7 @@ impl Default for ToneSynthesizer {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: tone_synthesis_tone_synthesizer_struct]
     use super::*;
 
     // Tests [@ANCHOR: ambe_fixed_dstar_tone_amplitude]
