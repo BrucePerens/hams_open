@@ -376,8 +376,14 @@ struct Api {
 }
 
 fn load_api() -> Result<Api, String> {
+    load_api_from(&["libSoapySDR.so.0.8", "libSoapySDR.so.0.7", "libSoapySDR.so"])
+}
+
+/// `load_api` over any list of library names (the first that loads is used).
+fn load_api_from(names: &[&str]) -> Result<Api, String> {
+    // [@ANCHOR: bench_mcp_sdr_load_api]
     let mut h = std::ptr::null_mut();
-    for name in ["libSoapySDR.so.0.8", "libSoapySDR.so.0.7", "libSoapySDR.so"] {
+    for name in names.iter().copied() {
         let c = CString::new(name).unwrap();
         h = unsafe { libc::dlopen(c.as_ptr(), libc::RTLD_NOW) };
         if !h.is_null() {
@@ -422,11 +428,17 @@ fn load_api() -> Result<Api, String> {
 }
 
 fn api() -> Result<&'static Api, String> {
+    // The unit tests give each test thread its own fake SoapySDR (no library, no radio).
+    #[cfg(test)]
+    if let Some(a) = tests::fake_api() {
+        return Ok(a);
+    }
     static API: OnceLock<Result<Api, String>> = OnceLock::new();
     API.get_or_init(load_api).as_ref().map_err(|e| e.clone())
 }
 
 fn last_error(a: &Api) -> String {
+    // [@ANCHOR: bench_mcp_sdr_last_error]
     let p = unsafe { (a.last_error)() };
     if p.is_null() {
         "unknown SoapySDR error".into()
@@ -443,6 +455,7 @@ struct Radio {
 
 impl Radio {
     fn open(c: &Config) -> Result<Radio, String> {
+        // [@ANCHOR: bench_mcp_sdr_radio_open]
         let a = api()?;
         let args = CString::new(soapy_args(c)).map_err(|e| e.to_string())?;
         let dev = unsafe { (a.make)(args.as_ptr()) };
@@ -458,6 +471,7 @@ impl Radio {
     }
 
     fn check(&self, what: &str, rc: c_int) -> Result<(), String> {
+        // [@ANCHOR: bench_mcp_sdr_radio_check]
         if rc == 0 {
             Ok(())
         } else {
@@ -470,6 +484,7 @@ impl Radio {
     }
 
     fn string(&self, p: *mut c_char) -> String {
+        // [@ANCHOR: bench_mcp_sdr_radio_string]
         if p.is_null() {
             return String::new();
         }
@@ -481,6 +496,7 @@ impl Radio {
     /// Tune, then read `cap.samples` complex samples on each channel (the first samples after start are dropped while the
     /// front end settles). Returns the channels' samples and the number of overflows the driver reported.
     fn capture(&self, cap: &Capture) -> Result<(Vec<Vec<Iq>>, usize, f64), String> {
+        // [@ANCHOR: bench_mcp_sdr_radio_capture]
         let a = self.a;
         for &ch in &cap.channels {
             if let Some(name) = &cap.antenna {
@@ -531,6 +547,7 @@ impl Radio {
         stream: Stream,
         cap: &Capture,
     ) -> Result<(Vec<Vec<Iq>>, usize, f64), String> {
+        // [@ANCHOR: bench_mcp_sdr_radio_read_stream]
         let a = self.a;
         self.check("activate", unsafe {
             (a.activate)(self.dev, stream, 0, 0, 0)
@@ -603,6 +620,7 @@ fn round(x: f64, places: i32) -> f64 {
 
 /// Identity and state of the radio: the driver's hardware key and info (firmware and gateware versions), channel counts.
 pub fn identify(c: &Config) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_sdr_identify]
     let r = Radio::open(c)?;
     let a = r.a;
     let key = r.string(unsafe { (a.hw_key)(r.dev) });
@@ -662,6 +680,7 @@ fn stamp() -> String {
 
 /// Capture one block, save the raw I/Q (little-endian f32 pairs) and return its statistics, floor and strongest peaks.
 pub fn capture(c: &Config, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_sdr_capture]
     let cap = capture_args(args, c)?;
     let r = Radio::open(c)?;
     let t0 = Instant::now();
@@ -710,6 +729,7 @@ pub fn capture(c: &Config, args: &Value, out: &Path) -> Result<Value, String> {
 
 /// A swept power survey from `start_hz` to `stop_hz`, saved as CSV, with the floor and the strongest peaks.
 pub fn survey(c: &Config, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_sdr_survey]
     let sv = survey_args(args, c)?;
     let r = Radio::open(c)?;
     let t0 = Instant::now();
@@ -1076,5 +1096,371 @@ mod tests {
         let sv = survey_args(&json!({"start_hz": 88e6, "stop_hz": 108e6}), &rtl(None)).unwrap();
         assert_eq!(sv.rate_hz, 2.4e6);
         assert_eq!(sv.steps(), 12);
+    }
+
+    // ---- a fake SoapySDR: the same C functions the radio library has, in Rust, so the real code runs with no radio ----
+
+    #[derive(Default)]
+    struct FakeState {
+        log: Vec<String>,
+        fail_open: bool,
+        /// The name of a call that returns -1 ("set_rate", "set_gain", "set_freq", "set_ppm", "set_antenna", "setup_stream", "activate").
+        fail: Option<&'static str>,
+        /// Results `read` returns before it starts delivering samples (-1 timeout, -4 overflow, other negatives are errors).
+        read_script: std::collections::VecDeque<c_int>,
+        channels: usize,
+        tuned: f64,
+        rate: f64,
+        tone_hz: f64,
+        read_pos: u64,
+        null_last_error: bool,
+    }
+
+    thread_local! {
+        static FAKE: std::cell::RefCell<FakeState> = std::cell::RefCell::new(FakeState::default());
+        static FAKE_API: std::cell::Cell<Option<&'static Api>> = const { std::cell::Cell::new(None) };
+    }
+
+    pub(super) fn fake_api() -> Option<&'static Api> {
+        FAKE_API.with(|a| a.get())
+    }
+
+    fn st<T>(f: impl FnOnce(&mut FakeState) -> T) -> T {
+        FAKE.with(|s| f(&mut s.borrow_mut()))
+    }
+
+    fn rc(name: &'static str, entry: String) -> c_int {
+        st(|s| {
+            s.log.push(entry);
+            if s.fail == Some(name) {
+                -1
+            } else {
+                0
+            }
+        })
+    }
+
+    extern "C" fn f_make(args: *const c_char) -> Dev {
+        let a = unsafe { CStr::from_ptr(args) }.to_string_lossy().into_owned();
+        st(|s| {
+            s.log.push(format!("make {a}"));
+            if s.fail_open {
+                std::ptr::null_mut()
+            } else {
+                1 as Dev
+            }
+        })
+    }
+    extern "C" fn f_unmake(_d: Dev) -> c_int {
+        rc("unmake", "unmake".into())
+    }
+    extern "C" fn f_set_rate(_d: Dev, _dir: c_int, _ch: usize, v: f64) -> c_int {
+        st(|s| s.rate = v);
+        rc("set_rate", format!("rate {v}"))
+    }
+    extern "C" fn f_set_freq(_d: Dev, _dir: c_int, _ch: usize, v: f64, _k: *const Kwargs) -> c_int {
+        st(|s| s.tuned = v);
+        rc("set_freq", format!("freq {v}"))
+    }
+    extern "C" fn f_set_gain(_d: Dev, _dir: c_int, _ch: usize, v: f64) -> c_int {
+        rc("set_gain", format!("gain {v}"))
+    }
+    extern "C" fn f_set_ppm(_d: Dev, _dir: c_int, _ch: usize, v: f64) -> c_int {
+        rc("set_ppm", format!("ppm {v}"))
+    }
+    extern "C" fn f_set_antenna(_d: Dev, _dir: c_int, _ch: usize, n: *const c_char) -> c_int {
+        let n = unsafe { CStr::from_ptr(n) }.to_string_lossy().into_owned();
+        rc("set_antenna", format!("antenna {n}"))
+    }
+    extern "C" fn f_setup_stream(
+        _d: Dev,
+        _dir: c_int,
+        fmt: *const c_char,
+        _ch: *const usize,
+        n: usize,
+        _k: *const Kwargs,
+    ) -> Stream {
+        let fmt = unsafe { CStr::from_ptr(fmt) }.to_string_lossy().into_owned();
+        st(|s| {
+            s.log.push(format!("setup_stream {fmt} x{n}"));
+            if s.fail == Some("setup_stream") {
+                std::ptr::null_mut()
+            } else {
+                2 as Stream
+            }
+        })
+    }
+    extern "C" fn f_close_stream(_d: Dev, _s: Stream) -> c_int {
+        rc("close_stream", "close_stream".into())
+    }
+    extern "C" fn f_activate(_d: Dev, _s: Stream, _f: c_int, _t: i64, _n: usize) -> c_int {
+        st(|s| s.read_pos = 0);
+        rc("activate", "activate".into())
+    }
+    extern "C" fn f_deactivate(_d: Dev, _s: Stream, _f: c_int, _t: i64) -> c_int {
+        rc("deactivate", "deactivate".into())
+    }
+    extern "C" fn f_read(
+        _d: Dev,
+        _s: Stream,
+        bufs: *const *mut c_void,
+        n: usize,
+        _flags: *mut c_int,
+        _t: *mut i64,
+        _timeout: c_long,
+    ) -> c_int {
+        st(|s| {
+            if let Some(r) = s.read_script.pop_front() {
+                return r;
+            }
+            // A tone outside the tuned band is not seen (a real front end filters it), so only noise is delivered then.
+            let in_band = (s.tone_hz - s.tuned).abs() < s.rate / 2.0 * 0.9;
+            let amp = if in_band { 0.5 } else { 0.0 };
+            let off = 2.0 * std::f64::consts::PI * (s.tone_hz - s.tuned) / s.rate;
+            let mut noise: u32 = 12345 + s.read_pos as u32;
+            for ch in 0..s.channels.max(1) {
+                let buf = unsafe { *bufs.add(ch) } as *mut f32;
+                for k in 0..n {
+                    let ph = off * (s.read_pos + k as u64) as f64;
+                    noise = noise.wrapping_mul(1664525).wrapping_add(1013904223);
+                    let nz = ((noise >> 16) as f32 / 65536.0 - 0.5) * 0.002;
+                    unsafe {
+                        *buf.add(2 * k) = amp * ph.cos() as f32 + nz;
+                        *buf.add(2 * k + 1) = amp * ph.sin() as f32 - nz;
+                    }
+                }
+            }
+            s.read_pos += n as u64;
+            n as c_int
+        })
+    }
+    extern "C" fn f_hw_key(_d: Dev) -> *mut c_char {
+        CString::new("FakeHW").unwrap().into_raw()
+    }
+    extern "C" fn f_driver_key(_d: Dev) -> *mut c_char {
+        CString::new("fakedrv").unwrap().into_raw()
+    }
+    extern "C" fn f_hw_info(_d: Dev) -> Kwargs {
+        let keys: Vec<*mut c_char> = ["firmware", "fpga"]
+            .iter()
+            .map(|k| CString::new(*k).unwrap().into_raw())
+            .collect();
+        let vals: Vec<*mut c_char> = ["2.4.0", "0.15"]
+            .iter()
+            .map(|k| CString::new(*k).unwrap().into_raw())
+            .collect();
+        let (keys, vals) = (Box::leak(keys.into_boxed_slice()), Box::leak(vals.into_boxed_slice()));
+        Kwargs {
+            size: 2,
+            keys: keys.as_mut_ptr(),
+            vals: vals.as_mut_ptr(),
+        }
+    }
+    extern "C" fn f_num_channels(_d: Dev, _dir: c_int) -> usize {
+        st(|s| s.channels)
+    }
+    extern "C" fn f_last_error() -> *const c_char {
+        static MSG: &CStr = c"fake failure";
+        if st(|s| s.null_last_error) {
+            std::ptr::null()
+        } else {
+            MSG.as_ptr()
+        }
+    }
+    extern "C" fn f_free(p: *mut c_void) {
+        st(|s| s.log.push("free".into()));
+        drop(unsafe { CString::from_raw(p.cast()) });
+    }
+    extern "C" fn f_kwargs_clear(_k: *mut Kwargs) {
+        st(|s| s.log.push("kwargs_clear".into()));
+    }
+
+    /// Installs a fresh fake radio for this test's thread; `configure` sets what it does.
+    fn fake(configure: impl FnOnce(&mut FakeState)) {
+        let api: &'static Api = Box::leak(Box::new(Api {
+            make: f_make,
+            unmake: f_unmake,
+            set_rate: f_set_rate,
+            set_freq: f_set_freq,
+            set_gain: f_set_gain,
+            set_ppm: f_set_ppm,
+            set_antenna: f_set_antenna,
+            setup_stream: f_setup_stream,
+            close_stream: f_close_stream,
+            activate: f_activate,
+            deactivate: f_deactivate,
+            read: f_read,
+            hw_key: f_hw_key,
+            driver_key: f_driver_key,
+            hw_info: f_hw_info,
+            num_channels: f_num_channels,
+            last_error: f_last_error,
+            free: f_free,
+            kwargs_clear: f_kwargs_clear,
+        }));
+        FAKE_API.with(|a| a.set(Some(api)));
+        st(|s| {
+            *s = FakeState {
+                channels: 1,
+                ..FakeState::default()
+            };
+            configure(s);
+        });
+    }
+
+    fn log() -> Vec<String> {
+        st(|s| s.log.clone())
+    }
+
+    // Tests [@ANCHOR: bench_mcp_sdr_load_api]
+    #[test]
+    fn a_missing_library_and_a_library_without_the_soapy_symbols_are_clear_errors() {
+        let e = load_api_from(&["libno_such_soapy.so.9"]).err().unwrap();
+        assert!(e.contains("SoapySDR is not installed"), "{e}");
+        // libc loads but has none of the SoapySDR functions.
+        let e = load_api_from(&["libno_such_soapy.so.9", "libc.so.6"]).err().unwrap();
+        assert_eq!(e, "libSoapySDR has no SoapySDRDevice_makeStrArgs");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_sdr_radio_open]
+    // Tests [@ANCHOR: bench_mcp_sdr_radio_check]
+    // Tests [@ANCHOR: bench_mcp_sdr_last_error]
+    // Tests [@ANCHOR: bench_mcp_sdr_radio_string]
+    #[test]
+    fn opening_a_radio_passes_the_soapy_args_and_every_failure_carries_the_drivers_message() {
+        fake(|_| {});
+        let c = Config {
+            serial: Some("ca3e".into()),
+            ..lime()
+        };
+        let r = Radio::open(&c).unwrap();
+        assert_eq!(log(), ["make driver=lime,serial=ca3e"]);
+        assert!(r.check("gain", 0).is_ok());
+        assert_eq!(r.check("gain", -1).unwrap_err(), "gain: fake failure");
+        assert_eq!(r.rx_channels(), 1);
+        // A string from the library is copied and then freed; a null one is empty and frees nothing.
+        let p = CString::new("abc").unwrap().into_raw();
+        assert_eq!(r.string(p), "abc");
+        assert_eq!(r.string(std::ptr::null_mut()), "");
+        assert_eq!(log().iter().filter(|l| *l == "free").count(), 1);
+        st(|s| s.null_last_error = true);
+        assert_eq!(r.check("x", -1).unwrap_err(), "x: unknown SoapySDR error");
+        drop(r);
+        assert_eq!(log().last().unwrap(), "unmake");
+
+        fake(|s| s.fail_open = true);
+        let e = Radio::open(&c).err().unwrap();
+        assert_eq!(e, "cannot open the limesdr (driver=lime,serial=ca3e): fake failure");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_sdr_identify]
+    #[test]
+    fn identify_reports_the_hardware_key_the_info_and_the_channel_count() {
+        fake(|s| s.channels = 2);
+        let v = identify(&lime()).unwrap();
+        assert_eq!(v["driver"], "limesdr");
+        assert_eq!(v["soapy_args"], "driver=lime");
+        assert_eq!(v["soapy_driver"], "fakedrv");
+        assert_eq!(v["hardware"], "FakeHW");
+        assert_eq!(v["info"]["firmware"], "2.4.0");
+        assert_eq!(v["info"]["fpga"], "0.15");
+        assert_eq!(v["rx_channels"], 2);
+        assert!(log().contains(&"kwargs_clear".to_string()));
+        fake(|s| s.fail_open = true);
+        assert!(identify(&lime()).unwrap_err().starts_with("cannot open the limesdr"));
+    }
+
+    // Tests [@ANCHOR: bench_mcp_sdr_capture]
+    // Tests [@ANCHOR: bench_mcp_sdr_radio_capture]
+    // Tests [@ANCHOR: bench_mcp_sdr_radio_read_stream]
+    #[test]
+    fn a_capture_tunes_streams_and_reports_the_tone_it_was_given() {
+        let dir = crate::testdir::TestDir::new("bench_sdr_capture");
+        fake(|s| s.tone_hz = 162.55e6 + 100e3);
+        let args = json!({"freq_hz": 162.55e6, "samples": 16384, "gain_db": 20, "ppm": -3});
+        let v = capture(&rtl(None), &args, &dir).unwrap();
+        assert_eq!(v["samples"], 16384);
+        let top = &v["peaks"][0];
+        let f = top["freq_hz"].as_f64().unwrap();
+        assert!((f - 162.65e6).abs() < 2_000.0, "{f}");
+        assert!((v["rms_dbfs"].as_f64().unwrap() + 6.0).abs() < 0.5, "{v}");
+        assert_eq!(v["continuous"], true);
+        assert_eq!(v["overflows_reported_by_driver"], 0);
+        // The file holds every kept sample, 8 bytes each.
+        let file = v["iq_file"].as_str().unwrap();
+        assert_eq!(std::fs::metadata(file).unwrap().len(), 16384 * 8);
+        // Settings go to the radio in this order, then the stream is set up, read to its end, stopped and closed.
+        let l = log();
+        let pos = |what: &str| l.iter().position(|x| x.starts_with(what)).unwrap();
+        assert!(pos("rate") < pos("gain") && pos("gain") < pos("ppm") && pos("ppm") < pos("freq"));
+        assert!(pos("freq") < pos("setup_stream CF32 x1") && pos("setup_stream") < pos("activate"));
+        assert!(pos("activate") < pos("deactivate") && pos("deactivate") < pos("close_stream"));
+        assert!(l.contains(&"ppm -3".to_string()) && l.contains(&"gain 20".to_string()));
+        // A bad argument never opens the radio.
+        fake(|_| {});
+        assert!(capture(&rtl(None), &json!({}), &dir).is_err());
+        assert!(log().is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_capture_names_the_failing_step_and_survives_overflows_and_a_few_timeouts() {
+        let dir = crate::testdir::TestDir::new("bench_sdr_capture_errors");
+        let args = json!({"freq_hz": 433.92e6, "samples": 4096, "antenna": "LNAH"});
+        for (step, text) in [
+            ("set_antenna", "antenna: fake failure"),
+            ("set_rate", "sample rate: fake failure"),
+            ("set_gain", "gain: fake failure"),
+            ("set_freq", "frequency: fake failure"),
+            ("setup_stream", "stream setup: fake failure"),
+            ("activate", "activate: fake failure"),
+        ] {
+            fake(|s| s.fail = Some(step));
+            assert_eq!(capture(&lime(), &args, &dir).unwrap_err(), text);
+        }
+        // A failed step stops the stream it opened.
+        assert!(log().contains(&"close_stream".to_string()));
+
+        // Five timeouts are tolerated, a sixth gives up; a read error is passed on.
+        fake(|s| s.read_script = [-1; 5].into());
+        assert!(capture(&lime(), &args, &dir).is_ok());
+        fake(|s| s.read_script = [-1; 6].into());
+        let e = capture(&lime(), &args, &dir).unwrap_err();
+        assert!(e.starts_with("the radio delivered no samples (5 read timeouts"), "{e}");
+        fake(|s| s.read_script = [-2].into());
+        assert_eq!(capture(&lime(), &args, &dir).unwrap_err(), "read error -2: fake failure");
+        // Overflows are counted and do not stop the capture.
+        fake(|s| s.read_script = [-4, -4, -4].into());
+        let v = capture(&lime(), &args, &dir).unwrap();
+        assert_eq!(v["overflows_reported_by_driver"], 3);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Tests [@ANCHOR: bench_mcp_sdr_survey]
+    #[test]
+    fn a_survey_steps_across_the_band_and_finds_the_tone_in_the_stitched_spectrum() {
+        let dir = crate::testdir::TestDir::new("bench_sdr_survey");
+        fake(|s| s.tone_hz = 98.0e6);
+        let args = json!({"start_hz": 88e6, "stop_hz": 108e6, "fft_len": 1024, "samples_per_step": 8192});
+        let v = survey(&lime(), &args, &dir).unwrap();
+        assert_eq!(v["steps"], 3);
+        let l = log();
+        // One tune per step, at the middle of each 7 MHz slice.
+        let tunes: Vec<&String> = l.iter().filter(|x| x.starts_with("freq ")).collect();
+        assert_eq!(tunes.len(), 3);
+        assert_eq!(tunes[0], "freq 91500000");
+        assert_eq!(tunes[1], "freq 98500000");
+        assert_eq!(tunes[2], "freq 105500000");
+        let csv = std::fs::read_to_string(v["csv_file"].as_str().unwrap()).unwrap();
+        assert!(csv.starts_with("freq_hz,power_dbfs\n"));
+        assert_eq!(csv.lines().count() - 1, v["points"].as_u64().unwrap() as usize);
+        let strongest = v["peaks"][0]["freq_hz"].as_f64().unwrap();
+        assert!((strongest - 98.0e6).abs() < 25_000.0, "{strongest}");
+        assert_eq!(v["overflows"], 0);
+        // A radio that cannot open is an error and bad arguments never reach it.
+        fake(|s| s.fail_open = true);
+        assert!(survey(&lime(), &args, &dir).unwrap_err().starts_with("cannot open the limesdr"));
+        assert!(survey(&lime(), &json!({}), &dir).is_err());
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
