@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 
+# [@ANCHOR: hams_base_res_config_settings_res_config_settings]
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
 

@@ -23,6 +23,9 @@ class TestMailTemplates(common.TransactionCase):
     """
 
     # Tests [@ANCHOR: hams_base:mail_templates]
+    # Tests [@ANCHOR: hams_base_res_config_settings_res_config_settings]
+    # Tests [@ANCHOR: hams_base_dmarc_report_dmarc_report]
+    # Tests [@ANCHOR: hams_base_database_lockdown_database_manager_lockdown]
     def test_notification_email_layout_renders_without_env_keyerror(self):
         org_name = "Test Compliance Org Name"
         self.env['ir.config_parameter'].with_user(

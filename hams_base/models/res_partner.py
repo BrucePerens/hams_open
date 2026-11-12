@@ -7,6 +7,7 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+# [@ANCHOR: hams_base_res_partner_res_partner]
 class ResPartner(models.Model):
     _inherit = "res.partner"
 

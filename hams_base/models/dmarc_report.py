@@ -48,6 +48,7 @@ def _epoch_to_naive_utc(seconds):
         return False
 
 
+# [@ANCHOR: hams_base_dmarc_report_dmarc_report]
 class DmarcReport(models.Model):
     _name = "hams_base.dmarc.report"
     _description = "DMARC RUA Report"
@@ -271,6 +272,7 @@ class DmarcReport(models.Model):
 
         return report
 
+# [@ANCHOR: hams_base_dmarc_report_dmarc_record]
 class DmarcRecord(models.Model):
     _name = "hams_base.dmarc.record"
     _description = "DMARC RUA Record Details"

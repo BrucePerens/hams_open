@@ -10,6 +10,7 @@ class TestMailThread(HamsTransactionCase):
         super().setUp()
         self.env['ir.config_parameter'].with_user(self.env.ref('base.user_admin').id).set_param('mail.bounce.alias', 'auto-mail-failure')
 
+    # Tests [@ANCHOR: hams_base_mail_thread_mail_thread]
     def test_vacation_reply_dropped(self):
         # Tests [@ANCHOR: hams_base:COMM_message_route]
         msg_dict = {

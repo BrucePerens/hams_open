@@ -38,6 +38,7 @@ class TestLoginCaseInsensitive(HamsTransactionCase):
         with self.assertRaises(AccessDenied):
             self.env["res.users"]._login(self._credential("case-test@example.com"), {"interactive": True})
 
+    # Tests [@ANCHOR: hams_base_res_users_res_users]
     def test_reset_password_resolves_one_user_for_any_case(self):
         user = self._make_user()
         found = self.env["res.users"].search(self.env["res.users"]._get_login_domain("CASE_TEST@EXAMPLE.COM"))

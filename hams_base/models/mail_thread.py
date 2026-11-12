@@ -6,6 +6,7 @@ from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
+# [@ANCHOR: hams_base_mail_thread_mail_thread]
 class MailThread(models.AbstractModel):
     _inherit = 'mail.thread'
 

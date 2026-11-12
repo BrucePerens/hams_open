@@ -15,6 +15,7 @@ class TestViewRenderingAuditCluster(common.TransactionCase):
     established test_all_xpaths_render convention elsewhere.
     """
 
+    # Tests [@ANCHOR: hams_base_dmarc_report_dmarc_record]
     def test_dmarc_record_tree_view_renders(self):
         # Tests [@ANCHOR: view_dmarc_record_tree]
         list_view = self.env["hams_base.dmarc.record"].get_view(

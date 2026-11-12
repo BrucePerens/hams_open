@@ -3,6 +3,7 @@ from odoo import http
 # from odoo import http, _
 from odoo.http import request
 
+# [@ANCHOR: hams_base_unsubscribe_unsubscribe_controller]
 class UnsubscribeController(http.Controller):
     # [@ANCHOR: hams_base:COMM_unsubscribe_page_route]
     @http.route('/unsubscribe', type='http', auth='public', website=True)
