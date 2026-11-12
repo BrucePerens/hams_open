@@ -21,6 +21,7 @@ use tokio::time::timeout;
 const IO_TIMEOUT: Duration = Duration::from_secs(3);
 const MAX_REPLY: u64 = 16 * 1024;
 
+// [@ANCHOR: radioctl_station_http_relay_family]
 /// The device family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Family {
@@ -30,6 +31,7 @@ pub enum Family {
     Tasmota,
 }
 
+// [@ANCHOR: radioctl_station_http_relay_http_relay]
 /// A bank of relays on one device; line n is relay n (0-based).
 pub struct HttpRelay {
     family: Family,
@@ -277,6 +279,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_http_is_private]
     // Tests [@ANCHOR: radioctl_station_http_parse_address]
     // Tests [@ANCHOR: radioctl_station_http_new]
+    // Tests [@ANCHOR: radioctl_station_http_relay_http_relay]
+    // Tests [@ANCHOR: radioctl_station_http_relay_family]
     #[test]
     fn only_private_ip_literals_are_accepted() {
         for ok in [

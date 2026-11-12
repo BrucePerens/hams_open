@@ -167,6 +167,7 @@ pub fn check_handshake_response(head: &str, key: &str) -> Result<(), String> {
     }
 }
 
+// [@ANCHOR: radioctl_station_ws_opcode]
 /// A WebSocket frame type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opcode {
@@ -213,9 +214,11 @@ impl Opcode {
     }
 }
 
+// [@ANCHOR: radioctl_station_ws_frame]
 /// One frame as read: final-fragment flag, type, unmasked payload.
 type Frame = (bool, Opcode, Vec<u8>);
 
+// [@ANCHOR: radioctl_station_ws_message]
 /// A whole message (fragments joined) or control frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message {
@@ -250,6 +253,7 @@ pub fn encode_frame(opcode: Opcode, payload: &[u8], mask: Option<[u8; 4]>) -> Ve
     out
 }
 
+// [@ANCHOR: radioctl_station_ws_decoder]
 /// Reassembles frames from a byte stream.
 #[derive(Debug)]
 pub struct Decoder {
@@ -435,6 +439,10 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_ws_decoder_new]
     // Tests [@ANCHOR: radioctl_station_ws_decoder_push]
     // Tests [@ANCHOR: radioctl_station_ws_decoder_frame]
+    // Tests [@ANCHOR: radioctl_station_ws_decoder]
+    // Tests [@ANCHOR: radioctl_station_ws_message]
+    // Tests [@ANCHOR: radioctl_station_ws_frame]
+    // Tests [@ANCHOR: radioctl_station_ws_opcode]
     #[test]
     fn frames_round_trip_masked_unmasked_fragmented_and_byte_at_a_time() {
         let long = vec![b'x'; 70_000];

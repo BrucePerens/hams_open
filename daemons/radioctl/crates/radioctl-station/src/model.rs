@@ -6,16 +6,19 @@ use crate::error::{StationError, StationErrorKind};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+// [@ANCHOR: radioctl_station_model_channel_id]
 /// The name of a switch channel.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ChannelId(pub String);
 
+// [@ANCHOR: radioctl_station_model_device_id]
 /// The name of a device (a radio, an amplifier and so on).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct DeviceId(pub String);
 
+// [@ANCHOR: radioctl_station_model_value]
 /// The value of a channel: a power or output channel is `Off` or `On`; a selector is `Off`
 /// (every way open) or `Port(n)` with n from 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -29,6 +32,7 @@ pub enum Value {
     Port(u32),
 }
 
+// [@ANCHOR: radioctl_station_model_amp_function]
 /// What an amplifier or tuner control line does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -39,6 +43,7 @@ pub enum AmpFunction {
     Tune,
 }
 
+// [@ANCHOR: radioctl_station_model_channel_kind]
 /// The typed kind of a switch channel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -114,6 +119,7 @@ pub enum ChannelKind {
     },
 }
 
+// [@ANCHOR: radioctl_station_model_channel_def]
 /// One switch channel.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChannelDef {
@@ -218,6 +224,7 @@ impl ChannelDef {
     }
 }
 
+// [@ANCHOR: radioctl_station_model_device_kind]
 /// What kind of equipment a device is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -236,6 +243,7 @@ pub enum DeviceKind {
     Computer,
 }
 
+// [@ANCHOR: radioctl_station_model_power_source]
 /// How a device is powered.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case")]
@@ -257,6 +265,7 @@ pub enum PowerSource {
     },
 }
 
+// [@ANCHOR: radioctl_station_model_device_def]
 /// One device in the station.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceDef {
@@ -288,6 +297,7 @@ pub struct DeviceDef {
     pub external_deadman: bool,
 }
 
+// [@ANCHOR: radioctl_station_model_profile_step]
 /// One step of a profile.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -306,6 +316,7 @@ pub enum ProfileStep {
     },
 }
 
+// [@ANCHOR: radioctl_station_model_profile_def]
 /// A named group, for example "HF station on".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProfileDef {
@@ -322,6 +333,7 @@ fn default_profile_timeout_ms() -> u64 {
     120_000
 }
 
+// [@ANCHOR: radioctl_station_model_power_meter_def]
 /// An external RF power meter: "the power meter for rig X" (`docs/DESIGN.md` decision 26).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PowerMeterDef {
@@ -399,6 +411,7 @@ impl PowerMeterDef {
     }
 }
 
+// [@ANCHOR: radioctl_station_model_station_def]
 /// The whole station.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StationDef {
@@ -419,6 +432,7 @@ pub struct StationDef {
     pub band_routes: Vec<BandRouteDef>,
 }
 
+// [@ANCHOR: radioctl_station_model_band_route_def]
 /// One `[[band_routes]]` entry: transmit frequencies from `low_hz` to `high_hz` inclusive select
 /// `port` of the selector `channel`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -769,6 +783,14 @@ steps = [
     // Tests [@ANCHOR: radioctl_station_def_power_on_order]
     // Tests [@ANCHOR: radioctl_station_def_dependents]
     // Tests [@ANCHOR: radioctl_station_channel_lines]
+    // Tests [@ANCHOR: radioctl_station_model_station_def]
+    // Tests [@ANCHOR: radioctl_station_model_profile_def]
+    // Tests [@ANCHOR: radioctl_station_model_profile_step]
+    // Tests [@ANCHOR: radioctl_station_model_device_def]
+    // Tests [@ANCHOR: radioctl_station_model_device_kind]
+    // Tests [@ANCHOR: radioctl_station_model_amp_function]
+    // Tests [@ANCHOR: radioctl_station_model_device_id]
+    // Tests [@ANCHOR: radioctl_station_model_channel_id]
     #[test]
     fn the_sample_station_parses_and_orders() {
         let def = StationDef::from_toml(SAMPLE).unwrap();
@@ -792,6 +814,7 @@ steps = [
 
     // Tests [@ANCHOR: radioctl_station_def_validate]
     // Tests [@ANCHOR: radioctl_station_channel_validate]
+    // Tests [@ANCHOR: radioctl_station_model_channel_kind]
     #[test]
     fn invalid_stations_are_refused() {
         let cases = [
@@ -864,6 +887,8 @@ steps = [
 
     // Tests [@ANCHOR: radioctl_station_meterdef_validate]
     // Tests [@ANCHOR: radioctl_station_meterdef_offset_db]
+    // Tests [@ANCHOR: radioctl_station_model_power_meter_def]
+    // Tests [@ANCHOR: radioctl_station_model_power_source]
     #[test]
     fn power_meters_are_validated_one_per_rig() {
         let meter = |extra: &str| {

@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+// [@ANCHOR: radioctl_station_lifecycle_radio_state]
 /// Where a radio is in its life.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -26,6 +27,7 @@ pub enum RadioState {
     Unreachable,
 }
 
+// [@ANCHOR: radioctl_station_lifecycle_power_evidence]
 /// What the switch channel says about the radio's power.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerEvidence {
@@ -37,6 +39,7 @@ pub enum PowerEvidence {
     Unknown,
 }
 
+// [@ANCHOR: radioctl_station_lifecycle_evidence]
 /// One snapshot of everything known about a radio right now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Evidence {
@@ -50,6 +53,7 @@ pub struct Evidence {
     pub present: Option<bool>,
 }
 
+// [@ANCHOR: radioctl_station_lifecycle_lifecycle_times]
 /// The timing the machine uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LifecycleTimes {
@@ -77,6 +81,7 @@ impl Default for LifecycleTimes {
     }
 }
 
+// [@ANCHOR: radioctl_station_lifecycle_transition]
 /// A state change with its reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transition {
@@ -88,6 +93,7 @@ pub struct Transition {
     pub reason: &'static str,
 }
 
+// [@ANCHOR: radioctl_station_lifecycle_lifecycle]
 /// The state machine of one radio. Time is a [`Duration`] since any fixed start.
 #[derive(Debug, Clone)]
 pub struct Lifecycle {
@@ -265,6 +271,10 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_lifecycle_power_on_commanded]
     // Tests [@ANCHOR: radioctl_station_lifecycle_assume_powered]
     // Tests [@ANCHOR: radioctl_station_lifecycle_step]
+    // Tests [@ANCHOR: radioctl_station_lifecycle_lifecycle]
+    // Tests [@ANCHOR: radioctl_station_lifecycle_lifecycle_times]
+    // Tests [@ANCHOR: radioctl_station_lifecycle_power_evidence]
+    // Tests [@ANCHOR: radioctl_station_lifecycle_radio_state]
     #[test]
     fn the_happy_path_goes_through_every_state_in_order() {
         let mut l = Lifecycle::new(RadioState::Off, T0, LifecycleTimes::default());
@@ -388,6 +398,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_lifecycle_step]
+    // Tests [@ANCHOR: radioctl_station_lifecycle_transition]
+    // Tests [@ANCHOR: radioctl_station_lifecycle_evidence]
     #[test]
     fn the_switch_going_off_wins_and_hotplug_wakes_an_unreachable_radio() {
         let mut l = Lifecycle::new(RadioState::Ready, T0, LifecycleTimes::default());

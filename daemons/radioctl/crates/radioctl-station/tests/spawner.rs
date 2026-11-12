@@ -213,6 +213,9 @@ fn quick(address: String) -> NetConfig {
 // Tests [@ANCHOR: radioctl_station_dspawner_spawn]
 // Tests [@ANCHOR: radioctl_station_dspawner_fail]
 // Tests [@ANCHOR: radioctl_station_rigspec_tcp]
+// Tests [@ANCHOR: radioctl_station_spawner_description_spawner]
+// Tests [@ANCHOR: radioctl_station_spawner_rig_spec]
+// Tests [@ANCHOR: radioctl_station_spawner_rig_endpoint]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_network_radio_keeps_its_actor_across_a_network_drop_and_is_unkeyed_by_it() {
     let desc = RigDescription::ts2000();
@@ -283,6 +286,7 @@ async fn a_ts890_is_logged_in_and_unkeyed_through_the_manager() {
 }
 
 // Tests [@ANCHOR: radioctl_station_rigspec_serial]
+// Tests [@ANCHOR: radioctl_station_spawner_framing_factory]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_unknown_radio_and_an_unreachable_one_are_clean_errors() {
     let mut spawner = DescriptionSpawner::new();

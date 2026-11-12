@@ -36,6 +36,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::{sleep, timeout, Instant};
 
+// [@ANCHOR: radioctl_station_station_key_state]
 /// Whether a transmitter is keyed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyState {
@@ -93,6 +94,7 @@ pub trait Readiness: Send + Sync {
     fn is_ready(&self, device: &DeviceId) -> BoxFuture<'_, bool>;
 }
 
+// [@ANCHOR: radioctl_station_station_all_off_report]
 /// The result of an all-off.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllOffReport {
@@ -102,6 +104,7 @@ pub struct AllOffReport {
     pub failed: Vec<(ChannelId, String)>,
 }
 
+// [@ANCHOR: radioctl_station_station_action]
 /// What a command does to the RF path, which decides how the keyed state treats it (Bruce,
 /// 2026-10-31).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,6 +120,7 @@ pub enum Action {
     RfPath,
 }
 
+// [@ANCHOR: radioctl_station_station_station]
 /// A station: the definition, its switchboard and its interlock sources.
 pub struct Station {
     def: StationDef,
@@ -1032,6 +1036,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_station_classify_on]
     // Tests [@ANCHOR: radioctl_station_station_classify_channel]
     // Tests [@ANCHOR: radioctl_station_station_classify_pulse]
+    // Tests [@ANCHOR: radioctl_station_station_station]
+    // Tests [@ANCHOR: radioctl_station_station_action]
     #[tokio::test(start_paused = true)]
     async fn the_shared_supply_protection_is_opt_in_and_makes_radio_power_on_an_rf_path_change() {
         // default: the radio's power-on is not an RF-path change
@@ -1104,6 +1110,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_station_station_run_profile]
     // Tests [@ANCHOR: radioctl_station_station_stop_profile]
+    // Tests [@ANCHOR: radioctl_station_channel_box_future]
     #[tokio::test(start_paused = true)]
     async fn a_profile_runs_in_order_waits_for_the_radio_and_stops_in_reverse() {
         let (st, bank, _key) = rig(Some(Arc::new(Answers(AtomicU8::new(0)))));
@@ -1148,6 +1155,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_station_all_off]
+    // Tests [@ANCHOR: radioctl_station_station_all_off_report]
     #[tokio::test(start_paused = true)]
     async fn all_off_is_never_blocked() {
         let (st, bank, key) = rig(None);

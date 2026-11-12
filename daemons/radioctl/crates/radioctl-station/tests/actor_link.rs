@@ -369,6 +369,9 @@ async fn a_transport_that_reconnects_by_itself_is_not_respawned() {
 
 // Tests [@ANCHOR: radioctl_station_actorlink_with_unkey_timeout]
 // Tests [@ANCHOR: radioctl_station_actorlink_unkey_pass]
+// Tests [@ANCHOR: radioctl_station_actor_link_live_key]
+// Tests [@ANCHOR: radioctl_station_actor_link_actor_links]
+// Tests [@ANCHOR: radioctl_station_actor_link_rig_connection]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_failed_unkey_pass_is_a_failed_connection() {
     // The actor is given a transport that reports itself down, so the unkey cannot be sent.

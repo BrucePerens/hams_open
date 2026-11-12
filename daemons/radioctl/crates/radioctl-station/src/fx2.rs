@@ -55,6 +55,7 @@ pub trait ControlTransport {
     ) -> Result<Vec<u8>, StationError>;
 }
 
+// [@ANCHOR: radioctl_station_fx2_info]
 /// What the board says about itself (`GET_INFO`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Info {
@@ -130,6 +131,7 @@ impl Info {
     }
 }
 
+// [@ANCHOR: radioctl_station_fx2_status]
 /// The board's status record (23 bytes).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Status {
@@ -180,6 +182,7 @@ impl Status {
     }
 }
 
+// [@ANCHOR: radioctl_station_fx2_map_step]
 /// A control OUT of the map load.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MapStep {
@@ -290,6 +293,7 @@ pub fn map_steps(map: &GpioMap, heartbeat_lapse_ms: u16) -> Result<Vec<MapStep>,
     Ok(steps)
 }
 
+// [@ANCHOR: radioctl_station_fx2_board]
 /// An open Station I/O board.
 pub struct Board<T: ControlTransport> {
     t: T,
@@ -481,6 +485,8 @@ channel = "swr"
 
     // Tests [@ANCHOR: radioctl_station_fx2_info_parse]
     // Tests [@ANCHOR: radioctl_station_fx2_status_parse]
+    // Tests [@ANCHOR: radioctl_station_fx2_status]
+    // Tests [@ANCHOR: radioctl_station_fx2_info]
     #[test]
     fn the_simulators_records_parse() {
         let i = Info::parse(&hex(INFO)).unwrap();
@@ -497,6 +503,7 @@ channel = "swr"
 
     // Tests [@ANCHOR: radioctl_station_fx2_info_require_station_io]
     // Tests [@ANCHOR: radioctl_station_fx2_board_open]
+    // Tests [@ANCHOR: radioctl_station_fx2_board]
     #[test]
     fn a_bench_board_or_one_without_timeouts_is_refused() {
         assert!(Board::open(fake()).is_ok());
@@ -532,6 +539,7 @@ channel = "swr"
 
     // Tests [@ANCHOR: radioctl_station_fx2_map_steps]
     // Tests [@ANCHOR: radioctl_station_fx2_board_load_map]
+    // Tests [@ANCHOR: radioctl_station_fx2_map_step]
     #[test]
     fn a_map_becomes_the_firmwares_requests_in_order_with_inputs_left_alone() {
         let steps = map_steps(&map(), 1000).unwrap();

@@ -39,6 +39,7 @@ pub trait RadioLink: Send + Sync {
     fn connect(&self, radio: &DeviceId) -> BoxFuture<'_, Result<Option<KnownState>, StationError>>;
 }
 
+// [@ANCHOR: radioctl_station_manager_rig_links]
 /// The link of real rigs: the actor's `link_up` for evidence; connecting is the caller's business
 /// (it respawns the actor), so `connect` here only reports whether the link is up.
 #[derive(Default)]
@@ -88,6 +89,7 @@ impl RadioLink for RigLinks {
     }
 }
 
+// [@ANCHOR: radioctl_station_manager_virtual_radio_link]
 /// A virtual radio for tests: it boots a set time after its power line (a [`VirtualBank`] line)
 /// goes on, can be made never to boot, to drop its link, or to vanish.
 #[derive(Clone)]
@@ -96,6 +98,7 @@ pub struct VirtualRadioLink {
     radios: Arc<Mutex<BTreeMap<DeviceId, VRadio>>>,
 }
 
+// [@ANCHOR: radioctl_station_manager_vradio]
 struct VRadio {
     line: u32,
     boot: Option<Duration>,
@@ -232,6 +235,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+// [@ANCHOR: radioctl_station_manager_radio_event]
 /// A radio changed state: the station-level event.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RadioEvent {
@@ -249,6 +253,7 @@ pub struct RadioEvent {
     pub reported: Option<KnownState>,
 }
 
+// [@ANCHOR: radioctl_station_manager_button]
 /// The power button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
@@ -260,6 +265,7 @@ pub enum Button {
     Reboot,
 }
 
+// [@ANCHOR: radioctl_station_manager_button_report]
 /// What a button press did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ButtonReport {
@@ -269,6 +275,7 @@ pub struct ButtonReport {
     pub powered_off: Vec<DeviceId>,
 }
 
+// [@ANCHOR: radioctl_station_manager_reconcile_item]
 /// One radio's start-up reconcile result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReconcileItem {
@@ -284,6 +291,7 @@ pub struct ReconcileItem {
     pub disagrees: bool,
 }
 
+// [@ANCHOR: radioctl_station_manager_entry]
 struct Entry {
     record: RadioRecord,
     life: Lifecycle,
@@ -294,6 +302,7 @@ struct Entry {
 const EVENT_BUFFER: usize = 256;
 const BUTTON_POLL: Duration = Duration::from_millis(250);
 
+// [@ANCHOR: radioctl_station_manager_radio_manager]
 /// The lifecycle, record and power button of the station's radios.
 pub struct RadioManager {
     station: Arc<Station>,
@@ -1052,6 +1061,13 @@ power = { source = "always_on" }
     // Tests [@ANCHOR: radioctl_station_vlink_connect]
     // Tests [@ANCHOR: radioctl_station_vlink_refresh]
     // Tests [@ANCHOR: radioctl_station_vlink_set_report]
+    // Tests [@ANCHOR: radioctl_station_record_known_state]
+    // Tests [@ANCHOR: radioctl_station_manager_radio_manager]
+    // Tests [@ANCHOR: radioctl_station_manager_entry]
+    // Tests [@ANCHOR: radioctl_station_manager_button_report]
+    // Tests [@ANCHOR: radioctl_station_manager_button]
+    // Tests [@ANCHOR: radioctl_station_manager_vradio]
+    // Tests [@ANCHOR: radioctl_station_manager_virtual_radio_link]
     #[tokio::test(start_paused = true)]
     async fn the_power_button_walks_a_radio_up_and_reports_without_restoring() {
         let r = rig("happy", Some(secs(5)));
@@ -1203,6 +1219,7 @@ power = { source = "always_on" }
     // Tests [@ANCHOR: radioctl_station_vlink_connects]
     // Tests [@ANCHOR: radioctl_station_vlink_set_boot]
     // Tests [@ANCHOR: radioctl_station_manager_poll]
+    // Tests [@ANCHOR: radioctl_station_manager_radio_event]
     #[tokio::test(start_paused = true)]
     async fn a_radio_that_drops_while_powered_degrades_then_comes_back_without_any_write() {
         let r = rig("drop", Some(secs(2)));
@@ -1251,6 +1268,7 @@ power = { source = "always_on" }
 
     // Tests [@ANCHOR: radioctl_station_manager_reconcile]
     // Tests [@ANCHOR: radioctl_station_manager_problems]
+    // Tests [@ANCHOR: radioctl_station_manager_reconcile_item]
     #[tokio::test(start_paused = true)]
     async fn reconcile_reads_without_writing_and_reports_disagreement_with_the_record() {
         // a record that says Ready, with a cached state, while the switch is really off

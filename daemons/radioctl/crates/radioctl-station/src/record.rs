@@ -23,6 +23,7 @@ pub const MAX_RECORD_FILE_BYTES: u64 = 4 * 1024 * 1024;
 /// Longest expected boot time a record may claim (one hour).
 pub const MAX_BOOT_MS: u64 = 3_600_000;
 
+// [@ANCHOR: radioctl_station_record_identity]
 /// How to find the radio.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Identity {
@@ -34,6 +35,7 @@ pub struct Identity {
     pub network_address: Option<String>,
 }
 
+// [@ANCHOR: radioctl_station_record_connect_method]
 /// How the relay connects after the radio is powered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -46,6 +48,7 @@ pub enum ConnectMethod {
     BootTime,
 }
 
+// [@ANCHOR: radioctl_station_record_connect_procedure]
 /// The connect procedure.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConnectProcedure {
@@ -56,6 +59,7 @@ pub struct ConnectProcedure {
     pub notes: String,
 }
 
+// [@ANCHOR: radioctl_station_record_known_state]
 /// The state last read from the radio, with when. Served with its age while the radio is off.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct KnownState {
@@ -78,6 +82,7 @@ pub struct KnownState {
     pub seen_unix: u64,
 }
 
+// [@ANCHOR: radioctl_station_record_health]
 /// Health counters.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Health {
@@ -92,6 +97,7 @@ pub struct Health {
     pub consecutive_failures: u32,
 }
 
+// [@ANCHOR: radioctl_station_record_radio_record]
 /// Everything durable about one radio.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RadioRecord {
@@ -131,6 +137,7 @@ pub struct RadioRecord {
     pub health: Health,
 }
 
+// [@ANCHOR: radioctl_station_record_cached_type]
 /// The cached state with its age.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Cached {
@@ -207,6 +214,7 @@ impl RadioRecord {
     }
 }
 
+// [@ANCHOR: radioctl_station_record_loaded]
 /// What a load found.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Loaded {
@@ -216,12 +224,14 @@ pub struct Loaded {
     pub problems: Vec<String>,
 }
 
+// [@ANCHOR: radioctl_station_record_file_image]
 #[derive(Serialize, Deserialize)]
 struct FileImage {
     schema: u32,
     radios: BTreeMap<String, serde_json::Value>,
 }
 
+// [@ANCHOR: radioctl_station_record_record_store]
 /// The record file.
 #[derive(Debug, Clone)]
 pub struct RecordStore {
@@ -443,6 +453,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_store_path]
     // Tests [@ANCHOR: radioctl_station_store_save]
     // Tests [@ANCHOR: radioctl_station_store_load]
+    // Tests [@ANCHOR: radioctl_station_record_record_store]
+    // Tests [@ANCHOR: radioctl_station_record_radio_record]
     #[test]
     fn a_record_round_trips_with_owner_only_permissions() {
         let d = dir("roundtrip");
@@ -514,6 +526,12 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_station_store_load]
     // Tests [@ANCHOR: radioctl_station_record_validate]
+    // Tests [@ANCHOR: radioctl_station_record_loaded]
+    // Tests [@ANCHOR: radioctl_station_record_cached_type]
+    // Tests [@ANCHOR: radioctl_station_record_health]
+    // Tests [@ANCHOR: radioctl_station_record_connect_procedure]
+    // Tests [@ANCHOR: radioctl_station_record_connect_method]
+    // Tests [@ANCHOR: radioctl_station_record_identity]
     #[test]
     fn one_bad_record_is_dropped_and_the_rest_kept() {
         let d = dir("badrecord");
@@ -552,6 +570,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_store_tighten]
     // Tests [@ANCHOR: radioctl_station_store_save]
     #[cfg(unix)]
+    // Tests [@ANCHOR: radioctl_station_record_file_image]
     #[test]
     fn a_world_readable_file_is_tightened_and_a_huge_one_refused() {
         use std::os::unix::fs::PermissionsExt;

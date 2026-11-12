@@ -24,9 +24,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::runtime::Handle;
 
+// [@ANCHOR: radioctl_station_spawner_framing_factory]
 /// Makes a fresh framing for each new connection.
 pub type FramingFactory = Arc<dyn Fn() -> Box<dyn Framing> + Send + Sync>;
 
+// [@ANCHOR: radioctl_station_spawner_rig_endpoint]
 /// Where a radio is.
 #[derive(Clone)]
 pub enum RigEndpoint {
@@ -48,6 +50,7 @@ pub enum RigEndpoint {
     },
 }
 
+// [@ANCHOR: radioctl_station_spawner_rig_spec]
 /// One radio: its description, where it is, and how its actor is configured.
 #[derive(Clone)]
 pub struct RigSpec {
@@ -89,6 +92,7 @@ impl RigSpec {
     }
 }
 
+// [@ANCHOR: radioctl_station_spawner_description_spawner]
 /// Spawns the rigs of a station from their specs.
 #[derive(Default)]
 pub struct DescriptionSpawner {

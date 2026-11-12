@@ -141,6 +141,8 @@ async fn a_silent_rotator_times_out_and_a_late_reply_is_not_taken_for_the_next()
 }
 
 // Tests [@ANCHOR: radioctl_station_vrot_control_set_stuck]
+// Tests [@ANCHOR: radioctl_station_rotator_shared_rotator]
+// Tests [@ANCHOR: radioctl_station_rotator_rotator_file]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_stuck_rotator_is_reported_with_where_it_was_seen() {
     let d = desc("generic-rotctld", 100.0, 1000);
@@ -180,6 +182,7 @@ async fn concurrent_commands_are_serialised_and_never_mixed() {
 }
 
 // Tests [@ANCHOR: radioctl_station_rotator_stop]
+// Tests [@ANCHOR: radioctl_station_rotator_rotator]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_down_link_fails_at_once_without_writing_and_recovers() {
     let d = desc("generic-rotctld", 100.0, 500);

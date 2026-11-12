@@ -18,6 +18,7 @@ use radioctl_core::units::Hz;
 use std::future::poll_fn;
 use std::pin::Pin;
 
+// [@ANCHOR: radioctl_station_band_follow_band_route]
 /// One band: transmit frequencies from `low` to `high` inclusive select `port` of `channel`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BandRoute {

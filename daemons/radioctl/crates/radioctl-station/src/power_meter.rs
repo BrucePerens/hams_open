@@ -27,6 +27,7 @@ use tokio::time::timeout;
 
 use crate::error::{StationError, StationErrorKind};
 
+// [@ANCHOR: radioctl_station_power_meter_meter_driver]
 /// Which wattmeter protocol a meter speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MeterDriver {
@@ -83,6 +84,7 @@ impl MeterDriver {
     }
 }
 
+// [@ANCHOR: radioctl_station_power_meter_sample]
 /// What one poll learned, in the driver's unit.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Sample {
@@ -144,6 +146,7 @@ pub fn parse_kpa1500(frame: &str) -> Result<(char, f64), StationError> {
 /// The longest reply frame accepted.
 const MAX_FRAME: usize = 32;
 
+// [@ANCHOR: radioctl_station_power_meter_meter_poller]
 /// An async poller for one external wattmeter on a byte stream.
 pub struct MeterPoller<T> {
     driver: MeterDriver,
@@ -216,14 +219,17 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> MeterPoller<T> {
     }
 }
 
+// [@ANCHOR: radioctl_station_power_meter_clock]
 /// A source of the current time, replaceable in tests.
 pub type Clock = Arc<dyn Fn() -> Instant + Send + Sync>;
 
+// [@ANCHOR: radioctl_station_power_meter_feed_state]
 struct FeedState {
     at: Instant,
     sample: Sample,
 }
 
+// [@ANCHOR: radioctl_station_power_meter_power_feed]
 /// The latest reading of one external meter, with the rule that makes a stale one "no power".
 pub struct PowerFeed {
     name: String,
@@ -318,6 +324,7 @@ pub async fn run_poller<T: AsyncRead + AsyncWrite + Unpin + Send>(
     }
 }
 
+// [@ANCHOR: radioctl_station_power_meter_virtual_power]
 /// What a virtual meter reports.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VirtualPower {
@@ -331,6 +338,7 @@ pub struct VirtualPower {
     pub silent: bool,
 }
 
+// [@ANCHOR: radioctl_station_power_meter_virtual_meter_control]
 /// Control of a virtual meter.
 #[derive(Clone)]
 pub struct VirtualMeterControl {
@@ -410,6 +418,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_meter_driver_default_baud]
     // Tests [@ANCHOR: radioctl_station_meter_driver_requests]
     // Tests [@ANCHOR: radioctl_station_meter_driver_has_reflected]
+    // Tests [@ANCHOR: radioctl_station_power_meter_meter_driver]
     #[test]
     fn drivers_have_names_requests_and_units() {
         for d in [MeterDriver::Kpa500, MeterDriver::Kpa1500] {
@@ -457,6 +466,9 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_meter_poller_read_frame]
     // Tests [@ANCHOR: radioctl_station_vmeter_serve]
     // Tests [@ANCHOR: radioctl_station_vmeter_set]
+    // Tests [@ANCHOR: radioctl_station_power_meter_virtual_meter_control]
+    // Tests [@ANCHOR: radioctl_station_power_meter_virtual_power]
+    // Tests [@ANCHOR: radioctl_station_power_meter_meter_poller]
     #[tokio::test]
     async fn pollers_read_both_meters_from_virtual_devices() {
         for driver in [MeterDriver::Kpa500, MeterDriver::Kpa1500] {
@@ -529,6 +541,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_feed_push]
     // Tests [@ANCHOR: radioctl_station_feed_read]
     // Tests [@ANCHOR: radioctl_station_feed_name]
+    // Tests [@ANCHOR: radioctl_station_power_meter_power_feed]
+    // Tests [@ANCHOR: radioctl_station_power_meter_sample]
     #[test]
     fn a_stale_reading_is_no_power() {
         let (clock, now) = manual_clock();
@@ -574,6 +588,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_meter_run]
+    // Tests [@ANCHOR: radioctl_station_power_meter_feed_state]
+    // Tests [@ANCHOR: radioctl_station_power_meter_clock]
     #[tokio::test]
     async fn the_poller_task_keeps_a_feed_fresh_until_the_meter_goes_quiet() {
         let (near, far) = duplex(256);
