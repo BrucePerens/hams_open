@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 /// bounded by this crate and not only by its callers.
 pub const MAX_LEASE: Duration = Duration::from_secs(60);
 
+// [@ANCHOR: hpsdr_gate_tx_gate]
 /// A shared, clonable transmit gate. `TxGate::default()` is closed.
 #[derive(Clone, Debug, Default)]
 pub struct TxGate {
@@ -23,6 +24,7 @@ pub struct TxGate {
     limits: Arc<Mutex<Limits>>,
 }
 
+// [@ANCHOR: hpsdr_gate_limits]
 /// What may be sent while the gate is open. Only ever narrowed ([`TxGate::narrow_limits`]).
 #[derive(Clone, Debug)]
 struct Limits {
@@ -125,6 +127,7 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
+    // Tests [@ANCHOR: hpsdr_gate_tx_gate]
     #[test]
     fn default_gate_is_closed_and_lease_expires() {
         // Tests [@ANCHOR: hpsdr_gate_new]
@@ -177,6 +180,7 @@ mod tests {
         assert!(!g.is_open(now + MAX_LEASE + Duration::from_secs(2)));
     }
 
+    // Tests [@ANCHOR: hpsdr_gate_limits]
     #[test]
     fn limits_only_narrow() {
         // Tests [@ANCHOR: hpsdr_gate_narrow_limits]

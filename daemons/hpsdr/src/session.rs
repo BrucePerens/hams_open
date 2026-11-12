@@ -25,6 +25,7 @@ use tokio::task::JoinHandle;
 /// Largest queue of transmit I/Q samples held for the sender task (about 85 ms at 48 ksps).
 pub const TX_QUEUE_MAX: usize = 4096;
 
+// [@ANCHOR: hpsdr_session_session_options]
 /// Tunables of a session.
 #[derive(Debug, Clone, Copy)]
 pub struct SessionOptions {
@@ -46,6 +47,7 @@ impl Default for SessionOptions {
     }
 }
 
+// [@ANCHOR: hpsdr_session_tx_state]
 #[derive(Debug, Default)]
 struct TxState {
     ptt: bool,
@@ -53,6 +55,7 @@ struct TxState {
     iq: VecDeque<(i16, i16)>,
 }
 
+// [@ANCHOR: hpsdr_session_shared]
 #[derive(Debug)]
 struct Shared {
     cfg: Mutex<P1Config>,
@@ -71,6 +74,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
+// [@ANCHOR: hpsdr_session_radio]
 /// A running Protocol 1 receive session. Call [`Radio::stop`]; a plain drop unkeys and stops the radio too, but only
 /// from the task's next tick and without reporting a failure.
 #[must_use = "dropping a session ends it without waiting; call stop().await"]
@@ -403,6 +407,9 @@ mod tests {
         false
     }
 
+    // Tests [@ANCHOR: hpsdr_emulator_emulator]
+    // Tests [@ANCHOR: hpsdr_emulator_emulator_counters]
+    // Tests [@ANCHOR: hpsdr_emulator_emulator_config]
     #[tokio::test]
     async fn discovery_finds_the_emulator_with_board_and_version() {
         // Tests [@ANCHOR: hpsdr_discovery_parse_reply]
@@ -429,6 +436,9 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_session_radio]
+    // Tests [@ANCHOR: hpsdr_session_session_options]
+    // Tests [@ANCHOR: hpsdr_emulator_tone]
     #[tokio::test]
     async fn two_receivers_stream_their_own_tones_without_loss() {
         // Tests [@ANCHOR: hpsdr_session_start]
@@ -647,6 +657,7 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_session_shared]
     #[tokio::test]
     async fn an_open_gate_keys_and_the_lease_expiry_unkeys() {
         // Tests [@ANCHOR: hpsdr_session_stop]
@@ -688,6 +699,7 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_discovery_discovered]
     #[tokio::test]
     async fn stop_while_keyed_sends_a_mox_clear_datagram_before_the_stop_packet() {
         // Tests [@ANCHOR: hpsdr_session_stop]

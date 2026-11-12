@@ -34,6 +34,7 @@ pub const TX_QUEUE_MAX: usize = 4096;
 /// with stale settings (the High Priority packet is sent every tick).
 const DDC_REFRESH: Duration = Duration::from_secs(1);
 
+// [@ANCHOR: hpsdr_session_p2_p2_config]
 /// What the session asks the radio to do. Settings the protocol cannot express are rejected.
 #[derive(Debug, Clone, PartialEq)]
 pub struct P2Config {
@@ -105,6 +106,7 @@ impl P2Config {
     }
 }
 
+// [@ANCHOR: hpsdr_session_p2_tx_queue]
 #[derive(Debug, Default)]
 struct TxQueue {
     ptt: bool,
@@ -112,6 +114,7 @@ struct TxQueue {
     iq: VecDeque<(i16, i16)>,
 }
 
+// [@ANCHOR: hpsdr_session_p2_shared]
 #[derive(Debug)]
 struct Shared {
     cfg: Mutex<(P2Config, u64)>,
@@ -131,6 +134,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
+// [@ANCHOR: hpsdr_session_p2_seqs]
 /// Sequence numbers of the four packet kinds the session sends.
 #[derive(Debug, Default)]
 struct Seqs {
@@ -140,6 +144,7 @@ struct Seqs {
     duc: u32,
 }
 
+// [@ANCHOR: hpsdr_session_p2_target]
 /// Where the session sends and what it computes with.
 #[derive(Debug, Clone)]
 struct Target {
@@ -262,6 +267,7 @@ fn handle_datagram(
     }
 }
 
+// [@ANCHOR: hpsdr_session_p2_task]
 /// The task's fixed inputs.
 struct Task {
     sock: Arc<UdpSocket>,
@@ -324,6 +330,7 @@ async fn run(mut t: Task) {
     }
 }
 
+// [@ANCHOR: hpsdr_session_p2_radio2]
 /// A running Protocol 2 receive session. Call [`Radio2::stop`]; a plain drop unkeys and stops the radio too, but only
 /// from the task's next tick and without reporting a failure.
 #[must_use = "dropping a session ends it without waiting; call stop().await"]
@@ -597,6 +604,8 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: hpsdr_session_p2_radio2]
+    // Tests [@ANCHOR: hpsdr_session_p2_seqs]
     #[tokio::test]
     async fn two_receivers_stream_their_own_tones_without_loss() {
         // Tests [@ANCHOR: hpsdr_session_p2_start]
@@ -668,6 +677,8 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_session_p2_target]
+    // Tests [@ANCHOR: hpsdr_session_p2_p2_config]
     #[tokio::test]
     async fn frequency_rate_and_attenuator_changes_reach_the_radio() {
         // Tests [@ANCHOR: hpsdr_session_p2_update]
@@ -766,6 +777,7 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_session_p2_task]
     #[tokio::test]
     async fn a_whole_receive_session_with_a_closed_gate_never_transmits() {
         // Tests [@ANCHOR: hpsdr_session_p2_request_ptt]
@@ -799,6 +811,7 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_session_p2_tx_queue]
     #[tokio::test]
     async fn an_open_gate_keys_and_the_lease_expiry_unkeys() {
         let (emu, d, ports) = setup(P2EmulatorConfig::default(), 1).await;
@@ -849,6 +862,7 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_session_p2_shared]
     #[tokio::test]
     async fn lost_datagrams_and_a_slow_consumer_are_counted() {
         let ecfg = P2EmulatorConfig {

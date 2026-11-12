@@ -29,6 +29,7 @@ pub const DDC_SAMPLES: usize = 238;
 /// Protocol 2 board type reported by default (1 = Hermes).
 pub const HERMES_P2_TYPE: u8 = 1;
 
+// [@ANCHOR: hpsdr_emulator_p2_p2_emulator_config]
 /// What the emulated radio is and how it behaves.
 #[derive(Debug, Clone)]
 pub struct P2EmulatorConfig {
@@ -80,6 +81,7 @@ impl Default for P2EmulatorConfig {
     }
 }
 
+// [@ANCHOR: hpsdr_emulator_p2_p2_counters]
 /// What the emulator has seen from the client.
 #[derive(Debug, Default)]
 pub struct P2Counters {
@@ -152,6 +154,7 @@ pub fn loopback_ports(ddcs: u8) -> Result<RadioPorts, HpsdrError> {
     Err(HpsdrError::Io("no free loopback port block".into()))
 }
 
+// [@ANCHOR: hpsdr_emulator_p2_emulator_p2]
 /// A running Protocol 2 emulator.
 #[derive(Debug)]
 pub struct EmulatorP2 {
@@ -219,6 +222,7 @@ impl EmulatorP2 {
     }
 }
 
+// [@ANCHOR: hpsdr_emulator_p2_io]
 struct Io {
     cmd: UdpSocket,
     ddc_spec: Arc<UdpSocket>,
@@ -228,6 +232,7 @@ struct Io {
     ddc_out: Vec<UdpSocket>,
 }
 
+// [@ANCHOR: hpsdr_emulator_p2_rf_state]
 /// What the client has told the radio.
 #[derive(Debug)]
 struct RfState {
@@ -429,6 +434,9 @@ async fn run(io: Io, cfg: P2EmulatorConfig, c: Arc<P2Counters>) {
 mod tests {
     use super::*;
 
+    // Tests [@ANCHOR: hpsdr_emulator_p2_emulator_p2]
+    // Tests [@ANCHOR: hpsdr_emulator_p2_p2_counters]
+    // Tests [@ANCHOR: hpsdr_emulator_p2_p2_emulator_config]
     #[tokio::test]
     async fn listens_on_loopback_only_and_answers_discovery() {
         // Tests [@ANCHOR: hpsdr_emulator_p2_start]
@@ -479,6 +487,7 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_emulator_p2_rf_state]
     #[test]
     fn ddc_packets_follow_the_settings() {
         // Tests [@ANCHOR: hpsdr_emulator_p2_apply_hp]

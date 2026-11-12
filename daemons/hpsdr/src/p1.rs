@@ -59,6 +59,7 @@ pub fn stop_packet() -> [u8; 64] {
     start_packet(false, false)
 }
 
+// [@ANCHOR: hpsdr_p1_p1_reply]
 /// A parsed Protocol 1 discovery reply (Metis, "Metis Discovery reply format").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct P1Reply {
@@ -106,6 +107,7 @@ pub fn encode_reply(r: &P1Reply) -> [u8; 60] {
     p
 }
 
+// [@ANCHOR: hpsdr_p1_p1_config]
 /// Receiver and front-end settings carried by the C&C bytes of EP2 frames.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct P1Config {
@@ -232,6 +234,7 @@ impl P1Config {
     }
 }
 
+// [@ANCHOR: hpsdr_p1_tx_request]
 /// Transmit request for [`Ep2Builder::build_tx`].
 #[derive(Debug, Clone, Copy)]
 pub struct TxRequest<'a> {
@@ -244,6 +247,7 @@ pub struct TxRequest<'a> {
     pub iq: &'a [(i16, i16)],
 }
 
+// [@ANCHOR: hpsdr_p1_ep2_builder]
 /// Builds EP2 datagrams (PC to radio) with the C&C round-robin and a sequence counter.
 #[derive(Debug, Clone, Default)]
 pub struct Ep2Builder {
@@ -330,6 +334,7 @@ impl Ep2Builder {
     }
 }
 
+// [@ANCHOR: hpsdr_p1_ep2]
 /// An EP2 datagram as the radio sees it (the emulator uses this to count transmit requests).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ep2 {
@@ -372,6 +377,7 @@ pub fn parse_ep2(d: &[u8]) -> Result<Ep2, HpsdrError> {
     })
 }
 
+// [@ANCHOR: hpsdr_p1_ep6]
 /// One decoded EP6 datagram (radio to PC).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ep6 {
@@ -563,6 +569,7 @@ mod tests {
         assert_eq!(stop_packet().len(), 64);
     }
 
+    // Tests [@ANCHOR: hpsdr_p1_p1_reply]
     #[test]
     fn reply_round_trips_and_rejects_junk() {
         // Tests [@ANCHOR: hpsdr_p1_parse_reply]
@@ -586,6 +593,7 @@ mod tests {
         assert_eq!(parse_reply(&st), Err(HpsdrError::BadMagic));
     }
 
+    // Tests [@ANCHOR: hpsdr_p1_p1_config]
     #[test]
     fn config_validation_and_cc_round_trip() {
         // Tests [@ANCHOR: hpsdr_p1_config_default]
@@ -632,6 +640,8 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: hpsdr_p1_ep2]
+    // Tests [@ANCHOR: hpsdr_p1_ep2_builder]
     #[test]
     fn receive_datagrams_never_carry_transmit_state() {
         // Tests [@ANCHOR: hpsdr_p1_ep2_new]
@@ -667,6 +677,7 @@ mod tests {
         assert!(b.build_rx(&bad).is_err());
     }
 
+    // Tests [@ANCHOR: hpsdr_p1_tx_request]
     #[test]
     fn transmit_builder_refuses_unless_gate_open() {
         // Tests [@ANCHOR: hpsdr_p1_ep2_build_tx]
@@ -735,6 +746,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: hpsdr_p1_ep6]
     #[test]
     fn ep6_round_trips_for_one_to_seven_receivers() {
         // Tests [@ANCHOR: hpsdr_p1_samples_per_frame]

@@ -32,6 +32,7 @@ pub const DUC_SAMPLES: usize = 240;
 /// DDCs the format can address.
 pub const MAX_DDC: usize = 80;
 
+// [@ANCHOR: hpsdr_p2_radio_ports]
 /// The UDP ports of a session (P2, "General Packet to SDR", bytes 5..22). Zero means "use the default".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RadioPorts {
@@ -93,6 +94,7 @@ pub fn discovery_packet() -> [u8; SMALL_LEN] {
     p
 }
 
+// [@ANCHOR: hpsdr_p2_p2_reply]
 /// A parsed Protocol 2 discovery reply (P2, "Discovery Reply Packet", option 1: board type below 254).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct P2Reply {
@@ -179,6 +181,7 @@ pub fn encode_general(seq: u32, ports: &RadioPorts, phase_words: bool) -> [u8; S
     p
 }
 
+// [@ANCHOR: hpsdr_p2_ddc_setting]
 /// One DDC's settings (P2, "DDC Specific Packet").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DdcSetting {
@@ -227,6 +230,7 @@ pub fn phase_word(freq_hz: u32, clock_hz: f64) -> u32 {
     (4_294_967_296.0 * f64::from(freq_hz) / clock_hz).round() as u32
 }
 
+// [@ANCHOR: hpsdr_p2_hp_rx]
 /// What the receive high-priority packet carries.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HpRx {
@@ -271,6 +275,7 @@ pub fn encode_high_priority_rx(seq: u32, hp: &HpRx) -> Result<Vec<u8>, HpsdrErro
     hp_base(seq, hp)
 }
 
+// [@ANCHOR: hpsdr_p2_tx_state]
 /// Transmit part of a High Priority packet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TxState {
@@ -383,6 +388,7 @@ pub fn encode_hp_status(seq: u32, st: &HardwareStatus) -> [u8; SMALL_LEN] {
     p
 }
 
+// [@ANCHOR: hpsdr_p2_ddc_packet]
 /// One DDC data packet (P2, "DDC Packet", single DDC, 24 bits).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DdcPacket {
@@ -452,6 +458,8 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: hpsdr_types_protocol]
+    // Tests [@ANCHOR: hpsdr_p2_p2_reply]
     #[test]
     fn discovery_and_reply_round_trip() {
         // Tests [@ANCHOR: hpsdr_p2_discovery_packet]
@@ -489,6 +497,7 @@ mod tests {
         assert_eq!(parse_reply(&[1u8; 60]), Err(HpsdrError::BadMagic));
     }
 
+    // Tests [@ANCHOR: hpsdr_p2_radio_ports]
     #[test]
     fn general_packet_carries_ports_and_the_hardware_timer() {
         // Tests [@ANCHOR: hpsdr_p2_ports_default]
@@ -505,6 +514,7 @@ mod tests {
         assert_eq!(encode_general(0, &RadioPorts::default(), false)[37], 0);
     }
 
+    // Tests [@ANCHOR: hpsdr_p2_ddc_setting]
     #[test]
     fn ddc_specific_sets_enables_rates_and_adcs() {
         // Tests [@ANCHOR: hpsdr_p2_encode_ddc_specific]
@@ -533,6 +543,7 @@ mod tests {
         assert!(encode_ddc_specific(0, 1, 0, 0, &[ddcs[0]; 81]).is_err());
     }
 
+    // Tests [@ANCHOR: hpsdr_p2_hp_rx]
     #[test]
     fn receive_high_priority_never_carries_transmit_state() {
         // Tests [@ANCHOR: hpsdr_p2_phase_word]
@@ -569,6 +580,8 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: hpsdr_session_tx_state]
+    // Tests [@ANCHOR: hpsdr_p2_tx_state]
     #[test]
     fn transmit_packets_are_refused_while_the_gate_is_closed() {
         // Tests [@ANCHOR: hpsdr_p2_encode_hp_tx]
@@ -614,6 +627,7 @@ mod tests {
         assert!(encode_duc_iq(0, &vec![(0, 0); 241], &gate, now).is_err());
     }
 
+    // Tests [@ANCHOR: hpsdr_p2_ddc_packet]
     #[test]
     fn status_and_ddc_packets_round_trip() {
         // Tests [@ANCHOR: hpsdr_p2_parse_hp_status]
