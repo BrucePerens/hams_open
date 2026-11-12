@@ -282,7 +282,7 @@ Returns `Ok(v)` when `v` is finite and in `0.0..=max` (both ends allowed), other
 | `args.current_a` | number, amperes | Sent as `CURR <a>` with three decimals. |
 | `lim` | `&Limits` | Provides the two caps. |
 
-Returns `{"sent": [the commands], "state": <state object>}` after a 300 ms pause; the state is the measured and stored values, so the caller sees what the supply accepted (the supply may round or reject). Errors: the `bench_mcp_psu_caps` message, `give voltage_v and/or current_a` when neither is a number, link errors. Order matters: a voltage that was sent stays set if the current is then refused. Keys that are present but not numbers are ignored as if absent. Test: `setpoints_are_sent_only_within_the_caps_and_something_must_be_given`.
+Returns `{"sent": [the commands], "state": <state object>}` after a 300 ms pause; the state is the measured and stored values, so the caller sees what the supply accepted (the supply may round or reject). Errors: the `bench_mcp_psu_caps` message, `give voltage_v and/or current_a` when neither is a number, link errors. Both values are checked against the caps before anything is sent, so a refused current leaves the voltage unchanged. A key that is present but not a number is an error (`<key> must be a number`); null counts as absent. Test: `setpoints_are_sent_only_within_the_caps_and_something_must_be_given`.
 
 ### `bench_mcp_psu_safe_state` [@ANCHOR: bench_mcp_psu_safe_state]
 
