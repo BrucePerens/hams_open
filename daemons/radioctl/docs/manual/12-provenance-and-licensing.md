@@ -23,8 +23,8 @@ The order of preference, from the proposal's section 6:
 1. **Vendors' published CAT and CI-V reference manuals.** Cited by document, revision, page and command, with
    the PDF's SHA-256 so a reader can confirm it is the same file. Facts about a protocol are not
    copyrightable; the manual's text is, so the files cite and do not copy.
-2. **Captures of our own radios and owner-run tests.** None exist yet.
-3. **Existing code in this repository** (the relay's CI-V and TS-2000 bridges, `tools/rig_simulator.py`),
+2. **Captures of our own radios and owner-run tests.** One radio so far: the Elecraft KX3 bench run of 2026-11-05 and the RX-888 `radiod` run of the same day (chapter [16](16-verification.md); `rigs/reports/verified.toml`). Other volunteers' reports arrive through the self-test upload.
+3. **Existing code in this repository** (the relay's CI-V and TS-2000 bridges),
    for the basic commands and for the simulators the virtual rigs replaced.
 4. **Program output of Hamlib's `rigctl --dump-caps`** (Tier 1). Program output, not source. It feeds
    the capability matrix ([appendix A](A-capability-matrix.md)) and some descriptions' timing.

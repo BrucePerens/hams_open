@@ -448,7 +448,7 @@ cd tools && python3 -m unittest test_hamlib_caps_matrix                         
 ```
 
 - For a new Hamlib release, run it into a new `data/hamlib-<version>/` directory and diff against the old one.
-- Hamlib 4.6.2 lists 313 models (the proposal said 314; that count included the header line).
+- Hamlib 4.6.2 lists <!--count:models-->313<!--/count--> models (the proposal said 314; that count included the header line).
 - 312 models dump; model 2 (NET rigctl) fails with `rig does not have tx_range` and is recorded as not dumpable.
 
 ## radioctld
@@ -526,7 +526,7 @@ cd tools && python3 -m unittest test_hamlib_caps_matrix                         
 ### Rotators
 
 - A `[[rotator]]` section serves one rotator in Hamlib's `rotctld` text protocol on its own listener (default port 4533 + index).
-- It runs through `radioctl-station`'s rotator engines (`rotctld` and GS-232 models from `data/station/rotators.toml`), over a reconnecting TCP link or against the virtual rotator served inside the daemon.
+- It runs through `radioctl-station`'s rotator engines (`rotctld` and GS-232 models from `data/station/rotators.toml`), over a reconnecting TCP link, a serial port or against the virtual rotator served inside the daemon.
 - Commands: `P p S K _ \dump_state q`, and the `+` format.
 - A position outside the model's travel is refused (`RPRT -1`) before anything is written. Other Hamlib rotator commands get `RPRT -4`.
 - It uses the same server, allow list and bounds as a rig (`server::LineService`).
@@ -596,7 +596,7 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 
 ## radioctl-capi
 
-- C ABI sketch (own README): explicit runtime ownership, and the transmit gate closed by default.
+- C ABI sketch (own README): explicit runtime ownership, the transmit gate closed by default, rigs and rotators.
 - Builds as `cdylib` and `staticlib`; header `include/radioctl.h` by cbindgen.
 - Unverified sketch.
 

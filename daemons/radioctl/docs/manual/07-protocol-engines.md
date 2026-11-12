@@ -31,8 +31,8 @@ the file families). Families added since the table was written (the small serial
 | `hpsdr-network` | `hpsdr_net::HpsdrEngine` | ANAN-10, ANAN-100 | a small line protocol to a bridge over the `hpsdr` crate (control plane only) |
 
 **Planned, not on `main`:** the
-FlexRadio streams and the 8000 series, the OpenHPSDR I/Q data plane and the
-Kenwood and Icom LAN protocols.
+FlexRadio streams and the 8000 series, the OpenHPSDR I/Q data plane, the Icom LAN protocol
+and the Kenwood LAN protocol of radios other than the TS-890S (the TS-890S session exists, chapter [5](05-transports.md)).
 
 ## Receive attenuator and preamplifier (`attenuation.rs`)
 
@@ -139,8 +139,8 @@ fact of `rigs/kenwood-ts-890s.toml`).
   sent). `ID;` answers `ID024;`.
 - **LAN:** the guide documents a TCP connection (UTF-8; the radio drops it after 10 s of silence): `##CN;`
   then `##ID` with an account type, the two lengths, the account and the password. The frames are built by
-  `lan_connect_request` and `lan_login` and the answers read by `lan_reply`. **No transport sends them yet:** a
-  session needs the owner's administrator or user account from the radio's LAN menu, which belongs in the
+  `lan_connect_request` and `lan_login` and the answers read by `lan_reply`. `Ts890LanFraming` (`kenwood_ts890_lan`) runs them over the network link and `radioctld` serves it as
+  `framing = "ts890-lan"` (chapter [9](09-radioctld.md)); tested against a fake radio only. A session needs the owner's administrator or user account from the radio's LAN menu, which belongs in the
   station's secret store and never in a description. The commands after login are those of the serial link.
 - **Bandscope (unverified, virtual rig only):** the core scope operations map to `BS3` (center, fixed, auto
   scroll), `BS4` (span 5 to 500 kHz), `BSC` (reference level, half-decibel steps from -20 to +10 dB) and

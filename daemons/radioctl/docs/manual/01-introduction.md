@@ -33,8 +33,8 @@ so that:
 - a driver and its test double come from the same data file and cannot drift apart;
 - every fact about a radio says where it came from and what has been checked.
 
-It is **not** a replacement for Hamlib today. Hamlib 4.6.2 lists 313 radio models ([appendix A](A-capability-matrix.md));
-radioctl has descriptions for 281 of the 284 that are real radios (29 more are not radios or have no transport radioctl speaks; [RIG_SUPPORT.md](../RIG_SUPPORT.md) has the list), none verified on hardware yet. It is not a drop-in `libhamlib`; a C ABI exists as a sketch (`radioctl-capi`, [chapter 14](14-station.md#the-c-abi))
+It is **not** a replacement for Hamlib today. Hamlib 4.6.2 lists <!--count:models-->313<!--/count--> radio models ([appendix A](A-capability-matrix.md));
+radioctl has descriptions for <!--count:described-->283<!--/count--> of the <!--count:real_radios-->283<!--/count--> that are real radios (<!--count:not_applicable-->30<!--/count--> more are not radios or have no transport radioctl speaks; [RIG_SUPPORT.md](../RIG_SUPPORT.md) has the list), none verified on hardware yet. It is not a drop-in `libhamlib`; a C ABI exists as a sketch (`radioctl-capi`, [chapter 14](14-station.md#the-c-abi))
 ([chapter 13](13-roadmap.md)). The plan is hybrid: radios move to radioctl one at a time, once a
 description has been verified on real hardware, and Hamlib stays the fallback and the test oracle.
 
