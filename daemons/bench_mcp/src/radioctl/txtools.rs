@@ -106,6 +106,14 @@ pub struct TestArgs {
     pub reason: String,
 }
 
+/// The "is required" text only for a missing value; a value that is present but wrong keeps `bounded`'s own message.
+fn required(args: &Value, key: &str, missing: &str, own: String) -> String {
+    match args.get(key) {
+        None | Some(Value::Null) => missing.to_string(),
+        Some(_) => own,
+    }
+}
+
 pub fn check_args(args: &Value, tx: &Transmit) -> Result<TestArgs, String> {
     // [@ANCHOR: radioctl_tx_args]
     let flag = |k: &str| match args.get(k) {
@@ -114,7 +122,7 @@ pub fn check_args(args: &Value, tx: &Transmit) -> Result<TestArgs, String> {
         Some(_) => Err(format!("{k} must be true or false")),
     };
     let frequency_hz = bounded(args, "frequency_hz", f64::NAN, 1.0, 1.0e12)
-        .map_err(|_| "frequency_hz is required (Hz)".to_string())?;
+        .map_err(|e| required(args, "frequency_hz", "frequency_hz is required (Hz)", e))?;
     if tx.range_of(frequency_hz).is_none() {
         return Err(format!(
             "{frequency_hz:.0} Hz is outside transmit.frequency_ranges, the owner's list of frequencies for dummy-load tests ({}). There is no default list; the owner lists them and answers for their licence",
@@ -132,15 +140,20 @@ pub fn check_args(args: &Value, tx: &Transmit) -> Result<TestArgs, String> {
         ));
     }
     let power_w = bounded(args, "power_w", f64::NAN, 0.001, 1000.0)
-        .map_err(|_| "power_w is required (watts)".to_string())?;
+        .map_err(|e| required(args, "power_w", "power_w is required (watts)", e))?;
     if power_w > tx.max_power_w {
         return Err(format!(
             "power_w {power_w} is above transmit.max_power_w {} (the owner's cap)",
             tx.max_power_w
         ));
     }
-    let seconds = bounded(args, "seconds", f64::NAN, 0.1, 60.0).map_err(|_| {
-        "seconds is required: the duration of the keyed interval (0.1 to 60)".to_string()
+    let seconds = bounded(args, "seconds", f64::NAN, 0.1, 60.0).map_err(|e| {
+        required(
+            args,
+            "seconds",
+            "seconds is required: the duration of the keyed interval (0.1 to 60)",
+            e,
+        )
     })?;
     if seconds > tx.max_seconds {
         return Err(format!(
@@ -155,7 +168,7 @@ pub fn check_args(args: &Value, tx: &Transmit) -> Result<TestArgs, String> {
         .map(str::trim)
         .unwrap_or("")
         .to_string();
-    if reason.len() > 120 || reason.chars().any(char::is_control) {
+    if reason.chars().count() > 120 || reason.chars().any(char::is_control) {
         return Err("reason is at most 120 characters of plain text".into());
     }
     Ok(TestArgs {
