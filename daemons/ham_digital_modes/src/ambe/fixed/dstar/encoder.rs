@@ -37,6 +37,7 @@ impl Encoder {
     /// float encoder's constant of the same name.
     pub const CHIP_ALIGNED_CENTER_OFFSET: i32 = -80;
 
+    // [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_new]
     pub fn new() -> Self {
         let mut analyzer = FrameAnalyzer::new();
         analyzer.set_center_offset(Self::CHIP_ALIGNED_CENTER_OFFSET);
@@ -66,6 +67,7 @@ impl Encoder {
     }
 
     /// The next 72-bit logical frame if enough lookahead has been pushed.
+    // [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_next_frame]
     pub fn next_frame(&mut self) -> Option<u128> {
         let a = self.analyzer.next_analysis()?;
         let slot: Vec<i16> = a.slot_samples.iter().map(|&s| s as i16).collect(); // lossless: pushed as i16
@@ -107,6 +109,7 @@ impl Encoder {
     }
 
     /// Pads with silence so every pushed sample's frame is emitted, returning the remaining frames.
+    // [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_finish]
     pub fn finish(&mut self) -> Vec<u128> {
         self.analyzer.finish_input();
         let mut out = Vec::new();

@@ -24,6 +24,7 @@ pub struct MbeSynthesizer {
 }
 
 impl MbeSynthesizer {
+    // [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_new]
     pub fn new() -> Self {
         let mut synthesis = SynthesisState::new();
         synthesis.set_unvoiced_gain_q16(UNVOICED_GAIN_Q16_16);
@@ -34,6 +35,7 @@ impl MbeSynthesizer {
         }
     }
 
+    // [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_lift]
     fn lift(&mut self, frame: [i64; N]) -> [i64; N] {
         let mut out = frame;
         for (o, &x) in out.iter_mut().zip(frame.iter()) {
@@ -48,6 +50,7 @@ impl MbeSynthesizer {
     /// Synthesizes one speech frame. `voiced` and `ml_q16` are both 1-indexed by harmonic (index 0
     /// is unused padding), exactly as `SpeechParameters` carries them. Returns `None` on a length
     /// mismatch.
+    // [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_synthesize_speech]
     pub fn synthesize_speech(
         &mut self,
         w0_q32: i64,

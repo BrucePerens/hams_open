@@ -89,6 +89,7 @@ pub struct MbeSynthesizer {
 }
 
 impl MbeSynthesizer {
+    // [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_lift]
     fn lift(&mut self, frame: [f64; N]) -> [f64; N] {
         let mut out = frame;
         for (o, &x) in out.iter_mut().zip(frame.iter()) {
@@ -112,6 +113,7 @@ impl MbeSynthesizer {
         }
     }
 
+    // [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_errors_for]
     fn errors_for(&mut self, epsilon_c0: u32, epsilon_c1: u32) -> FrameErrors {
         let errors = estimate_errors(
             &[epsilon_c0, epsilon_c1, 0, 0, 0, 0, 0],
@@ -124,6 +126,7 @@ impl MbeSynthesizer {
     /// Synthesizes one speech frame. `voiced` and `ml` are both 1-indexed by harmonic (index 0 is
     /// unused padding), exactly as `dstar::decode::DStarParameters` and
     /// `ambe_plus_2::decode::Parameters` carry them. Returns `None` on a length mismatch.
+    // [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_synthesize_speech]
     pub fn synthesize_speech(
         &mut self,
         w0: f64,

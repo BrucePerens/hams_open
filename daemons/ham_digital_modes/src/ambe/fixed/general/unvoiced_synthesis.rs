@@ -203,6 +203,7 @@ fn twiddle_q16(m: i32, n: i32) -> (i32, i32) {
 
 /// `U_w(m)` (Eq. 118): the 256-point DFT of the current frame's own windowed noise sequence, for `m`
 /// in `-128..=127`.
+// [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_dft_q16]
 fn unvoiced_dft_q16(noise: &NoiseState) -> [ComplexQ16; 256] {
     let mut uw = [ComplexQ16::ZERO; 256];
     for (i, slot) in uw.iter_mut().enumerate() {
@@ -258,6 +259,7 @@ pub const UNVOICED_SCALING_COEFFICIENT_Q16: i32 = 9_610_413;
 
 /// `U~_w(m)` (Eq. 119-120, 124): see this module's own doc comment for why `scale` is derived via
 /// [`sqrt_wide_q16`] directly, not a "square everything first" reorganization.
+// [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_spectrum_q16]
 fn unvoiced_spectrum_q16(
     noise: &NoiseState,
     omega0_tilde_q32: i64,
@@ -321,6 +323,7 @@ fn unvoiced_spectrum_q16(
 /// `u~_w(n)` (Eq. 125): the 256-point inverse DFT of `U~_w(m)`, for `n` in `-128..=127`. Only the real
 /// part is kept, exactly as the float sibling does (mathematically guaranteed real by the spectrum's
 /// own conjugate symmetry -- see that module's own doc comment and test).
+// [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_time_domain_q16]
 fn unvoiced_time_domain_q16(spectrum: &[ComplexQ16; 256]) -> [i64; 256] {
     let mut out = [0i64; 256];
     for (i, slot) in out.iter_mut().enumerate() {
@@ -336,6 +339,7 @@ fn unvoiced_time_domain_q16(spectrum: &[ComplexQ16; 256]) -> [i64; 256] {
     out
 }
 
+// [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_time_domain_at_q16]
 fn time_domain_at_q16(samples: &[i64; 256], n: i32) -> i64 {
     if (-128..=127).contains(&n) {
         samples[(n + 128) as usize]
@@ -361,6 +365,7 @@ impl UnvoicedState {
     /// Synthesizes the current frame's own unvoiced speech component `s_uv(n)` (Eq. 117-126) as
     /// `i32` Q16.16 PCM samples, advancing the overlap-add history for the next call. See the float
     /// sibling's own doc comment for the full parameter contract.
+    // [@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_UnvoicedState_synthesize]
     pub fn synthesize(
         &mut self,
         noise: &NoiseState,

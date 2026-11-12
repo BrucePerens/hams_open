@@ -56,6 +56,7 @@ impl AmbePlus2SynthesisDecoder {
     /// three low pitch bits and the low bits of the first spectral vectors (`d[35..44)`; see `examples/ambe_bit_sensitivity.rs`).
     const CORRECTABLE_BITS: [usize; 9] = [35, 36, 37, 38, 39, 40, 41, 42, 43];
 
+    // [@ANCHOR: ham_digital_modes:float_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_concealing]
     fn decode_concealing(&mut self, parsed: &super::ParsedFrame) -> Option<[f64; N]> {
         let mut candidates: Vec<(u32, Option<Descriptor>)> = Vec::new();
         let mut readings = Vec::new();
@@ -111,6 +112,7 @@ impl AmbePlus2SynthesisDecoder {
     }
 
     /// Decodes one logical 72-bit frame (see `interleave::interleaved_to_frame`) into 20 ms of PCM.
+    // [@ANCHOR: ham_digital_modes:float_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]
     pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[f64; N]> {
         let parsed = parse_frame(logical_frame);
         let raw = extract_raw_parameters(parsed.d);

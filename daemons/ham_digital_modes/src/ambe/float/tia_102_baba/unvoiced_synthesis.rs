@@ -165,6 +165,7 @@ fn twiddles() -> &'static [(f64, f64); 256] {
 /// `u(n)*w_S(n)`, for `m` in `-128..=127`. Note this range is offset by one bin from
 /// `pitch_refinement::RefinementFrame`'s own `S_w(m)` (`-127..=128`) -- a real difference between the
 /// spec's own Eq. 29 and Eq. 118, not a copy-paste slip (each checked independently at 600 DPI).
+// [@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_dft]
 fn unvoiced_dft(noise: &NoiseState) -> [Complex; 256] {
     let mut uw = [Complex::ZERO; 256];
     for (i, slot) in uw.iter_mut().enumerate() {
@@ -209,6 +210,7 @@ pub fn unvoiced_scaling_coefficient() -> f64 {
     *VALUE.get_or_init(unvoiced_scaling_coefficient_uncached)
 }
 
+// [@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_scaling_coefficient_uncached]
 fn unvoiced_scaling_coefficient_uncached() -> f64 {
     let sum_w_r: f64 = (-110..=110).map(pitch_refinement_window).sum();
     let sum_w_s_sq: f64 = (-104..=104).map(|n| synthesis_window(n).powi(2)).sum();

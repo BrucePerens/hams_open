@@ -95,6 +95,12 @@ fn run(offset: i32, max_samples: usize, stats: &mut Stats) {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_finish_input]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_next_analysis]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_table]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_finish_input]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_next_analysis]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_table]
 fn streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech() {
     let seconds: usize = std::env::var("MAX_SECONDS")
         .ok()

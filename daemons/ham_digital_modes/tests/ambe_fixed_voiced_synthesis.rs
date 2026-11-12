@@ -214,6 +214,7 @@ fn synthesize_matches_float_for_a_quiet_voiced_frame() {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_voiced_synthesis_VoicedState_synthesize]
 fn synthesize_matches_float_for_many_harmonics_including_dithered_range() {
     // A high L~ (well past floor(L~/4), i.e. inside the phase-dither-eligible range Eq. 140's own
     // second branch covers) with a realistic mix of voiced/unvoiced harmonics. Pitch varies slightly

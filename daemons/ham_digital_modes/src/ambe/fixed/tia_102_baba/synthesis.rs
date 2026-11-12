@@ -100,6 +100,7 @@ impl SynthesisState {
 
     /// Section 8-9 (Eq. 105-116): the fixed-point equivalent of the float sibling's own
     /// `finalize_parameters`. Returns `None` on a length mismatch.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_finalize_parameters]
     fn finalize_parameters(
         &mut self,
         reconstructed_amplitudes_q16: &[i32],
@@ -147,6 +148,7 @@ impl SynthesisState {
     /// Section 11 (Eq. 117-142): advances the shared noise generator exactly once per frame, then
     /// synthesizes and sums both halves -- see this module's own doc comment for why the sum is kept
     /// in `i64` rather than re-narrowed to `i32`.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_core]
     fn synthesize_core(
         &mut self,
         omega0_tilde_q32: i64,

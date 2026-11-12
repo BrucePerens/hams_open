@@ -102,6 +102,12 @@ fn speech_frames_agree_with_float_on_the_first_frame_and_track_thereafter() {
 /// exact one, everything else float. If the fixed synthesis were losing accuracy anywhere else
 /// (amplitudes, enhancement, voiced/unvoiced arithmetic) this comparison would still be low.
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_synthesize_speech]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_lift]
+// Tests [@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_new]
+// Tests [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_synthesize_speech]
+// Tests [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_lift]
+// Tests [@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_errors_for]
 fn speech_snr_decline_is_pitch_quantization_not_synthesis_arithmetic() {
     use ham_digital_modes::ambe::fixed::dstar::decode::{
         dequantize as fixed_dequantize, DequantizedFrame as FixedDq,

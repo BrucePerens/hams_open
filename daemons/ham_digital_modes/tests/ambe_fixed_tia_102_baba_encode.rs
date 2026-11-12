@@ -75,6 +75,12 @@ fn parity(name: &str, start: usize, frames: usize) -> Parity {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_next_frame]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_finish]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_next_frame]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_finish]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_HighPassFilter_step]
+// Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_HighPassFilter_step]
 fn tia_parity_first_150_frames() {
     let p = parity("TIA-102.BABA first 150 frames", 0, common::parity_frames());
     assert_eq!(p.count_mismatch, 0);

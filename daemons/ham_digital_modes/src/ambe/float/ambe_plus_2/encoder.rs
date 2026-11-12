@@ -87,6 +87,7 @@ impl Encoder {
     }
 
     /// The next 72-bit logical frame if enough lookahead has been pushed.
+    // [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_Encoder_next_frame]
     pub fn next_frame(&mut self) -> Option<u128> {
         let a = self.analyzer.next_analysis()?;
         if let Some(det) = detect_tone(&a.slot_samples) {
@@ -154,6 +155,7 @@ impl Encoder {
     }
 
     /// Pads with silence so every pushed sample's frame is emitted, returning the remaining frames.
+    // [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_Encoder_finish]
     pub fn finish(&mut self) -> Vec<u128> {
         self.analyzer.finish_input();
         let mut out = Vec::new();

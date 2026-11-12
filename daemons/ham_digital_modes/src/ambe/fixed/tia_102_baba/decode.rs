@@ -96,6 +96,7 @@ impl DecoderState {
 
     /// The fixed-point equivalent of `DecoderState::decode_parameters` -- see the float sibling's own
     /// doc comment for the full step-by-step derivation this mirrors exactly.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_parameters]
     pub fn decode_parameters(&mut self, c: [u32; 8]) -> Option<FrameOutcome> {
         // Same wire layer choice as the float sibling: the standard's demodulate-then-FEC-decode, or
         // (chip-comparison tools only) the DVSI chip's framing. Pure integer code either way.
@@ -158,6 +159,7 @@ impl DecoderState {
     }
 
     /// The fixed-point equivalent of `DecoderState::decode_frame`.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_frame]
     pub fn decode_frame(&mut self, c: [u32; 8]) -> Option<[i64; N]> {
         match self.decode_parameters(c)? {
             FrameOutcome::Repeat => self.synthesis.synthesize_repeated_frame(),

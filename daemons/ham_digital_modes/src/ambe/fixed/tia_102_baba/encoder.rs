@@ -100,6 +100,7 @@ impl FrameAnalyzer {
     }
 
     /// Marks the end of input and pads with silence so the last real frames complete.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_finish_input]
     pub fn finish_input(&mut self) {
         if !self.finished {
             self.raw
@@ -116,6 +117,7 @@ impl FrameAnalyzer {
         !self.finished || self.center(self.next_frame) < LEAD + self.real_samples
     }
 
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_table]
     fn table(&mut self, k: usize) {
         if !self.tables.iter().any(|(i, _)| *i == k) {
             let center = self.center(k);
@@ -125,6 +127,7 @@ impl FrameAnalyzer {
     }
 
     /// The next frame's analysis, or `None` if more input is needed (or the stream is exhausted).
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_next_analysis]
     pub fn next_analysis(&mut self) -> Option<FrameAnalysis> {
         let k = self.next_frame;
         if !self.has_real_frame() || !self.available(k) {
@@ -203,6 +206,7 @@ pub struct HighPassFilter {
 const HIGH_PASS_POLE_Q30: i64 = ((99i64 << 30) + 50) / 100;
 
 impl HighPassFilter {
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_HighPassFilter_step]
     pub fn step(&mut self, x: i32) -> i32 {
         let x = x as i64;
         let feedback = (self.prev_output_q16 * HIGH_PASS_POLE_Q30 + (1 << 29)) >> 30;
@@ -248,6 +252,7 @@ impl Encoder {
     }
 
     /// Encodes the next frame if enough look-ahead has been pushed, else `None`.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_next_frame]
     pub fn next_frame(&mut self) -> Option<[u32; 8]> {
         let a = self.analyzer.next_analysis()?;
         match encode_frame(
@@ -270,6 +275,7 @@ impl Encoder {
     }
 
     /// Pads with silence so every pushed sample's frame can be emitted, and returns those remaining frames.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_finish]
     pub fn finish(&mut self) -> Vec<[u32; 8]> {
         self.analyzer.finish_input();
         let mut out = Vec::new();

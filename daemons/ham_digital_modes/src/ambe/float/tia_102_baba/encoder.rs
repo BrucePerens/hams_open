@@ -108,6 +108,7 @@ impl FrameAnalyzer {
     }
 
     /// Pads with silence so every pushed sample's frame can be analysed; call once, then drain `next_analysis`.
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_finish_input]
     pub fn finish_input(&mut self) {
         if !self.finished {
             self.raw
@@ -124,6 +125,7 @@ impl FrameAnalyzer {
         !self.finished || self.center(self.next_frame) < LEAD + self.real_samples
     }
 
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_table]
     fn table(&mut self, k: usize) {
         if !self.tables.iter().any(|(i, _)| *i == k) {
             let center = self.center(k);
@@ -134,6 +136,7 @@ impl FrameAnalyzer {
 
     /// The next frame's analysis if enough lookahead has been pushed (and, after [`Self::finish_input`], while
     /// frames still cover real input), else `None`.
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_next_analysis]
     pub fn next_analysis(&mut self) -> Option<FrameAnalysis> {
         let k = self.next_frame;
         if !self.has_real_frame() || !self.available(k) {
@@ -208,6 +211,7 @@ const HIGH_PASS_POLE_Q30: i64 = ((99i64 << 30) + 50) / 100;
 
 impl HighPassFilter {
     /// One sample of the filter; `x` is a whole-number PCM value and the result is the rounded whole-number output.
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_HighPassFilter_step]
     pub fn step(&mut self, x: f64) -> f64 {
         let x = x.round() as i64;
         let feedback = (self.prev_output_q16 * HIGH_PASS_POLE_Q30 + (1 << 29)) >> 30;
@@ -271,6 +275,7 @@ impl Encoder {
     }
 
     /// Encodes the next frame if enough lookahead has been pushed, else `None`.
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_next_frame]
     pub fn next_frame(&mut self) -> Option<[u32; 8]> {
         let a = self.analyzer.next_analysis()?;
         self.last_analysis = Some((a.initial_pitch, a.omega0_hat, a.initial_pitch_error));
@@ -305,6 +310,7 @@ impl Encoder {
     }
 
     /// Pads with silence so every pushed sample's frame can be emitted, and returns those remaining frames.
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_finish]
     pub fn finish(&mut self) -> Vec<[u32; 8]> {
         self.analyzer.finish_input();
         let mut out = Vec::new();
