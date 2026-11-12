@@ -60,6 +60,7 @@
             "zero_sudo/static/tests/offline_store.test.js",
             "zero_sudo/static/src/js/tour_abort_gate.js",
             "zero_sudo/static/tests/tour_abort_gate.test.js",
+            "zero_sudo/static/tests/security_dashboard.test.js",
         ],
     },
     "data": [

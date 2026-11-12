@@ -6,6 +6,7 @@ import { useService } from "@web/core/utils/hooks";
 import { Component, onWillStart, useState, useRef, useEffect } from "@odoo/owl";
 
 export class SecurityDashboard extends Component {
+    // [@ANCHOR: zero_sudo:js_security_dashboard_setup]
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
@@ -31,6 +32,7 @@ export class SecurityDashboard extends Component {
         });
     }
 
+    // [@ANCHOR: zero_sudo:js_security_dashboard_load_logs]
     async loadLogs() {
         this.state.logs = await this.orm.searchRead(
             "zero_sudo.security.log",
@@ -40,6 +42,7 @@ export class SecurityDashboard extends Component {
         );
     }
 
+    // [@ANCHOR: zero_sudo:js_security_dashboard_toggle_pause]
     togglePause() {
         this.state.isPaused = !this.state.isPaused;
     }
