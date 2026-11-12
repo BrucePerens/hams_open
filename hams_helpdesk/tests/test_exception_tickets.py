@@ -15,6 +15,7 @@ import sys
 import tempfile
 import types
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 import psycopg2.errors
@@ -401,6 +402,19 @@ class TestExceptionNeverRaises(ExceptionTicketCase):
         with self.assertLogs("hams_helpdesk.exception_reporter", level="ERROR") as logs:
             self.assertFalse(self.report(exc))
         self.assertIn("db is gone", logs.output[0])
+
+    # Tests [@ANCHOR: hams_helpdesk_models_exception_fingerprint_reentry_state]
+    def test_the_reentry_flag_is_per_thread_and_cleared_after_each_report(self):
+        self.assertFalse(reporter._STATE.active, "no report is being written at the start of a test")
+        exc = self.caught(raise_attribute_error)
+        self.assertTrue(self.report(exc))
+        self.assertFalse(reporter._STATE.active, "the flag is cleared once the report is written")
+        reporter._STATE.active = True
+        self.addCleanup(setattr, reporter._STATE, "active", False)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            seen = pool.submit(lambda: reporter._STATE.active).result(timeout=10)
+        self.assertFalse(seen, "another thread does not see this thread's flag")
+        self.assertFalse(self.report(exc), "a report asked for while one is being written on this thread is refused")
 
     def test_a_failure_in_the_writer_is_not_reported_again(self):
         exc = self.caught(raise_attribute_error)

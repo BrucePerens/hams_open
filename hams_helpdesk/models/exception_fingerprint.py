@@ -74,6 +74,7 @@ CLOSED_STAGES = ("resolved", "closed")
 QUIET_REOPEN = timedelta(hours=24)
 
 
+# [@ANCHOR: hams_helpdesk_models_exception_fingerprint_reentry_state]
 class _ReentryState(threading.local):
     """Per-thread flag: a report is being written on this thread."""
 

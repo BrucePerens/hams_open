@@ -440,3 +440,33 @@
 **Methods.** `__init__`, `_note_drop`, `_attr_texts`, `handle_starttag`, `handle_startendtag`, `handle_endtag`, `handle_data`, `handle_comment`, `unknown_decl`, `handle_pi`.
 
 **See also:** test `test_01_sanitizer_methods_keep_allowed_tags_and_drop_everything_else (tests/test_untrusted_text_api.py)`.
+
+### `_NoRedirect` [@ANCHOR: hams_helpdesk:hams_helpdesk_daemon_exception_reporter_no_redirect]
+
+**Purpose and location.** Refuses every HTTP redirect for the exception-report daemon. `urllib` copies all request headers, the credential (the reporter's bearer key) included, to wherever a 3xx answer points, so a hostile or misconfigured redirect would send the key to another host. Defined in `hams_helpdesk/daemon/exception_reporter.py` and used once, to build the module's private opener `_OPENER = urllib.request.build_opener(_NoRedirect)` that `post_report` sends through.
+
+**Definition.** `class _NoRedirect(urllib.request.HTTPRedirectHandler)` with one method, `redirect_request(self, req, fp, code, msg, headers, newurl)`, which always returns `None`.
+
+**Behaviour.** Returning `None` from `redirect_request` makes `urllib` raise the `HTTPError` of the 3xx status instead of following it; `post_report` turns that into a `ReportError` that names the status. No state: the class has no attributes, and one instance is shared by the opener for the life of the process, so it is safe on any thread.
+
+**Functions that touch it.** `_NoRedirect.redirect_request` and `post_report`.
+
+**See also:** test `PostReportRefusesARedirectTests` in `hams_helpdesk/daemon/test_exception_reporter.py` (a real local server answers 302 and a second server checks that the key never reaches it).
+
+### `_ReentryState` [@ANCHOR: hams_helpdesk:hams_helpdesk_models_exception_fingerprint_reentry_state]
+
+**Purpose and location.** The per-thread "a report is being written on this thread" flag of the server exception reporter. It makes `report_exception` safe against recursion: an error raised while a report is being recorded (a database failure, the write itself) must not be reported again, because that could loop forever or fill the log. Defined in `hams_helpdesk/models/exception_fingerprint.py` as a subclass of `threading.local`; the module keeps one instance, `_STATE`.
+
+**Definition.** `class _ReentryState(threading.local)`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `active` | `bool` | Class default `False`. `report_exception` sets it to `True` on entry and back to `False` in its `finally` block. While it is `True`, a second call on the same thread returns `False` at once without writing anything. |
+
+**Concurrency.** Because it is a `threading.local`, every thread has its own `active`: one worker writing a report never makes another worker's reports be dropped. It is not process wide state and needs no lock. A thread that is killed in the middle of a report loses the flag with the thread.
+
+**Not serialized.** It lives only in memory for the life of the thread.
+
+**Functions that touch it.** `report_exception` (the only reader and writer).
+
+**See also:** tests `test_the_reentry_flag_is_per_thread_and_cleared_after_each_report` and `test_a_failure_in_the_writer_is_not_reported_again` in `hams_helpdesk/tests/test_exception_tickets.py`.
