@@ -12,6 +12,7 @@ SECRET_MASK = "********"
 REDIS_PASSWORD_PARAM = "distributed_redis_cache.redis_password"
 
 
+# [@ANCHOR: distributed_redis_cache_res_config_settings_res_config_settings]
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 

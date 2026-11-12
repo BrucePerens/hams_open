@@ -58,6 +58,7 @@ class TestCronCacheInterceptor(HamsTransactionCase):
         self.assertIsNotNone(job, "setup bug: could not acquire the job we just created")
         return cron, job
 
+    # Tests [@ANCHOR: distributed_redis_cache_ir_cron_ir_cron]
     def test_cron_dispatch_polls_before_running_the_job(self):
         """The override must run the poll on every real per-job dispatch, not just on paper.
 

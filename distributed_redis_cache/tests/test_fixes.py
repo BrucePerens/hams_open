@@ -386,6 +386,7 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         except ConnectionRefusedError:
             self.fail("_reconnect()'s own except block did not swallow the connection failure")
 
+    # Tests [@ANCHOR: distributed_redis_cache_res_config_settings_res_config_settings]
     def test_redis_pools_authenticate_with_the_redis_env_credentials(self):
         # [@ANCHOR: COMM_test_redis_pool_env_variables]
         """Production Redis refuses unauthenticated clients (since 2026-10-03): the shared pool and
