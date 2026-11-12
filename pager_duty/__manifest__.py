@@ -64,6 +64,11 @@
             "pager_duty/static/src/components/log_viewer/log_viewer.js",
             "pager_duty/static/src/components/log_viewer/log_viewer.xml",
         ],
+        # Run by tests/test_board_hoot.py via browser_js(); /web/tests builds its bundle from web.assets_backend, which already
+        # holds the component sources.
+        "web.assets_unit_tests": [
+            "pager_duty/static/tests/board.test.js",
+        ],
         "web.assets_tests": [
             "pager_duty/static/src/tours/incident_tour.js",
             "pager_duty/static/src/tours/pager_check_tour.js",

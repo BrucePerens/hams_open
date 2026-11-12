@@ -4,6 +4,7 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
 export class PagerBoard extends Component {
+    // [@ANCHOR: pager_duty:js_board_setup]
     setup() {
         this.busService = useService("bus_service");
         this.orm = useService("orm");
@@ -28,6 +29,7 @@ export class PagerBoard extends Component {
         });
     }
 
+    // [@ANCHOR: pager_duty:js_board_fetch_data]
     async fetchData() {
         const context = {};
         const urlParams = new URLSearchParams(document.location.search);
@@ -42,6 +44,7 @@ export class PagerBoard extends Component {
         this.applyBurnInShift();
     }
 
+    // [@ANCHOR: pager_duty:js_board_apply_burn_in_shift]
     applyBurnInShift() {
         // Pseudo-random drift between -15px and +15px to prevent OLED burn-in
         const x = Math.floor(Math.random() * 30) - 15;
@@ -50,15 +53,18 @@ export class PagerBoard extends Component {
         this.state.transformStyle = `transform: translate(${x}px, ${y}px); transition: transform 20s linear;`;
     }
 
+    // [@ANCHOR: pager_duty:js_board_acknowledge]
     async acknowledge(incidentId) {
         await this.orm.call("pager.incident", "action_acknowledge", [[incidentId]]);
         await this.fetchData();
     }
 
+    // [@ANCHOR: pager_duty:js_board_toggle_pause]
     togglePause() {
         this.state.isPaused = !this.state.isPaused;
     }
 
+    // [@ANCHOR: pager_duty:js_board_on_notification]
     onNotification({ detail: notifications }) {
         if (this.state.isPaused) return;
         for (const { type } of notifications) {
