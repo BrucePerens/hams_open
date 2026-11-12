@@ -96,6 +96,7 @@ impl ComplexQ23 {
     /// `i128`-exact but computed with `u64` arithmetic whenever both
     /// components are under 2^31 in magnitude (each square is then under
     /// 2^62 and the sum under 2^63).
+    // [@ANCHOR: fixed_fft:ComplexQ23_mag_sq_raw]
     pub(crate) fn mag_sq_raw(self) -> i128 {
         if (self.re.unsigned_abs() | self.im.unsigned_abs()) < (1u64 << 31) {
             let (r, i) = (self.re.unsigned_abs(), self.im.unsigned_abs());
@@ -121,6 +122,7 @@ pub(crate) fn rshift_round_i64(x: i64, n: u32) -> i64 {
 /// and adversarial encoder input stay under 2^63 here, but decoding
 /// pseudo-random garbage bitstreams reaches 2^67 in the butterfly, which is
 /// why the exact `i128` path is kept rather than assuming `i64` suffices.)
+// [@ANCHOR: fixed_fft:twiddle_mul]
 #[inline(always)]
 fn twiddle_mul(wr: i64, wi: i64, br: i64, bi: i64) -> (i64, i64) {
     if (br.unsigned_abs() | bi.unsigned_abs()) < (1u64 << 38) {
@@ -1168,6 +1170,7 @@ const I32_SUM_LIMIT: u64 = 1 << 29;
 /// original 64-bit path stopped one bit lower, at 2^37.)
 const I64_SUM_LIMIT: u64 = 1 << 39;
 
+// [@ANCHOR: fixed_fft:mode_for_sum]
 #[inline(always)]
 fn mode_for_sum(sum: u64) -> u8 {
     if sum < I32_SUM_LIMIT {
@@ -1183,6 +1186,7 @@ fn mode_for_sum(sum: u64) -> u8 {
 /// 24-bit twiddle `w` and an `i64` `x`: three 32-bit multiplies (a full
 /// 32x32 signed-by-unsigned product for the low word of `x`, and the
 /// cross term with its high word, which the 64-bit result truncates).
+// [@ANCHOR: fixed_fft:mul_w_x]
 #[inline(always)]
 fn mul_w_x(w: i32, x: i64) -> (u32, i32) {
     let xl = x as u32;
@@ -1197,6 +1201,7 @@ fn mul_w_x(w: i32, x: i64) -> (u32, i32) {
 /// `(w1 * x1 + w2 * x2 + 2^22) >> 23` for 24-bit `w1`, `w2` and `i64`
 /// `x1`, `x2` whose weighted sum is under 2^62 in magnitude, done on
 /// 32-bit halves. Bit-identical to the plain `i64` expression.
+// [@ANCHOR: fixed_fft:mul_round_i64]
 #[inline(always)]
 fn mul_round_i64(w1: i32, x1: i64, w2: i32, x2: i64) -> i64 {
     let (l1, h1) = mul_w_x(w1, x1);
@@ -1215,6 +1220,7 @@ fn mul_round_i64(w1: i32, x1: i64, w2: i32, x2: i64) -> i64 {
 /// unsigned product (`mul` + `mulhu`) for the low word of `x` and one
 /// 32-bit product for its high word. No sign corrections are needed
 /// because `c` is unsigned.
+// [@ANCHOR: fixed_fft:umul_x]
 #[inline(always)]
 fn umul_x(c: u32, x: i64) -> (u32, u32) {
     let xl = x as u32;
@@ -1230,6 +1236,7 @@ fn umul_x(c: u32, x: i64) -> (u32, u32) {
 /// first-quadrant twiddle `(c, -s)` (`c`, `s` positive): `A = c*x - s*y`
 /// and `B = c*y + s*x` (the real and imaginary parts of `w * (x + j y)`
 /// before rounding), each as (low, high) words.
+// [@ANCHOR: fixed_fft:twiddle_sums]
 #[inline(always)]
 fn twiddle_sums(c: u32, s: u32, x: i64, y: i64) -> ((u32, u32), (u32, u32)) {
     let (cxl, cxh) = umul_x(c, x);
@@ -1245,6 +1252,7 @@ fn twiddle_sums(c: u32, s: u32, x: i64, y: i64) -> ((u32, u32), (u32, u32)) {
 
 /// `(v + 2^22) >> 23` for a 64-bit value in (low, high) words whose result
 /// fits `i64` (arithmetic shift).
+// [@ANCHOR: fixed_fft:round_shift]
 #[inline(always)]
 fn round_shift((lo, hi): (u32, u32)) -> i64 {
     let (l, c) = lo.overflowing_add(1 << (FRAC_BITS - 1));
@@ -1255,6 +1263,7 @@ fn round_shift((lo, hi): (u32, u32)) -> i64 {
 }
 
 /// `(2^22 - v) >> 23`, i.e. the rounded shift of `-v`.
+// [@ANCHOR: fixed_fft:round_shift_neg]
 #[inline(always)]
 fn round_shift_neg((lo, hi): (u32, u32)) -> i64 {
     let l = (1u32 << (FRAC_BITS - 1)).wrapping_sub(lo);
@@ -3005,6 +3014,7 @@ mod tests {
     /// Fast-path complex multiply and squared magnitude equal the exact
     /// `i128` forms on both sides of every fast-path threshold.
     #[test]
+    // Tests [@ANCHOR: fixed_fft:ComplexQ23_mag_sq_raw]
     fn complex_mul_and_mag_sq_fast_paths_match_the_i128_forms() {
         let mut seed = 99u64;
         for &bits in &[8u32, 20, 29, 30, 31, 32, 36, 40] {
@@ -3033,5 +3043,128 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A random value with up to `bits` magnitude bits and a random sign.
+    fn signed_bits(seed: &mut u64, bits: u32) -> i64 {
+        (lcg(seed) % (1i64 << bits)) * if lcg(seed) & 1 == 0 { 1 } else { -1 }
+    }
+
+    /// `twiddle_mul` is the exact `(w * b)` rounded to Q23 on both sides of its 2^38 switch from the
+    /// `i64` form to the `i128` form, and the unit twiddle `(2^23, 0)` returns its input.
+    #[test]
+    // Tests [@ANCHOR: fixed_fft:twiddle_mul]
+    fn twiddle_mul_matches_the_exact_i128_product_either_side_of_the_i64_switch() {
+        let mut seed = 5150u64;
+        for &bits in &[8u32, 30, 37, 38, 39, 45, 52] {
+            for _ in 0..400 {
+                let (wr, wi) = (signed_bits(&mut seed, 23), signed_bits(&mut seed, 23));
+                let (br, bi) = (signed_bits(&mut seed, bits), signed_bits(&mut seed, bits));
+                let want_re =
+                    rshift_round_i128(wr as i128 * br as i128 - wi as i128 * bi as i128, FRAC_BITS);
+                let want_im =
+                    rshift_round_i128(wr as i128 * bi as i128 + wi as i128 * br as i128, FRAC_BITS);
+                assert_eq!(
+                    twiddle_mul(wr, wi, br, bi),
+                    (want_re, want_im),
+                    "bits={bits}"
+                );
+            }
+        }
+        assert_eq!(twiddle_mul(1 << 23, 0, 12345, -678), (12345, -678));
+    }
+
+    /// `mode_for_sum` picks the cheapest kernel whose bound the value sum meets: under 2^29 the 32-bit
+    /// mode, under 2^39 the 64-bit kernel of this target, anything else the checked mode.
+    #[test]
+    // Tests [@ANCHOR: fixed_fft:mode_for_sum]
+    fn mode_for_sum_switches_at_exactly_the_documented_limits() {
+        assert_eq!(mode_for_sum(0), MODE_I32);
+        assert_eq!(mode_for_sum(I32_SUM_LIMIT - 1), MODE_I32);
+        assert_eq!(mode_for_sum(I32_SUM_LIMIT), I64_KERNEL);
+        assert_eq!(mode_for_sum(I64_SUM_LIMIT - 1), I64_KERNEL);
+        assert_eq!(mode_for_sum(I64_SUM_LIMIT), MODE_CHECKED);
+        assert_eq!(mode_for_sum(u64::MAX), MODE_CHECKED);
+    }
+
+    /// `mul_w_x` and `umul_x` return the low 64 bits of the product as two 32-bit words, equal to the
+    /// plain `wrapping_mul`; `mul_round_i64` is the plain `(w1 x1 + w2 x2 + 2^22) >> 23` while the sum
+    /// stays under 2^62.
+    #[test]
+    // Tests [@ANCHOR: fixed_fft:mul_w_x]
+    // Tests [@ANCHOR: fixed_fft:umul_x]
+    // Tests [@ANCHOR: fixed_fft:mul_round_i64]
+    fn split_word_multiplies_equal_the_plain_64_bit_arithmetic() {
+        let mut seed = 777u64;
+        for &bits in &[1u32, 20, 31, 32, 39, 61] {
+            for _ in 0..400 {
+                let w = signed_bits(&mut seed, 23) as i32;
+                let x = signed_bits(&mut seed, bits);
+                let want = (w as i64).wrapping_mul(x);
+                assert_eq!(
+                    mul_w_x(w, x),
+                    (want as u32, (want >> 32) as i32),
+                    "mul_w_x w={w} x={x}"
+                );
+
+                let c = signed_bits(&mut seed, 23).unsigned_abs() as u32;
+                let want = (c as u64).wrapping_mul(x as u64);
+                assert_eq!(
+                    umul_x(c, x),
+                    (want as u32, (want >> 32) as u32),
+                    "umul_x c={c} x={x}"
+                );
+            }
+        }
+        for &bits in &[1u32, 20, 30, 37, 38] {
+            for _ in 0..400 {
+                let (w1, w2) = (
+                    signed_bits(&mut seed, 23) as i32,
+                    signed_bits(&mut seed, 23) as i32,
+                );
+                let (x1, x2) = (signed_bits(&mut seed, bits), signed_bits(&mut seed, bits));
+                let want =
+                    rshift_round_i128(w1 as i128 * x1 as i128 + w2 as i128 * x2 as i128, FRAC_BITS);
+                assert_eq!(mul_round_i64(w1, x1, w2, x2), want, "bits={bits}");
+            }
+        }
+    }
+
+    /// `twiddle_sums` returns `c x - s y` and `c y + s x` as exact 64-bit (low, high) word pairs, and
+    /// `round_shift` / `round_shift_neg` turn such a pair into the Q23-rounded value of `v` and of `-v`.
+    #[test]
+    // Tests [@ANCHOR: fixed_fft:twiddle_sums]
+    // Tests [@ANCHOR: fixed_fft:round_shift]
+    // Tests [@ANCHOR: fixed_fft:round_shift_neg]
+    fn twiddle_sums_and_the_rounded_shifts_equal_the_exact_i128_values() {
+        let mut seed = 31337u64;
+        let words = |v: i64| (v as u32, (v >> 32) as u32);
+        for &bits in &[1u32, 20, 31, 38] {
+            for _ in 0..400 {
+                let c = signed_bits(&mut seed, 23).unsigned_abs() as u32;
+                let s = signed_bits(&mut seed, 23).unsigned_abs() as u32;
+                let (x, y) = (signed_bits(&mut seed, bits), signed_bits(&mut seed, bits));
+                let a = c as i128 * x as i128 - s as i128 * y as i128;
+                let b = c as i128 * y as i128 + s as i128 * x as i128;
+                let (got_a, got_b) = twiddle_sums(c, s, x, y);
+                assert_eq!(got_a, words(a as i64), "A bits={bits}");
+                assert_eq!(got_b, words(b as i64), "B bits={bits}");
+                assert_eq!(
+                    round_shift(got_a),
+                    rshift_round_i128(a, FRAC_BITS),
+                    "round_shift bits={bits}"
+                );
+                assert_eq!(
+                    round_shift_neg(got_a),
+                    rshift_round_i128(-a, FRAC_BITS),
+                    "round_shift_neg bits={bits}"
+                );
+            }
+        }
+        // The half-way point rounds up for `round_shift`; negated, 2^22 becomes -2^22, which rounds to 0.
+        assert_eq!(round_shift(words(1 << 22)), 1);
+        assert_eq!(round_shift((0, 0)), 0);
+        assert_eq!(round_shift_neg(words(1 << 22)), 0);
+        assert_eq!(round_shift_neg(words(-(1i64 << 22))), 1);
     }
 }
