@@ -455,13 +455,18 @@ fn frames(ms: f64) -> usize {
 
 impl Vna {
     pub fn open(cfg: Config) -> Result<Vna, String> {
-        check(&cfg)?;
-        let session = Session::open(&cfg)?;
-        Ok(Vna::with_session(cfg, session))
+        check(&cfg)
+            .and_then(|()| Session::open(&cfg))
+            .map(|session| Vna::with_session(cfg, session))
     }
 
-    /// A handle over an already-open unit and codecs (`open` does this with the real ones).
-    pub(crate) fn with_session(cfg: Config, session: Session) -> Vna {
+    /// A handle over a unit and two codecs that are already open (`open` does this with the real ones); a test or simulation passes a
+    /// `usb::Vnwa::with_transport` unit and `capture::synthetic_capture` codecs.
+    pub fn with_parts(cfg: Config, usb: Vnwa, s11: Capture, s21: Capture) -> Vna {
+        Vna::with_session(cfg, Session { usb, s11, s21 })
+    }
+
+    fn with_session(cfg: Config, session: Session) -> Vna {
         Vna {
             session,
             cfg,
@@ -1106,19 +1111,17 @@ mod tests {
         cfg: Config,
         s11_scale: f64,
         dead_reference: bool,
-    ) -> (Vna, (crate::capture::FakeFeed, crate::capture::FakeFeed)) {
+    ) -> (Vna, (crate::capture::SyntheticFeed, crate::capture::SyntheticFeed)) {
         let w = 2.0 * std::f64::consts::PI * cfg.if_hz / SAMPLE_RATE as f64;
         let s = move |scale: f64, i: u64| (8000.0 * scale * (w * i as f64).sin()) as i16;
-        let (c1, f1) = crate::capture::fake_capture(move |i| {
+        let (c1, f1) = crate::capture::synthetic_capture(move |i| {
             [s(if dead_reference { 0.0 } else { 1.0 }, i), s(s11_scale, i)]
         });
-        let (c2, f2) = crate::capture::fake_capture(move |i| [s(1.0, i), s(1.0, i)]);
-        let session = Session {
-            usb: Vnwa::with_transport(Box::new(Quiet)),
-            s11: c1,
-            s21: c2,
-        };
-        (Vna::with_session(cfg, session), (f1, f2))
+        let (c2, f2) = crate::capture::synthetic_capture(move |i| [s(1.0, i), s(1.0, i)]);
+        (
+            Vna::with_parts(cfg, Vnwa::with_transport(Box::new(Quiet)), c1, c2),
+            (f1, f2),
+        )
     }
 
     // Tests [@ANCHOR: vnwa_open_vna_measure]

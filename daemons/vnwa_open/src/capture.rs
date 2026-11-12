@@ -98,8 +98,9 @@ pub struct CpalHost;
 
 impl InputHost for CpalHost {
     fn input_ids(&self) -> Result<Vec<String>, String> {
-        let host = cpal::default_host();
-        let devices = host.input_devices().map_err(|e| format!("audio: {e}"))?;
+        let devices = cpal::default_host()
+            .input_devices()
+            .map_err(|e| format!("audio: {e}"))?;
         Ok(devices
             .filter_map(|d| d.id().ok())
             .map(|id| id.to_string())
@@ -326,12 +327,12 @@ impl Capture {
     }
 }
 
-/// A running capture fed by a thread at the real 48 kHz rate from `gen(frame_index)`, for tests that need audio without a codec. The
-/// returned guard stops the feeder when dropped.
-#[cfg(test)]
-pub(crate) fn fake_capture(
+/// A running capture fed by a thread at the real 48 kHz rate from `gen(frame_index)`: simulated audio for tests and demos that have no codec.
+/// The returned guard stops the feeder when dropped.
+pub fn synthetic_capture(
     gen: impl Fn(u64) -> [i16; 2] + Send + 'static,
-) -> (Capture, FakeFeed) {
+) -> (Capture, SyntheticFeed) {
+    // [@ANCHOR: vnwa_open_synthetic_capture]
     let ring = Ring::shared();
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let (feed_ring, feed_stop) = (ring.clone(), stop.clone());
@@ -362,22 +363,18 @@ pub(crate) fn fake_capture(
         ring,
         stream: Arc::new(Mutex::new(Some(Box::new(())))),
     };
-    (capture, FakeFeed { stop, thread: Some(thread) })
+    (capture, SyntheticFeed { stop, thread: Some(thread) })
 }
 
-#[cfg(test)]
-pub(crate) struct FakeFeed {
+pub struct SyntheticFeed {
     stop: Arc<std::sync::atomic::AtomicBool>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
-#[cfg(test)]
-impl Drop for FakeFeed {
+impl Drop for SyntheticFeed {
     fn drop(&mut self) {
         self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
-        if let Some(t) = self.thread.take() {
-            let _ = t.join();
-        }
+        let _ = self.thread.take().map(|t| t.join());
     }
 }
 
@@ -419,6 +416,30 @@ mod tests {
         );
         assert_eq!(input_names_on(&Fixed(Ok(vec![]))).unwrap(), Vec::<String>::new());
         assert_eq!(input_names_on(&Fixed(Err("audio: no host".into()))), Err("audio: no host".into()));
+    }
+
+    // Tests [@ANCHOR: vnwa_open_synthetic_capture]
+    #[test]
+    fn a_synthetic_capture_delivers_the_generated_frames_after_a_mark_until_it_is_closed() {
+        let (cap, feed) = synthetic_capture(|i| [(i % 1000) as i16, -((i % 1000) as i16)]);
+        assert!(cap.is_open());
+        let mark = cap.mark();
+        let frames = cap.frames_after(mark, 100, 480, Duration::from_secs(2)).unwrap();
+        assert_eq!(frames.len(), 480);
+        // Consecutive generated frames, wherever the window fell.
+        for w in frames.windows(2) {
+            let (a, b) = (w[0][0] as i32, w[1][0] as i32);
+            assert!(b == a + 1 || (a == 999 && b == 0), "{a} {b}");
+            assert_eq!(w[0][1], -w[0][0]);
+        }
+        assert_eq!(cap.overrun_count(), 0);
+        cap.close();
+        assert!(!cap.is_open());
+        assert_eq!(
+            cap.frames_after(mark, 0, 10, Duration::from_millis(10)).unwrap_err(),
+            "audio: the stream was closed"
+        );
+        drop(feed);
     }
 
     // Tests [@ANCHOR: vnwa_open_capture_close]
