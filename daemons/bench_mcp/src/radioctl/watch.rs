@@ -48,6 +48,19 @@ fn poll(c: &mut Client) -> Result<Vec<(&'static str, String)>, String> {
     Ok(v)
 }
 
+/// The values that differ between two polls, matched by name: a poll without `passband_hz` (no mode read) is shorter than one with it.
+fn changes<'a>(
+    last: &'a [(&'static str, String)],
+    now: &'a [(&'static str, String)],
+) -> Vec<(&'static str, &'a str, &'a str)> {
+    now.iter()
+        .filter_map(|(name, new)| {
+            let (_, old) = last.iter().find(|(n, _)| n == name)?;
+            (old != new).then_some((*name, old.as_str(), new.as_str()))
+        })
+        .collect()
+}
+
 pub fn watch(c: &mut Client, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: radioctl_watch]
     let seconds = bounded(args, "seconds", 10.0, 1.0, 120.0)?;
@@ -63,13 +76,11 @@ pub fn watch(c: &mut Client, args: &Value) -> Result<Value, String> {
         let now = poll(c)?;
         polls += 1;
         let t = (began.elapsed().as_secs_f64() * 100.0).round() / 100.0;
-        for ((name, old), (_, new)) in last.iter().zip(&now) {
-            if old != new {
-                if events.len() >= MAX_EVENTS {
-                    truncated = true;
-                } else {
-                    events.push(json!({"t_s": t, "what": name, "from": old, "to": new}));
-                }
+        for (name, old, new) in changes(&last, &now) {
+            if events.len() >= MAX_EVENTS {
+                truncated = true;
+            } else {
+                events.push(json!({"t_s": t, "what": name, "from": old, "to": new}));
             }
         }
         last = now;
@@ -80,4 +91,30 @@ pub fn watch(c: &mut Client, args: &Value) -> Result<Value, String> {
         "events": events, "events_truncated": truncated,
         "note": "polled, so a change that reverts between two polls is not seen; frequency_hz is a text of the dial reading in Hz",
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: radioctl_watch]
+    #[test]
+    fn polls_of_different_length_are_compared_by_name() {
+        let with_mode = vec![
+            ("frequency_hz", "7000000".to_string()),
+            ("mode", "USB".to_string()),
+            ("passband_hz", "2400".to_string()),
+            ("vfo", "VFOA".to_string()),
+            ("ptt", "receive".to_string()),
+        ];
+        let without_mode = vec![
+            ("frequency_hz", "7000000".to_string()),
+            ("mode", "unavailable".to_string()),
+            ("vfo", "VFOA".to_string()),
+            ("ptt", "receive".to_string()),
+        ];
+        let c = changes(&with_mode, &without_mode);
+        assert_eq!(c, vec![("mode", "USB", "unavailable")], "vfo and ptt did not change");
+        assert!(changes(&without_mode, &with_mode).len() == 1);
+    }
 }

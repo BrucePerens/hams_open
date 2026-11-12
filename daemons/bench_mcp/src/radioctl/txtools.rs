@@ -739,6 +739,11 @@ pub fn power_sweep(
 
 /// `bench_radioctl_safe_state`: PTT off and read back; the power setting to the minimum unless told not to. Does not wait for any other
 /// call to the rig, so it works while a keyed interval is running (and ends it).
+/// The power setting a fresh-connection release goes to: the minimum, only when the caller wants the power lowered.
+pub(super) fn power_floor(lower: bool, min: Option<f64>) -> Option<f64> {
+    min.filter(|_| lower)
+}
+
 pub fn safe_state(c: &mut Client, inst: &Instrument, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: radioctl_tx_safe_state]
     let lower = match args.get("lower_power") {
@@ -774,7 +779,8 @@ pub fn safe_state(c: &mut Client, inst: &Instrument, args: &Value) -> Result<Val
         }
     }
     let Some(read_back) = verified else {
-        let fresh = super::guard::unkey(&host_port(inst)?.0, host_port(inst)?.1, min)
+        let (host, port) = host_port(inst)?;
+        let fresh = super::guard::unkey(&host, port, power_floor(lower, min))
             .map_err(|e| format!("{e}; {last}"));
         return match fresh {
             Ok(_) => Ok(json!({"ptt": "receive", "verified": true, "via": "a new connection"})),
