@@ -290,8 +290,14 @@ fn connect_waits(c: &Value) -> Result<Vec<f64>, String> {
     };
     v.as_array()
         .filter(|a| a.len() <= 8)
-        .and_then(|a| a.iter().map(|x| x.as_f64().filter(|w| (0.0..=3600.0).contains(w))).collect())
-        .ok_or_else(|| "connect_waits_s must be up to eight numbers from 0 to 3600 (seconds)".to_string())
+        .and_then(|a| {
+            a.iter()
+                .map(|x| x.as_f64().filter(|w| (0.0..=3600.0).contains(w)))
+                .collect()
+        })
+        .ok_or_else(|| {
+            "connect_waits_s must be up to eight numbers from 0 to 3600 (seconds)".to_string()
+        })
 }
 
 pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
@@ -426,11 +432,20 @@ mod tests {
     #[test]
     fn connect_waits_default_to_37_seconds_and_are_bounded() {
         let waits = |extra: &str| {
-            parse(&format!(r#"{{"instruments":{{"s":{{"driver":"siglent_sds","host":"h"{extra}}}}}}}"#)).map(|v| v[0].connect_waits_s.clone())
+            parse(&format!(
+                r#"{{"instruments":{{"s":{{"driver":"siglent_sds","host":"h"{extra}}}}}}}"#
+            ))
+            .map(|v| v[0].connect_waits_s.clone())
         };
         assert_eq!(waits("").unwrap(), [2.0, 5.0, 10.0, 20.0]);
-        assert_eq!(waits(r#","connect_waits_s":[300,600,1800]"#).unwrap(), [300.0, 600.0, 1800.0]);
-        assert_eq!(waits(r#","connect_waits_s":[]"#).unwrap(), Vec::<f64>::new());
+        assert_eq!(
+            waits(r#","connect_waits_s":[300,600,1800]"#).unwrap(),
+            [300.0, 600.0, 1800.0]
+        );
+        assert_eq!(
+            waits(r#","connect_waits_s":[]"#).unwrap(),
+            Vec::<f64>::new()
+        );
         for bad in ["[-1]", "[3601]", r#"["5"]"#, "5", "[1,1,1,1,1,1,1,1,1]"] {
             let e = waits(&format!(r#","connect_waits_s":{bad}"#)).unwrap_err();
             assert!(e.contains("connect_waits_s must be"), "{bad}: {e}");

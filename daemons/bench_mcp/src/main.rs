@@ -13,6 +13,8 @@ mod config;
 mod dsp;
 mod elad;
 mod example;
+#[cfg(test)]
+mod fake_scope;
 mod gla;
 mod glasgow;
 mod link;
@@ -29,8 +31,6 @@ mod scope_more;
 mod sdr;
 mod serial_guard;
 mod spectrum;
-#[cfg(test)]
-mod fake_scope;
 #[cfg(test)]
 mod testdir;
 mod usb_hub;
@@ -94,8 +94,8 @@ const TOOLS: &[ToolSpec] = &[
         desc: "Scope channel settings: `bandwidth_limit` and `invert` of a channel, read back. (Probe attenuation, coupling, volts per division and offset are bench_set.)",
         props: r#"{"instrument":{"type":"string"},"channel":{"type":"integer","enum":[1,2]},"bandwidth_limit":{"type":"boolean"},"invert":{"type":"boolean"}}"#, required: &["channel"] },
     ToolSpec { name: "bench_scope_display", tier: Tier::ReadConfig, kinds: &[Kind::Scope],
-        desc: "Scope display: `screen_saver` (OFF or 1MIN to 60MIN; the display sleeps after 30 minutes by default, SCPI and screenshots still work asleep), `grid` (FULL, HALF, OFF), and `trace_intensity` with `grid_intensity` (0 to 100), read back.",
-        props: r#"{"instrument":{"type":"string"},"screen_saver":{"type":"string"},"grid":{"type":"string","enum":["FULL","HALF","OFF"]},"trace_intensity":{"type":"integer"},"grid_intensity":{"type":"integer"}}"#, required: &[] },
+        desc: "Scope display: `screen_saver` (OFF or 1MIN to 60MIN; the display sleeps after 30 minutes by default, SCPI and screenshots still work asleep), `grid` (FULL, HALF, OFF), `trace_intensity` with `grid_intensity` (0 to 100), `xy` (XY mode on or off), `persistence` (OFF, INFINITE, 1, 5, 10 or 30 seconds), `dot_join` (dots instead of vectors) and `menu`, read back.",
+        props: r#"{"instrument":{"type":"string"},"screen_saver":{"type":"string"},"grid":{"type":"string","enum":["FULL","HALF","OFF"]},"trace_intensity":{"type":"integer"},"grid_intensity":{"type":"integer"},"xy":{"type":"boolean"},"persistence":{"type":["string","integer"]},"dot_join":{"type":"boolean"},"menu":{"type":"boolean"}}"#, required: &[] },
     ToolSpec { name: "bench_screenshot", tier: Tier::ReadOnly, kinds: &[Kind::Scope], desc: "Save the scope screen as an image file and return its path.", props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
     ToolSpec { name: "bench_set", tier: Tier::ReadConfig, kinds: ANY,
         desc: "Scope: timebase_s (seconds per division), vdiv_v, offset_v, coupling (A1M/D1M/GND), attenuation (probe ratio), trigger_mode (AUTO/NORM/SINGLE/STOP); channel selects which channel. Supply: voltage_v and current_a setpoints, each capped by the max_volts and max_amps in the server's config; does not change the output state.",
@@ -314,7 +314,11 @@ fn connect(i: &Instrument) -> Result<Link, String> {
         Kind::Scope => {
             // A scope still holding a dead session resets the first queries: wait it out (37 s by default, `connect_waits_s`) before reporting NO-GO.
             let host = i.host.as_deref().unwrap_or_default();
-            let waits: Vec<_> = i.connect_waits_s.iter().map(|w| std::time::Duration::from_secs_f64(*w)).collect();
+            let waits: Vec<_> = i
+                .connect_waits_s
+                .iter()
+                .map(|w| std::time::Duration::from_secs_f64(*w))
+                .collect();
             Link::tcp_checked(host, i.port, &waits, &|h, p| Link::scope_state(h, &[p, 80]))
         }
         Kind::Psu => Link::serial(i.serial.as_deref().unwrap_or_default(), i.baud),
