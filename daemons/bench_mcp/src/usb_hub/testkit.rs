@@ -6,6 +6,7 @@ use super::uhubctl::Runner;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
+// [@ANCHOR: bench_mcp_usb_hub_testkit_dir]
 pub struct Dir(crate::testdir::TestDir);
 
 impl Dir {
@@ -48,6 +49,7 @@ pub fn writable_sys() -> (Dir, PathBuf) {
     (d, sys)
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_testkit_behaviour]
 /// What the scripted hub does when asked to switch a port off.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Behaviour {
@@ -59,6 +61,7 @@ pub enum Behaviour {
     Fails,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_testkit_fake_hub]
 /// A stand-in for `sudo -n uhubctl` that edits a copy of sysfs. It answers a plain `uhubctl` status request from the recording.
 pub struct FakeHub {
     pub sys: PathBuf,

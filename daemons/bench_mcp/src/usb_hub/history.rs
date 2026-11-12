@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+// [@ANCHOR: bench_mcp_usb_hub_history_event]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Event {
     pub ts: f64,
@@ -156,6 +157,7 @@ pub fn parse(text: &str) -> Vec<Event> {
     v
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_history_query]
 /// Options for `analyze`.
 pub struct Query {
     pub device: Option<String>,
@@ -347,6 +349,7 @@ pub fn history(
     Ok(v)
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_history_snap]
 /// What the tree shows for one device, for the watch diff.
 #[derive(Clone, Debug, PartialEq)]
 struct Snap {
@@ -356,6 +359,7 @@ struct Snap {
     authorized: bool,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_history_snaps]
 type Snaps = (BTreeMap<String, Snap>, BTreeMap<String, (String, u64)>);
 
 fn snapshot(t: &Tree) -> Snaps {
@@ -505,6 +509,7 @@ mod tests {
     // Tests [@ANCHOR: usb_hub_history_parse]
     // Tests [@ANCHOR: bench_mcp_usb_hub_history_errno_of]
     // Tests [@ANCHOR: bench_mcp_usb_hub_history_port_target]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_event]
     #[test]
     fn lines_are_classified_with_device_and_error_numbers() {
         let l = |m: &str| parse_line(&format!("1793289140.5 devbox kernel: {m}")).unwrap();
@@ -621,6 +626,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_history_flaps]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_query]
     #[test]
     fn flapping_needs_enough_connects_inside_the_window() {
         assert_eq!(flaps(&[0.0, 10.0, 20.0], 30.0, 3), Some((3, 0.0)));
@@ -680,6 +686,8 @@ mod tests {
     // Tests [@ANCHOR: usb_hub_watch_with]
     // Tests [@ANCHOR: bench_mcp_usb_hub_history_diff]
     // Tests [@ANCHOR: bench_mcp_usb_hub_history_snapshot]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_snaps]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_history_snap]
     #[test]
     fn a_watch_reports_a_device_leaving_and_returning_with_a_new_number() {
         // The poll count is the clock: the port goes off after the third snapshot and comes back after the sixth, so the

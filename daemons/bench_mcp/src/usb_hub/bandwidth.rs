@@ -59,6 +59,7 @@ fn interval_us(speed: f64, iso: bool, b: u8) -> u32 {
     }
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_bandwidth_stream]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stream {
     pub interface: u32,
@@ -144,6 +145,7 @@ pub fn potential_load(streams: &[Stream]) -> f64 {
         .fold(0.0, |a, b| a + b)
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_bandwidth_domain]
 /// The domain a device's periodic traffic is counted in: its translator for a full- or low-speed device below a high-speed hub,
 /// otherwise its bus at its own speed.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -395,6 +397,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_domain_of]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_domain]
     #[test]
     fn the_domain_of_a_device_is_its_translator_or_its_bus() {
         let t = Tree::read(&recorded_sys()).unwrap();
@@ -412,6 +415,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_potential_load]
     // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_potential_streams]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_bandwidth_stream]
     #[test]
     fn descriptors_give_every_alternate_settings_periodic_endpoints() {
         let t = Tree::read(&recorded_sys()).unwrap();

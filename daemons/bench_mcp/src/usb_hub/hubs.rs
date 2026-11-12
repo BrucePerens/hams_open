@@ -253,6 +253,7 @@ pub fn flag(args: &Value, key: &str) -> Result<bool, String> {
     }
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_hubs_plan_type]
 /// Everything about a port action that can be decided before touching it: the target, who is affected, the verdict and what the hub is.
 pub struct Plan {
     pub affected: Vec<String>,
@@ -547,6 +548,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_flag]
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_plan]
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_secs]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_plan_type]
     #[test]
     fn dry_run_says_what_would_happen_and_changes_nothing() {
         let _evidence = crate::usb_hub::testkit::evidence_lock();

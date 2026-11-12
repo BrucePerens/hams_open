@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+// [@ANCHOR: bench_mcp_usb_hub_sysfs_endpoint]
 /// One endpoint of the active alternate setting of an interface.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Endpoint {
@@ -16,6 +17,7 @@ pub struct Endpoint {
     pub direction: String,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_sysfs_node]
 /// A device node (or network interface, sound card) an interface exposes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node {
@@ -26,6 +28,7 @@ pub struct Node {
     pub id: Option<String>,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_sysfs_interface]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Interface {
     pub name: String,
@@ -39,6 +42,7 @@ pub struct Interface {
     pub endpoints: Vec<Endpoint>,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_sysfs_port]
 /// The state of one downstream port, from the hub's `<hub>-portN` directory.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Port {
@@ -52,6 +56,7 @@ pub struct Port {
     pub child: Option<String>,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_sysfs_controller]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Controller {
     pub pci: String,
@@ -60,6 +65,7 @@ pub struct Controller {
     pub device: String,
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_sysfs_device]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Device {
     /// The sysfs name: `usb3` for a root hub, `3-2.2` for the device on port 2 of the hub `3-2`.
@@ -476,6 +482,7 @@ fn device_at(dir: &Path, path: &str) -> Option<Device> {
     })
 }
 
+// [@ANCHOR: bench_mcp_usb_hub_sysfs_tree]
 /// The whole tree: every device by sysfs name.
 #[derive(Clone, Debug, Default)]
 pub struct Tree {
@@ -730,6 +737,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_device_at]
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_interface_of]
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_ports_of]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_controller]
     #[test]
     fn the_recorded_tree_has_the_vnwa_chain_and_its_topology() {
         let t = Tree::read(&fixture()).unwrap();
@@ -767,6 +776,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_collect_nodes]
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_class_nodes]
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_dev_path]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_interface]
     #[test]
     fn a_codec_exposes_its_sound_card_hid_node_and_drivers() {
         let t = Tree::read(&fixture()).unwrap();
@@ -867,6 +877,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_endpoints_of]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_endpoint]
     #[test]
     fn endpoints_are_read_from_their_directories_and_sorted_by_address() {
         let ctl = endpoints_of(&fixture().join("devices/pci0000:00/0000:00:14.0/usb3"));
