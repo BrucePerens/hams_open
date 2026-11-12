@@ -27,6 +27,7 @@ export const ENFORCED_ACTIONS = new Set([
 ]);
 
 patch(ReCaptcha.prototype, {
+    // [@ANCHOR: form_shield:js_recaptcha_load_libs]
     loadLibs() {
         if (session.is_website_user) {
             this._shield = new ShieldSession(null);
@@ -34,6 +35,7 @@ patch(ReCaptcha.prototype, {
         return Promise.resolve(true);
     },
 
+    // [@ANCHOR: form_shield:js_recaptcha_get_token]
     async getToken(action) {
         if (!ENFORCED_ACTIONS.has(action) || !session.is_website_user) {
             return { message: _t("No automatic check is asked for on this form.") };

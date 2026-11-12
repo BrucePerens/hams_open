@@ -79,3 +79,8 @@ challenge may be used once [@ANCHOR: form_shield:claim_nonce]; the limits count 
 ## Page script: a form whose check cannot run
 
 - `FormShieldForm.unavailable()` is what a shielded form does when the browser cannot run the automatic check: it shows the link to the simple question page when the form has one; otherwise it asks the question inside the form and lets the form be sent with the answer; with neither, or when the question cannot be fetched, it says so in the form's status line. Tests: `static/tests/form_unavailable.test.js`. [@ANCHOR: form_shield:js_form_unavailable]
+
+## Page script: Odoo's own forms
+
+- `ReCaptcha.loadLibs()` (patched) loads no Google script; for a visitor who is not signed in it starts a shield session so the challenge is fetched while the form is filled in. [@ANCHOR: form_shield:js_recaptcha_load_libs]
+- `ReCaptcha.getToken()` (patched) solves a challenge for the actions the server enforces and returns it as the token, using a new session for the next submit; for any other action, or a signed-in member, it returns a message and no token; when the solve fails it returns an error. Tests: `static/tests/recaptcha_patch.test.js`. [@ANCHOR: form_shield:js_recaptcha_get_token]
