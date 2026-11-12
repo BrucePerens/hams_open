@@ -16,6 +16,18 @@ use nix::sys::stat::{fstat, lstat, major, minor, Mode, SFlag};
 
 use crate::wire::{DeviceClass, DeviceDescriptor};
 
+/// What the OS layer could find out about the USB identity behind a device node.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UsbIdentity {
+    /// A USB device: vendor id, product id, product string.
+    Usb(u16, u16, String),
+    /// Readable, and not USB (a legacy serial port, a PCI sound card, a virtual console), or a
+    /// node name with no sysfs home.
+    NotUsb,
+    /// The node's sysfs entry cannot be read (sysfs not mounted, hidden from a container).
+    Unreadable,
+}
+
 /// The credentials of the process at the other end of a Unix socket.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Peer {
@@ -60,8 +72,9 @@ pub trait Os {
     /// The kind of an already-open descriptor (the post-open TOCTOU check).
     fn fd_kind(&self, fd: BorrowedFd<'_>) -> NodeKind;
     /// USB vendor and product ids and the product string of the device behind a node, if USB
-    /// (the manufacturer string is in the device list only).
-    fn usb_identity(&self, path: &Path) -> Option<(u16, u16, String)>;
+    /// (the manufacturer string is in the device list only). `Unreadable` when the node has a
+    /// sysfs name but sysfs cannot be read for it, so nothing can be said about its USB identity.
+    fn usb_identity(&self, path: &Path) -> UsbIdentity;
     /// Read-only enumeration of serial and audio nodes.
     fn list_devices(&self) -> Vec<DeviceDescriptor>;
     /// The account name of a UID.
@@ -263,10 +276,17 @@ impl Os for LinuxOs {
     }
 
     // [@ANCHOR: relay_broker_linux_usb_identity]
-    fn usb_identity(&self, path: &Path) -> Option<(u16, u16, String)> {
-        let dir = self.sysfs_dir_for(path)?;
-        usb_identity_from_sysfs(&dir.join("device"))
-            .map(|(vid, pid, product, _manufacturer)| (vid, pid, product))
+    fn usb_identity(&self, path: &Path) -> UsbIdentity {
+        let Some(dir) = self.sysfs_dir_for(path) else {
+            return UsbIdentity::NotUsb;
+        };
+        if !dir.exists() {
+            return UsbIdentity::Unreadable;
+        }
+        match usb_identity_from_sysfs(&dir.join("device")) {
+            Some((vid, pid, product, _manufacturer)) => UsbIdentity::Usb(vid, pid, product),
+            None => UsbIdentity::NotUsb,
+        }
     }
 
     // [@ANCHOR: relay_broker_linux_list_devices]
@@ -485,15 +505,28 @@ mod tests {
         assert_eq!(devs[1].class, DeviceClass::Audio);
         assert_eq!(
             os.usb_identity(Path::new("/dev/ttyUSB0")),
-            Some((0x08bb, 0x29c0, "VNWA".to_string()))
+            UsbIdentity::Usb(0x08bb, 0x29c0, "VNWA".to_string())
+        );
+        assert!(matches!(
+            os.usb_identity(Path::new("/dev/snd/pcmC1D0c")),
+            UsbIdentity::Usb(0x08bb, ..)
+        ));
+        // Readable and not USB, or a name sysfs has no class directory for: not USB.
+        assert_eq!(os.usb_identity(Path::new("/dev/tty0")), UsbIdentity::NotUsb);
+        assert_eq!(os.usb_identity(Path::new("/dev/sda")), UsbIdentity::NotUsb);
+        assert_eq!(
+            os.usb_identity(Path::new("/etc/passwd")),
+            UsbIdentity::NotUsb
+        );
+        // A tty or sound node whose sysfs entry is missing: unreadable, not "not USB".
+        assert_eq!(
+            os.usb_identity(Path::new("/dev/ttyUSB9")),
+            UsbIdentity::Unreadable
         );
         assert_eq!(
-            os.usb_identity(Path::new("/dev/snd/pcmC1D0c")).map(|t| t.0),
-            Some(0x08bb)
+            os.usb_identity(Path::new("/dev/snd/pcmC9D0c")),
+            UsbIdentity::Unreadable
         );
-        assert_eq!(os.usb_identity(Path::new("/dev/tty0")), None);
-        assert_eq!(os.usb_identity(Path::new("/dev/sda")), None);
-        assert_eq!(os.usb_identity(Path::new("/etc/passwd")), None);
         assert_eq!(read_hex_u16(&root.join("missing")), None);
     }
 

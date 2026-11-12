@@ -5,7 +5,7 @@
 //!
 //! Keys: `allow_uid`, `allow_gid` (repeatable), `apply_groups` (`true`/`false`, default false:
 //! provisioning only reports), `audit_log` (path), `rate_per_minute`, `device_root`,
-//! `serial_major`, `audio_major`, `deny_usb` (`vvvv:pppp`, repeatable), `deny_path` (repeatable),
+//! `serial_major`, `audio_major`, `deny_usb` (`vvvv:pppp`, repeatable), `allow_unreadable_usb` (`true`/`false`, default false: a node whose USB identity cannot be read because sysfs is unreadable is refused), `deny_path` (repeatable),
 //! `idle_exit_secs`, `hub` (`true`/`false`, default false), `update_package` (`true`/`false`, default false), `set_time` (`true`/`false`, default false), `max_unproven_step_secs` (default 30), `max_time_steps_per_hour` (default 4), `bind_udp_port` (repeatable, default 123). Setting any `serial_major`/`audio_major`/`deny_usb`/`deny_path`/`bind_udp_port` replaces the
 //! default list for that key.
 
@@ -199,6 +199,13 @@ impl Config {
                         .deny_usb
                         .push(parse_usb_pair(value).ok_or_else(|| err("expected vvvv:pppp"))?);
                 }
+                "allow_unreadable_usb" => {
+                    cfg.policy.allow_unreadable_usb = match value {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err(err("expected true or false")),
+                    }
+                }
                 "deny_path" => {
                     if !seen_path {
                         cfg.policy.deny_paths.clear();
@@ -305,6 +312,17 @@ mod tests {
         assert_eq!(Config::parse("\nallow_uid = x").unwrap_err().line, 2);
         assert!(Config::parse("apply_groups = yes").is_err());
         assert!(Config::parse("deny_usb = 08bb").is_err());
+        assert!(
+            !Config::default().policy.allow_unreadable_usb,
+            "fails closed by default"
+        );
+        assert!(
+            Config::parse("allow_unreadable_usb = true")
+                .unwrap()
+                .policy
+                .allow_unreadable_usb
+        );
+        assert!(Config::parse("allow_unreadable_usb = yes").is_err());
         assert!(Config::parse("device_root = dev").is_err());
         assert!(Config::parse("no equals here").is_err());
         assert_eq!(parse_usb_pair("08BB:29C0"), Some((0x08bb, 0x29c0)));

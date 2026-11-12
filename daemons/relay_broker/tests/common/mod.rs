@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use relay_broker::audit::AuditLog;
 use relay_broker::broker::Broker;
 use relay_broker::config::Config;
-use relay_broker::os::{LinuxOs, NodeKind, Os, Peer};
+use relay_broker::os::{LinuxOs, NodeKind, Os, Peer, UsbIdentity};
 use relay_broker::wire::{DeviceClass, DeviceDescriptor};
 
 pub const HAM_UID: u32 = 1000;
@@ -24,6 +24,8 @@ pub struct FakeOs {
     pub peer: Peer,
     pub nodes: HashMap<PathBuf, NodeKind>,
     pub usb: HashMap<PathBuf, (u16, u16, String)>,
+    /// Nodes whose sysfs entry cannot be read.
+    pub usb_unreadable: Vec<PathBuf>,
     pub devices: Vec<DeviceDescriptor>,
     pub users: HashMap<u32, String>,
     pub groups: HashMap<String, Vec<String>>,
@@ -90,6 +92,7 @@ impl FakeOs {
             },
             nodes,
             usb,
+            usb_unreadable: Vec::new(),
             devices: vec![
                 dev(DeviceClass::Serial, "/dev/ttyUSB0", 0x0403, 0x6001),
                 dev(DeviceClass::Serial, "/dev/ttyUSB1", 0x08bb, 0x29c0),
@@ -129,8 +132,14 @@ impl Os for FakeOs {
     fn fd_kind(&self, _fd: BorrowedFd<'_>) -> NodeKind {
         self.last_opened.get().unwrap_or(NodeKind::Missing)
     }
-    fn usb_identity(&self, path: &Path) -> Option<(u16, u16, String)> {
-        self.usb.get(path).cloned()
+    fn usb_identity(&self, path: &Path) -> UsbIdentity {
+        if self.usb_unreadable.iter().any(|p| p == path) {
+            return UsbIdentity::Unreadable;
+        }
+        match self.usb.get(path) {
+            Some((vid, pid, product)) => UsbIdentity::Usb(*vid, *pid, product.clone()),
+            None => UsbIdentity::NotUsb,
+        }
     }
     fn list_devices(&self) -> Vec<DeviceDescriptor> {
         self.devices.clone()

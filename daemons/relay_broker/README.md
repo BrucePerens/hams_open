@@ -51,7 +51,7 @@ segment, byte-for-byte what will be opened, not on `deny_path`: `/dev/mem`, `/de
 `/dev/stdin`, `/dev/fd/0`, `/dev/serial/by-id/...` and a planted link are all refused; the final
 node is a character device whose major belongs to the requested class: 4/166/188/204/207
 serial, 116 ALSA; disks are block devices and fail here), USB identity (the VNWA codec
-`08bb:29c0` and anything on `deny_usb`), and a post-open `fstat` re-check so a swap between the
+`08bb:29c0` and anything on `deny_usb`; this check **fails closed**: a `tty*` or `snd/*` node whose sysfs entry cannot be read, so its USB identity is unknown, is refused with "usb identity unreadable", because otherwise hiding sysfs would bypass `deny_usb`. A host that must run without readable sysfs, such as a container, says so explicitly with `allow_unreadable_usb = true` in the config and then gives up the VNWA protection; a node that sysfs describes as not USB is unaffected), and a post-open `fstat` re-check so a swap between the
 walk and the open fails closed.
 
 ## Threat model

@@ -90,6 +90,35 @@ fn an_unlisted_peer_is_closed_before_any_byte_is_read() {
     assert!(matches!(resp, Response::Devices(_)));
 }
 
+// Tests [@ANCHOR: relay_broker_policy_check_node]
+// Tests [@ANCHOR: relay_broker_broker_open_device]
+#[test]
+fn an_unreadable_usb_identity_is_refused_unless_the_config_allows_it() {
+    let mut os = FakeOs::typical();
+    os.usb_unreadable.push("/dev/ttyUSB0".into());
+    let peer = os.peer;
+    let now = Instant::now();
+    let mut closed = broker_with(&test_config(), os, None);
+    let (resp, fd) = closed.handle(peer, &open("/dev/ttyUSB0", DeviceClass::Serial), now);
+    assert!(
+        fd.is_none(),
+        "no descriptor for a node whose USB identity is unknown"
+    );
+    assert!(denied(&resp, Denial::UsbUnreadable), "{resp:?}");
+    // Explicit allow: the same node opens.
+    let mut os = FakeOs::typical();
+    os.usb_unreadable.push("/dev/ttyUSB0".into());
+    let mut cfg = test_config();
+    cfg.policy.allow_unreadable_usb = true;
+    let mut open_broker = broker_with(&cfg, os, None);
+    let (resp, fd) = open_broker.handle(peer, &open("/dev/ttyUSB0", DeviceClass::Serial), now);
+    assert!(fd.is_some(), "{resp:?}");
+    // A readable non-USB node (ttyACM0 has no USB entry in the fake) is unaffected by the default.
+    let mut ok = broker_with(&test_config(), FakeOs::typical(), None);
+    let (_, fd) = ok.handle(peer, &open("/dev/ttyACM0", DeviceClass::Serial), now);
+    assert!(fd.is_some());
+}
+
 // Tests [@ANCHOR: relay_broker_broker_handle]
 // Tests [@ANCHOR: relay_broker_broker_open_device]
 #[test]
