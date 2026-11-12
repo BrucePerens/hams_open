@@ -138,38 +138,187 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 ## Function reference
 
-- [@ANCHOR: relay_broker:relay_broker_time_guard_new] (time_guard.rs) A guard with the configured ceilings.
-- [@ANCHOR: relay_broker:relay_broker_time_guard_check] (time_guard.rs) Decides whether the clock may be stepped: breaker, build date, large step without proof, steps per hour; a refusal on the step count trips the breaker.
-- [@ANCHOR: relay_broker:relay_broker_time_guard_record_step] (time_guard.rs) Counts one completed step.
-- [@ANCHOR: relay_broker:relay_broker_time_guard_status] (time_guard.rs) Steps in the last hour and whether the breaker is open.
+### `TimeGuard::new` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_guard_new]
+
+**Purpose.** Builds the clock-step guard that `Broker` consults before every `set_system_time`: the configured ceilings, an empty step history and a closed circuit breaker. The broker makes one guard when it is assembled (`Broker::new`) and keeps it for its lifetime, so the step count survives across requests but not across a broker restart.
+
+**Signature.** `pub fn new(max_unproven_step_secs: u64, max_steps_per_hour: u32) -> TimeGuard`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `max_unproven_step_secs` | `u64`, seconds | The largest step (absolute difference between the current clock and the target) allowed without proof. A larger step needs a GPS source or two agreeing sources. Comes from the config key of the same name. |
+| `max_steps_per_hour` | `u32` | How many completed steps are allowed in any rolling hour. Stored as `usize`. Zero means every check trips the breaker. |
+
+**Returns.** A `TimeGuard` with `steps` empty and `breaker_until = None`. **Errors.** None; it cannot fail or panic. **Concurrency.** Plain value, no locks; the broker serves one connection at a time, so the guard needs none. **Side effects.** None. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs).
+
+### `TimeGuard::check` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_guard_check]
+
+**Purpose.** The decision half of the broker's own clock ceiling. It does not trust the relay's judgement: it refuses a clock step that is implausible, unproven or too frequent. `Broker::set_system_time` calls it after the config switch and before the OS call. Checks run in a fixed order: expire old state, breaker open, target before the build date, large step without proof, steps per hour (which trips the breaker).
+
+**Signature.** `pub fn check(&mut self, now: Instant, current_unix_secs: u64, target_unix_secs: u64, source: TimeSource, agreeing: u8) -> Result<(), TimeDenial>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `now` | `Instant` (monotonic) | The time of the decision; passed in so tests need no clock. Not wall-clock, so it is immune to the step being checked. |
+| `current_unix_secs` | `u64`, Unix seconds | The wall clock now; the step size is its absolute difference to the target. |
+| `target_unix_secs` | `u64`, Unix seconds | The time the relay asks for. Refused when earlier than `BUILD_DATE_UNIX_SECS` (2026-11-01 UTC). |
+| `source` | `TimeSource` | The relay's claimed source; `Gps` counts as proof by itself. |
+| `agreeing` | `u8` | How many independent sources agree with the target; 2 or more count as proof. The broker cannot verify the claim, only the relay's own evidence rule. |
+
+**Returns.** `Ok(())` when the step may proceed. An allowed step is NOT recorded: the caller calls `record_step` once the OS call succeeded. **Errors** (`TimeDenial`): `BreakerOpen` (breaker already open, or this call found the hour's step count full and opened it for an hour), `BeforeBuildDate`, `UnprovenLargeStep`. **Side effects.** Mutates the guard: expires state and may open the breaker, but never records a step. **Security.** This is the clock-poisoning ceiling: a compromised relay cannot walk the clock back or forward in a flood of steps. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs).
+
+### `TimeGuard::record_step` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_guard_record_step]
+
+**Purpose.** Counts one completed clock step toward the per-hour limit. `Broker::set_system_time` calls it only after the OS `clock_settime` succeeded, so a refused or failed step never uses up the allowance.
+
+**Signature.** `pub fn record_step(&mut self, now: Instant)`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `now` | `Instant` | The monotonic time of the completed step; kept for one hour and then dropped by `expire`. |
+
+**Returns.** Nothing. **Errors.** None. **Side effects.** Pushes onto the back of the in-memory `steps` queue; the queue is bounded in practice because `check` refuses and trips the breaker once `max_steps_per_hour` entries are present. It does not itself open the breaker. **Concurrency.** No locking; one request at a time. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs): two recorded steps fill an hour of two.
+
+### `TimeGuard::status` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_guard_status]
+
+**Purpose.** Reports the guard's state for the read-only `time_status` action: how many steps were made in the last hour and whether the circuit breaker is open. It is what the relay shows an operator who asks why a clock step was refused.
+
+**Signature.** `pub fn status(&mut self, now: Instant) -> (u8, bool)`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `now` | `Instant` | The time of the query; old steps and an expired breaker are dropped first (`expire`), so the answer is current. |
+
+**Returns.** `(steps in the last hour, breaker open)`. The count saturates at 255 (`u8::MAX`). **Errors.** None. **Side effects.** Calls `expire`, so it mutates the guard (it takes `&mut self`) but changes no answer a later `check` would not also reach. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs): `(2, false)`, `(2, true)` while open, and `(0, false)` after the hour.
+
 - [@ANCHOR: relay_broker:relay_broker_broker_set_system_time] (broker.rs) Steps the clock when enabled and inside the ceilings; audits every outcome with before, target, source and evidence.
 - [@ANCHOR: relay_broker:relay_broker_broker_time_status] (broker.rs) The clock and the step limits; read-only, always served.
 - [@ANCHOR: relay_broker:relay_broker_os_system_time] (os.rs) The wall clock now in Unix seconds (the Linux layer also steps it with `clock_settime`).
-- [@ANCHOR: relay_broker:relay_broker_json_escape] (audit.rs) Escapes a string for a JSON literal (quotes, backslash, control characters).
-- [@ANCHOR: relay_broker:relay_broker_audit_event_to_json_line] (audit.rs) The record as one JSON line (with the trailing newline). `ts` is Unix seconds.
-- [@ANCHOR: relay_broker:relay_broker_audit_log_open] (audit.rs) Opens (creating, mode 0600) the log at `path`; `None` disables logging to a file, which
-- [@ANCHOR: relay_broker:relay_broker_audit_log_record] (audit.rs) Appends one event. A write failure is reported but never stops the broker.
-- [@ANCHOR: relay_broker:relay_broker_allow_list_permits] (auth.rs) True when the peer's UID or primary GID is listed. An empty list permits no one: a
+### `json_escape` (audit.rs) [@ANCHOR: relay_broker:relay_broker_json_escape]
+
+**Purpose.** The only JSON encoding the audit log needs: it escapes a string for use inside a JSON string literal, so the hand-formatted lines stay valid whatever a path or reason contains (the broker has no serialisation dependency). Called by `AuditEvent::to_json_line` for `action`, `outcome` and `detail`.
+
+**Signature.** `pub fn json_escape(s: &str) -> String`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `s` | `&str` | Any text; borrowed, not retained. It may hold peer-supplied bytes (a device path), which is why escaping matters. |
+
+**Returns.** A new `String`: `"` becomes `\"`, `\` becomes `\\`, newline, CR and tab become `\n`, `\r`, `\t`, other control characters below U+0020 become `\u00xx`, everything else is copied unchanged (non-ASCII stays UTF-8). **Errors.** None. **Side effects.** None; pure. **Security.** Stops a peer-controlled string from breaking out of its field or forging a second log line (a newline cannot survive). **Tests.** `lines_are_valid_json_with_escaped_detail` (audit.rs).
+
+### `AuditEvent::to_json_line` (audit.rs) [@ANCHOR: relay_broker:relay_broker_audit_event_to_json_line]
+
+**Purpose.** Formats one `AuditEvent` as the log's wire form: one JSON object per line, as `events.jsonl`. `AuditLog::record_at` writes it. The data structure is `AuditEvent { uid: u32 (`u32::MAX` when unknown), pid: i32, action: &'static str, outcome: &'static str, detail: String }`; `action` is one of `open_device`, `list_devices`, `grant_group`, `provision_groups`, `peer_rejected`, `malformed` (and the later actions), `outcome` one of `allowed`, `denied`, `dry_run`, `applied`, `rate_limited`, `failed`, `rejected`.
+
+**Signature.** `pub fn to_json_line(&self, ts: u64) -> String`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `ts` | `u64`, Unix seconds | The record's time, supplied by the caller. |
+
+**Returns.** `{"ts":N,"uid":N,"pid":N,"action":"..","outcome":"..","detail":".."}` followed by `\n`; the three strings pass through `json_escape`. **Errors.** None. **Side effects.** None; pure. **Tests.** `lines_are_valid_json_with_escaped_detail` (audit.rs) parses the line back.
+
+### `AuditLog::open` (audit.rs) [@ANCHOR: relay_broker:relay_broker_audit_log_open]
+
+**Purpose.** Opens the append-only audit log at startup. `AuditLog` holds the optional file, its path, the current `size`, the rotation cap `max_bytes` (`MAX_LOG_BYTES`, 4 MiB) and a map from UID to the time of its last logged `peer_rejected`. The broker refuses to start unauditable, so an open failure is fatal.
+
+**Signature.** `pub fn open(path: Option<&Path>) -> io::Result<AuditLog>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `Option<&Path>` | The log file; borrowed (copied into the struct). `None` disables logging to a file, which the tests use. |
+
+**Returns.** The log, with `size` read from the existing file. **Errors.** Any `io::Error` from opening or reading the metadata (missing directory, permissions): returned to `main`, which exits. **Side effects.** Creates the file with mode 0600 if absent, opened with `O_APPEND` so existing lines are never rewritten; no rotation happens here. **Security.** Private mode, append-only. **Tests.** `records_append_to_a_private_file_and_none_is_a_sink` (audit.rs).
+
+### `AuditLog::record` (audit.rs) [@ANCHOR: relay_broker:relay_broker_audit_log_record]
+
+**Purpose.** Appends one event to the audit log, stamped with the current Unix time. Called by `Broker::log` for every request decided and by the server for every peer turned away. A write failure is reported but never stops the broker: once running, availability of the broker outranks the log.
+
+**Signature.** `pub fn record(&mut self, event: &AuditEvent) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `event` | `&AuditEvent` | The record, borrowed. |
+
+**Returns.** `Ok(())` after the line is written, or when the throttle swallowed it or the log is a sink. **Errors.** `io::Error` from the write or from rotation; the caller (`Broker::log`) ignores it. **Side effects.** Reads the system clock, appends a line to the file, may rotate to `<path>.1`. A `peer_rejected` event is logged once per UID per minute, since a group member off the allow-list can connect as fast as it likes. **Concurrency.** `&mut self`; one writer. **Tests.** `records_append_to_a_private_file_and_none_is_a_sink` and `a_rejected_peer_is_logged_once_per_minute_and_the_log_rotates_at_the_cap` (audit.rs).
+
+### `AllowList::permits` (auth.rs) [@ANCHOR: relay_broker:relay_broker_allow_list_permits]
+
+**Purpose.** The broker's authentication decision for one connection. `AllowList { uids: Vec<u32>, gids: Vec<u32> }` is built from the root-owned config; the server asks `permits` on accept, from `SO_PEERCRED`, before any request byte is read, so an unknown peer never reaches the parser.
+
+**Signature.** `pub fn permits(&self, peer: Peer) -> bool`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer { uid, gid, pid }` | The kernel-reported credentials of the connecting process. Only `uid` and the primary `gid` are compared. |
+
+**Returns.** `true` when the UID or the primary GID is listed. An empty list permits no one: a broker with no config answers nobody. **Errors.** None. **Side effects.** None; pure. **Security.** Only the primary GID counts, not supplementary groups. **Tests.** `only_listed_uids_or_gids_pass_and_an_empty_list_passes_nobody` (auth.rs).
+
 - [@ANCHOR: relay_broker:relay_broker_broker_new] (broker.rs) Assembles a broker from a config, an audit log and an OS layer.
 - [@ANCHOR: relay_broker:relay_broker_broker_os] (broker.rs) The OS layer (the server uses it for peer credentials).
 - [@ANCHOR: relay_broker:relay_broker_broker_log] (broker.rs) Writes one audit record; a failed write is ignored here (the log is best effort once
 - [@ANCHOR: relay_broker:relay_broker_broker_handle] (broker.rs) Decides and performs one request for an already-authenticated peer. Returns the response
 - [@ANCHOR: relay_broker:relay_broker_broker_open_device] (broker.rs) The open action: lexical check, node walk, open, post-open check. Any failure closes the
 - [@ANCHOR: relay_broker:relay_broker_broker_grant] (broker.rs) The provisioning action: which of `groups` the caller lacks, applied only when the
-- [@ANCHOR: relay_broker:relay_broker_client_call] (client.rs) Sends `req` on `stream` and waits for the answer. The descriptor, if any, is the opened
-- [@ANCHOR: relay_broker:relay_broker_client_default_server_uids] (client.rs) `DEFAULT_SERVER_UIDS: &[u32] = &[0]`, the accounts a broker socket may be served
-  by when the caller names none: root. A socket-activated broker has its listener made by systemd, so a client reads root's credentials even
-  though the service runs as `hams-relay-broker`; a broker started directly by a service account must be named to `connect_and_call_as`.
-- [@ANCHOR: relay_broker:relay_broker_client_verify_server] (client.rs) `verify_server(stream: &UnixStream, expected_uids: &[u32]) -> io::Result<()>`.
-  Reads `SO_PEERCRED` of the connected socket and requires its uid to be in `expected_uids` (an empty list permits no one). Nothing has been
-  sent when it runs. `Err(PermissionDenied)` names the uid found; any other error is the failure to read the credentials. This is the
-  client authenticating the broker; the broker authenticating the client is `auth.rs`. Blocking, no side effect.
-- [@ANCHOR: relay_broker:relay_broker_client_connect_and_call] (client.rs) `connect_and_call(path, req)`: `connect_and_call_as` with `DEFAULT_SERVER_UIDS` (root).
-  Errors: connect failure, `PermissionDenied` from the verification, then those of `call`.
-- [@ANCHOR: relay_broker:relay_broker_client_connect_and_call_as] (client.rs) `connect_and_call_as(path: &Path, req: &Request, expected_uids: &[u32])
-  -> io::Result<(Response, Option<OwnedFd>)>`. Connects, runs `verify_server`, and only then sends `req` and returns the response and the passed
-  descriptor, if any (`call`). A wrong server is refused with `PermissionDenied` and receives no byte, so an impostor on the socket path cannot
-  answer `ListDevices`, `ProvisionGroups` or `OpenDevice` with a descriptor of its choice. Blocking; one connection per call.
+### `call` (client.rs) [@ANCHOR: relay_broker:relay_broker_client_call]
+
+**Purpose.** The request-response exchange on an already verified stream: sends `req` and waits for the answer. The descriptor, if any, is the opened device of an `Opened` response; descriptors passed with any other response are dropped.
+
+**Signature.** `pub fn call(stream: &UnixStream, req: &Request) -> io::Result<(Response, Option<OwnedFd>)>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `stream` | `&UnixStream` | A connected, verified socket; borrowed. |
+| `req` | `&Request` | The request; encoded by `Request::encode`. |
+
+**Returns.** The decoded `Response` and the passed descriptor. **Errors.** Any `io::Error` from the framing (`send_frame`, `recv_frame`), and `InvalidData` carrying the `WireError` when the body does not decode. **Side effects.** Sets the socket timeouts (`IO_TIMEOUT`, failure ignored), so it blocks no longer than that per read or write. **Tests.** `an_allowed_open_passes_a_working_descriptor_and_never_the_path` (tests/broker.rs).
+
+### `DEFAULT_SERVER_UIDS` (client.rs) [@ANCHOR: relay_broker:relay_broker_client_default_server_uids]
+
+**Definition.** `pub const DEFAULT_SERVER_UIDS: &[u32] = &[0];` the accounts a broker socket may be served by when the caller names none: root only. Used by `connect_and_call`; read-only constant, no runtime state.
+
+**Why root.** A socket-activated broker has its listener made by systemd, so a client reads root's credentials from `SO_PEERCRED` even though the service runs as `hams-relay-broker`. A broker started directly by a service account must be named to `connect_and_call_as`. **Security.** The list is the client's trust anchor: a process that took over the socket path under another uid is refused by `verify_server`. **Tests.** `the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_nothing` (tests/broker.rs). **Related.** `verify_server`, `connect_and_call`.
+
+### `verify_server` (client.rs) [@ANCHOR: relay_broker:relay_broker_client_verify_server]
+
+**Purpose.** The client authenticating the broker (the broker authenticating the client is `auth.rs`). Run after `connect` and before anything is sent.
+
+**Signature.** `pub fn verify_server(stream: &UnixStream, expected_uids: &[u32]) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `stream` | `&UnixStream` | The connected socket; borrowed. |
+| `expected_uids` | `&[u32]` | The uids accepted as the server. An empty list permits no one. |
+
+**Returns.** `Ok(())` when the server's `SO_PEERCRED` uid is in the list. **Errors.** `Err(PermissionDenied)` naming the uid found; any other `io::Error` is the failure to read the credentials. **Side effects.** None; blocking in theory but a `getsockopt` returns at once. Nothing has been sent when it runs, so an impostor learns nothing. **Tests.** `the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_nothing` (tests/broker.rs).
+
+### `connect_and_call` (client.rs) [@ANCHOR: relay_broker:relay_broker_client_connect_and_call]
+
+**Purpose.** The default client entry point: `connect_and_call_as` with `DEFAULT_SERVER_UIDS` (root), for the usual socket-activated broker.
+
+**Signature.** `pub fn connect_and_call(path: &Path, req: &Request) -> io::Result<(Response, Option<OwnedFd>)>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The broker's Unix socket path. |
+| `req` | `&Request` | The typed request to send. |
+
+**Returns.** The decoded `Response` and, for an `Opened` response, the passed descriptor (`Some(OwnedFd)` owned by the caller, who must close or use it). **Errors.** Connect failure, `PermissionDenied` from the server check, then those of `call` (timeouts, `InvalidData` for a malformed response). **Concurrency.** Blocking; one connection per call, closed on return. **Security.** The request is sent only after the server's uid is verified. **Tests.** `the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_nothing` (tests/broker.rs).
+
+### `connect_and_call_as` (client.rs) [@ANCHOR: relay_broker:relay_broker_client_connect_and_call_as]
+
+**Purpose.** Connects to the broker, runs `verify_server`, and only then sends `req` and returns the answer (`call`). A wrong server is refused with `PermissionDenied` and receives no byte, so an impostor on the socket path cannot answer `ListDevices`, `ProvisionGroups` or `OpenDevice` with a descriptor of its choice.
+
+**Signature.** `pub fn connect_and_call_as(path: &Path, req: &Request, expected_uids: &[u32]) -> io::Result<(Response, Option<OwnedFd>)>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The broker socket. |
+| `req` | `&Request` | The request to send. |
+| `expected_uids` | `&[u32]` | Accounts accepted as the server (root, or the service account of a broker started directly). |
+
+**Returns.** `(Response, Option<OwnedFd>)`; the descriptor is present only for an `Opened` response and is owned by the caller. **Errors.** Connect failure, `PermissionDenied`, `InvalidData`, timeouts. **Concurrency.** Blocking, one connection per call. **Tests.** `the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_when_idle` and `the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_nothing` (tests/broker.rs).
+
 - [@ANCHOR: relay_broker:relay_broker_parse_usb_pair] (config.rs) Parses `vvvv:pppp` (hex) into a vendor/product pair.
 - [@ANCHOR: relay_broker:relay_broker_config_parse] (config.rs) Parses the file text. Comments start with `#`; blank lines are skipped.
 - [@ANCHOR: relay_broker:relay_broker_config_load] (config.rs) Reads and parses `path`, first requiring it to be owned by `owner_uid` (0 in production)
@@ -225,10 +374,51 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 - [@ANCHOR: relay_broker:relay_broker_reader_bool] (wire.rs) `Reader::bool`: reads one byte and returns `false` for 0 and `true` for 1. Any other byte is `WireError::BadTag(byte)`, and an empty buffer is `Truncated`, so a flag field cannot carry a third value past the parser. Used for the 5 GHz flag, the optional-DNS flag and the hub and breaker status flags.
 - [@ANCHOR: relay_broker:relay_broker_reader_ipv4] (wire.rs) `Reader::ipv4`: takes four bytes and returns them as an `Ipv4Addr` in network order. Fewer than four bytes left is `WireError::Truncated`; the reader position only advances on success. Used for the hub address and the optional uplink DNS address in a hub start request.
 - [@ANCHOR: relay_broker:relay_broker_reader_u32] (wire.rs) `Reader::u32`: takes four bytes and returns a big-endian u32, or `WireError::Truncated` when fewer than four remain. Used for the lease length in minutes of a hub start request. It never panics and never reads past the end of the body.
-- [@ANCHOR: relay_broker:relay_broker_time_denial_reason] (time_guard.rs) `TimeDenial::reason`: the fixed text for each reason a clock step is refused (before the build date, a large step without proof, the circuit breaker open). It goes to the relay in the error response and into the audit log detail, so it contains no caller input.
-- [@ANCHOR: relay_broker:relay_broker_time_guard_expire] (time_guard.rs) `TimeGuard::expire(now)`: drops recorded steps older than one hour and closes the circuit breaker once its deadline has passed. Called at the start of `check` and `status` so both see the current hour only. No return value; it only trims the guard state.
-- [@ANCHOR: relay_broker:relay_broker_audit_log_record_at] (audit.rs) `AuditLog::record_at(event, ts)`: the body of `record` with the timestamp supplied. A `peer_rejected` event from a UID already logged in the last 60 seconds is dropped (the UID table is cleared at its cap), the line is rotated first when it would pass the size cap, then appended. Errors are the write or rotate failure.
-- [@ANCHOR: relay_broker:relay_broker_audit_log_rotate] (audit.rs) `AuditLog::rotate`: renames the full log to `<path>.1` (replacing an older one) and opens a fresh empty log with mode 0600, resetting the size count. With no log path (the sink) it does nothing. Errors are the rename or open failure, returned to `record_at`.
+### `TimeDenial::reason` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_denial_reason]
+
+**Purpose.** Gives the fixed text for each reason a clock step is refused; the same text goes to the relay in the `Denied` response and into the audit log `detail`, so the two always agree. `TimeDenial` is a small closed enum (`BeforeBuildDate`, `UnprovenLargeStep`, `BreakerOpen`), `Copy`, with no data.
+
+**Signature.** `pub fn reason(self) -> &'static str`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `self` | `TimeDenial` | The reason to describe, by value. |
+
+**Returns.** One of three static strings: "target is before the build date", "large step needs a GPS lock or two agreeing sources", "too many clock steps: circuit breaker open". **Errors.** None. **Side effects.** None; pure. **Security.** The strings carry no input, so nothing the relay sent is reflected into the log. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs) checks that a reason is non-empty.
+
+### `TimeGuard::expire` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_guard_expire]
+
+**Purpose.** Private housekeeping for `check` and `status`: forgets recorded steps that are an hour old or older and closes the circuit breaker once its deadline has passed, so the one-hour window slides and the breaker heals without any timer thread.
+
+**Signature.** `fn expire(&mut self, now: Instant)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `now` | `Instant` | The reference time; steps with `now - t >= 3600 s` are popped from the front of the queue (it is in time order) and `breaker_until` is cleared when `now >= breaker_until`. |
+
+**Returns.** Nothing. **Errors.** None; `Instant` arithmetic here cannot underflow because steps are recorded in time order. **Side effects.** Mutates `steps` and `breaker_until` only. **Tests.** Reached by `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs): after one hour the steps and the breaker are gone.
+
+### `AuditLog::record_at` (audit.rs) [@ANCHOR: relay_broker:relay_broker_audit_log_record_at]
+
+**Purpose.** The body of `record` with the timestamp supplied, so the once-a-minute rejection rule and the rotation can be tested without a clock. Private.
+
+**Signature.** `fn record_at(&mut self, event: &AuditEvent, ts: u64) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `event` | `&AuditEvent` | The record. |
+| `ts` | `u64`, Unix seconds | Its time. |
+
+**Behaviour.** A `peer_rejected` event from a UID already logged within `REJECTION_LOG_SECS` (60) returns `Ok(())` without writing; the remembered-UID map is cleared at 1024 entries, which only costs a few extra lines. Otherwise it formats the line, calls `rotate` first if the line would push the file past `max_bytes`, writes it with `write_all` and adds its length to `size`. **Errors.** `io::Error` from rotation or the write. **Side effects.** File append; throttle map update. **Tests.** `a_rejected_peer_is_logged_once_per_minute_and_the_log_rotates_at_the_cap` (audit.rs).
+
+### `AuditLog::rotate` (audit.rs) [@ANCHOR: relay_broker:relay_broker_audit_log_rotate]
+
+**Purpose.** Keeps the log directory bounded: the log is moved to `<path>.1` (replacing an older one) when it reaches 4 MiB, so the directory never holds more than about twice that. Private, called from `record_at`.
+
+**Signature.** `fn rotate(&mut self) -> io::Result<()>`
+
+**Arguments.** None besides `&mut self`; it uses the stored `path`. **Returns.** `Ok(())`; a log without a path (the sink) does nothing. **Errors.** `io::Error` from the `rename` or from creating the new file. **Side effects.** `rename(path, path.1)` (atomic, replaces an older `.1`), then opens a fresh empty file at `path` with `O_APPEND` and mode 0600 and resets `size` to 0. Only one generation is kept, so history older than about two files is lost. **Tests.** `a_rejected_peer_is_logged_once_per_minute_and_the_log_rotates_at_the_cap` (audit.rs).
+
 - [@ANCHOR: relay_broker:relay_broker_hub_validate] (hub.rs) `hub::validate(settings)`: checks the hub settings and names the one that is wrong. The interface must be a plain name of at most 15 characters, the SSID 1 to 32 printable ASCII characters, the passphrase 8 to 63 printable ASCII characters, the channel valid for the band, the address private, the relay name one DNS label, the lease 1 minute to 24 hours. Nothing that could add a line to a config file passes.
 - [@ANCHOR: relay_broker:relay_broker_hub_dnsmasq_conf] (hub.rs) `hub::dnsmasq_conf(settings)`: validates, then returns the dnsmasq configuration text for the hub /24: DHCP pool .20 to .250, the hub as DNS (option 6) and NTP (option 42) server, the relay name and the phone connectivity-probe names answering with the hub, and other names forwarded to the uplink resolver or refused. Error is the validation message.
 - [@ANCHOR: relay_broker:relay_broker_hub_takeover_dnsmasq_conf] (hub.rs) `hub::takeover_dnsmasq_conf(takeover)`: the dnsmasq text for taking over DHCP on an existing network: the same /24 from a high pool (.200 to .250), five-minute leases, the router as gateway, the hub as DNS and NTP server. A gateway off the subnet or a hub address inside the pool is an error string.
