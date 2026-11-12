@@ -1428,6 +1428,7 @@ class HelpdeskTicket(models.Model):
         hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
         return bool(hd_env["res.users"].search_count([("partner_id", "=", int(author_id))]))
 
+    @public_rpc  # RPC by design: the ses_inbound_mail_ingest daemon calls it over RPC
     def ingest_inbound_email(self, raw_email_bytes):
         """RPC entrypoint for the SES-to-S3-to-Odoo inbound mail daemon
         (see docs/proposals/EMAIL_SEND_RECEIVE.md). Restricted to the
