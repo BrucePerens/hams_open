@@ -115,6 +115,8 @@ This module enables:
             "user_websites/static/tests/violation_report.test.js",
             "user_websites/static/src/js/toast_notifications.js",
             "user_websites/static/tests/toast_notifications.test.js",
+            "user_websites/static/src/js/owner_delete_dialog.js",
+            "user_websites/static/tests/owner_delete_dialog.test.js",
         ],
     },
     "demo": [],
