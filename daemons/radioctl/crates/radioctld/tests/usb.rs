@@ -100,10 +100,19 @@ async fn a_usb_transport_needs_a_usb_device_description() {
     );
 }
 
+// The Elektor SDR-USB used to be the board with no engine; it has one now (elektor507), so the daemon
+// builds its engine and stops only at the missing device (or missing libusb support). Every
+// `usb-device` protocol has an engine, so no shipped board is left to pin the old refusal.
 #[tokio::test]
-async fn a_usb_board_without_an_engine_is_not_started() {
+async fn a_usb_board_with_an_engine_is_started_as_far_as_its_device() {
     let why = start_error("elektor-sdr-usb.toml").await;
-    assert!(why.contains("no engine yet"), "{why}");
+    assert!(!why.contains("no engine"), "{why}");
+    let expected = if cfg!(feature = "usb") {
+        "not plugged in"
+    } else {
+        "built without USB support"
+    };
+    assert!(why.contains(expected), "{why}");
 }
 
 // Tests [@ANCHOR: radioctld_rigs_real_usb_backend]
