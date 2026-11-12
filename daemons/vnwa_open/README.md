@@ -152,7 +152,7 @@ Each is a test against bytes or samples recorded from the vendor program.
 * Installing backs up what it replaces, is idempotent, and undoes its steps on a failure midway. [@ANCHOR: vnwa_open_install_install]
 * Uninstalling removes what was installed and restores the backups. [@ANCHOR: vnwa_open_install_uninstall]
 * The production executor runs a real command and returns its failure text. [@ANCHOR: vnwa_open_install_process_exec]
-* One frequency-meter measurement (the recovery repeats it): the set-up block is sent and the tone offset is fitted. (Hardware test.) [@ANCHOR: vnwa_open_meter_once]
+* One frequency-meter measurement (the recovery repeats it): the set-up block is sent and the tone offset is fitted. Tested on the simulated unit at 1, 10 and 50 MHz within 1 ppm, and a dead reference or disagreeing codecs give an error, not a number. [@ANCHOR: vnwa_open_meter_once]
 * The cold reset of the unit through its hub port, waiting for the unit and both codecs. (Hardware test.) [@ANCHOR: vnwa_open_power_cold_reset]
 * The production runner returns the exit status and both output streams of a real program. [@ANCHOR: vnwa_open_power_process_runner]
 * The hub port is switched through `sudo -n uhubctl`; a failure is a clear error, and a hub name that is not a USB hub location (`3-2`, `3-2.4`) is refused before `uhubctl` runs. [@ANCHOR: vnwa_open_power_uhubctl] [@ANCHOR: vnwa_open_power_valid_hub_name]
