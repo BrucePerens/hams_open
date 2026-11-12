@@ -729,8 +729,10 @@ enum Sv {
     Words(&'static [&'static str]),
     /// A whole number in this range.
     Int(i64, i64),
-    /// A time in seconds in this range.
-    Time(f64, f64),
+    /// A number in this range, sent in E-notation followed by the unit (`S` or `V`).
+    Num(f64, f64, &'static str),
+    /// A JSON boolean, sent as ON or OFF.
+    Flag,
     /// A data pattern of `0`, `1` and `X`, up to 96 of them.
     Bits,
     /// A baud rate: one of the standard words, or any whole number in the range (sent as `CUSTOM,<n>`).
@@ -757,7 +759,7 @@ const SERIAL_PARAMS: &[(&str, &str, Sv)] = &[
     ("IIC", "DLEN", Sv::Int(1, 12)),
     ("SPI", "CLK", Sv::Src),
     ("SPI", "CLK:EDGE", Sv::Words(&["RISING", "FALLING"])),
-    ("SPI", "CLK:TIM", Sv::Time(100e-9, 5e-3)),
+    ("SPI", "CLK:TIM", Sv::Num(100e-9, 5e-3, "S")),
     ("SPI", "MOSI", Sv::Src),
     ("SPI", "MISO", Sv::Src),
     ("SPI", "CSTP", Sv::Words(&["CS", "NCS", "TIMEOUT"])),
@@ -885,9 +887,13 @@ fn serial_value(kind: Sv, v: &Value) -> Result<String, String> {
             .filter(|x| (lo..=hi).contains(x))
             .map(|x| x.to_string())
             .ok_or(format!("must be a whole number from {lo} to {hi}")),
-        Sv::Time(lo, hi) => range(lo, hi)
-            .map(|x| format!("{x:E}S"))
-            .ok_or(format!("must be a time in seconds from {lo} to {hi}")),
+        Sv::Num(lo, hi, unit) => range(lo, hi)
+            .map(|x| format!("{x:E}{unit}"))
+            .ok_or(format!("must be a number from {lo} to {hi} ({unit})")),
+        Sv::Flag => v
+            .as_bool()
+            .map(|b| if b { "ON" } else { "OFF" }.to_string())
+            .ok_or("must be true or false".to_string()),
         Sv::Bits => {
             let bits: Vec<char> = v
                 .as_str()
@@ -1006,6 +1012,146 @@ pub fn trigger(s: &mut Link, args: &Value) -> Result<Value, String> {
             .collect(),
     );
     Ok(r)
+}
+
+const CH: Sv = Sv::Words(&["C1", "C2"]);
+const THR: Sv = Sv::Num(-100.0, 100.0, "V");
+
+/// The serial-decode parameters of the guide: protocol, the command that sets its bus (`B<n>:<COMMAND>`), parameter, value. The argument name is the parameter in
+/// lower case. Only the analogue channels are offered as sources (the digital ones need the MSO option).
+const DECODE_PARAMS: &[(&str, &str, &str, Sv)] = &[
+    ("I2C", "DCIC", "DIS", Sv::Flag),
+    ("I2C", "DCIC", "SCL", CH),
+    ("I2C", "DCIC", "SCLT", THR),
+    ("I2C", "DCIC", "SDA", CH),
+    ("I2C", "DCIC", "SDAT", THR),
+    ("I2C", "DCIC", "RW", Sv::Flag),
+    ("SPI", "DCSP", "DIS", Sv::Flag),
+    ("SPI", "DCSP", "CLK", CH),
+    ("SPI", "DCSP", "CLKT", THR),
+    ("SPI", "DCSP", "EDGE", Sv::Words(&["RISING", "FALLING"])),
+    ("SPI", "DCSP", "MISO", CH),
+    ("SPI", "DCSP", "MISOT", THR),
+    ("SPI", "DCSP", "MOSI", CH),
+    ("SPI", "DCSP", "MOSIT", THR),
+    ("SPI", "DCSP", "CSTP", Sv::Words(&["CS", "NCS", "TIMEOUT"])),
+    ("SPI", "DCSP", "CS", CH),
+    ("SPI", "DCSP", "CST", THR),
+    ("SPI", "DCSP", "NCS", CH),
+    ("SPI", "DCSP", "NCST", THR),
+    ("SPI", "DCSP", "TIM", Sv::Num(100e-9, 5e-3, "S")),
+    ("SPI", "DCSP", "BIT", Sv::Words(&["MSB", "LSB"])),
+    ("SPI", "DCSP", "DLEN", Sv::Int(4, 32)),
+    ("UART", "DCUT", "DIS", Sv::Flag),
+    ("UART", "DCUT", "RX", CH),
+    ("UART", "DCUT", "RXT", THR),
+    ("UART", "DCUT", "TX", CH),
+    ("UART", "DCUT", "TXT", THR),
+    ("UART", "DCUT", "BAUD", Sv::Int(300, 50_000_000)),
+    ("UART", "DCUT", "DLEN", Sv::Int(5, 8)),
+    ("UART", "DCUT", "PAR", Sv::Words(&["NONE", "EVEN", "ODD"])),
+    ("UART", "DCUT", "STOP", Sv::Words(&["1", "1.5", "2"])),
+    ("UART", "DCUT", "POL", Sv::Words(&["LOW", "HIGH"])),
+    ("UART", "DCUT", "BIT", Sv::Words(&["MSB", "LSB"])),
+    ("CAN", "DCCN", "DIS", Sv::Flag),
+    ("CAN", "DCCN", "CANH", CH),
+    ("CAN", "DCCN", "CANHT", THR),
+    ("CAN", "DCCN", "CANL", CH),
+    ("CAN", "DCCN", "CANLT", THR),
+    (
+        "CAN",
+        "DCCN",
+        "SRC",
+        Sv::Words(&["CAN_H", "CAN_L", "SUB_L"]),
+    ),
+    ("CAN", "DCCN", "BAUD", Sv::Int(5000, 1_000_000)),
+    ("LIN", "DCLN", "DIS", Sv::Flag),
+    ("LIN", "DCLN", "SRC", CH),
+    ("LIN", "DCLN", "SRCT", THR),
+    ("LIN", "DCLN", "BAUD", Sv::Int(300, 2000)),
+];
+
+/// `bench_scope_decode`: serial decode. `on` switches decode on or off (`DCST`); `list` (OFF, D1, D2), `format` (BIN, DEC, HEX) and `bus` (1 or 2) set the
+/// decode list and the bus it follows (`DCPA`); `protocol` (i2c, spi, uart, can, lin) with `settings` (the guide's parameters in lower case, such as `scl`,
+/// `baud`, `dis`) configures a bus (`B<n>:DCIC`, `DCSP`, `DCUT`, `DCCN`, `DCLN`). The guide has no query for the bus settings and no way to read the decoded
+/// frames over SCPI, so the decode state is read back (`DCST?`) and the decoded list is seen with `bench_screenshot`.
+pub fn decode(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_decode]
+    let bus = match args.get("bus") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_u64()
+                .filter(|b| (1..=2).contains(b))
+                .ok_or("bus must be 1 or 2")?,
+        ),
+    };
+    let mut cmds: Vec<String> = Vec::new();
+    let on = match args.get("on") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_bool().ok_or("on must be true or false")?),
+    };
+    cmds.extend(on.map(|b| format!("DCST {}", if b { "ON" } else { "OFF" })));
+    let mut common = Vec::new();
+    if let Some(b) = bus {
+        common.push(format!("BUS,B{b}"));
+    }
+    for (k, words) in [
+        ("list", &["OFF", "D1", "D2"][..]),
+        ("format", &["BIN", "DEC", "HEX"][..]),
+    ] {
+        if let Some(v) = args.get(k).filter(|v| !v.is_null()) {
+            let w = v
+                .as_str()
+                .map(str::to_uppercase)
+                .filter(|w| words.contains(&w.as_str()))
+                .ok_or(format!("{k} must be one of {}", words.join(", ")))?;
+            common.push(format!("{},{w}", if k == "list" { "LIST" } else { "FOMT" }));
+        }
+    }
+    if !common.is_empty() {
+        cmds.push(format!("DCPA {}", common.join(",")));
+    }
+    if let Some(proto) = args.get("protocol").filter(|v| !v.is_null()) {
+        let proto = proto
+            .as_str()
+            .map(str::to_uppercase)
+            .filter(|p| DECODE_PARAMS.iter().any(|d| d.0 == p))
+            .ok_or("protocol must be i2c, spi, uart, can or lin")?;
+        let n = bus.ok_or("protocol needs bus (1 or 2)")?;
+        let settings = args
+            .get("settings")
+            .and_then(Value::as_object)
+            .filter(|m| !m.is_empty())
+            .ok_or("settings must name at least one parameter")?;
+        let table: Vec<_> = DECODE_PARAMS.iter().filter(|d| d.0 == proto).collect();
+        if let Some(bad) = settings
+            .keys()
+            .find(|k| !table.iter().any(|d| d.2.to_lowercase() == **k))
+        {
+            let known: Vec<String> = table.iter().map(|d| d.2.to_lowercase()).collect();
+            return Err(format!(
+                "settings.{bad} is not a {proto} decode parameter ({})",
+                known.join(", ")
+            ));
+        }
+        let mut pairs = Vec::new();
+        for (_, _, param, kind) in &table {
+            if let Some(v) = settings.get(&param.to_lowercase()) {
+                let text = serial_value(*kind, v)
+                    .map_err(|e| format!("settings.{} {e}", param.to_lowercase()))?;
+                pairs.push(format!("{param},{text}"));
+            }
+        }
+        cmds.push(format!("B{n}:{} {}", table[0].1, pairs.join(",")));
+    } else if args.get("settings").is_some_and(|v| !v.is_null()) {
+        return Err("settings needs protocol".into());
+    }
+    for c in &cmds {
+        s.send(c)?;
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    Ok(json!({"sent": cmds, "decode": readback(s, "DCST?"),
+        "note": "the guide has no query for the decode bus settings: check them on the screen (bench_screenshot); commands from the SDS1000X-E programming guide, not yet checked on firmware 1.3.27 (decode may be a licensed option)"}))
 }
 
 #[cfg(test)]
@@ -1507,5 +1653,74 @@ mod tests {
                 .contains("DROP")
         );
         assert_eq!(f.got("TRSE").len(), 1);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_decode]
+    #[test]
+    fn serial_decode_is_switched_on_configured_per_bus_and_every_value_is_checked() {
+        let (f, mut l) = link();
+        let r = decode(&mut l, &json!({"on": true, "bus": 1, "list": "d1", "format": "hex", "protocol": "uart", "settings": {"baud": 9600, "rx": "C1", "rxt": 0.2, "par": "odd", "stop": 2, "dis": true}})).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!([
+                "DCST ON",
+                "DCPA BUS,B1,LIST,D1,FOMT,HEX",
+                "B1:DCUT DIS,ON,RX,C1,RXT,2E-1V,BAUD,9600,PAR,ODD,STOP,2"
+            ])
+        );
+        assert_eq!(r["decode"], "DCST ON");
+        let r = decode(&mut l, &json!({"bus": 2, "protocol": "i2c", "settings": {"scl": "C1", "sda": "C2", "rw": false}})).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!(["DCPA BUS,B2", "B2:DCIC SCL,C1,SDA,C2,RW,OFF"])
+        );
+        let r = decode(&mut l, &json!({"bus": 1, "protocol": "spi", "settings": {"clk": "C1", "edge": "falling", "tim": 1e-6, "dlen": 16}})).unwrap();
+        assert_eq!(
+            r["sent"][1],
+            "B1:DCSP CLK,C1,EDGE,FALLING,TIM,1E-6S,DLEN,16"
+        );
+        assert_eq!(
+            decode(
+                &mut l,
+                &json!({"bus": 1, "protocol": "can", "settings": {"src": "can_h", "baud": 500000}})
+            )
+            .unwrap()["sent"][1],
+            "B1:DCCN SRC,CAN_H,BAUD,500000"
+        );
+        assert_eq!(
+            decode(
+                &mut l,
+                &json!({"bus": 1, "protocol": "lin", "settings": {"baud": 1200}})
+            )
+            .unwrap()["sent"][1],
+            "B1:DCLN BAUD,1200"
+        );
+        assert_eq!(
+            decode(&mut l, &json!({"on": false})).unwrap()["decode"],
+            "DCST OFF"
+        );
+        let n = f.seen.lock().unwrap().len();
+        for bad in [
+            json!({"bus": 3}),
+            json!({"on": "yes"}),
+            json!({"list": "D3"}),
+            json!({"format": "OCT"}),
+            json!({"protocol": "uart", "settings": {"baud": 9600}}),
+            json!({"bus": 1, "protocol": "usb", "settings": {"baud": 9600}}),
+            json!({"bus": 1, "protocol": "uart"}),
+            json!({"bus": 1, "settings": {"baud": 9600}}),
+            json!({"bus": 1, "protocol": "uart", "settings": {"baud": 100}}),
+            json!({"bus": 1, "protocol": "uart", "settings": {"scl": "C1"}}),
+            json!({"bus": 1, "protocol": "i2c", "settings": {"scl": "D0"}}),
+            json!({"bus": 1, "protocol": "lin", "settings": {"baud": 9600}}),
+            json!({"bus": 1, "protocol": "uart", "settings": {"rxt": 500}}),
+        ] {
+            assert!(decode(&mut l, &bad).is_err(), "{bad}");
+        }
+        assert_eq!(
+            f.seen.lock().unwrap().len(),
+            n,
+            "nothing sent for a bad call"
+        );
     }
 }

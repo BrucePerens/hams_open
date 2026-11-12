@@ -1,7 +1,7 @@
 ---
 title: bench_scope_trigger
 summary: Serial triggers (I2C, SPI, UART, CAN, LIN) and the pattern trigger.
-see_also: [tools/bench_set, instruments/scope]
+see_also: [tools/bench_set, tools/bench_scope_decode, instruments/scope]
 tools: [bench_scope_trigger]
 instrument: scope
 tier: read_config

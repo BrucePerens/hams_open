@@ -417,6 +417,21 @@ Returns the text, for example `C2,2E-1V`, `7ADDA`, `1E-6S`, `1,0,X` or `CUSTOM,3
 
 Everything is checked before the first command. With `serial` the commands are `TRSE SERIAL` and then the settings in the guide's table order; with `pattern`, `TRPA ...`. Each is followed by 100 ms and a read-back. Returns `sent`, `readback`, `note`, `trigger` (`TRSE?`) and `settings`. Giving neither is `give serial or pattern`. The guide does not say how a pattern trigger is selected as the type, so only its channels and state are written. Test: `serial_and_pattern_triggers_are_set_checked_and_read_back` against the fake scope for each bus, a custom baud rate, a pattern, and thirteen refused calls that send nothing.
 
+### `bench_mcp_scope_decode` [@ANCHOR: bench_mcp_scope_decode]
+
+`decode(s, args)` is `bench_scope_decode` (tier `read_config`): serial decode set-up.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.on` | boolean | `DCST ON` or `OFF`. |
+| `args.bus` | 1 or 2 | The bus for `DCPA BUS,B<n>` and for the protocol command. |
+| `args.list` | `OFF`, `D1`, `D2` | `DCPA ... LIST,<v>`. |
+| `args.format` | `BIN`, `DEC`, `HEX` | `DCPA ... FOMT,<v>`. |
+| `args.protocol` | `i2c`, `spi`, `uart`, `can`, `lin` | Selects the command `B<n>:DCIC`, `DCSP`, `DCUT`, `DCCN` or `DCLN`; needs `bus` (`protocol needs bus (1 or 2)`) and `settings`. |
+| `args.settings` | object | The bus's parameters in lower case, each checked by `serial_value` (sources `C1` or `C2` only, thresholds numbers within 100 V, words, ranges, `dis` and `rw` booleans). An unknown name is refused with the list for that protocol; `settings` without `protocol` is refused. |
+
+Everything is checked before the first command; each command is followed by 100 ms. The bus parameters go out as one command in the guide's table order, for example `B1:DCUT DIS,ON,RX,C1,RXT,2E-1V,BAUD,9600,PAR,ODD,STOP,2`. Returns `sent`, `decode` (`DCST?` read back) and a `note`. With no argument nothing is sent and the decode state is read. Test: `serial_decode_is_switched_on_configured_per_bus_and_every_value_is_checked` against the fake scope for all five protocols and thirteen refused calls that send nothing.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.
