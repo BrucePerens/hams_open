@@ -32,9 +32,9 @@ The pages loaded jsPDF 2.5.1 and fabric.js 5.3.0 (the 2.5.1 and 5.3.0 files matc
 `98ccf17a...3875` and `48f8f091...2ca`, and the tarball integrity above matched npm; the old tags carried no `integrity=`
 attribute, so the page never verified them). Both are in the GitHub Advisory Database as vulnerable, with no fix on those lines:
 
-* jsPDF: every advisory through 4.2.0 (PDF object injection, AcroForm JavaScript injection, DoS through GIF/BMP dimensions, ReDoS,
+* jsPDF: every advisory through 4.2.0 (PDF object injection, AcroForm JavaScript injection, DoS (denial of service) through GIF/BMP dimensions, ReDoS (a regular expression that takes catastrophically long on crafted input),
   path traversal in the Node build, ...); fixed in 4.2.1. The calls this site makes (`new jspdf.jsPDF`, `addImage`, `save`) are the same in 4.x.
-* fabric.js: stored XSS through SVG export (CVE-2026-27013, fixed 7.2.0) and `Gradient` colour stops (CVE-2026-44311, fixed 7.4.0); the 5.x
+* fabric.js: stored XSS (cross-site scripting, attacker script saved and run in a viewer's browser) through SVG export (CVE, a public vulnerability identifier, CVE-2026-27013, fixed 7.2.0) and `Gradient` colour stops (CVE-2026-44311, fixed 7.4.0); the 5.x
   line (last 5.5.2) has no fix. `ham_logbook/static/src/js/award_designer.js` (hams_com) was ported to the 7.x API (promise-returning `Image.fromURL`,
   `backgroundImage` assignment, explicit `originX/originY: 'left'/'top'` because 7.x centres objects by default).
 
