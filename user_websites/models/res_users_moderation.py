@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-from odoo import models, fields, _
+from odoo import api, models, fields, _
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from .res_users import _async_unpublish_content, BACKGROUND_EXECUTOR
 
@@ -72,6 +72,7 @@ class ResUsersModeration(models.Model):
             user.suspended_group_ids = mapping[user.id]
 
     # [@ANCHOR: user_websites:COMM_action_suspend_user_websites]
+    @api.private
     def action_suspend_user_websites(self):
         """Forcefully unpublishes all user content and flags them as suspended."""
         user_ids = self.ids

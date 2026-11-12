@@ -6,13 +6,11 @@
       "action_reject"
     ],
     "ham.gdpr.export.token": [
-      "consume_and_export",
-      "create_for_current_user"
+      "consume_and_export"
     ],
     "res.users": [
       "SELF_WRITEABLE_FIELDS",
-      "action_pardon_user_websites",
-      "action_suspend_user_websites"
+      "action_pardon_user_websites"
     ],
     "user.websites.group": [
       "action_pardon_group_websites",
