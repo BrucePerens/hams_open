@@ -176,35 +176,158 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
 Each entry is a semantic anchor in the source with a test citing it (`// Tests [@ANCHOR: ...]`);
 the USB-level ones are exercised by the hardware tests in `tests/hil.rs`.
 
-- [@ANCHOR: rsp_open:rsp_lib_check_state] Refuses a device before anything is sent to it: boot-ROM (bcdDevice 2.00) gives `NotRunning`, any other unknown bcdDevice `UnknownState`, other SDRplay products `UnsupportedModel`.
-- [@ANCHOR: rsp_open:rsp_lib_model_for_pid] Maps an SDRplay USB product ID to a model.
-- [@ANCHOR: rsp_open:rsp_lib_model_name] The model's display name.
-- [@ANCHOR: rsp_open:rsp_lib_error_fmt] Human-readable error text, including the exact `NotRunning` message.
-- [@ANCHOR: rsp_open:rsp_encode_band_for] RF frequency to RSP2pro band: tuner mode, first-LO plan, band-filter code, LNA table.
-- [@ANCHOR: rsp_open:rsp_encode_band_in] Band lookup in a model's band table; refuses frequencies outside 1 kHz-2 GHz.
-- [@ANCHOR: rsp_open:rsp_rsp1a_lna_table] The RSP1A LNA-state tables: attenuator code, port-B step bit and MSi001 gain-reduction bits per state.
-- [@ANCHOR: rsp_open:rsp_rsp1a_board_a_byte] RSP1A port A ("byte 0x12"): band filter and attenuator step.
-- [@ANCHOR: rsp_open:rsp_rsp1a_board_b_byte] RSP1A port B ("byte 0x13"): DAB notch, step bit, FM/MW notch, bias-T (all active low).
-- [@ANCHOR: rsp_open:rsp_rsp1a_open_transient_b] RSP1A port-B value written in the middle of the open sequence.
-- [@ANCHOR: rsp_open:rsp_encode_mode_byte] MSi001 band-mode byte for r0 (Hi-Z selects the second AM input).
-- [@ANCHOR: rsp_open:rsp_encode_gain_table] Which LNA-state table applies for a band and antenna port.
-- [@ANCHOR: rsp_open:rsp_encode_lna_table] The LNA-state tables: board front-end step plus MSi001 gain-reduction bits per state.
-- [@ANCHOR: rsp_open:rsp_encode_lo_hz] First-LO frequency for an RF frequency (direct, +120 MHz up-conversion, -120 MHz down-conversion).
-- [@ANCHOR: rsp_open:rsp_encode_tunermode_lo_div] LO output divider per tuner mode.
-- [@ANCHOR: rsp_open:rsp_encode_pll] Tuner PLL words r2 and r3 (integer, 3000-step fraction, 12 extra fraction bits in r3), with ppm correction.
-- [@ANCHOR: rsp_open:rsp_encode_ifmode_code] IF-mode code for r0.
-- [@ANCHOR: rsp_open:rsp_encode_ifmode_hz] IF frequency of each IF mode.
-- [@ANCHOR: rsp_open:rsp_encode_ifmode_required_adc_hz] The only ADC clock each low-IF mode was observed with.
-- [@ANCHOR: rsp_open:rsp_encode_bandwidth_code] IF-bandwidth code for r0.
-- [@ANCHOR: rsp_open:rsp_encode_bandwidth_at_most] Widest IF bandwidth not above a given width.
-- [@ANCHOR: rsp_open:rsp_encode_board_band_byte] Board-control port A (MCP23S18 GPIOA, "byte 0x12"): antenna A/B, band filter, reference-clock output.
-- [@ANCHOR: rsp_open:rsp_encode_board_front_byte] Board-control port B (MCP23S18 GPIOB, "byte 0x13"): notch, front-end step, bias-T.
-- [@ANCHOR: rsp_open:rsp_encode_stream_config] Alternate setting, sample format and MSi2500 register 0x07 for an ADC clock and IF mode.
-- [@ANCHOR: rsp_open:rsp_encode_streamconfig_counter_step] Block sample-counter advance per 1024-byte block.
-- [@ANCHOR: rsp_open:rsp_encode_sampleformat_pairs_per_block] I/Q pairs per block for each sample format.
-- [@ANCHOR: rsp_open:rsp_encode_adc_clock] ADC clock synthesiser words (MSi2500 registers 0x03/0x04), with ppm correction.
-- [@ANCHOR: rsp_open:rsp_encode_ppm_to_ppb] Validates a ppm correction and converts it to parts per billion.
-- [@ANCHOR: rsp_open:rsp_encode_r0_plan] MSi001 r0 with the first-LO plan bits (120 MHz and non-AM modes 2, 144 MHz 1, 168 MHz 0).
+### `pub fn check_state(pid: u16, bcd_device: u16) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_lib_check_state]
+
+Decides, from the USB device descriptor alone, whether a receiver may be driven as a running device. It is called by `Rsp::open_device` before the interface is claimed (so nothing is sent to a device that fails it) and again on the opened transport's descriptor.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `pid` | `u16` | USB product ID; must be in `SUPPORTED_PIDS` (0x3010 RSP2/RSP2pro, 0x3000 RSP1A) |
+| `bcd_device` | `u16` | descriptor bcdDevice; 0x0207 is the running firmware personality |
+
+Returns `Ok(())` only for a supported PID at 0x0207. Errors: `Error::UnsupportedModel { pid, name }` for any other PID (the RSP1 included), `Error::NotRunning` for 0x0200 (boot ROM, no firmware), `Error::UnknownState { bcd_device }` for any other value. Pure function: no I/O, no locks, no side effects, safe to call from any thread. The boot-ROM paths (`open_boot_rom_with`) deliberately do not use it. Test: `lib.rs::state_detection`.
+
+### `pub fn model_for_pid(pid: u16) -> Model` [@ANCHOR: rsp_open:rsp_lib_model_for_pid]
+
+Maps a USB product ID to the `Model` enum: 0x2500 `Rsp1`, 0x3000 `Rsp1a`, 0x3010 `Rsp2` (covers the RSP2 and RSP2pro), 0x3020 `RspDuo`, 0x3030 `RspDx`, 0x3050 `Rsp1b` (the PID is unconfirmed), 0x3060 `RspDxR2`; every other value gives `Model::Unknown`. The `pid` argument is taken by value and the result is `Copy`; there are no errors, no panics and no I/O. Recognising a model does not mean the crate drives it: `check_state` and the open functions decide that. Used by `usb::list_devices` (via `describe`) to fill `DeviceInfo::model`, by `check_state` for the error text, and by the model-specific openers. Test: `lib.rs::state_detection`.
+
+### `pub fn name(self) -> &'static str` on `Model` [@ANCHOR: rsp_open:rsp_lib_model_name]
+
+Returns the display name of a model for messages and logs: "RSP1", "RSP1A", "RSP2/RSP2pro", "RSPduo", "RSPdx", "RSP1B (unconfirmed PID)", "RSPdx-R2" or "unknown SDRplay device". The string is static, so it is borrowed for the program's lifetime and `Error::UnsupportedModel` stores it directly. No errors, no I/O, no state. The RSP2 and RSP2pro share a USB ID and cannot be told apart from the descriptor, which is why one name covers both. Test: `lib.rs::state_detection` (asserts "RSP1" and "RSP2/RSP2pro").
+
+### `impl std::fmt::Display for Error` (`fmt`) [@ANCHOR: rsp_open:rsp_lib_error_fmt]
+
+Writes the human-readable text of every `Error` variant, so callers can print `{e}` and the relay can show it to the user. Fixed texts: `NotFound` "no supported SDRplay receiver (RSP2/RSP2pro, RSP1A) found"; `NotRunning` "device has no firmware loaded; load it with SDRplay's software first" (a test pins this exact string); `UnknownState` shows bcdDevice in hex; `UnsupportedModel` shows name and PID; `Usb` shows `what`, the libusb error name and code; `InvalidArgument`, `Unsupported` and `Stream` prefix their message; `KernelDriverInUse` names the driver, the device nodes and the holding programs and says to close them first; `Stalled` gives the milliseconds waited. Pure, no side effects; the text is not a stable wire format and must not be parsed. Test: `lib.rs::state_detection`.
+
+### `fn band_for(rf_hz: u64) -> Result<Band, Error>` [@ANCHOR: rsp_open:rsp_encode_band_for]
+
+Looks up the RF band of the RSP2pro (and RSP2) for a frequency. A `Band` (see `encode::BANDS`, PROTOCOL.md 1.9) carries the lower and upper edge in Hz, the tuner mode, the first-LO plan, the 3-bit band-filter code for board byte 0x12 and the gain table. The thirteen entries cover 1 kHz-2 GHz: three AM-mode HF bands, VHF (60-120 MHz), B3 (120-250 MHz), the 250-420 MHz AM down-conversion bands (the 375-420 MHz plans are only bracketed), UHF (420 MHz-1 GHz) and L band. It is a thin wrapper over `band_in` with the RSP2pro table, reached through `model_band`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `rf_hz` | `u64` | RF frequency in Hz, 1000..=2_000_000_000 |
+
+Returns the matching `Band` by value. Error: `Error::InvalidArgument` from `band_in` for a frequency outside the range. Pure, thread-safe, no I/O. Tests: `encode.rs::band_table_matches_capture`, `pll_matches_captures`.
+
+### `fn band_in(bands: &[Band], rf_hz: u64) -> Result<Band, Error>` [@ANCHOR: rsp_open:rsp_encode_band_in]
+
+Finds the band of a frequency in any model's table (the RSP2pro's `BANDS` or the RSP1A's `rsp1a::BANDS`). The range check comes first: a frequency below `RF_MIN_HZ` (1 kHz) or above `RF_MAX_HZ` (2 GHz) is refused before the table is searched; then the first band with `lo_hz <= rf_hz < hi_hz` is returned (a copy). `bands` is borrowed read-only; the top band's upper edge is `RF_MAX_HZ + 1`, so exactly 2 GHz is accepted. Errors: `Error::InvalidArgument("frequency ... outside ...")` for the range, `Error::InvalidArgument("no band for ...")` if the table has a gap. Pure and thread-safe. Called through `model_band` by every tune (`set_frequency`, the open sequence). Test: `rsp1a.rs::rsp1a_band_table_matches_capture`.
+
+### `pub fn lna_table(t: GainTable) -> &'static [FrontEndStep]` (RSP1A) [@ANCHOR: rsp_open:rsp_rsp1a_lna_table]
+
+The RSP1A's LNA-state tables (PROTOCOL.md 2.8), one static slice per `GainTable`: AM 7 states (also used for Hi-Z), VHF 10, AM-down 10, UHF 10, L 9. A `FrontEndStep` here packs two board fields into `board_step` as `attenuator code (port A bits 7:5, one of 0b111, 0b110, 0b101, 0b011) << 1 | port-B bit 1`; `am_buf`, `mixer_gr` and `lna_gr` are the tuner r1 bits as on the RSP2pro. Unlike the RSP2pro, `AmDown` has its own table. Index = LNA state; callers clamp it. Pure. Test: `rsp1a.rs::rsp1a_lna_tables_match_capture`.
+
+### `pub fn board_a_byte(filter: u8, board_step: u8) -> u8` [@ANCHOR: rsp_open:rsp_rsp1a_board_a_byte]
+
+Builds the RSP1A board port A value ("byte 0x12"): attenuator code in bits 7:5 (taken from `(board_step >> 1) & 7`) and the 5-bit band filter in bits 4:0 (`filter & 0x1f`). `filter` comes from the RSP1A band table (`rsp1a::BANDS`, which has an extra filter below 2 MHz); `board_step` is the packed field from `lna_table`. Pure, no errors. Written with request 0x49 by `Rsp::board`. Tests: `rsp1a.rs::rsp1a_band_table_matches_capture`, `rsp1a_lna_tables_match_capture`.
+
+### `pub fn board_b_byte(board_step: u8, fm_mw_notch: bool, dab_notch: bool, bias_t: bool) -> u8` [@ANCHOR: rsp_open:rsp_rsp1a_board_b_byte]
+
+Builds the RSP1A board port B value ("byte 0x13"). Bits 7, 6 and 3 are always 1 and bit 5 always 0 (0b1100_1000 fixed); bit 4 is the bias-T, bit 2 the FM/MW notch and bit 0 the DAB notch, **all active low** (0 = on); bit 1 is the front-end step bit taken from `board_step & 1`. A switch that is off therefore has its bit set. The bias-T feeds DC to the antenna port; the driver never turns it on by itself. Pure, no errors. Tests: `rsp1a.rs::rsp1a_front_byte_bits`, `rsp1a_lna_tables_match_capture`.
+
+### `pub fn open_transient_b(fm_mw_notch: bool, dab_notch: bool) -> u8` [@ANCHOR: rsp_open:rsp_rsp1a_open_transient_b]
+
+The port B value the RSP1A open sequence writes in the middle of the sequence: `board_b_byte(1, ..., bias_t = false)`, i.e. the step bit set and bias-T off. In every captured open both notches were off, giving 0xdf; with a notch on at open the notch bits follow the setting, which is a guess that was not captured (to-do: capture it). The bias-T is always off here. Pure, no errors. `Rsp::transient_b` uses it only for the first full tune after open (no port-B value has been written yet); later tunes reuse the port-B value in force. Test: `rsp1a.rs::rsp1a_front_byte_bits`.
+
+### `fn mode_byte(mode: TunerMode, antenna: Antenna) -> u32` [@ANCHOR: rsp_open:rsp_encode_mode_byte]
+
+Gives the MSi001 band-mode byte that goes in bits 11:4 of tuner register r0 (PROTOCOL.md 1.6.1). Values: AM mode 0xe1 on antenna A or B, 0x61 on the Hi-Z port (the tuner's second AM input); VHF 0x42, B3 0x44, B45 0x48, L 0x50 whatever the antenna. The two arguments are `Copy` enums passed by value; the result is the byte widened to `u32` for `r0`/`r0_plan`. No errors and no I/O; whether Hi-Z is allowed at this frequency is checked elsewhere (`check_antenna`). Tests: `encode.rs::band_table_matches_capture`, `r0_variants`.
+
+### `fn gain_table(band: &Band, antenna: Antenna) -> GainTable` [@ANCHOR: rsp_open:rsp_encode_gain_table]
+
+Chooses which LNA-state table applies. Normally it is the band's own `gain_table`; the exception is the Hi-Z port in an AM-mode band whose upper edge is at or below `HIZ_MAX_HZ` (60 MHz), which uses `GainTable::HiZ` (five states). `band` is borrowed, `antenna` is by value; the result is a `Copy` enum that `lna_table` turns into the table. Pure, no errors, no I/O. The device layer's `model_table` adds the RSP1A's own rules on top. Test: `encode.rs::hiz_uses_its_own_gain_table_only_below_60_mhz`.
+
+### `fn lna_table(t: GainTable) -> &'static [FrontEndStep]` (RSP2pro) [@ANCHOR: rsp_open:rsp_encode_lna_table]
+
+Returns the RSP2pro's LNA-state table for a gain table: a static slice whose index is the LNA state the user sets with `set_gain`. Sizes: AM 9 states (`AmDown` shares it), VHF 9, UHF 6, L 6, Hi-Z 5. Each `FrontEndStep` holds `board_step` (board port B bits 5:2, one of 0b1110, 0b1101, 0b1001, 0b0101), `am_buf` (r1 bits 11:10, an AM buffer gain step 0-3) and the booleans `mixer_gr` (mixer gain reduction) and `lna_gr` (LNA gain reduction), which `r1()` and `board_front_byte` turn into register bits. Values come from the gain and toggle captures (PROTOCOL.md 1.8). Callers must keep the LNA state below the slice length (`set_gain` and `set_frequency` clamp it). Pure; `rsp1a::lna_table` is the RSP1A's counterpart. Test: `encode.rs::gain_words_match_capture`.
+
+### `fn lo_hz(band: &Band, rf_hz: u64) -> u64` [@ANCHOR: rsp_open:rsp_encode_lo_hz]
+
+Computes the first local-oscillator frequency in Hz for an RF frequency, following the band's `lo_plan`: `Direct` gives `rf_hz`; `UpBy120M` gives `rf_hz + 120 MHz` (up-conversion below 60 MHz); `DownBy120M`, `DownBy144M` and `DownBy168M` subtract 120, 144 and 168 MHz. The result feeds `pll` together with `TunerMode::lo_div`. `rf_hz` must already be inside `band` (callers get the band from `band_in`), otherwise the subtraction could underflow, which `pll` then refuses only if the result is zero; a debug build would panic on a true underflow. Pure, no I/O. Tests: `encode.rs::pll_matches_captures`, `pll_lo_is_close`.
+
+### `fn tunermode_lo_div` (`TunerMode::lo_div(self) -> u64`) [@ANCHOR: rsp_open:rsp_encode_tunermode_lo_div]
+
+Returns the divider between the tuner's VCO and its local-oscillator output for a tuner mode (PROTOCOL.md 1.6.2): AM 16, VHF 32, B3 16, B45 4, L 2. `pll` multiplies the wanted LO frequency by it to find the VCO frequency, so a wrong value moves the receiver far off frequency. The mode is by value; no errors, no I/O. Test: `encode.rs::pll_matches_captures` (covers every band).
+
+### `fn pll(lo_hz: u64, div: u64, ppb: i64) -> Result<Pll, Error>` [@ANCHOR: rsp_open:rsp_encode_pll]
+
+Calculates the tuner PLL words r2 and r3 for a first-LO frequency (PROTOCOL.md 1.6.2). The VCO runs at `lo_hz * div` from the 96 MHz doubled reference; one PLL unit is 32 kHz of VCO, the integer part is `n`, the fraction `frac` is out of 3000 and r3 carries 12 more fraction bits (`sub`). The value written is the largest integer strictly below the exact quotient (computed in exact 128-bit integers), which fits every captured pair (100 MHz gives r2 0x213e72, r3 0x00fff3).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lo_hz` | `u64` | first-LO frequency from `lo_hz()`, Hz |
+| `div` | `u64` | LO divider from `TunerMode::lo_div` (2, 4, 16 or 32) |
+| `ppb` | `i64` | reference correction in parts per billion, positive = reference fast (from `ppm_to_ppb`) |
+
+Returns a `Pll` (`n`, `frac`, `sub`, the words `r2` and `r3` ready to send, and `lo_hz` actually produced at nominal reference). Errors: `Error::InvalidArgument` when `1_000_000_000 + ppb` is not positive or when `n` is outside 1..=255 (this also refuses a zero LO instead of underflowing). Pure; called from `full_tune`, `set_frequency` and `set_ppm`. Tests: `encode.rs::pll_matches_captures`, `pll_ppm_matches_capture`, `a_zero_lo_frequency_is_refused_not_a_panic`.
+
+### `fn code(self) -> u32` on `IfMode` [@ANCHOR: rsp_open:rsp_encode_ifmode_code]
+
+Gives the 2-bit code of an IF mode for MSi001 r0 bits 13:12: `Zero` 3, `Low450k` 2, `Low1620k` 1, `Low2048k` 0. `r0_plan` shifts it into place. Pure, no errors. Note the codes run opposite to the IF frequency. Tests: `encode.rs::r0_variants`, `band_table_matches_capture`.
+
+### `fn hz(self) -> u32` on `IfMode` [@ANCHOR: rsp_open:rsp_encode_ifmode_hz]
+
+Gives the IF frequency of the mode in Hz: 0 for `Zero`, 450 000, 1 620 000 or 2 048 000 for the three low-IF modes. Used to work out the output sample rate and by callers that do the host-side IF down-conversion (the driver does not; where RF lands in the low-IF output is not yet characterised, see Not implemented). Pure, no errors. Test: `encode.rs::if_and_bandwidth_helpers`.
+
+### `fn required_adc_hz(self) -> Option<u32>` on `IfMode` [@ANCHOR: rsp_open:rsp_encode_ifmode_required_adc_hz]
+
+Returns the only ADC clock a low-IF mode was observed with: `Low450k` 2.000 MHz, `Low1620k` 6.000 MHz, `Low2048k` 8.192 MHz, and `None` for `Zero` (any rate in range). `stream_config` refuses a different clock with `Error::Unsupported`, and `set_sampling` uses it to pick the clock when the mode changes. Pure, no errors. Tests: `encode.rs::if_and_bandwidth_helpers`, `stream_configs_match_capture`.
+
+### `fn code(self) -> u32` on `Bandwidth` [@ANCHOR: rsp_open:rsp_encode_bandwidth_code]
+
+Gives the 3-bit IF-bandwidth code for MSi001 r0 bits 16:14: 200k 0, 300k 1, 600k 2, 1.536M 3, 5M 4, 6M 5, 7M 6, 8M 7. `Bandwidth::hz` indexes its table with this code, so the two must stay in step. Pure, no errors. Tests: `encode.rs::r0_variants`, `band_table_matches_capture`.
+
+### `fn at_most(hz: u32) -> Bandwidth` on `Bandwidth` [@ANCHOR: rsp_open:rsp_encode_bandwidth_at_most]
+
+Chooses the widest IF bandwidth that does not exceed `hz` (Hz, any value); anything below 200 kHz still returns `K200`, the narrowest, and anything at or above 8 MHz returns `M8`. It scans all eight values in increasing order and keeps the last that fits. No errors, no I/O; used when a caller wants a bandwidth matching a sample rate. Test: `encode.rs::if_and_bandwidth_helpers`.
+
+### `fn board_band_byte(filter: u8, antenna: Antenna, ext_ref_out: bool) -> u8` [@ANCHOR: rsp_open:rsp_encode_board_band_byte]
+
+Builds the RSP2pro's board port A value (MCP23S18 GPIOA, "byte 0x12"), written with vendor request 0x49. Layout: bits 1:0 antenna (0b01 for A and Hi-Z, 0b10 for B), bits 5:3 the band-filter code (`filter & 7`), bit 2 always set, bit 6 the reference-clock output (clear = output enabled, because the expander outputs are open-drain; set when `ext_ref_out` is false). Bit 7 is 0. Arguments: `filter` from `Band::filter`, `antenna` by value, `ext_ref_out` the user setting. No errors, no I/O. Caller: `Rsp::band_byte` for the RSP2pro; the RSP1A uses `rsp1a::board_a_byte`. Tests: `encode.rs::board_bytes`, `band_table_matches_capture`.
+
+### `fn board_front_byte(board_step: u8, notch: bool, bias_t: bool) -> u8` [@ANCHOR: rsp_open:rsp_encode_board_front_byte]
+
+Builds the RSP2pro's board port B value (MCP23S18 GPIOB, "byte 0x13"): bits 7:6 the broadcast notch (0b01 on, 0b10 off), bits 5:2 the front-end step (`board_step & 0xf` from `FrontEndStep`), bit 0 the bias-T, which is **active low** (0 = bias-T on, 1 = off), bit 1 unused (0). Arguments: `board_step` from the LNA table, `notch` and `bias_t` the current settings. The bias-T supplies DC on the antenna port, so the driver refuses to open with it on and no test or example sets it. No errors, no I/O. `board_front_transient` calls it for the retune transient. Tests: `encode.rs::board_bytes`, `gain_words_match_capture`.
+
+### `fn stream_config(adc_hz: u32, if_mode: IfMode) -> Result<StreamConfig, Error>` [@ANCHOR: rsp_open:rsp_encode_stream_config]
+
+Picks the USB alternate setting, sample format and MSi2500 register 0x07 value for an ADC clock (PROTOCOL.md 1.7). Alt 2 carries one 1024-byte block per microframe (8000 blocks/s), alt 1 three (24000/s); the widest format whose block rate holds the clock is used (S14, S12, S10x384, S8). Only (alt, format, reg07) combinations seen on the wire are produced.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `adc_hz` | `u32` | ADC clock, 2_000_000..=10_000_000 Hz |
+| `if_mode` | `IfMode` | a low-IF mode forces its own clock and a decimate-by-2 config |
+
+Returns `StreamConfig { alt, format, reg07, decim2 }`. Errors: `InvalidArgument` outside 2-10 MHz; `Unsupported` when a low-IF mode is combined with another clock, or for 2.688-3 MHz (never observed). Pure; its result sets the `BlockParser` and the alt setting. Test: `encode.rs::stream_configs_match_capture`.
+
+### `fn counter_step(&self) -> u32` on `StreamConfig` [@ANCHOR: rsp_open:rsp_encode_streamconfig_counter_step]
+
+Gives how far the 32-bit sample counter in each block header advances from one 1024-byte block to the next: the format's pairs per block, doubled when the device decimates by 2 (low-IF modes). `BlockParser::new` stores it as the expected step, so a mismatch is counted as a gap. Examples: S14 252, S8 504, low-IF S14 504. Pure, no errors. Test: `encode.rs::stream_configs_match_capture`.
+
+### `fn pairs_per_block(self) -> u32` on `SampleFormat` [@ANCHOR: rsp_open:rsp_encode_sampleformat_pairs_per_block]
+
+Returns the number of I/Q pairs in the 1008-byte payload of one block for each wire format: `S14` 252, `S12` 336, `S10x384` 384, `S8` 504. It underlies `counter_step`, and the stream tests use it to size canned blocks. Pure, no errors. Test: `encode.rs::stream_configs_match_capture`.
+
+### `fn adc_clock(adc_hz: u32, ppb: i64, flag12: bool) -> Result<AdcClock, Error>` [@ANCHOR: rsp_open:rsp_encode_adc_clock]
+
+Computes the MSi2500 ADC clock synthesiser words (registers 0x03 and 0x04, PROTOCOL.md 1.7): `f = 4 MHz * (N + frac/2^21) / (2(d+1))`. The divider is the largest even value up to 16 that keeps `f * divider` within 32-40 MHz (else 32-42 MHz); `frac` is rounded down. The range field of reg 0x03 depends on the clock (<6 MHz 0, <7 MHz 1, up to 8 MHz 2, else 3).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `adc_hz` | `u32` | wanted ADC clock, 2-10 MHz |
+| `ppb` | `i64` | reference correction in ppb (from `ppm_to_ppb`) |
+| `flag12` | `bool` | reg 0x03 bit 12: set on the write at open and on ppm changes, clear on sample-rate changes (as the API does) |
+
+Returns `AdcClock { reg03, reg04, actual_hz }` (actual rate at nominal reference). Errors: `InvalidArgument` for a clock out of range or a synthesiser `N` outside 1..=15, `Unsupported` if no divider fits. Pure. Test: `encode.rs::adc_clock_matches_capture`.
+
+### `fn ppm_to_ppb(ppm: f64) -> Result<i64, Error>` [@ANCHOR: rsp_open:rsp_encode_ppm_to_ppb]
+
+Converts the user's reference-oscillator correction from parts per million to the integer parts per billion that `pll` and `adc_clock` take (`ppm * 1000`, rounded to nearest). A positive value means the reference runs fast. Error: `Error::InvalidArgument` when `ppm` is NaN or infinite or its magnitude exceeds 1000 (a limit that also keeps the PLL divisor positive). Pure, no I/O. Called by `set_ppm` and at open. Test: `encode.rs::ppm_conversion_and_limits`.
+
+### `fn r0_plan(mode_byte: u32, plan: LoPlan, if_mode: IfMode, bw: Bandwidth) -> u32` [@ANCHOR: rsp_open:rsp_encode_r0_plan]
+
+Builds the 20-bit payload of MSi001 register r0: bits 19:17 select the first-LO plan, bits 16:14 the IF bandwidth code, bits 13:12 the IF mode code, bits 11:4 the band-mode byte. The plan bits are 2 for the 120 MHz first IF and for every non-AM mode (the `Direct`, `UpBy120M` and `DownBy120M` plans), 1 for `DownBy144M` and 0 for `DownBy168M`. Arguments are by value (`mode_byte` from `mode_byte()`, `plan` from the band, `if_mode` and `bw` from the current settings). The result is a payload to be wrapped by `tuner_word(0, ...)`; `r0()` is the same call with `LoPlan::Direct`. No errors, no I/O. Test: `device.rs::first_if_plan_bits_follow_the_band_in_375_to_420_mhz`.
+
 - [@ANCHOR: rsp_open:rsp_device_rsp_open_auto] Opens whichever supported receiver is present: a running one if there is one, otherwise the first cold one.
 - [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_with] Opens the first receiver in the boot-ROM state (bcdDevice 2.00) and drives it without any firmware.
 - [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_model_with] As above, but only a receiver of one model (RSP2pro, RSP1A or RSP1), so a second receiver on the bus is not driven by mistake.
@@ -212,10 +335,31 @@ the USB-level ones are exercised by the hardware tests in `tests/hil.rs`.
 - [@ANCHOR: rsp_open:rsp_device_rsp_set_notch] Switches the broadcast notch; `Error::Unsupported` in boot-ROM mode.
 - [@ANCHOR: rsp_open:rsp_device_rsp_set_bias_t] Switches the bias-T (off at open, active low on the board); `Error::Unsupported` in boot-ROM mode.
 - [@ANCHOR: rsp_open:rsp_device_sampleiter_next_chunk] The next sample chunk, or `Error::Stalled` when nothing arrived within the timeout, or `Error::Stream` when the stream ended.
-- [@ANCHOR: rsp_open:rsp_kernel_inspect_in] Finds the kernel driver bound to a receiver's interface 0 and its device nodes from sysfs, and who has them open from /proc (roots given, for tests).
-- [@ANCHOR: rsp_open:rsp_kernel_holders_of] The processes (pid and name) that have one of a set of device nodes open; reports when another user's processes could not be inspected.
-- [@ANCHOR: rsp_open:rsp_stream_blockparser_push_packet] Splits isochronous packets into blocks, checks the sample counter (gaps, lost samples, wrap-around).
-- [@ANCHOR: rsp_open:rsp_stream_decode_payload] Decodes 14-bit, 12-bit packed, 10-bit "384" and 8-bit payloads to 16-bit left-aligned I/Q.
+### `pub(crate) fn inspect_in(sys: &Path, dev: &Path, proc_: &Path, bus: u8, address: u8) -> Result<Option<KernelDriverUse>, Error>` [@ANCHOR: rsp_open:rsp_kernel_inspect_in]
+
+Finds out whether a kernel driver is bound to the receiver at `bus`/`address` and who uses its device nodes. `inspect` calls it with `/sys`, `/dev` and `/proc`; tests pass a fake tree. It reads only: it scans `sys/bus/usb/devices` for the device directory whose `busnum`/`devnum` match, follows the `<dev>:1.0/driver` symlink for the driver name, finds the nodes by following `sys/class/video4linux/*/device` back to the interface, then calls `holders_of`.
+
+Returns `Ok(None)` if there is no sysfs, no matching device or no bound driver, otherwise `Ok(Some(KernelDriverUse { driver, nodes (sorted), holders, holders_complete }))`. It never returns `Err` today. Nothing is opened, detached or changed, no locks are taken, and the result is a snapshot that can be stale a moment later. Test: `kernel.rs::bound_driver_with_a_process_using_the_node`.
+
+### `fn holders_of(proc_: &Path, nodes: &[PathBuf]) -> (Vec<Holder>, bool)` [@ANCHOR: rsp_open:rsp_kernel_holders_of]
+
+Lists the processes that have one of `nodes` open, by reading `proc_/<pid>/fd` links, with the name from `comm`. Returns `(holders sorted by pid, complete)`. `complete` is false when a `/proc/<pid>/fd` directory gave permission denied (another user's process, so it may hold a node unseen) or `/proc` could not be read; processes that exit meanwhile are skipped. With no nodes it returns an empty list and true at once. Read-only, no side effects; cost is one directory read per process. Used to refuse taking a receiver from under a streaming program. Test: `kernel.rs::bound_driver_with_a_process_using_the_node`.
+
+### `pub fn push_packet(&mut self, pkt: &[u8], out: &mut Vec<IqI16>)` on `BlockParser` [@ANCHOR: rsp_open:rsp_stream_blockparser_push_packet]
+
+Parses one isochronous USB packet. Each whole 1024-byte block is split off, its little-endian counter (bytes 0-3) is compared with the expected one (previous plus `counter_step`, with 32-bit wrap), the payload after the 16-byte header is decoded to `out`, and statistics are updated. A packet whose length is not a multiple of 1024, or is empty, adds one to `short_packets`; trailing bytes are ignored.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `pkt` | `&[u8]` | one packet, normally 1 to 3 blocks |
+| `out` | `&mut Vec<IqI16>` | samples are appended, never cleared |
+
+A counter mismatch increments `stats.gaps` and adds the distance to `stats.lost_samples`; the first block after construction or `reset_counter` is not checked. No errors or panics. The parser is not thread-safe: it runs on the USB thread inside the packet sink. Tests: `stream.rs::s14_packet_with_gap`, `counter_wraps`, `three_blocks_per_packet_and_decim2_step`.
+
+### `pub fn decode_payload(format: SampleFormat, p: &[u8], out: &mut Vec<IqI16>)` [@ANCHOR: rsp_open:rsp_stream_decode_payload]
+
+Decodes the 1008-byte payload of one block to 16-bit left-aligned `IqI16` samples appended to `out`. S14: little-endian 16-bit words, I then Q, 14-bit signed, shifted left 2. S12: three bytes per pair, I the low 12 bits and Q the high 12, shifted left 4. S8: two signed bytes per pair, shifted left 8. S10x384: six groups of 164 bytes, each 16 runs of 10 bytes holding four I/Q pairs of 10-bit values plus a 32-bit word with a 2-bit scale per run (shift 4, 5 or 6); the last 24 bytes carry no samples. `p` must be exactly `PAYLOAD_LEN` (1008) bytes: a debug build asserts it and a shorter slice would panic in the group indexing; `push_packet` always passes the right length. Pure apart from the append. Tests: `stream.rs::s14_packet_with_gap`, `s12_decode`, `s384_decode`, `s8_decode`.
+
 - [@ANCHOR: rsp_open:rsp_dsp_fft] Radix-2 FFT used by the tests and examples.
 - [@ANCHOR: rsp_open:rsp_dsp_power_spectrum_db] Averaged, windowed power spectrum in dBFS.
 - [@ANCHOR: rsp_open:rsp_dsp_median] Median of a spectrum (noise-floor estimate).
