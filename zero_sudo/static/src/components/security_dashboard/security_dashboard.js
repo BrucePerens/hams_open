@@ -24,7 +24,7 @@ export class SecurityDashboard extends Component {
                 }
             }, 20000);
             return () => clearInterval(interval);
-        }, []);
+        }, () => []);  // Owl's useEffect takes a function that returns the dependencies; an array made it throw on mount.
 
         onWillStart(async () => {
             await this.loadLogs();
