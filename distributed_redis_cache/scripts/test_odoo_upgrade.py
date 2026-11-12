@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Unit tests for odoo_upgrade.py (stdlib only; run with `python3 -m unittest test_odoo_upgrade` from this directory)."""
 # Tests [@ANCHOR: distributed_redis_cache:COMM_odoo_upgrade_tool]
+# Tests [@ANCHOR: distributed_redis_cache:distributed_redis_cache_scripts_odoo_upgrade_upgrade_error]
 
 import contextlib
 import importlib.util

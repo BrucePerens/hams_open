@@ -73,6 +73,7 @@ BACKUP_GLOB = "/opt/hams/backups/deploy-*"
 CSS_CHECK_EXIT = 4
 
 
+# [@ANCHOR: distributed_redis_cache:distributed_redis_cache_scripts_odoo_upgrade_upgrade_error]
 class UpgradeError(Exception):
     """A precondition failed; the message is safe to print (it never contains a value from an env file)."""
 
