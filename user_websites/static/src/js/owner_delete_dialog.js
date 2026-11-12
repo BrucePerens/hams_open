@@ -11,6 +11,7 @@ import { registry } from "@web/core/registry";
 export class OwnerDeleteDialog extends Interaction {
     static selector = "#uw_delete_dialog";
 
+    // [@ANCHOR: user_websites:js_owner_delete_dialog_start]
     start() {
         const dialog = this.el;
         if (typeof dialog.showModal !== "function") {
