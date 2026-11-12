@@ -27,22 +27,46 @@ const ON_OFF: Kind = Kind::Enum(&["ON", "OFF"]);
 
 /// Setting, kind, power-on value. A key with a channel or bus prefix (`C1:VDIV`, `MATH:INVS`) is looked up by what follows the colon.
 const TABLE: &[(&str, Kind, &str)] = &[
-    ("ACQW", Kind::Enum(&["SAMPLING", "PEAK_DETECT", "AVERAGE", "ERES"]), "SAMPLING"),
+    (
+        "ACQW",
+        Kind::Enum(&["SAMPLING", "PEAK_DETECT", "AVERAGE", "ERES"]),
+        "SAMPLING",
+    ),
     ("AVGA", Kind::Raw, "16"),
-    ("MSIZ", Kind::Enum(&["7K", "70K", "700K", "7M", "14K", "140K", "1.4M", "14M"]), "14K"),
-    ("TRIG_MODE", Kind::Enum(&["AUTO", "NORM", "SINGLE", "STOP"]), "AUTO"),
+    (
+        "MSIZ",
+        Kind::Enum(&["7K", "70K", "700K", "7M", "14K", "140K", "1.4M", "14M"]),
+        "14K",
+    ),
+    (
+        "TRIG_MODE",
+        Kind::Enum(&["AUTO", "NORM", "SINGLE", "STOP"]),
+        "AUTO",
+    ),
     ("TDIV", Kind::Num("S"), "1.00E-03S"),
     ("VDIV", Kind::Num("V"), "5.00E-01V"),
     ("OFST", Kind::Num("V"), "0.00E+00V"),
-    ("CPL", Kind::Enum(&["A1M", "A50", "D1M", "D50", "GND"]), "D1M"),
+    (
+        "CPL",
+        Kind::Enum(&["A1M", "A50", "D1M", "D50", "GND"]),
+        "D1M",
+    ),
     ("ATTN", Kind::Raw, "1"),
     ("INVS", ON_OFF, "OFF"),
     ("TRA", ON_OFF, "ON"),
     ("BWL", Kind::Pairs, "C1,OFF,C2,OFF"),
-    ("SCSV", Kind::Enum(&["OFF", "1MIN", "5MIN", "10MIN", "30MIN", "60MIN"]), "30MIN"),
+    (
+        "SCSV",
+        Kind::Enum(&["OFF", "1MIN", "5MIN", "10MIN", "30MIN", "60MIN"]),
+        "30MIN",
+    ),
     ("GRDS", Kind::Enum(&["FULL", "HALF", "OFF"]), "FULL"),
     ("INTS", Kind::Pairs, "TRACE,50,GRID,50"),
-    ("PESU", Kind::Enum(&["OFF", "INFINITE", "1", "5", "10", "30"]), "OFF"),
+    (
+        "PESU",
+        Kind::Enum(&["OFF", "INFINITE", "1", "5", "10", "30"]),
+        "OFF",
+    ),
     ("DTJN", ON_OFF, "OFF"),
     ("MENU", ON_OFF, "ON"),
     ("XYDS", ON_OFF, "OFF"),
@@ -50,7 +74,11 @@ const TABLE: &[(&str, Kind, &str)] = &[
     ("HSLST", ON_OFF, "OFF"),
     ("MTVD", Kind::Num("V"), "1.00E+00V"),
     ("MTVP", Kind::Raw, "0"),
-    ("FFTW", Kind::Enum(&["RECT", "BLAC", "HANN", "HAMM", "FLATTOP"]), "HANN"),
+    (
+        "FFTW",
+        Kind::Enum(&["RECT", "BLAC", "HANN", "HAMM", "FLATTOP"]),
+        "HANN",
+    ),
     ("FFTC", Kind::Num("Hz"), "5.00E+08Hz"),
     ("FFTF", Kind::Enum(&["OFF", "ON", "EXCLU"]), "OFF"),
     ("FFTP", Kind::Num("V"), "0.00E+00V"),
@@ -69,7 +97,11 @@ const TABLE: &[(&str, Kind, &str)] = &[
     ("PFBF", ON_OFF, "OFF"),
     ("PFSC", Kind::Enum(&["C1", "C2"]), "C1"),
     ("PFST", Kind::Pairs, "XMASK,0.04,YMASK,0.04"),
-    ("REFLA", Kind::Enum(&["REFA", "REFB", "REFC", "REFD"]), "REFA"),
+    (
+        "REFLA",
+        Kind::Enum(&["REFA", "REFB", "REFC", "REFD"]),
+        "REFA",
+    ),
     ("REFSR", Kind::Enum(&["C1", "C2", "MATH"]), "C1"),
     ("REFDS", ON_OFF, "OFF"),
     ("REFPO", Kind::Num("V"), "0.00E+00V"),
@@ -79,7 +111,9 @@ const TABLE: &[(&str, Kind, &str)] = &[
 ];
 
 /// Commands under these prefixes (the serial trigger and the serial decode) are stored and answered as sent.
-const BUS_PREFIXES: &[&str] = &["TRIIC:", "TRSPI:", "TRUART:", "TRCAN:", "TRLIN:", "B1:DC", "B2:DC"];
+const BUS_PREFIXES: &[&str] = &[
+    "TRIIC:", "TRSPI:", "TRUART:", "TRCAN:", "TRLIN:", "B1:DC", "B2:DC",
+];
 
 /// What the fake does besides answering.
 #[derive(Clone, Default)]
@@ -114,8 +148,14 @@ fn parse_num(s: &str) -> Option<(f64, String)> {
     let mut end = 0;
     while end < b.len() {
         let c = b[end];
-        let exp = matches!(c, b'e' | b'E') && b.get(end + 1).is_some_and(|n| n.is_ascii_digit() || matches!(n, b'+' | b'-'));
-        if !(c.is_ascii_digit() || c == b'.' || exp || (matches!(c, b'+' | b'-') && (end == 0 || matches!(b[end - 1], b'e' | b'E')))) {
+        let exp = matches!(c, b'e' | b'E')
+            && b.get(end + 1)
+                .is_some_and(|n| n.is_ascii_digit() || matches!(n, b'+' | b'-'));
+        if !(c.is_ascii_digit()
+            || c == b'.'
+            || exp
+            || (matches!(c, b'+' | b'-') && (end == 0 || matches!(b[end - 1], b'e' | b'E'))))
+        {
             break;
         }
         end += 1;
@@ -147,8 +187,18 @@ fn e(v: f64, unit: &str) -> String {
 /// channel 2 is the same sine a quarter period later.
 fn volts(st: &State, ch: u8, x: f64) -> f64 {
     let amp_code = (100.0 - f64::from(st.frame)).max(10.0);
-    let vdiv = parse_num(st.vals.get(&format!("C{ch}:VDIV")).map_or("5.00E-01V", |v| v)).unwrap().0;
-    let phase = if ch == 2 { std::f64::consts::FRAC_PI_2 } else { 0.0 };
+    let vdiv = parse_num(
+        st.vals
+            .get(&format!("C{ch}:VDIV"))
+            .map_or("5.00E-01V", |v| v),
+    )
+    .unwrap()
+    .0;
+    let phase = if ch == 2 {
+        std::f64::consts::FRAC_PI_2
+    } else {
+        0.0
+    };
     amp_code * vdiv / 25.0 * (2.0 * std::f64::consts::PI * x / 100.0 + phase).sin()
 }
 
@@ -161,7 +211,9 @@ fn block(header: &str, data: &[u8]) -> Vec<u8> {
 
 /// The value of a measurement item on a channel for the model signal.
 fn pava(st: &State, ch: u8, item: &str) -> Option<String> {
-    let a = (0..1000).map(|k| volts(st, ch, f64::from(k)).abs()).fold(0.0, f64::max);
+    let a = (0..1000)
+        .map(|k| volts(st, ch, f64::from(k)).abs())
+        .fold(0.0, f64::max);
     let (v, u) = match item {
         "PKPK" | "AMPL" => (2.0 * a, "V"),
         "MAX" | "TOP" => (a, "V"),
@@ -188,14 +240,25 @@ impl State {
     fn new() -> State {
         let mut vals = HashMap::new();
         for ch in [1, 2] {
-            for (k, _, d) in TABLE.iter().filter(|t| matches!(t.0, "VDIV" | "OFST" | "CPL" | "ATTN" | "INVS" | "TRA")) {
+            for (k, _, d) in TABLE
+                .iter()
+                .filter(|t| matches!(t.0, "VDIV" | "OFST" | "CPL" | "ATTN" | "INVS" | "TRA"))
+            {
                 vals.insert(format!("C{ch}:{k}"), (*d).to_string());
             }
         }
         for (k, _, d) in TABLE {
             vals.insert((*k).to_string(), (*d).to_string());
         }
-        State { vals, nums: HashMap::new(), custom: Vec::new(), frame: 0, pf: (false, 0, 0), mask: false, ref_saved: Vec::new() }
+        State {
+            vals,
+            nums: HashMap::new(),
+            custom: Vec::new(),
+            frame: 0,
+            pf: (false, 0, 0),
+            mask: false,
+            ref_saved: Vec::new(),
+        }
     }
 }
 
@@ -210,20 +273,44 @@ fn set(st: &mut State, key: &str, arg: &str) {
         st.vals.insert(key.to_string(), arg.to_string());
         return;
     }
-    let Some((kind, default)) = spec(key) else { return };
-    let cur = st.vals.get(key).cloned().unwrap_or_else(|| default.to_string());
+    let Some((kind, default)) = spec(key) else {
+        return;
+    };
+    let cur = st
+        .vals
+        .get(key)
+        .cloned()
+        .unwrap_or_else(|| default.to_string());
     let new = match kind {
-        Kind::Enum(words) => words.iter().find(|w| w.eq_ignore_ascii_case(arg.trim())).map(|w| (*w).to_string()),
+        Kind::Enum(words) => words
+            .iter()
+            .find(|w| w.eq_ignore_ascii_case(arg.trim()))
+            .map(|w| (*w).to_string()),
         Kind::Num(unit) => parse_num(arg).map(|(v, _)| e(v, unit)),
         Kind::Raw => Some(arg.trim().to_string()),
         Kind::Pairs => {
-            let mut map: Vec<(String, String)> = cur.split(',').collect::<Vec<_>>().chunks(2).map(|c| (c[0].to_string(), c[1].to_string())).collect();
-            for c in arg.split(',').collect::<Vec<_>>().chunks(2).filter(|c| c.len() == 2) {
+            let mut map: Vec<(String, String)> = cur
+                .split(',')
+                .collect::<Vec<_>>()
+                .chunks(2)
+                .map(|c| (c[0].to_string(), c[1].to_string()))
+                .collect();
+            for c in arg
+                .split(',')
+                .collect::<Vec<_>>()
+                .chunks(2)
+                .filter(|c| c.len() == 2)
+            {
                 if let Some(slot) = map.iter_mut().find(|m| m.0 == c[0].trim().to_uppercase()) {
                     slot.1 = c[1].trim().to_string();
                 }
             }
-            Some(map.iter().map(|m| format!("{},{}", m.0, m.1)).collect::<Vec<_>>().join(","))
+            Some(
+                map.iter()
+                    .map(|m| format!("{},{}", m.0, m.1))
+                    .collect::<Vec<_>>()
+                    .join(","),
+            )
         }
     };
     st.vals.insert(key.to_string(), new.unwrap_or(cur));
@@ -232,11 +319,20 @@ fn set(st: &mut State, key: &str, arg: &str) {
 /// The reply to one command line (empty for a command, which the scope does not answer).
 fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
     let line = line.trim();
-    let (name, arg) = line.split_once(' ').map_or((line, ""), |(n, a)| (n, a.trim()));
+    let (name, arg) = line
+        .split_once(' ')
+        .map_or((line, ""), |(n, a)| (n, a.trim()));
     let query = name.ends_with('?');
     let key = name.trim_end_matches('?').to_string();
-    let rest = key.split_once(':').map_or(key.as_str(), |(_, r)| r).to_string();
-    let ch: u8 = key.strip_prefix('C').and_then(|r| r.chars().next()).and_then(|c| c.to_digit(10)).map_or(1, |d| d as u8);
+    let rest = key
+        .split_once(':')
+        .map_or(key.as_str(), |(_, r)| r)
+        .to_string();
+    let ch: u8 = key
+        .strip_prefix('C')
+        .and_then(|r| r.chars().next())
+        .and_then(|c| c.to_digit(10))
+        .map_or(1, |d| d as u8);
     let text = |s: String| format!("{s}\n").into_bytes();
     match (name, rest.as_str()) {
         ("*IDN?", _) => return text("*IDN SIGLENT,SDS1202X-E,SDS1FAKE000000,1.3.27".into()),
@@ -350,32 +446,69 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
         let data: Vec<u8> = if key.starts_with("MATH") {
             if st.vals.get("DEFINE").is_some_and(|d| d.contains("FFT")) {
                 // Observed on firmware 1.3.27 (2026-10-28), not in the guide: 1500 points for the FFT trace.
-                (0..1500).map(|i| if i == 750 { 100u8 } else { 156u8 }).collect()
+                (0..1500)
+                    .map(|i| if i == 750 { 100u8 } else { 156u8 })
+                    .collect()
             } else {
-                let eq = st.vals.get("DEFINE").cloned().unwrap_or_default().to_uppercase();
-                let (vd, vp) = (parse_num(&st.vals["MTVD"]).unwrap().0, st.vals["MTVP"].parse::<f64>().unwrap_or(0.0) / 50.0 * parse_num(&st.vals["MTVD"]).unwrap().0);
-                (0..1400).map(|k| {
-                    let x = f64::from(k) * 1000.0 / 1400.0;
-                    let (a, b) = (volts(st, 1, x), volts(st, 2, x));
-                    let v = if eq.contains('+') { a + b } else if eq.contains('-') { a - b } else if eq.contains('*') { a * b } else { a };
-                    ((v + vp) / (vd / 25.0)).round() as i8 as u8
-                }).collect()
+                let eq = st
+                    .vals
+                    .get("DEFINE")
+                    .cloned()
+                    .unwrap_or_default()
+                    .to_uppercase();
+                let (vd, vp) = (
+                    parse_num(&st.vals["MTVD"]).unwrap().0,
+                    st.vals["MTVP"].parse::<f64>().unwrap_or(0.0) / 50.0
+                        * parse_num(&st.vals["MTVD"]).unwrap().0,
+                );
+                (0..1400)
+                    .map(|k| {
+                        let x = f64::from(k) * 1000.0 / 1400.0;
+                        let (a, b) = (volts(st, 1, x), volts(st, 2, x));
+                        let v = if eq.contains('+') {
+                            a + b
+                        } else if eq.contains('-') {
+                            a - b
+                        } else if eq.contains('*') {
+                            a * b
+                        } else {
+                            a
+                        };
+                        ((v + vp) / (vd / 25.0)).round() as i8 as u8
+                    })
+                    .collect()
             }
         } else {
-            (0..n).map(|k| {
-                let vdiv = parse_num(&st.vals[&format!("C{ch}:VDIV")]).unwrap().0;
-                (volts(st, ch, f64::from(k)) / (vdiv / 25.0)).round() as i8 as u8
-            }).collect()
+            (0..n)
+                .map(|k| {
+                    let vdiv = parse_num(&st.vals[&format!("C{ch}:VDIV")]).unwrap().0;
+                    (volts(st, ch, f64::from(k)) / (vdiv / 25.0)).round() as i8 as u8
+                })
+                .collect()
         };
         return block(&format!("{key} DAT2"), &data);
     }
     if rest == "CRST" {
         if query {
             let keys: Vec<&str> = arg.split(',').collect();
-            let body = keys.iter().map(|k| format!("{k},{}", e(num(st, k), if k.starts_with('V') { "V" } else { "S" }))).collect::<Vec<_>>().join(",");
+            let body = keys
+                .iter()
+                .map(|k| {
+                    format!(
+                        "{k},{}",
+                        e(num(st, k), if k.starts_with('V') { "V" } else { "S" })
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
             return text(format!("{key} {body}"));
         }
-        for c in arg.split(',').collect::<Vec<_>>().chunks(2).filter(|c| c.len() == 2) {
+        for c in arg
+            .split(',')
+            .collect::<Vec<_>>()
+            .chunks(2)
+            .filter(|c| c.len() == 2)
+        {
             if let Some((v, _)) = parse_num(c[1]) {
                 st.nums.insert(c[0].trim().to_uppercase(), v);
             }
@@ -387,26 +520,62 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
             return vec![];
         }
         return text(if arg == "VREL" {
-            format!("{key} VREL,{},{},{}", e(num(st, "VDIF") - num(st, "VREF"), "V"), e(num(st, "VREF"), "V"), e(num(st, "VDIF"), "V"))
+            format!(
+                "{key} VREL,{},{},{}",
+                e(num(st, "VDIF") - num(st, "VREF"), "V"),
+                e(num(st, "VREF"), "V"),
+                e(num(st, "VDIF"), "V")
+            )
         } else {
             let dt = num(st, "TDIF") - num(st, "TREF");
-            format!("{key} HREL,{},{},{},{}", e(dt, "S"), e(if dt == 0.0 { 0.0 } else { 1.0 / dt.abs() }, "Hz"), e(num(st, "TREF"), "S"), e(num(st, "TDIF"), "S"))
+            format!(
+                "{key} HREL,{},{},{},{}",
+                e(dt, "S"),
+                e(if dt == 0.0 { 0.0 } else { 1.0 / dt.abs() }, "Hz"),
+                e(num(st, "TREF"), "S"),
+                e(num(st, "TDIF"), "S")
+            )
         });
     }
     if rest == "MEAD" && query {
-        return text(format!("{key} {},{}", arg, if arg == "PHA" { e(-89.46, "degree") } else { e(1e-6, "S") }));
+        return text(format!(
+            "{key} {},{}",
+            arg,
+            if arg == "PHA" {
+                e(-89.46, "degree")
+            } else {
+                e(1e-6, "S")
+            }
+        ));
     }
     if rest == "PAVA" && query {
         if arg.starts_with("CUST") {
-            let list: Vec<String> = (0..5).map(|i| match st.custom.get(i) {
-                Some((c, p)) => format!("CUST{}:{c},{p},{}", i + 1, pava(st, c[1..].parse().unwrap_or(1), p).unwrap_or_default()),
-                None => format!("CUST{}:OFF", i + 1),
-            }).collect();
+            let list: Vec<String> = (0..5)
+                .map(|i| match st.custom.get(i) {
+                    Some((c, p)) => format!(
+                        "CUST{}:{c},{p},{}",
+                        i + 1,
+                        pava(st, c[1..].parse().unwrap_or(1), p).unwrap_or_default()
+                    ),
+                    None => format!("CUST{}:OFF", i + 1),
+                })
+                .collect();
             let n = arg.strip_prefix("CUST").unwrap();
-            return text(if n == "ALL" { format!("PAVA {}", list.join(";")) } else { format!("PAVA {}", list.get(n.parse::<usize>().unwrap_or(1) - 1).cloned().unwrap_or_default()) });
+            return text(if n == "ALL" {
+                format!("PAVA {}", list.join(";"))
+            } else {
+                format!(
+                    "PAVA {}",
+                    list.get(n.parse::<usize>().unwrap_or(1) - 1)
+                        .cloned()
+                        .unwrap_or_default()
+                )
+            });
         }
         if let Some(n) = arg.strip_prefix("STAT") {
-            let Some((c, p)) = st.custom.get(n.parse::<usize>().unwrap_or(1) - 1).cloned() else { return vec![] };
+            let Some((c, p)) = st.custom.get(n.parse::<usize>().unwrap_or(1) - 1).cloned() else {
+                return vec![];
+            };
             if st.vals.get("PASTAT").is_none_or(|v| v != "ON") {
                 return vec![];
             }
@@ -415,8 +584,19 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
             return text(format!("PAVA STAT{n} {c}{split}{p}:cur,{v},mean,{v},min,{v},max,{v},std-dev,0.00E+00V,count,171"));
         }
         if arg == "ALL" {
-            let items = ["MAX", "MIN", "PKPK", "TOP", "BASE", "AMPL", "MEAN", "CMEAN", "STDEV", "VSTD", "RMS", "CRMS", "OVSN", "FPRE", "OVSP", "RPRE", "LEVELX", "PER", "FREQ", "PWID", "NWID", "RISE", "FALL", "WID", "DUTY", "NDUTY", "DELAY", "TIMEL"];
-            return text(format!("{key} {}", items.iter().map(|i| format!("{i},{}", pava(st, ch, i).unwrap())).collect::<Vec<_>>().join(",")));
+            let items = [
+                "MAX", "MIN", "PKPK", "TOP", "BASE", "AMPL", "MEAN", "CMEAN", "STDEV", "VSTD",
+                "RMS", "CRMS", "OVSN", "FPRE", "OVSP", "RPRE", "LEVELX", "PER", "FREQ", "PWID",
+                "NWID", "RISE", "FALL", "WID", "DUTY", "NDUTY", "DELAY", "TIMEL",
+            ];
+            return text(format!(
+                "{key} {}",
+                items
+                    .iter()
+                    .map(|i| format!("{i},{}", pava(st, ch, i).unwrap()))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ));
         }
         return pava(st, ch, arg).map_or(vec![], |v| text(format!("{key} {arg},{v}")));
     }
@@ -427,7 +607,11 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
     }
     if query {
         let default = spec(&key).map_or("", |s| s.1);
-        let v = st.vals.get(&key).cloned().unwrap_or_else(|| default.to_string());
+        let v = st
+            .vals
+            .get(&key)
+            .cloned()
+            .unwrap_or_else(|| default.to_string());
         return text(format!("{key} {v}"));
     }
     set(st, &key, arg);
@@ -436,13 +620,22 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
 
 /// The settings as one line of text, which `PNSU?` returns as its setup block and `restore` reads back.
 fn serialise(st: &State) -> String {
-    let mut v: Vec<_> = st.vals.iter().filter(|(k, _)| !k.starts_with("slot")).map(|(k, v)| format!("{k}={v}")).collect();
+    let mut v: Vec<_> = st
+        .vals
+        .iter()
+        .filter(|(k, _)| !k.starts_with("slot"))
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect();
     v.sort();
     format!("<SETUP>{}</SETUP>", v.join(";"))
 }
 
 fn restore(st: &mut State, s: &str) {
-    for kv in s.trim_start_matches("<SETUP>").trim_end_matches("</SETUP>").split(';') {
+    for kv in s
+        .trim_start_matches("<SETUP>")
+        .trim_end_matches("</SETUP>")
+        .split(';')
+    {
         if let Some((k, v)) = kv.split_once('=') {
             st.vals.insert(k.to_string(), v.to_string());
         }
@@ -469,7 +662,11 @@ fn read_command(s: &mut TcpStream) -> Option<String> {
             return Some(String::from_utf8_lossy(&b).to_string());
         }
     }
-    Some(String::from_utf8_lossy(&b).trim_end_matches('\r').to_string())
+    Some(
+        String::from_utf8_lossy(&b)
+            .trim_end_matches('\r')
+            .to_string(),
+    )
 }
 
 impl FakeScope {
@@ -508,7 +705,13 @@ impl FakeScope {
 
     /// The commands received that start with `prefix`.
     pub fn got(&self, prefix: &str) -> Vec<String> {
-        self.seen.lock().unwrap().iter().filter(|l| l.starts_with(prefix)).cloned().collect()
+        self.seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| l.starts_with(prefix))
+            .cloned()
+            .collect()
     }
 }
 
@@ -521,7 +724,10 @@ mod tests {
     fn it_answers_like_the_guide_for_identity_settings_and_units() {
         let f = FakeScope::start();
         let mut l = Link::tcp("127.0.0.1", f.port).unwrap();
-        assert!(l.query("*IDN?").unwrap().starts_with("*IDN SIGLENT,SDS1202X-E,"));
+        assert!(l
+            .query("*IDN?")
+            .unwrap()
+            .starts_with("*IDN SIGLENT,SDS1202X-E,"));
         l.send("C1:VDIV 200mV").unwrap();
         assert_eq!(l.query("C1:VDIV?").unwrap(), "C1:VDIV 2.00E-01V");
         l.send("TDIV 2us").unwrap();
@@ -568,7 +774,10 @@ mod tests {
         let mut l = Link::tcp("127.0.0.1", f.port).unwrap();
         assert_eq!(l.query("C1:PAVA? FREQ").unwrap(), "C1:PAVA FREQ,1.00E+03Hz");
         l.send("PACU PKPK,C1").unwrap();
-        assert!(l.query("PAVA? CUSTALL").unwrap().starts_with("PAVA CUST1:C1,PKPK,"));
+        assert!(l
+            .query("PAVA? CUSTALL")
+            .unwrap()
+            .starts_with("PAVA CUST1:C1,PKPK,"));
         // Setups: save to a slot, change, recall; slot 0 is the default.
         l.send("TDIV 5us").unwrap();
         l.send("*SAV 3").unwrap();
@@ -590,12 +799,21 @@ mod tests {
 
     #[test]
     fn a_new_connection_is_reset_while_it_pretends_to_hold_a_dead_session() {
-        let f = FakeScope::start_with(Opts { stale_for: Duration::from_millis(600), ..Opts::default() });
+        let f = FakeScope::start_with(Opts {
+            stale_for: Duration::from_millis(600),
+            ..Opts::default()
+        });
         let mut l = Link::tcp("127.0.0.1", f.port).unwrap();
-        assert!(l.query("*IDN?").is_err(), "the first line of a connection made too early gets no answer");
+        assert!(
+            l.query("*IDN?").is_err(),
+            "the first line of a connection made too early gets no answer"
+        );
         std::thread::sleep(Duration::from_millis(700));
         let mut l = Link::tcp("127.0.0.1", f.port).unwrap();
         assert!(l.query("*IDN?").is_ok());
-        assert!(f.got("*IDN").len() == 1, "the reset connection's line was not served");
+        assert!(
+            f.got("*IDN").len() == 1,
+            "the reset connection's line was not served"
+        );
     }
 }

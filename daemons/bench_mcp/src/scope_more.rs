@@ -144,7 +144,7 @@ pub fn cursors(s: &mut Link, args: &Value) -> Result<Value, String> {
 }
 
 /// Asks the scope for a setting and returns what it answers, or says it did not answer.
-fn readback(s: &mut Link, query: &str) -> Value {
+pub(crate) fn readback(s: &mut Link, query: &str) -> Value {
     // [@ANCHOR: bench_mcp_scope_more_readback]
     s.set_timeout_secs(3);
     let r = s.query(query);
@@ -157,7 +157,7 @@ fn readback(s: &mut Link, query: &str) -> Value {
 }
 
 /// Sends the commands one by one and reads each setting back so the answer shows what the scope accepted.
-fn apply(s: &mut Link, cmds: Vec<(String, String)>) -> Result<Value, String> {
+pub(crate) fn apply(s: &mut Link, cmds: Vec<(String, String)>) -> Result<Value, String> {
     // [@ANCHOR: bench_mcp_scope_more_apply]
     let mut sent = Vec::new();
     let mut back = serde_json::Map::new();
@@ -169,6 +169,85 @@ fn apply(s: &mut Link, cmds: Vec<(String, String)>) -> Result<Value, String> {
     }
     Ok(json!({"sent": sent, "readback": back,
         "note": "a setting the scope did not accept shows its old value or no answer in readback; these commands are written from the SDS1000X-E programming guide and have not all been confirmed on firmware 1.3.27"}))
+}
+
+/// How a tool argument is checked and written into a scope command.
+#[derive(Clone, Copy)]
+pub(crate) enum Ty {
+    /// A JSON boolean, sent as ON or OFF.
+    Flag,
+    /// One of these words (compared in upper case; a whole number counts as its digits), sent as it is.
+    Words(&'static [&'static str]),
+    /// A number from the first to the second value, sent in E-notation followed by the unit (`S`, `V`, `Hz` or none).
+    Num(f64, f64, &'static str),
+    /// A whole number from the first to the second value.
+    Int(u64, u64),
+}
+
+/// One setting of a scope tool: the tool argument that names it, the command it is written with (a `{c}` stands for the channel) and how the value is checked.
+pub(crate) struct Item {
+    pub arg: &'static str,
+    pub cmd: &'static str,
+    pub ty: Ty,
+}
+
+/// The commands (command, query to read it back) the arguments ask for, after checking every one of them. Nothing is sent here, so a bad value
+/// anywhere refuses the whole call before the scope sees a command.
+pub(crate) fn item_cmds(
+    args: &Value,
+    items: &[Item],
+    c: u8,
+) -> Result<Vec<(String, String)>, String> {
+    // [@ANCHOR: bench_mcp_scope_item_cmds]
+    let mut cmds = Vec::new();
+    for it in items {
+        let v = match args.get(it.arg) {
+            None | Some(Value::Null) => continue,
+            Some(v) => v,
+        };
+        let bad = |what: &str| format!("{} must be {what}", it.arg);
+        let text = match it.ty {
+            Ty::Flag => match v.as_bool() {
+                Some(b) => if b { "ON" } else { "OFF" }.to_string(),
+                None => return Err(bad("true or false")),
+            },
+            Ty::Words(w) => match v
+                .as_str()
+                .map(str::to_uppercase)
+                .or_else(|| v.as_u64().map(|n| n.to_string()))
+            {
+                Some(x) if w.contains(&x.as_str()) => x,
+                _ => return Err(bad(&format!("one of {}", w.join(", ")))),
+            },
+            Ty::Num(lo, hi, unit) => match v
+                .as_f64()
+                .filter(|x| x.is_finite() && (lo..=hi).contains(x))
+            {
+                Some(x) => format!("{x:E}{unit}"),
+                None => return Err(bad(&format!("a number from {lo} to {hi}"))),
+            },
+            Ty::Int(lo, hi) => match v.as_u64().filter(|x| (lo..=hi).contains(x)) {
+                Some(x) => x.to_string(),
+                None => return Err(bad(&format!("a whole number from {lo} to {hi}"))),
+            },
+        };
+        let head = it.cmd.replace("{c}", &c.to_string());
+        cmds.push((format!("{head} {text}"), format!("{head}?")));
+    }
+    Ok(cmds)
+}
+
+/// What the scope reports for each setting of the table, by argument name (the read-back of every setting, not only those just changed).
+pub(crate) fn read_items(s: &mut Link, items: &[Item], c: u8) -> Value {
+    // [@ANCHOR: bench_mcp_scope_read_items]
+    let mut m = serde_json::Map::new();
+    for it in items {
+        m.insert(
+            it.arg.to_string(),
+            readback(s, &format!("{}?", it.cmd.replace("{c}", &c.to_string()))),
+        );
+    }
+    Value::Object(m)
 }
 
 /// `bench_scope_acquire`: acquisition mode (sampling, peak detect, average with a count, or high resolution), memory depth, and a read of the
@@ -239,7 +318,31 @@ pub fn channel(s: &mut Link, args: &Value) -> Result<Value, String> {
     Ok(r)
 }
 
-/// `bench_scope_display`: screen saver on or off, grid, trace and grid intensity.
+/// What `bench_scope_display` sets besides the screen saver, grid and intensity.
+const DISPLAY_ITEMS: [Item; 4] = [
+    Item {
+        arg: "xy",
+        cmd: "XYDS",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "persistence",
+        cmd: "PESU",
+        ty: Ty::Words(&["OFF", "INFINITE", "1", "5", "10", "30"]),
+    },
+    Item {
+        arg: "dot_join",
+        cmd: "DTJN",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "menu",
+        cmd: "MENU",
+        ty: Ty::Flag,
+    },
+];
+
+/// `bench_scope_display`: screen saver on or off, grid, trace and grid intensity, XY mode, persistence (seconds, or `INFINITE`), dots instead of vectors and the menu.
 pub fn display(s: &mut Link, args: &Value) -> Result<Value, String> {
     // [@ANCHOR: bench_mcp_scope_display]
     let mut cmds = Vec::new();
@@ -281,7 +384,9 @@ pub fn display(s: &mut Link, args: &Value) -> Result<Value, String> {
             return Err("trace_intensity and grid_intensity go together".into());
         }
     }
+    cmds.extend(item_cmds(args, &DISPLAY_ITEMS, 1)?);
     let mut r = apply(s, cmds)?;
+    r["more"] = read_items(s, &DISPLAY_ITEMS, 1);
     r["screen_saver"] = readback(s, "SCSV?");
     r["grid"] = readback(s, "GRDS?");
     r["intensity"] = readback(s, "INTS?");
@@ -484,6 +589,93 @@ mod tests {
             seen.lock().unwrap().len(),
             before,
             "nothing was sent for a bad value"
+        );
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_item_cmds]
+    // Tests [@ANCHOR: bench_mcp_scope_read_items]
+    // Tests [@ANCHOR: bench_mcp_scope_display]
+    // Tests [@ANCHOR: bench_mcp_scope_acquire]
+    // Tests [@ANCHOR: bench_mcp_scope_channel]
+    #[test]
+    fn the_display_acquire_and_channel_tools_work_against_the_fake_sds1000x_e() {
+        let fake = crate::fake_scope::FakeScope::start();
+        let mut l = Link::tcp("127.0.0.1", fake.port).unwrap();
+        let r = display(&mut l, &json!({"xy": true, "persistence": 5, "dot_join": true, "menu": false, "grid": "HALF", "trace_intensity": 60, "grid_intensity": 30})).unwrap();
+        assert_eq!(
+            r["more"],
+            json!({"xy": "XYDS ON", "persistence": "PESU 5", "dot_join": "DTJN ON", "menu": "MENU OFF"})
+        );
+        assert_eq!(r["grid"], "GRDS HALF");
+        assert_eq!(r["intensity"], "INTS TRACE,60,GRID,30");
+        assert_eq!(r["screen_saver"], "SCSV 30MIN");
+        let r = display(
+            &mut l,
+            &json!({"persistence": "infinite", "screen_saver": "OFF"}),
+        )
+        .unwrap();
+        assert_eq!(r["more"]["persistence"], "PESU INFINITE");
+        assert_eq!(r["screen_saver"], "SCSV OFF");
+        for bad in [
+            json!({"xy": "on"}),
+            json!({"persistence": 7}),
+            json!({"menu": 1}),
+        ] {
+            assert!(display(&mut l, &bad).is_err(), "{bad}");
+        }
+        let sent = fake.got("XYDS").len();
+        assert!(display(&mut l, &json!({"xy": true, "persistence": "forever"})).is_err());
+        assert_eq!(
+            fake.got("XYDS").len(),
+            sent,
+            "nothing is sent when one value is bad"
+        );
+        let r = acquire(
+            &mut l,
+            &json!({"mode": "average", "average_count": 64, "memory_depth": "70K"}),
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                r["mode"].as_str().unwrap(),
+                r["memory_depth"].as_str().unwrap()
+            ),
+            ("ACQW AVERAGE", "MSIZ 70K")
+        );
+        assert_eq!(r["readback"]["AVGA?"], "AVGA 64");
+        assert_eq!(r["sample_rate_sa_s"], 5.0e6);
+        let r = channel(
+            &mut l,
+            &json!({"channel": 2, "bandwidth_limit": true, "invert": true}),
+        )
+        .unwrap();
+        assert_eq!(r["bandwidth_limit"], "BWL C1,OFF,C2,ON");
+        assert_eq!(r["invert"], "C2:INVS ON");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_math]
+    // Tests [@ANCHOR: bench_mcp_scope_cursors]
+    // Tests [@ANCHOR: bench_mcp_scope_combine]
+    // Tests [@ANCHOR: bench_mcp_scope_value_at]
+    #[test]
+    fn host_math_and_cursors_read_the_fake_scopes_two_channels() {
+        let fake = crate::fake_scope::FakeScope::start();
+        let mut l = Link::tcp("127.0.0.1", fake.port).unwrap();
+        let out = crate::testdir::scratch("scope_more_fake");
+        let r = math(&mut l, &json!({"op": "add"}), &out).unwrap();
+        // Two sines a quarter period apart add to one of 2 V * sqrt(2) peak.
+        let max = r["max"].as_f64().unwrap();
+        assert!((max - 2.0 * 2f64.sqrt()).abs() < 0.05, "{r}");
+        l.query("*OPC?").unwrap(); // the scope has read every earlier command once it answers
+        assert_eq!(
+            fake.got("TRIG_MODE"),
+            ["TRIG_MODE?", "TRIG_MODE STOP", "TRIG_MODE AUTO"],
+            "asked, stopped for the reading, put back"
+        );
+        let r = cursors(&mut l, &json!({"channel": 1, "times_s": [0.0, 50e-6]})).unwrap();
+        assert!(
+            (r["cursors"][1]["volts"].as_f64().unwrap() - 2.0).abs() < 0.02,
+            "{r}"
         );
     }
 }

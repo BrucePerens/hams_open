@@ -17,7 +17,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - tools/bench_scope_cursors: values at chosen times and the differences between two cursors, from the waveform memory
 - tools/bench_scope_acquire: acquisition mode, average count and memory depth with read-back
 - tools/bench_scope_channel: bandwidth limit and inversion with read-back
-- tools/bench_scope_display: screen saver, grid and intensity with read-back
+- tools/bench_scope_display: screen saver, grid and intensity with read-back; new `xy`, `persistence`, `dot_join` and `menu`
 - tools/bench_measure: new `statistics` argument (repeated readings summarised on the host)
 
 - tools/bench_vna_time_domain: impulse or step response and time gating of a stored sweep, host only

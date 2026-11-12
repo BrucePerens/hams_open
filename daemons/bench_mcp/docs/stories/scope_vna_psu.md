@@ -229,11 +229,37 @@ Any other type is `<key> must be true or false`. Each command is followed by a 1
 
 | Argument | Type | Meaning |
 |---|---|---|
+| `args.xy`, `args.dot_join`, `args.menu` | boolean | `XYDS`, `DTJN`, `MENU` `ON` or `OFF`, through `item_cmds`. |
+| `args.persistence` | `OFF`, `INFINITE`, `1`, `5`, `10`, `30` (a number is accepted) | `PESU <value>`. |
 | `args.screen_saver` | `OFF`, `1MIN`, `5MIN`, `10MIN`, `15MIN`, `30MIN`, `60MIN` | Sent as `SCSV <value>`. Other values: `screen_saver must be OFF, 1MIN, 5MIN, 10MIN, 15MIN, 30MIN or 60MIN`. |
 | `args.grid` | `FULL`, `HALF`, `OFF` | `GRDS <value>`; otherwise `grid must be FULL, HALF or OFF`. |
 | `args.trace_intensity`, `args.grid_intensity` | integer 0 to 100 | Sent together as `INTS GRID,<g>,TRACE,<t>`. Giving one without the other is `trace_intensity and grid_intensity go together`; out of range or not whole is `<key> must be a whole number from 0 to 100`. |
 
 Returns the same shape as `acquire` (`sent`, `readback`, `note`) plus the current `screen_saver`, `grid` and `intensity` read back (`SCSV?`, `GRDS?`, `INTS?`). With no key it is a read. Errors as listed, plus link errors on sends. Test: `settings_send_the_documented_commands_read_them_back_and_refuse_bad_values_unsent`.
+
+### `bench_mcp_scope_item_cmds` [@ANCHOR: bench_mcp_scope_item_cmds]
+
+`item_cmds(args, items, c)` turns the arguments of a scope tool into the commands that set them, checking every value first. It is the shared part of the tools written from the programming guide: each tool lists its settings as `Item { arg, cmd, ty }` and this function does the rest.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args` | `&Value` | The tool arguments; an item whose key is absent or null is skipped. |
+| `items` | `&[Item]` | The table of settings: argument name, command header (a `{c}` in it becomes the channel) and the type of the value. |
+| `c` | `u8` | The channel for `{c}`. |
+
+Types: a JSON boolean becomes `ON` or `OFF`; a word must be one of the listed ones (any case, sent upper case; a whole number counts as its digits, so `5` is the word `5`); a number must lie in its range and is sent as `1E-3` followed by the unit; a whole number must lie in its range. Returns `(command, query)` pairs such as `("XYDS ON", "XYDS?")`, or the first error, `<arg> must be <what>` (for example `persistence must be one of OFF, INFINITE, 1, 5, 10, 30`). Nothing is sent here, so one bad value refuses the call before the scope sees any command. Pure: no I/O. Test: `the_display_acquire_and_channel_tools_work_against_the_fake_sds1000x_e` (a bad value among good ones sends nothing).
+
+### `bench_mcp_scope_read_items` [@ANCHOR: bench_mcp_scope_read_items]
+
+`read_items(s, items, c)` asks the scope for the current value of every setting in an item table and returns a JSON object from argument name to the scope's answer, so a tool shows what the scope holds after a change and not only what was sent.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `s` | `&mut Link` | Open link to the scope. |
+| `items` | `&[Item]` | The settings to read; each is asked as its command header followed by `?`. |
+| `c` | `u8` | Channel for `{c}`. |
+
+Each answer is the scope's reply text, `(empty reply)`, or `no answer to <query>: <error>` after a 3 s timeout (a setting this firmware does not know is reported that way, not as an error of the call). Reads only; it changes nothing on the scope. Test: the same as `item_cmds`, which checks the `more` object of the display tool.
 
 ## The bench supply (`src/psu.rs`)
 
