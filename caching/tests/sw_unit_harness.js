@@ -15,6 +15,7 @@ const SOURCE = fs
     .replace("__TEST_HOOKS_ENABLED__", "false");
 
 /** Loads the worker into a fresh context; returns its context (functions are properties of it) and the listeners it registered. */
+// [@ANCHOR: caching:js_sw_harness_load]
 function load(globals = {}) {
     const listeners = {};
     const logged = [];
@@ -30,6 +31,7 @@ function load(globals = {}) {
 }
 
 /** An indexedDB whose open() answers asynchronously; `stores` are the object stores the database already has. */
+// [@ANCHOR: caching:js_sw_harness_fakeIndexedDB]
 function fakeIndexedDB({ stores = [], fail = false, transaction } = {}) {
     const seen = { opens: [], created: [] };
     const db = {
@@ -63,9 +65,11 @@ function fakeIndexedDB({ stores = [], fail = false, transaction } = {}) {
 }
 
 /** Objects made inside the vm have another realm's prototypes; this copies one into this realm for deepStrictEqual. */
+// [@ANCHOR: caching:js_sw_harness_plain]
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 /** The error a promise rejects with, or null when it resolves. */
+// [@ANCHOR: caching:js_sw_harness_rejection]
 async function rejection(promise) {
     try {
         await promise;
@@ -76,6 +80,7 @@ async function rejection(promise) {
 }
 
 const tests = {
+    // [@ANCHOR: caching:js_sw_harness_open_db]
     async open_db() {
         const fresh = fakeIndexedDB();
         const { context } = load({ indexedDB: fresh.indexedDB });
@@ -93,6 +98,7 @@ const tests = {
         assert.strictEqual(error.message, "open failed");
     },
 
+    // [@ANCHOR: caching:js_sw_harness_update_lru_metadata]
     async update_lru_metadata() {
         const puts = [];
         const transaction = () => {
@@ -112,6 +118,7 @@ const tests = {
         assert.strictEqual(failing.logged.length, 1);
     },
 
+    // [@ANCHOR: caching:js_sw_harness_enforce_lru_quota]
     async enforce_lru_quota() {
         const cacheDeleted = [];
         const cache = { delete: async (url) => { cacheDeleted.push(url); return true; } };
@@ -158,6 +165,7 @@ const tests = {
         assert.strictEqual(broken.logged.length, 1);
     },
 
+    // [@ANCHOR: caching:js_sw_harness_previous_version_cache_exists]
     async previous_version_cache_exists() {
         const names = async (list) => (await load({ caches: { keys: async () => list } }).context.previousVersionCacheExists());
         assert.strictEqual(await names([]), false);

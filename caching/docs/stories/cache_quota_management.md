@@ -26,3 +26,10 @@ Enforcing the quota client-side (`enforceLRUQuota`, triggered whenever `navigato
 - `updateLRUMetadata()` records a cached URL and the time it was last used, and only logs when the database cannot be opened. [@ANCHOR: caching:js_sw_update_lru_metadata]
 - `enforceLRUQuota()` does nothing while storage use is within the quota, and over it deletes the ten least recently used entries from the cache and from the bookkeeping. [@ANCHOR: caching:js_sw_enforce_lru_quota]
 - `previousVersionCacheExists()` is true only when an older version of this worker left a cache of its own behind (never for another worker's cache), so the "Update Available" toast is not shown on a first visit. [@ANCHOR: caching:js_sw_previous_version_cache_exists]
+
+## Test harness functions in `tests/sw_unit_harness.js`, run by `tests/test_sw_unit.py`
+- `load(globals)` runs the worker source in a fresh vm context with stand-ins for the worker globals and returns the context, the listeners the worker registered and what it logged. [@ANCHOR: caching:js_sw_harness_load]
+- `fakeIndexedDB(options)` is an `indexedDB` whose `open()` answers asynchronously, creating the store on first open or failing on request. [@ANCHOR: caching:js_sw_harness_fakeIndexedDB]
+- `plain(value)` copies an object made inside the vm into this realm so `deepStrictEqual` can compare it. [@ANCHOR: caching:js_sw_harness_plain]
+- `rejection(promise)` returns the error a promise rejects with, or null when it resolves. [@ANCHOR: caching:js_sw_harness_rejection]
+- `open_db`, `update_lru_metadata`, `enforce_lru_quota` and `previous_version_cache_exists` are the named test bodies the Python tests start, one per worker function. [@ANCHOR: caching:js_sw_harness_open_db] [@ANCHOR: caching:js_sw_harness_update_lru_metadata] [@ANCHOR: caching:js_sw_harness_enforce_lru_quota] [@ANCHOR: caching:js_sw_harness_previous_version_cache_exists]
