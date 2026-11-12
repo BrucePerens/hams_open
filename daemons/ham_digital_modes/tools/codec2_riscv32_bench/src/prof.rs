@@ -2,6 +2,7 @@ pub static mut ACC: [u64; 16] = [0; 16];
 static mut LAST: u32 = 0;
 #[inline(always)]
 pub fn instret() -> u32 {
+    // [@ANCHOR: codec2_riscv32_bench_instret]
     let x: u32;
     unsafe { core::arch::asm!("csrr {0}, minstret", out(reg) x) };
     x
@@ -14,6 +15,7 @@ pub extern "Rust" fn codec2_profile_mark(id: usize) {
 /// Adds instructions retired since the previous mark to bucket `i` (mark(15) just resets the baseline).
 #[inline(never)]
 pub fn mark(i: usize) {
+    // [@ANCHOR: codec2_riscv32_bench_mark]
     let now = instret();
     unsafe {
         if i != 15 { ACC[i] += now.wrapping_sub(LAST) as u64; }
