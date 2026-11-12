@@ -55,6 +55,7 @@ pub fn decode(text: &str) -> Option<Observation> {
 }
 
 /// The Transfox client engine.
+// [@ANCHOR: radioctl_transfox_transfox_engine]
 #[derive(Debug)]
 pub struct TransfoxEngine {
     desc: RigDescription,
@@ -129,6 +130,7 @@ impl ProtocolEngine for TransfoxEngine {
 }
 
 /// A virtual Transfox.
+// [@ANCHOR: radioctl_transfox_transfox_twin]
 #[derive(Debug)]
 pub struct TransfoxTwin {
     rx: RxBuffer,
@@ -199,6 +201,8 @@ impl VendorTwin for TransfoxTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_transfox_transfox_engine]
+    // Tests [@ANCHOR: radioctl_transfox_transfox_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

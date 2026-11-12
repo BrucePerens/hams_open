@@ -34,6 +34,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The Uniden engine.
+// [@ANCHOR: radioctl_uniden_uniden_engine]
 pub type UnidenEngine = LineEngine<UnidenDialect>;
 
 // [@ANCHOR: radioctl_uniden_engine]
@@ -50,6 +51,7 @@ const MODE_NAMES: [(u8, &str, Mode); 3] = [
 ];
 
 /// The Uniden command set of one model.
+// [@ANCHOR: radioctl_uniden_uniden_dialect]
 #[derive(Debug, Clone, Copy)]
 pub struct UnidenDialect {
     /// The BC780XLT reads its frequency through `SG`.
@@ -178,6 +180,7 @@ fn mode_named(desc: &RigDescription, name: &str) -> Option<Mode> {
 }
 
 /// The virtual Uniden scanner.
+// [@ANCHOR: radioctl_uniden_uniden_twin]
 #[derive(Debug)]
 pub struct UnidenTwin {
     desc: RigDescription,
@@ -234,6 +237,9 @@ impl ReceiverTwin for UnidenTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_uniden_uniden_engine]
+    // Tests [@ANCHOR: radioctl_uniden_uniden_dialect]
+    // Tests [@ANCHOR: radioctl_uniden_uniden_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;

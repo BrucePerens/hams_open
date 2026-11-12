@@ -929,3 +929,6 @@ async fn the_funcube_gain_commands_follow_the_dongle_model() {
 // Tests [@ANCHOR: radioctl_si570_usb_pending]
 // Tests [@ANCHOR: radioctl_si570_usb_si570_twin]
 // Tests [@ANCHOR: radioctl_si570_usb_si570_usb_engine]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_usb_family_usb_frame_stand_in]

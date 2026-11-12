@@ -41,6 +41,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The engine of the BCD396T and BCD996T.
+// [@ANCHOR: radioctl_uniden_digital_uniden_digital_engine]
 pub type UnidenDigitalEngine = LineEngine<UnidenDigitalDialect>;
 
 // [@ANCHOR: radioctl_unidig_engine]
@@ -61,6 +62,7 @@ const MODE_NAMES: [(u8, &str, Mode); 3] = [
 const FRQ_RANGE: (u64, u64) = (250_000, 13_000_000);
 
 /// The BCD396T / BCD996T command set.
+// [@ANCHOR: radioctl_uniden_digital_uniden_digital_dialect]
 #[derive(Debug, Clone, Copy)]
 pub struct UnidenDigitalDialect;
 
@@ -192,6 +194,7 @@ fn modulation(name: &str) -> Option<Mode> {
 }
 
 /// The virtual BCD396T / BCD996T.
+// [@ANCHOR: radioctl_uniden_digital_uniden_digital_twin]
 #[derive(Debug)]
 pub struct UnidenDigitalTwin {
     desc: RigDescription,
@@ -271,6 +274,9 @@ impl ReceiverTwin for UnidenDigitalTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_uniden_digital_uniden_digital_engine]
+    // Tests [@ANCHOR: radioctl_uniden_digital_uniden_digital_dialect]
+    // Tests [@ANCHOR: radioctl_uniden_digital_uniden_digital_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;

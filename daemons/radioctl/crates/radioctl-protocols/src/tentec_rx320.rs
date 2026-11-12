@@ -62,6 +62,7 @@ pub const FILTERS: [u32; 34] = [
 ];
 
 /// Which radio's formulas and frames.
+// [@ANCHOR: radioctl_tentec_rx320_variant]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Variant {
     /// RX-320 (Hamlib's formulas).
@@ -180,6 +181,7 @@ fn tune_frame(words: [u16; 3]) -> Vec<u8> {
 }
 
 /// The RX-320 client engine.
+// [@ANCHOR: radioctl_tentec_rx320_rx320_engine]
 #[derive(Debug)]
 pub struct Rx320Engine {
     desc: RigDescription,
@@ -260,6 +262,7 @@ impl ProtocolEngine for Rx320Engine {
 }
 
 /// A virtual RX-320.
+// [@ANCHOR: radioctl_tentec_rx320_rx320_twin]
 #[derive(Debug)]
 pub struct Rx320Twin {
     desc: RigDescription,
@@ -370,6 +373,9 @@ impl VendorTwin for Rx320Twin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_tentec_rx320_variant]
+    // Tests [@ANCHOR: radioctl_tentec_rx320_rx320_engine]
+    // Tests [@ANCHOR: radioctl_tentec_rx320_rx320_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);
