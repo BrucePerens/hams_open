@@ -85,7 +85,7 @@ Returns `None` when either nibble is above 9, which means the byte is not BCD an
 ### `fn decode_filter(&self, index: u8) -> Option<Observation>` [@ANCHOR: radioctl:radioctl_civ_engine_decode_filter]
 
 Decodes a filter index byte received from the radio into an observation of the filter width. `&self` is read-only; `index` is the BCD-coded index byte (for example `0x15` is index 15). A byte whose nibbles are not digits gives `None`.
-Which table applies depends on the mode last reported by the radio: AM uses the AM table, other modes the SSB/CW/RTTY table, via `filter_table_is_am`. If the mode is not yet known, or the index is outside the table, the result is `None`. Otherwise `Some(Observation::FilterWidth(Hz))`. Pure.
+Which table applies depends on the mode last reported by the radio, through `filter_table_is_am`: AM and the synchronous modes (SAM, SAM-L, SAM-U) use the AM table, every other mode except FM and WFM the SSB/CW/RTTY table. If the mode is not yet known, or is FM or WFM (which have no filter width), or the index is outside the table, the result is `None`. Otherwise `Some(Observation::FilterWidth(Hz))`. Pure.
 
 ### `fn decode_scope(&mut self, data: &[u8]) -> Option<Inbound>` [@ANCHOR: radioctl:radioctl_civ_engine_decode_scope]
 
