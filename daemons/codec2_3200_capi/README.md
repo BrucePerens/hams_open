@@ -105,6 +105,10 @@ need to know about.
   already-freed handle is a contract violation, and `NULL` aborts the process.
 - `codec2_encode(state, bytes, speech_in)` [@ANCHOR: codec2_3200_capi:codec2_encode] encodes one frame of 160 16-bit
   samples into 8 bytes (64 bits); a `NULL` handle or buffer aborts the process.
+- `encode_impl` [@ANCHOR: codec2_3200_capi:codec2_encode_impl] is the body behind `codec2_encode`: it asserts the handle and both buffers are non-NULL,
+  encodes the 160 samples with the handle's encoder and copies the 8 bytes out.
+- `decode_ber_impl` [@ANCHOR: codec2_3200_capi:codec2_decode_ber_impl] is the body behind `codec2_decode` and `codec2_decode_ber`: it asserts the handle and
+  both buffers are non-NULL, decodes the 8 bytes with the handle's decoder and copies the 160 samples out.
 - `codec2_decode(state, speech_out, bytes)` [@ANCHOR: codec2_3200_capi:codec2_decode] decodes one 8-byte frame into 160
   samples; it is `codec2_decode_ber` with a bit-error estimate of 0.
 - `codec2_decode_ber(state, speech_out, bytes, ber_est)` [@ANCHOR: codec2_3200_capi:codec2_decode_ber] decodes one
