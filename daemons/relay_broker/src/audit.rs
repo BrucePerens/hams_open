@@ -120,6 +120,8 @@ impl AuditLog {
         self.record_at(event, ts)
     }
 
+    // [@ANCHOR: relay_broker_audit_log_record_at]
+    /// `record` with the timestamp given, so the once-a-minute rejection rule and the rotation can be tested without a clock.
     fn record_at(&mut self, event: &AuditEvent, ts: u64) -> io::Result<()> {
         if event.action == "peer_rejected" {
             if let Some(last) = self.last_rejection.get(&event.uid) {
@@ -146,6 +148,7 @@ impl AuditLog {
         }
     }
 
+    // [@ANCHOR: relay_broker_audit_log_rotate]
     /// Moves the full log to `<path>.1` and starts an empty one (mode 0600).
     fn rotate(&mut self) -> io::Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
@@ -219,6 +222,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: relay_broker_audit_log_record]
+    // Tests [@ANCHOR: relay_broker_audit_log_record_at]
+    // Tests [@ANCHOR: relay_broker_audit_log_rotate]
     #[test]
     fn a_rejected_peer_is_logged_once_per_minute_and_the_log_rotates_at_the_cap() {
         let dir = crate::testdir::TestDir::new("audit_rot");

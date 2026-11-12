@@ -326,6 +326,8 @@ impl Os for LinuxOs {
         }
     }
 
+    // [@ANCHOR: relay_broker_linux_bind_udp]
+    /// Binds a UDP socket on every address (dual stack when the kernel has IPv6) and returns the descriptor.
     fn bind_udp(&self, port: u16) -> io::Result<OwnedFd> {
         use nix::sys::socket::{
             bind, setsockopt, socket, AddressFamily, SockFlag, SockType, SockaddrIn, SockaddrIn6,
@@ -421,6 +423,21 @@ impl LinuxOs {
 mod tests {
     use super::*;
     use std::os::fd::AsFd;
+
+    // Tests [@ANCHOR: relay_broker_linux_bind_udp]
+    #[test]
+    fn a_bound_udp_descriptor_is_a_real_socket_on_the_port_and_the_port_is_then_taken() {
+        let fd = LinuxOs::default()
+            .bind_udp(0)
+            .expect("bind an ephemeral port");
+        let socket = std::net::UdpSocket::from(fd);
+        let port = socket.local_addr().expect("local address").port();
+        assert_ne!(port, 0);
+        assert!(
+            LinuxOs::default().bind_udp(port).is_err(),
+            "a port in use is refused, not shared"
+        );
+    }
 
     fn temp_dir(tag: &str) -> crate::testdir::TestDir {
         crate::testdir::TestDir::new(&format!("os_{tag}"))

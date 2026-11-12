@@ -223,6 +223,7 @@ impl Broker {
         )
     }
 
+    // [@ANCHOR: relay_broker_broker_update_package]
     /// The package update action: one fixed command (`apt-get install --only-upgrade hams-local-relay`, or the `dnf` equivalent) that the
     /// caller cannot add to or change, so a verified-signature repository the owner configured is the only source of what installs.
     fn update_package(&mut self, peer: Peer) -> (Response, Option<OwnedFd>) {
@@ -250,6 +251,7 @@ impl Broker {
         }
     }
 
+    // [@ANCHOR: relay_broker_broker_bind_udp]
     /// The bind action: only a port the config lists. The descriptor is passed; the relay never needs a privilege to hold it.
     fn bind_udp(&mut self, peer: Peer, port: u16) -> (Response, Option<OwnedFd>) {
         if !self.bind_udp_ports.contains(&port) {
@@ -273,6 +275,7 @@ impl Broker {
         Response::Hub { access_point, dhcp }
     }
 
+    // [@ANCHOR: relay_broker_broker_hub_start]
     /// The hub start action: settings validated, both files written from the fixed templates, the programs started.
     fn hub_start(&mut self, peer: Peer, settings: &HubSettings) -> (Response, Option<OwnedFd>) {
         if !self.hub_enabled {
@@ -305,6 +308,8 @@ impl Broker {
         }
     }
 
+    // [@ANCHOR: relay_broker_broker_hub_stop]
+    /// The hub stop action: allowed only when the hub is enabled; stops both programs and answers with the hub status.
     fn hub_stop(&mut self, peer: Peer) -> (Response, Option<OwnedFd>) {
         if !self.hub_enabled {
             self.log(peer, "hub_stop", "denied", "hub not enabled".into());

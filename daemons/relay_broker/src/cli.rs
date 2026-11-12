@@ -48,7 +48,6 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
     Ok(args)
 }
 
-// [@ANCHOR: relay_broker_main]
 /// Removes a leftover socket at `path` from an earlier run; anything else at that path is an error, not deleted.
 // [@ANCHOR: relay_broker_remove_stale_socket]
 fn remove_stale_socket(path: &std::path::Path) -> std::io::Result<()> {
@@ -63,6 +62,7 @@ fn remove_stale_socket(path: &std::path::Path) -> std::io::Result<()> {
     }
 }
 
+// [@ANCHOR: relay_broker_main]
 /// The program: parses argv, loads the config, opens the audit log and the listener and serves until idle.
 pub fn run_main() -> ExitCode {
     let argv: Vec<String> = std::env::args().collect();
