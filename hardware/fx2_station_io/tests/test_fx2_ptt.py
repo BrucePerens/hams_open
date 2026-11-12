@@ -136,6 +136,7 @@ class PttBehaviour:
         self.assertEqual(h.MAP_ERRORS[st.map_error], code)
         self.assertEqual(self.pins()["oea"] & 3, 0, "a refused map must leave both pins released")
 
+    # Tests [@ANCHOR: hardware_hams_fx2_pin_spec]
     def test_map_refuses_two_functions_on_one_pin(self):
         self.refused([h.PinSpec(PA0, h.FUNC_PTT), h.PinSpec(PA0, h.FUNC_POWER)],
                      "pin_has_two_functions")
@@ -165,6 +166,7 @@ class PttBehaviour:
         self.refused([h.PinSpec(PA0, h.FUNC_PTT, partner=PA0)], "bad_partner")
         self.refused([h.PinSpec(PA0, h.FUNC_PTT, lead_ms=50)], "lead_lag_without_keyline")
 
+    # Tests [@ANCHOR: hardware_hams_fx2_stalled]
     def test_map_refuses_parameters_on_non_ptt_pins_and_steps_out_of_order(self):
         self.refused([h.PinSpec(PA0, h.FUNC_POWER, max_on_ms=100)], "bad_parameter")
         self.t.ctrl_out(0x40, h.REQ_MAP_BEGIN, 0, 0)
@@ -214,6 +216,7 @@ class PttBehaviour:
         self.assertEqual((st.keyed, st.last_reason), (0, h.REL_HOST))
         self.assertEqual(st.release_count, (base + 1) & 0xFF)
 
+    # Tests [@ANCHOR: hardware_fx2_simulator_chan]
     def test_keying_a_keyline_or_an_unmapped_pin_is_refused(self):
         self.load_ptt()
         with self.assertRaises(h.Stalled):
@@ -337,6 +340,7 @@ class PttBehaviour:
         self.assertTrue(self.pa0_low())
         self.assertEqual((st.last_reason, st.keyed, st.hb_alive), (h.REL_USB_RESET, 0, False))
 
+    # Tests [@ANCHOR: hardware_hams_fx2_status]
     def test_usb_suspend_releases_the_line(self):
         self.load_ptt(max_on=20000, hb=20000)
         self.key_down()

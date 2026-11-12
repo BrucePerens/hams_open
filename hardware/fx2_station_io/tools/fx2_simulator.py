@@ -31,6 +31,7 @@ SIM_INFO = bytes([
 BOARD_PINS = (0, 1)         # PA0 and PA1 are the only pins the board table allows as outputs
 
 
+# [@ANCHOR: hardware_fx2_simulator_chan]
 class _Chan:
     def __init__(self) -> None:
         self.func = 0
@@ -49,6 +50,7 @@ class _Chan:
         self.t_off = None
 
 
+# [@ANCHOR: hardware_fx2_simulator_simulated_station_engine]
 class SimulatedStationEngine:
     """The function-map engine written from the protocol description (virtual clock, 1 ms steps)."""
 
@@ -325,6 +327,7 @@ class SimulatedStationEngine:
             + u16(self._remaining(1)) + u16(hb_rem) + u16(0x120)
 
 
+# [@ANCHOR: hardware_fx2_simulator_simulated_fx2]
 class SimulatedFx2(Transport):
     """State: ROM (unprogrammed) or RUNNING; RAM; port A output-enable and latch."""
 
