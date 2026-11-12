@@ -538,9 +538,12 @@ def _leading_number(value):
     no number ("1.2.3", "."). Huge values stay inf: a 400-digit offset is off-screen, not unreadable."""
     m = re.match(r"^(-?[\d.]+)", value or "")
     try:
-        return float(m.group(1)) if m else None
+        result = float(m.group(1)) if m else None
     except ValueError:
         return None
+    if result is not None and not math.isfinite(result):
+        return result  # inf on purpose (see above); the digits and dots of the pattern can never spell nan
+    return result
 
 
 # [@ANCHOR: hams_helpdesk:untrusted_tiny_size]
