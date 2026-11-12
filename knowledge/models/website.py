@@ -4,6 +4,7 @@
 from odoo import models
 
 
+# [@ANCHOR: knowledge_website_website]
 class Website(models.Model):
     _inherit = "website"
 

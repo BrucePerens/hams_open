@@ -41,6 +41,7 @@ class TestClassifyDocAudience(common.HamsTransactionCase):
         self.assertEqual(classify_doc_audience("", {}), "internal")
         self.assertEqual(classify_doc_audience(None, None), "internal")
 
+    # Tests [@ANCHOR: knowledge_knowledge_article_knowledge_article]
     def test_02_explicit_opt_in_is_member(self):
         path = "data/documentation.html"
         self.assertEqual(

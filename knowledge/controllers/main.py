@@ -30,6 +30,7 @@ HELP_TOPIC_ORDER = (
 )
 DEFAULT_HELP_TOPIC = "Other guides"
 
+# [@ANCHOR: knowledge_main_manual_library_controller]
 class ManualLibraryController(http.Controller):
 
     def _compile_markdown(self, html_body, article_id=None, write_date=None):

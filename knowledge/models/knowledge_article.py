@@ -53,6 +53,7 @@ def _plain_text_preview(html_body):
     return tree.text_content()
 
 
+# [@ANCHOR: knowledge_knowledge_article_knowledge_article]
 class KnowledgeArticle(models.Model):
     """
     Clean-room implementation of the knowledge.article API for Odoo Community.
