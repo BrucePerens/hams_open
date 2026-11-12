@@ -12,6 +12,7 @@ from odoo.addons.distributed_redis_cache.redis_pool import (
     redis_pool,
     get_redis_connection,
 )
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class DistributedCacheConfig(models.TransientModel):
         help="Select a model to flush its specific cache.",
     )
 
+    @public_rpc
     def action_invalidate_model_cache(self):
         # [@ANCHOR: COMM_manual_cache_invalidation]
         self.ensure_one()
@@ -44,6 +46,7 @@ class DistributedCacheConfig(models.TransientModel):
                 },
             }
 
+    @public_rpc
     def check_redis_status(self):
         # [@ANCHOR: COMM_check_redis_status_logic]
         use_redis = bool(redis and redis_pool)
