@@ -20,6 +20,7 @@ use crate::codec2_3200::{E_BITS, LPC_ORD, WO_BITS};
 
 use super::lsp_quantiser::lsp_bits;
 
+// [@ANCHOR: bits_frame_fields1600_struct]
 pub struct FrameFields1600 {
     pub voiced0: bool,
     pub voiced1: bool,
@@ -80,6 +81,7 @@ pub fn unpack_frame_1600(bytes: &[u8; super::BYTES_PER_FRAME]) -> FrameFields160
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: bits_frame_fields1600_struct]
     use super::*;
 
     #[test]

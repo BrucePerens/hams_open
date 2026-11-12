@@ -51,6 +51,7 @@ use super::{BYTES_PER_FRAME, E_BITS, M_PITCH, N_SAMP, SAMPLES_PER_FRAME, WO_BITS
 /// Persistent per-call encoder state: the `M_PITCH`-sample speech
 /// history window shared by pitch estimation and LPC analysis, plus
 /// `nlp`/`voicing`'s own state.
+// [@ANCHOR: floating_reference_encoder_struct]
 pub struct Encoder {
     sn: [f32; M_PITCH],
     window: [f32; M_PITCH],

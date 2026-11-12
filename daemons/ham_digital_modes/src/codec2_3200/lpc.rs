@@ -40,8 +40,10 @@
 use super::fixed_point;
 use super::LPC_ORD;
 
+// [@ANCHOR: lpc_autocorr_struct]
 #[cfg(feature = "std")]
 pub type Autocorr = [f32; LPC_ORD + 1];
+// [@ANCHOR: lpc_lpc_coeffs_struct]
 #[cfg(feature = "std")]
 pub type LpcCoeffs = [f32; LPC_ORD + 1];
 /// LPC coefficients in Q8.23 fixed-point (`COEF_FRAC_BITS`), the real
@@ -49,6 +51,7 @@ pub type LpcCoeffs = [f32; LPC_ORD + 1];
 /// `levinson_durbin_fixed` converts this to `LpcCoeffs` (`f32`) only at
 /// its own output boundary, matching this port's established "integer
 /// core, float boundary" pattern.
+// [@ANCHOR: lpc_lpc_coeffs_q_struct]
 type LpcCoeffsQ = [i64; LPC_ORD + 1];
 
 /// Q8.23 for the fixed-point windowed samples `autocorrelate_fixed`
@@ -1246,6 +1249,9 @@ pub fn apply_bw_gamma_fixed(a_q23: &mut [i64; LPC_ORD + 1]) {
 // infrastructure across files.
 #[cfg(test)]
 pub(crate) mod tests {
+    // Tests [@ANCHOR: lpc_autocorr_struct]
+    // Tests [@ANCHOR: lpc_lpc_coeffs_struct]
+    // Tests [@ANCHOR: lpc_lpc_coeffs_q_struct]
     use super::*;
     use crate::codec2_3200::{bw_gamma, M_PITCH};
 

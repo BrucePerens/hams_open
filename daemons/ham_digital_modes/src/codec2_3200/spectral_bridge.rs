@@ -316,6 +316,7 @@ pub fn extrapolate_amplitudes_from_envelope(
     (a_ext, l2)
 }
 
+// [@ANCHOR: spectral_bridge_spectral_bridge_state_struct]
 #[cfg(feature = "std")]
 /// Persistent per-decoder Spectral Bridge synthesis state -- parallel
 /// to, and independent of, `synthesis::SynthesisState` (the base 8kHz
@@ -611,6 +612,7 @@ fn parzen_window_sb_q23() -> &'static [i64; SAMPLES_PER_FRAME_SB] {
 /// elsewhere in this crate). No `rng`/unvoiced excitation-phase branch
 /// here at all, matching `synthesize_subframe_sb`'s own (post-review)
 /// shape -- extrapolation only ever runs voiced.
+// [@ANCHOR: spectral_bridge_spectral_bridge_state_fixed_struct]
 pub(crate) struct SpectralBridgeStateFixed {
     pub(crate) enabled: bool,
     sn_: [i64; SAMPLES_PER_FRAME_SB],
@@ -720,6 +722,8 @@ impl SpectralBridgeStateFixed {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: spectral_bridge_spectral_bridge_state_struct]
+    // Tests [@ANCHOR: spectral_bridge_spectral_bridge_state_fixed_struct]
     use super::super::LPC_ORD;
     use super::*;
 

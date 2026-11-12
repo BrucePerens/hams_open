@@ -27,6 +27,7 @@
 /// reproduce [the reference]'s exact decision, only make a reasonable
 /// one"), but validated below against the *same* real test scenarios
 /// `is_voiced` itself is validated against, not assumed equivalent.
+// [@ANCHOR: voicing_voicing_state_fixed_struct]
 #[derive(Default)]
 pub struct VoicingStateFixed {
     /// Linear mean-squared-amplitude units (raw `i16` sample scale),
@@ -114,6 +115,7 @@ pub fn is_voiced_fixed(state: &mut VoicingStateFixed, samples: &[i16]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: voicing_voicing_state_fixed_struct]
     use super::*;
 
     fn to_i16(samples: &[f32]) -> Vec<i16> {

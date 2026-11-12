@@ -29,6 +29,7 @@ fn gray_to_binary(g: u32) -> u32 {
 
 /// Packs fields MSB-first into a byte buffer, Gray-coding any field
 /// wider than 1 bit before packing.
+// [@ANCHOR: bits_bit_writer_struct]
 pub struct BitWriter<'a> {
     bits: &'a mut [u8],
     bit_index: usize,
@@ -89,6 +90,7 @@ impl<'a> BitWriter<'a> {
 
 /// Reads fields MSB-first from a byte buffer, un-Gray-coding any field
 /// wider than 1 bit after unpacking.
+// [@ANCHOR: bits_bit_reader_struct]
 pub struct BitReader<'a> {
     bits: &'a [u8],
     bit_index: usize,
@@ -126,6 +128,7 @@ impl<'a> BitReader<'a> {
 
 /// One 3200bps frame's worth of decoded field values, before/after
 /// quantizer dequantization.
+// [@ANCHOR: bits_frame_fields_struct]
 pub struct FrameFields {
     pub voiced0: bool,
     pub voiced1: bool,
@@ -178,6 +181,9 @@ pub fn unpack_frame(
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: bits_bit_writer_struct]
+    // Tests [@ANCHOR: bits_bit_reader_struct]
+    // Tests [@ANCHOR: bits_frame_fields_struct]
     use super::*;
 
     macro_rules! fixture {

@@ -1071,3 +1071,6 @@ mod tests {
         assert!(corr > 0.99, "DecoderFixed diverged from the real reference decoder on the same real captured bitstream: correlation={corr} (expected > 0.99, measured 0.9964 when this test was written)");
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: floating_reference_encoder_struct]

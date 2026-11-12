@@ -42,6 +42,7 @@ const LOG2_LUT_SIZE: usize = (1 << LOG2_LUT_BITS) + 1;
 const TRIG_LUT_BITS: u32 = 12;
 const TRIG_LUT_SIZE: usize = (1 << TRIG_LUT_BITS) + 1;
 
+// [@ANCHOR: tables_gen_value_enum]
 pub(super) enum Value {
     Scalar(&'static str, &'static str, i64),
     Array(&'static str, &'static str, &'static str, Vec<i64>),
@@ -410,6 +411,7 @@ pub(super) fn render() -> String {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: tables_gen_value_enum]
     use super::*;
 
     #[test]
