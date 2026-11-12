@@ -48,6 +48,7 @@ fn amplitude_field(amplitude: f64) -> u16 {
     (lo.1 + t * (hi.1 - lo.1)).round() as u16
 }
 
+// [@ANCHOR: ambe_plus_2_encoder_encoder_struct]
 pub struct Encoder {
     analyzer: FrameAnalyzer,
     high_pass: HighPassFilter,
@@ -175,6 +176,7 @@ impl Default for Encoder {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: ambe_plus_2_encoder_encoder_struct]
     use super::*;
     use crate::ambe::float::ambe_plus_2::decode::{extract_raw_parameters, DequantizedFrame};
     use crate::ambe::float::ambe_plus_2::parse_frame;

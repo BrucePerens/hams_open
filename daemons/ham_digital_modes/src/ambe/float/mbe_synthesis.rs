@@ -31,6 +31,7 @@ use super::tia_102_baba::unvoiced_synthesis::N;
 /// frame as received instead of muting, which produces loud bursts and chirps. That is a defect, so it exists only to
 /// let conformance tests compare against the chip without the difference hiding others; nothing should select it in
 /// normal operation.
+// [@ANCHOR: mbe_synthesis_error_policy_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ErrorPolicy {
     /// mbelib's policy (repeat three times, then mute): kept for reference and for tests; not the default.
@@ -43,6 +44,7 @@ pub enum ErrorPolicy {
 }
 
 /// What to do with one damaged frame.
+// [@ANCHOR: mbe_synthesis_bad_frame_action_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BadFrameAction {
     Repeat,
@@ -82,6 +84,7 @@ pub const HIGH_LIFT_WEIGHT: f64 = 0.10;
 /// (`AMBE_CODEC_STATUS.md`): the standard's synthesis was 1.1 to 1.7 dB louder than the chip on noise-like frames.
 pub const UNVOICED_GAIN: f64 = 0.87;
 
+// [@ANCHOR: float_mbe_synthesis_mbe_synthesizer_struct]
 pub struct MbeSynthesizer {
     synthesis: SynthesisState,
     error_rate_prev: f64,
@@ -171,6 +174,9 @@ impl Default for MbeSynthesizer {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: mbe_synthesis_error_policy_enum]
+    // Tests [@ANCHOR: mbe_synthesis_bad_frame_action_enum]
+    // Tests [@ANCHOR: float_mbe_synthesis_mbe_synthesizer_struct]
     use super::*;
 
     /// `is_bad` calls a frame damaged when the corrected-error total exceeds 3 (clean and concealing

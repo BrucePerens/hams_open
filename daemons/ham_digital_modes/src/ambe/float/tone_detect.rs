@@ -12,6 +12,7 @@ use std::f64::consts::PI;
 
 pub const FRAME: usize = 160;
 
+// [@ANCHOR: float_tone_detect_detected_tone_enum]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DetectedTone {
     Dtmf {
@@ -25,6 +26,7 @@ pub enum DetectedTone {
     },
 }
 
+// [@ANCHOR: float_tone_detect_detection_struct]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Detection {
     pub tone: DetectedTone,
@@ -167,6 +169,8 @@ pub fn detect_tone(frame: &[f64]) -> Option<Detection> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: float_tone_detect_detected_tone_enum]
+    // Tests [@ANCHOR: float_tone_detect_detection_struct]
     use super::*;
 
     fn sines(freqs: &[f64], amp: f64, offset: usize) -> Vec<f64> {

@@ -21,6 +21,7 @@ fn bit(d: u64, start: usize) -> u32 {
 /// The nine raw parameter indices `b0..b8`, extracted from the 49 decoded data bits per the exact
 /// bit mapping documented in `mod.rs`'s own doc comment (traced directly from mbelib's real
 /// source, not guessed).
+// [@ANCHOR: decode_raw_parameters_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RawParameters {
     pub b0: u32,
@@ -51,6 +52,7 @@ pub fn extract_raw_parameters(d: u64) -> RawParameters {
 
 /// `b0`'s own real special-frame ranges (120-127, beyond Annex A's 120 real pitch codes),
 /// per mbelib's real `mbe_decodeAmbe2450Parms` branch on `b0`. See `mod.rs`'s own doc comment.
+// [@ANCHOR: decode_frame_kind_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameKind {
     /// `b0` 0-119: a real, voiced/unvoiced speech frame -- the common case.
@@ -252,6 +254,7 @@ pub fn dtmf_tone_idx(row: u8, col: u8) -> u8 {
 }
 
 /// DVSI's own `Call Progress` sub-range of `TONE_IDX` (`0xA0`/`0xA1`/`0xA2`/`0xFF`, Table 104).
+// [@ANCHOR: decode_call_progress_tone_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CallProgressTone {
     Dial,
@@ -266,6 +269,7 @@ pub enum CallProgressTone {
 /// range boundaries [`dtmf_digit_from_tone_idx`] alone doesn't cover. A `b0` of [`FrameKind::
 /// DetectedTone`] or [`FrameKind::CallProgress`] pairs with this; see `decode_tone_idx`'s own doc
 /// comment for which sub-range is chip-validated live and which is documented-but-untested.
+// [@ANCHOR: decode_tone_identity_enum]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ToneIdentity {
     /// A DTMF digit, as `(row, column)` per [`dtmf_digit_from_tone_idx`]'s own layout.
@@ -305,6 +309,7 @@ pub fn classify_tone_idx(tone_idx: u8) -> ToneIdentity {
 /// Persistent decoder state across frames -- the previous frame's own `L`, its (post-inverse-DCT)
 /// `log2` spectral-amplitude history, and `gamma`, mirroring mbelib's own `prev_mp` argument (and
 /// `ambe_dstar::decode::DStarDecoderState`'s identical role for the sibling generation).
+// [@ANCHOR: ambe_plus_2_decode_decoder_state_struct]
 pub struct DecoderState {
     pub l: u32,
     pub log2_ml: Vec<f64>,
@@ -326,6 +331,7 @@ impl DecoderState {
 }
 
 /// One frame's own real, decoded semantic parameters.
+// [@ANCHOR: decode_parameters_struct]
 #[derive(Debug, Clone)]
 pub struct Parameters {
     pub l: u32,
@@ -337,6 +343,7 @@ pub struct Parameters {
 /// The real outcome of dequantizing one frame: a genuine speech frame's parameters, or one of the
 /// three special frame kinds `mod.rs`'s doc comment describes -- never a panic on any of the 128
 /// possible `b0` values.
+// [@ANCHOR: ambe_plus_2_decode_dequantized_frame_enum]
 pub enum DequantizedFrame {
     Speech(Parameters),
     /// `b0=121` or `123` only -- a genuine erasure with no real parameters. **Not** `b0=120`/`122`;
@@ -519,6 +526,13 @@ pub fn dequantize(raw: &RawParameters, state: &mut DecoderState) -> DequantizedF
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: decode_raw_parameters_struct]
+    // Tests [@ANCHOR: decode_frame_kind_enum]
+    // Tests [@ANCHOR: decode_call_progress_tone_enum]
+    // Tests [@ANCHOR: decode_tone_identity_enum]
+    // Tests [@ANCHOR: ambe_plus_2_decode_decoder_state_struct]
+    // Tests [@ANCHOR: decode_parameters_struct]
+    // Tests [@ANCHOR: ambe_plus_2_decode_dequantized_frame_enum]
     use super::*;
     use crate::ambe::float::dstar::whiten_c1;
     use crate::ambe::general::fec::golay_encode;

@@ -53,6 +53,7 @@ pub const CALL_RING_HZ: [f64; 2] = [440.0, 480.0];
 pub const CALL_BUSY_HZ: [f64; 2] = [480.0, 620.0];
 
 /// Two phase accumulators (radians); a tone uses one or both.
+// [@ANCHOR: float_tone_synthesis_tone_synthesizer_struct]
 pub struct ToneSynthesizer {
     phase: [f64; 2],
 }
@@ -102,6 +103,7 @@ impl Default for ToneSynthesizer {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: float_tone_synthesis_tone_synthesizer_struct]
     use super::*;
 
     #[test]
