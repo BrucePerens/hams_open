@@ -115,6 +115,8 @@ fn wait(what: &str, mut check: impl FnMut() -> bool) {
 // Tests [@ANCHOR: radioctl_capi_rig_set_ptt]
 // Tests [@ANCHOR: radioctl_capi_rig_permit_transmit]
 // Tests [@ANCHOR: radioctl_capi_rig_close]
+// Tests [@ANCHOR: radioctl_capi_ffi_rctl_rig]
+// Tests [@ANCHOR: radioctl_capi_ffi_keep]
 #[test]
 fn a_tcp_rig_through_the_c_api_is_unkeyed_on_reconnect_and_on_close() {
     let tokio_rt = tokio::runtime::Builder::new_multi_thread()
@@ -190,6 +192,8 @@ fn a_tcp_rig_through_the_c_api_is_unkeyed_on_reconnect_and_on_close() {
 // Tests [@ANCHOR: radioctl_capi_rig_open_virtual]
 // Tests [@ANCHOR: radioctl_capi_rig_revoke_transmit]
 // Tests [@ANCHOR: radioctl_capi_rig_transmit_permitted]
+// Tests [@ANCHOR: radioctl_capi_ffi_rctl_runtime]
+// Tests [@ANCHOR: radioctl_capi_ffi_shared]
 #[test]
 fn a_host_supplied_runtime_owns_nothing_the_c_side_must_build() {
     let host = tokio::runtime::Builder::new_multi_thread()
@@ -219,6 +223,7 @@ fn a_host_supplied_runtime_owns_nothing_the_c_side_must_build() {
 }
 
 // Tests [@ANCHOR: radioctl_capi_run]
+// Tests [@ANCHOR: radioctl_capi_ffi_fail]
 #[test]
 fn the_wrong_kind_of_handle_and_a_panic_are_errors_not_crashes() {
     let toml = c(KX3);
@@ -307,6 +312,7 @@ fn a_serial_open_that_cannot_succeed_is_a_clean_error() {
 // Tests [@ANCHOR: radioctl_capi_from_station_error]
 // Tests [@ANCHOR: radioctl_capi_rotator_open_tcp]
 // Tests [@ANCHOR: radioctl_capi_rotator_open_serial]
+// Tests [@ANCHOR: radioctl_capi_ffi_rctl_rotator]
 #[test]
 fn a_virtual_rotator_through_the_c_api_moves_stops_parks_and_refuses_out_of_travel() {
     // SAFETY (whole block): valid pointers, or deliberately mismatched live handles.
