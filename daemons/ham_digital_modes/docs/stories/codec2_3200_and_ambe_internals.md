@@ -47,6 +47,23 @@ the index into `0..levels`. A target at or below the start maps to level 0.
   (`CNLP * gmax`), which can exceed `i64::MAX` at full-scale input and once silently wrapped.
 *(Reference: `src/codec2_3200/nlp.rs` -> `[@ANCHOR: ham_digital_modes:design_lowpass]`, `[@ANCHOR: ham_digital_modes:dc_notch_fixed]`, `[@ANCHOR: nlp:rshift_round_i128]`, `[@ANCHOR: ham_digital_modes:rshift_round_i128_wide]`)*
 
+## Codec2 3200 fixed-point FFT arithmetic helpers (fixed_fft)
+
+The integer FFT keeps every butterfly exact while avoiding 128-bit arithmetic whenever the values are small enough, so a few
+small helpers choose between equivalent forms; each is tested against the plain exact `i128` expression.
+
+- `ComplexQ23::mag_sq_raw` is the squared magnitude `re^2 + im^2` in Q46, computed in `u64` when both parts are under 2^31 and in
+  `i128` otherwise; the two paths give the same number.
+- `twiddle_mul` multiplies a Q23 twiddle by a complex value and rounds back to Q23: in `i64` when both operands are under 2^38,
+  otherwise in exact `i128`; the result is identical either way.
+- `mode_for_sum` picks the kernel for a transform from the sum of its input magnitudes: the 32-bit mode below 2^29, the 64-bit kernel
+  of the target below 2^39, and the checked mode above that.
+- `mul_w_x`, `umul_x` and `mul_round_i64` do 24-bit-by-64-bit multiplies as 32-bit halves, for targets without a 64-bit multiplier;
+  they equal the plain 64-bit product (and, for `mul_round_i64`, its Q23-rounded two-term sum).
+- `twiddle_sums` is the pair of exact 64-bit sums `c*x - s*y` and `c*y + s*x` of an inverse-transform twiddle multiply, as 32-bit
+  word pairs; `round_shift` and `round_shift_neg` turn such a pair into the Q23-rounded value of the sum and of its negation.
+  *(Reference: `src/codec2_3200/fixed_fft.rs` -> `[@ANCHOR: fixed_fft:ComplexQ23_mag_sq_raw]`, `[@ANCHOR: fixed_fft:twiddle_mul]`, `[@ANCHOR: fixed_fft:mode_for_sum]`, `[@ANCHOR: fixed_fft:mul_w_x]`, `[@ANCHOR: fixed_fft:umul_x]`, `[@ANCHOR: fixed_fft:mul_round_i64]`, `[@ANCHOR: fixed_fft:twiddle_sums]`, `[@ANCHOR: fixed_fft:round_shift]`, `[@ANCHOR: fixed_fft:round_shift_neg]`)*
+
 ## Codec2 3200 synthesis (float and fixed)
 
 `synthesize_subframe` turns one decoded model into 10 ms of audio: it samples the LPC filter's phase
