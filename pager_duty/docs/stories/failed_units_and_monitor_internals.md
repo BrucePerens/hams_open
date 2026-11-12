@@ -46,11 +46,11 @@ The "Systemd Failed Services Tracker" check (type systemd, target `*`) and the `
 
 ## RabbitMQ check
 
-`amqp_check()` checks the broker the way a client uses it: connect, authenticate, open the vhost and a channel, then close the
+`amqp_check()` [@ANCHOR: pager_duty:amqp_check] checks the broker the way a client uses it: connect, authenticate, open the vhost and a channel, then close the
 channel and the connection with their own handshakes. It used to send only the protocol header and drop the socket, which the
 broker logged as an abruptly closed connection 1,440 times a day. It returns a flag and a text that names the failure class
 (refused, timeout, authentication, access denied, protocol or lost connection) and never contains the credentials, gives up on
-a silent broker after a few seconds, and reports missing `RMQ_USER`/`RMQ_PASS` instead of trying. [@ANCHOR: pager_duty:amqp_check]
+a silent broker after a few seconds, and reports missing `RMQ_USER`/`RMQ_PASS` instead of trying. The full entry (arguments, timeouts and the failure texts) is `amqp_check` in `daemon/README.md`.
 
 ## Things we built that are not in operation
 

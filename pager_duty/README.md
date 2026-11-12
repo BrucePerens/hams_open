@@ -4,7 +4,7 @@
 
 ---
 
-[@ANCHOR: pager_duty_module_root]
+(The module as a whole is described in section 6, "Anchor entries".)
 
 The Pager Duty module is an enterprise-grade Site Reliability Engineering (SRE) suite designed to keep your Odoo infrastructure running smoothly. It provides active monitoring, intelligent alerting, and automated incident management.
 
@@ -96,9 +96,9 @@ sudo pagerduty-maintenance end
 The module follows a **Command Query Responsibility Segregation (CQRS)** pattern. Odoo serves as the configuration and reporting plane, while standalone Python daemons handle the high-frequency execution loops.
 
 ### Key Components:
-*   **Control Plane:** Odoo records (`pager.check`) define what to monitor. [@ANCHOR: generalized_pager_config]
+*   **Control Plane:** Odoo records (`pager.check`) define what to monitor (exported by `action_push_to_json`, section 6).
 *   **Data Plane (Daemons):**
-    *   `generalized_monitor.py`: Executes standard checks (HTTP, TCP, SQL, etc.) via a micro-privilege service account. It is designed to "fail fast" if system dependencies are missing. [@ANCHOR: daemon_execute_check]
+    *   `generalized_monitor.py`: Executes standard checks (HTTP, TCP, SQL, etc.) via a micro-privilege service account. It is designed to "fail fast" if system dependencies are missing (`execute_check`, section 6).
         A missing binary is first requested from Odoo through `rpc_ensure_executable` (12 attempts, 10 seconds apart); if it still cannot be provisioned, the daemon reports a critical "Daemon Boot" incident and exits.
 
     *   `pager_log_analyzer.py`: Tails system logs for regex matches in real-time. It runs chrooted to `/var/log`, drops all kernel capabilities, and de-escalates to `nobody:adm`. [@ANCHOR: COMM_pd_log_api_i18n]
@@ -108,7 +108,7 @@ The module follows a **Command Query Responsibility Segregation (CQRS)** pattern
 *   **Inter-Process Communication (IPC):** Uses Redis Pub/Sub and Queues for high-speed communication between Odoo workers and background daemons.
 
 ### Security & Micro-Privileges:
-*   **Zero-Sudo RPC (Remote Procedure Call):** Daemons authenticate via the `pager_service_internal` service account. No `sudo()` is used. All operations utilize `with_user()` for minimum privilege execution. High-privilege RPCs are protected by allow-lists. [@ANCHOR: rpc_ensure_executable_security]
+*   **Zero-Sudo RPC (Remote Procedure Call):** Daemons authenticate via the `pager_service_internal` service account. No `sudo()` is used. All operations utilize `with_user()` for minimum privilege execution. High-privilege RPCs are protected by allow-lists (`rpc_ensure_executable`, section 6).
 
 *   **Config Isolation:** The location of the daemon configuration file is managed through system parameters, isolated by service accounts. [@ANCHOR: generalized_pager_config_path]
     Odoo writes `pager_config.json` into the directory named by the `pager_duty.config_dir` system parameter (default `/opt/hams/etc`) when that directory exists and is writable, and otherwise into `daemon/`. `generalized_monitor.py` looks for it in the order `PAGER_CONFIG_PATH`, then `PAGER_CONFIG_DIR` (default `/opt/hams/etc`), then `daemon/`. `pager_log_analyzer.py` uses the same order (so `PAGER_CONFIG_PATH` works for it too); `pager_synthetic_spooler.py` reads only the copy in `daemon/`.
@@ -153,7 +153,7 @@ Tests: `daemon/test_freshness.py` (`FeedSchemeTests`).
     booking), the **most recently created** shift is the one that gets paged -- adding a new
     shift is how you override an existing one. A platform-wide shift (no website) and a
     website's own shift are ranked on that same one axis, with no precedence for either.
-    [@ANCHOR: test_pager_notification]
+    (Documented in section 6 as `get_current_on_duty_admin`.)
 
 ### `pager.incident` (Models)
 Handles the lifecycle of monitoring alerts.
@@ -185,8 +185,8 @@ Handles the lifecycle of monitoring alerts.
 *   `action_acknowledge(self)`: Acknowledges the current incident, halting its escalation timer.
 *   `get_board_data(self)`: Generates real-time, aggregated JSON metrics for the NOC Dashboard UI.
 
-*   `_joins_unit_tickets(self)`: [@ANCHOR: pager_duty:joins_unit_tickets] True only when the `pager_duty.helpdesk_model` parameter (default `hams_helpdesk.ticket`) names the stock `hams_helpdesk.ticket`, the one model that carries the per-unit exception tickets; `report_incident()` joins an incident to a unit's ticket only then.
-*   `_note_unit_tickets(self, incident, unit_tickets)`: [@ANCHOR: pager_duty:note_unit_tickets] Posts an internal note on `incident` listing `#ticket (unit)` for each entry of `unit_tickets`, sorted by unit, saying no separate ticket was opened.
+*   `_joins_unit_tickets(self)`: (section 6) True only when the `pager_duty.helpdesk_model` parameter (default `hams_helpdesk.ticket`) names the stock `hams_helpdesk.ticket`, the one model that carries the per-unit exception tickets; `report_incident()` joins an incident to a unit's ticket only then.
+*   `_note_unit_tickets(self, incident, unit_tickets)`: (section 6) Posts an internal note on `incident` listing `#ticket (unit)` for each entry of `unit_tickets`, sorted by unit, saying no separate ticket was opened.
 
 ### `pager.incident` Helpdesk adapter (`models/incident_ticket_adapter.py`, an extension of `pager.incident`, not a separate model)
 *   `action_generate_helpdesk_ticket(self)`: Converts an existing Pager Duty incident into a Helpdesk ticket, assigning the active on-call responder. Used in automated flows (no button in this module's views calls it).
@@ -238,3 +238,35 @@ Run module tests using the unified test runner:
 python3 tools/test.py -u pager_duty
 ```
 Daemon tests (for example `test_generalized_monitor.py`, `test_pager_log_analyzer.py`, `test_synthetic_spooler.py`) live in `pager_duty/tests/` with the other tests and run under the same runner; they import the daemon scripts directly. **Do not import Odoo packages in the daemon scripts under `pager_duty/daemon/`** (or in any test placed in that directory); the daemons run outside Odoo.
+
+## 6. Anchor entries
+
+Entries for anchors that the sections above mention only in passing. Paths are relative to `pager_duty/`.
+
+### The `pager_duty` module [@ANCHOR: pager_duty_module_root]
+
+The module-level anchor. `pager_duty` (version 1.2, category Ham Radio, AGPL-3) depends on `base`, `mail`, `calendar`, `bus`, `zero_sudo`, `distributed_redis_cache`, `hams_helpdesk`, `website` and `knowledge`; it also uses `binary_downloader` at run time through the manifest's `depends_cycle` entry (not a real Odoo key), because that module depends on this one. Python libraries: `psutil`, `redis`, `mcp`. Its models are `pager.check`, `pager.incident`, the `calendar.event` extension for on-call shifts, `pager.log.file`, `pager.log.pattern` and `pager.log.search.job`; `hooks.py` installs the PostgreSQL board function and registers the daemon keys; the standalone daemons live in `daemon/`. It declares one knowledge article, four security groups (pager admin, pager service, MCP triage service and incident creator) and the record rules that confine each website and company. No code runs at the anchor; it exists so documents can cite the module as a whole. Related entries: `action_push_to_json`, `report_incident`, `execute_check`.
+
+### `action_push_to_json(self)` [@ANCHOR: generalized_pager_config]
+
+The control-plane half of the architecture: it turns the `pager.check` rows into the daemon's configuration file (`models/pager_check.py`, `@public_rpc`). No arguments. It exports up to 1000 active checks with only the keys that are set (`id`, `name`, `type`, `target`, `interval` always), the log analyzer's active files and patterns, and `odoo_database`. The path is `pager_duty.config_dir` (default `/opt/hams/etc`) when writable, else the `daemon/` directory; the file is created with mode 0600 and fixed to 0600 if it already exists, because it contains check passwords. Returns a client notification: success, or a sticky "Export Failed" with the OS error. It is also run automatically after a commit that changes an exported field (`_schedule_config_export`). The daemon reads the file only at start. Details and field list: `docs/stories/automated_monitoring_setup.md`. Tests: `tests/test_generalized_config.py`.
+
+### `execute_check(check, client=None)` [@ANCHOR: daemon_execute_check]
+
+The data-plane half: `generalized_monitor.py` calls it every cycle for one check dict from the configuration file and gets `(passed, message)`. Arguments: `check` (`dict`, borrowed; `type`, `target` and the type's own keys) and `client` (`OdooClient` or `None`, used by types that ask Odoo, such as the freshness feed check). Returns `(True, "OK")` or `(False, text)`; a synthetic script may prefix the text with `[SEVERITY:<level>] `. Each of the roughly 40 check types has its own branch that catches its own network, subprocess and parse errors, so a failing target returns a message instead of ending the polling thread. Binaries it shells out to are verified at boot (`verify_and_install_dependencies`). It runs as the daemon's own user and holds no lock. Credentials come from the check or from `ENV:` references resolved by `parse_env`. Tests: `tests/test_generalized_monitor.py`. Full entry: `docs/journeys/daemon_execution_loop.md`.
+
+### `rpc_ensure_executable(self, cmd_name)` [@ANCHOR: rpc_ensure_executable_security]
+
+The one high-privilege RPC of the module (`@public_rpc @api.model`, `models/pager_check.py`): the daemon asks Odoo to provision a missing monitoring binary. The anchor marks its two guards. Argument: `cmd_name` (`str`). First, the caller must be a system administrator, a `group_pager_admin` member or a `group_pager_service` member, otherwise `AccessError`; a bare `is_service_account` flag is not enough, since every service account in the database has it, including this module's own incident creator. Second, `cmd_name` must be in an allow-list (`dig`, `snmpget`, `pg_dump`, `nginx`, `certbot`, `logrotate`, `curl`, `ping`, `docker`, `systemctl`, `cloudflared`) and contain no `/`. It checks that `binary_downloader` is installed, then calls `binary.manifest.ensure_executable` as `user_binary_downloader_service`. Returns `{"status": "ok", "path": ...}` or `{"status": "error", "message": ...}`; it does not raise for a refusal or a missing manifest entry. May download and install a binary (the side effect). Test: `test_02_rpc_ensure_executable_security` in `tests/test_pager_security.py`.
+
+### `get_current_on_duty_admin(self)` [@ANCHOR: test_pager_notification]
+
+Says who is on call now (`calendar.event`, `@api.private @api.model`, `models/schedule.py`). No arguments; the website comes from the context `website_id` or the current website. It searches events with `is_pager_duty` true whose `start <= now <= stop`, limited to the website or to no website, ordered by `ON_DUTY_SHIFT_ORDER = "create_date desc, id desc"`, and returns the `user_id` of the first one (a `res.users` record) or `False` when no shift covers now. Overlapping shifts are allowed, and the most recently created wins; a global shift and a site shift are ranked on that one axis with no precedence for either, so adding a shift overrides an older one. Read only. Used by `_notify_on_duty`, `_repage_if_due` and the escalation job. Tests: `test_02_zero_sudo_impersonation_and_mail_standard` in `tests/test_incident.py` and `test_02` to `test_06` in `tests/test_schedule_edge_cases.py`.
+
+### `_joins_unit_tickets(self)` [@ANCHOR: pager_duty:joins_unit_tickets]
+
+Decides whether an incident may be tied to a per-unit exception ticket (`@api.model`, `models/incident.py`). No arguments. It reads the system parameter `pager_duty.helpdesk_model` (default `hams_helpdesk.ticket`) as the zero-sudo helper does and returns `True` only when it equals `hams_helpdesk.ticket`, the one model that carries the per-unit tickets; with any other helpdesk model, or with the parameter pointing elsewhere, it returns `False` and the incident gets its own ticket. `report_incident` calls it only when the report names `units` and the severity pages. No writes, no errors. Test: `test_00_unit_tickets_join_only_for_the_stock_helpdesk_ticket` in `tests/test_incident.py`.
+
+### `_note_unit_tickets(self, incident, unit_tickets)` [@ANCHOR: pager_duty:note_unit_tickets]
+
+Leaves a trace on an incident that rides on per-unit tickets (`models/incident.py`). Arguments: `incident` (the new `pager.incident`) and `unit_tickets` (`dict` of unit name to ticket id, as returned by `_report_unit_failures`). It posts an internal note (subtype `mail.mt_note`, so no one is notified) as the mail service account reading "Tracked on the per-unit ticket(s) #id (unit), ..." with the entries sorted by unit, and "no separate ticket was opened". Returns nothing. Called by `report_incident` only after the incident was created with `helpdesk_ticket_id` pointing at the first unit ticket. Test: `test_00b_the_incident_notes_which_unit_tickets_carry_it` in `tests/test_incident.py`.
