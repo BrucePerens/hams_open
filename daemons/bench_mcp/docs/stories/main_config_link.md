@@ -303,6 +303,16 @@ Returns `Tier::ReadOnly` for `None` and for `"read_only"`, `ReadConfig` for `"re
 is read as absent by the caller and so becomes `read_only` (the least permission). The default when omitted is the least permission, so an entry without a
 tier can only read. No I/O. Tests: the tier tests in `config.rs`.
 
+### `connect_waits` [@ANCHOR: bench_mcp_config_connect_waits]
+
+Reads the `connect_waits_s` key of a scope entry: the pauses, in seconds, that `connect` makes after each failed connection attempt before it reports a NO-GO (see `bench_mcp_link_tcp_checked`). `parse` calls it for every entry; only scopes use the value.
+
+| Entry key | Type, range | Meaning |
+|---|---|---|
+| `connect_waits_s` | array of 0 to 8 numbers, each 0 to 3600 | One pause per retry; the scope is tried once more than there are pauses. Omitted: 2, 5, 10, 20 (37 s in all). `[]` means one attempt and no pause. |
+
+Errors: a value that is not such an array is refused with `connect_waits_s must be up to eight numbers from 0 to 3600 (seconds)`, with the instrument name in front. It exists for the stale-session experiment: setting `[300, 600, 1800]` makes one tool call wait the scope out for 5, 10 and 30 minutes and the NO-GO text records each attempt, so the idle timeout of the scope's SCPI server can be measured without a code change. Pure: no I/O. Tests: `connect_waits_default_to_37_seconds_and_are_bounded` in `config.rs` and `a_scope_holding_a_dead_session_is_waited_out_for_as_long_as_connect_waits_s_says` in `main.rs` (a fake scope that resets new connections for 0.7 s).
+
 ### `vna_config` [@ANCHOR: bench_mcp_config_vna]
 
 Reads the VNA settings of an instrument entry into `vnwa_open::sweep::Config`. `parse` calls it for every entry (not only VNAs; for the other

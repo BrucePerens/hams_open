@@ -312,9 +312,9 @@ fn connect(i: &Instrument) -> Result<Link, String> {
     // [@ANCHOR: bench_mcp_main_connect]
     match i.kind {
         Kind::Scope => {
-            // A scope still holding a dead session resets the first queries: wait it out (about 37 s at most) before reporting NO-GO.
+            // A scope still holding a dead session resets the first queries: wait it out (37 s by default, `connect_waits_s`) before reporting NO-GO.
             let host = i.host.as_deref().unwrap_or_default();
-            let waits = [2, 5, 10, 20].map(std::time::Duration::from_secs);
+            let waits: Vec<_> = i.connect_waits_s.iter().map(|w| std::time::Duration::from_secs_f64(*w)).collect();
             Link::tcp_checked(host, i.port, &waits, &|h, p| Link::scope_state(h, &[p, 80]))
         }
         Kind::Psu => Link::serial(i.serial.as_deref().unwrap_or_default(), i.baud),
@@ -1239,6 +1239,26 @@ mod tests {
         v[psu].kind = Kind::Audio;
         let e = connect(&v[psu]).err().unwrap();
         assert!(e.contains("have no SCPI link"), "{e}");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_connect]
+    // Tests [@ANCHOR: bench_mcp_config_connect_waits]
+    #[test]
+    fn a_scope_holding_a_dead_session_is_waited_out_for_as_long_as_connect_waits_s_says() {
+        let fake = crate::fake_scope::FakeScope::start_with(crate::fake_scope::Opts {
+            stale_for: std::time::Duration::from_millis(700),
+            ..Default::default()
+        });
+        let mut v = insts();
+        let scope = v.iter().position(|i| i.name == "scope").unwrap();
+        v[scope].port = fake.port;
+        // No pause: the first attempt is reset and the NO-GO carries the evidence.
+        v[scope].connect_waits_s = vec![];
+        let e = connect(&v[scope]).err().unwrap();
+        assert!(e.starts_with("NO-GO:") && e.contains("State: "), "{e}");
+        // Pauses that add up to more than the idle time: the scope answers on a later attempt.
+        v[scope].connect_waits_s = vec![0.3, 0.3, 0.3];
+        assert!(connect(&v[scope]).is_ok());
     }
 
     // Tests [@ANCHOR: bench_mcp_main_instrument_lock]

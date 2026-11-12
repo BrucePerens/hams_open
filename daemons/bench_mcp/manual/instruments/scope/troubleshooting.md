@@ -11,6 +11,7 @@ verified: probed on the unit (SDS1202X-E, firmware 1.3.27), 2026-10-28
 | Symptom | Cause | Action |
 |---|---|---|
 | connection error or timeout on any call | scope off, wrong `host`, network | check power and the address in the configuration; ping it; ask the person |
+| `NO-GO: ... did not answer *IDN?` while ping and port 5025 answer | the scope's one-client SCPI server probably holds a dead session (seen once after a host power loss; cause unconfirmed) | set `connect_waits_s` to `[300, 600, 1800]` in the scope entry and call a tool; if it answers after a wait, note which; otherwise power-cycle the scope |
 | `bench_capture` refused: scope is stopped | trigger mode `STOP` | `bench_set {"trigger_mode": "AUTO"}` |
 | measurements read `****` | no edges, signal off screen, scale too coarse | adjust `vdiv_v` and `timebase_s` |
 | capture returns a handful of samples | memory settings not reset (old firmware behaviour) | the driver sets full-point reads; retry; report if it persists |

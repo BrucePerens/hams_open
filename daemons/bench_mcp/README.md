@@ -81,6 +81,8 @@ The bladeRF needs its FPGA loaded (`bladeRF-cli -L hostedx115.rbf` writes it to 
 for the FPGA 0.16; the LimeSDR needs firmware 4 and gateware 2.23 (`LimeUtil --update`).
 The RTL-SDR (`rtlsdr`, an RTL2832U with an R820T tuner) is **receive only; the hardware cannot transmit**. It tunes 24 to 1766 MHz at 0.225 to 0.3 or 0.9 to 3.2 MS/s with gain 0 to 49.6 dB; `ppm` (-200 to 200) on a capture corrects its crystal, and `direct_samp` (`"1"` or `"2"`) in its entry makes it tune 0.1 to 28.8 MHz. The kernel DVB drivers must be blacklisted (`/etc/modprobe.d/rtl-sdr-blacklist.conf`), as the `rtl-sdr` package does. It has one channel, so `bench_sdr_coherence` and `antenna` do not apply.
 
+A scope entry may also set `connect_waits_s`, the pauses in seconds after each failed connection attempt (up to eight, 0 to 3600; default `[2, 5, 10, 20]`): a scope that still holds a dead SCPI session resets the first queries, and the tool call fails with a NO-GO only after the last pause. To find out how long the scope takes to free the session without a power cycle, set `[300, 600, 1800]` and call any scope tool while it is stuck; the NO-GO or the success tells which wait it needed.
+
 `BENCH_MCP_OUT` is the directory for captures and screenshots (default: the temp dir). Each
 instrument has its own permission tier (`read_only` when omitted). There is no raw-SCPI (raw instrument command) tool. The
 server, not the model, refuses a tool above an instrument's tier and does not list a tool that no
