@@ -205,6 +205,7 @@ impl SynthesisState {
     /// Synthesizes a frame from already-final parameters, skipping spectral enhancement, V/UV smoothing and
     /// amplitude smoothing entirely (`reconstructed_amplitudes` and `voiced` go straight to Eq. 127-142). For
     /// experiments comparing a mode's output against the real chip with those stages disabled.
+    // [@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_frame_unenhanced]
     pub fn synthesize_frame_unenhanced(
         &mut self,
         amplitudes: &[f64],
@@ -413,5 +414,36 @@ mod tests {
             frame.iter().any(|&s| s.abs() > 1e-6),
             "expected real synthesized energy, got near-silence: {frame:?}"
         );
+    }
+
+    /// `synthesize_frame_unenhanced` skips enhancement and smoothing, so it is deterministic in its inputs: two fresh states
+    /// given the same parameters give the same audible, finite frame; a length mismatch is `None`; and the repeated frame it
+    /// records reuses exactly those parameters (the same state advanced once more equals a second fresh-state call's second
+    /// frame).
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_frame_unenhanced]
+    fn synthesize_frame_unenhanced_is_deterministic_and_records_its_parameters_for_repeats() {
+        let omega0 = 2.0 * std::f64::consts::PI / 100.0;
+        let voiced = vec![true; 16];
+        let amplitudes = vec![500.0; 16];
+        let mut a = SynthesisState::new();
+        let mut b = SynthesisState::new();
+        let first_a = a
+            .synthesize_frame_unenhanced(&amplitudes, omega0, &voiced)
+            .unwrap();
+        let first_b = b
+            .synthesize_frame_unenhanced(&amplitudes, omega0, &voiced)
+            .unwrap();
+        assert_eq!(first_a, first_b);
+        assert!(first_a.iter().all(|s| s.is_finite()));
+        assert!(first_a.iter().any(|&s| s.abs() > 1.0), "audible output");
+        let repeated = a.synthesize_repeated_frame().unwrap();
+        let second_b = b
+            .synthesize_frame_unenhanced(&amplitudes, omega0, &voiced)
+            .unwrap();
+        assert_eq!(repeated, second_b);
+        assert!(SynthesisState::new()
+            .synthesize_frame_unenhanced(&amplitudes[..8], omega0, &voiced)
+            .is_none());
     }
 }

@@ -202,6 +202,23 @@ flips every symbol shows a negative trough at the symbol rate and a positive pea
 
   *(Reference: `src/codec2_3200/envelope.rs` -> `[@ANCHOR: ham_digital_modes:codec2_3200_envelope_sample_filter_phase_with]`; `src/codec2_3200/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:codec2_3200_synthesis_SynthesisStateFixed_prepare_subframe_fixed]`, `[@ANCHOR: ham_digital_modes:codec2_3200_synthesis_overlap_add_subframe]`; `src/codec2_3200/lpc.rs` -> `[@ANCHOR: ham_digital_modes:codec2_3200_lpc_cheb_poly_eval_q29]`, `[@ANCHOR: ham_digital_modes:codec2_3200_lpc_levinson_durbin_q23_from_integer_r]`; `src/codec2_1600/lsp_quantiser.rs` -> `[@ANCHOR: ham_digital_modes:codec2_1600_lsp_quantiser_lsp_cb_q23]`; `src/timing_characterizer.rs` -> `[@ANCHOR: ham_digital_modes:timing_characterizer_autocorrelation_profile]`)*
 
+## Float AMBE+2 tone level and unenhanced synthesis anchored in slice 10
+
+The float AMBE+2 encoder's `amplitude_field` maps a tone amplitude to the 12-bit level field by interpolating the chip's seven measured points in log2
+amplitude: each measured point is hit exactly, the ends clamp, and the mapping never decreases. `SynthesisState::synthesize_frame_unenhanced` synthesizes from
+already-final parameters with no enhancement or smoothing; it is deterministic, rejects a length mismatch, and records its parameters so the next repeated
+frame reuses them exactly.
+
+  *(Reference: `src/ambe/float/ambe_plus_2/encoder.rs` -> `[@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_amplitude_field]`; `src/ambe/float/tia_102_baba/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_frame_unenhanced]`)*
+
+## Codec2 1600 test-side reference helpers anchored in slice 11
+
+`FloatBoundaryEncoderFixed::encode` is the codec2 1600 encoder with the float analysis boundary (`analyse_lsps_and_energy_float_boundary` computes the LSPs and
+frame energy in float from the integer pitch analysis); the integer encoder is tested to produce the same frames as it. `decode_and_compare_to_reference`
+decodes a real captured 1600 bit/s stream and returns the correlation and RMS ratio against the real reference decoder's audio, which two tests require to
+be high and near one.
+  *(Reference: `src/codec2_1600/mod.rs` -> `[@ANCHOR: ham_digital_modes:codec2_1600_FloatBoundaryEncoderFixed_encode]`, `[@ANCHOR: ham_digital_modes:codec2_1600_analyse_lsps_and_energy_float_boundary]`, `[@ANCHOR: ham_digital_modes:codec2_1600_decode_and_compare_to_reference]`)*
+
 ## Codec2 3200 synthesis (float and fixed)
 
 `synthesize_subframe` turns one decoded model into 10 ms of audio: it samples the LPC filter's phase
