@@ -27,7 +27,7 @@ Scope:
 * `coupling`: `A1M` (AC, 1 MOhm), `D1M` (DC, 1 MOhm) or `GND`.
 * `attenuation`: the probe ratio (1, 10, ...); it must match the probe, or all voltages are wrong by that factor.
 * `trigger_mode`: `AUTO`, `NORM`, `SINGLE` or `STOP`. `STOP` freezes the memory; `bench_capture` refuses a stopped scope.
-* `trigger_type`: `EDGE`, `SLEW`, `GLIT`, `INTV`, `RUNT` or `TV` on `channel`; the type's other parameters keep their values. Window, pattern, drop-out and serial-bus triggers were not accepted by the tested unit.
+* `trigger_type`: `EDGE`, `SLEW`, `GLIT`, `INTV`, `RUNT`, `TV` or `DROP` (drop-out; from the programming guide, not yet probed) on `channel`; the type's other parameters keep their values. The serial-bus and pattern triggers are `bench_scope_trigger`; the guide has no window trigger type.
 
 Supply:
 

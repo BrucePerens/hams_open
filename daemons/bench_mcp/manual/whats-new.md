@@ -21,6 +21,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - tools/bench_scope_counter: The scope's hardware frequency counter, coarse and full precision.
 - tools/bench_scope_math_native: The scope's own math and FFT: equation, scale, FFT settings, trace read.
 - tools/bench_scope_cursor_native: The scope's own cursors: mode, type, positions and values.
+- tools/bench_scope_trigger: Serial triggers (I2C, SPI, UART, CAN, LIN) and the pattern trigger.
 - tools/bench_scope_math: channel 1 op channel 2 on the host from one frozen frame
 - tools/bench_scope_cursors: values at chosen times and the differences between two cursors, from the waveform memory
 - tools/bench_scope_acquire: acquisition mode, average count and memory depth with read-back
