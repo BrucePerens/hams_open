@@ -130,10 +130,10 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 ## Conventions
 
-- Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test carries
-  `// Tests [@ANCHOR: id]`, and this README cites it as `[@ANCHOR: relay_broker:id]` below.
-  `tests/conventions.rs` fails when source, tests and README disagree or a file lacks its SPDX
-  header.
+- Anchors (ADR 0090): a function carries an anchor comment with its id in source, its test carries
+  a `Tests` anchor comment with the same id, and this README cites it in the heading of its entry
+  (`### name`, then the id prefixed with `relay_broker:`; older one-line bullets do the same). `tests/conventions.rs` fails when source, tests and README disagree
+  or a file lacks its SPDX header.
 - Tests use the production code paths; the only test seam is the `Os` trait.
 
 ## Function reference
@@ -220,7 +220,14 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Returns.** `Response::TimeStatus { now_unix_secs, steps_last_hour, breaker_open, min_target_unix_secs }`, the last being `BUILD_DATE_UNIX_SECS`. **Errors.** None. **Side effects.** Reads the clock; expires guard state; one audit line. **Tests.** `the_clock_is_stepped_only_when_enabled_and_inside_the_ceilings` (tests/broker.rs).
 
-- [@ANCHOR: relay_broker:relay_broker_os_system_time] (os.rs) The wall clock now in Unix seconds (the Linux layer also steps it with `clock_settime`).
+### `LinuxOs::wall_clock_secs` (os.rs) [@ANCHOR: relay_broker:relay_broker_os_system_time]
+
+**Purpose.** The wall clock now in Unix seconds, the one source of "before" and "after" for `set_system_time` and of `now_unix_secs` for `time_status`. `LinuxOs::system_time_unix_secs` (the `Os` trait method) calls it; the Linux layer also steps the clock with `clock_settime` in `set_system_time`.
+
+**Signature.** `fn wall_clock_secs() -> u64` (private, associated function)
+
+**Arguments.** None. **Returns.** Seconds since 1970-01-01 UTC, or 0 when the clock reads before 1970. **Errors.** None; the failure case is mapped to 0 rather than a panic. **Side effects.** Reads `CLOCK_REALTIME` only. **Concurrency.** None; pure read. **Tests.** `the_clock_is_stepped_only_when_enabled_and_inside_the_ceilings` (tests/broker.rs) cites it (the broker tests drive the clock through a fake `Os`; whether the real wall clock is read there is unknown, to-do: a direct test of `LinuxOs::wall_clock_secs`).
+
 ### `json_escape` (audit.rs) [@ANCHOR: relay_broker:relay_broker_json_escape]
 
 **Purpose.** The only JSON encoding the audit log needs: it escapes a string for use inside a JSON string literal, so the hand-formatted lines stay valid whatever a path or reason contains (the broker has no serialisation dependency). Called by `AuditEvent::to_json_line` for `action`, `outcome` and `detail`.
@@ -498,21 +505,184 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Arguments.** Read from the process argv (see `parse_args`). **Returns.** `ExitCode::SUCCESS` after an idle exit; exit 2 for a bad option, config, audit log or listener (message to stderr: `hams-relay-broker: ...`); `FAILURE` when the accept loop errors. **Concurrency.** Single-threaded, one connection at a time; blocking in `run`. **Side effects.** Creates the log and the socket; may delete a stale socket. **Security.** The broker refuses to start unauditable or with an unsafe config. **Tests.** `the_program_exits_2_on_bad_options_or_config_and_0_after_an_idle_run` (tests/cli.rs).
 
-- [@ANCHOR: relay_broker:relay_broker_kind_of_mode] (os.rs) Maps `st_mode`/`st_rdev` to a `NodeKind`.
-- [@ANCHOR: relay_broker:relay_broker_read_hex_u16] (os.rs) Reads a sysfs attribute holding a hexadecimal id (`idVendor`, `idProduct`).
-- [@ANCHOR: relay_broker:relay_broker_usb_identity_from_sysfs] (os.rs) Walks up from a sysfs device directory (at most eight levels) to the USB device that holds
-- [@ANCHOR: relay_broker:relay_broker_linux_sysfs_dir_for] (os.rs) The sysfs class directory of a device node: `/dev/ttyUSB0` is `class/tty/ttyUSB0`,
-- [@ANCHOR: relay_broker:relay_broker_linux_scan_class] (os.rs) Lists one sysfs class directory. `keep` decides by entry name; `dev_dir` is where the
-- [@ANCHOR: relay_broker:relay_broker_linux_peer_credentials] (os.rs) fn peer_credentials(&self, socket: BorrowedFd<'_>) -> io::Result<Peer> {
-- [@ANCHOR: relay_broker:relay_broker_linux_update_package] (os.rs) fn update_package(&self) -> io::Result<()> { // creates the request file the package's root-owned path unit acts on; runs no program
-- [@ANCHOR: relay_broker:relay_broker_linux_node_kind] (os.rs) fn node_kind(&self, path: &Path) -> NodeKind {
-- [@ANCHOR: relay_broker:relay_broker_linux_open_device] (os.rs) fn open_device(&self, path: &Path, read_only: bool) -> io::Result<OwnedFd> {
-- [@ANCHOR: relay_broker:relay_broker_linux_fd_kind] (os.rs) fn fd_kind(&self, fd: BorrowedFd<'_>) -> NodeKind {
-- [@ANCHOR: relay_broker:relay_broker_linux_usb_identity] (os.rs) fn usb_identity(&self, path: &Path) -> Option<(u16, u16, String)> {
-- [@ANCHOR: relay_broker:relay_broker_linux_list_devices] (os.rs) fn list_devices(&self) -> Vec<DeviceDescriptor> {
-- [@ANCHOR: relay_broker:relay_broker_linux_username] (os.rs) fn username(&self, uid: u32) -> Option<String> {
-- [@ANCHOR: relay_broker:relay_broker_linux_groups_of] (os.rs) fn groups_of(&self, user: &str) -> Vec<String> {
-- [@ANCHOR: relay_broker:relay_broker_linux_add_to_group] (os.rs) fn add_to_group(&self, user: &str, group: &str) -> io::Result<()> {
+### `kind_of_mode` (os.rs) [@ANCHOR: relay_broker:relay_broker_kind_of_mode]
+
+**Purpose.** Maps `st_mode` and `st_rdev` from `lstat` or `fstat` to a `NodeKind`, the policy's view of a node. `NodeKind` is the closed enum `Char { major, minor }`, `Block`, `Dir`, `Symlink`, `Other` (file, fifo, socket) and `Missing` (does not exist or cannot be examined; produced by the callers).
+
+**Signature.** `fn kind_of_mode(mode: u32, rdev: u64) -> NodeKind` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `mode` | `u32` | The `st_mode` field; only the file-type bits `S_IFMT` are used. |
+| `rdev` | `u64` | `st_rdev`; the major and minor are taken from it only for a character device. |
+
+**Returns.** The kind; a block device is `Block` (a disk, always refused by the policy). **Errors.** None. **Side effects.** None; pure. **Tests.** `real_nodes_are_classified_and_dev_null_opens_without_root` (os.rs).
+
+### `read_hex_u16` (os.rs) [@ANCHOR: relay_broker:relay_broker_read_hex_u16]
+
+**Purpose.** Reads a sysfs attribute holding a hexadecimal id (`idVendor`, `idProduct`, for example `08bb`), for the USB identity.
+
+**Signature.** `fn read_hex_u16(path: &Path) -> Option<u16>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The attribute file; read as text, trimmed, parsed as base-16 `u16`. |
+
+**Returns.** `Some(value)`, or `None` when the file is missing, unreadable or not hex. **Errors.** None; every failure is `None`, which the caller treats as "no USB device here". **Side effects.** One file read. **Tests.** `sysfs_enumeration_reads_usb_ids_through_the_device_link` (os.rs).
+
+### `usb_identity_from_sysfs` (os.rs) [@ANCHOR: relay_broker:relay_broker_usb_identity_from_sysfs]
+
+**Purpose.** Finds the USB device behind a node: it walks up from a sysfs device directory (at most eight levels) to the directory that holds `idVendor` and `idProduct`, and returns them with the product and manufacturer strings. The tty or sound entry itself has no ids; the USB device is one of its ancestors.
+
+**Signature.** `fn usb_identity_from_sysfs(device_dir: &Path) -> Option<(u16, u16, String, String)>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `device_dir` | `&Path` | The `device` link of a sysfs class entry; canonicalised first, so the walk follows the real tree. |
+
+**Returns.** `Some((vendor, product id, product string, manufacturer string))` (strings empty when the attributes are missing), or `None` when no ancestor within eight levels holds both ids (not USB, or unreadable). **Errors.** None. **Side effects.** Filesystem reads in sysfs only. **Tests.** `sysfs_enumeration_reads_usb_ids_through_the_device_link` (os.rs).
+
+### `LinuxOs::sysfs_dir_for` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_sysfs_dir_for]
+
+**Purpose.** The sysfs class directory of a device node: `/dev/ttyUSB0` is `class/tty/ttyUSB0`, `/dev/snd/pcmC1D0c` is `class/sound/pcmC1D0c`, below the configurable `sysfs_root` (normally `/sys`). `LinuxOs` also has `group_file` (`/etc/group`), the `hub: HubRunner` and `update_request` (`/var/lib/hams-relay-broker/update-requested`), all parameters so the tests need no root.
+
+**Signature.** `fn sysfs_dir_for(&self, path: &Path) -> Option<PathBuf>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | A device path; must start with `/dev`. A single component starting `tty`, or `snd/<name>`, is recognised. |
+
+**Returns.** The directory, or `None` for any other node (a disk, `/dev/null`, a deeper path). **Errors.** None. **Side effects.** None; no file access. **Tests.** `sysfs_enumeration_reads_usb_ids_through_the_device_link` (os.rs).
+
+### `LinuxOs::scan_class` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_scan_class]
+
+**Purpose.** Lists one sysfs class directory as `DeviceDescriptor` values for `list_devices`. `keep` decides by entry name; `dev_dir` is where the node lives. Only entries with a `device` link (real hardware, not virtual consoles) count.
+
+**Signature.** `fn scan_class(&self, class: DeviceClass, sys_class: &str, dev_dir: &str, keep: fn(&str) -> bool) -> Vec<DeviceDescriptor>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `class` | `DeviceClass` | The class stamped on each result. |
+| `sys_class` | `&str` | The directory under `sysfs_root`, such as `class/tty`. |
+| `dev_dir` | `&str` | The directory prefix of the reported path, such as `/dev` or `/dev/snd`. |
+| `keep` | `fn(&str) -> bool` | Name filter. |
+
+**Returns.** Descriptors sorted by name, at most `MAX_DEVICES` (64) before filtering, with vendor and product ids, product and manufacturer strings (0 and empty for non-USB hardware). An unreadable class directory gives an empty list. **Errors.** None. **Side effects.** sysfs reads. **Tests.** `sysfs_enumeration_reads_usb_ids_through_the_device_link` (os.rs).
+
+### `LinuxOs::peer_credentials` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_peer_credentials]
+
+**Purpose.** The kernel's `SO_PEERCRED` of a connected Unix socket: the unforgeable uid, gid and pid of the process that called `connect`. The server reads it on accept, before reading any byte, and feeds it to `AllowList::permits`. `Peer { uid: u32, gid: u32, pid: i32 }` is the result (effective ids; the pid is informational because a pid can be reused).
+
+**Signature.** `fn peer_credentials(&self, socket: BorrowedFd<'_>) -> io::Result<Peer>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `socket` | `BorrowedFd` | A connected Unix stream socket. |
+
+**Returns.** The `Peer`. **Errors.** `io::Error` from `getsockopt`; `serve_connection` then treats the peer as rejected. **Side effects.** None. **Tests.** `real_nodes_are_classified_and_dev_null_opens_without_root` (os.rs).
+
+### `LinuxOs::update_package` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_update_package]
+
+**Purpose.** Asks for the relay package upgrade without the broker holding the right to run a package manager. It creates the request file (`update_request`, `/var/lib/hams-relay-broker/update-requested`); the package's root-owned `hams-relay-update.path` unit notices it and runs the one fixed upgrade command (`apt-get install --only-upgrade hams-local-relay` or `dnf upgrade`). Nothing from the caller reaches that command, and the broker starts no program.
+
+**Signature.** `fn update_package(&self) -> io::Result<()>`
+
+**Arguments.** None. **Returns.** `Ok(())` when the file was written (an existing file is rewritten). **Errors.** The `io::Error` of the write (directory missing or not writable). **Side effects.** One empty file; the upgrade itself happens later, asynchronously, under the unit, so success here means "requested", not "installed". **Tests.** `update_package_leaves_a_request_file_and_runs_no_program` (os.rs).
+
+### `LinuxOs::node_kind` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_node_kind]
+
+**Purpose.** The kind of the node at `path` without following a final symlink (`lstat`), so a planted link is seen as a link. `Policy::check_node` calls it for every component of the path.
+
+**Signature.** `fn node_kind(&self, path: &Path) -> NodeKind`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The node to examine. |
+
+**Returns.** The `NodeKind` through `kind_of_mode`; `Missing` when `lstat` fails for any reason. **Errors.** None; failure is a value. **Side effects.** One `lstat`. **Concurrency.** The answer can be stale by the time of the open, hence the post-open `fd_kind` check. **Tests.** `real_nodes_are_classified_and_dev_null_opens_without_root` (os.rs).
+
+### `LinuxOs::open_device` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_open_device]
+
+**Purpose.** Opens the validated node and returns the descriptor that is passed to the relay. Called by `Broker::open_device` after `check_path` and `check_node`.
+
+**Signature.** `fn open_device(&self, path: &Path, read_only: bool) -> io::Result<OwnedFd>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The checked path. |
+| `read_only` | `bool` | `O_RDONLY` when true, else `O_RDWR`. |
+
+**Returns.** An owned descriptor opened with `O_NOFOLLOW`, `O_CLOEXEC`, `O_NOCTTY` and, only for the open itself, `O_NONBLOCK` (so a tty without carrier returns at once); the flag is cleared afterwards so the worker gets an ordinary blocking descriptor. **Errors.** `io::Error` from `open` (permission, no such device, busy) or from `fcntl`; the descriptor is closed on error. **Side effects.** Opens the device. The caller must run `fd_kind` on the result. **Security.** `O_NOCTTY` stops a serial port becoming the broker's controlling terminal. **Tests.** `real_nodes_are_classified_and_dev_null_opens_without_root` (os.rs).
+
+### `LinuxOs::fd_kind` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_fd_kind]
+
+**Purpose.** The kind of an already-open descriptor (`fstat`), the post-open check of the time-of-check to time-of-use race: what was opened, not what the path said before.
+
+**Signature.** `fn fd_kind(&self, fd: BorrowedFd<'_>) -> NodeKind`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `fd` | `BorrowedFd` | The descriptor just opened; borrowed. |
+
+**Returns.** The `NodeKind`, `Missing` when `fstat` fails. **Errors.** None. **Side effects.** One `fstat`. **Tests.** `real_nodes_are_classified_and_dev_null_opens_without_root` (os.rs); `an_allowed_open_passes_a_working_descriptor_and_never_the_path` (tests/broker.rs).
+
+### `LinuxOs::usb_identity` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_usb_identity]
+
+**Purpose.** The USB vendor and product ids and the product string of the device behind a node, for the `deny_usb` check (for example the VNWA codec `08bb:29c0`). `UsbIdentity` is `Usb(vid, pid, product)`, `NotUsb` (readable and not USB, such as a legacy port or PCI sound card, or a node name with no sysfs home) or `Unreadable`.
+
+**Signature.** `fn usb_identity(&self, path: &Path) -> UsbIdentity`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The checked device path. |
+
+**Returns.** `NotUsb` when `sysfs_dir_for` recognises no sysfs home or no USB ancestor exists; `Unreadable` when the node has a sysfs name but its directory is absent (sysfs not mounted or hidden from a container); otherwise `Usb(..)`. **Errors.** None. **Security.** `Policy::check_node` fails closed on `Unreadable` unless `allow_unreadable_usb`. **Side effects.** sysfs reads. **Tests.** `sysfs_enumeration_reads_usb_ids_through_the_device_link` (os.rs); `an_unreadable_usb_identity_is_refused_unless_the_config_allows_it` (tests/broker.rs).
+
+### `LinuxOs::list_devices` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_list_devices]
+
+**Purpose.** Read-only enumeration of serial and audio hardware for the `list_devices` action: serial nodes `ttyUSB*`, `ttyACM*`, `ttyS*` under `/dev`, and audio nodes `pcmC*`, `controlC*` under `/dev/snd`, each with USB ids and strings when known. The broker removes entries on `deny_usb` afterwards.
+
+**Signature.** `fn list_devices(&self) -> Vec<DeviceDescriptor>`
+
+**Arguments.** None. **Returns.** Serial entries followed by audio entries (two `scan_class` calls, each sorted and capped at 64). **Errors.** None; a missing sysfs gives an empty list. **Side effects.** sysfs reads only; no device is opened. **Tests.** `sysfs_enumeration_reads_usb_ids_through_the_device_link` (os.rs); `the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_when_idle` (tests/broker.rs).
+
+### `LinuxOs::username` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_username]
+
+**Purpose.** The account name of the peer's UID, for the provisioning action (`Broker::grant`): the broker only ever acts on the caller's own account.
+
+**Signature.** `fn username(&self, uid: u32) -> Option<String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `uid` | `u32` | The peer's UID from `SO_PEERCRED`. |
+
+**Returns.** The name through the passwd database (`getpwuid`), or `None` for an unknown uid or a lookup error. **Errors.** None. **Side effects.** A passwd lookup (may read `/etc/passwd` or NSS). **Tests.** `group_membership_is_read_from_the_group_file` (os.rs).
+
+### `LinuxOs::groups_of` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_groups_of]
+
+**Purpose.** The supplementary groups of an account, read from `group_file` (`/etc/group`), so `Broker::grant` can say which of `dialout` and `audio` are missing.
+
+**Signature.** `fn groups_of(&self, user: &str) -> Vec<String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `user` | `&str` | The account name. |
+
+**Returns.** The names of groups whose member list contains `user` exactly; the account's primary group is not listed unless it also names the user. An unreadable file gives an empty list, so the broker then reports every group as missing. **Errors.** None. **Side effects.** Reads the file. **Tests.** `group_membership_is_read_from_the_group_file` (os.rs).
+
+### `LinuxOs::add_to_group` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_add_to_group]
+
+**Purpose.** Adds an account to a group. Only reached when the config enables `apply_groups`. This is the broker's only external program besides the hub's.
+
+**Signature.** `fn add_to_group(&self, user: &str, group: &str) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `user` | `&str` | The account name from the UID lookup. |
+| `group` | `&str` | The group name; one of the closed `Group` set. |
+
+**Returns.** `Ok(())` when `gpasswd` exits successfully. **Errors.** The spawn error, or "gpasswd exited with ..." for a non-zero exit (for example when the broker is not root). **Side effects.** Runs `/usr/sbin/gpasswd -a USER GROUP` with a fixed argv, no shell, a cleared environment and a fixed `PATH`; changes `/etc/group`; blocks until it finishes. **Security.** Both names were validated upstream. **Tests.** `add_to_group_as_an_ordinary_user_fails_without_running_a_shell` (os.rs).
+
 ### `Denial::reason` (policy.rs) [@ANCHOR: relay_broker:relay_broker_denial_reason]
 
 **Purpose.** A stable short reason for the audit log and the response when an open is refused. `Denial` is the closed enum of refusals: `NotAbsolute`, `OutsideRoot`, `Traversal`, `TooLong` (over `MAX_STRING` bytes or a NUL), `DenyListed`, `Symlink`, `NotCharDevice`, `WrongClass`, `ProtectedUsb`, `UsbUnreadable`. `Broker::open_device` sends the text as the `Denied` reason and logs it.
@@ -952,13 +1122,91 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Arguments.** None besides `&mut self`; it uses the stored `path`. **Returns.** `Ok(())`; a log without a path (the sink) does nothing. **Errors.** `io::Error` from the `rename` or from creating the new file. **Side effects.** `rename(path, path.1)` (atomic, replaces an older `.1`), then opens a fresh empty file at `path` with `O_APPEND` and mode 0600 and resets `size` to 0. Only one generation is kept, so history older than about two files is lost. **Tests.** `a_rejected_peer_is_logged_once_per_minute_and_the_log_rotates_at_the_cap` (audit.rs).
 
-- [@ANCHOR: relay_broker:relay_broker_hub_validate] (hub.rs) `hub::validate(settings)`: checks the hub settings and names the one that is wrong. The interface must be a plain name of at most 15 characters, the SSID 1 to 32 printable ASCII characters, the passphrase 8 to 63 printable ASCII characters, the channel valid for the band, the address private, the relay name one DNS label, the lease 1 minute to 24 hours. Nothing that could add a line to a config file passes.
-- [@ANCHOR: relay_broker:relay_broker_hub_dnsmasq_conf] (hub.rs) `hub::dnsmasq_conf(settings)`: validates, then returns the dnsmasq configuration text for the hub /24: DHCP pool .20 to .250, the hub as DNS (option 6) and NTP (option 42) server, the relay name and the phone connectivity-probe names answering with the hub, and other names forwarded to the uplink resolver or refused. Error is the validation message.
-- [@ANCHOR: relay_broker:relay_broker_hub_takeover_dnsmasq_conf] (hub.rs) `hub::takeover_dnsmasq_conf(takeover)`: the dnsmasq text for taking over DHCP on an existing network: the same /24 from a high pool (.200 to .250), five-minute leases, the router as gateway, the hub as DNS and NTP server. A gateway off the subnet or a hub address inside the pool is an error string.
-- [@ANCHOR: relay_broker:relay_broker_hub_runner_write_private] (hub_runner.rs) `write_private(path, text)`: creates or truncates a file with mode 0600 and writes the text, so the generated hostapd file (which holds the Wi-Fi passphrase) is readable by root only. Errors are the open or write failure.
-- [@ANCHOR: relay_broker:relay_broker_hub_runner_run] (hub_runner.rs) `HubRunner::run(program, args)`: runs one helper program (ip, hostapd or dnsmasq) to completion with a cleared environment and a fixed PATH. Success is exit status 0; any other status is an error naming the program and the status. A program that cannot start returns its spawn error.
-- [@ANCHOR: relay_broker:relay_broker_hub_runner_start] (hub_runner.rs) `HubRunner::start(hostapd_conf, dnsmasq_conf, interface, address)`: stops any earlier hub, creates the 0700 state directory, writes both configs and the interface name privately, gives the interface its /24 address, brings it up and starts hostapd then dnsmasq. Any failure stops what was started and returns the error.
-- [@ANCHOR: relay_broker:relay_broker_hub_runner_stop] (hub_runner.rs) `HubRunner::stop`: sends SIGTERM to hostapd and dnsmasq only when the pid file names a live process of that exact name, flushes the interface address, and removes the config, pid and interface files. Stopping a hub that is not running succeeds.
+### `hub::validate` (hub.rs) [@ANCHOR: relay_broker:relay_broker_hub_validate]
+
+**Purpose.** Checks the hub settings and names the one that is wrong. Free text is limited to printable ASCII, so a value cannot add a line to a configuration file. `HubSettings` is the data structure: `interface` (a plain name of at most 15 characters from letters, digits, `_`, `-`, `.`), `ssid` (1 to 32 printable ASCII), `passphrase` (8 to 63 printable ASCII, so the hub is never open), `channel: u8` (1 to 13, or 36 to 165 when `five_ghz`), `five_ghz: bool`, `hub_address: Ipv4Addr` (private or link-local host address, not .0 or .255; the network is its /24), `relay_name` (one DNS label of letters, digits and hyphens, up to 63), `uplink_dns: Option<Ipv4Addr>` and `lease_minutes: u32` (1 to 1440).
+
+**Signature.** `pub fn validate(s: &HubSettings) -> Result<(), String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `s` | `&HubSettings` | The settings from the wire; borrowed. |
+
+**Returns.** `Ok(())`. **Errors.** `Err(text)` naming the first invalid setting, in the order above; the text is sent back as the `Denied` reason. **Side effects.** None; pure. **Tests.** `settings_that_could_add_a_line_or_leave_the_hub_open_are_refused` (hub.rs).
+
+### `hub::dnsmasq_conf` (hub.rs) [@ANCHOR: relay_broker:relay_broker_hub_dnsmasq_conf]
+
+**Purpose.** Produces the `dnsmasq.conf` text for the hub's /24: DHCP with the pool .20 to .250, the hub as DNS server (option 6) and NTP server (option 42) and as gateway, the relay's name and `<name>.local` and the OS connectivity-probe names (Google, Apple, Microsoft, Firefox) resolving to the hub so phones open the console instead of declaring "no internet", and everything else forwarded to `uplink_dns` or, with none, refused at once (`no-resolv`).
+
+**Signature.** `pub fn dnsmasq_conf(s: &HubSettings) -> Result<String, String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `s` | `&HubSettings` | Validated first by `validate`. |
+
+**Returns.** The configuration text from a fixed template. **Errors.** The `validate` message. **Side effects.** None; `HubRunner::start` writes the file (mode 0600). **Tests.** `the_dhcp_and_dns_config_points_clients_at_the_hub_for_time_names_and_probes` (hub.rs).
+
+### `hub::takeover_dnsmasq_conf` (hub.rs) [@ANCHOR: relay_broker:relay_broker_hub_takeover_dnsmasq_conf]
+
+**Purpose.** The `dnsmasq.conf` text for taking over DHCP on an existing network (phase 0 of the emergency-hub plan: the hub is a node of the user's own /24 and the router's DHCP is gone). DHCP for the same /24 from a high pool (.200 to .250, away from the router's own and static addresses), five-minute leases (`TAKEOVER_LEASE_MINUTES`) so clients move back quickly after the hand-back, the router as gateway, the hub as DNS and NTP server and the relay's name. dnsmasq pings an address before offering it, which keeps it from handing out one that a still-running machine holds.
+
+**Signature.** `pub fn takeover_dnsmasq_conf(t: &TakeoverSettings) -> Result<String, String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `t` | `&TakeoverSettings` | `interface`, `hub_address`, `gateway` (another host on the hub's /24), `relay_name`, `uplink_dns: Option<Ipv4Addr>`. |
+
+**Returns.** The text. **Errors.** The `validate` message (run through placeholder wifi settings), or "the gateway must be another host address on the hub's /24", or "the hub and the gateway must be outside the takeover pool .200 to .250". **Side effects.** None; pure. **Tests.** `the_takeover_serves_the_same_subnet_from_a_high_pool_with_short_leases` (hub.rs).
+
+### `write_private` (hub_runner.rs) [@ANCHOR: relay_broker:relay_broker_hub_runner_write_private]
+
+**Purpose.** Writes a file readable by root only: the generated `hostapd.conf` carries the WPA passphrase, so it must not be world-readable. Used for both configuration files and the `interface` note.
+
+**Signature.** `fn write_private(path: &Path, text: &str) -> io::Result<()>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The file; created or truncated. |
+| `text` | `&str` | The content. |
+
+**Returns.** `Ok(())`. **Errors.** The `io::Error` from the open or write. **Side effects.** Creates the file with mode 0600 (the mode applies only on creation; an existing file keeps its mode). **Tests.** `start_runs_both_programs_and_stop_ends_them_and_removes_the_files` (hub_runner.rs).
+
+### `HubRunner::run` (hub_runner.rs) [@ANCHOR: relay_broker:relay_broker_hub_runner_run]
+
+**Purpose.** Runs one helper program (`ip`, `hostapd` or `dnsmasq`) to completion with a cleared environment and a fixed `PATH`; a non-zero exit is an error naming the program. `HubRunner { dir, hostapd, dnsmasq, ip }` holds the paths (defaults `/run/hams-relay-broker/hub`, `/usr/sbin/hostapd`, `/usr/sbin/dnsmasq`, `/usr/sbin/ip`).
+
+**Signature.** `fn run(&self, program: &Path, args: &[&OsStr]) -> io::Result<()>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `program` | `&Path` | One of the three fixed paths. |
+| `args` | `&[&OsStr]` | A fixed argument list; no shell, so nothing is interpreted. |
+
+**Returns.** `Ok(())` on exit status 0. **Errors.** The spawn error, or "`<program>` exited with ...". **Side effects.** Spawns and waits (blocking); both hub programs daemonise themselves, so the wait is short. **Tests.** `start_runs_both_programs_and_stop_ends_them_and_removes_the_files` (hub_runner.rs).
+
+### `HubRunner::start` (hub_runner.rs) [@ANCHOR: relay_broker:relay_broker_hub_runner_start]
+
+**Purpose.** Brings the hub up: stops any earlier hub, creates the 0700 state directory, writes the two configuration files and an `interface` note (mode 0600), gives the interface the hub's /24 address (`ip addr replace`, `ip link set up`) and starts `hostapd` and `dnsmasq`, each with its own pid file. A failure stops what was started.
+
+**Signature.** `pub fn start(&self, hostapd_conf: &str, dnsmasq_conf: &str, interface: &str, address: Ipv4Addr) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `hostapd_conf` | `&str` | The text from `hub::hostapd_conf`. |
+| `dnsmasq_conf` | `&str` | The text from `hub::dnsmasq_conf`. |
+| `interface` | `&str` | The validated wifi interface. |
+| `address` | `Ipv4Addr` | The hub address, configured as `<address>/24`. |
+
+**Returns.** `Ok(())`. **Errors.** Any `io::Error` from the directory, files or the helper programs; the earlier `stop` error also propagates. **Side effects.** Network interface configuration, two background daemons that outlive the broker's idle exit (their pid files are the only state). Needs root or equivalent capabilities. **Tests.** `start_runs_both_programs_and_stop_ends_them_and_removes_the_files` (hub_runner.rs).
+
+### `HubRunner::stop` (hub_runner.rs) [@ANCHOR: relay_broker:relay_broker_hub_runner_stop]
+
+**Purpose.** Stops both programs and removes the files and the interface address. Stopping a hub that is not running succeeds. A pid is trusted only while `/proc/<pid>/comm` still names the program, so a reused pid is never signalled.
+
+**Signature.** `pub fn stop(&self) -> io::Result<()>`
+
+**Arguments.** None. **Returns.** `Ok(())`. **Errors.** The `io::Error` of removing a file other than "not found"; failures to signal or to flush the address are ignored. **Side effects.** Sends `SIGTERM` to `hostapd` and `dnsmasq` whose pid files name a live process of that exact name; runs `ip addr flush dev <interface>` when the saved interface is a plain name; deletes `hostapd.conf`, `dnsmasq.conf`, `interface` and the two pid files. Does not wait for the daemons to exit. **Tests.** `start_runs_both_programs_and_stop_ends_them_and_removes_the_files` (hub_runner.rs).
+
 ### `Broker::update_package` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_update_package]
 
 **Purpose.** The package update action: it asks for the relay package upgrade, which the OS layer turns into a request file for the package's root-owned path unit. The command is one fixed command (`apt-get install --only-upgrade hams-local-relay`, or the `dnf` equivalent) that the caller cannot add to or change, so a verified-signature repository the owner configured is the only source of what installs.
@@ -1009,4 +1257,15 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Returns.** `Response::Hub { access_point, dhcp }`, both normally false. **Errors.** `Denied` "hub not enabled"; `Failed` when stopping fails. **Side effects.** Signals only the processes named in the broker's own pid files (see `HubRunner::stop`); audited. **Tests.** `the_hub_is_refused_unless_enabled_and_then_written_from_the_templates` (tests/broker.rs).
 
-- [@ANCHOR: relay_broker:relay_broker_linux_bind_udp] (os.rs) `LinuxOs::bind_udp(port)`: opens a UDP socket (dual stack IPv6 with v6only off when the kernel has IPv6, plain IPv4 otherwise), close-on-exec, binds every address on `port` and returns the descriptor. An address already in use or a refused port is the returned `io::Error`.
+### `LinuxOs::bind_udp` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_bind_udp]
+
+**Purpose.** Binds a UDP socket on the wildcard address and returns the descriptor, so the relay can serve a privileged port (123, its time service) without any privilege of its own. Dual stack: an IPv6 socket with `IPV6_V6ONLY` off when the kernel has IPv6, plain IPv4 otherwise.
+
+**Signature.** `fn bind_udp(&self, port: u16) -> io::Result<OwnedFd>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `port` | `u16` | The port; the broker has already checked that the config lists it. |
+
+**Returns.** The bound, close-on-exec descriptor, owned by the caller. **Errors.** `io::Error` from `socket`, `setsockopt` or `bind` (address in use, permission denied for a privileged port when the broker has no `CAP_NET_BIND_SERVICE`); `EAFNOSUPPORT` on the IPv6 socket falls back to IPv4. **Side effects.** Takes the port system-wide until the descriptor is closed. **Tests.** `a_bound_udp_descriptor_is_a_real_socket_on_the_port_and_the_port_is_then_taken` (os.rs).
+

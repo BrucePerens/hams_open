@@ -69,9 +69,10 @@ fn anchors_agree_between_source_tests_and_readme() {
     let readme = fs::read_to_string(crate_root().join("README.md")).expect("README");
     let cited: BTreeSet<String> = readme
         .lines()
+        .filter(|l| l.starts_with("- [@") || l.starts_with("### "))
         .filter_map(|l| {
-            l.trim_start()
-                .strip_prefix(&format!("- [@{}: relay_broker:", "ANCHOR"))
+            let marker = format!("[@{}: relay_broker:", "ANCHOR");
+            l.split_once(&marker).map(|(_, rest)| rest)
         })
         .filter_map(|rest| rest.split(']').next())
         .map(str::to_string)
