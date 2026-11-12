@@ -2073,8 +2073,7 @@ fn the_calibration_example_waits_for_the_operator_at_each_standard_and_stops_on_
 // Tests [@ANCHOR: proc_view_result]
 #[test]
 fn the_error_tail_is_the_end_of_the_output_and_a_run_without_a_state_is_not_purged() {
-    let dir = std::env::temp_dir().join(format!("bench_proc_tail_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let dir = crate::testdir::TestDir::new("bench_proc_tail");
     std::fs::create_dir_all(dir.join("runs/odd")).unwrap();
     let f = dir.join("stderr.txt");
     std::fs::write(&f, format!("{}END", "x".repeat(5000))).unwrap();
@@ -2092,7 +2091,6 @@ fn the_error_tail_is_the_end_of_the_output_and_a_run_without_a_state_is_not_purg
         parse_config(&json!({"dir": dir.display().to_string(), "retention_days": 0})).unwrap();
     assert_eq!(store::purge(&cfg), 0);
     assert!(dir.join("runs/odd").exists());
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // Tests [@ANCHOR: proc_py_failure_report]
