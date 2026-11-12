@@ -14,6 +14,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
     distributed_cache,
     notify_model_invalidation,
 )
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -290,6 +291,7 @@ class PagerCheck(models.Model):
     def _valid_field_parameter(self, field, name):
         return name == "password" or super()._valid_field_parameter(field, name)
 
+    @public_rpc
     @api.model
     def rpc_ensure_executable(self, cmd_name):
         """
@@ -395,6 +397,7 @@ class PagerCheck(models.Model):
             )
             return {"status": "error", "message": _("Internal server error.")}
 
+    @public_rpc
     @api.model
     # [@ANCHOR: pager_duty:check_heartbeat_rpc]
     def check_heartbeat_rpc(self, hb_uuid, interval_sec):
@@ -425,6 +428,7 @@ class PagerCheck(models.Model):
         return os.path.join(base_dir, "pager_config.json")
 
     # [@ANCHOR: pager_duty:action_pull_from_json]
+    @public_rpc
     def action_pull_from_json(self):
         path = self._get_config_path()
         if not os.path.exists(path):
@@ -525,6 +529,7 @@ class PagerCheck(models.Model):
             },
         }
 
+    @public_rpc
     def action_push_to_json(self):
         # [@ANCHOR: generalized_pager_config]
         checks = self.env["pager.check"].search([("active", "=", True)], limit=1000)
@@ -890,6 +895,7 @@ class PagerCheck(models.Model):
         self.action_push_to_json()
 
     # [@ANCHOR: pager_duty:action_autodiscover]
+    @public_rpc
     def action_autodiscover(self):
         self._run_autodiscovery()
         return {
@@ -906,6 +912,7 @@ class PagerCheck(models.Model):
         }
 
     # [@ANCHOR: pager_duty:action_trigger_check]
+    @public_rpc
     def action_trigger_check(self):
         return {
             "type": "ir.actions.client",

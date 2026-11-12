@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api, _
 from odoo.exceptions import AccessError
+from odoo.addons.zero_sudo import public_rpc
 
 
 class PagerLogPattern(models.Model):
@@ -68,6 +69,7 @@ class PagerLogSearchJob(models.TransientModel):
     state = fields.Selection([("pending", "Pending"), ("done", "Done"), ("error", "Error")], default="pending")
     result_payload = fields.Text(string="Result JSON")
 
+    @public_rpc
     @api.model
     # [@ANCHOR: pager_duty:log_search_rpc_update_state]
     def rpc_update_state(self, uuid, state, result_payload):
