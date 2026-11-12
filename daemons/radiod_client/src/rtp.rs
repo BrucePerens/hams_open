@@ -8,6 +8,7 @@
 use std::fmt;
 
 /// Why a packet was rejected.
+// [@ANCHOR: radiod_client_rtp_rtp_error]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RtpError {
     /// Shorter than the fixed header, or the CSRC list / extension / padding run past the end.
@@ -28,6 +29,7 @@ impl fmt::Display for RtpError {
 impl std::error::Error for RtpError {}
 
 /// A parsed RTP packet; the payload borrows from the datagram.
+// [@ANCHOR: radiod_client_rtp_rtp_packet]
 #[derive(Debug, Clone, Copy)]
 pub struct RtpPacket<'a> {
     /// Payload type.
@@ -84,6 +86,7 @@ impl<'a> RtpPacket<'a> {
 }
 
 /// Output encodings from `rtp.h` that this client decodes.
+// [@ANCHOR: radiod_client_rtp_encoding]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Encoding {
     /// Signed 16-bit big-endian PCM (value 2 in `radiod`).
@@ -108,6 +111,7 @@ impl Encoding {
 }
 
 /// Decoder for one stream. Output is mono `f32` (stereo is downmixed).
+// [@ANCHOR: radiod_client_rtp_audio_decoder]
 pub struct AudioDecoder {
     encoding: Encoding,
     channels: usize,
@@ -213,6 +217,7 @@ impl AudioDecoder {
 pub const REORDER_WINDOW: u16 = 32;
 
 /// Tracks sequence numbers to count loss, reordering and stream restarts.
+// [@ANCHOR: radiod_client_rtp_seq_tracker]
 #[derive(Debug, Default, Clone)]
 pub struct SeqTracker {
     last: Option<u16>,
@@ -253,6 +258,11 @@ impl SeqTracker {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radiod_client_rtp_rtp_error]
+    // Tests [@ANCHOR: radiod_client_rtp_rtp_packet]
+    // Tests [@ANCHOR: radiod_client_rtp_encoding]
+    // Tests [@ANCHOR: radiod_client_rtp_audio_decoder]
+    // Tests [@ANCHOR: radiod_client_rtp_seq_tracker]
     use super::*;
 
     fn pkt(pt: u8, seq: u16, payload: &[u8]) -> Vec<u8> {

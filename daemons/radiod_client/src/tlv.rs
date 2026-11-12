@@ -165,6 +165,7 @@ pub mod ty {
 }
 
 /// Why a datagram was rejected.
+// [@ANCHOR: radiod_client_tlv_tlv_error]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TlvError {
     /// Datagram shorter than a packet kind and one entry.
@@ -195,6 +196,7 @@ impl fmt::Display for TlvError {
 impl std::error::Error for TlvError {}
 
 /// Packet kind (first byte).
+// [@ANCHOR: radiod_client_tlv_kind]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     /// Status from `radiod`.
@@ -204,6 +206,7 @@ pub enum Kind {
 }
 
 /// One decoded entry; `value` borrows from the datagram.
+// [@ANCHOR: radiod_client_tlv_entry]
 #[derive(Debug, Clone, Copy)]
 pub struct Entry<'a> {
     /// Type identifier.
@@ -335,6 +338,7 @@ pub fn parse(pkt: &[u8]) -> Result<(Kind, Vec<Entry<'_>>), TlvError> {
 
 /// Builder for a command datagram. Crate-private on purpose: callers go through
 /// [`crate::command::Command`].
+// [@ANCHOR: radiod_client_tlv_writer]
 #[derive(Debug)]
 pub(crate) struct Writer {
     buf: Vec<u8>,
@@ -381,6 +385,10 @@ impl Writer {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radiod_client_tlv_tlv_error]
+    // Tests [@ANCHOR: radiod_client_tlv_kind]
+    // Tests [@ANCHOR: radiod_client_tlv_entry]
+    // Tests [@ANCHOR: radiod_client_tlv_writer]
     use super::*;
 
     // Tests [@ANCHOR: radiod_client_tlv_writer_command]

@@ -32,6 +32,7 @@ const MAX_DATAGRAM: usize = 65_536;
 const RETRY_INTERVAL: Duration = Duration::from_millis(200);
 
 /// Network or protocol failure.
+// [@ANCHOR: radiod_client_net_net_error]
 #[derive(Debug)]
 pub enum NetError {
     /// Socket error.
@@ -131,6 +132,7 @@ fn register(handle: &Handle, sock: std::net::UdpSocket) -> Result<UdpSocket, Net
 }
 
 /// The control/status link to one `radiod` instance.
+// [@ANCHOR: radiod_client_net_control]
 #[derive(Debug)]
 pub struct Control {
     sock: UdpSocket,
@@ -261,6 +263,7 @@ impl Control {
 }
 
 /// An RTP receiver for one multicast group.
+// [@ANCHOR: radiod_client_net_rtp_socket]
 #[derive(Debug)]
 pub struct RtpSocket {
     sock: UdpSocket,
@@ -299,6 +302,9 @@ impl RtpSocket {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radiod_client_net_net_error]
+    // Tests [@ANCHOR: radiod_client_net_control]
+    // Tests [@ANCHOR: radiod_client_net_rtp_socket]
     use super::*;
     use crate::command::{AudioChannel, Encoding, Mode, SpectrumChannel, Ssrc};
     use crate::tlv::{parse, ty, Kind};
