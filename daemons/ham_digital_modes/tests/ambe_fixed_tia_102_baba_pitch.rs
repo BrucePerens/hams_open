@@ -124,6 +124,12 @@ fn run_file(path: &str, stats: &mut Stats) {
 }
 
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_new]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_function]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_table]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_choose_initial_pitch_estimate]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_ahead_pitch_tracking]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_back_pitch_tracking]
 fn fixed_pitch_tracking_matches_float_on_real_speech() {
     let mut stats = Stats::default();
     for path in common::OSR_FILES {
@@ -163,6 +169,9 @@ fn fixed_pitch_tracking_matches_float_on_real_speech() {
 /// Silence scores the worst error everywhere, as in the float sibling; the default history is the
 /// spec's 100.0.
 #[test]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_new]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_function]
+// Tests [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_table]
 fn silent_frame_has_unit_error_and_default_history_index_is_pitch_100() {
     let raw = vec![0i32; 500];
     let f = fx::PitchAnalysisFrame::new(&raw, 250);

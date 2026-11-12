@@ -165,6 +165,7 @@ pub struct RefinementFrame {
 
 impl RefinementFrame {
     /// `raw` is PCM; the window is centred on `raw[center]` and reads `center-110..=center+110`.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_RefinementFrame_new]
     pub fn new(raw: &[i32], center: usize) -> Self {
         let mut xw = [0i64; 221];
         for (i, slot) in xw.iter_mut().enumerate() {
@@ -198,6 +199,7 @@ impl RefinementFrame {
     }
 
     /// `S_w(m)` (Q10), zero outside `-127..=128`.
+    // [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_RefinementFrame_sw_at]
     pub fn sw_at(&self, m: i32) -> Cplx {
         if (-127..=128).contains(&m) {
             self.sw[(m + 127) as usize]
@@ -208,6 +210,7 @@ impl RefinementFrame {
 }
 
 /// `W_R(m)` (Q22), zero outside the table.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_window_dft_16384_q22]
 pub fn window_dft_16384_q22(m: i32) -> i64 {
     if m.abs() <= WINDOW_DFT_HALF_RANGE {
         WINDOW_DFT_16384_Q22[(m + WINDOW_DFT_HALF_RANGE) as usize] as i64
@@ -217,6 +220,7 @@ pub fn window_dft_16384_q22(m: i32) -> i64 {
 }
 
 /// `A_l` (Eq. 26-28) as a Q16 complex, from the bins `[ceil(a_l), ceil(b_l))`.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_harmonic_amplitude_q16]
 pub fn harmonic_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) -> Cplx {
     let (lo, hi) = (pitch.band_start(l as i32), pitch.band_start(l as i32 + 1));
     let mut num_re = 0i128;
@@ -242,6 +246,7 @@ pub fn harmonic_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) ->
 /// `err = sum |S_w(m) - S_synth(m)|^2`, where the synthetic spectrum is built from harmonics
 /// `0..=max_l` at period `p8` (Eq. 25; a bin in no harmonic's band has synthetic value 0). Both are
 /// Q60 `i128`.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_spectrum_error_and_energy]
 pub fn spectrum_error_and_energy(
     frame: &RefinementFrame,
     pitch: &Pitch,
@@ -283,6 +288,7 @@ pub fn spectrum_error_and_energy(
 }
 
 /// The refinement error `E_R` (Eq. 24) at `pitch`, Q60.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_refinement_error]
 pub fn refinement_error(frame: &RefinementFrame, pitch: &Pitch) -> i128 {
     let l_est = pitch.l_estimate();
     let upper_m = pitch.upper_bin(l_est);
@@ -293,6 +299,7 @@ pub fn refinement_error(frame: &RefinementFrame, pitch: &Pitch) -> i128 {
 /// Refines the half-sample candidate `p_hat_i_index` (see [`super::pitch`]) to quarter-sample
 /// accuracy: tries `P = p_hat_i + {-9,-7,...,+9}/8` and returns the `P8` with the smallest `E_R`
 /// (first of equals, as the float sibling's `min_by`).
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_refine_pitch]
 pub fn refine_pitch(frame: &RefinementFrame, p_hat_i_index: usize) -> u32 {
     let base = p8_of_index(p_hat_i_index) as i32;
     let mut best_p8 = 0u32;

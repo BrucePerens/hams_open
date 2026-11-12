@@ -17,6 +17,7 @@ use super::pitch_refinement::{window_dft_16384_q22, Pitch, RefinementFrame};
 use crate::ambe::fixed::general::isqrt::isqrt_u128;
 
 /// `A_voiced(l)` (Eq. 43), Q16.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_voiced_amplitude_q16]
 pub fn voiced_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) -> i64 {
     let (lo, hi) = (pitch.band_start(l as i32), pitch.band_start(l as i32 + 1));
     let mut signal_energy = 0i128; // Q20
@@ -33,6 +34,7 @@ pub fn voiced_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) -> i
 }
 
 /// `A_unvoiced(l)` (Eq. 44), Q16.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_unvoiced_amplitude_q16]
 pub fn unvoiced_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) -> i64 {
     let (lo, hi) = (pitch.band_start(l as i32), pitch.band_start(l as i32 + 1));
     let width = (hi - lo) as i128;
@@ -48,6 +50,7 @@ pub fn unvoiced_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) ->
 }
 
 /// `M_hat_l` for `l = 1..=l_hat` (Q16): the voiced or unvoiced estimator per the band's decision.
+// [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_estimate_spectral_amplitudes_q16]
 pub fn estimate_spectral_amplitudes_q16(
     frame: &RefinementFrame,
     l_hat: u32,
