@@ -45,6 +45,7 @@ class TestContentViolationReport(HamsTransactionCase):
             }
         )
 
+    # Tests [@ANCHOR: content_moderation_content_violation_report_content_violation_report]
     def test_01_create_report(self):
         report = self.env["content.violation.report"].create(
             {
