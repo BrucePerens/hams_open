@@ -119,9 +119,17 @@ fn every_anchor_is_documented_in_the_readme() {
             }
         }
     }
+    // Function anchors are documented one entry each in docs/stories/radioctl_function_anchors_NN.md (ADR 0113).
+    if let Ok(entries) = fs::read_dir(workspace_root().join("docs").join("stories")) {
+        for entry in entries.flatten() {
+            if let Ok(text) = fs::read_to_string(entry.path()) {
+                readme.push_str(&text);
+            }
+        }
+    }
     let declared = anchors(&rust_files(), &declared_marker());
     for id in declared {
         let cite = format!("[@{}: radioctl:{id}]", "ANCHOR");
-        assert!(readme.contains(&cite), "README lacks {cite}");
+        assert!(readme.contains(&cite), "README or docs/stories lacks {cite}");
     }
 }
