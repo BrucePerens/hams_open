@@ -512,6 +512,10 @@ pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigE
   (`GetFrequency(B)` in `known_kenwood_divergences`); a real TS-590 decides which is right. The same
   goes for every derived value: all of it follows the manuals and the virtual radios.
 
+## Main and Sub receivers
+
+A dual-receiver rig has the capability `receivers` and these ops (decision 2026-11-12; **implemented per model only where the model's manual is on hand, all unverified**): `SelectReceiver(Main|Sub)` and `GetReceiver` (which band later commands act on), `SetTxReceiver(Main|Sub)` and `GetTxReceiver` (which band the transmitter follows; it never keys the rig), and `SetDualWatch(bool)` and `GetDualWatch`. Each set updates the cache (`Observation::Receiver`, `TxReceiver`, `DualWatch`); an engine that has no command for an op refuses it as unsupported.
+
 ## Scope and spectrum
 
 A rig with a spectrum scope (band scope) has the capability `scope`. At the time of writing the IC-7300

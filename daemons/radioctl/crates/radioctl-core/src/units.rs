@@ -90,6 +90,16 @@ impl Mode {
     }
 }
 
+/// A receiver (band) of a dual-receiver rig: the Main band or the Sub band (Icom Main/Sub, Yaesu
+/// Main/VFO-A band and Sub/VFO-B band of the FTDX 3000/5000/9000/1200).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Receiver {
+    /// The Main band.
+    Main,
+    /// The Sub band.
+    Sub,
+}
+
 /// A VFO. Only the VFOs a description lists are usable on a given rig.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Vfo {
