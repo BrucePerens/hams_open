@@ -30,6 +30,8 @@ mod sdr;
 mod serial_guard;
 mod spectrum;
 #[cfg(test)]
+mod fake_scope;
+#[cfg(test)]
 mod testdir;
 mod usb_hub;
 mod vna;
