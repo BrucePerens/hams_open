@@ -153,14 +153,21 @@ The retry wrapper for every control transfer. It runs `op` up to 1 + `TRANSFER_R
 
 Sorts a libusb error into what recovery should do. `Io` (libusb's name for the kernel's EPROTO), `Pipe` (a stall), `Timeout` and `Overflow` are `Transient` (worth sending again); `NoDevice` and `NotFound` are `NoDevice` (the unit left the bus, so a cold reset is the remedy, not a resend); every other error, such as a permission problem or invalid argument, is `Other` and is not repeated. Carries the libusb error text. Pure, total. Tests: the classification test in `transport.rs`.
 
-* The S11 and S21 codecs are told apart by their USB port, whatever order the kernel named the cards in. [@ANCHOR: vnwa_open_codec_topology]
+### `topology::assign(cards: &[CodecCard]) -> Result<Codecs, String>` [@ANCHOR: vnwa_open_codec_topology]
+
+Picks the S11 and S21 codecs from the codec cards found. There must be exactly two, on one parent hub with different ports; the lower port is the S11 codec (reference on its left channel) and the higher the S21 codec, observed on ports 2 and 3 of the unit's internal hub on 2026-10-28. This holds whatever order the kernel named the cards (`CODEC`, `CODEC_1`), and that order can change after a power cycle. Errors (strings): not two cards (listing those found), different hubs, an unreadable USB path, or the same port twice. Returns ALSA ids `hw:CARD=<id>,`. Pure, no I/O. Tests: swapped card order and each refusal.
 
 ### `power::power_cycle(run, port, off_time, back, ready) -> Result<(), String>` [@ANCHOR: vnwa_open_power_cycle]
 
 Cold-resets the unit by cutting power to its hub port: `uhubctl off`, sleep `off_time` (3 s by default so the supply capacitors discharge), `uhubctl on`, then wait up to `back` for `ready` (the unit and both codecs present; about 8 s in practice). Errors name the failing step: an `uhubctl` failure, or "the unit did not come back within N s of power-on on hub H port P". After it the unit has lost its set-up and generator state, and its device numbers change. The caller must have closed audio streams first. Blocking for seconds. Tests: scripted-runner tests of the order of commands and each failure; the real thing is a hardware test.
 
-* A failing point is measured again, then after one cold reset, and only a success is returned. [@ANCHOR: vnwa_open_recovery]
-* This driver's S11 and S21 agree with the vendor program's on the same cables to 0.25 % and 0.6 degrees (S11) and 1 % and 0.6 degrees (S21, a constant 0.8 % offset). [@ANCHOR: vnwa_open_vendor_agreement]
+### `sweep::recover(unit, what, attempt) -> Result<T, String>` [@ANCHOR: vnwa_open_recovery]
+
+Runs a measurement closure until it succeeds, and returns only a real success. It tries `retries + 1` times (200 ms apart); if all fail and a hub is configured it does one cold reset (`Recoverable::cold_reset`) and tries the same number again. A failure caused by lost audio (`capture::is_overrun_error`) is repeated from a separate budget (`overrun_retries`, 50 ms apart) that does not count against the unit and never leads to a power cycle; when that budget runs out the error says audio was lost in every attempt and the unit is not at fault. Tallies (re-measurements, overrun retries, power cycles) are kept in `Recovery`, `note_recovered` records a recovery that worked, and `note_power_cycle` records why the reset happened. If everything fails the error lists every attempt. Blocking; sleeps between attempts. Tests: scripted-unit tests for retry, reset and the overrun path.
+
+### `sweep::agreement(reference: Complex, measured: Complex) -> (f64, f64)` [@ANCHOR: vnwa_open_vendor_agreement]
+
+Compares a measurement with a reference value of the same quantity (here the vendor program's own): returns the magnitude difference in percent of the reference and the phase difference in degrees, wrapped to -180 to 180, both from the complex ratio measured / reference. Pure, no I/O, no error path (a zero reference gives NaN or infinity). Used by the reference tests that established that this driver's S11 and S21 agree with the vendor program's on the same cables to 0.25 % and 0.6 degrees (S11) and 1 % and 0.6 degrees (S21, with a constant 0.8 % offset).
 
 ### `cal::solve_one_port(measured: [Complex; 3], actual: [Complex; 3]) -> Result<(Complex, Complex, Complex), String>` [@ANCHOR: vnwa_open_cal_one_port]
 
@@ -199,7 +206,10 @@ Returns the measured tone's frequency minus the reference tone's, in Hz, and the
 Runs `power_cycle` for each (off time, wait for the unit) pair in the schedule in turn and stops at the first success. If a cycle fails, the next one uses the next pair, normally a longer off time: the control chip once failed to enumerate after a 3 s off that followed a modulation lock-up, and a second cycle with a longer off time brought it back. If every pair fails the error joins all the failures ("cycle 1 (off 3 s): ...; cycle 2 ..."). An empty schedule gives an empty error. Blocking for the sum of the cycles. Tests: scripted-runner tests of the escalation.
 
 * The soak run compares every sweep with the first, and counts errors, wrong results and hangs separately: `examples/soak.rs`.
-* A point is accepted only if the reference tone at the IF is steady across the analysis window (IF error 2 Hz or less, level change 3 % or less); a slipped DDS PLL (phase-locked loop), a retune inside the window or a stage boundary fails it. [@ANCHOR: vnwa_open_stability]
+
+### `sweep::stability(x: &[f64], fs: f64, if_hz: f64) -> (f64, f64)` [@ANCHOR: vnwa_open_stability]
+
+Measures how steady the tone at the IF is across an analysis window, from the two halves of the reference channel: returns the frequency error in Hz (the phase advance between the halves, wrapped to plus or minus 180 degrees, divided by the half-window time) and the relative amplitude change between the halves (infinite for a dead channel). `measure_once` accepts a point only if the error is at most 2 Hz (`MAX_IF_ERROR_HZ`) and the change at most 3 percent (`MAX_LEVEL_CHANGE`); a healthy unit shows about 0.15 Hz (the codec's clock is not the unit's, about 12 ppm) and under 0.1 percent, whereas a slipped DDS PLL, a retune inside the window or a stage boundary shows far more. Pure, no I/O.
 
 ### `Capture::frames_after(&self, mark: u64, skip: usize, n: usize, timeout: Duration) -> Result<Vec<[i16; 2]>, String>` [@ANCHOR: vnwa_open_overrun_window]
 
@@ -225,13 +235,35 @@ Decodes the reply of request 0x85 (`wValue` 3), the unit's internal temperature 
 
 Returns the last 16 transfer tries (oldest first), each as epoch milliseconds, what was sent and the outcome (`ok` or the error text), for the evidence record of a failure: `sweep.rs` includes it when a point failed and a retry or power cycle cured it. It copies the ring under a mutex and has no other side effect; it cannot fail beyond a poisoned lock. Not persistent: the log lives as long as the `Vnwa` handle. Tests: the transfer-log test in `usb.rs`.
 
-* A failure that a retry or power cycle cured keeps its evidence (error text, raw channel levels, block send time, overruns, the last 16 transfers), and so does every power cycle of the recovery. [@ANCHOR: vnwa_open_failure_log] [@ANCHOR: vnwa_open_failure_evidence]
-* The analysis window is timed from the end of the block send, not from before it. [@ANCHOR: vnwa_open_window_from_send_end]
+### `Vna::note_recovered(&mut self, what: &str, history: &[String])` (`Recoverable` impl) [@ANCHOR: vnwa_open_failure_log]
+
+Records a point that needed more than one attempt (or a power cycle) and was measured in the end, with every failed attempt and its evidence (error text, raw levels, block send time, overruns, last transfers), so a recovery that worked still leaves its cause on record (the 2026-10-29 soak lost three unexplained power cycles this way). Entries are `FailureRecord { epoch_s, what, attempts }`, kept up to the newest 200 (`MAX_FAILURE_LOG`), oldest dropped first, and read with `Vna::failure_log`. Called by `recover` on a success after a failure. In memory only; no error path.
+
+### `Vna::with_evidence(&self, e: String) -> String` (`sweep.rs`, crate-private) [@ANCHOR: vnwa_open_failure_evidence]
+
+Appends the evidence of a failed attempt to its error text: how long the block send took, the raw channel levels of the last attempt (or a note that it failed before the audio was analysed), the overruns reported so far on both codecs, and the last 16 transfers with their outcomes from `Vnwa::recent_transfers`. `measure` calls it on every failed attempt before the error goes into the recovery history, so the evidence survives even when a retry cures the failure. Reads three internal mutexes and the transfer log; no I/O, no error path.
+
+### `Vna::measure_once` timing of the analysis window (`sweep.rs`) [@ANCHOR: vnwa_open_window_from_send_end]
+
+The analysis window of a point is timed from the end of the block send (the send plus the 0x0d read), not from before it. The unit starts emitting when it has the block and the 0x0d read, and the send takes 7 to 27 ms: timing from before the send put the window start on the 60 ms level step whenever the send took over about 20 ms, which made 3 to 4 percent of attempts fail the steadiness check (measured 2026-10-29: every failed attempt had a send of 20.9 ms or more, no good one had more). The audio mark is taken right after the send ends, resends wait only 5 ms (`RETRY_PAUSE`) so they do not move the window, and an optional minimum gap between sends is honoured first. Errors are returned as strings and carry evidence via `with_evidence`.
+
 * The installer runs only the commands on its allow-list (with or without `sudo`), and refuses every other command before it is run. [@ANCHOR: vnwa_open_install_commands]
-* A USB device is the VNWA's codec only when it is a PCM2900C that has a VNWA control chip as a sibling on the same parent hub; no other sound card is reserved. [@ANCHOR: vnwa_open_reserved_codec]
-* The codec cards are found in the `pw-dump` document of a PipeWire sound server. [@ANCHOR: vnwa_open_sound_server_pipewire]
-* The codec cards are found in the text of `pactl list cards` of a PulseAudio sound server. [@ANCHOR: vnwa_open_sound_server_pulse]
-* A sweep can measure a configured number of points at its start frequency first and throw the results away, to bring the unit to a steady state. [@ANCHOR: vnwa_open_discard_points]
+
+### `reserved::is_vnwa_codec(sys: &Path, usb_path: &str) -> bool` [@ANCHOR: vnwa_open_reserved_codec]
+
+Decides whether a USB device is the VNWA's audio codec, by topology: the device at `usb_path` (for example `3-2.2.2`, under `<sys>/bus/usb/devices`) must have the PCM2900C ids 08bb:29c0 and a sibling device under the same parent hub with the VNWA control chip's ids 20a0:4118. The codec id alone is a generic Texas Instruments part used by many USB sound dongles, so it is never the whole test, and no other sound card is reserved. A path without a parent, an unreadable sysfs or a device with other ids gives false. Read-only reads of sysfs, no side effects. `vnwa_open is-vnwa-codec` exposes it to the packaged udev and sound-server rules by exit status.
+
+### `sound_server::parse_pw_dump(json: &str) -> Result<Vec<Card>, String>` [@ANCHOR: vnwa_open_sound_server_pipewire]
+
+Finds the codec-chip cards in the output of `pw-dump` (PipeWire): objects whose `info.props` carry vendor id 0x08bb and product id 0x29c0 (compared lower-cased), returned with their description (default "USB audio codec"), the USB port from `device.bus-path` and the PipeWire object id. Errors (strings): the text is not JSON or not a list. Objects without properties are skipped. Pure, no I/O; the program is run by `check`. The id is what `wpctl set-profile` needs.
+
+### `sound_server::parse_pactl_cards(text: &str) -> Vec<Card>` [@ANCHOR: vnwa_open_sound_server_pulse]
+
+Finds the codec-chip cards in the text of `pactl list cards` (PulseAudio): it splits the text at `Card #`, reads `device.vendor.id`, `device.product.id`, `device.description` and `device.bus_path` properties, keeps cards with vendor 0x08bb and product 0x29c0, and takes the card number as the id. Text that lists none gives an empty list; there is no error path. Pure, no I/O.
+
+### `sweep::discard_points(count: u32, measure: impl FnMut() -> Result<T, String>)` (private) [@ANCHOR: vnwa_open_discard_points]
+
+Measures `count` points at the sweep's start frequency and throws the results away, to bring the unit to a steady state before the sweep proper (configurable). A failure of a discarded point is ignored here, but it is still counted in the recovery tallies and written to the failure log by `measure` itself, so nothing is hidden. Returns nothing; blocks for `count` point measurements; with a count of 0 it does nothing. Tests: the discard test counts the measurements made.
 
 ### `cal::solve3(a: [[Complex; 3]; 3], b: [Complex; 3]) -> Option<[Complex; 3]>` (private) [@ANCHOR: vnwa_open_cal_solve3]
 
@@ -277,8 +309,13 @@ Opens the audio input whose id contains `needle` (case-insensitive, for example 
 
 Estimates how many frames have passed since the last delivery of a period: the elapsed seconds since that delivery times 48,000, capped at one period, and 0 when nothing has been delivered yet. Used by `Capture::mark` so the mark does not trail real time by the delivery granularity. Pure apart from reading the clock, no error path. Tests: the capture unit tests that check the mark against the clock.
 
-* The `vnwa_open` command line: `is-vnwa-codec` answers by exit status, `install-system-config` runs the installer, anything else prints the usage and exits 2. [@ANCHOR: vnwa_open_cli_main]
-* The codec cards in sysfs are listed with their USB paths, and only the codec vendor is read. [@ANCHOR: vnwa_open_codec_find_cards]
+### `main()` in `src/bin/vnwa_open.rs` [@ANCHOR: vnwa_open_cli_main]
+
+The command line: `vnwa_open is-vnwa-codec <usb path>` exits 0 when `reserved::is_vnwa_codec` says the path is a VNWA codec and 1 otherwise (used by the packaged udev and sound-server rules); `vnwa_open install-system-config [--apply] [--uninstall] [--check] [--force] [--restart-audio] [--root DIR]` runs the installer, a dry run unless `--apply`, with its log under `--root` or `$XDG_STATE_HOME`, printing the plan and, in `--check` mode, the sound-server exposure and warning. An installer error is printed to standard error with exit status 2, and any other first argument prints the usage and exits 2. It changes system files only with `--apply`, and an installed root-owned rule needs `sudo`, which the installer decides. Tests: the installer unit tests; this entry point itself is thin.
+
+### `topology::find_cards(sys: &Path) -> Vec<CodecCard>` [@ANCHOR: vnwa_open_codec_find_cards]
+
+Lists the codec cards in sysfs: for each `class/sound/card*` it reads the card id, resolves the `device` link to the USB device directory (the parent of the interface directory), reads only its vendor and product ids and keeps cards whose ids are the PCM2900C codec, returning the card id and the USB port path (for example `3-2.2.3`). Unreadable entries are skipped and a missing directory gives an empty list; nothing is written. `sys` is the sysfs root (`/sys` in production, a fake tree in tests).
 
 ### `generator::am_captured_500hz_100pct(usb: &Vnwa, freq_hz: f64) -> Result<(), String>` [@ANCHOR: vnwa_open_generator_am_captured]
 
@@ -328,12 +365,29 @@ Opens the VNWA through libusb by vendor and product id (20a0:4118 in production)
 
 The test transport's control read: it plays the next scripted outcome for a read of the given request, copying at most the buffer length of its bytes into the buffer and returning the count, or returning the scripted error (transient, no device or other). When the script is exhausted it succeeds, so a test only scripts the failures it cares about. It records what was asked in the shared log. No hardware, no timing. This is what lets the retry and recovery logic be tested on the same code path that production uses. Tests: the usb retry tests.
 
-* A session opens the unit and both codecs (found by topology unless named). (Hardware test.) [@ANCHOR: vnwa_open_session_open]
-* The sound server is asked (`pw-dump`, else `pactl`) and judged; what could not be inspected is reported as unknown. [@ANCHOR: vnwa_open_sound_server_check]
-* Only the cards on the USB port of a codec that has the control chip beside it are the VNWA's. [@ANCHOR: vnwa_open_sound_server_judge]
-* The USB port is read from the card's bus path. [@ANCHOR: vnwa_open_sound_server_port_of]
-* The exposure is stated plainly: protected, exposed or unknown. [@ANCHOR: vnwa_open_sound_server_protected]
-* An exposed codec gives a warning that names the fixes. [@ANCHOR: vnwa_open_sound_server_warning]
+### `Session::open(cfg: &Config) -> Result<Session, String>` (`sweep.rs`, private) [@ANCHOR: vnwa_open_session_open]
+
+Opens everything a measurement needs together: the unit's control link (`Vnwa::open`) and the two codec capture streams. The codecs are those named in the configuration (`codec_s11`, `codec_s21`) or, when either is not named, found by USB topology with `topology::codecs`, so the kernel's card order does not matter. Errors (strings): topology failure (not exactly two codecs, not on one hub), libusb failure, or an audio stream that cannot be opened. It is called at start and again after every power cycle, because all three handles go stale when the unit re-enumerates. Opening only listens and sends no requests, so nothing is transmitted. Needs the real unit, so it is covered by the hardware tests.
+
+### `sound_server::check(sys: &Path, run: &dyn Fn(&str, &[&str]) -> Option<String>) -> Exposure` [@ANCHOR: vnwa_open_sound_server_check]
+
+Asks the sound server and judges the answer. It lists the VNWA codec paths from sysfs, runs `pw-dump` and, if that is not available, `pactl list cards`, parses the output and calls `judge`. A `pw-dump` output that cannot be parsed gives `Unknown` with the parse error; if neither program answers it gives `Unknown("neither pw-dump ... nor pactl ... answered: no sound server to inspect")`. `run` returns the program's output or `None`, so tests script it. It only reads; it never changes the sound server.
+
+### `sound_server::judge(cards: Vec<Card>, vnwa_usb_paths: &[String]) -> Exposure` [@ANCHOR: vnwa_open_sound_server_judge]
+
+Decides which listed cards are the VNWA's: those whose USB port equals the port of a codec that topology says is a VNWA codec (a generic PCM2900C dongle elsewhere is not). Returns `Unknown("no VNWA codecs are plugged in")` when the topology list is empty, `Protected` when no listed card matches, and `Exposed(cards)` with the matching ones otherwise. Pure, no I/O.
+
+### `sound_server::port_of(bus_path: &str) -> Option<String>` (private) [@ANCHOR: vnwa_open_sound_server_port_of]
+
+Extracts the USB port from a sound server's card bus path, for example `2.2.2` from `pci-0000:00:14.0-usb-0:2.2.2:1.0`: the text after `-usb-`, after the bus number and colon, up to the next colon. `None` when the path does not have that shape. Pure. It is the key used to match a sound-server card to the topology-based list of VNWA codecs in `judge`.
+
+### `sound_server::protected(e: &Exposure) -> Option<bool>` [@ANCHOR: vnwa_open_sound_server_protected]
+
+Turns an `Exposure` into the plain statement used in reports: `Some(true)` for protected, `Some(false)` for exposed, `None` for unknown, so a report never claims safety it did not establish. Pure, total.
+
+### `sound_server::warning(e: &Exposure) -> Option<String>` [@ANCHOR: vnwa_open_sound_server_warning]
+
+Gives the user-facing warning when codecs are exposed: it names the cards and says system sounds can be played into the analyzer and a sweep can find the card busy, then names two fixes: `vnwa_open install-system-config --apply` (takes effect at the next login or after replugging the unit) or, at once and without touching other clients, `wpctl set-profile <id> 0` for each listed card id. Returns `None` for protected and unknown. Pure formatting; it changes nothing itself.
 
 ### `Vnwa::temperature_counts(&self) -> Result<u16, String>` [@ANCHOR: vnwa_open_temperature_counts]
 
@@ -351,7 +405,9 @@ Returns the delay of the largest-magnitude point of `z`, refined by parabolic in
 
 Time gating: keeps what arrives between two times and returns that part's frequency response on the same grid. It takes the impulse response with a rectangular window (so nothing needs undoing), on a time grid spanning one whole period of the frequency grid (`1 / step`, signed about zero), multiplies it by a gate shaped by `shape` between the two times (zero outside), and transforms back with the inverse sum. A gate covering the whole period with a rectangular shape returns the input. Errors: a start not before the stop (or not finite) and the grid errors of `check_grid`. In low-pass mode the response is real, so a negative start keeps the part before zero. Pure, no I/O; the cost is the square of the grid size. Tests: gating a delay line and the identity gate.
 
-* One point is traced raw: the audio of both codecs around the set-up block send. (Hardware test.) [@ANCHOR: vnwa_open_trace_point]
+### `Vna::trace_point(&self, freq_hz: f64, before_ms: f64, after_ms: f64) -> Result<RawPoint, String>` [@ANCHOR: vnwa_open_trace_point]
+
+Traces one point raw: it sends the set-up block for `freq_hz` as `measure` does and returns the audio of both codecs from `before_ms` before the send until `after_ms` after it ended, plus the send time and the frame where the send ended (from the clock). It is a diagnostic used to find when the IF tone and the burst start; errors are not retried and are strings (transfer failure, missing audio, or overrun). The unit's generator emits its low-level tone while the point runs; nothing else is transmitted. Needs the real unit, so it is a hardware test.
 
 ### `impl Display for TransferError` (`transport.rs`) [@ANCHOR: vnwa_open_transfer_error_text]
 
@@ -361,7 +417,9 @@ The text of a transfer error as it appears in messages and the transfer log: a `
 
 Appends one line, `<epoch ms> <what>: <outcome>`, to the ring of recent transfers, dropping the oldest when 16 are held (`TRANSFER_LOG`). Called by `attempt`, `read_patient` and `reset_device` for every try, success or failure. The time is read from the system clock, 0 if it cannot be read. Takes the mutex of the ring, so concurrent transfers record in the order they finish. No I/O. Tests: the transfer-log tests in `usb.rs`.
 
-* The recovery's cold reset closes the streams, power cycles the hub port and reopens the session. (Hardware test.) [@ANCHOR: vnwa_open_vna_cold_reset]
+### `Vna::cold_reset(&mut self) -> Result<(), String>` (`Recoverable` impl) [@ANCHOR: vnwa_open_vna_cold_reset]
+
+The recovery's cold reset of the whole measuring session. It needs a hub in the configuration (otherwise "no hub configured"), adds the USB resends and codec overruns so far to the recovery tallies (they die with the old handles), closes both audio streams first (an open stream on a vanishing codec storms with overrun reports), calls `power::cold_reset` (a real power cycle of the unit's hub port, tens of seconds), and then reopens the unit and both codecs with `Session::open`. Errors: no hub, the power-cycle failure, or the reopen failure. The unit loses its set-up, so the next point sends a full block. Tests: hardware test; `recover` is unit-tested with a scripted unit.
 
 ### `Window::from_name(s: &str) -> Result<Window, String>` [@ANCHOR: vnwa_open_window_from_name]
 
@@ -377,7 +435,9 @@ plus 0.1 % and 0.1 degrees per 100 counts of temperature change since that basel
 
 A device-to-host vendor read for the 0x0d request, which the unit stalls while it is busy: after a transient error it waits the given pauses (milliseconds), one per resend, instead of the default 3 resends of 5 ms; the caller's table gives growing pauses, up to 6 resends. Returns the bytes read (truncated to what arrived). A `NoDevice` or `Other` error fails at once; running out of pauses returns an error naming the count and the last message. Every try is logged and each resend counted. It sleeps the calling thread for the pauses. Tests: the growing-pause test over the scripted transport in `usb.rs`.
 
-* The IF tone starts 61 ms and the 18 kHz burst about 1 ms after the end of the send, in a recorded point. [@ANCHOR: vnwa_open_emission_onset]
+### `trace::onset_block(env: &[f64]) -> Option<usize>` [@ANCHOR: vnwa_open_emission_onset]
+
+Finds where a tone starts in an amplitude envelope: the index of the first block that reaches half of the envelope's largest value, `None` for silence (largest value zero or less). Pure, no I/O. It is applied to 1 ms envelopes of a recorded point, and the test uses a recording of 2026-10-29 to show that the IF tone starts about 61 ms and the 18 kHz burst about 1 ms after the end of the send, which is what fixes the placement of the analysis window.
 
 ### `generator::am_fields(level: u16, mod_hz: f64, depth_pct: f64) -> Result<AmFields, String>` [@ANCHOR: vnwa_open_am_fields]
 
@@ -407,8 +467,17 @@ The cold reset to use when the unit is in, or may be in, a modulation lock-up (d
 
 Lets a program that embeds this crate install its own power-cycle implementation (`bench_mcp` installs its USB hub module's), a boxed closure taking the hub port and the (off time, wait) ladder and returning when the unit is back. It is stored once in a process-wide `OnceLock`: the first call wins and returns true, a later call returns false and changes nothing. The recovery inside a measurement, the generator-off recovery and the power-cycle tool then all run one implementation with its hub protection rules and evidence record. This crate cannot depend on `bench_mcp`, so standalone programs use the built-in `sudo -n uhubctl` path. Tests: the hook test in `power.rs`.
 
-* Spectrum analyzer: the audio power around the LO at each frequency (TX chip silent or a 12 kHz tracking generator), band power by DFT (discrete Fourier transform), settings refused if they would leave holes. [@ANCHOR: vnwa_open_sa_band_rms] [@ANCHOR: vnwa_open_sa_spectrum]
-* A point with all four channels dead says nothing leaves the TX port and names the TX connector, pad, tee and leads first. [@ANCHOR: vnwa_open_no_reference_message]
+### `spectrum::band_rms(x: &[f64], lo_hz: f64, hi_hz: f64) -> f64` [@ANCHOR: vnwa_open_sa_band_rms]
+
+The rms of 48 kHz audio between two frequencies: remove the mean, apply a Hann window, take a DFT bin by bin over the band (from the first bin at or above `lo_hz`, at least bin 1, to the last at or below `hi_hz`, below Nyquist) and sum the one-sided power with the window's power correction (Parseval), then take the square root. Result in codec counts, not dBm. Pure, no I/O, no error path; `x` must hold enough samples for the band to include at least one bin or the result is 0. Cost is samples times bins. Used by `sa_once` with the DC guard of 100 Hz as the lower edge.
+
+### `spectrum::spectrum_plan(start_hz, stop_hz, points, band_hz, tracking_level) -> Result<f64, String>` [@ANCHOR: vnwa_open_sa_spectrum]
+
+Checks the settings of a spectrum and returns the point spacing in hertz. Errors (strings): fewer than 2 points; a band outside 200 Hz to 20 kHz; a tracking-generator level above 14 bits; a range that starts below 12.001 kHz or ends above 1.3 GHz or before it starts; and a spacing wider than the band, because the spectrum would then have holes. Pure, no I/O. Called by `Vna::spectrum` before the unit is touched so bad settings send nothing. The tracking generator level 0 keeps the TX chip silent; a non-zero level makes it emit a low-level tone.
+
+### `sweep::no_reference_message(freq_hz, refs: (f64, f64), measured: (f64, f64), min: f64) -> String` [@ANCHOR: vnwa_open_no_reference_message]
+
+Builds the error text for a point whose reference channels carry no tone, quoting all four channel levels in counts. When the measured channels are also below the minimum, no signal is leaving the TX port at all and the text says so and names what to check first: the TX connector, the pad, the tee and the leads (a loose TX SMA looked exactly like this on 2026-10-29 when the unit was otherwise healthy), then a power cycle. When the measured channels do see a tone, the text says the cause is the unit's reference input or its cabling and not the DDS lock. Pure formatting, cannot fail. It is the message `measure_once` returns when a reference is below `min_reference`.
 
 ### `generator::modulate(usb: &Vnwa, carrier_hz: f64, attenuation_db: f64, m: Modulation) -> Result<(), String>` [@ANCHOR: vnwa_open_generator_modulate]
 
@@ -422,7 +491,9 @@ Chooses the power-cycle implementation: with a hook installed it calls the hook 
 
 Returns the power-cycle schedule used after AM or FM: five cycles with 3, 12, 12, 30 and 12 s off, each waiting up to 25 s (for the 3 s cycle) or 45 s (`BACK_TIMEOUT`, for the others) for the unit. It is that long because in 11 of 25 recoveries from a modulation lock-up measured on 2026-10-29 the control chip failed to come back after one or more cycles (1 cycle 14 times, 2 cycles 6 times, 3 cycles 3 times, 4 or more twice). The extra cycles cost time only when the unit does not come back. Pure, no I/O. Tests: the ladder shape test in `power.rs`.
 
-* The functions that modulate, choose the power-cycle implementation, climb the modulation ladder and measure one spectrum point are anchored. [@ANCHOR: vnwa_open_spectrum_sa_once]
+### `Vna::sa_once(&self, f_hz: f64, band_hz: f64, tracking_level: u16) -> Result<f64, String>` (private) [@ANCHOR: vnwa_open_spectrum_sa_once]
+
+Measures the audio power around the LO at one frequency, for the rudimentary spectrum analyzer: it builds the set-up block with the TX word at `f - 12 kHz` (so the LO sits at `f`), reads request 0x58 for the tracking level, sends the block, does the patient 0x0d read, marks the S21 codec, collects a window of its left channel and returns `band_rms` from 100 Hz to `band_hz`. With `tracking_level` 0 the TX chip is silent; otherwise a loopback shows the TX as a line at the IF. Errors (strings): a transfer failure or audio loss, which `Vna::spectrum` retries through `recover`. The result is in codec counts; amplitude, ghost lines and subharmonic responses are not verified.
 
 ## Soak scope connection (`soak_scope`)
 
