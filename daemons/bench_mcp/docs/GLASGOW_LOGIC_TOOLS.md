@@ -69,7 +69,7 @@ last change at or before `t_ns` (`init` before the first). Binary search, O(log 
 
 **Purpose.** What a clocked receiver sees at an edge: the state just before change number `i`. `fn value_before(&self, i: usize) -> u32`
 returns `init` for 0 and `edges[i-1].value` otherwise. `i` must be a valid index into `edges` or `edges.len()`; larger panics. Used
-by the I2C, UART and SPI decoders and the edge trigger. **Tests:** `value_lookups_and_pin_names_resolve`.
+by the I2C (two-wire serial bus), UART and SPI (four-wire serial bus) decoders and the edge trigger. **Tests:** `value_lookups_and_pin_names_resolve`.
 
 ### `gla_wave_pin_index`
 
@@ -201,7 +201,7 @@ recording. **Tests:** `the_window_keeps_the_pre_trigger_part_and_the_trigger_pos
 ### `gla_zip_store`
 
 **Purpose.** A dependency-free ZIP writer for the `.sr` file. `pub fn zip_store(entries: &[(&str, Vec<u8>)]) -> Vec<u8>`: each entry
-stored without compression with a CRC, then a central directory and the end record; DOS date fixed at 1980-01-01, so the bytes depend
+stored without compression with a CRC (cyclic redundancy check), then a central directory and the end record; DOS date fixed at 1980-01-01, so the bytes depend
 only on the content. Limits: 4 GiB per entry and archive (no ZIP64); names up to 65 535 bytes, ASCII. **Tests:**
 `crc32_matches_the_check_value_and_the_zip_lists_every_entry` (reads it back with its own local-header parser).
 

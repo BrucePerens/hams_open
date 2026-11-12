@@ -1,7 +1,7 @@
 # USB hub tools (bench_mcp, `usb_hub` driver)
 
 The `bench_usb_*` tools describe and control the host's USB tree. They live in `src/usb_hub/` and are part of the bench_mcp server,
-because the VNA is attached through a power-switching hub: the VNA cold reset and the hub tools share one implementation of
+because the VNA (vector network analyzer) is attached through a power-switching hub: the VNA cold reset and the hub tools share one implementation of
 power off, power on and the wait for re-enumeration.
 
 ## Registering
@@ -83,7 +83,7 @@ A sudoers rule must name the binary with `--usb-priv *`, and the binary must be 
 
 A port cannot be verified from software alone, so the output gives a level, never a boolean: 1 claimed (uhubctl reports per-port switching); 2 re-enumerated (the device left the tree
 when the port went off and came back with a new device number and readable descriptors, with the measured times; checked on every cycle the tool performs); 3 state cleared (a
-device-specific check, recorded in the config); 4 VBUS measured (manual entry in the config). Level 2 shows the port dropped the device, not that VBUS fell: some hubs disable the
+device-specific check, recorded in the config); 4 VBUS (the USB power line) measured (manual entry in the config). Level 2 shows the port dropped the device, not that VBUS fell: some hubs disable the
 data lines and leave VBUS on. The VNWA on hub 3-2 port 2 is confirmed by eye to go dark and keep nothing, which the config records as `confirmed_by_hand` (level 2 plus manually confirmed).
 
 ## Safety rules
