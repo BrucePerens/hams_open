@@ -2261,6 +2261,510 @@ stores the new `xi_max` and band decisions in the state, pads the bands to `K_ha
 
 ## Fixed and float AMBE codec chain anchored in slice 7 (encoders, decoders, synthesis, concealment)
 
+The streaming encoders take PCM and return frames: `push_samples`, then `next_frame` until it returns `None`, then `finish`. They are in-memory
+state machines (no I/O, no locks, no threads; a single owner calls them in order), so no transmitter keying, PTT, band check or transmit gate applies here; whatever carries the
+frames to a radio or chip does that. Each fixed encoder has a float sibling with the same surface, and the parity tests run both on real speech.
+
+### `Encoder::new` (fixed D-STAR) [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_new]
+
+Creates the streaming fixed-point D-STAR encoder: a `FrameAnalyzer` whose analysis-center offset is set to `CHIP_ALIGNED_CENTER_OFFSET` (-80 samples, the offset at which its pitch track lines up with the chip's),
+a default `HighPassFilter`, a mirror of the fixed decoder state (`MbeDecoderState::initial()`) and a fresh `AnalysisState`. The mirror is advanced by dequantizing each emitted frame so the quantizer sees the same
+predictor state as a receiving decoder.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| none | | |
+
+**Returns:** `Encoder`.
+**Errors:** none.
+**Special concerns:** `set_center_offset` can change the alignment afterwards; `Default` calls `new`.
+**Signature:** `pub fn new() -> Self`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames`; `float_dstar_encoder_Encoder_new`.
+
+### `Encoder::next_frame` (fixed D-STAR) [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_next_frame]
+
+Returns the next 72-bit logical D-STAR frame once enough look-ahead has been pushed (two frames), else `None`. It takes the frame's analysis from `FrameAnalyzer::next_analysis`; if `detect_tone` finds a tone in the frame's
+160 samples it returns a tone frame (DTMF index `128 + row + 4*col`, or the single-tone index); otherwise it quantizes the pitch with `quantize_pitch_p8`, takes `L` from `L_TABLE`, runs `analyze_and_quantize` against the mirror
+state, packs `b0..b8` with `pack_raw_parameters`, advances the mirror with `dequantize`, and builds the frame with `build_frame`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Advances the analyzer, the mirror decoder state and the voicing history |
+
+**Returns:** `Option<u128>`: the logical frame in the low 72 bits (use `frame_to_wire_bytes` for chip wire bytes), or `None` when more input is needed.
+**Errors:** none returned.
+**Special concerns:** stateful: frames must be pulled in order, and calling it also advances the mirror, so it is not idempotent.
+**Signature:** `pub fn next_frame(&mut self) -> Option<u128>`
+**See also:** test in `tests/ambe_fixed_dstar_encoder.rs` (`speech_parity_with_the_float_encoder_first_150_frames`); `fixed_dstar_encoder_Encoder_finish`.
+
+### `Encoder::finish` (fixed D-STAR) [@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_finish]
+
+Flushes the encoder at the end of the input: it calls `FrameAnalyzer::finish_input` (which pads with silence so every pushed sample's frame is complete), then drains `next_frame` into a vector. Call it once after the last
+`push_samples`; the returned frames are the ones still held back by the two-frame look-ahead.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Consumed in effect: no more input should be pushed afterwards |
+
+**Returns:** `Vec<u128>`, the remaining logical frames (possibly empty).
+**Errors:** none.
+**Special concerns:** the silence padding makes the last frames cover silence, so the output count equals the input length rounded up to whole frames of 160 samples (as parity tests check against the float encoder).
+**Signature:** `pub fn finish(&mut self) -> Vec<u128>`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames`; `fixed_dstar_encoder_Encoder_next_frame`.
+
+### `Encoder::next_frame` (fixed AMBE+2) [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encoder_Encoder_next_frame]
+
+The AMBE+2 half-rate streaming step, same structure as the D-STAR encoder: analysis, tone detection (a tone frame via `build_tone_frame` with the DTMF or single tone index and the amplitude field from `amplitude_field_q16`),
+else `quantize_pitch_p8` for `b0`, `analyze_and_quantize` against the mirror, `dequantize(&raw, mirror)` to advance the mirror state, and `build_frame(&raw)`. Returns `None` until the look-ahead is filled.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Advances the analyzer, mirror state and analysis history |
+
+**Returns:** `Option<u128>`, the 72-bit logical frame.
+**Errors:** none.
+**Special concerns:** stateful, in order; no interleaving into wire bytes (see the AMBE+2 interleave helpers).
+**Signature:** `pub fn next_frame(&mut self) -> Option<u128>`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames` in `tests/ambe_fixed_ambe_plus_2_encoder.rs`; `float_ambe_plus_2_encoder_Encoder_next_frame`.
+
+### `Encoder::finish` (fixed AMBE+2) [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encoder_Encoder_finish]
+
+Ends an AMBE+2 stream: pads the analyzer with silence through `finish_input` and drains `next_frame`, returning the frames that were waiting on look-ahead. Call once after the last samples.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Further `push_samples` afterwards would start from padded silence |
+
+**Returns:** `Vec<u128>` of 72-bit logical frames.
+**Errors:** none.
+**Special concerns:** idempotent padding (`finish_input` pads once), so a second call returns an empty vector.
+**Signature:** `pub fn finish(&mut self) -> Vec<u128>`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames`; `fixed_ambe_plus_2_encoder_Encoder_next_frame`.
+
+### `Encoder::next_frame` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_next_frame]
+
+Encodes the next TIA-102.BABA frame as eight code vectors once enough look-ahead has been pushed, else `None`. It takes the frame analysis from `FrameAnalyzer::next_analysis` and calls
+`encode_frame` with the refined pitch, the initial pitch error and the previous `FrameState`. On success the state advances and the frame is remembered; if analysis fails (degenerate pitch or `L_hat`)
+the failure counter `failed_frames` is incremented and the previous frame is repeated (or all zeros before any frame).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Advances analyzer and frame state |
+
+**Returns:** `Option<[u32; 8]>`, the eight code vectors, or `None` when more input is needed.
+**Errors:** none returned; failures are counted in the public field `failed_frames`.
+**Special concerns:** two frames of look-ahead delay; stateful.
+**Signature:** `pub fn next_frame(&mut self) -> Option<[u32; 8]>`
+**See also:** test `tia_parity_first_150_frames`; `float_tia_102_baba_encoder_Encoder_next_frame`.
+
+### `Encoder::finish` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_finish]
+
+Pads the analyzer with silence so every pushed sample's frame can be emitted, then drains `next_frame` and returns the remaining frames. Call once at the end of the input.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Stream is finished afterwards |
+
+**Returns:** `Vec<[u32; 8]>`, the remaining code-vector frames.
+**Errors:** none.
+**Special concerns:** failed frames inside the flush also count in `failed_frames`.
+**Signature:** `pub fn finish(&mut self) -> Vec<[u32; 8]>`
+**See also:** test `tia_parity_first_150_frames`; `fixed_tia_102_baba_encoder_Encoder_next_frame`.
+
+### `FrameAnalyzer::finish_input` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_finish_input]
+
+Marks the end of the input and pads the analyzer's sample buffer with `3 * 160 + 2 * 160` zeros (silence), once, so the last real frames have the look-ahead and margin they need. After it,
+`next_analysis` stops when the next frame's center is beyond the real samples. A second call does nothing.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut FrameAnalyzer` | Sets the `finished` flag |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** do not push samples afterwards.
+**Signature:** `pub fn finish_input(&mut self)`
+**See also:** test `streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech`; `next_analysis`.
+
+### `FrameAnalyzer::next_analysis` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_next_analysis]
+
+Produces the analysis of the next frame, or `None` if more input is needed (or the stream is exhausted after `finish_input`). It builds (and caches) the pitch error tables for frames `k`, `k+1`, `k+2`, runs the look-back and
+look-ahead tracking with the previous two frames' results, chooses the initial pitch, refines it to eighth samples, and returns a `FrameAnalysis` with `p8`, the exact `Pitch`, `initial_pitch_error_q16`, the `RefinementFrame` and the
+frame's own 160 `slot_samples` (used by tone detection). It also drops tables and input samples no longer needed.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut FrameAnalyzer` | Holds the sample buffer, error tables and pitch history |
+
+**Returns:** `Option<FrameAnalysis>`.
+**Errors:** none; `None` means wait for more samples.
+**Special concerns:** stateful and in-order; trims the buffer, so earlier frames cannot be re-analysed.
+**Signature:** `pub fn next_analysis(&mut self) -> Option<FrameAnalysis>`
+**See also:** test `streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech`; `fixed_tia_102_baba_pitch_look_ahead_pitch_tracking`.
+
+### `FrameAnalyzer::table` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_table]
+
+Private helper that ensures the pitch error table for frame `k` is in the analyzer's cache. If it is absent it computes the frame's center (`LEAD + k*160 + center_offset`, never below `MARGIN`), builds a
+`PitchAnalysisFrame` from the buffered samples and stores its `error_table()`. Frames are tabled once and reused by the three frames that look at them.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `k` | `usize` | Frame number |
+
+**Returns:** nothing.
+**Errors:** may panic if the buffer does not yet cover the window; `next_analysis` checks `available` first.
+**Special concerns:** private; mutates the cache.
+**Signature:** `fn table(&mut self, k: usize)`
+**See also:** test `streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech`; `PitchAnalysisFrame::error_table`.
+
+### `HighPassFilter::step` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_HighPassFilter_step]
+
+One sample of the standard's input high-pass filter (Eq. 3), `H(z) = (1 - z^-1) / (1 - 0.99 z^-1)`, in integers: the recursive state is kept in Q16 and the pole `0.99` in Q30, so the result is the exact response rounded to an
+integer sample with no accumulating rounding error. It removes DC offset, which would otherwise corrupt the pitch error function. Every streaming encoder calls it on each pushed sample.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut HighPassFilter` | Holds the previous input and previous output (Q16) |
+| `x` | `i32` | Input PCM sample |
+
+**Returns:** `i32`, the filtered sample (may exceed 16 bits; callers saturate where they need `i16`).
+**Errors:** none.
+**Special concerns:** stateful; one filter per stream.
+**Signature:** `pub fn step(&mut self, x: i32) -> i32`
+**See also:** test `tia_parity_first_150_frames`; `float_tia_102_baba_encoder_HighPassFilter_step`.
+
+### `Encoder::new` (float D-STAR) [@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_new]
+
+Creates the float D-STAR streaming encoder: analyzer with center offset `CHIP_ALIGNED_CENTER_OFFSET` (-80, where voiced frames agree with the chip's pitch index within 2 steps 66% of the time),
+the high-pass filter, a `DStarDecoderState::initial()` mirror and a fresh `AnalysisState`. It deliberately does not copy the chip's habit of parking all-unvoiced frames on `b0 = 34` (documented in a comment, since it lowers envelope correlation).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| none | | |
+
+**Returns:** `Encoder`.
+**Errors:** none (`push_samples` panics on non-finite samples).
+**Special concerns:** input is `&[f64]` whole-number PCM.
+**Signature:** `pub fn new() -> Self`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames`; `fixed_dstar_encoder_Encoder_new`.
+
+### `Encoder::next_frame` (float D-STAR) [@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_next_frame]
+
+The float D-STAR streaming step and the reference for the fixed one: a tone frame if `detect_tone` fires on the slot samples, else `b0 = quantize_pitch(omega0_hat)`, `L` from `L_TABLE`, `analyze_at_pitch` for voicing and amplitudes,
+`quantize_speech` against the mirror state with the D-STAR mode tables, `pack_raw_parameters`, `dequantize` to advance the mirror, and `build_frame`. Returns `None` until look-ahead is available.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Advances analyzer, mirror and analysis state |
+
+**Returns:** `Option<u128>`, the 72-bit logical frame.
+**Errors:** none.
+**Special concerns:** stateful, in order.
+**Signature:** `pub fn next_frame(&mut self) -> Option<u128>`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames`; `fixed_dstar_encoder_Encoder_next_frame`.
+
+### `Encoder::finish` (float D-STAR) [@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_finish]
+
+Float D-STAR flush: `finish_input` pads the analyzer with silence, then `next_frame` is drained into a vector. Same contract as the fixed `finish`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Ends the stream |
+
+**Returns:** `Vec<u128>`.
+**Errors:** none.
+**Special concerns:** call once after the last `push_samples`.
+**Signature:** `pub fn finish(&mut self) -> Vec<u128>`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames`; `fixed_dstar_encoder_Encoder_finish`.
+
+### `Encoder::next_frame` (float AMBE+2) [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_Encoder_next_frame]
+
+Float AMBE+2 step: tone frame via `build_tone_frame` (tone index from `dtmf_tone_idx` or the single-tone index, amplitude field from `amplitude_field`), else `quantize_pitch(omega0_hat)`, `L_TABLE`, `W0_TABLE` for `f0`,
+`analyze_at_pitch`, `quantize_speech` with the AMBE+2 mode tables (`hoc_b8_even_only` false, `rho` 0.65), `dequantize` for the mirror and `build_frame`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Advances analyzer and state |
+
+**Returns:** `Option<u128>`.
+**Errors:** none.
+**Special concerns:** stateful, in order.
+**Signature:** `pub fn next_frame(&mut self) -> Option<u128>`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames` in `tests/ambe_fixed_ambe_plus_2_encoder.rs`; `fixed_ambe_plus_2_encoder_Encoder_next_frame`.
+
+### `Encoder::finish` (float AMBE+2) [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_Encoder_finish]
+
+Float AMBE+2 flush: pad the analyzer with silence and drain `next_frame`, returning the frames still held by the look-ahead.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Ends the stream |
+
+**Returns:** `Vec<u128>`.
+**Errors:** none.
+**Special concerns:** call once.
+**Signature:** `pub fn finish(&mut self) -> Vec<u128>`
+**See also:** test `speech_parity_with_the_float_encoder_first_150_frames`; `fixed_ambe_plus_2_encoder_Encoder_finish`.
+
+### `Encoder::next_frame` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_next_frame]
+
+The float TIA-102.BABA encoder step. It records `last_analysis` (initial pitch, refined `omega0_hat`, initial pitch error) for diagnostics and calls `encode_frame`, or `encode_frame_chip_wire` when the encoder was configured
+to emit the DVSI chip's framing, with the analysis and previous state. A failed frame increments `failed_frames` and repeats the previous frame (zeros before the first).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Advances analyzer and frame state |
+
+**Returns:** `Option<[u32; 8]>`, `None` while waiting for look-ahead.
+**Errors:** none returned.
+**Special concerns:** stateful; chip framing is a configuration choice of the encoder.
+**Signature:** `pub fn next_frame(&mut self) -> Option<[u32; 8]>`
+**See also:** test `tia_parity_first_150_frames`; `fixed_tia_102_baba_encoder_Encoder_next_frame`.
+
+### `Encoder::finish` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_finish]
+
+Pads the float analyzer with silence and drains `next_frame`, returning the remaining code-vector frames.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut Encoder` | Ends the stream |
+
+**Returns:** `Vec<[u32; 8]>`.
+**Errors:** none.
+**Special concerns:** call once.
+**Signature:** `pub fn finish(&mut self) -> Vec<[u32; 8]>`
+**See also:** test `tia_parity_first_150_frames`; `fixed_tia_102_baba_encoder_Encoder_finish`.
+
+### `FrameAnalyzer::finish_input` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_finish_input]
+
+Pads the float analyzer's buffer with `3 * 160 + 2 * 160` zero samples once, so every pushed sample's frame can be analysed; call once, then drain `next_analysis`. A second call does nothing.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut FrameAnalyzer` | Sets `finished` |
+
+**Returns:** nothing.
+**Errors:** none.
+**Special concerns:** no pushes afterwards.
+**Signature:** `pub fn finish_input(&mut self)`
+**See also:** test `streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech`; `fixed_tia_102_baba_encoder_FrameAnalyzer_finish_input`.
+
+### `FrameAnalyzer::next_analysis` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_next_analysis]
+
+Returns the next frame's analysis if enough look-ahead has been pushed (and, after `finish_input`, while frames still cover real input), else `None`. It follows the same procedure as the fixed analyzer in f64: error tables for
+three frames, look-back and look-ahead tracking, initial estimate, refinement, and the frame's slot samples for tone detection.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut FrameAnalyzer` | Buffer, tables, pitch history |
+
+**Returns:** `Option<FrameAnalysis>` (float fields such as `initial_pitch`, `omega0_hat`, `initial_pitch_error`).
+**Errors:** none.
+**Special concerns:** stateful, in order.
+**Signature:** `pub fn next_analysis(&mut self) -> Option<FrameAnalysis>`
+**See also:** test `streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech`; `fixed_tia_102_baba_encoder_FrameAnalyzer_next_analysis`.
+
+### `FrameAnalyzer::table` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_table]
+
+Private: ensures the pitch error table for frame `k` is cached, computing it with `ErrorTable::compute` on the buffered samples at that frame's center if it is not. Tables are shared by the three frames that need them.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `k` | `usize` | Frame number |
+
+**Returns:** nothing.
+**Errors:** none expected; `next_analysis` checks availability first.
+**Special concerns:** private; mutates the cache.
+**Signature:** `fn table(&mut self, k: usize)`
+**See also:** test `streaming_fixed_analyzer_matches_the_float_analyzer_on_real_speech`; `fixed_tia_102_baba_encoder_FrameAnalyzer_table`.
+
+### `HighPassFilter::step` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_HighPassFilter_step]
+
+One sample of the input high-pass filter. `x` is a whole-number PCM value (rounded to `i64`); the arithmetic is the same Q16/Q30 integer recursion as the fixed filter, so the float and fixed encoders see
+bit-identical filtered input, and the result is the rounded whole-number output as `f64`. Without the filter a DC offset makes quiet frames look periodic at every lag.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut HighPassFilter` | Filter state |
+| `x` | `f64` | Whole-number PCM sample |
+
+**Returns:** `f64`, the filtered sample.
+**Errors:** none (NaN input is rejected earlier in `push_samples`).
+**Special concerns:** stateful.
+**Signature:** `pub fn step(&mut self, x: f64) -> f64`
+**See also:** test `tia_parity_first_150_frames`; `fixed_tia_102_baba_encoder_HighPassFilter_step`.
+
+### `decode_frame` (fixed D-STAR synthesis) [@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_frame]
+
+Decodes one logical 72-bit D-STAR frame into 20 ms of Q16.16 PCM (`N` samples). It runs `parse_frame` (FEC and de-whitening), classifies `b0`, and for speech frames under the default `Concealing` policy delegates
+to `decode_concealing`. Otherwise damaged frames (more than 3 corrected errors, or reserved codes 125 and 127 under the chip policy) repeat the previous parameters up to three times, then mute and reinitialize; good frames are
+dequantized and synthesized, and tone frames go to the fixed `ToneSynthesizer` (single tone, DTMF, or silence for unidentified dual-tone codes).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `logical_frame` | `u128` | 72-bit logical frame (from `wire_bytes_to_frame`) |
+
+**Returns:** `Option<[i64; N]>`, Q16.16 samples; `None` when the synthesizer rejects the parameter lengths or a repeat is requested before any real frame has run.
+**Errors:** none returned.
+**Special concerns:** stateful (decoder state, synthesizer, repeat counter); one decoder per stream; the policy is set with `with_error_policy`.
+**Signature:** `pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[i64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `ham_digital_modes_mbe:ErrorPolicy_is_bad`.
+
+### `decode_concealing` (fixed D-STAR synthesis) [@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]
+
+The concealing path of the fixed D-STAR decoder. It dequantizes the frame as received and with each single-bit flip of the 11 correctable raw bits (38 to 48), each against a copy of the state, builds a `Descriptor` for each
+speech reading and asks `Concealer::decide` (with the corrected-error count of both code words). `Accept(i)` commits that reading's state and synthesizes it; `Repeat` either resets the decoder and returns silence,
+returns silence when the scale is zero, or replays the previous frame faded by the scale.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `parsed` | `&ParsedFrame` | Parsed frame: `d`, `epsilon_c0`, `epsilon_c1` |
+
+**Returns:** `Option<[i64; N]>` of Q16.16 PCM.
+**Errors:** none returned.
+**Special concerns:** private; only for speech frames; the default policy, so the decoder fades instead of muting abruptly.
+**Signature:** `fn decode_concealing(&mut self, parsed: &ParsedFrame) -> Option<[i64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_general_concealment_Concealer_decide`.
+
+### `decode_frame` (fixed AMBE+2 synthesis) [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]
+
+Decodes one logical 72-bit AMBE+2 frame into 20 ms of Q16.16 PCM. Speech frames use `decode_concealing` under the default policy; otherwise a damaged speech frame repeats (the chip policy still runs the gain recursion on the damaged frame) and after three repeats mutes and
+reinitializes. Erasure frames repeat the previous frame, silence frames give zeros, and tone frames (single tone, DTMF, call-progress dial, ring, busy) go through the fixed tone synthesizer; reserved tones give silence.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `logical_frame` | `u128` | 72-bit logical frame (from `interleaved_to_frame`) |
+
+**Returns:** `Option<[i64; N]>`, `None` on a rejected parameter length or a repeat before any real frame.
+**Errors:** none returned.
+**Special concerns:** stateful; one decoder per stream.
+**Signature:** `pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[i64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_ambe_plus_2_decode_dequantize`.
+
+### `decode_concealing` (fixed AMBE+2 synthesis) [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_concealing]
+
+The concealing path for AMBE+2 speech frames, as for D-STAR but with 9 correctable raw bits (35 to 43). It dequantizes the received frame and each single-bit flip against copies of the state, makes `Descriptor`s and lets
+`Concealer::decide` pick a reading or a (possibly faded, possibly resetting) repeat.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `parsed` | `&ParsedFrame` | Parsed frame with the corrected-error counts |
+
+**Returns:** `Option<[i64; N]>`.
+**Errors:** none.
+**Special concerns:** private; speech frames only.
+**Signature:** `fn decode_concealing(&mut self, parsed: &ParsedFrame) -> Option<[i64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_general_concealment_Concealer_decide`.
+
+### `decode_frame` (float D-STAR synthesis) [@ANCHOR: ham_digital_modes:float_dstar_synthesis_DStarSynthesisDecoder_decode_frame]
+
+The float D-STAR bits-to-PCM decoder for one logical frame, returning 20 ms of `f64` samples. It follows mbelib's bad-frame policy (a speech frame with more than 3 corrected errors reuses the previous parameters
+without touching the predictor state, after 3 in a row it mutes and reinitializes), the default concealing path for speech frames, the chip policy's reserved-code handling, and tone synthesis.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `logical_frame` | `u128` | 72-bit logical frame |
+
+**Returns:** `Option<[f64; N]>`.
+**Errors:** none returned.
+**Special concerns:** stateful.
+**Signature:** `pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[f64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_dstar_synthesis_DStarSynthesisDecoder_decode_frame`.
+
+### `decode_concealing` (float D-STAR synthesis) [@ANCHOR: ham_digital_modes:float_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]
+
+Float concealing decoder for D-STAR speech frames: candidate readings from the 11 correctable bits, `Descriptor`s, `Concealer::decide`, then accept or a faded repeat or reset. It is the reference for the fixed one.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `parsed` | `&ParsedFrame` | Parsed frame with `epsilon` counts |
+
+**Returns:** `Option<[f64; N]>`.
+**Errors:** none.
+**Special concerns:** private.
+**Signature:** `fn decode_concealing(&mut self, parsed: &ParsedFrame) -> Option<[f64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `float_concealment_Concealer_decide`.
+
+### `decode_frame` (float AMBE+2 synthesis) [@ANCHOR: ham_digital_modes:float_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]
+
+The float AMBE+2 decoder for one logical frame (20 ms of `f64` PCM): parse, classify, concealing path for speech, otherwise the mbelib/chip bad-frame policy, erasure repeat, silence, and tone synthesis for DTMF, single and call-progress tones.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `logical_frame` | `u128` | 72-bit logical frame |
+
+**Returns:** `Option<[f64; N]>`.
+**Errors:** none returned.
+**Special concerns:** stateful.
+**Signature:** `pub fn decode_frame(&mut self, logical_frame: u128) -> Option<[f64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame`.
+
+### `decode_concealing` (float AMBE+2 synthesis) [@ANCHOR: ham_digital_modes:float_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_concealing]
+
+Float concealing decoder for AMBE+2 speech frames: readings for the received frame and the 9 correctable single-bit flips (35 to 43), `Concealer::decide`, then accept or faded repeat or reset.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `parsed` | `&ParsedFrame` | Parsed frame |
+
+**Returns:** `Option<[f64; N]>`.
+**Errors:** none.
+**Special concerns:** private.
+**Signature:** `fn decode_concealing(&mut self, parsed: &ParsedFrame) -> Option<[f64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `float_concealment_Concealer_decide`.
+
+### `Concealer::decide` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_concealment_Concealer_decide]
+
+Chooses among the candidate readings of one frame. `candidates[i] = (flips, descriptor)`: the number of raw bits flipped from the received frame (candidate 0 is as received) and the reading's `Descriptor` (`None` if it is not
+speech). It updates the bit-error-rate estimate (Q32) from `epsilon / 47`; with no errors and a quiet estimate it accepts candidate 0. Otherwise each candidate costs `flips * ln((1-p)/p)` plus the continuity cost against the previous frame plus
+`error_suspicion * epsilon`; the cheapest wins if within the repeat cost, else the previous frame repeats with a fade (`fade_per_frame^repeats`, zero when under 0.03) and a reset after `reset_after` (30) repeats.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `candidates` | `&[(u32, Option<Descriptor>)]` | Readings: bit flips and descriptor |
+| `epsilon` | `u32` | Errors corrected by the channel code in this frame |
+
+**Returns:** `Decision::Accept(index)` or `Decision::Repeat { scale_q16, reset }`.
+**Errors:** none.
+**Special concerns:** stateful (previous descriptor, BER, repeat count); all Q16.16 or Q32 integer arithmetic, with `ConcealParams::default()` equal to the float defaults.
+**Signature:** `pub fn decide(&mut self, candidates: &[(u32, Option<Descriptor>)], epsilon: u32) -> Decision`
+**See also:** test in `tests/ambe_error_policy.rs`; `float_concealment_Concealer_decide`.
+
+### `Descriptor::new` (fixed concealment) [@ANCHOR: ham_digital_modes:fixed_general_concealment_Descriptor_new]
+
+Builds the compact description of a decoded frame that the continuity prior compares: the fundamental `w0_q16`, the overall level in dB (RMS of the harmonic amplitudes, Q16.16), a 16-point spectral shape in dB sampled across
+the harmonics, and an 8-band voicing pattern. `voiced` and `ml_q16` are indexed by harmonic starting at 1 (index 0 unused).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `w0_q16` | `i32` | Fundamental, Q16.16 |
+| `voiced` | `&[bool]` | Voiced flag per harmonic |
+| `ml_q16` | `&[i32]` | Amplitude per harmonic, Q16.16 |
+
+**Returns:** `Descriptor`.
+**Errors:** divides by the harmonic count; `ml_q16` must have at least two entries (one harmonic) or it panics.
+**Special concerns:** pure.
+**Signature:** `pub fn new(w0_q16: i32, voiced: &[bool], ml_q16: &[i32]) -> Self`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_general_concealment_Concealer_decide`.
+
+### `Concealer::decide` (float) [@ANCHOR: ham_digital_modes:float_concealment_Concealer_decide]
+
+The float reference of the concealment decision: `candidates[i] = (flips, descriptor)` where `flips` is the number of raw bits changed from the received frame (candidate 0 is as received, `None` if not a speech frame) and `epsilon` is the
+total corrected-error count. It estimates the bit error rate from the 47 protected bits, accepts the received frame when there is no evidence of errors, otherwise picks the cheapest candidate (flip cost, continuity cost, error suspicion) or repeats with a fade.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `candidates` | `&[(u32, Option<Descriptor>)]` | Readings |
+| `epsilon` | `u32` | Errors corrected in the received frame |
+
+**Returns:** `Decision`.
+**Errors:** none.
+**Special concerns:** stateful, f64.
+**Signature:** `pub fn decide(&mut self, candidates: &[(u32, Option<Descriptor>)], epsilon: u32) -> Decision`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_general_concealment_Concealer_decide`.
+
+### Entries of this section not yet expanded
+
 The encoders (`Encoder::new`, `next_frame`, `finish` for D-STAR, AMBE+2 and TIA-102, fixed and float, and the TIA analyzer's `finish_input`, `next_analysis`,
 `table` and `HighPassFilter::step`) are cited by the real-speech parity tests that run the fixed and float encoders side by side and require identical frame
 counts, near-identical parameters and a decoded SNR floor. The synthesis decoders' `decode_frame` and `decode_concealing` (all four) and the concealers'
@@ -2270,7 +2774,7 @@ counts, near-identical parameters and a decoded SNR floor. The synthesis decoder
 helpers, `unvoiced_dft`, `unvoiced_scaling_coefficient_uncached`, `VoicedState::synthesize`) by the float-parity synthesis tests; and the fixed TIA
 `SynthesisState::finalize_parameters` and `synthesize_core` by the float-parity synthesis tests, including the case where the gamma_m gain engages.
 
-  *(Reference: `src/ambe/fixed/dstar/encoder.rs` -> `[@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_next_frame]`, `[@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_finish]`, `[@ANCHOR: ham_digital_modes:fixed_dstar_encoder_Encoder_new]`; `src/ambe/fixed/ambe_plus_2/encoder.rs` -> `[@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encoder_Encoder_next_frame]`, `[@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encoder_Encoder_finish]`; `src/ambe/fixed/tia_102_baba/encoder.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_next_frame]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_Encoder_finish]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_finish_input]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_next_analysis]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_FrameAnalyzer_table]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encoder_HighPassFilter_step]`; `src/ambe/float/dstar/encoder.rs` -> `[@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_next_frame]`, `[@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_finish]`, `[@ANCHOR: ham_digital_modes:float_dstar_encoder_Encoder_new]`; `src/ambe/float/ambe_plus_2/encoder.rs` -> `[@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_Encoder_next_frame]`, `[@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_Encoder_finish]`; `src/ambe/float/tia_102_baba/encoder.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_next_frame]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_Encoder_finish]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_finish_input]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_next_analysis]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_FrameAnalyzer_table]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_encoder_HighPassFilter_step]`; `src/ambe/fixed/dstar/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_frame]`, `[@ANCHOR: ham_digital_modes:fixed_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]`; `src/ambe/fixed/ambe_plus_2/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]`, `[@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_concealing]`; `src/ambe/float/dstar/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_dstar_synthesis_DStarSynthesisDecoder_decode_frame]`, `[@ANCHOR: ham_digital_modes:float_dstar_synthesis_DStarSynthesisDecoder_decode_concealing]`; `src/ambe/float/ambe_plus_2/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_frame]`, `[@ANCHOR: ham_digital_modes:float_ambe_plus_2_synthesis_AmbePlus2SynthesisDecoder_decode_concealing]`; `src/ambe/fixed/general/concealment.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_concealment_Concealer_decide]`, `[@ANCHOR: ham_digital_modes:fixed_general_concealment_Descriptor_new]`; `src/ambe/float/concealment.rs` -> `[@ANCHOR: ham_digital_modes:float_concealment_Concealer_decide]`; `src/ambe/fixed/tia_102_baba/decode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_parameters]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_frame]`; `src/ambe/fixed/general/mbe_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_synthesize_speech]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_lift]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_new]`; `src/ambe/float/mbe_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_synthesize_speech]`, `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_lift]`, `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_errors_for]`; `src/ambe/fixed/general/unvoiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_UnvoicedState_synthesize]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_spectrum_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_dft_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_time_domain_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_time_domain_at_q16]`; `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_dft]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_scaling_coefficient_uncached]`; `src/ambe/fixed/general/voiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_voiced_synthesis_VoicedState_synthesize]`; `src/ambe/fixed/tia_102_baba/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_finalize_parameters]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_core]`)*
+  *(Reference: `src/ambe/fixed/tia_102_baba/decode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_parameters]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_decode_DecoderState_decode_frame]`; `src/ambe/fixed/general/mbe_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_synthesize_speech]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_lift]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_synthesis_MbeSynthesizer_new]`; `src/ambe/float/mbe_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_synthesize_speech]`, `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_lift]`, `[@ANCHOR: ham_digital_modes:float_mbe_synthesis_MbeSynthesizer_errors_for]`; `src/ambe/fixed/general/unvoiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_UnvoicedState_synthesize]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_spectrum_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_dft_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_unvoiced_time_domain_q16]`, `[@ANCHOR: ham_digital_modes:fixed_general_unvoiced_synthesis_time_domain_at_q16]`; `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_dft]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_scaling_coefficient_uncached]`; `src/ambe/fixed/general/voiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_voiced_synthesis_VoicedState_synthesize]`; `src/ambe/fixed/tia_102_baba/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_finalize_parameters]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_core]`)*
 
 ## Fixed and float AMBE quantizers, reconstruction and wire decode anchored in slice 8
 
