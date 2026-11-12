@@ -139,6 +139,8 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 
 ## Anchors
 
+Function anchors whose full entries (purpose, signature, arguments, returns, errors, special concerns; ADR 0113) are one `###` heading each in the story files [`docs/stories/radioctl_function_anchors_44.md`](../../docs/stories/) onwards are not repeated here; the rest are listed below.
+
 - [@ANCHOR: radioctl:radioctl_station_vbank_new] (radioctl-station) A bank whose lines all start off, with read-back.
 - [@ANCHOR: radioctl:radioctl_station_vbank_no_readback] (radioctl-station) A bank that cannot be read back.
 - [@ANCHOR: radioctl:radioctl_station_vbank_set_fault] (radioctl-station) Injects a fault.
@@ -168,12 +170,6 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_board_pulse] (radioctl-station) Pulses a momentary channel: the line goes on for the channel's pulse width, then off.
 - [@ANCHOR: radioctl:radioctl_station_board_force_off] (radioctl-station) Drives a power, output or selector channel to off without waiting for any operation in
 - [@ANCHOR: radioctl:radioctl_station_board_spawn_input] (radioctl-station) Starts a task on `runtime` that samples an input channel every `interval`, debounces it by
-- [@ANCHOR: radioctl:radioctl_station_error_new] (radioctl-station) Builds an error.
-- [@ANCHOR: radioctl:radioctl_station_error_display] (radioctl-station) `kind: detail`.
-- [@ANCHOR: radioctl:radioctl_station_catalog_from_toml] (radioctl-station) Parses a catalog.
-- [@ANCHOR: radioctl:radioctl_station_catalog_builtin] (radioctl-station) The built-in catalog.
-- [@ANCHOR: radioctl:radioctl_station_catalog_get] (radioctl-station) A board by name.
-- [@ANCHOR: radioctl:radioctl_station_map_from_toml] (radioctl-station) Parses a map and validates it against `catalog`.
 - [@ANCHOR: radioctl:radioctl_station_fx2_info_parse] (radioctl-station) Parses the FX2 Station I/O board's GET_INFO record.
 - [@ANCHOR: radioctl:radioctl_station_fx2_info_require_station_io] (radioctl-station) Accepts only a Station I/O board that reports a hardware time-out, a heartbeat and release on reset; a bench board is refused.
 - [@ANCHOR: radioctl:radioctl_station_fx2_status_parse] (radioctl-station) Parses the board's 23-byte status record.
@@ -184,16 +180,6 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_fx2_board_load_map] (radioctl-station) Sends and commits a map; a refused step reports the firmware's map error code.
 - [@ANCHOR: radioctl:radioctl_station_fx2_board_heartbeat] (radioctl-station) One heartbeat; the answer must echo the sequence and the commanded keyed state.
 - [@ANCHOR: radioctl:radioctl_station_fx2_board_key] (radioctl-station) Keys a ptt line down or up; a refusal carries the firmware's reason.
-- [@ANCHOR: radioctl:radioctl_station_map_validate] (radioctl-station) No pin has two functions or appears twice, no pin the board does not expose, no power,
-- [@ANCHOR: radioctl:radioctl_station_map_safe_levels] (radioctl-station) The pins with a defined safe level, for the firmware or driver to apply on release.
-- [@ANCHOR: radioctl:radioctl_station_http_is_private] (radioctl-station) Whether an address is loopback, private or link-local (IPv4 or IPv6, including IPv4-mapped).
-- [@ANCHOR: radioctl:radioctl_station_http_parse_address] (radioctl-station) The address the owner typed: an IP literal, optionally `:port` (default 80), private only.
-- [@ANCHOR: radioctl:radioctl_station_http_new] (radioctl-station) A driver for `relays` relays (1 to 32) at `address`. Nothing is sent.
-- [@ANCHOR: radioctl:radioctl_station_http_get] (radioctl-station) One HTTP/1.0 GET; the body of a 200 reply.
-- [@ANCHOR: radioctl:radioctl_station_http_check] (radioctl-station) Refuses a relay number past the bank.
-- [@ANCHOR: radioctl:radioctl_station_http_write_line] (radioctl-station) Switches one relay.
-- [@ANCHOR: radioctl:radioctl_station_http_read_line] (radioctl-station) Reads one relay's state from the device.
-- [@ANCHOR: radioctl:radioctl_station_http_can_read_back] (radioctl-station) Both families report their relay state.
 - [@ANCHOR: radioctl:radioctl_station_modbus_sainsmart] (radioctl-station) The SainSmart 16-channel 9-36 V USB relay module (sku 101-70-208): Modbus ASCII, 9600
 - [@ANCHOR: radioctl:radioctl_station_modbus_from_toml] (radioctl-station) Parses a board description.
 - [@ANCHOR: radioctl:radioctl_station_modbus_lrc] (radioctl-station) The Modbus ASCII checksum: the two's complement of the byte sum, low byte.
@@ -240,9 +226,6 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_def_validate] (radioctl-station) Checks names, references, channel kinds, one device per power channel, and that the
 - [@ANCHOR: radioctl:radioctl_station_def_power_on_order] (radioctl-station) Every device in an order where each follows the devices it depends on (ties by name);
 - [@ANCHOR: radioctl:radioctl_station_def_dependents] (radioctl-station) Every device that depends on `id`, directly or not, in power-off order (the most
-- [@ANCHOR: radioctl:radioctl_station_band_route_for] (radioctl-station) The first route whose band holds `hz`, or `None` outside every band (the selector is then left alone).
-- [@ANCHOR: radioctl:radioctl_station_band_follow_tx_frequency] (radioctl-station) Follows the rig's transmit frequency until its event stream ends: switches the selector of the
-- [@ANCHOR: radioctl:radioctl_station_follow_configured] (radioctl-station) Starts the follower for the rig named `rig_name` from the station's own `[[band_routes]]`: only the channels that belong to this rig and have not opted out follow. Returns at once when the rig has no routes.
 - [@ANCHOR: radioctl:radioctl_station_rig_name] (radioctl-station) The rig id.
 - [@ANCHOR: radioctl:radioctl_station_rig_key_state] (radioctl-station) Keyed state from the rig handle: unknown when the link is down; the rig's own PTT read
 - [@ANCHOR: radioctl:radioctl_station_station_new] (radioctl-station) Builds a station over a switchboard that has every channel of `def`. Nothing is switched.
@@ -269,15 +252,6 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_lifecycle_power_on_commanded] (radioctl-station) The power-on was commanded (the power button or a profile). A radio that is already
 - [@ANCHOR: radioctl:radioctl_station_lifecycle_power_off_commanded] (radioctl-station) The power-off was commanded and the switch is going off: the radio is no longer expected
 - [@ANCHOR: radioctl:radioctl_station_lifecycle_step] (radioctl-station) Feeds one snapshot at `now` and returns the transition it caused, if any. At most one
-- [@ANCHOR: radioctl:radioctl_station_record_new] (radioctl-station) A bare record: unknown state, Unreachable, no history.
-- [@ANCHOR: radioctl:radioctl_station_record_validate] (radioctl-station) Rejects a record that cannot be trusted: empty ids, absurd boot time, non-finite levels,
-- [@ANCHOR: radioctl:radioctl_station_record_cached] (radioctl-station) The last-known state with its age at `now_unix` (a clock that went backwards gives age 0).
-- [@ANCHOR: radioctl:radioctl_station_store_new] (radioctl-station) A store over `path`. Nothing is read or written.
-- [@ANCHOR: radioctl:radioctl_station_store_path] (radioctl-station) The file.
-- [@ANCHOR: radioctl:radioctl_station_store_load] (radioctl-station) Reads the file. A missing file is an empty store. A file that is too big, not JSON, of
-- [@ANCHOR: radioctl:radioctl_station_store_tighten] (radioctl-station) Removes group and other permissions from an existing record file.
-- [@ANCHOR: radioctl:radioctl_station_store_set_aside] (radioctl-station) Renames a bad file to `<name>.bad-<n>` (first free n) so it is kept but not read again.
-- [@ANCHOR: radioctl:radioctl_station_store_save] (radioctl-station) Writes every record atomically with mode 0600: a temporary file in the same directory,
 - [@ANCHOR: radioctl:radioctl_station_station_guard_action] (radioctl-station) The interlock with the action's class (Bruce, 2026-10-31): an [`Action::PowerOff`] and an
 - [@ANCHOR: radioctl:radioctl_station_station_power_on_action] (radioctl-station) The class of powering device `id` on, for callers that must know before they start (a
 - [@ANCHOR: radioctl:radioctl_station_station_classify_on] (radioctl-station) The class of powering `d` on: a radio is [`Action::PowerOnRadio`] unless its power channel
@@ -443,12 +417,6 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_vrot_control_stop] (radioctl-station) Stops the listener task and drops the client connection it holds, closing the port; a second call does nothing.
 - [@ANCHOR: radioctl:radioctl_station_vrot_control_set_silent] (radioctl-station) Makes the rotator silent (or lets it answer).
 - [@ANCHOR: radioctl:radioctl_station_vrot_serve] (radioctl-station) Serves `rotator` on `listener` from a task on `runtime`; one client at a time, a new connection replaces the old one.
-- [@ANCHOR: radioctl:radioctl_station_rigspec_tcp] (radioctl-station) A radio at a TCP address with the raw CAT stream and default settings.
-- [@ANCHOR: radioctl:radioctl_station_rigspec_serial] (radioctl-station) A radio on a serial port at `baud`, with default settings.
-- [@ANCHOR: radioctl:radioctl_station_dspawner_new] (radioctl-station) No radios yet.
-- [@ANCHOR: radioctl:radioctl_station_dspawner_add] (radioctl-station) Adds (or replaces) the spec of a radio.
-- [@ANCHOR: radioctl:radioctl_station_dspawner_fail] (radioctl-station) `fail` (see the source).
-- [@ANCHOR: radioctl:radioctl_station_dspawner_spawn] (radioctl-station) Builds the engine, opens the transport (reconnecting), and spawns the actor with the transport's link status.
 - [@ANCHOR: radioctl:radioctl_station_meter_driver_name] (radioctl-station) The configuration name.
 - [@ANCHOR: radioctl:radioctl_station_meter_driver_from_name] (radioctl-station) The driver with a configuration name.
 - [@ANCHOR: radioctl:radioctl_station_meter_driver_unit] (radioctl-station) The unit the driver reports in (both read watts).
@@ -471,6 +439,3 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 - [@ANCHOR: radioctl:radioctl_station_meterdef_validate] (radioctl-station) Checks the definition: a known driver, a unit that driver can report, sane limits.
 - [@ANCHOR: radioctl:radioctl_station_meterdef_offset_db] (radioctl-station) The offset in decibels.
 - [@ANCHOR: radioctl:radioctl_station_ha_open_stream] (radioctl-station) A byte stream to Home Assistant: TCP, wrapped in TLS when a connector is given.
-- [@ANCHOR: radioctl:radioctl_station_tls_parse_pin] (radioctl-station) Reads a fingerprint: 64 hex digits, any case, with optional colons or spaces.
-- [@ANCHOR: radioctl:radioctl_station_tls_connector] (radioctl-station) The connector for `tls`: the owner's authority or the pinned certificate, nothing else.
-- [@ANCHOR: radioctl:radioctl_station_tls_server_name] (radioctl-station) The name a certificate must carry: the address itself, an IP entry.
