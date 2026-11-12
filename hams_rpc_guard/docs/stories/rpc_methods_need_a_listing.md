@@ -74,6 +74,8 @@ header can only narrow a daemon, never widen it. `[@ANCHOR: hams_rpc_guard:certi
   the batch helper (`push_batches_to_odoo(client, logger, rows, "model", "method")`) and a caller passed along
   (`asyncio.to_thread(client.execute, "model", "method")`): those are the daemons' main calls.
   `[@ANCHOR: hams_rpc_guard:scan_daemon_pairs]` `[@ANCHOR: hams_rpc_guard:scan_caller_reference]` (a bare reference to a calling method)
+  `[@ANCHOR: hams_rpc_guard:scan_module_string_constants]` (a model or method held in a module-level constant, such as
+  `RUN_MODEL`, is resolved)
 * In report mode the operator reads the guard's log lines (one at the 1st, 10th, 100th, ... would-be refusal of each kind per
   worker); `tools/report_summary.py` totals them over the workers, so a few days of log become a short table of what to list or fix
   before switching to enforce. `[@ANCHOR: hams_rpc_guard:report_summary]`

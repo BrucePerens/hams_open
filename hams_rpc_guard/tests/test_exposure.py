@@ -154,6 +154,7 @@ class TestScanner(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:scan_main]
     # Tests [@ANCHOR: hams_rpc_guard:scan_decorator_names]
     # Tests [@ANCHOR: hams_rpc_guard:scan_caller_reference]
+    # Tests [@ANCHOR: hams_rpc_guard:scan_module_string_constants]
     # Tests [@ANCHOR: hams_rpc_guard:scan_string_values]
 
     def test_public_methods_only(self):
@@ -212,3 +213,16 @@ class TestScanner(HamsTransactionCase):
             'run(logger.info, "ham.not.either", "caller")\n')
         self.assertEqual(exposure_scan.daemon_pairs(source), {
             ("ham.au.register", "sync_au_register_batch"), ("ham.dx.spot", "push_spot_batch"), ("ham.a.b", "from_call")})
+
+    def test_daemon_pairs_resolve_module_level_string_constants(self):
+        source = (
+            'RUN_MODEL = "ham.club.crawl.run"\n'
+            '_SAFE_READ_METHOD: str = "mcp_safe_read"\n'
+            'OTHER = some_call()\n'
+            'def run(odoo):\n'
+            '    odoo.execute(RUN_MODEL, "mcp_crawl_begin_run")\n'
+            '    odoo.execute("hams_helpdesk.ticket", _SAFE_READ_METHOD)\n'
+            '    odoo.execute(OTHER, "not_found")\n'
+            '    odoo.execute(unknown_name, "not_found_either")\n')
+        self.assertEqual(exposure_scan.daemon_pairs(source), {
+            ("ham.club.crawl.run", "mcp_crawl_begin_run"), ("hams_helpdesk.ticket", "mcp_safe_read")})
