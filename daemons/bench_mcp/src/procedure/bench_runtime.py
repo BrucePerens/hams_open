@@ -112,6 +112,7 @@ def finite(value):
     return value
 
 
+# [@ANCHOR: proc_py_bench_error_class]
 class BenchError(Exception):
     """A bench tool call failed; ``kind`` says why (tool, tier,
     budget, lock, policy)."""
@@ -124,12 +125,14 @@ class BenchError(Exception):
         self.kind = kind
 
 
+# [@ANCHOR: proc_py_bench_cancelled_class]
 class BenchCancelled(BaseException):
     """The host asked the run to stop (cancel, time-out). Derives
     from BaseException so a procedure's ``except Exception`` does not
     swallow it; registered cleanup handlers still run."""
 
 
+# [@ANCHOR: proc_py_procedure_failure_class]
 class ProcedureFailure(Exception):
     """Raised by ``bench.expect``: a failed check with context."""
 
@@ -139,10 +142,12 @@ class ProcedureFailure(Exception):
         self.context = context or {}
 
 
+# [@ANCHOR: proc_py_policy_error_class]
 class PolicyError(RuntimeError):
     """The audit hook refused an operation."""
 
 
+# [@ANCHOR: proc_py_wire_class]
 class Wire:
     """The newline-delimited JSON pipe to the host."""
 
@@ -665,6 +670,7 @@ def make_hook(scratch):
     return hook
 
 
+# [@ANCHOR: proc_py_output_class]
 class Output:
     """A file-like object that sends text to the host, which stores
     it with a size cap."""
