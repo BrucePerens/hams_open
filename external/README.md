@@ -73,7 +73,7 @@ license text each library's own license requires, not just its SPDX identifier.
 ### Noble crypto libraries (@noble/curves, @noble/hashes, @noble/ciphers)
 - **Version:** 2.3.0 (all three packages)
 - **License:** MIT (all three)
-- **Purpose:** The primitive layer (X25519, SHA-256, HKDF, ChaCha20-Poly1305) underneath
+- **Purpose:** The primitive layer (X25519 key agreement, SHA-256 hashing, HKDF key derivation, ChaCha20-Poly1305 authenticated encryption) underneath
   `hams_com`'s browser-side Noise_XX handshake (`ham_shack/static/src/js/noise_xx.js`,
   `docs/proposals/TRANSMITTER_HIJACK_PREVENTION.md` section 1). These used to be imported live from
   `cdn.jsdelivr.net` on every handshake -- a real, unmitigated CDN dependency for the exact code
@@ -119,13 +119,13 @@ license text each library's own license requires, not just its SPDX identifier.
   `tests/test_vendored_files.py` enforces the hashes). Not fetched by `fetch_assets.py`; update by the steps in `VENDORED.md`.
 - Loaded with plain `<script src>` tags, not an asset bundle (see the note in `__manifest__.py`).
 
-### SIP.js (browser SIP over WebSocket + WebRTC)
+### SIP.js (browser SIP, the Session Initiation Protocol for internet telephony, over WebSocket + WebRTC, the browser's real-time audio standard)
 - **Version:** 0.21.2 (npm `sip.js`, published 2022-10-27; the newest stable release on 2026-10-03, the
   registry's `latest` dist-tag, with no pre-release newer than it).
 - **License:** MIT, Copyright (c) 2020 Junction Networks. The license text is in
   `sipjs/LICENSE.md` and reproduced in `THIRD_PARTY_LICENSES.md`.
 - **Purpose:** The browser-direct AllStar client (`hams_com`'s `ham_shack`, ADR 0101): the browser registers
-  and calls an AllStar node itself over SIP-over-WSS and WebRTC, with no relay and no hams.com in the
+  and calls an AllStar node itself over SIP-over-WSS (SIP carried on a secure WebSocket) and WebRTC, with no relay and no hams.com in the
   signalling or audio path. Bruce chose SIP.js (2026-09-23) and authorised vendoring it (2026-10-03).
 - **Local Path:** `/external/static/src/node_modules/sipjs/lib/index.js` (loaded with a dynamic `import()`,
   the same way `noise_xx.js` loads noble; the library is pure ES modules with relative `./x.js` imports and
@@ -179,7 +179,7 @@ weak-signal amateur-radio digital mode these modules decode and encode.
 - **A real algorithmic-improvement hypothesis was tested here and honestly falsified -- recorded
   so a future session doesn't re-spend the time re-testing it.** `SOFTWARE_ANALYSIS_PROPOSALS.md`
   records Bruce's direct instruction to study why the same author's `ft8ts` (a pure-TypeScript,
-  GPL-3.0 port of WSJT-X's own reference LDPC (low-density parity-check) decoder) claims a real, benchmarked accuracy
+  GPL-3.0 port of WSJT-X's (the standard weak-signal software's) own reference LDPC (low-density parity-check) decoder) claims a real, benchmarked accuracy
   advantage over `ft8_lib`/`ft8js` (17/N vs 8/N decoded messages on the author's own test set), and
   reimplement whatever real improvement is found as original, MIT-licensed code -- not port or
   copy `ft8ts`'s own GPL source. Reading both implementations side by side found one concrete,
