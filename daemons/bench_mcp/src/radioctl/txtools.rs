@@ -241,7 +241,14 @@ pub fn preflight(c: &mut Client, tx: &Transmit, a: &TestArgs) -> Result<Rig, Str
             a.power_w
         ));
     }
-    let w_set = fraction_to_watts(c, f_req.min(1.0), a.frequency_hz)?;
+    if f_req > 1.0 {
+        return Err(format!(
+            "{} W is above the rig's full-scale power setting (1.0 is {} W). Nothing was sent.",
+            a.power_w,
+            fraction_to_watts(c, 1.0, a.frequency_hz)?
+        ));
+    }
+    let w_set = fraction_to_watts(c, f_req, a.frequency_hz)?;
     if w_set > tx.max_power_w * 1.02 {
         return Err(format!("the setting for {} W comes to {w_set:.2} W by the rig's full-scale power, above the cap {} W. Nothing was sent.", a.power_w, tx.max_power_w));
     }
@@ -419,6 +426,20 @@ fn gate(c: &mut Client, inst: &Instrument, deps: &Deps, a: &TestArgs) -> Result<
     )
 }
 
+/// Sets the mode and reads it back; a rig that did not take it is not keyed.
+fn set_mode_verified(c: &mut Client, mode: &str) -> Result<(), String> {
+    c.command(&format!("set_mode {mode} 0"))
+        .map_err(|e| format!("setting the mode: {e}"))?;
+    let back = c.read("get_mode").map_err(|e| e.to_string())?;
+    if back.kv("Mode").map(|m| m.to_ascii_uppercase()).as_deref() != Some(mode) {
+        return Err(format!(
+            "the rig reports mode {:?}, not {mode}; nothing was sent",
+            back.kv("Mode")
+        ));
+    }
+    Ok(())
+}
+
 /// One keyed interval with everything around it checked: used by the test and by each step of a sweep.
 #[allow(clippy::too_many_arguments)]
 fn keyed(
@@ -569,16 +590,7 @@ pub fn key_test(
             1.0,
             "setting the frequency",
         )?;
-        c.command(&format!("set_mode {} 0", a.mode))
-            .map_err(|e| format!("setting the mode: {e}"))?;
-        let back = c.read("get_mode").map_err(|e| e.to_string())?;
-        if back.kv("Mode").map(|m| m.to_ascii_uppercase()).as_deref() != Some(a.mode.as_str()) {
-            return Err(format!(
-                "the rig reports mode {:?}, not {}; nothing was sent",
-                back.kv("Mode"),
-                a.mode
-            ));
-        }
+        set_mode_verified(c, &a.mode)?;
         let probe_report = probe(c, inst, deps, &rig, &a, "bench_radioctl_tx_key_test")?;
         let run = keyed(
             c,
@@ -682,8 +694,7 @@ pub fn power_sweep(
             1.0,
             "setting the frequency",
         )?;
-        c.command(&format!("set_mode {} 0", a.mode))
-            .map_err(|e| format!("setting the mode: {e}"))?;
+        set_mode_verified(c, &a.mode)?;
         let probe_report = probe(c, inst, deps, &rig, &a, "bench_radioctl_tx_power_sweep")?;
         let mut out = vec![];
         for w in &steps {
@@ -692,6 +703,8 @@ pub fn power_sweep(
                 power_w: *w,
                 ..a.clone()
             };
+            let raised = f < rig.f_min;
+            let f = f.max(rig.f_min);
             let run = keyed(
                 c,
                 inst,
@@ -699,11 +712,11 @@ pub fn power_sweep(
                 &rig,
                 &sa,
                 dwell,
-                f.max(rig.f_min),
+                f,
                 "sweep step",
                 "bench_radioctl_tx_power_sweep",
             )?;
-            out.push(json!({"power_w": w, "setting": f, "meters": summary(&run.samples), "aborted": run.aborted, "ptt_read_back_off": run.ptt_read_back}));
+            out.push(json!({"power_w": w, "setting": f, "raised_to_minimum": raised, "meters": summary(&run.samples), "aborted": run.aborted, "ptt_read_back_off": run.ptt_read_back}));
             if run.aborted.is_some() {
                 break;
             }
