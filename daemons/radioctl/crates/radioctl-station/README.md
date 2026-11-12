@@ -141,35 +141,4 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
 
 Function anchors whose full entries (purpose, signature, arguments, returns, errors, special concerns; ADR 0113) are one `###` heading each in the story files [`docs/stories/radioctl_function_anchors_44.md`](../../docs/stories/) onwards are not repeated here; the rest are listed below.
 
-- [@ANCHOR: radioctl:radioctl_station_modbus_sainsmart] (radioctl-station) The SainSmart 16-channel 9-36 V USB relay module (sku 101-70-208): Modbus ASCII, 9600
-- [@ANCHOR: radioctl:radioctl_station_modbus_from_toml] (radioctl-station) Parses a board description.
-- [@ANCHOR: radioctl:radioctl_station_modbus_lrc] (radioctl-station) The Modbus ASCII checksum: the two's complement of the byte sum, low byte.
-- [@ANCHOR: radioctl:radioctl_station_modbus_crc16] (radioctl-station) The Modbus RTU CRC-16 (polynomial 0xA001 reflected, start 0xFFFF).
-- [@ANCHOR: radioctl:radioctl_station_modbus_hex_val] (radioctl-station) One hex digit's value.
-- [@ANCHOR: radioctl:radioctl_station_modbus_encode_ascii] (radioctl-station) An ASCII frame: `:`, slave and PDU as upper-case hex, the LRC, CR LF.
-- [@ANCHOR: radioctl:radioctl_station_modbus_decode_ascii] (radioctl-station) Checks an ASCII frame (colon, even hex digits, CR LF, LRC) and returns slave and PDU.
-- [@ANCHOR: radioctl:radioctl_station_modbus_encode_rtu] (radioctl-station) An RTU frame: slave, PDU, CRC-16 low byte first.
-- [@ANCHOR: radioctl:radioctl_station_modbus_decode_rtu] (radioctl-station) Checks an RTU frame's CRC and returns slave and PDU.
-- [@ANCHOR: radioctl:radioctl_station_modbus_pdu_write_coil] (radioctl-station) Function 5: write one coil (`FF00` on, `0000` off).
-- [@ANCHOR: radioctl:radioctl_station_modbus_pdu_write_coils] (radioctl-station) Function 15: write `bits.len()` coils from `start`, bit 0 of the first data byte first.
-- [@ANCHOR: radioctl:radioctl_station_modbus_pdu_read_coils] (radioctl-station) Function 1: read `count` coils from `start`.
-- [@ANCHOR: radioctl:radioctl_station_modbus_parse_reply] (radioctl-station) Checks a reply PDU against the request PDU it answers. Fails closed: an exception code, a
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_new] (radioctl-station) A driver for `board` over `io`. Nothing is sent.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_coil] (radioctl-station) The coil address of a line, bounds-checked.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_read_frame] (radioctl-station) Reads one reply frame: to CR LF (ASCII) or to an idle gap (RTU), bounded in size and time.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_write_all] (radioctl-station) Function 15 over every coil: all on or all off in one frame.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_write_line] (radioctl-station) Function 5 on the line's coil.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_read_line] (radioctl-station) Function 1 on the line's coil.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_can_read_back] (radioctl-station) Whether the board description reads coils back.
-- [@ANCHOR: radioctl:radioctl_station_modbus_safe_bits] (radioctl-station) The safe level of every coil, in coil order: `safe_state`, or all off when it is empty.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_reopen] (radioctl-station) Replaces the byte stream after a reconnect or reopen: every coil becomes unknown and the safe state is required again before any other command.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_exchange] (radioctl-station) Sends one request PDU on the locked stream and returns the validated reply; read coils is refused for a board whose status is not readable.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_apply_safe] (radioctl-station) Writes the board's safe state in ONE function 15 frame and records it on an acknowledgement; a failure leaves every coil unknown and extends the backoff.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_ensure_safe_state] (radioctl-station) Applies the safe state if it has not been applied on this link; nothing else goes out before it succeeds.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_write_gated] (radioctl-station) The one path for a command write: safe state first, then the request; the affected coils are recorded on an acknowledgement and become unknown on any failure.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_record] (radioctl-station) The driver's record of every coil in order: the level the board last acknowledged and its age, or unknown. Recorded, not confirmed.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_assurance] (radioctl-station) `Assurance::Recorded` for a board whose status is not readable, otherwise `HostSupervised`.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_safe_line] (radioctl-station) The board's safe level for a line (`safe_state`, off when empty).
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_force_safe] (radioctl-station) The emergency path: the board's whole safe state in one frame, ignoring the retry delay. Never blocked.
-- [@ANCHOR: radioctl:radioctl_station_modbus_relay_recorded_line] (radioctl-station) The record of one line: recorded, not confirmed.
 
