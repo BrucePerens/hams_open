@@ -40,7 +40,7 @@ USB cable testing is left to other contributors.
 
 Licence: AGPL-3.0-or-later. Not published to crates.io.
 
-Every function and data structure of the crate has a full ADR 0113 entry (purpose, arguments, return, errors, concurrency and safety) in `docs/stories/`, one file per source area; the code's `[@ANCHOR: id]` markers point there.
+Every function and data structure of the crate has a full ADR 0113 entry (purpose, arguments, return, errors, concurrency and safety) in `docs/stories/`, one file per source area; the anchor markers in the code point there.
 
 ## Configuration
 
