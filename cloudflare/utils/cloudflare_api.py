@@ -213,6 +213,10 @@ def unban_ip(rule_id, token, zone_id):
     )
     if response and response.status_code == 200:
         return True, "Success"
+    if response is not None and response.status_code == 404:
+        # Someone removed the rule in the dashboard: the ban is lifted. Answering an error here
+        # would leave the local row active, and every later attempt would get the same 404.
+        return True, "Rule was already gone"
     return False, "API Error"
 
 
