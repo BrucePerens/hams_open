@@ -261,6 +261,25 @@ Types: a JSON boolean becomes `ON` or `OFF`; a word must be one of the listed on
 
 Each answer is the scope's reply text, `(empty reply)`, or `no answer to <query>: <error>` after a 3 s timeout (a setting this firmware does not know is reported that way, not as an error of the call). Reads only; it changes nothing on the scope. Test: the same as `item_cmds`, which checks the `more` object of the display tool.
 
+## The scope: functions from the programming guide (`src/scope_guide.rs`)
+
+These tools are written from the SDS1000X-E programming guide (EN02E) and tested against `src/fake_scope.rs`, a fake scope that answers as the guide shows. Each sends its commands, reads the settings back and returns what the scope reports, because the real unit's answers have not yet been compared with the guide. The commands and replies that need a lab check are listed in the to-do `bench-mcp-scope-remaining-functions`.
+
+### `bench_mcp_scope_history` [@ANCHOR: bench_mcp_scope_history]
+
+`history(s, args, out)` is `bench_scope_history` (tier `read_config`): history mode, frame list, frame select and frame read-out.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.history`, `args.list` | boolean | `HSMD ON/OFF`, `HSLST ON/OFF` (the list works only while history is on). Other types: `<key> must be true or false`. |
+| `args.frame` | integer 0 to 100000 | `FRAM <n>`. |
+| `args.frames` | array of up to 20 integers 0 to 100000 | Each is selected (`FRAM <n>`, then 100 ms), its `FTIM?` read, and its waveform read like `capture` does. Anything else: `frames must be up to 20 frame numbers from 0 to 100000`. |
+| `args.channel` | integer 1 or 2 | Required with `frames`. |
+| `args.save` | boolean | Also saves each frame as little-endian f32 volts in `out`. |
+| `out` | `&Path` | Directory for saved frames. |
+
+Every value is checked before the first command is sent. Returns `sent`, `readback`, `note`, `settings` (read back `history`, `list`, `frame`) and `frames` (per frame: `frame`, `time`, `samples`, `sample_interval_s`, `min_v`, `max_v`, `pkpk_v`, `file`). The frame number the scope can reach is its own: a larger one is clamped or ignored by the scope and the read-back shows it. The recording of frames is not started here. Test: `history_turns_on_reads_frames_with_their_times_and_refuses_bad_frames_unsent` against the fake scope.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.
