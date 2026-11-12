@@ -875,6 +875,10 @@ fn clipping_keeps_short_text_and_centres_long_text_on_the_first_hit() {
     // No hit: the clip starts at the top, with only the trailing ellipsis.
     let top = clip_around(&long, &["zzz".into()], 50);
     assert!(top.starts_with("a a") && top.ends_with(" ..."), "{top}");
+    // A character whose lower-case form is longer (U+0130) before the hit neither panics nor moves the window off the hit.
+    let odd = format!("{}needle{}", "\u{130}".repeat(100), "x".repeat(400));
+    let c = clip_around(&odd, &["needle".into()], 100);
+    assert!(c.contains("needle"), "{c}");
 }
 
 // Tests [@ANCHOR: bench_mcp_manual_page_text_for_resource]
