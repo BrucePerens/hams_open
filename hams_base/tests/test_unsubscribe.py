@@ -92,6 +92,7 @@ class TestUnsubscribePage(HamsHttpCase):
         msg = "[!] DIAGNOSTIC FOR AI: A logged-in, non-public user visiting /unsubscribe should see the account-lockout form."
         self.assertIn(b'action="/unsubscribe/lockout"', response.content, msg)
 
+    # Tests [@ANCHOR: hams_base_unsubscribe_unsubscribe_controller]
     def test_public_user_post_to_lockout_is_rejected_by_auth_user(self):
         # The route declares auth='user', so an unauthenticated POST never
         # reaches unsubscribe_lockout()'s own body at all -- Odoo's routing
@@ -139,6 +140,7 @@ class TestEmailPolicyPage(HamsHttpCase):
     # Tests [@ANCHOR: hams_base:email_policy_template]
 
     # Tests [@ANCHOR: hams_base:COMM_email_policy_route]
+    # Tests [@ANCHOR: hams_base_email_policy_email_policy_controller]
     def test_email_policy_page_reachable(self):
         response = self.url_open("/email-policy")
         msg = "[!] DIAGNOSTIC FOR AI: /email-policy should be reachable (200 OK) to anonymous visitors -- it's a public disclosure page."
@@ -146,6 +148,7 @@ class TestEmailPolicyPage(HamsHttpCase):
         self.assertIn(b"How We Use Email", response.content, msg)
 
 
+    # Tests [@ANCHOR: hams_base_website_website]
     def test_email_delivery_notice_shows_only_when_configured(self):
         # Tests [@ANCHOR: hams_base:email_policy_template]
         # Tests [@ANCHOR: hams_base:unsubscribe_page_template]

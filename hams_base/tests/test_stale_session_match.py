@@ -45,6 +45,7 @@ class TestStaleSessionBeforeWebsiteMatch(HamsHttpCase):
         odoo.http.root.session_store.save(session)
         return session, missing_uid
 
+    # Tests [@ANCHOR: hams_base_ir_http_ir_http]
     def test_homepage_with_deleted_user_session_is_public(self):
         # Tests [@ANCHOR: hams_base_validate_session_before_website_match]
         session, missing_uid = self._point_session_at_deleted_user()

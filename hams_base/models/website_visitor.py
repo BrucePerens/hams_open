@@ -5,6 +5,7 @@ from odoo.http import request
 from odoo.tools import SQL
 
 
+# [@ANCHOR: hams_base_website_visitor_website_visitor]
 class WebsiteVisitor(models.Model):
     _inherit = "website.visitor"
 

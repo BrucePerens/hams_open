@@ -44,6 +44,7 @@ class TestResPartnerBounce(HamsTransactionCase):
             }
         )
 
+    # Tests [@ANCHOR: hams_base_res_partner_res_partner]
     def test_a_members_bounce_notifies_their_parent_company_as_the_club(self):
         # Tests [@ANCHOR: hams_base:COMM_message_receive_bounce]
         before = self.club.message_ids

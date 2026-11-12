@@ -53,6 +53,7 @@ def scrub_error_body(data, exc):
     return data
 
 
+# [@ANCHOR: hams_base_database_lockdown_database_manager_lockdown]
 class DatabaseManagerLockdown(Database):
     """Every `/web/database/*` route is a 404 outside developer mode.
 
@@ -111,6 +112,7 @@ class DatabaseManagerLockdown(Database):
 
 
 # Same `routing_type` as the core class: Dispatcher.__init_subclass__ registers by routing type, so these replace it.
+# [@ANCHOR: hams_base_database_lockdown_hams_json_rpcdispatcher]
 class HamsJsonRPCDispatcher(JsonRPCDispatcher):
     routing_type = "jsonrpc"
 
@@ -135,6 +137,7 @@ class HamsJsonRPCDispatcher(JsonRPCDispatcher):
         return self._response(error=error)
 
 
+# [@ANCHOR: hams_base_database_lockdown_hams_json2_dispatcher]
 class HamsJson2Dispatcher(Json2Dispatcher):
     routing_type = "json2"
 

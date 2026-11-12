@@ -58,6 +58,8 @@ class TestScrubErrorBody(HamsTransactionCase):
         with _dev_mode(["all"]):
             self.assertEqual(lockdown.scrub_error_body(raw, exc), raw)
 
+    # Tests [@ANCHOR: hams_base_database_lockdown_hams_json2_dispatcher]
+    # Tests [@ANCHOR: hams_base_database_lockdown_hams_json_rpcdispatcher]
     def test_the_dispatchers_replace_the_core_ones(self):
         self.assertIs(http._dispatchers["jsonrpc"], lockdown.HamsJsonRPCDispatcher)
         self.assertIs(http._dispatchers["json2"], lockdown.HamsJson2Dispatcher)

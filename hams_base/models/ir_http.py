@@ -8,6 +8,7 @@ from odoo.http import request
 from odoo.service import security
 
 
+# [@ANCHOR: hams_base_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 

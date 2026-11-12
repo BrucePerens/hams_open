@@ -3,6 +3,7 @@
 from odoo import api, models
 
 
+# [@ANCHOR: hams_base_website_website]
 class Website(models.Model):
     _inherit = "website"
 
