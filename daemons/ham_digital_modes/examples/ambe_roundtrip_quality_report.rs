@@ -108,6 +108,7 @@ fn q16(v: &[i64]) -> Vec<f64> {
     v.iter().map(|&x| x as f64 / 65536.0).collect()
 }
 
+// [@ANCHOR: ambe_roundtrip_quality_report_codec_struct]
 type Codec = (&'static str, fn(&[i16]) -> Vec<f64>);
 
 fn dstar_float(pcm: &[i16]) -> Vec<f64> {
@@ -197,11 +198,8 @@ fn tia_fixed(pcm: &[i16]) -> Vec<f64> {
         .collect()
 }
 
-fn main() {
-    let frames: usize = std::env::args()
-        .nth(1)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(600);
+/// Every codec the report measures: the D-STAR and TIA-102.BABA float and fixed ports and, with the `ambe_plus_2` feature, AMBE+2.
+fn codec_table() -> Vec<Codec> {
     #[allow(unused_mut)]
     let mut codecs: Vec<Codec> = vec![
         ("D-STAR float", dstar_float),
@@ -214,6 +212,15 @@ fn main() {
         ("AMBE+2 float", a2_float as fn(&[i16]) -> Vec<f64>),
         ("AMBE+2 fixed", a2_fixed),
     ]);
+    codecs
+}
+
+fn main() {
+    let frames: usize = std::env::args()
+        .nth(1)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(600);
+    let codecs = codec_table();
     println!("| codec | speaker | energy corr | spectral distance dB | level offset dB |\n|---|---|---|---|---|");
     for (name, f) in &codecs {
         let mut sums = (0.0, 0.0, 0.0);
@@ -235,5 +242,30 @@ fn main() {
             sums.1 / 4.0,
             sums.2 / 4.0
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ambe_roundtrip_quality_report_codec_struct]
+    #[test]
+    fn every_codec_in_the_table_turns_pcm_into_finite_pcm_of_whole_frames() {
+        let pcm: Vec<i16> = (0..3200)
+            .map(|n| {
+                ((1..=10)
+                    .map(|k| (2.0 * std::f64::consts::PI * 150.0 * k as f64 * n as f64 / 8000.0).sin() / k as f64)
+                    .sum::<f64>()
+                    * 6000.0) as i16
+            })
+            .collect();
+        let table = codec_table();
+        assert!(table.len() >= 4);
+        for (name, run) in table {
+            let out = run(&pcm);
+            assert!(!out.is_empty() && out.len() % 160 == 0, "{name}: {} samples", out.len());
+            assert!(out.iter().all(|v| v.is_finite()), "{name}");
+        }
     }
 }

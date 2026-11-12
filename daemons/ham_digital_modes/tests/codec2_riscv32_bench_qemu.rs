@@ -221,3 +221,6 @@ fn the_riscv32_firmware_runs_under_qemu_reports_its_counters_and_matches_the_hos
     let on_target = u32::from_str_radix(line["checksum ".len()..].trim(), 16).unwrap();
     assert_eq!(on_target, host_checksum(&pcm), "{line}");
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: main_uart_struct]
