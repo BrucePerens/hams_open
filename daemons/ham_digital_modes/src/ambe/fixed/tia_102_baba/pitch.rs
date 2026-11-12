@@ -197,6 +197,7 @@ impl ErrorTable {
 }
 
 /// Candidate indices `c` with `0.8 * P_ref <= P_c <= 1.2 * P_ref`, evaluated exactly in half samples.
+// [@ANCHOR: ham_digital_modes:tracking_range]
 fn tracking_range(ref_idx: usize) -> std::ops::RangeInclusive<usize> {
     let r2 = p2_of_index(ref_idx);
     let mut lo = CANDIDATES;
@@ -301,5 +302,52 @@ pub fn choose_initial_pitch_estimate(idx_b: usize, ce_b: i32, idx_f: usize, ce_f
         idx_b
     } else {
         idx_f
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `tracking_range` is the contiguous run of candidate indices whose pitch lies within
+    /// 0.8 to 1.2 of the reference's, evaluated in exact half samples: it contains the reference,
+    /// every index inside satisfies the bounds, the indices just outside do not, and it stays inside
+    /// the candidate table.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:tracking_range]
+    fn tracking_range_is_the_exact_eighty_to_one_twenty_percent_window() {
+        let within = |c: usize, r: usize| {
+            let (c2, r2) = (p2_of_index(c), p2_of_index(r));
+            5 * c2 >= 4 * r2 && 5 * c2 <= 6 * r2
+        };
+        for r in [0usize, 1, 40, 100, 150, CANDIDATES - 2, CANDIDATES - 1] {
+            let range = tracking_range(r);
+            let (lo, hi) = (*range.start(), *range.end());
+            assert!(
+                lo <= r && r <= hi,
+                "reference {r} lies inside its own range {lo}..={hi}"
+            );
+            assert!(hi < CANDIDATES);
+            for c in lo..=hi {
+                assert!(
+                    within(c, r),
+                    "index {c} inside {lo}..={hi} for reference {r}"
+                );
+            }
+            if lo > 0 {
+                assert!(
+                    !within(lo - 1, r),
+                    "index {} below the range for reference {r}",
+                    lo - 1
+                );
+            }
+            if hi + 1 < CANDIDATES {
+                assert!(
+                    !within(hi + 1, r),
+                    "index {} above the range for reference {r}",
+                    hi + 1
+                );
+            }
+        }
     }
 }

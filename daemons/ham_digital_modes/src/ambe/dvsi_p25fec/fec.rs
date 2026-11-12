@@ -80,6 +80,7 @@ pub fn hamming_encode_chip(data: u16) -> u16 {
 
 /// Minimum-distance decoding for [`hamming_encode_chip`], same brute-force technique as
 /// [`super::fec::hamming_decode`].
+// [@ANCHOR: ham_digital_modes:hamming_decode_chip]
 pub fn hamming_decode_chip(received: u16) -> (u16, u32) {
     let received = received & 0x7FFF;
     let mut best_data = 0u16;
@@ -448,6 +449,30 @@ mod tests {
                 use super::super::wire_format::natural_position;
                 let (found_block, _offset) = block_for_natural(natural_position(wire));
                 assert_eq!(found_block, block);
+            }
+        }
+    }
+
+    /// `hamming_decode_chip` returns the data and a zero distance for every one of the 2048 real
+    /// codewords, corrects any single flipped bit of the 15 (distance 1, original data back), and
+    /// ignores bit 15 of its argument.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:hamming_decode_chip]
+    fn hamming_decode_chip_recovers_every_data_word_and_corrects_one_flipped_bit() {
+        for data in 0u16..2048 {
+            let codeword = hamming_encode_chip(data);
+            assert_eq!(hamming_decode_chip(codeword), (data, 0), "data={data:#x}");
+            assert_eq!(
+                hamming_decode_chip(codeword | 0x8000),
+                (data, 0),
+                "bit 15 is ignored"
+            );
+            for bit in 0..15 {
+                assert_eq!(
+                    hamming_decode_chip(codeword ^ (1 << bit)),
+                    (data, 1),
+                    "data={data:#x} flipped bit {bit}"
+                );
             }
         }
     }

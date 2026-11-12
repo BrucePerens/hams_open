@@ -139,6 +139,7 @@ pub enum DStarHeaderError {
 }
 
 impl DStarHeader {
+    // [@ANCHOR: ham_digital_modes:DStarHeader_pack_field]
     fn pack_field(value: &str, width: usize, out: &mut Vec<u8>) -> Result<(), DStarHeaderError> {
         if !value.is_ascii() {
             return Err(DStarHeaderError::NonAscii);
@@ -368,5 +369,29 @@ mod tests {
                 "flipping header byte {i} must be caught by the FCS check"
             );
         }
+    }
+
+    /// `pack_field` writes the text, space-pads it to the field width, accepts a value exactly as wide
+    /// as the field, and refuses non-ASCII text and a value longer than the field.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:DStarHeader_pack_field]
+    fn pack_field_pads_with_spaces_and_refuses_non_ascii_or_overlong_text() {
+        let mut out = Vec::new();
+        assert_eq!(DStarHeader::pack_field("K6BP", 8, &mut out), Ok(()));
+        assert_eq!(out, b"K6BP    ");
+        assert_eq!(DStarHeader::pack_field("W6ABC  G", 8, &mut out), Ok(()));
+        assert_eq!(out, b"K6BP    W6ABC  G");
+        assert_eq!(DStarHeader::pack_field("", 3, &mut out), Ok(()));
+        assert_eq!(out.len(), 16 + 3);
+        let before = out.clone();
+        assert_eq!(
+            DStarHeader::pack_field("K6BP\u{e9}", 8, &mut out),
+            Err(DStarHeaderError::NonAscii)
+        );
+        assert_eq!(
+            DStarHeader::pack_field("TOOLONGFIELD", 8, &mut out),
+            Err(DStarHeaderError::FieldTooLong)
+        );
+        assert_eq!(out, before, "a refused field appends nothing");
     }
 }

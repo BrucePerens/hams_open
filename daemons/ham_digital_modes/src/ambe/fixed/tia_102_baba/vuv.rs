@@ -118,6 +118,7 @@ pub fn voicing_threshold_q30(
 
 /// `error / real` as Q30, for non-negative Q60 `i128` energies with `real > 0`; shifts both down
 /// together so the scaled numerator cannot overflow.
+// [@ANCHOR: ham_digital_modes:ratio_q30]
 fn ratio_q30(err: i128, real: i128) -> i64 {
     let bits = 128 - real.leading_zeros() as i32;
     let shift = (bits - 90).max(0);
@@ -180,4 +181,25 @@ pub fn determine_voicing(
         })
         .collect();
     (voiced, xi_max)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `ratio_q30` is `error / real` in Q30 for wide Q60 energies: exact halves and unity, zero for
+    /// no error, a ratio above one when the error exceeds the real energy, the same answer after the
+    /// operands are scaled up past the 90-bit shift threshold, and unity for a zero denominator.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:ratio_q30]
+    fn ratio_q30_is_the_q30_quotient_and_survives_very_wide_energies() {
+        assert_eq!(ratio_q30(5, 10), 1 << 29);
+        assert_eq!(ratio_q30(0, 10), 0);
+        assert_eq!(ratio_q30(10, 10), ONE_Q30);
+        assert_eq!(ratio_q30(30, 10), 3 * ONE_Q30);
+        assert_eq!(ratio_q30(1i128 << 100, 1i128 << 101), 1 << 29);
+        assert_eq!(ratio_q30(3i128 << 100, 1i128 << 102), 3 << 28);
+        assert_eq!(ratio_q30(1, 1i128 << 100), 0);
+        assert_eq!(ratio_q30(123, 0), ONE_Q30);
+    }
 }

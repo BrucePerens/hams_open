@@ -80,6 +80,22 @@ small helpers choose between equivalent forms; each is tested against the plain 
   overflow, in which case it widens to `i128`.
   *(Reference: `src/codec2_3200/fixed_point.rs` -> `[@ANCHOR: ham_digital_modes:clz_nonzero]`, `[@ANCHOR: ham_digital_modes:table_is_non_decreasing]`; `src/codec2_3200/nlp.rs` -> `[@ANCHOR: ham_digital_modes:window_fits_i32]`, `[@ANCHOR: ham_digital_modes:square_words]`, `[@ANCHOR: ham_digital_modes:power_bin]`; `src/codec2_3200/envelope.rs` -> `[@ANCHOR: ham_digital_modes:mag_sq_q23]`; `src/codec2_3200/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:mul_q23]`, `[@ANCHOR: ham_digital_modes:window_is_bounded]`)*
 
+## Small helpers anchored in slice 3 (wire layout, FEC, tables, tracking, header packing, timing)
+
+- `natural_range` (P25 chip wire format) gives the `(start, length)` of each natural-order block: four 23-bit Golay blocks, three 15-bit
+  Hamming blocks and the 7 raw bits tile the 144-bit frame exactly once, and an index past the last block of its kind is refused.
+- `hamming_decode_chip` is the minimum-distance decoder of the chip's Hamming(15,11) code; it recovers every data word, corrects any one
+  flipped bit, and ignores bit 15.
+- `gain_vector_bits` is the integer-only `bits` half of the gain bit-allocation table, `None` outside L 9..=56 and M 2..=6.
+- `tracking_range` (fixed-point pitch tracking) is the contiguous run of candidate indices within 0.8 to 1.2 of the reference pitch,
+  evaluated in exact half samples.
+- `ratio_q30` divides two wide Q60 energies into a Q30 ratio, shifting both down first so the numerator cannot overflow.
+- `DStarHeader::pack_field` writes one callsign field space-padded to its width, refusing non-ASCII text and an overlong value without
+  appending anything.
+- `two_tone_window_len` picks the midpoint of the valid window band for the two-tone timing feature, or `None` when no window satisfies
+  both constraints.
+  *(Reference: `src/ambe/dvsi_p25fec/wire_format.rs` -> `[@ANCHOR: ham_digital_modes:natural_range]`; `src/ambe/dvsi_p25fec/fec.rs` -> `[@ANCHOR: ham_digital_modes:hamming_decode_chip]`; `src/ambe/float/tia_102_baba/tables.rs` -> `[@ANCHOR: ham_digital_modes:gain_vector_bits]`; `src/ambe/fixed/tia_102_baba/pitch.rs` -> `[@ANCHOR: ham_digital_modes:tracking_range]`; `src/ambe/fixed/tia_102_baba/vuv.rs` -> `[@ANCHOR: ham_digital_modes:ratio_q30]`; `src/dstar.rs` -> `[@ANCHOR: ham_digital_modes:DStarHeader_pack_field]`; `src/timing_characterizer.rs` -> `[@ANCHOR: ham_digital_modes:two_tone_window_len]`)*
+
 ## Codec2 3200 synthesis (float and fixed)
 
 `synthesize_subframe` turns one decoded model into 10 ms of audio: it samples the LPC filter's phase
