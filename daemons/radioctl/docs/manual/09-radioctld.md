@@ -142,7 +142,7 @@ rotator (Hamlib's `rot_set_position` answers `RIG_EINVAL` for one outside the li
 when a client disconnects, and stopping the daemon leaves the rotator where it is (it keeps its own
 target, as it would if a `rotctld` stopped). Tested against the virtual rotator only, and with Hamlib's
 own `rotctl -m 2` as an oracle under `--features hamlib-oracle`; **nothing is verified against a real
-rotator**. Verifying the shipped descriptions (`verified = true` per fact), serial transports, Easycomm,
+rotator**. Verifying the shipped descriptions (`verified = true` per fact), Easycomm,
 Rot2Prog and DCU engines, and the relay's `rotor_steer` dispatch are still to do.
 
 ## Access control and exposure
