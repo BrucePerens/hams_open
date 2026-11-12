@@ -178,6 +178,7 @@ fn env(x: &[f64]) -> Vec<f64> {
         .collect()
 }
 
+// [@ANCHOR: ratet27_chip_encode_compare_params_struct]
 struct Params {
     b0: i32,
     l_hat: u32,
@@ -323,5 +324,22 @@ fn main() {
             corr(&env_in, &env(&ours_chip)),
             corr(&env_in, &env(&ours_ours)),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ratet27_chip_encode_compare_params_struct]
+    #[test]
+    fn params_of_reports_one_entry_per_frame_with_in_range_values() {
+        let frames = [[0u32; 8], [0x0123_4567, 0x89ab, 0xcdef, 0x1234, 0x5678, 0x9abc, 0xdef0, 0x0fed]];
+        let p = params_of(&frames);
+        assert_eq!(p.len(), frames.len());
+        for got in p.iter().flatten() {
+            assert!((0.0..=1.0).contains(&got.voiced_frac));
+            assert!((9..=56).contains(&got.l_hat), "{}", got.l_hat);
+        }
     }
 }

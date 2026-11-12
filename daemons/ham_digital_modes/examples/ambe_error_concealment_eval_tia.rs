@@ -18,6 +18,7 @@ const FILES: [&str; 4] = [
     "tests/fixtures/osr_speech/OSR_us_000_0031_8k.wav",
 ];
 
+// [@ANCHOR: ambe_error_concealment_eval_tia_lcg_struct]
 struct Lcg(u64);
 impl Lcg {
     fn unit(&mut self) -> f64 {
@@ -215,5 +216,24 @@ fn main() {
     }
     if only.is_some() {
         println!("SCORE {score:.3}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ambe_error_concealment_eval_tia_lcg_struct]
+    #[test]
+    fn the_lcg_repeats_for_a_seed_stays_in_the_unit_interval_and_differs_between_seeds() {
+        let (mut a, mut b, mut c) = (Lcg(1), Lcg(1), Lcg(2));
+        let first = a.unit();
+        assert_eq!(first, b.unit());
+        assert!((first - 0.42320917087271326).abs() < 1e-12, "{first}");
+        assert_ne!(first, c.unit());
+        for _ in 0..1000 {
+            let v = a.unit();
+            assert!((0.0..1.0).contains(&v), "{v}");
+        }
     }
 }

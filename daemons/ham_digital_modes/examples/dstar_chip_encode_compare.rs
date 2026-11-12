@@ -152,6 +152,7 @@ fn env(x: &[f64]) -> Vec<f64> {
         .collect()
 }
 
+// [@ANCHOR: dstar_chip_encode_compare_p_struct]
 struct P {
     b0: u32,
     b1: u32,
@@ -302,5 +303,41 @@ fn main() {
             corr(&env_in, &env(&ours_chip)),
             corr(&env_in, &env(&ours_ours)),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: dstar_chip_encode_compare_p_struct]
+    #[test]
+    fn params_reports_the_raw_pitch_gain_and_spectral_indices_of_each_speech_frame() {
+        let mut encoder = Encoder::new();
+        let pcm: Vec<f64> = (0..8000)
+            .map(|n| {
+                (1..=10)
+                    .map(|k| (2.0 * std::f64::consts::PI * 150.0 * k as f64 * n as f64 / 8000.0).sin() / k as f64)
+                    .sum::<f64>()
+                    * 6000.0
+            })
+            .collect();
+        encoder.push_samples(&pcm);
+        let mut frames = Vec::new();
+        while let Some(f) = encoder.next_frame() {
+            frames.push(f);
+        }
+        assert!(!frames.is_empty());
+        let p = params(&frames);
+        assert_eq!(p.len(), frames.len());
+        let mut speech = 0;
+        for (frame, got) in frames.iter().zip(&p) {
+            if let Some(got) = got {
+                let raw = extract_raw_parameters(parse_frame(*frame).d);
+                assert_eq!((got.b0, got.b1, got.b2), (raw.b0, raw.b1, raw.b2));
+                speech += 1;
+            }
+        }
+        assert!(speech > 0, "a harmonic signal must produce speech frames");
     }
 }

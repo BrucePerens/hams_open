@@ -151,6 +151,7 @@ fn speech(wav: &str, n_frames: usize, prefix: &str, noisy: bool) {
 }
 
 /// Deterministic xorshift for reproducible sweeps.
+// [@ANCHOR: tia_102_baba_cross_validation_dump_rng_struct]
 struct Rng(u64);
 impl Rng {
     fn next(&mut self) -> u64 {
@@ -441,5 +442,21 @@ fn main() {
         Some("sweep") => sweep(&args[2]),
         Some("tables") => tables(),
         _ => eprintln!("usage: speech <wav> <nframes> <out_prefix> | sweep <out_prefix>"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: tia_102_baba_cross_validation_dump_rng_struct]
+    #[test]
+    fn the_xorshift_generator_follows_its_known_sequence_and_never_reaches_zero() {
+        let mut r = Rng(1);
+        assert_eq!(r.next(), 1082269761);
+        assert_eq!(r.next(), 1152992998833853505);
+        for _ in 0..1000 {
+            assert_ne!(r.next(), 0);
+        }
     }
 }

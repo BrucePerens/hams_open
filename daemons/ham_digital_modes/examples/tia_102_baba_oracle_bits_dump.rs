@@ -20,6 +20,7 @@ use ham_digital_modes::ambe::float::tia_102_baba::tables::{
 use ham_digital_modes::ambe::float::tia_102_baba::vuv::{frequency_bands_count, harmonics_count};
 use std::fmt::Write as _;
 
+// [@ANCHOR: tia_102_baba_oracle_bits_dump_rng_struct]
 struct Rng(u64);
 impl Rng {
     fn next(&mut self) -> u64 {
@@ -89,4 +90,20 @@ fn main() {
     }
     std::fs::write(format!("{prefix}.b"), b_txt).unwrap();
     std::fs::write(format!("{prefix}.u"), u_txt).unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: tia_102_baba_oracle_bits_dump_rng_struct]
+    #[test]
+    fn the_xorshift_generator_follows_its_known_sequence_and_never_reaches_zero() {
+        let mut r = Rng(1);
+        assert_eq!(r.next(), 1082269761);
+        assert_eq!(r.next(), 1152992998833853505);
+        for _ in 0..1000 {
+            assert_ne!(r.next(), 0);
+        }
+    }
 }
