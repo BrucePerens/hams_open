@@ -2,9 +2,9 @@
 # Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The command facts marked manual-checked were compared with Yaesu's 'FT-450 CAT Operation Reference Book' (sha256 in each fact); timing and the model name are Hamlib 4.6.2 (rigs/yaesu/ft450.c, newcat.c, `rigctl -m 1027 --dump-caps`, facts only).
 # Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
 # Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon (both checked against the book).
-# Gaps and pinned open questions (details: crates/radioctl-protocols/src/yaesu.rs): levels (MG is three sub-ranges of 000-255 and PC is 000-255, set per model; AG, RG and KS match the engine's ranges); no split (FT selects the displayed or the opposite band); no RIT/XIT capability (the book has RT, RU, RD, RC for the receive clarifier but no XT, and the capability covers both).
+# Gaps and pinned open questions (details: crates/radioctl-protocols/src/yaesu.rs): levels (MG is three sub-ranges of 000-255 and PC is 000-255, set per model; AG, RG and KS match the engine's ranges); no split (FT selects the displayed or the opposite band); RIT/XIT: the book has RT, RU, RD, RC for the receive clarifier but no XT, so the rit-xit capability is claimed with XIT refused (`yaesu.clarifier = "rt-receive"`).
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "levels", "identify", "read-power"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "levels", "identify", "read-power"]
 
 [rig]
 id = "yaesu-ft-450"
@@ -12,6 +12,7 @@ name = "Yaesu FT-450"
 family = "yaesu-newcat"
 
 [yaesu]
+clarifier = "rt-receive"
 model_id = 241
 frequency_digits = 8
 levels = { mic-gain = [0, 255], rf-power = [0, 255] }
@@ -108,4 +109,9 @@ verified = { state = "manual-checked", reference = "FT-450 CAT Operation Referen
 [[facts]]
 key = "yaesu.levels"
 provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK', file ft450_cat_reference.pdf, sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2: AG p. 5, KS p. 11, MG p. 12, PC p. 13, RG p. 14", note = "AG P2 and RG P2 000-255, MG 000-255 (L/M/H sub-ranges), PC 000-255, KS 004-060 WPM; MG and PC differ from the engine's default ranges. Where this block is silent the engine's default range applies." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.clarifier"
+provenance = { kind = "manual", reference = "Yaesu 'FT-450 CAT OPERATION REFERENCE BOOK', file FT-450_CAT_Operation_Reference_Book.pdf, sha256 7f5531a15683f6d7dca444b62ec98fc5febb5d92dda2679c6835365ff11882b2: RT CLAR PDF p. 15 (P1 0 receive clarifier off, 1 on), RU and RD PDF pp. 15 and 14 (offset 0000-9999 Hz), RC CLAR CLEAR PDF p. 14; IF (P4 receive, P5 transmit flag)", note = "The book has no XT: the transmit clarifier cannot be switched by CAT on this model, so the engine refuses XIT. Unverified." }
 verified = { state = "unverified" }

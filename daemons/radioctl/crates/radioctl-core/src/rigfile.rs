@@ -9,7 +9,7 @@
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
 //! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.scope_link` (`lan`, the default, or `serial`: how a TS-890S sends its scopes), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
-//! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`), `yaesu.clarifier` (`"cf-receive"` when the clarifier is the receive-only `CF` command, `"cf-rx-tx"` when `CF` switches both; `"rt-xt"` or absent otherwise),
+//! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`), `yaesu.clarifier` (`"cf-receive"` when the clarifier is the receive-only `CF` command, `"cf-rx-tx"` when `CF` switches both, `"rt-receive"` when it is `RT` with no `XT`; `"rt-xt"` or absent otherwise),
 //! `yaesu.split` (`"st"` when split is the `ST` command; `"ft"` or absent otherwise),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
@@ -670,9 +670,10 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
                     None | Some("rt-xt") => YaesuClarifier::RtXt,
                     Some("cf-receive") => YaesuClarifier::CfReceive,
                     Some("cf-rx-tx") => YaesuClarifier::CfRxTx,
+                    Some("rt-receive") => YaesuClarifier::RtReceive,
                     Some(other) => {
                         return Err(bad(format!(
-                            "yaesu.clarifier must be \"rt-xt\", \"cf-receive\" or \"cf-rx-tx\", not {other:?}"
+                            "yaesu.clarifier must be \"rt-xt\", \"cf-receive\", \"cf-rx-tx\" or \"rt-receive\", not {other:?}"
                         )))
                     }
                 },
@@ -1789,6 +1790,11 @@ verified = { state = "unverified" }
         assert_eq!(
             both.description.yaesu.expect("yaesu").clarifier,
             YaesuClarifier::CfRxTx
+        );
+        let rt = parse(&format!("{}{fact}", with("rt-receive"))).expect("loads");
+        assert_eq!(
+            rt.description.yaesu.expect("yaesu").clarifier,
+            YaesuClarifier::RtReceive
         );
         expect_rejected(&format!("{}{fact}", with("rit")), "yaesu.clarifier");
     }

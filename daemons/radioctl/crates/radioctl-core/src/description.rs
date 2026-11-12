@@ -769,6 +769,9 @@ pub enum YaesuClarifier {
     /// together (P3 0) and sets the offset (P3 1, a sign and four digits); there is no `RT`, `XT`, `RC`,
     /// `RU` or `RD`. FT-710.
     CfRxTx,
+    /// `RT` (receive only) with `RC`/`RU`/`RD` for the offset, and no `XT`: the book has no transmit
+    /// clarifier command. FT-450 and FT-450D.
+    RtReceive,
 }
 
 impl YaesuParams {

@@ -199,6 +199,14 @@ impl YaesuEngine {
             .is_some_and(|y| y.clarifier == YaesuClarifier::CfRxTx)
     }
 
+    /// True when this model's clarifier is `RT` with no transmit one (`yaesu.clarifier = "rt-receive"`: FT-450, FT-450D).
+    fn rt_receive(&self) -> bool {
+        self.desc
+            .yaesu
+            .as_ref()
+            .is_some_and(|y| y.clarifier == YaesuClarifier::RtReceive)
+    }
+
     // [@ANCHOR: radioctl_yaesu_engine_split_st]
     /// True when this model's split is the `ST` command (`yaesu.split = "st"`), not `FT2`/`FT3`.
     fn split_st(&self) -> bool {
@@ -433,9 +441,9 @@ impl ProtocolEngine for YaesuEngine {
             Op::SetRit(on) if self.cf_receive() => {
                 Self::command(format!("CF0{}0;", u8::from(*on)), none)
             }
-            Op::GetXit | Op::SetXit(_) if self.cf_receive() => {
+            Op::GetXit | Op::SetXit(_) if self.cf_receive() || self.rt_receive() => {
                 return Err(Self::unsupported(
-                    "this model has no transmit clarifier command (CF is the receive clarifier)",
+                    "this model has no transmit clarifier command (the clarifier is receive only)",
                 ))
             }
             Op::GetRit => Self::command("RT;".into(), observe(Field::Rit)),
@@ -777,6 +785,20 @@ mod tests {
                 matches!(e.feed(bad, T0).as_slice(), [Inbound::Unrecognised(_)]),
                 "{bad:?}"
             );
+        }
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_engine_cf_receive]
+    #[test]
+    fn the_ft_450_and_450d_clarifier_is_rt_with_no_transmit_one() {
+        for id in ["yaesu-ft-450", "yaesu-ft-450d"] {
+            let mut e = YaesuEngine::new(shipped(id)).expect("engine");
+            let b = |e: &mut YaesuEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+            assert_eq!(b(&mut e, Op::SetRit(true)), b"RT1;", "{id}");
+            assert_eq!(b(&mut e, Op::GetRit), b"RT;");
+            assert_eq!(b(&mut e, Op::SetRitOffset(-150)), b"RC;RD0150;");
+            assert!(e.encode(&Op::SetXit(true)).is_err());
+            assert!(e.encode(&Op::GetXit).is_err());
         }
     }
 
