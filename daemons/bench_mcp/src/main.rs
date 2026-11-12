@@ -27,6 +27,7 @@ mod rotator;
 mod rx888;
 mod sa;
 mod scope;
+mod scope_guide;
 mod scope_more;
 mod sdr;
 mod serial_guard;
@@ -96,6 +97,9 @@ const TOOLS: &[ToolSpec] = &[
     ToolSpec { name: "bench_scope_display", tier: Tier::ReadConfig, kinds: &[Kind::Scope],
         desc: "Scope display: `screen_saver` (OFF or 1MIN to 60MIN; the display sleeps after 30 minutes by default, SCPI and screenshots still work asleep), `grid` (FULL, HALF, OFF), `trace_intensity` with `grid_intensity` (0 to 100), `xy` (XY mode on or off), `persistence` (OFF, INFINITE, 1, 5, 10 or 30 seconds), `dot_join` (dots instead of vectors) and `menu`, read back.",
         props: r#"{"instrument":{"type":"string"},"screen_saver":{"type":"string"},"grid":{"type":"string","enum":["FULL","HALF","OFF"]},"trace_intensity":{"type":"integer"},"grid_intensity":{"type":"integer"},"xy":{"type":"boolean"},"persistence":{"type":["string","integer"]},"dot_join":{"type":"boolean"},"menu":{"type":"boolean"}}"#, required: &[] },
+    ToolSpec { name: "bench_scope_history", tier: Tier::ReadConfig, kinds: &[Kind::Scope],
+        desc: "Scope history (segmented memory): `history` (mode on or off), `list` (the frame list), `frame` (select a frame), and `frames` (up to 20 frame numbers, with `channel`): each is selected and its time stamp, its summary (min, max, peak-to-peak) and, with `save`, its waveform as little-endian f32 volts are returned. History recording itself is the scope's own function (turn history on after a stop); the settings are read back. From the programming guide, not yet checked on firmware 1.3.27.",
+        props: r#"{"instrument":{"type":"string"},"history":{"type":"boolean"},"list":{"type":"boolean"},"frame":{"type":"integer"},"frames":{"type":"array","items":{"type":"integer"}},"channel":{"type":"integer","enum":[1,2]},"save":{"type":"boolean"}}"#, required: &[] },
     ToolSpec { name: "bench_screenshot", tier: Tier::ReadOnly, kinds: &[Kind::Scope], desc: "Save the scope screen as an image file and return its path.", props: r#"{"instrument":{"type":"string"}}"#, required: &[] },
     ToolSpec { name: "bench_set", tier: Tier::ReadConfig, kinds: ANY,
         desc: "Scope: timebase_s (seconds per division), vdiv_v, offset_v, coupling (A1M/D1M/GND), attenuation (probe ratio), trigger_mode (AUTO/NORM/SINGLE/STOP); channel selects which channel. Supply: voltage_v and current_a setpoints, each capped by the max_volts and max_amps in the server's config; does not change the output state.",
@@ -489,6 +493,7 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
         ("bench_scope_acquire", Kind::Scope) => scope_more::acquire(&mut l, args),
         ("bench_scope_channel", Kind::Scope) => scope_more::channel(&mut l, args),
         ("bench_scope_display", Kind::Scope) => scope_more::display(&mut l, args),
+        ("bench_scope_history", Kind::Scope) => scope_guide::history(&mut l, args, &out_dir()),
         ("bench_screenshot", _) => scope::screenshot(&mut l, &out_dir()),
         ("bench_set", Kind::Scope) => scope::set(&mut l, args),
         ("bench_set", Kind::Psu) => psu::set(&mut l, args, &lim),

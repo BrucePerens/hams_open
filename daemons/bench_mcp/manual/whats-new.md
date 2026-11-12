@@ -13,6 +13,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - instruments/rtlsdr: the RTL-SDR dongle (R820T) as a receive-only SDR (all seven pages), `ppm` on bench_sdr_capture and bench_sdr_survey, config key `direct_samp`; verified on a dongle with NOAA weather radio
 - instruments/radioctl: the `hamlib` driver is replaced by the `radioctl` driver (a radioctld started from a rig description; `rig`, `rigs_dir`; `model` and `set_conf` removed), tools renamed `bench_hamlib_*` to `bench_radioctl_*` and `bench_hamlib_rigctld` to `bench_radioctl_daemon`; rotators use a radioctld rotator listener (`radioctld_port`)
 - instruments/scope/troubleshooting: the scope entry's `connect_waits_s` (pauses between connection attempts) for waiting out a stale SCPI session
+- tools/bench_scope_history: History (segmented) memory: mode, frame list, frame select, frame read-out.
 - tools/bench_scope_math: channel 1 op channel 2 on the host from one frozen frame
 - tools/bench_scope_cursors: values at chosen times and the differences between two cursors, from the waveform memory
 - tools/bench_scope_acquire: acquisition mode, average count and memory depth with read-back
