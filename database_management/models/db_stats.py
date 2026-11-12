@@ -10,6 +10,7 @@ import subprocess
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, AccessError
 import odoo.tools.sql
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ class DatabaseTableStat(models.Model):
             pkg_name="postgresql-client" if cmd_name == "vacuumdb" else cmd_name,
         )
 
+    @public_rpc
     def action_vacuum_analyze(self):
         # [@ANCHOR: COMM_vacuum_analyze]
         exe = self._get_executable("vacuumdb")
@@ -225,6 +227,7 @@ class DatabaseQueryStat(models.Model):
             $$ LANGUAGE plpgsql;
         """)
 
+    @public_rpc
     def action_install_extension(self):
         # [@ANCHOR: COMM_db_install_extension]
         try:
@@ -279,6 +282,7 @@ class DatabaseQueryStat(models.Model):
             _logger.exception("Failed to reset query stats: %s", e)
             raise UserError(_("Could not reset statistics: %s") % str(e))
 
+    @public_rpc
     def action_explain_query(self):
         # [@ANCHOR: COMM_db_explain_query]
         self.ensure_one()
@@ -354,6 +358,7 @@ class DatabaseActivity(models.Model):
         """
         )
 
+    @public_rpc
     def action_terminate_backend(self):
         # [@ANCHOR: COMM_db_terminate_backend]
         # micro-privilege: Use service account for termination
@@ -506,5 +511,6 @@ class PgExplainWizard(models.TransientModel):
     explain_plan = fields.Text(string="Explain Plan", readonly=True)
 
     # [@ANCHOR: COMM_pg_explain_wizard_close]
+    @public_rpc
     def action_close(self):
         return {"type": "ir.actions.act_window_close"}

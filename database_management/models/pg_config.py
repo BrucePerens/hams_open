@@ -9,6 +9,7 @@ from odoo import models, fields, _
 from odoo.exceptions import UserError
 from psycopg2 import sql
 import odoo.tools.sql
+from odoo.addons.zero_sudo import public_rpc
 
 
 class DatabasePgSetting(models.Model):
@@ -67,6 +68,7 @@ class PgOptimizeWizard(models.TransientModel):
         string="Max Connections", required=True, default=200
     )
 
+    @public_rpc
     def action_apply_optimizations(self):
         # [@ANCHOR: COMM_pg_optimize_wizard]
 
@@ -269,6 +271,7 @@ class PgHaWizard(models.TransientModel):
                 )
             )
 
+    @public_rpc
     def action_generate(self):
         # [@ANCHOR: COMM_pg_ha_wizard]
 
