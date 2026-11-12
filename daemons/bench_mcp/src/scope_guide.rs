@@ -68,6 +68,60 @@ pub fn history(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> 
     Ok(r)
 }
 
+/// What `bench_scope_reference` sets: which reference (location, source) and, once one is stored, how it is shown.
+const REFERENCE_ITEMS: [Item; 5] = [
+    Item {
+        arg: "location",
+        cmd: "REFLA",
+        ty: Ty::Words(&["REFA", "REFB", "REFC", "REFD"]),
+    },
+    Item {
+        arg: "source",
+        cmd: "REFSR",
+        ty: Ty::Words(&["C1", "C2", "MATH"]),
+    },
+    Item {
+        arg: "display",
+        cmd: "REFDS",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "position_v",
+        cmd: "REFPO",
+        ty: Ty::Num(-100.0, 100.0, "V"),
+    },
+    Item {
+        arg: "scale_v",
+        cmd: "REFSC",
+        ty: Ty::Num(500e-6, 10.0, "V"),
+    },
+];
+
+/// `bench_scope_reference`: selects a reference waveform (REFA to REFD) and its source, stores the source's screen waveform in it (`save`), shows
+/// it, sets its vertical position and scale, or closes the reference function (`close`). The guide has no command that reads a reference back or
+/// compares it, so there is none here: the stored trace is on the scope's screen (`bench_screenshot` shows it).
+pub fn reference(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_reference]
+    let flag = |k: &str| match args.get(k) {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(_) => Err(format!("{k} must be true or false")),
+    };
+    let (save, close) = (flag("save")?, flag("close")?);
+    // The location and the source come first, the store after them, and the display settings after that (the scope takes those only once a trace is stored).
+    let mut cmds = item_cmds(args, &REFERENCE_ITEMS[..2], 1)?;
+    if save {
+        cmds.push(("REFSA".into(), "REFDS?".into()));
+    }
+    cmds.extend(item_cmds(args, &REFERENCE_ITEMS[2..], 1)?);
+    if close {
+        cmds.push(("REFCL".into(), "REFDS?".into()));
+    }
+    let mut r = apply(s, cmds)?;
+    r["settings"] = read_items(s, &REFERENCE_ITEMS, 1);
+    Ok(r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,5 +166,47 @@ mod tests {
             assert!(history(&mut l, &bad, &out).is_err(), "{bad}");
         }
         assert_eq!(f.got("HSMD").len(), sent, "nothing sent for a bad call");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_reference]
+    #[test]
+    fn a_reference_is_selected_stored_shown_scaled_and_closed_in_the_guides_order() {
+        let (f, mut l) = link();
+        let r = reference(&mut l, &json!({"scale_v": 0.1, "location": "refb", "source": "C2", "save": true, "position_v": 0.2})).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!([
+                "REFLA REFB",
+                "REFSR C2",
+                "REFSA",
+                "REFPO 2E-1V",
+                "REFSC 1E-1V"
+            ])
+        );
+        assert_eq!(
+            r["settings"]["display"], "REFDS ON",
+            "storing a trace shows it"
+        );
+        assert_eq!(r["settings"]["scale_v"], "REFSC 1.00E-01V");
+        let r = reference(&mut l, &json!({"display": false})).unwrap();
+        assert_eq!(r["settings"]["display"], "REFDS OFF");
+        let r = reference(&mut l, &json!({"close": true})).unwrap();
+        assert_eq!(r["settings"]["display"], "REFDS OFF");
+        // A display setting for a location with nothing stored is ignored by the scope: the read-back shows it.
+        reference(&mut l, &json!({"location": "REFC", "display": true})).unwrap();
+        assert_eq!(
+            reference(&mut l, &json!({})).unwrap()["settings"]["display"],
+            "REFDS OFF"
+        );
+        let n = f.got("REF").len();
+        for bad in [
+            json!({"location": "REFE"}),
+            json!({"scale_v": 100}),
+            json!({"save": "yes"}),
+            json!({"display": true, "source": "C3"}),
+        ] {
+            assert!(reference(&mut l, &bad).is_err(), "{bad}");
+        }
+        assert_eq!(f.got("REF").len(), n);
     }
 }

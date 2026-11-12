@@ -280,6 +280,21 @@ These tools are written from the SDS1000X-E programming guide (EN02E) and tested
 
 Every value is checked before the first command is sent. Returns `sent`, `readback`, `note`, `settings` (read back `history`, `list`, `frame`) and `frames` (per frame: `frame`, `time`, `samples`, `sample_interval_s`, `min_v`, `max_v`, `pkpk_v`, `file`). The frame number the scope can reach is its own: a larger one is clamped or ignored by the scope and the read-back shows it. The recording of frames is not started here. Test: `history_turns_on_reads_frames_with_their_times_and_refuses_bad_frames_unsent` against the fake scope.
 
+### `bench_mcp_scope_reference` [@ANCHOR: bench_mcp_scope_reference]
+
+`reference(s, args)` is `bench_scope_reference` (tier `read_config`): reference waveform select, store, display, position, scale and close.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.location` | `REFA`, `REFB`, `REFC`, `REFD` (any case) | `REFLA <loc>`. |
+| `args.source` | `C1`, `C2`, `MATH` | `REFSR <src>`. |
+| `args.save` | boolean | Sends `REFSA` after the location and source: stores the source's screen waveform and shows it. |
+| `args.display` | boolean | `REFDS ON` or `OFF`. |
+| `args.position_v`, `args.scale_v` | number, volts; scale 0.0005 to 10 | `REFPO`, `REFSC`, in E-notation. |
+| `args.close` | boolean | Sends `REFCL` last. |
+
+Any value of the wrong type or range is refused (`<arg> must be ...`) before the first command is sent. Order sent: location, source, save, display, position, scale, close. Returns `sent`, `readback`, `note` and `settings` (every setting read back with `REFLA?`, `REFSR?`, `REFDS?`, `REFPO?`, `REFSC?`). There is no read of the stored trace and no compare in the guide, so none is offered. Test: `a_reference_is_selected_stored_shown_scaled_and_closed_in_the_guides_order` against the fake scope, which ignores display settings for a location with nothing stored, as the guide says.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.
