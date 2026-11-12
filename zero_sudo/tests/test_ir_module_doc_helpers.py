@@ -12,6 +12,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 @tagged("post_install", "-at_install")
 class TestIrModuleDocHelpers(HamsTransactionCase):
     # Tests [@ANCHOR: zero_sudo:ir_module_is_internal_doc_path]
+    # Tests [@ANCHOR: zero_sudo_ir_module_module_module]
     def test_stories_journeys_and_runbooks_directories_are_internal_paths(self):
         Module = self.env["ir.module.module"]
         for path in ("docs/stories/a.md", "docs/Journeys/a.md", "x\\runbooks\\a.md", "stories/deep/er/a.md"):

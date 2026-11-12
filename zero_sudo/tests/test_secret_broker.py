@@ -125,6 +125,7 @@ class TestSecretBrokerPolicy(BaseCase):
     def _ask(self, broker, op, **args):
         return broker.handle(json.dumps({"v": 1, "op": op, "args": args}).encode(), self.os_uid)
 
+    # Tests [@ANCHOR: zero_sudo_secret_store_secret_store]
     def test_a_secret_that_has_gone_or_a_nested_request_gets_an_error_reply(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_handle]
         broker = self._broker()
@@ -141,6 +142,7 @@ class TestSecretBrokerPolicy(BaseCase):
         nested = b'{"v": 1, "op": "hmac_sign", "args": ' + b"[" * 100000 + b"]" * 100000 + b"}"
         self.assertEqual(broker.handle(nested, self.os_uid), {"ok": False, "error": "bad_request"})
 
+    # Tests [@ANCHOR: zero_sudo_broker_broker_config_error]
     def test_config_validation(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_validate_config]
         # Tests [@ANCHOR: zero_sudo:secret_broker_validate_https]
@@ -252,6 +254,7 @@ class TestSecretBrokerPolicy(BaseCase):
         reply = self._ask(broker, "https_request", name="stripe.secret_key", method="GET", path="/v1/x")
         self.assertEqual(reply, {"ok": False, "error": "upstream_failed"})
 
+    # Tests [@ANCHOR: zero_sudo_broker_refused]
     def test_paths(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_check_path]
         prefixes = ["/v1/", "/api"]
@@ -344,6 +347,9 @@ class TestSecretBrokerIsolation(BaseCase):
         self.assertEqual(uid, self.os_uid)
         self.assertIn(os.getgid(), gids)
 
+    # Tests [@ANCHOR: zero_sudo_secret_store_broker_client]
+    # Tests [@ANCHOR: zero_sudo_secret_store_systemd_credential_backend]
+    # Tests [@ANCHOR: zero_sudo_secret_store_secret_store_error]
     def test_wrong_peer_uid_is_refused_on_the_real_socket(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_peer_credentials]
         # Tests [@ANCHOR: zero_sudo:secret_broker_serve_connection]

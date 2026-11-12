@@ -55,6 +55,7 @@ class TestCssSanitizerFunctions(BaseCase):
         self.assertEqual(css._clean_declarations("color:red;margin:0"), ("color:red;margin:0", False))
         self.assertEqual(css._clean_declarations("behavior:x"), ("", True))
 
+    # Tests [@ANCHOR: zero_sudo_css_sanitizer_counter]
     def test_06_clean_rules_drops_what_is_not_allowed_and_keeps_the_rest(self):
         # Tests [@ANCHOR: zero_sudo:css_clean_rules]
         text, dropped = css._clean_rules("a{color:red} @import 'x'; b{position:fixed}", 0, css._Counter())
@@ -75,6 +76,7 @@ class TestSvgSanitizerFunctions(BaseCase):
     def _svg(self, text):
         return etree.fromstring(text)
 
+    # Tests [@ANCHOR: zero_sudo_svg_sanitizer_call_totals]
     def test_01_call_totals_and_budget_start_at_zero(self):
         # Tests [@ANCHOR: zero_sudo:svg_call_totals_init]
         # Tests [@ANCHOR: zero_sudo:svg_budget_init]
@@ -85,6 +87,7 @@ class TestSvgSanitizerFunctions(BaseCase):
         self.assertIs(budget.totals, totals)
         self.assertIsNone(svg._Budget().totals)
 
+    # Tests [@ANCHOR: zero_sudo_svg_sanitizer_rejected]
     def test_02_budget_element_counts_up_to_the_cap(self):
         # Tests [@ANCHOR: zero_sudo:svg_budget_element]
         budget = svg._Budget()

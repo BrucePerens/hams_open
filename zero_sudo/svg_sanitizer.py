@@ -352,6 +352,7 @@ _STYLE_ONLY_VALIDATORS = {
 }
 
 
+# [@ANCHOR: zero_sudo_svg_sanitizer_rejected]
 class _Rejected(Exception):
     """Raised inside one block when it exceeds a cap; the block is dropped."""
 
@@ -362,6 +363,7 @@ MAX_TOTAL_SVG_BLOCKS = 1000
 MAX_TOTAL_SVG_BYTES = 1024 * 1024
 
 
+# [@ANCHOR: zero_sudo_svg_sanitizer_call_totals]
 class _CallTotals:
     # [@ANCHOR: zero_sudo:svg_call_totals_init]
     def __init__(self):
@@ -369,6 +371,7 @@ class _CallTotals:
         self.size = 0
 
 
+# [@ANCHOR: zero_sudo_svg_sanitizer_budget]
 class _Budget:
     # [@ANCHOR: zero_sudo:svg_budget_init]
     def __init__(self, totals=None):

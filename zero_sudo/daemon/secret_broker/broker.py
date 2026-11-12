@@ -63,10 +63,12 @@ _ACL_USER, _ACL_GROUP = 0x02, 0x08
 _ACL_MASK = 0x10
 
 
+# [@ANCHOR: zero_sudo_broker_broker_config_error]
 class BrokerConfigError(ValueError):
     """The broker configuration is unusable; the broker refuses to start."""
 
 
+# [@ANCHOR: zero_sudo_broker_refused]
 class Refused(Exception):
     """A request the broker will not serve; `code` is what the caller sees."""
 
@@ -294,6 +296,7 @@ def https_call(policy, secret, method, path, body=None, headers=None):
     }
 
 
+# [@ANCHOR: zero_sudo_broker_broker]
 class Broker:
     """The request handler: policy + secret source. `handle()` is the whole decision for one request."""
 

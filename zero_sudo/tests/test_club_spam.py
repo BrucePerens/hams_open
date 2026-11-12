@@ -347,6 +347,7 @@ class TestSitemaps(BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestHomePage(BaseCase):
+    # Tests [@ANCHOR: zero_sudo_club_spam_home_parser]
     def test_20_the_recent_posts_widget_and_links_of_a_hacked_page_are_read(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_extract_home_evidence]
         # Tests [@ANCHOR: zero_sudo:club_spam_parser_init]
@@ -371,6 +372,7 @@ class TestHomePage(BaseCase):
         self.assertNotIn(HOST + "/#respond", urls)
         self.assertEqual(clean["outbound_domains"], 3)  # arrl, weather.gov, machothemes
 
+    # Tests [@ANCHOR: zero_sudo_club_spam_entry_score]
     def test_21_a_hidden_block_of_casino_links_is_found_and_css_classes_are_not_read(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_extract_home_evidence]
         for style in ("position:absolute;left:-9999px;", "display:none", "visibility:hidden", "font-size:0px;",
@@ -453,6 +455,7 @@ class TestEvidenceAndDecision(BaseCase):
         self.assertEqual(verdict["aged_flagged"], 0)
         self.assertTrue(any("not yet persistent" in r for r in verdict["reasons"]))
 
+    # Tests [@ANCHOR: zero_sudo_club_spam_spam_config]
     def test_33_the_persistence_threshold_is_a_table(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_evaluate_evidence]
         # Tests [@ANCHOR: zero_sudo:club_spam_config_from_params]
@@ -631,6 +634,7 @@ class TestHeadVerification(BaseCase):
         judged = spam.evaluate_head_results([{"u": "a", "status": 200, "etag": '"x"'}] * 2, TODAY)
         self.assertEqual((judged["old_count"], judged["with_validators"]), (0, 2))
 
+    # Tests [@ANCHOR: zero_sudo_club_spam_strip_parser]
     def test_53_spam_blocks_are_cut_from_a_page_before_a_model_sees_it(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_strip_spam_blocks]
         # Tests [@ANCHOR: zero_sudo:club_spam_strip_init]

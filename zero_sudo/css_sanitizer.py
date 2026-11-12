@@ -180,6 +180,7 @@ def _clean_declarations(body):
     return ";".join(kept), dropped
 
 
+# [@ANCHOR: zero_sudo_css_sanitizer_counter]
 class _Counter:
     rules = 0
 

@@ -186,6 +186,7 @@ class TestHarnessHelpers(HamsTransactionCase):
             self.safe_patch_object_cm(FakeCursor(), "execute")
 
     # Tests [@ANCHOR: zero_sudo:invalidate_zero_sudo_utils_cache]
+    # Tests [@ANCHOR: zero_sudo_security_utils_zero_sudo_security_utils]
     def test_invalidating_the_utils_cache_does_nothing_when_zero_sudo_is_not_in_the_registry(self):
         """edge_cache's own run has no `zero_sudo.security.utils` model, and must not reach Redis for it."""
         without_model = SimpleNamespace(registry={}, env=self.env)

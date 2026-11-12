@@ -143,6 +143,7 @@ class TestSsrfSafeFetch(HamsTransactionCase):
         self.assertFalse(is_safe(ipaddress.ip_address("0.0.0.0")))
         self.assertFalse(is_safe(ipaddress.ip_address("::1")))
 
+    # Tests [@ANCHOR: zero_sudo_ssrf_safe_fetch_ssrfvalidation_error]
     def test_resolve_ssrf_safe_addresses_raises_for_a_missing_hostname(self):
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_resolve_ssrf_safe_addresses]
         with self.assertRaises(sf.SSRFValidationError):
@@ -345,6 +346,7 @@ class TestSsrfSafeFetch(HamsTransactionCase):
             )
         self.assertIsInstance(ctx.exception.reason, ssl.SSLCertVerificationError)
 
+    # Tests [@ANCHOR: zero_sudo_ssrf_safe_fetch_no_redirect_handler]
     def test_a_refused_redirect_reaches_the_caller_as_an_http_error(self):
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_no_redirect]
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_urlopen_ssrf_safe]
@@ -374,6 +376,8 @@ class TestSsrfSafeFetch(HamsTransactionCase):
             sf.urlopen_ssrf_safe(req, "test-context", https_only=True)
         self.assertIn("unknown url type", str(ctx.exception))
 
+    # Tests [@ANCHOR: zero_sudo_ssrf_safe_fetch_ssrfsafe_httpshandler]
+    # Tests [@ANCHOR: zero_sudo_ssrf_safe_fetch_ssrfsafe_httphandler]
     def test_the_handlers_keep_their_context_label_and_the_https_handler_its_ssl_context(self):
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_http_handler_init]
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_https_handler_init]

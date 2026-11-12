@@ -7,6 +7,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: zero_sudo_security_log_security_log]
 class SecurityLog(models.Model):
     # [@ANCHOR: zero_sudo:COMM_zero_sudo_security_log_global]
     # ---

@@ -79,6 +79,7 @@ class TestSecretStoreTierA(BaseCase):
             with self.assertRaises(ValueError, msg=bad):
                 ss.check_name(bad)
 
+    # Tests [@ANCHOR: zero_sudo_secret_store_insecure_secret_source]
     def test_private_file_rules(self):
         # Tests [@ANCHOR: zero_sudo:secret_store_check_private_file]
         good = _write(os.path.join(self.tmp, "good"), "a=b\n", 0o640)
@@ -131,6 +132,7 @@ class TestSecretStoreTierA(BaseCase):
         with self.assertRaises(ss.InsecureSecretSource):
             backend.get("loose")
 
+    # Tests [@ANCHOR: zero_sudo_secret_store_credentials_file_backend]
     def test_credentials_file_backend(self):
         # Tests [@ANCHOR: zero_sudo:secret_store_file_init]
         # Tests [@ANCHOR: zero_sudo:secret_store_file_get]
@@ -146,6 +148,7 @@ class TestSecretStoreTierA(BaseCase):
             with self.assertRaises(ss.InsecureSecretSource):
                 ss.CredentialsFileBackend(path).get("stripe.secret_key")
 
+    # Tests [@ANCHOR: zero_sudo_secret_store_encrypted_backend]
     def test_encrypted_backend_round_trip_and_binding(self):
         # Tests [@ANCHOR: zero_sudo:secret_store_encrypted_init]
         # Tests [@ANCHOR: zero_sudo:secret_store_encrypted_get]

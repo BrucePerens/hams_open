@@ -21,6 +21,7 @@ from . import models  # noqa: E402
 from . import controllers  # noqa: E402
 
 
+# [@ANCHOR: zero_sudo___init___tesc_warning_filter]
 class TEscWarningFilter(logging.Filter):
     """
     Suppresses noisy Odoo 15+ QWeb deprecation warnings for @t-esc

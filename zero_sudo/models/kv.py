@@ -7,6 +7,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: zero_sudo_kv_zero_sudo_kv]
 class ZeroSudoKV(models.Model):
     # [@ANCHOR: zero_sudo:COMM_zero_sudo_kv_global]
     # This model is logically GLOBAL and NOT multi-tenanted.

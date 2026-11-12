@@ -141,6 +141,7 @@ class TestCoreSecretsFromStore(TransactionCase, SafePatchMixin):
         self.assertNotEqual(misc.hmac(self.env, "scope", "message"),
                             misc.hmac(self.env, "scope", "message", secret=DB_SECRET))
 
+    # Tests [@ANCHOR: zero_sudo_secret_store_secret_not_found]
     def test_on_missing_database_secret_is_loud(self):
         # Tests [@ANCHOR: zero_sudo:core_secrets_store_value]
         # Tests [@ANCHOR: zero_sudo:core_secrets_get_param]
@@ -163,6 +164,7 @@ class TestCoreSecretsFromStore(TransactionCase, SafePatchMixin):
         self._flag(True)
         self.assertEqual(self._session_secret(), STORE_SECRET)
 
+    # Tests [@ANCHOR: zero_sudo_core_secrets_res_users_core_secrets]
     def test_flip_keeps_sessions_when_the_store_holds_the_old_value(self):
         # Tests [@ANCHOR: zero_sudo:core_secrets_session_token_values]
         sid = "test-session-id"

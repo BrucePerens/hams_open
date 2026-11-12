@@ -20,6 +20,7 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: zero_sudo_daemon_utils_zero_sudo_daemon_utils]
 class ZeroSudoDaemonUtils(models.AbstractModel):
     _name = "zero_sudo.daemon.utils"
     _description = "Daemon Management Utilities"

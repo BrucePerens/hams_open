@@ -11,6 +11,7 @@ from odoo.addons.web.controllers.home import Home
 from odoo.addons.web.controllers.session import Session
 
 
+# [@ANCHOR: zero_sudo_main_zero_sudo_home]
 class ZeroSudoHome(Home):
     @http.route()
     def web_login(self, redirect=None, login=None, **kw):
@@ -83,6 +84,7 @@ class ZeroSudoHome(Home):
         return response
 
 
+# [@ANCHOR: zero_sudo_main_zero_sudo_session]
 class ZeroSudoSession(Session):
     @http.route()
     # [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]

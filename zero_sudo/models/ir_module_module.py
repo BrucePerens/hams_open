@@ -76,6 +76,7 @@ def classify_doc_audience(path, doc_info):
     return AUDIENCE_INTERNAL
 
 
+# [@ANCHOR: zero_sudo_ir_module_module_module]
 class Module(models.Model):
     _inherit = "ir.module.module"
 

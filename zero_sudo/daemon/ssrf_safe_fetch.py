@@ -68,6 +68,7 @@ import urllib.request
 from urllib.parse import urlsplit
 
 
+# [@ANCHOR: zero_sudo_ssrf_safe_fetch_ssrfvalidation_error]
 class SSRFValidationError(Exception):
     """Raised when a URL's hostname is missing, unresolvable, or resolves to a
     non-public address. Deliberately a plain, Odoo-free exception type -- each
@@ -227,6 +228,7 @@ def _make_pinned_http_class(base_cls, validated_addrinfo):
     return _factory
 
 
+# [@ANCHOR: zero_sudo_ssrf_safe_fetch_ssrfsafe_httphandler]
 class _SSRFSafeHTTPHandler(urllib.request.HTTPHandler):
     """Resolves + validates + pins on EVERY request this handler is asked to
     open -- including a redirect target, since `HTTPRedirectHandler` builds a
@@ -249,6 +251,7 @@ class _SSRFSafeHTTPHandler(urllib.request.HTTPHandler):
         )
 
 
+# [@ANCHOR: zero_sudo_ssrf_safe_fetch_ssrfsafe_httpshandler]
 class _SSRFSafeHTTPSHandler(urllib.request.HTTPSHandler):
     """HTTPS counterpart of `_SSRFSafeHTTPHandler`. `context=self._context`
     (an `ssl.SSLContext`, defaulted the same way `urllib.request.HTTPSHandler`
@@ -273,6 +276,7 @@ class _SSRFSafeHTTPSHandler(urllib.request.HTTPSHandler):
         )
 
 
+# [@ANCHOR: zero_sudo_ssrf_safe_fetch_no_redirect_handler]
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Refuses every redirect, so the 3xx answer reaches the caller as an HTTPError (with its Location header)."""
 

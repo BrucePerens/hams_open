@@ -92,6 +92,7 @@ _SECOND_LEVEL_LABELS = frozenset({"co", "com", "org", "net", "ac", "gov", "edu",
                                     "me", "ltd", "plc", "sch", "asn", "id"})
 
 
+# [@ANCHOR: zero_sudo_club_spam_spam_config]
 @dataclass(frozen=True)
 class SpamConfig:
     """Every tunable, with its default. The Odoo system parameter for a field is PARAM_PREFIX + the field name."""
@@ -243,6 +244,7 @@ def _non_latin_share(tokens):
     return sum(1 for ch in letters if ord(ch) > 0x24F) / len(letters)
 
 
+# [@ANCHOR: zero_sudo_club_spam_entry_score]
 @dataclass
 class EntryScore:
     points: int
@@ -397,6 +399,7 @@ _VOID = frozenset("area base br col embed hr img input link meta param source tr
 _SKIP_TEXT = frozenset(("script", "style", "noscript", "template"))
 
 
+# [@ANCHOR: zero_sudo_club_spam_home_parser]
 class _HomeParser(HTMLParser):
     """Collects what the spam rules need from one home page. Not a tree: a stack of open tags with two inherited flags
     (hidden by an inline style, inside a recent-posts widget)."""
@@ -901,6 +904,7 @@ def evaluate_head_results(results, today, config=None, redirect=False):
     }
 
 
+# [@ANCHOR: zero_sudo_club_spam_strip_parser]
 class _StripParser(HTMLParser):
     """Finds the character spans of a page that are spam: a recent-posts widget most of whose links are flagged, a hidden
     element holding a flagged link, a list item whose only link is flagged, a flagged link anywhere else."""

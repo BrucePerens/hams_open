@@ -11,6 +11,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: zero_sudo_json_rpc_client_secure_jsonrpcclient]
 class SecureJSONRPCClient:
     """
     Standardized JSON-2 IPC client for external daemons.

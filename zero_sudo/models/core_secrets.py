@@ -85,6 +85,7 @@ def _optional_store_value(key):
         return None
 
 
+# [@ANCHOR: zero_sudo_core_secrets_ir_config_parameter_core_secrets]
 class IrConfigParameterCoreSecrets(models.Model):
     _inherit = "ir.config_parameter"
 
@@ -207,6 +208,7 @@ class IrConfigParameterCoreSecrets(models.Model):
         return restored
 
 
+# [@ANCHOR: zero_sudo_core_secrets_res_users_core_secrets]
 class ResUsersCoreSecrets(models.Model):
     _inherit = "res.users"
 

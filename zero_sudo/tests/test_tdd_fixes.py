@@ -268,6 +268,7 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         # This should not raise an exception
         self.env["ir.module.module"]._bootstrap_knowledge_docs()
 
+    # Tests [@ANCHOR: zero_sudo_daemon_utils_zero_sudo_daemon_utils]
     def test_daemon_utils_sys_paths(self):
         # Tests [@ANCHOR: zero_sudo:_start_daemon_process]
         daemon_utils = self.env["zero_sudo.daemon.utils"]
