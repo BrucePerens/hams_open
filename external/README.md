@@ -274,14 +274,36 @@ handles the D3-family files, which need real post-download transformation (banne
 and for `d3-geo-projection`, the `require()`-neutering fix documented above), and which are hash-
 verified against a pinned, currently-vendored-file hash rather than assumed correct:
 
-- `hash_file(path)` -- SHA-256 of a file on disk, or `None` if it doesn't exist yet.
-  [@ANCHOR: external:hash_file]
-- `download_and_transform_file(url, dest_path, transform_fn, expected_hash)` -- like
-  `download_file`, but applies `transform_fn(raw_bytes) -> bytes` to the download before hash-
-  verifying and writing it, so the pinned hash covers the real, post-transform content that
-  actually lands on disk. [@ANCHOR: external:download_and_transform_file]
-- `_odoo_module_banner_transform`/`_d3_geo_projection_transform` are the two real transforms in
-  current use, both documented in the D3.js section above.
+### `hash_file(path)` [@ANCHOR: external:hash_file]
+
+`hash_file(path) -> str | None` in `fetch_assets.py`. Returns the lowercase hex SHA-256 of the file at `path`, read in 4096-byte chunks so a large file is never held in memory, or `None` when the file does not exist yet (a `FileNotFoundError` is caught). Any other `OSError` (permissions, a directory) propagates. Read-only and pure apart from the file read. `download_file` and `download_and_transform_file` call it first and skip the download when the on-disk hash already equals the pinned one. Tests: `test_hash_file_returns_the_real_sha256_of_real_content`, `test_hash_file_returns_none_for_a_missing_file`.
+
+### `download_and_transform_file(url, dest_path, transform_fn, expected_hash)` [@ANCHOR: external:download_and_transform_file]
+
+Like `download_file`, but applies `transform_fn` to the raw download before hash-checking and writing, so the pinned hash covers the post-transform bytes that actually land on disk.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `url` | str | The pinned download URL (one of this file's own tables; no caller or record field chooses it). |
+| `dest_path` | str | Where the file is written; its directory is created with `os.makedirs` when missing. |
+| `transform_fn` | callable(bytes) -> bytes | The post-processing, for example `_odoo_module_banner_transform`. |
+| `expected_hash` | str | Lowercase hex SHA-256 of the transformed content. |
+
+Returns `None`. If `hash_file(dest_path)` already equals `expected_hash` it logs "Skipping" and returns without any network access. Otherwise it makes one `GET` with the project's `User-Agent` (10 second timeout), reads the whole body, transforms it and compares the SHA-256; a difference raises `ValueError("Hash mismatch (after transform) ...")` and nothing is written. The file is written to a temporary file in the destination directory, made mode 0644 and moved into place with `shutil.move`; an `OSError` there removes the temporary file and re-raises. Network errors (`URLError`) propagate. A developer-run script: it is not called by the running server. Tests: `test_download_and_transform_file_applies_the_real_transform_before_hash_verifying`, `test_download_and_transform_file_raises_on_a_real_hash_mismatch`.
+
+### `_odoo_module_banner_transform(raw)` [@ANCHOR: external:_odoo_module_banner_transform]
+
+`_odoo_module_banner_transform(raw: bytes) -> bytes`. Returns `b"/** @odoo-module **/\n" + raw`: the one-line banner that makes Odoo treat a vendored D3-family file as a module. It is the only transform `topojson-client.min.js` and `d3.v7.min.js` need, and with it a fresh unpkg download of topojson-client is byte-identical to the vendored file. Pure, cannot fail, never looks inside `raw`. Test: `test_odoo_module_banner_transform_prepends_the_real_banner`.
+
+### `_d3_geo_projection_transform(raw)` [@ANCHOR: external:_d3_geo_projection_transform]
+
+`_d3_geo_projection_transform(raw: bytes) -> bytes`. The banner plus two byte-level replacements for `d3-geo-projection`, the only vendored file with real CommonJS dependencies. `require("d3-geo"), require("d3-array")` becomes `importModule("d3-geo"), importModule("d3-array")` (names that exist nowhere, so Odoo's asset pipeline cannot try to resolve them as modules), and the AMD branch `"function"==typeof define&&define.amd?define([...],r)` is disabled by changing it to `false?_define([...],r)`. If a pattern is absent that replacement silently does nothing. The reason is the best-evidenced hypothesis, not confirmed: a plain clean fetch reproduced a "d3-array module dependency" test failure. Pure. Test: `test_d3_geo_projection_transform_neuters_the_real_commonjs_requires`.
+
+### `fetch_d3_family_assets_INTENTIONALLY_NOT_CALLED_FROM_MAIN(lib_dir)` [@ANCHOR: external:fetch_d3_family_assets]
+
+`fetch_d3_family_assets...(lib_dir: str) -> None`. Reproduces the vendoring of `d3.v7.min.js` (d3@7.9.0), `d3-geo-projection.v4.min.js` (d3-geo-projection@4.0.0) and `topojson-client.min.js` (topojson-client@3.1.0) from unpkg into `<lib_dir>/d3` and `<lib_dir>/topojson`, by three `download_and_transform_file` calls with pinned post-transform hashes. It is deliberately never called from `main()`: only the topojson hash matches the vendored file byte for byte, and the other two differ by internal line reflow, so running it against a populated checkout would overwrite them with functionally equivalent but different files. An earlier attempt to swap them without running the full suite broke 12 tests, so run it by hand and then run the full test suite. Errors and network behaviour are those of `download_and_transform_file`. Test: `test_fetch_d3_family_assets_downloads_all_three_real_pinned_files` patches the downloader and checks the three URLs, transforms and hashes.
+
+`_odoo_module_banner_transform` and `_d3_geo_projection_transform` are the two transforms in use; both are described above.
   [@ANCHOR: external:_odoo_module_banner_transform] [@ANCHOR: external:_d3_geo_projection_transform]
 - `fetch_d3_family_assets_INTENTIONALLY_NOT_CALLED_FROM_MAIN(lib_dir)` -- reproduces the D3-family
   vendoring end to end. Deliberately not wired into `main()`/called automatically -- see its own
