@@ -22,6 +22,12 @@ class TestManagement:
         4. Asserts that the response has a hostname and ip.
     """
     def test_get_host_details(self, tmp_path, component_tests_config):
+        # Tests [@ANCHOR: cloudflared:CloudflaredCli]
+        # Tests [@ANCHOR: cloudflared:SubprocessError]
+        # Tests [@ANCHOR: cloudflared:CloudflaredProcess]
+        # Tests [@ANCHOR: cloudflared:NamedTunnelConfig]
+        # Tests [@ANCHOR: cloudflared:NamedTunnelBaseConfig]
+        # Tests [@ANCHOR: cloudflared:BaseConfig]
         # TUN-7377 : wait_tunnel_ready does not work properly in windows.
         # Skipping this test for windows for now and will address it as part of tun-7377
         if platform.system() == "Windows":

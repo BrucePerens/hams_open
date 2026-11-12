@@ -6,6 +6,8 @@ from util import LOGGER, start_cloudflared, wait_tunnel_ready, wait_quicktunnel_
 class TestQuickTunnels:
     def test_quick_tunnel(self, tmp_path, component_tests_config):
         # Tests [@ANCHOR: cloudflared:wait_quicktunnel_ready]
+        # Tests [@ANCHOR: cloudflared:CfdModes]
+        # Tests [@ANCHOR: cloudflared:QuickTunnelConfig]
         # Tests [@ANCHOR: cloudflared:_wait_quicktunnel_ready]
         config = component_tests_config(cfd_mode=CfdModes.QUICK)
         LOGGER.debug(config)

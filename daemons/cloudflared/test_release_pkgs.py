@@ -45,6 +45,7 @@ def _process(returncode=0, out=b"", err=b""):
 
 class PkgUploaderTest(unittest.TestCase):
     # Tests [@ANCHOR: release_pkgs:PkgUploader::__init__]
+    # Tests [@ANCHOR: release_pkgs:PkgUploader]
     def test_the_constructor_keeps_the_four_r2_settings(self):
         up = rp.PkgUploader("acct", "bucket", "id", "secret")
         self.assertEqual((up.account_id, up.bucket_name, up.client_id, up.client_secret),
@@ -75,6 +76,7 @@ class PkgUploaderTest(unittest.TestCase):
 
 class DistributionConfTest(InTempDir):
     # Tests [@ANCHOR: release_pkgs:PkgCreator::create_distribution_conf]
+    # Tests [@ANCHOR: release_pkgs:PkgCreator]
     def test_one_stanza_is_written_per_release_with_the_signing_key(self):
         path = os.path.join(os.getcwd(), "distributions")
         rp.PkgCreator().create_distribution_conf(path, "cloudflared", "cloudflared", ["bookworm", "noble"],

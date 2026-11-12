@@ -795,3 +795,96 @@ Reads and validates the command line for `release_pkgs.py`, each value from a fl
 
 **See also:** `test_the_required_values_are_returned_with_the_default_distributions_and_architectures`, `test_values_may_come_from_the_environment`, `test_each_missing_required_value_exits_with_status_1`.
 
+
+
+## Data structures of the release scripts
+
+The classes of the three upstream release scripts and of the test support `release_script_testing.py` (ADR 0113). They run in Cloudflare's release pipeline (the scripts) or in unit tests (the support module); nothing here transmits and nothing runs in the relay or on `hams1`.
+
+### `PkgUploader` [@ANCHOR: release_pkgs:PkgUploader]
+
+**Purpose and location.** Uploads one built package file to a Cloudflare R2 bucket. `daemons/cloudflared/release_pkgs.py`, a plain class created once by the script's `main` from its command-line options.
+
+**Definition.** `class PkgUploader` with `__init__(account_id, bucket_name, client_id, client_secret)` and `upload_pkg_to_r2(filename, upload_file_path)`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `account_id` | `str` | Cloudflare account id; the endpoint is `https://<account_id>.r2.cloudflarestorage.com`. |
+| `bucket_name` | `str` | The R2 bucket the file goes into. |
+| `client_id` | `str` | R2 access key id (an S3-style credential). |
+| `client_secret` | `str` | R2 secret access key. A secret: never logged by this class; it comes from the pipeline's environment. |
+
+**Invariants and lifetime.** Plain attribute holder, no validation in the class (the script's `main` refuses missing options before creating it). Never changed after construction; no concurrency concerns beyond one boto3 client created per upload.
+
+**Serialized form.** None (in memory only).
+
+**Functions that touch it.** `PkgUploader.__init__`, `PkgUploader.upload_pkg_to_r2` (see their entries above). Tests: `test_release_pkgs.py`.
+
+### `PkgCreator` [@ANCHOR: release_pkgs:PkgCreator]
+
+**Purpose and location.** Builds the signed apt and yum repositories from the packages: writes the reprepro distribution file, runs reprepro for each `.deb`, builds the rpm repository, signs it and writes the `.repo` file. `daemons/cloudflared/release_pkgs.py`.
+
+**Definition.** `class PkgCreator` with no attributes and no `__init__`: a namespace of methods (`create_distribution_conf`, `create_deb_pkgs`, `create_rpm_pkgs`, `create_repo_file`, `import_gpg_keys` and the private `_sign_rpms`, `_sign_repomd`, `_setup_rpm_pkg_directories`).
+
+**Invariants and lifetime.** Stateless: an instance carries nothing between calls, so the order of calls is the caller's (the script's `main`) and every method gets its inputs as arguments. The methods run external programs (reprepro, createrepo, gpg) and raise on a non-zero exit.
+
+**Serialized form.** The files the methods write (`conf/distributions`, the repository directories, `.repo` file) are documented in the method entries above.
+
+**Functions that touch it.** All methods named above. Tests: `test_release_pkgs.py`.
+
+### `FakeResponse` [@ANCHOR: release_script_testing:FakeResponse]
+
+**Purpose and location.** Just enough of `requests.Response` for the tests of `github_message.py` and `github_release.py`: `daemons/cloudflared/release_script_testing.py`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `status_code` | `int` | HTTP status, default 200. |
+| `text` | `str` | Body text, default empty. |
+| `_json` | `object` or `None` | The value `json()` returns; `None` means "the body is not JSON". |
+
+**Behaviour.** `json()` returns `_json`, or raises `ValueError("not JSON")` when it is `None`. No network, no state change. Tests: `test_release_script_testing.py`.
+
+### `GithubException` [@ANCHOR: release_script_testing:GithubException]
+
+**Purpose and location.** Stand-in for `github.GithubException`, defined inside `_install_missing_third_party_modules()` in `daemons/cloudflared/release_script_testing.py` and registered in `sys.modules["github"]` only when PyGithub is not installed (an installed package is used as it is). Lets the release scripts be imported on a box without PyGithub.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `status` | `int` | HTTP status, default 0. |
+| `data` | `dict` | Response data, default `{}` (a `None` argument becomes `{}`). |
+
+**Notes.** `args` are `(status, data)`. Lifetime: the process (it lives in `sys.modules`). Tests: `test_release_script_testing.py`, which hides the real package and restores `sys.modules`.
+
+### `UnknownObjectException` [@ANCHOR: release_script_testing:UnknownObjectException]
+
+**Purpose and location.** Stand-in for `github.UnknownObjectException`, the "not found" error the release scripts catch when a release or file is missing. Same function, same `sys.modules["github"]` registration, only when PyGithub is not installed.
+
+**Definition.** A subclass of the stand-in `GithubException` with no body, so it inherits `status` and `data` and `except GithubException` also catches it, as with the real package. Tests: `test_release_script_testing.py`.
+
+### `Github` [@ANCHOR: release_script_testing:Github]
+
+**Purpose and location.** Stand-in for `github.Github`, the PyGithub client, registered in `sys.modules["github"]` only when PyGithub is not installed (in `release_script_testing.py`).
+
+**Behaviour.** Its constructor takes any arguments and always raises `AssertionError("a test must replace Github with a mock; no real GitHub call")`, so no test can reach the real GitHub API by accident through the stand-in. A test that needs a client patches the script's `Github` name with a mock. Tests: `test_release_script_testing.py`.
+
+### `Config` [@ANCHOR: release_script_testing:Config]
+
+**Purpose and location.** Stand-in for `botocore.client.Config`, registered in `sys.modules["botocore.client"]` only when botocore is not installed (in `release_script_testing.py`); `release_pkgs.py` builds its R2 client configuration with it.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `kwargs` | `dict` | The keyword arguments the constructor was given (`region_name`, `s3` addressing style), kept so a test can read them. |
+
+**Notes.** It does nothing else: the boto3 client is replaced by a mock in the tests. Tests: `test_release_script_testing.py`.
+
+### `ClientError` [@ANCHOR: release_script_testing:ClientError]
+
+**Purpose and location.** Stand-in for `botocore.exceptions.ClientError`, registered in `sys.modules["botocore.exceptions"]` only when botocore is not installed (in `release_script_testing.py`).
+
+**Definition.** A bare `Exception` subclass with no attributes. `PkgUploader.upload_pkg_to_r2` catches `ClientError` and re-raises it, which `test_release_pkgs.py` checks with this class. Tests: `test_release_script_testing.py`.
+
+### `GPG` [@ANCHOR: release_script_testing:GPG]
+
+**Purpose and location.** Stand-in for `gnupg.GPG` (python-gnupg), registered in `sys.modules["gnupg"]` only when python-gnupg is not installed (in `release_script_testing.py`).
+
+**Behaviour.** Its constructor always raises `AssertionError("a test must replace gnupg.GPG with a mock; no real gpg call")`, so no GPG key import or signing can happen through the stand-in; the key-import tests patch the script's `gnupg.GPG` with a mock. The module's `boto3.client` stand-in is a function that raises the same way. Tests: `test_release_script_testing.py`.

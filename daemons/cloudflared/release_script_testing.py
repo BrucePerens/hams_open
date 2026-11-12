@@ -17,6 +17,7 @@ import types
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+# [@ANCHOR: release_script_testing:FakeResponse]
 class FakeResponse:
     """Just enough of requests.Response: status_code, json(), text."""
 
@@ -43,15 +44,18 @@ def _install_missing_third_party_modules():
     if not _have("github"):
         github = types.ModuleType("github")
 
+        # [@ANCHOR: release_script_testing:GithubException]
         class GithubException(Exception):
             def __init__(self, status=0, data=None, headers=None, message=None):
                 super().__init__(status, data)
                 self.status = status
                 self.data = data or {}
 
+        # [@ANCHOR: release_script_testing:UnknownObjectException]
         class UnknownObjectException(GithubException):
             pass
 
+        # [@ANCHOR: release_script_testing:Github]
         class Github:
             def __init__(self, *args, **kwargs):
                 raise AssertionError("a test must replace Github with a mock; no real GitHub call")
@@ -73,10 +77,12 @@ def _install_missing_third_party_modules():
         botocore_client = types.ModuleType("botocore.client")
         botocore_exceptions = types.ModuleType("botocore.exceptions")
 
+        # [@ANCHOR: release_script_testing:Config]
         class Config:
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
 
+        # [@ANCHOR: release_script_testing:ClientError]
         class ClientError(Exception):
             pass
 
@@ -90,6 +96,7 @@ def _install_missing_third_party_modules():
     if not _have("gnupg"):
         gnupg = types.ModuleType("gnupg")
 
+        # [@ANCHOR: release_script_testing:GPG]
         class GPG:
             def __init__(self, *args, **kwargs):
                 raise AssertionError("a test must replace gnupg.GPG with a mock; no real gpg call")

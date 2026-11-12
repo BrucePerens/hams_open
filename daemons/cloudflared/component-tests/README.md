@@ -88,3 +88,91 @@ Probes a URL until it answers HTTP 200. It is wrapped in `retrying.retry` with `
 **Signature:** `def _wait_quicktunnel_ready(url)` (decorated with `@retry(stop_max_attempt_number=MAX_RETRIES, wait_fixed=BACKOFF_SECS * 1000)`)
 
 **See also:** `test_quick_tunnel`, `test_quick_tunnel_url`; `cloudflared:wait_quicktunnel_ready`.
+
+
+## Data structures of the component tests
+
+The classes the component tests are built from (ADR 0113). They need a real Cloudflare account and tunnel and so only run in Cloudflare's own CI; `config.py` is pure data and is also unit-tested here (`../test_component_config.py`). Never run on the relay hosts.
+
+### `CloudflaredCli` [@ANCHOR: cloudflared:CloudflaredCli]
+
+**Purpose and location.** Drives the `cloudflared tunnel ...` command line for a test: lists tunnels, gets tunnel and connector info, fetches management and tail tokens, and (as a context manager) runs a tunnel. `component-tests/cli.py`.
+
+**Definition.** `class CloudflaredCli`, built as `CloudflaredCli(config, config_path, logger)`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `basecmd` | `list[str]` | `[config.cloudflared_binary, "tunnel"]`, plus `--config <config_path>` when given and `--origincert <cert>` when the component-tests config has an `origincert`. Extended by `__enter__` with `run`. |
+| `logger` | `logging.Logger` | Where command output is logged at debug level. |
+| `cfd` | `CloudflaredProcess` | Set by `__enter__` only: the running tunnel process, cleaned up by `__exit__`. |
+
+**Behaviour and errors.** Each helper runs the command with a 15 s timeout (`subprocess.TimeoutExpired` propagates) and a non-zero exit raises `SubprocessError`. Output of `list` and `info` is parsed as JSON. Used as `with CloudflaredCli(...) as cfd:` it starts `tunnel run` and terminates it on exit.
+
+### `SubprocessError` [@ANCHOR: cloudflared:SubprocessError]
+
+**Purpose and location.** The exception `run_subprocess` raises when a command exits non-zero. `component-tests/cli.py`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `program` | `str` | The program that failed (the first word of the command). |
+| `exit_code` | `int` | Its exit status. |
+| `cause` | `subprocess.CalledProcessError` | The original exception, with stdout and stderr. |
+
+A timeout is not wrapped: `subprocess.TimeoutExpired` propagates as it is.
+
+### `BaseConfig` [@ANCHOR: cloudflared:BaseConfig]
+
+**Purpose and location.** Settings common to every cloudflared test run: `component-tests/config.py`, a frozen dataclass (assigning to a field raises, which emulates immutability).
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cloudflared_binary` | `str` | Path of the binary under test (required). |
+| `no_autoupdate` | `bool` | Default True; written to the config as `no-autoupdate`. |
+| `metrics` | `str` | Default `localhost:<METRICS_PORT>`; written as `metrics`. |
+
+`merge_config(additional)` returns a copy of `additional` with `no-autoupdate` and `metrics` set from the object.
+
+### `NamedTunnelBaseConfig` [@ANCHOR: cloudflared:NamedTunnelBaseConfig]
+
+**Purpose and location.** The settings of a named (account) tunnel: `component-tests/config.py`, frozen dataclass derived from `BaseConfig`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `tunnel` | `str` | Tunnel id or name (required: `TypeError` when missing). |
+| `credentials_file` | `str` | Path of the tunnel credentials JSON (required). |
+| `ingress` | `list` | The ingress rules (required; may be an empty list). |
+| `hostname` | `str` | Hostname routed to the tunnel (default `None`). |
+
+The fields default to `None` only because the parent's defaults come first; `__post_init__` raises `TypeError` for a missing `tunnel`, `credentials_file` or `ingress`. `merge_config` adds `tunnel`, `credentials-file` and `ingress` unless `additional` already has them (config tests override the ingress).
+
+### `NamedTunnelConfig` [@ANCHOR: cloudflared:NamedTunnelConfig]
+
+**Purpose and location.** The ready-to-use configuration of a named tunnel test: `component-tests/config.py`, frozen dataclass derived from `NamedTunnelBaseConfig`, built by the `component_tests_config` fixture.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `full_config` | `dict` | The merged configuration written to the config file (set in `__post_init__` with `object.__setattr__`, since the class is frozen). |
+| `additional_config` | `InitVar[dict]` | Constructor-only: keys that override the defaults; not stored. |
+
+Methods: `get_url()` (`https://<hostname>`), `base_config()` (a copy of `full_config` without `tunnel` and `credentials-file`), `get_tunnel_id()`, `get_credentials_json()` (reads the credentials file) and `get_token()` (the base64 of `{"a": AccountTag, "t": TunnelID, "s": TunnelSecret}`, the token form `cloudflared tunnel run --token` takes). The credentials hold the tunnel secret: the tests keep them in a temporary directory and never log them.
+
+### `QuickTunnelConfig` [@ANCHOR: cloudflared:QuickTunnelConfig]
+
+**Purpose and location.** The configuration of a quick-tunnel (account-less) test: `component-tests/config.py`, frozen dataclass derived from `BaseConfig` with `full_config` (the merged configuration) and the constructor-only `additional_config`, merged exactly as in `NamedTunnelConfig` but without any tunnel or credential fields. The quick tunnel needs no account, so only the base keys (`no-autoupdate`, `metrics`) plus the caller's `additional_config` (for example `url`) end up in `full_config`. Built by the fixture for `CfdModes.QUICK`; unit-tested in `../test_component_config.py`.
+
+### `CfdModes` [@ANCHOR: cloudflared:CfdModes]
+
+**Purpose and location.** The two tunnel modes the `component_tests_config` fixture can build: `component-tests/conftest.py`, an `enum.Enum` with `NAMED` (a `NamedTunnelConfig`) and `QUICK` (a `QuickTunnelConfig`), values from `auto()`. Any other value raises `Exception("Unknown cloudflared mode ...")`. Note: `test_service.py` still passes `CfdModes.CLASSIC`, which does not exist in this enum (unknown whether upstream removed it; those service tests are not run by us).
+
+### `CloudflaredProcess` [@ANCHOR: cloudflared:CloudflaredProcess]
+
+**Purpose and location.** A wrapper around a `subprocess.Popen` that keeps draining the child's output in a background thread so a full OS pipe never blocks cloudflared, and logs the captured output at cleanup. `component-tests/util.py`, created by `start_cloudflared` and `CloudflaredCli.__enter__`.
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `process` | `subprocess.Popen` | The child; stdout and stderr merged (`STDOUT`), or discarded when not captured; stdin a pipe only when `allow_input`. |
+| `_capture_output` | `bool` | Whether output is captured. |
+| `_stdout_lines` | `list[bytes]` | Lines read so far, exposed as `stdout_lines`. |
+| `_threads` | `list[Thread]` | The daemon reader threads, joined at cleanup (timeout `READER_THREAD_JOIN_TIMEOUT`). |
+
+**Behaviour.** `terminate()` terminates a running child; `cleanup()` terminates it, waits `GRACEFUL_SHUTDOWN_TIMEOUT` seconds then kills it, joins the readers and logs the output. Other attributes (`pid`, `returncode`, `send_signal`, `stdin`) are proxied to the `Popen` through `__getattr__`. The reader threads append to a shared list without a lock (appending is atomic in CPython and only one thread writes).

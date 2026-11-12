@@ -25,6 +25,7 @@ from botocore.exceptions import ClientError
 R2_ASSET_URL = 'https://demo-r2-worker.cloudflare-tunnel.workers.dev/'
 
 
+# [@ANCHOR: release_pkgs:PkgUploader]
 class PkgUploader:
     # [@ANCHOR: release_pkgs:PkgUploader::__init__]
     def __init__(self, account_id, bucket_name, client_id, client_secret):
@@ -59,6 +60,7 @@ class PkgUploader:
             raise e
 
 
+# [@ANCHOR: release_pkgs:PkgCreator]
 class PkgCreator:
     """
         The distribution conf is what dictates to reprepro, the debian packaging building
