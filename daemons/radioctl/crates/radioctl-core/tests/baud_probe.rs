@@ -224,6 +224,8 @@ fn the_request_is_the_engines_own_civ_frequency_read() {
 // Tests [@ANCHOR: radioctl_core_baud_probe_serial_port_open]
 // Tests [@ANCHOR: radioctl_core_baud_probe_serial_port_close]
 // Tests [@ANCHOR: radioctl_core_baud_probe_serial_probe_port]
+// Tests [@ANCHOR: radioctl_core_serial_serial_config]
+// Tests [@ANCHOR: radioctl_core_serial_port_target]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_serial_probe_port_reports_a_missing_device_and_closes_idempotently() {
     let config = SerialConfig::new(

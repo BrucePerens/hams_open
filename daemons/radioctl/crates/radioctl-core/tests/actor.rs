@@ -1346,6 +1346,7 @@ async fn an_unkey_is_never_refused_when_the_emergency_queue_is_full() {
 // Tests [@ANCHOR: radioctl_core_actor_link_status_changed]
 // Tests [@ANCHOR: radioctl_core_link_changed]
 // Tests [@ANCHOR: radioctl_core_handle_link_up]
+// Tests [@ANCHOR: radioctl_core_serial_link_status_type]
 #[tokio::test(start_paused = true)]
 async fn a_port_loss_takes_the_link_down_and_a_reopen_unkeys_before_serving_the_queue() {
     use radioctl_core::serial::LinkStatus;

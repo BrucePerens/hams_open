@@ -298,6 +298,7 @@ async fn a_replug_at_another_device_path_is_not_found_by_a_path_target_until_the
 // Tests [@ANCHOR: radioctl_core_serial_open_port]
 // Tests [@ANCHOR: radioctl_core_serial_control_set_line]
 // Tests [@ANCHOR: radioctl_core_serial_control_set_control]
+// Tests [@ANCHOR: radioctl_core_serial_line_control]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_port_without_modem_lines_cannot_be_opened_as_managed_and_is_honest_when_unmanaged() {
     let (_master, path) = pty();
@@ -494,6 +495,13 @@ fn sysfs_lists_usb_ports_and_skips_the_rest() {
 // Tests [@ANCHOR: radioctl_core_serial_monitor_status]
 // Tests [@ANCHOR: radioctl_core_serial_monitor_watch]
 // Tests [@ANCHOR: radioctl_core_serial_monitor_stats]
+// Tests [@ANCHOR: radioctl_core_serial_session_end]
+// Tests [@ANCHOR: radioctl_core_serial_supervisor]
+// Tests [@ANCHOR: radioctl_core_serial_command]
+// Tests [@ANCHOR: radioctl_core_serial_serial_monitor]
+// Tests [@ANCHOR: radioctl_core_serial_serial_link]
+// Tests [@ANCHOR: radioctl_core_serial_shared_port]
+// Tests [@ANCHOR: radioctl_core_serial_serial_stats]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_split_link_keeps_status_and_counters_on_the_monitor() {
     let (mut master, path) = pty();
@@ -523,6 +531,9 @@ async fn a_split_link_keeps_status_and_counters_on_the_monitor() {
 // Tests [@ANCHOR: radioctl_core_serial_open_port]
 // Tests [@ANCHOR: radioctl_core_rigfile_parse]
 // Tests [@ANCHOR: radioctl_core_engine_line_step]
+// Tests [@ANCHOR: radioctl_core_serial_stop_bits]
+// Tests [@ANCHOR: radioctl_core_serial_parity]
+// Tests [@ANCHOR: radioctl_core_serial_data_bits]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_vendor_descriptions_seven_even_two_line_reaches_the_port() {
     // The RFT EKD-500 states 7 data bits, even parity, 2 stop bits and RTS/CTS flow control in its
@@ -596,6 +607,8 @@ async fn a_descriptions_line_settings_reach_the_port() {
 
 // Tests [@ANCHOR: radioctl_core_serial_control_check_rts_free]
 // Tests [@ANCHOR: radioctl_core_keyer_new]
+// Tests [@ANCHOR: radioctl_core_serial_serial_control]
+// Tests [@ANCHOR: radioctl_core_serial_flow]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rts_cannot_key_or_carry_data_on_a_port_whose_rts_is_flow_control() {
     let (_master, path) = pty();

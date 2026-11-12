@@ -17,6 +17,7 @@ use rusb::{Context, DeviceHandle, UsbContext};
 use crate::error::{ErrorKind, RigError};
 use crate::usb_device::{UsbBackend, UsbDevice, UsbFailure, UsbTarget};
 
+// [@ANCHOR: radioctl_core_usb_libusb_libusb_backend]
 /// Opens devices through libusb.
 pub struct LibusbBackend {
     context: Context,
@@ -119,6 +120,7 @@ impl UsbBackend for LibusbBackend {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_libusb_libusb_device]
 struct LibusbDevice {
     handle: DeviceHandle<Context>,
 }

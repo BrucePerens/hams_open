@@ -49,6 +49,7 @@ const READ_QUEUE: usize = 64;
 const WRITE_RETRIES: u32 = 40;
 const SUPERVISOR_TICK: Duration = Duration::from_millis(100);
 
+// [@ANCHOR: radioctl_core_serial_data_bits]
 /// Data bits per character.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataBits {
@@ -58,6 +59,7 @@ pub enum DataBits {
     Eight,
 }
 
+// [@ANCHOR: radioctl_core_serial_parity]
 /// Parity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Parity {
@@ -69,6 +71,7 @@ pub enum Parity {
     Even,
 }
 
+// [@ANCHOR: radioctl_core_serial_stop_bits]
 /// Stop bits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StopBits {
@@ -78,6 +81,7 @@ pub enum StopBits {
     Two,
 }
 
+// [@ANCHOR: radioctl_core_serial_flow]
 /// Flow control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flow {
@@ -89,6 +93,7 @@ pub enum Flow {
     Software,
 }
 
+// [@ANCHOR: radioctl_core_serial_line_control]
 /// Whether the port has modem control lines this library may use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineControl {
@@ -101,6 +106,7 @@ pub enum LineControl {
     Unmanaged,
 }
 
+// [@ANCHOR: radioctl_core_serial_port_target]
 /// Where the port is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PortTarget {
@@ -110,6 +116,7 @@ pub enum PortTarget {
     Usb(UsbMatcher),
 }
 
+// [@ANCHOR: radioctl_core_serial_serial_config]
 /// How to open and keep a serial port.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SerialConfig {
@@ -216,6 +223,7 @@ impl SerialConfig {
     }
 }
 
+// [@ANCHOR: radioctl_core_serial_link_status_type]
 /// The state of the physical link.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LinkStatus {
@@ -237,6 +245,7 @@ pub enum LinkStatus {
     Closed,
 }
 
+// [@ANCHOR: radioctl_core_serial_serial_stats]
 /// Counters of a serial link.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SerialStats {
@@ -250,6 +259,7 @@ pub struct SerialStats {
     pub reconnects: u64,
 }
 
+// [@ANCHOR: radioctl_core_serial_counters]
 #[derive(Default)]
 struct Counters {
     bytes_in: AtomicU64,
@@ -258,6 +268,7 @@ struct Counters {
     reconnects: AtomicU64,
 }
 
+// [@ANCHOR: radioctl_core_serial_shared_port]
 type SharedPort = Arc<Mutex<Option<Box<dyn SerialPort>>>>;
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -266,6 +277,7 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+// [@ANCHOR: radioctl_core_serial_serial_control]
 /// Immediate access to the control lines of the port. Clone it freely.
 #[derive(Clone)]
 pub struct SerialControl {
@@ -341,6 +353,7 @@ impl ControlLines for SerialControl {
     }
 }
 
+// [@ANCHOR: radioctl_core_serial_serial_link]
 /// A running serial link: the byte stream for the actor, the control lines, the link status.
 pub struct SerialLink {
     /// The byte stream to hand to [`crate::rig::spawn`]. Dropping it closes the port.
@@ -386,6 +399,7 @@ impl SerialLink {
     }
 }
 
+// [@ANCHOR: radioctl_core_serial_serial_monitor]
 /// The part of a [`SerialLink`] that stays with the owner after the byte stream went to the
 /// actor: the control lines, the link status and the counters.
 pub struct SerialMonitor {
@@ -424,6 +438,7 @@ fn snapshot(counters: &Counters) -> SerialStats {
     }
 }
 
+// [@ANCHOR: radioctl_core_serial_command]
 enum Command {
     Write(Vec<u8>),
     Shutdown,
@@ -500,6 +515,7 @@ fn write_fully(port: &mut dyn SerialPort, mut bytes: &[u8]) -> io::Result<()> {
     port.flush()
 }
 
+// [@ANCHOR: radioctl_core_serial_supervisor]
 struct Supervisor {
     config: SerialConfig,
     commands: std_mpsc::Receiver<Command>,
@@ -509,6 +525,7 @@ struct Supervisor {
     counters: Arc<Counters>,
 }
 
+// [@ANCHOR: radioctl_core_serial_session_end]
 enum SessionEnd {
     Shutdown,
     Lost(String),

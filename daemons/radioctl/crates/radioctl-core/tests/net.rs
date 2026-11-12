@@ -138,6 +138,8 @@ impl Server {
 // Tests [@ANCHOR: radioctl_core_net_monitor_status]
 // Tests [@ANCHOR: radioctl_core_net_monitor_watch]
 // Tests [@ANCHOR: radioctl_core_net_monitor_stats]
+// Tests [@ANCHOR: radioctl_core_net_net_link]
+// Tests [@ANCHOR: radioctl_core_net_net_stats]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_virtual_flexradio_is_read_through_the_network_link() {
     let desc = rigfile::parse(include_str!("../../../rigs/flex-6300.toml"))
@@ -293,6 +295,8 @@ async fn a_cut_connection_is_reconnected_and_the_rig_is_unkeyed_first() {
     server.kill().await;
 }
 
+// Tests [@ANCHOR: radioctl_core_net_attempt_end]
+// Tests [@ANCHOR: radioctl_core_net_supervisor]
 #[tokio::test]
 async fn the_first_connection_gives_up_after_its_attempts() {
     let dead = {
@@ -404,6 +408,7 @@ async fn login_radio(
 }
 
 // Tests [@ANCHOR: radioctl_core_net_open_and_handshake]
+// Tests [@ANCHOR: radioctl_core_net_decoded]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_login_handshake_gates_the_link_and_a_refusal_fails_it() {
     let (addr, counts) = login_radio("s3cret", true).await;
@@ -483,6 +488,8 @@ async fn a_radio_that_never_answers_the_login_times_out() {
     );
 }
 
+// Tests [@ANCHOR: radioctl_core_net_session_end]
+// Tests [@ANCHOR: radioctl_core_net_net_monitor]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn keepalive_is_sent_and_silence_drops_the_link() {
     // A radio that answers pings keeps its link; one that goes quiet loses it.
@@ -569,6 +576,7 @@ async fn length_framing_wraps_both_directions_over_tcp() {
 }
 
 // Tests [@ANCHOR: radioctl_core_net_wire_open]
+// Tests [@ANCHOR: radioctl_core_net_wire]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn udp_carries_one_datagram_per_write_and_detects_silence() {
     let socket = UdpSocket::bind("127.0.0.1:0").await.expect("bind");

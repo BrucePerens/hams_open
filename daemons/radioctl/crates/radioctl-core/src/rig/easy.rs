@@ -143,6 +143,7 @@ impl EventStream {
     }
 }
 
+// [@ANCHOR: radioctl_core_rig_easy_transmit_lease]
 /// The transmit gate held open for a bounded time. Created by [`RigHandle::transmit_lease`].
 /// Dropping it ends the lease: the gate closes and the rig is unkeyed.
 pub struct TransmitLease {

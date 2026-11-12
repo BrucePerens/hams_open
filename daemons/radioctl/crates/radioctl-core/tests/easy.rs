@@ -215,6 +215,7 @@ async fn transmit_for_keys_holds_and_unkeys() {
 }
 
 // Tests [@ANCHOR: radioctl_core_easy_lease_transmit_for]
+// Tests [@ANCHOR: radioctl_core_rig_easy_transmit_lease]
 #[tokio::test(start_paused = true)]
 async fn transmit_for_is_cut_short_by_the_lease() {
     let (rig, control) = ic7300();

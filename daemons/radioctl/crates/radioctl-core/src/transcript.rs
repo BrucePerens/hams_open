@@ -9,6 +9,7 @@ use crate::error::{ErrorKind, RigError};
 use crate::op::{Observation, Op};
 use crate::units::{Hz, Level, Meter, Mode, Vfo};
 
+// [@ANCHOR: radioctl_core_transcript_expect]
 /// What the engine must report for the rig's answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Expect {
@@ -20,6 +21,7 @@ pub enum Expect {
     Nak,
 }
 
+// [@ANCHOR: radioctl_core_transcript_panel]
 /// A knob turned at the radio itself (an unsolicited step).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Panel {
@@ -37,6 +39,7 @@ pub enum Panel {
     RitOffset(i16),
 }
 
+// [@ANCHOR: radioctl_core_transcript_step]
 /// One exchange.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
@@ -58,6 +61,7 @@ pub struct Step {
 // A step with neither `op` nor `panel` but with `rx`, allowed as the first step only, is the
 // radio's prologue: what it sends before being asked anything.
 
+// [@ANCHOR: radioctl_core_transcript_transcript]
 /// A transcript.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transcript {
@@ -69,6 +73,7 @@ pub struct Transcript {
     pub steps: Vec<Step>,
 }
 
+// [@ANCHOR: radioctl_core_transcript_doc]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Doc {
@@ -78,6 +83,7 @@ struct Doc {
     step: Vec<StepSpec>,
 }
 
+// [@ANCHOR: radioctl_core_transcript_step_spec]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct StepSpec {
@@ -96,6 +102,7 @@ struct StepSpec {
     panel: Option<PanelSpec>,
 }
 
+// [@ANCHOR: radioctl_core_transcript_op_spec]
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum OpSpec {
@@ -127,6 +134,7 @@ enum OpSpec {
     GetFirmware,
 }
 
+// [@ANCHOR: radioctl_core_transcript_expect_spec]
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum ExpectSpec {
@@ -151,6 +159,7 @@ enum ExpectSpec {
     Nak,
 }
 
+// [@ANCHOR: radioctl_core_transcript_panel_spec]
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum PanelSpec {
@@ -382,6 +391,10 @@ expect = { kind = "frequency", vfo = "a", hz = 7000000 }
     // Tests [@ANCHOR: radioctl_core_transcript_build_expect]
     // Tests [@ANCHOR: radioctl_core_transcript_build_op]
     // Tests [@ANCHOR: radioctl_core_transcript_build_panel]
+    // Tests [@ANCHOR: radioctl_core_transcript_transcript]
+    // Tests [@ANCHOR: radioctl_core_transcript_step]
+    // Tests [@ANCHOR: radioctl_core_transcript_panel]
+    // Tests [@ANCHOR: radioctl_core_transcript_expect]
     #[test]
     fn a_transcript_parses_into_typed_steps() {
         let transcript = parse(GOOD).expect("parses");
@@ -408,6 +421,11 @@ expect = { kind = "frequency", vfo = "a", hz = 7000000 }
     // Tests [@ANCHOR: radioctl_core_transcript_step_bytes]
     // Tests [@ANCHOR: radioctl_core_transcript_build_op]
     // Tests [@ANCHOR: radioctl_core_transcript_build_expect]
+    // Tests [@ANCHOR: radioctl_core_transcript_panel_spec]
+    // Tests [@ANCHOR: radioctl_core_transcript_expect_spec]
+    // Tests [@ANCHOR: radioctl_core_transcript_op_spec]
+    // Tests [@ANCHOR: radioctl_core_transcript_step_spec]
+    // Tests [@ANCHOR: radioctl_core_transcript_doc]
     #[test]
     fn text_steps_and_the_extended_vocabulary_parse() {
         let text = r#"

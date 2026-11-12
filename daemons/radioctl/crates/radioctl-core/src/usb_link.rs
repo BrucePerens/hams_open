@@ -45,9 +45,11 @@ const WRITE_QUEUE: usize = 64;
 const READ_QUEUE: usize = 64;
 const SUPERVISOR_TICK: Duration = Duration::from_millis(100);
 
+// [@ANCHOR: radioctl_core_usb_link_usb_stats]
 /// Counters of a USB link (the same shape as a serial link's: bytes are frame bytes).
 pub type UsbStats = SerialStats;
 
+// [@ANCHOR: radioctl_core_usb_link_usb_config_type]
 /// How to reach a USB device and keep the link.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UsbConfig {
@@ -74,6 +76,7 @@ impl UsbConfig {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_link_counters]
 #[derive(Default)]
 struct Counters {
     bytes_in: AtomicU64,
@@ -91,6 +94,7 @@ fn snapshot(counters: &Counters) -> UsbStats {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_link_usb_link]
 /// A running USB link: the byte stream for the actor and the link status.
 pub struct UsbLink {
     /// The byte stream to hand to [`crate::rig::spawn`]. Dropping it closes the device.
@@ -133,6 +137,7 @@ impl UsbLink {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_link_usb_monitor]
 /// The part of a [`UsbLink`] that stays with the owner after the stream went to the actor.
 pub struct UsbMonitor {
     status: watch::Receiver<LinkStatus>,
@@ -159,6 +164,7 @@ impl UsbMonitor {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_link_command_type]
 enum Command {
     Write(Vec<u8>),
     Shutdown,
@@ -168,11 +174,13 @@ fn link_error(detail: impl Into<String>) -> RigError {
     RigError::new(ErrorKind::LinkDown, detail)
 }
 
+// [@ANCHOR: radioctl_core_usb_link_session_end]
 enum SessionEnd {
     Shutdown,
     Lost(String),
 }
 
+// [@ANCHOR: radioctl_core_usb_link_supervisor]
 struct Supervisor {
     backend: Arc<dyn UsbBackend>,
     config: UsbConfig,

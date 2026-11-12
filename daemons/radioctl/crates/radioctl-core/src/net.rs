@@ -46,9 +46,11 @@ const UDP_READ: usize = 65_536;
 /// to allocate.
 pub const MAX_FRAME: usize = 1 << 20;
 
+// [@ANCHOR: radioctl_core_net_net_stats]
 /// Counters of a network link (the same shape as a serial link's).
 pub type NetStats = SerialStats;
 
+// [@ANCHOR: radioctl_core_net_net_protocol]
 /// Which transport protocol the link uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetProtocol {
@@ -61,6 +63,7 @@ pub enum NetProtocol {
     Udp,
 }
 
+// [@ANCHOR: radioctl_core_net_net_config]
 /// How to reach a rig over the network and keep the link.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NetConfig {
@@ -102,6 +105,7 @@ impl NetConfig {
     }
 }
 
+// [@ANCHOR: radioctl_core_net_decoded]
 /// What a framing produced from bytes read off the wire.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Decoded {
@@ -136,6 +140,7 @@ pub trait Framing: Send + Sync + 'static {
     fn keepalive_sent(&mut self) {}
 }
 
+// [@ANCHOR: radioctl_core_net_raw_framing]
 /// No framing: the CAT stream is the wire stream, nothing is greeted, nothing is kept alive.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RawFraming;
@@ -173,6 +178,7 @@ impl Framing for RawFraming {
     }
 }
 
+// [@ANCHOR: radioctl_core_net_length_framing]
 /// Frames of a 2 or 4 byte big-endian length followed by that many bytes. Each write from the
 /// actor becomes one frame; the payload of every complete frame read is passed up. A length over
 /// [`MAX_FRAME`] is a failure (the stream is out of step), never an allocation.
@@ -261,6 +267,7 @@ impl Framing for LengthFraming {
     }
 }
 
+// [@ANCHOR: radioctl_core_net_counters]
 #[derive(Default)]
 struct Counters {
     bytes_in: AtomicU64,
@@ -279,6 +286,7 @@ fn snapshot(counters: &Counters) -> NetStats {
     }
 }
 
+// [@ANCHOR: radioctl_core_net_net_link]
 /// A running network link: the byte stream for the actor and the link status.
 pub struct NetLink {
     /// The byte stream to hand to [`crate::rig::spawn`]. Dropping it closes the socket.
@@ -320,6 +328,7 @@ impl NetLink {
     }
 }
 
+// [@ANCHOR: radioctl_core_net_net_monitor]
 /// The part of a [`NetLink`] that stays with the owner: the link status and the counters.
 pub struct NetMonitor {
     status: watch::Receiver<LinkStatus>,
@@ -351,6 +360,7 @@ fn net_error(detail: impl Into<String>) -> RigError {
     RigError::new(ErrorKind::LinkDown, detail)
 }
 
+// [@ANCHOR: radioctl_core_net_wire]
 /// The open socket of one session.
 enum Wire {
     Tcp(TcpStream),
@@ -420,6 +430,7 @@ impl Wire {
     }
 }
 
+// [@ANCHOR: radioctl_core_net_session_end]
 /// Why a session ended.
 enum SessionEnd {
     /// The actor dropped its end: stop for good.
@@ -428,6 +439,7 @@ enum SessionEnd {
     Lost(String),
 }
 
+// [@ANCHOR: radioctl_core_net_supervisor]
 struct Supervisor {
     config: NetConfig,
     framing: Box<dyn Framing>,
@@ -708,6 +720,7 @@ impl Supervisor {
     }
 }
 
+// [@ANCHOR: radioctl_core_net_attempt_end]
 /// How an attempt ended without a wire.
 enum AttemptEnd {
     /// The actor dropped its end: stop for good.
@@ -772,6 +785,8 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctl_core_net_config_new]
+    // Tests [@ANCHOR: radioctl_core_net_net_config]
+    // Tests [@ANCHOR: radioctl_core_net_net_protocol]
     #[test]
     fn config_defaults_are_bounded() {
         let config = NetConfig::new("192.168.1.9:4992");
@@ -788,6 +803,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_net_raw_encode]
     // Tests [@ANCHOR: radioctl_core_net_raw_decode]
     // Tests [@ANCHOR: radioctl_core_net_raw_keepalive]
+    // Tests [@ANCHOR: radioctl_core_net_raw_framing]
     #[test]
     fn raw_framing_is_the_identity() {
         let mut raw = RawFraming;
@@ -808,6 +824,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_net_length_encode]
     // Tests [@ANCHOR: radioctl_core_net_length_decode]
     // Tests [@ANCHOR: radioctl_core_net_length_keepalive]
+    // Tests [@ANCHOR: radioctl_core_net_length_framing]
     #[test]
     fn length_framing_round_trips_and_reassembles() {
         for width in [2usize, 4] {
@@ -847,6 +864,9 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_net_proto_name]
     // Tests [@ANCHOR: radioctl_core_net_read_size]
     // Tests [@ANCHOR: radioctl_core_net_error]
+    // Tests [@ANCHOR: radioctl_core_net_counters]
+    // Tests [@ANCHOR: radioctl_core_serial_counters]
+    // Tests [@ANCHOR: radioctl_core_usb_link_counters]
     #[test]
     fn small_helpers() {
         let counters = Counters::default();
