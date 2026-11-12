@@ -25,6 +25,7 @@ use crate::ambe::float::tone_detect::{detect_tone, DetectedTone};
 /// fixed [`super::super::tone_synthesis::AMBE_PLUS_2_TONE_RMS`]) is sensitive to this field's exact
 /// value, so there is no chip-oracle signal to fit a more precise mapping against -- a closed-form
 /// curve would be neither more nor less "correct" than this interpolation. Not planned further.
+// [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_amplitude_field]
 fn amplitude_field(amplitude: f64) -> u16 {
     const POINTS: [(f64, f64); 7] = [
         (250.0, 0x715 as f64),
@@ -258,6 +259,33 @@ mod tests {
             assert!(
                 matches!(classify_tone_idx(idx), ToneIdentity::SingleTone { hz } if (hz - 1000.0).abs() < 16.0)
             );
+        }
+    }
+
+    /// `amplitude_field` interpolates the chip's seven measured tone-level points in log2 amplitude: it returns each
+    /// measured field value exactly at its own amplitude, clamps below 250 and above 16000, and never decreases as the
+    /// amplitude grows.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:float_ambe_plus_2_encoder_amplitude_field]
+    fn tone_amplitude_field_hits_the_chips_measured_points_and_is_monotonic() {
+        for (a, field) in [
+            (250.0, 0x715u16),
+            (500.0, 0x725),
+            (1000.0, 0xea2),
+            (2000.0, 0xed2),
+            (4000.0, 0xf12),
+            (8000.0, 0xf62),
+            (16000.0, 0xfa2),
+        ] {
+            assert_eq!(amplitude_field(a), field, "amplitude {a}");
+        }
+        assert_eq!(amplitude_field(1.0), 0x715);
+        assert_eq!(amplitude_field(30000.0), 0xfa2);
+        let mut last = 0;
+        for i in 0..400 {
+            let f = amplitude_field(100.0 * 1.02f64.powi(i));
+            assert!(f >= last, "amplitude step {i}: {f:#x} < {last:#x}");
+            last = f;
         }
     }
 }

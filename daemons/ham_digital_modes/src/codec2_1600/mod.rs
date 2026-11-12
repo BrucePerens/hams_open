@@ -818,6 +818,7 @@ mod tests {
     /// `codec2_3200::FloatBoundaryEncoderFixed::encode` already validated, factored out
     /// here for the same reason its float sibling was (1600bps runs it
     /// twice per 40ms, quantizing only the second pass's own LSPs).
+    // [@ANCHOR: ham_digital_modes:codec2_1600_analyse_lsps_and_energy_float_boundary]
     fn analyse_lsps_and_energy_float_boundary(
         sn: &[i16; M_PITCH],
         window_fixed: &[i32; M_PITCH],
@@ -848,6 +849,7 @@ mod tests {
         /// Same real frame structure as `Encoder::encode` (see this
         /// module's own doc comment) -- this is `FloatBoundaryEncoderFixed`'s own
         /// mirror.
+        // [@ANCHOR: ham_digital_modes:codec2_1600_FloatBoundaryEncoderFixed_encode]
         pub fn encode(&mut self, speech: &[i16; SAMPLES_PER_FRAME]) -> [u8; BYTES_PER_FRAME] {
             self.shift_in(&speech[0..N_SAMP]);
             nlp::nlp_fixed(&mut self.nlp_state, &self.sn);
@@ -895,6 +897,8 @@ mod tests {
     /// different pitch-bin, energy and line spectral pair arithmetic at the quantiser boundaries, so
     /// a frame can differ by a quantiser step; the count is recorded and bounded.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_1600_FloatBoundaryEncoderFixed_encode]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_1600_analyse_lsps_and_energy_float_boundary]
     fn integer_encoder_matches_the_float_boundary_encoder() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1240,6 +1244,7 @@ mod tests {
     /// alone is scale-invariant and would miss a gain bug, same
     /// reasoning `codec2_3200::DecoderFixed`'s own equivalent test
     /// documents).
+    // [@ANCHOR: ham_digital_modes:codec2_1600_decode_and_compare_to_reference]
     fn decode_and_compare_to_reference(bits_path: &str, pcm_path: &str) -> (f64, f64) {
         let bits_data = std::fs::read(bits_path).unwrap_or_else(|e| panic!("{bits_path}: {e}"));
         let pcm_data = std::fs::read(pcm_path).unwrap_or_else(|e| panic!("{pcm_path}: {e}"));
@@ -1312,6 +1317,7 @@ mod tests {
     /// transmitted), so divergence on unvoiced content is real and
     /// expected, not a defect -- confirmed by measurement, not assumed.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_1600_decode_and_compare_to_reference]
     fn decoder_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream() {
         let (corr, rms_ratio) = decode_and_compare_to_reference(
             concat!(
@@ -1343,6 +1349,7 @@ mod tests {
     /// former: correlation here lands at 0.99+, matching 3200bps's own
     /// bar.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_1600_decode_and_compare_to_reference]
     fn decoder_matches_the_real_reference_decoder_on_a_mostly_voiced_synthetic_signal_bitstream() {
         let (corr, rms_ratio) = decode_and_compare_to_reference(
             concat!(
