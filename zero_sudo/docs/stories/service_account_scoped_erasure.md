@@ -17,7 +17,18 @@ This story describes how the GDPR erasure utility avoids a real failure mode -- 
 `ResUsersZeroSudo.write` `[@ANCHOR: zero_sudo:res_users_write]` guarantees a service account's password can never be set to a caller-supplied value, even inside a batch write that also touches ordinary users -- a mixed recordset write is split so only the regular accounts in the batch receive the given password; any service account in the same batch still gets its own freshly forced-random one.
 
 ## Daemon Process Lifecycle
-`_stop_daemon_process` `[@ANCHOR: zero_sudo:stop_daemon_process]` safely terminates a daemon subprocess this module started (SIGTERM, escalating to SIGKILL if it doesn't exit in time) -- the cleanup half of the daemon-management utilities `_start_daemon_process`/`_poll_health_check` already document elsewhere.
+### `_stop_daemon_process(process)` `[@ANCHOR: zero_sudo:stop_daemon_process]`
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `process` | `subprocess.Popen` or `None` | a daemon this module started with `_start_daemon_process`, which starts it in its own session |
+
+`@api.model`; returns nothing. Does nothing for `None` or a process that has already exited (`poll()` is not `None`). Otherwise it
+asks the daemon's whole process group to terminate (SIGTERM, so child processes go too) and waits up to 5 seconds; if the daemon
+is still running it logs a warning and forces the group to stop (SIGKILL). A process that exits between the `poll()` check and a
+signal (`ProcessLookupError`) counts as success, in both steps, rather than an error. It signals only the process group of the
+`Popen` object it is given, never a pid found by searching. No database access and no lock. Other `OSError`s from the system
+propagate. It is the cleanup half of `_start_daemon_process` and `_poll_health_check`, which are documented in the README.
 
 ## Is a Commit Safe Right Now?
 `_is_test_mode` `[@ANCHOR: zero_sudo:is_test_mode]` reports whether `env.cr.commit()` would be unsafe or meaningless in the current context -- true inside both `HamsTransactionCase` (whose cursor patches `.commit` to raise) and `HamsHttpCase`-style tests (Odoo's own `TestCursor`), so callers that conditionally commit only in real, non-test execution have one real, direct signal to check instead of re-deriving it themselves.
