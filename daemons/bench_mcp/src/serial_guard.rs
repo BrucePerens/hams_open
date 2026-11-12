@@ -10,6 +10,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+// [@ANCHOR: bench_mcp_serial_guard_roots]
 /// The two directories the checks read, so tests can use a fake tree.
 pub struct Roots<'a> {
     pub by_id: &'a Path,
@@ -196,6 +197,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_serial_guard_reserved_reason]
     // Tests [@ANCHOR: bench_mcp_serial_guard_usb_port_of]
     // Tests [@ANCHOR: bench_mcp_serial_guard_by_id_name]
+    // Tests [@ANCHOR: bench_mcp_serial_guard_roots]
     #[test]
     fn a_reserved_usb_port_or_by_id_path_is_found_whatever_name_the_device_has() {
         let (root, dev, by_id, sys) = tree("reserved");

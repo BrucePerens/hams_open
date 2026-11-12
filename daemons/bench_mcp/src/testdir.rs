@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+// [@ANCHOR: bench_mcp_testdir_test_dir]
 /// A scratch directory that removes itself.
 #[derive(Debug)]
 pub struct TestDir {
@@ -146,6 +147,7 @@ fn make_writable(dir: &Path) {
 mod tests {
     use super::*;
 
+    // Tests [@ANCHOR: bench_mcp_testdir_test_dir]
     #[test]
     fn a_test_dir_is_fresh_unique_and_removed_with_its_contents_on_drop() {
         // Tests [@ANCHOR: bench_mcp_test_dir_new]

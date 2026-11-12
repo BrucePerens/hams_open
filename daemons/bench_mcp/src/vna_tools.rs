@@ -658,6 +658,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_vna_cal_apply]
+    // Tests [@ANCHOR: bench_mcp_vna_hardware]
     #[test]
     fn measuring_a_standard_needs_a_valid_session_standard_and_cable() {
         let dir = tmp("meas");

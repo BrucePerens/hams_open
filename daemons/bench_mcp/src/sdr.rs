@@ -14,6 +14,7 @@ use std::time::Instant;
 /// SoapySDR direction constants.
 const RX: c_int = 1;
 
+// [@ANCHOR: bench_mcp_sdr_config]
 /// Which radio, and what its tools may ask of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
@@ -95,6 +96,7 @@ pub fn soapy_args(c: &Config) -> String {
     s
 }
 
+// [@ANCHOR: bench_mcp_sdr_limits_type]
 /// The tuning and rate limits the tools enforce before the radio is touched.
 struct Limits {
     min_hz: f64,
@@ -196,6 +198,7 @@ fn ppm_arg(args: &Value, c: &Config) -> Result<f64, String> {
     in_range("ppm", ppm.unwrap_or(0.0), -200.0, 200.0)
 }
 
+// [@ANCHOR: bench_mcp_sdr_capture_type]
 /// A tuned capture: centre frequency, sample rate, gain, length and channels.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Capture {
@@ -267,6 +270,7 @@ pub fn capture_args(args: &Value, c: &Config) -> Result<Capture, String> {
     })
 }
 
+// [@ANCHOR: bench_mcp_sdr_survey_type]
 /// A swept survey: every step is one capture, stitched into one spectrum.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Survey {
@@ -330,6 +334,7 @@ pub fn survey_args(args: &Value, c: &Config) -> Result<Survey, String> {
 
 // ---- SoapySDR, loaded at run time -------------------------------------------------------------------------------------
 
+// [@ANCHOR: bench_mcp_sdr_kwargs]
 #[repr(C)]
 struct Kwargs {
     size: usize,
@@ -337,9 +342,12 @@ struct Kwargs {
     vals: *mut *mut c_char,
 }
 
+// [@ANCHOR: bench_mcp_sdr_dev]
 type Dev = *mut c_void;
+// [@ANCHOR: bench_mcp_sdr_stream]
 type Stream = *mut c_void;
 
+// [@ANCHOR: bench_mcp_sdr_api_type]
 struct Api {
     make: unsafe extern "C" fn(*const c_char) -> Dev,
     unmake: unsafe extern "C" fn(Dev) -> c_int,
@@ -889,6 +897,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_sdr_check_config]
     // Tests [@ANCHOR: bench_mcp_sdr_args]
+    // Tests [@ANCHOR: bench_mcp_sdr_config]
     #[test]
     fn the_soapy_argument_string_and_config_checks() {
         assert_eq!(soapy_args(&lime()), "driver=lime");
@@ -925,6 +934,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sdr_whole]
     // Tests [@ANCHOR: bench_mcp_sdr_in_range]
     // Tests [@ANCHOR: bench_mcp_sdr_capture_args]
+    // Tests [@ANCHOR: bench_mcp_sdr_capture_type]
     #[test]
     fn capture_arguments_are_checked_against_each_radios_limits() {
         let ok = capture_args(&json!({"freq_hz": 433.92e6}), &blade(None)).unwrap();
@@ -988,6 +998,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sdr_whole]
     // Tests [@ANCHOR: bench_mcp_sdr_in_range]
     // Tests [@ANCHOR: bench_mcp_sdr_survey_args]
+    // Tests [@ANCHOR: bench_mcp_sdr_survey_type]
     #[test]
     fn survey_arguments_bound_the_number_of_steps() {
         let s = survey_args(&json!({"start_hz": 88e6, "stop_hz": 108e6}), &lime()).unwrap();
@@ -1352,6 +1363,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sdr_radio_check]
     // Tests [@ANCHOR: bench_mcp_sdr_last_error]
     // Tests [@ANCHOR: bench_mcp_sdr_radio_string]
+    // Tests [@ANCHOR: bench_mcp_sdr_dev]
+    // Tests [@ANCHOR: bench_mcp_sdr_kwargs]
     #[test]
     fn opening_a_radio_passes_the_soapy_args_and_every_failure_carries_the_drivers_message() {
         fake(|_| {});
@@ -1404,6 +1417,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sdr_capture]
     // Tests [@ANCHOR: bench_mcp_sdr_radio_capture]
     // Tests [@ANCHOR: bench_mcp_sdr_radio_read_stream]
+    // Tests [@ANCHOR: bench_mcp_sdr_api_type]
+    // Tests [@ANCHOR: bench_mcp_sdr_stream]
     #[test]
     fn a_capture_tunes_streams_and_reports_the_tone_it_was_given() {
         let dir = crate::testdir::TestDir::new("bench_sdr_capture");

@@ -15,6 +15,7 @@ use vnwa_open::sweep::Point;
 /// The end of every shell reply.
 pub const PROMPT: &[u8] = b"ch> ";
 
+// [@ANCHOR: bench_mcp_nanovna_error]
 /// The failures of this driver, each with its own wording prefix so a caller can tell them apart.
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -54,6 +55,7 @@ impl From<Error> for String {
     }
 }
 
+// [@ANCHOR: bench_mcp_nanovna_config]
 /// The `nanovna` settings of an instrument entry.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
@@ -158,6 +160,7 @@ pub fn parse_reply(cmd: &str, raw: &[u8]) -> Result<Vec<String>, Error> {
     Ok(lines)
 }
 
+// [@ANCHOR: bench_mcp_nanovna_shell]
 /// A conversation over a byte port with the shell.
 pub struct Shell<P: Port> {
     port: P,
@@ -245,6 +248,7 @@ fn is_wait(e: &std::io::Error) -> bool {
     )
 }
 
+// [@ANCHOR: bench_mcp_nanovna_identity]
 /// What `version`, `info` and `help` said.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Identity {
@@ -254,6 +258,7 @@ pub struct Identity {
     pub commands: Vec<String>,
 }
 
+// [@ANCHOR: bench_mcp_nanovna_limits]
 /// The range this unit can sweep.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Limits {
@@ -990,6 +995,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_nanovna_parse_reply]
     // Tests [@ANCHOR: bench_nanovna_command]
+    // Tests [@ANCHOR: bench_mcp_nanovna_error]
     #[test]
     fn replies_lose_the_echo_and_prompt_and_survive_partial_reads() {
         for chunk in [0, 1, 3, 7] {
@@ -1036,6 +1042,8 @@ mod tests {
 
     // Tests [@ANCHOR: bench_nanovna_identify]
     // Tests [@ANCHOR: bench_nanovna_limits]
+    // Tests [@ANCHOR: bench_mcp_nanovna_identity]
+    // Tests [@ANCHOR: bench_mcp_nanovna_config]
     #[test]
     fn identity_and_limits_come_from_the_shell() {
         let mut s = shell(Fake::new());
@@ -1222,6 +1230,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_nanovna_command]
+    // Tests [@ANCHOR: bench_mcp_nanovna_shell]
     #[test]
     fn the_shell_works_against_a_pty_with_a_firmware_without_scan() {
         let pty = PtyServer::start(Fake {

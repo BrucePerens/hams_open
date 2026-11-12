@@ -4,9 +4,11 @@
 
 use std::f64::consts::PI;
 
+// [@ANCHOR: bench_mcp_dsp_iq]
 /// One complex sample, I then Q, as the radios deliver them (full scale is 1.0).
 pub type Iq = (f32, f32);
 
+// [@ANCHOR: bench_mcp_dsp_spectrum]
 /// An averaged power spectrum, with bin 0 at -rate/2 (the DC bin is at `len / 2`).
 #[derive(Debug, Clone)]
 pub struct Spectrum {
@@ -138,6 +140,7 @@ pub fn noise_floor_db(s: &Spectrum) -> f64 {
     v[v.len() / 2]
 }
 
+// [@ANCHOR: bench_mcp_dsp_peak]
 /// A spectral peak: its offset from the centre frequency and its power.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Peak {
@@ -185,6 +188,7 @@ pub fn peaks(
         .collect()
 }
 
+// [@ANCHOR: bench_mcp_dsp_phase_report]
 /// What two receive channels sharing one oscillator show at the strongest tone.
 #[derive(Debug, Clone)]
 pub struct PhaseReport {
@@ -304,6 +308,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_dsp_peaks]
     // Tests [@ANCHOR: bench_mcp_dsp_check_len]
     // Tests [@ANCHOR: bench_mcp_sdr_spectrum_math]
+    // Tests [@ANCHOR: bench_mcp_dsp_spectrum]
     #[test]
     fn a_bin_centred_tone_reads_its_amplitude_and_offset() {
         let (rate, n) = (2.0e6, 1 << 16);
@@ -321,6 +326,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_dsp_peaks]
     // Tests [@ANCHOR: bench_mcp_dsp_noise_floor]
+    // Tests [@ANCHOR: bench_mcp_dsp_peak]
     #[test]
     fn peaks_are_ordered_floor_is_the_median_and_dc_is_skipped() {
         let (rate, n) = (2.0e6, 1 << 16);
@@ -348,6 +354,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_sdr_phase_math]
+    // Tests [@ANCHOR: bench_mcp_dsp_phase_report]
     #[test]
     fn the_phase_between_two_channels_and_its_stability_are_measured() {
         let (rate, n) = (2.0e6, 1 << 16);
@@ -368,6 +375,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_dsp_stats]
+    // Tests [@ANCHOR: bench_mcp_dsp_iq]
     #[test]
     fn stats_report_rms_peak_dc_and_clipping() {
         let x: Vec<Iq> = vec![(1.0, 0.0), (0.0, 0.0), (0.5, 0.5), (0.0, -1.0)];

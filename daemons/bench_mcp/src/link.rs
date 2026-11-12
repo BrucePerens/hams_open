@@ -21,6 +21,7 @@ impl Port for TcpStream {
     }
 }
 
+// [@ANCHOR: bench_mcp_link_serial]
 /// A serial device at a fixed baud rate, 8 data bits, no parity, 1 stop bit, no flow control.
 pub struct Serial {
     f: File,
@@ -126,6 +127,7 @@ impl Port for Serial {
     }
 }
 
+// [@ANCHOR: bench_mcp_link_link]
 pub struct Link {
     p: Box<dyn Port>,
     /// Command terminator: `\n` for the scope, `\r\n` for the serial supply.
@@ -368,6 +370,7 @@ mod tests {
     use std::thread::JoinHandle;
     use std::time::Duration;
 
+    // Tests [@ANCHOR: bench_mcp_link_link]
     #[test]
     fn value_handles_both_header_settings() {
         assert_eq!(Link::value("C1:VDIV 1.00E+00V"), "1.00E+00V");
@@ -626,6 +629,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_link_serial_open]
+    // Tests [@ANCHOR: bench_mcp_link_serial]
     #[test]
     fn a_serial_port_that_is_not_one_or_has_an_unsupported_baud_rate_is_refused() {
         let (_device, path) = pty();

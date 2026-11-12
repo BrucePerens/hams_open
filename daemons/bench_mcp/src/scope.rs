@@ -101,6 +101,7 @@ fn statistics(v: &[f64], asked: usize) -> Value {
         "min": v.iter().cloned().fold(f64::INFINITY, f64::min), "max": v.iter().cloned().fold(f64::NEG_INFINITY, f64::max), "std_dev": var.sqrt()})
 }
 
+// [@ANCHOR: bench_mcp_scope_analysis]
 struct Analysis {
     min: f32,
     max: f32,
@@ -383,6 +384,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: scope_mcp_analyse]
+    // Tests [@ANCHOR: bench_mcp_scope_analysis]
     #[test]
     fn square_wave_edges_and_frequency() {
         // 1 kHz square wave sampled at 1 MSa/s, 0 V to 3 V, with a little noise on the levels.

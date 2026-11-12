@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+// [@ANCHOR: bench_mcp_psu_limits]
 pub struct Limits {
     pub max_volts: f64,
     pub max_amps: f64,
@@ -163,6 +164,7 @@ pub fn plan_on(l: &mut Link, lim: &Limits, for_s: f64) -> Result<Value, String> 
     )
 }
 
+// [@ANCHOR: bench_mcp_psu_timer]
 /// One supply's switch-off timer state: its instrument lock, and a counter that increases whenever an output
 /// command supersedes a pending timed switch-off.
 #[derive(Clone, Default)]
@@ -265,6 +267,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_psu_safe_state]
+    // Tests [@ANCHOR: bench_mcp_psu_timer]
     #[test]
     fn safe_state_reads_off_back_and_fails_loudly_when_the_supply_stays_on() {
         let ok = fake_supply(3.3, false);

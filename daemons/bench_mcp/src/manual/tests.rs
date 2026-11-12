@@ -58,6 +58,7 @@ fn inner_links(body: &str) -> Vec<String> {
 }
 
 // Tests [@ANCHOR: bench_mcp_manual_front_matter]
+// Tests [@ANCHOR: bench_mcp_manual_page]
 #[test]
 fn every_file_in_the_manual_is_a_page_with_the_required_front_matter() {
     for (file, text) in embedded::FILES {
@@ -136,6 +137,7 @@ fn paths_are_normalized() {
 }
 
 // Tests [@ANCHOR: bench_mcp_manual_tool_pages]
+// Tests [@ANCHOR: bench_mcp_manual_tool_info]
 #[test]
 fn every_registered_tool_has_a_page_and_every_tools_entry_names_a_registered_tool() {
     let reg = registered_tools();
@@ -486,6 +488,7 @@ fn pages_are_well_formed_markdown_of_bounded_length() {
     }
 }
 
+// Tests [@ANCHOR: bench_mcp_manual_manual]
 #[test]
 fn the_manual_has_the_documented_top_level() {
     for path in [
@@ -549,6 +552,7 @@ fn the_index_tool_lists_the_top_of_the_tree_with_summaries() {
 }
 
 // Tests [@ANCHOR: bench_mcp_manual_read]
+// Tests [@ANCHOR: bench_mcp_manual_heading]
 #[test]
 fn read_returns_text_metadata_children_sections_and_cuts_long_pages() {
     let v = call("bench_manual_read", &json!({"path": "instruments"})).unwrap();
@@ -661,6 +665,7 @@ fn search_ranks_pages_and_filters_by_instrument_and_tool() {
     assert!(call("bench_manual_search", &json!({"query": "a", "limit": 0})).is_err());
 }
 
+// Tests [@ANCHOR: bench_mcp_manual_search_index]
 #[test]
 fn tokens_split_names_and_bm25_prefers_rarer_words() {
     assert_eq!(
@@ -731,6 +736,7 @@ fn whats_new_lists_releases_and_every_path_exists() {
     );
 }
 
+// Tests [@ANCHOR: bench_mcp_manual_spec]
 #[test]
 fn the_manual_tools_are_listed_whatever_the_bench_has_and_are_read_only() {
     let only_psu = crate::config::parse(

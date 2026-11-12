@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 /// The most a call may wait for a move to finish.
 const HARD_MAX_WAIT_S: f64 = 600.0;
 
+// [@ANCHOR: bench_mcp_rotator_config]
 /// The `rotator` settings of an instrument entry.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Config {
@@ -128,6 +129,7 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     Ok(cfg)
 }
 
+// [@ANCHOR: bench_mcp_rotator_spec]
 pub struct Spec {
     pub name: &'static str,
     pub tier: Tier,
@@ -521,6 +523,7 @@ mod tests {
         parse_config(&serde_json::from_str::<Value>(&format!("{{{extra}}}")).unwrap())
     }
 
+    // Tests [@ANCHOR: bench_mcp_rotator_spec]
     #[test]
     fn every_tool_schema_is_valid_json() {
         for spec in SPECS {
@@ -800,6 +803,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: rotator_error_text]
+    // Tests [@ANCHOR: bench_mcp_sa_testkit_reply]
+    // Tests [@ANCHOR: bench_mcp_example_testkit_reply]
     #[test]
     fn a_rotator_that_does_not_answer_or_refuses_is_an_error_with_a_next_action_for_a_rotator() {
         let silent = FakeRadioctld::serve(|_| Reply::Silent);

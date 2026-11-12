@@ -171,6 +171,7 @@ pub(crate) fn apply(s: &mut Link, cmds: Vec<(String, String)>) -> Result<Value, 
         "note": "a setting the scope did not accept shows its old value or no answer in readback; these commands are written from the SDS1000X-E programming guide and have not all been confirmed on firmware 1.3.27"}))
 }
 
+// [@ANCHOR: bench_mcp_scope_more_ty]
 /// How a tool argument is checked and written into a scope command.
 #[derive(Clone, Copy)]
 pub(crate) enum Ty {
@@ -184,6 +185,7 @@ pub(crate) enum Ty {
     Int(i64, i64),
 }
 
+// [@ANCHOR: bench_mcp_scope_more_item]
 /// One setting of a scope tool: the tool argument that names it, the command it is written with (a `{c}` stands for the channel) and how the value is checked.
 pub(crate) struct Item {
     pub arg: &'static str,
@@ -549,6 +551,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_scope_acquire]
     // Tests [@ANCHOR: bench_mcp_scope_channel]
     // Tests [@ANCHOR: bench_mcp_scope_display]
+    // Tests [@ANCHOR: bench_mcp_scope_more_item]
+    // Tests [@ANCHOR: bench_mcp_scope_more_ty]
     #[test]
     fn settings_send_the_documented_commands_read_them_back_and_refuse_bad_values_unsent() {
         let (port, seen) = scope("AUTO");

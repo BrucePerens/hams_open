@@ -510,6 +510,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_example_run_pulse]
     // Tests [@ANCHOR: bench_mcp_example_safe_state]
     // Tests [@ANCHOR: bench_mcp_example_status]
+    // Tests [@ANCHOR: bench_mcp_example_testkit_fake_device]
     #[test]
     fn status_reads_the_recorded_session_and_a_stranger_is_sent_nothing() {
         let dev = FakeDevice::from_transcript("tests/example_fixtures/status.txt");
@@ -543,6 +544,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: example_retry]
+    // Tests [@ANCHOR: bench_mcp_example_testkit_sim]
     #[test]
     fn a_silent_instrument_is_retried_a_bounded_number_of_times_then_reported_with_the_next_step() {
         let quiet = FakeDevice::start(|_| None);

@@ -523,6 +523,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sa_connector]
     // Tests [@ANCHOR: bench_mcp_sa_call]
     // Tests [@ANCHOR: bench_mcp_sa_call_with]
+    // Tests [@ANCHOR: bench_mcp_sa_testkit_sim]
     #[test]
     fn tools_are_listed_by_tier_and_refused_below_it_before_any_connection() {
         let ro = crate::config::parse(

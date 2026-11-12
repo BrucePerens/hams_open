@@ -718,6 +718,7 @@ pub fn cursor_native(s: &mut Link, args: &Value) -> Result<Value, String> {
     Ok(r)
 }
 
+// [@ANCHOR: bench_mcp_scope_guide_sv]
 /// How one serial-trigger parameter's value is checked.
 #[derive(Clone, Copy)]
 enum Sv {
@@ -1554,6 +1555,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_scope_trigger]
     // Tests [@ANCHOR: bench_mcp_scope_serial_value]
+    // Tests [@ANCHOR: bench_mcp_scope_guide_sv]
     #[test]
     fn serial_and_pattern_triggers_are_set_checked_and_read_back() {
         let (f, mut l) = link();

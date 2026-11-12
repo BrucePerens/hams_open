@@ -829,6 +829,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_manual_call]
     // Tests [@ANCHOR: bench_mcp_manual_excerpt]
     // Tests [@ANCHOR: bench_mcp_manual_releases]
+    // Tests [@ANCHOR: bench_mcp_config_instrument]
     #[test]
     fn the_vna_sweep_tool_is_listed_and_allowed_only_at_read_config() {
         let vna = |tier: &str| {
@@ -1131,6 +1132,10 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_main_psu_output]
     // Tests [@ANCHOR: bench_mcp_main_psu_timer]
+    // Tests [@ANCHOR: bench_mcp_sa_testkit_fake_device]
+    // Tests [@ANCHOR: bench_mcp_sdr_limits_type]
+    // Tests [@ANCHOR: bench_mcp_psu_limits]
+    // Tests [@ANCHOR: bench_mcp_nanovna_limits]
     #[test]
     fn psu_output_needs_confirmation_honours_dry_run_and_switches_off_by_the_safe_state() {
         use crate::example::testkit::FakeDevice;
@@ -1289,6 +1294,7 @@ mod tests {
 
     // Tests [@ANCHOR: bench_mcp_main_connect]
     // Tests [@ANCHOR: bench_mcp_config_connect_waits]
+    // Tests [@ANCHOR: bench_mcp_fake_scope_state]
     #[test]
     fn a_scope_holding_a_dead_session_is_waited_out_for_as_long_as_connect_waits_s_says() {
         let fake = crate::fake_scope::FakeScope::start_with(crate::fake_scope::Opts {
