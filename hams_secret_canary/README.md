@@ -50,8 +50,17 @@ environment, so only `logging` runs for it.
 **Purpose.** Scans the text responses `_post_dispatch` never sees. `scan_wsgi(application, scan)`: `application` a WSGI
 callable (or a method taking `self` first), `scan` a function `(text, path)`. Returns a WSGI callable that returns the
 application's body unchanged and, once the whole body has been sent, calls `scan` with the first 1 MiB decoded as UTF-8
-(undecodable bytes replaced) and the request path; a response whose `Content-Type` is not text, or whose environ carries
-`hams_secret_canary.scanned`, is not scanned. It does not catch errors from `scan`; the installed one never raises. Test: `TestWsgiScan`.
+(undecodable bytes replaced) and the request path; a response whose `Content-Type` is not text, or which `_post_dispatch` already
+scanned (`mark_scanned`), is not scanned. It does not catch errors from `scan`; the installed one never raises. Test: `TestWsgiScan`.
+
+### `hams_secret_canary:mark_scanned`
+
+**Purpose.** Tells the WSGI wrapper that the request this thread is serving already had its response scanned by `_post_dispatch`.
+`mark_scanned()`: no arguments, no result. It sets a thread-local flag that the wrapper clears before it runs each request and
+reads after the application returns. It is a thread-local and not an environ key because Odoo's `request.httprequest.environ`
+is a filtered copy of the WSGI environ (the first version set a key there and every scanned response was scanned twice, with two
+alarms). No errors. Test: `TestWsgiScan.test_a_response_post_dispatch_already_scanned_is_not_scanned_again`; the real-request check
+is `TestResponseHook` (one response, one alarm).
 
 ### `hams_secret_canary:is_text`
 
