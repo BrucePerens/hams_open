@@ -52,6 +52,7 @@ class TestDomainsApi(HamsHttpCase):
         )
         self.env.flush_all()
 
+    # Tests [@ANCHOR: user_websites_user_websites_api_user_websites_api]
     def test_domains_api_returns_all_domains(self):
         # Tests [@ANCHOR: user_websites:COMM_api_domains]
         # Tests [@ANCHOR: COMM_test_domains_api_returns_all_domains]

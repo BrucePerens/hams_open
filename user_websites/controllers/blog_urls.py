@@ -33,6 +33,7 @@ def _owned_blog_path(blog):
     return blog.site_path or ""
 
 
+# [@ANCHOR: user_websites_blog_urls_site_blog_url]
 class SiteBlogUrl:
     """Stand-in for the stock page's `blog_url` (a QueryURL): the blog links it makes.
 
@@ -56,6 +57,7 @@ class SiteBlogUrl:
         return self.default_path
 
 
+# [@ANCHOR: user_websites_blog_urls_user_blog_pages]
 class UserBlogPages(http.Controller):
 
     # [@ANCHOR: user_websites:COMM_user_blog_owner]
@@ -180,6 +182,7 @@ class UserBlogPages(http.Controller):
         )
 
 
+# [@ANCHOR: user_websites_blog_urls_user_blog_redirects]
 class UserBlogRedirects(WebsiteBlog):
     """Odoo's own blog addresses, redirected for the blogs that have a /<callsign>/blog address.
 

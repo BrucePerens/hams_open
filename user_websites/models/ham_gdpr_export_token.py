@@ -25,6 +25,7 @@ class GdprExportTokenRejected(AccessError):
     tell a bad link from every other failure by the class name in Odoo's JSON-2 error answer, never by message text."""
 
 
+# [@ANCHOR: user_websites_ham_gdpr_export_token_ham_gdpr_export_token]
 class HamGdprExportToken(models.Model):
     # [@ANCHOR: user_websites:gdpr_export_token]
     _name = "ham.gdpr.export.token"

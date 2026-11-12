@@ -4,6 +4,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: user_websites_res_config_settings_res_config_settings]
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 

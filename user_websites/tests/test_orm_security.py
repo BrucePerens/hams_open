@@ -77,6 +77,7 @@ class TestORMSecurity(RealTransactionCase):
             )
             self.env.flush_all()
 
+    # Tests [@ANCHOR: user_websites_ham_gdpr_export_token_ham_gdpr_export_token]
     def test_01b_prevent_public_user_create_via_self_ownership(self):
         """
         See docs/bug_hunt_claims/hams_open/user_websites/security/

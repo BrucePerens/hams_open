@@ -173,6 +173,7 @@ def answers_site_response(route):
     return wrapper
 
 
+# [@ANCHOR: user_websites_owner_site_user_websites_owner_controller]
 class UserWebsitesOwnerController(http.Controller):
 
     # ------------------------------------------------------------------ helpers

@@ -192,6 +192,7 @@ class TestModeration(RealTransactionCase):
             "Suspended pages must return 404 for public guests to prevent access leaks.",
         )
 
+    # Tests [@ANCHOR: user_websites_content_violation_report_moderation_content_violation_report_moderation]
     def test_04_group_moderation_cascading_strikes(self):
         """
         Verify that applying a strike to a group violation report correctly iterates

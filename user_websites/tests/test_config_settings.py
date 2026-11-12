@@ -101,6 +101,8 @@ class TestConfigSettings(HamsTransactionCase):
             "...and revoke it the same way.",
         )
 
+    # Tests [@ANCHOR: user_websites_res_config_settings_res_config_settings]
+    # Tests [@ANCHOR: user_websites_content_violation_appeal_content_violation_appeal]
     def test_03_settings_save_never_touches_group_membership_anymore(self):
         """
         Direct proof the crash mechanism is now structurally impossible, not

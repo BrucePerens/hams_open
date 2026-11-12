@@ -31,6 +31,7 @@ from odoo import models, fields, api, _
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 
 
+# [@ANCHOR: user_websites_content_violation_report_moderation_content_violation_report_moderation]
 class ContentViolationReportModeration(models.Model):
     _inherit = "content.violation.report"
 

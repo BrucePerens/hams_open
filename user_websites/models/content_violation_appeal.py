@@ -5,6 +5,7 @@ from odoo.exceptions import UserError, ValidationError
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: user_websites_content_violation_appeal_content_violation_appeal]
 class ContentViolationAppeal(models.Model):
     _name = "content.violation.appeal"
     _description = "User Website Moderation Appeal"

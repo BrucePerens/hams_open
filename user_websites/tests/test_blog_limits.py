@@ -39,6 +39,12 @@ class TestBlogLimits(RealTransactionCase):
         self.env["ir.config_parameter"].set_param("user_websites.global_blog_limit", "2")
         self.env["ir.config_parameter"].set_param("user_websites.global_blog_post_limit", "2")
 
+    # Tests [@ANCHOR: user_websites_website_page_website_page]
+    # Tests [@ANCHOR: user_websites_user_websites_owned_mixin_user_websites_owned_mixin]
+    # Tests [@ANCHOR: user_websites_user_websites_groups_user_websites_group]
+    # Tests [@ANCHOR: user_websites_res_users_res_users]
+    # Tests [@ANCHOR: user_websites_blog_post_blog_post]
+    # Tests [@ANCHOR: user_websites_blog_blog_blog_blog]
     def test_01_blog_creation_is_blocked_past_the_configured_limit(self):
         # Tests [@ANCHOR: user_websites:COMM_blog_blog_create]
 
@@ -124,6 +130,7 @@ class TestBlogLimits(RealTransactionCase):
             )
             self.env.flush_all()
 
+    # Tests [@ANCHOR: user_websites_website_website]
     def test_04_portal_owner_cannot_set_website_id_to_opt_out_of_isolation(self):
         # website_page.py's own write()/create() already handle
         # this exact class of issue (see its own comment,

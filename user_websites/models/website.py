@@ -7,6 +7,7 @@ SVC = "user_websites.user_websites_service_account"
 SITEMAP_POSTS_MAX = 5000
 
 
+# [@ANCHOR: user_websites_website_website]
 class Website(models.Model):
     _inherit = "website"
 

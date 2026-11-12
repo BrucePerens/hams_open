@@ -74,6 +74,7 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
             }
         )
 
+    # Tests [@ANCHOR: user_websites_sql_views_user_websites_weekly_digest_view]
     def test_01_weekly_digest_and_unsubscribe_headers(self):
         """
         Verify that the cron correctly generates emails, successfully injects the

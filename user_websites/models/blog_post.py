@@ -13,6 +13,7 @@ from markupsafe import Markup
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: user_websites_blog_post_blog_post]
 class BlogPost(models.Model):
     _name = "blog.post"
     name = fields.Char(string="Name", default=lambda self: self._description)

@@ -170,6 +170,7 @@ def _async_unpublish_group_content(db_name, group_ids):
         cr.close()
 
 
+# [@ANCHOR: user_websites_user_websites_groups_user_websites_group]
 class UserWebsitesGroup(models.Model):
     """
     Represents a group of users who can manage a shared website.

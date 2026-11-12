@@ -11,6 +11,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 @tagged("post_install", "-at_install")
 class TestRpcRefusesServiceOnlyMethods(HamsTransactionCase):
+    # Tests [@ANCHOR: user_websites_site_eligibility_res_users_site_eligibility]
     def test_service_only_methods_cannot_be_called_over_rpc(self):
         for model, name in (
             ('blog.post', 'send_weekly_digest'),

@@ -19,6 +19,7 @@ from odoo.http import request
 from odoo.addons.edge_routing.utils import language_slugs
 
 
+# [@ANCHOR: user_websites_ir_http_site_slug_converter]
 class SiteSlugConverter(UnicodeConverter):
     # [@ANCHOR: user_websites:site_slug_converter]
     # Verified by [@ANCHOR: test_language_prefixed_paths_still_work]
@@ -30,6 +31,7 @@ class SiteSlugConverter(UnicodeConverter):
         return super().to_python(value)
 
 
+# [@ANCHOR: user_websites_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 
