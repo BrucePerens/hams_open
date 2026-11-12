@@ -12,6 +12,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 
 _logger = logging.getLogger(__name__)
 
+# [@ANCHOR: distributed_redis_cache_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 

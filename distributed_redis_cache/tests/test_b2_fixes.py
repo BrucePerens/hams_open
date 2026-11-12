@@ -162,6 +162,7 @@ class TestB2Fixes(HamsTransactionCase):
             "the same cache key.",
         )
 
+    # Tests [@ANCHOR: distributed_redis_cache_ir_http_ir_http]
     def test_b2_3_banned_local_imports(self):
         # ir_http.py's _authenticate does not import
         # _local_cache/LRU_LOCK directly -- both call sites (ir.http and

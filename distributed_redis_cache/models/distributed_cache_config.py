@@ -17,6 +17,7 @@ from odoo.addons.zero_sudo import public_rpc
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: distributed_redis_cache_distributed_cache_config_distributed_cache_config]
 class DistributedCacheConfig(models.TransientModel):
     _name = "distributed.cache.config"
     _description = "Distributed Cache Configuration"

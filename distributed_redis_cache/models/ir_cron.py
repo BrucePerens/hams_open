@@ -8,6 +8,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 )
 
 
+# [@ANCHOR: distributed_redis_cache_ir_cron_ir_cron]
 class IrCron(models.Model):
     _inherit = "ir.cron"
 

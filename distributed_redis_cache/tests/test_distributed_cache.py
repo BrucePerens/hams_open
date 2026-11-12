@@ -36,6 +36,7 @@ class TestDistributedCacheTour(HamsHttpCase):
         super().setUp()
         self.env.ref('base.user_admin').lang = 'en_US'
 
+    # Tests [@ANCHOR: distributed_redis_cache_distributed_cache_config_distributed_cache_config]
     def test_distributed_cache_admin_tour(self):
         # Tests [@ANCHOR: COMM_redis_cache_interceptor]
         """
