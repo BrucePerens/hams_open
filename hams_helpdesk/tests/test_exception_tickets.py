@@ -11,6 +11,7 @@ import importlib.util
 import json
 import logging
 import os
+import sys
 import tempfile
 import types
 import unittest
@@ -433,15 +434,21 @@ class TestExceptionWriterUnderReadOnlyTestCursor(ExceptionTicketCase):
         # under test (ham_club_management). The write is skipped quietly.
         exc = self.caught(raise_attribute_error)
         readonly_cursor = types.SimpleNamespace(readonly=True, _savepoint=object())
-        self.safe_patch_object(reporter._TestCursor, "_cursors_stack", new=[readonly_cursor])
+        self.safe_patch_object(sys.modules["odoo.tests.test_cursor"].TestCursor, "_cursors_stack", new=[readonly_cursor])
         with self.assertNoLogs("hams_helpdesk.exception_reporter", level="ERROR"):
             self.assertFalse(self.report(exc))
         self.assertFalse(self.fingerprints())
 
+    def test_importing_the_reporter_never_imports_the_test_framework(self):
+        # Production logs "Importing test framework" (ERROR, with a stack) when business code imports odoo.tests.
+        source = open(reporter.__file__, encoding="utf-8").read()
+        self.assertNotRegex(source, r"(?m)^\s*(from|import)\s+odoo\.tests")
+        self.assertNotIn("_TestCursor", source)
+
     def test_a_read_write_test_cursor_still_writes(self):
         exc = self.caught(raise_attribute_error)
         read_write_cursor = types.SimpleNamespace(readonly=False, _savepoint=object())
-        self.safe_patch_object(reporter._TestCursor, "_cursors_stack", new=[read_write_cursor])
+        self.safe_patch_object(sys.modules["odoo.tests.test_cursor"].TestCursor, "_cursors_stack", new=[read_write_cursor])
         self.assertTrue(self.report(exc))
 
 
