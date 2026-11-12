@@ -54,6 +54,7 @@ class TestSesWebhookPurgeCronMigration(HamsTransactionCase):
         )
         return cron
 
+    # Tests [@ANCHOR: ses_webhook_ses_webhook_log_ses_webhook_log]
     def test_01_migration_unlinks_the_purge_crons_by_xmlid(self):
         migration = _load_migration()
         crons = self.env["ir.cron"].browse()
@@ -89,6 +90,7 @@ class TestSesWebhookPurgeCronMigration(HamsTransactionCase):
             "these must not exist on a database that has run the 1.1 migration: " + ", ".join(names),
         )
 
+    # Tests [@ANCHOR: ses_webhook_ses_webhook_pending_submission_ses_webhook_pending_submission]
     def test_04_no_truncate_methods_and_service_account_cannot_delete(self):
         log = self.env["ses.webhook.log"]
         pending = self.env["ses.webhook.pending_submission"]

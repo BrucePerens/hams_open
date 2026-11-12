@@ -215,6 +215,7 @@ class TestSesWebhook(HamsHttpCase):
         response = self.url_open('/mail/webhook/sns?token=wrong_token', data=b'{}', headers={'Content-Type': 'application/json'})
         self.assertEqual(response.status_code, 403, "Should reject with wrong token")
 
+    # Tests [@ANCHOR: ses_webhook_ses_webhook_domain_ses_webhook_domain]
     def test_02_webhook_empty_or_invalid_payload(self):
         """Verify handling of empty or invalid JSON payloads."""
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=b' ', headers={'Content-Type': 'application/json'})
@@ -749,6 +750,7 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(mock_urlopen.call_count, 2)
         _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
 
+    # Tests [@ANCHOR: ses_webhook_webhook_api_ses_webhook_controller]
     def test_34_forged_complaint_without_signature_does_not_blacklist(self):
         # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
 

@@ -252,6 +252,7 @@ def _verify_sns_signature(payload):
         return False
 
 
+# [@ANCHOR: ses_webhook_webhook_api_ses_webhook_controller]
 class SesWebhookController(http.Controller):
     
     @http.route('/mail/webhook/sns', type='http', auth='public', methods=['POST'], csrf=False)
