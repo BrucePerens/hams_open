@@ -119,16 +119,15 @@ class TestAlarm(CanaryCase):
         self.assertIn("[REDACTED:test_secret]", rows.user_agent)
 
     def test_pager_backend_opens_one_critical_incident_without_the_value(self):
-        if "pager.incident" not in self.env:
-            self.skipTest("pager_duty is not installed")
         label = "test_pager_%s" % uuid.uuid4().hex[:8]  # report_incident rate-limits a source for 60 s in Redis: a fresh one each run
         alerts.pager_backend(self.env, alerts.Alarm(label, "secret", "response", "/leak/[REDACTED:%s]" % label))
-        found = self.env["pager.incident"].sudo().search([("source", "=", "Secret canary: %s" % label)])
+        pager_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
+        found = self.env["pager.incident"].with_user(pager_uid).search([("source", "=", "Secret canary: %s" % label)])
         self.assertEqual(found.mapped("severity"), ["critical"])
         self.assertIn(label, found.description)
         self.assertIn("/leak/[REDACTED:%s]" % label, found.description)
-        with self.assertLogs("hams_secret_canary.alarm", "WARNING") as warned, patch.object(
-                type(self.env["pager.incident"]), "report_incident", side_effect=ValueError(SECRET)):
+        self.safe_patch_object(type(self.env["pager.incident"]), "report_incident", side_effect=ValueError(SECRET))
+        with self.assertLogs("hams_secret_canary.alarm", "WARNING") as warned:
             alerts.pager_backend(self.env, alerts.Alarm(label, "secret", "response", "/x"))  # must not raise
         self.assertNotIn(SECRET, "\n".join(warned.output))
         alerts.pager_backend(None, alerts.Alarm(label, "secret", "log", "some.logger"))  # a log hit has no env
