@@ -8,6 +8,7 @@ import logging
 
 from . import css_sanitizer
 from . import peer_address
+from . import rpc_public
 from . import svg_sanitizer
 
 # [@ANCHOR: zero_sudo:svg_allowlist_install]
@@ -15,6 +16,7 @@ from . import svg_sanitizer
 # allowlist of inline SVG. See svg_sanitizer.py for why it patches `_Cleaner.__call__`.
 svg_sanitizer.install()
 
+from .rpc_public import public_rpc  # noqa: E402,F401  (`from odoo.addons.zero_sudo import public_rpc`)
 from . import models  # noqa: E402
 from . import controllers  # noqa: E402
 

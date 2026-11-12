@@ -7,5 +7,4 @@ from . import policy
 from . import patch
 from . import exposure_scan
 from . import models
-from .exposure import public_rpc
 from .hooks import post_init_hook, post_load_hook
