@@ -380,6 +380,20 @@ Returns `Some(hertz)`, or `None` when the text has no number or a unit that is n
 
 Everything is checked before the first command. Returns `sent`, `readback`, `note`, `settings`, `equation` and, with `read`, either `trace` (min, max, point count and the f32 file, converted as volts = code x `MTVD?` / 25 - `MTVP?` / 50 x `MTVD?`) or, if the equation holds `FFT`, `fft_trace` with the raw trace's point count, the index and code of its highest point and `peak_frequency_hz_assumed` (centre + (index / (points - 1) - 0.5) x 10 x `FFTT?`), with the assumption written beside it, because the guide says an FFT trace is not readable. Errors: the checks above, `write <file>`, and link errors. Test: `the_scopes_own_math_is_defined_scaled_read_and_its_fft_is_set_up` against the fake scope, which encodes the sum of the two channels with the guide's formula and serves a 1500-point FFT trace.
 
+### `bench_mcp_scope_cursor_native` [@ANCHOR: bench_mcp_scope_cursor_native]
+
+`cursor_native(s, args)` is `bench_scope_cursor_native` (tier `read_config`): the scope's own cursors.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.channel` | integer 1 or 2 | Required; the trace prefix of `CRST` and `CRVA?`. |
+| `args.mode` | `OFF`, `MANUAL`, `TRACK` | `CRMS <mode>`. |
+| `args.type` | `X`, `Y`, `X-Y` | `CRTY <type>`. |
+| `args.x1_s`, `args.x2_s`, `args.track_x1_s`, `args.track_x2_s` | number, seconds, magnitude at most 1000 | `TREF`, `TDIF`, `HREF`, `HDIF` in one `C<c>:CRST` command. |
+| `args.y1_v`, `args.y2_v` | number, volts | `VREF`, `VDIF` in the same command. |
+
+All values are checked before the first command (`<arg> must be a number from -1000 to 1000`). Returns `sent`, `readback` (including `C<c>:CRST?` for the positions), `note`, `settings` and `values`: `hrel` from `C<c>:CRVA? HREL` (`delta_s`, `inverse_hz`, `x1_s`, `x2_s`) and `vrel` from `C<c>:CRVA? VREL` (`delta_v`, `y1_v`, `y2_v`), each number being the reply field without its unit; a reply that does not have all the fields, or no reply within 3 s (cursors off), is `{no_answer: <text>}`. The positions are in the scope's own reference (the screen centre of the trace), not the first sample of the waveform memory as in `bench_scope_cursors`. Test: `the_scopes_own_cursors_are_set_and_their_values_read` against the fake scope, in manual and track mode and with the cursors off.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.

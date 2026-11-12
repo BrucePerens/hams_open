@@ -634,6 +634,92 @@ pub fn math_native(s: &mut Link, args: &Value, out: &Path) -> Result<Value, Stri
     Ok(r)
 }
 
+/// What `bench_scope_cursor_native` sets: the cursor mode and (manual mode) type.
+const CURSOR_ITEMS: [Item; 2] = [
+    Item {
+        arg: "mode",
+        cmd: "CRMS",
+        ty: Ty::Words(&["OFF", "MANUAL", "TRACK"]),
+    },
+    Item {
+        arg: "type",
+        cmd: "CRTY",
+        ty: Ty::Words(&["X", "Y", "X-Y"]),
+    },
+];
+
+/// The cursor positions, as (argument, the scope's name, unit): manual X1 and X2 (time), Y1 and Y2 (volts), and track X1 and X2 (time).
+const CURSOR_POSITIONS: [(&str, &str, &str); 6] = [
+    ("x1_s", "TREF", "S"),
+    ("x2_s", "TDIF", "S"),
+    ("y1_v", "VREF", "V"),
+    ("y2_v", "VDIF", "V"),
+    ("track_x1_s", "HREF", "S"),
+    ("track_x2_s", "HDIF", "S"),
+];
+
+/// `bench_scope_cursor_native`: the scope's own cursors on a channel. `mode` is OFF, MANUAL or TRACK and `type` X, Y or X-Y (`CRMS`, `CRTY`); the positions
+/// `x1_s`, `x2_s`, `y1_v`, `y2_v` (manual) or `track_x1_s`, `track_x2_s` (track), relative to the screen centre and the trace given by `channel`, are set with
+/// `CRST`. With the cursors on it reads their values (`CRVA? HREL` and `CRVA? VREL`: the time difference, its reciprocal and the two times, the voltage
+/// difference and the two voltages). The host-side `bench_scope_cursors` reads values at times from the waveform memory instead.
+pub fn cursor_native(s: &mut Link, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_cursor_native]
+    let c = ch(args)?;
+    let mut pairs = Vec::new();
+    for (arg, name, unit) in CURSOR_POSITIONS {
+        match args.get(arg) {
+            None | Some(Value::Null) => {}
+            Some(v) => {
+                let x = v
+                    .as_f64()
+                    .filter(|x| x.is_finite() && x.abs() <= 1000.0)
+                    .ok_or(format!("{arg} must be a number from -1000 to 1000"))?;
+                pairs.push(format!("{name},{x:E}{unit}"));
+            }
+        }
+    }
+    let mut cmds = item_cmds(args, &CURSOR_ITEMS, 1)?;
+    if !pairs.is_empty() {
+        cmds.push((
+            format!("C{c}:CRST {}", pairs.join(",")),
+            format!("C{c}:CRST? TREF,TDIF,VREF,VDIF,HREF,HDIF"),
+        ));
+    }
+    let mut r = apply(s, cmds)?;
+    r["settings"] = read_items(s, &CURSOR_ITEMS, 1);
+    let number = |t: &str| -> Option<f64> {
+        t.trim_end_matches(|ch: char| !(ch.is_ascii_digit() || ch == '.'))
+            .parse()
+            .ok()
+    };
+    let mut values = serde_json::Map::new();
+    for (kind, names) in [
+        ("HREL", &["delta_s", "inverse_hz", "x1_s", "x2_s"][..]),
+        ("VREL", &["delta_v", "y1_v", "y2_v"][..]),
+    ] {
+        s.set_timeout_secs(3);
+        let text = s.query(&format!("C{c}:CRVA? {kind}")).unwrap_or_default();
+        s.set_timeout_secs(10);
+        let fields: Vec<&str> = text.split([' ', ',']).skip(2).collect();
+        let nums: Vec<Option<f64>> = fields.iter().map(|f| number(f)).collect();
+        let named: serde_json::Map<String, Value> = names
+            .iter()
+            .zip(&nums)
+            .map(|(k, v)| (k.to_string(), json!(v)))
+            .collect();
+        values.insert(
+            kind.to_lowercase(),
+            if nums.len() == names.len() {
+                Value::Object(named)
+            } else {
+                json!({"no_answer": text})
+            },
+        );
+    }
+    r["values"] = Value::Object(values);
+    Ok(r)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -987,6 +1073,49 @@ mod tests {
             json!({"scale_v": 1000}),
         ] {
             assert!(math_native(&mut l, &bad, &out).is_err(), "{bad}");
+        }
+        assert_eq!(f.seen.lock().unwrap().len(), n);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_cursor_native]
+    #[test]
+    fn the_scopes_own_cursors_are_set_and_their_values_read() {
+        let (f, mut l) = link();
+        let r = cursor_native(&mut l, &json!({"channel": 1, "mode": "manual", "type": "x-y", "x1_s": -3e-6, "x2_s": 1e-6, "y1_v": -0.5, "y2_v": 0.25})).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!([
+                "CRMS MANUAL",
+                "CRTY X-Y",
+                "C1:CRST TREF,-3E-6S,TDIF,1E-6S,VREF,-5E-1V,VDIF,2.5E-1V"
+            ])
+        );
+        assert_eq!(
+            r["values"]["hrel"],
+            json!({"delta_s": 4e-6, "inverse_hz": 250000.0, "x1_s": -3e-6, "x2_s": 1e-6})
+        );
+        assert_eq!(
+            r["values"]["vrel"],
+            json!({"delta_v": 0.75, "y1_v": -0.5, "y2_v": 0.25})
+        );
+        let r = cursor_native(
+            &mut l,
+            &json!({"channel": 2, "mode": "TRACK", "track_x1_s": 0.0, "track_x2_s": 5e-6}),
+        )
+        .unwrap();
+        assert_eq!(r["values"]["hrel"]["delta_s"], 5e-6);
+        // Switched off, the scope gives no values.
+        let r = cursor_native(&mut l, &json!({"channel": 1, "mode": "off"})).unwrap();
+        assert!(r["values"]["hrel"]["no_answer"].is_string());
+        let n = f.seen.lock().unwrap().len();
+        for bad in [
+            json!({"mode": "ON"}),
+            json!({"channel": 3}),
+            json!({"channel": 1, "mode": "ON"}),
+            json!({"channel": 1, "x1_s": "0"}),
+            json!({"channel": 1, "y1_v": 5000}),
+        ] {
+            assert!(cursor_native(&mut l, &bad).is_err(), "{bad}");
         }
         assert_eq!(f.seen.lock().unwrap().len(), n);
     }
