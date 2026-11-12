@@ -2443,93 +2443,332 @@ with the ratio of harmonic power below 2 kHz to power from 2 kHz up, in dB. An u
 
 `src/codec2_3200/envelope.rs` turns eleven LPC coefficients plus a frame energy into one amplitude per
 harmonic, by sampling the LPC synthesis filter's magnitude at each harmonic and applying an energy-preserving
-formant-sharpening postfilter (the classic Chen and Gersho idea with `gamma = 0.5`, `beta = 0.2`).
+formant-sharpening postfilter (the classic Chen and Gersho idea with `gamma = 0.5`, `beta = 0.2`). Each function has its own entry below.
 
-- `lpc_spectrum` zero-pads the coefficients into a 512-point buffer, runs a forward FFT and returns the
-  first 257 bins.
-  *(Reference: `[@ANCHOR: lpc_spectrum]`)*
-- `lpc_spectrum_fixed` does this in Q23 with the sparse-prefix forward FFT into the shared scratch buffers
-  (only the first 11 inputs are non-zero).
-  *(Reference: `[@ANCHOR: lpc_spectrum_fixed]`)*
-- `compute_harmonic_amplitudes` computes the power spectrum of the filter and of its bandwidth-expanded copy,
-  derives a gain that keeps the postfiltered energy equal to the frame energy, and sets each harmonic's
-  amplitude from the postfilter-weighted power over the bins around it (1.96 times weight below 1 kHz). It
-  also returns the complex spectrum so the synthesis can read the filter's phase.
-  *(Reference: `[@ANCHOR: compute_harmonic_amplitudes]`)*
-- `compute_harmonic_amplitudes_fixed` is the Q23 version, replacing square roots and powers with
-  `log2_q23`/`exp2_q23`, computing the per-bin postfilter weight once and reusing it for the gain and for
-  every harmonic band; the gain is one exact 128-bit division.
-  *(Reference: `[@ANCHOR: compute_harmonic_amplitudes_fixed]`)*
-- `apply_first_harmonic_correction` multiplies the first harmonic's amplitude by 0.032 when the pitch is
-  below 150 Hz (`wo < pi * 150 / 4000`), because LPC overestimates the fundamental of low voices.
-  *(Reference: `[@ANCHOR: apply_first_harmonic_correction]`)*
-- `apply_first_harmonic_correction_fixed` does the same comparison and scaling against Q23 constants.
-  *(Reference: `[@ANCHOR: apply_first_harmonic_correction_fixed]`)*
-- `sample_filter_phase` returns, for each harmonic `m`, the conjugate of the LPC spectrum at the bin nearest
-  `m * wo`: the synthesis filter's phase, opposite to the analysis filter's.
-  *(Reference: `[@ANCHOR: sample_filter_phase]`)*
-- `sample_filter_phase_fixed` is a test-only wrapper that applies the production phase-sampling step to a
-  full spectrum array (production reads the transform scratch directly).
-  *(Reference: `[@ANCHOR: sample_filter_phase_fixed]`)*
+### `lpc_spectrum` [@ANCHOR: lpc_spectrum]
+
+Computes the frequency response of the LPC filter `A(z)` by zero-padding the eleven coefficients into a 512-point buffer, running a forward complex FFT (`microfft`) and returning the first 257 bins (0 to 4 kHz at 8 kHz sampling). It is the starting point of the postfilter and of the phase sampling; it is called twice per frame, once for the filter and once for its bandwidth-expanded copy.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ak` | `&[f32; 11]` | LPC coefficients `a[0..=10]`, with `a[0] = 1`. |
+
+**Returns:** `[Complex32; 257]`, the spectrum of `A`. **Errors:** none. **Special concerns:** Pure computation: no I/O, no locks, no transmit side effects. The FFT allocates nothing on the heap (fixed-size arrays).
+
+**Location:** `src/codec2_3200/envelope.rs`. **Signature:** `fn lpc_spectrum(ak: &[f32; LPC_ORD + 1]) -> [Complex32; SPEC_BINS]`. **See also:** `compute_harmonic_amplitudes`; test `model_fixed_new_does_not_panic_at_wo_zero_and_matches_model_new` (`codec2_3200/envelope.rs`).
+
+### `lpc_spectrum_fixed` [@ANCHOR: lpc_spectrum_fixed]
+
+The Q23 fixed-point version of `lpc_spectrum`: it runs the sparse-prefix forward FFT (only the first 11 inputs are non-zero, so the first stages are shortened) and leaves the 512-point result in the shared scratch buffers `scratch.re` and `scratch.im`; the first 257 bins are the spectrum.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ak_q23` | `&[i64; 11]` | LPC coefficients in Q23 (`a[0]` is 1.0 = 2^23). |
+| `scratch` | `&mut FftScratch` | Shared work buffers; overwritten with the spectrum. |
+
+**Returns:** nothing; the result is in `scratch`. **Errors:** none. **Special concerns:** private; uses no heap and no locks, but overwrites the shared scratch, so the caller must read the result before the next FFT call (`compute_harmonic_amplitudes_fixed` does). No I/O. No transmit side effects.
+
+**Location:** `src/codec2_3200/envelope.rs`. **Signature:** `fn lpc_spectrum_fixed(ak_q23: &[i64; LPC_ORD + 1], scratch: &mut FftScratch)`. **See also:** `lpc_spectrum`, `compute_harmonic_amplitudes_fixed`; test `model_fixed_new_does_not_panic_at_wo_zero_and_matches_model_new` (`codec2_3200/envelope.rs`).
+
+### `compute_harmonic_amplitudes` [@ANCHOR: compute_harmonic_amplitudes]
+
+Sets the amplitude of every harmonic of the model from the LPC filter and the frame energy. It computes the power spectra `|A|^2` of the filter and of its bandwidth-expanded copy (coefficients scaled by `gamma^i`, gamma 0.5), derives a gain that keeps the postfiltered energy equal to the frame energy, and sets each harmonic's amplitude as the square root of the postfilter-weighted power over the bins around it (bins `(m - 1/2) wo` to `(m + 1/2) wo`, with 1.96 times weight below 1 kHz), times the gain. It also returns the complex spectrum so the synthesis can read the filter's phase.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ak` | `&[f32; 11]` | LPC coefficients. |
+| `e` | `f32` | Frame energy supplied by the caller. |
+| `model` | `&mut Model` | The harmonic model: `wo` and `l` are read, `a[1..=l]` are written. |
+
+**Returns:** `[Complex32; 257]`, the LPC filter spectrum (for `sample_filter_phase`). **Errors:** none; a flat or zero filter gives small but finite amplitudes because 1e-6 is added to each power bin. **Special concerns:** public; mutates `model.a`. No I/O or locks. The cost is two 512-point FFTs plus about 256 square roots and powers per frame. No transmit side effects.
+
+**Location:** `src/codec2_3200/envelope.rs`. **Signature:** `pub fn compute_harmonic_amplitudes(ak: &[f32; LPC_ORD + 1], e: f32, model: &mut Model) -> [Complex32; SPEC_BINS]`. **See also:** `lpc_spectrum`, `sample_filter_phase`, `apply_first_harmonic_correction`; test `model_fixed_new_does_not_panic_at_wo_zero_and_matches_model_new` (`codec2_3200/envelope.rs`).
+
+### `compute_harmonic_amplitudes_fixed` [@ANCHOR: compute_harmonic_amplitudes_fixed]
+
+The Q23 fixed-point version of `compute_harmonic_amplitudes`. It replaces square roots and powers with `log2_q23` and `exp2_q23`, computes the per-bin postfilter weight once and reuses it for both the gain and every harmonic band, and obtains the gain with one exact 128-bit division. The postfilter exponent, the boost below 1 kHz (`boost_ratio_q23`, applied below `BOOST_BIN_THRESHOLD`) and the bin positions use integer constants. It also samples the filter phase from the spectrum before the scratch is reused and returns it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ak_q23` | `&[i64; 11]` | LPC coefficients in Q23. |
+| `e_q23` | `i64` | Frame energy in Q23. |
+| `model` | `&mut ModelFixed` | Harmonic model; `l` and the bin constant `k_q23` are read, `a[1..=l]` written. |
+| `scratch` | `&mut FftScratch` | Shared FFT work buffers, overwritten. |
+
+**Returns:** `[ComplexQ23; MAX_AMP + 1]`, the sampled synthesis filter phase for harmonics 1 to `l`. **Errors:** none; a non-positive harmonic power gives amplitude 0. **Special concerns:** `pub(crate)`; mutates `model.a` and the scratch. No heap, locks or I/O. It is the bit-exact integer twin used on targets without floating point; tests compare it with the float version. No transmit side effects.
+
+**Location:** `src/codec2_3200/envelope.rs`. **Signature:** `pub(crate) fn compute_harmonic_amplitudes_fixed(ak_q23: &[i64; LPC_ORD + 1], e_q23: i64, model: &mut ModelFixed, scratch: &mut FftScratch) -> [ComplexQ23; MAX_AMP + 1]`. **See also:** `compute_harmonic_amplitudes`, `log2_q23`, `exp2_q23`; test `model_fixed_new_does_not_panic_at_wo_zero_and_matches_model_new` (`codec2_3200/envelope.rs`).
+
+### `apply_first_harmonic_correction` [@ANCHOR: apply_first_harmonic_correction]
+
+Multiplies the first harmonic's amplitude by 0.032 when the pitch is below 150 Hz (`wo < pi * 150 / 4000`), because LPC overestimates the fundamental of low voices.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut Model` | The harmonic model; `a[1]` is scaled in place when `wo` is below the threshold. |
+
+**Returns:** nothing. **Errors:** none. **Special concerns:** public; mutates `model`. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/envelope.rs`. **Signature:** `pub fn apply_first_harmonic_correction(model: &mut Model)`. **See also:** `compute_harmonic_amplitudes`; test `compute_harmonic_amplitudes_fixed_matches_the_float_version_on_real_captured_data` (`codec2_3200/envelope.rs`).
+
+### `apply_first_harmonic_correction_fixed` [@ANCHOR: apply_first_harmonic_correction_fixed]
+
+The Q23 version of the first-harmonic correction: the same comparison against a Q23 pitch threshold and the same 0.032 scaling, done as a rounded 128-bit multiply and shift so the result matches the float version to within rounding.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&mut ModelFixed` | The fixed-point model; `a[1]` is scaled in place. |
+
+**Returns:** nothing. **Errors:** none. **Special concerns:** `pub(crate)`; mutates `model`. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/envelope.rs`. **Signature:** `pub(crate) fn apply_first_harmonic_correction_fixed(model: &mut ModelFixed)`. **See also:** `apply_first_harmonic_correction`; test `compute_harmonic_amplitudes_fixed_matches_the_float_version_on_real_captured_data` (`codec2_3200/envelope.rs`).
+
+### `sample_filter_phase` [@ANCHOR: sample_filter_phase]
+
+Returns, for each harmonic `m` from 1 to `model.l`, the conjugate of the LPC spectrum at the bin nearest `m * wo` (clamped to the last usable bin): the synthesis filter's phase, which is opposite to the analysis filter's. The decoder uses it to set the phase of each harmonic.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `aw` | `&[Complex32]` | The LPC spectrum from `compute_harmonic_amplitudes` (at least 256 bins). |
+| `model` | `&Model` | Supplies `wo` and `l`. |
+
+**Returns:** `[Complex32; MAX_AMP + 1]`; index 0 and indexes above `l` stay zero. **Errors:** none; it indexes `aw` up to bin 255. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/envelope.rs`. **Signature:** `pub fn sample_filter_phase(aw: &[Complex32], model: &Model) -> [Complex32; MAX_AMP + 1]`. **See also:** `compute_harmonic_amplitudes`; test `apply_first_harmonic_correction_fixed_matches_the_float_version_on_both_sides_of_the_threshold` (`codec2_3200/envelope.rs`).
+
+### `sample_filter_phase_fixed` [@ANCHOR: sample_filter_phase_fixed]
+
+A test-only wrapper (`#[cfg(test)]`) that applies the production phase-sampling step to a full spectrum array, so tests can drive it with a spectrum they build. Production reads the transform scratch directly through `sample_filter_phase_with`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `aw` | `&[ComplexQ23]` | A full spectrum array. |
+| `model` | `&ModelFixed` | Supplies `wo` and `l`. |
+
+**Returns:** `[ComplexQ23; MAX_AMP + 1]`. **Errors:** none. **Special concerns:** `pub(crate)`, compiled only in tests. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/envelope.rs`. **Signature:** `pub(crate) fn sample_filter_phase_fixed(aw: &[ComplexQ23], model: &ModelFixed) -> [ComplexQ23; MAX_AMP + 1]`. **See also:** `sample_filter_phase`; test `apply_first_harmonic_correction_fixed_matches_the_float_version_on_both_sides_of_the_threshold` (`codec2_3200/envelope.rs`).
 
 ## Fixed-point FFT, logarithm and trigonometry
 
-- `ComplexQ23::mul` multiplies two Q23 complex numbers and rescales to Q23; a plain `i64` path when every
-  component is under 2^30, an exact `i128` path otherwise, both bit-identical.
-  *(Reference: `src/codec2_3200/fixed_fft.rs` -> `[@ANCHOR: ComplexQ23::mul]`)*
-- `fixed_fft:rshift_round_i128` is the round-half-up right shift for an `i128` accumulator that narrows to
-  `i64`, with a debug assertion that the result fits (the FFT butterflies are bounded far below that).
-  *(Reference: `[@ANCHOR: fixed_fft:rshift_round_i128]`)*
-- `build_bit_reverse_table` computes, at compile time, the bit-reversal permutation for an `N`-point
-  transform as `u16` entries.
-  *(Reference: `[@ANCHOR: build_bit_reverse_table]`)*
-- `fft_twiddles_q23` (test helper) returns the twiddle-factor table for transform size `N`.
-  *(Reference: `[@ANCHOR: fft_twiddles_q23]`)*
-- `fft_bit_reverse_table` (test helper) returns the bit-reversal table for transform size `N`.
-  *(Reference: `[@ANCHOR: fft_bit_reverse_table]`)*
-- `log2_lut_generic_fixed` computes `log2(x)` for a positive `f32` by taking the exponent from the IEEE-754
-  bits and interpolating the mantissa's logarithm in a Q23 table, using the raw mantissa bits as the
-  interpolation weight; no float arithmetic until the final sum.
-  *(Reference: `src/codec2_3200/fixed_point.rs` -> `[@ANCHOR: log2_lut_generic_fixed]`)*
-- `f32_to_q_exact_round` converts an `f32` to a Q format with exact rounding (the magnitude is rounded half up,
-  i.e. halves go away from zero) by shifting its 24-bit significand (zero maps to zero; subnormals and out-of-range values are debug-asserted).
-  *(Reference: `[@ANCHOR: f32_to_q_exact_round]`)*
-- `exp2_lut_generic_fixed` is the mirror image: `2^y` for an `f32`, with `y` converted exactly to Q24, split
-  into a floor and a fraction, interpolated in a Q23 table and rebuilt as an IEEE-754 bit pattern.
-  *(Reference: `[@ANCHOR: exp2_lut_generic_fixed]`)*
-- `log2_q23` is the integer-in, integer-out base-2 logarithm of a positive Q23 value: normalise by counting
-  leading zeros, table-interpolate the mantissa. Zero is treated as the smallest positive value.
-  *(Reference: `[@ANCHOR: log2_q23]`)*
-- `exp2_q23` is `2^y` for a Q23 exponent, returning Q23: the integer part shifts, the fractional part is
-  table-interpolated; very negative `y` underflows to 0 and very large `y` is debug-asserted.
-  *(Reference: `[@ANCHOR: exp2_q23]`)*
-- `sin_cos_q23` returns `(cos, sin)` as a Q23 complex number for a `u32` binary angle (the full range is one
-  turn), indexing a 4096-cell (4097-point) table with the top 12 bits and interpolating with the rest.
-  *(Reference: `src/codec2_3200/trig_fixed.rs` -> `[@ANCHOR: sin_cos_q23]`)*
+Q23 means a signed integer holding a value times 2^23. These are the integer building blocks behind the fixed-point codec.
+
+### `ComplexQ23::mul` [@ANCHOR: ComplexQ23::mul]
+
+Multiplies two Q23 complex numbers and rescales the product to Q23 with round-half-up. When every component is below 2^30 in magnitude it takes a plain `i64` path; otherwise an exact `i128` path. The two paths give bit-identical results, so the choice only affects speed. The FFT butterflies call it for every twiddle product.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `ComplexQ23` | Left operand, `re` and `im` in Q23. |
+| `other` | `ComplexQ23` | Right operand. |
+
+**Returns:** `ComplexQ23`, the product in Q23. **Errors:** none; the `i64` path cannot overflow below the 2^30 bound, and the `i128` path narrows through `rshift_round_i128`, which debug-asserts that the result fits. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_fft.rs`. **Signature:** `pub(crate) fn mul(self, other: ComplexQ23) -> ComplexQ23`. **See also:** `rshift_round_i128`; test `decoder_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream` (`codec2_3200/mod.rs`).
+
+### `fixed_fft:rshift_round_i128` [@ANCHOR: fixed_fft:rshift_round_i128]
+
+Round-half-up right shift of an `i128` accumulator that narrows to `i64`: adds `2^(n-1)` then shifts by `n`. A debug assertion checks that the result fits in `i64` (the FFT butterflies stay far below that).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `i128` | The wide accumulator. |
+| `n` | `u32` | Shift amount, 1 or more (0 would underflow the rounding term). |
+
+**Returns:** `i64`, the rounded shifted value. **Errors:** panics in debug builds if the result does not fit `i64`; in release it truncates. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_fft.rs`. **Signature:** `pub(crate) fn rshift_round_i128(x: i128, n: u32) -> i64`. **See also:** `ComplexQ23::mul`; tests `sparse_harmonic_inverse_is_bit_identical_to_the_dense_reference_at_the_used_outputs` (`codec2_3200/fixed_fft.rs`), `rshift_round_i128_rounds_half_up_and_narrows_wide_accumulators` (`codec2_3200/fixed_fft.rs`).
+
+### `build_bit_reverse_table` [@ANCHOR: build_bit_reverse_table]
+
+Computes, at compile time, the bit-reversal permutation for an `N`-point transform as `u16` entries: entry `i` is `i` with its `log2(N)` low bits reversed. The in-place FFT uses it to reorder its input.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `N` | const generic `usize` | Transform size; a power of two of at most 65536. |
+
+**Returns:** `[u16; N]`. **Errors:** none (a non-power-of-two `N` gives a meaningless table; the sizes used are fixed). **Special concerns:** a `const fn`, evaluated by the compiler, so no runtime cost and no state. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_fft.rs`. **Signature:** `const fn build_bit_reverse_table<const N: usize>() -> [u16; N]`. **See also:** `fft_bit_reverse_table`; test `twiddle_tables_match_their_own_generating_formula` (`codec2_3200/fixed_fft.rs`).
+
+### `fft_twiddles_q23` [@ANCHOR: fft_twiddles_q23]
+
+Test helper (`#[cfg(test)]`) that returns the twiddle-factor table of the `N`-point fixed-point transform as `(re, im)` pairs in Q23, so tests can check the table against an independent computation.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `N` | const generic `usize` | Transform size with a table implementation (`Size<N>: FftTables`). |
+
+**Returns:** `&'static [(i32, i32)]`. **Errors:** none. **Special concerns:** compiled only in tests; reads a static table. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_fft.rs`. **Signature:** `fn fft_twiddles_q23<const N: usize>() -> &'static [(i32, i32)] where Size<N>: FftTables`. **See also:** `fft_bit_reverse_table`; test `twiddle_tables_match_their_own_generating_formula` (`codec2_3200/fixed_fft.rs`).
+
+### `fft_bit_reverse_table` [@ANCHOR: fft_bit_reverse_table]
+
+Test helper (`#[cfg(test)]`) that returns the bit-reversal table of the `N`-point fixed-point transform, so tests can check it against `build_bit_reverse_table`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `N` | const generic `usize` | Transform size with a table implementation. |
+
+**Returns:** `&'static [u16]`. **Errors:** none. **Special concerns:** compiled only in tests; reads a static table. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_fft.rs`. **Signature:** `fn fft_bit_reverse_table<const N: usize>() -> &'static [u16] where Size<N>: FftTables`. **See also:** `build_bit_reverse_table`; test `twiddle_tables_match_their_own_generating_formula` (`codec2_3200/fixed_fft.rs`).
+
+### `log2_lut_generic_fixed` [@ANCHOR: log2_lut_generic_fixed]
+
+Computes `log2(x)` for a positive `f32` without float arithmetic until the final sum: the exponent comes from the IEEE-754 bits, and the mantissa's logarithm is interpolated linearly in a Q23 table, using the raw mantissa bits as the interpolation weight. The table has `2^bits + 1` entries.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `f32` | The value; must be positive and normal. |
+| `bits` | `u32` | Table resolution: the table has `2^bits` intervals. |
+| `table_q23` | `&[i32]` | The mantissa-logarithm table in Q23, length `2^bits + 1`. |
+
+**Returns:** `f32`, `log2(x)`. **Errors:** panics in debug builds if `x` is not positive; the result for zero, negative or subnormal input is unspecified in release. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_point.rs`. **Signature:** `fn log2_lut_generic_fixed(x: f32, bits: u32, table_q23: &[i32]) -> f32`. **See also:** `exp2_lut_generic_fixed`, `log2_q23`; test `a_deliberately_coarse_4_bit_lut_produces_real_index_mismatches_confirming_the_test_above_is_not_vacuous` (`codec2_3200/fixed_point.rs`).
+
+### `f32_to_q_exact_round` [@ANCHOR: f32_to_q_exact_round]
+
+Converts an `f32` to a Q format with `frac_bits` fractional bits with exact rounding: the 24-bit significand is shifted, and the magnitude is rounded half up (halves go away from zero). Zero maps to zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `y` | `f32` | The value; must be zero or a normal number. |
+| `frac_bits` | `u32` | Number of fractional bits of the result, such that the shifted significand fits 40 bits. |
+
+**Returns:** `i64`, `y * 2^frac_bits` rounded. **Errors:** panics in debug builds for a subnormal `y` or one too large for the format; a shift of 64 or more gives 0. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_point.rs`. **Signature:** `pub(crate) fn f32_to_q_exact_round(y: f32, frac_bits: u32) -> i64`. **See also:** `exp2_lut_generic_fixed`; test `postfilter_lut_decisions_match_plain_float_across_a_real_temporal_replay` (`codec2_3200/fixed_point.rs`).
+
+### `exp2_lut_generic_fixed` [@ANCHOR: exp2_lut_generic_fixed]
+
+The mirror image of `log2_lut_generic_fixed`: computes `2^y` for an `f32` by converting `y` exactly to Q24 (`f32_to_q_exact_round`), splitting it into a floor and a fraction, interpolating the fraction in a Q23 table and rebuilding the result as an IEEE-754 bit pattern with the floor as the exponent.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `y` | `f32` | The exponent; `floor(y) + 127` must be a valid biased exponent (1..=254). |
+| `bits` | `u32` | Table resolution. |
+| `table_frac_q23` | `&[i32]` | Table of `2^f - 1` in Q23 for `f` in `[0, 1]`, length `2^bits + 1`. |
+
+**Returns:** `f32`, `2^y`. **Errors:** panics in debug builds if the result would be outside the representable exponent range or the interpolation leaves the mantissa range. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_point.rs`. **Signature:** `fn exp2_lut_generic_fixed(y: f32, bits: u32, table_frac_q23: &[i32]) -> f32`. **See also:** `log2_lut_generic_fixed`; test `log2_lut_generic_fixed_handles_its_own_index_boundaries_correctly` (`codec2_3200/fixed_point.rs`).
+
+### `log2_q23` [@ANCHOR: log2_q23]
+
+The integer-in, integer-out base-2 logarithm of a positive Q23 value, returning Q23: it normalises by counting leading zeros and table-interpolates the mantissa. Zero (or negative) input is treated as the smallest positive value, 1, so the result is finite. On 64-bit targets it takes a native 64-bit path and on others a split 32-bit path; both give the same result.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x_q23` | `i64` | The value in Q23; at most 2^62. |
+
+**Returns:** `i64`, `log2(x)` in Q23 (negative for values below 1.0). **Errors:** none. **Special concerns:** `pub(crate)` and pure; the table is a shared static. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_point.rs`. **Signature:** `pub(crate) fn log2_q23(x_q23: i64) -> i64`. **See also:** `exp2_q23`; tests `exp2_q23_reference` (`codec2_3200/fixed_point.rs`), `postfilter_lut_decisions_match_plain_float_across_a_real_temporal_replay` (`codec2_3200/fixed_point.rs`), `log2_q23_matches_log2_lut_across_a_wide_dynamic_range` (`codec2_3200/fixed_point.rs`).
+
+### `exp2_q23` [@ANCHOR: exp2_q23]
+
+Computes `2^y` for a Q23 exponent, returning Q23: the integer part of `y` is applied as a shift, the fractional part is table-interpolated. A very negative `y` (floor below -24) underflows to 0; a very large `y` (floor of 39 or more) overflows `i64` and is debug-asserted.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `y_q23` | `i64` | The exponent in Q23. |
+
+**Returns:** `i64`, `2^y` in Q23. **Errors:** panics in debug builds when `floor(y) >= 39`; in release the shift is meaningless. **Special concerns:** `pub(crate)` and pure; the table is a shared static. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/fixed_point.rs`. **Signature:** `pub(crate) fn exp2_q23(y_q23: i64) -> i64`. **See also:** `log2_q23`; tests `exp2_q23_reference` (`codec2_3200/fixed_point.rs`), `log2_q23_handles_x_less_than_one_correctly` (`codec2_3200/fixed_point.rs`).
+
+### `sin_cos_q23` [@ANCHOR: sin_cos_q23]
+
+Returns `(cos, sin)` as a Q23 complex number (`re` is the cosine, `im` the sine) for a binary angle in a `u32` (the full range is one turn). It indexes a 4096-cell (4097-point) table with the top 12 bits and interpolates linearly with the rest.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `angle_q32` | `u32` | Angle as a fraction of a turn times 2^32 (0 is 0 degrees, 2^31 is 180 degrees). |
+
+**Returns:** `ComplexQ23`, `cos + j sin`. **Errors:** none. **Special concerns:** `pub(crate)` and pure; tables are static. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/trig_fixed.rs`. **Signature:** `pub(crate) fn sin_cos_q23(angle_q32: u32) -> ComplexQ23`. **See also:** `ComplexQ23::mul`; test `sin_cos_q23` (`codec2_3200/trig_fixed.rs`).
 
 ## Floating-point LPC analysis (reference, and the live 1600 encoder)
 
-`src/codec2_3200/floating_reference/lpc.rs`.
+`src/codec2_3200/floating_reference/lpc.rs`. The reference LPC analysis that the live Codec2 1600 encoder also uses; each function has its own entry. `Autocorr` is `[f32; 11]` and `LpcCoeffs` is `[f32; 11]`.
 
-- `autocorrelate` computes `R[j] = sum wn[i] * wn[i + j]` for lags 0 to 10 over the windowed buffer.
-  *(Reference: `[@ANCHOR: autocorrelate]`)*
-- `levinson_durbin` solves for the ten predictor coefficients from the autocorrelation (`ak[0] = 1`); a
-  reflection coefficient larger than 1 in magnitude is replaced by 0, and the recursion stops with the
-  identity filter when the residual energy reaches zero (silence) instead of dividing 0 by 0.
-  *(Reference: `[@ANCHOR: levinson_durbin]`)*
-- `build_p_q` forms the two symmetric and antisymmetric polynomials `P` and `Q` (the LPC filter plus and
-  minus its mirror) in Chebyshev form, whose interleaved roots are the LSP frequencies.
-  *(Reference: `[@ANCHOR: build_p_q]`)*
-- `find_next_root` finds one root of such a polynomial by sweeping `x` downward from a start point in 0.01
-  steps until the sign changes, then bisecting six times; it returns `None` when the sweep reaches -1
-  without a sign change.
-  *(Reference: `[@ANCHOR: find_next_root]`)*
-- `lpc_to_lsp` finds the ten roots in turn, alternating between `P` and `Q`, each search starting where the
-  last root was found, and returns their arccosines; `None` if fewer than ten roots are found.
-  *(Reference: `[@ANCHOR: lpc_to_lsp]`)*
-- `lpc_energy` is the prediction-error energy `sum ak[i] * R[i]`; it has to be taken before bandwidth
-  expansion or it can come out negative.
-  *(Reference: `[@ANCHOR: lpc_energy]`)*
+### `autocorrelate` [@ANCHOR: autocorrelate]
+
+Computes the autocorrelation `R[j] = sum_i wn[i] * wn[i + j]` for lags 0 to 10 over the windowed speech buffer. It is the first step of LPC analysis: `levinson_durbin` turns it into predictor coefficients.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `wn` | `&[f32]` | The windowed analysis buffer; must be longer than 10 samples. |
+
+**Returns:** `Autocorr`, 11 values `R[0..=10]`. **Errors:** panics (subtraction underflow) if `wn` has 10 or fewer samples. **Special concerns:** `pub(crate)` and pure; cost 11 passes over the buffer. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/lpc.rs`. **Signature:** `pub(crate) fn autocorrelate(wn: &[f32]) -> Autocorr`. **See also:** `levinson_durbin`, `lpc_energy`; test `build_p_q_matches_the_real_reference_p_q_on_real_captured_data` (`codec2_3200/floating_reference/lpc.rs`).
+
+### `levinson_durbin` [@ANCHOR: levinson_durbin]
+
+Solves for the ten predictor coefficients from the autocorrelation by the Levinson-Durbin recursion (`ak[0] = 1`). A reflection coefficient larger than 1 in magnitude is replaced by 0, and the recursion stops, leaving the remaining coefficients zero, when the residual energy reaches zero or below (silence), instead of dividing 0 by 0.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `r` | `&Autocorr` | The autocorrelation from `autocorrelate`. |
+
+**Returns:** `LpcCoeffs`, `a[0..=10]`. **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/lpc.rs`. **Signature:** `pub(crate) fn levinson_durbin(r: &Autocorr) -> LpcCoeffs`. **See also:** `autocorrelate`, `lpc_to_lsp`; tests `lpc_energy` (`codec2_3200/floating_reference/lpc.rs`), `levinson_durbin_does_not_produce_nan_when_a_reflection_coefficient_hits_the_clamp_boundary_exactly` (`codec2_3200/floating_reference/lpc.rs`).
+
+### `build_p_q` [@ANCHOR: build_p_q]
+
+Forms the two polynomials `P` and `Q` (the LPC filter plus and minus its mirror image) in Chebyshev form, as six coefficients each; the interleaved roots of the two are the line spectral pair (LSP) frequencies. The coefficients are built by the usual recurrence and the first five of each are doubled.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ak` | `&LpcCoeffs` | The LPC coefficients. |
+
+**Returns:** `([f32; 6], [f32; 6])`: `P` and `Q`. **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/lpc.rs`. **Signature:** `pub(crate) fn build_p_q(ak: &LpcCoeffs) -> ([f32; 6], [f32; 6])`. **See also:** `lpc_to_lsp`, `find_next_root`; test `lpc_to_lsp_matches_the_real_reference_on_real_captured_ak_data` (`codec2_3200/floating_reference/lpc.rs`).
+
+### `find_next_root` [@ANCHOR: find_next_root]
+
+Finds one root of such a polynomial: the coefficients are converted to Q23 and the shared root finder sweeps `x` downward from a start point in 0.01 steps until the sign changes, then bisects six times. It returns `None` when the sweep reaches -1 without a sign change.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `poly` | `&[f32; 6]` | `P` or `Q` from `build_p_q`. |
+| `x_start` | `f32` | Where to start the downward sweep, at most 1.0. |
+
+**Returns:** `Option<f32>`, the root `x = cos(omega)`. **Errors:** `None` when no sign change is found before -1. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/lpc.rs`. **Signature:** `pub(crate) fn find_next_root(poly: &[f32; 6], x_start: f32) -> Option<f32>`. **See also:** `lpc_to_lsp`, `build_p_q`; test `autocorrelate_matches_the_real_reference_r_on_a_synthetic_signals_real_captured_wn_data` (`codec2_3200/floating_reference/lpc.rs`).
+
+### `lpc_to_lsp` [@ANCHOR: lpc_to_lsp]
+
+Converts LPC coefficients to the ten LSP frequencies: it finds the ten roots in turn, alternating between `P` and `Q`, each search starting where the last root was found, and returns their arccosines in radians in increasing order.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ak` | `&LpcCoeffs` | The LPC coefficients. |
+
+**Returns:** `Option<[f32; 10]>`, the LSP frequencies in radians (0 to pi). **Errors:** `None` if fewer than ten roots are found (an unstable or degenerate filter). **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/lpc.rs`. **Signature:** `pub(crate) fn lpc_to_lsp(ak: &LpcCoeffs) -> Option<[f32; LPC_ORD]>`. **See also:** `build_p_q`, `find_next_root`; test `levinson_durbin_reflection_coefficients_stay_within_the_construction_bound` (`codec2_3200/floating_reference/lpc.rs`).
+
+### `lpc_energy` [@ANCHOR: lpc_energy]
+
+Computes the prediction-error energy `sum_i ak[i] * R[i]`. It has to be taken before bandwidth expansion or it can come out negative.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `ak` | `&LpcCoeffs` | The LPC coefficients, before bandwidth expansion. |
+| `r` | `&Autocorr` | The autocorrelation they came from. |
+
+**Returns:** `f32`, the residual energy. **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/codec2_3200/floating_reference/lpc.rs`. **Signature:** `pub(crate) fn lpc_energy(ak: &LpcCoeffs, r: &Autocorr) -> f32`. **See also:** `levinson_durbin`, `analyse_lsps_and_energy`; test `find_next_root_locates_known_chebyshev_roots_and_only_searches_downward` (`codec2_3200/floating_reference/lpc.rs`).
 
 ## Pitch estimation
 
