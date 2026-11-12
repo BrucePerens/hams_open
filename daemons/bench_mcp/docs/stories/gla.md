@@ -555,7 +555,7 @@ A CS assertion with no clocks gives a transfer with 0 words. Errors: `mode <m> m
 | i2c: `scl`, `sda` (both required) | See `gla_decode_i2c`. |
 | spi: `sck` (required); `cs`, `copi`, `cipo` (optional, null counts as absent), `mode` (0), `bits` (8), `msb_first` (true), `cs_active_low` (true) | See `gla_decode_spi`. |
 
-Pins are names or positions (`gla_wave_pin_index`). Numbers are read as floats and cut to integers (`bits` 8.9 is 8; a negative number becomes 0 and is then refused by the decoder). A value of the wrong JSON type for `baud`, `bits`, `mode`, `parity` or a flag is silently replaced by its default instead of being refused. Errors: `decode needs "<key>"` for a missing required pin; the pin errors; `decode type <t> must be uart, i2c or spi`; and those of the decoders.
+Pins are names or positions (`gla_wave_pin_index`). Numbers are read as floats and cut to integers (`bits` 8.9 is 8; a negative number becomes 0 and is then refused by the decoder). A value of the wrong JSON type for `baud`, `bits`, `mode`, `parity` or a flag is refused (`decode <key> must be a number`, `... true or false`, `... text`); null counts as absent. Errors: `decode needs "<key>"` for a missing required pin; the pin errors; `decode type <t> must be uart, i2c or spi`; and those of the decoders.
 Pure. Test: `gla::tests::the_decode_argument_picks_the_decoder_and_reads_pins_by_name`.
 
 ## The pattern planner (`pattern.rs`)

@@ -277,18 +277,31 @@ pub fn run(w: &Wave, spec: &Value) -> Result<Value, String> {
             .map(|v| w.pin_index(v))
             .transpose()
     };
-    let num = |k: &str, d: f64| spec.get(k).and_then(|v| v.as_f64()).unwrap_or(d);
-    let flag = |k: &str, d: bool| spec.get(k).and_then(|v| v.as_bool()).unwrap_or(d);
+    // A value of the wrong JSON type is refused, not replaced by the default (a wrong baud rate would decode garbage).
+    let num = |k: &str, d: f64| -> Result<f64, String> {
+        match spec.get(k) {
+            None | Some(Value::Null) => Ok(d),
+            Some(v) => v.as_f64().ok_or_else(|| format!("decode {k} must be a number")),
+        }
+    };
+    let flag = |k: &str, d: bool| -> Result<bool, String> {
+        match spec.get(k) {
+            None | Some(Value::Null) => Ok(d),
+            Some(v) => v.as_bool().ok_or_else(|| format!("decode {k} must be true or false")),
+        }
+    };
+    let parity = match spec.get("parity") {
+        None | Some(Value::Null) => "none",
+        Some(p) => p.as_str().ok_or("decode parity must be text: none, even or odd")?,
+    };
     match spec.get("type").and_then(|t| t.as_str()) {
         Some("uart") => uart(
             w,
             pin("pin")?,
-            num("baud", 115200.0),
-            num("bits", 8.0) as u32,
-            spec.get("parity")
-                .and_then(|p| p.as_str())
-                .unwrap_or("none"),
-            flag("invert", false),
+            num("baud", 115200.0)?,
+            num("bits", 8.0)? as u32,
+            parity,
+            flag("invert", false)?,
         ),
         Some("i2c") => i2c(w, pin("scl")?, pin("sda")?),
         Some("spi") => spi(
@@ -297,10 +310,10 @@ pub fn run(w: &Wave, spec: &Value) -> Result<Value, String> {
             pin("sck")?,
             opt("copi")?,
             opt("cipo")?,
-            num("mode", 0.0) as u8,
-            num("bits", 8.0) as u32,
-            flag("msb_first", true),
-            flag("cs_active_low", true),
+            num("mode", 0.0)? as u8,
+            num("bits", 8.0)? as u32,
+            flag("msb_first", true)?,
+            flag("cs_active_low", true)?,
         ),
         o => Err(format!("decode type {o:?} must be uart, i2c or spi")),
     }
