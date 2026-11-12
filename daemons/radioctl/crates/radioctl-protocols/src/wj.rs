@@ -122,6 +122,7 @@ pub fn decode_frame(buf: &[u8]) -> Option<(Hz, u8)> {
 }
 
 /// The WJ-8888 client engine.
+// [@ANCHOR: radioctl_wj_wj_engine]
 #[derive(Debug)]
 pub struct WjEngine {
     desc: RigDescription,
@@ -189,6 +190,7 @@ impl ProtocolEngine for WjEngine {
 }
 
 /// A virtual WJ-8888: it decodes the command frames.
+// [@ANCHOR: radioctl_wj_wj_twin]
 #[derive(Debug)]
 pub struct WjTwin {
     rx: RxBuffer,
@@ -249,6 +251,8 @@ impl VendorTwin for WjTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_wj_wj_engine]
+    // Tests [@ANCHOR: radioctl_wj_wj_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

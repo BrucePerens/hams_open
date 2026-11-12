@@ -73,6 +73,7 @@ pub fn decode(text: &str) -> Option<Observation> {
 }
 
 /// The XG3 client engine.
+// [@ANCHOR: radioctl_xg3_xg3_engine]
 #[derive(Debug)]
 pub struct Xg3Engine {
     desc: RigDescription,
@@ -149,6 +150,7 @@ impl ProtocolEngine for Xg3Engine {
 }
 
 /// A virtual XG3.
+// [@ANCHOR: radioctl_xg3_xg3_twin]
 #[derive(Debug)]
 pub struct Xg3Twin {
     rx: RxBuffer,
@@ -298,6 +300,8 @@ impl VendorTwin for Xg3Twin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_xg3_xg3_engine]
+    // Tests [@ANCHOR: radioctl_xg3_xg3_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

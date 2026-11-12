@@ -108,6 +108,7 @@ pub fn backend_for(
 
 /// A virtual USB device as a byte-in, byte-out stand-in: request frames in, reply frames out.
 /// The conformance harness replays transcripts through it, which is the wire the engine produces.
+// [@ANCHOR: radioctl_usb_family_usb_frame_stand_in]
 pub struct UsbFrameStandIn {
     device: Box<dyn UsbDevice>,
     pending: Vec<u8>,

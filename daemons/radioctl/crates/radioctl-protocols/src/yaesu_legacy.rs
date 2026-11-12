@@ -92,6 +92,7 @@ const MAX_CLAR_HZ: u16 = 9_990;
 pub const MAX_CLAR_HZ_I16: i16 = 9_990;
 
 /// What the engine is waiting for after a read.
+// [@ANCHOR: radioctl_yaesu_legacy_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -163,6 +164,7 @@ pub fn decode_bcd_frequency(bytes: &[u8]) -> Option<Hz> {
 }
 
 /// The Yaesu legacy client engine for one rig.
+// [@ANCHOR: radioctl_yaesu_legacy_yaesu_legacy_engine]
 #[derive(Debug)]
 pub struct YaesuLegacyEngine {
     desc: RigDescription,
@@ -545,6 +547,8 @@ impl ProtocolEngine for YaesuLegacyEngine {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_yaesu_legacy_pending]
+    // Tests [@ANCHOR: radioctl_yaesu_legacy_yaesu_legacy_engine]
     use super::*;
     use radioctl_core::units::Mode;
 

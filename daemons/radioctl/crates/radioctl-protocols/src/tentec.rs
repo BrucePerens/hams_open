@@ -40,6 +40,7 @@ use crate::serial_vendor::{parse_decimal, vendor_of, RxBuffer, TwinSnapshot, Ven
 const CR: u8 = b'\r';
 
 /// The Ten-Tec model families.
+// [@ANCHOR: radioctl_tentec_dialect]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialect {
     /// Orion TT-565/566 and Eagle TT-599: ASCII.
@@ -93,6 +94,7 @@ pub fn decode_frequency(bytes: &[u8]) -> Option<Hz> {
 }
 
 /// What the engine waits for after a read or an acknowledged write.
+// [@ANCHOR: radioctl_tentec_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -103,6 +105,7 @@ enum Pending {
 }
 
 /// The Ten-Tec client engine for one rig.
+// [@ANCHOR: radioctl_tentec_tentec_engine]
 #[derive(Debug)]
 pub struct TentecEngine {
     desc: RigDescription,
@@ -389,6 +392,7 @@ impl ProtocolEngine for TentecEngine {
 }
 
 /// A virtual Ten-Tec radio of one dialect.
+// [@ANCHOR: radioctl_tentec_tentec_twin]
 #[derive(Debug)]
 pub struct TentecTwin {
     dialect: Dialect,
@@ -579,6 +583,10 @@ impl VendorTwin for TentecTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_tentec_dialect]
+    // Tests [@ANCHOR: radioctl_tentec_pending]
+    // Tests [@ANCHOR: radioctl_tentec_tentec_engine]
+    // Tests [@ANCHOR: radioctl_tentec_tentec_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

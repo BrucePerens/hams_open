@@ -48,6 +48,7 @@ use crate::kenwood::{parse_digits, Token, Tokenizer};
 const MAX_OFFSET_HZ: u16 = 9_999;
 
 /// How a level is written on the wire.
+// [@ANCHOR: radioctl_yaesu_level_wire_struct]
 struct LevelWire {
     name: &'static str,
     /// True when the command carries a leading `0` (main receiver / fixed) before the digits.
@@ -136,6 +137,7 @@ pub fn parse_clarifier(text: &str) -> Option<i16> {
 }
 
 /// The Yaesu newcat client engine for one rig.
+// [@ANCHOR: radioctl_yaesu_yaesu_engine]
 #[derive(Debug)]
 pub struct YaesuEngine {
     desc: RigDescription,
@@ -569,6 +571,8 @@ impl ProtocolEngine for YaesuEngine {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_yaesu_level_wire_struct]
+    // Tests [@ANCHOR: radioctl_yaesu_yaesu_engine]
     use super::*;
     use radioctl_core::units::Mode;
 
