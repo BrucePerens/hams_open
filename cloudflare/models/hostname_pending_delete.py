@@ -166,13 +166,16 @@ class CloudflareHostnamePendingDelete(models.Model):
             try:
                 with self.env.cr.savepoint():
                     summary[record._attempt_one_delete()] += 1
-            except Exception:  # audit-ignore-catch-all
-                summary["retrying"] += 1
+            except Exception as error:  # audit-ignore-catch-all
+                # The savepoint is rolled back; book the failure so the row backs off and is
+                # abandoned at the cap, instead of being retried on every cron tick forever.
                 _logger.exception(
                     "Cloudflare pending hostname delete %s raised; it stays "
                     "pending and the remaining records continue.",
                     record.cf_hostname_id,
                 )
+                record._fail_attempt(str(error))
+                summary["abandoned" if record.state == "abandoned" else "retrying"] += 1
         return summary
 
     # [@ANCHOR: cloudflare:COMM_pending_delete_attempt_one]
