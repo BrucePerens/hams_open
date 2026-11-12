@@ -27,6 +27,7 @@ class TestEdgeCacheHeaders(HamsHttpCase):
             }
         )
 
+    # Tests [@ANCHOR: edge_cache_ir_http_ir_http]
     def test_01_static_asset_caching(self):
         # [@ANCHOR: test_cf_static_asset_caching]
 

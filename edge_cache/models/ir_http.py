@@ -40,6 +40,7 @@ def _set_cookie_value(header_value):
     return header_value.split(";", 1)[0].partition("=")[2].strip()
 
 
+# [@ANCHOR: edge_cache_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 

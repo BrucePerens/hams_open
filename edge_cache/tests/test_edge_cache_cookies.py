@@ -103,6 +103,8 @@ class TestEdgeCacheCookies(HamsHttpCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers.get(CDN), NO_STORE)
 
+    # Tests [@ANCHOR: edge_cache_website_page_website_page]
+    # Tests [@ANCHOR: edge_cache_csrf_token_cloudflare_csrf_token]
     def test_login_page_and_post_targets_are_never_cacheable(self):
         # Tests [@ANCHOR: COMM_cloudflare_edge_cacheable]
         # Tests [@ANCHOR: cf_nocache_routes]
