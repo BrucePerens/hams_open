@@ -211,6 +211,7 @@ class DaemonKeyRegistry(models.Model):
                 )
                 raise UserError(msg % (mandatory_prefix, real_path))
 
+    @api.private
     @api.model
     def register_daemon(
         self, daemon_name, user_xml_id, env_file_path, os_group=None
@@ -311,6 +312,7 @@ class DaemonKeyRegistry(models.Model):
         registry._rotate_key_and_write_file()
         return True
 
+    @api.private
     @api.model
     def unregister_daemon(self, daemon_name):
         """

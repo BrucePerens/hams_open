@@ -5,9 +5,7 @@
       "action_apply_key_lifetime",
       "action_force_provision_all",
       "action_rotate_key",
-      "register_daemon",
-      "rotate_own_key",
-      "unregister_daemon"
+      "rotate_own_key"
     ]
   }
 }
