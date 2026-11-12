@@ -43,12 +43,12 @@
 
 use std::time::Duration;
 
-use radioctl_core::description::{CivCommandSet, CivParams, Family, RigDescription};
+use radioctl_core::description::{CivCommandSet, CivMainSub, CivParams, Family, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::scope::ScopeFrame;
-use radioctl_core::units::{Hz, Level, Meter, Mode, Vfo};
+use radioctl_core::units::{Hz, Level, Meter, Mode, Receiver, Vfo};
 
 use crate::attenuation;
 
@@ -667,6 +667,37 @@ impl CivEngine {
         })
     }
 
+    // [@ANCHOR: radioctl_civ_engine_encode_main_sub]
+    /// The Main/Sub band commands of command `07` (`civ.main_sub`): `D0` selects Main and `D1` Sub
+    /// on a model that has `select` or `full`; `D2` reads the selection and `C0`, `C1`, `C2` set
+    /// and read dual watch on `full` only (the IC-7610). Anything else, the transmit band
+    /// included, is refused as unsupported. Facts: IC-7610 CI-V guide and IC-9100 manual
+    /// command tables (see the description facts). Unverified on a radio.
+    fn encode_main_sub(&self, op: &Op) -> Option<Result<Request, RigError>> {
+        let level = self.params.main_sub;
+        let full = level == CivMainSub::Full;
+        Some(match op {
+            Op::SelectReceiver(rx) if level != CivMainSub::None => Ok(self.set(
+                0x07,
+                &[if *rx == Receiver::Sub { 0xD1 } else { 0xD0 }],
+            )),
+            Op::GetReceiver if full => Ok(self.get(0x07, &[0xD2], Field::Receiver)),
+            Op::SetDualWatch(on) if full => {
+                Ok(self.set(0x07, &[if *on { 0xC1 } else { 0xC0 }]))
+            }
+            Op::GetDualWatch if full => Ok(self.get(0x07, &[0xC2], Field::DualWatch)),
+            Op::SelectReceiver(_)
+            | Op::GetReceiver
+            | Op::SetTxReceiver(_)
+            | Op::GetTxReceiver
+            | Op::SetDualWatch(_)
+            | Op::GetDualWatch => {
+                Err(Self::unsupported("not a Main/Sub command on this Icom model"))
+            }
+            _ => return None,
+        })
+    }
+
     // [@ANCHOR: radioctl_civ_engine_encode_rit_xit]
     fn encode_rit_xit(&self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
@@ -767,6 +798,7 @@ impl ProtocolEngine for CivEngine {
         let ack = ReplyKind::Ack;
         if let Some(done) = self
             .encode_vfo_b_or_split(op)
+            .or_else(|| self.encode_main_sub(op))
             .or_else(|| self.encode_rit_xit(op))
             .or_else(|| self.encode_levels_and_filter(op))
             .or_else(|| self.encode_scope(op))
@@ -905,6 +937,12 @@ impl CivEngine {
                 rest.get(1).copied(),
             ),
             (0x0F, [state]) => Some(Observation::Split(*state != 0)),
+            (0x07, [0xD2, band]) => Some(Observation::Receiver(if *band == 0 {
+                Receiver::Main
+            } else {
+                Receiver::Sub
+            })),
+            (0x07, [0xC2, state]) => Some(Observation::DualWatch(*state != 0)),
             (0x21, [0x00, rest @ ..]) => decode_rit_offset(rest).map(Observation::RitOffset),
             (0x21, [0x01, state]) => Some(Observation::Rit(*state != 0)),
             (0x21, [0x02, state]) => Some(Observation::Xit(*state != 0)),

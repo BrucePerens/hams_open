@@ -349,6 +349,22 @@ pub struct CivParams {
     pub frequency_bytes: u8,
     /// Which command set sets the frequency and the mode (see [`CivCommandSet`]).
     pub command_set: CivCommandSet,
+    /// Which Main/Sub band commands (`07 D0`...) the model has (see [`CivMainSub`]).
+    pub main_sub: CivMainSub,
+}
+
+/// The Main/Sub band commands of a dual-receiver Icom (command `07`, sub commands `B0` to `D2`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CivMainSub {
+    /// None: the model has one receiver or no documented form.
+    #[default]
+    None,
+    /// `07 D0` selects the Main band and `07 D1` the Sub band; the book has no read of the
+    /// selection and no dual watch command (IC-9100).
+    Select,
+    /// `Select` plus `07 D2` (read the selected band) and dual watch `07 C0` off, `07 C1` on,
+    /// `07 C2` read (IC-7610).
+    Full,
 }
 
 /// The command numbers a CI-V model uses to set the frequency and to read and set the mode.
@@ -1143,6 +1159,7 @@ impl RigDescription {
                 echo: false,
                 frequency_bytes: 5,
                 command_set: CivCommandSet::Standard,
+                main_sub: CivMainSub::None,
             }),
             kenwood: None,
             elecraft: None,

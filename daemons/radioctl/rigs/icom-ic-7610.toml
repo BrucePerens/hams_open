@@ -3,7 +3,7 @@
 # download terms forbid reuse of its data); the facts come from Hamlib 4.6.2 source, read for facts only,
 # with the file and function named in each fact below. Gaps are listed in crates/radioctl-protocols/src/civ.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "scope", "read-meters"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "scope", "read-meters", "receivers"]
 
 [rig]
 id = "icom-ic-7610"
@@ -15,6 +15,7 @@ address = 0x98
 controller = 0xE0
 model_id = 0x98
 echo = false
+main_sub = "full"
 
 [scope]
 receivers = 2
@@ -112,6 +113,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.main_sub"
+provenance = { kind = "manual", reference = "Icom IC-7610 CI-V Reference Guide, file IC-7610_ENG_CI-V_4.pdf (from /storage/manuals/icom/IC-7610), sha256 708675dd8adae67e53e4acd919e293c0fe6c710b90db69b52aadeead8128d9ff: command table, PDF p. 4: command 07 sub commands B0 exchange Main and Sub, B1 equalize, C0 dualwatch off, C1 dualwatch on, C2 send or read dualwatch (00 off, 01 on), D0 select the main band, D1 select the sub band, D2 send or read the band selection (00 main, 01 sub)", note = "`SelectReceiver` sends 07 D0 or 07 D1, `GetReceiver` 07 D2, `SetDualWatch` 07 C0 or C1, `GetDualWatch` 07 C2. The exchange and equalize commands are not used. Read from the manual's command table by Bruce's 2026-11-12 decision (the radioctl rule is facts only, never copied text). Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]
