@@ -103,8 +103,7 @@ to `mod.rs`; called twice by `parse_config`.
 | `key` | `&str` | `"outputs"` or `"inputs"`. |
 
 Each member of the object is `alias: "fragment"` (the string is the matcher) or `alias: {"match": "fragment", "volume_cap": 0.3}`. The matcher is a
-node name or a fragment of the node name or description (see `alias_of`). `volume_cap`, when a number, must be above 0 and at most 1; a value that is
-not a number is ignored (the alias then has no own cap).
+node name or a fragment of the node name or description (see `alias_of`). `volume_cap`, when a number, must be above 0 and at most 1; a value that is not a number is an error naming the alias.
 
 Return value: `Ok(map)`; the map is empty when the key is absent. Errors, each naming the key and alias: `<key> must be an object`; `<key>: "<alias>" is not
 a usable alias` for an empty or whitespace alias or the reserved word `auto`; `<key>.<alias>: no "match"` for an object without a string `match`;
@@ -132,12 +131,12 @@ Settings read, with the default (the default is the value of `Config::default()`
 | `quiet_volume` | number, above 0 to 1 | 0.15 | Silently lowered to `volume_cap` when higher. |
 | `quiet_hours` | `{"start":"22:00","end":"07:00"}` or `false` | 22:00 to 07:00 | `false` switches quiet hours off; start equal to end is an error; any other non-object value is an error. |
 | `capture_dir` | path string | none; `Config::capture_dir()` gives `<bench out dir>/audio` | Where recordings, references and the discovery file live. |
-| `retention_files`, `retention_days` | unsigned integers | 50, 14 | A value that is not an unsigned integer is ignored. |
+| `retention_files`, `retention_days` | unsigned integers | 50, 14 | A value that is not an unsigned integer is an error (`<key> must be a whole number`). |
 | `max_record_s` | 1 to 600 seconds | 30 | Out of range is an error. |
 | `max_play_s` | 0.1 to 60 seconds | 10 | Out of range is an error. |
 | `tts_engine` | `auto`, `speech-dispatcher`, `espeak-ng`, `piper` | `auto` | Anything else is an error. |
 | `tts_voice`, `tts_language` | string accepted by `speak::safe_code` | none, `en-us` | Rejected text is an error naming the key. |
-| `tts_rate` | integer 80 to 450 words per minute | 160 | Out of range is an error. |
+| `tts_rate` | integer 80 to 450 words per minute | 160 | Out of range, or not a whole number, is an error. |
 | `piper_model` | path string | none | Not validated here. |
 | `verify_actions` | object name to non-empty list of strings (program, then arguments) | empty | The only commands `bench_audio_verify` runs; no shell. |
 | `reserved` | list of non-empty strings | `["08bb:29c0"]` | Lower-cased and appended; `08bb:29c0` is always present; duplicates dropped. |
