@@ -195,6 +195,34 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_vna_time_domain]
+    // Tests [@ANCHOR: bench_vna_time_read_sweep]
+    #[test]
+    fn the_through_peaks_at_zero_and_a_three_foot_open_stub_at_its_round_trip_delay_in_every_window() {
+        let d = crate::testdir::TestDir::new("vna_time_stub");
+        // 3 feet (0.9144 m) of cable at velocity factor 0.66, open at the end: the reflection returns after 2 l / (vf c) = 9.243 ns.
+        let tau = 2.0 * 0.9144 / (0.66 * C);
+        write_sweep(d.path(), "stub.csv", tau);
+        for window in ["rectangular", "hamming", "hanning", "blackman"] {
+            let stub = time_domain(
+                &json!({"file": "stub.csv", "trace": "s11", "window": window, "t_max_s": 40e-9,
+                        "time_points": 401, "velocity_factor": 0.66}),
+                d.path(),
+            )
+            .unwrap();
+            let t = stub["peak_time_s"].as_f64().unwrap();
+            assert!((t - tau).abs() < 0.2e-9, "{window}: {t}");
+            let dist = stub["distance_m"].as_f64().unwrap();
+            assert!((dist - 0.9144).abs() < 0.05, "{window}: {dist} m");
+            let through = time_domain(
+                &json!({"file": "stub.csv", "trace": "s21", "window": window, "t_max_s": 40e-9, "time_points": 401}),
+                d.path(),
+            )
+            .unwrap();
+            assert!(through["peak_time_s"].as_f64().unwrap().abs() < 0.2e-9, "{window}");
+        }
+    }
+
+    // Tests [@ANCHOR: bench_vna_time_domain]
     // Tests [@ANCHOR: bench_vna_time_text]
     // Tests [@ANCHOR: bench_vna_time_number]
     // Tests [@ANCHOR: bench_vna_time_read_sweep]
