@@ -12,7 +12,7 @@ import { registry } from "@web/core/registry";
 // What the report form's refusals tell the visitor (the server's report_error=<reason>). The
 // reasons that identify a program (a bad signature, a wrong solution) are never sent: those get
 // the success message, so a program learns nothing.
-const REPORT_ERRORS = {
+export const REPORT_ERRORS = {
     missing_fields: "Please describe the problem and try again.",
     short_description: "Please describe the problem in at least ten characters.",
     gibberish: "Please describe the problem in your own words.",
@@ -30,12 +30,13 @@ const REPORT_ERRORS = {
 export class UrlToastNotification extends Interaction {
     static selector = '#wrapwrap';
 
+    // [@ANCHOR: user_websites:js_toast_notifications_url_start]
     start() {
         this._checkUrlForNotifications();
     }
 
+    // [@ANCHOR: user_websites:js_toast_notifications_check_url]
     // [@ANCHOR: toast_notifications_logic]
-
     // Verified by [@ANCHOR: test_tour_toast_notifications]
     _checkUrlForNotifications() {
         const urlParams = new URLSearchParams(document.location.search);
@@ -84,6 +85,7 @@ registry.category("public.interactions").add("user_websites.UrlToastNotification
 export const MODERATION_TOAST_KEY = 'admin_violation_toast_seen';
 export const MODERATION_TOAST_TTL_MS = 12 * 60 * 60 * 1000;
 
+// [@ANCHOR: user_websites:js_toast_notifications_read_seen]
 export function readSeen(storage) {
     try {
         const raw = (storage || window.localStorage).getItem(MODERATION_TOAST_KEY);
@@ -93,6 +95,7 @@ export function readSeen(storage) {
     }
 }
 
+// [@ANCHOR: user_websites:js_toast_notifications_write_seen]
 export function writeSeen(data, now, storage) {
     try {
         (storage || window.localStorage).setItem(MODERATION_TOAST_KEY, JSON.stringify({
@@ -104,6 +107,7 @@ export function writeSeen(data, now, storage) {
 }
 
 /** Show when never seen, expired, or the queue grew (count or newest id up). */
+// [@ANCHOR: user_websites:js_toast_notifications_should_show_toast]
 export function shouldShowToast(seen, data, now) {
     if (!data || !(data.count > 0)) return false;
     if (!seen || typeof seen.ts !== 'number') return true;
@@ -114,14 +118,14 @@ export function shouldShowToast(seen, data, now) {
 export class AdminViolationToast extends Interaction {
     static selector = '#wrapwrap';
 
+    // [@ANCHOR: user_websites:js_toast_notifications_admin_start]
     start() {
         void this._checkPendingReports();
     }
 
+    // [@ANCHOR: user_websites:js_toast_notifications_check_pending_reports]
     // [@ANCHOR: admin_toast_logic]
-
     // Verified by [@ANCHOR: test_tour_toast_notifications]
-
     // Verified by [@ANCHOR: test_admin_violation_toast_rpc]
     _checkPendingReports() {
         return fetch('/api/v1/user_websites/pending_reports')
