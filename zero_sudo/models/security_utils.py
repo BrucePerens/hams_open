@@ -51,6 +51,7 @@ _logger = logging.getLogger(__name__)
 _SERVICE_UID_CACHE = {}
 
 
+# [@ANCHOR: zero_sudo_security_utils_zero_sudo_security_utils]
 class ZeroSudoSecurityUtils(models.AbstractModel):
     _name = "zero_sudo.security.utils"
     _description = (

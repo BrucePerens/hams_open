@@ -29,6 +29,7 @@ class TestZeroSudoControllers(RealTransactionCase):
         )
         self.env.cr.commit()
 
+    # Tests [@ANCHOR: zero_sudo_main_zero_sudo_home]
     def test_01_web_login_interceptor(self):
         # [@ANCHOR: zero_sudo:COMM_test_web_login_interceptor_check]
         # ---
@@ -128,6 +129,7 @@ class TestZeroSudoControllers(RealTransactionCase):
             msg="[!] DIAGNOSTIC FOR AI: Security log entry was not created for blocked login.",
         )
 
+    # Tests [@ANCHOR: zero_sudo_ir_http_ir_http]
     def test_02_service_account_session_blocked_from_interactive_web_ui(self):
         # Tests [@ANCHOR: zero_sudo:ir_http_authenticate]
         """The /web/login form interceptor above blocks a service account

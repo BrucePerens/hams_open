@@ -52,14 +52,17 @@ ENCRYPTED_FORMAT = b"hs1"
 _AAD_PREFIX = b"hams-secret-store:v1:"
 
 
+# [@ANCHOR: zero_sudo_secret_store_secret_store_error]
 class SecretStoreError(RuntimeError):
     """Base class: the store could not give the caller what it asked for."""
 
 
+# [@ANCHOR: zero_sudo_secret_store_secret_not_found]
 class SecretNotFound(SecretStoreError):
     """No configured backend has this secret."""
 
 
+# [@ANCHOR: zero_sudo_secret_store_insecure_secret_source]
 class InsecureSecretSource(SecretStoreError):
     """A secret file has an owner or mode that would let the wrong account read or rewrite it."""
 
@@ -121,6 +124,7 @@ def parse_credentials_text(text):
     return values
 
 
+# [@ANCHOR: zero_sudo_secret_store_systemd_credential_backend]
 class SystemdCredentialBackend:
     """Tier A: `$CREDENTIALS_DIRECTORY/<name>`, one file per secret, put there by systemd."""
 
@@ -144,6 +148,7 @@ class SystemdCredentialBackend:
         return read_small_file(path).decode("utf-8").strip()
 
 
+# [@ANCHOR: zero_sudo_secret_store_credentials_file_backend]
 class CredentialsFileBackend:
     """Tier A: one root-owned `name=value` file, readable by the service account through its group."""
 
@@ -163,6 +168,7 @@ class CredentialsFileBackend:
         return parse_credentials_text(read_small_file(self.path).decode("utf-8")).get(name)
 
 
+# [@ANCHOR: zero_sudo_secret_store_encrypted_backend]
 class EncryptedBackend:
     """Tier A fallback: AES-256-GCM values, key outside the database.
 
@@ -244,6 +250,7 @@ def json_file_lookup(path):
     return lookup
 
 
+# [@ANCHOR: zero_sudo_secret_store_broker_client]
 class BrokerClient:
     """Tier B client: one JSON request per connection to the broker's unix socket (secret_broker.py).
     The broker decides who may ask from SO_PEERCRED; the client sends no credential of its own."""
@@ -274,6 +281,7 @@ class BrokerClient:
         return reply.get("result")
 
 
+# [@ANCHOR: zero_sudo_secret_store_secret_store]
 class SecretStore:
     """Ordered Tier A backends plus an optional Tier B broker.
 

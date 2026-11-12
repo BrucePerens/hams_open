@@ -10,6 +10,7 @@ from odoo import api, fields, models
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 
 
+# [@ANCHOR: zero_sudo_res_users_res_users_zero_sudo]
 class ResUsersZeroSudo(models.Model):
     _inherit = "res.users"
 

@@ -47,6 +47,7 @@ class TestDebugAssetsReachesWebClientBundles(HamsHttpCase):
         )
         return response.text
 
+    # Tests [@ANCHOR: zero_sudo_main_zero_sudo_session]
     def test_debug_assets_serves_unminified_web_bundle(self):
         self.authenticate("admin", "admin")
         html = self._webclient_html("/odoo?debug=assets")

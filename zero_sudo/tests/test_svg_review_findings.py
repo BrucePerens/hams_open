@@ -27,6 +27,7 @@ class TestSvgReviewFindings(BaseCase):
         # (a quadratic cost quadruples it); see assert_linear_cpu for why this is not a wall-clock budget.
         assert_linear_cpu(self, lambda n: "<svg></svg>" * n, 10000, 20000, "sibling svgs")
 
+    # Tests [@ANCHOR: zero_sudo_svg_sanitizer_budget]
     def test_02_many_svgs_interleaved_with_elements_are_linear_too(self):
         # The same cost with an element between the blocks: `<svg></svg><b>x</b>` repeated, inside one
         # paragraph, so every block has a different neighbour than in test_01 and the fix cannot be a

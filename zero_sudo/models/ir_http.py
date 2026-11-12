@@ -50,6 +50,7 @@ def _harden_cookie_header(cookie_header, is_https):
     return "; ".join(parts)
 
 
+# [@ANCHOR: zero_sudo_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = 'ir.http'
 

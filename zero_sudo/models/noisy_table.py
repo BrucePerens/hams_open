@@ -7,6 +7,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: zero_sudo_noisy_table_noisy_table]
 class NoisyTable(models.Model):
     # [@ANCHOR: zero_sudo:COMM_zero_sudo_noisy_table_global]
     # This model is logically GLOBAL and NOT multi-tenanted.

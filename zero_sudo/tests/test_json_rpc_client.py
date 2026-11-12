@@ -36,6 +36,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         finally:
             super().tearDown()
 
+    # Tests [@ANCHOR: zero_sudo_json_rpc_client_secure_jsonrpcclient]
     def test_call_success(self):
         # Tests [@ANCHOR: zero_sudo:json_rpc_client_init]
 

@@ -85,6 +85,9 @@ class TestRealTransactionFacility(RealTransactionCase):
         self.assertLess(small_locks * 3, big_locks, "locks piled up across batches: %s vs %s" % (small_locks, big_locks))
         self.assertEqual(set(counts), set(tables))
 
+    # Tests [@ANCHOR: zero_sudo_security_log_security_log]
+    # Tests [@ANCHOR: zero_sudo_res_users_res_users_zero_sudo]
+    # Tests [@ANCHOR: zero_sudo_core_secrets_ir_config_parameter_core_secrets]
     def test_01_auto_cleanup_tracking(self):
         # [@ANCHOR: zero_sudo:COMM_test_orm_instrumentation]
         # ---
@@ -102,6 +105,7 @@ class TestRealTransactionFacility(RealTransactionCase):
         self.assertIn(user.id, self._tracked_records["res.users"])
         # Note: TearDown will automatically delete this user and check for leaks.
 
+    # Tests [@ANCHOR: zero_sudo_noisy_table_noisy_table]
     def test_02_leak_detector_catches_raw_sql(self):
         # [@ANCHOR: zero_sudo:COMM_test_leak_verification]
         # ---
@@ -254,6 +258,7 @@ class TestRealTransactionFacility(RealTransactionCase):
             )
             self.env.cr.commit()
 
+    # Tests [@ANCHOR: zero_sudo_kv_zero_sudo_kv]
     def test_07_common_setup_class_sql(self):
         # [@ANCHOR: zero_sudo:COMM_test_common_setup_class_sql]
         # ---
