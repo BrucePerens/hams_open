@@ -72,6 +72,7 @@ class PagerDutyIncidentTicketAdapter(models.Model):
         ).action_generate_helpdesk_ticket()
         return records
 
+    @api.private
     def action_generate_helpdesk_ticket(self):
         """
         Adapter API: Dynamically resolves the helpdesk model from system parameters
