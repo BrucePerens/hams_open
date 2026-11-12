@@ -126,6 +126,7 @@ fn dtmf_tone(row_hz: f64, col_hz: f64, amp: f64) -> Vec<i16> {
 /// (`b0`, ordinary-speech `b1`, ordinary-speech `b2`, real tone index, real tone volume [only
 /// meaningful when `b0` is a tone frame -- see `ambe_dstar::decode::decode_tone`], `epsilon_c0`,
 /// `epsilon_c1`).
+// [@ANCHOR: ham_digital_modes:p25_ambe_plus_2_and_dstar_dtx_dtmf_probe_dstar_tone_capture_struct]
 type DstarToneCapture = (u32, u32, u32, u32, u32, u32, u32);
 
 fn send_recv_retrying(sock: &UdpSocket, buf: &mut [u8; 256], pkt: &[u8]) -> usize {
@@ -368,4 +369,19 @@ fn main() {
 
     probe_ambe_plus_2(&sock);
     probe_dstar(&sock);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ham_digital_modes:p25_ambe_plus_2_and_dstar_dtx_dtmf_probe_dstar_tone_capture_struct]
+    #[test]
+    fn a_capture_is_the_seven_decoded_integers_in_documented_order() {
+        let capture: DstarToneCapture = (34, 1, 2, 7, 9, 3, 4);
+        let (b0, b1, b2, tone_index, tone_volume, epsilon_c0, epsilon_c1) = capture;
+        assert_eq!((b0, b1, b2), (34, 1, 2));
+        assert_eq!((tone_index, tone_volume), (7, 9));
+        assert_eq!((epsilon_c0, epsilon_c1), (3, 4));
+    }
 }

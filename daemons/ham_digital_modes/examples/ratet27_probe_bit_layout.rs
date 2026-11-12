@@ -318,6 +318,7 @@ fn norm(a: &[f64]) -> f64 {
     a.iter().map(|x| x * x).sum::<f64>().sqrt()
 }
 
+// [@ANCHOR: ham_digital_modes:ratet27_probe_bit_layout_chip_struct]
 struct Chip<'a> {
     sock: &'a UdpSocket,
     buf: [u8; 1024],
@@ -463,5 +464,43 @@ fn main() {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ham_digital_modes:ratet27_probe_bit_layout_chip_struct]
+    #[test]
+    fn decode_repeated_sends_the_header_and_wire_bytes_and_keeps_the_last_two_frames() {
+        // A fake chip on loopback: answers every CHANNEL packet with a SPEECH packet whose samples are the
+        // number of the request, and reports each request payload back through a channel.
+        let server = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let addr = server.local_addr().unwrap();
+        let (seen_tx, seen_rx) = std::sync::mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            let mut buf = [0u8; 1024];
+            for n in 0..REPS {
+                let (len, from) = server.recv_from(&mut buf).unwrap();
+                let (ptype, payload) = parse_packet(&buf[..len]).unwrap();
+                assert_eq!(ptype, TYPE_CHANNEL);
+                seen_tx.send(payload.to_vec()).unwrap();
+                server.send_to(&build_speech(&[n as i16; FRAME_SAMPLES]), from).unwrap();
+            }
+        });
+        let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+        sock.connect(addr).unwrap();
+        sock.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        let mut chip = Chip { sock: &sock, buf: [0; 1024], header: vec![0xAA, 0xBB] };
+        let c = [0u32; 8];
+        let frames = chip.decode_repeated(&c);
+        handle.join().unwrap();
+        let first = seen_rx.recv().unwrap();
+        assert_eq!(&first[..2], &[0xAA, 0xBB]);
+        assert_eq!(first[2..], c_to_wire_bytes(&c));
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0][0], (REPS - 2) as f64);
+        assert_eq!(frames[1][0], (REPS - 1) as f64);
     }
 }

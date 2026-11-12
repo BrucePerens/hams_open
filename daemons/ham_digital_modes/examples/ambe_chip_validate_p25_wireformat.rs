@@ -454,6 +454,7 @@ fn generate_permutations() -> Vec<[u8; 8]> {
     out
 }
 
+// [@ANCHOR: ham_digital_modes:ambe_chip_validate_p25_wireformat_perm_hit_struct]
 struct PermHit {
     reverse_bytes: bool,
     lsb_first: bool,
@@ -865,4 +866,28 @@ fn main() {
          instructions and stop for review before touching any production src/ambe/ code. If nothing \
          scored meaningfully above chance, that's the honest negative result to write up instead."
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: ham_digital_modes:ambe_chip_validate_p25_wireformat_perm_hit_struct]
+    #[test]
+    fn hits_sort_best_dewhitened_match_first_then_by_raw_matches() {
+        let hit = |dew4, raw4| PermHit {
+            reverse_bytes: false,
+            lsb_first: true,
+            perm: [0, 1, 2, 3, 4, 5, 6, 7],
+            raw4,
+            dew4,
+            dew7: 0,
+            total: 10,
+        };
+        let mut hits = vec![hit(2, 5), hit(4, 1), hit(4, 3)];
+        hits.sort_by_key(|a| std::cmp::Reverse((a.dew4, a.raw4)));
+        let order: Vec<(usize, usize)> = hits.iter().map(|h| (h.dew4, h.raw4)).collect();
+        assert_eq!(order, vec![(4, 3), (4, 1), (2, 5)]);
+        assert_eq!(hits[0].total, 10);
+    }
 }
