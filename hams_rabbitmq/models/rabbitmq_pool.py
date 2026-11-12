@@ -363,6 +363,7 @@ class RabbitMQPool(models.AbstractModel):
                 except (pika.exceptions.AMQPError, OSError) as close_error:
                     _logger.debug("Closing a dead RabbitMQ connection raised %r", close_error)
 
+    @api.private
     @api.model
     def publish(self, exchange, routing_key, body, properties=None, on_result=None):
         # [@ANCHOR: rabbitmq_publish]
