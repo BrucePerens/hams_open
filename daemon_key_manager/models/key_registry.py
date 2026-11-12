@@ -11,6 +11,7 @@ import tempfile
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError, AccessError
 from odoo.addons.base.models.res_users import INDEX_SIZE, KEY_CRYPT_CONTEXT
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -383,6 +384,7 @@ class DaemonKeyRegistry(models.Model):
         self.ensure_one()
         return self._lifetime_days() - (KEY_LIFETIME_DAYS - ROTATION_AGE_DAYS)
 
+    @public_rpc
     def action_apply_key_lifetime(self):
         """
         Extends the key a remote self-rotating daemon holds today to this row's Key Lifetime,
@@ -482,6 +484,7 @@ class DaemonKeyRegistry(models.Model):
             user.invalidate_recordset()
             self.env.registry.clear_cache()
 
+    @public_rpc
     def action_force_provision_all(self, *args, **kwargs):
         # # Tested by [@ANCHOR: COMM_test_force_provisioning]
 
@@ -596,6 +599,7 @@ class DaemonKeyRegistry(models.Model):
             },
         }
 
+    @public_rpc
     def action_rotate_key(self):
         """
         Manually rotate the key for a single daemon.
@@ -626,6 +630,7 @@ class DaemonKeyRegistry(models.Model):
             },
         }
 
+    @public_rpc
     @api.model
     def rotate_own_key(self, daemon_name, current_key):
         """
