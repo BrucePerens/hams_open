@@ -280,31 +280,215 @@ Receives one datagram into `buf` and returns its length, or `Ok(None)` when `wai
 received. A datagram longer than `buf` is cut to fit (the kernel discards the rest); size `buf` for the largest
 packet expected. Errors: `NetError::Io`. Takes `&self`. No parsing happens here: pass the bytes to `RtpPacket::parse`. Test:
 `rtp_socket_receives_and_times_out`.
-- [@ANCHOR: radiod_client:radiod_client_rtp_error_fmt] (rtp) Display text of an RTP rejection.
-- [@ANCHOR: radiod_client:radiod_client_rtp_packet_parse] (rtp) Parse a datagram.
-- [@ANCHOR: radiod_client:radiod_client_rtp_encoding_from_radiod] (rtp) Map `radiod`'s encoding number.
-- [@ANCHOR: radiod_client:radiod_client_rtp_decoder_debug_fmt] (rtp) Debug text of an audio decoder (encoding and channels, never the codec state).
-- [@ANCHOR: radiod_client:radiod_client_rtp_decoder_new] (rtp) Build a decoder from the channel status (`channels` for PCM; Opus is always 2).
-- [@ANCHOR: radiod_client:radiod_client_rtp_decoder_decode] (rtp) Decode a payload to mono samples in -1.0..=1.0.
-- [@ANCHOR: radiod_client:radiod_client_rtp_seq_push] (rtp) `SeqTracker::push(&mut self, seq: u16)`: account for one packet in the counters `received`, `lost`, `out_of_order` and `restarts` (all `u64`). One ahead is in order; 2 to 32767 ahead adds the skipped packets to `lost`; the same number, or at most `REORDER_WINDOW` (32) behind the newest, is `out_of_order` and leaves the newest unchanged; further back (including exactly 32768) is a stream restart: `restarts` grows by one, nothing is added to `lost` (the new numbering says nothing about how many old packets were missed), and tracking follows the new sequence so the packets after it are in order. `radiod` re-creating a channel restarts its sequence (200 lower on the RX-888, 2026-11-05); before this the whole new stream counted as out of order and the outage showed nowhere. A restart that lands ahead of the old sequence counts as loss.
-- [@ANCHOR: radiod_client:radiod_client_status_decode] (status) Decode a datagram.
-- [@ANCHOR: radiod_client:radiod_client_status_spectrum_db] (status) Spectrum bins in ascending frequency order with their frequencies, in dB.
-- [@ANCHOR: radiod_client:radiod_client_tlv_error_fmt] (tlv) Display text of a rejected datagram.
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_uint] (tlv) Unsigned integer (up to 8 bytes, big-endian, zero length is 0).
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_bool] (tlv) Boolean (any non-zero integer).
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32] (tlv) 32-bit float; a value longer than four bytes is read as a double, as `radiod` does.
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_f64] (tlv) 64-bit float; a value of four bytes or fewer is read as a float.
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_text] (tlv) UTF-8 text (lossy, so a hostile description cannot fail the parse).
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_socket] (tlv) Socket: 6 bytes IPv4 plus port, 18 bytes IPv6 plus port, or empty (null socket).
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32_vec] (tlv) A vector of big-endian `f32` (`BIN_DATA`).
-- [@ANCHOR: radiod_client:radiod_client_tlv_parse] (tlv) Parse a datagram into its kind and entries.
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_command] (tlv) Starts a command datagram (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_header] (tlv) Writes one entry header (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_uint] (tlv) Writes an integer with leading zero bytes removed (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_bool] (tlv) Writes a boolean as an integer (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_f32] (tlv) Writes a big-endian 32-bit float (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_f64] (tlv) Writes a big-endian 64-bit float (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_finish] (tlv) Terminates the datagram with the end-of-list entry (crate-private).
+
+### `impl Display for RtpError` (`fmt(&self, f) -> fmt::Result`) [@ANCHOR: radiod_client:radiod_client_rtp_error_fmt]
+
+The text of an RTP rejection (`src/rtp.rs`): the `Debug` form of the variant, for example `Truncated`,
+`Version(1)` or `Payload("...")`. `RtpError` has three variants: `Truncated` (shorter than the fixed header, or
+a CSRC list, extension or padding runs past the end), `Version(v)` (not RTP version 2) and `Payload(text)` (the
+codec could not decode the bytes, or Opus support is not built in). It also implements `std::error::Error`. Pure.
+Test: `rejects_bad_packets`.
+
+### `RtpPacket::parse(d: &[u8]) -> Result<RtpPacket<'_>, RtpError>` [@ANCHOR: radiod_client:radiod_client_rtp_packet_parse]
+
+Parses one RTP datagram without copying: the returned `payload` borrows from `d`.
+
+| Field | Source |
+|---|---|
+| `pt` | low 7 bits of byte 1 (payload type; dynamic in `radiod`, learned from the channel status) |
+| `marker` | high bit of byte 1 |
+| `seq`, `timestamp`, `ssrc` | big-endian bytes 2-3, 4-7, 8-11 |
+| `payload` | after the 12-byte header, the CSRC list (4 bytes each) and any header extension, up to the end less the padding count |
+
+Errors: `Truncated` when `d` is under 12 bytes or the CSRC list, the extension header, or the padding length would
+run past the end (every offset is checked, so no input panics); `Version(v)` when the version bits are not 2.
+Pure, sans-IO, borrows the datagram. Tests: `parses_header`, `rejects_bad_packets`.
+
+### `Encoding::from_radiod(n: u64) -> Option<Encoding>` [@ANCHOR: radiod_client:radiod_client_rtp_encoding_from_radiod]
+
+Maps the output-encoding number in a channel status (`ChannelStatus::encoding`, from `OUTPUT_ENCODING`, `rtp.h`
+of `radiod`) to the decoder format: 1 is `S16Le` (16-bit little-endian PCM), 2 is `S16Be` (big-endian), 3 is
+`Opus` (48 kHz stereo). Any other number gives `None`, so the caller can refuse a stream it cannot decode
+instead of playing noise. Pure, cannot fail. Test: `encoding_numbers_and_little_endian_stereo`.
+
+### `impl Debug for AudioDecoder` (`fmt(&self, f) -> fmt::Result`) [@ANCHOR: radiod_client:radiod_client_rtp_decoder_debug_fmt]
+
+Writes `AudioDecoder { encoding: ..., channels: ... }` and nothing else. The Opus codec state is left out on
+purpose: the library type does not implement `Debug`, and the state is large and meaningless in a log. `channels`
+is the channel count the decoder downmixes from (2 for Opus). Pure, no locking. Test: `pcm_big_endian`.
+
+### `AudioDecoder::new(encoding: Encoding, channels: usize) -> Result<AudioDecoder, RtpError>` [@ANCHOR: radiod_client:radiod_client_rtp_decoder_new]
+
+Builds a decoder for one stream from what its channel status said. `channels` is the status's output channel
+count; PCM clamps it to 1 or 2, and Opus ignores it because `radiod` always sends Opus as 48 kHz stereo. For
+`Opus` it creates an `opus::Decoder` (48,000 Hz, stereo); if the crate was built without the `opus` feature, or the
+codec refuses, it returns `RtpError::Payload`. PCM never fails. The decoder holds state, so use one per stream
+(SSRC) and call `decode` on it in packet order. Pure otherwise; no I/O. Test: `pcm_big_endian`.
+
+### `AudioDecoder::decode(&mut self, payload: &[u8]) -> Result<Vec<f32>, RtpError>` [@ANCHOR: radiod_client:radiod_client_rtp_decoder_decode]
+
+Decodes one RTP payload to mono `f32` samples in -1.0 to 1.0 (stereo is downmixed by averaging).
+
+| Encoding | Behaviour | Errors |
+|---|---|---|
+| `S16Be`, `S16Le` | each 16-bit sample divided by 32768; with 2 channels each pair is averaged | `Payload` when the length is not a whole number of frames |
+| `Opus` | decodes with `decode_float` into a buffer sized for the longest Opus frame (120 ms at 48 kHz) and averages the two channels | `Payload` with the codec's message; or "built without the opus feature" |
+
+`&mut self` because the Opus decoder keeps state between packets; a lost packet is not concealed. Allocates the
+output vector each call. Not async, no locking. Tests: `pcm_big_endian`, `encoding_numbers_and_little_endian_stereo`.
+
+### `SeqTracker::push(&mut self, seq: u16)` [@ANCHOR: radiod_client:radiod_client_rtp_seq_push]
+
+Accounts for one received packet in the public counters `received`, `lost`, `out_of_order` and `restarts` (all
+`u64`; the tracker also remembers the newest sequence number). It cannot fail. Let `d` be `seq` minus the newest
+one, with 16-bit wrap-around:
+
+| `d` | Counted as |
+|---|---|
+| 1 | in order, nothing extra |
+| 0 | duplicate: `out_of_order` +1 |
+| 2 to 32767 | the skipped packets, `d - 1`, added to `lost` |
+| behind the newest by at most `REORDER_WINDOW` (32) | late packet: `out_of_order` +1, the newest is unchanged |
+| further back (including exactly 32768) | stream restart: `restarts` +1, nothing added to `lost`, tracking follows the new sequence |
+
+`radiod` re-creating a channel restarts its sequence (200 lower on the RX-888, 2026-11-05); before this the whole
+new stream counted as out of order and the outage showed nowhere. A restart that lands ahead of the old sequence cannot
+be told from loss and counts as loss. The first packet only sets the starting point. Pure, one tracker per
+stream. Tests: `loss_accounting`, `a_channel_restart_is_counted_once_and_tracking_follows_the_new_sequence`,
+`the_reorder_window_separates_late_packets_from_restarts`.
+
+### `ChannelStatus::decode(pkt: &[u8]) -> Result<Option<ChannelStatus>, TlvError>` [@ANCHOR: radiod_client:radiod_client_status_decode]
+
+Decodes one datagram into a `ChannelStatus` (`src/status.rs`). It parses the TLV list, returns `Ok(None)` for a
+command packet (our own, echoed back by multicast loopback), and otherwise fills each field whose type number
+it knows (the field tables below list them); absent fields stay `None` and unknown types are ignored, as the
+protocol intends. Errors: any `TlvError` from the parse, `TlvError::BadValue(type)` when a known entry has an
+impossible length (including an `OUTPUT_SSRC` wider than 32 bits, which is refused rather than truncated into
+another channel's number), so a hostile datagram fails instead of giving a wrong number. Sets `has_ssrc` only
+when an SSRC entry was present. Pure, sans-IO, never panics. Tests: `decodes_a_real_rx888_front_end_status`,
+`our_own_command_packets_are_skipped_and_garbage_is_an_error`,
+`a_status_with_no_ssrc_or_a_wider_than_32_bit_one_is_not_taken_for_the_front_end`.
+
+### `ChannelStatus::spectrum_db(&self, center_hz: f64) -> Vec<(f64, f32)>` [@ANCHOR: radiod_client:radiod_client_status_spectrum_db]
+
+Turns the spectrum bins of a status into `(frequency in Hz, level in dB)` pairs in ascending frequency order,
+around `center_hz` (the centre the channel was asked for). It returns an empty vector when `bin_hz` is absent or
+zero. Float bins (`BIN_DATA`) arrive DC first, then positive, then negative frequencies, so they are unwrapped and
+sorted, and the level is `10 log10(power)` with the power floored at 1e-30. Byte bins (`BIN_BYTE_DATA`) are already
+low to high, and the level is `base_db + step_db * byte` (defaults -150 and 0.5 when the status omits them). Levels are relative to full
+scale (a tone at -20 dBFS reads -20 dB), not dBm. Pure, allocates one vector. Tests:
+`float_bins_are_unwrapped_to_ascending_frequency`, `byte_bins_are_already_ascending_and_use_base_and_step`.
+
+### `impl Display for TlvError` (`fmt(&self, f) -> fmt::Result`) [@ANCHOR: radiod_client:radiod_client_tlv_error_fmt]
+
+The text of a rejected datagram (`src/tlv.rs`): "datagram too short" (`TooShort`), "entry runs past end of
+datagram" (`Truncated`), "unsupported length-of-length" (`BadLength`), "unknown packet kind N" (`BadKind`, the
+first byte was neither 0 status nor 1 command), and "malformed value for type N" (`BadValue`, a value length its
+type cannot have). Pure. `TlvError` also implements `std::error::Error`. Test: `hostile_inputs_are_errors_not_panics`.
+
+### `Entry::uint(&self) -> Result<u64, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_uint]
+
+Reads an entry value as an unsigned big-endian integer. Leading zero bytes are removed on the wire, so a value
+of any length 0 to 8 bytes is accepted and a zero-length value is 0. More than 8 bytes gives
+`TlvError::BadValue(type)`. Pure, cannot overflow. `bool`, `f32` and `f64` are built on it. The caller narrows the
+result (for example `ChannelStatus::decode` refuses an SSRC above 32 bits). Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Entry::bool(&self) -> Result<bool, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_bool]
+
+Reads an entry value as a boolean: any non-zero integer is true, and an empty value (how `radiod` sends 0) is
+false. Errors as `uint`: a value over 8 bytes is `TlvError::BadValue(type)`. Pure. Used for the flags of the
+channel status such as AGC, RF AGC, PLL on and lock. Test: `bool_and_float_values`.
+
+### `Entry::f32(&self) -> Result<f32, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32]
+
+Reads an entry value as a 32-bit float. A value of up to 4 bytes is the big-endian bit pattern (an empty value
+is `0.0`, which is how `radiod` sends a zero level); a value of 5 to 8 bytes is read as a 64-bit double and
+narrowed, as `radiod` does, because it sends the shortest form. Longer values give `TlvError::BadValue(type)`.
+`NaN` and infinities pass through unchanged (a stopped front end reports `-inf`). Pure. Test: `bool_and_float_values`.
+
+### `Entry::f64(&self) -> Result<f64, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_f64]
+
+Reads an entry value as a 64-bit float, such as the carrier frequency. A value of 5 to 8 bytes is the big-endian
+bit pattern of a double; one of 4 bytes or fewer is read as a 32-bit float and widened, since `radiod` may send
+the shorter form for a value that fits. Longer values give `TlvError::BadValue(type)`. Pure, no allocation.
+Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Entry::text(&self) -> String` [@ANCHOR: radiod_client:radiod_client_tlv_entry_text]
+
+Reads an entry value as UTF-8 text, such as the front end description. Invalid bytes are replaced with the
+replacement character instead of failing, so a hostile or odd description cannot make the whole status fail to
+parse. It cannot return an error. The text is untrusted: do not use it as a path, a command or markup without
+escaping. Allocates a `String`. Test: `vectors_and_text`.
+
+### `Entry::socket(&self) -> Result<Option<SocketAddr>, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_socket]
+
+Reads an entry value as a network address with a port. Six bytes are an IPv4 address then a big-endian port,
+eighteen bytes an IPv6 address then a port, and an empty value is the null socket, returned as `Ok(None)`. Any
+other length gives `TlvError::BadValue(type)`. Used for `OUTPUT_DATA_DEST_SOCKET` (the status's `data_dest`).
+This client only reads a destination; it can never send one. Pure. Test: `socket_forms`.
+
+### `Entry::f32_vec(&self) -> Result<Vec<f32>, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32_vec]
+
+Reads an entry value as a vector of big-endian 32-bit floats, used for the float spectrum bins (`BIN_DATA`). The
+length must be a multiple of 4, otherwise `TlvError::BadValue(type)`; an empty value gives an empty vector.
+It allocates one `f32` per 4 bytes, bounded by the datagram size (65,536 bytes at most, so 16,384 floats).
+Pure. Test: `vectors_and_text`.
+
+### `parse(pkt: &[u8]) -> Result<(Kind, Vec<Entry<'_>>), TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_parse]
+
+Splits a datagram into its packet kind and its entries; each `Entry` borrows its value bytes from `pkt`. The first
+byte is the kind (0 `Status`, 1 `Command`). Each entry is a type byte and a length: 0 to 127 is direct; with the
+high bit set the low 7 bits give the number of big-endian length bytes (1 to 4). Parsing stops at the end
+marker (type 0) or the end of the datagram. Errors: `TooShort` (empty), `BadKind(byte)`, `Truncated` (a length
+runs past the end), `BadLength` (length-of-length 0 or over 4). Every length is checked against the bytes left, so
+no input can panic or read outside the datagram. Pure, sans-IO. Tests: `long_form_length`,
+`hostile_inputs_are_errors_not_panics`, `integer_round_trip_strips_leading_zeroes`.
+
+### `Writer::command() -> Writer` [@ANCHOR: radiod_client:radiod_client_tlv_writer_command]
+
+Starts a command datagram: a buffer holding the single packet-kind byte 1. Crate-private (`pub(crate)`), because
+the only intended callers are `Command::encode` and `encode_front_end_poll`; nothing outside the crate can
+assemble bytes for `radiod`, which is the closed command schema. Pure, allocates a small `Vec`. Entries are added
+with the `uint`, `bool`, `f32` and `f64` writers and the list is closed with `finish`. Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Writer::header(&mut self, t: u8, len: usize)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_header]
+
+Writes the type byte and a one-byte length of one entry (private). Only the short form is produced, because every
+value written here is at most 8 bytes; a `len` of 256 or more would be truncated, but no caller passes one. It
+does not write the value, so a caller must follow it with exactly `len` bytes. The other writers call it; nothing
+else does. Pure. Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Writer::uint(&mut self, t: u8, v: u64)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_uint]
+
+Writes an unsigned integer entry of type `t`, big-endian, with the leading zero bytes removed (the way `radiod`
+reads them), so 0 is an entry with an empty value and 300 is two bytes. The length is 8 minus the zero bytes
+skipped. Crate-private, cannot fail, appends to the buffer. Used for SSRC, tag, lifetime, bin count and similar
+fields. Tests: `integer_round_trip_strips_leading_zeroes`, `bool_and_float_values`.
+
+### `Writer::bool(&mut self, t: u8, v: bool)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_bool]
+
+Writes a boolean entry of type `t` as the integer 1 for true or 0 for false (the zero case becomes an entry with an
+empty value, as in the other integer fields). Crate-private; it calls `uint`, so it cannot fail. Used for the
+AGC, envelope, PLL and squelch flags of an audio command. Test: `bool_and_float_values`.
+
+### `Writer::f32(&mut self, t: u8, v: f32)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_f32]
+
+Writes a 32-bit float entry of type `t`: a length of 4 and the big-endian bit pattern of `v`, always four bytes
+(no zero stripping). Crate-private, cannot fail. Used for filter edges, gain, squelch thresholds, the FM
+de-emphasis values and the spectrum bin width. The caller has validated `v` as finite where it matters. Test: `bool_and_float_values`.
+
+### `Writer::f64(&mut self, t: u8, v: f64)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_f64]
+
+Writes a 64-bit float entry of type `t`: a length of 8 and the big-endian bit pattern of `v`. Crate-private,
+cannot fail. Used for `RADIO_FREQUENCY`, the carrier or centre frequency in Hz, which needs the double's
+precision. Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Writer::finish(self) -> Vec<u8>` [@ANCHOR: radiod_client:radiod_client_tlv_writer_finish]
+
+Ends the datagram with the end-of-list entry (type 0, no length) and returns the finished bytes. It takes the
+writer by value, so nothing can be added afterwards. Crate-private, cannot fail, allocation-free beyond the
+buffer already built. The result is what `Command::encode` returns and `Control::send` puts on the wire. Test:
+`integer_round_trip_strips_leading_zeroes`.
 
 ## RX-888 additions (2026-11-05): front end, filter, gain, I/Q
 
@@ -446,9 +630,7 @@ The datagram that asks for the front end's status: a command packet holding only
 no lifetime applies. This is the one command not built from a `Command`, because a `Ssrc` can never be 0.
 `tag` is any value; it is not echoed (below). Pure. `Control::front_end` is the usual caller.
 
-#### `radiod_client_command_max_spectrum_span_hz` - `max_spectrum_span_hz(input_samprate: u64, real: bool) -> f64`
-
-[@ANCHOR: radiod_client:radiod_client_command_max_spectrum_span_hz]
+#### `radiod_client_command_max_spectrum_span_hz` - `max_spectrum_span_hz(input_samprate: u64, real: bool) -> f64` [@ANCHOR: radiod_client:radiod_client_command_max_spectrum_span_hz]
 
 The widest spectrum span (`bin_count * bin_hz`, Hz) a front end fills. It is half of `input_samprate` (Hz)
 when `real` is true (a direct-sampling front end such as the RX-888) and all of it when false. Feed it the
@@ -456,17 +638,13 @@ front end's `input_samprate` and `fe_is_real`. Observed at 64.8 Msps: spans up t
 every bin filled, and 32.44 MHz and wider came back with about half the bins exactly zero, so callers keep
 requests inside this bound. Pure; returns 0.0 for a rate of 0.
 
-#### `radiod_client_net_is_front_end` - `is_front_end(status: &ChannelStatus) -> bool`
-
-[@ANCHOR: radiod_client:radiod_client_net_is_front_end]
+#### `radiod_client_net_is_front_end` - `is_front_end(status: &ChannelStatus) -> bool` [@ANCHOR: radiod_client:radiod_client_net_is_front_end]
 
 True when `status` is about the front end (SSRC 0). Observed: `radiod` does not echo the command tag in a
 front-end reply, and sends one only when polled. So any SSRC-0 status counts as the answer, whoever asked:
 the front end is the same for every client. Pure.
 
-#### `radiod_client_net_control_front_end` - `async fn Control::front_end(&mut self, wait: Duration) -> Result<Option<ChannelStatus>, NetError>`
-
-[@ANCHOR: radiod_client:radiod_client_net_control_front_end]
+#### `radiod_client_net_control_front_end` - `async fn Control::front_end(&mut self, wait: Duration) -> Result<Option<ChannelStatus>, NetError>` [@ANCHOR: radiod_client:radiod_client_net_control_front_end]
 
 Sends `encode_front_end_poll` to the status group, repeating every 200 ms, and returns the first
 front-end status (`is_front_end`) within `wait`. Channel statuses received meanwhile are skipped.
@@ -495,9 +673,7 @@ section 8), so lock behaviour on a real carrier is a hardware follow-up.
 
 ### Data structures
 
-#### `radiod_client_command_mode` - `Mode` (synchronous variants)
-
-[@ANCHOR: radiod_client:radiod_client_command_mode]
+#### `radiod_client_command_mode` - `Mode` (synchronous variants) [@ANCHOR: radiod_client:radiod_client_command_mode]
 
 Three variants added to the table above. All are sent as explicit parameters:
 
@@ -523,16 +699,15 @@ Three variants added to the table above. All are sent as explicit parameters:
   command every 2 s; whether re-sending `PLL_ENABLE` 1 to a channel that already has it disturbs the lock is
   not documented and must be watched on a real carrier (lock should stay steady across refreshes).
 
-#### `radiod_client_command_sam_squelch` - `SAM_SQUELCH_OPEN_DB`
-
-[@ANCHOR: radiod_client:radiod_client_command_sam_squelch]
+#### `radiod_client_command_sam_squelch` - `SAM_SQUELCH_OPEN_DB` [@ANCHOR: radiod_client:radiod_client_command_sam_squelch]
 
 A compile-time constant (no ownership, no locking): `pub const SAM_SQUELCH_OPEN_DB: f32 = -1000.0`, dB SNR, sent as
-both `SQUELCH_OPEN` (83) and `SQUELCH_CLOSE` (84) with every synchronous `Audio` command.
+both `SQUELCH_OPEN` (83) and `SQUELCH_CLOSE` (84) with every synchronous `Audio` command. The value is
+`radiod`'s documented "keep the squelch open" threshold: the carrier PLL turns on `radiod`'s carrier squelch, and
+sending -1000 dB for both thresholds (with the SNR squelch off) lets a listener hear a fading carrier instead
+of silence. Not configurable by the caller. Test: `synchronous_modes_turn_the_pll_on_and_hold_its_squelch_open`.
 
-#### `radiod_client_status_channel_status` - `ChannelStatus` (PLL fields)
-
-[@ANCHOR: radiod_client:radiod_client_status_channel_status]
+#### `radiod_client_status_channel_status` - `ChannelStatus` (PLL fields) [@ANCHOR: radiod_client:radiod_client_status_channel_status]
 
 Fields added on 2026-11-06. Each is `None` when the status does not carry it. All are set only by
 `ChannelStatus::decode`; nobody else writes them.
@@ -553,17 +728,13 @@ The decode rule is unchanged: a value of impossible length fails the decode with
 
 ### Functions
 
-#### `radiod_client_command_mode_is_synchronous` - `Mode::is_synchronous(self) -> bool`
-
-[@ANCHOR: radiod_client:radiod_client_command_mode_is_synchronous]
+#### `radiod_client_command_mode_is_synchronous` - `Mode::is_synchronous(self) -> bool` [@ANCHOR: radiod_client:radiod_client_command_mode_is_synchronous]
 
 True for `Sam`, `SamLower` and `SamUpper`: the modes that turn `radiod`'s carrier PLL on, so the channel's
 status carries a carrier lock. Callers use it to decide whether to report a lock at all (a plain AM channel has
 none). Takes `self` by value (`Mode` is `Copy`); pure, no errors, no allocation.
 
-#### `radiod_client_status_carrier_lock` - `ChannelStatus::carrier_lock(&self) -> Option<bool>`
-
-[@ANCHOR: radiod_client:radiod_client_status_carrier_lock]
+#### `radiod_client_status_carrier_lock` - `ChannelStatus::carrier_lock(&self) -> Option<bool>` [@ANCHOR: radiod_client:radiod_client_status_carrier_lock]
 
 The carrier lock of a synchronous channel, for a console's lock indicator.
 
