@@ -15,6 +15,7 @@ from retrying import retry
 
 from constants import METRICS_PORT, MAX_RETRIES, BACKOFF_SECS, DNS_BACKOFF_SECS, GRACEFUL_SHUTDOWN_TIMEOUT, READER_THREAD_JOIN_TIMEOUT
 
+# [@ANCHOR: cloudflared:CloudflaredProcess]
 class CloudflaredProcess:
     """
     Wrapper around a Popen process that continuously drains stdout and stderr

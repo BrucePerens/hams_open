@@ -10,6 +10,7 @@ from constants import BACKOFF_SECS
 from util import LOGGER
 
 
+# [@ANCHOR: cloudflared:CfdModes]
 class CfdModes(Enum):
     NAMED = auto()
     QUICK = auto()

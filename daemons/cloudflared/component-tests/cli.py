@@ -7,6 +7,7 @@ from util import get_tunnel_connector_id, CloudflaredProcess
 
 SINGLE_CASE_TIMEOUT = 600
 
+# [@ANCHOR: cloudflared:CloudflaredCli]
 class CloudflaredCli:
     def __init__(self, config, config_path, logger):
         self.basecmd = [config.cloudflared_binary, "tunnel"]
@@ -94,6 +95,7 @@ def cert_path():
     return get_config_from_file()["origincert"]
 
 
+# [@ANCHOR: cloudflared:SubprocessError]
 class SubprocessError(Exception):
     def __init__(self, program, exit_code, cause):
         self.program = program

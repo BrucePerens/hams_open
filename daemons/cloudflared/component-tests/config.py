@@ -10,6 +10,7 @@ from constants import METRICS_PORT
 # frozen=True raises exception when assigning to fields. This emulates immutability
 
 
+# [@ANCHOR: cloudflared:BaseConfig]
 @dataclass(frozen=True)
 class BaseConfig:
     cloudflared_binary: str
@@ -23,6 +24,7 @@ class BaseConfig:
         return config
 
 
+# [@ANCHOR: cloudflared:NamedTunnelBaseConfig]
 @dataclass(frozen=True)
 class NamedTunnelBaseConfig(BaseConfig):
     # The attributes of the parent class are ordered before attributes in this class,
@@ -52,6 +54,7 @@ class NamedTunnelBaseConfig(BaseConfig):
         return config
 
 
+# [@ANCHOR: cloudflared:NamedTunnelConfig]
 @dataclass(frozen=True)
 class NamedTunnelConfig(NamedTunnelBaseConfig):
     full_config: dict = None
@@ -88,6 +91,7 @@ class NamedTunnelConfig(NamedTunnelBaseConfig):
         with open(self.credentials_file) as json_file:
             return json.load(json_file)
         
+# [@ANCHOR: cloudflared:QuickTunnelConfig]
 @dataclass(frozen=True)
 class QuickTunnelConfig(BaseConfig):
     full_config: dict = None
