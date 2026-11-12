@@ -66,6 +66,7 @@ const MAGIC_ROTATOR: u64 = 0x5243_544C_524F_5420; // "RCTLROT "
 const MAX_TEXT: usize = 1 << 20;
 const MAX_WHO: usize = 256;
 
+// [@ANCHOR: radioctl_capi_ffi_shared]
 struct Shared {
     handle: Handle,
     /// The runtime this library built, if it did.
@@ -73,12 +74,14 @@ struct Shared {
     rigs: AtomicUsize,
 }
 
+// [@ANCHOR: radioctl_capi_ffi_rctl_runtime]
 /// An opaque runtime handle (`rctl_runtime`): the tokio runtime that drives rigs.
 pub struct RctlRuntime {
     magic: u64,
     shared: Arc<Shared>,
 }
 
+// [@ANCHOR: radioctl_capi_ffi_keep]
 enum Keep {
     Nothing,
     Net(NetMonitor),
@@ -98,6 +101,7 @@ impl Keep {
     }
 }
 
+// [@ANCHOR: radioctl_capi_ffi_rctl_rig]
 /// An opaque rig handle (`rctl_rig`): one open rig.
 pub struct RctlRig {
     magic: u64,
@@ -106,6 +110,7 @@ pub struct RctlRig {
     keep: Keep,
 }
 
+// [@ANCHOR: radioctl_capi_ffi_rctl_rotator]
 /// An opaque rotator handle (`rctl_rotator`): one open rotator. Rotators count with rigs when a
 /// runtime is freed.
 pub struct RctlRotator {
@@ -118,6 +123,7 @@ pub struct RctlRotator {
     virtual_control: Option<VirtualRotatorControl>,
 }
 
+// [@ANCHOR: radioctl_capi_ffi_fail]
 /// A failure on its way to a status code and an error message.
 struct Fail {
     code: i32,
