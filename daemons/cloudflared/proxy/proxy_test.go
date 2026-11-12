@@ -1183,6 +1183,7 @@ func (p *pipedRequestBody) Close() error {
 
 type wsRespWriter struct {
 	w               io.Writer
+	pending         []byte
 	responseHeaders http.Header
 	code            int
 }
@@ -1197,15 +1198,29 @@ func newWSRespWriter(w io.Writer) *wsRespWriter {
 }
 
 // Write is written to by ingress.Stream and serves as the output to the client.
+// gobwas/ws 1.5 writes a frame's header and payload in separate Write calls, so
+// bytes are buffered until a whole frame can be read.
 func (w *wsRespWriter) Write(p []byte) (int, error) {
-	returnedMsg, err := wsutil.ReadServerBinary(bytes.NewBuffer(p))
+	w.pending = append(w.pending, p...)
+	returnedMsg, err := wsutil.ReadServerBinary(bytes.NewBuffer(w.pending))
+	if err == io.ErrUnexpectedEOF || err == io.EOF {
+		// Incomplete frame: wait for the rest.
+		return len(p), nil
+	}
 	if err != nil {
 		// The data was not returned by a websocket connection.
-		if err != io.ErrUnexpectedEOF {
-			return w.w.Write(p)
-		}
+		_, werr := w.w.Write(w.pending)
+		w.pending = nil
+		return len(p), werr
 	}
-	return w.w.Write(returnedMsg)
+	w.pending = nil
+	if _, werr := w.w.Write(returnedMsg); werr != nil {
+		return 0, werr
+	}
+	// These tests exchange one message and rely on the unwrapped message being shorter than
+	// the frame (a short write) to end the proxy's copy loop. Keep that explicit now that the
+	// frame can arrive in two writes.
+	return 0, io.ErrShortWrite
 }
 
 func (w *wsRespWriter) WriteRespHeaders(status int, header http.Header) error {
