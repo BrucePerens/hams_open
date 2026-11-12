@@ -584,3 +584,27 @@ audio instrument <x>, which is not in the bench config` when no instrument of ki
 instrument's settings); or the error of `devices::resolve` (no input matches, several match, or only a reserved device matches: such a device is never returned). Blocking: lists devices (the sound
 module's discovery through `Process`; which commands it runs is unknown from this file). No lock of its own; `call` has the rig's lock. Never touches the rig. See also: test
 `a_rig_names_its_audio_input_by_the_names_of_the_audio_instrument`; related anchors `radioctl_audio_capture`, `bench_mcp_audio_devices_resolve`.
+
+### `required` [@ANCHOR: radioctl_tx_required]
+
+`required(args, key, missing, own)` chooses the error text for a transmit-test argument that `bounded` rejected. If the key is absent or JSON null, the caller did not supply the value, so the answer is the "is required" text passed in `missing`; if a value is present but wrong (out of range, wrong type) the answer is `own`, the message `bounded` itself produced, which names the actual problem.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args` | `&Value` | The tool arguments object. |
+| `key` | `&str` | The argument name looked up. |
+| `missing` | `&str` | The text returned when the argument is absent or null. |
+| `own` | `String` | The text returned when a value is present. |
+
+Returns a `String`; pure, no errors, no I/O. Test: `a_missing_value_gets_the_is_required_text_and_a_wrong_one_keeps_its_own`.
+
+### `set_mode_verified` [@ANCHOR: radioctl_tx_set_mode_verified]
+
+`set_mode_verified(c, mode)` sets the rig mode with `set_mode <mode> 0` and then reads it back with `get_mode`; the transmit tools call it before keying, so a rig that ignored the request is never keyed on the wrong mode.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `&mut Client` | Open radioctld connection to the rig. |
+| `mode` | `&str` | Upper-case mode name already validated against the allowed list. |
+
+Returns `Ok(())` when the reported `Mode` equals `mode` (compared upper-case). Errors: `setting the mode: <rig error>` when the set fails, the read error text when the read fails, and `the rig reports mode ..., not ...; nothing was sent` when the rig kept another mode. It never keys. Test: `a_mode_the_rig_reports_back_is_accepted_and_a_different_one_is_refused`.

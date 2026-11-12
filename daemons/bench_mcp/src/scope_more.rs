@@ -74,6 +74,7 @@ pub(crate) fn combine(op: &str, a: &[f32], b: &[f32]) -> (Vec<f32>, usize) {
 }
 
 fn summary(v: &[f32]) -> (f32, f32, f64, f64) {
+    // [@ANCHOR: bench_mcp_scope_more_summary]
     let (mn, mx) = v
         .iter()
         .fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
@@ -144,6 +145,7 @@ pub fn cursors(s: &mut Link, args: &Value) -> Result<Value, String> {
 
 /// Asks the scope for a setting and returns what it answers, or says it did not answer.
 fn readback(s: &mut Link, query: &str) -> Value {
+    // [@ANCHOR: bench_mcp_scope_more_readback]
     s.set_timeout_secs(3);
     let r = s.query(query);
     s.set_timeout_secs(10);
@@ -156,6 +158,7 @@ fn readback(s: &mut Link, query: &str) -> Value {
 
 /// Sends the commands one by one and reads each setting back so the answer shows what the scope accepted.
 fn apply(s: &mut Link, cmds: Vec<(String, String)>) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_more_apply]
     let mut sent = Vec::new();
     let mut back = serde_json::Map::new();
     for (cmd, query) in cmds {
@@ -378,6 +381,34 @@ mod tests {
         assert_eq!(combine("sub", &[3.0], &[1.0, 9.0]).0, vec![2.0]);
         assert_eq!(combine("mul", &[3.0], &[2.0]).0, vec![6.0]);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_more_summary]
+    #[test]
+    fn summary_gives_min_max_mean_and_rms() {
+        let (mn, mx, mean, rms) = summary(&[-1.0, 1.0, -1.0, 1.0]);
+        assert_eq!((mn, mx, mean), (-1.0, 1.0, 0.0));
+        assert!((rms - 1.0).abs() < 1e-12);
+        assert_eq!(summary(&[3.0]).2, 3.0);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_more_apply]
+    // Tests [@ANCHOR: bench_mcp_scope_more_readback]
+    #[test]
+    fn apply_sends_each_command_and_reads_its_setting_back() {
+        let (port, seen) = scope("AUTO");
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        let r = apply(
+            &mut l,
+            vec![("TRIG_MODE SINGLE".into(), "TRIG_MODE?".into())],
+        )
+        .unwrap();
+        assert_eq!(r["sent"][0], "TRIG_MODE SINGLE");
+        assert_eq!(r["readback"]["TRIG_MODE?"], "TRIG_MODE SINGLE");
+        assert_eq!(
+            seen.lock().unwrap().as_slice(),
+            ["TRIG_MODE SINGLE", "TRIG_MODE?"]
+        );
     }
 
     // Tests [@ANCHOR: bench_mcp_scope_cursors]

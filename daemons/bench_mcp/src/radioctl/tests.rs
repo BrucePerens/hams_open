@@ -1475,6 +1475,50 @@ fn good_args() -> Value {
     json!({"frequency_hz": 7.05e6, "mode": "usb", "power_w": 10, "seconds": 0.5, "sample_every_ms": 100, "reason": "K6BP: check the PA into the load", "confirm_dummy_load": true})
 }
 
+// Tests [@ANCHOR: radioctl_tx_required]
+#[test]
+fn a_missing_value_gets_the_is_required_text_and_a_wrong_one_keeps_its_own() {
+    let a = json!({"x": 5, "n": null});
+    assert_eq!(
+        txtools::required(&a, "absent", "missing", "own".into()),
+        "missing"
+    );
+    assert_eq!(
+        txtools::required(&a, "n", "missing", "own".into()),
+        "missing"
+    );
+    assert_eq!(txtools::required(&a, "x", "missing", "own".into()), "own");
+}
+
+// Tests [@ANCHOR: radioctl_tx_set_mode_verified]
+#[test]
+fn a_mode_the_rig_reports_back_is_accepted_and_a_different_one_is_refused() {
+    let held = std::sync::Arc::new(std::sync::Mutex::new(String::from("USB")));
+    let h = held.clone();
+    let fake = FakeRadioctld::serve(move |c| match c.split(' ').next().unwrap() {
+        "set_mode" => ok(&[]),
+        "get_mode" => ok(&[&format!("Mode: {}", h.lock().unwrap()), "Passband: 2400"]),
+        _ => err(-11),
+    });
+    let mut c = Client::connect("127.0.0.1", fake.port, Duration::from_secs(2)).unwrap();
+    assert!(txtools::set_mode_verified(&mut c, "USB").is_ok());
+    let e = txtools::set_mode_verified(&mut c, "CW").unwrap_err();
+    assert!(
+        e.contains("not CW") && e.contains("nothing was sent"),
+        "{e}"
+    );
+}
+
+// Tests [@ANCHOR: bench_mcp_rigd_program]
+#[test]
+fn the_rig_daemon_program_is_never_empty() {
+    let p = rigd::program();
+    assert!(!p.is_empty());
+    if std::env::var_os("BENCH_MCP_RADIOCTLD").is_none_or(|v| v.is_empty()) {
+        assert!(p.to_string_lossy().ends_with("radioctld"), "{p:?}");
+    }
+}
+
 // Tests [@ANCHOR: radioctl_tx_args]
 #[test]
 fn a_test_is_refused_above_the_power_cap_outside_the_ranges_in_a_mode_not_allowed_or_too_long() {

@@ -59,6 +59,7 @@ pub fn rigs_dir(m: &Managed) -> Result<PathBuf, String> {
 
 /// The program that serves the rig: `BENCH_MCP_RADIOCTLD` if set, else `radioctld` from the search path.
 pub fn program() -> std::ffi::OsString {
+    // [@ANCHOR: bench_mcp_rigd_program]
     // The unit tests build radioctld from this repository when no program is named.
     #[cfg(test)]
     if std::env::var_os("BENCH_MCP_RADIOCTLD").is_none_or(|p| p.is_empty()) {

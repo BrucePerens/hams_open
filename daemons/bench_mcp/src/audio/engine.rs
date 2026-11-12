@@ -162,6 +162,7 @@ impl Drop for Recorder {
 
 /// The `pw-play` command line of one playback. `bench_audio_safe_state` finds these by `PLAY_SIGNATURE`.
 fn play_command(node: &str, path: &Path, stream_volume: f64) -> Command {
+    // [@ANCHOR: bench_mcp_audio_engine_play_command]
     let mut c = Command::new("pw-play");
     c.arg("-P")
         .arg(NO_FALLBACK)
@@ -265,6 +266,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_engine_playing_start]
+    // Tests [@ANCHOR: bench_mcp_audio_engine_play_command]
     #[test]
     fn a_playback_command_line_starts_with_the_signature_that_safe_state_stops() {
         let c = play_command("node-x", Path::new("/tmp/a.wav"), 0.5);

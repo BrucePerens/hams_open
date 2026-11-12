@@ -107,7 +107,8 @@ pub struct TestArgs {
 }
 
 /// The "is required" text only for a missing value; a value that is present but wrong keeps `bounded`'s own message.
-fn required(args: &Value, key: &str, missing: &str, own: String) -> String {
+pub(super) fn required(args: &Value, key: &str, missing: &str, own: String) -> String {
+    // [@ANCHOR: radioctl_tx_required]
     match args.get(key) {
         None | Some(Value::Null) => missing.to_string(),
         Some(_) => own,
@@ -428,7 +429,8 @@ fn gate(c: &mut Client, inst: &Instrument, deps: &Deps, a: &TestArgs) -> Result<
 }
 
 /// Sets the mode and reads it back; a rig that did not take it is not keyed.
-fn set_mode_verified(c: &mut Client, mode: &str) -> Result<(), String> {
+pub(super) fn set_mode_verified(c: &mut Client, mode: &str) -> Result<(), String> {
+    // [@ANCHOR: radioctl_tx_set_mode_verified]
     c.command(&format!("set_mode {mode} 0"))
         .map_err(|e| format!("setting the mode: {e}"))?;
     let back = c.read("get_mode").map_err(|e| e.to_string())?;
