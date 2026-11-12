@@ -125,6 +125,18 @@ small helpers choose between equivalent forms; each is tested against the plain 
   widen with the number of frames repeated in a row, the voicing cost does not.
   *(Reference: `src/ambe/float/mbe_synthesis.rs` -> `[@ANCHOR: ham_digital_modes_mbe:ErrorPolicy_is_bad]`, `[@ANCHOR: ham_digital_modes_mbe:ErrorPolicy_bad_frame_action]`; `src/ambe/float/concealment.rs` -> `[@ANCHOR: ham_digital_modes_float_conceal:Descriptor_new]`, `[@ANCHOR: ham_digital_modes_float_conceal:Concealer_continuity_cost]`)*
 
+## Codec2 3200 fixed-point FFT kernels (fixed_fft, internal stages)
+
+`fft_fixed` and its sparse relatives are built from small kernels, and each is held to the same rule: it must give the integers the textbook
+`i128` loop gives. `bf`, `bf_one`, `bf_quarter` and `i32_twiddle_scaled` are the butterfly forms (generic, add/subtract-only for the twiddles
+`1` and `-j`, and the 32-bit-halves multiply); `block` and `block_inv_i64` / `block_inv_i64_pruned` apply them across one block of a stage,
+the latter two using the quarter-turn symmetry of the table. `stage_prefix`, `stages_prefix_loop`, `stages_prefix_hot`, `prefix_general`,
+`scatter_prefix`, `scatter_prefix_short`, `prefix_fill_len`, `fft_fixed_sparse_prefix_forward` and `pitch_fft_512_kernel` are the transform for
+an input whose only nonzero samples are the first few (the pitch estimator's 64-sample window). `SparseInverse` (`put`, `run_kernel`),
+`fold_flags`, `stage_sparse`, `stages_sparse_hot`, `stages_sparse_loop`, `final_stage_real` and `twiddle_real_inverse` are the sparse harmonic
+inverse that skips empty blocks. `narrow_twiddles`, `quadrant_symmetric` and `twiddles_below_unity` vet the const tables at compile time.
+  *(Reference: `src/codec2_3200/fixed_fft.rs` -> `[@ANCHOR: fixed_fft:bf]`, `[@ANCHOR: fixed_fft:bf_one]`, `[@ANCHOR: fixed_fft:bf_quarter]`, `[@ANCHOR: fixed_fft:block]`, `[@ANCHOR: fixed_fft:block_inv_i64]`, `[@ANCHOR: fixed_fft:block_inv_i64_pruned]`, `[@ANCHOR: fixed_fft:fft_fixed_sparse_prefix_forward]`, `[@ANCHOR: fixed_fft:final_stage_real]`, `[@ANCHOR: fixed_fft:fold_flags]`, `[@ANCHOR: fixed_fft:i32_twiddle_scaled]`, `[@ANCHOR: fixed_fft:narrow_twiddles]`, `[@ANCHOR: fixed_fft:pitch_fft_512_kernel]`, `[@ANCHOR: fixed_fft:prefix_fill_len]`, `[@ANCHOR: fixed_fft:prefix_general]`, `[@ANCHOR: fixed_fft:quadrant_symmetric]`, `[@ANCHOR: fixed_fft:scatter_prefix]`, `[@ANCHOR: fixed_fft:scatter_prefix_short]`, `[@ANCHOR: fixed_fft:stage_prefix]`, `[@ANCHOR: fixed_fft:stages_prefix_hot]`, `[@ANCHOR: fixed_fft:stages_prefix_loop]`, `[@ANCHOR: fixed_fft:stage_sparse]`, `[@ANCHOR: fixed_fft:stages_sparse_hot]`, `[@ANCHOR: fixed_fft:stages_sparse_loop]`, `[@ANCHOR: fixed_fft:twiddle_real_inverse]`, `[@ANCHOR: fixed_fft:twiddles_below_unity]`, `[@ANCHOR: fixed_fft:SparseInverse_put]`, `[@ANCHOR: fixed_fft:SparseInverse_run_kernel]`)*
+
 ## Codec2 3200 synthesis (float and fixed)
 
 `synthesize_subframe` turns one decoded model into 10 ms of audio: it samples the LPC filter's phase
