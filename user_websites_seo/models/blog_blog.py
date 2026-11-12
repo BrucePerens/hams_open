@@ -3,6 +3,7 @@
 from odoo import models
 
 
+# [@ANCHOR: user_websites_seo_blog_blog_blog_blog_seo]
 class BlogBlogSEO(models.Model):
     _name = "blog.blog"
     _inherit = ["blog.blog", "user.websites.seo.metadata.mixin"]

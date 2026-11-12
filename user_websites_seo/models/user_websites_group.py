@@ -4,6 +4,7 @@ from odoo import models, _
 from odoo.exceptions import AccessError
 
 
+# [@ANCHOR: user_websites_seo_user_websites_group_user_websites_group_seo]
 class UserWebsitesGroupSEO(models.Model):
     _name = "user.websites.group"
     _inherit = [

@@ -4,6 +4,7 @@ from odoo import models, _
 from odoo.exceptions import AccessError
 
 
+# [@ANCHOR: user_websites_seo_res_users_res_users_seo]
 class ResUsersSEO(models.Model):
     _name = "res.users"
     _inherit = ["res.users", "user.websites.seo.metadata.mixin"]

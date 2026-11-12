@@ -5,6 +5,7 @@ from odoo.http import request, Response
 from odoo.addons.user_websites.controllers.main import UserWebsitesController
 
 
+# [@ANCHOR: user_websites_seo_main_user_websites_seocontroller]
 class UserWebsitesSEOController(UserWebsitesController):
 
     @http.route(
