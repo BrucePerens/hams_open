@@ -3,7 +3,7 @@
 This directory contains the Distributed Cache Manager Daemon, a standalone Python asynchronous service designed to enforce cache phase coherence: once any Odoo worker signals that cached data changed, every other worker discards its in-memory cache before its next request or cron job (see `../README.md`, Architecture).
 
 ### Functions
-- **PostgreSQL Listener**: Listens for `distributed_cache_invalidation` NOTIFY events from the Odoo PostgreSQL database via `asyncpg`.
+- **PostgreSQL Listener**: Listens for `distributed_cache_invalidation` NOTIFY events (PostgreSQL's built-in message broadcast) from the Odoo PostgreSQL database via `asyncpg`.
 - **Redis Publisher**: Validates each payload (it must be a JSON object with both `model` and `dbname`; anything else is logged and dropped), then, in one Redis pipeline, publishes it on the pub/sub channel `odoo_cache_invalidation_bus` and increments the `global_cache_invalidation_counter` key. Odoo workers read only the counter; nothing in Odoo subscribes to the channel, which this module's tests use to verify the publish side.
 - **Connection Management**: For PostgreSQL, it runs a `SELECT 1` health check every 60 seconds (10-second timeout) and, on any failure, closes the connection and reconnects 5 seconds later; a failed connection attempt is logged and retried on the next 60-second cycle. For Redis there is no reconnect loop: if Redis is unreachable at startup the daemon exits (the provided systemd unit, `Restart=always`, starts it again 10 seconds later), and after startup a publish that fails or times out (10 seconds) is logged and that one invalidation is dropped, not retried.
 

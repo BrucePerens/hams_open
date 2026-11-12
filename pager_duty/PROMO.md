@@ -1,11 +1,11 @@
-# 🛎️ Pager Duty: Enterprise-Grade SRE for Odoo
+# 🛎️ Pager Duty: Enterprise-Grade SRE (Site Reliability Engineering) for Odoo
 
-This platform handles massive, real-time data velocities. Standard ERP monitoring simply isn't enough. We built a completely generalized, standalone Site Reliability Engineering (SRE) suite that mirrors the capabilities of Datadog and Zabbix, right inside your Odoo backend.
+This platform handles massive, real-time data velocities. Standard ERP (enterprise resource planning software, which Odoo is) monitoring simply isn't enough. We built a completely generalized, standalone Site Reliability Engineering (SRE) suite that mirrors the capabilities of Datadog and Zabbix, right inside your Odoo backend.
 
 ## 🚀 Key Capabilities
 
 ### ⚡ Asynchronous & Airgapped
-The monitoring engine runs as a completely isolated Python daemon outside of Odoo. If Odoo crashes, the daemon doesn't crash with it. It catches the RPC failure and immediately utilizes its **Airgapped SMTP Fallback** to email you directly. ("Airgapped" here means independent of Odoo, not disconnected from the network: the fallback needs `PAGER_FALLBACK_EMAIL` and `SMTP_HOST` set, see `daemon/README.md`.) If you configure a Webhook, it instantly pings your **Slack or Discord** via ChatOps.
+The monitoring engine runs as a completely isolated Python daemon outside of Odoo. If Odoo crashes, the daemon doesn't crash with it. It catches the RPC (remote procedure call) failure and immediately utilizes its **Airgapped SMTP (the standard email-sending protocol) Fallback** to email you directly. ("Airgapped" here means independent of Odoo, not disconnected from the network: the fallback needs `PAGER_FALLBACK_EMAIL` and `SMTP_HOST` set, see `daemon/README.md`.) If you configure a Webhook, it instantly pings your **Slack or Discord** via ChatOps.
 
 ### 📅 Intelligent Calendar Routing
 No more guessing who is on call when disaster strikes. The Pager Duty module natively integrates with Odoo's Calendar application to dynamically route alerts. By checking the "Is Pager Duty Shift" box on a calendar event, the system instantly knows who to notify. Because it relies on standard calendar mechanics, you have absolute versatility in scheduling—easily set up recurring shifts like "Every Monday at midnight," "The first Tuesday of the month," or manage complex holiday handoffs effortlessly.
@@ -24,13 +24,13 @@ Local DNS caching hides massive outages. Our DNS monitor executes `dig +trace`, 
 
 ### ⏱️ Intelligent Execution
 * **Stochastic Jitter:** The daemon randomizes its loop start times to mathematically prevent "thundering herds" from exhausting your database connection pool.
-* **Startup Grace Periods:** Tell the daemon to silently suppress alerts for 120 seconds after a reboot, giving your heavy WSGI workers time to spin up without triggering false-positive pages.
+* **Startup Grace Periods:** Tell the daemon to silently suppress alerts for 120 seconds after a reboot, giving your heavy WSGI (Python web-server interface) workers time to spin up without triggering false-positive pages.
 * **Watchdog Threads:** If a network socket hangs indefinitely, the main daemon watchdog detects the dead thread and physically restarts the entire process.
 
 ### 🧠 Advanced SRE Capabilities
 * **Cascading Failure Suppression:** Link checks together. If the master database crashes, downstream HTTP checks automatically silence themselves to prevent an avalanche of redundant alerts.
 * **Maintenance Windows:** Define precise datetime ranges to mute alarms during planned infrastructure upgrades. (A separate, host-wide flag for planned restarts is described under "Pagerduty maintenance" in `README.md`.)
-* **"Dead Man's Snitch" Heartbeats:** For jobs that *should* run (like nightly backups). Provide your external scripts with a unique `/api/v1/pager/heartbeat/<uuid>` URL. If the daemon doesn't hear from the script before the TTL expires, it raises the alarm.
+* **"Dead Man's Snitch" Heartbeats:** For jobs that *should* run (like nightly backups). Provide your external scripts with a unique `/api/v1/pager/heartbeat/<uuid>` URL. If the daemon doesn't hear from the script before the TTL (time to live, the allowed silence) expires, it raises the alarm.
 * **Multi-Tier Escalation:** An automated background job sweeps for `open` incidents older than 15 minutes. If your on-call operator sleeps through their page, the system automatically escalates the alert to the entire administrative group.
 * **SRE Analytics:** Native tracking of Mean Time To Acknowledge (MTTA) and Mean Time To Resolve (MTTR) metrics directly on the incident records.
 
@@ -42,9 +42,9 @@ The daemon natively understands and monitors the following layers of your infras
 * **HTTP/3 (QUIC):** Validates emerging cutting-edge transport protocols over UDP natively.
 * **TCP Sockets:** Opens direct L4 stream connections to monitor any generic TCP port, sends raw strings or Hexadecimal payloads, and asserts exact byte responses.
 * **UDP Datagrams:** Executes connectionless packet transmissions to monitor generic UDP ports and expects specific reply payloads.
-* **LDAP & NTP:** Dedicated protocol handlers for monitoring directory services and time synchronization.
+* **LDAP & NTP (directory lookups and network time):** Dedicated protocol handlers for monitoring directory services and time synchronization.
 * **XML-RPC & JSON-RPC:** Natively serializes dictionaries and arrays, executes remote method calls, and validates the un-marshalled Python responses directly.
-* **DNS:** Full-chain resolution bypassing local caches (Root -> TLD -> Authoritative).
+* **DNS:** Full-chain resolution bypassing local caches (Root -> TLD, the top-level domain such as .com -> Authoritative).
 * **SMTP:** Validates outbound email health by executing a complete dry-run TCP handshake and login sequence without sending spam.
 * **SSL/TLS:** Queries live certificate data to mathematically calculate expiration windows.
 
@@ -52,16 +52,16 @@ The daemon natively understands and monitors the following layers of your infras
 * **PostgreSQL:** Verifies DB health natively via `psycopg2` or raw socket fallbacks. It securely logs in and executes `SELECT 1;` or custom SQL threshold queries for Anomaly Detection. Also simulates `pg_dump` backup processes.
 * **MySQL/MariaDB:** Native client validation that logs in using credentials to execute non-destructive `SELECT 1;` queries to guarantee database responsiveness.
 * **Redis:** Native client simulation. Initiates AUTH sequences and expects synchronous PONG replies.
-* **RabbitMQ:** A complete AMQP connection: authenticates, opens the vhost and a channel, then closes both with their own handshakes. Failures say which stage failed (refused, timed out, authentication, protocol).
+* **RabbitMQ:** A complete AMQP (the message-queue protocol RabbitMQ speaks) connection: authenticates, opens the vhost and a channel, then closes both with their own handshakes. Failures say which stage failed (refused, timed out, authentication, protocol).
 * **Cloudflare Tunnels:** Pre-flights Zero Trust `cloudflared` daemons to ensure certificates are valid and edge connections are active.
 * **Nginx:** Simulates reverse proxy reloads to catch syntax and path errors.
 * **Host OS Metrics:** Utilizes `psutil` to track RAM, Disk Space, CPU Usage, IO Wait (Disk Saturation), and Hypervisor Steal.
-* **ICMP Ping:** Basic network reachability using native OS utilities.
+* **ICMP Ping (ICMP is the network control protocol that ping uses):** Basic network reachability using native OS utilities.
 * **Docker Container Health:** Validates the native `.State.Running` status of target containers.
 * **Memcached:** Direct TCP socket handshakes requesting cache `stats`.
 * **SSH Handshakes:** Validates port reachability and protocol compliance.
 * **Systemd Services:** Queries `systemctl is-active` to ensure host OS processes are healthy.
-* **SMART Disk Health:** Anticipates hardware failures by reading from an airgapped JSON spool populated by a highly privileged root sidecar, allowing the main monitoring daemon to safely evaluate NVMe/SSD/HDD telemetry without violating its systemd sandbox.
+* **SMART Disk Health (SMART is the self-monitoring a disk reports about itself):** Anticipates hardware failures by reading from an airgapped JSON spool populated by a highly privileged root sidecar, allowing the main monitoring daemon to safely evaluate NVMe/SSD/HDD telemetry without violating its systemd sandbox.
 
 **File Formats & Log Analysis:**
 * **Log Tailing:** Spawns isolated threads to continuously tail system files (e.g., `/var/log/syslog` or Odoo application logs).
