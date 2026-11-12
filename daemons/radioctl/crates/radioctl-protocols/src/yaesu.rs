@@ -140,6 +140,9 @@ pub fn parse_clarifier(text: &str) -> Option<i16> {
 pub struct YaesuEngine {
     desc: RigDescription,
     tokenizer: Tokenizer,
+    /// The last known receive and transmit clarifier switches, for the `CF` form that sets both
+    /// in one command (`yaesu.clarifier = "cf-rx-tx"`): switching one keeps the other.
+    clar: (bool, bool),
 }
 
 impl YaesuEngine {
@@ -155,6 +158,7 @@ impl YaesuEngine {
         Ok(YaesuEngine {
             desc,
             tokenizer: Tokenizer::default(),
+            clar: (false, false),
         })
     }
 
@@ -185,6 +189,14 @@ impl YaesuEngine {
             .yaesu
             .as_ref()
             .is_some_and(|y| y.clarifier == YaesuClarifier::CfReceive)
+    }
+
+    /// True when this model's clarifier is the two-switch `CF` command (`yaesu.clarifier = "cf-rx-tx"`, the FT-710).
+    fn cf_rx_tx(&self) -> bool {
+        self.desc
+            .yaesu
+            .as_ref()
+            .is_some_and(|y| y.clarifier == YaesuClarifier::CfRxTx)
     }
 
     // [@ANCHOR: radioctl_yaesu_engine_split_st]
@@ -223,6 +235,34 @@ impl YaesuEngine {
             return self
                 .decode_if(body)
                 .unwrap_or_else(|| vec![Inbound::Unrecognised(format!("{text};").into_bytes())]);
+        }
+        // `CF` on the FT-710: P1 0, P2 0, P3 0, P4 the receive and P5 the transmit clarifier (0 off,
+        // 1 on), P6-P8 000; or P3 1 with a sign and four digits of offset.
+        if self.cf_rx_tx() {
+            if let Some(body) = text
+                .strip_prefix("CF")
+                .filter(|b| b.len() == 8 && b.is_ascii())
+            {
+                let on = |at: usize| match body.get(at..=at) {
+                    Some("0") => Some(false),
+                    Some("1") => Some(true),
+                    _ => None,
+                };
+                let decoded = match body.get(..3) {
+                    Some("000") if body.get(5..) == Some("000") => on(3)
+                        .zip(on(4))
+                        .map(|(rx, tx)| vec![Observation::Rit(rx), Observation::Xit(tx)]),
+                    Some("001") => body
+                        .get(3..)
+                        .and_then(parse_clarifier)
+                        .map(|hz| vec![Observation::RitOffset(hz)]),
+                    _ => None,
+                };
+                return decoded.map_or_else(
+                    || vec![Inbound::Unrecognised(format!("{text};").into_bytes())],
+                    |all| all.into_iter().map(Inbound::Observation).collect(),
+                );
+            }
         }
         let observation = match (text.get(..2), text.get(2..)) {
             (Some("FA"), Some(d)) if d.len() == self.digits() => {
@@ -358,6 +398,37 @@ impl ProtocolEngine for YaesuEngine {
                 Self::command(format!("ST{};", u8::from(*on)), none)
             }
             Op::SetSplit(on) => Self::command(format!("FT{};", if *on { 3 } else { 2 }), none),
+            // FT-710: `CF000;` reads both switches, `CF000` + RX + TX + `000;` sets them, and the
+            // offset is `CF001` + sign + four digits; the other switch is re-sent as last known.
+            Op::GetRit | Op::GetXit if self.cf_rx_tx() => {
+                let field = if matches!(op, Op::GetRit) {
+                    Field::Rit
+                } else {
+                    Field::Xit
+                };
+                Self::command("CF000;".into(), observe(field))
+            }
+            Op::SetRit(on) if self.cf_rx_tx() => {
+                self.clar.0 = *on;
+                Self::command(
+                    format!("CF000{}{}000;", u8::from(*on), u8::from(self.clar.1)),
+                    none,
+                )
+            }
+            Op::SetXit(on) if self.cf_rx_tx() => {
+                self.clar.1 = *on;
+                Self::command(
+                    format!("CF000{}{}000;", u8::from(self.clar.0), u8::from(*on)),
+                    none,
+                )
+            }
+            Op::SetRitOffset(hz) if self.cf_rx_tx() => {
+                if hz.unsigned_abs() > MAX_OFFSET_HZ {
+                    return Err(Self::unsupported("clarifier offset beyond 9999 Hz"));
+                }
+                let sign = if *hz < 0 { '-' } else { '+' };
+                Self::command(format!("CF001{sign}{:04};", hz.unsigned_abs()), none)
+            }
             Op::GetRit if self.cf_receive() => Self::command("CF0;".into(), observe(Field::Rit)),
             Op::SetRit(on) if self.cf_receive() => {
                 Self::command(format!("CF0{}0;", u8::from(*on)), none)
@@ -437,14 +508,22 @@ impl ProtocolEngine for YaesuEngine {
 
     // [@ANCHOR: radioctl_yaesu_engine_feed]
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound> {
-        self.tokenizer
-            .feed(bytes, now)
-            .into_iter()
-            .flat_map(|token| match token {
-                Token::Command(text) => self.decode(&text),
-                Token::Junk(junk) => vec![Inbound::Unrecognised(junk)],
-            })
-            .collect()
+        let tokens = self.tokenizer.feed(bytes, now);
+        let mut inbound = Vec::new();
+        for token in tokens {
+            match token {
+                Token::Command(text) => inbound.extend(self.decode(&text)),
+                Token::Junk(junk) => inbound.push(Inbound::Unrecognised(junk)),
+            }
+        }
+        for item in &inbound {
+            match item {
+                Inbound::Observation(Observation::Rit(on)) => self.clar.0 = *on,
+                Inbound::Observation(Observation::Xit(on)) => self.clar.1 = *on,
+                _ => {}
+            }
+        }
+        inbound
     }
 }
 
@@ -657,6 +736,48 @@ mod tests {
             e.feed(b"CF010;", T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_engine_cf_receive]
+    #[test]
+    fn the_ft_710_sets_both_clarifier_switches_and_the_offset_with_cf() {
+        let mut e = YaesuEngine::new(shipped("yaesu-ft-710")).expect("engine");
+        let b = |e: &mut YaesuEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+        assert_eq!(b(&mut e, Op::GetRit), b"CF000;");
+        assert_eq!(b(&mut e, Op::GetXit), b"CF000;");
+        assert_eq!(b(&mut e, Op::GetRitOffset), b"IF;");
+        // Each switch keeps the other as last set or read.
+        assert_eq!(b(&mut e, Op::SetRit(true)), b"CF00010000;");
+        assert_eq!(b(&mut e, Op::SetXit(true)), b"CF00011000;");
+        assert_eq!(b(&mut e, Op::SetRit(false)), b"CF00001000;");
+        assert_eq!(b(&mut e, Op::SetRitOffset(150)), b"CF001+0150;");
+        assert_eq!(b(&mut e, Op::SetRitOffset(-1200)), b"CF001-1200;");
+        assert_eq!(b(&mut e, Op::SetRitOffset(0)), b"CF001+0000;");
+        assert!(e.encode(&Op::SetRitOffset(10_000)).is_err());
+        // An answer carries both switches and refreshes the remembered state.
+        assert_eq!(
+            e.feed(b"CF00011000;", T0),
+            vec![
+                Inbound::Observation(Observation::Rit(true)),
+                Inbound::Observation(Observation::Xit(true)),
+            ]
+        );
+        assert_eq!(b(&mut e, Op::SetRit(false)), b"CF00001000;");
+        assert_eq!(
+            e.feed(b"CF001-0150;", T0),
+            vec![Inbound::Observation(Observation::RitOffset(-150))]
+        );
+        for bad in [
+            &b"CF00012000;"[..],
+            b"CF00010100;",
+            b"CF001*0150;",
+            b"CF0001;",
+        ] {
+            assert!(
+                matches!(e.feed(bad, T0).as_slice(), [Inbound::Unrecognised(_)]),
+                "{bad:?}"
+            );
+        }
     }
 
     // Tests [@ANCHOR: radioctl_yaesu_engine_split_st]

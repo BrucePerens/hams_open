@@ -765,6 +765,10 @@ pub enum YaesuClarifier {
     /// `CF P1 P2 P3` (P2 0 off, 1 on): the receive clarifier only, there is no transmit clarifier command; the offset is
     /// still `RC`/`RU`/`RD`. FT-891.
     CfReceive,
+    /// `CF P1 P2 P3 P4 P5 P6 P7 P8`: one command switches the receive (P4) and transmit (P5) clarifiers
+    /// together (P3 0) and sets the offset (P3 1, a sign and four digits); there is no `RT`, `XT`, `RC`,
+    /// `RU` or `RD`. FT-710.
+    CfRxTx,
 }
 
 impl YaesuParams {

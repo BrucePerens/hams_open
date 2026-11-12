@@ -3,9 +3,9 @@
 # Written from Yaesu's published Yaesu 'FT-710 CAT Operation Reference Manual' (document, PDF page and sha256 in each fact), with Hamlib 4.6.2 as a cross-check.
 # Hamlib lists: serial 4800..115200 baud, 8N1, ctrl=NONE; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 70.5 MHz in 42 ranges; RIT range -9.999kHz/+9.999kHz.
 # Frequency fields are 9 digits (`yaesu.frequency_digits`); the IF answer is 28 characters with the semicolon.
-# Gaps and open questions: Split is the ST command (FT here selects the main or sub band transmitter), no rit-xit (the guide has CF, not RT/XT). Details: crates/radioctl-protocols/src/yaesu.rs.
+# Gaps and open questions: Split is the ST command (FT here selects the main or sub band transmitter), the clarifier is the CF command (both switches in one command, offset by CF001; the guide has no RT, XT, RC, RU or RD). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "split", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "split", "rit-xit", "levels", "identify"]
 
 [rig]
 id = "yaesu-ft-710"
@@ -15,6 +15,7 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 800
 split = "st"
+clarifier = "cf-rx-tx"
 
 [levels]
 attenuator_db = [6, 12, 18]
@@ -102,7 +103,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "manual", reference = "Yaesu 'FT-710 CAT Operation Reference Manual' (2306-C), file FT-710_CAT_OM_ENG_2306-C.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-710_CAT_OM_ENG_2306-C.pdf, sha256 fdf62b8a5c89e321381d69c53292a6ded045f1ceeeaf04ae21ce856e8e2ff8c2: ID p. 14, FA p. 14, FB p. 14, IF p. 15, MD p. 16, TX p. 22, SM p. 21, AI p. 7, RM p. 20, AG p. 7, RG p. 20, MG p. 16, PC p. 19, KS p. 15, RA p. 19, PA p. 18", note = "The guide's command pages. Split is the ST command (FT here selects the main or sub band transmitter), no rit-xit (the guide has CF, not RT/XT)." }
+provenance = { kind = "manual", reference = "Yaesu 'FT-710 CAT Operation Reference Manual' (2306-C), file FT-710_CAT_OM_ENG_2306-C.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-710_CAT_OM_ENG_2306-C.pdf, sha256 fdf62b8a5c89e321381d69c53292a6ded045f1ceeeaf04ae21ce856e8e2ff8c2: ID p. 14, FA p. 14, FB p. 14, IF p. 15, MD p. 16, TX p. 22, SM p. 21, AI p. 7, RM p. 20, AG p. 7, RG p. 20, MG p. 16, PC p. 19, KS p. 15, RA p. 19, PA p. 18", note = "The guide's command pages. Split is the ST command (FT here selects the main or sub band transmitter), the clarifier is the CF command (both switches in one command, offset by CF001; the guide has no RT, XT, RC, RU or RD)." }
 verified = { state = "unverified" }
 
 [[facts]]
@@ -118,4 +119,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "yaesu.split"
 provenance = { kind = "manual", reference = "Yaesu 'FT-710 CAT Operation Reference Manual' (2306-C), file FT-710_CAT_OM_ENG_2306-C.pdf, sha256 fdf62b8a5c89e321381d69c53292a6ded045f1ceeeaf04ae21ce856e8e2ff8c2: ST SPLIT, PDF p. 22 (set ST P1; read ST; answer ST P1: 0 split off, 1 on, 2 on and the transmitter 5 kHz up)", note = "Split is the ST command on this model, not FT2/FT3; the engine sends ST0 and ST1 and reads P1 0 as off and 1 or 2 as on. Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.clarifier"
+provenance = { kind = "manual", reference = "Yaesu 'FT-710 CAT Operation Reference Manual' (2306-C), file FT-710_CAT_OM_ENG_2306-C.pdf, sha256 fdf62b8a5c89e321381d69c53292a6ded045f1ceeeaf04ae21ce856e8e2ff8c2: CF CLAR ON/OFF, PDF p. 9 (P1 0 main band, P2 0 fixed; P3 0 setting: P4 receive clarifier 0 off or 1 on, P5 transmit clarifier 0 off or 1 on, P6-P8 000; P3 1 frequency: P4 sign, P5-P8 0000-9999 Hz); XT, PDF p. 23 (TX CLAR); IF, PDF p. 15 (P3 offset, P4 and P5 flags)", note = "The FT-710 has CF for both clarifier switches and for the offset; there is no RT, RC, RU or RD in the guide. The engine remembers the last transmit state so a receive switch re-sends it, and the receive state for a transmit switch. Page numbers are the guide's own pages from the text of the PDF; unverified." }
 verified = { state = "unverified" }

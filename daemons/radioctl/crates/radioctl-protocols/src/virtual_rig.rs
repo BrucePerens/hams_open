@@ -1181,6 +1181,24 @@ impl VirtualRig {
                 self.state.rit = flag == "010";
                 None
             }
+            // FT-710 (guide: CF P1 0, P2 0, P3 0 read or set both switches P4 receive, P5 transmit, P6-P8 000;
+            // P3 1 reads or sets the offset, a sign and four digits).
+            ("CF", "000") if self.yaesu_cf_rx_tx() => Some(format!(
+                "CF000{}{}000;",
+                u8::from(self.state.rit),
+                u8::from(self.state.xit)
+            )),
+            ("CF", "001") if self.yaesu_cf_rx_tx() => {
+                let hz = self.state.rit_offset;
+                Some(format!(
+                    "CF001{}{:04};",
+                    if hz < 0 { '-' } else { '+' },
+                    hz.unsigned_abs()
+                ))
+            }
+            ("CF", body) if self.yaesu_cf_rx_tx() && body.len() == 8 && body.is_ascii() => {
+                self.yaesu_cf_set(body)
+            }
             ("RT", "") => Some(format!("RT{};", u8::from(self.state.rit))),
             ("RT", flag @ ("0" | "1")) => {
                 self.state.rit = flag == "1";
@@ -1245,6 +1263,43 @@ impl VirtualRig {
     /// True when this Yaesu model switches its clarifier with `CF` (`yaesu.clarifier = "cf-receive"`).
     fn yaesu_cf(&self) -> bool {
         matches!(&self.wire, Wire::Yaesu { params, .. } if params.clarifier == YaesuClarifier::CfReceive)
+    }
+
+    /// True when this Yaesu model's `CF` switches both clarifiers and sets the offset (`yaesu.clarifier = "cf-rx-tx"`).
+    fn yaesu_cf_rx_tx(&self) -> bool {
+        matches!(&self.wire, Wire::Yaesu { params, .. } if params.clarifier == YaesuClarifier::CfRxTx)
+    }
+
+    /// The eight characters of a `CF` set: `000` + receive + transmit + `000`, or `001` + sign + four digits.
+    fn yaesu_cf_set(&mut self, body: &str) -> Option<String> {
+        let bytes = body.as_bytes();
+        let flag = |b: u8| match b {
+            b'0' => Some(false),
+            b'1' => Some(true),
+            _ => None,
+        };
+        if body.starts_with("000") && body.ends_with("000") {
+            if let (Some(rx), Some(tx)) = (flag(bytes[3]), flag(bytes[4])) {
+                self.state.rit = rx;
+                self.state.xit = tx;
+                return None;
+            }
+        } else if body.starts_with("001") {
+            if let Some(hz) = body
+                .get(4..)
+                .filter(|d| d.len() == 4)
+                .and_then(kenwood::parse_digits)
+                .and_then(|v| i16::try_from(v).ok())
+            {
+                match bytes[3] {
+                    b'+' => self.state.rit_offset = hz,
+                    b'-' => self.state.rit_offset = -hz,
+                    _ => return Some("?;".to_string()),
+                }
+                return None;
+            }
+        }
+        Some("?;".to_string())
     }
 
     // [@ANCHOR: radioctl_virtual_yaesu_digits]
@@ -2362,6 +2417,32 @@ mod tests {
             .description;
         let mut rig = VirtualRig::from_description(&desc).expect("rig");
         assert_eq!(rig.feed(b"CF0;", T0), b"?;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_cf]
+    #[test]
+    fn the_ft_710_twin_switches_both_clarifiers_and_sets_the_offset_with_cf() {
+        let path = format!(
+            "{}/../../rigs/yaesu-ft-710.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let text = std::fs::read_to_string(path).expect("rig file");
+        let desc = radioctl_core::rigfile::parse(&text)
+            .expect("loads")
+            .description;
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        assert_eq!(rig.feed(b"CF000;", T0), b"CF00000000;");
+        assert!(rig.feed(b"CF00010000;", T0).is_empty());
+        assert!(rig.feed(b"CF00001000;", T0).is_empty());
+        assert_eq!(rig.feed(b"CF000;", T0), b"CF00001000;");
+        assert!(rig.feed(b"CF00011000;", T0).is_empty());
+        assert_eq!(rig.feed(b"CF000;", T0), b"CF00011000;");
+        assert!(rig.feed(b"CF001-0150;", T0).is_empty());
+        assert_eq!(rig.feed(b"CF001;", T0), b"CF001-0150;");
+        assert!(rig.feed(b"CF001+9999;", T0).is_empty());
+        assert_eq!(rig.feed(b"CF001;", T0), b"CF001+9999;");
+        assert_eq!(rig.feed(b"CF00021000;", T0), b"?;");
+        assert_eq!(rig.feed(b"CF001*0150;", T0), b"?;");
     }
 
     // Tests [@ANCHOR: radioctl_virtual_yaesu_digits]
