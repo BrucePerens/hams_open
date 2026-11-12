@@ -33,6 +33,7 @@ fn harmonic_index_ratio_q16(l: u32, l_hat_prev: u32, l_hat_curr: u32) -> i32 {
 /// `log2(M_tilde_j(-1))` in Q16.16, for any `j >= 0` -- the fixed-point equivalent of
 /// `previous_log2_amplitude`, applying the same two spec boundary assumptions (Eq. 56/57).
 /// `previous_m_q16` holds `M_tilde_j(-1)` in Q16.16 for `j = 1..=l_hat_prev`, one-indexed.
+// [@ANCHOR: ham_digital_modes:previous_log2_amplitude_q16]
 fn previous_log2_amplitude_q16(previous_m_q16: &[i32], l_hat_prev: u32, j: u32) -> i32 {
     if j == 0 {
         0
@@ -115,4 +116,25 @@ pub fn prediction_residual_q16(
     let (predicted_q16, bias_correction_q16) =
         predicted_and_bias_correction_q16(l, l_hat_curr, l_hat_prev, previous_m_q16);
     log2_q16_i64(unquantized_m_l_q16.max(1)) - predicted_q16 + bias_correction_q16
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `previous_log2_amplitude_q16` is `log2` of the previous frame's amplitude `M(j)` in Q16.16,
+    /// zero for `j = 0`, and holds the last harmonic's value for any `j` beyond `l_hat_prev`.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:previous_log2_amplitude_q16]
+    fn previous_log2_amplitude_clamps_to_the_last_harmonic_and_is_zero_for_j_zero() {
+        // M(1) = 1.0, M(2) = 2.0, M(3) = 0.5 in Q16.16.
+        let m = [65536, 131072, 32768];
+        assert_eq!(previous_log2_amplitude_q16(&m, 3, 0), 0);
+        assert_eq!(previous_log2_amplitude_q16(&m, 3, 1), 0);
+        assert_eq!(previous_log2_amplitude_q16(&m, 3, 2), 65536);
+        assert_eq!(previous_log2_amplitude_q16(&m, 3, 3), -65536);
+        assert_eq!(previous_log2_amplitude_q16(&m, 3, 4), -65536);
+        assert_eq!(previous_log2_amplitude_q16(&m, 3, 40), -65536);
+        assert_eq!(previous_log2_amplitude_q16(&m, 2, 40), 65536);
+    }
 }

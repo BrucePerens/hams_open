@@ -64,6 +64,7 @@ fn psi_update_q32(psi_prev_phase: u32, omega0_prev_q32: i64, omega0_curr_q32: i6
 /// count `0..53125`, linearly mapped) -- computed directly as a radian value, not via the phase
 /// machinery, since this result is used as an ordinary bounded angle in [`phi_new_q16`]'s own
 /// dither term, not accumulated anywhere.
+// [@ANCHOR: ham_digital_modes:phase_dither_q16]
 fn phase_dither_q16(noise: &NoiseState, l: u32) -> i32 {
     let u_l = noise
         .at(l as i32)
@@ -384,6 +385,35 @@ mod tests {
                 "phi_prev={phi_prev} phi_curr={phi_curr} l={l}: theta_n phase differs from phi_curr by {signed_diff} (of u32::MAX={})",
                 u32::MAX
             );
+        }
+    }
+
+    /// `phase_dither_q16` maps the noise sample `u_l` (0..53125) linearly onto `[-pi, pi)`: always
+    /// inside that range for harmonics 1..=56, and ordered the same way as `u_l`.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:phase_dither_q16]
+    fn phase_dither_maps_the_noise_sample_linearly_onto_minus_pi_to_pi() {
+        use super::super::fixed_ops::PI_Q16_16;
+        use super::super::unvoiced_synthesis::NoiseState;
+        let noise = NoiseState::new();
+        let mut seen = Vec::new();
+        for l in 1..=56u32 {
+            let u = noise.at(l as i32).unwrap();
+            let rho = phase_dither_q16(&noise, l);
+            assert!(
+                (-PI_Q16_16..PI_Q16_16).contains(&rho),
+                "l={l} u={u} rho={rho}"
+            );
+            seen.push((u, rho));
+        }
+        for a in &seen {
+            for b in &seen {
+                assert_eq!(
+                    a.0 < b.0,
+                    a.1 < b.1 || (a.0 < b.0 && a.1 == b.1),
+                    "order of {a:?} and {b:?}"
+                );
+            }
         }
     }
 }
