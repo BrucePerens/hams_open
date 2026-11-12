@@ -161,12 +161,34 @@ Cold-resets the unit by cutting power to its hub port: `uhubctl off`, sleep `off
 
 * A failing point is measured again, then after one cold reset, and only a success is returned. [@ANCHOR: vnwa_open_recovery]
 * This driver's S11 and S21 agree with the vendor program's on the same cables to 0.25 % and 0.6 degrees (S11) and 1 % and 0.6 degrees (S21, a constant 0.8 % offset). [@ANCHOR: vnwa_open_vendor_agreement]
-* The one-port error terms are recovered from open, short and load, and a known load is corrected. [@ANCHOR: vnwa_open_cal_one_port]
-* A kit definition models real standards, round-trips its file, and the calibration with it removes their imperfections. [@ANCHOR: vnwa_open_cal_kit] [@ANCHOR: vnwa_open_kit_file]
-* A stored calibration is refused when the IF, time per point, RF level or cable set-up differ. [@ANCHOR: vnwa_open_cal_valid]
-* A calibration survives its text file and a damaged file is refused. [@ANCHOR: vnwa_open_cal_file]
-* The windows have their textbook shapes. [@ANCHOR: vnwa_open_window]
-* A delay line peaks at its delay in low-pass and band-pass mode, windows lower the sidelobes, a reflection's step settles at its coefficient. [@ANCHOR: vnwa_open_time_domain]
+
+### `cal::solve_one_port(measured: [Complex; 3], actual: [Complex; 3]) -> Result<(Complex, Complex, Complex), String>` [@ANCHOR: vnwa_open_cal_one_port]
+
+Recovers the three one-port error terms (directivity `e00`, source match `e11` and reflection tracking) at one frequency from the measured and true reflections of the open, short and load: it solves the 3 by 3 system `measured = e00 + e11 * actual * measured - d * actual` and returns `(e00, e11, e00 * e11 - d)`. Error: "the three standards are not distinct enough to calibrate" when the system is singular. Pure, no I/O. `Calibration::build` calls it at each frequency, and `Calibration::s11` then corrects a raw reflection with the result. Tests: terms recovered from synthetic error terms and a known load corrected.
+
+### `KitDefinition::standards(&self, f: f64) -> [Complex; 3]` [@ANCHOR: vnwa_open_cal_kit]
+
+Returns the true reflection coefficients of the open, short and load at frequency `f`, at the reference plane, from the kit definition. The open is `1 / (j w C)` with C a cubic polynomial in f (an ideal open, C = 0, is exactly +1), the short is a reactance `w L(f)`, the load is its resistance plus `w * L` inductance, each taken against 50 ohms and then moved through its offset line with `through_offset`. Pure, no error path. The default kit is ideal (open +1, short -1, load 0). `Calibration::build` solves the error terms from these values and the measured standards, so a more accurate kit definition removes the standards' imperfections from the result. Tests: kit modelling and calibration with a non-ideal kit.
+
+### `KitDefinition::from_text(text: &str) -> Result<KitDefinition, String>` [@ANCHOR: vnwa_open_kit_file]
+
+Reads a kit definition: `key = numbers` lines, `#` comments, blank lines skipped, any key left out keeps the ideal value. Keys and their counts: `open_c` and `short_l` four numbers, `open_offset`, `short_offset`, `load_offset` and `load` two, `thru_delay_s` one, and `name` free text. Errors (strings, with the line number): a line without `=`, a number that does not parse or is not finite, a wrong count of numbers, a load resistance that is not positive, or an unknown key (so a misspelt key is not silently ignored). Pure, no I/O. Tests: round trip with `to_text` and the error cases.
+
+### `Calibration::check_setup(&self, now: &Setup) -> Result<(), String>` [@ANCHOR: vnwa_open_cal_valid]
+
+Refuses to use a stored calibration at settings other than those it was made with. It compares the IF, time per point, RF level and cable description (as written) of the calibration against `now` and returns one error listing every difference ("IF 6000 Hz now, 12000 Hz in the calibration; ..."), with the calibration's creation text. Ok only when all four are equal. Pure, no I/O. The reason: error terms depend on the receiver set-up and the cables, so applying them elsewhere gives wrong S-parameters without warning. Tests: one test per differing setting.
+
+### `Calibration::from_text(text: &str) -> Result<Calibration, String>` [@ANCHOR: vnwa_open_cal_file]
+
+Reads a calibration file written by `to_text`. It requires the exact header `vnwa_open calibration 2` ("not a vnwa_open calibration file (version 2)" otherwise), then the created, cable and settings lines, the embedded kit, the point count and the two flags, and parses every frequency line. Errors (strings with line numbers): a missing or misspelt field, a wrong number of numbers on a line, a value that is not finite, a count that disagrees with the header, or frequencies that are not rising. A damaged file is refused, never half-loaded. Pure, no I/O. Tests: round trip and damaged-file cases.
+
+### `Window::weight(self, k: usize, n: usize) -> f64` [@ANCHOR: vnwa_open_window]
+
+The weight of point `k` of `n` (0 to n-1) of a window: `a0 - a1 cos(2 pi k / (n-1)) + a2 cos(4 pi k / (n-1))` with Hamming (0.54, 0.46, 0), Hanning (0.5, 0.5, 0), Blackman (0.42, 0.5, 0.08), Blackman squared (the square of Blackman) and rectangular (1). Hanning and Blackman weights are 0 or near 0 at the ends; with fewer than two points the weight is 1. These are the textbook shapes (the vendor's Help file shows only plots). Pure, total. Tests: the textbook values and shapes.
+
+### `timedomain::transform(freqs, data, window, mode, response, times_s) -> Result<Vec<Complex>, String>` [@ANCHOR: vnwa_open_time_domain]
+
+Computes the impulse or step response at each requested time from a measured frequency response, by a direct Fourier sum scaled by the grid step, with a window across the used span. Low-pass mode mirrors the spectrum (`S(-f) = conj S(f)`) for a real result and needs the grid to start at a multiple of its step; it extends the data down to DC by holding the first magnitude and taking the phase linearly to zero. Band-pass mode uses only the positive frequencies and gives a complex result. Errors: differing lengths, a bad grid, a step response in band-pass mode, a low-pass grid not starting at a multiple of its step, and a step with fewer than two times (the step is the running integral over a uniform time grid). Data must be in the standard sign convention, so conjugate the vendor-convention sweeps first. Pure, no I/O. Cost is points times times. Tests: a delay line peaks at its delay, windows lower the sidelobes, and a reflection's step settles at its coefficient.
 
 ### `meter::tone_offset(measured: &[f64], reference: &[f64], fs: f64, if_hz: f64) -> Result<(f64, f64), String>` [@ANCHOR: vnwa_open_meter_offset]
 
@@ -210,15 +232,42 @@ Returns the last 16 transfer tries (oldest first), each as epoch milliseconds, w
 * The codec cards are found in the `pw-dump` document of a PipeWire sound server. [@ANCHOR: vnwa_open_sound_server_pipewire]
 * The codec cards are found in the text of `pactl list cards` of a PulseAudio sound server. [@ANCHOR: vnwa_open_sound_server_pulse]
 * A sweep can measure a configured number of points at its start frequency first and throw the results away, to bring the unit to a steady state. [@ANCHOR: vnwa_open_discard_points]
-* The three one-port error terms come from the three standards by solving a 3x3 complex system; standards that are not distinct give no solution. [@ANCHOR: vnwa_open_cal_solve3]
-* A calibration is built from the open, short, load and through sweeps of one rising frequency grid; open, short and load must come together, sweeps of another length, a through with no signal or nothing to calibrate are refused. [@ANCHOR: vnwa_open_cal_build]
-* The reflection of a standard is moved back through its offset line (delay and loss), there and back. [@ANCHOR: vnwa_open_cal_through_offset]
-* A frequency is placed between two calibrated frequencies for interpolation, and one outside the calibrated range is refused. [@ANCHOR: vnwa_open_cal_locate]
-* A raw reflection is corrected with the interpolated one-port terms. [@ANCHOR: vnwa_open_cal_s11]
-* A raw transmission is divided by the interpolated through measurement. [@ANCHOR: vnwa_open_cal_s21]
-* A measured point is corrected in each parameter the calibration covers and left `None` in the other. [@ANCHOR: vnwa_open_cal_correct]
-* A calibration is written as a text file (header, frequency count, one line per frequency). [@ANCHOR: vnwa_open_cal_to_text]
-* A kit definition is written as a text file that reads back to the same definition. [@ANCHOR: vnwa_open_kit_to_text]
+
+### `cal::solve3(a: [[Complex; 3]; 3], b: [Complex; 3]) -> Option<[Complex; 3]>` (private) [@ANCHOR: vnwa_open_cal_solve3]
+
+Solves a 3 by 3 complex linear system by Cramer's rule. It returns `None` when the determinant has magnitude under 1e-12, which for the calibration happens when the three standards are not distinct (for example two identical measurements), so `solve_one_port` can say the standards are not distinct enough instead of producing nonsense. Pure, no I/O. Tests: calibration tests with distinct and degenerate standards.
+
+### `Calibration::build(freqs, open, short, load, thru, kit, setup, created) -> Result<Calibration, String>` [@ANCHOR: vnwa_open_cal_build]
+
+Builds a calibration from sweeps of the open, short, load and through on one rising frequency grid. Errors (strings): fewer than two rising frequencies; a one-port set with only some of open, short and load (they must come together); a sweep whose length differs from the grid; a through measurement with a zero point ("no signal"); nothing to calibrate (no one-port set and no through); and the solve failure, naming the frequency. The through is stored divided by the kit's through response. `Calibration::new` calls it with the ideal kit and default setup. Pure, no I/O. Tests: the calibration tests for each refusal.
+
+### `cal::through_offset(g: Complex, o: &Offset, f: f64) -> Complex` (private) [@ANCHOR: vnwa_open_cal_through_offset]
+
+Moves a standard's ideal reflection coefficient back through its offset line, there and back, so the model is the reflection at the reference plane. For an offset with one-way delay `d` and loss `L` (gigaohms per second at 1 GHz) it multiplies `g` by `exp(-2a)` in magnitude, where `a = L * 1e9 * d / (2 * 50) * sqrt(f / 1 GHz)`, and rotates it by twice the one-way phase `-2 pi f d`. A zero offset leaves `g` unchanged. Arguments: `g` the standard's reflection, `o` the offset line, `f` the frequency in Hz. Pure, no error path. Used by `KitDefinition::standards` for the open, short and load. Tests: the kit tests in `cal.rs` check delay and loss.
+
+### `Calibration::locate(&self, f: f64) -> Result<(usize, f64), String>` (private) [@ANCHOR: vnwa_open_cal_locate]
+
+Finds where a frequency lies in the calibrated grid for interpolation: returns the index of the grid point at or below it and the weight (0 to 1) toward the next one. A frequency outside the calibrated range, with a tolerance of one part in a billion, is an error naming the range, so a result is never extrapolated. Exact grid points and the last point resolve to a valid segment. Pure, no I/O. Used by `s11` and `s21` to interpolate the error terms linearly. Tests: interior, edge and outside frequencies.
+
+### `Calibration::s11(&self, f: f64, raw: Complex) -> Result<Complex, String>` [@ANCHOR: vnwa_open_cal_s11]
+
+Corrects a raw reflection measurement with the one-port terms interpolated to frequency `f`: `m = raw - e00`, result `m / (e11 * m + tracking)`. Errors: the calibration has no open/short/load part, or `f` is outside the calibrated range. Pure, no I/O. Tests: a known load measured through synthetic error terms comes back to its true reflection.
+
+### `Calibration::s21(&self, f: f64, raw: Complex) -> Result<Complex, String>` [@ANCHOR: vnwa_open_cal_s21]
+
+Corrects a raw transmission measurement by dividing it by the through measurement interpolated to frequency `f` (the through is stored already divided by the kit's through response). Errors: the calibration has no through part, or `f` is outside the calibrated range. Pure, no I/O. A response normalisation only: it does not remove port mismatch. Tests: a through measured and corrected comes back to 1 with zero phase.
+
+### `Calibration::correct(&self, p: &sweep::Point) -> Result<CalibratedPoint, String>` [@ANCHOR: vnwa_open_cal_correct]
+
+Corrects one measured point in each parameter the calibration covers: `s11` is corrected when the calibration has a one-port part and `s21` when it has a through part; the other stays `None`. Errors are those of `s11` and `s21` (frequency outside the range). Returns a `CalibratedPoint` with the frequency and both optional results. Pure, no I/O. Tests: points corrected with one-port-only, through-only and full calibrations.
+
+### `Calibration::to_text(&self) -> String` [@ANCHOR: vnwa_open_cal_to_text]
+
+Writes a calibration as a text file: the header `vnwa_open calibration 2`, `created`, `cable` (newlines replaced by spaces so one line stays one line), a `settings` line (IF, time per point, RF level), the kit lines prefixed `kit `, `points = N`, flags `onport yes|no` and `thru yes|no`, then one line per frequency holding the frequency and the real and imaginary parts of the error terms and the through, in exponent form for an exact round trip. Pure, no I/O, no error path. `Calibration::from_text` reads it back; the file is the operator's and holds no secret. Tests: survives its text file.
+
+### `KitDefinition::to_text(&self) -> String` [@ANCHOR: vnwa_open_kit_to_text]
+
+Writes a kit definition as the text file format: `name`, then `open_c`, `open_offset`, `short_l`, `short_offset`, `load`, `load_offset` and `thru_delay_s` lines as `key = numbers` with each number in exponent form so it reads back exactly. Pure, no I/O, no error path. It is the writer half of the round trip tested against `from_text`, and the kit lines are embedded in a calibration file by `Calibration::to_text` with a `kit ` prefix. A name containing a newline would break the format; names are the operator's own and are not escaped. Tests: the round trip test.
 
 ### `Capture::open_with(needle: &str, options: Options) -> Result<Capture, String>` [@ANCHOR: vnwa_open_capture_open_with]
 
@@ -290,9 +339,18 @@ The test transport's control read: it plays the next scripted outcome for a read
 
 Reads the internal temperature in raw counts. It first reads the firmware version and refuses with an error naming both versions when the firmware is older than v5.16 (`SENSOR_MIN_VERSION`, the first with the sensor), then does a vendor read of request 0x85 and parses it with `parse_temperature`. Two USB control reads, each with the retry wrapper; a transport error is returned as a string. No state changes on the unit. `Vna::temperature_counts` forwards to it for the sweep session. Tests: the monitor tests over the scripted transport.
 
-* A time-domain transform needs at least four points on a uniform, rising frequency grid. [@ANCHOR: vnwa_open_time_domain_check_grid]
-* The delay of the largest peak is found by parabolic interpolation. [@ANCHOR: vnwa_open_time_domain_peak_time]
-* A time gate keeps what arrives between two times (shaped by a window across the gate) and returns that part's frequency response on the same grid; the impulse response is taken with a rectangular window so nothing needs undoing. [@ANCHOR: vnwa_open_time_domain_gate]
+### `timedomain::check_grid(freqs: &[f64]) -> Result<(f64, f64), String>` (private) [@ANCHOR: vnwa_open_time_domain_check_grid]
+
+Checks that the frequencies form a uniform rising grid of at least four points and returns `(start, step)`. Errors: fewer than four points, a step that is not positive or is NaN, or a spacing that differs from the mean step by more than one part in a million. Pure, no I/O. Used by `transform` and `gate`, which both need equal spacing for the direct Fourier sum. Tests: the time-domain refusal tests.
+
+### `timedomain::peak_time(times_s: &[f64], z: &[Complex]) -> Option<f64>` [@ANCHOR: vnwa_open_time_domain_peak_time]
+
+Returns the delay of the largest-magnitude point of `z`, refined by parabolic interpolation through that point and its two neighbours (the shift is `0.5 (a - c) / (a - 2b + c)` of a step; no shift when the three are collinear). A peak at the first or last point has no neighbour on one side and returns that time unrefined. An empty `z` gives `None`. Pure, no I/O. Used to read a delay or distance from a time-domain response. Tests: a delay line between samples is found within a fraction of a step.
+
+### `timedomain::gate(freqs, data, mode, t_start_s, t_stop_s, shape) -> Result<Vec<Complex>, String>` [@ANCHOR: vnwa_open_time_domain_gate]
+
+Time gating: keeps what arrives between two times and returns that part's frequency response on the same grid. It takes the impulse response with a rectangular window (so nothing needs undoing), on a time grid spanning one whole period of the frequency grid (`1 / step`, signed about zero), multiplies it by a gate shaped by `shape` between the two times (zero outside), and transforms back with the inverse sum. A gate covering the whole period with a rectangular shape returns the input. Errors: a start not before the stop (or not finite) and the grid errors of `check_grid`. In low-pass mode the response is real, so a negative start keeps the part before zero. Pure, no I/O; the cost is the square of the grid size. Tests: gating a delay line and the identity gate.
+
 * One point is traced raw: the audio of both codecs around the set-up block send. (Hardware test.) [@ANCHOR: vnwa_open_trace_point]
 
 ### `impl Display for TransferError` (`transport.rs`) [@ANCHOR: vnwa_open_transfer_error_text]
@@ -304,7 +362,10 @@ The text of a transfer error as it appears in messages and the transfer log: a `
 Appends one line, `<epoch ms> <what>: <outcome>`, to the ring of recent transfers, dropping the oldest when 16 are held (`TRANSFER_LOG`). Called by `attempt`, `read_patient` and `reset_device` for every try, success or failure. The time is read from the system clock, 0 if it cannot be read. Takes the mutex of the ring, so concurrent transfers record in the order they finish. No I/O. Tests: the transfer-log tests in `usb.rs`.
 
 * The recovery's cold reset closes the streams, power cycles the hub port and reopens the session. (Hardware test.) [@ANCHOR: vnwa_open_vna_cold_reset]
-* A window is chosen by name, several spellings each; an unknown name is refused with the list. [@ANCHOR: vnwa_open_window_from_name]
+
+### `Window::from_name(s: &str) -> Result<Window, String>` [@ANCHOR: vnwa_open_window_from_name]
+
+Chooses a time-domain window by name, case-insensitively: `rectangular` (also `rect`, `none`), `hamming`, `hanning` (also `hann`), `blackman`, and `blackman2` or `blackman_squared`. An unknown name is an error that lists the accepted names, so a typo from a tool call is explained rather than silently defaulted. Pure, no I/O. Tests: every spelling and the refusal.
 
 ## Drift (2026-10-29)
 
