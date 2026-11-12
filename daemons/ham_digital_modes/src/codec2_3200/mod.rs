@@ -997,6 +997,8 @@ mod tests {
     /// in the fixed-point synthesis chain) would pass a correlation-only
     /// check and only show up as implausibly loud or quiet audio.
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_3200_synthesis_SynthesisStateFixed_prepare_subframe_fixed]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_3200_synthesis_overlap_add_subframe]
     // Tests [@ANCHOR: DecoderFixed::decode]
     // Tests [@ANCHOR: ComplexQ23::mul]
     // Tests [@ANCHOR: SynthesisStateFixed::synthesize_subframe_fixed]

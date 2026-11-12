@@ -521,6 +521,7 @@ pub(crate) fn apply_first_harmonic_correction_fixed(model: &mut ModelFixed) {
 
 /// The phase-sampling step of `sample_filter_phase`: for each harmonic `m`
 /// the conjugate of the spectrum `bin(b)` at the bin nearest `m * wo`.
+// [@ANCHOR: ham_digital_modes:codec2_3200_envelope_sample_filter_phase_with]
 fn sample_filter_phase_with(
     bin: impl Fn(usize) -> ComplexQ23,
     model: &ModelFixed,
@@ -806,6 +807,7 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: ham_digital_modes:codec2_3200_envelope_sample_filter_phase_with]
     // Tests [@ANCHOR: sample_filter_phase]
     // Tests [@ANCHOR: sample_filter_phase_fixed]
     fn sample_filter_phase_fixed_matches_the_float_version_on_a_synthetic_spectrum() {

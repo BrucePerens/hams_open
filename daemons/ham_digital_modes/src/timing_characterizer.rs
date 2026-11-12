@@ -116,6 +116,7 @@ const MIN_LAG_FLOOR: usize = 4;
 /// `probe_dominant_symbol_period_separates_rtty_cw_and_noise` for a real measurement of this.
 ///
 /// `None` under the same degenerate conditions as `dominant_symbol_period`.
+// [@ANCHOR: ham_digital_modes:timing_characterizer_autocorrelation_profile]
 pub fn autocorrelation_profile(
     feature: &[f64],
     feature_rate_hz: f64,
@@ -970,5 +971,39 @@ mod tests {
         assert_eq!(two_tone_window_len(8_000, 170.0, 300.0), None);
         // An empty band (min == max) is also None.
         assert_eq!(two_tone_window_len(1_000, 100.0, 100.0), None);
+    }
+
+    /// A feature that flips sign every 20 samples (a 50 baud clock at 1000 Hz) has a first difference whose
+    /// autocorrelation is strongly negative at the one-symbol lag, positive at two symbols, and the profile runs
+    /// from the highest baud to the lowest; degenerate ranges give `None`.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:timing_characterizer_autocorrelation_profile]
+    fn autocorrelation_profile_shows_a_negative_trough_at_the_symbol_rate_of_a_square_feature() {
+        let feature: Vec<f64> = (0..2000)
+            .map(|i| if (i / 20) % 2 == 0 { 1.0 } else { -1.0 })
+            .collect();
+        let profile = autocorrelation_profile(&feature, 1000.0, 20.0, 100.0).unwrap();
+        assert!(
+            profile.windows(2).all(|w| w[0].0 > w[1].0),
+            "highest baud first"
+        );
+        let at = |baud: f64| {
+            profile
+                .iter()
+                .find(|(b, _)| (b - baud).abs() < 0.5)
+                .unwrap()
+                .1
+        };
+        assert!(at(50.0) < -0.01, "one-symbol lag is a trough: {}", at(50.0));
+        assert!(at(25.0) > 0.01, "two-symbol lag is a peak: {}", at(25.0));
+        let (min_baud, _) = profile
+            .iter()
+            .copied()
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .unwrap();
+        assert!((min_baud - 50.0).abs() < 0.5);
+        assert!(autocorrelation_profile(&feature, 0.0, 20.0, 100.0).is_none());
+        assert!(autocorrelation_profile(&feature, 1000.0, 100.0, 20.0).is_none());
+        assert!(autocorrelation_profile(&feature[..3], 1000.0, 20.0, 100.0).is_none());
     }
 }
