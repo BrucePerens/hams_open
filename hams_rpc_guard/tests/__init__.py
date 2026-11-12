@@ -6,3 +6,4 @@ from . import test_exposure
 from . import test_repository
 from . import test_guard
 from . import test_unix_listener
+from . import test_report_summary

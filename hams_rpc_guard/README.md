@@ -69,6 +69,25 @@ Requests are counted per worker by endpoint family, network class (`loopback`, `
 `unknown`, `unix`) and outcome; refusals are logged at the first and at every power of ten: never an address, login,
 model, method, header or body.
 
+## Reading the report-mode log
+
+In `report` mode every call is served and each would-be refusal is counted per worker and logged at the 1st, 10th, 100th, ...
+occurrence of a kind: loggers `odoo.addons.hams_rpc_guard.policy` (`RPC guard (report): N call(s) to model.method by a portal
+user, reason strict-portal.`) and `odoo.addons.hams_rpc_guard.endpoint_gate` (`Served (report-only mode), would have refused,
+N request(s) to the json2 endpoints from a public client (reason: ...)`). So a busy kind costs a handful of lines a day, not
+one per call. `tools/report_summary.py` totals them over the workers (a lower bound, see its header):
+
+```
+sudo journalctl -u odoo --since "-1 day" | python3 hams_rpc_guard/tools/report_summary.py
+```
+
+The reasons: `strict-portal` / `strict-public` (a portal or public user called a pair not declared `portal`),
+`client-not-listed` (a service account with a `clients` entry called a pair outside it), `unmapped-client-*` (a service
+account with no entry; give it one), `managed-not-listed` (an internal user called a public method of ours that is
+neither `@public_rpc` nor listed), `unix-login-not-bound` (a Unix-socket peer used a login its `unix_peers` entry does not
+name), and for endpoints `network` (the client is on no allowed network), `transport` (TCP refused in `unix` mode), `legacy-closed` and `peer` (an unlisted Unix-socket peer). Legitimate ones are fixed by adding the pair
+to the right list; a would-be refusal that nobody can explain is the reason to stay in `report`.
+
 ## Who the true client is
 
 Behind nginx or Cloudflare Tunnel the TCP peer of every request is a loopback address, so the peer alone proves
