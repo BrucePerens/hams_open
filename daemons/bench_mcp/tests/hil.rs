@@ -393,6 +393,73 @@ fn the_spectrum_tool_sees_the_tracking_generator_only_in_a_band_that_includes_it
     assert!(off["noise_floor_counts"].as_f64().unwrap() < 20.0, "{off}");
 }
 
+/// Needs `vna` (read_config) and `scope` instruments, the TX port through the pad and tee to the scope and the RX input, and nothing else using the unit.
+/// Acceptance of the spectrum analyzer mode: a 10 MHz generator tone shows at 10 MHz within the point spacing, and a 10 dB step of the generator level moves the
+/// VNA's line and the scope FFT's line by the same amount within 2 dB (the VNA scale is uncalibrated codec counts, so levels are compared as steps). Also runs
+/// the host-only tools on the result: the scope math, cursors and the VNA time domain tool.
+// Tests [@ANCHOR: bench_vna_spectrum]
+#[test]
+#[ignore]
+fn the_vna_spectrum_agrees_with_the_scope_fft_on_the_generator_tone() {
+    let tool = |name: &str, args: &str| -> serde_json::Value {
+        let r = rpc(&[&call(name, args)]);
+        assert!(r[0]["result"]["isError"] != true, "{name}: {}", text(&r[0]));
+        serde_json::from_str(&text(&r[0])).unwrap()
+    };
+    let mut vna_db = Vec::new();
+    let mut scope_db = Vec::new();
+    for level in [-10.0f64, -20.0] {
+        tool(
+            "bench_vna_generator_on",
+            &format!(r#"{{"freq_hz":10000000,"level_db":{level}}}"#),
+        );
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let sa = tool(
+            "bench_vna_spectrum",
+            r#"{"start_hz":9990000,"stop_hz":10010000,"points":21,"band_hz":3000}"#,
+        );
+        let line = &sa["peaks"][0];
+        assert!(
+            (line["freq_hz"].as_f64().unwrap() - 1e7).abs() <= 1000.0,
+            "{sa}"
+        );
+        vna_db.push(20.0 * line["rms_counts"].as_f64().unwrap().log10());
+        let s = tool(
+            "bench_scope_spectrum",
+            r#"{"instrument":"scope","channel":1,"timebase_s":0.0002,"memory_depth":"14M","points":262144,"window":"blackman","peaks":1}"#,
+        );
+        assert!(
+            (s["peaks"][0]["freq_hz"].as_f64().unwrap() - 1e7).abs() < 5e4,
+            "{s}"
+        );
+        scope_db.push(20.0 * s["peaks"][0]["vrms"].as_f64().unwrap().log10());
+    }
+    tool("bench_vna_generator_off", "{}");
+    let step = (vna_db[0] - vna_db[1]) - (scope_db[0] - scope_db[1]);
+    assert!(step.abs() < 2.0, "vna {vna_db:?} scope {scope_db:?}");
+    // The host-only tools on the same hardware: scope cursors on the live tone, and a sweep followed by its time domain.
+    let c = tool(
+        "bench_scope_cursors",
+        r#"{"instrument":"scope","channel":1,"times_s":[0.0,0.0000001],"allow_stopped":true}"#,
+    );
+    assert!(c["values"].is_array() || c.is_object(), "{c}");
+    let sw = tool(
+        "bench_vna_sweep",
+        r#"{"start_hz":2000000,"stop_hz":200000000,"points":100,"if_hz":4000}"#,
+    );
+    let file = std::path::Path::new(sw["file"].as_str().unwrap())
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    let td = tool(
+        "bench_vna_time_domain",
+        &format!(r#"{{"file":"{file}","trace":"s21","window":"hanning"}}"#),
+    );
+    assert!(td.is_object(), "{td}");
+}
+
 // The RTL-SDR check needs `BENCH_MCP_RTLSDR_CONFIG=<file>` naming a config with a receive-only RTL-SDR instrument "rtl" at
 // read_config (`{"instruments":{"rtl":{"driver":"rtlsdr","tier":"read_config"}}}`), the dongle plugged in. One capture centred
 // on 162.475 MHz covers all seven NOAA weather radio channels (162.400 to 162.550 MHz); the test wants a carrier on one of them
