@@ -64,3 +64,6 @@ about each unit.
     active, and a long-running service (not one-shot, with no timer or path of its own, its condition met on this host) that is not active. An
     opt-in timer that is only linked is deliberately off and is left alone; one that is enabled must run. The result is `high`, which pages.
     [@ANCHOR: pager_duty:units_not_in_operation]
+3.  **What is planned to be off.** A unit that is provisioned but will be installed by a later, planned step (hams1 is installed unit by unit, not by
+    `provision.py`) is listed in the tracked `daemon/units_expected_off.txt` with its reason and the condition for removing the line, or in
+    `HAMS_UNITS_EXPECTED_OFF`; the check skips those, and still pages for any other missing unit. [@ANCHOR: pager_duty:units_expected_off]

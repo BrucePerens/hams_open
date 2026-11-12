@@ -19,7 +19,8 @@ What counts as in operation:
     .path of its own, and is not active                    not running   (unless its Condition*= was evaluated and is unmet on this host)
 
 Templates (`name@.service`), entries for a host class this host does not have, and units listed in HAMS_UNITS_EXPECTED_OFF
-(comma separated unit names) are not checked. The MANIFEST is read from the hams_shared tree beside this script's repository
+(comma separated unit names) or in units_expected_off.txt beside this script (tracked, one unit per line, `#` starts a comment,
+each entry says why it is off and when to remove it) are not checked. The MANIFEST is read from the hams_shared tree beside this script's repository
 (or HAMS_INFRASTRUCTURE_DIR), so it is always the one this deploy shipped.
 
 Exit 0 healthy, 1 failing: `SEVERITY:high` (pages) on stderr, then a short first line (the monitor keeps about 80 characters) and
@@ -37,6 +38,7 @@ SYSTEMD_DIR = "/opt/hams/systemd/"
 UNIT_SUFFIXES = (".service", ".timer", ".path")
 SHOW_PROPERTIES = "LoadState,ActiveState,UnitFileState,Type,ConditionResult,ConditionTimestamp"
 SHORT_LIST = 4
+EXPECTED_OFF_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "units_expected_off.txt")
 
 # The MANIFEST module is a hard dependency: reached by a sys.path hop (the odoo.addons namespace is not importable in this
 # script's standalone process), imported at the top, and a missing one stops the script with a traceback (non-zero exit, so
@@ -98,9 +100,24 @@ def units_not_in_operation(units, show=systemctl_show, expected_off=()):
     return problems
 
 
+# [@ANCHOR: pager_duty:units_expected_off]
+def units_expected_off(environ=None, path=EXPECTED_OFF_FILE):
+    """Set of unit names not to check: HAMS_UNITS_EXPECTED_OFF (comma separated) plus the tracked file `path` (one unit per line,
+    `#` comments and blank lines ignored; a missing file adds nothing)."""
+    environ = os.environ if environ is None else environ
+    names = {name.strip() for name in environ.get("HAMS_UNITS_EXPECTED_OFF", "").split(",") if name.strip()}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as listing:
+            for line in listing:
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    names.add(line)
+    return names
+
+
 # [@ANCHOR: pager_duty:provisioned_units_main]
 def main(argv=None):
-    expected_off = {name.strip() for name in os.environ.get("HAMS_UNITS_EXPECTED_OFF", "").split(",") if name.strip()}
+    expected_off = units_expected_off()
     try:
         units = expected_units(infrastructure)
     except (OSError, KeyError) as problem:

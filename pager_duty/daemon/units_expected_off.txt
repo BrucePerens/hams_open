@@ -1,0 +1,11 @@
+# Units the hams_shared MANIFEST provisions (provision.py) that are not yet installed on hams1, because hams1 is installed unit by
+# unit by hand and these come in a later, planned step. check_provisioned_units.py skips them (HAMS_UNITS_EXPECTED_OFF does the same).
+# One unit per line; keep a reason and the condition for removing the line. A unit that is not listed and is missing still pages.
+
+# Parking go-live in progress. Remove this line when callsign.parking.service is installed on hams1.
+callsign.parking.service
+
+# Installed by the provisioning/backup window, not by the deploy tool (opt-in: Bruce approves enabling it, config.json and the
+# fingerprint record are placed by a person, docs/runbooks/BACKUP_SELFTEST.md). Remove both lines when the unit and timer are installed.
+hams-backup-selftest.service
+hams-backup-selftest.timer
