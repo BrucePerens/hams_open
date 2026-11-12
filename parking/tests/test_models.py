@@ -158,6 +158,7 @@ class TestParkingModels(HamsTransactionCase):
         self.assertTrue(self.Domain.create({"name": "fine.example"}))
 
     # [@ANCHOR: parking:COMM_test_tenant_hosts_exist]
+    # Tests [@ANCHOR: parking_tenant_site_host_tenant_site_host]
     def test_parked_domains_count_as_tenant_hostnames(self):
         # Tests [@ANCHOR: parking:COMM_tenant_hosts_exist]
         Host = self.env["tenant.site.host"]

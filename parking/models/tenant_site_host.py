@@ -4,6 +4,7 @@ from odoo import api, models
 SERVICE_USER_XMLID = "parking.user_parking_service"
 
 
+# [@ANCHOR: parking_tenant_site_host_tenant_site_host]
 class TenantSiteHost(models.Model):
     _inherit = "tenant.site.host"
 

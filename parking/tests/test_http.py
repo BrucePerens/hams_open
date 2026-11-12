@@ -50,6 +50,7 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
 
     # [@ANCHOR: parking:COMM_test_post_dispatch]
+    # Tests [@ANCHOR: parking_parking_domain_parking_domain]
     def test_parked_page(self):
         # Tests [@ANCHOR: parking:COMM_post_dispatch]
         response = self.get("/", "parked.example")
@@ -154,6 +155,8 @@ class TestParkingHttp(HamsHttpCase):
 
     # [@ANCHOR: parking:COMM_test_inquiry_controller]
     # [@ANCHOR: parking:COMM_test_inquiry_done]
+    # Tests [@ANCHOR: parking_parking_inquiry_parking_inquiry]
+    # Tests [@ANCHOR: parking_parking_api_parking_controller]
     def test_sale_form_end_to_end(self):
         # Tests [@ANCHOR: parking:COMM_inquiry_done]
         # Tests [@ANCHOR: parking:COMM_inquiry_controller]
@@ -207,6 +210,7 @@ class TestParkingHttp(HamsHttpCase):
 
     # [@ANCHOR: parking:COMM_test_extra_kind]
     # [@ANCHOR: parking:COMM_test_public_route]
+    # Tests [@ANCHOR: parking_ir_http_ir_http]
     def test_only_parked_hostnames_are_classified_as_parking(self):
         # Tests [@ANCHOR: parking:COMM_extra_kind]
         # Tests [@ANCHOR: parking:COMM_public_route]

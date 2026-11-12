@@ -2,6 +2,7 @@
 from odoo import fields, models
 
 
+# [@ANCHOR: parking_parking_inquiry_parking_inquiry]
 class ParkingInquiry(models.Model):
     _name = "parking.inquiry"
     _description = "Inquiry about a for-sale domain"
