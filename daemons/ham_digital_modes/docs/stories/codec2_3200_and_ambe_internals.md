@@ -1656,29 +1656,608 @@ assertions on the real tables.
 
 ## AMBE codec helpers anchored in slice 5 (quantizers, classifiers, interleave, FEC encoders)
 
-Each function here already had an exact-value or float-parity test; the tests now cite them. `g3_encode` and `hamming_encode_chip` are the chip's
-own `g3` and 15-bit Hamming encoders (zero encodes to zero, every codeword round-trips, the weight distribution matches the known enumerator).
-The fixed `dequantize` for AMBE+2 and D-STAR gives the same parameters as the float one over representative frame sequences, and the fixed
-`quantize_pitch_p8` equals the float `quantize_pitch` for every pitch period. `classify_tone_index` (fixed and float D-STAR) maps a tone index to
-the same frequency, `classify_b0` separates tone-bearing sub-codes from erasures, `frame_to_wire_bytes` and `wire_bytes_to_frame` are the exact
-inverses of each other over the D-STAR interleave, `build_frame` packs 49 bits into a frame that survives the wire round trip, and `update_xi_max`
-follows Eq. 41 in all three branches.
+Each function here already had an exact-value or float-parity test; the tests cite them. These are the chip-compatible FEC encoders, the D-STAR and AMBE+2
+dequantizers and frame classifiers, the pitch quantizers, and the D-STAR wire interleave and frame builder. All are plain synchronous functions: no
+I/O, no locks, no global state, no transmitter keying. They sit on the vocoder path only (frames in memory), so no PTT, band or transmit-gate logic applies.
 
-  *(Reference: `src/ambe/dvsi_p25fec/fec.rs` -> `[@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_g3_encode]`, `[@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_hamming_encode_chip]`; `src/ambe/fixed/ambe_plus_2/decode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_decode_dequantize]`; `src/ambe/fixed/dstar/decode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_dstar_decode_dequantize]`, `[@ANCHOR: ham_digital_modes:fixed_dstar_decode_classify_tone_index]`; `src/ambe/fixed/ambe_plus_2/encode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encode_quantize_pitch_p8]`; `src/ambe/fixed/dstar/encode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_dstar_encode_quantize_pitch_p8]`; `src/ambe/float/dstar/decode.rs` -> `[@ANCHOR: ham_digital_modes:float_dstar_decode_classify_tone_index]`, `[@ANCHOR: ham_digital_modes:float_dstar_decode_classify_b0]`; `src/ambe/float/ambe_plus_2/decode.rs` -> `[@ANCHOR: ham_digital_modes:float_ambe_plus_2_decode_classify_b0]`; `src/ambe/float/dstar/quantize.rs` -> `[@ANCHOR: ham_digital_modes:float_dstar_quantize_quantize_pitch]`; `src/ambe/float/dstar/interleave.rs` -> `[@ANCHOR: ham_digital_modes:float_dstar_interleave_frame_to_wire_bytes]`, `[@ANCHOR: ham_digital_modes:float_dstar_interleave_wire_bytes_to_frame]`; `src/ambe/float/dstar/encode.rs` -> `[@ANCHOR: ham_digital_modes:float_dstar_encode_build_frame]`; `src/ambe/fixed/tia_102_baba/vuv.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_update_xi_max]`)*
+### `g3_encode` [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_g3_encode]
+
+Encodes 8 data bits into the 23-bit `g3` codeword the DVSI chip emits for its third channel block. It is not a standard systematic Golay construction: the codeword is
+the XOR of the rows of `G3_GENERATOR` (a rank-8 basis derived from about 3500 captured chip frames) selected by the data bits, most significant bit first. The test
+side uses it to build chip-style frames and to check that `g3_decode` round-trips all 256 codewords.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `data` | `u8` | The 8 data bits, MSB first (bit 7 selects row 0) |
+
+**Returns:** `u32`, the 23-bit codeword in the low bits; zero data gives zero.
+**Errors:** none; every `u8` is valid.
+**Special concerns:** pure, constant time. What parameter the 8-bit subspace represents is documented in the source as still open.
+**Signature:** `pub fn g3_encode(data: u8) -> u32`
+**See also:** tests `g3_encode_of_zero_is_zero`, `g3_decode_round_trips_every_one_of_its_256_real_codewords_with_zero_distance`; `fec_g3_decode`.
+
+### `hamming_encode_chip` [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_hamming_encode_chip]
+
+Encodes 11 data bits into the chip's real 15-bit systematic Hamming codeword: data in the high 11 bits, 4 parity bits in the low bits. Parity is the XOR of the
+`HAMMING_PARITY_CHIP` rows for each set data bit (bit 10 selects row 0). The same abstract [15,11,3] code as the one in `fec.rs`, but with the chip's own column labelling.
+`hamming_decode_chip` inverts it by brute-force minimum distance.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `data` | `u16` | Data bits; only the low 11 are used (masked with `0x07FF`) |
+
+**Returns:** `u16`, the 15-bit codeword.
+**Errors:** none; high bits of `data` are ignored.
+**Special concerns:** pure, constant time.
+**Signature:** `pub fn hamming_encode_chip(data: u16) -> u16`
+**See also:** tests `hamming_encode_chip_of_zero_is_zero`, `hamming_chip_weight_distribution_matches_the_known_enumerator`; `hamming_decode_chip`.
+
+### `dequantize` (fixed AMBE+2) [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_decode_dequantize]
+
+The fixed-point AMBE+2 dequantizer: turns the raw `b0..b8` indices of one frame into speech parameters, and mirrors the float `dequantize` over representative sequences. It branches on
+`classify_b0`: erasure returns `Erasure`; the tone sub-codes return `Tone` carrying the raw parameters; silence returns `Silence` with `L = 14` and resets the decoder state;
+otherwise `L` and `w0` come from `L_TABLE` and the Q16/Q32 `W0_TABLE` (a table of f0, multiplied by 2 pi) and `dequantize_speech` applies the differential state.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `raw` | `&RawParameters` | The frame's extracted indices `b0` to `b8` |
+| `state` | `&mut MbeDecoderState` | Previous-frame decoder state (`l`, `gamma_q16`, log2 magnitudes); updated in place |
+
+**Returns:** `DequantizedFrame`: `Erasure`, `Tone { raw }`, `Silence { l, w0_q16 }` or `Speech(parameters)`.
+**Errors:** none returned. `b0` of 0 to 119 indexes the tables; other values never reach the table lookups.
+**Special concerns:** the state advances only on speech and silence; erasures and tones leave it untouched, so the caller decides concealment.
+**Signature:** `pub fn dequantize(raw: &RawParameters, state: &mut MbeDecoderState) -> DequantizedFrame`
+**See also:** test `fixed_dequantize_matches_float_across_representative_sequences`; `float_ambe_plus_2_decode_classify_b0`.
+
+### `dequantize` (fixed D-STAR) [@ANCHOR: ham_digital_modes:fixed_dstar_decode_dequantize]
+
+The fixed-point D-STAR dequantizer. It extracts the raw indices from the 49-bit parameter word `d`; a tone frame (`b0 & 0x7E == 0x7E`) returns `Tone` from `decode_tone`; otherwise `L` and
+`w0` come from the pitch tables by `b0` (clamped to the table length) and `dequantize_speech` reconstructs the speech parameters, updating the state. It gives the same parameters as the float
+D-STAR `dequantize` over representative frame sequences.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `u64` | The 49-bit parameter layout (see `extract_raw_parameters`) |
+| `state` | `&mut MbeDecoderState` | Previous-frame state, updated on speech frames |
+
+**Returns:** `DequantizedFrame::Speech(parameters)` or `DequantizedFrame::Tone(payload)`.
+**Errors:** none; out-of-range `b0` is clamped to the last table entry.
+**Special concerns:** pure apart from the state update; no erasure variant (D-STAR damage is handled elsewhere).
+**Signature:** `pub fn dequantize(d: u64, state: &mut MbeDecoderState) -> DequantizedFrame`
+**See also:** test `fixed_dequantize_matches_float_across_representative_sequences` in `tests/ambe_fixed_dstar.rs`; `float_dstar_decode_classify_b0`.
+
+### `classify_tone_index` (fixed D-STAR) [@ANCHOR: ham_digital_modes:fixed_dstar_decode_classify_tone_index]
+
+Maps the 8-bit tone index of a D-STAR tone frame to its kind using mbelib's range table: 5 to 122 is a single tone, 128 to 163 a dual tone (DTMF is one), anything else invalid. The single tone
+frequency is exact in Q16.16, `index * 31.25` Hz (`HZ_PER_INDEX_Q16_16`). It is the fixed twin of the float function and must agree with it for every index.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `index` | `u32` | Tone index extracted by `decode_tone`, 0 to 255 |
+
+**Returns:** `ToneKind`: `Invalid`, `Single { hz_q16: i32 }` or `Dual`.
+**Errors:** none; unknown indices return `Invalid`.
+**Special concerns:** pure.
+**Signature:** `pub fn classify_tone_index(index: u32) -> ToneKind`
+**See also:** test `classify_tone_index_hz_matches_the_float_sibling_exactly`; `float_dstar_decode_classify_tone_index`.
+
+### `quantize_pitch_p8` (fixed AMBE+2) [@ANCHOR: ham_digital_modes:fixed_ambe_plus_2_encode_quantize_pitch_p8]
+
+Returns `b0` for a pitch period of `p8 / 8` samples: the integer port of the float `quantize_pitch`. It converts the period to `omega0 = 2 pi 8 / p8` in Q32 radians per sample
+and returns the index of the nearest of the first 120 entries of `W0_TABLE_Q32` (first of equals). The streaming AMBE+2 encoder calls it after pitch refinement.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `p8` | `u32` | Pitch period in eighths of a sample; 0 is treated as 1 |
+
+**Returns:** `u32`, `b0` in 0 to 119.
+**Errors:** none.
+**Special concerns:** a linear scan of 120 entries; pure.
+**Signature:** `pub fn quantize_pitch_p8(p8: u32) -> u32`
+**See also:** test `pitch_quantizer_matches_the_float_one_for_every_period`; `float_dstar_quantize_quantize_pitch`.
+
+### `quantize_pitch_p8` (fixed D-STAR) [@ANCHOR: ham_digital_modes:fixed_dstar_encode_quantize_pitch_p8]
+
+Returns `b0` for a pitch period of `p8 / 8` samples by inverting the chip's pitch map `f0 = 2^(-4.258618 - 0.021766 b0)`. With `f0 = 8 / p8`,
+`b0 = (log2(p8) - 3 - 4.258618) / 0.021766`, evaluated in Q16 with a table-interpolated `log2`, rounded to nearest and clamped to 0 to 125 (126 and 127 are the tone codes).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `p8` | `u32` | Pitch period in eighths of a sample; 0 is treated as 1 |
+
+**Returns:** `u32`, `b0` in 0 to 125.
+**Errors:** none.
+**Special concerns:** pure; integer only.
+**Signature:** `pub fn quantize_pitch_p8(p8: u32) -> u32`
+**See also:** test `pitch_quantizer_matches_the_float_one_for_every_period`; `float_dstar_quantize_quantize_pitch`.
+
+### `classify_tone_index` (float D-STAR) [@ANCHOR: ham_digital_modes:float_dstar_decode_classify_tone_index]
+
+Classifies a D-STAR tone frame's index per mbelib's range table: 5 to 122 is `Single { hz: index * 31.25 }`, 128 to 163 is `Dual`, and everything else (0 to 4, 123 to 127, 164 and up) is `Invalid`. A live
+chip capture of a 200 Hz tone produced index 6, which reads as 187.5 Hz, one quantization step (31.25 Hz) below the stimulus.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `index` | `u32` | Tone index from `decode_tone` |
+
+**Returns:** `ToneKind` with an `f64` frequency for single tones.
+**Errors:** none.
+**Special concerns:** pure; reference for the fixed version.
+**Signature:** `pub fn classify_tone_index(index: u32) -> ToneKind`
+**See also:** test `classify_tone_index_hz_matches_the_float_sibling_exactly`; `fixed_dstar_decode_classify_tone_index`.
+
+### `classify_b0` (float D-STAR) [@ANCHOR: ham_digital_modes:float_dstar_decode_classify_b0]
+
+Separates tone frames from speech frames by the pitch index `b0`: `b0 & 0x7E == 0x7E` (126 or 127) is `Tone`, everything else `Speech`. D-STAR, matching mbelib exactly, does not treat 120 or 121 as special:
+a DTX silence frame at `b0 = 120` decodes as ordinary speech by the reference decoder too. Called by both `dequantize` functions and by the tone round-trip tests.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `b0` | `u32` | Pitch/mode index, 0 to 127 |
+
+**Returns:** `FrameKind::Speech` or `FrameKind::Tone`.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn classify_b0(b0: u32) -> FrameKind`
+**See also:** tests `classify_b0_matches_mbelib_exactly_not_the_wider_ambe_plus_2_range`, `tone_round_trip_dtmf_and_one_kilohertz`.
+
+### `classify_b0` (float AMBE+2) [@ANCHOR: ham_digital_modes:float_ambe_plus_2_decode_classify_b0]
+
+The AMBE+2 pitch-index classifier: 0 to 119 `Speech`, 120 `DetectedTone`, 121 and 123 `Erasure`, 122 `CallProgress`, 124 and 125 `Silence`, 126 and up `Tone`. Sub-codes 120 and 122 are tone-bearing
+(recoverable through the tone-index decoders) rather than true erasures, as confirmed against live chip captures. 126 and 127 (`Tone`) were never observed from the chip and are kept for spec completeness.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `b0` | `u32` | Pitch/mode index |
+
+**Returns:** `FrameKind`.
+**Errors:** none; every value maps to a kind.
+**Special concerns:** pure.
+**Signature:** `pub fn classify_b0(b0: u32) -> FrameKind`
+**See also:** test `classify_b0_separates_tone_bearing_subcodes_from_genuine_erasure`; `fixed_ambe_plus_2_decode_dequantize`.
+
+### `quantize_pitch` (float D-STAR) [@ANCHOR: ham_digital_modes:float_dstar_quantize_quantize_pitch]
+
+Returns `b0`, the pitch index nearest a target fundamental `w0` (radians per sample): the decoder's `f0`/`w0` formula run in reverse. It converts `f0 = w0 / 2 pi`, estimates `b0` with
+`decode::b0_from_f0`, then rounds and clamps to 0 to 125. The fixed `quantize_pitch_p8` must equal it for every pitch period.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `w0` | `f64` | Target fundamental in radians per sample; must be finite and positive |
+
+**Returns:** `u32`, `b0` in 0 to 125.
+**Errors:** panics (assert) when `w0` is not finite and positive.
+**Special concerns:** pure; float.
+**Signature:** `pub fn quantize_pitch(w0: f64) -> u32`
+**See also:** test `pitch_quantizer_matches_the_float_one_for_every_period`; `fixed_dstar_encode_quantize_pitch_p8`.
+
+### `frame_to_wire_bytes` [@ANCHOR: ham_digital_modes:float_dstar_interleave_frame_to_wire_bytes]
+
+The exact inverse of `wire_bytes_to_frame`: it takes the logical 72-bit D-STAR frame (`C0(24)||C1(23)||C2(11)||C3(14)`, each block MSB-first in the low 72 bits) and scatters each bit through the
+`dW`/`dX` interleave tables into 9 chip wire bytes, each byte filled LSB-first. Used when the encoder emits frames to the chip or a D-STAR stream.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `u128` | Logical frame; only the low 72 bits are used |
+
+**Returns:** `[u8; 9]`, the wire bytes in chip order.
+**Errors:** none; bits above 72 are masked off.
+**Special concerns:** pure.
+**Signature:** `pub fn frame_to_wire_bytes(frame: u128) -> [u8; 9]`
+**See also:** test `wire_bytes_and_frame_round_trip`; `wire_bytes_to_frame`.
+
+### `wire_bytes_to_frame` [@ANCHOR: ham_digital_modes:float_dstar_interleave_wire_bytes_to_frame]
+
+Converts 9 raw CHAND bytes (chip wire order: bytes as received, each byte's bits LSB-first) into the crate's logical 72-bit frame value `C0(24)||C1(23)||C2(11)||C3(14)`, each block packed
+MSB-first, the input convention of `decode::parse_frame`. It places wire bit `i` at row `dW[i]`, column `dX[i]` of a 4 by 24 bit matrix and reads the blocks back out.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `bytes` | `&[u8; 9]` | Wire bytes as received |
+
+**Returns:** `u128` holding the 72-bit logical frame.
+**Errors:** none.
+**Special concerns:** pure; a test checks that `dW`/`dX` partition the 72 bits into the real block sizes.
+**Signature:** `pub fn wire_bytes_to_frame(bytes: &[u8; 9]) -> u128`
+**See also:** test `wire_bytes_and_frame_round_trip`; `frame_to_wire_bytes`.
+
+### `build_frame` [@ANCHOR: ham_digital_modes:float_dstar_encode_build_frame]
+
+Builds the full transmittable 72-bit logical frame from the 49-bit `d[]` layout: Golay-encodes `C0`'s 12 data bits (the 24th bit is the even parity of the codeword, which decoders here never check),
+Golay-encodes and whitens `C1`'s 12 data bits with `C0`'s data as the whitening seed, and carries `C2` (11 bits) and `C3` (14 bits) raw. The result is packed MSB-first and goes to
+`frame_to_wire_bytes`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `d` | `u64` | The 49-bit parameter word: `C0` data bits 48..37, `C1` data 36..25, `C2` 24..14, `C3` 13..0 |
+
+**Returns:** `u128`, the logical frame in the low 72 bits.
+**Errors:** none; bits of `d` above 49 are ignored by the masks.
+**Special concerns:** pure.
+**Signature:** `pub fn build_frame(d: u64) -> u128`
+**See also:** test `build_frame_round_trips_through_real_wire_bytes`; `c0_field_has_even_parity_like_the_chips_extended_golay_code`.
+
+### `update_xi_max` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_update_xi_max]
+
+Updates the running maximum of the frame spectral energy `xi_max` (Eq. 41), Q16, used by the voicing threshold. If the new energy `xi_0` exceeds the previous maximum, the result is the midpoint of the two;
+otherwise it decays as `(99 xi_max_prev + xi_0) / 100`, never below `XI_MAX_FLOOR_Q16` (20000 in Q16). Called by `determine_voicing` once per frame.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `xi_max_prev` | `i128` | Previous maximum, Q16 |
+| `xi_0` | `i128` | This frame's `xi_LF + xi_HF`, Q16 |
+
+**Returns:** `i128`, the new `xi_max`, Q16.
+**Errors:** none.
+**Special concerns:** pure; the stream starts at `XI_MAX_INITIAL_Q16` (the floor).
+**Signature:** `pub fn update_xi_max(xi_max_prev: i128, xi_0: i128) -> i128`
+**See also:** test `xi_max_update_and_energy_dependent_function_match_the_equations`; `fixed_tia_102_baba_vuv_determine_voicing`.
+
+*(Reference: `src/ambe/dvsi_p25fec/fec.rs`; `src/ambe/fixed/ambe_plus_2/decode.rs`; `src/ambe/fixed/dstar/decode.rs`; `src/ambe/fixed/ambe_plus_2/encode.rs`; `src/ambe/fixed/dstar/encode.rs`; `src/ambe/float/dstar/decode.rs`; `src/ambe/float/ambe_plus_2/decode.rs`; `src/ambe/float/dstar/quantize.rs`; `src/ambe/float/dstar/interleave.rs`; `src/ambe/float/dstar/encode.rs`; `src/ambe/fixed/tia_102_baba/vuv.rs`)*
 
 ## Fixed-point TIA-102 analysis chain anchored in slice 6 (pitch tracking and refinement, voicing, amplitudes)
 
-The encoder's analysis side is tested end to end against its float sibling on real speech, and each step is cited by those tests.
-`PitchAnalysisFrame` (`new`, `error_function`, `error_table`) builds the pitch error table E(P) for the 102 candidate periods (a silent frame has unit
-error and the default history index); `look_back_pitch_tracking`, `look_ahead_pitch_tracking` and `choose_initial_pitch_estimate` pick the initial
-estimate from it. `RefinementFrame` (`new`, `sw_at`), `window_dft_16384_q22`, `harmonic_amplitude_q16`, `spectrum_error_and_energy`,
-`refinement_error` and `refine_pitch` refine that estimate to an eighth of a sample, agreeing with the float refiner to the same P8 value on nearly every
-frame. `xi_over`, `voicing_threshold_q30`, `voicing_measure_q30` and `determine_voicing` make the per-band voiced/unvoiced decisions (Eq. 35 to 41) and
-`estimate_spectral_amplitudes_q16`, `voiced_amplitude_q16` and `unvoiced_amplitude_q16` the harmonic amplitudes; `analyze_at_pitch` ties them together for
-one frame. Over the real-speech frames the voicing decisions agree with float on all but a handful of harmonics and the amplitudes to better than
-0.001 dB where voicing agrees.
+The encoder's analysis side is tested end to end against its float sibling on real speech, and each step is cited by those tests. `PitchAnalysisFrame` builds the pitch error table
+E(P) for the 203 candidate periods (21.0 to 122.0 samples in half-sample steps; a silent frame has unit error); `look_back_pitch_tracking`, `look_ahead_pitch_tracking` and
+`choose_initial_pitch_estimate` pick the initial estimate; `RefinementFrame`, `window_dft_16384_q22`, `harmonic_amplitude_q16`, `spectrum_error_and_energy`, `refinement_error` and
+`refine_pitch` refine it to an eighth of a sample; `xi_over`, `voicing_threshold_q30`, `voicing_measure_q30` and `determine_voicing` make the per-band voiced/unvoiced decisions (Eq. 35 to 41);
+`estimate_spectral_amplitudes_q16`, `voiced_amplitude_q16` and `unvoiced_amplitude_q16` produce the harmonic amplitudes; `analyze_at_pitch` ties them together. All are pure integer
+functions with no I/O, locks or transmitter involvement.
 
-  *(Reference: `src/ambe/fixed/tia_102_baba/pitch.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_new]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_function]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_table]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_choose_initial_pitch_estimate]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_ahead_pitch_tracking]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_back_pitch_tracking]`; `src/ambe/fixed/tia_102_baba/pitch_refinement.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_RefinementFrame_new]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_RefinementFrame_sw_at]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_window_dft_16384_q22]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_harmonic_amplitude_q16]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_spectrum_error_and_energy]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_refine_pitch]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_refinement_error]`; `src/ambe/fixed/tia_102_baba/vuv.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_determine_voicing]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_measure_q30]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_threshold_q30]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_xi_over]`; `src/ambe/fixed/tia_102_baba/spectral_amplitude.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_estimate_spectral_amplitudes_q16]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_voiced_amplitude_q16]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_unvoiced_amplitude_q16]`; `src/ambe/fixed/mbe_encode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_mbe_encode_analyze_at_pitch]`)*
+### `PitchAnalysisFrame::new` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_new]
+
+Builds the per-frame analysis state for the pitch error function. It applies the Eq. 9 lowpass (21 taps) to the 301 samples around the center in a Q30 accumulator, block-normalises so the peak lies in
+`[2^21, 2^22)`, forms the windowed energy `S`, and the table of integer-lag autocorrelations `R[t]` (about 34 thousand multiply-accumulates, once per frame). An all-zero frame is marked `silent` with zero energy.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `raw` | `&[i32]` | PCM samples at 16-bit scale |
+| `center` | `usize` | Index of the window center; the function reads `raw[center-160..=center+160]` |
+
+**Returns:** `PitchAnalysisFrame` (`s_energy`, 151 autocorrelation lags, `silent` flag).
+**Errors:** panics on an out-of-range index if the slice does not contain the window (caller must supply it).
+**Special concerns:** pure; deterministic; the largest cost per frame in the pitch stage.
+**Signature:** `pub fn new(raw: &[i32], center: usize) -> Self`
+**See also:** test `silent_frame_has_unit_error_and_default_history_index_is_pitch_100`; `error_function`.
+
+### `PitchAnalysisFrame::error_function` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_function]
+
+Computes `E(P)` for one candidate index as Q16.16: `(S - P Rsum) / (S (1 - P W4))`, where `Rsum` sums the autocorrelation at lags `0` and every multiple `n P` up to 300 samples (half-sample lags average the
+two neighbouring integer lags). An all-zero frame scores the worst error, 1.0 (65536), as the float sibling does; the result is clamped to be at least zero, and a zero denominator also returns 1.0.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `idx` | `usize` | Candidate index, 0 to 202 (`P = 21 + idx / 2`) |
+
+**Returns:** `i32`, `E(P)` in Q16.16.
+**Errors:** none returned; an index above 202 is not validated here (unknown whether it panics, to-do verify).
+**Special concerns:** pure, uses `i128` internally.
+**Signature:** `pub fn error_function(&self, idx: usize) -> i32`
+**See also:** test `silent_frame_has_unit_error_and_default_history_index_is_pitch_100`; `error_table`.
+
+### `PitchAnalysisFrame::error_table` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_PitchAnalysisFrame_error_table]
+
+Evaluates `error_function` for every one of the 203 candidates and returns them as an `ErrorTable` (`[i32; 203]`, Q16.16). The tracking functions and the initial-estimate choice read the table of the current
+and the next two frames. Measured against the float sibling on real speech, the maximum absolute error over all candidates is 0.00002 (as documented in the module header).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&PitchAnalysisFrame` | The frame state from `new` |
+
+**Returns:** `ErrorTable`.
+**Errors:** none.
+**Special concerns:** pure; 203 calls to `error_function`.
+**Signature:** `pub fn error_table(&self) -> ErrorTable`
+**See also:** tests `fixed_pitch_tracking_matches_float_on_real_speech`, `silent_frame_has_unit_error_and_default_history_index_is_pitch_100`.
+
+### `choose_initial_pitch_estimate` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_choose_initial_pitch_estimate]
+
+Section 5.1.4: chooses between the backward estimate and the forward estimate and returns the pitch candidate index. It returns the backward index when its cumulative error `CE_B` is at most 0.48 (Q16.16) or
+not greater than the forward `CE_F`, else the forward index.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `idx_b`, `ce_b` | `usize`, `i32` | Look-back index and cumulative error, Q16.16 |
+| `idx_f`, `ce_f` | `usize`, `i32` | Look-ahead index and cumulative error, Q16.16 |
+
+**Returns:** `usize`, the chosen candidate index.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn choose_initial_pitch_estimate(idx_b: usize, ce_b: i32, idx_f: usize, ce_f: i32) -> usize`
+**See also:** tests `fixed_pitch_tracking_matches_float_on_real_speech`, `ambe_fixed_tia_102_baba_pitch_refinement.rs`; `look_back_pitch_tracking`.
+
+### `look_ahead_pitch_tracking` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_ahead_pitch_tracking]
+
+Look-ahead tracking (5.1.3) over the error tables of the current and next two frames. It finds the candidate `P0` minimising `E0 + min E1 + min E2` where each next pitch is within 0.8 to 1.2 of the previous
+one, then tests sub-multiples of the winner (smallest pitch first, snapped to the half-sample grid) against the three acceptance rules (thresholds 0.85 with ratio 1.7, 0.4 with ratio 3.5, and 0.05), using
+multiplied-out ratio tests so no division is needed. The first sub-multiple that passes replaces the winner.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `t0`, `t1`, `t2` | `&ErrorTable` | Error tables of the current, next and next-but-one frames |
+
+**Returns:** `(usize, i32)`: the index of `P_hat_F` and its cumulative error `CE_F`, Q16.16.
+**Errors:** none.
+**Special concerns:** pure; precomputes best values for all 203 candidates (dynamic programming), so it is cheap.
+**Signature:** `pub fn look_ahead_pitch_tracking(t0, t1, t2: &ErrorTable) -> (usize, i32)`
+**See also:** test `fixed_pitch_tracking_matches_float_on_real_speech`; `choose_initial_pitch_estimate`.
+
+### `look_back_pitch_tracking` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_look_back_pitch_tracking]
+
+Look-back tracking (5.1.2): among candidates within 0.8 to 1.2 of the previous frame's pitch, picks the one with the smallest current error and returns it with the cumulative error
+`CE_B = E + prev1 error + prev2 error` (saturated to `i32`). The range is evaluated exactly in half samples. The defaults for the first frames are `(DEFAULT_PITCH_INDEX, 0)`, that is pitch 100.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `table` | `&ErrorTable` | This frame's error table |
+| `prev1`, `prev2` | `(usize, i32)` | Final (pitch index, error) of the previous two frames |
+
+**Returns:** `(usize, i32)`: index of `P_hat_B` and `CE_B`.
+**Errors:** none.
+**Special concerns:** pure; the first candidate with the smallest error wins ties.
+**Signature:** `pub fn look_back_pitch_tracking(table, prev1, prev2) -> (usize, i32)`
+**See also:** test `fixed_pitch_tracking_matches_float_on_real_speech`; `fixed_tia_102_baba_pitch_look_ahead_pitch_tracking`.
+
+### `RefinementFrame::new` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_RefinementFrame_new]
+
+Computes the 256-point windowed DFT `S_w(m)` of one frame, `m = -127..=128`, Q10. It multiplies the 221 samples around the center by the refinement window, then evaluates the DFT directly against a
+Q30 cosine table (rounding each bin); negative bins are the conjugates of the positive ones, since the input is real.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `raw` | `&[i32]` | PCM samples |
+| `center` | `usize` | Window center; reads `raw[center-110..=center+110]` |
+
+**Returns:** `RefinementFrame` holding 256 complex bins.
+**Errors:** panics on an out-of-range index if the window is not inside `raw`.
+**Special concerns:** pure; about 29 thousand multiply-accumulates per frame.
+**Signature:** `pub fn new(raw: &[i32], center: usize) -> Self`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_pitch_refinement.rs`; `sw_at`.
+
+### `RefinementFrame::sw_at` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_RefinementFrame_sw_at]
+
+Reads bin `S_w(m)` (Q10 complex) from the frame's DFT, returning zero outside `-127..=128`. It makes the band loops in the refinement, voicing and amplitude code safe to run past the ends of the table.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `m` | `i32` | Bin index |
+
+**Returns:** `Cplx` (`i64` real and imaginary, Q10); zero outside the range.
+**Errors:** none.
+**Special concerns:** pure, constant time.
+**Signature:** `pub fn sw_at(&self, m: i32) -> Cplx`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_pitch_refinement.rs`; `RefinementFrame::new`.
+
+### `window_dft_16384_q22` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_window_dft_16384_q22]
+
+Looks up `W_R(m)`, the refinement window's DFT sampled at 16384 points, Q22, from `WINDOW_DFT_16384_Q22`. The table covers `|m| <= WINDOW_DFT_HALF_RANGE` (512); anything outside is
+treated as zero. The reachable range for pitches of at least 19.875 is about 476, so the cutoff is never hit in practice.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `m` | `i32` | Window-DFT index (from `Pitch::window_index`) |
+
+**Returns:** `i64`, `W_R(m)` in Q22; 0 outside the table.
+**Errors:** none.
+**Special concerns:** pure; the float sibling's `window_dft_16384_direct` computes the same function directly.
+**Signature:** `pub fn window_dft_16384_q22(m: i32) -> i64`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_pitch_refinement.rs`; `harmonic_amplitude_q16`.
+
+### `harmonic_amplitude_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_harmonic_amplitude_q16]
+
+Estimates the complex amplitude `A_l` of harmonic `l` (Eq. 26 to 28): `sum(S_w(m) W_R(.)) / sum(W_R^2)` over the bins from `ceil(a_l)` up to `ceil(b_l)` (`Pitch::band_start`). The numerator is Q32 and
+the denominator Q44, both `i128`; the quotient is Q16 complex. If the denominator is zero (empty band) it returns zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | The windowed DFT |
+| `l` | `u32` | Harmonic number |
+| `pitch` | `&Pitch` | Exact-fraction pitch (from `P8` or `omega0`) |
+
+**Returns:** `Cplx`, Q16.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn harmonic_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) -> Cplx`
+**See also:** test `fixed_pitch_refinement_matches_float_on_real_speech`; `spectrum_error_and_energy`.
+
+### `spectrum_error_and_energy` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_spectrum_error_and_energy]
+
+Over the bins `m_start <= m < m_end`, returns `(err, real)`: `real = sum |S_w(m)|^2` and `err = sum |S_w(m) - S_synth(m)|^2`, where the synthetic spectrum is built from harmonics `0..=max_l` at the given
+pitch (Eq. 25); a bin in no harmonic's band has synthetic value 0. Both are Q60 `i128`. It is the shared core of `refinement_error` (the `err` part) and `voicing_measure_q30` (their ratio).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Measured spectrum |
+| `pitch` | `&Pitch` | Candidate pitch |
+| `max_l` | `u32` | Highest harmonic included |
+| `m_start`, `m_end` | `i32` | Bin range, end exclusive |
+
+**Returns:** `(i128, i128)`: `(err, real)`, Q60.
+**Errors:** none.
+**Special concerns:** pure; recomputes `harmonic_amplitude_q16` for each harmonic overlapping the range.
+**Signature:** `pub fn spectrum_error_and_energy(frame, pitch, max_l, m_start, m_end) -> (i128, i128)`
+**See also:** test `fixed_pitch_refinement_matches_float_on_real_speech`; `refinement_error`.
+
+### `refine_pitch` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_refine_pitch]
+
+Refines the half-sample initial pitch candidate to eighth-sample accuracy (the doc comment says quarter-sample, the offsets are eighths): it tries `P = p_hat_i + {-9,-7,-5,-3,-1,1,3,5,7,9}/8`, evaluates
+`refinement_error` for each and returns the `P8` with the smallest `E_R` (first of equals, as the float sibling's `min_by`). On real speech it equals the float result on 99.99% of frames.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Windowed DFT of the frame |
+| `p_hat_i_index` | `usize` | Initial candidate index from the tracking stage (`P = 21 + index / 2`) |
+
+**Returns:** `u32`, the refined period in eighths of a sample.
+**Errors:** none.
+**Special concerns:** pure; ten full error evaluations per call, the dominant cost of the refinement stage.
+**Signature:** `pub fn refine_pitch(frame: &RefinementFrame, p_hat_i_index: usize) -> u32`
+**See also:** test `fixed_pitch_refinement_matches_float_on_real_speech`; `refinement_error`.
+
+### `refinement_error` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_pitch_refinement_refinement_error]
+
+The refinement error `E_R` (Eq. 24) at a given pitch, Q60. It takes `L_est` from the pitch (`floor(0.9254 P / 2 - 1/2)`), the upper bin, and sums the spectral error over bins 50 up to that bin for
+harmonics up to `L_est + 1`, via `spectrum_error_and_energy`. `refine_pitch` minimises it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Measured spectrum |
+| `pitch` | `&Pitch` | Pitch under test |
+
+**Returns:** `i128`, `E_R`, Q60.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn refinement_error(frame: &RefinementFrame, pitch: &Pitch) -> i128`
+**See also:** test `fixed_pitch_refinement_matches_float_on_real_speech`; `refine_pitch`.
+
+### `determine_voicing` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_determine_voicing]
+
+Decides voiced or unvoiced for each frequency band and updates `xi_max`. It computes `L_hat` and `K_hat` from the pitch, the low- and high-frequency energies (`xi_lf`, `xi_hf`), updates `xi_max`
+(`update_xi_max`), the energy-dependent function `M(xi)`, then for each band `k` declares it voiced when the measure `D_k` is below the threshold `Theta_xi(k)`. The previous frame's decision for the
+same band feeds the threshold; missing entries count as unvoiced.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Measured spectrum |
+| `pitch` | `&Pitch` | Refined pitch |
+| `initial_pitch_error_q16` | `i32` | `E(P_hat_I)`, Q16.16 |
+| `xi_max_prev_q16` | `i128` | Running maximum from the previous frame |
+| `previous_v` | `&[bool]` | Previous frame's band decisions; empty for the first frame |
+
+**Returns:** `(Vec<bool>, i128)`: one flag per band (`K_hat` entries) and the new `xi_max`, Q16.
+**Errors:** none.
+**Special concerns:** pure; allocates the result vector.
+**Signature:** `pub fn determine_voicing(frame, pitch, initial_pitch_error_q16, xi_max_prev_q16, previous_v) -> (Vec<bool>, i128)`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `voicing_measure_q30`, `voicing_threshold_q30`.
+
+### `voicing_measure_q30` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_measure_q30]
+
+The band voicing measure `D_k` (Eq. 35 and 36) in Q30: the ratio of the synthetic-spectrum error to the real energy over the band's bins, from `spectrum_error_and_energy` and a wide-range `ratio_q30`. Band `k` covers
+harmonics `3k-2` to `3k` (the highest band extends to `L_hat`). A band with no spectral energy counts as maximally unvoiced (1.0), as in the float sibling.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Measured spectrum |
+| `k` | `u32` | Band number, from 1 |
+| `l_hat` | `u32` | Harmonic count |
+| `pitch` | `&Pitch` | Pitch |
+| `is_highest_band` | `bool` | The band extends to `L_hat` instead of `3k` |
+
+**Returns:** `i64`, `D_k` in Q30; `ONE_Q30` when the band has no energy.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn voicing_measure_q30(frame, k, l_hat, pitch, is_highest_band) -> i64`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `determine_voicing`.
+
+### `voicing_threshold_q30` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_voicing_threshold_q30]
+
+The voicing threshold `Theta_xi(k)` (Eq. 37) in Q30. If the initial pitch error exceeds 0.5 and `k >= 2` the threshold is zero (the band is forced unvoiced). Otherwise it is `M(xi) * (1 - 0.3096 (k-1) omega0)`,
+scaled by 9/16 when the previous frame's band was voiced and by 9/20 when it was not.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `k` | `u32` | Band number from 1 |
+| `omega0_q30` | `i64` | Fundamental in radians per sample, Q30 |
+| `initial_pitch_error_q16` | `i32` | `E(P_hat_I)`, Q16.16 |
+| `previous_band_voiced` | `bool` | Previous frame's decision for this band |
+| `m_xi_q30` | `i64` | Energy-dependent function `M(xi)`, Q30 |
+
+**Returns:** `i64`, the threshold in Q30.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn voicing_threshold_q30(k, omega0_q30, initial_pitch_error_q16, previous_band_voiced, m_xi_q30) -> i64`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `determine_voicing`.
+
+### `xi_over` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_xi_over]
+
+Private helper giving the normalised spectral energy `sum |S_w(m)|^2 / W_R(0)^2` over bins `lo..=hi`, Q16. `xi_lf` uses bins 0 to 63 (Eq. 38) and `xi_hf` bins 64 to 128 (Eq. 39); their sum is `xi_0` used by
+`determine_voicing`. The sum is in Q20 and shifted by 40 before dividing by the squared window DC gain in Q44.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Measured spectrum |
+| `lo`, `hi` | `i32` | Inclusive bin range |
+
+**Returns:** `i128`, Q16.
+**Errors:** none (a zero window DC gain would divide by zero; the table value is nonzero).
+**Special concerns:** pure; private.
+**Signature:** `fn xi_over(frame: &RefinementFrame, lo: i32, hi: i32) -> i128`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `update_xi_max`.
+
+### `estimate_spectral_amplitudes_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_estimate_spectral_amplitudes_q16]
+
+Returns `M_hat_l` for `l = 1..=l_hat` in Q16, using the voiced estimator (`voiced_amplitude_q16`) for harmonics whose band was decided voiced and the unvoiced estimator (`unvoiced_amplitude_q16`) otherwise.
+The band of harmonic `l` is `ceil(l / 3)` limited to `K_hat`; a band index missing from `voiced` counts as unvoiced.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Measured spectrum |
+| `l_hat` | `u32` | Harmonic count |
+| `k_hat` | `u32` | Band count |
+| `pitch` | `&Pitch` | Pitch |
+| `voiced` | `&[bool]` | Band decisions from `determine_voicing` |
+
+**Returns:** `Vec<i64>` of `l_hat` amplitudes, Q16 (about `3.3e4 * 2^16` for a full-scale sine, hence `i64`).
+**Errors:** none.
+**Special concerns:** pure; allocates.
+**Signature:** `pub fn estimate_spectral_amplitudes_q16(frame, l_hat, k_hat, pitch, voiced) -> Vec<i64>`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `analyze_at_pitch`.
+
+### `voiced_amplitude_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_voiced_amplitude_q16]
+
+The voiced amplitude `A_voiced(l)` (Eq. 43), Q16: `sqrt(E_sig / E_win)` over the harmonic's band, where `E_sig = sum |S_w(m)|^2` (Q20) and `E_win = sum W_R^2` (Q44). The root is an integer square root
+of `E_sig * 2^56 / E_win`, so no precision is lost before it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Measured spectrum |
+| `l` | `u32` | Harmonic |
+| `pitch` | `&Pitch` | Pitch |
+
+**Returns:** `i64`, Q16; 0 when the window energy is zero.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn voiced_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) -> i64`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `unvoiced_amplitude_q16`.
+
+### `unvoiced_amplitude_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_spectral_amplitude_unvoiced_amplitude_q16]
+
+The unvoiced amplitude `A_unvoiced(l)` (Eq. 44), Q16: `sqrt(E_sig / width) / sum(w_R)`, where `width` is the number of bins in the band and `sum(w_R)` equals the window DC gain `W_R(0)` (Q22).
+Implemented as `isqrt(E_sig_q20 * 2^12 / width) * 2^22 / W_R(0)`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Measured spectrum |
+| `l` | `u32` | Harmonic |
+| `pitch` | `&Pitch` | Pitch |
+
+**Returns:** `i64`, Q16; 0 for an empty band.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn unvoiced_amplitude_q16(frame: &RefinementFrame, l: u32, pitch: &Pitch) -> i64`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `voiced_amplitude_q16`.
+
+### `analyze_at_pitch` (fixed) [@ANCHOR: ham_digital_modes:fixed_mbe_encode_analyze_at_pitch]
+
+Per-harmonic voicing (`voiced[h]`, index 0 unused) and amplitudes (`ml[h]`, Q16, index 0 unused) for harmonics `1..=l` at a pitch, mirroring the float `analyze_at_pitch` exactly. It calls `determine_voicing`,
+stores the new `xi_max` and band decisions in the state, pads the bands to `K_hat(l)` with the last decision, then lets each harmonic take its band's flag and amplitude from
+`estimate_spectral_amplitudes_q16`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `refinement` | `&RefinementFrame` | Measured spectrum |
+| `initial_pitch_error_q16` | `i32` | `E(P_hat_I)`, Q16.16 |
+| `pitch` | `&Pitch` | Pitch to analyse at (the refined pitch or a decoder-quantized one) |
+| `l` | `u32` | Harmonic count |
+| `state` | `&mut AnalysisState` | `xi_max_q16` and previous band decisions; updated |
+
+**Returns:** `(Vec<bool>, Vec<i64>)`, each of length `l + 1`.
+**Errors:** none.
+**Special concerns:** mutates `state`, so frames must be analysed in order, once each.
+**Signature:** `pub fn analyze_at_pitch(refinement, initial_pitch_error_q16, pitch, l, state) -> (Vec<bool>, Vec<i64>)`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `fixed_mbe_encode_analyze_and_quantize`.
+
+*(Reference: `src/ambe/fixed/tia_102_baba/pitch.rs`; `src/ambe/fixed/tia_102_baba/pitch_refinement.rs`; `src/ambe/fixed/tia_102_baba/vuv.rs`; `src/ambe/fixed/tia_102_baba/spectral_amplitude.rs`; `src/ambe/fixed/mbe_encode.rs`)*
 
 ## Fixed and float AMBE codec chain anchored in slice 7 (encoders, decoders, synthesis, concealment)
 
