@@ -40,6 +40,7 @@ LOG_LINE = re.compile(r"^\s*(\d+\.\d+)\s+(.*)$")
 FREQ_RESULT = re.compile(r"^Frequency\((A|B), Hz\((\d+)\)\)")
 
 
+# [@ANCHOR: radioctl_wire_frame]
 @dataclass
 class Frame:
     time: float
@@ -47,6 +48,7 @@ class Frame:
     data: bytes
 
 
+# [@ANCHOR: radioctl_wire_command]
 @dataclass
 class Command:
     time: float
@@ -55,6 +57,7 @@ class Command:
     result: str = ""
 
 
+# [@ANCHOR: radioctl_wire_exchange]
 @dataclass
 class Exchange:
     """One `tx` frame and the `rx` bytes that followed it before the next `tx`."""

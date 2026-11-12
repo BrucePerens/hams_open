@@ -43,6 +43,9 @@ WIRE = """\
 
 
 class WireToTranscriptTests(unittest.TestCase):
+    # Tests [@ANCHOR: radioctl_wire_frame]
+    # Tests [@ANCHOR: radioctl_wire_command]
+    # Tests [@ANCHOR: radioctl_wire_exchange]
     # Tests [@ANCHOR: radioctl_wire_parse_wire]
     def test_the_wire_lines_are_parsed_and_a_bad_line_is_an_error(self):
         frames = w.parse_wire(WIRE)
