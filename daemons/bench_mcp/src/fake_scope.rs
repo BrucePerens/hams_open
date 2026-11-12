@@ -516,6 +516,7 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
         return vec![];
     }
     if rest == "CRVA" && query {
+        let track = st.vals["CRMS"] == "TRACK";
         if st.vals["CRMS"] == "OFF" {
             return vec![];
         }
@@ -527,13 +528,18 @@ fn answer(st: &mut State, line: &str, o: &Opts) -> Vec<u8> {
                 e(num(st, "VDIF"), "V")
             )
         } else {
-            let dt = num(st, "TDIF") - num(st, "TREF");
+            let (a, b) = if track {
+                ("HREF", "HDIF")
+            } else {
+                ("TREF", "TDIF")
+            };
+            let dt = num(st, b) - num(st, a);
             format!(
                 "{key} HREL,{},{},{},{}",
                 e(dt, "S"),
                 e(if dt == 0.0 { 0.0 } else { 1.0 / dt.abs() }, "Hz"),
-                e(num(st, "TREF"), "S"),
-                e(num(st, "TDIF"), "S")
+                e(num(st, a), "S"),
+                e(num(st, b), "S")
             )
         });
     }
