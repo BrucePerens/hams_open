@@ -16,7 +16,7 @@ use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind};
 use radioctl_core::error::ErrorKind;
 use radioctl_core::op::{Observation, Op};
 use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Level, Mode, Vfo};
+use radioctl_core::units::{Hz, Level, Mode, Receiver, Vfo};
 use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::virtual_rig::VirtualRig;
 
@@ -428,4 +428,86 @@ fn synchronous_am_goes_on_the_wire_with_the_code_the_manual_gives_and_reads_back
         .expect("7300 file");
     let mut engine = engine_for(ic7300).expect("engine");
     assert!(engine.encode(&Op::SetMode(Mode::Sam)).is_err());
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_encode_main_sub]
+#[test]
+fn the_ic_7610_and_ic_9100_select_the_main_or_sub_band_as_their_command_tables_give() {
+    let files = icom_files();
+    let find = |id: &str| files.iter().find(|d| d.id == id).expect("file");
+    let frame = |d: &RigDescription, cmd: u8, data: &[u8]| {
+        let c = d.civ.as_ref().expect("civ");
+        let mut v = vec![0xFE, 0xFE, c.address, c.controller, cmd];
+        v.extend_from_slice(data);
+        v.push(0xFD);
+        v
+    };
+
+    // IC-7610 (CI-V guide p. 4): 07 D0 main, D1 sub, D2 read; C0 off, C1 on, C2 read dual watch.
+    let d = find("icom-ic-7610");
+    assert!(d.capabilities.has(Capability::Receivers));
+    let mut engine = engine_for(d).expect("engine");
+    let mut rig = VirtualRig::from_description(d).expect("virtual rig");
+    let wire = |e: &mut dyn ProtocolEngine, op: Op| e.encode(&op).expect("encode").bytes;
+    assert_eq!(
+        wire(engine.as_mut(), Op::SelectReceiver(Receiver::Main)),
+        frame(d, 0x07, &[0xD0])
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::SelectReceiver(Receiver::Sub)),
+        frame(d, 0x07, &[0xD1])
+    );
+    assert_eq!(wire(engine.as_mut(), Op::GetReceiver), frame(d, 0x07, &[0xD2]));
+    assert_eq!(wire(engine.as_mut(), Op::SetDualWatch(true)), frame(d, 0x07, &[0xC1]));
+    assert_eq!(wire(engine.as_mut(), Op::SetDualWatch(false)), frame(d, 0x07, &[0xC0]));
+    assert_eq!(wire(engine.as_mut(), Op::GetDualWatch), frame(d, 0x07, &[0xC2]));
+    assert_eq!(
+        read(engine.as_mut(), &mut rig, &Op::GetReceiver),
+        Observation::Receiver(Receiver::Main)
+    );
+    write(engine.as_mut(), &mut rig, &Op::SelectReceiver(Receiver::Sub));
+    assert_eq!(
+        read(engine.as_mut(), &mut rig, &Op::GetReceiver),
+        Observation::Receiver(Receiver::Sub)
+    );
+    assert_eq!(
+        read(engine.as_mut(), &mut rig, &Op::GetDualWatch),
+        Observation::DualWatch(false)
+    );
+    write(engine.as_mut(), &mut rig, &Op::SetDualWatch(true));
+    assert_eq!(
+        read(engine.as_mut(), &mut rig, &Op::GetDualWatch),
+        Observation::DualWatch(true)
+    );
+    // The transmit band has no command here.
+    assert_eq!(
+        engine
+            .encode(&Op::SetTxReceiver(Receiver::Sub))
+            .expect_err("refused")
+            .kind,
+        ErrorKind::Unsupported
+    );
+
+    // IC-9100 (manual p. 193): select only; no read, no dual watch.
+    let d = find("icom-ic-9100");
+    assert!(d.capabilities.has(Capability::Receivers));
+    let mut engine = engine_for(d).expect("engine");
+    let mut rig = VirtualRig::from_description(d).expect("virtual rig");
+    assert_eq!(
+        wire(engine.as_mut(), Op::SelectReceiver(Receiver::Sub)),
+        frame(d, 0x07, &[0xD1])
+    );
+    write(engine.as_mut(), &mut rig, &Op::SelectReceiver(Receiver::Main));
+    for op in [Op::GetReceiver, Op::SetDualWatch(true), Op::GetDualWatch] {
+        assert_eq!(
+            engine.encode(&op).expect_err("refused").kind,
+            ErrorKind::Unsupported,
+            "{op:?}"
+        );
+    }
+
+    // A model without the capability refuses the op.
+    let d = find("icom-ic-7300");
+    let mut engine = engine_for(d).expect("engine");
+    assert!(engine.encode(&Op::SelectReceiver(Receiver::Sub)).is_err());
 }

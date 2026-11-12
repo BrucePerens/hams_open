@@ -20,7 +20,7 @@ use std::time::Duration;
 use std::collections::BTreeMap;
 
 use radioctl_core::description::{
-    CivCommandSet, CivParams, ElecraftParams, Family, KenwoodParams, RigDescription,
+    CivCommandSet, CivMainSub, CivParams, ElecraftParams, Family, KenwoodParams, RigDescription,
     YaesuClarifier, YaesuParams,
 };
 use radioctl_core::engine::PARTIAL_FRAME_TIMEOUT;
@@ -172,6 +172,9 @@ pub struct VirtualRig {
     /// CI-V: true while VFO B is the selected VFO (command 07 01); `03`, `05` and `25 00` act on
     /// the selected VFO and `25 01` on the other.
     civ_b_selected: bool,
+    /// Whether the Sub band is the selected one (`07 D1`) and whether dual watch is on (`07 C1`), on a model with `civ.main_sub`.
+    civ_sub_selected: bool,
+    civ_dual_watch: bool,
     /// Kenwood: the VFO `FR` selected for receive (0 A, 1 B) and `FT` for transmit; split is
     /// when they differ.
     kenwood_rx_vfo: u8,
@@ -272,6 +275,8 @@ impl VirtualRig {
             wire,
             scope: desc.scope.as_ref().map(ScopeSim::new),
             civ_b_selected: false,
+            civ_sub_selected: false,
+            civ_dual_watch: false,
             kenwood_rx_vfo: 0,
             yaesu_tx_band: 0,
             kenwood_tx_vfo: 0,
@@ -513,6 +518,20 @@ impl VirtualRig {
             (0x07, [0x01]) => {
                 self.civ_b_selected = true;
                 CivReply::Ok
+            }
+            (0x07, [0xD0 | 0xD1]) if params.main_sub != CivMainSub::None => {
+                self.civ_sub_selected = data == [0xD1];
+                CivReply::Ok
+            }
+            (0x07, [0xD2]) if params.main_sub == CivMainSub::Full => {
+                CivReply::Data(0x07, vec![0xD2, u8::from(self.civ_sub_selected)])
+            }
+            (0x07, [0xC0 | 0xC1]) if params.main_sub == CivMainSub::Full => {
+                self.civ_dual_watch = data == [0xC1];
+                CivReply::Ok
+            }
+            (0x07, [0xC2]) if params.main_sub == CivMainSub::Full => {
+                CivReply::Data(0x07, vec![0xC2, u8::from(self.civ_dual_watch)])
             }
             (0x07, [0xA0]) => {
                 *self.civ_slot(true) = *self.civ_slot(false);

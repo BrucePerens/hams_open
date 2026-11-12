@@ -125,6 +125,10 @@ Errors are `Unsupported` `RigError`s: in FM and wide FM there is no filter width
 Encodes the operations on VFO B and on split for Icom radios. `&self`; `op` is the operation. Handled: `GetFrequency(B)` and `SetFrequency(B, hz)` as command `25 01` (the set carries the BCD frequency), and `GetSplit` and `SetSplit` as command `0F` with a flag byte.
 Returns `None` for any other operation, so the caller tries the next group; `Some(Err)` when the frequency does not fit the model's field. Builds a request only; nothing is sent. Setting split does not by itself key the radio.
 
+### `fn encode_main_sub(&self, op: &Op) -> Option<Result<Request, RigError>>` [@ANCHOR: radioctl:radioctl_civ_engine_encode_main_sub]
+
+Encodes the Main/Sub band ops of a dual-receiver Icom, by the description's `civ.main_sub` level. `SelectReceiver(Main)` is command `07` with `D0` and `Sub` is `D1`, on both levels (`select`: IC-9100, `full`: IC-7610); on `full` only, `GetReceiver` is `07 D2` and `SetDualWatch(false/true)` is `07 C0`/`C1` with `GetDualWatch` `07 C2`. Replies `07 D2 00/01` and `07 C2 00/01` decode in `decode` to `Receiver` and `DualWatch`. Every other receiver op (the transmit band included) and a level that lacks the command return an `Unsupported` error; a non-receiver op returns `None` so the other encoders try it. Reads the description only; pure, nothing is sent.
+
 ### `fn encode_rit_xit(&self, op: &Op) -> Option<Result<Request, RigError>>` [@ANCHOR: radioctl:radioctl_civ_engine_encode_rit_xit]
 
 Encodes RIT, XIT and RIT offset operations for Icom radios. `&self`; `op` is the operation. `GetRit` and `SetRit` use `21 01`, `GetXit` and `SetXit` use `21 02` (a flag byte for set), and `GetRitOffset` and `SetRitOffset` use `21 00`, the set carrying the 3 bytes from `encode_rit_offset`.

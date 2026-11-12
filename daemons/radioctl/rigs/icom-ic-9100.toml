@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split", "filter", "levels", "identify", "read-power", "read-meters"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "split", "filter", "levels", "identify", "read-power", "read-meters", "receivers"]
 
 [rig]
 id = "icom-ic-9100"
@@ -19,6 +19,7 @@ address = 0x7C
 controller = 0xE0
 model_id = 0x7C
 echo = false
+main_sub = "select"
 
 [levels]
 attenuator_db = [20]
@@ -104,6 +105,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.main_sub"
+provenance = { kind = "manual", reference = "Icom IC-9100 instruction manual, file IC-9100_ENG_2a.pdf (from /storage/manuals/icom/IC-9100), sha256 1ac4d513003b84d6c9fc5d531ae60b85d699291c941653be6bd7d674e95c6fb1: CI-V command table, PDF p. 193: command 07 sub commands D0 select MAIN band, D1 select SUB band, B0 exchange MAIN and SUB", note = "`SelectReceiver` sends 07 D0 or 07 D1. The table has no read of the selected band and no dual watch command, so only the select form is claimed. Read from the manual's command table by Bruce's 2026-11-12 decision (the radioctl rule is facts only, never copied text). Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]

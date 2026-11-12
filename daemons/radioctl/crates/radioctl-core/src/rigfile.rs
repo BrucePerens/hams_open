@@ -27,7 +27,7 @@ use serde::Deserialize;
 
 use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
-    CivCommandSet, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
+    CivCommandSet, CivMainSub, CivParams, ElecraftParams, Family, FlexParams, HhDialect, HpsdrParams,
     KenwoodDialect, KenwoodHhParams, KenwoodParams, KyForm, KyParams, KyStop, LegacyBlock,
     LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams, PowerMeterParams,
     ReceiverParams, ReceiverProtocol, RigDescription, ScopeParams, Timing, UsbParams, UsbProtocol,
@@ -168,6 +168,18 @@ struct CivSection {
     frequency_bytes: u8,
     #[serde(default)]
     command_set: CivCommandSetName,
+    /// `"select"` or `"full"` (see `CivMainSub`); absent means none.
+    #[serde(default)]
+    main_sub: CivMainSubName,
+}
+
+#[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+enum CivMainSubName {
+    #[default]
+    None,
+    Select,
+    Full,
 }
 
 #[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
@@ -626,6 +638,11 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         command_set: match c.command_set {
             CivCommandSetName::Standard => CivCommandSet::Standard,
             CivCommandSetName::F8101 => CivCommandSet::F8101,
+        },
+        main_sub: match c.main_sub {
+            CivMainSubName::None => CivMainSub::None,
+            CivMainSubName::Select => CivMainSub::Select,
+            CivMainSubName::Full => CivMainSub::Full,
         },
     });
     let kenwood = doc
@@ -1308,6 +1325,13 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         .is_some_and(|c| c.command_set != CivCommandSet::Standard)
     {
         keys.push("civ.command_set".to_string());
+    }
+    if description
+        .civ
+        .as_ref()
+        .is_some_and(|c| c.main_sub != CivMainSub::None)
+    {
+        keys.push("civ.main_sub".to_string());
     }
     if description.scope.is_some() {
         keys.extend(
