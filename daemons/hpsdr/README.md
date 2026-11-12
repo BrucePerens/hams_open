@@ -1,6 +1,6 @@
 # hpsdr
 
-A Rust client for OpenHPSDR radios (ANAN-10, ANAN-100, Hermes, and the other boards of the family), built
+A Rust client for OpenHPSDR (the open High Performance Software Defined Radio protocol and hardware family) radios (ANAN-10, ANAN-100, Hermes, and the other boards of the family), built
 for the relay SDR plan (`hams_com/docs/proposals/SDR_RECEIVE_ENGINE_AND_TRANSMIT_PATH.md` sections 2 to 4)
 and the transmit safety baseline (`RELAY_SDR_RADIOCTL_ROADMAP.md` section 2a). Prototype: **everything here is
 `verified=unverified`** until it has run against a real radio. No hardware was used to write it.
@@ -9,14 +9,14 @@ and the transmit safety baseline (`RELAY_SDR_RADIOCTL_ROADMAP.md` section 2a). P
 
 | Piece | State |
 |---|---|
-| `p1`: Protocol 1 discovery, start/stop, EP2 builder, EP6 decoder, status C&C | written, unit-tested |
+| `p1`: Protocol 1 discovery, start/stop, EP2 builder, EP6 decoder (USB endpoint 2 carries data to the radio and endpoint 6 carries samples from it), status C&C | written, unit-tested |
 | `gate`: transmit gate (closed by default, bounded lease) | written, unit-tested |
 | `iq`: `IqStream` trait, blocks with sequence numbers, drop counters | written, unit-tested |
 | `types`: boards, sample rates, power/supply/SWR conversion | written, unit-tested |
 | `discovery`: UDP broadcast or unicast discovery (Protocol 1) | written, tested against the emulator |
-| `session`: configure, start, stream several DDC receivers, status, stop; gated PTT and transmit I/Q queue | written, tested against the emulator |
+| `session`: configure, start, stream several DDC (digital down-converter) receivers, status, stop; gated PTT and transmit I/Q queue | written, tested against the emulator |
 | `emulator`: loopback-only Protocol 1 server with synthetic tones, status, loss injection and transmit counters | written |
-| `p2`: Protocol 2 discovery, General, DDC-specific, High Priority (receive and gated transmit), gated DUC I/Q, HP status and DDC packet parsers | written, unit-tested by round trip only |
+| `p2`: Protocol 2 discovery, General, DDC-specific, High Priority (receive and gated transmit), gated DUC (digital up-converter) I/Q, HP status and DDC packet parsers | written, unit-tested by round trip only |
 | `session_p2`: Protocol 2 session (General, DDC-specific, High Priority; DDC streams demultiplexed by source port; gated PTT and DUC I/Q) | written, tested against the Protocol 2 emulator |
 | `emulator_p2`: loopback-only Protocol 2 server with synthetic tones, attenuator, status, loss injection and transmit counters | written |
 | Hardware status for the ANAN-100: temperature | not defined by the published specs |
@@ -38,7 +38,7 @@ hardware and produces tones at absolute frequencies, so each receiver sees its o
 
 * **Sans-IO.** `p1` builds and parses datagrams; it opens no sockets. The library never creates a tokio
   runtime and never calls `block_on`: anything that opens a socket or spawns takes a `tokio::runtime::Handle`.
-* **Transmit fails closed.** `TxGate::default()` is closed. `Ep2Builder::build_rx` has no MOX, drive or
+* **Transmit fails closed.** `TxGate::default()` is closed. `Ep2Builder::build_rx` has no MOX (manual operate transmit, the transmit-on switch), drive or
   transmit I/Q parameter at all; `Ep2Builder::build_tx` returns `HpsdrError::GateClosed` and builds nothing unless
   the caller opened the gate. A gate opens for a fixed lease and expires by itself; a poisoned lock reads as closed.
   Tests assert that every receive datagram has MOX clear, drive zero and zero transmit I/Q in every C&C address.

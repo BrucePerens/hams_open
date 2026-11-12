@@ -1,6 +1,6 @@
 # elad_usb
 
-A receive-only Rust driver for ELAD USB receivers (FDM-DUO, FDM-S2, FDM-S1), written from public descriptions of the protocol
+A receive-only Rust driver for ELAD (an Italian maker of software-defined radio receivers) USB receivers (FDM-DUO, FDM-S2, FDM-S1), written from public descriptions of the protocol
 and checked against one real FDM-S2. Used by the relay (`hams_com/daemons/hams_local_relay/src/elad_source.rs`) and by
 `bench_mcp` (`src/elad/`). The design is `hams_com/docs/proposals/ELAD_RECEIVER_RELAY_AND_BENCH.md`.
 
@@ -11,9 +11,9 @@ and checked against one real FDM-S2. Used by the relay (`hams_com/daemons/hams_l
 | Discovery by USB id (1721:061a DUO, 061c S2, 0610 S1) | **verified on an FDM-S2, 2026-11-08** |
 | Descriptors: configuration 1, interface 0 vendor class, bulk OUT 0x02, bulk IN 0x86 (512 bytes), high speed | **verified on an FDM-S2** |
 | Control reads: firmware version (`0xFF`), EEPROM (`0xA2`, index `0x0151`): serial, hardware version, rate correction, dB offsets | **verified on an FDM-S2** (fw 3.0, hw 1.3; plausible values; fixture `tests/fixtures/fdm_s2_fw3_0_open.txt`) |
-| Tune word, S2 front-end code, FIFO start/stop | written from public descriptions, tested against the fake only |
+| Tune word, S2 front-end code, FIFO (first-in, first-out sample buffer) start/stop | written from public descriptions, tested against the fake only |
 | I/Q format (32-bit little-endian below 6.144 Msps, 16-bit at 6.144 Msps; I then Q) | written from public descriptions; **not decoded from real samples yet** |
-| FDM-S1/S2 FPGA image | **not loaded by this software, by decision**: see below |
+| FDM-S1/S2 FPGA (programmable logic chip) image | **not loaded by this software, by decision**: see below |
 | FDM-DUO | no unit available; nothing verified |
 
 **The S1/S2 FPGA.** A bus-powered FDM-S1/S2 enumerates and answers control reads with no FPGA image, but streams no samples (a real
@@ -24,7 +24,7 @@ S1/S2 unless the caller states the FPGA was loaded by other means (`FpgaState::L
 
 ## Receive only
 
-`protocol::is_receive_request` is the whole list of what can go on the wire; `Radio` refuses anything else. No CAT write, no PTT, no
+`protocol::is_receive_request` is the whole list of what can go on the wire; `Radio` refuses anything else. No CAT (computer control of the radio) write, no PTT (push-to-talk, transmit keying), no
 EEPROM write. A test runs every model through every public method and checks each request sent.
 
 ## Using it
@@ -47,7 +47,7 @@ manual text; ELAD's `gr-elad` and loader were not downloaded or read.
 Each entry is a semantic anchor in the source with a test citing it (`// Tests [@ANCHOR: ...]`).
 
 - [@ANCHOR: elad_usb:elad_model_from_pid] Maps a USB product id to FDM-DUO, FDM-S2 or FDM-S1; any other id is refused.
-- [@ANCHOR: elad_usb:elad_tuning_word] The 32-bit DDC tuning word: the frequency's fraction of the ADC clock times 2^32, clamped at zero, aliasing above the clock.
+- [@ANCHOR: elad_usb:elad_tuning_word] The 32-bit DDC (digital down-converter, the stage that selects a frequency from the sampled band) tuning word: the frequency's fraction of the ADC (analog-to-digital converter) clock times 2^32, clamped at zero, aliasing above the clock.
 - [@ANCHOR: elad_usb:elad_tune_request_sampler] The FDM-S1/S2 tune request: word low half in the value, high half in the index, top byte in the data stage.
 - [@ANCHOR: elad_usb:elad_tune_request_duo] The FDM-DUO tune request through its gateway request.
 - [@ANCHOR: elad_usb:elad_front_end_code] The FDM-S2 filter-bank and attenuator code for a frequency.

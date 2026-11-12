@@ -1,6 +1,6 @@
 # rsp_open
 
-An open Rust driver for the SDRplay **RSP2pro** (USB 1df7:3010), **RSP1A** (USB 1df7:3000)
+An open Rust driver for the SDRplay (a maker of software-defined radio receivers) **RSP2pro** (USB 1df7:3010), **RSP1A** (USB 1df7:3000)
 and **RSP1** (USB 1df7:2500): library crate plus examples, receive only. Status
 (2026-10-25): all three receivers tune and stream from power-up with no firmware and no
 SDRplay software, checked with each receiver's own 24 MHz reference harmonics (1 kHz-2 GHz
@@ -30,7 +30,7 @@ and those calls return `Error::Unsupported` (docs/PROTOCOL.md 5). `Rsp::open` st
 
 ## Stress testing on a port you can power-cycle
 
-`examples/rsp_coldcheck.rs` is a one-shot pass/fail check of a receiver (prints one JSON line, exit 0 or 1; a stream that delivers nothing is reported as `stalled`, not waited on). `tools/power_cycle_stress.py` wraps it in a loop: switch the port's power off, check the receiver leaves the bus, switch it on, check it comes back in its cold state (bcdDevice 2.00) with the expected USB ID, then run the check, optionally several open/close cycles per power cycle (`--hammer`). It logs one JSON line per iteration, stops at the first failure with a snapshot (lsusb, kernel log tail) and leaves the device powered for inspection. Power backends: `uhubctl` (a hub that really switches port power), `cmd` (relay boards, smart plugs), `sysfs` (does not cut VBUS on many machines, including the development laptop, so it is not a real power cycle), `manual`, and `none`. USB port power on a given machine must be verified first: the receiver has to disappear from the bus and come back at bcdDevice 2.00.
+`examples/rsp_coldcheck.rs` is a one-shot pass/fail check of a receiver (prints one JSON line, exit 0 or 1; a stream that delivers nothing is reported as `stalled`, not waited on). `tools/power_cycle_stress.py` wraps it in a loop: switch the port's power off, check the receiver leaves the bus, switch it on, check it comes back in its cold state (bcdDevice 2.00) with the expected USB ID, then run the check, optionally several open/close cycles per power cycle (`--hammer`). It logs one JSON line per iteration, stops at the first failure with a snapshot (lsusb, kernel log tail) and leaves the device powered for inspection. Power backends: `uhubctl` (a hub that really switches port power), `cmd` (relay boards, smart plugs), `sysfs` (does not cut VBUS (the USB power line) on many machines, including the development laptop, so it is not a real power cycle), `manual`, and `none`. USB port power on a given machine must be verified first: the receiver has to disappear from the bus and come back at bcdDevice 2.00.
 
 ## Linux: the kernel `msi2500` driver and opening a receiver
 
@@ -72,7 +72,7 @@ The crate does steps 2 and the libusb detach of step 3 itself: `UsbTransport::op
   | 12-bit packed layout (two 12-bit values per 3 bytes, low nibble first) | libmirisdr-4 `convert/336_s16.c` |
   | "384" format layout (6 groups x [16 runs x 10 bytes of 10-bit values + 32-bit scale word], 24 trailing bytes) | libmirisdr-4 `convert/384_s16.c` |
 
-  Everything else (band tables, board bytes 0x12/0x13 of both models, LNA tables, ADC clock
+  Everything else (band tables, board bytes 0x12/0x13 of both models, LNA (low-noise amplifier) tables, ADC (analog-to-digital converter) clock
   rules, alt and format selection, open/close sequences) comes from the wire captures.
 
 - **Clean-room boundary:** only bus traffic of the author's own receiver was observed;
@@ -135,7 +135,7 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
 
 - Streaming at 2.0/2.048/3/6/8/9/10 MHz ADC clocks in all four sample formats, 0 counter
   gaps in steady state (one occasional gap in the first blocks after START).
-- Tuning in every supported band: the internal 24 MHz harmonics land within one 122 Hz FFT
+- Tuning in every supported band: the internal 24 MHz harmonics land within one 122 Hz FFT (fast Fourier transform)
   bin of the expected offset in VHF, B3, HF AM, the 250-375 MHz AM down-conversion band,
   B4/5 and L band (`tests/hil.rs`).
 - Changes while streaming, all with 0 counter gaps (`hil_live_reconfiguration`,
@@ -159,9 +159,9 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
   handshake at each plan change (request 0x42 read, r13/r14 writes) is not replicated; the
   reference spurs land correctly without it (PROTOCOL.md 5.6). Its effect on sensitivity and
   phase noise is not measured, and the plan edges (about 375 and 395 MHz) are only bracketed.
-- The API's close-time VCO calibration (0x42 read and r13/r14/063000/00800e writes) is not
+- The API's close-time VCO (voltage-controlled oscillator) calibration (0x42 read and r13/r14/063000/00800e writes) is not
   replicated; the driver closes the way `an earlier stand-alone verification program` did (works).
-- No AGC, DC/IQ correction or decimation (all host-side in SDRplay's API).
+- No AGC (automatic gain control), DC/IQ correction or decimation (all host-side in SDRplay's API).
 - Low-IF modes only with their observed ADC clocks; ADC clocks between 2.688 and 3 MHz and
   above 10 MHz refused.
 - Bias-T is never switched on by tests or examples (nothing is connected to the ports).

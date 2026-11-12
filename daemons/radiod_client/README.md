@@ -8,12 +8,12 @@ radiod trial; findings and numbers are in `hams_com/docs/reviews/RADIOD_TRIAL_20
 * `tlv`: bounds-checked parser and a crate-private writer for the type/length/value format.
 * `command`: the **closed command schema**. Typed audio and spectrum channels, validated against a `Policy`
   (frequency range, bin count, bin width, averaging, lifetime). Every channel command carries a non-zero
-  lifetime (a bare poll of an unknown SSRC makes `radiod` create an immortal channel). A spectrum request never exceeds 16,000 float or 60,000 byte bins whatever the policy
+  lifetime (a bare poll of an unknown SSRC (the RTP stream identifier) makes `radiod` create an immortal channel). A spectrum request never exceeds 16,000 float or 60,000 byte bins whatever the policy
   says (larger requests segfault `radiod`). There is no field for a
   data destination, no raw-bytes entry point, and nothing that touches the front end.
 * `status`: decoded channel status, including float and byte spectrum bins.
-* `rtp`: RTP header parsing, loss accounting, 16-bit PCM and Opus decoding.
-* `net`: tokio multicast sockets (TTL 0, a named interface), request with tag acknowledgement. No runtime
+* `rtp`: RTP (Real-time Transport Protocol) header parsing, loss accounting, 16-bit PCM (pulse-code modulation, plain digital audio samples) and Opus decoding.
+* `net`: tokio multicast sockets (TTL 0 (time to live zero, so packets stay on the local machine), a named interface), request with tag acknowledgement. No runtime
   of its own: the caller passes a `tokio::runtime::Handle` when a socket is opened, and the acknowledgement
   rules (`next_tag`, `is_ack`, `classify`) are sans-IO.
 
