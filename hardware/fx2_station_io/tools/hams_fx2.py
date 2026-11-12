@@ -57,14 +57,17 @@ DEVICE_TYPES = {0x0001: "station_io"}
 LED_MASK = 0x03                         # PA0 and PA1 are the only pins this image drives
 
 
+# [@ANCHOR: hardware_hams_fx2_fx2_error]
 class Fx2Error(Exception):
     """A protocol, safety or hardware problem; the message says what to do."""
 
 
+# [@ANCHOR: hardware_hams_fx2_stalled]
 class Stalled(Fx2Error):
     """The device answered a control request with a STALL (it refused the request)."""
 
 
+# [@ANCHOR: hardware_hams_fx2_transport]
 class Transport:
     """Control-transfer access to one device."""
 
@@ -79,6 +82,7 @@ class Transport:
         raise NotImplementedError
 
 
+# [@ANCHOR: hardware_hams_fx2_get_info]
 @dataclasses.dataclass
 class GetInfo:
     """Parsed GET_INFO record, protocol 0.1 (layout in README.md)."""
@@ -223,6 +227,7 @@ def gpio_get(t: Transport) -> Dict[str, int]:
     return {"oea": d[0], "pa": d[1], "pb": d[2], "pd": d[3]}
 
 
+# [@ANCHOR: hardware_hams_fx2_tick]
 @dataclasses.dataclass
 class Tick:
     """The firmware's millisecond clock (Timer 2) and worst-case main-loop latency (Timer 0)."""
@@ -272,6 +277,7 @@ REL_USB_RESET, REL_USB_SUSPEND, REL_HOST, REL_MAP_CLEARED = 5, 6, 7, 8
 CH_ST = {0: "idle", 1: "lead", 2: "on", 3: "lag"}
 
 
+# [@ANCHOR: hardware_hams_fx2_status]
 @dataclasses.dataclass
 class Status:
     """The status record (README, "Status record")."""
@@ -313,6 +319,7 @@ def parse_status(d: bytes) -> Status:
         hb_remaining_ms=_u16(d, 19), loop_max=_u16(d, 21))
 
 
+# [@ANCHOR: hardware_hams_fx2_pin_spec]
 @dataclasses.dataclass
 class PinSpec:
     """One map entry: a pin, its function, safe state and timers."""
@@ -403,6 +410,7 @@ class Heartbeater:
         return heartbeat(self.t, self.seq, self.commanded)
 
 
+# [@ANCHOR: hardware_hams_fx2_usb_transport]
 class UsbTransport(Transport):
     """pyusb transport for one device. Control transfers only; no interface is claimed."""
 

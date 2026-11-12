@@ -31,6 +31,8 @@ def build_image():
 
 class ParseGetInfoTests(unittest.TestCase):
     # Tests [@ANCHOR: HAMS_FX2_parse_get_info]
+    # Tests [@ANCHOR: hardware_hams_fx2_get_info]
+    # Tests [@ANCHOR: hardware_fx2_simulator_simulated_station_engine]
     def test_parses_simulator_record(self):
         info = h.parse_get_info(SIM_INFO)
         self.assertEqual((info.proto_major, info.proto_minor), (0, 2))
@@ -47,6 +49,7 @@ class ParseGetInfoTests(unittest.TestCase):
         longer[0] = len(longer)
         self.assertEqual(h.parse_get_info(bytes(longer)).endpoints, [(0, 1)])
 
+    # Tests [@ANCHOR: hardware_hams_fx2_fx2_error]
     def test_refuses_unknown_major_version(self):
         bad = bytearray(SIM_INFO)
         bad[1] = 1
@@ -98,6 +101,7 @@ class ChunkTests(unittest.TestCase):
 
 class LoaderTests(unittest.TestCase):
     # Tests [@ANCHOR: HAMS_FX2_load_ram]
+    # Tests [@ANCHOR: hardware_fx2_simulator_simulated_fx2]
     def test_load_holds_resets_writes_verifies_releases_only_via_a0(self):
         sim = SimulatedFx2()
         n = h.load_ram(sim, {0: 2, 1: 0, 2: 0x40, 0x2300: 23})
@@ -110,6 +114,8 @@ class LoaderTests(unittest.TestCase):
         self.assertTrue(all(e[3] < 0x4000 for e in writes[1:-1]))  # code RAM only
         self.assertEqual(sim.eeprom_writes, 0)
 
+    # Tests [@ANCHOR: hardware_hams_fx2_usb_transport]
+    # Tests [@ANCHOR: hardware_hams_fx2_transport]
     def test_readback_mismatch_leaves_cpu_in_reset(self):
         sim = SimulatedFx2()
         real = sim.ctrl_in
@@ -165,6 +171,7 @@ class GpioTests(unittest.TestCase):
 
 class TickTests(unittest.TestCase):
     # Tests [@ANCHOR: HAMS_FX2_tick]
+    # Tests [@ANCHOR: hardware_hams_fx2_tick]
     def test_tick_advances_at_one_millisecond_per_count(self):
         sim = SimulatedFx2()
         h.load_ram(sim, {0: 2, 1: 0, 2: 0x40})
