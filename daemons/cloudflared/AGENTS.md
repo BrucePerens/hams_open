@@ -38,7 +38,7 @@ TARGET_OS=windows TARGET_ARCH=amd64 make cloudflared
 # macOS ARM64
 TARGET_OS=darwin TARGET_ARCH=arm64 make cloudflared
 
-# FIPS compliant build
+# FIPS (US Federal Information Processing Standards, cryptography) compliant build
 FIPS=true make cloudflared
 ```
 
@@ -210,7 +210,7 @@ type TunnelProperties struct {
   Do NOT reach for the package-private `getCurvePreferences` helper; the
   exported `TLSConfigWithCurvePreferences` is the only supported entry
   point.
-- Two PQ modes are supported and apply identically to QUIC and HTTP/2:
+- Two PQ (post-quantum: key exchange designed to resist future quantum computers) modes are supported and apply identically to QUIC (the UDP-based transport protocol) and HTTP/2:
   - `PostQuantumPrefer` (default): `[X25519MLKEM768, P256Kyber768Draft00, CurveP256]`
   - `PostQuantumStrict` (`--post-quantum`): `[X25519MLKEM768, P256Kyber768Draft00]`
 - FIPS and non-FIPS builds use the same curve list. Do NOT reintroduce a

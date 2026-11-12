@@ -122,7 +122,7 @@ installed), so they make no network, GitHub or signing call.
 
 ### `github_message.py`: checksums into the release notes
 
-Reads the sha256 of each uploaded binary back out of Workers KV and writes them into the GitHub release's notes.
+Reads the sha256 of each uploaded binary back out of Workers KV (Cloudflare's key-value store) and writes them into the GitHub release's notes.
 
 - `_raise_for_kv_error` [@ANCHOR: github_message:_raise_for_kv_error] raises for any Workers KV answer other than 200,
   using the first entry of the body's `errors` array or else the raw body text, so a failed read can never be mistaken
@@ -172,7 +172,7 @@ Uploads the built binaries as GitHub release assets and records each one's sha25
 
 ### `release_pkgs.py`: signed apt and yum repositories on R2
 
-Builds the `.deb` (reprepro) and `.rpm` (createrepo_c) repositories, signs them, and uploads them to Cloudflare R2.
+Builds the `.deb` (reprepro) and `.rpm` (createrepo_c) repositories, signs them, and uploads them to Cloudflare R2 (Cloudflare's S3-compatible object storage).
 
 - `PkgUploader.__init__` [@ANCHOR: release_pkgs:PkgUploader::__init__] keeps the R2 account id, bucket name, client id
   and client secret.
