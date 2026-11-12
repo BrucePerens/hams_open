@@ -29,6 +29,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The Rohde and Schwarz engine.
+// [@ANCHOR: radioctl_rs_rs_engine]
 pub type RsEngine = LineEngine<RsDialect>;
 
 // [@ANCHOR: radioctl_rs_engine]
@@ -47,6 +48,7 @@ const MODES: [(u8, &str, Mode); 5] = [
 ];
 
 /// The `FREQ` / `DEM` command set.
+// [@ANCHOR: radioctl_rs_rs_dialect]
 #[derive(Debug, Clone, Copy)]
 pub struct RsDialect;
 
@@ -131,6 +133,7 @@ impl Dialect for RsDialect {
 }
 
 /// The virtual Rohde and Schwarz receiver.
+// [@ANCHOR: radioctl_rs_rs_twin]
 #[derive(Debug)]
 pub struct RsTwin {
     desc: RigDescription,
@@ -180,6 +183,9 @@ impl ReceiverTwin for RsTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_rs_rs_engine]
+    // Tests [@ANCHOR: radioctl_rs_rs_dialect]
+    // Tests [@ANCHOR: radioctl_rs_rs_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;

@@ -25,6 +25,7 @@ fn unsupported(what: &str) -> RigError {
     RigError::new(ErrorKind::Unsupported, what.to_string())
 }
 
+// [@ANCHOR: radioctl_rshfiq_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -33,6 +34,7 @@ enum Pending {
 }
 
 /// The RS-HFIQ client engine.
+// [@ANCHOR: radioctl_rshfiq_rshfiq_engine]
 #[derive(Debug)]
 pub struct RshfiqEngine {
     desc: RigDescription,
@@ -126,6 +128,7 @@ impl ProtocolEngine for RshfiqEngine {
 }
 
 /// A virtual RS-HFIQ.
+// [@ANCHOR: radioctl_rshfiq_rshfiq_twin]
 #[derive(Debug)]
 pub struct RshfiqTwin {
     rx: RxBuffer,
@@ -188,6 +191,9 @@ impl VendorTwin for RshfiqTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_rshfiq_pending]
+    // Tests [@ANCHOR: radioctl_rshfiq_rshfiq_engine]
+    // Tests [@ANCHOR: radioctl_rshfiq_rshfiq_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

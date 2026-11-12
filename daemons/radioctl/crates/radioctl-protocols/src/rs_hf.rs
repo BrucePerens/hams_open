@@ -36,6 +36,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The engine of the Rohde and Schwarz HF dialects.
+// [@ANCHOR: radioctl_rs_hf_rs_hf_engine]
 pub type RsHfEngine = LineEngine<RsHfDialect>;
 
 // [@ANCHOR: radioctl_rshf_engine]
@@ -45,6 +46,7 @@ pub fn engine(desc: RigDescription) -> Result<RsHfEngine, RigError> {
 }
 
 /// Which command set a model speaks.
+// [@ANCHOR: radioctl_rs_hf_style]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Style {
     /// EK 895 and EK 896: `F<hz>`, `I<n>`, `L?`.
@@ -62,6 +64,7 @@ const EK_MAX_HZ: u64 = 30_000_000;
 const XK852_MAX_UNITS: u64 = 9_999_999;
 
 /// The command set of one Rohde and Schwarz HF model.
+// [@ANCHOR: radioctl_rs_hf_rs_hf_dialect]
 #[derive(Debug, Clone, Copy)]
 pub struct RsHfDialect {
     style: Style,
@@ -206,6 +209,7 @@ fn tagged_digits(line: &str, tag: &str, count: usize) -> Option<u64> {
 }
 
 /// The virtual Rohde and Schwarz HF receiver.
+// [@ANCHOR: radioctl_rs_hf_rs_hf_twin]
 #[derive(Debug)]
 pub struct RsHfTwin {
     style: Style,
@@ -316,6 +320,10 @@ impl RsHfTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_rs_hf_rs_hf_engine]
+    // Tests [@ANCHOR: radioctl_rs_hf_style]
+    // Tests [@ANCHOR: radioctl_rs_hf_rs_hf_dialect]
+    // Tests [@ANCHOR: radioctl_rs_hf_rs_hf_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;

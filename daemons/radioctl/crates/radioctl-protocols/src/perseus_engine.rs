@@ -38,6 +38,7 @@ fn unsupported(what: &str) -> RigError {
 }
 
 /// The Perseus client engine.
+// [@ANCHOR: radioctl_perseus_engine_perseus_engine]
 #[derive(Debug)]
 pub struct PerseusEngine {
     desc: RigDescription,

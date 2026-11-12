@@ -42,6 +42,7 @@ fn unsupported(what: &str) -> RigError {
 }
 
 /// The decoded state line.
+// [@ANCHOR: radioctl_prm80_state]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct State {
     /// Transmitting.
@@ -103,6 +104,7 @@ pub fn decode_state(line: &[u8]) -> Option<State> {
 }
 
 /// The PRM8060 client engine.
+// [@ANCHOR: radioctl_prm80_prm80_engine]
 #[derive(Debug)]
 pub struct Prm80Engine {
     desc: RigDescription,
@@ -189,6 +191,7 @@ impl ProtocolEngine for Prm80Engine {
 }
 
 /// A virtual PRM8060.
+// [@ANCHOR: radioctl_prm80_prm80_twin]
 #[derive(Debug)]
 pub struct Prm80Twin {
     rx: RxBuffer,
@@ -263,6 +266,9 @@ impl VendorTwin for Prm80Twin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_prm80_state]
+    // Tests [@ANCHOR: radioctl_prm80_prm80_engine]
+    // Tests [@ANCHOR: radioctl_prm80_prm80_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

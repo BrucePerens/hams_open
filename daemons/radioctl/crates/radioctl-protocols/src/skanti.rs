@@ -42,6 +42,7 @@ fn unsupported(what: &str) -> RigError {
 }
 
 /// The two Skanti command sets.
+// [@ANCHOR: radioctl_skanti_dialect]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialect {
     /// TRP8000: CR-ended commands, `>` prompt.
@@ -79,6 +80,7 @@ fn mode_text(code: u8) -> String {
 }
 
 /// The Skanti client engine.
+// [@ANCHOR: radioctl_skanti_skanti_engine]
 #[derive(Debug)]
 pub struct SkantiEngine {
     desc: RigDescription,
@@ -179,6 +181,7 @@ impl ProtocolEngine for SkantiEngine {
 }
 
 /// A virtual Skanti transceiver.
+// [@ANCHOR: radioctl_skanti_skanti_twin]
 #[derive(Debug)]
 pub struct SkantiTwin {
     dialect: Dialect,
@@ -372,6 +375,9 @@ impl VendorTwin for SkantiTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_skanti_dialect]
+    // Tests [@ANCHOR: radioctl_skanti_skanti_engine]
+    // Tests [@ANCHOR: radioctl_skanti_skanti_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

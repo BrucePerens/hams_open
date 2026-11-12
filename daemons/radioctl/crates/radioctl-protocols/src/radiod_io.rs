@@ -47,6 +47,7 @@ const MAX_RTP: usize = 9000;
 const STALL_GAP: Duration = Duration::from_millis(250);
 
 /// Where the channel lives and how it is kept. Build with [`RadiodLink::new`] and adjust fields.
+// [@ANCHOR: radioctl_radiod_io_radiod_link]
 #[derive(Debug, Clone, PartialEq)]
 pub struct RadiodLink {
     /// `radiod`'s status (control) multicast group.
@@ -141,6 +142,7 @@ impl RadiodLink {
 }
 
 /// One decoded RTP packet of the channel's audio.
+// [@ANCHOR: radioctl_radiod_io_audio_frame]
 #[derive(Debug, Clone, PartialEq)]
 pub struct AudioFrame {
     /// Mono samples in -1.0..=1.0 (20 ms: 240 at 12 kHz, 480 at 24 kHz).
@@ -154,6 +156,7 @@ pub struct AudioFrame {
 }
 
 /// Counters and the latest statuses, for diagnostics and the front-end overrange display.
+// [@ANCHOR: radioctl_radiod_io_radiod_stats]
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RadiodStats {
     /// Commands `radiod` acknowledged.
@@ -187,6 +190,7 @@ pub struct RadiodStats {
 }
 
 /// What the stream format of the channel is, as its status announced.
+// [@ANCHOR: radioctl_radiod_io_format]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Format {
     pt: u8,
@@ -195,6 +199,7 @@ struct Format {
     rate_hz: u32,
 }
 
+// [@ANCHOR: radioctl_radiod_io_shared]
 struct Shared {
     stats: Mutex<RadiodStats>,
     /// The mode the engine last set successfully (the bridge's `State::mode`), for `carrier_lock`.
@@ -210,6 +215,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// Handle on a served bridge: the audio queue, counters and the latest statuses.
+// [@ANCHOR: radioctl_radiod_io_radiod_control]
 #[derive(Clone)]
 pub struct RadiodControl {
     shared: Arc<Shared>,
@@ -270,6 +276,7 @@ fn radiod_mode(mode: Mode) -> Option<RadiodMode> {
 }
 
 /// The channel as the engine last asked for it.
+// [@ANCHOR: radioctl_radiod_io_state]
 struct State {
     ssrc: Ssrc,
     freq: u64,
@@ -305,6 +312,7 @@ impl State {
 }
 
 /// The control side of the bridge: one task owns this.
+// [@ANCHOR: radioctl_radiod_io_bridge]
 struct Bridge {
     control: Control,
     link: RadiodLink,

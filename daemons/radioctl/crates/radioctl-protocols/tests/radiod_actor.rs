@@ -525,3 +525,13 @@ fn the_engine_refuses_transmit_before_the_bridge_sees_it() {
     assert!(e.encode(&Op::SetPtt(true)).is_err());
     assert!(e.encode(&Op::SendCw("CQ".into())).is_err());
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_radiod_io_audio_frame]
+// Tests [@ANCHOR: radioctl_radiod_io_bridge]
+// Tests [@ANCHOR: radioctl_radiod_io_format]
+// Tests [@ANCHOR: radioctl_radiod_io_radiod_control]
+// Tests [@ANCHOR: radioctl_radiod_io_radiod_link]
+// Tests [@ANCHOR: radioctl_radiod_io_radiod_stats]
+// Tests [@ANCHOR: radioctl_radiod_io_shared]
+// Tests [@ANCHOR: radioctl_radiod_io_state]
