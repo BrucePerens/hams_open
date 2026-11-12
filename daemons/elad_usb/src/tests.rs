@@ -363,6 +363,7 @@ fn filters_and_attenuator_change_the_front_end_code_on_the_s2_only() {
 
 #[test]
 fn start_and_stop_use_the_right_fifo_requests_for_each_family() {
+    // Tests [@ANCHOR: tests_fail_nth_out_struct]
     // Tests [@ANCHOR: elad_radio_start]
     // Tests [@ANCHOR: elad_radio_stop]
     let t = fake_unit();
@@ -670,6 +671,7 @@ fn a_boxed_transport_forwards_every_call() {
 }
 
 /// A fake whose n-th control OUT (counting from 1) fails after the unit "accepted" it: the case a timed-out transfer makes.
+// [@ANCHOR: tests_fail_nth_out_struct]
 struct FailNthOut {
     inner: FakeTransport,
     count: usize,
@@ -806,3 +808,36 @@ fn an_eeprom_write_cannot_go_out_through_send() {
     assert!(matches!(r.send(&w), Err(Error::NotReceiveOnly(0xA2))));
     assert!(outs(&fake).is_empty());
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: convert_format_enum]
+// Tests [@ANCHOR: convert_decoder_struct]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: fpga_fpga_state_enum]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: lock_lock_error_enum]
+// Tests [@ANCHOR: lock_device_lock_struct]
+// Tests [@ANCHOR: lock_locked_struct]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: protocol_model_enum]
+// Tests [@ANCHOR: protocol_request_struct]
+// Tests [@ANCHOR: protocol_calibration_struct]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radio_open_options_struct]
+// Tests [@ANCHOR: radio_stats_struct]
+// Tests [@ANCHOR: radio_device_info_struct]
+// Tests [@ANCHOR: radio_radio_struct]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: transport_op_enum]
+// Tests [@ANCHOR: transport_reply_table_struct]
+// Tests [@ANCHOR: transport_bulk_queue_struct]
+// Tests [@ANCHOR: transport_fake_transport_struct]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: usb_found_struct]
+// Tests [@ANCHOR: usb_usb_transport_struct]

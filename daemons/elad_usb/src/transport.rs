@@ -29,6 +29,7 @@ pub trait Transport: Send {
 }
 
 /// One recorded operation.
+// [@ANCHOR: transport_op_enum]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
     /// A control IN.
@@ -55,10 +56,13 @@ pub enum Op {
     },
 }
 
+// [@ANCHOR: transport_reply_table_struct]
 type ReplyTable = Arc<Mutex<HashMap<(u8, u16), Vec<u8>>>>;
+// [@ANCHOR: transport_bulk_queue_struct]
 type BulkQueue = Arc<Mutex<VecDeque<Result<Vec<u8>, Error>>>>;
 
 /// A scripted unit: records every control request, answers control IN by (request, value) from a table, and serves queued bulk chunks.
+// [@ANCHOR: transport_fake_transport_struct]
 #[derive(Clone, Default)]
 pub struct FakeTransport {
     /// Everything sent, in order.

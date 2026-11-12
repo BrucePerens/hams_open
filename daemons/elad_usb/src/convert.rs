@@ -4,6 +4,7 @@
 //! `verified=unverified` until a capture of a known tone has been decoded (README.md).
 
 /// The component width of a rate.
+// [@ANCHOR: convert_format_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Format {
     /// 32-bit signed little-endian components.
@@ -43,6 +44,7 @@ impl Format {
 }
 
 /// Decodes a byte stream to interleaved I, Q floats in +-1.0, carrying a partial pair across calls.
+// [@ANCHOR: convert_decoder_struct]
 #[derive(Debug, Clone)]
 pub struct Decoder {
     format: Format,

@@ -6,6 +6,7 @@
 use crate::protocol::Model;
 
 /// What the caller says about the FPGA.
+// [@ANCHOR: fpga_fpga_state_enum]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FpgaState {
     /// Someone else loaded the image for the sample rate in use (the caller's statement, not checked here).
