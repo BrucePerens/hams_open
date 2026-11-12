@@ -171,6 +171,29 @@ class TestStylesheetCheck(unittest.TestCase):
         self.assertNotIn("-u", cmd)
         self.assertTrue(script.endswith("check_asset_bundles_shell.py"))
 
+    def test_shell_mode_runs_odoo_shell_with_the_service_environment_while_the_service_runs(self):
+        out, ran = io.StringIO(), []
+        rc = u.run(["--db", "hams_prod", "--shell"], show=lambda: SHOW, read_text=lambda p: FILES[p], is_active=lambda: True,
+                   out=out, execute_shell=lambda cmd: ran.append(cmd) or 7)
+        self.assertEqual(rc, 7)  # odoo shell's exit code, and the running service did not stop it
+        cmd = ran[0]
+        self.assertIn("--unit=odoo-shell-run", cmd)
+        self.assertEqual(cmd[-7:], ["/usr/bin/odoo", "shell", "--config", "/etc/odoo/odoo.conf", "-d", "hams_prod", "--no-http"])
+        self.assertIn("EnvironmentFile=-/opt/hams/etc/redis.env", cmd)
+        self.assertNotIn("-u", cmd)
+        self.assertNotIn(SECRET, out.getvalue())
+
+    def test_shell_mode_dry_run_and_argument_checks(self):
+        ran = []
+        out = io.StringIO()
+        self.assertEqual(u.run(["--db", "d", "--shell", "--dry-run"], show=lambda: SHOW, read_text=lambda p: FILES[p], out=out,
+                               execute_shell=ran.append), 0)
+        self.assertEqual(ran, [])
+        self.assertIn("odoo-shell-run", out.getvalue())
+        for argv in (["--db", "d", "--shell", "--modules", "m"], ["--db", "d", "--shell", "--install", "m"], ["--db", "d"]):
+            with self.assertRaises(u.UpgradeError):
+                u.run(argv, show=lambda: SHOW, read_text=lambda p: FILES[p], out=io.StringIO())
+
     def test_the_check_script_is_shipped_beside_the_tool(self):
         self.assertTrue(os.path.isfile(u.CSS_CHECK_SCRIPT))
 
