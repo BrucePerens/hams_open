@@ -7,6 +7,7 @@ from odoo.exceptions import UserError
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: content_moderation_content_violation_report_content_violation_report]
 class ContentViolationReport(models.Model):
     """Content-type-agnostic report against a reachable piece of content.
 
