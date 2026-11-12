@@ -69,6 +69,25 @@ Requests are counted per worker by endpoint family, network class (`loopback`, `
 `unknown`, `unix`) and outcome; refusals are logged at the first and at every power of ten: never an address, login,
 model, method, header or body.
 
+## Reading the report-mode log
+
+In `report` mode every call is served and each would-be refusal is counted per worker and logged at the 1st, 10th, 100th, ...
+occurrence of a kind: loggers `odoo.addons.hams_rpc_guard.policy` (`RPC guard (report): N call(s) to model.method by a portal
+user, reason strict-portal.`) and `odoo.addons.hams_rpc_guard.endpoint_gate` (`Served (report-only mode), would have refused,
+N request(s) to the json2 endpoints from a public client (reason: ...)`). So a busy kind costs a handful of lines a day, not
+one per call. `tools/report_summary.py` totals them over the workers (a lower bound, see its header):
+
+```
+sudo journalctl -u odoo --since "-1 day" | python3 hams_rpc_guard/tools/report_summary.py
+```
+
+The reasons: `strict-portal` / `strict-public` (a portal or public user called a pair not declared `portal`),
+`client-not-listed` (a service account with a `clients` entry called a pair outside it), `unmapped-client-*` (a service
+account with no entry; give it one), `managed-not-listed` (an internal user called a public method of ours that is
+neither `@public_rpc` nor listed), `unix-login-not-bound` (a Unix-socket peer used a login its `unix_peers` entry does not
+name), and for endpoints `network` (the client is on no allowed network), `transport` (TCP refused in `unix` mode), `legacy-closed` and `peer` (an unlisted Unix-socket peer). Legitimate ones are fixed by adding the pair
+to the right list; a would-be refusal that nobody can explain is the reason to stay in `report`.
+
 ## Who the true client is
 
 Behind nginx or Cloudflare Tunnel the TCP peer of every request is a loopback address, so the peer alone proves
@@ -156,9 +175,15 @@ any other account is refused with an access error). Example for systemd:
 # odoo.service
 [Service]
 RuntimeDirectory=odoo
-RuntimeDirectoryMode=0750
+RuntimeDirectoryMode=0755
 SupplementaryGroups=hamsd
 ```
+
+systemd creates `/run/odoo` owned by the unit's own `User=`/`Group=` (`odoo:odoo`), not by `SupplementaryGroups`, so a mode of
+`0750` would keep every daemon user out of the directory and none could reach the socket. `0755` only lets them traverse it:
+who may connect is decided by the socket file itself (owner `odoo`, group `hamsd`, mode `0660`) and by `unix_peers`.
+`SupplementaryGroups=hamsd` is needed because Odoo must be a member of the group it gives the socket to; the unit fails to start
+(exit status 216/GROUP) if that group does not exist, so create it first (`groupadd --system hamsd`).
 
 ```ini
 # odoo.conf
@@ -168,7 +193,7 @@ hams_rpc_guard_socket_mode = 0660
 ```
 
 and `hams_rpc_guard.unix_peers = hamsd_backup=backup_service, hamsd_pager=pager_service`,
-`hams_rpc_guard.rpc_transport = unix`. The directory must let the daemon users traverse it (group `hamsd`, mode 0750).
+`hams_rpc_guard.rpc_transport = unix`. The directory must let the daemon users traverse it (mode 0755, see above).
 The identity `unix:<user>` can also be given a `clients` entry in `rpc_exposure.json`, which narrows the daemon like a
 certificate subject (both lists must allow a pair).
 
@@ -474,9 +499,10 @@ before the first request; swaps module-level names, not Odoo source files. **Tes
 
 `load_exposure(cr, registry)` returns the merged declarations of the installed addons, read once per registry.
 `exposure_scan.py` is the generator and checker of the transitional lists (command line above); `scan_source`,
-`scan_addon`, `scan_model_of_class`, `scan_render`, `scan_managed_addons`, `scan_orm_names`, `scan_caller_reference` and `scan_daemon_pairs` are
+`scan_addon`, `scan_model_of_class`, `scan_render`, `scan_managed_addons`, `scan_orm_names`, `scan_caller_reference`, `scan_module_string_constants` and `scan_daemon_pairs` are
 its steps. `scan_daemon_pairs` finds the literal pairs of `execute`/`call`/`_json2_call` calls, of a batch helper
-(`push_batches_to_odoo(client, logger, rows, "model", "method")`) and of a caller passed along (`asyncio.to_thread(client.execute, "model", "method")`). All are pure functions of source text. Tests: `test_exposure.TestScanner`, `test_repository`.
+(`push_batches_to_odoo(client, logger, rows, "model", "method")`) and of a caller passed along (`asyncio.to_thread(client.execute, "model", "method")`); a model or method held in a module-level string constant of the
+same file is resolved. All are pure functions of source text. Tests: `test_exposure.TestScanner`, `test_repository`.
 
 ### `hams_rpc_guard:certificate_identity`
 

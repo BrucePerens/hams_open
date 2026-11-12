@@ -147,25 +147,136 @@ Exit codes: 0 when no log file is configured; 1 for a missing or unparsable conf
 
 ## Monitor helper interface (`generalized_monitor.py`)
 
-- `[@ANCHOR: pager_duty:severity_for_days_left]` `severity_for_days_left(days_left)` returns the graduated severity (low, medium, high, critical) of the first threshold that the remaining days fall under, or None when the credential is healthy; shared by every expiring-credential check. Tested by `test_check_github_pat_expiry.py`.
-- `[@ANCHOR: pager_duty:extract_severity_prefix]` `extract_severity_prefix(msg, default='high')` returns `(severity, cleaned message)` for a message carrying a `[SEVERITY:low|medium|high|critical] ` prefix from a synthetic check, and `(default, msg)` unchanged for any other message. Tested by `test_22_extract_severity_prefix` and `test_22b_extract_severity_prefix_ends_at_the_end_of_the_text`.
-- `[@ANCHOR: pager_duty:human_age]` `_human_age(seconds)` formats an age for a message: seconds under two minutes, minutes under two hours, `HhMM` under two days, else days. **Tests:** `ConfigurationTests.test_human_age`.
-- `[@ANCHOR: pager_duty:parse_freshness_time]` `parse_freshness_time(value)` returns epoch seconds from a number, a numeric string or an ISO 8601 / `YYYY-MM-DD HH:MM:SS` string (UTC when naive), and None for anything unreadable, including `nan` and `inf`. **Tests:** `RedisKeyAndFileTests.test_epoch_and_iso_values_are_read`, `RedisKeyAndFileTests.test_iso_time_age_is_computed_in_utc`, `RedisKeyAndFileTests.test_a_missing_key_or_garbage_fails`.
-- `[@ANCHOR: pager_duty:parse_systemd_timestamp]` `parse_systemd_timestamp(text)` returns epoch seconds from systemctl's `Tue 2026-10-20 05:17:00 UTC` form (the host's zone otherwise), and None for an empty or `n/a` value, which means the event has not happened. **Tests:** `UnitTests.test_systemd_timestamps`.
-- `[@ANCHOR: pager_duty:freshness_one_unit]` `_freshness_one_unit(unit, max_age, now)` judges one `Type=oneshot` systemd unit through `systemctl show`: it passes when the last run succeeded within `max_age` or the run in progress is not older than `max_age`, and fails for a failed last run, a stale one, a unit that is not loaded, or a non-oneshot unit. **Tests:** `UnitTests.test_a_recent_successful_run_passes`, `UnitTests.test_a_run_older_than_the_limit_fails`, `UnitTests.test_a_failed_last_run_fails`, `UnitTests.test_an_unknown_unit_fails`, `UnitTests.test_a_run_in_progress_passes_until_it_has_run_longer_than_the_limit`, `UnitTests.test_a_long_running_daemon_unit_is_refused_with_advice`.
-- `[@ANCHOR: pager_duty:freshness_unit]` `_freshness_unit(units, max_age, now, failing=None)` judges one or several comma-separated units that share a limit, names every stale or failed one in a single message, and appends each failing unit to `failing`. **Tests:** `UnitTests.test_several_units_report_every_stale_one_in_a_single_message`, `UnitTests.test_the_stale_units_are_sent_with_the_incident`.
-- `[@ANCHOR: pager_duty:note_failing_units]` `note_failing_units(check, units)` records the units behind a check's failure, in order and once each, for the polling thread to send with the incident. **Tests:** `UnitTests.test_the_stale_units_are_sent_with_the_incident`.
+Each entry below is one function of `generalized_monitor.py`. The first group are pure helpers; the freshness group backs the `freshness` check type (see "Freshness" in `../README.md`).
+
+### `severity_for_days_left(days_left)` [@ANCHOR: pager_duty:severity_for_days_left]
+
+Turns the days remaining on an expiring credential into a severity, so every expiry check escalates the same way. It walks `SEVERITY_THRESHOLDS_DAYS`, which is `(2, critical)`, `(7, high)`, `(14, medium)`, `(30, low)`, from least to most urgent, and returns the severity of the first threshold that `days_left <= threshold` satisfies.
+
+| Name | Type | Meaning |
+|---|---|---|
+| `days_left` | number | Days until expiry; negative or zero means already expired (gives `critical`). |
+| returns | `str` or `None` | `low`, `medium`, `high` or `critical`; `None` when more than 30 days remain (healthy). |
+
+No errors, no side effects. Used by the synthetic expiry scripts such as `check_github_pat_expiry.py`. Test: `tests/test_check_github_pat_expiry.py`.
+
+### `extract_severity_prefix(msg, default="high")` [@ANCHOR: pager_duty:extract_severity_prefix]
+
+The reading half of graduated severity for the `synthetic` check type. A script prints `SEVERITY:<level>` on stderr, `execute_check` turns that into a message starting `[SEVERITY:low|medium|high|critical] `, and this function splits it off again before the incident is reported.
+
+| Name | Type | Meaning |
+|---|---|---|
+| `msg` | `str` | The check's failure message. |
+| `default` | `str` | Severity to use when there is no prefix; `high`. |
+| returns | `(str, str)` | `(severity, message without the prefix)`, or `(default, msg)` unchanged when the message does not start with a valid prefix. |
+
+The pattern is anchored at both ends and allows a multi-line remainder. Never raises; pure function. Tests: `test_22_extract_severity_prefix`, `test_22b_extract_severity_prefix_ends_at_the_end_of_the_text`.
+
+### `_human_age(seconds)` [@ANCHOR: pager_duty:human_age]
+
+Formats an age for a message. `seconds` is a number (negative is treated as 0). Returns `"<n>s"` under 120 seconds, `"<n>min"` under two hours, `"<h>h<mm>"` (minutes zero padded) under two days, otherwise `"<n>d"` in whole days. Used in the freshness messages (`newest record is 3h05 old (limit 6h00)`). Pure function, never raises. Test: `ConfigurationTests.test_human_age`.
+
+### `parse_freshness_time(value)` [@ANCHOR: pager_duty:parse_freshness_time]
+
+Reads a time stamp written by a feed, whatever form it is in. Accepts a number, a numeric string, `bytes` (decoded as UTF-8), or an ISO 8601 or `YYYY-MM-DD HH:MM:SS` string (a trailing `Z` is accepted; a time with no zone is taken as UTC).
+
+| Name | Type | Meaning |
+|---|---|---|
+| `value` | number, `str` or `bytes` | The stored value. Borrowed. |
+| returns | `float` or `None` | Epoch seconds; `None` for anything unreadable, including `nan` and `inf`. |
+
+Never raises and has no side effects. It does not range check: a far future time is returned as given and the caller treats a negative age as an error. Tests: `RedisKeyAndFileTests.test_epoch_and_iso_values_are_read`, `RedisKeyAndFileTests.test_iso_time_age_is_computed_in_utc`, `RedisKeyAndFileTests.test_a_missing_key_or_garbage_fails`.
+
+### `parse_systemd_timestamp(text)` [@ANCHOR: pager_duty:parse_systemd_timestamp]
+
+Reads the time form `systemctl show` prints, such as `Tue 2026-10-20 05:17:00 UTC`. The weekday is ignored. `UTC`, `GMT` and `Z` (or no zone word) mean UTC; any other zone name is read as the host's own zone with `time.mktime`, which is what systemd printed.
+
+| Name | Type | Meaning |
+|---|---|---|
+| `text` | `str` or `None` | The property value. |
+| returns | `float` or `None` | Epoch seconds. `None` for empty, `n/a` (the event has not happened), fewer than three words, or text that does not match the format. |
+
+Never raises; pure apart from reading the host zone. Test: `UnitTests.test_systemd_timestamps`.
+
+### `_freshness_one_unit(unit, max_age, now)` [@ANCHOR: pager_duty:freshness_one_unit]
+
+Judges one timer-driven `Type=oneshot` systemd unit for the `unit:` freshness scheme. It finds `systemctl` with `ensure_executable`, runs `systemctl show <unit>` for six properties (10-second timeout) and decides.
+
+| Name | Type | Meaning |
+|---|---|---|
+| `unit` | `str` | Unit name, for example `backup.service`. |
+| `max_age` | number | Seconds the last successful run may be old (and how long a run may take). |
+| `now` | number | Epoch seconds, passed in so tests can fix the time. |
+| returns | `(bool, str)` | Pass or fail and a message. |
+
+It fails for: a unit that is not loaded, a unit whose `Type` is not `oneshot` (the message points to a data source scheme for daemons), a run in progress for longer than `max_age` ("looks hung"), a last run whose `Result` is not `success`, a last success older than `max_age`, and a unit that has not run since boot when the host has been up longer than `max_age`. A run in progress shorter than `max_age`, a recent success, or no run yet on a recently booted host (`/proc/uptime`) pass. A missing `systemctl` returns `(False, "Missing dependency ...")`. Blocks up to 10 seconds. Tests: `UnitTests.test_a_recent_successful_run_passes`, `UnitTests.test_a_run_older_than_the_limit_fails`, `UnitTests.test_a_failed_last_run_fails`, `UnitTests.test_an_unknown_unit_fails`, `UnitTests.test_a_run_in_progress_passes_until_it_has_run_longer_than_the_limit`, `UnitTests.test_a_long_running_daemon_unit_is_refused_with_advice`.
+
+### `_freshness_unit(units, max_age, now, failing=None)` [@ANCHOR: pager_duty:freshness_unit]
+
+Applies `_freshness_one_unit` to one unit or to several names separated by commas that share one limit. `units` is the text after `unit:`; blanks are skipped; an empty list fails with a message asking for names. With one unit it returns that unit's result. With several it returns `(True, "OK (all N units ran successfully within <age>)")` or `(False, "K of N units are stale: <message>; ...")` naming every bad unit at once, so one incident lists them all.
+
+| Name | Type | Meaning |
+|---|---|---|
+| `max_age`, `now` | number | As for `_freshness_one_unit`. |
+| `failing` | `list` or `None` | When given, each failing unit name is appended; the caller passes the result to `note_failing_units`. |
+
+Sequential: it blocks up to 10 seconds per unit. No exceptions escape for normal failures. Tests: `UnitTests.test_several_units_report_every_stale_one_in_a_single_message`, `UnitTests.test_the_stale_units_are_sent_with_the_incident`.
+
+### `note_failing_units(check, units)` [@ANCHOR: pager_duty:note_failing_units]
+
+Records which systemd units caused this run's failure so `polling_thread` can send them with the incident and the server can open one ticket per unit. `check` is the check dict (its key is `check_key(check)`, the record id or the name); `units` is an iterable of unit names. It stores `CHECK_UNITS[key]` as a list with empty names dropped, order kept and duplicates removed. Returns nothing. The dict is written and read only by that check's own polling thread (which clears it at the start of each pass), so it takes no lock. Test: `UnitTests.test_the_stale_units_are_sent_with_the_incident`.
 
 ## Helpers of the monitor and its check scripts
 
-- `[@ANCHOR: pager_duty:utcnow]` `_utcnow()` returns the current UTC time as a naive `datetime`, the form Odoo stores. **Tests:** `ConfigurationTests.test_utcnow_is_a_naive_utc_datetime`.
-- `[@ANCHOR: pager_duty:freshness_redis]` `_freshness_redis()` returns a Redis client for the freshness checks from `REDIS_HOST` (default `redis`), `REDIS_PORT` (default 6379) and the monitor's Redis credentials, with 5-second connect and read timeouts. **Tests:** `ConfigurationTests.test_freshness_redis_connects_to_the_configured_host_and_port`, `ConfigurationTests.test_freshness_redis_defaults_to_the_redis_host`.
-- `[@ANCHOR: pager_duty:failure_detail]` `_failure_detail(exe, unit)` returns `<Result> since <time>` for a failed unit (the weekday dropped), and an empty string when `systemctl show` fails or cannot run. **Tests:** `FailedUnitsCheckTests.test_failure_detail_is_the_result_and_the_time_without_the_weekday`.
-- `[@ANCHOR: pager_duty:amqp_check]` `amqp_check(host, port, user, password, vhost)` is the RabbitMQ check described above: a full AMQP open and clean close, returning `(ok, text)`. **Tests:** `test_amqp_check.py`.
-- `[@ANCHOR: pager_duty:auth_cert_enddate_of]` `_enddate_of(args, pem=None)` in `check_auth_cert_expiry.py` runs `openssl x509 -noout -enddate` on a file (`-in`) or on PEM text and returns the expiry, raising `ValueError` when openssl cannot read it. **Tests:** `TestAuthCertExpiryCheck.test_healthy_certificate_exits_zero`, `TestAuthCertExpiryCheck.test_an_unreadable_certificate_pages`.
-- `[@ANCHOR: pager_duty:provisioned_units_systemctl_show]` `systemctl_show(unit)` in `check_provisioned_units.py` returns the unit's `LoadState`, `ActiveState` and related properties as a dict, empty when systemd answers nothing. **Tests:** `SystemctlShowTests`.
-- `[@ANCHOR: pager_duty:units_expected_off]` `units_expected_off()` in `check_provisioned_units.py` returns the unit names the check skips: `HAMS_UNITS_EXPECTED_OFF` (comma separated) plus the tracked `units_expected_off.txt` (one unit per line, `#` comments and blank lines ignored, a missing file adds nothing). Each line of the file carries the reason and the condition for removing it. **Tests:** `ExpectedOffTests`.
-- `[@ANCHOR: pager_duty:provisioned_units_main]` `main()` of `check_provisioned_units.py` prints "all N provisioned units are in operation" and exits 0, or prints `SEVERITY:high` and a short list (four names and a count) on stderr with the full list, and exits 1; an unloadable MANIFEST also exits 1. `HAMS_UNITS_EXPECTED_OFF` and the tracked `units_expected_off.txt` name units to skip. **Tests:** `MainTests`.
-- `[@ANCHOR: pager_duty:recordings_disk_nearest_directory]` `nearest_existing_directory(path)` in `check_recordings_disk_usage.py` returns the absolute path itself when it is a directory, else its closest existing parent. **Tests:** `TestRecordingsDiskUsage.test_a_missing_directory_is_measured_through_its_nearest_parent`.
-- `[@ANCHOR: pager_duty:recordings_disk_human]` `human(nbytes)` formats bytes with decimal units (`999 B`, `1.5 KB`, `2.0 GB`, up to TB). **Tests:** `test_human_sizes_use_decimal_units`.
-- `[@ANCHOR: pager_duty:recordings_disk_summary_line]` `summary_line(...)` returns the one-line recordings report: file count, size, daily rate, filesystem percent and the days to the failure line ("no growth seen", "already past N%", "more than 10 years" or "about N days"). **Tests:** `test_summary_line_carries_files_size_rate_and_days`, `test_a_huge_horizon_reads_as_more_than_ten_years`.
+### `_utcnow()` [@ANCHOR: pager_duty:utcnow]
+
+Returns the current UTC time as a naive `datetime` (no `tzinfo`), the form Odoo stores and compares; it replaces `datetime.utcnow()`, deprecated since Python 3.12. No arguments, never raises. Used for `last_run` in `record_check_status` and for the maintenance window test in `is_in_maintenance`. Test: `ConfigurationTests.test_utcnow_is_a_naive_utc_datetime`.
+
+### `_freshness_redis()` [@ANCHOR: pager_duty:freshness_redis]
+
+Builds the Redis client the freshness checks use. Takes no arguments; reads `REDIS_HOST` (default `redis`), `REDIS_PORT` (default 6379), and the module constants `REDIS_USERNAME` and `REDIS_PASS` (from `REDIS_USERNAME` and `REDIS_PASSWORD`; both may be unset on a test box). Returns a `redis.Redis` with 5-second connect and read timeouts. It makes no connection until first used, so it does not raise for an unreachable server; the check that uses it reports the error. The password is never logged. Tests: `ConfigurationTests.test_freshness_redis_connects_to_the_configured_host_and_port`, `ConfigurationTests.test_freshness_redis_defaults_to_the_redis_host`.
+
+### `_failure_detail(exe, unit)` [@ANCHOR: pager_duty:failure_detail]
+
+Explains why a unit is in the failed state, for the failed-units check message. It runs `<exe> show <unit> -p Result -p StateChangeTimestamp` (10-second timeout). `exe` is the `systemctl` path; `unit` is the unit name. Returns text such as `exit-code since 2026-10-18 18:24:17 UTC` (the result, then `since` and the time with the weekday dropped), either part omitted when empty, and an empty string when the command cannot run, times out or fails. Never raises. Test: `FailedUnitsCheckTests.test_failure_detail_is_the_result_and_the_time_without_the_weekday`.
+
+### `amqp_check(host, port, user, password, vhost="/")` [@ANCHOR: pager_duty:amqp_check]
+
+The RabbitMQ check: a real AMQP client session, so the broker logs an ordinary short connection. It opens a `pika.BlockingConnection` (plain credentials, one attempt, 3-second socket timeout, 5-second handshake timeout, 2-second heartbeat), opens and closes a channel, and closes the connection.
+
+| Name | Type | Meaning |
+|---|---|---|
+| `host`, `port` | `str`, `int` | Broker address. |
+| `user`, `password` | `str` | Login. With either empty the check fails at once, saying to set `RMQ_USER` and `RMQ_PASS`; there is no guest fallback. |
+| `vhost` | `str` | Virtual host to open, default `/`. |
+| returns | `(bool, str)` | `(True, "OK")` or `(False, text)` naming the failure: authentication failed, access denied (vhost), protocol error, timed out, connection refused or connection failed. The text never contains the password. |
+
+No exception escapes. A `finally` block closes any connection still open. Blocks up to about the handshake timeout. Tests: `tests/test_amqp_check.py`.
+
+### `_enddate_of(args, pem=None)` in `check_auth_cert_expiry.py` [@ANCHOR: pager_duty:auth_cert_enddate_of]
+
+Asks `openssl x509 -noout -enddate` for a certificate's expiry. `args` is the extra argument list (`["-in", path]` for a file, `[]` for PEM text on stdin); `pem` is the PEM text or `None`. It runs openssl with a 15-second timeout and returns the result of `parse_enddate` (a timezone-aware expiry time). Raises `ValueError("openssl could not read the certificate: ...")` (first 80 characters of stderr) when openssl exits non-zero; the script's `main` turns that into a paging failure. Reads a public certificate only. Tests: `TestAuthCertExpiryCheck.test_healthy_certificate_exits_zero`, `TestAuthCertExpiryCheck.test_an_unreadable_certificate_pages`.
+
+### `systemctl_show(unit)` in `check_provisioned_units.py` [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
+
+Runs `systemctl show <unit> -p <SHOW_PROPERTIES>` (`LoadState`, `ActiveState`, `UnitFileState`, `Type`, `ConditionResult` and `ConditionTimestamp`) without a timeout and without raising on a non-zero exit, and returns the `Name=Value` lines as a dict. `unit` is a unit file name. An unreadable or empty answer gives an empty dict, which the caller reads as "not installed". It is the default `show` argument of `units_not_in_operation`, so tests pass a fake. Read only. Tests: `SystemctlShowTests`.
+
+### `units_expected_off()` in `check_provisioned_units.py` [@ANCHOR: pager_duty:units_expected_off]
+
+Returns the set of unit names the check must skip. Arguments: `environ` (mapping, default `os.environ`) and `path` (default the tracked `units_expected_off.txt` next to the script). The set is the comma-separated names in `HAMS_UNITS_EXPECTED_OFF` plus the file's names (one per line, `#` starts a comment, blank lines ignored; a missing file adds nothing). Each line of the file should carry the reason and the condition for removing it. Returns a `set[str]`; an unreadable existing file raises `OSError`. Test: `ExpectedOffTests`.
+
+### `main()` of `check_provisioned_units.py` [@ANCHOR: pager_duty:provisioned_units_main]
+
+Entry point of the "Synthetic Journey (Script)" check that pages when something provisioned is not running. It reads the expected-off set, loads the unit list from the `hams_shared` MANIFEST (`expected_units`), and asks `units_not_in_operation`. All in operation: prints `all N provisioned units are in operation` and returns 0. Otherwise prints `SEVERITY:high` and a short list (four names and `+N`) then the full list with reasons on stderr and returns 1, which pages. A MANIFEST that cannot be read (`OSError` or `KeyError`) also prints `SEVERITY:high` and returns 1, so the check cannot go quiet. Argument `argv` is unused. Runs `systemctl` once per unit. Test: `MainTests`.
+
+### `nearest_existing_directory(path)` in `check_recordings_disk_usage.py` [@ANCHOR: pager_duty:recordings_disk_nearest_directory]
+
+Finds a directory that can be measured for a path that may not exist yet. `path` is made absolute; the function climbs to the parent until `os.path.isdir` is true and returns that directory (the filesystem root is the stop). Returns `str`. Never raises, makes only `stat` calls. `filesystem_usage` uses it so a missing recordings directory is measured through its nearest parent. Test: `TestRecordingsDiskUsage.test_a_missing_directory_is_measured_through_its_nearest_parent`.
+
+### `human(nbytes)` in `check_recordings_disk_usage.py` [@ANCHOR: pager_duty:recordings_disk_human]
+
+Formats a byte count with decimal units for a message. `nbytes` is a number (bytes). It divides by 1000 until the value is under 1000 or the unit is TB and returns `999 B` (no decimals for bytes), `1.5 KB`, `2.0 GB`, up to `TB` with one decimal. A negative value prints as bytes. Pure function, never raises. Test: `test_human_sizes_use_decimal_units`.
+
+### `summary_line(path, percent, volume, rate, days_to_fail, fail=85)` in `check_recordings_disk_usage.py` [@ANCHOR: pager_duty:recordings_disk_summary_line]
+
+Builds the one-line recordings report that the check prints. `path` is the directory; `percent` the filesystem percent used; `volume` the tuple from `directory_volume` (file count, total bytes, recent bytes, complete flag, oldest mtime); `rate` bytes per day; `days_to_fail` the estimate or `None`; `fail` the failure percent. The tail reads `no growth seen` (`None`), `already past N%` (zero or less), `more than 10 years to N%` (over 3650 days) or `about N days to N%`; `(listing stopped early, partial)` is added when the scan hit its time budget. Returns `str`. Pure function, never raises for well-formed input. Tests: `test_summary_line_carries_files_size_rate_and_days`, `test_a_huge_horizon_reads_as_more_than_ten_years`.

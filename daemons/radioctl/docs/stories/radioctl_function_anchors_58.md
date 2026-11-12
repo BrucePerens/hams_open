@@ -14,7 +14,7 @@ Reads a position reply from `buf`: words separated by a space, CR or LF, where `
 
 ### `fn description(&self) -> &RotatorDescription` [@ANCHOR: radioctl:radioctl_station_easycomm_description]
 
-Implementation of `RotatorEngine::description` for the Easycomm engine: a borrow of the description it was built with. No side effects, cannot fail.
+Implementation of `RotatorEngine::description` for the Easycomm engine; takes `&self` and returns `&RotatorDescription`, a borrow of the description the engine was built with (`EasycommEngine::new` took ownership of it, so the borrow lives as long as the engine). The description holds the rotator's `id` and `name`, the wire `protocol` (`easycomm1`, `easycomm2` or `easycomm3`, which `encode` reads to choose the command shape), the travel (`az_min`, `az_max`, `el_min`, `el_max`), `has_elevation`, the optional `park` position, `reply_timeout_ms` (the longest wait for a reply, which the rotator driver reads from this call at its read step) and `verified`. `radioctld`'s rotctl front end also reads the name and travel through it. No I/O, no lock, no side effects, cannot fail or panic. The result never changes after construction, so it is safe to call from any thread (the trait requires `Send + Sync`). Test: `easycomm_encodes_and_parses_the_specification_shapes` in `rotator.rs`.
 
 ### `fn encode(&self, op: &RotOp) -> Result<Encoded, StationError>` [@ANCHOR: radioctl:radioctl_station_easycomm_encode]
 

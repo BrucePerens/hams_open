@@ -1,6 +1,6 @@
 # Story: Helpdesk Ticket Creation
 
-**[@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_creation]**
+## Creating and routing a ticket [@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_creation]
 
 Ticket creation is an intelligent process that automatically routes incidents to the appropriate on-duty personnel.
 
@@ -13,25 +13,37 @@ Ticket creation is an intelligent process that automatically routes incidents to
 
 7.  **The Submitter's Callsign**: a ticket takes its callsign from its partner, so the partner's own callsign has to be right. The partner's callsign follows the callsign of the partner's login user and is recalculated whenever that changes, which is what lets a member's real, on-file callsign reach every ticket they submit through `/my/tickets/new`. A partner whose user has no callsign, or who has no login at all (a phone-in contact a support agent entered), keeps the value typed in by hand rather than having it blanked. The user is read through an internal facility service account, because this calculation can be triggered by a write to any partner by any caller, including narrowly scoped service accounts that cannot read users themselves **[@ANCHOR: hams_helpdesk:res_partner_compute_callsign]**.
 
-*Verified by [@ANCHOR: hams_helpdesk:COMM_test_01_ticket_creation_and_routing]*
+**Interface:** `hams_helpdesk.ticket.create(vals_list)` (`@api.model_create_multi`, in `models/helpdesk_ticket.py`) takes a list of value dicts and returns the recordset in the same order. Before the insert it looks up the on-duty admin once (a failure is logged, the ticket stays unassigned), drops the triage verdict fields a caller may have sent, fills `website_id` from the context key `website_id`, `company_id` from that website, `callsign` from the partner, `user_id` from the on-duty admin, forces priority 3 for the child-safety type, and decides `notify_state` (`suppressed` for the spam stage, `held` while the triage review window is open, else `sent`). A batch that mixes quarantined and real tickets is created in two calls. After the insert it schedules the triage wake-up and runs `_automated_routing_and_notification()` under the helpdesk service account. **Errors:** a missing service account raises, by design. **Security:** no `sudo()`; elevation is by service account only.
+
+## Verified by the creation and routing test [@ANCHOR: hams_helpdesk:COMM_test_01_ticket_creation_and_routing]
+
+`test_01_ticket_creation_and_routing` (`tests/test_helpdesk_core.py`) creates a ticket for a portal member with the on-duty lookup and the bus patched, and asserts that the ticket goes to the on-duty manager (unassigned when `pager_duty` is not installed) and that the member's partner follows the ticket so the stage mail-back reaches them. A second test, `test_bug_dependency_crash`, proves creation does not raise when `pager_duty` is absent.
 
 ## Detailed Feature Index
-The ticket creation process utilizes the standard ticket form.
-**[@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_form]**
 
-The operator view lists all created tickets.
-**[@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_list]**
+The creation process uses the standard views below; each entry names the view, what it shows and how it is tested.
 
-The portal user can list their tickets.
-**[@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_list]**
+### The ticket form [@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_form]
 
-The portal provides detailed views for individual tickets.
-**[@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_detail]**
+View `hams_helpdesk.view_hams_helpdesk_ticket_form` (`views/helpdesk_ticket_views.xml`) is the staff form. The header holds the Close Ticket button (`action_close`), the Shift Handoff button (`action_shift_handoff`, hidden once Resolved or Closed), three administrator-only child-safety report buttons, and the `stage` statusbar (clickable). Above the sheet are the suspicion notice, the red phishing banner when links are defanged and the triage verdict notice. Staff only; a portal user never reaches it. Tested by `test_helpdesk_operator_rendering` and the operator tour.
 
-Customers can submit a new ticket directly from the portal.
-**[@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_new]**
+### The ticket list [@ANCHOR: hams_helpdesk:COMM_helpdesk_ticket_list]
 
-## Amazon SES scan verdicts count as spam signals
+View `hams_helpdesk.view_hams_helpdesk_ticket_list` is the operator list of all tickets the user may read. Columns: id, subject, callsign, assignee, stage, priority, a suspicion flag (red when set) and, hidden by default and for staff only, the affected-member count and latest member. It backs the Helpdesk Tickets action (list then form) and the Spam / Phishing review queue (domain `stage = spam`). Tested by `test_helpdesk_operator_rendering` (`get_view` of the list) and the operator tour.
+
+### The portal ticket list [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_list]
+
+QWeb template `hams_helpdesk.portal_my_tickets`, rendered by the route `GET /my/tickets` (`portal_my_tickets` in `controllers/portal.py`, 20 tickets per page, newest first, login required). It shows a New Ticket button and a table of ticket number, title, callsign and status, or a "no tickets" note. The controller reads under the helpdesk service account but filters by hand to the member's own partner and to tickets of this website or of no website. Tested by `test_helpdesk_portal_rendering` and the portal tour.
+
+### The portal ticket detail [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_detail]
+
+QWeb template `hams_helpdesk.portal_ticket_detail`, rendered by `GET /my/ticket/<id>`. It shows the subject, status badge, callsign, priority, the description and the communication history (internal notes are excluded by the portal thread), and a Close Ticket form (CSRF token) while the ticket is not closed. A ticket that does not exist, belongs to another partner or to another website redirects to `/my`. Tested by `test_portal_ticket_detail_shows_own_ticket_and_denies_others` and the portal tour.
+
+### The portal new-ticket form [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_new]
+
+QWeb template `hams_helpdesk.portal_ticket_new`, rendered by `GET /my/tickets/new` and posted to `POST /my/tickets/submit` (CSRF protected). Fields: subject (required), callsign (pre-filled from the member's profile, optional), category (the model's ticket types minus the child-safety and automatic-exception types; an unknown `?ticket_type=` falls back to `general`) and description. A prospective ham without a callsign is not refused. Tested by `test_helpdesk_portal_rendering`, `test_portal_ticket_new_renders_without_callsign` and `test_portal_ticket_new_deep_link_preselects_a_real_category`.
+
+## Amazon SES scan verdicts count as spam signals [@ANCHOR: hams_helpdesk:ses_verdicts]
 
 Mail to the support addresses passes through Amazon SES, whose receipt rule has scanning on, so each stored message carries
 `X-SES-Spam-Verdict` and `X-SES-Virus-Verdict`. `message_parse` keeps them and both inbound routes (admin@/support@ through
@@ -39,7 +51,7 @@ Mail to the support addresses passes through Amazon SES, whose receipt rule has 
 any other spam signal: the ticket starts in the Spam / Phishing stage with the reason in its first note, the same reversible
 quarantine as the filter's own signals. `PASS`, `GRAY` and `PROCESSING_FAILED` are ignored. A DKIM, SPF or DMARC failure is not a
 reason by itself (mailing lists and forwarders legitimately fail them); since 2026-11-03 each is one weak, weighted signal in the
-bulk-mail rules below. [@ANCHOR: hams_helpdesk:ses_verdicts]
+bulk-mail rules below.
 
 **Status:** Verified by `test_17_ses_verdicts_flag_only_a_fail`, `test_18_a_message_without_ses_headers_has_no_verdicts` and
 `test_19_a_hostile_verdict_value_is_bounded` (tests/test_inbound_spam_filter.py).
@@ -52,8 +64,7 @@ marketing mail that matched no subject pattern and arrived as `[PAGER] ...` tick
 SES verdicts, and both routes call the one function below. A flagged message still becomes a ticket in the visible Spam / Phishing
 stage with every reason in its first note; nothing is deleted and a person can move it back to New.
 
-### `inbound_spam_reasons`
-**[@ANCHOR: hams_helpdesk:inbound_spam_reasons]**
+### `inbound_spam_reasons` [@ANCHOR: hams_helpdesk:inbound_spam_reasons]
 
 Purpose: decide whether one inbound message is quarantined, and say why in plain English. Pure Python, no ORM, safe on hostile input.
 Defined in `hams_helpdesk/models/inbound_spam_filter.py`; called by `hams_helpdesk.ticket.message_new()` and
@@ -93,8 +104,7 @@ stage.
 
 **Status:** Verified by `TestBulkMailSignals` (tests/test_inbound_spam_filter.py), which runs the real ticket names of hams_prod.
 
-### `referenced_message_ids`
-**[@ANCHOR: hams_helpdesk:inbound_referenced_message_ids]**
+### `referenced_message_ids` [@ANCHOR: hams_helpdesk:inbound_referenced_message_ids]
 
 Purpose: list the Message-IDs a raw inbound message says it replies to, so the caller can check them against stored mail. Pure (no
 database); called by `mail_signals()`.
@@ -108,16 +118,14 @@ nearest ancestors); `[]` when the headers are absent or hold no `<...>` token. R
 
 **Status:** Verified by `test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail` (tests/test_inbound_spam_filter.py).
 
-### `REPLY_MESSAGE_MODELS`
-**[@ANCHOR: hams_helpdesk:inbound_reply_message_models]**
+### `REPLY_MESSAGE_MODELS` [@ANCHOR: hams_helpdesk:inbound_reply_message_models]
 
 A module constant in `models/mail_thread_untrusted.py`: the list `["hams_helpdesk.ticket", "pager.incident"]` of Odoo model names a stored
 `mail.message` may belong to for its Message-ID to count as a real thread (an inbound message becomes a ticket, or a pager incident
 through the pager adapter). Read only, by `_with_verified_reply_headers()` as the `model` term of its lookup; a model that is not
 installed simply matches nothing. Immutable by convention; add a model here when another record type starts receiving inbound mail.
 
-### `_with_verified_reply_headers`
-**[@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]**
+### `_with_verified_reply_headers` [@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]
 
 Purpose: decide whether a message really is a reply, because `detect_bulk_mail_signals()` skips the bulk rules for a reply and the
 sender writes `In-Reply-To` and `References` (a bulk sender could add any value and escape the weighted rules). Called by
@@ -134,8 +142,7 @@ side effect; a database error propagates to the mail ingest, which retries the m
 
 **Status:** Verified by `test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail`.
 
-### `mail_signals`
-**[@ANCHOR: hams_helpdesk:inbound_mail_signals]**
+### `mail_signals` [@ANCHOR: hams_helpdesk:inbound_mail_signals]
 
 Purpose: read the header facts and HTML shape of one raw inbound message, once, in `mail.thread.message_parse()`, because Odoo's
 sanitised ticket body has lost all of them. The dict is parked on the cursor beside `ses_verdicts` (cleared on commit and rollback)
@@ -166,8 +173,7 @@ fact is only ever a weak signal.
 
 **Status:** Verified by `test_26_a_failed_dmarc_spf_dkim_adds_weight_only` and `test_27_only_the_ses_authentication_results_header_is_believed`.
 
-### `html_shape`
-**[@ANCHOR: hams_helpdesk:inbound_html_shape]**
+### `html_shape` [@ANCHOR: hams_helpdesk:inbound_html_shape]
 
 `html_shape(html)`: `html` is a str (or None, read as empty). Returns `{"tables": int, "table_depth": int, "images": int,
 "tracking_pixels": int}`: the number of `<table>` tags, the deepest nesting, the number of `<img>` tags, and the number of images
@@ -175,16 +181,14 @@ whose `width` or `height` attribute is 0 or 1 (with or without `px`). Counted fr
 400,000 characters, so unbalanced or hostile markup cannot raise and a stray `</table>` never makes the depth negative. Pure,
 no side effects. **Status:** Verified by `test_30_hostile_input_never_raises`.
 
-### `own_authenticated_sender`
-**[@ANCHOR: hams_helpdesk:inbound_own_authenticated_sender]**
+### `own_authenticated_sender` [@ANCHOR: hams_helpdesk:inbound_own_authenticated_sender]
 
 `own_authenticated_sender(signals)`: `signals` is a `mail_signals()` dict (or None). Returns True only when `from_domain` is one of
 `OWN_SENDER_DOMAINS` (`hams.com`) or a sub-domain of it AND SES recorded a `dkim` or `dmarc` pass. A forged From line fails
 authentication and returns False; `evil-hams.com` is not a sub-domain. Pure. `inbound_spam_reasons()` returns [] for such a sender.
 **Status:** Verified by `test_28_replies_members_and_our_own_authenticated_senders_are_exempt`.
 
-### `bulk_mail_findings`
-**[@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]**
+### `bulk_mail_findings` [@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]
 
 `bulk_mail_findings(subject, body_html, signals=None)`: `subject`, `body_html` as for `inbound_spam_reasons`; `signals` the
 `mail_signals()` dict, or None when only stored text exists (then the header and plain-text rules cannot fire and the shape is read
@@ -192,8 +196,7 @@ from `body_html`). Returns a list of `(weight, reason)`, every weak signal prese
 plain-English reason; the caller applies the threshold. Pure, never raises. The weights are listed under `inbound_spam_reasons`.
 **Status:** Verified by `test_25_each_weak_signal_has_its_own_reason_and_weight`.
 
-### `detect_bulk_mail_signals`
-**[@ANCHOR: hams_helpdesk:inbound_detect_bulk_mail_signals]**
+### `detect_bulk_mail_signals` [@ANCHOR: hams_helpdesk:inbound_detect_bulk_mail_signals]
 
 `detect_bulk_mail_signals(subject, body_html, signals=None, threshold=BULK_SCORE_THRESHOLD)`: arguments as above; `threshold` is the
 total weight needed (live mail 5, `STORED_TICKET_SCORE_THRESHOLD` 4 for the one-off pass over stored tickets). Returns [] below the
@@ -201,16 +204,14 @@ threshold or when `signals["reply_headers"]` is true; otherwise a first reason s
 `bulk signal (+N): ...` reason per finding. Pure, never raises. **Status:** Verified by
 `test_21_the_real_missed_newsletters_are_flagged_from_the_stored_ticket_alone`.
 
-### `inbound_sender_is_member`
-**[@ANCHOR: hams_helpdesk:inbound_sender_is_member]**
+### `inbound_sender_is_member` [@ANCHOR: hams_helpdesk:inbound_sender_is_member]
 
 `hams_helpdesk.ticket._inbound_sender_is_member(author_id)` (model method). `author_id`: int res.partner id the mail gateway matched
 to the From address, or `False`/`None`. Returns True when that partner has at least one active user; False otherwise, including for
 a partner that is only a contact. Runs as the helpdesk service account because the mail-ingest identity cannot read `res.users`.
 No side effects. Mail from a member is never run through the spam filter (but see the DMARC exception above).
 
-### A quarantined ticket mails nobody
-**[@ANCHOR: hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail]**
+### A quarantined ticket mails nobody [@ANCHOR: hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail]
 
 `create()` switches off Odoo's own "you have been assigned" email (the `mail_auto_subscribe_no_notify` context key) when every ticket
 of the call is created in the `spam` stage. A call that mixes spam and real tickets is split in two so the real ones keep their

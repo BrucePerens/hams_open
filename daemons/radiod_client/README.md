@@ -40,59 +40,455 @@ The tests open real multicast sockets on `127.0.0.1` (TTL 0); nothing leaves the
 
 Anchors (ADR 0090): a function carries `// [@ANCHOR: id]` in source, its test carries
 `// Tests [@ANCHOR: id]`, and this README cites it as `[@ANCHOR: radiod_client:id]` below.
+The tag is the crate name, a colon and the function id; the code form drops the crate prefix. A README entry is a
+`###` heading that carries the tag, followed by what the function does, its arguments, what it returns, its errors,
+its async and locking behaviour, and the tests that cite it, so a reader never has to open the source to use it.
 
-- [@ANCHOR: radiod_client:radiod_client_command_ssrc_new] (command) Validate a gateway-chosen SSRC.
-- [@ANCHOR: radiod_client:radiod_client_command_ssrc_get] (command) The numeric value.
-- [@ANCHOR: radiod_client:radiod_client_command_policy_default] (command) The default site policy (10 kHz to 30 MHz, 8,192 bins, 5 minute lifetime cap).
-- [@ANCHOR: radiod_client:radiod_client_command_error_fmt] (command) Display text of a refused command.
-- [@ANCHOR: radiod_client:radiod_client_command_check_freq] (command) Refuses a frequency that is not finite or is outside the policy range.
-- [@ANCHOR: radiod_client:radiod_client_command_check_life] (command) Refuses a lifetime of 0 (radiod never expires such a channel) or above the policy limit.
-- [@ANCHOR: radiod_client:radiod_client_command_policy_bin_limit] (command) The largest bin count this policy permits for a format: the site limit, never above the hard ceiling that keeps `radiod` from crashing.
-- [@ANCHOR: radiod_client:radiod_client_command_ssrc] (command) The channel this command addresses.
-- [@ANCHOR: radiod_client:radiod_client_command_validate] (command) Check the command against the site policy.
-- [@ANCHOR: radiod_client:radiod_client_command_encode] (command) Validate and build the datagram.
-- [@ANCHOR: radiod_client:radiod_client_command_audio_bandwidth] (command) `AudioChannel::bandwidth_hz`: the audio passband width, or `None` for the mode's own.
-- [@ANCHOR: radiod_client:radiod_client_command_mode_passband] (command) `Mode::passband`: the `(low, high)` edges sent for a mode and an optional width.
-- [@ANCHOR: radiod_client:radiod_client_net_error_fmt] (net) Display text of a network or protocol failure.
-- [@ANCHOR: radiod_client:radiod_client_net_error_from_io] (net) Wraps an I/O error as a network failure.
-- [@ANCHOR: radiod_client:radiod_client_net_next_tag] (net) The tag after `tag`: it increments and never becomes 0 (a zero tag is an empty integer on the wire and cannot be told from an absent one).
-- [@ANCHOR: radiod_client:radiod_client_net_is_ack] (net) True when `status` is `radiod`'s reply to the command with this channel and tag.
-- [@ANCHOR: radiod_client:radiod_client_net_classify] (net) Decode one received datagram: a status is returned, our own looped-back commands are skipped, and a malformed datagram is counted in `malformed` and skipped.
-- [@ANCHOR: radiod_client:radiod_client_net_open_group] (net) Open a multicast receive socket bound to `port` and joined to `group` on `iface`, with a TTL of 0 so nothing it sends leaves the host.
-- [@ANCHOR: radiod_client:radiod_client_net_register] (net) Register a socket with the runtime behind `handle`.
-- [@ANCHOR: radiod_client:radiod_client_net_control_open] (net) Join the status group (port `STATUS_PORT`) and prepare to send commands to it.
-- [@ANCHOR: radiod_client:radiod_client_net_control_open_on_port] (net) As `Control::open`, for a `radiod` configured with a status port other than 5006.
-- [@ANCHOR: radiod_client:radiod_client_net_control_send] (net) Validate and send a command; returns the tag `radiod` will echo in its reply.
-- [@ANCHOR: radiod_client:radiod_client_net_control_recv_status] (net) Wait up to `wait` for the next status datagram, skipping our own commands and malformed datagrams.
-- [@ANCHOR: radiod_client:radiod_client_net_control_request] (net) Send `cmd` and wait for the status carrying its tag (the only acknowledgement `radiod` gives).
-- [@ANCHOR: radiod_client:radiod_client_net_rtp_open] (net) Join the data group (port `RTP_PORT`); the socket is registered with the runtime behind `handle`.
-- [@ANCHOR: radiod_client:radiod_client_net_rtp_open_on_port] (net) As `RtpSocket::open`, for a `radiod` configured with a data port other than 5004.
-- [@ANCHOR: radiod_client:radiod_client_net_rtp_recv] (net) Receive one datagram into `buf`; `Ok(None)` after `wait` with nothing received.
-- [@ANCHOR: radiod_client:radiod_client_rtp_error_fmt] (rtp) Display text of an RTP rejection.
-- [@ANCHOR: radiod_client:radiod_client_rtp_packet_parse] (rtp) Parse a datagram.
-- [@ANCHOR: radiod_client:radiod_client_rtp_encoding_from_radiod] (rtp) Map `radiod`'s encoding number.
-- [@ANCHOR: radiod_client:radiod_client_rtp_decoder_debug_fmt] (rtp) Debug text of an audio decoder (encoding and channels, never the codec state).
-- [@ANCHOR: radiod_client:radiod_client_rtp_decoder_new] (rtp) Build a decoder from the channel status (`channels` for PCM; Opus is always 2).
-- [@ANCHOR: radiod_client:radiod_client_rtp_decoder_decode] (rtp) Decode a payload to mono samples in -1.0..=1.0.
-- [@ANCHOR: radiod_client:radiod_client_rtp_seq_push] (rtp) `SeqTracker::push(&mut self, seq: u16)`: account for one packet in the counters `received`, `lost`, `out_of_order` and `restarts` (all `u64`). One ahead is in order; 2 to 32767 ahead adds the skipped packets to `lost`; the same number, or at most `REORDER_WINDOW` (32) behind the newest, is `out_of_order` and leaves the newest unchanged; further back (including exactly 32768) is a stream restart: `restarts` grows by one, nothing is added to `lost` (the new numbering says nothing about how many old packets were missed), and tracking follows the new sequence so the packets after it are in order. `radiod` re-creating a channel restarts its sequence (200 lower on the RX-888, 2026-11-05); before this the whole new stream counted as out of order and the outage showed nowhere. A restart that lands ahead of the old sequence counts as loss.
-- [@ANCHOR: radiod_client:radiod_client_status_decode] (status) Decode a datagram.
-- [@ANCHOR: radiod_client:radiod_client_status_spectrum_db] (status) Spectrum bins in ascending frequency order with their frequencies, in dB.
-- [@ANCHOR: radiod_client:radiod_client_tlv_error_fmt] (tlv) Display text of a rejected datagram.
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_uint] (tlv) Unsigned integer (up to 8 bytes, big-endian, zero length is 0).
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_bool] (tlv) Boolean (any non-zero integer).
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32] (tlv) 32-bit float; a value longer than four bytes is read as a double, as `radiod` does.
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_f64] (tlv) 64-bit float; a value of four bytes or fewer is read as a float.
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_text] (tlv) UTF-8 text (lossy, so a hostile description cannot fail the parse).
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_socket] (tlv) Socket: 6 bytes IPv4 plus port, 18 bytes IPv6 plus port, or empty (null socket).
-- [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32_vec] (tlv) A vector of big-endian `f32` (`BIN_DATA`).
-- [@ANCHOR: radiod_client:radiod_client_tlv_parse] (tlv) Parse a datagram into its kind and entries.
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_command] (tlv) Starts a command datagram (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_header] (tlv) Writes one entry header (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_uint] (tlv) Writes an integer with leading zero bytes removed (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_bool] (tlv) Writes a boolean as an integer (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_f32] (tlv) Writes a big-endian 32-bit float (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_f64] (tlv) Writes a big-endian 64-bit float (crate-private).
-- [@ANCHOR: radiod_client:radiod_client_tlv_writer_finish] (tlv) Terminates the datagram with the end-of-list entry (crate-private).
+Each entry below documents one function or constant of the crate from its source in `src/`. Every function is
+synchronous and pure unless marked async; the async ones run on the caller's tokio runtime. Where the
+behaviour in the RX-888 sections further down (from "RX-888 additions") covers the same anchor, that section
+holds the full table and this part holds the rest.
+
+### `Ssrc::new(v: u32) -> Result<Ssrc, CommandError>` [@ANCHOR: radiod_client:radiod_client_command_ssrc_new]
+
+The only way to build an `Ssrc`, the channel identifier of a command (`src/command.rs`). `v` is a number the
+gateway chose. `0` addresses `radiod`'s front end and `0xffff_ffff` means "all channels" to `radiod`, so both are
+refused with `CommandError::ReservedSsrc(v)`; every other value gives `Ok`. Pure, no I/O, no locking. Because
+the tuple field is private, a `Command` can never name the front end or every channel by accident (the one
+front-end request is `encode_front_end_poll`, which does not use an `Ssrc`). Test: `reserved_ssrcs_are_not_constructible`.
+
+### `Ssrc::get(self) -> u32` [@ANCHOR: radiod_client:radiod_client_command_ssrc_get]
+
+Returns the number inside an `Ssrc`. `Ssrc` is `Copy`, so it is taken by value, and the call cannot fail. The
+value is what `Command::encode` writes as `OUTPUT_SSRC` and what `Control::request` compares with the SSRC of
+a received status (`is_ack`). It is never 0 or `u32::MAX`, because `Ssrc::new` refused those. Pure.
+Test: `reserved_ssrcs_are_not_constructible`.
+
+### `Policy::default() -> Policy` [@ANCHOR: radiod_client:radiod_client_command_policy_default]
+
+The site policy used when the caller does not choose one: the limits `Command::validate` checks before anything
+reaches the wire. Constant data, no side effects.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `min_hz`, `max_hz` | 10,000.0 and 30,000,000.0 Hz (`f64`) | Allowed carrier or centre frequency, inclusive |
+| `max_bins` | 8,192 | Spectrum bin count; can only lower the hard ceilings (16,000 float, 60,000 byte) |
+| `min_bin_hz` | 1.0 Hz (`f32`) | Narrowest spectrum bin |
+| `max_lifetime_frames` | 15,000 | Longest channel lifetime: 5 minutes of 20 ms frames |
+| `max_averaging` | 64 | Most FFTs averaged per response |
+| `max_span_hz` | `None` | No span check until the front end is known (see `max_spectrum_span_hz`) |
+
+Test: `default_policy_is_inside_the_hard_ceilings`.
+
+### `impl Display for CommandError` (`fmt(&self, f) -> fmt::Result`) [@ANCHOR: radiod_client:radiod_client_command_error_fmt]
+
+The text of a refused command. It writes the `Debug` form of the variant, for example `Lifetime(0)` or
+`Frequency(NaN)`, so the message carries the offending value but no prose; callers that want a sentence map the
+variant themselves. `CommandError` also implements `std::error::Error`, so it works with `?` and `Box<dyn Error>`.
+Pure and allocation-free apart from the formatter. Tests: `errors_display`.
+
+### `check_freq(p: &Policy, f: f64) -> Result<(), CommandError>` [@ANCHOR: radiod_client:radiod_client_command_check_freq]
+
+Private frequency rule used by `Command::validate` for the carrier of an audio channel and the centre of a
+spectrum channel. `Ok(())` when `f` is finite and lies in `p.min_hz..=p.max_hz` (both ends allowed); otherwise
+`Err(CommandError::Frequency(f))`. `NaN` and infinities are refused because every comparison with them is
+false or they are not finite. Pure. It keeps a gateway from steering the receiver outside the band the site
+allows. Test: `rejects_unsafe_values`.
+
+### `check_life(p: &Policy, l: u32) -> Result<(), CommandError>` [@ANCHOR: radiod_client:radiod_client_command_check_life]
+
+Private lifetime rule, in 20 ms frames, applied to every command that creates or touches a channel. `Ok(())`
+for `1..=p.max_lifetime_frames`; `Err(CommandError::Lifetime(l))` for 0 or anything above. Zero is refused on
+purpose: `radiod` treats lifetime 0 as "never expires" (its default), so a channel made with it would live
+until `radiod` restarts. The value is later sent as `LIFETIME`. Pure. Test: `rejects_unsafe_values`.
+
+### `Policy::bin_limit(&self, byte_format: bool) -> u32` [@ANCHOR: radiod_client:radiod_client_command_policy_bin_limit]
+
+The largest spectrum bin count this policy allows for a format: `min(max_bins, hard)` where `hard` is
+`MAX_BYTE_BINS` (60,000) when `byte_format` is true and `MAX_FLOAT_BINS` (16,000) otherwise. The hard ceilings
+exist because `radiod` builds a spectrum reply in a 65,536-byte stack buffer and crashes when it is overrun
+(17,000 float bins and 66,000 byte bins crashed it in the trial), so a permissive site policy cannot raise
+the limit. Pure, cannot fail. Test: `oversized_bin_requests_are_refused_even_by_a_permissive_policy`.
+
+### `Command::ssrc(&self) -> Ssrc` [@ANCHOR: radiod_client:radiod_client_command_ssrc]
+
+The channel a command addresses: the `ssrc` field of `Audio`, `Spectrum`, `Poll`, `Filter` and `Gain`, and the
+payload of `Remove`. Every variant has one, so the function always returns a value and cannot fail. Pure,
+by reference, no copy beyond the small `Ssrc`. `Command::encode` writes it as `OUTPUT_SSRC` and
+`Control::request` uses it to recognise the acknowledgement. Test: `every_command_names_its_channel`.
+
+### `Command::validate(&self, p: &Policy) -> Result<(), CommandError>` [@ANCHOR: radiod_client:radiod_client_command_validate]
+
+Checks a command against the site policy without building bytes; `encode` and `Control::send` call it first.
+It returns the first failing rule, in the order shown, and `Ok(())` when none fails. Pure.
+
+| Variant | Checks, in order | Error |
+|---|---|---|
+| `Audio` | frequency (`check_freq`); lifetime; Opus bit rate 6,000 to 128,000; bandwidth, when set, within 100 to 24,000 Hz and edges acceptable to `check_filter` | `Frequency`, `Lifetime`, `Bitrate`, `Bandwidth` |
+| `Spectrum` | centre frequency; lifetime; bin count 1 to `bin_limit`; bin width finite and at least `min_bin_hz`; averaging 1 to `max_averaging`; span (bins times width) within `max_span_hz` when it is set | `Frequency`, `Lifetime`, `BinCount`, `BinWidth`, `Averaging`, `Span` |
+| `Poll` | lifetime | `Lifetime` |
+| `Remove` | none | always `Ok` |
+| `Filter` | lifetime; edges (`check_filter`) | `Lifetime`, `Filter` |
+| `Gain` | lifetime; a fixed gain finite and inside `GAIN_RANGE_DB`; `None` (AGC) is always fine | `Lifetime`, `Gain` |
+
+Tests: `rejects_unsafe_values`, `spectrum_limits`, `a_bandwidth_outside_the_limits_is_refused_before_the_wire`,
+`a_spectrum_wider_than_the_front_end_can_fill_is_refused_when_the_policy_knows_it`.
+
+### `Command::encode(&self, p: &Policy, tag: u32) -> Result<Vec<u8>, CommandError>` [@ANCHOR: radiod_client:radiod_client_command_encode]
+
+Validates the command, then builds the one datagram that carries it: a command packet (kind byte 1) of TLV
+entries ending with the end marker. `tag` goes in `COMMAND_TAG`; `radiod` echoes it in the status it replies
+with, which is the only acknowledgement it gives. Errors are those of `validate`; nothing is built when it
+fails. Pure; the datagram is never sent here (see `Control::send`). Every datagram starts with `OUTPUT_SSRC` and
+`COMMAND_TAG`, then:
+
+| Variant | Entries written after those two |
+|---|---|
+| `Poll` | `LIFETIME` |
+| `Remove` | `LIFETIME` 1 (expires at the next frame) |
+| `Filter` | `LIFETIME`, `LOW_EDGE`, `HIGH_EDGE` |
+| `Gain` | `LIFETIME`, then `AGC_ENABLE` 0 and `GAIN` for a fixed gain, or `AGC_ENABLE` 1 |
+| `Audio` | `LIFETIME`, `RADIO_FREQUENCY`, `OUTPUT_CHANNELS` (2 for `Iq`, else 1), the mode's demodulator parameters, `OUTPUT_ENCODING` (2 for 16-bit PCM, 3 for Opus plus `OPUS_BIT_RATE`) |
+| `Spectrum` | `LIFETIME`, `DEMOD_TYPE` (3 float bins, 4 byte bins), `RADIO_FREQUENCY`, `BIN_COUNT`, `RESOLUTION_BW`, `SPECTRUM_AVG` |
+
+Security: no variant can write `OUTPUT_DATA_DEST_SOCKET` or any front end entry; the tests
+`encoded_command_never_names_a_destination` and `no_public_path_takes_caller_bytes` pin that. Other tests:
+`audio_command_carries_frequency_and_lifetime`, `a_bare_unknown_ssrc_poll_cannot_be_built`.
+
+### `impl Display for NetError` (`fmt(&self, f) -> fmt::Result`) [@ANCHOR: radiod_client:radiod_client_net_error_fmt]
+
+The text of a network or protocol failure (`src/net.rs`), one prefix per variant: `io: <error>` for a socket
+failure (`Io`), `command: <error>` for a command the policy refused (`Command`), `tlv: <error>` for a malformed
+datagram (`Tlv`), and `<address> is not a multicast address` for `NotMulticast`. The wrapped error's own
+`Display` supplies the rest. Pure. `NetError` also implements `std::error::Error`. Test: `errors_display`.
+
+### `impl From<io::Error> for NetError` (`from_io(e: io::Error) -> NetError`) [@ANCHOR: radiod_client:radiod_client_net_error_from_io]
+
+Wraps an operating system I/O error as `NetError::Io(e)` without losing its kind or message. It exists so the
+socket calls in `open_group`, `register`, `send` and `recv` can use `?` and still return a `NetError`. Pure,
+cannot fail. The other `NetError` variants are built explicitly: `Command` by `send`, `NotMulticast` by
+`open_group`, and `Tlv` is defined for decoding failures but the receive helpers count and skip those instead of
+returning it. Test: `errors_display`.
+
+### `next_tag(tag: u32) -> u32` [@ANCHOR: radiod_client:radiod_client_net_next_tag]
+
+The command tag that follows `tag`. It adds 1 with wrap-around and never returns 0, so `u32::MAX` goes to 1. A
+zero tag is written as an empty integer on the wire and could not be told from a missing tag, which would make
+an acknowledgement ambiguous. `Control` starts at 1 and calls this after each datagram. Pure, sans-IO, no
+errors. Test: `acknowledgement_rules_are_pure`.
+
+### `is_ack(status: &ChannelStatus, ssrc: u32, tag: u32) -> bool` [@ANCHOR: radiod_client:radiod_client_net_is_ack]
+
+True when `status` answers the command sent to channel `ssrc` with command tag `tag`: the status's `ssrc`
+equals `ssrc` and its echoed `tag` is `Some(tag)`. A status with no tag, or another channel's, gives false.
+Pure, sans-IO. It is the only acknowledgement test for channel commands; a front-end reply carries no tag, so
+`is_front_end` is used for it. `Control::request` calls it for every tag it has sent. Test:
+`acknowledgement_rules_are_pure`.
+
+### `classify(datagram: &[u8], malformed: &mut u64) -> Option<ChannelStatus>` [@ANCHOR: radiod_client:radiod_client_net_classify]
+
+Turns one received datagram into a status for the receive loop. A status decodes to `Some`. A command packet
+(our own, looped back by multicast) is skipped: `None`, nothing counted. A datagram `ChannelStatus::decode`
+rejects is skipped too, and `*malformed` is increased by one so the damage stays visible. It never panics on
+hostile input. Pure, sans-IO; `Control::recv_status` passes its public `malformed` field. Test:
+`acknowledgement_rules_are_pure`.
+
+### `open_group(group: Ipv4Addr, port: u16, iface: Ipv4Addr) -> Result<std::net::UdpSocket, NetError>` [@ANCHOR: radiod_client:radiod_client_net_open_group]
+
+Private. Builds the non-blocking multicast receive socket both `Control` and `RtpSocket` use.
+
+| Argument | Meaning |
+|---|---|
+| `group` | IPv4 multicast group; anything else gives `NetError::NotMulticast(group)` |
+| `port` | UDP port to bind, on all addresses |
+| `iface` | Local interface address to join on (`127.0.0.1` for loopback) |
+
+It sets address and port reuse, binds, joins the group on `iface`, sets the outgoing interface, TTL 0 (so
+nothing it sends leaves the host), multicast loopback on, and a 4 MiB receive buffer (the kernel may clamp it).
+Any failing socket call returns `NetError::Io`. Synchronous. Security: the protocol has no authentication and the
+bind accepts datagrams from any sender, so `radiod` runs on loopback or in a namespace. Test:
+`only_multicast_groups_open`.
+
+### `register(handle: &Handle, sock: std::net::UdpSocket) -> Result<UdpSocket, NetError>` [@ANCHOR: radiod_client:radiod_client_net_register]
+
+Private. Hands a standard socket to the tokio runtime behind `handle` and returns the async `UdpSocket`. It
+enters the handle's context for the call, because `UdpSocket::from_std` needs a runtime context to find the I/O
+driver, and leaves it again at once. The crate owns no runtime, so every socket goes through here. The socket must
+already be non-blocking (`open_group` sets that). Errors: `NetError::Io`. Synchronous; no task is spawned.
+Test: `refused_commands_never_reach_the_wire`.
+
+### `Control::open(handle: &Handle, group: Ipv4Addr, iface: Ipv4Addr, policy: Policy) -> Result<Control, NetError>` [@ANCHOR: radiod_client:radiod_client_net_control_open]
+
+Opens the control and status link to one `radiod`: joins `group` on port `STATUS_PORT` (5006), registers the
+socket with the runtime behind `handle`, and keeps `policy` for every later `send`. Commands go to the same
+group and port the status arrives on. Returns a `Control` whose tag counter starts at 1 and whose public
+`malformed` counter is 0. Errors: `NotMulticast` for a non-multicast group and `Io` for socket failures.
+Synchronous, but `handle` must belong to a running runtime. It is the same as `open_on_port` with the default
+port. Test: `only_multicast_groups_open`.
+
+### `Control::open_on_port(handle: &Handle, group: Ipv4Addr, port: u16, iface: Ipv4Addr, policy: Policy) -> Result<Control, NetError>` [@ANCHOR: radiod_client:radiod_client_net_control_open_on_port]
+
+The same as `Control::open` with the status port given, for a `radiod` configured for a port other than 5006.
+`port` is both the port bound for receiving and the destination port of every command. Arguments, return value
+and errors are as for `open`. It is where the work is done: `open_group` builds the socket, `register` makes it
+async, and the struct is filled in. No locking; a `Control` belongs to one task. Test: `refused_commands_never_reach_the_wire`.
+
+### `Control::send(&mut self, cmd: &Command) -> Result<u32, NetError>` (async) [@ANCHOR: radiod_client:radiod_client_net_control_send]
+
+Validates `cmd` against the policy given at open, encodes it with the next tag, and sends one datagram to the
+group. Returns the tag, which `radiod` will echo in its status reply. A refused command returns
+`NetError::Command` and puts nothing on the wire, and the tag counter does not move; a failed send returns
+`NetError::Io` (the tag is already used). It does not wait for an answer: use `request` for that. `&mut self`, so
+one send at a time per `Control`. Tests: `refused_commands_never_reach_the_wire`, `request_is_acknowledged_by_tag`.
+
+### `Control::recv_status(&mut self, wait: Duration) -> Result<Option<ChannelStatus>, NetError>` (async) [@ANCHOR: radiod_client:radiod_client_net_control_recv_status]
+
+Waits up to `wait` for the next status datagram and returns it. Datagrams that are our own looped-back commands
+are skipped, and malformed ones are skipped and counted in `self.malformed`; the wait keeps its original
+deadline across skips. Returns `Ok(None)` when the time runs out and `Err(NetError::Io)` on a socket error.
+Each call allocates a 64 KiB buffer (the largest datagram `radiod` sends). The source address is not checked,
+so any host on the group is believed. Async on the caller's runtime. Tests: `request_is_acknowledged_by_tag`,
+`unanswered_request_times_out_and_retries`.
+
+### `Control::request(&mut self, cmd: &Command, wait: Duration) -> Result<Option<ChannelStatus>, NetError>` (async) [@ANCHOR: radiod_client:radiod_client_net_control_request]
+
+Sends `cmd` and waits for the status that carries its tag, which is the only acknowledgement `radiod` gives. It
+repeats the send every 200 ms until `wait` has passed; sends are idempotent, so a reply to any tag this call has
+sent (not only the newest) counts, and a slow reply is not lost. Statuses that do not match, including other
+clients' channels, are discarded. Returns `Ok(Some(status))` on acknowledgement, `Ok(None)` on timeout, and
+`NetError::Command` or `Io` for a refused command or socket failure. `radiod` may therefore receive the
+command several times. Tests: `request_is_acknowledged_by_tag`,
+`a_reply_slower_than_the_retry_interval_still_acknowledges`, `unanswered_request_times_out_and_retries`.
+
+### `RtpSocket::open(handle: &Handle, group: Ipv4Addr, iface: Ipv4Addr) -> Result<RtpSocket, NetError>` [@ANCHOR: radiod_client:radiod_client_net_rtp_open]
+
+Opens a receiver for `radiod`'s audio data: joins the data `group` on port `RTP_PORT` (5004) on `iface` and
+registers the socket with the runtime behind `handle`. The socket only receives; this type has no send method.
+Errors: `NotMulticast` for a non-multicast group, `Io` for socket failures. Synchronous. It is
+`open_on_port` with the default port. The `group` is the data destination `radiod` was configured with, learned
+from channel status (`data_dest`), not chosen by this client. Test: `only_multicast_groups_open`.
+
+### `RtpSocket::open_on_port(handle: &Handle, group: Ipv4Addr, port: u16, iface: Ipv4Addr) -> Result<RtpSocket, NetError>` [@ANCHOR: radiod_client:radiod_client_net_rtp_open_on_port]
+
+As `RtpSocket::open` for a `radiod` whose data port is not 5004. `port` is the UDP port bound. The multicast
+settings are those of `open_group`: TTL 0, 4 MiB receive buffer, loopback on. Errors are `NotMulticast` and `Io`.
+Synchronous and without side effects beyond the socket joining the group. Test: `rtp_socket_receives_and_times_out`.
+
+### `RtpSocket::recv(&self, buf: &mut [u8], wait: Duration) -> Result<Option<usize>, NetError>` (async) [@ANCHOR: radiod_client:radiod_client_net_rtp_recv]
+
+Receives one datagram into `buf` and returns its length, or `Ok(None)` when `wait` passes with nothing
+received. A datagram longer than `buf` is cut to fit (the kernel discards the rest); size `buf` for the largest
+packet expected. Errors: `NetError::Io`. Takes `&self`. No parsing happens here: pass the bytes to `RtpPacket::parse`. Test:
+`rtp_socket_receives_and_times_out`.
+
+### `impl Display for RtpError` (`fmt(&self, f) -> fmt::Result`) [@ANCHOR: radiod_client:radiod_client_rtp_error_fmt]
+
+The text of an RTP rejection (`src/rtp.rs`): the `Debug` form of the variant, for example `Truncated`,
+`Version(1)` or `Payload("...")`. `RtpError` has three variants: `Truncated` (shorter than the fixed header, or
+a CSRC list, extension or padding runs past the end), `Version(v)` (not RTP version 2) and `Payload(text)` (the
+codec could not decode the bytes, or Opus support is not built in). It also implements `std::error::Error`. Pure.
+Test: `rejects_bad_packets`.
+
+### `RtpPacket::parse(d: &[u8]) -> Result<RtpPacket<'_>, RtpError>` [@ANCHOR: radiod_client:radiod_client_rtp_packet_parse]
+
+Parses one RTP datagram without copying: the returned `payload` borrows from `d`.
+
+| Field | Source |
+|---|---|
+| `pt` | low 7 bits of byte 1 (payload type; dynamic in `radiod`, learned from the channel status) |
+| `marker` | high bit of byte 1 |
+| `seq`, `timestamp`, `ssrc` | big-endian bytes 2-3, 4-7, 8-11 |
+| `payload` | after the 12-byte header, the CSRC list (4 bytes each) and any header extension, up to the end less the padding count |
+
+Errors: `Truncated` when `d` is under 12 bytes or the CSRC list, the extension header, or the padding length would
+run past the end (every offset is checked, so no input panics); `Version(v)` when the version bits are not 2.
+Pure, sans-IO, borrows the datagram. Tests: `parses_header`, `rejects_bad_packets`.
+
+### `Encoding::from_radiod(n: u64) -> Option<Encoding>` [@ANCHOR: radiod_client:radiod_client_rtp_encoding_from_radiod]
+
+Maps the output-encoding number in a channel status (`ChannelStatus::encoding`, from `OUTPUT_ENCODING`, `rtp.h`
+of `radiod`) to the decoder format: 1 is `S16Le` (16-bit little-endian PCM), 2 is `S16Be` (big-endian), 3 is
+`Opus` (48 kHz stereo). Any other number gives `None`, so the caller can refuse a stream it cannot decode
+instead of playing noise. Pure, cannot fail. Test: `encoding_numbers_and_little_endian_stereo`.
+
+### `impl Debug for AudioDecoder` (`fmt(&self, f) -> fmt::Result`) [@ANCHOR: radiod_client:radiod_client_rtp_decoder_debug_fmt]
+
+Writes `AudioDecoder { encoding: ..., channels: ... }` and nothing else. The Opus codec state is left out on
+purpose: the library type does not implement `Debug`, and the state is large and meaningless in a log. `channels`
+is the channel count the decoder downmixes from (2 for Opus). Pure, no locking. Test: `pcm_big_endian`.
+
+### `AudioDecoder::new(encoding: Encoding, channels: usize) -> Result<AudioDecoder, RtpError>` [@ANCHOR: radiod_client:radiod_client_rtp_decoder_new]
+
+Builds a decoder for one stream from what its channel status said. `channels` is the status's output channel
+count; PCM clamps it to 1 or 2, and Opus ignores it because `radiod` always sends Opus as 48 kHz stereo. For
+`Opus` it creates an `opus::Decoder` (48,000 Hz, stereo); if the crate was built without the `opus` feature, or the
+codec refuses, it returns `RtpError::Payload`. PCM never fails. The decoder holds state, so use one per stream
+(SSRC) and call `decode` on it in packet order. Pure otherwise; no I/O. Test: `pcm_big_endian`.
+
+### `AudioDecoder::decode(&mut self, payload: &[u8]) -> Result<Vec<f32>, RtpError>` [@ANCHOR: radiod_client:radiod_client_rtp_decoder_decode]
+
+Decodes one RTP payload to mono `f32` samples in -1.0 to 1.0 (stereo is downmixed by averaging).
+
+| Encoding | Behaviour | Errors |
+|---|---|---|
+| `S16Be`, `S16Le` | each 16-bit sample divided by 32768; with 2 channels each pair is averaged | `Payload` when the length is not a whole number of frames |
+| `Opus` | decodes with `decode_float` into a buffer sized for the longest Opus frame (120 ms at 48 kHz) and averages the two channels | `Payload` with the codec's message; or "built without the opus feature" |
+
+`&mut self` because the Opus decoder keeps state between packets; a lost packet is not concealed. Allocates the
+output vector each call. Not async, no locking. Tests: `pcm_big_endian`, `encoding_numbers_and_little_endian_stereo`.
+
+### `SeqTracker::push(&mut self, seq: u16)` [@ANCHOR: radiod_client:radiod_client_rtp_seq_push]
+
+Accounts for one received packet in the public counters `received`, `lost`, `out_of_order` and `restarts` (all
+`u64`; the tracker also remembers the newest sequence number). It cannot fail. Let `d` be `seq` minus the newest
+one, with 16-bit wrap-around:
+
+| `d` | Counted as |
+|---|---|
+| 1 | in order, nothing extra |
+| 0 | duplicate: `out_of_order` +1 |
+| 2 to 32767 | the skipped packets, `d - 1`, added to `lost` |
+| behind the newest by at most `REORDER_WINDOW` (32) | late packet: `out_of_order` +1, the newest is unchanged |
+| further back (including exactly 32768) | stream restart: `restarts` +1, nothing added to `lost`, tracking follows the new sequence |
+
+`radiod` re-creating a channel restarts its sequence (200 lower on the RX-888, 2026-11-05); before this the whole
+new stream counted as out of order and the outage showed nowhere. A restart that lands ahead of the old sequence cannot
+be told from loss and counts as loss. The first packet only sets the starting point. Pure, one tracker per
+stream. Tests: `loss_accounting`, `a_channel_restart_is_counted_once_and_tracking_follows_the_new_sequence`,
+`the_reorder_window_separates_late_packets_from_restarts`.
+
+### `ChannelStatus::decode(pkt: &[u8]) -> Result<Option<ChannelStatus>, TlvError>` [@ANCHOR: radiod_client:radiod_client_status_decode]
+
+Decodes one datagram into a `ChannelStatus` (`src/status.rs`). It parses the TLV list, returns `Ok(None)` for a
+command packet (our own, echoed back by multicast loopback), and otherwise fills each field whose type number
+it knows (the field tables below list them); absent fields stay `None` and unknown types are ignored, as the
+protocol intends. Errors: any `TlvError` from the parse, `TlvError::BadValue(type)` when a known entry has an
+impossible length (including an `OUTPUT_SSRC` wider than 32 bits, which is refused rather than truncated into
+another channel's number), so a hostile datagram fails instead of giving a wrong number. Sets `has_ssrc` only
+when an SSRC entry was present. Pure, sans-IO, never panics. Tests: `decodes_a_real_rx888_front_end_status`,
+`our_own_command_packets_are_skipped_and_garbage_is_an_error`,
+`a_status_with_no_ssrc_or_a_wider_than_32_bit_one_is_not_taken_for_the_front_end`.
+
+### `ChannelStatus::spectrum_db(&self, center_hz: f64) -> Vec<(f64, f32)>` [@ANCHOR: radiod_client:radiod_client_status_spectrum_db]
+
+Turns the spectrum bins of a status into `(frequency in Hz, level in dB)` pairs in ascending frequency order,
+around `center_hz` (the centre the channel was asked for). It returns an empty vector when `bin_hz` is absent or
+zero. Float bins (`BIN_DATA`) arrive DC first, then positive, then negative frequencies, so they are unwrapped and
+sorted, and the level is `10 log10(power)` with the power floored at 1e-30. Byte bins (`BIN_BYTE_DATA`) are already
+low to high, and the level is `base_db + step_db * byte` (defaults -150 and 0.5 when the status omits them). Levels are relative to full
+scale (a tone at -20 dBFS reads -20 dB), not dBm. Pure, allocates one vector. Tests:
+`float_bins_are_unwrapped_to_ascending_frequency`, `byte_bins_are_already_ascending_and_use_base_and_step`.
+
+### `impl Display for TlvError` (`fmt(&self, f) -> fmt::Result`) [@ANCHOR: radiod_client:radiod_client_tlv_error_fmt]
+
+The text of a rejected datagram (`src/tlv.rs`): "datagram too short" (`TooShort`), "entry runs past end of
+datagram" (`Truncated`), "unsupported length-of-length" (`BadLength`), "unknown packet kind N" (`BadKind`, the
+first byte was neither 0 status nor 1 command), and "malformed value for type N" (`BadValue`, a value length its
+type cannot have). Pure. `TlvError` also implements `std::error::Error`. Test: `hostile_inputs_are_errors_not_panics`.
+
+### `Entry::uint(&self) -> Result<u64, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_uint]
+
+Reads an entry value as an unsigned big-endian integer. Leading zero bytes are removed on the wire, so a value
+of any length 0 to 8 bytes is accepted and a zero-length value is 0. More than 8 bytes gives
+`TlvError::BadValue(type)`. Pure, cannot overflow. `bool`, `f32` and `f64` are built on it. The caller narrows the
+result (for example `ChannelStatus::decode` refuses an SSRC above 32 bits). Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Entry::bool(&self) -> Result<bool, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_bool]
+
+Reads an entry value as a boolean: any non-zero integer is true, and an empty value (how `radiod` sends 0) is
+false. Errors as `uint`: a value over 8 bytes is `TlvError::BadValue(type)`. Pure. Used for the flags of the
+channel status such as AGC, RF AGC, PLL on and lock. Test: `bool_and_float_values`.
+
+### `Entry::f32(&self) -> Result<f32, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32]
+
+Reads an entry value as a 32-bit float. A value of up to 4 bytes is the big-endian bit pattern (an empty value
+is `0.0`, which is how `radiod` sends a zero level); a value of 5 to 8 bytes is read as a 64-bit double and
+narrowed, as `radiod` does, because it sends the shortest form. Longer values give `TlvError::BadValue(type)`.
+`NaN` and infinities pass through unchanged (a stopped front end reports `-inf`). Pure. Test: `bool_and_float_values`.
+
+### `Entry::f64(&self) -> Result<f64, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_f64]
+
+Reads an entry value as a 64-bit float, such as the carrier frequency. A value of 5 to 8 bytes is the big-endian
+bit pattern of a double; one of 4 bytes or fewer is read as a 32-bit float and widened, since `radiod` may send
+the shorter form for a value that fits. Longer values give `TlvError::BadValue(type)`. Pure, no allocation.
+Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Entry::text(&self) -> String` [@ANCHOR: radiod_client:radiod_client_tlv_entry_text]
+
+Reads an entry value as UTF-8 text, such as the front end description. Invalid bytes are replaced with the
+replacement character instead of failing, so a hostile or odd description cannot make the whole status fail to
+parse. It cannot return an error. The text is untrusted: do not use it as a path, a command or markup without
+escaping. Allocates a `String`. Test: `vectors_and_text`.
+
+### `Entry::socket(&self) -> Result<Option<SocketAddr>, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_socket]
+
+Reads an entry value as a network address with a port. Six bytes are an IPv4 address then a big-endian port,
+eighteen bytes an IPv6 address then a port, and an empty value is the null socket, returned as `Ok(None)`. Any
+other length gives `TlvError::BadValue(type)`. Used for `OUTPUT_DATA_DEST_SOCKET` (the status's `data_dest`).
+This client only reads a destination; it can never send one. Pure. Test: `socket_forms`.
+
+### `Entry::f32_vec(&self) -> Result<Vec<f32>, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32_vec]
+
+Reads an entry value as a vector of big-endian 32-bit floats, used for the float spectrum bins (`BIN_DATA`). The
+length must be a multiple of 4, otherwise `TlvError::BadValue(type)`; an empty value gives an empty vector.
+It allocates one `f32` per 4 bytes, bounded by the datagram size (65,536 bytes at most, so 16,384 floats).
+Pure. Test: `vectors_and_text`.
+
+### `parse(pkt: &[u8]) -> Result<(Kind, Vec<Entry<'_>>), TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_parse]
+
+Splits a datagram into its packet kind and its entries; each `Entry` borrows its value bytes from `pkt`. The first
+byte is the kind (0 `Status`, 1 `Command`). Each entry is a type byte and a length: 0 to 127 is direct; with the
+high bit set the low 7 bits give the number of big-endian length bytes (1 to 4). Parsing stops at the end
+marker (type 0) or the end of the datagram. Errors: `TooShort` (empty), `BadKind(byte)`, `Truncated` (a length
+runs past the end), `BadLength` (length-of-length 0 or over 4). Every length is checked against the bytes left, so
+no input can panic or read outside the datagram. Pure, sans-IO. Tests: `long_form_length`,
+`hostile_inputs_are_errors_not_panics`, `integer_round_trip_strips_leading_zeroes`.
+
+### `Writer::command() -> Writer` [@ANCHOR: radiod_client:radiod_client_tlv_writer_command]
+
+Starts a command datagram: a buffer holding the single packet-kind byte 1. Crate-private (`pub(crate)`), because
+the only intended callers are `Command::encode` and `encode_front_end_poll`; nothing outside the crate can
+assemble bytes for `radiod`, which is the closed command schema. Pure, allocates a small `Vec`. Entries are added
+with the `uint`, `bool`, `f32` and `f64` writers and the list is closed with `finish`. Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Writer::header(&mut self, t: u8, len: usize)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_header]
+
+Writes the type byte and a one-byte length of one entry (private). Only the short form is produced, because every
+value written here is at most 8 bytes; a `len` of 256 or more would be truncated, but no caller passes one. It
+does not write the value, so a caller must follow it with exactly `len` bytes. The other writers call it; nothing
+else does. Pure. Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Writer::uint(&mut self, t: u8, v: u64)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_uint]
+
+Writes an unsigned integer entry of type `t`, big-endian, with the leading zero bytes removed (the way `radiod`
+reads them), so 0 is an entry with an empty value and 300 is two bytes. The length is 8 minus the zero bytes
+skipped. Crate-private, cannot fail, appends to the buffer. Used for SSRC, tag, lifetime, bin count and similar
+fields. Tests: `integer_round_trip_strips_leading_zeroes`, `bool_and_float_values`.
+
+### `Writer::bool(&mut self, t: u8, v: bool)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_bool]
+
+Writes a boolean entry of type `t` as the integer 1 for true or 0 for false (the zero case becomes an entry with an
+empty value, as in the other integer fields). Crate-private; it calls `uint`, so it cannot fail. Used for the
+AGC, envelope, PLL and squelch flags of an audio command. Test: `bool_and_float_values`.
+
+### `Writer::f32(&mut self, t: u8, v: f32)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_f32]
+
+Writes a 32-bit float entry of type `t`: a length of 4 and the big-endian bit pattern of `v`, always four bytes
+(no zero stripping). Crate-private, cannot fail. Used for filter edges, gain, squelch thresholds, the FM
+de-emphasis values and the spectrum bin width. The caller has validated `v` as finite where it matters. Test: `bool_and_float_values`.
+
+### `Writer::f64(&mut self, t: u8, v: f64)` [@ANCHOR: radiod_client:radiod_client_tlv_writer_f64]
+
+Writes a 64-bit float entry of type `t`: a length of 8 and the big-endian bit pattern of `v`. Crate-private,
+cannot fail. Used for `RADIO_FREQUENCY`, the carrier or centre frequency in Hz, which needs the double's
+precision. Test: `integer_round_trip_strips_leading_zeroes`.
+
+### `Writer::finish(self) -> Vec<u8>` [@ANCHOR: radiod_client:radiod_client_tlv_writer_finish]
+
+Ends the datagram with the end-of-list entry (type 0, no length) and returns the finished bytes. It takes the
+writer by value, so nothing can be added afterwards. Crate-private, cannot fail, allocation-free beyond the
+buffer already built. The result is what `Command::encode` returns and `Control::send` puts on the wire. Test:
+`integer_round_trip_strips_leading_zeroes`.
 
 ## RX-888 additions (2026-11-05): front end, filter, gain, I/Q
 
@@ -106,9 +502,7 @@ tokio runtime (the one whose `Handle` opened the socket) and never spawn a task.
 
 ### Data structures
 
-#### `radiod_client_command_limits` - filter and gain bounds
-
-[@ANCHOR: radiod_client:radiod_client_command_limits]
+#### `radiod_client_command_limits` - filter and gain bounds [@ANCHOR: radiod_client:radiod_client_command_limits]
 
 Constants in `src/command.rs`, checked by `Command::validate` before anything is sent.
 
@@ -119,9 +513,7 @@ Constants in `src/command.rs`, checked by `Command::validate` before anything is
 
 Plain compile-time constants: no ownership, no wire form, no locking.
 
-#### `radiod_client_command_mode` - `Mode`
-
-[@ANCHOR: radiod_client:radiod_client_command_mode]
+#### `radiod_client_command_mode` - `Mode` [@ANCHOR: radiod_client:radiod_client_command_mode]
 
 The demodulation of an audio channel, `Copy`. Each variant is sent as explicit parameters
 (`DEMOD_TYPE`, edges, output rate, envelope, AGC), never as a server-side preset name.
@@ -135,9 +527,7 @@ The demodulation of an audio channel, `Copy`. Each variant is sent as explicit p
 | `Fm` | -8000 to 8000 | 24 kHz mono | threshold extension, de-emphasis 530.5 us and 12 dB |
 | `Iq` (new) | -5000 to 5000 | 12 kHz, two channels: I then Q in each sample pair | linear, no detection, AGC on, the parameters of `radiod`'s `[iq]` preset. Observed: RTP payload type 123, 2 channels, 0 lost. For a fixed level set a gain with `Command::Gain`. |
 
-#### `radiod_client_command_command` - `Command` (new variants)
-
-[@ANCHOR: radiod_client:radiod_client_command_command]
+#### `radiod_client_command_command` - `Command` (new variants) [@ANCHOR: radiod_client:radiod_client_command_command]
 
 Everything a client may ask of `radiod`. The earlier variants (`Audio`, `Spectrum`, `Poll`, `Remove`) are
 unchanged. Two retune commands were added. Both carry a lifetime, like every channel command: sent to an
@@ -153,9 +543,7 @@ that channel expire.
 table says. The refusals are `CommandError::Filter` and `CommandError::Gain`, plus `CommandError::Lifetime`
 for a zero or too-long lifetime.
 
-#### `radiod_client_command_error` - `CommandError` (new variants)
-
-[@ANCHOR: radiod_client:radiod_client_command_error]
+#### `radiod_client_command_error` - `CommandError` (new variants) [@ANCHOR: radiod_client:radiod_client_command_error]
 
 Why a command was refused; nothing was sent. New variants:
 
@@ -167,9 +555,7 @@ Why a command was refused; nothing was sent. New variants:
 
 `Display` prints the `Debug` form (`Filter(1.0, 0.0)`).
 
-#### `radiod_client_status_channel_status` - `ChannelStatus` (new fields)
-
-[@ANCHOR: radiod_client:radiod_client_status_channel_status]
+#### `radiod_client_status_channel_status` - `ChannelStatus` (new fields) [@ANCHOR: radiod_client:radiod_client_status_channel_status]
 
 A decoded status datagram (`ChannelStatus::decode`). Every field is `None` when absent, and unknown types
 are skipped. A field whose value has an impossible length fails the whole decode with a `TlvError` rather
@@ -201,16 +587,14 @@ already have the front end's RF gain removed. Observed: the channel noise densit
 
 ### Functions
 
-#### `radiod_client_command_check_filter` - `check_filter(low: f32, high: f32) -> Result<(), CommandError>`
-
-[@ANCHOR: radiod_client:radiod_client_command_check_filter]
+#### `radiod_client_command_check_filter` - `check_filter(low: f32, high: f32) -> Result<(), CommandError>` [@ANCHOR: radiod_client:radiod_client_command_check_filter]
 
 Crate-private. The `Command::Filter` edge rule: both edges finite with magnitude at most
-`MAX_FILTER_EDGE_HZ`, and `low < high`. Returns `Err(CommandError::Filter(low, high))` otherwise. Pure.
+`MAX_FILTER_EDGE_HZ`, and `low < high`. Returns `Err(CommandError::Filter(low, high))` otherwise. Pure. `NaN` and infinite edges fail the finite test, and equal edges fail `low < high`. It is called by
+`Command::validate` for `Command::Filter` and for the edges that `Mode::passband` computes from an audio `bandwidth_hz`
+(a failure there is reported as `CommandError::Bandwidth`). Test: `filter_command_is_bounded_and_carries_a_lifetime`.
 
-#### `radiod_client_command_audio_bandwidth` - `AudioChannel::bandwidth_hz: Option<u32>`
-
-[@ANCHOR: radiod_client:radiod_client_command_audio_bandwidth]
+#### `radiod_client_command_audio_bandwidth` - `AudioChannel::bandwidth_hz: Option<u32>` [@ANCHOR: radiod_client:radiod_client_command_audio_bandwidth]
 
 The width of an audio channel's passband in Hz. `None` (what every earlier caller meant) sends the mode's own
 passband from the `Mode` table. `Some(width)` sends edges from `Mode::passband`, so the gateway can pass a
@@ -221,9 +605,7 @@ computed edge is past `MAX_FILTER_EDGE_HZ` for the mode (for example `Cw` wider 
 the passband of an existing channel, and the next `Audio` command puts back the one named here. Other crates'
 `AudioChannel` literals must now name the field (`bandwidth_hz: None` keeps the old behaviour).
 
-#### `radiod_client_command_mode_passband` - `Mode::passband(self, bandwidth_hz: Option<u32>) -> (f32, f32)`
-
-[@ANCHOR: radiod_client:radiod_client_command_mode_passband]
+#### `radiod_client_command_mode_passband` - `Mode::passband(self, bandwidth_hz: Option<u32>) -> (f32, f32)` [@ANCHOR: radiod_client:radiod_client_command_mode_passband]
 
 The `(low, high)` passband edges, Hz from the carrier, that `Command::encode` writes as `LOW_EDGE` and
 `HIGH_EDGE`. Pure; takes `self` by value (`Mode` is `Copy`); no errors (the range check is
@@ -241,18 +623,14 @@ The `(low, high)` passband edges, Hz from the carrier, that `Command::encode` wr
 See also `radiod_client_command_check_filter` and the test
 `a_bandwidth_sets_the_sent_passband_and_none_keeps_the_mode_default`.
 
-#### `radiod_client_command_encode_front_end_poll` - `encode_front_end_poll(tag: u32) -> Vec<u8>`
-
-[@ANCHOR: radiod_client:radiod_client_command_encode_front_end_poll]
+#### `radiod_client_command_encode_front_end_poll` - `encode_front_end_poll(tag: u32) -> Vec<u8>` [@ANCHOR: radiod_client:radiod_client_command_encode_front_end_poll]
 
 The datagram that asks for the front end's status: a command packet holding only `OUTPUT_SSRC` 0 and
 `COMMAND_TAG tag`, then the end marker. SSRC 0 is the front end, not a channel, so no channel is created and
 no lifetime applies. This is the one command not built from a `Command`, because a `Ssrc` can never be 0.
 `tag` is any value; it is not echoed (below). Pure. `Control::front_end` is the usual caller.
 
-#### `radiod_client_command_max_spectrum_span_hz` - `max_spectrum_span_hz(input_samprate: u64, real: bool) -> f64`
-
-[@ANCHOR: radiod_client:radiod_client_command_max_spectrum_span_hz]
+#### `radiod_client_command_max_spectrum_span_hz` - `max_spectrum_span_hz(input_samprate: u64, real: bool) -> f64` [@ANCHOR: radiod_client:radiod_client_command_max_spectrum_span_hz]
 
 The widest spectrum span (`bin_count * bin_hz`, Hz) a front end fills. It is half of `input_samprate` (Hz)
 when `real` is true (a direct-sampling front end such as the RX-888) and all of it when false. Feed it the
@@ -260,17 +638,13 @@ front end's `input_samprate` and `fe_is_real`. Observed at 64.8 Msps: spans up t
 every bin filled, and 32.44 MHz and wider came back with about half the bins exactly zero, so callers keep
 requests inside this bound. Pure; returns 0.0 for a rate of 0.
 
-#### `radiod_client_net_is_front_end` - `is_front_end(status: &ChannelStatus) -> bool`
-
-[@ANCHOR: radiod_client:radiod_client_net_is_front_end]
+#### `radiod_client_net_is_front_end` - `is_front_end(status: &ChannelStatus) -> bool` [@ANCHOR: radiod_client:radiod_client_net_is_front_end]
 
 True when `status` is about the front end (SSRC 0). Observed: `radiod` does not echo the command tag in a
 front-end reply, and sends one only when polled. So any SSRC-0 status counts as the answer, whoever asked:
 the front end is the same for every client. Pure.
 
-#### `radiod_client_net_control_front_end` - `async fn Control::front_end(&mut self, wait: Duration) -> Result<Option<ChannelStatus>, NetError>`
-
-[@ANCHOR: radiod_client:radiod_client_net_control_front_end]
+#### `radiod_client_net_control_front_end` - `async fn Control::front_end(&mut self, wait: Duration) -> Result<Option<ChannelStatus>, NetError>` [@ANCHOR: radiod_client:radiod_client_net_control_front_end]
 
 Sends `encode_front_end_poll` to the status group, repeating every 200 ms, and returns the first
 front-end status (`is_front_end`) within `wait`. Channel statuses received meanwhile are skipped.
@@ -299,9 +673,7 @@ section 8), so lock behaviour on a real carrier is a hardware follow-up.
 
 ### Data structures
 
-#### `radiod_client_command_mode` - `Mode` (synchronous variants)
-
-[@ANCHOR: radiod_client:radiod_client_command_mode]
+#### `radiod_client_command_mode` - `Mode` (synchronous variants) [@ANCHOR: radiod_client:radiod_client_command_mode]
 
 Three variants added to the table above. All are sent as explicit parameters:
 
@@ -327,16 +699,15 @@ Three variants added to the table above. All are sent as explicit parameters:
   command every 2 s; whether re-sending `PLL_ENABLE` 1 to a channel that already has it disturbs the lock is
   not documented and must be watched on a real carrier (lock should stay steady across refreshes).
 
-#### `radiod_client_command_sam_squelch` - `SAM_SQUELCH_OPEN_DB`
-
-[@ANCHOR: radiod_client:radiod_client_command_sam_squelch]
+#### `radiod_client_command_sam_squelch` - `SAM_SQUELCH_OPEN_DB` [@ANCHOR: radiod_client:radiod_client_command_sam_squelch]
 
 A compile-time constant (no ownership, no locking): `pub const SAM_SQUELCH_OPEN_DB: f32 = -1000.0`, dB SNR, sent as
-both `SQUELCH_OPEN` (83) and `SQUELCH_CLOSE` (84) with every synchronous `Audio` command.
+both `SQUELCH_OPEN` (83) and `SQUELCH_CLOSE` (84) with every synchronous `Audio` command. The value is
+`radiod`'s documented "keep the squelch open" threshold: the carrier PLL turns on `radiod`'s carrier squelch, and
+sending -1000 dB for both thresholds (with the SNR squelch off) lets a listener hear a fading carrier instead
+of silence. Not configurable by the caller. Test: `synchronous_modes_turn_the_pll_on_and_hold_its_squelch_open`.
 
-#### `radiod_client_status_channel_status` - `ChannelStatus` (PLL fields)
-
-[@ANCHOR: radiod_client:radiod_client_status_channel_status]
+#### `radiod_client_status_channel_status` - `ChannelStatus` (PLL fields) [@ANCHOR: radiod_client:radiod_client_status_channel_status]
 
 Fields added on 2026-11-06. Each is `None` when the status does not carry it. All are set only by
 `ChannelStatus::decode`; nobody else writes them.
@@ -357,17 +728,13 @@ The decode rule is unchanged: a value of impossible length fails the decode with
 
 ### Functions
 
-#### `radiod_client_command_mode_is_synchronous` - `Mode::is_synchronous(self) -> bool`
-
-[@ANCHOR: radiod_client:radiod_client_command_mode_is_synchronous]
+#### `radiod_client_command_mode_is_synchronous` - `Mode::is_synchronous(self) -> bool` [@ANCHOR: radiod_client:radiod_client_command_mode_is_synchronous]
 
 True for `Sam`, `SamLower` and `SamUpper`: the modes that turn `radiod`'s carrier PLL on, so the channel's
 status carries a carrier lock. Callers use it to decide whether to report a lock at all (a plain AM channel has
 none). Takes `self` by value (`Mode` is `Copy`); pure, no errors, no allocation.
 
-#### `radiod_client_status_carrier_lock` - `ChannelStatus::carrier_lock(&self) -> Option<bool>`
-
-[@ANCHOR: radiod_client:radiod_client_status_carrier_lock]
+#### `radiod_client_status_carrier_lock` - `ChannelStatus::carrier_lock(&self) -> Option<bool>` [@ANCHOR: radiod_client:radiod_client_status_carrier_lock]
 
 The carrier lock of a synchronous channel, for a console's lock indicator.
 

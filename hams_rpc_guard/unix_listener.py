@@ -333,7 +333,12 @@ def install_server_patches():
         except OSError as error:
             if error.errno not in (errno.EAGAIN, errno.ECONNABORTED):
                 raise
-            return worker_work(self)  # nothing on the Unix socket: Odoo's own TCP accept, unchanged
+            connection = None
+        if connection is None:
+            # Nothing on the Unix socket: Odoo's own TCP accept, unchanged. Outside the `except` block, so that a traceback
+            # Odoo logs while serving that request is not chained to this accept's BlockingIOError ("During handling of the
+            # above exception, another exception occurred"), which made every logged error look like a socket fault.
+            return worker_work(self)
         serve_unix_connection(_state["server"], connection)
         self.request_count += 1
 

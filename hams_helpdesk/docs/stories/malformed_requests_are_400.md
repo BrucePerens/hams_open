@@ -6,7 +6,7 @@ not buried under requests whose only mistake was the sender's. (The automatic ti
 `server_exception_tickets.md`; a real handler bug must stay visible, so each of these is logged at warning.)
 
 Every route goes through `ir.http._dispatch`, which `hams_helpdesk` wraps.
-`[@ANCHOR: hams_helpdesk:missing_required_params_is_400]`
+`[@ANCHOR: hams_helpdesk:missing_required_params_is_400]` **Interface:** `ir.http._dispatch(cls, endpoint)` (a classmethod in `models/ir_http_exception.py`; `endpoint` is Odoo's matched endpoint object) runs before the handler. It raises `werkzeug.exceptions.BadRequest` (HTTP 400) when the request holds a NUL byte (`_request_has_nul_byte`) or when `_missing_required_params(endpoint)` names a required handler parameter the request did not carry; the message lists parameter names only, never a value. Otherwise it calls Odoo's `_dispatch` and converts three kinds of caught error from the sender's own input (a non-number, an unreadable date, other positive evidence of bad input on a public page) into 400 or 404, logged at warning or info. Everything else is re-raised unchanged and stays a 500 with a ticket. No locking, no database access, no secrets; it is read-only until the handler runs. Tested by `test_a_bare_get_of_each_qa_014_route_is_a_400_not_a_500` and `tests/test_missing_params.py`.
 
 1. **A NUL byte.** PostgreSQL cannot store or compare a string with a NUL (`%00`), so a handler that
    searched with one raised `ValueError` and answered 500. A NUL byte in the request path, or in any text

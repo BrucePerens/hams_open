@@ -40,8 +40,8 @@ service: alerts go to the Odoo log, a `zero_sudo.security.log` row and an email 
 
 Every backend in `alerts.BACKENDS` runs for every alarm; add one with `alerts.register_backend(name)`. Shipped: `logging`
 (one CRITICAL line on the logger `hams_secret_canary.alarm`), `record` (a `zero_sudo.security.log` row, reason
-`secret_canary`) and `mail` (one `mail.mail` to the `base.user_admin` partner). A log-line hit has no database
-environment, so only `logging` runs for it.
+`secret_canary`), `mail` (one `mail.mail` to the `base.user_admin` partner) and `pager` (a critical `pager.incident`
+when `pager_duty` is installed). A log-line hit has no database environment, so only `logging` runs for it.
 
 ## Anchor entries
 
@@ -50,8 +50,17 @@ environment, so only `logging` runs for it.
 **Purpose.** Scans the text responses `_post_dispatch` never sees. `scan_wsgi(application, scan)`: `application` a WSGI
 callable (or a method taking `self` first), `scan` a function `(text, path)`. Returns a WSGI callable that returns the
 application's body unchanged and, once the whole body has been sent, calls `scan` with the first 1 MiB decoded as UTF-8
-(undecodable bytes replaced) and the request path; a response whose `Content-Type` is not text, or whose environ carries
-`hams_secret_canary.scanned`, is not scanned. It does not catch errors from `scan`; the installed one never raises. Test: `TestWsgiScan`.
+(undecodable bytes replaced) and the request path; a response whose `Content-Type` is not text, or which `_post_dispatch` already
+scanned (`mark_scanned`), is not scanned. It does not catch errors from `scan`; the installed one never raises. Test: `TestWsgiScan`.
+
+### `hams_secret_canary:mark_scanned`
+
+**Purpose.** Tells the WSGI wrapper that the request this thread is serving already had its response scanned by `_post_dispatch`.
+`mark_scanned()`: no arguments, no result. It sets a thread-local flag that the wrapper clears before it runs each request and
+reads after the application returns. It is a thread-local and not an environ key because Odoo's `request.httprequest.environ`
+is a filtered copy of the WSGI environ (the first version set a key there and every scanned response was scanned twice, with two
+alarms). No errors. Test: `TestWsgiScan.test_a_response_post_dispatch_already_scanned_is_not_scanned_again`; the real-request check
+is `TestResponseHook` (one response, one alarm).
 
 ### `hams_secret_canary:is_text`
 
@@ -189,6 +198,15 @@ Test: `TestAlarm`.
 
 **Purpose.** A `zero_sudo.security.log` row, reason `secret_canary`, `login` = label, `user_agent` = `source: place`,
 created as `zero_sudo.odoo_facility_service_internal`. Does nothing when `env` is `None`. Test: `TestAlarm`.
+
+### `hams_secret_canary:pager_backend`
+
+**Purpose.** A critical `pager.incident` with source `Secret canary: <label>` and a description of kind, label, source, place
+and UTC time (no value), made through `report_incident` as `pager_duty.user_pager_service_internal`. `report_incident` does not
+read the `pagerduty-maintenance` flag, so a hit during maintenance still pages; it drops a repeat of the same source within
+60 seconds and then adds an occurrence to the open incident. Does nothing when `env` is `None` or `pager_duty` is not
+installed. A failure is logged (a warning naming the exception type) and swallowed, inside a savepoint. Test:
+`TestAlarm.test_pager_backend_opens_one_critical_incident_without_the_value`.
 
 ### `hams_secret_canary:mail_backend`
 

@@ -27,11 +27,11 @@ secret is noticed when it happens and not months later.
    `hams_secret_canary:scan_wsgi` `hams_secret_canary:scan_after_request`
    The wrapper scans only text media types, passes the body through unchanged and closes it, and looks at the first megabyte.
    `hams_secret_canary:is_text` `hams_secret_canary:pass_through` `hams_secret_canary:scan_chunks`
-4. A hit runs every alert backend: a CRITICAL log line, a security-log row and an email to the administrator. A log
+4. A hit runs every alert backend: a CRITICAL log line, a security-log row, an email to the administrator and, with `pager_duty` installed, a critical pager incident. A log
    line that held the value is rewritten with the value removed. No alarm carries the matched value.
    `hams_secret_canary:redact` `hams_secret_canary:raise_alarm`
    `hams_secret_canary:register_backend` `hams_secret_canary:logging_backend`
-   `hams_secret_canary:record_backend` `hams_secret_canary:mail_backend`
+   `hams_secret_canary:record_backend` `hams_secret_canary:mail_backend` `hams_secret_canary:pager_backend`
 
 This detects a leak after it has happened. It does not prevent one.
 
@@ -89,7 +89,7 @@ It loads the state, creates a salt if there is none, adds the entry `{fingerprin
 
 ### `hams_secret_canary:post_dispatch_scan` [@ANCHOR: hams_secret_canary:post_dispatch_scan]
 
-`IrHttp._post_dispatch(cls, response)` (classmethod override in `models/ir_http.py`). Calls `super()`, then, if there is a request and `scannable_response(response)` is true, sets `environ["hams_secret_canary.scanned"] = True` (so the WSGI wrapper does not scan the same response again), takes the first 1 MiB of the body (`MAX_SCAN_BYTES`), decodes it as UTF-8 with replacement and calls `_scan_text(text, "response", path)`. Returns what `super()` returned and never changes the response: the leak has already happened, this only makes it noticed. Streamed, passthrough and non-text responses are skipped. Alert-backend exceptions propagate and would fail the request (fail fast). Test: `test_a_response_carrying_a_registered_token_raises_the_alarm`.
+`IrHttp._post_dispatch(cls, response)` (classmethod override in `models/ir_http.py`). Calls `super()`, then, if there is a request and `scannable_response(response)` is true, calls `wsgi_scan.mark_scanned()` (so the WSGI wrapper does not scan the same response again), takes the first 1 MiB of the body (`MAX_SCAN_BYTES`), decodes it as UTF-8 with replacement and calls `_scan_text(text, "response", path)`. Returns what `super()` returned and never changes the response: the leak has already happened, this only makes it noticed. Streamed, passthrough and non-text responses are skipped. Alert-backend exceptions propagate and would fail the request (fail fast). Test: `test_a_response_carrying_a_registered_token_raises_the_alarm`.
 
 ### `hams_secret_canary:scannable_response` [@ANCHOR: hams_secret_canary:scannable_response]
 
@@ -121,15 +121,19 @@ Returns the list of `(label, kind)` found, empty when nothing is registered yet 
 
 ### `hams_secret_canary:watch_log_records` [@ANCHOR: hams_secret_canary:watch_log_records]
 
-`_watch_log_records(factory)` in `models/secret_canary.py`. Takes the existing log-record factory and returns a replacement `make_record(*args, **kwargs)`. For every record created, if any database state is loaded and the logger name does not start with `hams_secret_canary` (so the alarm line cannot trigger itself), it formats the message and calls `find_matches` against each loaded database's table. On a match it rewrites the record with `redact` (the value becomes `[REDACTED:<label>]`, `args` cleared) and calls `alerts.logging_backend(None, Alarm(label, kind, "log", logger_name))`, then stops after the first database that matched. It uses only the cached tables, never touching the database, and so is safe inside logging. It adds a hash per token on every log call of the process. Test: `test_a_log_line_with_a_registered_secret_raises_the_alarm_and_is_redacted`.
+`_watch_log_records(factory)` in `models/secret_canary.py`. Takes the existing log-record factory and returns a replacement `make_record(*args, **kwargs)`. For every record created, if any database state is loaded and the logger name does not start with `hams_secret_canary` (so the alarm line cannot trigger itself), it formats the message and calls `find_matches` against each loaded database's table. On a match it rewrites the record with `redact` (the value becomes `[REDACTED:<label>]`, `args` cleared) and calls `alerts.logging_backend(None, Alarm(label, kind, "log", logger_name))`, then stops after the first database that matched. It uses only the cached tables, never touching the database, and so is safe inside logging. It adds a hash per token on every log call of the process. It never makes a logging call fail: a database with no salt or no fingerprints is skipped, and any exception while formatting or scanning (a malformed call such as `logger.info("%s %s", one_argument)`, which logging alone survives) leaves the record as it was made. Tests: `test_a_log_line_with_a_registered_secret_raises_the_alarm_and_is_redacted`, `test_logging_never_raises_in_the_caller_whatever_the_record_or_the_state`.
 
 ### `hams_secret_canary:scan_wsgi` [@ANCHOR: hams_secret_canary:scan_wsgi]
 
-`scan_wsgi(application, scan)` in `wsgi_scan.py`. Wraps a WSGI application and returns a callable taking `(environ, start_response)` or `(self, environ, start_response)` (it is installed over a method). It runs `application`, remembers the response `Content-Type`, and returns the body unchanged unless the type is text (`_is_text`) and `environ["hams_secret_canary.scanned"]` is not set; then it returns `_pass_through(body, path, scan)`. After the body is fully sent, `scan(text, path)` is called with the first `MAX_SCAN_BYTES` bytes decoded. A failure in `scan` is handled by the caller, not the client. It covers responses that never pass `ir.http._post_dispatch`, such as an XML-RPC fault built from an exception. Test: `test_text_is_scanned_after_it_is_sent_unchanged_even_when_split_in_chunks`.
+`scan_wsgi(application, scan)` in `wsgi_scan.py`. Wraps a WSGI application and returns a callable taking `(environ, start_response)` or `(self, environ, start_response)` (it is installed over a method). It runs `application`, remembers the response `Content-Type`, and returns the body unchanged unless the type is text (`_is_text`) and `mark_scanned()` was not called by `_post_dispatch` while serving this request; then it returns `_pass_through(body, path, scan)`. After the body is fully sent, `scan(text, path)` is called with the first `MAX_SCAN_BYTES` bytes decoded. A failure in `scan` is handled by the caller, not the client. It covers responses that never pass `ir.http._post_dispatch`, such as an XML-RPC fault built from an exception. Test: `test_text_is_scanned_after_it_is_sent_unchanged_even_when_split_in_chunks`.
 
 ### `hams_secret_canary:scan_after_request` [@ANCHOR: hams_secret_canary:scan_after_request]
 
 `scan_after_request(text, where)` in `models/secret_canary.py`, the `scan` callback of `scan_wsgi`. For every database whose table this process has loaded it runs `find_matches` on `text`; on a match it redacts `where`, opens a fresh cursor with `Registry(dbname).cursor()` (the request's own is gone), resolves the `zero_sudo.odoo_facility_service_internal` user id with the SQL function `zero_sudo_get_service_uid`, builds an environment for it and calls `alerts.raise_alarm` for each match with source `"response"`. Any exception is logged and swallowed (`audit-ignore-catch-all`: a detector must not break the response). Returns nothing. Test: `test_a_fault_naming_a_registered_secret_raises_the_alarm_once_without_the_value`.
+
+### `hams_secret_canary:mark_scanned` [@ANCHOR: hams_secret_canary:mark_scanned]
+
+`mark_scanned()` in `wsgi_scan.py`. Sets a flag on a `threading.local` that says the response of the request this thread is serving was already scanned by `IrHttp._post_dispatch`. `scan_wsgi` sets the flag to False before it runs the application and reads it right after the application returns (Odoo has built and finished the response by then), so the flag never carries over to the next request on the thread. It is not an environ key: Odoo's `request.httprequest.environ` is a filtered copy of the WSGI environ, so a key set there was invisible to the wrapper and every response the hook scanned was scanned again, raising each alarm twice. Tests: `TestWsgiScan.test_a_response_post_dispatch_already_scanned_is_not_scanned_again`, `TestResponseHook`.
 
 ### `hams_secret_canary:is_text` [@ANCHOR: hams_secret_canary:is_text]
 
@@ -162,6 +166,10 @@ Returns the list of `(label, kind)` found, empty when nothing is registered yet 
 ### `hams_secret_canary:record_backend` [@ANCHOR: hams_secret_canary:record_backend]
 
 `record_backend(env, alarm)` in `alerts.py`, registered as `record`. Does nothing when `env` is `None`. Otherwise it resolves the facility service account `zero_sudo.odoo_facility_service_internal` and creates one `zero_sudo.security.log` row with `reason = "secret_canary"` (a selection value this module adds), `login` set to the alarm label and `user_agent` set to `"<source>: <where>"`. The row joins the caller's transaction. Errors, such as a missing service account, propagate. No value is written. Test: `test_secret_in_a_response_body_raises_the_alarm_without_the_value`.
+
+### `hams_secret_canary:pager_backend` [@ANCHOR: hams_secret_canary:pager_backend]
+
+`pager_backend(env, alarm)` in `alerts.py`, registered as `pager` (it runs after the other three). Does nothing when `env` is `None` (a log hit) or when the `pager.incident` model does not exist (`pager_duty` not installed). Otherwise, inside a savepoint and as `pager_duty.user_pager_service_internal`, it calls `report_incident` with source `Secret canary: <label>`, severity `critical` and a description naming kind, label, source, the (already redacted) place and the UTC time; the matched value never appears. `report_incident` ignores the `pagerduty-maintenance` flag, drops a repeat of the same source for 60 seconds and then adds an occurrence to the open incident. Any exception is logged as a warning naming only its type and swallowed, so a pager failure cannot break the response being scanned. Test: `test_pager_backend_opens_one_critical_incident_without_the_value`.
 
 ### `hams_secret_canary:mail_backend` [@ANCHOR: hams_secret_canary:mail_backend]
 

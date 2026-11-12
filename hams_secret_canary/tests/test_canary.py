@@ -7,6 +7,7 @@ import stat
 import tempfile
 import sys
 import time
+import uuid
 import xmlrpc.client
 from unittest.mock import patch
 
@@ -102,6 +103,7 @@ class TestAlarm(CanaryCase):
     # Tests [@ANCHOR: hams_secret_canary:logging_backend]
     # Tests [@ANCHOR: hams_secret_canary:record_backend]
     # Tests [@ANCHOR: hams_secret_canary:mail_backend]
+    # Tests [@ANCHOR: hams_secret_canary:pager_backend]
 
     def test_secret_in_a_response_body_raises_the_alarm_without_the_value(self):
         mails_before = self.env["mail.mail"].search([]).ids
@@ -115,6 +117,21 @@ class TestAlarm(CanaryCase):
         for text in (*logs.output, rows.user_agent, mails.subject, mails.body_html, mails.email_to):
             self.assertNotIn(SECRET, text)
         self.assertIn("[REDACTED:test_secret]", rows.user_agent)
+
+    def test_pager_backend_opens_one_critical_incident_without_the_value(self):
+        if "pager.incident" not in self.env:
+            self.skipTest("pager_duty is not installed")
+        label = "test_pager_%s" % uuid.uuid4().hex[:8]  # report_incident rate-limits a source for 60 s in Redis: a fresh one each run
+        alerts.pager_backend(self.env, alerts.Alarm(label, "secret", "response", "/leak/[REDACTED:%s]" % label))
+        found = self.env["pager.incident"].sudo().search([("source", "=", "Secret canary: %s" % label)])
+        self.assertEqual(found.mapped("severity"), ["critical"])
+        self.assertIn(label, found.description)
+        self.assertIn("/leak/[REDACTED:%s]" % label, found.description)
+        with self.assertLogs("hams_secret_canary.alarm", "WARNING") as warned, patch.object(
+                type(self.env["pager.incident"]), "report_incident", side_effect=ValueError(SECRET)):
+            alerts.pager_backend(self.env, alerts.Alarm(label, "secret", "response", "/x"))  # must not raise
+        self.assertNotIn(SECRET, "\n".join(warned.output))
+        alerts.pager_backend(None, alerts.Alarm(label, "secret", "log", "some.logger"))  # a log hit has no env
 
     def test_a_clean_response_raises_nothing(self):
         with self.assertNoLogs("hams_secret_canary.alarm"):
@@ -145,6 +162,20 @@ class TestAlarm(CanaryCase):
         for text in alarms.output:
             self.assertNotIn(SECRET, text)
         self.assertIn("log", alarms.output[0])
+
+    def test_logging_never_raises_in_the_caller_whatever_the_record_or_the_state(self):
+        # Tests [@ANCHOR: hams_secret_canary:watch_log_records]
+        token = "abcdefghijklmnopqrstuvwxyz0123456789"
+        secret_canary._tables["no_state_db"] = (time.monotonic(), None, {})  # installed, but the state row is gone
+        self.addCleanup(secret_canary._tables.pop, "no_state_db", None)
+        logger = logging.getLogger("some.addon")
+        with self.assertNoLogs("hams_secret_canary.alarm"):
+            # Each of these is an ordinary line of an Odoo log, or a malformed call that logging itself survives.
+            logger.makeRecord("some.addon", logging.INFO, "f", 1, "fetched key %s", (token,), None)
+            logger.makeRecord("some.addon", logging.INFO, "f", 1, "two %s and %s", ("args",), None)  # too few arguments
+            logger.makeRecord("some.addon", logging.INFO, "f", 1, {"k": token}, (), None)
+            logger.makeRecord("some.addon", logging.ERROR, "f", 1,
+                              "Importing test framework, avoid importing from business modules", (), None, sinfo="stack")
 
 
 @tagged("post_install", "-at_install")
@@ -197,6 +228,9 @@ class TestResponseHook(CanaryCase, HamsHttpCase):
         secret_canary._tables.clear()
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
             self.url_open("/odoo")
+            with release_test_lock():  # the WSGI wrapper's own scan, were it to run, comes after the response
+                time.sleep(1)
+        self.assertEqual(len(logs.output), 1)  # one response, one alarm: the wrapper does not scan it again
         self.assertIn("page_token", logs.output[0])
 
 
@@ -230,8 +264,13 @@ class TestWsgiScan(HamsTransactionCase):
         self.assertEqual((body, sent), (payload, ["200 OK"]))
         self.assertEqual(seen, [(payload.decode(), "/xmlrpc/2/common")])
 
+    # Tests [@ANCHOR: hams_secret_canary:mark_scanned]
     def test_a_response_post_dispatch_already_scanned_is_not_scanned_again(self):
-        self.assertEqual(self._run(_wsgi(b"x"), {wsgi_scan.SCANNED: True})[1], [])
+        def application(environ, start_response):
+            wsgi_scan.mark_scanned()  # what `ir.http._post_dispatch` does while serving the request
+            return _wsgi(b"x")(environ, start_response)
+        self.assertEqual(self._run(application)[1], [])
+        self.assertEqual(len(self._run(_wsgi(b"x"))[1]), 1)  # the mark does not outlive its request
 
     # Tests [@ANCHOR: hams_secret_canary:is_text]
     def test_binary_responses_are_not_scanned(self):
