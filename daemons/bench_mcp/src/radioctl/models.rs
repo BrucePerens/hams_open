@@ -70,8 +70,12 @@ pub fn description_name(path: &Path) -> Result<String, String> {
 /// Every description in `dir`, sorted by id. A file that does not parse is skipped.
 pub fn list(dir: &Path) -> Result<Vec<Rig>, String> {
     // [@ANCHOR: radioctl_models_list]
-    let rd = std::fs::read_dir(dir)
-        .map_err(|e| format!("cannot read the rig description directory {}: {e}", dir.display()))?;
+    let rd = std::fs::read_dir(dir).map_err(|e| {
+        format!(
+            "cannot read the rig description directory {}: {e}",
+            dir.display()
+        )
+    })?;
     let mut out: Vec<Rig> = rd
         .filter_map(|e| e.ok())
         .map(|e| e.path())
@@ -145,14 +149,20 @@ mod tests {
             ("elecraft-kx3", "Elecraft KX3", "elecraft-ascii")
         );
         assert!(r.capabilities.contains(&"read-signal".to_string()));
-        assert!(r.capabilities.contains(&"identify".to_string()), "a capability on the second line of the array");
+        assert!(
+            r.capabilities.contains(&"identify".to_string()),
+            "a capability on the second line of the array"
+        );
         assert!(parse_description("nothing").is_err());
     }
 
     // Tests [@ANCHOR: radioctl_models_description_name]
     #[test]
     fn the_name_of_a_description_file_is_read_and_a_missing_file_is_an_error() {
-        assert_eq!(description_name(&rigs().join("elecraft-kx3.toml")).unwrap(), "Elecraft KX3");
+        assert_eq!(
+            description_name(&rigs().join("elecraft-kx3.toml")).unwrap(),
+            "Elecraft KX3"
+        );
         assert!(description_name(&rigs().join("no-such-rig.toml")).is_err());
     }
 
@@ -165,7 +175,11 @@ mod tests {
         assert_eq!(v["rigs"][0]["rig"], "elecraft-kx3");
         assert!(v["total_rigs"].as_u64().unwrap() > 200);
         let v = tool(&rigs(), &json!({"rig": "elecraft-kx3"})).unwrap();
-        assert!(v["capabilities"].as_array().unwrap().iter().any(|c| c == "split"));
+        assert!(v["capabilities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c == "split"));
         assert!(tool(&rigs(), &json!({"rig": "nope"})).is_err());
         assert!(tool(&rigs(), &json!({"limit": 0})).is_err());
         assert!(tool(std::path::Path::new("/nonexistent-rigs"), &json!({})).is_err());

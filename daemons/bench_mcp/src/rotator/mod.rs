@@ -69,7 +69,11 @@ fn degrees(c: &Value, key: &str, lo: f64, hi: f64) -> Result<Option<f64>, String
 /// `min_az`, `max_az`, `min_el`, `max_el` (degrees), `tolerance_deg` and `max_wait_s` (up to 600).
 pub fn parse_config(c: &Value) -> Result<Config, String> {
     // [@ANCHOR: rotator_config]
-    for (old, new) in [("rotctld_port", "radioctld_port"), ("rotctld_host", "radioctld_host"), ("allow_remote_rotctld", "allow_remote_radioctld")] {
+    for (old, new) in [
+        ("rotctld_port", "radioctld_port"),
+        ("rotctld_host", "radioctld_host"),
+        ("allow_remote_rotctld", "allow_remote_radioctld"),
+    ] {
         if c.get(old).is_some() {
             return Err(format!("{old} was the setting for Hamlib's rotctld and is gone: use {new} (the port of a radioctld with a [[rotator]] section)"));
         }

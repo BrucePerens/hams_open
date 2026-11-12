@@ -24,23 +24,40 @@ pub fn radioctld() -> PathBuf {
             return PathBuf::from(p);
         }
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("../radioctl/Cargo.toml");
-        let mut cargo = std::process::Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+        let mut cargo =
+            std::process::Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
         // The test run's own CARGO_* variables describe bench_mcp, not the radioctl workspace; only where to build is passed on.
         for (k, _) in std::env::vars_os() {
             let k = k.to_string_lossy().to_string();
-            if k.starts_with("CARGO_") && k != "CARGO_TARGET_DIR" && k != "CARGO_HOME" && k != "CARGO_BUILD_JOBS" {
+            if k.starts_with("CARGO_")
+                && k != "CARGO_TARGET_DIR"
+                && k != "CARGO_HOME"
+                && k != "CARGO_BUILD_JOBS"
+            {
                 cargo.env_remove(k);
             }
         }
         let out = cargo
-            .args(["build", "-p", "radioctld", "--bin", "radioctld", "--message-format=json", "--manifest-path"])
+            .args([
+                "build",
+                "-p",
+                "radioctld",
+                "--bin",
+                "radioctld",
+                "--message-format=json",
+                "--manifest-path",
+            ])
             .arg(&manifest)
             .output()
             .expect("cargo is needed to build radioctld for the tests");
         assert!(
             out.status.success(),
             "building radioctld (daemons/radioctl) failed: {}",
-            String::from_utf8_lossy(&out.stderr).lines().filter(|l| l.contains("error")).collect::<Vec<_>>().join(" | ")
+            String::from_utf8_lossy(&out.stderr)
+                .lines()
+                .filter(|l| l.contains("error"))
+                .collect::<Vec<_>>()
+                .join(" | ")
         );
         String::from_utf8_lossy(&out.stdout)
             .lines()

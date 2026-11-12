@@ -2079,13 +2079,17 @@ fn the_error_tail_is_the_end_of_the_output_and_a_run_without_a_state_is_not_purg
     let f = dir.join("stderr.txt");
     std::fs::write(&f, format!("{}END", "x".repeat(5000))).unwrap();
     let tail = store::read_tail(&f, 2000);
-    assert!(tail.len() == 2000 && tail.ends_with("END"), "the tail is the last bytes");
+    assert!(
+        tail.len() == 2000 && tail.ends_with("END"),
+        "the tail is the last bytes"
+    );
     std::fs::write(&f, "short").unwrap();
     assert_eq!(store::read_tail(&f, 2000), "short");
     assert_eq!(store::read_tail(&dir.join("none"), 2000), "");
     // A state file with no `state` field is left alone even with retention 0.
     std::fs::write(dir.join("runs/odd/state.json"), "{}").unwrap();
-    let cfg = parse_config(&json!({"dir": dir.display().to_string(), "retention_days": 0})).unwrap();
+    let cfg =
+        parse_config(&json!({"dir": dir.display().to_string(), "retention_days": 0})).unwrap();
     assert_eq!(store::purge(&cfg), 0);
     assert!(dir.join("runs/odd").exists());
     let _ = std::fs::remove_dir_all(&dir);

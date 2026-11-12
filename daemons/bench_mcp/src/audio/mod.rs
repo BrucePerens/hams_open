@@ -216,9 +216,10 @@ fn ports(c: &Value, key: &str) -> Result<BTreeMap<String, Port>, String> {
                     .to_string(),
                 match p.get("volume_cap") {
                     None | Some(Value::Null) => None,
-                    Some(x) => Some(x.as_f64().ok_or(format!(
-                        "{key}.{alias}: volume_cap must be a number"
-                    ))?),
+                    Some(x) => Some(
+                        x.as_f64()
+                            .ok_or(format!("{key}.{alias}: volume_cap must be a number"))?,
+                    ),
                 },
             ),
             _ => return Err(format!("{key}.{alias} must be a string or an object")),
@@ -855,7 +856,9 @@ mod tests {
         assert!(bad(r#","volume_cap":1.5"#));
         // A value of the wrong type is refused, not replaced by the default.
         assert!(bad(r#","volume_cap":"0.2""#));
-        assert!(bad(r#","outputs":{"tv":{"match":"HDMI","volume_cap":"loud"}}"#));
+        assert!(bad(
+            r#","outputs":{"tv":{"match":"HDMI","volume_cap":"loud"}}"#
+        ));
         assert!(bad(r#","retention_days":"x""#));
         assert!(bad(r#","retention_files":1.5"#));
         assert!(bad(r#","tts_rate":"fast""#));

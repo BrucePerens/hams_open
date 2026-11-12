@@ -130,6 +130,9 @@ fn every_anchor_is_documented_in_the_readme() {
     let declared = anchors(&rust_files(), &declared_marker());
     for id in declared {
         let cite = format!("[@{}: radioctl:{id}]", "ANCHOR");
-        assert!(readme.contains(&cite), "README or docs/stories lacks {cite}");
+        assert!(
+            readme.contains(&cite),
+            "README or docs/stories lacks {cite}"
+        );
     }
 }

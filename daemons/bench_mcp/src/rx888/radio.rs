@@ -604,7 +604,10 @@ mod tests {
         assert_eq!(mode_arg(&json!({}), Mode::Am), Ok(Mode::Am));
         assert_eq!(mode_arg(&json!({"mode": "lsb"}), Mode::Am), Ok(Mode::Lsb));
         assert!(mode_arg(&json!({"mode": "iq"}), Mode::Am).is_err());
-        assert!(mode_arg(&json!({"mode": 5}), Mode::Am).is_err(), "a mode that is not text is refused, not defaulted");
+        assert!(
+            mode_arg(&json!({"mode": 5}), Mode::Am).is_err(),
+            "a mode that is not text is refused, not defaulted"
+        );
         assert_eq!(mode_arg(&json!({"mode": null}), Mode::Am), Ok(Mode::Am));
         let cfg = Config::default();
         assert_eq!(ssrc(&cfg, 2).map(|s| s.get()), Ok(cfg.ssrc_base + 2));

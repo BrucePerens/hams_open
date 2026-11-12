@@ -80,7 +80,9 @@ pub fn config_text(name: &str, m: &Managed, port: u16, rigs: &Path, transmit: bo
         (Some(d), Some(s)) => format!("kind = \"serial\"\npath = \"{d}\"\nbaud = {s}\n"),
         _ => "kind = \"virtual\"\n".to_string(),
     };
-    let power = m.full_power_w.map_or(String::new(), |w| format!("tx_power_mw = {:.0}\n", w * 1000.0));
+    let power = m.full_power_w.map_or(String::new(), |w| {
+        format!("tx_power_mw = {:.0}\n", w * 1000.0)
+    });
     format!(
         "[server]\ncache_max_age_ms = 0\n\n[[rig]]\nname = \"{}\"\ndescription = \"{}\"\nlisten = \"127.0.0.1:{port}\"\ntransmit = {transmit}\n{power}\n[rig.transport]\n{transport}",
         super::safe_name(name),

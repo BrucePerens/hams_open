@@ -846,7 +846,12 @@ fn the_decode_argument_picks_the_decoder_and_reads_pins_by_name() {
     assert!(decode::run(&w, &json!({"type": "uart", "baud": 19200}))
         .unwrap_err()
         .contains("\"pin\""));
-    for (k, v) in [("baud", json!("19200")), ("bits", json!("8")), ("parity", json!(1)), ("invert", json!("yes"))] {
+    for (k, v) in [
+        ("baud", json!("19200")),
+        ("bits", json!("8")),
+        ("parity", json!(1)),
+        ("invert", json!("yes")),
+    ] {
         let e = decode::run(&w, &json!({"type": "uart", "pin": "A1", k: v})).unwrap_err();
         assert!(e.contains(&format!("decode {k} must be")), "{k}: {e}");
     }

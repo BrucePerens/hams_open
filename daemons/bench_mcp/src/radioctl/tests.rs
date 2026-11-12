@@ -83,7 +83,11 @@ fn config_takes_a_managed_or_an_existing_radioctld_and_refuses_the_rest() {
     };
     assert_eq!(
         (m.speed, m.rigs_dir.as_deref(), c.rx_ranges_hz.len()),
-        (Some(19200), Some(std::path::Path::new("/opt/radioctl/rigs")), 1)
+        (
+            Some(19200),
+            Some(std::path::Path::new("/opt/radioctl/rigs")),
+            1
+        )
     );
     assert_eq!(
         parse(r#""radioctld_port":4532"#).unwrap().source,
@@ -122,14 +126,20 @@ fn config_takes_a_managed_or_an_existing_radioctld_and_refuses_the_rest() {
     assert!(parse(r#""rig":"elecraft-kx3","full_power_w":0"#).is_err());
     assert!(parse(&format!(r#""radioctld_port":4532,{tx}"#)).is_ok());
     // A Hamlib model number gets a message that names the new setting; the old driver name gets one that names the new driver.
-    assert!(parse(r#""model":1"#).unwrap_err().contains("rig description"));
-    let e = crate::config::parse(r#"{"instruments":{"r":{"driver":"hamlib","model":1}}}"#).unwrap_err();
-    assert!(e.contains("\"hamlib\" driver was removed") && e.contains("radioctl"), "{e}");
-    // A remote daemon needs the owner's explicit word, and is then allowed.
+    assert!(parse(r#""model":1"#)
+        .unwrap_err()
+        .contains("rig description"));
+    let e =
+        crate::config::parse(r#"{"instruments":{"r":{"driver":"hamlib","model":1}}}"#).unwrap_err();
     assert!(
-        parse(r#""radioctld_port":4532,"radioctld_host":"192.0.2.9","allow_remote_radioctld":true"#)
-            .is_ok()
+        e.contains("\"hamlib\" driver was removed") && e.contains("radioctl"),
+        "{e}"
     );
+    // A remote daemon needs the owner's explicit word, and is then allowed.
+    assert!(parse(
+        r#""radioctld_port":4532,"radioctld_host":"192.0.2.9","allow_remote_radioctld":true"#
+    )
+    .is_ok());
 }
 
 // Tests [@ANCHOR: radioctl_command]
@@ -217,11 +227,27 @@ fn the_daemon_config_binds_localhost_and_carries_only_the_owners_settings() {
         full_power_w: Some(15.0),
     };
     let t = rigd::config_text("a b", &serial, 5001, rigs, false);
-    assert!(t.contains("listen = \"127.0.0.1:5001\"\ntransmit = false\n"), "{t}");
-    assert!(t.contains("name = \"a_b\"") && t.contains("description = \"/opt/radioctl/rigs/icom-ic-7300.toml\""), "{t}");
-    assert!(t.contains("kind = \"serial\"\npath = \"/dev/ttyUSB0\"\nbaud = 9600\n"), "{t}");
-    assert!(t.contains("cache_max_age_ms = 0"), "reads are never served from the daemon's cache");
-    assert!(t.contains("transmit = false\ntx_power_mw = 15000\n"), "the owner's full-scale power is the daemon's: {t}");
+    assert!(
+        t.contains("listen = \"127.0.0.1:5001\"\ntransmit = false\n"),
+        "{t}"
+    );
+    assert!(
+        t.contains("name = \"a_b\"")
+            && t.contains("description = \"/opt/radioctl/rigs/icom-ic-7300.toml\""),
+        "{t}"
+    );
+    assert!(
+        t.contains("kind = \"serial\"\npath = \"/dev/ttyUSB0\"\nbaud = 9600\n"),
+        "{t}"
+    );
+    assert!(
+        t.contains("cache_max_age_ms = 0"),
+        "reads are never served from the daemon's cache"
+    );
+    assert!(
+        t.contains("transmit = false\ntx_power_mw = 15000\n"),
+        "the owner's full-scale power is the daemon's: {t}"
+    );
     let virt = Managed {
         rig: "elecraft-kx3".into(),
         device: None,
@@ -231,13 +257,24 @@ fn the_daemon_config_binds_localhost_and_carries_only_the_owners_settings() {
         full_power_w: None,
     };
     let t = rigd::config_text("v", &virt, 5002, rigs, true);
-    assert!(t.contains("transmit = true") && t.contains("kind = \"virtual\"") && !t.contains("tx_power_mw"), "{t}");
+    assert!(
+        t.contains("transmit = true")
+            && t.contains("kind = \"virtual\"")
+            && !t.contains("tx_power_mw"),
+        "{t}"
+    );
     // A quote in the directory cannot break out of the string.
     let t = rigd::config_text("v", &virt, 5002, std::path::Path::new("/a\"b"), false);
     assert!(t.contains("/a\\\"b/elecraft-kx3.toml"), "{t}");
     // The rigs directory: the config's, else the environment's, else an error that says what to set.
-    let own = Managed { rigs_dir: Some("/x/rigs".into()), ..virt.clone() };
-    assert_eq!(rigd::rigs_dir(&own).unwrap(), std::path::Path::new("/x/rigs"));
+    let own = Managed {
+        rigs_dir: Some("/x/rigs".into()),
+        ..virt.clone()
+    };
+    assert_eq!(
+        rigd::rigs_dir(&own).unwrap(),
+        std::path::Path::new("/x/rigs")
+    );
 }
 
 // Tests [@ANCHOR: radioctl_open]
@@ -261,7 +298,10 @@ fn the_managed_daemon_starts_on_demand_stops_on_request_and_starts_again() {
     assert_eq!(st["listens_on"], "127.0.0.1");
     let port = st["port"].as_u64().unwrap() as u16;
     let mut c = open(&b[0]).unwrap();
-    assert_eq!(c.read_number("get_freq", Some("Frequency")).unwrap(), 14_060_000.0);
+    assert_eq!(
+        c.read_number("get_freq", Some("Frequency")).unwrap(),
+        14_060_000.0
+    );
     // Asking again does not start a second daemon.
     assert_eq!(
         call(&b, "bench_radioctl_daemon", &json!({"action": "start"})).unwrap()["port"],
@@ -568,8 +608,16 @@ fn set_changes_the_virtual_rig_and_reads_every_change_back() {
         .iter()
         .any(|c| c["set"] == "split" && c["read_back"] == true));
     // radioctld serves no noise blanker function: the refusal is the rig's, with its code and a next step.
-    let e = call(&b, "bench_radioctl_set", &json!({"functions": {"NB": true}})).unwrap_err();
-    assert!(e.contains("RPRT -11") && e.contains("Next") || e.contains("not available"), "{e}");
+    let e = call(
+        &b,
+        "bench_radioctl_set",
+        &json!({"functions": {"NB": true}}),
+    )
+    .unwrap_err();
+    assert!(
+        e.contains("RPRT -11") && e.contains("Next") || e.contains("not available"),
+        "{e}"
+    );
     // The information tools are allowed at a higher tier.
     assert_eq!(
         call(&b, "bench_radioctl_get", &json!({"item": "frequency"})).unwrap()["frequency_hz"],
@@ -670,7 +718,10 @@ fn a_memory_channel_is_recalled_and_a_keyed_rig_is_left_alone() {
     });
     let scripted = fake_bench("t_mem_ok", fake.port, "read_config", "");
     let v = call(&scripted, "bench_radioctl_memory", &json!({"channel": 3})).unwrap();
-    assert_eq!((v["channel"].clone(), v["frequency_hz"].clone()), (json!(3.0), json!(7_100_000.0)));
+    assert_eq!(
+        (v["channel"].clone(), v["frequency_hz"].clone()),
+        (json!(3.0), json!(7_100_000.0))
+    );
     assert!(fake.received().contains(&"set_mem 3".to_string()));
     let mut radio = Radio::new(&[-50.0]);
     radio.ptt = true;
@@ -811,7 +862,9 @@ fn a_daemon_that_exits_at_start_is_reported_with_the_end_of_its_log() {
         e.contains("exited") && e.contains("its log says") && e.contains("Next:"),
         "{e}"
     );
-    assert!(std::fs::read_to_string(dir.0.join("t_exits.radioctld.log")).is_ok_and(|l| !l.is_empty()));
+    assert!(
+        std::fs::read_to_string(dir.0.join("t_exits.radioctld.log")).is_ok_and(|l| !l.is_empty())
+    );
 }
 
 // Tests [@ANCHOR: radioctl_shutdown]
@@ -901,7 +954,12 @@ fn the_station_tools_list_the_table_and_the_owner_edits_it() {
     );
     let n = v["stations"].as_array().unwrap().len();
     assert!(n > 20 && v["note"].as_str().unwrap().contains("Never assume"));
-    let v = call(&b, "bench_radioctl_stations", &json!({"frequency_hz": 7.1e6})).unwrap();
+    let v = call(
+        &b,
+        "bench_radioctl_stations",
+        &json!({"frequency_hz": 7.1e6}),
+    )
+    .unwrap();
     assert!(v["references_now"]
         .as_array()
         .unwrap()
@@ -1472,7 +1530,9 @@ fn a_test_is_refused_above_the_power_cap_outside_the_ranges_in_a_mode_not_allowe
     }
     assert!(with("confirm_dummy_load", json!("yes")).is_err());
     assert!(
-        with("mode", json!(5)).unwrap_err().contains("mode must be text"),
+        with("mode", json!(5))
+            .unwrap_err()
+            .contains("mode must be text"),
         "a mode that is not text is refused, not replaced by the default"
     );
     let mut none = good_args();
@@ -1517,7 +1577,10 @@ fn dump_state_is_read_to_its_done_line_which_has_no_rprt() {
     let full = c.dump_state().unwrap();
     assert_eq!(full.lines.last().map(String::as_str), Some("done"));
     let min = txtools::rfpower_min(&full.lines);
-    assert!(min.is_some_and(|m| (0.0..=1.0).contains(&m)), "the rig's lowest RFPOWER setting: {min:?}");
+    assert!(
+        min.is_some_and(|m| (0.0..=1.0).contains(&m)),
+        "the rig's lowest RFPOWER setting: {min:?}"
+    );
     // The simulation answers the same way.
     let (fake, _sim) = serve_sim(Sim::new());
     let mut c = Client::connect("127.0.0.1", fake.port, Duration::from_secs(2)).unwrap();
@@ -1538,7 +1601,8 @@ fn dump_state_is_read_to_its_done_line_which_has_no_rprt() {
 // Tests [@ANCHOR: radioctl_tx_full_scale]
 // Tests [@ANCHOR: radioctl_tx_power_convert]
 #[test]
-fn the_power_setting_is_a_fraction_of_the_transmit_range_power_the_daemon_reports_and_without_one_nothing_is_sent() {
+fn the_power_setting_is_a_fraction_of_the_transmit_range_power_the_daemon_reports_and_without_one_nothing_is_sent(
+) {
     // The scripted rig reports 100 W for 7 MHz: 5 W is 0.05 and back.
     let (fake, _sim) = serve_sim(Sim::new());
     let mut c = Client::connect("127.0.0.1", fake.port, Duration::from_secs(2)).unwrap();
@@ -1546,7 +1610,10 @@ fn the_power_setting_is_a_fraction_of_the_transmit_range_power_the_daemon_report
     assert!((txtools::fraction_to_watts(&mut c, 0.5, 7.05e6).unwrap() - 50.0).abs() < 1e-9);
     // A frequency outside every transmit range has no scale: an error that says what to check.
     let e = txtools::watts_to_fraction(&mut c, 5.0, 14.2e6).unwrap_err();
-    assert!(e.contains("no transmit range") && e.contains("tx_power_mw"), "{e}");
+    assert!(
+        e.contains("no transmit range") && e.contains("tx_power_mw"),
+        "{e}"
+    );
     // A daemon whose gate is closed advertises no transmit range at all.
     let closed = FakeRadioctld::serve(|c| {
         if c == "dump_state" {
@@ -1579,7 +1646,10 @@ fn the_rig_is_read_first_and_a_split_xit_keyed_or_over_cap_rig_is_refused_withou
     over["power_w"] = json!(150);
     let a_over = txtools::check_args(&over, &wide).unwrap();
     let e = txtools::preflight(&mut c, &wide, &a_over).unwrap_err();
-    assert!(e.contains("full-scale") && e.contains("Nothing was sent"), "{e}");
+    assert!(
+        e.contains("full-scale") && e.contains("Nothing was sent"),
+        "{e}"
+    );
     assert_eq!(
         txtools::rfpower_min(&["level_gran=0=0,0,0;12=0.05,1,0.002;".into()]),
         Some(0.05)
@@ -1758,8 +1828,7 @@ fn a_key_test_passes_every_gate_probes_keys_releases_restores_and_logs_each_inte
     assert!(
         b.sim.lock().unwrap().log[n..]
             .iter()
-            .all(|c| c.starts_with("get_")
-                || c.starts_with("dump_state")),
+            .all(|c| c.starts_with("get_") || c.starts_with("dump_state")),
         "{:?}",
         &b.sim.lock().unwrap().log[n..]
     );
@@ -2235,7 +2304,12 @@ fn the_first_contact_releases_a_rig_left_keyed_by_a_crash_and_says_so_in_the_res
         s.rfpower = 0.5;
     }
     tx::forget_checked("tx_start");
-    let v = call(&b.insts, "bench_radioctl_get", &json!({"item": "frequency"})).unwrap();
+    let v = call(
+        &b.insts,
+        "bench_radioctl_get",
+        &json!({"item": "frequency"}),
+    )
+    .unwrap();
     assert_eq!(v["startup_release"]["stuck_ptt_found"], true, "{v}");
     assert_eq!(v["startup_release"]["released"], true);
     assert!(
@@ -2248,15 +2322,22 @@ fn the_first_contact_releases_a_rig_left_keyed_by_a_crash_and_says_so_in_the_res
         .iter()
         .any(|l| l["event"] == "startup_release"));
     // The note is given once.
-    assert!(
-        call(&b.insts, "bench_radioctl_get", &json!({"item": "frequency"}))
-            .unwrap()
-            .get("startup_release")
-            .is_none()
-    );
+    assert!(call(
+        &b.insts,
+        "bench_radioctl_get",
+        &json!({"item": "frequency"})
+    )
+    .unwrap()
+    .get("startup_release")
+    .is_none());
     // A rig that was not transmitting gets only a precaution, and no note in the result.
     tx::forget_checked("tx_start");
-    let v = call(&b.insts, "bench_radioctl_get", &json!({"item": "frequency"})).unwrap();
+    let v = call(
+        &b.insts,
+        "bench_radioctl_get",
+        &json!({"item": "frequency"}),
+    )
+    .unwrap();
     assert!(v.get("startup_release").is_none());
     assert!(
         b.log_lines()

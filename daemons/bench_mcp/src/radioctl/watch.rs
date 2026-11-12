@@ -114,7 +114,11 @@ mod tests {
             ("ptt", "receive".to_string()),
         ];
         let c = changes(&with_mode, &without_mode);
-        assert_eq!(c, vec![("mode", "USB", "unavailable")], "vfo and ptt did not change");
+        assert_eq!(
+            c,
+            vec![("mode", "USB", "unavailable")],
+            "vfo and ptt did not change"
+        );
         assert!(changes(&without_mode, &with_mode).len() == 1);
     }
 }
