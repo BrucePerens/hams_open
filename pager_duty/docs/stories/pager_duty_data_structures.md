@@ -256,3 +256,39 @@
 **Methods.** `get_current_on_duty_admin`.
 
 **See also:** test `test_01_adapter_creates_ticket_and_event (tests/test_helpdesk_adapter.py)`.
+
+### `_NoRedirect` in `generalized_monitor.py` [@ANCHOR: pager_duty:pager_duty_daemon_generalized_monitor_no_redirect]
+
+**Purpose and location.** Refuses every HTTP redirect for the pager monitor daemon. `urllib` copies all request headers, including the bearer key of the monitor's service account, to wherever a 3xx answer points; a redirect to another host would hand that key over. Defined in `pager_duty/daemon/generalized_monitor.py`; the module builds its private opener `_OPENER = urllib.request.build_opener(_NoRedirect)` from it and the monitor's `OdooClient.execute` sends every Odoo call through that opener.
+
+**Definition.** `class _NoRedirect(urllib.request.HTTPRedirectHandler)` with the single method `redirect_request(self, req, fp, code, msg, headers, newurl)`, which always returns `None`.
+
+**Behaviour.** Returning `None` makes `urllib` raise the `HTTPError` of the 3xx status instead of following it; `OdooClient.execute` lets that error out, so the caller sees the status. No attributes, no state: one shared instance, safe on any thread. The class is private to the module; the MCP server and the PAT-expiry check each define their own identical copy (unknown why they do not share one).
+
+**Functions that touch it.** `_NoRedirect.redirect_request`, `OdooClient.execute`.
+
+**See also:** test `test_the_monitor_odoo_client_refuses_a_redirect` in `pager_duty/tests/test_credential_redirect.py`, which asserts that the first host sees the key and a second host never receives a request.
+
+### `_NoRedirect` in `pager_mcp_server.py` [@ANCHOR: pager_duty:pager_duty_daemon_pager_mcp_server_no_redirect]
+
+**Purpose and location.** Refuses every HTTP redirect for the pager MCP server, so the bearer key it uses to read pager incidents cannot be forwarded to another host by a redirect. Defined in `pager_duty/daemon/pager_mcp_server.py`; the module's `_OPENER = urllib.request.build_opener(_NoRedirect)` is what its `OdooClient.execute` sends through.
+
+**Definition.** `class _NoRedirect(urllib.request.HTTPRedirectHandler)` with the single method `redirect_request(self, req, fp, code, msg, headers, newurl)`, which always returns `None`.
+
+**Behaviour.** The 3xx answer surfaces as an `HTTPError`; `OdooClient.execute` turns errors into a `RuntimeError` that names the status. Stateless, shared, safe on any thread; an identical copy of the handler in the monitor and in the PAT-expiry check.
+
+**Functions that touch it.** `_NoRedirect.redirect_request`, `OdooClient.execute`.
+
+**See also:** test `test_the_mcp_odoo_client_refuses_a_redirect` in `pager_duty/tests/test_credential_redirect.py`.
+
+### `_NoRedirect` in `check_github_pat_expiry.py` [@ANCHOR: pager_duty:pager_duty_daemon_check_github_pat_expiry_no_redirect]
+
+**Purpose and location.** Refuses every HTTP redirect in the GitHub token expiry check, so the personal access token it sends in its `Authorization` header cannot be forwarded to another host by a redirect from the GitHub API URL. Defined in `pager_duty/daemon/check_github_pat_expiry.py`; the module's `_OPENER = urllib.request.build_opener(_NoRedirect)` is used by `_fetch_expiry_header`.
+
+**Definition.** `class _NoRedirect(urllib.request.HTTPRedirectHandler)` with the single method `redirect_request(self, req, fp, code, msg, headers, newurl)`, which always returns `None`.
+
+**Behaviour.** A redirect answer raises the `HTTPError` of the 3xx status to the caller of `_fetch_expiry_header`. Stateless, shared, safe on any thread; the token itself is a secret and is never logged by this class.
+
+**Functions that touch it.** `_NoRedirect.redirect_request`, `_fetch_expiry_header`.
+
+**See also:** test `test_the_github_pat_expiry_check_refuses_a_redirect` in `pager_duty/tests/test_credential_redirect.py`.

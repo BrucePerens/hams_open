@@ -47,6 +47,7 @@ if _DAEMON_DIR not in sys.path:
 from generalized_monitor import severity_for_days_left  # noqa: E402
 
 
+# [@ANCHOR: pager_duty_daemon_check_github_pat_expiry_no_redirect]
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
     points; a refused redirect surfaces as the HTTPError of the 3xx status."""

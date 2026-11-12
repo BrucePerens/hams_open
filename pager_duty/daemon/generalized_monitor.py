@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pagerduty_maintenance  # noqa: E402
 
 
+# [@ANCHOR: pager_duty_daemon_generalized_monitor_no_redirect]
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
     points; a refused redirect surfaces as the HTTPError of the 3xx status."""

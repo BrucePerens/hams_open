@@ -77,6 +77,7 @@ class _RedirectProbe:
 class TestPagerDaemonsRefuseRedirects(HamsTransactionCase):
     def test_the_monitor_odoo_client_refuses_a_redirect(self):
         # Tests [@ANCHOR: pager_duty:no_redirect_monitor]
+        # Tests [@ANCHOR: pager_duty_daemon_generalized_monitor_no_redirect]
         # Tests [@ANCHOR: pager_duty:odoo_client_execute]
         with _RedirectProbe() as probe:
             client = generalized_monitor.OdooClient(probe.url, "db", "pager_service_internal", "monitor-key")
@@ -88,6 +89,7 @@ class TestPagerDaemonsRefuseRedirects(HamsTransactionCase):
 
     def test_the_mcp_odoo_client_refuses_a_redirect(self):
         # Tests [@ANCHOR: pager_duty:no_redirect_mcp]
+        # Tests [@ANCHOR: pager_duty_daemon_pager_mcp_server_no_redirect]
         # Tests [@ANCHOR: pager_duty:mcp_odoo_client_execute]
         pager_mcp_server = importlib.import_module("odoo.addons.pager_duty.daemon.pager_mcp_server")
         with _RedirectProbe() as probe:
@@ -100,6 +102,7 @@ class TestPagerDaemonsRefuseRedirects(HamsTransactionCase):
 
     def test_the_github_pat_expiry_check_refuses_a_redirect(self):
         # Tests [@ANCHOR: pager_duty:no_redirect_github_pat_expiry]
+        # Tests [@ANCHOR: pager_duty_daemon_check_github_pat_expiry_no_redirect]
         # Tests [@ANCHOR: pager_duty:fetch_github_pat_expiry]
         with _RedirectProbe() as probe:
             self.safe_patch("odoo.addons.pager_duty.daemon.check_github_pat_expiry.GITHUB_USER_URL", probe.url + "/user")
