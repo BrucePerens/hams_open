@@ -287,7 +287,6 @@ fn the_engine_refuses_what_the_board_cannot_do() {
 
 // Tests [@ANCHOR: radioctl_usb_family_engine_for]
 // Tests [@ANCHOR: radioctl_usb_family_twin_for]
-// Tests [@ANCHOR: radioctl_core_usb_link_usb_config]
 // Tests [@ANCHOR: radioctl_core_usb_link_usb_config_type]
 #[tokio::test]
 async fn a_rig_over_the_link_and_the_fake_bus_sets_up_and_tunes() {

@@ -73,8 +73,6 @@ fn shared_library_dir() -> PathBuf {
 // Tests [@ANCHOR: radioctl_capi_rotator_get_position]
 // Tests [@ANCHOR: radioctl_capi_rotator_stop]
 // Tests [@ANCHOR: radioctl_capi_rotator_park]
-// Tests [@ANCHOR: radioctl_core_usb_link_command]
-// Tests [@ANCHOR: radioctl_core_usb_link_command_type]
 #[test]
 fn the_c_program_passes_against_the_shared_library() {
     let lib = shared_library_dir();
