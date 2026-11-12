@@ -191,8 +191,35 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Returns.** `(steps in the last hour, breaker open)`. The count saturates at 255 (`u8::MAX`). **Errors.** None. **Side effects.** Calls `expire`, so it mutates the guard (it takes `&mut self`) but changes no answer a later `check` would not also reach. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs): `(2, false)`, `(2, true)` while open, and `(0, false)` after the hour.
 
-- [@ANCHOR: relay_broker:relay_broker_broker_set_system_time] (broker.rs) Steps the clock when enabled and inside the ceilings; audits every outcome with before, target, source and evidence.
-- [@ANCHOR: relay_broker:relay_broker_broker_time_status] (broker.rs) The clock and the step limits; read-only, always served.
+### `Broker::set_system_time` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_set_system_time]
+
+**Purpose.** Steps the clock when the config enables it (`set_time = true`) and the ceilings in `time_guard.rs` allow it. Every outcome is audited with the clock before, the target, the source and the evidence. The relay uses it to set time on a machine without Internet.
+
+**Signature.** `fn set_system_time(&mut self, peer: Peer, now: Instant, target: u64, source: TimeSource, agreeing: u8) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Caller, audit only. |
+| `now` | `Instant` | Monotonic time for the guard. |
+| `target` | `u64`, Unix seconds | The time to set. |
+| `source` | `TimeSource` | The relay's claim of origin (`Gps` is proof alone). |
+| `agreeing` | `u8` | Count of agreeing independent sources. |
+
+**Returns.** `TimeSet { before_unix_secs, after_unix_secs }`. **Errors.** `Denied` ("clock steps not enabled", or the `TimeDenial::reason`), `Failed` when `clock_settime` fails (needs `CAP_SYS_TIME`). **Side effects.** Changes `CLOCK_REALTIME`; records the step in the guard only after success. **Security.** The broker applies its own limits and does not trust the relay. **Tests.** `the_clock_is_stepped_only_when_enabled_and_inside_the_ceilings` (tests/broker.rs).
+
+### `Broker::time_status` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_time_status]
+
+**Purpose.** Tells the relay the broker's clock and its step limits, so it can decide whether a step is worth attempting. Read-only and always served (it is not behind `set_time`), but still rate-limited and audited.
+
+**Signature.** `fn time_status(&mut self, peer: Peer, now: Instant) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Caller, audit only. |
+| `now` | `Instant` | Passed to `TimeGuard::status`. |
+
+**Returns.** `Response::TimeStatus { now_unix_secs, steps_last_hour, breaker_open, min_target_unix_secs }`, the last being `BUILD_DATE_UNIX_SECS`. **Errors.** None. **Side effects.** Reads the clock; expires guard state; one audit line. **Tests.** `the_clock_is_stepped_only_when_enabled_and_inside_the_ceilings` (tests/broker.rs).
+
 - [@ANCHOR: relay_broker:relay_broker_os_system_time] (os.rs) The wall clock now in Unix seconds (the Linux layer also steps it with `clock_settime`).
 ### `json_escape` (audit.rs) [@ANCHOR: relay_broker:relay_broker_json_escape]
 
@@ -254,12 +281,86 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Returns.** `true` when the UID or the primary GID is listed. An empty list permits no one: a broker with no config answers nobody. **Errors.** None. **Side effects.** None; pure. **Security.** Only the primary GID counts, not supplementary groups. **Tests.** `only_listed_uids_or_gids_pass_and_an_empty_list_passes_nobody` (auth.rs).
 
-- [@ANCHOR: relay_broker:relay_broker_broker_new] (broker.rs) Assembles a broker from a config, an audit log and an OS layer.
-- [@ANCHOR: relay_broker:relay_broker_broker_os] (broker.rs) The OS layer (the server uses it for peer credentials).
-- [@ANCHOR: relay_broker:relay_broker_broker_log] (broker.rs) Writes one audit record; a failed write is ignored here (the log is best effort once
-- [@ANCHOR: relay_broker:relay_broker_broker_handle] (broker.rs) Decides and performs one request for an already-authenticated peer. Returns the response
-- [@ANCHOR: relay_broker:relay_broker_broker_open_device] (broker.rs) The open action: lexical check, node walk, open, post-open check. Any failure closes the
-- [@ANCHOR: relay_broker:relay_broker_broker_grant] (broker.rs) The provisioning action: which of `groups` the caller lacks, applied only when the
+### `Broker::new` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_new]
+
+**Purpose.** Assembles the one `Broker` value that every connection shares: the allow-list, the open policy, the feature switches, the clock guard, the rate limiter, the audit log and the OS layer. `Broker` is the data structure that holds all broker state: public fields `allow: AllowList`, `policy: Policy`, `apply_groups`, `bind_udp_ports: Vec<u16>`, `hub_enabled`, `update_package`, `set_time` (all switches default off except the time port list), and private `time_guard`, `rate`, `audit`, `os: Box<dyn Os + Send>`.
+
+**Signature.** `pub fn new(config: &Config, audit: AuditLog, os: Box<dyn Os + Send>) -> Broker`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `config` | `&Config` | The parsed config; borrowed, its lists are cloned. |
+| `audit` | `AuditLog` | The opened log; moved in and owned by the broker. |
+| `os` | `Box<dyn Os + Send>` | The OS layer: `LinuxOs` in production, a fake in tests (the only test seam). Owned. |
+
+**Returns.** The broker. **Errors.** None. **Side effects.** None; builds `TimeGuard::new(max_unproven_step_secs, max_time_steps_per_hour)` and `RateLimiter::new(rate_per_minute)`. **Concurrency.** The value is used from one thread, one connection at a time. **Tests.** `an_unlisted_peer_is_closed_before_any_byte_is_read` and the other builders in tests/broker.rs.
+
+### `Broker::os` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_os]
+
+**Purpose.** Read access to the broker's OS layer. The server uses it to read peer credentials of an accepted socket (`peer_credentials`) before the allow-list is consulted, so authentication goes through the same seam as every other system effect.
+
+**Signature.** `pub fn os(&self) -> &dyn Os`
+
+**Arguments.** None besides `&self`. **Returns.** A shared borrow of the `Os` trait object, valid while the broker is borrowed. **Errors.** None. **Side effects.** None; callers can only call the `&self` methods of the trait. **Concurrency.** No locking. **Tests.** `an_unlisted_peer_is_closed_before_any_byte_is_read` (tests/broker.rs) goes through it.
+
+### `Broker::log` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_log]
+
+**Purpose.** Writes one audit record for a peer. Every action method in `broker.rs` calls it for every outcome, allowed or refused, so the log is the complete history of what the broker decided.
+
+**Signature.** `pub fn log(&mut self, peer: Peer, action: &'static str, outcome: &'static str, detail: String)`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Kernel credentials; `uid` and `pid` go into the record. |
+| `action` | `&'static str` | Action name such as `open_device`, `bind_udp`, `set_system_time`. |
+| `outcome` | `&'static str` | `allowed`, `denied`, `failed`, `dry_run`, `applied`, `rate_limited`. |
+| `detail` | `String` | Free text (path, reason); moved in, escaped on output. |
+
+**Returns.** Nothing. **Errors.** A failed write is ignored here: the log is best effort once it has been opened (opening it is mandatory, `AuditLog::open`). **Side effects.** Appends to `events.jsonl` through `AuditLog::record`. **Tests.** `provisioning_reports_by_default_and_applies_only_when_configured` (tests/broker.rs) reads the lines back.
+
+### `Broker::handle` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_handle]
+
+**Purpose.** The one function that turns an authenticated, parsed `Request` into a `Response`. There is no string anywhere that becomes a command: it rate-limits the peer, dispatches on the request variant to the action method, and every path audits. The server calls it once per connection, after `AllowList::permits` and the wire decode.
+
+**Signature.** `pub fn handle(&mut self, peer: Peer, req: &Request, now: Instant) -> (Response, Option<OwnedFd>)`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Authenticated credentials of the caller. |
+| `req` | `&Request` | One of `ListDevices`, `OpenDevice`, `GrantGroup`, `ProvisionGroups`, `BindUdp`, `HubStart`, `HubStop`, `HubStatus`, `UpdatePackage`, `SetSystemTime`, `TimeStatus`. |
+| `now` | `Instant` | Monotonic time, used for the rate limit and the clock guard. |
+
+**Returns.** The response and, for a successful open or bind, the descriptor to pass (owned; the server sends it with SCM_RIGHTS and drops it). `ListDevices` filters by class and removes any device whose USB id is on `deny_usb`. **Errors.** Reported as `Response::Error` with a `Status` (`RateLimited`, `Denied`, `Failed`); nothing panics. **Side effects.** Audit record per request; the action's own effects. **Tests.** `policy_refuses_disks_protected_devices_traversal_and_symlink_games` and `a_peer_over_its_rate_is_refused_and_logged` (tests/broker.rs).
+
+### `Broker::open_device` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_open_device]
+
+**Purpose.** The open action, the broker's core service: it opens one device node for the relay so the worker never needs `/dev` access and never learns another device's path. Order: lexical check (`Policy::check_path`), node walk (`check_node`), open, post-open descriptor check (`check_fd`).
+
+**Signature.** `fn open_device(&mut self, peer: Peer, class: DeviceClass, read_only: bool, path: &str) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Caller, for the audit record. |
+| `class` | `DeviceClass` | `Serial` or `Audio`; the node's major must belong to it. |
+| `read_only` | `bool` | Open read-only when true, read-write otherwise. |
+| `path` | `&str` | The requested device path; peer-supplied, untrusted. |
+
+**Returns.** `(Response::Opened, Some(fd))` on success; otherwise `Denied` (policy refusal, with the stable reason) or `Failed` (the open failed) and no descriptor. Any failure closes the descriptor by drop. **Side effects.** Opens the node `O_NOFOLLOW`, `O_CLOEXEC`, `O_NOCTTY`; audit record per outcome. **Security.** The post-open check re-examines the descriptor itself, closing the race between walk and open. **Tests.** `policy_refuses_disks_protected_devices_traversal_and_symlink_games` and `an_unreadable_usb_identity_is_refused_unless_the_config_allows_it` (tests/broker.rs).
+
+### `Broker::grant` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_grant]
+
+**Purpose.** Serves `grant_group` (one group) and `provision_groups` (`dialout` and `audio`): reports which of those groups the caller's own account lacks and, only when `apply_groups = true`, adds the account to them. The account is the peer's own UID; a peer can never name another user.
+
+**Signature.** `fn grant(&mut self, peer: Peer, action: &'static str, groups: &[Group]) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | The account that is looked up (`username(uid)`). |
+| `action` | `&'static str` | `grant_group` or `provision_groups`, for the audit record. |
+| `groups` | `&[Group]` | The groups asked about; `Group` is a closed enum, so no arbitrary group name exists. |
+
+**Returns.** `Response::GroupReport { applied, user, groups }`: `applied` is true only when the change was made, `groups` lists those that were (or would be) added, empty when nothing is missing; no descriptor. **Errors.** `Failed` for "unknown uid" or when `add_to_group` fails (it stops at the first failure). **Side effects.** With `apply_groups` set, runs `gpasswd -a USER GROUP` with a fixed argv through the OS layer; audit outcome `allowed` (nothing missing), `applied`, or `dry_run`. **Tests.** `provisioning_reports_by_default_and_applies_only_when_configured` (tests/broker.rs).
+
 ### `call` (client.rs) [@ANCHOR: relay_broker:relay_broker_client_call]
 
 **Purpose.** The request-response exchange on an already verified stream: sends `req` and waits for the answer. The descriptor, if any, is the opened device of an `Opened` response; descriptors passed with any other response are dropped.
@@ -319,12 +420,84 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Returns.** `(Response, Option<OwnedFd>)`; the descriptor is present only for an `Opened` response and is owned by the caller. **Errors.** Connect failure, `PermissionDenied`, `InvalidData`, timeouts. **Concurrency.** Blocking, one connection per call. **Tests.** `the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_when_idle` and `the_client_refuses_a_server_that_is_not_an_expected_account_and_sends_it_nothing` (tests/broker.rs).
 
-- [@ANCHOR: relay_broker:relay_broker_parse_usb_pair] (config.rs) Parses `vvvv:pppp` (hex) into a vendor/product pair.
-- [@ANCHOR: relay_broker:relay_broker_config_parse] (config.rs) Parses the file text. Comments start with `#`; blank lines are skipped.
-- [@ANCHOR: relay_broker:relay_broker_config_load] (config.rs) Reads and parses `path`, first requiring it to be owned by `owner_uid` (0 in production)
-- [@ANCHOR: relay_broker:relay_broker_main_parse_args] (cli.rs) Parses argv; unknown options are an error.
-- [@ANCHOR: relay_broker:relay_broker_remove_stale_socket] (cli.rs) Removes a leftover socket at the `--socket` path from an earlier run; any other kind of file there is an error and is left alone. The listener is then bound and set to mode 0660.
-- [@ANCHOR: relay_broker:relay_broker_main] (cli.rs) Entry point.
+### `parse_usb_pair` (config.rs) [@ANCHOR: relay_broker:relay_broker_parse_usb_pair]
+
+**Purpose.** Parses `vvvv:pppp` (hex) into a vendor/product pair for the `deny_usb` config key. Private helper of `Config::parse`.
+
+**Signature.** `fn parse_usb_pair(s: &str) -> Option<(u16, u16)>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `s` | `&str` | Text such as `08bb:29c0`; split on the first `:`, each half parsed as base-16 `u16` (so no `0x` prefix). |
+
+**Returns.** `Some((vendor, product))`, or `None` for a missing colon or a non-hex or out-of-range half; the caller turns `None` into the config error "expected vvvv:pppp". **Side effects.** None; pure. **Tests.** `keys_are_closed_and_lists_replace_defaults` (config.rs).
+
+### `Config::parse` (config.rs) [@ANCHOR: relay_broker:relay_broker_config_parse]
+
+**Purpose.** Parses the config file text into a `Config`. Comments start with `#`; blank lines are skipped; every other line is `key = value`. The schema is closed: an unknown key is an error, so a typo cannot silently weaken a control. `ConfigError { line: usize (1-based, 0 for file-level), message: String }` is the error type.
+
+**Signature.** `pub fn parse(text: &str) -> Result<Config, ConfigError>`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `allow_uid`, `allow_gid` | none | Repeatable; the allow-list (peer UID or primary GID). |
+| `apply_groups`, `hub`, `update_package`, `set_time`, `allow_unreadable_usb` | false | `true` or `false` switches. |
+| `max_unproven_step_secs`, `max_time_steps_per_hour` | 30, 4 | Clock ceilings. |
+| `bind_udp_port` | 123 | Repeatable; the first line replaces the default list. |
+| `audit_log` | `/var/log/hams-relay-broker/events.jsonl` | Log path. |
+| `rate_per_minute`, `idle_exit_secs` | 60, 60 | Rate limit; idle exit. |
+| `device_root` | `/dev` | Absolute path. |
+| `serial_major`, `audio_major`, `deny_usb`, `deny_path` | built-in lists | Repeatable; the first line replaces the built-in list. |
+
+**Returns.** The `Config`. **Errors.** `ConfigError` with the line for a missing `=`, a bad number, uid, port or major, a non-boolean, a relative `device_root`, a bad `vvvv:pppp`, or an unknown key. **Side effects.** None; pure. **Tests.** `keys_are_closed_and_lists_replace_defaults` (config.rs).
+
+### `Config::load` (config.rs) [@ANCHOR: relay_broker:relay_broker_config_load]
+
+**Purpose.** Reads and parses the config file after checking its ownership: first requiring it to be owned by `owner_uid` (0 in production) and writable by nobody else, because the config holds the allow-list and the policy. The owner is a parameter so the tests can load a file they own; the binary passes `--config-owner` (default 0).
+
+**Signature.** `pub fn load(path: &Path, owner_uid: u32) -> Result<Config, ConfigError>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The config file, normally `/etc/hams-relay-broker.conf`. |
+| `owner_uid` | `u32` | The uid that must own it. |
+
+**Returns.** The parsed `Config`. **Errors.** `ConfigError` with line 0 for an unreadable file, a wrong owner, or a group- or world-writable mode (`mode & 0o022`); otherwise the errors of `Config::parse`. **Side effects.** Reads the file; the `metadata` check and the read are separate calls, so the check is not atomic with the read. **Tests.** `load_requires_the_expected_owner_and_private_mode` (config.rs).
+
+### `parse_args` (cli.rs) [@ANCHOR: relay_broker:relay_broker_main_parse_args]
+
+**Purpose.** Parses argv for `hams-relay-broker`; unknown options are an error. The private `Args { config: PathBuf (default `/etc/hams-relay-broker.conf`), socket: Option<PathBuf>, config_owner: u32 (default 0) }` is its result.
+
+**Signature.** `fn parse_args(argv: &[String]) -> Result<Args, String>` (private)
+
+| Option | Meaning |
+|---|---|
+| `--config PATH` | Config file. |
+| `--socket PATH` | A path to bind when no socket is activated (development). |
+| `--config-owner UID` | Uid that must own the config. |
+
+**Returns.** The `Args`. **Errors.** `Err(text)` for an unknown option, a missing value ("--x needs a value") or a bad uid; `run_main` prints it and exits 2. The first element of `argv` is skipped as the program name. **Side effects.** None. **Tests.** `options_are_closed_and_defaults_point_at_etc` (cli.rs).
+
+### `remove_stale_socket` (cli.rs) [@ANCHOR: relay_broker:relay_broker_remove_stale_socket]
+
+**Purpose.** Removes a leftover socket at the `--socket` path from an earlier run, so a restart can bind; any other kind of file there is an error and is left alone, so a wrong path cannot delete a real file.
+
+**Signature.** `fn remove_stale_socket(path: &Path) -> io::Result<()>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `path` | `&Path` | The socket path; examined with `symlink_metadata`, so a symlink is not followed (and is refused). |
+
+**Returns.** `Ok(())` after removing a socket, or when nothing exists. **Errors.** An `io::Error` "exists and is not a socket; not removing it" for anything else, or the error from the metadata or removal. **Side effects.** Deletes the socket file. **Tests.** `only_a_leftover_socket_is_removed` (cli.rs).
+
+### `run_main` (cli.rs) [@ANCHOR: relay_broker:relay_broker_main]
+
+**Purpose.** The program: `main.rs` calls it so the relay package can build the same binary. It parses argv, loads the config, opens the audit log and the listener (the systemd-activated fd 3, else binds `--socket` with mode 0660), builds the `Broker` with `LinuxOs` and serves until idle for `idle_exit_secs`.
+
+**Signature.** `pub fn run_main() -> ExitCode`
+
+**Arguments.** Read from the process argv (see `parse_args`). **Returns.** `ExitCode::SUCCESS` after an idle exit; exit 2 for a bad option, config, audit log or listener (message to stderr: `hams-relay-broker: ...`); `FAILURE` when the accept loop errors. **Concurrency.** Single-threaded, one connection at a time; blocking in `run`. **Side effects.** Creates the log and the socket; may delete a stale socket. **Security.** The broker refuses to start unauditable or with an unsafe config. **Tests.** `the_program_exits_2_on_bad_options_or_config_and_0_after_an_idle_run` (tests/cli.rs).
+
 - [@ANCHOR: relay_broker:relay_broker_kind_of_mode] (os.rs) Maps `st_mode`/`st_rdev` to a `NodeKind`.
 - [@ANCHOR: relay_broker:relay_broker_read_hex_u16] (os.rs) Reads a sysfs attribute holding a hexadecimal id (`idVendor`, `idProduct`).
 - [@ANCHOR: relay_broker:relay_broker_usb_identity_from_sysfs] (os.rs) Walks up from a sysfs device directory (at most eight levels) to the USB device that holds
@@ -346,8 +519,31 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 - [@ANCHOR: relay_broker:relay_broker_policy_check_kind] (policy.rs) Accepts a node kind only when it is a character device of `class`.
 - [@ANCHOR: relay_broker:relay_broker_policy_check_node] (policy.rs) The filesystem check: every directory on the way from the device root is a real
 - [@ANCHOR: relay_broker:relay_broker_policy_check_fd] (policy.rs) The post-open check on the descriptor itself.
-- [@ANCHOR: relay_broker:relay_broker_rate_limiter_new] (ratelimit.rs) `per_minute` requests sustained, with a burst of the same size. Zero means one a minute.
-- [@ANCHOR: relay_broker:relay_broker_rate_limiter_allow] (ratelimit.rs) Takes one token for `uid` at time `now`; false when the bucket is empty. At most 256
+### `RateLimiter::new` (ratelimit.rs) [@ANCHOR: relay_broker:relay_broker_rate_limiter_new]
+
+**Purpose.** Builds the per-UID token-bucket limiter: `per_minute` requests sustained, with a burst of the same size. Zero means one a minute. `RateLimiter` holds `capacity`, `refill_every` and a map uid to `(tokens, refill accounted up to, last request)`, so a worker looping on a refused open cannot turn the broker into a log flood or a CPU sink.
+
+**Signature.** `pub fn new(per_minute: u32) -> RateLimiter`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `per_minute` | `u32` | Sustained rate; capacity is `max(per_minute, 1)` and one token returns every `60 s / capacity`. Config default 60. |
+
+**Returns.** An empty limiter. **Errors.** None. **Side effects.** None. **Tests.** `a_burst_is_allowed_then_refused_until_time_passes_per_uid` and `the_sustained_rate_keeps_the_fraction_and_a_huge_rate_does_not_wrap` (ratelimit.rs).
+
+### `RateLimiter::allow` (ratelimit.rs) [@ANCHOR: relay_broker:relay_broker_rate_limiter_allow]
+
+**Purpose.** Takes one token for `uid` at time `now`; false when the bucket is empty. Called first in `Broker::handle`.
+
+**Signature.** `pub fn allow(&mut self, uid: u32, now: Instant) -> bool`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `uid` | `u32` | The peer's UID; each UID has its own bucket, so one noisy peer does not starve another. |
+| `now` | `Instant` | Monotonic time; refills are whole tokens, keeping the fractional remainder. |
+
+**Returns.** `true` if a token was taken, `false` when empty. **Errors.** None; time going backwards is saturated. **Memory bound.** At most 256 peers are tracked; beyond that the peer that asked longest ago is dropped (not the one refilled longest ago). **Tests.** `a_burst_is_allowed_then_refused_until_time_passes_per_uid`, `the_peer_evicted_is_the_one_that_asked_longest_ago` (ratelimit.rs); `a_peer_over_its_rate_is_refused_and_logged` (tests/broker.rs).
+
 - [@ANCHOR: relay_broker:relay_broker_serve_connection] (server.rs) Serves one connection to completion. Never panics; every failure is an `Outcome`.
 - [@ANCHOR: relay_broker:relay_broker_run] (server.rs) Accepts connections until `idle` passes with none, or until `max_connections` have been
 - [@ANCHOR: relay_broker:relay_broker_activated_listener] (server.rs) The listener systemd passed (`LISTEN_PID` is this process and `LISTEN_FDS` is 1), if any.
@@ -426,8 +622,54 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 - [@ANCHOR: relay_broker:relay_broker_hub_runner_run] (hub_runner.rs) `HubRunner::run(program, args)`: runs one helper program (ip, hostapd or dnsmasq) to completion with a cleared environment and a fixed PATH. Success is exit status 0; any other status is an error naming the program and the status. A program that cannot start returns its spawn error.
 - [@ANCHOR: relay_broker:relay_broker_hub_runner_start] (hub_runner.rs) `HubRunner::start(hostapd_conf, dnsmasq_conf, interface, address)`: stops any earlier hub, creates the 0700 state directory, writes both configs and the interface name privately, gives the interface its /24 address, brings it up and starts hostapd then dnsmasq. Any failure stops what was started and returns the error.
 - [@ANCHOR: relay_broker:relay_broker_hub_runner_stop] (hub_runner.rs) `HubRunner::stop`: sends SIGTERM to hostapd and dnsmasq only when the pid file names a live process of that exact name, flushes the interface address, and removes the config, pid and interface files. Stopping a hub that is not running succeeds.
-- [@ANCHOR: relay_broker:relay_broker_broker_update_package] (broker.rs) `Broker::update_package(peer)`: the update action. Denied (and audited) unless `update_package = true` in the config; when enabled it asks the OS layer to leave the root-owned path unit its request file and answers `Updated`. A failure is audited and returned as `Failed`. The caller cannot supply any command.
-- [@ANCHOR: relay_broker:relay_broker_broker_bind_udp] (broker.rs) `Broker::bind_udp(peer, port)`: binds a UDP socket on a port the config lists (default 123 only) and passes the descriptor, so the unprivileged relay never holds the privilege. An unlisted port is `Denied`, a bind error `Failed`; each outcome is audited.
-- [@ANCHOR: relay_broker:relay_broker_broker_hub_start] (broker.rs) `Broker::hub_start(peer, settings)`: the hub start action. Denied unless the hub is enabled in the config; validates the settings and builds both configs from the fixed templates (a bad setting is `Denied` and never reaches the OS), then starts the hub and answers with its status. Every outcome is audited.
-- [@ANCHOR: relay_broker:relay_broker_broker_hub_stop] (broker.rs) `Broker::hub_stop(peer)`: the hub stop action. Denied unless the hub is enabled; otherwise stops both programs through the OS layer and answers with the resulting hub status. A failure is audited and returned as `Failed`.
+### `Broker::update_package` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_update_package]
+
+**Purpose.** The package update action: it asks for the relay package upgrade, which the OS layer turns into a request file for the package's root-owned path unit. The command is one fixed command (`apt-get install --only-upgrade hams-local-relay`, or the `dnf` equivalent) that the caller cannot add to or change, so a verified-signature repository the owner configured is the only source of what installs.
+
+**Signature.** `fn update_package(&mut self, peer: Peer) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Caller, audit only; the request carries no parameters. |
+
+**Returns.** `Response::Updated`. **Errors.** `Denied` "updates not enabled" unless `update_package = true`; `Failed` when the request file cannot be created. **Side effects.** `Os::update_package` (see `LinuxOs::update_package`); audited. **Tests.** `update_package_runs_only_when_the_config_enables_it` (tests/broker.rs).
+
+### `Broker::bind_udp` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_bind_udp]
+
+**Purpose.** The bind action: only a port the config lists (default 123, the time service). The broker binds the UDP socket and passes the descriptor, so the relay never needs a privilege to hold a privileged port.
+
+**Signature.** `fn bind_udp(&mut self, peer: Peer, port: u16) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Caller, audit only. |
+| `port` | `u16` | Requested port; must be in `bind_udp_ports`. |
+
+**Returns.** `(Response::Opened, Some(fd))`, the descriptor owned by the caller. **Errors.** `Denied` "port not allowed"; `Failed` when the bind fails (port in use, no privilege). **Side effects.** Binds a socket in the broker's process via `Os::bind_udp`; the descriptor is closed in the broker after sending. **Tests.** `bind_udp_serves_only_listed_ports_and_passes_a_descriptor` (tests/broker.rs).
+
+### `Broker::hub_start` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_hub_start]
+
+**Purpose.** The hub start action: the stand-alone emergency hub. Settings are validated, both config files (`hostapd.conf`, `dnsmasq.conf`) are produced from the fixed templates in `hub.rs`, and the programs are started through the OS layer.
+
+**Signature.** `fn hub_start(&mut self, peer: Peer, settings: &HubSettings) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Caller, audit only. |
+| `settings` | `&HubSettings` | Typed settings (interface, address, SSID and the rest); validated by `hub::hostapd_conf` and `hub::dnsmasq_conf`; no free text reaches a command. |
+
+**Returns.** `Response::Hub { access_point, dhcp }` with the status after the start. **Errors.** `Denied` "hub not enabled" unless `hub = true`, or the validation message; `Failed` when the start fails. **Side effects.** Writes the files (mode 0600), configures the interface, starts `hostapd` and `dnsmasq`; audited with the interface name. **Tests.** `the_hub_is_refused_unless_enabled_and_then_written_from_the_templates` (tests/broker.rs).
+
+### `Broker::hub_stop` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_hub_stop]
+
+**Purpose.** The hub stop action: allowed only when the hub is enabled; stops both programs through the OS layer and answers with the hub status.
+
+**Signature.** `fn hub_stop(&mut self, peer: Peer) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Caller, audit only. |
+
+**Returns.** `Response::Hub { access_point, dhcp }`, both normally false. **Errors.** `Denied` "hub not enabled"; `Failed` when stopping fails. **Side effects.** Signals only the processes named in the broker's own pid files (see `HubRunner::stop`); audited. **Tests.** `the_hub_is_refused_unless_enabled_and_then_written_from_the_templates` (tests/broker.rs).
+
 - [@ANCHOR: relay_broker:relay_broker_linux_bind_udp] (os.rs) `LinuxOs::bind_udp(port)`: opens a UDP socket (dual stack IPv6 with v6only off when the kernel has IPv6, plain IPv4 otherwise), close-on-exec, binds every address on `port` and returns the descriptor. An address already in use or a refused port is the returned `io::Error`.
