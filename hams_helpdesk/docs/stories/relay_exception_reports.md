@@ -91,11 +91,11 @@ Exception raised by the validation functions. `status` is an HTTP-like code (400
 
 ### `[@ANCHOR: hams_helpdesk:relay_report_rejected_init]` `ReportRejected(status, reason)`
 
-**Purpose.** Builds the exception. **Call interface.** `status`: int, an HTTP-like code; `reason`: str, a fixed word. Both are kept as attributes; the exception's message is `reason`. No errors, no I/O.
+**Purpose.** Builds the exception. **Call interface.** `status`: int, an HTTP-like code; `reason`: str, a fixed word. Both are kept as attributes; the exception's message is `reason`. No errors, no I/O. The class derives from `Exception`, is raised only by `validate_report` and `parse_body` in `models/relay_exception_schema.py`, and is caught in `relay_exception.py`'s `_submit`, which logs `reason` at debug level and answers `REJECTED` to the relay, so a sender learns only that the report was refused. Because `reason` is always a fixed word, a hostile report cannot put its own text into the log through the exception. Tested by the rejection cases of `tests/test_relay_exceptions.py`.
 
 ### `[@ANCHOR: hams_helpdesk:relay_is_int]` `_is_int(value)`
 
-**Purpose.** True for an integer that is not a boolean (Python counts `True` as an int; a report may not). **Call interface.** `value`: any object. Returns bool. Pure.
+**Purpose.** True for an integer that is not a boolean (Python counts `True` as an int; a report may not). **Call interface.** `value`: any object. Returns bool. Pure. **Used by** `validate_report` for the schema version `v` and for the integer fields `uptime_s`, `count` and `occurred_at`, so a JSON `true` can never pass as the number 1. Never raises for any Python object (it is one `isinstance` test plus the boolean exclusion). Tested through the `wrong_type` and `wrong_version` rejections in `tests/test_relay_exceptions.py`.
 
 ### `[@ANCHOR: hams_helpdesk:relay_clean]` `_clean(text)`
 
@@ -107,7 +107,7 @@ Exception raised by the validation functions. `status` is an HTTP-like code (400
 
 ### `[@ANCHOR: hams_helpdesk:relay_function_label]` `_function_label(path)`
 
-**Purpose.** The function as a ticket title shows it: the path without the leading `hams_local_relay::`. **Call interface.** `path`: str, a normalised frame. Returns str (the path unchanged when it is another crate's). Pure.
+**Purpose.** The function as a ticket title shows it: the path without the leading `hams_local_relay::`. **Call interface.** `path`: str, a normalised frame. Returns str (the path unchanged when it is another crate's). Pure. It first runs the argument through `_path_of`, then strips the crate name `hams_local_relay` and the two colons of `::` only when the path starts with that prefix, so `hams_local_relay::multiplexer::handle_command` becomes `multiplexer::handle_command`. It is used by `build_report` to make the ticket name (`panic in multiplexer::handle_command`, cut to 200 characters). It reads no state and cannot raise for a string; the label is display only and is not part of the fingerprint.
 
 ### `[@ANCHOR: hams_helpdesk:relay_parse_body]` `parse_body(raw)`
 
