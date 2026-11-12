@@ -82,6 +82,7 @@ class TestFormShield(HamsTransactionCase):
         response = shield_response(self.env, "contact", "203.0.113.200")
         self.assertTrue(self.shield.check("contact", response).ok)
 
+    # Tests [@ANCHOR: form_shield_ir_http_ir_http]
     def test_honeypot_marks_a_program(self):
         # Tests [@ANCHOR: form_shield:check]
         response = shield_response(self.env, "contact", GUEST)

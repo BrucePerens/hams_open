@@ -55,6 +55,7 @@ MEMBER_LIMITS = (
 )
 
 
+# [@ANCHOR: form_shield_form_shield_form_shield]
 class FormShield(models.AbstractModel):
     _name = "form.shield"
     _description = "Form shield (anti-spam checks for public forms)"

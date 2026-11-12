@@ -7,6 +7,7 @@ SERVICE_ACCOUNT = "form_shield.user_form_shield_service"
 DEFAULT_RETENTION_DAYS = 90
 
 
+# [@ANCHOR: form_shield_form_shield_rejection_form_shield_rejection]
 class FormShieldRejection(models.Model):
     """One counter per day, form and reason. No address, no email, no text a visitor typed."""
 

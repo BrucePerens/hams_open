@@ -33,6 +33,7 @@ MESSAGES = {
 }
 
 
+# [@ANCHOR: form_shield_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 

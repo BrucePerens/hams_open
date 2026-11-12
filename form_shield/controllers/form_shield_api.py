@@ -5,6 +5,7 @@ from odoo.http import request
 from .. import tokens
 
 
+# [@ANCHOR: form_shield_form_shield_api_form_shield_controller]
 class FormShieldController(http.Controller):
 
     # [@ANCHOR: form_shield:challenge_route]
