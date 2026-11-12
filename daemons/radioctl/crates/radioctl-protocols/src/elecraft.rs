@@ -79,7 +79,9 @@ pub fn level_wire(level: Level) -> LevelWire {
         Level::Preamp => ("PA", 0, 0),
         // Receiver-board levels with no Elecraft command; the empty prefix matches no reply and the
         // encoder refuses both before it asks for a wire form.
-        Level::Dither | Level::Preselector | Level::Antenna => ("", 0, 0),
+        Level::Dither | Level::Preselector => ("", 0, 0),
+        // `ANn;` (Programmer's Reference p. 7): the antenna jack, 1 or 2.
+        Level::Antenna => ("AN", 1, 2),
     };
     LevelWire { prefix, min, max }
 }
@@ -300,9 +302,15 @@ impl ElecraftEngine {
                 }
                 Self::set(format!("BW{:04};", hz.0 / 10))
             }
-            Op::GetLevel(Level::Dither | Level::Preselector | Level::Antenna)
-            | Op::SetLevel(Level::Dither | Level::Preselector | Level::Antenna, _) => {
+            Op::GetLevel(Level::Dither | Level::Preselector)
+            | Op::SetLevel(Level::Dither | Level::Preselector, _) => {
                 return Err(Self::unsupported("no such level on this rig"));
+            }
+            Op::SetLevel(Level::Antenna, port) => {
+                if *port < 1 || *port > u16::from(self.desc.levels.antenna_ports.min(2)) {
+                    return Err(Self::unsupported("no such antenna port on this model"));
+                }
+                Self::set(format!("AN{port};"))
             }
             Op::SetLevel(level @ (Level::Attenuator | Level::Preamp), value) => {
                 let step = crate::attenuation::step_of(&self.desc, *level, *value)?;
@@ -389,6 +397,11 @@ impl ElecraftEngine {
                 .and_then(|step| crate::attenuation::value_of(&self.desc, level, step))
                 .map(|v| Observation::Level(level, v));
         }
+        if name == "AN" {
+            return number(1)
+                .filter(|p| (1..=u16::from(self.desc.levels.antenna_ports.min(2))).contains(p))
+                .map(|p| Observation::Level(Level::Antenna, p));
+        }
         if let Some(level) = [
             Level::AfGain,
             Level::RfGain,
@@ -452,6 +465,9 @@ impl ProtocolEngine for ElecraftEngine {
         let level_get = |level: Level| {
             if matches!(level, Level::Dither | Level::Preselector) {
                 return Err(Self::unsupported("no such level on this rig"));
+            }
+            if level == Level::Antenna && self.desc.levels.antenna_ports == 0 {
+                return Err(Self::unsupported("no antenna port list on this model"));
             }
             if crate::attenuation::is_front_end_level(level) {
                 crate::attenuation::step_of(&self.desc, level, 0)?;
@@ -722,6 +738,7 @@ mod tests {
             b"KS020;"
         );
         assert_eq!(bytes(&mut e, Op::GetLevel(Level::MicGain)), b"MG;");
+        assert!(e.encode(&Op::GetLevel(Level::Antenna)).is_err(), "KX3 lists no ports");
         assert_eq!(bytes(&mut e, Op::SetLevel(Level::RfPower, 5)), b"PC005;");
         assert_eq!(bytes(&mut e, Op::GetSignal), b"SM;");
         assert_eq!(bytes(&mut e, Op::GetPower), b"PO;");

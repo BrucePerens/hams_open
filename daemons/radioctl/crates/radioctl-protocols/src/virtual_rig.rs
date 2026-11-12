@@ -1727,6 +1727,19 @@ impl VirtualRig {
                 self.state.cw_sent.push(sent);
                 None
             }
+            ("AN", "") if self.desc.levels.antenna_ports > 0 => {
+                let port = self.state.levels.get(&Level::Antenna).copied().unwrap_or(1);
+                Some(format!("AN{port};"))
+            }
+            ("AN", data) => match data.parse::<u16>() {
+                Ok(p) if data.len() == 1
+                    && (1..=u16::from(self.desc.levels.antenna_ports.min(2))).contains(&p) =>
+                {
+                    self.state.levels.insert(Level::Antenna, p);
+                    None
+                }
+                _ => refuse(),
+            },
             (prefix @ ("RA" | "PA"), data) => {
                 attenuation::virtual_elecraft(&self.desc, &mut self.state.levels, prefix, data)
             }
@@ -2122,6 +2135,21 @@ mod tests {
         assert!(rig.feed(b"K22;K31;", T0).is_empty());
         assert_eq!(rig.feed(b"K2;K3;", T0), b"K22;K31;");
         assert_eq!(rig.feed(b"K24;K32;", T0), b"?;?;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_elecraft_command]
+    #[test]
+    fn a_k3_has_two_antenna_jacks_and_a_kx3_lists_none() {
+        let desc = radioctl_core::rigfile::parse(include_str!("../../../rigs/elecraft-k3.toml"))
+            .expect("k3 file")
+            .description;
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        assert_eq!(rig.feed(b"AN;", T0), b"AN1;");
+        assert!(rig.feed(b"AN2;", T0).is_empty());
+        assert_eq!(rig.feed(b"AN;", T0), b"AN2;");
+        assert_eq!(rig.feed(b"AN3;AN0;AN12;", T0), b"?;?;?;");
+        assert_eq!(rig.state().levels.get(&Level::Antenna), Some(&2));
+        assert_eq!(kx3_rig().feed(b"AN;", T0), b"?;");
     }
 
     // Tests [@ANCHOR: radioctl_virtual_elecraft_if]
