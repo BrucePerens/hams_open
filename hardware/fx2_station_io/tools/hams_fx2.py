@@ -397,6 +397,7 @@ def get_edges(t: Transport) -> Tuple[int, List[Tuple[int, int, float]]]:
     return d[0], out
 
 
+# [@ANCHOR: hardware_hams_fx2_heartbeater]
 class Heartbeater:
     """Sequence-numbered heartbeats with the commanded state, as the relay's transmit task sends."""
 

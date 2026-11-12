@@ -130,6 +130,30 @@ class LoaderTests(unittest.TestCase):
         self.assertFalse(sim.running)
 
 
+class HeartbeaterTests(unittest.TestCase):
+    # Tests [@ANCHOR: hardware_hams_fx2_heartbeater]
+    def test_each_beat_sends_the_next_sequence_number_and_the_commanded_state_and_the_sequence_wraps(self):
+        calls = []
+
+        class Recording(h.Transport):
+            def ctrl_in(self, req_type, req, value, index, length):
+                calls.append((req_type, req, value, index))
+                record = bytearray(h.STATUS_LEN)
+                record[0] = h.STATUS_LEN
+                record[11:13] = value.to_bytes(2, "little")   # the board echoes the last sequence number
+                return bytes(record)
+
+        beater = h.Heartbeater(Recording())
+        self.assertEqual((beater.seq, beater.commanded), (0, 0))
+        self.assertEqual(beater.beat().last_seq, 1)
+        beater.commanded = 0x05
+        self.assertEqual(beater.beat().last_seq, 2)
+        beater.seq = 0xFFFF
+        self.assertEqual(beater.beat().last_seq, 0, "the sequence number wraps at 16 bits")
+        self.assertEqual([c[1:] for c in calls], [(h.REQ_HEARTBEAT, 1, 0), (h.REQ_HEARTBEAT, 2, 5), (h.REQ_HEARTBEAT, 0, 5)])
+        self.assertTrue(all(c[0] == 0xC0 for c in calls), "heartbeats are vendor control IN requests")
+
+
 class GpioTests(unittest.TestCase):
     # Tests [@ANCHOR: HAMS_FX2_gpio]
     def setUp(self):
