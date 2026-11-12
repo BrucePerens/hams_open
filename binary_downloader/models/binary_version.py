@@ -11,6 +11,7 @@ from odoo.addons.zero_sudo import public_rpc
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: binary_downloader_binary_version_binary_version]
 class BinaryVersion(models.Model):
     _inherit = ["binary_downloader.mixin"]
     _name = "binary.version"

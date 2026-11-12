@@ -9,6 +9,7 @@ from odoo.addons.zero_sudo import public_rpc
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: binary_downloader_binary_tenant_link_binary_tenant_link]
 class BinaryTenantLink(models.Model):
     _inherit = ["mail.thread", "mail.activity.mixin"]
     _name = "binary.tenant.link"

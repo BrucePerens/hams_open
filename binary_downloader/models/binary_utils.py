@@ -91,6 +91,7 @@ def _safe_response_geturl(response):
     return geturl()
 
 
+# [@ANCHOR: binary_downloader_binary_utils_binary_downloader_mixin]
 class BinaryDownloaderMixin(models.AbstractModel):
     _name = "binary_downloader.mixin"
     _description = "Binary Downloader Mixin"
