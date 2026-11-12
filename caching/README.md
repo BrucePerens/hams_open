@@ -38,7 +38,7 @@ The caching system is fully aware of Odoo's multi-website architecture. Each web
 This module eliminates the need for manual version bumping or complex cache-busting query parameters.
 
 **Filesystem-Linked Invalidation:**
-- **Filesystem Scan:** When `/sw.js` is requested and no cached scan result exists (nothing scans during server startup itself), the module performs an efficient recursive scan using `os.scandir` of all `static/` directories across all installed modules ([@ANCHOR: COMM_caching_fs_scan_logic]). Hidden files (starting with `.`) are ignored to prevent caching metadata or source control files; `static/description/` is skipped and symbolic links are not followed. The result is cached through `distributed_redis_cache`'s `@distributed_cache()`: in each worker's memory, and in Redis for up to 24 hours.
+- **Filesystem Scan:** When `/sw.js` is requested and no cached scan result exists (nothing scans during server startup itself), the module performs an efficient recursive scan using `os.scandir` of all `static/` directories across all installed modules (entry `COMM_caching_fs_scan_logic` above). Hidden files (starting with `.`) are ignored to prevent caching metadata or source control files; `static/description/` is skipped and symbolic links are not followed. The result is cached through `distributed_redis_cache`'s `@distributed_cache()`: in each worker's memory, and in Redis for up to 24 hours.
 - **MTime Tracking:** It identifies the latest modification timestamp (`mtime`) among all discovered assets.
 - **Dynamic Service Worker (SW) Generation:** This timestamp is injected into the `/sw.js` payload as part of the cache name `odoo-assets-cache-<mtime>-v<version>` (the version is the website's invalidation version), effectively versioning the Service Worker script itself. The per-file size limit and the quota are injected the same way.
 - **Automatic Refresh:** When a new scan finds a different latest modification time, the Service Worker's signature changes. A server restart alone does not guarantee a new scan: it empties only each worker's in-memory copy of the scan result, and the Redis copy can survive for up to 24 hours. (The `/sw.js` template text itself is also cached in Redis for 24 hours.) Browsers detect this update on the next visit (`/sw.js` is served with `Cache-Control: no-cache`), triggering a background installation of the new worker, which takes over immediately and purges this module's stale `odoo-assets-cache-*` caches; open pages then show an "Update Available" notice with a **Reload** button.
@@ -75,13 +75,13 @@ Implements a global, root-scoped Service Worker (`/sw.js`) that proxies and cach
 * Assets placed in your module's `static/` directory are cached automatically.
 * **No Competing Workers:** DO NOT attempt to register another Service Worker.
 * **WebSockets:** `ws://` and `wss://` protocols are hardcoded to bypass the proxy.
-* **Dynamic Large File Prohibition**: The server calculates a per-file size limit from the website's quota (default 35MB) and injects it into the worker [@ANCHOR: COMM_caching_quota_calculation]. Heavy media MUST route via `/web/image` to prevent the cache from ejecting critical UI bundles.
+* **Dynamic Large File Prohibition**: The server calculates a per-file size limit from the website's quota (default 35MB) and injects it into the worker. Heavy media MUST route via `/web/image` to prevent the cache from ejecting critical UI bundles.
 
-* **Settings Layout Injection**: The settings UI is injected into `website.res_config_settings_view_form` via XPath [@ANCHOR: COMM_xpath_rendering_caching_settings].
+* **Settings Layout Injection**: The settings UI is injected into `website.res_config_settings_view_form` via XPath (entry `COMM_xpath_rendering_caching_settings` below).
 
 ## 3. Zero-Sudo Architecture
 This module is built with security as a primary concern, adhering strictly to the Zero-Sudo architecture:
-- **Micro-Privileged Service Account**: A dedicated service user `caching.user_caching_service` is utilized for the filesystem scan ([@ANCHOR: COMM_caching_fs_scan_logic]). This account has zero access to business data: its only access rights are read access to module records (`ir.module.module`) and to system parameters whose key begins with `caching.`.
+- **Micro-Privileged Service Account**: A dedicated service user `caching.user_caching_service` is utilized for the filesystem scan (entry `COMM_caching_fs_scan_logic` above). This account has zero access to business data: its only access rights are read access to module records (`ir.module.module`) and to system parameters whose key begins with `caching.`.
 - **Secure Parameter Access**: System parameters (in this module, only `caching.enable_sw_test_hooks`, which turns on the Service Worker's test-only message hooks and is off unless set to `true` or `1`) are retrieved through the `zero_sudo.security.utils` abstraction layer, preventing direct access to `ir.config_parameter` and maintaining strict audit trails.
 - **Configuration Whitelisting**: Only specifically approved parameters are readable through that layer, preventing unauthorized configuration leakage. The one this module reads, `caching.enable_sw_test_hooks`, is on `zero_sudo`'s whitelist. The quota and invalidation version are not system parameters at all: they are per-website fields (`website.caching_safe_quota_mb`, `website.caching_invalidation_version`). (`caching.safe_quota_mb` is also whitelisted, but nothing in this module reads it.)
 - **No Sudo Escalation**: All background operations run within the context of their assigned service accounts without ever requesting global administrative (`sudo`) privileges.
@@ -90,30 +90,62 @@ This module is built with security as a primary concern, adhering strictly to th
 - **Offline fallback page** [@ANCHOR: caching_sw_offline_fallback_response]: when a page request fails and even the precached `/offline` page cannot be found (evicted, or its install-time precache failed), the worker answers with a small built-in "You are offline" page, status 503, instead of returning nothing, which the browser would show as a hard network error.
 - **Stale cache cleanup** [@ANCHOR: caching_sw_cache_cleanup_prefix_scoped]: on activation the worker deletes the caches left by older versions of itself, and only those: a cache is deleted only if its name starts with this worker's own prefix and is not the current cache's name, so caches that other scripts on the same origin created are never touched.
 
+## Anchored functions and views
+
+### `caching.mixin.get_fs_stats(override_svc_uid=None)` [@ANCHOR: COMM_caching_fs_scan_logic]
+
+Scans the `static/` directory of every installed module (`odoo.modules.module.get_modules()` and `get_module_path`) recursively with `os.scandir` and returns `(latest_mtime, file_sizes)`: `latest_mtime` is the newest `st_mtime` as a float (0.0 when there are no files), `file_sizes` is a list of every file's size in bytes sorted largest first. Dot-named entries and a module's `static/description` folder are skipped and symlinks are not followed. An unreadable directory is logged at warning level and skipped, so the scan never raises for a filesystem error. The method is an `@api.model`, `@api.private` method wrapped in `@distributed_cache()`, so the result is shared through Redis and may survive a restart for up to 24 hours; `force_invalidate_cache` clears it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `override_svc_uid` | int or None | The user id of `caching.user_caching_service`. When given, the call really switches to that user with `with_user`, so any ORM read added later runs with the service account's narrow rights (read on `ir.module.module` and on `caching.` parameters) rather than the public visitor's. |
+
+Security: the scan reads only file names, times and sizes under installed modules' `static/` folders; it does not read file contents or business data. Tests: `tests/test_settings_and_cache.py` (`test_05_zero_sudo_scan`, anchor `test_caching_zero_sudo_scan`).
+
+### `caching.mixin.get_global_static_info(quota_mb, override_svc_uid=None)` [@ANCHOR: COMM_caching_quota_calculation]
+
+Works out the largest single file the service worker may cache. It calls `get_fs_stats`, takes a safe quota of `max(0, quota_mb - 10)` MB (10 MB is reserved for Odoo's own bundles, which the worker exempts) and returns `(str(int(latest_mtime)), str(max_file_size))`, both strings because they are pasted into JavaScript. If the safe quota is zero or less the limit is `"0"`; with no files it is 10 MB; when everything fits, the limit is the larger of the biggest file plus 1 KiB and 10 MB; otherwise it walks the sorted sizes from the largest, dropping files until the rest fit, and the limit is just below the size of the last file dropped (so that file and all larger ones are excluded). Wrapped in `@distributed_cache()` like `get_fs_stats`. Argument `quota_mb` is the website's `caching_safe_quota_mb` (default 35); `override_svc_uid` as above. No errors of its own. Test: `tests/test_settings_and_cache.py` (anchor `test_settings_and_cache_01`).
+
+### `ServiceWorkerController.service_worker()`, route `/sw.js` [@ANCHOR: COMM_caching_sw_serve_route]
+
+Serves the service worker from the site root, which is the only way it can control the whole origin. `type="http"`, `auth="public"`, `website=True`, no sitemap entry; it takes no arguments and answers `200` with `Content-Type: application/javascript` and `Cache-Control: no-cache, max-age=0`. Steps: read the template `caching/static/src/sw/sw.js` (cached as the Redis key `caching_sw_js_content` for 24 hours; if Redis fails the read and write are logged at warning level and the file is read from disk, never an HTTP 500); take the current website's `caching_safe_quota_mb` and `caching_invalidation_version` (35 and 1 when there is no website); when the context has `force_fs_scan` call `force_invalidate_cache` as the service account; call `get_global_static_info`; and replace the placeholders `__CACHE_NAME__` (`odoo-assets-cache-<mtime>-v<version>`), `__MAX_FILE_SIZE_BYTES__`, `__MAX_STORAGE_BYTES__` (quota in bytes) and `__TEST_HOOKS_ENABLED__` (`true` only when the whitelisted parameter `caching.enable_sw_test_hooks` is `1` or `true`). Raises `NotFound` (404) when the template file is missing. Runs for anonymous visitors, uses the service account for the scan and sudo nowhere. Tests: `tests/test_service_worker.py`.
+
+### Service worker `fetch` listener [@ANCHOR: COMM_caching_sw_fetch_interceptor]
+
+The `fetch` event handler in `static/src/sw/sw.js`; it decides, per request, whether the worker answers from its cache. It ignores (lets the browser handle) anything that is not `GET`, the Chrome `only-if-cached` cross-origin case, `ws:`/`wss:` URLs, `/my/`, `/api/`, `/web/image/`, `/web/content/` and documentation images. A page navigation is network-first and falls back to the precached `/offline` page, then to a built-in 503 page. A request whose path matches `CACHE_URL_REGEX` (`/web/assets/` or `/<module>/static/`) is answered from `CACHE_NAME` when present (recording its use for the LRU unless it is an Odoo bundle); otherwise it is fetched, and only a status-200 `basic` response is cached. A non-bundle response over `MAX_FILE_SIZE_BYTES` (by `Content-Length`, or measured when that header is absent) is returned but not stored. The cache write is not awaited and its errors are only logged; a `QuotaExceededError` evicts the ten oldest entries and retries once; a newly cached Odoo bundle deletes the older hash of the same bundle. Tests: `tests/test_sw_fetch.py` and the tours `sw_behavior_tour.js` and `caching_tour.js`.
+
+### `res.config.settings` view `res_config_settings_view_form` [@ANCHOR: COMM_xpath_rendering_caching_settings]
+
+`views/res_config_settings_views.xml` inherits `website.res_config_settings_view_form` and, by an XPath after the `website_settings` block, adds a "Caching Service Worker" block with four settings: Safe Quota (`caching_safe_quota_mb`, integer MB), Force Cache Invalidation (shows `caching_invalidation_version` and the button `action_force_cache_invalidation`, "Invalidate Cache Now"), PWA Theme Color (`caching_pwa_theme_color`) and PWA Background Color (`caching_pwa_background_color`). All four are per-website fields. Pressing the button raises the version by one, which changes the cache name served by `/sw.js` and so makes every browser of that website drop its old caches. No arguments; the view is data, not code, and is loaded at install. Test: `tests/test_settings_and_cache.py` (`test_04_xpath_rendering_settings`).
+
+### Test `test_03_caching_sudo_params` [@ANCHOR: COMM_test_caching_sudo_params]
+
+A test in `tests/test_settings_and_cache.py` that sets `caching.safe_quota_mb` to `"42"` through `zero_sudo.security.utils._set_system_param` and reads it back with `_get_system_param`, asserting `"42"`. It shows that a whitelisted `caching.` parameter is reachable through the Zero-Sudo layer without a direct `ir.config_parameter` or `sudo()` call. It takes no arguments, changes only the test database (rolled back with the test) and fails with an assertion error if the value does not round trip. It also stands as the anchor named by the Manual Invalidation journey.
+
 ## 4. Stories & Journeys
 Detailed architectural narratives and process flows are documented in the `docs/` directory:
 
 ### Stories
-* [Cache Quota Management](docs/stories/cache_quota_management.md) ([@ANCHOR: COMM_caching_quota_calculation])
+* [Cache Quota Management](docs/stories/cache_quota_management.md) (entry `COMM_caching_quota_calculation` above)
 
-* [Cache Invalidation Strategy](docs/stories/cache_invalidation_strategy.md) ([@ANCHOR: COMM_caching_fs_scan_logic])
+* [Cache Invalidation Strategy](docs/stories/cache_invalidation_strategy.md) (entry `COMM_caching_fs_scan_logic` above)
 
 ### Journeys
-* [Asset Request Flow](docs/journeys/asset_request_flow.md) ([@ANCHOR: COMM_caching_sw_fetch_interceptor])
+* [Asset Request Flow](docs/journeys/asset_request_flow.md) (entry `COMM_caching_sw_fetch_interceptor` above)
 
-* [Server Startup Scan](docs/journeys/server_startup_scan.md) ([@ANCHOR: COMM_caching_sw_serve_route])
+* [Server Startup Scan](docs/journeys/server_startup_scan.md) (entry `COMM_caching_sw_serve_route` above)
 
-* [Manual Invalidation](docs/journeys/manual_invalidation.md) ([@ANCHOR: COMM_test_caching_sudo_params])
+* [Manual Invalidation](docs/journeys/manual_invalidation.md) (entry `COMM_test_caching_sudo_params` above)
 
 ## 5. Testing
 Tests are located in the `tests/` directory and cover:
-- Service Worker delivery and headers [@ANCHOR: COMM_caching_sw_serve_route].
+- Service Worker delivery and headers.
 
-- Quota calculation logic [@ANCHOR: COMM_caching_quota_calculation].
+- Quota calculation logic.
 - Cache invalidation triggers.
-- UI Tour for registration check [@ANCHOR: COMM_caching_sw_fetch_interceptor].
+- UI Tour for registration check.
 
-- Zero-Sudo compliance for FS scan [@ANCHOR: COMM_caching_fs_scan_logic].
+- Zero-Sudo compliance for FS scan.
 
 ## 6. External Dependencies
 None
