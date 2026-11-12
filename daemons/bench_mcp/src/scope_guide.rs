@@ -462,31 +462,176 @@ pub fn measure_custom(s: &mut Link, args: &Value) -> Result<Value, String> {
     Ok(r)
 }
 
+/// A frequency in hertz from a scope reply such as `CYMT 94.5177261kHz`, `FFTT 100.00MHz` or `1.00E+03Hz`: the value after the last space or comma, a number
+/// followed by `Hz`, `kHz`, `MHz` or `GHz`. `None` for anything else (`<10Hz`, no number, another unit).
+pub(crate) fn hertz(text: &str) -> Option<f64> {
+    // [@ANCHOR: bench_mcp_scope_hertz]
+    let t = Link::value(text);
+    let end = t
+        .find(|c: char| c.is_ascii_alphabetic() && !matches!(c, 'e' | 'E'))
+        .unwrap_or(t.len());
+    let v: f64 = t[..end].parse().ok()?;
+    match &t[end..] {
+        "Hz" => Some(v),
+        "kHz" => Some(v * 1e3),
+        "MHz" => Some(v * 1e6),
+        "GHz" => Some(v * 1e9),
+        _ => None,
+    }
+}
+
 /// `bench_scope_counter`: the scope's hardware frequency counter (`CYMT?`, E-notation, and `CYMT_HW?`, full precision with kHz or MHz), each as the
 /// scope's text and as hertz. The counter counts trigger-level crossings of the trigger source. Below 10 Hz the scope answers `10Hz` or `<10Hz`, which
 /// has no hertz value here (`null`). The guide lists no histogram or DVM function for this series, so none is offered.
 pub fn counter(s: &mut Link) -> Result<Value, String> {
     // [@ANCHOR: bench_mcp_scope_counter]
-    let hz = |text: &str| -> Option<f64> {
-        let t = Link::value(text);
-        let end = t
-            .find(|c: char| c.is_ascii_alphabetic() && !matches!(c, 'e' | 'E'))
-            .unwrap_or(t.len());
-        let v: f64 = t[..end].parse().ok()?;
-        match &t[end..] {
-            "Hz" => Some(v),
-            "kHz" => Some(v * 1e3),
-            "MHz" => Some(v * 1e6),
-            "GHz" => Some(v * 1e9),
-            _ => None,
-        }
-    };
     let coarse = s.query("CYMT?")?;
     let full = s.query("CYMT_HW?")?;
     Ok(
-        json!({"counter": coarse, "counter_hz": hz(&coarse), "full_precision": full, "full_precision_hz": hz(&full),
+        json!({"counter": coarse, "counter_hz": hertz(&coarse), "full_precision": full, "full_precision_hz": hertz(&full),
         "note": "counts the trigger source's level crossings; below 10 Hz the scope answers 10Hz or <10Hz; from the programming guide, not yet checked on firmware 1.3.27"}),
     )
+}
+
+/// The equations `DEFINE EQN` takes, per the guide: two channels combined, or a transform of one.
+fn equations() -> Vec<String> {
+    // [@ANCHOR: bench_mcp_scope_equations]
+    let mut v = Vec::new();
+    for (a, b) in [("C1", "C2"), ("C2", "C1")] {
+        v.extend(["+", "-", "*", "/"].iter().map(|op| format!("{a}{op}{b}")));
+    }
+    for t in ["FFT", "INTG", "DIFF", "SQRT"] {
+        v.extend(["C1", "C2"].iter().map(|c| format!("{t}{c}")));
+    }
+    v
+}
+
+/// What `bench_scope_math_native` sets besides the equation: the vertical scale and position of an arithmetic result, and the FFT's window, centre,
+/// vertical scale, unit, position and screen mode.
+const NATIVE_MATH_ITEMS: [Item; 9] = [
+    Item {
+        arg: "scale_v",
+        cmd: "MTVD",
+        ty: Ty::Num(500e-6, 100.0, "V"),
+    },
+    Item {
+        arg: "position",
+        cmd: "MTVP",
+        ty: Ty::Int(-255, 255),
+    },
+    Item {
+        arg: "invert",
+        cmd: "MATH:INVS",
+        ty: Ty::Flag,
+    },
+    Item {
+        arg: "fft_window",
+        cmd: "FFTW",
+        ty: Ty::Words(&["RECT", "BLAC", "HANN", "HAMM", "FLATTOP"]),
+    },
+    Item {
+        arg: "fft_center_hz",
+        cmd: "FFTC",
+        ty: Ty::Num(0.0, 1e9, "Hz"),
+    },
+    Item {
+        arg: "fft_unit",
+        cmd: "FFTU",
+        ty: Ty::Words(&["VRMS", "DBM", "DBVRMS"]),
+    },
+    Item {
+        arg: "fft_scale",
+        cmd: "FFTS",
+        ty: Ty::Num(0.001, 20.0, ""),
+    },
+    Item {
+        arg: "fft_position_v",
+        cmd: "FFTP",
+        ty: Ty::Num(-1000.0, 1000.0, "V"),
+    },
+    Item {
+        arg: "fft_screen",
+        cmd: "FFTF",
+        ty: Ty::Words(&["OFF", "ON", "EXCLU"]),
+    },
+];
+
+/// `bench_scope_math_native`: the scope's own math. `equation` (`C1+C2`, `C1-C2`, `C1*C2`, `C1/C2` or the channels the other way round, or `FFTC1`, `INTGC1`,
+/// `DIFFC1`, `SQRTC1`, also for C2) is set with `DEFINE`; the vertical scale and position, invert, and the FFT window, centre, scale, unit, position and screen mode
+/// are set and read back. With `read` the math trace is read: an arithmetic or transform trace (not FFT) is decoded with the guide's formula (volts =
+/// code * scale / 25 - position / 50 * scale), summarised and saved as little-endian f32; an FFT trace, which the guide says cannot be read, is returned as
+/// its raw codes' summary with the peak's position and the frequency that position has IF the trace spans ten divisions of the FFT time-base value
+/// round the centre (an assumption to be checked on the unit, so it is labelled).
+pub fn math_native(s: &mut Link, args: &Value, out: &Path) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_scope_math_native]
+    let eq = match args.get("equation") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(
+            v.as_str()
+                .map(|e| e.to_uppercase())
+                .filter(|e| equations().contains(e))
+                .ok_or_else(|| format!("equation must be one of {}", equations().join(", ")))?,
+        ),
+    };
+    let read = match args.get("read") {
+        None | Some(Value::Null) => false,
+        Some(v) => v.as_bool().ok_or("read must be true or false")?,
+    };
+    let mut cmds: Vec<(String, String)> = eq
+        .iter()
+        .map(|e| (format!("DEFINE EQN,'{e}'"), "DEFINE?".to_string()))
+        .collect();
+    cmds.extend(item_cmds(args, &NATIVE_MATH_ITEMS, 1)?);
+    let mut r = apply(s, cmds)?;
+    r["settings"] = read_items(s, &NATIVE_MATH_ITEMS, 1);
+    r["equation"] = readback(s, "DEFINE?");
+    if read {
+        let fft = r["equation"]
+            .as_str()
+            .is_some_and(|e| e.to_uppercase().contains("FFT"));
+        s.send("WFSU SP,1,NP,0,FP,0")?;
+        s.set_timeout_secs(30);
+        let raw = s.block("MATH:WF? DAT2");
+        s.set_timeout_secs(10);
+        let raw = raw?;
+        if fft {
+            let (idx, code) = raw
+                .iter()
+                .enumerate()
+                .map(|(i, b)| (i, *b as i8))
+                .max_by_key(|(_, c)| *c)
+                .ok_or("empty FFT trace")?;
+            let span = s
+                .query("FFTT?")
+                .ok()
+                .and_then(|t| crate::scope_guide::hertz(&t));
+            let centre = s
+                .query("FFTC?")
+                .ok()
+                .and_then(|t| crate::scope_guide::hertz(&t));
+            let f = span
+                .zip(centre)
+                .filter(|_| raw.len() > 1)
+                .map(|(span, c)| c + (idx as f64 / (raw.len() - 1) as f64 - 0.5) * 10.0 * span);
+            r["fft_trace"] = json!({"points": raw.len(), "peak_index": idx, "peak_code": code, "peak_frequency_hz_assumed": f,
+                "assumption": "the guide says the FFT trace cannot be read; the frequency assumes the points span 10 divisions of FFTT? round FFTC?; the level is not converted"});
+        } else {
+            let scale = s.number("MTVD?")?;
+            let pos = s.number("MTVP?")?;
+            let v: Vec<f32> = raw
+                .iter()
+                .map(|&b| (f64::from(b as i8) * scale / 25.0 - pos / 50.0 * scale) as f32)
+                .collect();
+            let (mn, mx) = v
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
+            let path = out.join(format!("math_native_{}.f32", stamp()));
+            let bytes: Vec<u8> = v.iter().flat_map(|x| x.to_le_bytes()).collect();
+            std::fs::write(&path, bytes).map_err(|e| format!("write {}: {e}", path.display()))?;
+            r["trace"] = json!({"points": v.len(), "min": mn, "max": mx, "file": path, "file_format": "little-endian f32, the unit of the math result"});
+        }
+    }
+    Ok(r)
 }
 
 #[cfg(test)]
@@ -743,6 +888,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_scope_counter]
+    // Tests [@ANCHOR: bench_mcp_scope_hertz]
     #[test]
     fn the_counter_is_read_coarse_and_full_precision_and_a_low_frequency_has_no_hertz_value() {
         let (_f, mut l) = link();
@@ -752,6 +898,16 @@ mod tests {
             (Some(1000.0), Some(1000.0))
         );
         assert_eq!(r["full_precision"], "CYMT 1.00000kHz");
+        assert_eq!(
+            (
+                hertz("FFTT 100.00MHz"),
+                hertz("2.5E+07Hz"),
+                hertz("<10Hz"),
+                hertz("3GHz"),
+                hertz("5V")
+            ),
+            (Some(1e8), Some(2.5e7), None, Some(3e9), None)
+        );
         // A scope that answers as the guide says for a signal under 10 Hz, and the header the guide's CYMOMETER? syntax shows.
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -773,5 +929,65 @@ mod tests {
         assert!(r["counter_hz"].is_null());
         assert_eq!(r["counter"], "CYMOMETER <10Hz");
         assert!((r["full_precision_hz"].as_f64().unwrap() - 94517.7261).abs() < 1e-6);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_scope_math_native]
+    // Tests [@ANCHOR: bench_mcp_scope_equations]
+    #[test]
+    fn the_scopes_own_math_is_defined_scaled_read_and_its_fft_is_set_up() {
+        let (f, mut l) = link();
+        let out = crate::testdir::scratch("scope_guide_math");
+        let r = math_native(&mut l, &json!({"equation": "c1+c2", "scale_v": 1, "position": -50, "invert": false, "read": true}), &out).unwrap();
+        assert_eq!(
+            r["sent"],
+            json!([
+                "DEFINE EQN,'C1+C2'",
+                "MTVD 1E0V",
+                "MTVP -50",
+                "MATH:INVS OFF"
+            ])
+        );
+        assert_eq!(r["equation"], "DEFINE EQN,'C1+C2'");
+        // The two sines add to 2 V * sqrt(2) peak; the guide's formula undoes the scale and position the fake encoded with.
+        assert!(
+            (r["trace"]["max"].as_f64().unwrap() - 2.0 * 2f64.sqrt()).abs() < 0.1,
+            "{r}"
+        );
+        assert_eq!(
+            std::fs::metadata(r["trace"]["file"].as_str().unwrap())
+                .unwrap()
+                .len(),
+            1400 * 4
+        );
+        let r = math_native(&mut l, &json!({"equation": "FFTC1", "fft_window": "hamm", "fft_center_hz": 58e6, "fft_unit": "dbvrms", "fft_scale": 5, "fft_screen": "ON", "read": true}), &out).unwrap();
+        assert_eq!(r["settings"]["fft_window"], "FFTW HAMM");
+        assert_eq!(r["settings"]["fft_center_hz"], "FFTC 5.80E+07Hz");
+        assert_eq!(r["settings"]["fft_unit"], "FFTU DBVRMS");
+        assert_eq!(
+            (
+                r["fft_trace"]["points"].as_u64(),
+                r["fft_trace"]["peak_index"].as_u64()
+            ),
+            (Some(1500), Some(750))
+        );
+        let f_hz = r["fft_trace"]["peak_frequency_hz_assumed"]
+            .as_f64()
+            .unwrap();
+        assert!(
+            (f_hz - (58e6 + (750.0 / 1499.0 - 0.5) * 1e9)).abs() < 1.0,
+            "{f_hz}"
+        );
+        let n = f.seen.lock().unwrap().len();
+        for bad in [
+            json!({"equation": "C1^2"}),
+            json!({"equation": "FFT(C1)"}),
+            json!({"fft_window": "GAUSS"}),
+            json!({"position": 300}),
+            json!({"read": "yes"}),
+            json!({"scale_v": 1000}),
+        ] {
+            assert!(math_native(&mut l, &bad, &out).is_err(), "{bad}");
+        }
+        assert_eq!(f.seen.lock().unwrap().len(), n);
     }
 }

@@ -347,6 +347,39 @@ Everything is checked before the first command. Returns `sent`, `readback`, `not
 
 Sends `CYMT?` and `CYMT_HW?` and converts each reply to hertz: the value is what follows the last space or comma, a number (plain or E-notation) followed by `Hz`, `kHz`, `MHz` or `GHz`. Returns `counter`, `counter_hz`, `full_precision`, `full_precision_hz` and a `note`. A reply with another unit or no number (`<10Hz`, `10Hz` is a number but the scope's own statement is that it is a floor) gives `null` for the hertz value and still returns the text, so the caller sees what the scope said. Errors: only link errors (`send`, `read`). The call changes nothing on the scope. Test: `the_counter_is_read_coarse_and_full_precision_and_a_low_frequency_has_no_hertz_value` against the fake scope and a one-off server that answers `CYMOMETER <10Hz`.
 
+### `bench_mcp_scope_equations` [@ANCHOR: bench_mcp_scope_equations]
+
+`equations()` returns every equation text the scope's `DEFINE EQN` takes on a two-channel SDS1000X-E: `C1+C2`, `C1-C2`, `C1*C2`, `C1/C2` and the same with the channels swapped (8 in all), and `FFT`, `INTG`, `DIFF`, `SQRT` followed by `C1` or `C2` (8 more), as the guide writes them. `math_native` uses it as the whole-word list an `equation` argument must match, so no free text reaches the scope.
+
+Takes nothing and returns a `Vec<String>` of 16 equations. Pure: no I/O, no failure. Test: `the_scopes_own_math_is_defined_scaled_read_and_its_fft_is_set_up` (a lowercase `c1+c2` is accepted by upper-casing it; `C1^2` and `FFT(C1)` are refused unsent). The guide's spelling has no parentheses (`FFTC1`); the earlier probe on firmware 1.3.27 got an answer to `FFT(C1)` in quotes, so the unit may take both: to be checked in the lab.
+
+### `bench_mcp_scope_hertz` [@ANCHOR: bench_mcp_scope_hertz]
+
+`hertz(text)` turns a scope reply into a frequency in hertz: it takes the value after the last space or comma (`CYMT 94.5177261kHz` gives `94.5177261kHz`) and converts a number followed by `Hz`, `kHz`, `MHz` or `GHz` (E-notation allowed, as in `2.5E+07Hz`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `text` | `&str` | The scope's reply line. |
+
+Returns `Some(hertz)`, or `None` when the text has no number or a unit that is not a frequency (`<10Hz`, `5V`). Pure: no I/O. Used by `counter` for both counter replies and by `math_native` to read `FFTT?` and `FFTC?`. Test: `the_counter_is_read_coarse_and_full_precision_and_a_low_frequency_has_no_hertz_value`, which also checks `FFTT 100.00MHz`, `3GHz` and the two `None` cases.
+
+### `bench_mcp_scope_math_native` [@ANCHOR: bench_mcp_scope_math_native]
+
+`math_native(s, args, out)` is `bench_scope_math_native` (tier `read_config`): the scope's own math and FFT settings and the math trace.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.equation` | one of the `equations()` texts, any case | `DEFINE EQN,'<EQ>'` with ASCII apostrophes. Otherwise `equation must be one of ...`. |
+| `args.scale_v` | number 0.0005 to 100 | `MTVD`, E-notation volts. |
+| `args.position` | integer -255 to 255 | `MTVP`. |
+| `args.invert` | boolean | `MATH:INVS ON/OFF`. |
+| `args.fft_window`, `args.fft_unit`, `args.fft_screen` | words | `FFTW` (`RECT`, `BLAC`, `HANN`, `HAMM`, `FLATTOP`), `FFTU` (`VRMS`, `DBM`, `DBVRMS`), `FFTF` (`OFF`, `ON`, `EXCLU`). |
+| `args.fft_center_hz`, `args.fft_scale`, `args.fft_position_v` | numbers | `FFTC`, `FFTS`, `FFTP`. |
+| `args.read` | boolean | Read `MATH:WF? DAT2` (30 s limit) after setting. |
+| `out` | `&Path` | Directory for the saved trace. |
+
+Everything is checked before the first command. Returns `sent`, `readback`, `note`, `settings`, `equation` and, with `read`, either `trace` (min, max, point count and the f32 file, converted as volts = code x `MTVD?` / 25 - `MTVP?` / 50 x `MTVD?`) or, if the equation holds `FFT`, `fft_trace` with the raw trace's point count, the index and code of its highest point and `peak_frequency_hz_assumed` (centre + (index / (points - 1) - 0.5) x 10 x `FFTT?`), with the assumption written beside it, because the guide says an FFT trace is not readable. Errors: the checks above, `write <file>`, and link errors. Test: `the_scopes_own_math_is_defined_scaled_read_and_its_fft_is_set_up` against the fake scope, which encodes the sum of the two channels with the guide's formula and serves a 1500-point FFT trace.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.

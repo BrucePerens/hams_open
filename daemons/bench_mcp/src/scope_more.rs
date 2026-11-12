@@ -181,7 +181,7 @@ pub(crate) enum Ty {
     /// A number from the first to the second value, sent in E-notation followed by the unit (`S`, `V`, `Hz` or none).
     Num(f64, f64, &'static str),
     /// A whole number from the first to the second value.
-    Int(u64, u64),
+    Int(i64, i64),
 }
 
 /// One setting of a scope tool: the tool argument that names it, the command it is written with (a `{c}` stands for the channel) and how the value is checked.
@@ -226,7 +226,7 @@ pub(crate) fn item_cmds(
                 Some(x) => format!("{x:E}{unit}"),
                 None => return Err(bad(&format!("a number from {lo} to {hi}"))),
             },
-            Ty::Int(lo, hi) => match v.as_u64().filter(|x| (lo..=hi).contains(x)) {
+            Ty::Int(lo, hi) => match v.as_i64().filter(|x| (lo..=hi).contains(x)) {
                 Some(x) => x.to_string(),
                 None => return Err(bad(&format!("a whole number from {lo} to {hi}"))),
             },
