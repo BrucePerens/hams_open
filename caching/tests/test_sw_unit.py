@@ -25,16 +25,24 @@ class TestServiceWorkerUnit(BaseCase):
 
     def test_open_db_creates_the_store_once_and_rejects_on_error(self):
         # Tests [@ANCHOR: caching:js_sw_open_db]
+        # Tests [@ANCHOR: caching:js_sw_harness_open_db]
+        # Tests [@ANCHOR: caching:js_sw_harness_load]
+        # Tests [@ANCHOR: caching:js_sw_harness_fakeIndexedDB]
+        # Tests [@ANCHOR: caching:js_sw_harness_plain]
+        # Tests [@ANCHOR: caching:js_sw_harness_rejection]
         self._run("open_db")
 
     def test_update_lru_metadata_records_the_url_and_time(self):
         # Tests [@ANCHOR: caching:js_sw_update_lru_metadata]
+        # Tests [@ANCHOR: caching:js_sw_harness_update_lru_metadata]
         self._run("update_lru_metadata")
 
     def test_enforce_lru_quota_evicts_the_ten_oldest_over_quota(self):
         # Tests [@ANCHOR: caching:js_sw_enforce_lru_quota]
+        # Tests [@ANCHOR: caching:js_sw_harness_enforce_lru_quota]
         self._run("enforce_lru_quota")
 
     def test_previous_version_cache_exists_only_for_an_older_cache_of_its_own(self):
         # Tests [@ANCHOR: caching:js_sw_previous_version_cache_exists]
+        # Tests [@ANCHOR: caching:js_sw_harness_previous_version_cache_exists]
         self._run("previous_version_cache_exists")
