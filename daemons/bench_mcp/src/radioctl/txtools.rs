@@ -32,6 +32,7 @@ pub trait Alerter {
     fn alert(&self, message: &str) -> Result<Value, String>;
 }
 
+// [@ANCHOR: bench_mcp_radioctl_txtools_audio_alert]
 /// The operator alert through the `audio` module's `bench_audio_alert`.
 pub struct AudioAlert<'a> {
     pub insts: &'a [Instrument],
@@ -49,6 +50,7 @@ impl Alerter for AudioAlert<'_> {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_txtools_deps]
 /// What the keyed tools need besides the rig: the watchdog starter, the alert and the audio for the load check.
 pub struct Deps<'a> {
     pub spawner: &'a dyn Spawner,
@@ -93,6 +95,7 @@ pub(super) fn fraction_to_watts(c: &mut Client, f: f64, hz: f64) -> Result<f64, 
     Ok(f * full_scale_mw(c, hz)? / 1000.0)
 }
 
+// [@ANCHOR: bench_mcp_radioctl_txtools_test_args]
 /// Arguments of a keyed test, checked against the attestation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TestArgs {
@@ -185,6 +188,7 @@ pub fn check_args(args: &Value, tx: &Transmit) -> Result<TestArgs, String> {
     })
 }
 
+// [@ANCHOR: bench_mcp_radioctl_txtools_rig]
 /// What the rig said before anything was changed.
 #[derive(Clone, Debug)]
 pub struct Rig {

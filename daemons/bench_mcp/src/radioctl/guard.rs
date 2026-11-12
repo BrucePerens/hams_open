@@ -59,6 +59,7 @@ pub fn unkey(host: &str, port: u16, min_power: Option<f64>) -> Result<bool, Stri
     ))
 }
 
+// [@ANCHOR: bench_mcp_radioctl_guard_word]
 /// Lines from the tool's side of the pipe, or the end of the pipe.
 pub enum Word {
     Line(String),
@@ -207,8 +208,10 @@ pub trait Spawner {
     ) -> Result<Box<dyn Watch>, String>;
 }
 
+// [@ANCHOR: bench_mcp_radioctl_guard_process_spawner]
 pub struct ProcessSpawner;
 
+// [@ANCHOR: bench_mcp_radioctl_guard_process_watch]
 struct ProcessWatch {
     child: std::process::Child,
     stdin: Option<std::process::ChildStdin>,

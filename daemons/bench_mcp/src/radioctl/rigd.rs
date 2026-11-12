@@ -19,6 +19,7 @@ const WINDOW: Duration = Duration::from_secs(600);
 /// How long a new daemon gets to open the rig and accept connections.
 const READY_WAIT: Duration = Duration::from_secs(10);
 
+// [@ANCHOR: bench_mcp_radioctl_rigd_slot]
 struct Slot {
     child: Option<Child>,
     port: u16,

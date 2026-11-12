@@ -19,6 +19,7 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+// [@ANCHOR: bench_mcp_radioctl_load_reading]
 /// Everything measured at one frequency.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Reading {
@@ -33,6 +34,7 @@ pub struct Reading {
     pub audio: Option<AudioObs>,
 }
 
+// [@ANCHOR: bench_mcp_radioctl_load_audio_obs]
 #[derive(Clone, Debug, PartialEq)]
 pub struct AudioObs {
     pub rms_dbfs: f64,
@@ -97,6 +99,7 @@ impl Reading {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_load_baseline]
 /// What was recorded when the owner attested the load.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Baseline {
@@ -107,6 +110,7 @@ pub struct Baseline {
     pub readings: Vec<Reading>,
 }
 
+// [@ANCHOR: bench_mcp_radioctl_load_verdict]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Verdict {
     /// The readings match the baseline: consistent with a dummy load (not proof).
@@ -128,6 +132,7 @@ impl Verdict {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_load_decision]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Decision {
     pub verdict: Verdict,
@@ -314,6 +319,7 @@ fn mode_for(hz: f64) -> &'static str {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_load_original]
 /// What the rig was set to before the check, to put back.
 struct Original {
     freq: f64,
@@ -421,6 +427,7 @@ fn settings_record(th: &LoadCheck, audio: bool) -> Value {
     json!({"af": th.af, "preamp_db": th.preamp_db, "attenuator_db": 0, "readings": th.readings, "dwell_ms": th.dwell_ms, "references": th.references, "audio": audio})
 }
 
+// [@ANCHOR: bench_mcp_radioctl_load_measured]
 pub struct Measured {
     pub readings: Vec<Reading>,
     pub settings: Value,
@@ -545,6 +552,9 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_load_decide]
     // Tests [@ANCHOR: radioctl_verdict_word]
+    // Tests [@ANCHOR: bench_mcp_radioctl_load_decision]
+    // Tests [@ANCHOR: bench_mcp_radioctl_load_verdict]
+    // Tests [@ANCHOR: bench_mcp_radioctl_load_reading]
     #[test]
     fn readings_at_the_baseline_are_consistent_and_each_kind_of_excess_refuses() {
         let b = base(vec![
@@ -645,6 +655,7 @@ mod tests {
         assert_eq!(nan.verdict, Verdict::Refuse);
     }
 
+    // Tests [@ANCHOR: bench_mcp_radioctl_load_audio_obs]
     #[test]
     fn audio_evidence_a_station_heard_loud_audio_a_new_carrier_note_and_a_dead_input() {
         let mut b1 = r("tx", -54.0, 1.0);
@@ -693,6 +704,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_baseline_save]
     // Tests [@ANCHOR: radioctl_baseline_load]
+    // Tests [@ANCHOR: bench_mcp_radioctl_load_baseline]
     #[test]
     fn a_baseline_is_stored_per_range_and_read_back_exactly_and_damage_is_an_error() {
         let d = crate::testdir::TestDir::new("bench_mcp-baseline");
