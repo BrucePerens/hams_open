@@ -211,6 +211,9 @@ class TestResponseHook(CanaryCase, HamsHttpCase):
         secret_canary._tables.clear()
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
             self.url_open("/odoo")
+            with release_test_lock():  # the WSGI wrapper's own scan, were it to run, comes after the response
+                time.sleep(1)
+        self.assertEqual(len(logs.output), 1)  # one response, one alarm: the wrapper does not scan it again
         self.assertIn("page_token", logs.output[0])
 
 
@@ -244,8 +247,13 @@ class TestWsgiScan(HamsTransactionCase):
         self.assertEqual((body, sent), (payload, ["200 OK"]))
         self.assertEqual(seen, [(payload.decode(), "/xmlrpc/2/common")])
 
+    # Tests [@ANCHOR: hams_secret_canary:mark_scanned]
     def test_a_response_post_dispatch_already_scanned_is_not_scanned_again(self):
-        self.assertEqual(self._run(_wsgi(b"x"), {wsgi_scan.SCANNED: True})[1], [])
+        def application(environ, start_response):
+            wsgi_scan.mark_scanned()  # what `ir.http._post_dispatch` does while serving the request
+            return _wsgi(b"x")(environ, start_response)
+        self.assertEqual(self._run(application)[1], [])
+        self.assertEqual(len(self._run(_wsgi(b"x"))[1]), 1)  # the mark does not outlive its request
 
     # Tests [@ANCHOR: hams_secret_canary:is_text]
     def test_binary_responses_are_not_scanned(self):

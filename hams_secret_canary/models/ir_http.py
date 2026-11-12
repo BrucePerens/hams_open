@@ -18,7 +18,7 @@ class IrHttp(models.AbstractModel):
         streamed."""
         result = super()._post_dispatch(response)
         if request and detector.scannable_response(response):
-            request.httprequest.environ[wsgi_scan.SCANNED] = True
+            wsgi_scan.mark_scanned()
             data = response.get_data()[: detector.MAX_SCAN_BYTES]
             request.env["hams.secret.canary"]._scan_text(
                 data.decode("utf-8", "replace"), "response", request.httprequest.path
