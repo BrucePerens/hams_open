@@ -1937,19 +1937,115 @@ and searches the spectrum for the strongest bin in the 50 to 400 Hz range, then 
 
 ## Spectral bridge numerics
 
-- `extrapolate_amplitudes` fits `ln(a)` against harmonic frequency over the top `min(l, 16)` decoded
-  harmonics by least squares, clamps a rising slope to flat, and continues the line out to `min(2l, 160)`
-  harmonics; nothing is added unless the bridge is enabled and the sub-frame is voiced.
-  *(Reference: `src/codec2_3200/spectral_bridge.rs` -> `[@ANCHOR: extrapolate_amplitudes]`)*
-- `freq_hz_fixed` is the frequency of harmonic `m` in whole Hz, `m * wo * 4000 / pi`, rounded; keeping `x` a
-  plain integer keeps the regression sums inside `i64`.
-  *(Reference: `[@ANCHOR: freq_hz_fixed]`)*
-- `spectral_bridge_div_round_i128` divides an `i128` by a positive divisor rounding to nearest, ties away from
-  zero; it serves the two divisions of the fit (the lpc module has its own copy under another anchor).
-  *(Reference: `[@ANCHOR: spectral_bridge_div_round_i128]`)*
-- `extrapolate_amplitudes_fixed` is the same fit in base-2 logarithms: slope and intercept in Q23 log2
-  amplitude, a non-rising clamp, and `exp2_q23` for each new harmonic.
-  *(Reference: `[@ANCHOR: extrapolate_amplitudes_fixed]`)*
+### `extrapolate_amplitudes` [@ANCHOR: extrapolate_amplitudes]
+
+Guesses the harmonic amplitudes above a decoded voiced sub-frame's own top harmonic, so the 16 kHz decode can fill the
+4 to 8 kHz band. It fits `ln(a)` against harmonic frequency by ordinary least squares over the top `min(l, 16)` decoded
+harmonics, clamps a rising slope to flat (`beta.min(0.0)`), and continues the line out to harmonic `l2 = min(2l, 160)`.
+Nothing is added unless the bridge is enabled and the sub-frame is voiced. It is called by
+`SpectralBridgeState::synthesize_subframe_sb`, the float 16 kHz decode path.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&Model` | The already decoded base model: `l` harmonics, amplitudes `a[1..=l]` (index 0 unused), fundamental `wo` in radians per sample at 8 kHz, and the `voiced` flag. |
+| `enabled` | `bool` | The bridge switch (`SpectralBridgeState::enabled`); false returns the model's own harmonics unchanged. |
+
+**Returns:** `([f32; MAX_AMP_SB + 1], usize)`: the extended amplitude array (`1..=l` copied from `model.a`, `l+1..=l2`
+extrapolated, everything else 0) and `l2`. `l2 == model.l` when disabled, unvoiced, or `l` is already 80 or more.
+
+**Errors:** none; it never returns a failure. Each fitted amplitude is floored at `1e-6` before the logarithm. If the
+regression denominator is under `1e-9` (all frequencies equal) the fit falls back to a flat line at the mean log
+amplitude. It slices `model.a[1..=l]` and so requires `l <= MAX_AMP` (80), which `Model::new` guarantees.
+
+**Special concerns:** pure and allocation-free apart from the returned array; no I/O, locks or threads, safe on any
+thread. Compiled only with the `std` feature (float path). It never transmits and has no radio side effect. Unvoiced
+frames are deliberately skipped: the envelope-driven variant `extrapolate_amplitudes_from_envelope` handles them. The
+extrapolated amplitudes are an invented guess, not recovered signal.
+
+**Signature:** `pub fn extrapolate_amplitudes(model: &Model, enabled: bool) -> ([f32; MAX_AMP_SB + 1], usize)`
+
+**See also:** tests `extrapolate_amplitudes_fixed_matches_the_float_version_within_tolerance`,
+`extrapolated_amplitudes_continue_a_declining_trend_without_exceeding_the_known_top`, `a_flat_spectrum_extrapolates_flat_not_rising`,
+`unvoiced_subframes_never_extrapolate_even_when_enabled`, `extrapolation_never_extends_past_max_amp_sb`;
+`extrapolate_amplitudes_fixed`.
+*(Reference: `src/codec2_3200/spectral_bridge.rs`)*
+
+### `freq_hz_fixed` [@ANCHOR: freq_hz_fixed]
+
+The frequency of harmonic `m` in whole Hz, `m * wo * 4000 / pi`, rounded to the nearest integer (4000/pi is
+`SAMPLE_RATE / TAU` at 8 kHz). `extrapolate_amplitudes_fixed` uses it as the regression's `x`. Keeping `x` a plain
+integer of at most 8000 (not a Q23 value) keeps the sums `sum_xx` and `sum_xy` inside `i64` with no widening.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `m` | `usize` | Harmonic number, 1 to `MAX_AMP_SB` (160). |
+| `wo_q23` | `i64` | Fundamental in radians per sample, Q23 (`ModelFixed::wo`). |
+
+**Returns:** `i64`, the frequency in integer Hz. It is computed as `m * wo_q23` times the Q23 constant `SB_HZ_PER_RAD_Q23`
+(10680707072, which is 4000/pi in Q23), with a round-to-nearest shift by 23 twice (the product to Q23 Hz, then to
+integer Hz).
+
+**Errors:** none. The product is formed in `i128`, so there is no overflow for any valid `m` and `wo`.
+
+**Special concerns:** private, pure, no allocation, no locks, no I/O. It is on the fixed-point (no floating point) path.
+
+**Signature:** `fn freq_hz_fixed(m: usize, wo_q23: i64) -> i64`
+
+**See also:** test `extrapolate_amplitudes_fixed_matches_the_float_version_within_tolerance`, which compares it against
+the float closure; `extrapolate_amplitudes_fixed`.
+
+### `spectral_bridge_div_round_i128` [@ANCHOR: spectral_bridge_div_round_i128]
+
+Divides an `i128` by a positive divisor, rounding to nearest with ties away from zero. It serves the two divisions of
+the least-squares fit in `extrapolate_amplitudes_fixed` (`beta`, `alpha`) and the mean computations of
+`extrapolate_amplitudes_from_envelope_fixed`. Its source name is `div_round_i128` in `spectral_bridge.rs`; the lpc module
+has its own copy under another anchor, kept as a local helper by this project's convention for small per-module helpers.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `n` | `i128` | Numerator, any sign. |
+| `d` | `i128` | Divisor, must be greater than 0 (an OLS variance sum `n*sum_xx - sum_x^2` or a harmonic count). |
+
+**Returns:** `i64`, `(n + d/2) / d` for `n >= 0` and `(n - d/2) / d` otherwise, truncated division. The result is cast
+with `as i64`, so a quotient beyond `i64` would wrap (not reachable with the fit's magnitudes).
+
+**Errors:** a divisor of 0 panics (integer division by zero); `d <= 0` fails a `debug_assert` in debug builds and gives a
+wrong rounding in release builds. Callers guard with `denom != 0` and positive counts.
+
+**Special concerns:** private and pure; no allocation, locks or I/O.
+
+**Signature:** `fn div_round_i128(n: i128, d: i128) -> i64`
+
+**See also:** test `div_round_i128_rounds_to_nearest_with_ties_away_from_zero` (`7/2 -> 4`, `-7/2 -> -4`, exact
+quotients untouched); `extrapolate_amplitudes_fixed`.
+
+### `extrapolate_amplitudes_fixed` [@ANCHOR: extrapolate_amplitudes_fixed]
+
+The integer twin of `extrapolate_amplitudes`: the same least-squares fit in base-2 logarithms. Log2 amplitude `y` stays
+Q23 (the output format of `log2_q23`), so the slope `beta` comes out in Q23 log2 amplitude per Hz, and `beta * x` for an
+integer Hz `x` needs no rescale. The slope is clamped non-rising, and each new harmonic is `exp2_q23(alpha + beta * x)`.
+Base 2 instead of natural log only rescales both `alpha` and `beta` by `ln 2`, which cancels. It is called by
+`SpectralBridgeStateFixed::synthesize_subframe_sb_fixed`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `model` | `&ModelFixed` | Decoded base model: `l`, Q23 amplitudes `a[1..=l]`, Q23 `wo`, `voiced`. |
+| `enabled` | `bool` | The bridge switch; false returns the harmonics unchanged. |
+
+**Returns:** `([i64; MAX_AMP_SB + 1], usize)`: Q23 amplitudes (`1..=l` copied, `l+1..=l2` extrapolated) and `l2 =
+min(2l, 160)` when enabled and voiced, otherwise `model.l`.
+
+**Errors:** none returned. Each input amplitude is floored at 1 (one Q23 unit) before `log2_q23`. A zero regression
+denominator falls back to a flat fit at the mean log amplitude. A `debug_assert` fires in debug builds if `beta * x`
+leaves `i64`; the sums themselves are plain `i64` and are not expected to overflow at the measured magnitudes.
+
+**Special concerns:** pure, allocation-free, no floating point, no locks, no I/O, safe on any thread. Voiced only, as in
+the float version; the envelope-driven bridge (`extrapolate_amplitudes_from_envelope_fixed`) covers unvoiced frames.
+
+**Signature:** `pub(crate) fn extrapolate_amplitudes_fixed(model: &ModelFixed, enabled: bool) -> ([i64; MAX_AMP_SB + 1], usize)`
+
+**See also:** tests `extrapolate_amplitudes_fixed_matches_the_float_version_within_tolerance`,
+`extrapolation_fixed_never_extends_past_max_amp_sb`; `freq_hz_fixed`, `spectral_bridge_div_round_i128`.
 
 ### The envelope-driven high band (`Decoder::decode_16k`, 2026-11-07)
 
@@ -2094,31 +2190,189 @@ sparse inverse transform, Parzen window and overlap-add. `a_ext` must hold `l2` 
 
 `src/codec2_3200/synthesis.rs`.
 
-- `make_synthesis_window` builds the overlap-add window: a trapezoid ramping up over the 80 samples around
-  sample 40 and down around sample 120, which for the codec's constants is a triangle peaking at sample 80.
-  *(Reference: `[@ANCHOR: make_synthesis_window]`)*
-- `next_rand` advances a xorshift generator and returns a uniform angle in `[0, 2*pi)`; it need not match
-  the reference generator because it only randomises phase.
-  *(Reference: `[@ANCHOR: next_rand]`)*
-- `next_rand_fixed` is the same state update returning the raw 32-bit word as a binary angle.
-  *(Reference: `[@ANCHOR: next_rand_fixed]`)*
-- `phase_increment_q32` converts `wo * 80` (the pitch phase advance per sub-frame) into a 32-bit turn
-  fraction by dividing by `2*pi` in Q23 with rounding and discarding whole turns.
-  *(Reference: `[@ANCHOR: phase_increment_q32]`)*
-- `postfilter_step` is the decision logic of the voiced postfilter: it computes the mean harmonic energy in
-  dB; on an unvoiced frame below 40 dB it updates the background estimate (beta 0.1), and on a voiced frame
-  it flags harmonics quieter than the background plus 6 dB.
-  *(Reference: `[@ANCHOR: postfilter_step]`)*
-- `postfilter_step_fixed` is the Q23 version (`l` is clamped to at least 1 so the division cannot trap).
-  *(Reference: `[@ANCHOR: postfilter_step_fixed]`)*
+### `make_synthesis_window` [@ANCHOR: make_synthesis_window]
+
+Builds the 160-sample (`SAMPLES_PER_FRAME`) overlap-add window that `SynthesisState` applies to each 10 ms inverse-FFT
+block. It is a trapezoid ramping up over the 80 samples around sample 40 (`N_SAMP/2`) and down over the 80 samples
+around sample 120 (`3*N_SAMP/2`); for the codec's constants (`TW = 40`, `N_SAMP = 80`) the flat top has zero length, so
+it is a triangle peaking at exactly 1.0 at sample 80. Adjacent frames overlap by 80 samples so the two windows sum to 1.
+
+**Arguments:** none (it reads the constants `N_SAMP`, `TW`, `SAMPLES_PER_FRAME`).
+
+**Returns:** `[f32; SAMPLES_PER_FRAME]`, zero outside the ramps and between 0 and 1 inside them.
+
+**Errors:** none. The `take`/`skip` bounds are clamped with `min` and `saturating_sub`, so no index can leave the array.
+
+**Special concerns:** pure, called once when a `SynthesisState` is built (and by `tables_gen.rs` when the fixed table is
+generated). `std` feature only. No locks, I/O or side effects.
+
+**Signature:** `pub(crate) fn make_synthesis_window() -> [f32; SAMPLES_PER_FRAME]`
+
+**See also:** test `synthesis_window_peaks_at_1_in_the_middle_and_tapers_toward_0_at_both_ends`; the 16 kHz copy
+`make_synthesis_window_sb`.
+*(Reference: `src/codec2_3200/synthesis.rs`)*
+
+### `next_rand` [@ANCHOR: next_rand]
+
+A xorshift32 generator (shifts 13, 17, 5) that returns a uniform phase angle in `[0, 2*pi)`. The synthesis uses it to
+randomise the phase of unvoiced harmonics and of quiet harmonics in voiced frames (`postfilter`). It need not match the
+reference codec's generator, because the value is a synthesis detail that is never transmitted.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `state` | `&mut u32` | Generator state, updated in place. Must be non-zero: zero is a fixed point and always yields 0.0. The decoders seed it with `0xC0FFEE`; the spectral bridge uses `0x5B_1D6E`. |
+
+**Returns:** `f32` angle in radians, `(state >> 8) / 2^24 * TAU`, always below `TAU`.
+
+**Errors:** none.
+
+**Special concerns:** each decoder holds its own state (never shared), so output is deterministic per decoder instance;
+no locks, I/O or allocation. `std` feature only. Not cryptographic.
+
+**Signature:** `pub(crate) fn next_rand(state: &mut u32) -> f32`
+
+**See also:** test `next_rand_produces_values_spread_across_the_full_tau_range`; `next_rand_fixed`, `postfilter_step`.
+
+### `next_rand_fixed` [@ANCHOR: next_rand_fixed]
+
+The same xorshift32 state update as `next_rand`, returning the raw 32-bit state word as a binary angle (one turn is
+`1 << 32`, the phase format of `sin_cos_q23`). Because the raw word is already uniform over its full range, no scaling is
+needed. The fixed and float decoders hold independent state; what matters for comparing decoded audio is that this draws
+the same number of values at the same points of the algorithm as the float path, not that the angles are equal.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `state` | `&mut u32` | Generator state, updated in place; must be non-zero (zero stays zero). Seeded `0xC0FFEE`. |
+
+**Returns:** `u32`, the new state, interpreted as a turn fraction.
+
+**Errors:** none.
+
+**Special concerns:** pure apart from the state update; available without `std`; no locks, I/O or allocation.
+
+**Signature:** `pub(crate) fn next_rand_fixed(state: &mut u32) -> u32`
+
+**See also:** test `decoder_fixed_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream`
+(`codec2_3200/mod.rs`); `next_rand`, `postfilter_step_fixed`.
+
+### `phase_increment_q32` [@ANCHOR: phase_increment_q32]
+
+Converts the voiced excitation's per-sub-frame phase advance, `wo * N_SAMP` (`N_SAMP = 80` samples), into a 32-bit turn
+fraction for the fixed synthesis. It divides by `2*pi` in Q23 with rounding; `wo_q23` and `pi_q23()` share Q23 scaling, so
+the scale cancels. The final mask to 32 bits keeps only the fractional turn: whole turns are discarded, which is correct
+because only the angle modulo one turn matters downstream.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `wo_q23` | `i64` | Fundamental in radians per sample, Q23, positive (`ModelFixed::wo`). |
+
+**Returns:** `u32`, the phase increment in turns (`1 << 32` is a full turn), `round(wo*80/(2*pi) * 2^32) mod 2^32`.
+
+**Errors:** none; the product is formed in `i128`. It divides by `2 * pi_q23()`, a non-zero constant.
+
+**Special concerns:** pure, no allocation, locks or I/O. Called by `synthesize_phase_fixed` (the base
+decode) and by the fixed spectral bridge, so both advance the excitation phase once per sub-frame from the same `wo`.
+
+**Signature:** `pub(crate) fn phase_increment_q32(wo_q23: i64) -> u32`
+
+**See also:** test `decoder_fixed_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream`;
+`pi_q23`, `next_rand_fixed`.
+
+### `postfilter_step` [@ANCHOR: postfilter_step]
+
+The pure decision logic of the voiced postfilter: no random numbers and no model mutation. It computes the mean
+harmonic energy in dB, `10*log10(sum(a^2)/l)` (expressed through `log2`). On an unvoiced frame whose energy is under
+`BG_THRESH` (40 dB) it updates the background-noise estimate with `bg*(1-0.1) + e_db*0.1` (`BG_BETA`); on a voiced frame it
+flags every harmonic whose amplitude is below the background plus `BG_MARGIN` (6 dB). `postfilter` then randomises the
+phase of the flagged harmonics.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `voiced` | `bool` | Whether the sub-frame is voiced. |
+| `l` | `usize` | Harmonic count, at least 1 (the float divide by `l` gives `inf` at 0, which no branch acts on). |
+| `a` | `&[f32; MAX_AMP + 1]` | Harmonic amplitudes, indices `1..=l` read. |
+| `bg_est` | `f32` | Current background estimate in dB. |
+| `log2`, `exp2` | `Fn(f32) -> f32` | The log-domain operations, injected so tests can swap the LUTs for plain `f32::log2`/`exp2`. |
+
+**Returns:** `(f32, [bool; MAX_AMP + 1])`: the updated `bg_est` and, for a voiced frame, which harmonics `1..=l` should
+get random phase (all `false` for an unvoiced frame).
+
+**Errors:** none.
+
+**Special concerns:** pure and allocation-free; no locks or I/O. `std` feature only. It decides only how audio sounds and
+has no radio side effect. The validation shape follows `CODEC2_MOD_FIXED_POINT_PLAN.md` (a real temporal replay).
+
+**Signature:** `pub(crate) fn postfilter_step<L: Fn(f32) -> f32, E: Fn(f32) -> f32>(voiced: bool, l: usize, a: &[f32; MAX_AMP + 1], bg_est: f32, log2: L, exp2: E) -> (f32, [bool; MAX_AMP + 1])`
+
+**See also:** test `postfilter_step_fixed_matches_postfilter_step_across_a_real_temporal_replay`; `postfilter_step_fixed`.
+
+### `postfilter_step_fixed` [@ANCHOR: postfilter_step_fixed]
+
+The Q23 version of `postfilter_step`, using `log2_q23` and `exp2_q23` directly. Energy, background estimate and the
+returned estimate are all Q23 dB-domain values; the EMA update and the voiced threshold use the Q23 constants
+(`SYNTH_TEN_OVER_LOG2_10_Q23`, `SYNTH_LOG2_10_OVER_20_Q23`, the BG constants). The divisor `l` is clamped to at least 1
+(`l.max(1)`) so the integer division cannot trap on `l == 0`, which no real decode path produces (`l >= 10`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `voiced` | `bool` | Whether the sub-frame is voiced. |
+| `l` | `usize` | Harmonic count. |
+| `a` | `&[i64; MAX_AMP + 1]` | Q23 harmonic amplitudes, indices `1..=l` read. |
+| `bg_est` | `i64` | Background estimate, Q23. |
+
+**Returns:** `(i64, [bool; MAX_AMP + 1])`: the new Q23 estimate and the per-harmonic randomise flags (empty for unvoiced).
+
+**Errors:** none; at `l == 0` the sum is empty and the result has no flags (tested). Squares use `i128`.
+
+**Special concerns:** pure, no floating point, no allocation, locks or I/O. Called by `postfilter_fixed`.
+
+**Signature:** `pub(crate) fn postfilter_step_fixed(voiced: bool, l: usize, a: &[i64; MAX_AMP + 1], bg_est: i64) -> (i64, [bool; MAX_AMP + 1])`
+
+**See also:** test `postfilter_step_fixed_matches_postfilter_step_across_a_real_temporal_replay`; `postfilter_step`.
 
 ## Analysis windows
 
-- `make_analysis_window` builds the 320-sample Hann window over the central 279 samples, scaled by `1 / sqrt(sum(w^2) * 512)`, the
-  normalisation the LPC analysis expects.
-  *(Reference: `src/codec2_3200/window.rs` -> `[@ANCHOR: make_analysis_window]`)*
-- `make_analysis_window_fixed` returns the same window as the committed Q30 table.
-  *(Reference: `[@ANCHOR: make_analysis_window_fixed]`)*
+### `make_analysis_window` [@ANCHOR: make_analysis_window]
+
+Builds the time-domain LPC analysis window: a 279-sample (`NW`) Hann taper, `0.5 - 0.5*cos(2*pi*j/(NW-1))`, centred in the
+320-sample (`M_PITCH`) history buffer and zero outside samples 21 to 299 (`analysis_span`). The whole window is scaled by
+`1 / sqrt(sum(w^2) * 512)` (`FFT_ENC = 512`), the normalisation the autocorrelation-based LPC analysis expects.
+
+**Arguments:** none (constants `M_PITCH`, `NW`, `FFT_ENC`).
+
+**Returns:** `[f32; M_PITCH]`.
+
+**Errors:** none.
+
+**Special concerns:** pure, computed with `f32` cosines, `std` feature only. It is used when an encoder is built
+(the 1600 bit/s encoder, `EncoderMbe`, `floating_reference::Encoder`) and by `tables_gen.rs`, which quantises it to the
+committed Q30 table. No locks or I/O.
+
+**Signature:** `pub fn make_analysis_window() -> [f32; M_PITCH]`
+
+**See also:** test `window_is_zero_outside_its_centered_support`; `make_analysis_window_fixed`, `analysis_span`.
+*(Reference: `src/codec2_3200/window.rs`)*
+
+### `make_analysis_window_fixed` [@ANCHOR: make_analysis_window_fixed]
+
+Returns the same window as the committed Q30 table `tables::WINDOW_ANALYSIS_Q30`: 30 fractional bits and no integer
+bits, since measured values never exceed about 0.0044 (`0.0044 * 2^30` is about 4.7e6, far inside `i32`). The Hann `cos()`
+evaluation happens offline, so no floating point runs at encode time. The fixed encoders multiply samples by the table
+directly (`sn * W >> 7` gives the Q8.23 the autocorrelation expects); this accessor is called inside the crate only by
+tests (the check against the float window, and the 1600 bit/s float-boundary reference encoder).
+
+**Arguments:** none.
+
+**Returns:** `[i32; M_PITCH]` by value (a copy of the table); exactly zero outside `analysis_span`.
+
+**Errors:** none.
+
+**Special concerns:** const data, no allocation, locks or I/O; available without `std`.
+
+**Signature:** `pub fn make_analysis_window_fixed() -> [i32; M_PITCH]`
+
+**See also:** tests `make_analysis_window_fixed_matches_the_real_float_window_within_quantization_noise` and
+`both_analysis_windows_are_exactly_zero_outside_the_analysis_span`; `make_analysis_window`.
 
 ### `analysis_span` [@ANCHOR: analysis_span]
 
@@ -2192,18 +2446,95 @@ correction first; the validation of this path assumes it.
 over ten iterations, produced a measurable coefficient error on the worst corpus frame. `n = 0` returns `x`. The
 Levinson core uses it for the final Q8.40 to Q8.23 conversion.
 
-`[@ANCHOR: q_mul]` multiplies two Q8.40 numbers: the 128-bit product plus half a unit, shifted right by 40, narrowed to
-`i64` (debug-asserted not to overflow). `div_round_i128` (described in the codec2_3200 story) is its division counterpart.
+#### `q_mul` [@ANCHOR: q_mul]
+
+Multiplies two Q8.40 numbers for the Levinson-Durbin recursion: the 128-bit product plus half a unit (`1 << 39`), shifted
+right by 40, so the result is rounded to nearest. `div_round_i128` (described in the codec2_3200 story) is its
+division counterpart. Operands up to 48 bits make the product too wide for `i64`, hence `i128`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a`, `b` | `i64` | Q8.40 operands (`LEVINSON_FRAC_BITS` = 40). |
+
+**Returns:** `i64`, `(a*b + 2^39) >> 40`, Q8.40.
+
+**Errors:** none returned; a `debug_assert` fires in debug builds if the narrowed result leaves `i64` (the recursion's
+quantities stay near 77 at most). In release the cast would wrap.
+
+**Special concerns:** private, pure, no allocation, locks or I/O. Called only from the recursion core (numerator sum,
+coefficient update, `1 - k^2`, `e *= ...`).
+
+**Signature:** `fn q_mul(a: i64, b: i64) -> i64`
+
+**See also:** test `white_noise_correction_measurably_improves_the_worst_case_amplification_margin` (exercises the
+recursion); `rshift_round`.
 
 ### Q-format conversion helpers
 
-`[@ANCHOR: dequantize_coef_q23]` converts Q8.23 coefficients to `f32` by dividing by 2^23, for callers that need the
-float boundary without access to the crate-private `COEF_FRAC_BITS`.
+#### `dequantize_coef_q23` [@ANCHOR: dequantize_coef_q23]
 
-`[@ANCHOR: f32_to_q]` converts an `f32` to a signed fixed-point `i32` with the given number of fractional bits: multiply
-by 2^bits in `f64`, round half away from zero, cast (the cast saturates, so formats wider than 31 bits cannot be held).
-`[@ANCHOR: f32_to_q64]` is the same conversion with an `i64` result, needed for the Q8.40 format of the Levinson recursion;
-NaN converts to 0, which the silent-frame path relies on.
+Converts Q8.23 LPC coefficients to `f32` by dividing each by 2^23: the "integer core, float boundary" conversion, exposed
+so a caller in another module can reach the float representation without access to the crate-private `COEF_FRAC_BITS`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a_q23` | `&[i64; LPC_ORD + 1]` | Eleven Q8.23 coefficients, `a[0]` = 1.0 (`1 << 23`). |
+
+**Returns:** `LpcCoeffs` (`[f32; 11]`), `a_q23[i] / 2^23`.
+
+**Errors:** none.
+
+**Special concerns:** pure, no allocation, locks or I/O; used by `levinson_durbin_fixed_from_integer_r` for its
+float return value. `std` feature only.
+
+**Signature:** `pub fn dequantize_coef_q23(a_q23: &[i64; LPC_ORD + 1]) -> LpcCoeffs`
+
+**See also:** test `dequantize_coef_q23_divides_by_two_to_the_23`.
+
+#### `f32_to_q` [@ANCHOR: f32_to_q]
+
+Converts an `f32` to a signed fixed-point `i32` with a given number of fractional bits: multiply by `2^frac_bits` in
+`f64`, round half away from zero (`f64::round`), cast. The `as i32` cast saturates, so a format wider than 31 bits cannot
+be held (use `f32_to_q64`); NaN becomes 0.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `f32` | Value to convert. |
+| `frac_bits` | `u32` | Fractional bits (23 for coefficients, 29 for the Chebyshev `x`); under 63 so the shift fits. |
+
+**Returns:** `i32`, `round(x * 2^frac_bits)`, saturated.
+
+**Errors:** none.
+
+**Special concerns:** private, pure, no allocation, locks or I/O; `std` feature only (float boundary). Used to quantise
+the Chebyshev coefficients and `x` in the LSP root search.
+
+**Signature:** `fn f32_to_q(x: f32, frac_bits: u32) -> i32`
+
+**See also:** test `f32_to_q_rounds_half_away_from_zero_and_saturates_at_i32`; `f32_to_q64`.
+
+#### `f32_to_q64` [@ANCHOR: f32_to_q64]
+
+The same conversion with an `i64` result, needed for the Q8.40 format of the Levinson recursion: even a value in
+`[-1, 1]` at 40 fractional bits reaches 2^40, which overflows `i32`. An earlier version narrowed first (`f32_to_q ... as
+i64`), which saturated every normalised autocorrelation entry to `i32::MAX`/`MIN` and caused coefficient errors up to 5.9
+(caught by the Levinson divergence test). NaN converts to 0, which the silent-frame path relies on.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `f32` | Value to convert, typically `r[j]/r[0]`. |
+| `frac_bits` | `u32` | Fractional bits, 40 for the Levinson recursion. |
+
+**Returns:** `i64`, `round(x * 2^frac_bits)`, half away from zero, saturating at the `i64` limits.
+
+**Errors:** none.
+
+**Special concerns:** private, pure, no allocation, locks or I/O; `std` feature only. Called by
+`levinson_durbin_fixed_core` to normalise `f32` autocorrelations.
+
+**Signature:** `fn f32_to_q64(x: f32, frac_bits: u32) -> i64`
+
+**See also:** test `f32_to_q64_holds_a_40_bit_format_and_maps_nan_to_zero`; `f32_to_q`.
 
 ### LPC to LSP conversion
 
@@ -2231,10 +2562,41 @@ from the first root near `x = 1`). It builds `P`/`Q`, finds each root with `find
 `acos_lut_fixed`; it returns `None` if any of the ten roots is not found. The all-integer form of the same step is
 `lpc_to_lsp_q23_from_integer_ak`.
 
-`[@ANCHOR: acos_lut_table_q23]` returns the 4097-entry table of `acos(i/4096)` in Q23 (generated into
-`tables.rs`, entries within one unit of the exact value, with `acos(0) = pi/2` and `acos(1) = 0`), the input of the linear
-interpolation in `acos_lut_q23`. `[@ANCHOR: pi_q23]` is pi in Q23 (26353590, the `f32` value of pi quantized); it is the
-reflection constant for negative arguments in `acos_lut_q23` and the upper limit of `cos_q23`'s angle domain.
+#### `acos_lut_table_q23` [@ANCHOR: acos_lut_table_q23]
+
+Returns the 4097-entry table of `acos(i/4096)` for `i` in `0..=4096`, in Q23, the input of the linear interpolation in
+`acos_lut_q23`. It is generated into `tables.rs` (`LPC_ACOS_LUT_Q23`), entries within one unit of the exact value, with
+`acos(0) = pi/2` and `acos(1) = 0`, so there is no runtime construction cost.
+
+**Arguments:** none.
+
+**Returns:** `&'static [i32; 4097]` (`ACOS_LUT_SIZE = 2^12 + 1`).
+
+**Errors:** none.
+
+**Special concerns:** read-only static data; thread-safe, no allocation or locks. Private, `std` feature only.
+
+**Signature:** `fn acos_lut_table_q23() -> &'static [i32; ACOS_LUT_SIZE]`
+
+**See also:** test `acos_lut_table_q23_holds_acos_of_i_over_4096`; `acos_lut_fixed`.
+
+#### `pi_q23` [@ANCHOR: pi_q23]
+
+Pi in Q23: 26353590, the `f32` value of pi quantised (one unit above `round(pi * 2^23)` because `f32::PI` is slightly
+high). It is a `const fn` for use wherever a constant is needed: the reflection point of `acos_lut_q23` (`acos(-x) = pi -
+acos(x)`), the upper limit of `cos_q23`'s angle domain, and the `2*pi` of `phase_increment_q32` and the envelope code.
+
+**Arguments:** none.
+
+**Returns:** `i64`, `tables::LPC_PI_Q23`.
+
+**Errors:** none.
+
+**Special concerns:** constant, no side effects, safe anywhere; available without `std`.
+
+**Signature:** `pub(crate) const fn pi_q23() -> i64`
+
+**See also:** test `pi_q23_is_pi_in_q23`; `cos_q23`, `phase_increment_q32`.
 
 `[@ANCHOR: acos_lut_fixed]` is the `f32` wrapper of the integer `acos`: it quantizes `|x|` to Q23 (clamped to 1.0), restores
 the sign, calls `acos_lut_q23` and converts the Q23 radians back to `f32`. `x` must lie in `[-1, 1]` (debug-asserted).
@@ -2242,27 +2604,201 @@ Worst-case error over the whole domain is about 7 Hz of an LSP at 8 kHz sampling
 
 ### LSP to LPC conversion (decoder side)
 
-`[@ANCHOR: lsp_to_lpc]` rebuilds `f32` LPC coefficients from ten LSP angles: `P(z)` is the product of
-`1 - 2cos(w_i) z^-1 + z^-2` over the even-indexed LSPs times `(1 + z^-1)`, `Q(z)` the same over the odd-indexed ones times
-`(1 - z^-1)`, and `a = (P + Q) / 2` truncated to eleven terms. The two helpers `[@ANCHOR: build_half_poly]` (the cascade of
-quadratic factors and the boundary factor for one of `P`/`Q`, in `f32`, returning the buffer and its length) and
-`[@ANCHOR: poly_mul_fixed]` (plain convolution of two ascending-power polynomials into a fixed-size buffer, returning the
-product length; "fixed" refers to the buffer size, not the arithmetic) do the work without heap allocation.
+#### `lsp_to_lpc` [@ANCHOR: lsp_to_lpc]
+
+Rebuilds `f32` LPC coefficients from ten LSP angles in radians. `P(z)` is the product of `1 - 2cos(w_i) z^-1 + z^-2` over
+the even-indexed LSPs times `(1 + z^-1)`, `Q(z)` the same over the odd-indexed ones times `(1 - z^-1)`; both have degree 11 and
+their top terms cancel when summed, so `a = (P + Q) / 2` truncated to eleven terms. Used by the decoders
+(`codec2_3200`, `codec2_1600`) and the spectral bridge once the LSPs are decoded.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp` | `&[f32; LPC_ORD]` | Ten ascending LSP angles in `(0, pi)`. |
+
+**Returns:** `LpcCoeffs` (`[f32; 11]`), `a[0] = 1`.
+
+**Errors:** none; an out-of-order or out-of-range LSP set is not rejected here (the callers check the order), it just gives
+a filter that may be unstable. The decoders pass LSPs already ordered by the quantiser/interpolator (unverified here).
+
+**Special concerns:** pure and allocation-free (fixed-size stack buffers), no locks or I/O; per-frame hot path on the
+decode side. `std` feature only.
+
+**Signature:** `pub fn lsp_to_lpc(lsp: &[f32; LPC_ORD]) -> LpcCoeffs`
+
+**See also:** test `lsp_to_lpc_round_trips_lpc_to_lsp_on_real_captured_ak_data`; `build_half_poly`, `poly_mul_fixed`, `lsp_to_lpc_fixed`.
+
+#### `build_half_poly` [@ANCHOR: build_half_poly]
+
+Builds one of `P(z)` or `Q(z)` for `lsp_to_lpc`: it cascades a degree-2 factor `1 - 2*cos(lsp_i)*z^-1 + z^-2` per LSP at
+indices `start_offset, start_offset + 2, ...`, then multiplies by the boundary factor `1 + boundary_sign*z^-1`, all in
+`f32` and without heap allocation.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `cos_lsp` | `&[f32; LPC_ORD]` | `cos` of each LSP. |
+| `start_offset` | `usize` | 0 for `P` (even LSPs), 1 for `Q` (odd LSPs). |
+| `boundary_sign` | `f32` | `+1.0` for `P`, `-1.0` for `Q`. |
+
+**Returns:** `([f32; HALF_POLY_LEN], usize)`: the ascending-power coefficients in a 12-entry buffer and the used length
+(12 for the callers' arguments).
+
+**Errors:** none; `HALF_POLY_LEN = LPC_ORD + 2` is sized for the maximum degree.
+
+**Special concerns:** private, pure, stack buffers only; `std` feature only.
+
+**Signature:** `fn build_half_poly(cos_lsp: &[f32; LPC_ORD], start_offset: usize, boundary_sign: f32) -> ([f32; HALF_POLY_LEN], usize)`
+
+**See also:** test `lsp_to_lpc_round_trips_lpc_to_lsp_on_real_captured_ak_data`; `build_half_poly_q23`.
+
+#### `poly_mul_fixed` [@ANCHOR: poly_mul_fixed]
+
+Plain convolution of two ascending-power polynomials into a fixed-size buffer, returning the product length. "Fixed"
+refers to the buffer size (`HALF_POLY_LEN`), not the arithmetic: it is `f32` throughout. A stack buffer is simpler
+and cheaper than a `Vec` on the codec's per-frame path.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a` | `&[f32; HALF_POLY_LEN]` | First factor; `a[..a_len]` is used. |
+| `a_len` | `usize` | Real length of `a`. |
+| `b` | `&[f32]` | Second factor (at most 3 terms in practice). |
+| `out` | `&mut [f32; HALF_POLY_LEN]` | Result buffer; `out[..len]` is overwritten. |
+
+**Returns:** `usize`, `a_len + b.len() - 1`.
+
+**Errors:** panics (index out of bounds) if the product length exceeds `HALF_POLY_LEN`, or underflows if `b` is empty; the
+callers never do either.
+
+**Special concerns:** private, pure, no allocation, locks or I/O; `std` feature only.
+
+**Signature:** `fn poly_mul_fixed(a: &[f32; HALF_POLY_LEN], a_len: usize, b: &[f32], out: &mut [f32; HALF_POLY_LEN]) -> usize`
+
+**See also:** test `lsp_to_lpc_round_trips_lpc_to_lsp_on_real_captured_ak_data`; `poly_mul_q23`.
 
 The Q23 decoder path (`lsp_to_lpc_fixed`, used by the fixed `Decoder`) mirrors this in integers.
-`[@ANCHOR: lsp_to_lpc_fixed]` computes `cos` of each Q23 angle with `cos_q23`, builds `P` and `Q` with
-`build_half_poly_q23`, and returns `(p + q) >> 1` for eleven Q8.23 coefficients.
-`[@ANCHOR: cos_q23]` takes an angle in Q23 radians, clamps it to `[0, pi]`, divides by pi (one 128-bit integer division) to
-get a position in the 4097-entry table, and linearly interpolates. `[@ANCHOR: cos_lut_table_q23]` is that table:
-`cos(pi * i/4096)` in Q23 (generated in `f32`, within two units of exact; exactly 1, 0 and -1 at the start, middle and end).
-`[@ANCHOR: build_half_poly_q23]` is the Q8.23 twin of `build_half_poly` (the quadratic factor is `[1, -2cos, 1]` in Q23,
-the boundary factor `[1, +-1]`), and `[@ANCHOR: poly_mul_q23]` the Q8.23 twin of `poly_mul_fixed`: each product is formed in
-`i128` and shifted right by 23 before it is accumulated.
+
+#### `lsp_to_lpc_fixed` [@ANCHOR: lsp_to_lpc_fixed]
+
+The integer `lsp_to_lpc`: it computes `cos` of each Q23 angle with `cos_q23`, builds `P` and `Q` with `build_half_poly_q23`,
+and returns `(p + q) >> 1` for eleven Q8.23 coefficients. It is integer end to end (the midpoint is a plain arithmetic
+shift, as elsewhere in the port) and is the decoder's no-FPU entry point.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `lsp_q23` | `&[i64; LPC_ORD]` | Ten LSP angles in radians, Q23 (`decode_lsps_delta_scalar_fixed` output). |
+
+**Returns:** `[i64; LPC_ORD + 1]`, Q8.23, the same format as the encoder's Levinson output.
+
+**Errors:** none; angles outside `[0, pi]` are clamped by `cos_q23`.
+
+**Special concerns:** pure, no allocation, locks or I/O, safe on any thread; no floating point.
+
+**Signature:** `pub fn lsp_to_lpc_fixed(lsp_q23: &[i64; LPC_ORD]) -> [i64; LPC_ORD + 1]`
+
+**See also:** test `lsp_to_lpc_fixed_matches_lsp_to_lpc_on_real_captured_lsp_data`; `cos_q23`.
+
+#### `cos_q23` [@ANCHOR: cos_q23]
+
+Integer cosine: a Q23 angle in, a Q23 value out. It clamps the angle to `[0, pi]`, divides by pi (one 128-bit integer
+division) to get a position in the 4097-entry table, and linearly interpolates between neighbouring entries. Unlike
+`acos_lut_fixed` it takes and returns integers, since every caller is already integer.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `angle_q23` | `i64` | Angle in radians, Q23. Clamped to `[0, pi_q23()]`; the clamp is silent because the value has passed through several upstream stages. |
+
+**Returns:** `i64`, `cos(angle)` in Q23, with a measured worst-case error under `1e-4` against `f32::cos` over a dense sweep of `[0, pi]` (the test's bound).
+
+**Errors:** none.
+
+**Special concerns:** pure and allocation-free; the table is read-only static data. No locks or I/O.
+
+**Signature:** `pub(crate) fn cos_q23(angle_q23: i64) -> i64`
+
+**See also:** test `cos_q23_matches_plain_float_cos_on_a_dense_sweep_of_its_whole_domain`; `cos_lut_table_q23`, `pi_q23`.
+
+#### `cos_lut_table_q23` [@ANCHOR: cos_lut_table_q23]
+
+The table behind `cos_q23`: `cos(pi * i/4096)` in Q23 for `i` in `0..=4096` (4097 entries). It is a precomputed static
+(`tables::LPC_COS_LUT_Q23`), generated in `f32`, so entries are within two units of exact; exactly 1, 0 and -1 at the start,
+middle and end.
+
+**Arguments:** none.
+
+**Returns:** `&'static [i32; COS_LUT_SIZE]`.
+
+**Errors:** none.
+
+**Special concerns:** read-only static data, thread-safe, no allocation or locks. Private.
+
+**Signature:** `fn cos_lut_table_q23() -> &'static [i32; COS_LUT_SIZE]`
+
+**See also:** test `cos_lut_table_q23_holds_cos_of_pi_times_i_over_4096`; `cos_q23`.
+
+#### `build_half_poly_q23` [@ANCHOR: build_half_poly_q23]
+
+The Q8.23 twin of `build_half_poly`: the quadratic factor is `[1, -2cos, 1]` in Q23 and the boundary factor `[1, +-1]`. The
+`-2 * c` is a Q23 value times a plain integer, so it needs no rescale.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `cos_lsp_q23` | `&[i64; LPC_ORD]` | `cos_q23` of each LSP. |
+| `start_offset` | `usize` | 0 for `P`, 1 for `Q`. |
+| `boundary_sign_q23` | `i64` | `+(1 << 23)` or `-(1 << 23)`. |
+
+**Returns:** `([i64; HALF_POLY_LEN], usize)`, coefficients in Q8.23 and their length.
+
+**Errors:** none.
+
+**Special concerns:** private, pure, stack buffers, no floating point.
+
+**Signature:** `fn build_half_poly_q23(cos_lsp_q23: &[i64; LPC_ORD], start_offset: usize, boundary_sign_q23: i64) -> ([i64; HALF_POLY_LEN], usize)`
+
+**See also:** test `lsp_to_lpc_fixed_matches_lsp_to_lpc_on_real_captured_lsp_data`; `poly_mul_q23`.
+
+#### `poly_mul_q23` [@ANCHOR: poly_mul_q23]
+
+The Q8.23 twin of `poly_mul_fixed`: each product is formed in `i128` (two Q8.23 values can be too wide for `i64`) and shifted
+right by 23 before it is accumulated, the same accumulate-then-narrow pattern as `lpc_energy_fixed`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a`, `a_len` | `&[i64; HALF_POLY_LEN]`, `usize` | First factor and its length. |
+| `b` | `&[i64]` | Second factor (Q8.23). |
+| `out` | `&mut [i64; HALF_POLY_LEN]` | Result, overwritten up to the product length. |
+
+**Returns:** `usize`, `a_len + b.len() - 1`.
+
+**Errors:** panics on a product longer than `HALF_POLY_LEN` (never from the callers).
+
+**Special concerns:** private, pure, no allocation, no floating point.
+
+**Signature:** `fn poly_mul_q23(a: &[i64; HALF_POLY_LEN], a_len: usize, b: &[i64], out: &mut [i64; HALF_POLY_LEN]) -> usize`
+
+**See also:** test `lsp_to_lpc_fixed_matches_lsp_to_lpc_on_real_captured_lsp_data`; `poly_mul_fixed`.
 
 ### Frame energy and bandwidth expansion
 
-`[@ANCHOR: lpc_energy_fixed]` is the `f32` boundary of `lpc_energy_q23`: the sum `a[i] * R[i]` for `i = 0..=10` (the
-prediction-error energy that the encoder quantizes) computed in Q23, converted to `f32` by dividing by 2^23.
+#### `lpc_energy_fixed` [@ANCHOR: lpc_energy_fixed]
+
+The `f32` boundary of `lpc_energy_q23`: the prediction-error energy the encoder quantises, the sum `a[i] * R[i]` for
+`i = 0..=10`, computed in Q23 and converted to `f32` by dividing by 2^23. Each term is formed in `i128` and shifted right
+by 23 before accumulating; the sum stays well inside `i64` for real frames (`|a| <= 77.17`, `|R[j]| <= R[0]`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `a_q23` | `&[i64; LPC_ORD + 1]` | Q8.23 LPC coefficients from the Levinson recursion (before bandwidth expansion). |
+| `r_q` | `&[i64; LPC_ORD + 1]` | Q8.23 autocorrelation from `autocorrelate_fixed`. |
+
+**Returns:** `f32`, the energy.
+
+**Errors:** none.
+
+**Special concerns:** pure, no allocation, locks or I/O. It must run before `apply_bw_gamma_fixed`, since the energy is
+defined on the un-expanded coefficients. Called by `EncoderFixed` and the 1600 bit/s fixed encoder.
+
+**Signature:** `pub fn lpc_energy_fixed(a_q23: &[i64; LPC_ORD + 1], r_q: &[i64; LPC_ORD + 1]) -> f32`
+
+**See also:** test `lpc_energy_fixed_and_lpc_energy_produce_the_same_real_quantizer_index`; `lpc_energy_q23`.
 
 `[@ANCHOR: apply_bw_gamma_fixed]` multiplies coefficient `a[i]` in place by `0.994^i` (the `BW_GAMMA_Q23` table, Q8.23),
 shifting right by 23 (floor). It widens the LPC spectral peaks' bandwidth slightly and must be applied after the energy
