@@ -20,6 +20,7 @@ from odoo.addons.portal.controllers.portal import CustomerPortal, pager as porta
 _PORTAL_EXCLUDED_TICKET_TYPES = {"csam_enticement_trafficking", "server_exception"}
 
 
+# [@ANCHOR: hams_helpdesk_portal_helpdesk_portal]
 class HelpdeskPortal(CustomerPortal):
 
     # [@ANCHOR: hams_helpdesk:COMM_prepare_home_portal_values]

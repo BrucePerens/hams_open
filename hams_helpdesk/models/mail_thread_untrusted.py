@@ -28,6 +28,7 @@ def stash_for(env):
     return env.cr.cache.setdefault(MAIL_STASH_KEY, {})
 
 
+# [@ANCHOR: hams_helpdesk_mail_thread_untrusted_mail_thread]
 class MailThread(models.AbstractModel):
     _inherit = "mail.thread"
 

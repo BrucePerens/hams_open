@@ -61,6 +61,7 @@ Frame = collections.namedtuple("Frame", "path line col module bundle version")
 Report = collections.namedtuple("Report", "type_name module frame route trace name release bundle version agent")
 
 
+# [@ANCHOR: hams_helpdesk_browser_exception_schema_report_rejected]
 class ReportRejected(Exception):
     """The report is refused. ``status`` is the HTTP status to answer, ``reason`` a short fixed word
     (never a piece of the report) for the log and the tests."""

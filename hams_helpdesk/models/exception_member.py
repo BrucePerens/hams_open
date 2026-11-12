@@ -49,6 +49,7 @@ REPLY_BODY = (
 )
 
 
+# [@ANCHOR: hams_helpdesk_exception_member_exception_member]
 class ExceptionMember(models.Model):
     _name = "hams_helpdesk.exception.member"
     _description = "Member affected by an automatic exception ticket"

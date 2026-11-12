@@ -111,6 +111,7 @@ _NCMEC_PARAM_FALLBACK_EMAIL = "hams_helpdesk.ncmec_fallback_report_email"
 # whether /finish is required even with zero uploaded files is unconfirmed.
 
 
+# [@ANCHOR: hams_helpdesk_helpdesk_ticket_helpdesk_ticket]
 class HelpdeskTicket(models.Model):
     _name = "hams_helpdesk.ticket"
     _description = "Helpdesk Ticket"

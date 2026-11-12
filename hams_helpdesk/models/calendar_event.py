@@ -4,6 +4,7 @@
 from odoo import api, models, fields
 
 
+# [@ANCHOR: hams_helpdesk_calendar_event_calendar_event]
 class CalendarEvent(models.Model):
     _inherit = "calendar.event"
 

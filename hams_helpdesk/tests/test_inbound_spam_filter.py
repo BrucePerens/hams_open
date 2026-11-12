@@ -328,6 +328,7 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertTrue(all(0 < weight <= 2 for weight, _reason in findings))
         self.assertGreaterEqual(BULK_SCORE_THRESHOLD, 3, "no two weak signals may flag a message")
 
+    # Tests [@ANCHOR: hams_helpdesk_untrusted_text_result]
     def test_26_a_failed_dmarc_spf_dkim_adds_weight_only(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_mail_signals]
         failing = "Authentication-Results: amazonses.com; spf=fail smtp.mailfrom=x.example.net; dkim=fail header.i=@x.example.net; dmarc=fail header.from=x.example.net\r\n"
@@ -367,6 +368,7 @@ class TestBulkMailSignals(HamsTransactionCase):
             self.assertTrue(inbound_spam_reasons(subject, "<p>x</p>", {}), subject)
         self.assertTrue(inbound_spam_reasons("Question", "<p>x</p>", {}, {"spam": "FAIL"}))
 
+    # Tests [@ANCHOR: hams_helpdesk_mail_thread_untrusted_mail_thread]
     def test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_referenced_message_ids]
         # Tests [@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]

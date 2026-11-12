@@ -75,6 +75,7 @@ class TestRelayReportSchema(MemberCase):
         self.assertTrue(schema.validate_report(good(kind="signal", signal="SIGSEGV", operator_key="04" + "ab" * 64)))
         self.assertTrue(schema.validate_report(good(kind="error")))
 
+    # Tests [@ANCHOR: hams_helpdesk_browser_exception_schema_report_rejected]
     def test_each_bad_report_is_refused_with_its_own_reason(self):
         def without(key):
             report = good()

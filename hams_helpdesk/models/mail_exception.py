@@ -54,6 +54,7 @@ def report_mail_failure(registry, failure_type, reason, server_id, count):
     )
 
 
+# [@ANCHOR: hams_helpdesk_mail_exception_mail_mail_exception_report]
 class MailMailExceptionReport(models.Model):
     _inherit = "mail.mail"
 
@@ -70,6 +71,7 @@ class MailMailExceptionReport(models.Model):
         return result
 
 
+# [@ANCHOR: hams_helpdesk_mail_exception_mail_thread_bounce_report]
 class MailThreadBounceReport(models.AbstractModel):
     _inherit = "mail.thread"
 

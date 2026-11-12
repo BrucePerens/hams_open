@@ -50,6 +50,7 @@ MAX_FINDINGS = 40
 # ---------------------------------------------------------------------------------------------
 
 
+# [@ANCHOR: hams_helpdesk_untrusted_text_result]
 class Result:
     """text: the clean text (or sanitized HTML). plain: its visible text. findings: list of dicts."""
 
@@ -648,6 +649,7 @@ def _safe_href(value):
     return None
 
 
+# [@ANCHOR: hams_helpdesk_untrusted_text_sanitizer]
 class _Sanitizer(HTMLParser):
     # [@ANCHOR: hams_helpdesk:untrusted_sanitizer_init]
     def __init__(self, location):

@@ -134,6 +134,7 @@ class TestExceptionClassification(ExceptionTicketCase):
     # Tests [@ANCHOR: hams_helpdesk:exc_is_expected]
     # Tests [@ANCHOR: hams_helpdesk:exc_report_exception]
 
+    # Tests [@ANCHOR: hams_helpdesk_ir_http_exception_ir_http_exception_report]
     def test_expected_control_flow_is_not_reported(self):
         expected = [
             (werkzeug.exceptions.NotFound(), "http", False),
@@ -647,6 +648,7 @@ class TestExceptionQuietPeriodReopen(ExceptionTicketCase):
         self.assertEqual(ticket.stage, "new")
         self.assertIn("after a release", ticket.message_ids[0].body)
 
+    # Tests [@ANCHOR: hams_helpdesk_daemon_exception_exception_fingerprint_daemon]
     def test_a_daemon_failure_always_reopens(self):
         uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
         service = self.Fingerprint.with_user(uid)
@@ -806,6 +808,7 @@ class TestMailFailureReports(ExceptionTicketCase):
     def mail_rows(self):
         return self.Fingerprint.search([("source", "=", "mail")])
 
+    # Tests [@ANCHOR: hams_helpdesk_mail_exception_mail_mail_exception_report]
     def test_failed_send_makes_one_ticket_with_no_addresses_or_content(self):
         mail = self.make_mail()
         self.env.flush_all()
@@ -889,6 +892,7 @@ class TestMailFailureReports(ExceptionTicketCase):
             self.assertEqual(scrub.mail_failure_class(text), label, text)
 
     # Tests [@ANCHOR: hams_helpdesk:exc_mail_bounce]
+    # Tests [@ANCHOR: hams_helpdesk_mail_exception_mail_thread_bounce_report]
     def test_bounce_processing_failure_is_reported_and_reraised(self):
         self.env.flush_all()
         # A bounce dict without the keys Odoo reads makes the real handler raise.
@@ -1253,6 +1257,7 @@ class TestExceptionHooks(RealTransactionCase):
         self.url_open("/this/page/does/not/exist-12345")
         self.assertFalse(self.rows())
 
+    # Tests [@ANCHOR: hams_helpdesk_ir_cron_exception_ir_cron_exception_report]
     def test_failing_cron_job_is_reported_and_still_raises(self):
         cron = self.env["ir.cron"].create(
             {

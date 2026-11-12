@@ -55,6 +55,7 @@ class TestHelpdeskCore(HamsTransactionCase):
         self.assertTrue(note.startswith(" "))
         self.assertIn("7 other server exception tickets", note)
 
+    # Tests [@ANCHOR: hams_helpdesk_calendar_event_calendar_event]
     def test_01_ticket_creation_and_routing(self):
         """Verify ticket creation routes to on-duty user, subscribes customer, and fires bus toast."""
         # [@ANCHOR: COMM_test_01_ticket_creation_and_routing]

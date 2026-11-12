@@ -436,6 +436,8 @@ class TestBrowserExceptionEndpoint(RealTransactionCase):
         self.assertEqual(len(rows), cap + 2, "every failure is counted")
         self.assertEqual(len(rows.filtered("ticket_id")), cap, "but only the cap opens tickets")
 
+    # Tests [@ANCHOR: hams_helpdesk_relay_exception_relay_exception]
+    # Tests [@ANCHOR: hams_helpdesk_browser_exception_browser_exception]
     def test_a_failure_inside_the_beacon_is_not_reported_by_the_beacon(self):
         self.safe_patch_object(type(self.env["hams_helpdesk.browser.exception"]), "_record", side_effect=RuntimeError("x"))
         with self.assertLogs("hams_helpdesk.exception_reporter", level="ERROR"):

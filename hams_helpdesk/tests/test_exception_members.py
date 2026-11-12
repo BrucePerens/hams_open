@@ -90,6 +90,11 @@ class TestWhoIsLinked(MemberCase):
     # Tests [@ANCHOR: hams_helpdesk:exc_note_member]
     # Tests [@ANCHOR: hams_helpdesk:exc_record_occurrence]
 
+    # Tests [@ANCHOR: hams_helpdesk_untrusted_mixin_hams_helpdesk_ticket_suspicion]
+    # Tests [@ANCHOR: hams_helpdesk_shift_handoff_shift_handoff_wizard]
+    # Tests [@ANCHOR: hams_helpdesk_helpdesk_ticket_helpdesk_ticket]
+    # Tests [@ANCHOR: hams_helpdesk_exception_member_exception_member]
+    # Tests [@ANCHOR: hams_helpdesk_exception_fingerprint_exception_fingerprint]
     def test_a_signed_in_member_is_linked_to_the_fingerprint_and_the_ticket(self):
         row = self.fail_as(self.member)
         self.assertEqual(row.member_ids.user_id, self.member)
@@ -98,6 +103,7 @@ class TestWhoIsLinked(MemberCase):
         self.assertEqual(row.member_ids.ticket_id, row.ticket_id)
         self.assertEqual(self.the_panel(row), row.member_ids)
 
+    # Tests [@ANCHOR: hams_helpdesk_untrusted_mixin_hams_helpdesk_untrusted_mixin]
     def test_nobody_is_linked_for_a_logged_out_visitor_a_service_account_odoobot_or_an_archived_account(self):
         archived = self.env["res.users"].create({"name": "Archived Member", "login": "exc_member_archived"})
         archived.action_archive()
@@ -185,6 +191,7 @@ class TestPanelDetails(MemberCase):
     def panel_row(self):
         return self.the_panel(self.fail_as(self.member))
 
+    # Tests [@ANCHOR: hams_helpdesk_res_partner_res_partner]
     def test_staff_see_name_callsign_and_email_computed_from_the_member(self):
         panel = self.panel_row()
         self.assertEqual(panel.member_name, NAME)

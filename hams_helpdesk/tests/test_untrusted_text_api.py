@@ -231,6 +231,7 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestUntrustedTextHtmlSanitizer(BaseCase):
+    # Tests [@ANCHOR: hams_helpdesk_untrusted_text_sanitizer]
     def test_01_sanitizer_methods_keep_allowed_tags_and_drop_everything_else(self):
         # Tests [@ANCHOR: hams_helpdesk:untrusted_sanitizer_init]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_sanitizer_handle_starttag]

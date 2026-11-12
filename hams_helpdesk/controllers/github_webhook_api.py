@@ -76,6 +76,7 @@ def _verify_github_signature(raw_body, secret, signature_header):
     return hmac.compare_digest(mac.hexdigest().encode(), provided_hex.encode("utf-8", "replace"))
 
 
+# [@ANCHOR: hams_helpdesk_github_webhook_api_github_webhook_controller]
 class GithubWebhookController(http.Controller):
 
     # [@ANCHOR: hams_helpdesk:COMM_github_webhook_receive]
