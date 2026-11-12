@@ -45,10 +45,13 @@ pub enum Capability {
     Identify,
     /// Spectrum scope: settings and waveform frames.
     Scope,
+    /// Select and read the Main or Sub receiver (band) of a dual-receiver rig, the band the
+    /// transmitter follows, and dual watch.
+    Receivers,
 }
 
 /// Every capability with its file-format name.
-const NAMES: [(Capability, &str); 19] = [
+const NAMES: [(Capability, &str); 20] = [
     (Capability::ReadFrequency, "read-frequency"),
     (Capability::SetFrequency, "set-frequency"),
     (Capability::ReadMode, "read-mode"),
@@ -68,6 +71,7 @@ const NAMES: [(Capability, &str); 19] = [
     (Capability::ReadMeters, "read-meters"),
     (Capability::Identify, "identify"),
     (Capability::Scope, "scope"),
+    (Capability::Receivers, "receivers"),
 ];
 
 impl Capability {

@@ -4,7 +4,7 @@
 
 use crate::capability::Capability;
 use crate::scope::{ScopeAction, ScopeAxis, ScopeSetting};
-use crate::units::{Hz, Level, Meter, Mode, Vfo};
+use crate::units::{Hz, Level, Meter, Mode, Receiver, Vfo};
 
 /// A command to a rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,6 +96,19 @@ pub enum Op {
     GetScopeSetting(u8, ScopeSetting),
     /// Run a one-shot scope command on a receiver (see [`ScopeAction`]).
     ScopeAction(u8, ScopeAction),
+    /// Make a receiver (band) the one later commands act on (Icom `07 D0`/`D1`).
+    SelectReceiver(Receiver),
+    /// Read which receiver (band) later commands act on.
+    GetReceiver,
+    /// Choose the band the transmitter follows (Yaesu `FT` on the dual-band FTDX models). Setting
+    /// it does not key the rig.
+    SetTxReceiver(Receiver),
+    /// Read the band the transmitter follows.
+    GetTxReceiver,
+    /// Turn dual watch (both receivers listening) on or off (Icom `07 C0`/`C1`).
+    SetDualWatch(bool),
+    /// Read whether dual watch is on.
+    GetDualWatch,
 }
 
 /// A kind of value the actor caches.
@@ -150,6 +163,12 @@ pub enum Field {
     ScopeReference(u8),
     /// A receiver's scope setting.
     ScopeSetting(u8, ScopeSetting),
+    /// The receiver (band) commands act on.
+    Receiver,
+    /// The band the transmitter follows.
+    TxReceiver,
+    /// Dual watch on or off.
+    DualWatch,
     /// A safety condition the actor reports on its own (see [`Alarm`]).
     Alarm,
 }
@@ -224,6 +243,12 @@ pub enum Observation {
     ScopeReference(u8, i16),
     /// A receiver's scope setting, as the rig's choice code.
     ScopeSetting(u8, ScopeSetting, u8),
+    /// The receiver (band) commands act on.
+    Receiver(Receiver),
+    /// The band the transmitter follows.
+    TxReceiver(Receiver),
+    /// Dual watch on or off.
+    DualWatch(bool),
     /// A safety condition reported by the actor, never by the rig.
     Alarm(Alarm),
 }
@@ -257,6 +282,9 @@ impl Observation {
             Observation::ScopeSpan(rx, _) => Field::ScopeSpan(*rx),
             Observation::ScopeReference(rx, _) => Field::ScopeReference(*rx),
             Observation::ScopeSetting(rx, setting, _) => Field::ScopeSetting(*rx, *setting),
+            Observation::Receiver(_) => Field::Receiver,
+            Observation::TxReceiver(_) => Field::TxReceiver,
+            Observation::DualWatch(_) => Field::DualWatch,
             Observation::Alarm(_) => Field::Alarm,
         }
     }
@@ -303,6 +331,12 @@ impl Op {
             | Op::SetScopeSetting(..)
             | Op::GetScopeSetting(..)
             | Op::ScopeAction(..) => Capability::Scope,
+            Op::SelectReceiver(_)
+            | Op::GetReceiver
+            | Op::SetTxReceiver(_)
+            | Op::GetTxReceiver
+            | Op::SetDualWatch(_)
+            | Op::GetDualWatch => Capability::Receivers,
         }
     }
 
@@ -402,6 +436,15 @@ mod tests {
             Field::ScopeReference(0)
         );
         assert_eq!(Observation::Alarm(Alarm::UnkeyFailed).field(), Field::Alarm);
+        assert_eq!(
+            Observation::Receiver(Receiver::Sub).field(),
+            Field::Receiver
+        );
+        assert_eq!(
+            Observation::TxReceiver(Receiver::Main).field(),
+            Field::TxReceiver
+        );
+        assert_eq!(Observation::DualWatch(true).field(), Field::DualWatch);
     }
 
     // Tests [@ANCHOR: radioctl_core_op_capability]
@@ -418,6 +461,17 @@ mod tests {
         assert_eq!(Op::SetPtt(false).required_capability(), Capability::SetPtt);
         assert_eq!(Op::SetSplit(true).required_capability(), Capability::Split);
         assert_eq!(Op::GetTxVfo.required_capability(), Capability::Split);
+        for op in [
+            Op::SelectReceiver(Receiver::Sub),
+            Op::GetReceiver,
+            Op::SetTxReceiver(Receiver::Main),
+            Op::GetTxReceiver,
+            Op::SetDualWatch(true),
+            Op::GetDualWatch,
+        ] {
+            assert_eq!(op.required_capability(), Capability::Receivers, "{op:?}");
+            assert!(!op.transmits(), "{op:?} never keys the rig");
+        }
         assert_eq!(
             Op::SetScopeSpan(0, Hz(50_000)).required_capability(),
             Capability::Scope

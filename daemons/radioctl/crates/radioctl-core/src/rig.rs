@@ -1889,6 +1889,9 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                     self.observe(Observation::TxVfo(rx), source);
                 }
             }
+            Op::SelectReceiver(rx) => self.observe(Observation::Receiver(*rx), source),
+            Op::SetTxReceiver(rx) => self.observe(Observation::TxReceiver(*rx), source),
+            Op::SetDualWatch(on) => self.observe(Observation::DualWatch(*on), source),
             Op::SetRit(on) => self.observe(Observation::Rit(*on), source),
             Op::SetXit(on) => self.observe(Observation::Xit(*on), source),
             Op::SetRitOffset(hz) => self.observe(Observation::RitOffset(*hz), source),

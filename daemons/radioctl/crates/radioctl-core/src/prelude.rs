@@ -20,4 +20,4 @@ pub use crate::rig::{
     TransmitLease, TransmitPermit,
 };
 pub use crate::rigfile;
-pub use crate::units::{Hz, Level, Meter, Mode, Vfo};
+pub use crate::units::{Hz, Level, Meter, Mode, Receiver, Vfo};
