@@ -10,6 +10,7 @@ from . import detector
 SCANNED = "hams_secret_canary.scanned"  # environ key: `ir.http._post_dispatch` already scanned this response
 
 
+# [@ANCHOR: hams_secret_canary:is_text]
 def _is_text(content_type):
     mimetype = content_type.split(";")[0].strip().lower()
     return mimetype.startswith("text/") or mimetype in detector.SCANNABLE_MIMETYPES
@@ -36,12 +37,14 @@ def scan_wsgi(application, scan):
     return call
 
 
+# [@ANCHOR: hams_secret_canary:pass_through]
 def _pass_through(body, path, scan):
     """The same chunks as `body`, closing `body` when the server closes the result."""
     inner = ClosingIterator(body)  # closes `body` if it has a close()
     return ClosingIterator(_scan_chunks(inner, path, scan), inner.close)
 
 
+# [@ANCHOR: hams_secret_canary:scan_chunks]
 def _scan_chunks(chunks, path, scan):
     seen = bytearray()
     for chunk in chunks:

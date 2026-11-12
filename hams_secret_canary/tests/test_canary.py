@@ -218,6 +218,9 @@ class TestWsgiScan(HamsTransactionCase):
         body = b"".join(wrapped(dict(environ or {}, PATH_INFO="/xmlrpc/2/common"), lambda status, headers, exc_info=None: sent.append(status)))
         return body, seen, sent
 
+    # Tests [@ANCHOR: hams_secret_canary:is_text]
+    # Tests [@ANCHOR: hams_secret_canary:pass_through]
+    # Tests [@ANCHOR: hams_secret_canary:scan_chunks]
     def test_text_is_scanned_after_it_is_sent_unchanged_even_when_split_in_chunks(self):
         payload = b"<fault>" + SECRET.encode() + b"</fault>"
         body, seen, sent = self._run(_wsgi(payload, chunks=4))
@@ -227,9 +230,11 @@ class TestWsgiScan(HamsTransactionCase):
     def test_a_response_post_dispatch_already_scanned_is_not_scanned_again(self):
         self.assertEqual(self._run(_wsgi(b"x"), {wsgi_scan.SCANNED: True})[1], [])
 
+    # Tests [@ANCHOR: hams_secret_canary:is_text]
     def test_binary_responses_are_not_scanned(self):
         self.assertEqual(self._run(_wsgi(b"x", "image/png"))[1], [])
 
+    # Tests [@ANCHOR: hams_secret_canary:scan_chunks]
     def test_only_the_first_megabyte_is_scanned(self):
         body, seen, _sent = self._run(_wsgi(b"a" * (detector.MAX_SCAN_BYTES + 5000), chunks=3))
         self.assertEqual(len(body), detector.MAX_SCAN_BYTES + 5000)

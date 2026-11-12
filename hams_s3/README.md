@@ -48,3 +48,8 @@ After running the script, restart the Odoo server and update the apps list.
   form, and `set_values` (only while "Use Amazon S3 Storage" is checked) writes the form's values
   to that record, or creates one named "Amazon S3 Storage" if none exists, using `us-east-1` when
   no region is chosen.
+- `_register_s3_secret_with_canary` ([@ANCHOR: hams_s3_register_secret_with_canary]), called first by `set_values`: when the optional
+  `hams_secret_canary` addon is installed, registers the fingerprint (a salted hash, never the value) of a newly entered S3 secret
+  key so its appearance in a response or log line raises an alarm. An unchanged (masked `********`) or empty key, or one that is not
+  a single token (the canary raises `ValueError`, logged as a warning), is skipped: saving the form never fails because of the canary,
+  and without the addon nothing happens.

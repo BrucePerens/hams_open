@@ -62,6 +62,18 @@ class TestHamsS3ConfigSettings(HamsTransactionCase):
         self.assertEqual(backend.aws_secret_access_key, 'NEW_SECRET')
         self.assertEqual(res.get('hams_s3_aws_region'), 'us-east-1')
 
+    # Tests [@ANCHOR: hams_s3_register_secret_with_canary]
+    def test_a_newly_entered_secret_is_registered_with_the_canary_and_a_mask_or_odd_value_is_skipped(self):
+        secret = "Qw8Zk39dQ7mPq2LxV8nTb4RcY6aHjUe5Wt1XyZ0n"
+        settings = self.ConfigSettings.create({"hams_s3_aws_secret_access_key": secret})
+        settings._register_s3_secret_with_canary()  # never raises, with or without the optional addon
+        if "hams.secret.canary" in self.env:  # burn-ignore-optional-oca-dep
+            with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
+                self.env["hams.secret.canary"]._scan_text("<p>%s</p>" % secret, "response", "/x")
+            self.assertNotIn(secret, logs.output[0])
+        for skipped in ("********", "short value with spaces", ""):
+            self.ConfigSettings.create({"hams_s3_aws_secret_access_key": skipped})._register_s3_secret_with_canary()
+
     # Tests [@ANCHOR: hams_s3_compute_oca_installed]
     def test_compute_hams_s3_oca_installed_is_false_when_storage_backend_is_absent(self):
         # This sandbox never installs OCA's storage_backend (see this
