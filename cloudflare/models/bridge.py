@@ -3,6 +3,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: cloudflare_bridge_website_page]
 class WebsitePage(models.Model):
     _name = "website.page"
     _inherit = ["website.page", "cloudflare.purge.mixin"]
@@ -21,6 +22,7 @@ class WebsitePage(models.Model):
         return super().unlink()
 
 
+# [@ANCHOR: cloudflare_bridge_blog_post]
 class BlogPost(models.Model):
     _name = "blog.post"
     _inherit = ["blog.post", "cloudflare.purge.mixin"]
@@ -49,6 +51,7 @@ class BlogPost(models.Model):
         return super().unlink()
 
 
+# [@ANCHOR: cloudflare_bridge_website_menu]
 class WebsiteMenu(models.Model):
     _name = "website.menu"
     _inherit = ["website.menu", "cloudflare.purge.mixin"]
@@ -66,6 +69,7 @@ class WebsiteMenu(models.Model):
         return super().unlink()
 
 
+# [@ANCHOR: cloudflare_bridge_product_template]
 class ProductTemplate(models.Model):
     _name = "product.template"
     _inherit = ["product.template", "cloudflare.purge.mixin"]

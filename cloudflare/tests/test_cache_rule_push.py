@@ -164,6 +164,7 @@ class TestCacheRulePush(HamsTransactionCase):
         self.mock_update.assert_not_called()
         self.mock_create.assert_not_called()
 
+    # Tests [@ANCHOR: cloudflare_dns_push_wizard_cloudflare_dns_push_wizard]
     def test_plan_changes_nothing_and_stale_hash_is_refused(self):
         # Tests [@ANCHOR: cloudflare:COMM_cache_plan_cache_rules]
         # Tests [@ANCHOR: cloudflare:COMM_cache_action_push_cache_rules]

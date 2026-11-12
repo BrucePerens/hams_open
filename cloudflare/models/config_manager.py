@@ -48,6 +48,7 @@ DEFAULT_WAF_RULES = [
 ]
 
 
+# [@ANCHOR: cloudflare_config_manager_cloudflare_config_manager]
 class CloudflareConfigManager(models.AbstractModel):
     _name = "cloudflare.config.manager"
     _description = "Cloudflare Configuration Manager"

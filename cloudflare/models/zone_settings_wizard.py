@@ -6,6 +6,7 @@ from ..utils.cloudflare_api import get_zone_settings, update_zone_setting
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: cloudflare_zone_settings_wizard_cloudflare_zone_settings_wizard]
 class CloudflareZoneSettingsWizard(models.TransientModel):
     _name = "cloudflare.zone.settings.wizard"
     _description = "Cloudflare Zone Settings Wizard"

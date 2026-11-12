@@ -133,6 +133,7 @@ def _parse_ranges(text):
     return ranges
 
 
+# [@ANCHOR: cloudflare_trusted_ip_ranges_cloudflare_trusted_ip_utils]
 class CloudflareTrustedIpUtils(models.AbstractModel):
     _name = "cloudflare.trusted_ip_utils"
     _description = "Cloudflare Trusted IP Range Utilities"

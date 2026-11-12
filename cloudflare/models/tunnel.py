@@ -32,6 +32,7 @@ LEGACY_PROVISIONED_PARAM = "cloudflare.tunnel.provisioned"
 LEGACY_PROVISIONED_MIGRATED = "migrated-to-per-tunnel"
 
 
+# [@ANCHOR: cloudflare_tunnel_cloudflare_tunnel]
 class CloudflareTunnel(models.Model):
     _name = "cloudflare.tunnel"
     _description = "Cloudflare Tunnel"

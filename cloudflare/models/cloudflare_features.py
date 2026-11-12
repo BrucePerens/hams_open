@@ -5,6 +5,7 @@ from odoo import models, fields, _
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: cloudflare_cloudflare_features_cloudflare_zone_settings]
 class CloudflareZoneSettings(models.Model):
     _name = "cloudflare.zone.settings"
     _description = "Cloudflare Zone Settings"
@@ -28,6 +29,7 @@ class CloudflareZoneSettings(models.Model):
     )
 
 
+# [@ANCHOR: cloudflare_cloudflare_features_cloudflare_rate_limit]
 class CloudflareRateLimit(models.Model):
     _name = "cloudflare.rate.limit"
     _description = "Cloudflare Rate Limit"
@@ -50,6 +52,7 @@ class CloudflareRateLimit(models.Model):
     website_id = fields.Many2one("website", string="Website")
 
 
+# [@ANCHOR: cloudflare_cloudflare_features_cloudflare_cache_rule]
 class CloudflareCacheRule(models.Model):
     _name = "cloudflare.cache.rule"
     _description = "Cloudflare Cache Rule"
@@ -129,6 +132,7 @@ class CloudflareCacheRule(models.Model):
         }
 
 
+# [@ANCHOR: cloudflare_cloudflare_features_cloudflare_zero_trust_policy]
 class CloudflareZeroTrustPolicy(models.Model):
     _name = "cloudflare.zero.trust.policy"
     _description = "Cloudflare Zero Trust Policy"

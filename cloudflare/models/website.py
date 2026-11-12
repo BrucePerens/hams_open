@@ -29,6 +29,7 @@ _CLOUDFLARE_CREDENTIAL_FIELDS = frozenset({
 })
 
 
+# [@ANCHOR: cloudflare_website_website_cloudflare]
 class WebsiteCloudflare(models.Model):
     _inherit = "website"
 

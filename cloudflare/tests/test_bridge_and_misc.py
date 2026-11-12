@@ -28,6 +28,13 @@ class TestBridgeAndMisc(RealTransactionCase):
         self.website = self.env["website"].get_current_website()
         self.PurgeQueue.search([], limit=10000).unlink()
 
+    # Tests [@ANCHOR: cloudflare_purge_queue_cloudflare_purge_queue]
+    # Tests [@ANCHOR: cloudflare_domain_cloudflare_routing_domain]
+    # Tests [@ANCHOR: cloudflare_dns_record_cloudflare_dnsrecord]
+    # Tests [@ANCHOR: cloudflare_bridge_product_template]
+    # Tests [@ANCHOR: cloudflare_bridge_website_menu]
+    # Tests [@ANCHOR: cloudflare_bridge_blog_post]
+    # Tests [@ANCHOR: cloudflare_bridge_website_page]
     def test_blog_post_write_enqueues_a_purge(self):
         # Tests [@ANCHOR: cloudflare:COMM_blog_post_write]
         blog = self.env["blog.blog"].create({"name": "Bridge Test Blog"})
@@ -56,6 +63,17 @@ class TestBridgeAndMisc(RealTransactionCase):
                 )
             )
 
+    # Tests [@ANCHOR: cloudflare_zone_settings_wizard_cloudflare_zone_settings_wizard]
+    # Tests [@ANCHOR: cloudflare_waf_rule_cloudflare_waf_rule]
+    # Tests [@ANCHOR: cloudflare_tunnel_cloudflare_tunnel]
+    # Tests [@ANCHOR: cloudflare_purge_wizard_cloudflare_purge_wizard]
+    # Tests [@ANCHOR: cloudflare_ip_ban_cloudflare_ipban]
+    # Tests [@ANCHOR: cloudflare_hostname_pending_delete_cloudflare_hostname_pending_delete]
+    # Tests [@ANCHOR: cloudflare_config_backup_cloudflare_config_backup]
+    # Tests [@ANCHOR: cloudflare_cloudflare_features_cloudflare_zero_trust_policy]
+    # Tests [@ANCHOR: cloudflare_cloudflare_features_cloudflare_cache_rule]
+    # Tests [@ANCHOR: cloudflare_cloudflare_features_cloudflare_rate_limit]
+    # Tests [@ANCHOR: cloudflare_cloudflare_features_cloudflare_zone_settings]
     def test_website_menu_write_and_unlink_purge_all_menus(self):
         # Tests [@ANCHOR: cloudflare:COMM_menu_write]
 
@@ -140,6 +158,9 @@ class TestBridgeAndMisc(RealTransactionCase):
                 )
             )
 
+    # Tests [@ANCHOR: cloudflare_website_website_cloudflare]
+    # Tests [@ANCHOR: cloudflare_res_config_settings_res_config_settings]
+    # Tests [@ANCHOR: cloudflare_config_manager_cloudflare_config_manager]
     def test_trigger_edge_purge_static_assets_enqueues_on_mtime_increase(self):
         # Tests [@ANCHOR: cloudflare:COMM_trigger_edge_purge_static_assets]
         #
@@ -187,6 +208,7 @@ class TestBridgeAndMisc(RealTransactionCase):
             utils._get_system_param("cloudflare.last_static_mtime"), "99999999"
         )
 
+    # Tests [@ANCHOR: cloudflare_edge_context_cloudflare_utils]
     def test_get_current_website_id_falls_back_to_get_current_website_outside_a_request(self):
         # Tests [@ANCHOR: cloudflare:COMM_get_current_website_id]
         result = self.env["cloudflare.utils"].get_current_website_id()
@@ -212,6 +234,7 @@ class TestBridgeAndMisc(RealTransactionCase):
         settings.action_pull_cf_waf()
         mock_pull.assert_called_once_with(website_id=self.website.id)
 
+    # Tests [@ANCHOR: cloudflare_tunnel_route_cloudflare_tunnel_route]
     def test_tunnel_route_compute_name_reflects_hostname_path_and_service(self):
         # Tests [@ANCHOR: cloudflare:COMM_tunnel_route_compute_name]
         route = self.env["cloudflare.tunnel.route"].create(

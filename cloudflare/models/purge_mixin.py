@@ -3,6 +3,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: cloudflare_purge_mixin_cloudflare_purge_mixin]
 class CloudflarePurgeMixin(models.AbstractModel):
     _name = "cloudflare.purge.mixin"
     _description = "Cloudflare Purge Mixin"

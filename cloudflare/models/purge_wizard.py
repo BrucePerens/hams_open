@@ -6,6 +6,7 @@ from odoo.addons.cloudflare.utils.cloudflare_api import purge_everything, purge_
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: cloudflare_purge_wizard_cloudflare_purge_wizard]
 class CloudflarePurgeWizard(models.TransientModel):
     _name = "cloudflare.purge.wizard"
     _description = "Cloudflare Manual Cache Purge Wizard"

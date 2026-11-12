@@ -7,6 +7,7 @@ from ..utils import dns_plan
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: cloudflare_dns_push_wizard_cloudflare_dns_push_wizard]
 class CloudflareDnsPushWizard(models.TransientModel):
     """Two steps: show the plan (reads only), then apply exactly that plan."""
 

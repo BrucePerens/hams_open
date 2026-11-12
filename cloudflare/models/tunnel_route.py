@@ -7,6 +7,7 @@ from odoo.exceptions import ValidationError
 from ..utils import dns_plan
 
 
+# [@ANCHOR: cloudflare_tunnel_route_cloudflare_tunnel_route]
 class CloudflareTunnelRoute(models.Model):
     _name = "cloudflare.tunnel.route"
     _description = "Cloudflare Tunnel Route"

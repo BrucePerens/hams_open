@@ -24,6 +24,7 @@ MAX_DELETE_ATTEMPTS = 8
 BACKOFF_MINUTES = [5, 10, 20, 40, 80, 160, 320, 720]
 
 
+# [@ANCHOR: cloudflare_hostname_pending_delete_cloudflare_hostname_pending_delete]
 class CloudflareHostnamePendingDelete(models.Model):
     """A custom hostname Cloudflare would not delete, kept so it can be retried.
 

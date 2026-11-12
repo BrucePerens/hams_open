@@ -3,6 +3,7 @@
 from odoo import api, models, fields
 
 
+# [@ANCHOR: cloudflare_tunnel_wizard_cloudflare_tunnel_wizard]
 class CloudflareTunnelWizard(models.TransientModel):
     _name = "cloudflare.tunnel.wizard"
     _description = "Cloudflare Tunnel Setup Wizard"

@@ -10,6 +10,7 @@ from cryptography.fernet import Fernet, InvalidToken
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: cloudflare_tenant_key_cloudflare_tenant_key]
 class CloudflareTenantKey(models.Model):
     _name = "cloudflare.tenant.key"
     _description = "Per-Company Cloudflare Encryption Key (Envelope-Encrypted)"

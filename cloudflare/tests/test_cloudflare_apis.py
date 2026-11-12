@@ -45,6 +45,7 @@ class TestCloudflareAPIs(HamsTransactionCase):
         res = self.env["cloudflare.waf"].ban_ip("192.168.1.100", website_id=website.id)
         self.assertTrue(res)
 
+    # Tests [@ANCHOR: cloudflare_turnstile_cloudflare_turnstile]
     def test_02_turnstile_secret_fetch(self):
         # Tests [@ANCHOR: cloudflare:COMM_compute_cf_turnstile_secret]
 
@@ -168,6 +169,7 @@ class TestCloudflareAPIs(HamsTransactionCase):
             "verification.",
         )
 
+    # Tests [@ANCHOR: cloudflare_tunnel_wizard_cloudflare_tunnel_wizard]
     def test_03_tunnel_setup(self):
         # Tests [@ANCHOR: cloudflare:COMM_tunnel_wizard_compute_command]
         # [@ANCHOR: COMM_test_cf_tunnel_setup]
@@ -576,6 +578,7 @@ class TestCloudflareRetryIdempotency(HamsTransactionCase):
             _logger.info("Probe %s expectedly ended in %s: %s", method, type(exc).__name__, exc)
         return counts[method]
 
+    # Tests [@ANCHOR: cloudflare_cloudflare_api_idempotency_aware_retry]
     def test_08_retry_policy_excludes_non_idempotent_methods(self):
         # [@ANCHOR: test_cf_retry_policy_excludes_non_idempotent_methods]
 

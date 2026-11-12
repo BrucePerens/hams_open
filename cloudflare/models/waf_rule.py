@@ -3,6 +3,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: cloudflare_waf_rule_cloudflare_waf_rule]
 class CloudflareWafRule(models.Model):
     _name = "cloudflare.waf.rule"
     _description = "Cloudflare WAF Custom Rule"

@@ -24,6 +24,7 @@ NAME_PATTERN = re.compile(r"(\*\.)?([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-
 CREDENTIAL_ERROR = "***ERROR***"
 
 
+# [@ANCHOR: cloudflare_dns_record_cloudflare_dnsrecord]
 class CloudflareDNSRecord(models.Model):
     """One DNS record that Odoo is the source of truth for.
 

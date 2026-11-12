@@ -14,6 +14,7 @@ PURGE_INCIDENT_SOURCE = "Cloudflare purge queue"
 RETRY_FAILED_AFTER_HOURS = 1
 
 
+# [@ANCHOR: cloudflare_purge_queue_cloudflare_purge_queue]
 class CloudflarePurgeQueue(models.Model):
     _name = "cloudflare.purge.queue"
     _description = "Cloudflare Cache Purge Queue"
