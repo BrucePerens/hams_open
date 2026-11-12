@@ -28,6 +28,7 @@ use crate::virtual_rig::VirtualRig;
 
 /// A virtual rig that is up: the rig handle to drive it and the control of the stand-in behind it
 /// (front panel, state, fault injection).
+// [@ANCHOR: radioctl_easy_spawned_virtual_rig]
 pub struct SpawnedVirtualRig {
     /// The rig actor's handle. Its transmit gate is closed.
     pub rig: RigHandle,
@@ -69,6 +70,7 @@ impl VirtualRig {
 
 /// A rig on a serial port: the handle, and the port's status, counters and control lines. Keep
 /// `link` for as long as the rig is in use: the actor's link watch and any line keyer depend on it.
+// [@ANCHOR: radioctl_easy_serial_rig]
 pub struct SerialRig {
     /// The rig actor's handle. Its transmit gate is closed.
     pub rig: RigHandle,

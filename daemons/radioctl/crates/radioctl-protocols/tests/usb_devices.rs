@@ -915,3 +915,9 @@ async fn the_funcube_gain_commands_follow_the_dongle_model() {
 // Data-structure anchors (ADR 0113) exercised by the tests above.
 // Tests [@ANCHOR: radioctl_dwt_dwt_engine]
 // Tests [@ANCHOR: radioctl_dwt_dwt_twin]
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_funcube_funcube_engine]
+// Tests [@ANCHOR: radioctl_funcube_funcube_twin]
+// Tests [@ANCHOR: radioctl_funcube_pending]
+// Tests [@ANCHOR: radioctl_funcube_reading]

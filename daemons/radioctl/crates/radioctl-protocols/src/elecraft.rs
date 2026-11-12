@@ -52,6 +52,7 @@ pub const MAX_KY_CHARS: usize = 24;
 pub const MAX_RIT_HZ: i16 = 9_999;
 
 /// The command prefix and the allowed range of a level, from the manual.
+// [@ANCHOR: radioctl_elecraft_level_wire_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LevelWire {
     /// The two-letter command.
@@ -200,6 +201,7 @@ pub fn decode_if(payload: &str, desc: &RigDescription) -> Option<Vec<Observation
 }
 
 /// The Elecraft ASCII client engine for one rig.
+// [@ANCHOR: radioctl_elecraft_elecraft_engine]
 #[derive(Debug)]
 pub struct ElecraftEngine {
     desc: RigDescription,
@@ -540,6 +542,8 @@ pub const MODE_DIGITS: [(Mode, u8); 8] = [
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_elecraft_level_wire_struct]
+    // Tests [@ANCHOR: radioctl_elecraft_elecraft_engine]
     use super::*;
     use radioctl_core::rigfile;
 

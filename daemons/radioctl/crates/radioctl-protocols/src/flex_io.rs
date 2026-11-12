@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 
 use crate::virtual_flex::{FlexPanel, FlexRigState, Order, VirtualFlex};
 
+// [@ANCHOR: radioctl_flex_io_shared]
 struct Shared {
     rig: Mutex<VirtualFlex>,
     push: mpsc::UnboundedSender<Vec<u8>>,
@@ -26,6 +27,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// Control of a served virtual radio.
+// [@ANCHOR: radioctl_flex_io_virtual_flex_control]
 #[derive(Clone)]
 pub struct VirtualFlexControl {
     shared: Arc<Shared>,

@@ -108,6 +108,7 @@ fn take_frame(rx: &mut RxBuffer) -> Option<Vec<u8>> {
     }
 }
 
+// [@ANCHOR: radioctl_guohe_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -116,6 +117,7 @@ enum Pending {
 }
 
 /// The Guohe client engine.
+// [@ANCHOR: radioctl_guohe_guohe_engine]
 #[derive(Debug)]
 pub struct GuoheEngine {
     desc: RigDescription,
@@ -246,6 +248,7 @@ impl ProtocolEngine for GuoheEngine {
 }
 
 /// A virtual PMR-171.
+// [@ANCHOR: radioctl_guohe_guohe_twin]
 #[derive(Debug)]
 pub struct GuoheTwin {
     rx: RxBuffer,
@@ -333,6 +336,9 @@ impl VendorTwin for GuoheTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_guohe_pending]
+    // Tests [@ANCHOR: radioctl_guohe_guohe_engine]
+    // Tests [@ANCHOR: radioctl_guohe_guohe_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

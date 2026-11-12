@@ -211,3 +211,7 @@ async fn nothing_that_can_key_reaches_the_wire_while_the_gate_is_closed() {
     let again = rig.set_ptt(true).await.expect_err("closed again");
     assert_eq!(again.kind, ErrorKind::TransmitGateClosed);
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_flex_io_shared]
+// Tests [@ANCHOR: radioctl_flex_io_virtual_flex_control]

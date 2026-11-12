@@ -27,6 +27,7 @@ use crate::attenuation;
 const MAX_LINE: usize = 128;
 
 /// The engine for one OpenHPSDR radio.
+// [@ANCHOR: radioctl_hpsdr_net_hpsdr_engine]
 #[derive(Debug)]
 pub struct HpsdrEngine {
     desc: RigDescription,
@@ -145,6 +146,7 @@ impl ProtocolEngine for HpsdrEngine {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_hpsdr_net_hpsdr_engine]
     use super::*;
     use radioctl_core::rigfile;
 

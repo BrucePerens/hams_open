@@ -191,3 +191,7 @@ async fn open_serial_rig_names_the_description_or_the_port_it_could_not_open() {
         miss.detail
     );
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_easy_serial_rig]
+// Tests [@ANCHOR: radioctl_easy_spawned_virtual_rig]

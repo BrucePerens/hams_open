@@ -21,6 +21,7 @@ use tokio::io::{duplex, AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tokio::runtime::Handle;
 
 /// A running session of either protocol.
+// [@ANCHOR: radioctl_hpsdr_io_hpsdr_link]
 #[derive(Debug)]
 pub enum HpsdrLink {
     /// A Protocol 1 session.
@@ -30,6 +31,7 @@ pub enum HpsdrLink {
 }
 
 /// Bridge settings.
+// [@ANCHOR: radioctl_hpsdr_io_hpsdr_options]
 #[derive(Debug, Clone, Copy)]
 pub struct HpsdrOptions {
     /// How long one `P 1` keys the radio before the bridge unkeys by itself.
@@ -55,6 +57,7 @@ impl Default for HpsdrOptions {
     }
 }
 
+// [@ANCHOR: radioctl_hpsdr_io_shared]
 struct Shared {
     link: Mutex<Option<HpsdrLink>>,
     gate: TxGate,
@@ -66,6 +69,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 /// Handle on the served bridge: the attenuator (also reachable as `Level::Attenuator` through the
 /// actor) and the status.
+// [@ANCHOR: radioctl_hpsdr_io_hpsdr_control]
 #[derive(Clone)]
 pub struct HpsdrControl {
     shared: Arc<Shared>,
@@ -139,6 +143,7 @@ fn request_ptt(link: &HpsdrLink, on: bool, drive: u8) -> Result<(), hpsdr::error
 }
 
 /// Mutable state of the bridge task.
+// [@ANCHOR: radioctl_hpsdr_io_state]
 struct State {
     freq: u32,
     ptt: bool,

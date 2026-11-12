@@ -100,6 +100,7 @@ pub fn command_report(command: u8, args: &[u8]) -> Vec<u8> {
     report
 }
 
+// [@ANCHOR: radioctl_funcube_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -113,6 +114,7 @@ enum Pending {
 }
 
 /// How the answer byte of a read is turned into an observation.
+// [@ANCHOR: radioctl_funcube_reading]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Reading {
     ProPreamp,
@@ -133,6 +135,7 @@ fn code_step(table: &[u8], code: u8) -> u16 {
 }
 
 /// The FUNcube client engine.
+// [@ANCHOR: radioctl_funcube_funcube_engine]
 #[derive(Debug)]
 pub struct FuncubeEngine {
     desc: RigDescription,
@@ -374,6 +377,7 @@ impl ProtocolEngine for FuncubeEngine {
 }
 
 /// A virtual FUNcube dongle: a [`UsbDevice`] answering the HID reports above.
+// [@ANCHOR: radioctl_funcube_funcube_twin]
 #[derive(Debug)]
 pub struct FuncubeTwin {
     hz: u32,

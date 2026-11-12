@@ -70,6 +70,7 @@ pub fn lines_without_prompts(bytes: &[u8]) -> Vec<Vec<u8>> {
         .collect()
 }
 
+// [@ANCHOR: radioctl_gomspace_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -78,6 +79,7 @@ enum Pending {
 }
 
 /// The GS100 client engine.
+// [@ANCHOR: radioctl_gomspace_gomspace_engine]
 #[derive(Debug)]
 pub struct GomspaceEngine {
     desc: RigDescription,
@@ -167,6 +169,7 @@ impl ProtocolEngine for GomspaceEngine {
 }
 
 /// A virtual GS100.
+// [@ANCHOR: radioctl_gomspace_gomspace_twin]
 #[derive(Debug)]
 pub struct GomspaceTwin {
     rx: RxBuffer,
@@ -238,6 +241,9 @@ impl VendorTwin for GomspaceTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_gomspace_pending]
+    // Tests [@ANCHOR: radioctl_gomspace_gomspace_engine]
+    // Tests [@ANCHOR: radioctl_gomspace_gomspace_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

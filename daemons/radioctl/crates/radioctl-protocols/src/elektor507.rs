@@ -88,6 +88,7 @@ fn unsupported(what: &str) -> RigError {
 }
 
 /// The PLL settings: total pump `p`, total counter `q` and divider 1 `div`.
+// [@ANCHOR: radioctl_elektor507_pll]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pll {
     /// Total pump (P).
@@ -178,6 +179,7 @@ impl Pll {
 }
 
 /// Builds the pin samples of I2C write transactions.
+// [@ANCHOR: radioctl_elektor507_samples]
 #[derive(Debug)]
 struct Samples<'a> {
     port: &'a mut u8,
@@ -259,6 +261,7 @@ fn vendor(request: u8, value: u16) -> Request {
 }
 
 /// The Elektor SDR-USB client engine.
+// [@ANCHOR: radioctl_elektor507_elektor507_engine]
 #[derive(Debug)]
 pub struct Elektor507Engine {
     desc: RigDescription,
@@ -401,6 +404,7 @@ impl ProtocolEngine for Elektor507Engine {
 
 /// A virtual Elektor SDR-USB: a [`UsbDevice`] that decodes the pin samples written to the bulk OUT
 /// endpoint into I2C transactions on a clock chip's register file.
+// [@ANCHOR: radioctl_elektor507_elektor507_twin]
 #[derive(Debug)]
 pub struct Elektor507Twin {
     regs: [u8; 256],
