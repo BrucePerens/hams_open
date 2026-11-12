@@ -3,7 +3,7 @@ title: bench_sdr_survey
 summary: Power survey over a frequency span by stepping the tuning and stitching spectra; CSV, floor and strongest peaks.
 see_also: [tools/bench_sdr_capture, concepts/units-and-conventions]
 tools: [bench_sdr_survey]
-instrument: [bladerf, limesdr]
+instrument: [bladerf, limesdr, rtlsdr]
 tier: read_config
 verified: code only, 2026-10-29
 ---
@@ -23,6 +23,7 @@ Steps the tuning from `start_hz` to `stop_hz`, keeps 70 % of each capture's band
 * `sample_rate_hz`: default 10e6; the span per step is 70 % of it.
 * `gain_db`: default 30, 0 to 70.
 * `antenna`: LimeSDR receive input `LNAH`, `LNAL` (default) or `LNAW`.
+* `ppm`: RTL-SDR only: crystal correction, -200 to 200 parts per million (default 0). The RTL-SDR accepts 24 to 1766 MHz (0.1 to 28.8 MHz with `direct_samp`), 0.225 to 0.3 or 0.9 to 3.2 MS/s and gain 0 to 49.6; it has one input and one channel.
 * `fft_len`: a power of two from 64 to 65536, default 4096; the bin width is the sample rate over this.
 * `samples_per_step`: default 262144, at least four times `fft_len`.
 

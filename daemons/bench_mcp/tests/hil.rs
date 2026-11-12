@@ -392,3 +392,64 @@ fn the_spectrum_tool_sees_the_tracking_generator_only_in_a_band_that_includes_it
     );
     assert!(off["noise_floor_counts"].as_f64().unwrap() < 20.0, "{off}");
 }
+
+// The RTL-SDR check needs `BENCH_MCP_RTLSDR_CONFIG=<file>` naming a config with a receive-only RTL-SDR instrument "rtl" at
+// read_config (`{"instruments":{"rtl":{"driver":"rtlsdr","tier":"read_config"}}}`), the dongle plugged in. One capture centred
+// on 162.475 MHz covers all seven NOAA weather radio channels (162.400 to 162.550 MHz); the test wants a carrier on one of them
+// well above the noise floor and falls back to a survey of the FM broadcast band. This driver cannot transmit.
+// Run: `cargo test --test hil -- --ignored rtlsdr`.
+#[test]
+#[ignore]
+fn rtlsdr_identifies_and_captures_a_weather_channel() {
+    let cfg = std::env::var("BENCH_MCP_RTLSDR_CONFIG").expect("BENCH_MCP_RTLSDR_CONFIG");
+    let id = rpc_cfg(
+        Some(&cfg),
+        &[&call("bench_identify", r#"{"instrument":"rtl"}"#)],
+    );
+    let t = text(&id[0]);
+    assert!(
+        t.contains("\"rx_channels\": 1") && t.contains("R820T"),
+        "{t}"
+    );
+    let r = rpc_cfg(
+        Some(&cfg),
+        &[&call(
+            "bench_sdr_capture",
+            r#"{"instrument":"rtl","freq_hz":162475000,"samples":1048576,"sample_rate_hz":1024000,"gain_db":38.6}"#,
+        )],
+    );
+    let t = text(&r[0]);
+    assert_ne!(r[0]["result"]["isError"], true, "{t}");
+    let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+    assert_eq!(v["continuous"], true, "samples were lost: {t}");
+    assert!(v["clipped_samples"].as_u64().unwrap() == 0, "{t}");
+    let floor = v["noise_floor_dbfs"].as_f64().unwrap();
+    let weather = v["peaks"].as_array().unwrap().iter().filter(|p| {
+        let f = p["freq_hz"].as_f64().unwrap();
+        (162.4e6..=162.55e6).contains(&(f + 6000.0)) || (162.4e6..=162.55e6).contains(&(f - 6000.0))
+    });
+    let best = weather
+        .map(|p| p["power_dbfs"].as_f64().unwrap() - floor)
+        .fold(f64::MIN, f64::max);
+    println!(
+        "noise floor {floor} dBFS; strongest weather carrier {best} dB over it; peaks {}",
+        v["peaks"]
+    );
+    if best > 10.0 {
+        return;
+    }
+    let r = rpc_cfg(
+        Some(&cfg),
+        &[&call(
+            "bench_sdr_survey",
+            r#"{"instrument":"rtl","start_hz":88000000,"stop_hz":108000000,"gain_db":38.6}"#,
+        )],
+    );
+    let t = text(&r[0]);
+    assert_ne!(r[0]["result"]["isError"], true, "{t}");
+    let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+    let top = v["peaks"][0]["power_dbfs"]
+        .as_f64()
+        .expect("no FM carrier either");
+    assert!(top - v["median_floor_dbfs"].as_f64().unwrap() > 10.0, "{t}");
+}

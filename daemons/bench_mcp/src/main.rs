@@ -15,12 +15,12 @@ mod elad;
 mod example;
 mod gla;
 mod glasgow;
-mod radioctl;
 mod link;
 mod manual;
 mod nanovna;
 mod procedure;
 mod psu;
+mod radioctl;
 mod rotator;
 mod rx888;
 mod sa;
@@ -137,11 +137,11 @@ const TOOLS: &[ToolSpec] = &[
         desc: "VNA calibration, step 2: build the calibration file of `session` from its stored standards (open+short+load give S11, thru gives S21), optionally with the real kit's published numbers from kit_file (see vnwa_open cal::KitDefinition text format). Apply it with bench_vna_sweep calibration=<file> cable=<same text>; it is refused at other IF, time per point, RF level or cable.",
         props: r#"{"instrument":{"type":"string"},"session":{"type":"string"},"kit_file":{"type":"string"},"created":{"type":"string"}}"#, required: &["session"] },
     ToolSpec { name: "bench_sdr_capture", tier: Tier::ReadConfig, kinds: &[Kind::Sdr],
-        desc: "SDR (bladeRF, LimeSDR): tune to freq_hz, capture `samples` complex baseband samples (default 262144, up to 16777216) at sample_rate_hz (default 2 MHz) and gain_db (default 30), receive only. Saves the raw I/Q as little-endian f32 pairs and returns RMS level, peak, DC offset, clipped sample count, the noise floor and the strongest peaks (dBFS at the set gain, not calibrated power). A bladeRF below 237.5 MHz needs its XB-200 configured (\"xb200\" in the config). channel 1 is the LimeSDR's second receiver. antenna picks the LimeSDR receive input (LNAH, LNAL or LNAW, the H, L and W connectors of each channel); the default is LNAL, which is what the driver selects at every frequency. The bladeRF has one input.",
-        props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"antenna":{"type":"string","enum":["LNAH","LNAL","LNAW"]},"samples":{"type":"integer"},"channel":{"type":"integer","enum":[0,1]}}"#, required: &["freq_hz"] },
+        desc: "SDR (bladeRF, LimeSDR, RTL-SDR): tune to freq_hz, capture `samples` complex baseband samples (default 262144, up to 16777216) at sample_rate_hz (default 2 MHz) and gain_db (default 30), receive only. Saves the raw I/Q as little-endian f32 pairs and returns RMS level, peak, DC offset, clipped sample count, the noise floor and the strongest peaks (dBFS at the set gain, not calibrated power). A bladeRF below 237.5 MHz needs its XB-200 configured (\"xb200\" in the config). channel 1 is the LimeSDR's second receiver. antenna picks the LimeSDR receive input (LNAH, LNAL or LNAW, the H, L and W connectors of each channel); the default is LNAL, which is what the driver selects at every frequency. The bladeRF has one input. The RTL-SDR (receive only, 24 to 1766 MHz, 0.225 to 0.3 or 0.9 to 3.2 MS/s, gain 0 to 49.6 dB) takes `ppm` (crystal correction, -200 to 200) and has one input; with \"direct_samp\" in its config it tunes 0.1 to 28.8 MHz instead.",
+        props: r#"{"ppm":{"type":"number"},"instrument":{"type":"string"},"freq_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"antenna":{"type":"string","enum":["LNAH","LNAL","LNAW"]},"samples":{"type":"integer"},"channel":{"type":"integer","enum":[0,1]}}"#, required: &["freq_hz"] },
     ToolSpec { name: "bench_sdr_survey", tier: Tier::ReadConfig, kinds: &[Kind::Sdr],
         desc: "SDR: a power survey from start_hz to stop_hz, stepping the tuning and stitching the spectra (70 % of each capture's bandwidth is kept; at most 400 steps). Saves a CSV of frequency and dBFS and returns the median floor and the ten strongest peaks. The radio's own DC spike is removed from every step. Use it to look for signals or noise sources; levels are relative to full scale at the set gain.",
-        props: r#"{"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"antenna":{"type":"string","enum":["LNAH","LNAL","LNAW"]},"fft_len":{"type":"integer"},"samples_per_step":{"type":"integer"}}"#, required: &["start_hz"] },
+        props: r#"{"ppm":{"type":"number"},"instrument":{"type":"string"},"start_hz":{"type":"number"},"stop_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"antenna":{"type":"string","enum":["LNAH","LNAL","LNAW"]},"fft_len":{"type":"integer"},"samples_per_step":{"type":"integer"}}"#, required: &["start_hz"] },
     ToolSpec { name: "bench_sdr_coherence", tier: Tier::ReadConfig, kinds: &[Kind::Sdr],
         desc: "SDR with two receivers (LimeSDR): capture both channels together at freq_hz, repeat `repeats` times with a fresh tune each time, and report the phase and gain of channel 0 relative to channel 1 at the strongest tone, how stable the phase is within a capture and across retunes, and the coherence. Needs one signal on both inputs (a splitter).",
         props: r#"{"instrument":{"type":"string"},"freq_hz":{"type":"number"},"sample_rate_hz":{"type":"number"},"gain_db":{"type":"number"},"antenna":{"type":"string","enum":["LNAH","LNAL","LNAW"]},"repeats":{"type":"integer"}}"#, required: &["freq_hz"] },

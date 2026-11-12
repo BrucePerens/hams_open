@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Software defined radios (a Nuand bladeRF 1 with an optional XB-200, a LimeSDR-USB) through SoapySDR. The library is loaded at
+//! Software defined radios (a Nuand bladeRF 1 with an optional XB-200, a LimeSDR-USB, an RTL-SDR dongle) through SoapySDR. The library is loaded at
 //! run time (`dlopen`), so the server builds and runs without it and answers "SoapySDR is not installed" for these tools. Only
 //! receive is implemented: the tools tune, capture complex baseband, and analyse it (`dsp`). Nothing here transmits.
 //! Levels are dB relative to the radio's full scale (dBFS), not calibrated power: they depend on the gain setting.
@@ -17,12 +17,14 @@ const RX: c_int = 1;
 /// Which radio, and what its tools may ask of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Config {
-    /// "bladerf" or "limesdr" (the config file's driver name).
+    /// "bladerf", "limesdr" or "rtlsdr" (the config file's driver name).
     pub driver: String,
     /// Hex serial (or any prefix of it) to pick one of several boards.
     pub serial: Option<String>,
     /// bladeRF only: the XB-200 transverter setting passed to SoapySDR ("50M", "144M", "222M", "auto", "auto1db", "auto3db", "custom").
     pub xb200: Option<String>,
+    /// RTL-SDR only: direct sampling mode "1" (I branch) or "2" (Q branch) for 0.1 to 28.8 MHz without an upconverter.
+    pub direct_samp: Option<String>,
 }
 
 impl Default for Config {
@@ -31,6 +33,7 @@ impl Default for Config {
             driver: "bladerf".into(),
             serial: None,
             xb200: None,
+            direct_samp: None,
         }
     }
 }
@@ -42,7 +45,7 @@ const XB200_SETTINGS: &[&str] = &[
 /// The settings of a radio that are checked when the configuration is read.
 pub fn check_config(c: &Config) -> Result<(), String> {
     // [@ANCHOR: bench_mcp_sdr_check_config]
-    if !matches!(c.driver.as_str(), "bladerf" | "limesdr") {
+    if !matches!(c.driver.as_str(), "bladerf" | "limesdr" | "rtlsdr") {
         return Err(format!("unknown SDR driver {:?}", c.driver));
     }
     if let Some(s) = &c.serial {
@@ -61,17 +64,28 @@ pub fn check_config(c: &Config) -> Result<(), String> {
             ));
         }
     }
+    if let Some(d) = &c.direct_samp {
+        if c.driver != "rtlsdr" {
+            return Err("direct_samp applies to the RTL-SDR only".into());
+        }
+        if !matches!(d.as_str(), "1" | "2") {
+            return Err(format!("direct_samp {d:?} must be \"1\" or \"2\""));
+        }
+    }
     Ok(())
 }
 
 /// The SoapySDR argument string that opens this radio.
 pub fn soapy_args(c: &Config) -> String {
     // [@ANCHOR: bench_mcp_sdr_args]
-    let mut s = String::from(if c.driver == "limesdr" {
-        "driver=lime"
-    } else {
-        "driver=bladerf"
+    let mut s = String::from(match c.driver.as_str() {
+        "limesdr" => "driver=lime",
+        "rtlsdr" => "driver=rtlsdr",
+        _ => "driver=bladerf",
     });
+    if let Some(x) = &c.direct_samp {
+        s.push_str(&format!(",direct_samp={x}"));
+    }
     if let Some(x) = &c.xb200 {
         s.push_str(&format!(",xb200={x}"));
     }
@@ -85,22 +99,47 @@ pub fn soapy_args(c: &Config) -> String {
 struct Limits {
     min_hz: f64,
     max_hz: f64,
+    min_rate: f64,
     max_rate: f64,
+    max_gain: f64,
+    /// The sample rate a survey uses when none is given.
+    survey_rate: f64,
 }
 
 fn limits(c: &Config) -> Limits {
     // [@ANCHOR: bench_mcp_sdr_limits]
-    if c.driver == "limesdr" {
+    if c.driver == "rtlsdr" {
+        // R820T tuner 24 to 1766 MHz (the part tunes about 24 to 1764 MHz); direct sampling reaches 0.1 to 28.8 MHz.
+        let (min_hz, max_hz) = if c.direct_samp.is_some() {
+            (0.1e6, 28.8e6)
+        } else {
+            (24e6, 1766e6)
+        };
+        Limits {
+            min_hz,
+            max_hz,
+            min_rate: 0.225e6,
+            max_rate: 3.2e6,
+            max_gain: 49.6,
+            survey_rate: 2.4e6,
+        }
+    } else if c.driver == "limesdr" {
         Limits {
             min_hz: 30e6,
             max_hz: 3.8e9,
+            min_rate: 0.25e6,
             max_rate: 30.72e6,
+            max_gain: 70.0,
+            survey_rate: 10e6,
         }
     } else {
         Limits {
             min_hz: if c.xb200.is_some() { 9e3 } else { 237.5e6 },
             max_hz: 3.8e9,
+            min_rate: 0.25e6,
             max_rate: 20e6,
+            max_gain: 70.0,
+            survey_rate: 10e6,
         }
     }
 }
@@ -137,6 +176,24 @@ fn in_range(name: &str, x: f64, lo: f64, hi: f64) -> Result<f64, String> {
     }
 }
 
+/// The sample rate check: within the radio's limits and, for the RTL-SDR, not in the 0.3 to 0.9 MS/s gap its driver cannot run.
+fn check_rate(c: &Config, l: &Limits, rate_hz: f64) -> Result<(), String> {
+    in_range("sample_rate_hz", rate_hz, l.min_rate, l.max_rate)?;
+    if c.driver == "rtlsdr" && rate_hz > 0.3e6 && rate_hz < 0.9e6 {
+        return Err("the RTL-SDR runs 0.225 to 0.3 or 0.9 to 3.2 MS/s, not between".into());
+    }
+    Ok(())
+}
+
+/// The `ppm` argument: the dongle's crystal error, applied as a frequency correction. RTL-SDR only.
+fn ppm_arg(args: &Value, c: &Config) -> Result<f64, String> {
+    let ppm = number(args, "ppm")?;
+    if ppm.is_some() && c.driver != "rtlsdr" {
+        return Err("ppm applies to the RTL-SDR only".into());
+    }
+    in_range("ppm", ppm.unwrap_or(0.0), -200.0, 200.0)
+}
+
 /// A tuned capture: centre frequency, sample rate, gain, length and channels.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Capture {
@@ -147,6 +204,8 @@ pub struct Capture {
     pub channels: Vec<usize>,
     /// The LimeSDR receive input ("LNAH", "LNAL" or "LNAW"); `None` leaves the driver's default, which is LNAL.
     pub antenna: Option<String>,
+    /// RTL-SDR frequency correction in parts per million (0 leaves the dongle as it is).
+    pub ppm: f64,
 }
 
 const MAX_SAMPLES: usize = 1 << 24;
@@ -165,7 +224,9 @@ fn antenna_arg(args: &Value, c: &Config) -> Result<Option<String>, String> {
                 .ok_or("antenna must be a string")?
                 .to_ascii_uppercase();
             if c.driver != "limesdr" {
-                return Err("the bladeRF has one receive input; leave antenna out".into());
+                return Err(
+                    "only the LimeSDR has a choice of receive input; leave antenna out".into(),
+                );
             }
             if !LIME_INPUTS.contains(&name.as_str()) {
                 return Err(format!(
@@ -185,9 +246,9 @@ pub fn capture_args(args: &Value, c: &Config) -> Result<Capture, String> {
     let freq_hz = number(args, "freq_hz")?.ok_or("freq_hz is required")?;
     in_range("freq_hz", freq_hz, l.min_hz, l.max_hz)?;
     let rate_hz = number(args, "sample_rate_hz")?.unwrap_or(2e6);
-    in_range("sample_rate_hz", rate_hz, 0.25e6, l.max_rate)?;
+    check_rate(c, &l, rate_hz)?;
     let gain_db = number(args, "gain_db")?.unwrap_or(30.0);
-    in_range("gain_db", gain_db, 0.0, 70.0)?;
+    in_range("gain_db", gain_db, 0.0, l.max_gain)?;
     let samples = whole(args, "samples", 1 << 18, 4096, MAX_SAMPLES)?;
     let channel = whole(args, "channel", 0, 0, 1)?;
     if channel == 1 && c.driver != "limesdr" {
@@ -200,6 +261,7 @@ pub fn capture_args(args: &Value, c: &Config) -> Result<Capture, String> {
         samples,
         channels: vec![channel],
         antenna: antenna_arg(args, c)?,
+        ppm: ppm_arg(args, c)?,
     })
 }
 
@@ -213,6 +275,7 @@ pub struct Survey {
     pub fft_len: usize,
     pub samples_per_step: usize,
     pub antenna: Option<String>,
+    pub ppm: f64,
 }
 
 /// The fraction of each capture's bandwidth that is kept (the band edges are rolled off by the radio's filters).
@@ -235,10 +298,10 @@ pub fn survey_args(args: &Value, c: &Config) -> Result<Survey, String> {
     if stop_hz <= start_hz {
         return Err("stop_hz must be above start_hz".into());
     }
-    let rate_hz = number(args, "sample_rate_hz")?.unwrap_or(10e6);
-    in_range("sample_rate_hz", rate_hz, 0.25e6, l.max_rate)?;
+    let rate_hz = number(args, "sample_rate_hz")?.unwrap_or(l.survey_rate);
+    check_rate(c, &l, rate_hz)?;
     let gain_db = number(args, "gain_db")?.unwrap_or(30.0);
-    in_range("gain_db", gain_db, 0.0, 70.0)?;
+    in_range("gain_db", gain_db, 0.0, l.max_gain)?;
     let fft_len = whole(args, "fft_len", 4096, 64, 1 << 16)?;
     if !fft_len.is_power_of_two() {
         return Err(format!("fft_len {fft_len} must be a power of two"));
@@ -252,6 +315,7 @@ pub fn survey_args(args: &Value, c: &Config) -> Result<Survey, String> {
         fft_len,
         samples_per_step,
         antenna: antenna_arg(args, c)?,
+        ppm: ppm_arg(args, c)?,
     };
     if s.steps() > MAX_STEPS {
         return Err(format!(
@@ -280,6 +344,7 @@ struct Api {
     set_rate: unsafe extern "C" fn(Dev, c_int, usize, f64) -> c_int,
     set_freq: unsafe extern "C" fn(Dev, c_int, usize, f64, *const Kwargs) -> c_int,
     set_gain: unsafe extern "C" fn(Dev, c_int, usize, f64) -> c_int,
+    set_ppm: unsafe extern "C" fn(Dev, c_int, usize, f64) -> c_int,
     set_antenna: unsafe extern "C" fn(Dev, c_int, usize, *const c_char) -> c_int,
     setup_stream: unsafe extern "C" fn(
         Dev,
@@ -339,6 +404,7 @@ fn load_api() -> Result<Api, String> {
         set_rate: sym(h, "SoapySDRDevice_setSampleRate")?,
         set_freq: sym(h, "SoapySDRDevice_setFrequency")?,
         set_gain: sym(h, "SoapySDRDevice_setGain")?,
+        set_ppm: sym(h, "SoapySDRDevice_setFrequencyCorrection")?,
         set_antenna: sym(h, "SoapySDRDevice_setAntenna")?,
         setup_stream: sym(h, "SoapySDRDevice_setupStream")?,
         close_stream: sym(h, "SoapySDRDevice_closeStream")?,
@@ -429,6 +495,11 @@ impl Radio {
             self.check("gain", unsafe {
                 (a.set_gain)(self.dev, RX, ch, cap.gain_db)
             })?;
+            if cap.ppm != 0.0 {
+                self.check("frequency correction", unsafe {
+                    (a.set_ppm)(self.dev, RX, ch, cap.ppm)
+                })?;
+            }
             self.check("frequency", unsafe {
                 (a.set_freq)(self.dev, RX, ch, cap.freq_hz, std::ptr::null())
             })?;
@@ -630,7 +701,8 @@ pub fn capture(c: &Config, args: &Value, out: &Path) -> Result<Value, String> {
         "iq_format": "little-endian f32 I,Q pairs, full scale 1.0",
         "stream_seconds": round(capture_s, 3),
         "real_time_seconds": round(real_s, 3),
-        "continuous": continuous(capture_s, real_s),
+        // The RTL-SDR spends up to about 0.3 s starting its USB transfers before the first samples arrive.
+        "continuous": continuous(if c.driver == "rtlsdr" { capture_s - 0.3 } else { capture_s }, real_s),
         "seconds": round(t0.elapsed().as_secs_f64(), 2),
         "note": "levels are dBFS at the set gain, not calibrated power; the DC spike at the centre frequency is the radio's own and is ignored in peaks",
     }))
@@ -655,6 +727,7 @@ pub fn survey(c: &Config, args: &Value, out: &Path) -> Result<Value, String> {
             samples: sv.samples_per_step,
             channels: vec![0],
             antenna: sv.antenna.clone(),
+            ppm: sv.ppm,
         };
         let (chans, o, _) = r.capture(&cap)?;
         overflows += o;
@@ -716,9 +789,9 @@ pub fn coherence(c: &Config, args: &Value) -> Result<Value, String> {
     let freq_hz = number(args, "freq_hz")?.ok_or("freq_hz is required")?;
     in_range("freq_hz", freq_hz, l.min_hz, l.max_hz)?;
     let rate_hz = number(args, "sample_rate_hz")?.unwrap_or(2e6);
-    in_range("sample_rate_hz", rate_hz, 0.25e6, l.max_rate)?;
+    check_rate(c, &l, rate_hz)?;
     let gain_db = number(args, "gain_db")?.unwrap_or(30.0);
-    in_range("gain_db", gain_db, 0.0, 70.0)?;
+    in_range("gain_db", gain_db, 0.0, l.max_gain)?;
     let repeats = whole(args, "repeats", 4, 1, 10)?;
     let r = Radio::open(c)?;
     if r.rx_channels() < 2 {
@@ -735,6 +808,7 @@ pub fn coherence(c: &Config, args: &Value) -> Result<Value, String> {
         samples: 1 << 18,
         channels: vec![0, 1],
         antenna: antenna_arg(args, c)?,
+        ppm: 0.0,
     };
     let mut runs = Vec::new();
     let mut phases = Vec::new();
@@ -935,5 +1009,72 @@ mod tests {
         let e = write_iq(&dir.join("no/such/dir/x.iq"), &[(0.0, 0.0)]).unwrap_err();
         assert!(e.contains("x.iq"), "{e}");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn rtl(direct: Option<&str>) -> Config {
+        Config {
+            driver: "rtlsdr".into(),
+            serial: Some("ca3e".into()),
+            direct_samp: direct.map(String::from),
+            ..Config::default()
+        }
+    }
+
+    // Tests [@ANCHOR: bench_mcp_sdr_check_config]
+    // Tests [@ANCHOR: bench_mcp_sdr_args]
+    // Tests [@ANCHOR: bench_mcp_sdr_limits]
+    // Tests [@ANCHOR: bench_mcp_sdr_capture_args]
+    // Tests [@ANCHOR: bench_mcp_sdr_survey_args]
+    // Tests [@ANCHOR: bench_mcp_sdr_antenna_arg]
+    #[test]
+    fn the_rtl_sdr_is_receive_only_with_its_own_tuning_rate_gain_and_ppm_limits() {
+        assert_eq!(
+            soapy_args(&rtl(Some("2"))),
+            "driver=rtlsdr,direct_samp=2,serial=ca3e"
+        );
+        assert!(check_config(&rtl(Some("1"))).is_ok());
+        assert!(check_config(&rtl(Some("3"))).is_err());
+        assert!(check_config(&Config {
+            direct_samp: Some("1".into()),
+            ..lime()
+        })
+        .is_err());
+        // NOAA weather radio at 162.55 MHz with the defaults.
+        let ok = capture_args(&json!({"freq_hz": 162.55e6}), &rtl(None)).unwrap();
+        assert_eq!((ok.rate_hz, ok.gain_db, ok.ppm), (2e6, 30.0, 0.0));
+        // R820T range, rate gap, gain, ppm.
+        assert!(capture_args(&json!({"freq_hz": 10e6}), &rtl(None)).is_err());
+        assert!(capture_args(&json!({"freq_hz": 1.8e9}), &rtl(None)).is_err());
+        assert!(capture_args(
+            &json!({"freq_hz": 100e6, "sample_rate_hz": 3.2e6}),
+            &rtl(None)
+        )
+        .is_ok());
+        assert!(capture_args(
+            &json!({"freq_hz": 100e6, "sample_rate_hz": 3.3e6}),
+            &rtl(None)
+        )
+        .is_err());
+        assert!(capture_args(
+            &json!({"freq_hz": 100e6, "sample_rate_hz": 0.5e6}),
+            &rtl(None)
+        )
+        .is_err());
+        assert!(capture_args(&json!({"freq_hz": 100e6, "gain_db": 49.6}), &rtl(None)).is_ok());
+        assert!(capture_args(&json!({"freq_hz": 100e6, "gain_db": 50}), &rtl(None)).is_err());
+        let p = capture_args(&json!({"freq_hz": 100e6, "ppm": -35.5}), &rtl(None)).unwrap();
+        assert_eq!(p.ppm, -35.5);
+        assert!(capture_args(&json!({"freq_hz": 100e6, "ppm": 500}), &rtl(None)).is_err());
+        assert!(capture_args(&json!({"freq_hz": 433.92e6, "ppm": 1}), &blade(None)).is_err());
+        // One receiver, one input.
+        assert!(capture_args(&json!({"freq_hz": 100e6, "channel": 1}), &rtl(None)).is_err());
+        assert!(capture_args(&json!({"freq_hz": 100e6, "antenna": "LNAL"}), &rtl(None)).is_err());
+        // Direct sampling replaces the tuner range with 0.1 to 28.8 MHz.
+        assert!(capture_args(&json!({"freq_hz": 7.1e6}), &rtl(Some("2"))).is_ok());
+        assert!(capture_args(&json!({"freq_hz": 100e6}), &rtl(Some("2"))).is_err());
+        // A survey defaults to a rate the dongle can run.
+        let sv = survey_args(&json!({"start_hz": 88e6, "stop_hz": 108e6}), &rtl(None)).unwrap();
+        assert_eq!(sv.rate_hz, 2.4e6);
+        assert_eq!(sv.steps(), 12);
     }
 }

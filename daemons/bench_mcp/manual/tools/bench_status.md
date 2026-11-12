@@ -3,7 +3,7 @@ title: bench_status
 summary: What an instrument is doing now: scope timebase and channels, supply output and readbacks, VNA link and settings, SDR identity.
 see_also: [tools/bench_identify, tools/bench_set, instruments/scope, instruments/psu, instruments/vna/monitoring-and-recovery]
 tools: [bench_status]
-instrument: [scope, psu, vna, bladerf, limesdr]
+instrument: [scope, psu, vna, bladerf, limesdr, rtlsdr]
 tier: read_only
 verified: code only, 2026-10-29
 ---

@@ -3,7 +3,7 @@ title: bench_sdr_capture
 summary: Tune a bladeRF or LimeSDR, capture complex baseband samples (receive only) and report level, noise floor and peaks.
 see_also: [tools/bench_sdr_survey, tools/bench_sdr_coherence, concepts/units-and-conventions]
 tools: [bench_sdr_capture]
-instrument: [bladerf, limesdr]
+instrument: [bladerf, limesdr, rtlsdr]
 tier: read_config
 verified: code only, 2026-10-29
 ---
@@ -22,6 +22,7 @@ Tunes the radio to `freq_hz`, captures `samples` complex samples at `sample_rate
 * `sample_rate_hz`: default 2e6; 0.25e6 up to 30.72e6 (LimeSDR) or 20e6 (bladeRF).
 * `gain_db`: default 30, 0 to 70.
 * `antenna`: LimeSDR only: receive input `LNAH`, `LNAL` or `LNAW` (the H, L and W connectors of each channel). The default is `LNAL`, which is what the driver selects at every frequency; a signal on an H or W connector is not heard unless you choose it. The bladeRF has one input.
+* `ppm`: RTL-SDR only: crystal correction, -200 to 200 parts per million (default 0). The RTL-SDR accepts 24 to 1766 MHz (0.1 to 28.8 MHz with `direct_samp`), 0.225 to 0.3 or 0.9 to 3.2 MS/s and gain 0 to 49.6; it has one input and one channel.
 * `samples`: default 262144, 4096 to 16777216.
 * `channel`: `0`, or `1` for the LimeSDR's second receiver.
 

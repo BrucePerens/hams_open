@@ -3,7 +3,7 @@ title: bench_identify
 summary: Ask an instrument who it is (scope and supply *IDN?, VNA and SDR driver facts).
 see_also: [tools/bench_list, tools/bench_status, concepts/errors]
 tools: [bench_identify]
-instrument: [scope, psu, vna, bladerf, limesdr]
+instrument: [scope, psu, vna, bladerf, limesdr, rtlsdr]
 tier: read_only
 verified: code only, 2026-10-29
 ---

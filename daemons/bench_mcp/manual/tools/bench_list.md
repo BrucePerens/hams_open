@@ -3,7 +3,7 @@ title: bench_list
 summary: List the configured instruments with their driver and permission tier.
 see_also: [concepts/configuration, concepts/safety-tiers, tools/bench_identify]
 tools: [bench_list]
-instrument: [scope, psu, vna, bladerf, limesdr, usb-hubs, sound]
+instrument: [scope, psu, vna, bladerf, limesdr, rtlsdr, usb-hubs, sound]
 tier: read_only
 verified: code only, 2026-10-29
 ---
@@ -20,7 +20,7 @@ This tool takes no arguments.
 
 ## Returns
 
-A JSON array with one object per configured instrument: `name` (the alias to pass as `instrument`), `driver` (`siglent_sds`, `atm6301`, `vnwa_open`, `bladerf`, `limesdr`, `usb_hub`, `audio`) and `tier` (`ReadOnly`, `ReadConfig` or `Full`).
+A JSON array with one object per configured instrument: `name` (the alias to pass as `instrument`), `driver` (`siglent_sds`, `atm6301`, `vnwa_open`, `bladerf`, `limesdr`, `rtlsdr`, `usb_hub`, `audio`) and `tier` (`ReadOnly`, `ReadConfig` or `Full`).
 
 ## Side effects and failure modes
 
