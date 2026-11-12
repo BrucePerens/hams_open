@@ -38,6 +38,7 @@ SYSTEMD_DIR = "/opt/hams/systemd/"
 UNIT_SUFFIXES = (".service", ".timer", ".path")
 SHOW_PROPERTIES = "LoadState,ActiveState,UnitFileState,Type,ConditionResult,ConditionTimestamp"
 SHORT_LIST = 4
+SYSTEMCTL_TIMEOUT_SECONDS = 10  # a hung systemd must fail the check, not run into the monitor's own timeout
 EXPECTED_OFF_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "units_expected_off.txt")
 
 # The MANIFEST module is a hard dependency: reached by a sys.path hop (the odoo.addons namespace is not importable in this
@@ -69,7 +70,8 @@ def expected_units(infra, environment="prod"):
 # [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
 def systemctl_show(unit):
     """{property: value} for one unit; an unreadable answer is an empty dict."""
-    result = subprocess.run(["systemctl", "show", unit, "-p", SHOW_PROPERTIES], capture_output=True, text=True, check=False)
+    result = subprocess.run(["systemctl", "show", unit, "-p", SHOW_PROPERTIES], capture_output=True, text=True, check=False,
+                            timeout=SYSTEMCTL_TIMEOUT_SECONDS)
     return dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
 
 
@@ -124,7 +126,12 @@ def main(argv=None):
         print("SEVERITY:high", file=sys.stderr)
         print(f"provisioned units cannot be checked: the MANIFEST did not load ({problem})", file=sys.stderr)
         return 1
-    problems = units_not_in_operation(units, expected_off=expected_off)
+    try:
+        problems = units_not_in_operation(units, expected_off=expected_off)
+    except subprocess.TimeoutExpired:
+        print("SEVERITY:high", file=sys.stderr)
+        print("provisioned units cannot be checked: systemctl did not answer in time", file=sys.stderr)
+        return 1
     if not problems:
         print(f"all {len(units)} provisioned units are in operation")
         return 0
