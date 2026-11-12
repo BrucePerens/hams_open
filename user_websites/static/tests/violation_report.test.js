@@ -37,6 +37,7 @@ describe("violation_report", () => {
     describe.current.tags("user_websites_violation_report");
 
     test("_onModalShow injects the triggering button's data-url and clears prior input", () => {
+        // Tests [@ANCHOR: user_websites:js_violation_report_on_modal_show]
         const instance = Object.create(ViolationReportModal.prototype);
         const modal = makeModal();
         const button = document.createElement("button");
@@ -50,6 +51,7 @@ describe("violation_report", () => {
     });
 
     test("_onModalShow does nothing when the event carries no relatedTarget", () => {
+        // Tests [@ANCHOR: user_websites:js_violation_report_on_modal_show]
         const instance = Object.create(ViolationReportModal.prototype);
         const modal = makeModal();
 
@@ -62,6 +64,7 @@ describe("violation_report", () => {
     });
 
     test("_onModalShow tolerates a modal missing the optional description/email fields", () => {
+        // Tests [@ANCHOR: user_websites:js_violation_report_on_modal_show]
         const instance = Object.create(ViolationReportModal.prototype);
         const modal = makeModal({ withDescriptionAndEmail: false });
         modal.querySelector('input[name="url"]').value = "";
@@ -72,5 +75,25 @@ describe("violation_report", () => {
         instance._onModalShow({ relatedTarget: button, currentTarget: modal });
 
         expect(modal.querySelector('input[name="url"]').value).toBe("/forum/post/42");
+    });
+
+    test("start makes the report modal's show event fill in the form, and does nothing when the page has no such modal", () => {
+        // Tests [@ANCHOR: user_websites:js_violation_report_start]
+        const modal = makeModal();
+        modal.id = "reportViolationModal";
+        document.body.appendChild(modal);
+        try {
+            const button = document.createElement("button");
+            button.setAttribute("data-url", "/blog/x");
+            const instance = Object.create(ViolationReportModal.prototype);
+            instance.start();
+            const show = new Event("show.bs.modal");
+            Object.defineProperty(show, "relatedTarget", { value: button });
+            modal.dispatchEvent(show);
+            expect(modal.querySelector('input[name="url"]').value).toBe("/blog/x");
+        } finally {
+            modal.remove();
+        }
+        expect(() => Object.create(ViolationReportModal.prototype).start()).not.toThrow();
     });
 });

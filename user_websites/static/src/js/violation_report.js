@@ -6,6 +6,7 @@ import { registry } from "@web/core/registry";
 export class ViolationReportModal extends Interaction {
     static selector = '.user-websites-report-container';
 
+    // [@ANCHOR: user_websites:js_violation_report_start]
     start() {
         // Find the modal element in the DOM
         const modalElement = document.getElementById('reportViolationModal');
@@ -20,8 +21,8 @@ export class ViolationReportModal extends Interaction {
      * Injects the URL and resets the form to clear any previous inputs.
      * @param {Event} ev
      */
+    // [@ANCHOR: user_websites:js_violation_report_on_modal_show]
     // [@ANCHOR: violation_report_logic]
-
     // Verified by [@ANCHOR: test_tour_violation_report]
     _onModalShow(ev) {
         // The button that triggered the modal is available via ev.relatedTarget in Bootstrap 5
