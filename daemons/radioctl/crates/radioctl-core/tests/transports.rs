@@ -123,6 +123,7 @@ async fn bytes_flow_both_ways_over_a_pty() {
 
 // Tests [@ANCHOR: radioctl_core_serial_open]
 // Tests [@ANCHOR: radioctl_core_rig_spawn]
+// Tests [@ANCHOR: radioctl_core_rig_actor]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_rig_actor_reads_a_virtual_kx3_through_a_pty() {
     let (mut master, path) = pty();

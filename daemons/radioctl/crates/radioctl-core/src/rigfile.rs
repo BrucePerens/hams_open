@@ -39,6 +39,7 @@ use crate::units::{Hz, Level, Mode};
 /// The only schema version this reader accepts.
 pub const SCHEMA: u32 = 1;
 
+// [@ANCHOR: radioctl_core_rigfile_provenance_kind]
 /// Where a datum came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -59,6 +60,7 @@ pub enum ProvenanceKind {
     HamlibSource,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_provenance]
 /// A provenance record.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -72,6 +74,7 @@ pub struct Provenance {
     pub note: String,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_verified]
 /// What has been checked about a datum.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verified {
@@ -100,6 +103,7 @@ pub enum Verified {
     },
 }
 
+// [@ANCHOR: radioctl_core_rigfile_fact]
 /// One provenance and verification record for a key or a key prefix.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fact {
@@ -111,6 +115,7 @@ pub struct Fact {
     pub verified: Verified,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_loaded_description]
 /// A parsed description together with the record of where its data came from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedDescription {
@@ -120,6 +125,7 @@ pub struct LoadedDescription {
     pub facts: Vec<Fact>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_file_doc]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FileDoc {
@@ -149,6 +155,7 @@ struct FileDoc {
     facts: Vec<FactEntry>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_rig_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RigSection {
@@ -157,6 +164,7 @@ struct RigSection {
     family: String,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_civ_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CivSection {
@@ -173,6 +181,7 @@ struct CivSection {
     main_sub: CivMainSubName,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_civ_main_sub_name]
 #[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 enum CivMainSubName {
@@ -182,6 +191,7 @@ enum CivMainSubName {
     Full,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_civ_command_set_name]
 #[derive(Deserialize, Default, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 enum CivCommandSetName {
@@ -194,6 +204,7 @@ fn default_frequency_bytes() -> u8 {
     5
 }
 
+// [@ANCHOR: radioctl_core_rigfile_kenwood_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct KenwoodSection {
@@ -206,6 +217,7 @@ struct KenwoodSection {
     scope_link: Option<String>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_ky_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct KySection {
@@ -220,6 +232,7 @@ struct KySection {
     stop: Option<String>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_elecraft_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ElecraftSection {
@@ -229,6 +242,7 @@ struct ElecraftSection {
     levels: BTreeMap<String, (u16, u16)>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_yaesu_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct YaesuSection {
@@ -249,6 +263,7 @@ struct YaesuSection {
     tx_band: bool,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_yaesu_legacy_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct YaesuLegacySection {
@@ -269,6 +284,7 @@ struct YaesuLegacySection {
     status_modes: Vec<ModeEntry>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_legacy_command_entry]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LegacyCommandEntry {
@@ -277,6 +293,7 @@ struct LegacyCommandEntry {
     form: Option<String>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_legacy_freq_entry]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LegacyFreqEntry {
@@ -284,6 +301,7 @@ struct LegacyFreqEntry {
     form: String,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_legacy_mode_entry]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LegacyModeEntry {
@@ -291,6 +309,7 @@ struct LegacyModeEntry {
     mask: u8,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_legacy_flag_entry]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LegacyFlagEntry {
@@ -299,6 +318,7 @@ struct LegacyFlagEntry {
     on_when_set: bool,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_legacy_read_entry]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LegacyReadEntry {
@@ -311,12 +331,14 @@ struct LegacyReadEntry {
     vfo_mode: Option<LegacyFlagEntry>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_kenwood_hh_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct KenwoodHhSection {
     dialect: String,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_flex_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FlexSection {
@@ -326,6 +348,7 @@ struct FlexSection {
     slice: u8,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_receiver_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ReceiverSection {
@@ -340,6 +363,7 @@ struct ReceiverSection {
     flow: String,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_hpsdr_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct HpsdrSection {
@@ -348,6 +372,7 @@ struct HpsdrSection {
     anan10: bool,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_vendor_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct VendorSection {
@@ -379,6 +404,7 @@ fn default_flow() -> String {
     "none".to_string()
 }
 
+// [@ANCHOR: radioctl_core_rigfile_usb_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct UsbSection {
@@ -390,6 +416,7 @@ struct UsbSection {
     multiplier: u8,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_scope_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ScopeSection {
@@ -400,6 +427,7 @@ struct ScopeSection {
     spans_hz: Vec<u64>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_levels_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LevelsSection {
@@ -413,12 +441,14 @@ struct LevelsSection {
     absent: Vec<String>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_power_meter_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PowerMeterSection {
     raw_to_milliwatts: Vec<(u16, u32)>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_timing_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TimingSection {
@@ -427,6 +457,7 @@ struct TimingSection {
     inter_command_ms: u64,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_defaults_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DefaultsSection {
@@ -434,6 +465,7 @@ struct DefaultsSection {
     mode: String,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_code_value]
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum CodeValue {
@@ -441,6 +473,7 @@ enum CodeValue {
     Char(String),
 }
 
+// [@ANCHOR: radioctl_core_rigfile_mode_entry]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ModeEntry {
@@ -448,6 +481,7 @@ struct ModeEntry {
     code: CodeValue,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_verified_entry]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct VerifiedEntry {
@@ -459,6 +493,7 @@ struct VerifiedEntry {
     tested: Option<String>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_fact_entry]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FactEntry {
@@ -1597,6 +1632,17 @@ verified = { state = "unverified" }
     // Tests [@ANCHOR: radioctl_core_rigfile_build_verified]
     // Tests [@ANCHOR: radioctl_core_rigfile_check_coverage]
     // Tests [@ANCHOR: radioctl_core_rigfile_matches_key]
+    // Tests [@ANCHOR: radioctl_core_rigfile_fact_entry]
+    // Tests [@ANCHOR: radioctl_core_rigfile_verified_entry]
+    // Tests [@ANCHOR: radioctl_core_rigfile_mode_entry]
+    // Tests [@ANCHOR: radioctl_core_rigfile_code_value]
+    // Tests [@ANCHOR: radioctl_core_rigfile_defaults_section]
+    // Tests [@ANCHOR: radioctl_core_rigfile_rig_section]
+    // Tests [@ANCHOR: radioctl_core_rigfile_file_doc]
+    // Tests [@ANCHOR: radioctl_core_rigfile_loaded_description]
+    // Tests [@ANCHOR: radioctl_core_rigfile_fact]
+    // Tests [@ANCHOR: radioctl_core_rigfile_provenance]
+    // Tests [@ANCHOR: radioctl_core_rigfile_provenance_kind]
     #[test]
     fn a_complete_description_loads_with_its_facts() {
         let loaded = parse(GOOD).expect("loads");
@@ -1613,6 +1659,7 @@ verified = { state = "unverified" }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_check_timing]
     // Tests [@ANCHOR: radioctl_core_description_timing]
+    // Tests [@ANCHOR: radioctl_core_rigfile_timing_section]
     #[test]
     fn timing_that_would_delay_or_defeat_an_unkey_is_rejected() {
         expect_rejected(
@@ -1689,6 +1736,7 @@ verified = { state = "unverified" }
     // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
     // Tests [@ANCHOR: radioctl_core_description_elecraft_params]
+    // Tests [@ANCHOR: radioctl_core_rigfile_elecraft_section]
     #[test]
     fn the_elecraft_family_needs_its_own_block_and_fact() {
         let elecraft = GOOD
@@ -1875,6 +1923,7 @@ verified = { state = "unverified" }
     // Tests [@ANCHOR: radioctl_core_rigfile_fact_for]
     // Tests [@ANCHOR: radioctl_core_rigfile_verification_summary]
     // Tests [@ANCHOR: radioctl_core_rigfile_is_hardware_verified]
+    // Tests [@ANCHOR: radioctl_core_rigfile_verified]
     #[test]
     fn an_exact_fact_wins_and_the_summary_counts_states() {
         let loaded = parse(GOOD).expect("loads");
@@ -1890,6 +1939,9 @@ verified = { state = "unverified" }
         assert!(!loaded.is_hardware_verified());
     }
     // Tests [@ANCHOR: radioctl_core_rigfile_parse]
+    // Tests [@ANCHOR: radioctl_core_rigfile_kenwood_hh_section]
+    // Tests [@ANCHOR: radioctl_core_rigfile_ky_section]
+    // Tests [@ANCHOR: radioctl_core_rigfile_kenwood_section]
     #[test]
     fn a_kenwood_dialect_is_named_known_and_needs_its_fact() {
         let ts890 = GOOD.replace("model_id = 19", "model_id = 19\ndialect = \"ts890\"");
@@ -1912,6 +1964,7 @@ verified = { state = "unverified" }
     // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
     // Tests [@ANCHOR: radioctl_core_description_yaesu_params]
+    // Tests [@ANCHOR: radioctl_core_rigfile_yaesu_section]
     #[test]
     fn a_yaesu_frequency_width_is_8_or_9_and_a_non_default_needs_its_fact() {
         let yaesu = GOOD
@@ -1938,6 +1991,9 @@ verified = { state = "unverified" }
     }
 
     // Tests [@ANCHOR: radioctl_core_civparams_field_len]
+    // Tests [@ANCHOR: radioctl_core_rigfile_civ_command_set_name]
+    // Tests [@ANCHOR: radioctl_core_rigfile_civ_main_sub_name]
+    // Tests [@ANCHOR: radioctl_core_rigfile_civ_section]
     #[test]
     fn civ_frequency_bytes_is_four_five_or_six_and_needs_its_fact() {
         let civ = "[civ]\naddress = 1\ncontroller = 224\nmodel_id = 1\necho = false\n";
@@ -1982,6 +2038,7 @@ verified = { state = "unverified" }
     // Tests [@ANCHOR: radioctl_core_rigfile_build_power_meter]
     // Tests [@ANCHOR: radioctl_core_powermeter_cal]
     // Tests [@ANCHOR: radioctl_core_description_power_meter_params]
+    // Tests [@ANCHOR: radioctl_core_rigfile_power_meter_section]
     #[test]
     fn a_power_meter_block_needs_a_calibration_and_its_fact() {
         let fact = "\n[[facts]]\nkey = \"power_meter.raw_to_milliwatts\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
@@ -2034,6 +2091,7 @@ verified = { state = "unverified" }
     // Tests [@ANCHOR: radioctl_core_levelparams_attenuator_db]
     // Tests [@ANCHOR: radioctl_core_levelparams_max_attenuation]
     // Tests [@ANCHOR: radioctl_core_description_level_params]
+    // Tests [@ANCHOR: radioctl_core_rigfile_levels_section]
     #[test]
     fn a_levels_block_is_sane_and_needs_its_facts() {
         let levels = "\n[levels]\nattenuator_db = [6, 12, 18]\npreamp_steps = 2\n";
@@ -2081,6 +2139,7 @@ verified = { state = "unverified" }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_build_scope]
     // Tests [@ANCHOR: radioctl_core_description_scope_params]
+    // Tests [@ANCHOR: radioctl_core_rigfile_scope_section]
     #[test]
     fn a_scope_block_is_icom_only_sane_and_needs_its_facts() {
         let scope = "\n[scope]\nreceivers = 1\nline_length = 475\nsamples_per_frame = 50\namplitude_max = 160\nspans_hz = [5000, 10000]\n";

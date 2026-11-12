@@ -79,6 +79,7 @@ async fn rig_for(
 // Tests [@ANCHOR: radioctl_hpsdr_set_attenuator]
 // Tests [@ANCHOR: radioctl_hpsdr_control_take_streams]
 // Tests [@ANCHOR: radioctl_core_description_hpsdr_params]
+// Tests [@ANCHOR: radioctl_core_rigfile_hpsdr_section]
 #[tokio::test]
 async fn protocol_1_virtual_anan_tunes_reports_power_and_keeps_the_gate_closed() {
     let emu = Emulator::start_p1(

@@ -158,6 +158,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_txstate_from_cache]
+    // Tests [@ANCHOR: radioctl_core_rig_cached]
     #[test]
     fn the_inputs_come_from_the_cached_observations() {
         let get = |field| match field {
