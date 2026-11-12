@@ -19,6 +19,7 @@ use tokio::runtime::Handle;
 
 // Tests [@ANCHOR: radioctl_station_rig_name]
 // Tests [@ANCHOR: radioctl_station_rig_key_state]
+// Tests [@ANCHOR: radioctl_station_station_key_state]
 #[tokio::test]
 async fn a_keyed_virtual_rig_blocks_switching() {
     let desc = RigDescription::ic7300();
@@ -78,6 +79,7 @@ safe = "off"
 // Tests [@ANCHOR: radioctl_station_riglinks_link_up]
 // Tests [@ANCHOR: radioctl_station_riglinks_present]
 // Tests [@ANCHOR: radioctl_station_riglinks_connect]
+// Tests [@ANCHOR: radioctl_station_manager_rig_links]
 #[tokio::test]
 async fn rig_links_report_a_radio_without_a_handle_as_down_and_a_live_handle_as_up() {
     let links = RigLinks::new();

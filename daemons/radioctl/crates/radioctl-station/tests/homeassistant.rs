@@ -440,6 +440,10 @@ fn board(driver: &Arc<HomeAssistant>) -> Switchboard {
 // Tests [@ANCHOR: radioctl_station_ha_driver_err]
 // Tests [@ANCHOR: radioctl_station_driver_assurance]
 // Tests [@ANCHOR: radioctl_station_board_assurance]
+// Tests [@ANCHOR: radioctl_station_homeassistant_inner]
+// Tests [@ANCHOR: radioctl_station_homeassistant_cache]
+// Tests [@ANCHOR: radioctl_station_homeassistant_discovered]
+// Tests [@ANCHOR: radioctl_station_homeassistant_memory_audit]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn discovery_switching_and_confirmation_by_event() {
     let mut ha = Ha::start().await;
@@ -730,6 +734,8 @@ async fn a_silent_home_assistant_is_noticed_by_ping() {
     ha.stop().await;
 }
 
+// Tests [@ANCHOR: radioctl_station_homeassistant_home_assistant]
+// Tests [@ANCHOR: radioctl_station_homeassistant_memory_secrets]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_wrong_token_never_syncs_and_is_never_logged() {
     let mut ha = Ha::start().await;
@@ -766,6 +772,7 @@ async fn a_wrong_token_never_syncs_and_is_never_logged() {
 }
 
 // Tests [@ANCHOR: radioctl_station_ha_post]
+// Tests [@ANCHOR: radioctl_station_homeassistant_audit_entry]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_rejected_service_call_is_an_error_and_an_audit_entry() {
     let mut ha = Ha::start().await;
@@ -795,6 +802,8 @@ async fn a_rejected_service_call_is_an_error_and_an_audit_entry() {
 // Tests [@ANCHOR: radioctl_station_ha_filesecrets_new]
 // Tests [@ANCHOR: radioctl_station_ha_filesecrets_secret]
 // Tests [@ANCHOR: radioctl_station_ha_secret_new]
+// Tests [@ANCHOR: radioctl_station_homeassistant_ha_config]
+// Tests [@ANCHOR: radioctl_station_homeassistant_file_secrets]
 #[tokio::test]
 async fn start_refuses_what_it_should_before_touching_the_network() {
     let audit: Arc<dyn AuditLog> = Arc::new(MemoryAudit::new());

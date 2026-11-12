@@ -18,6 +18,7 @@ use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
+// [@ANCHOR: radioctl_station_virtual_rotator_rotator_state]
 /// What the virtual rotator is doing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RotatorState {
@@ -31,6 +32,7 @@ pub struct RotatorState {
     pub target_el: f32,
 }
 
+// [@ANCHOR: radioctl_station_virtual_rotator_virtual_rotator]
 /// The sans-IO virtual rotator.
 pub struct VirtualRotator {
     desc: RotatorDescription,
@@ -361,6 +363,7 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+// [@ANCHOR: radioctl_station_virtual_rotator_virtual_rotator_control]
 /// Control of a served virtual rotator.
 #[derive(Clone)]
 pub struct VirtualRotatorControl {
@@ -526,6 +529,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_vrot_rot2prog]
+    // Tests [@ANCHOR: radioctl_station_virtual_rotator_rotator_state]
     #[test]
     fn it_speaks_rot2prog() {
         let mut r = rot("spid-rot2prog");

@@ -30,6 +30,7 @@ use tokio::time::{sleep, timeout, Instant};
 /// The rotator descriptions shipped with radioctl.
 pub const BUILTIN_ROTATORS: &str = include_str!("../../../data/station/rotators.toml");
 
+// [@ANCHOR: radioctl_station_rotator_rotator_protocol]
 /// Which wire protocol the rotator speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -52,6 +53,7 @@ pub enum RotatorProtocol {
     Dcu,
 }
 
+// [@ANCHOR: radioctl_station_rotator_park_position]
 /// A park position.
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize)]
 pub struct ParkPosition {
@@ -61,6 +63,7 @@ pub struct ParkPosition {
     pub el: f32,
 }
 
+// [@ANCHOR: radioctl_station_rotator_rotator_description]
 /// What a rotator is and can do.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct RotatorDescription {
@@ -96,6 +99,7 @@ pub struct RotatorDescription {
     pub verified: bool,
 }
 
+// [@ANCHOR: radioctl_station_rotator_rotator_file]
 #[derive(Deserialize)]
 struct RotatorFile {
     #[serde(default)]
@@ -224,6 +228,7 @@ impl RotatorDescription {
     }
 }
 
+// [@ANCHOR: radioctl_station_rotator_rot_op]
 /// A rotator command.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RotOp {
@@ -242,6 +247,7 @@ pub enum RotOp {
     Park,
 }
 
+// [@ANCHOR: radioctl_station_rotator_rot_expect]
 /// What reply a command expects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RotExpect {
@@ -253,6 +259,7 @@ pub enum RotExpect {
     Position,
 }
 
+// [@ANCHOR: radioctl_station_rotator_encoded]
 /// A command encoded for the wire.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Encoded {
@@ -262,6 +269,7 @@ pub struct Encoded {
     pub expect: RotExpect,
 }
 
+// [@ANCHOR: radioctl_station_rotator_rot_reply]
 /// A parsed reply.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RotReply {
@@ -333,6 +341,7 @@ fn line(buf: &[u8]) -> Option<(String, usize)> {
     Some((text, start + end + 1))
 }
 
+// [@ANCHOR: radioctl_station_rotator_rotctld_engine]
 /// Hamlib's `rotctld` protocol.
 pub struct RotctldEngine {
     desc: RotatorDescription,
@@ -459,6 +468,7 @@ impl RotatorEngine for RotctldEngine {
     }
 }
 
+// [@ANCHOR: radioctl_station_rotator_gs232_engine]
 /// The Yaesu GS-232A/B ASCII protocol.
 pub struct Gs232Engine {
     desc: RotatorDescription,
@@ -543,6 +553,7 @@ impl RotatorEngine for Gs232Engine {
     }
 }
 
+// [@ANCHOR: radioctl_station_rotator_easycomm_engine]
 /// The Easycomm I, II and III ASCII protocols (Chris Jackson G7UPN; Easycomm III by Alexander
 /// Schultze), from the specification the AMSAT WiSP programs ship and Hamlib carries:
 /// `AZaaa.a ELeee.e` moves, a bare `AZ EL` reads (the controller echoes `AZaaa.a ELeee.e`),
@@ -673,6 +684,7 @@ impl RotatorEngine for EasycommEngine {
     }
 }
 
+// [@ANCHOR: radioctl_station_rotator_rot2_prog_engine]
 /// The SPID Rot2Prog / MD-01/02 binary protocol, from SPID's "ROT2PROG Protocol" sheet: every
 /// command is 13 bytes `W` + 10 payload bytes + command + `0x20` (set: two groups of four ASCII
 /// digits of `(360 + angle) * pulses` each followed by the pulses-per-degree byte, command `0x2F`;
@@ -807,6 +819,7 @@ impl RotatorEngine for Rot2ProgEngine {
     }
 }
 
+// [@ANCHOR: radioctl_station_rotator_dcu_engine]
 /// The Hy-Gain DCU-1/DCU-2/DCU-3 ASCII protocol, from Hy-Gain's DCU-3 manual ("Command Set":
 /// `AP1nnn;` sets the target bearing, three digits 000 to 359, and `AM1;` starts the rotation to
 /// it; 4800 baud 8N1; the controller sends nothing back). Both commands go out in one write.
@@ -869,6 +882,7 @@ impl RotatorEngine for DcuEngine {
     }
 }
 
+// [@ANCHOR: radioctl_station_rotator_rotator]
 /// A rotator on a transport: commands are serialised, every wait is bounded, and a down link
 /// fails at once.
 pub struct Rotator {
@@ -1062,6 +1076,7 @@ async fn drain(io: &mut Box<dyn Transport>) {
     }
 }
 
+// [@ANCHOR: radioctl_station_rotator_shared_rotator]
 /// A rotator shared between tasks.
 pub type SharedRotator = Arc<Rotator>;
 
@@ -1081,6 +1096,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_rot_desc_validate]
     // Tests [@ANCHOR: radioctl_station_rot_desc_engine]
     // Tests [@ANCHOR: radioctl_station_rot_err]
+    // Tests [@ANCHOR: radioctl_station_rotator_rotator_description]
+    // Tests [@ANCHOR: radioctl_station_rotator_park_position]
     #[test]
     fn the_shipped_descriptions_are_valid_and_bad_ones_are_refused() {
         let all = RotatorDescription::builtin();
@@ -1126,6 +1143,9 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_station_rot_desc_contains]
     // Tests [@ANCHOR: radioctl_station_rot_resolve]
+    // Tests [@ANCHOR: radioctl_station_rotator_gs232_engine]
+    // Tests [@ANCHOR: radioctl_station_rotator_rotctld_engine]
+    // Tests [@ANCHOR: radioctl_station_rotator_rot_op]
     #[test]
     fn positions_outside_the_travel_are_refused_not_clamped() {
         let d = desc("yaesu-g-5500-gs232b");
@@ -1157,6 +1177,9 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_rotctld_parse]
     // Tests [@ANCHOR: radioctl_station_rotctld_rprt]
     // Tests [@ANCHOR: radioctl_station_rot_line]
+    // Tests [@ANCHOR: radioctl_station_rotator_rot_reply]
+    // Tests [@ANCHOR: radioctl_station_rotator_encoded]
+    // Tests [@ANCHOR: radioctl_station_rotator_rot_expect]
     #[test]
     fn rotctld_encodes_and_parses() {
         let e = RotctldEngine::new(desc("generic-rotctld"));
@@ -1210,6 +1233,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_easycomm_encode]
     // Tests [@ANCHOR: radioctl_station_easycomm_parse]
     // Tests [@ANCHOR: radioctl_station_easycomm_parse_position]
+    // Tests [@ANCHOR: radioctl_station_rotator_easycomm_engine]
+    // Tests [@ANCHOR: radioctl_station_rotator_rotator_protocol]
     #[test]
     fn easycomm_encodes_and_parses_the_specification_shapes() {
         let e1 = EasycommEngine::new(desc("easycomm1-azel"));
@@ -1285,6 +1310,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_rot2prog_parse]
     // Tests [@ANCHOR: radioctl_station_rot2prog_frame]
     // Tests [@ANCHOR: radioctl_station_rot2prog_reading]
+    // Tests [@ANCHOR: radioctl_station_rotator_rot2_prog_engine]
     #[test]
     fn rot2prog_encodes_and_parses_the_sheet_frames() {
         let e = Rot2ProgEngine::new(desc("spid-rot2prog"));
@@ -1359,6 +1385,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_dcu_description]
     // Tests [@ANCHOR: radioctl_station_dcu_encode]
     // Tests [@ANCHOR: radioctl_station_dcu_parse]
+    // Tests [@ANCHOR: radioctl_station_rotator_dcu_engine]
     #[test]
     fn dcu_encodes_the_manual_commands_and_reads_nothing() {
         let e = DcuEngine::new(desc("hygain-dcu3"));

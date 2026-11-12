@@ -202,6 +202,8 @@ fn hamlibs_rotctl_drives_the_virtual_dcu() {
     assert_eq!(log, ["AP1123;", "AM1;", "AS1;"]);
 }
 
+// Tests [@ANCHOR: radioctl_station_virtual_rotator_virtual_rotator_control]
+// Tests [@ANCHOR: radioctl_station_virtual_rotator_virtual_rotator]
 #[test]
 fn hamlibs_rotctl_drives_the_virtual_easycomm_rotators() {
     if Command::new("rotctl").arg("--version").output().is_err() {

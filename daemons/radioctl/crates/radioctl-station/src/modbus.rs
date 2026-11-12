@@ -23,6 +23,7 @@ const FN_WRITE_COIL: u8 = 0x05;
 const FN_WRITE_COILS: u8 = 0x0F;
 const MAX_FRAME: usize = 520;
 
+// [@ANCHOR: radioctl_station_modbus_framing]
 /// Serial-line framing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -33,6 +34,7 @@ pub enum Framing {
     Rtu,
 }
 
+// [@ANCHOR: radioctl_station_modbus_modbus_board]
 /// A coil relay board, as data.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModbusBoard {
@@ -267,6 +269,7 @@ pub fn pdu_read_coils(start: u16, count: u16) -> Vec<u8> {
     p
 }
 
+// [@ANCHOR: radioctl_station_modbus_reply]
 /// A validated reply.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reply {
@@ -315,6 +318,7 @@ pub fn parse_reply(request: &[u8], reply: &[u8]) -> Result<Reply, StationError> 
     }
 }
 
+// [@ANCHOR: radioctl_station_modbus_shadow]
 /// The driver's record of the board: one entry per coil plus the safe-state gate.
 #[derive(Debug)]
 struct Shadow {
@@ -332,6 +336,7 @@ struct Shadow {
 const BACKOFF_BASE_MS: u64 = 250;
 const BACKOFF_MAX_MS: u64 = 8000;
 
+// [@ANCHOR: radioctl_station_modbus_modbus_relay]
 /// A coil relay board on an async byte stream.
 ///
 /// Nothing but a function 5 or 15 write is ever sent for a board with `status_readable = false`,
@@ -850,6 +855,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_modbus_crc16]
     // Tests [@ANCHOR: radioctl_station_modbus_encode_rtu]
     // Tests [@ANCHOR: radioctl_station_modbus_decode_rtu]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_function]
     #[test]
     fn rtu_frames_carry_a_crc() {
         // Function 5, slave 1, coil 10 on: the CRC bytes are AC 38 on the wire.
@@ -864,6 +870,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_modbus_parse_reply]
+    // Tests [@ANCHOR: radioctl_station_modbus_shadow]
+    // Tests [@ANCHOR: radioctl_station_modbus_reply]
     #[test]
     fn unknown_replies_fail_closed() {
         let w = pdu_write_coil(3, true);
@@ -895,6 +903,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_station_modbus_sainsmart]
     // Tests [@ANCHOR: radioctl_station_modbus_from_toml]
+    // Tests [@ANCHOR: radioctl_station_modbus_modbus_board]
+    // Tests [@ANCHOR: radioctl_station_modbus_framing]
     #[test]
     fn boards_are_description_data() {
         let b = ModbusBoard::sainsmart_16ch();
@@ -926,6 +936,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_modbus_relay_write_gated]
     // Tests [@ANCHOR: radioctl_station_modbus_relay_exchange]
     // Tests [@ANCHOR: radioctl_station_modbus_safe_bits]
+    // Tests [@ANCHOR: radioctl_station_modbus_modbus_relay]
     #[tokio::test(start_paused = true)]
     async fn the_safe_state_is_the_first_frame_and_nothing_goes_before_it() {
         // the board powers up with relays 1 and 16 pulled in
@@ -1020,6 +1031,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_modbus_relay_assurance]
     // Tests [@ANCHOR: radioctl_station_modbus_relay_recorded_line]
     // Tests [@ANCHOR: radioctl_station_modbus_relay_record]
+    // Tests [@ANCHOR: radioctl_station_channel_recorded]
+    // Tests [@ANCHOR: radioctl_station_channel_assurance]
     #[tokio::test(start_paused = true)]
     async fn an_unreadable_board_is_recorded_and_read_coils_is_never_sent() {
         let (io, module) = spawn(vec![false; 16]);

@@ -36,6 +36,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::sync::watch;
 
+// [@ANCHOR: radioctl_station_actor_link_rig_connection]
 /// A freshly spawned rig actor and, when its transport reconnects by itself, that transport's
 /// link status (the same watch the actor was given as `RigOptions::link_watch`).
 pub struct RigConnection {
@@ -53,11 +54,13 @@ pub trait RigSpawner: Send + Sync {
     fn spawn(&self, radio: &DeviceId) -> BoxFuture<'_, Result<RigConnection, StationError>>;
 }
 
+// [@ANCHOR: radioctl_station_actor_link_slot]
 struct Slot {
     handle: RigHandle,
     watch: Option<watch::Receiver<LinkStatus>>,
 }
 
+// [@ANCHOR: radioctl_station_actor_link_inner]
 #[derive(Default)]
 struct Inner {
     slots: BTreeMap<DeviceId, Slot>,
@@ -79,6 +82,7 @@ fn transport_up(watch: &Option<watch::Receiver<LinkStatus>>) -> bool {
     }
 }
 
+// [@ANCHOR: radioctl_station_actor_link_actor_links]
 /// The links of real rigs: spawns, respawns and unkeys. Share it as an `Arc`.
 pub struct ActorLinks {
     spawner: Arc<dyn RigSpawner>,
@@ -192,6 +196,7 @@ impl ActorLinks {
     }
 }
 
+// [@ANCHOR: radioctl_station_actor_link_slot_state]
 /// What a radio's slot says.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SlotState {
@@ -201,6 +206,7 @@ enum SlotState {
     Dead,
 }
 
+// [@ANCHOR: radioctl_station_actor_link_live_key]
 struct LiveKey {
     inner: Arc<Mutex<Inner>>,
     radio: DeviceId,
@@ -298,6 +304,9 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctl_station_actorlink_transport_up]
+    // Tests [@ANCHOR: radioctl_station_actor_link_slot_state]
+    // Tests [@ANCHOR: radioctl_station_actor_link_inner]
+    // Tests [@ANCHOR: radioctl_station_actor_link_slot]
     #[test]
     fn no_status_means_the_transport_is_usable() {
         assert!(transport_up(&None));

@@ -3,6 +3,7 @@
 
 use std::fmt;
 
+// [@ANCHOR: radioctl_station_error_station_error_kind]
 /// What went wrong, coarsely, so a caller can branch without parsing text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StationErrorKind {
@@ -25,6 +26,7 @@ pub enum StationErrorKind {
     Store,
 }
 
+// [@ANCHOR: radioctl_station_error_station_error]
 /// An error with a kind and a human-readable detail.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StationError {
@@ -61,6 +63,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_station_error_new]
     // Tests [@ANCHOR: radioctl_station_error_display]
+    // Tests [@ANCHOR: radioctl_station_error_station_error]
+    // Tests [@ANCHOR: radioctl_station_error_station_error_kind]
     #[test]
     fn errors_carry_kind_and_text() {
         let e = StationError::new(StationErrorKind::Refused, "keyed");

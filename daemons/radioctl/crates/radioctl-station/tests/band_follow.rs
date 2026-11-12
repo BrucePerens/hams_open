@@ -93,6 +93,7 @@ async fn wait_for_way(station: &Station, port: u32) {
 }
 
 // Tests [@ANCHOR: radioctl_station_band_route_for]
+// Tests [@ANCHOR: radioctl_station_band_follow_band_route]
 #[test]
 fn a_route_is_found_by_band_and_outside_every_band_there_is_none() {
     let r = routes();
@@ -206,6 +207,7 @@ fn a_channel_follows_only_its_own_rig_and_only_without_the_opt_out() {
 }
 
 // Tests [@ANCHOR: radioctl_station_def_validate]
+// Tests [@ANCHOR: radioctl_station_model_band_route_def]
 #[test]
 fn a_band_route_must_name_a_selector_way_and_a_sane_band() {
     let with = |route: &str| format!("{CONFIG}\n[[band_routes]]\n{route}");

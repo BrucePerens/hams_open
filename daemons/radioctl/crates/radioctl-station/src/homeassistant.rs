@@ -64,6 +64,7 @@ const MAX_CATALOG: usize = 20_000;
 const MAX_REPLY: u64 = 64 * 1024;
 const DEFAULT_PORT: u16 = 8123;
 
+// [@ANCHOR: radioctl_station_homeassistant_secret]
 /// A secret value. Its `Debug` hides it and it has no `Display`; the only way to the text is
 /// [`Secret::expose`], used where it must go on the wire.
 pub struct Secret(String);
@@ -96,6 +97,7 @@ pub trait SecretStore: Send + Sync {
     fn secret(&self, name: &str) -> Result<Secret, StationError>;
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_memory_secrets]
 /// Secrets held in memory (tests, or a front end that has unlocked a vault).
 #[derive(Default)]
 pub struct MemorySecrets {
@@ -127,6 +129,7 @@ impl SecretStore for MemorySecrets {
     }
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_file_secrets]
 /// Secrets in files of a directory, one file per secret, readable by the owner only.
 pub struct FileSecrets {
     dir: PathBuf,
@@ -189,6 +192,7 @@ fn missing_secret(name: &str) -> StationError {
     )
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_audit_entry]
 /// One line of the audit log. It never holds a secret.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditEntry {
@@ -208,6 +212,7 @@ pub trait AuditLog: Send + Sync {
     fn record(&self, entry: AuditEntry);
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_memory_audit]
 /// An audit log held in memory.
 #[derive(Default)]
 pub struct MemoryAudit {
@@ -239,6 +244,7 @@ impl AuditLog for MemoryAudit {
     }
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_ha_config]
 /// How to reach Home Assistant and which entities are lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HaConfig {
@@ -283,6 +289,7 @@ impl HaConfig {
     }
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_discovered]
 /// An entity Home Assistant offers, for the owner to choose from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Discovered {
@@ -298,6 +305,7 @@ pub struct Discovered {
     pub mapped: bool,
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_cache]
 #[derive(Default)]
 struct Cache {
     synced: bool,
@@ -305,6 +313,7 @@ struct Cache {
     states: HashMap<String, (String, Option<String>)>,
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_inner]
 struct Inner {
     addr: SocketAddr,
     connector: Option<TlsConnector>,
@@ -316,6 +325,7 @@ struct Inner {
     audit: Arc<dyn AuditLog>,
 }
 
+// [@ANCHOR: radioctl_station_homeassistant_home_assistant]
 /// The driver. Dropping it ends the session task.
 pub struct HomeAssistant {
     inner: Arc<Inner>,
@@ -949,6 +959,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_ha_secret_new]
     // Tests [@ANCHOR: radioctl_station_ha_secret_expose]
     // Tests [@ANCHOR: radioctl_station_ha_secret_debug]
+    // Tests [@ANCHOR: radioctl_station_homeassistant_secret]
     #[test]
     fn a_secret_never_shows_in_debug() {
         let s = Secret::new("hunter2-token");

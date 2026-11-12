@@ -19,9 +19,11 @@ use tokio::sync::{broadcast, Mutex};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep, Instant};
 
+// [@ANCHOR: radioctl_station_channel_box_future]
 /// A boxed future, so drivers can be used as trait objects.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+// [@ANCHOR: radioctl_station_channel_assurance]
 /// How far the station can rely on a driver to take a device to its safe state, and how directly.
 /// Ordered from least to most.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -80,6 +82,7 @@ pub trait ChannelDriver: Send + Sync {
     }
 }
 
+// [@ANCHOR: radioctl_station_channel_recorded]
 /// A driver's own record of one line: recorded, not confirmed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Recorded {
@@ -89,6 +92,7 @@ pub struct Recorded {
     pub age: Option<Duration>,
 }
 
+// [@ANCHOR: radioctl_station_channel_station_event]
 /// Something that happened in the station.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StationEvent {
@@ -157,6 +161,7 @@ pub enum StationEvent {
     },
 }
 
+// [@ANCHOR: radioctl_station_channel_channel_status]
 /// What the switchboard knows about one channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChannelStatus {
@@ -175,6 +180,7 @@ pub struct ChannelStatus {
     pub assurance: Assurance,
 }
 
+// [@ANCHOR: radioctl_station_channel_set_outcome]
 /// The result of a successful set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetOutcome {
@@ -184,6 +190,7 @@ pub struct SetOutcome {
     pub confirmed: Option<Value>,
 }
 
+// [@ANCHOR: radioctl_station_channel_fault]
 /// Faults a virtual bank can inject.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fault {
@@ -201,6 +208,7 @@ pub enum Fault {
     DropAfter(usize),
 }
 
+// [@ANCHOR: radioctl_station_channel_bank_inner]
 #[derive(Debug)]
 struct BankInner {
     lines: BTreeMap<u32, bool>,
@@ -210,6 +218,7 @@ struct BankInner {
     readback: bool,
 }
 
+// [@ANCHOR: radioctl_station_channel_virtual_bank]
 /// A virtual bank of lines with fault injection, for tests and for running a station without
 /// hardware. Clones share the same lines.
 #[derive(Debug, Clone)]
@@ -334,6 +343,7 @@ impl ChannelDriver for VirtualBank {
     }
 }
 
+// [@ANCHOR: radioctl_station_channel_debouncer]
 /// A sans-IO input debouncer: a new level is believed only after it has held for the debounce
 /// time. Time is passed in, so tests need no clock.
 #[derive(Debug, Clone)]
@@ -378,6 +388,7 @@ impl Debouncer {
     }
 }
 
+// [@ANCHOR: radioctl_station_channel_chan]
 struct Chan {
     def: ChannelDef,
     driver: Arc<dyn ChannelDriver>,
@@ -385,6 +396,7 @@ struct Chan {
     state: StdMutex<State>,
 }
 
+// [@ANCHOR: radioctl_station_channel_state]
 #[derive(Debug, Clone, Copy, Default)]
 struct State {
     commanded: Option<Value>,
@@ -392,6 +404,7 @@ struct State {
     last_off: Option<Instant>,
 }
 
+// [@ANCHOR: radioctl_station_channel_switchboard]
 /// All channels of a station, their drivers and their state.
 pub struct Switchboard {
     channels: HashMap<ChannelId, Chan>,
@@ -926,6 +939,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_driver_safe_line]
     // Tests [@ANCHOR: radioctl_station_driver_force_safe]
     // Tests [@ANCHOR: radioctl_station_driver_recorded_line]
+    // Tests [@ANCHOR: radioctl_station_channel_state]
+    // Tests [@ANCHOR: radioctl_station_channel_virtual_bank]
     #[tokio::test]
     async fn the_default_safe_level_is_off_and_there_is_no_record() {
         let bank = VirtualBank::new();
@@ -939,6 +954,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_vbank_read_line]
     // Tests [@ANCHOR: radioctl_station_vbank_can_read_back]
     // Tests [@ANCHOR: radioctl_station_vbank_set_physical]
+    // Tests [@ANCHOR: radioctl_station_channel_bank_inner]
     #[tokio::test]
     async fn a_virtual_bank_holds_lines() {
         let bank = VirtualBank::default();
@@ -954,6 +970,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_station_vbank_no_readback]
     // Tests [@ANCHOR: radioctl_station_vbank_set_fault]
+    // Tests [@ANCHOR: radioctl_station_channel_fault]
     #[tokio::test]
     async fn faults_are_injected() {
         let bank = VirtualBank::without_readback();
@@ -976,6 +993,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_debouncer_new]
     // Tests [@ANCHOR: radioctl_station_debouncer_sample]
     // Tests [@ANCHOR: radioctl_station_debouncer_stable]
+    // Tests [@ANCHOR: radioctl_station_channel_debouncer]
     #[test]
     fn the_debouncer_believes_only_a_held_level() {
         let ms = Duration::from_millis;
@@ -1003,6 +1021,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_station_board_store]
     // Tests [@ANCHOR: radioctl_station_board_read_value]
     // Tests [@ANCHOR: radioctl_station_board_verify]
+    // Tests [@ANCHOR: radioctl_station_model_value]
+    // Tests [@ANCHOR: radioctl_station_channel_station_event]
     #[tokio::test]
     async fn power_is_commanded_then_confirmed_and_mismatches_alarm() {
         let bank = VirtualBank::new();
@@ -1152,6 +1172,9 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_board_force_off]
+    // Tests [@ANCHOR: radioctl_station_channel_chan]
+    // Tests [@ANCHOR: radioctl_station_channel_set_outcome]
+    // Tests [@ANCHOR: radioctl_station_channel_channel_status]
     #[tokio::test]
     async fn force_off_ignores_minimum_times_and_busy_channels() {
         let bank = VirtualBank::new();
@@ -1171,6 +1194,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_board_spawn_input]
+    // Tests [@ANCHOR: radioctl_station_model_channel_def]
+    // Tests [@ANCHOR: radioctl_station_channel_switchboard]
     #[tokio::test(start_paused = true)]
     async fn an_input_is_debounced_and_fails_closed() {
         let bank = VirtualBank::new();

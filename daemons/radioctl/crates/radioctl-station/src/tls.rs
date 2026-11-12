@@ -23,6 +23,7 @@ use tokio_rustls::TlsConnector;
 
 use crate::error::{StationError, StationErrorKind};
 
+// [@ANCHOR: radioctl_station_tls_ha_tls]
 /// How to trust a Home Assistant over TLS. Exactly one of the two fields is set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HaTls {
@@ -58,6 +59,7 @@ pub fn parse_pin(text: &str) -> Result<[u8; 32], StationError> {
     Ok(out)
 }
 
+// [@ANCHOR: radioctl_station_tls_pin_verifier]
 /// Accepts exactly the pinned certificate; the handshake signature is still checked against its
 /// key, so the peer must hold the private key.
 #[derive(Debug)]
@@ -189,6 +191,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_tls_connector]
+    // Tests [@ANCHOR: radioctl_station_tls_ha_tls]
     #[test]
     fn the_connector_needs_exactly_one_way_to_trust() {
         let none = HaTls {
@@ -214,6 +217,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_station_tls_verify_server_cert]
+    // Tests [@ANCHOR: radioctl_station_tls_pin_verifier]
     #[test]
     fn only_the_pinned_certificate_is_accepted() {
         let cert = CertificateDer::from(b"a fake certificate, only its hash matters".to_vec());

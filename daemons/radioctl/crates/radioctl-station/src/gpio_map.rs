@@ -7,6 +7,7 @@ use crate::error::{StationError, StationErrorKind};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+// [@ANCHOR: radioctl_station_gpio_map_direction]
 /// The direction of a line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -21,6 +22,7 @@ pub enum Direction {
     InputPullDown,
 }
 
+// [@ANCHOR: radioctl_station_gpio_map_output_type]
 /// How an output drives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -32,6 +34,7 @@ pub enum OutputType {
     OpenDrain,
 }
 
+// [@ANCHOR: radioctl_station_gpio_map_level]
 /// A logic level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -42,6 +45,7 @@ pub enum Level {
     High,
 }
 
+// [@ANCHOR: radioctl_station_gpio_map_function]
 /// What a line does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -66,6 +70,7 @@ pub enum Function {
     Spare,
 }
 
+// [@ANCHOR: radioctl_station_gpio_map_line]
 /// One line of a map.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Line {
@@ -98,6 +103,7 @@ pub struct Line {
     pub max_on_ms: Option<u64>,
 }
 
+// [@ANCHOR: radioctl_station_gpio_map_gpio_map]
 /// A station's assignment of functions to the lines of one board.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpioMap {
@@ -108,6 +114,7 @@ pub struct GpioMap {
     pub lines: Vec<Line>,
 }
 
+// [@ANCHOR: radioctl_station_gpio_map_board_model]
 /// A board model: the pins it exposes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BoardModel {
@@ -136,12 +143,14 @@ fn yes() -> bool {
     true
 }
 
+// [@ANCHOR: radioctl_station_gpio_map_board_catalog]
 /// The board models known to a build, parsed from TOML.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BoardCatalog {
     boards: BTreeMap<String, BoardModel>,
 }
 
+// [@ANCHOR: radioctl_station_gpio_map_catalog_file]
 #[derive(Deserialize)]
 struct CatalogFile {
     #[serde(default, rename = "board")]
@@ -347,6 +356,9 @@ pulse_ms = 300
     // Tests [@ANCHOR: radioctl_station_catalog_from_toml]
     // Tests [@ANCHOR: radioctl_station_catalog_builtin]
     // Tests [@ANCHOR: radioctl_station_catalog_get]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_catalog_file]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_board_catalog]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_board_model]
     #[test]
     fn the_builtin_catalog_lists_the_boards() {
         let c = BoardCatalog::builtin();
@@ -359,6 +371,11 @@ pulse_ms = 300
 
     // Tests [@ANCHOR: radioctl_station_map_from_toml]
     // Tests [@ANCHOR: radioctl_station_map_safe_levels]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_gpio_map]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_line]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_level]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_output_type]
+    // Tests [@ANCHOR: radioctl_station_gpio_map_direction]
     #[test]
     fn a_good_map_loads_and_reports_safe_levels() {
         let map = GpioMap::from_toml(MAP, &BoardCatalog::builtin()).unwrap();
