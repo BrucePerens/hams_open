@@ -21,6 +21,7 @@ use crate::ambe::float::tia_102_baba::tables::{
 };
 
 /// Splits `l` residuals into Annex J's six blocks; `None` for an `l` outside `9..=56` or a wrong residual count.
+// [@ANCHOR: ham_digital_modes:partition_into_blocks_q16]
 pub fn partition_into_blocks_q16(residuals_q16: &[i32], l: u32) -> Option<[Vec<i32>; 6]> {
     let lengths = block_lengths_for_l(l)?;
     if residuals_q16.len() != l as usize {
@@ -180,5 +181,27 @@ mod tests {
         for (i, &level) in GAIN_QUANTIZER_LEVELS_Q16_16.iter().enumerate() {
             assert_eq!(quantize_gain_index_q16(level) as usize, i);
         }
+    }
+
+    /// `partition_into_blocks_q16` splits `l` residuals into six consecutive blocks whose lengths come
+    /// from Annex J: concatenating the blocks gives the input back for every `l` in 9..=56, and a wrong
+    /// residual count or an `l` outside the range is `None`.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:partition_into_blocks_q16]
+    fn partition_into_blocks_concatenates_back_to_the_residuals_for_every_l() {
+        for l in 9..=56u32 {
+            let residuals: Vec<i32> = (0..l as i32).map(|i| i * 1000 - 7).collect();
+            let blocks = partition_into_blocks_q16(&residuals, l).expect("l in range");
+            let joined: Vec<i32> = blocks.iter().flatten().copied().collect();
+            assert_eq!(joined, residuals, "l={l}");
+            assert!(
+                blocks.iter().all(|b| !b.is_empty()),
+                "l={l}: every block has at least one residual"
+            );
+        }
+        assert!(partition_into_blocks_q16(&[0; 8], 8).is_none());
+        assert!(partition_into_blocks_q16(&[0; 57], 57).is_none());
+        assert!(partition_into_blocks_q16(&[0; 20], 21).is_none());
+        assert!(partition_into_blocks_q16(&[0; 22], 21).is_none());
     }
 }

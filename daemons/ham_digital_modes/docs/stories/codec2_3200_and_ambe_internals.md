@@ -96,6 +96,22 @@ small helpers choose between equivalent forms; each is tested against the plain 
   both constraints.
   *(Reference: `src/ambe/dvsi_p25fec/wire_format.rs` -> `[@ANCHOR: ham_digital_modes:natural_range]`; `src/ambe/dvsi_p25fec/fec.rs` -> `[@ANCHOR: ham_digital_modes:hamming_decode_chip]`; `src/ambe/float/tia_102_baba/tables.rs` -> `[@ANCHOR: ham_digital_modes:gain_vector_bits]`; `src/ambe/fixed/tia_102_baba/pitch.rs` -> `[@ANCHOR: ham_digital_modes:tracking_range]`; `src/ambe/fixed/tia_102_baba/vuv.rs` -> `[@ANCHOR: ham_digital_modes:ratio_q30]`; `src/dstar.rs` -> `[@ANCHOR: ham_digital_modes:DStarHeader_pack_field]`; `src/timing_characterizer.rs` -> `[@ANCHOR: ham_digital_modes:two_tone_window_len]`)*
 
+## Fixed-point AMBE helpers anchored in slice 4 (noise, twiddles, dequantizer, blocks)
+
+- `NoiseState` (`new`, `step`, `advance_frame`, `at`) is the integer noise generator of Eq. 117, `u(n+1) = (171 u(n) + 11213) mod 53125`
+  from `u(-105) = 3147`: `new` runs it 209 steps, `at` reads `u(-104..=104)` relative to the current frame and refuses anything outside,
+  and `advance_frame` moves the window on by one 160-sample frame.
+- `ComplexQ16::norm_sqr_q16` is the squared magnitude of an `i64` Q16.16 spectral value through an `i128` intermediate, so a large bin
+  cannot overflow; `mul_div_wide` is `a * b / c` in one widened division (zero for a zero divisor), used to rescale a bin without ever
+  forming the tiny scale factor on its own.
+- `twiddle_q16` is `(cos, sin)` of `2 pi m n / 256` from a table of the 256 distinct phases, so the 256-point transforms evaluate no
+  trigonometry per term.
+- `phase_dither_q16` maps the noise sample of harmonic `l` linearly onto `[-pi, pi)` (Eq. 141) in Q16.16 radians.
+- `dequantize_uniform_q16` is the shared bin-centre formula of Eq. 68 and 71, `step * (value - 2^(bits-1) + 0.5)`, zero for zero bits;
+  `previous_log2_amplitude_q16` is `log2` of the previous frame's harmonic amplitude, zero for `j = 0` and clamped to the last harmonic;
+  `partition_into_blocks_q16` splits the `L` prediction residuals into Annex J's six blocks.
+  *(Reference: `src/ambe/fixed/general/unvoiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:NoiseState_new]`, `[@ANCHOR: ham_digital_modes:NoiseState_step]`, `[@ANCHOR: ham_digital_modes:NoiseState_advance_frame]`, `[@ANCHOR: ham_digital_modes:NoiseState_at]`, `[@ANCHOR: ham_digital_modes:ComplexQ16_norm_sqr_q16]`, `[@ANCHOR: ham_digital_modes:mul_div_wide]`, `[@ANCHOR: ham_digital_modes:twiddle_q16]`; `src/ambe/fixed/general/voiced_synthesis.rs` -> `[@ANCHOR: ham_digital_modes:phase_dither_q16]`; `src/ambe/fixed/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: ham_digital_modes:dequantize_uniform_q16]`; `src/ambe/fixed/tia_102_baba/prediction.rs` -> `[@ANCHOR: ham_digital_modes:previous_log2_amplitude_q16]`; `src/ambe/fixed/tia_102_baba/quantize.rs` -> `[@ANCHOR: ham_digital_modes:partition_into_blocks_q16]`)*
+
 ## Codec2 3200 synthesis (float and fixed)
 
 `synthesize_subframe` turns one decoded model into 10 ms of audio: it samples the LPC filter's phase

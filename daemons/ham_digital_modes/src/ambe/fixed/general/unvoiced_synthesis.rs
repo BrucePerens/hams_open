@@ -80,6 +80,7 @@ impl ComplexQ16 {
     /// `|self|^2` in Q16.16, via an `i128` intermediate (`self.re`/`self.im` can be large enough that
     /// squaring directly in `i64` would overflow -- same reasoning as `fixed_ops::mul_q16_i64`'s own
     /// doc comment).
+    // [@ANCHOR: ham_digital_modes:ComplexQ16_norm_sqr_q16]
     fn norm_sqr_q16(self) -> i64 {
         let re2 = (self.re as i128) * (self.re as i128);
         let im2 = (self.im as i128) * (self.im as i128);
@@ -95,6 +96,7 @@ impl ComplexQ16 {
 /// `gamma_w * M_l / sqrt(power)` directly, without ever materializing that ratio as its own
 /// (potentially far-too-imprecise-for-a-quiet-harmonic) intermediate value -- see this module's own
 /// doc comment.
+// [@ANCHOR: ham_digital_modes:mul_div_wide]
 fn mul_div_wide(a_q16: i64, b_q16: i64, c_q16: i64) -> i64 {
     if c_q16 == 0 {
         return 0;
@@ -117,6 +119,7 @@ pub struct NoiseState {
 }
 
 impl NoiseState {
+    // [@ANCHOR: ham_digital_modes:NoiseState_new]
     pub fn new() -> Self {
         let mut state = Self {
             last: 3147,
@@ -128,6 +131,7 @@ impl NoiseState {
         state
     }
 
+    // [@ANCHOR: ham_digital_modes:NoiseState_step]
     fn step(&mut self) {
         self.last = advance_noise(self.last);
         if self.window.len() == 209 {
@@ -136,6 +140,7 @@ impl NoiseState {
         self.window.push_back(self.last);
     }
 
+    // [@ANCHOR: ham_digital_modes:NoiseState_advance_frame]
     pub fn advance_frame(&mut self) {
         for _ in 0..N {
             self.step();
@@ -143,6 +148,7 @@ impl NoiseState {
     }
 
     /// `u(relative)` for `relative` in `-104..=104`, relative to the current frame's own `n = 0`.
+    // [@ANCHOR: ham_digital_modes:NoiseState_at]
     pub fn at(&self, relative: i32) -> Option<i64> {
         if !(-104..=104).contains(&relative) {
             return None;
@@ -181,6 +187,7 @@ fn dft_phase(m: i32, n: i32) -> u32 {
 /// `(cos, sin)` in Q16.16 of the twiddle angle `2*pi*(m*n)/256`, from a table of the 256 distinct phases computed once with the
 /// very same `cos_q16`/`sin_q16` the per-term evaluation used, so results are bit-identical and the transforms below no longer
 /// evaluate trigonometry per term.
+// [@ANCHOR: ham_digital_modes:twiddle_q16]
 fn twiddle_q16(m: i32, n: i32) -> (i32, i32) {
     static TABLE: std::sync::OnceLock<Vec<(i32, i32)>> = std::sync::OnceLock::new();
     let table = TABLE.get_or_init(|| {
@@ -393,5 +400,103 @@ impl UnvoicedState {
 impl Default for UnvoicedState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The noise generator is the integer recurrence `u(n+1) = (171 u(n) + 11213) mod 53125` from
+    /// `u(-105) = 3147`: `new` has advanced it 209 times, `at` reads the window `-104..=104` (and
+    /// refuses anything outside it), `step` is one recurrence step, and `advance_frame` moves the
+    /// window on by exactly one 160-sample frame.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:NoiseState_new]
+    // Tests [@ANCHOR: ham_digital_modes:NoiseState_step]
+    // Tests [@ANCHOR: ham_digital_modes:NoiseState_at]
+    // Tests [@ANCHOR: ham_digital_modes:NoiseState_advance_frame]
+    fn noise_state_follows_the_published_recurrence_one_frame_at_a_time() {
+        let mut u = 3147i64;
+        let mut sequence = Vec::new();
+        for _ in 0..(209 + N) {
+            u = (171 * u + 11213) % 53125;
+            sequence.push(u);
+        }
+        let mut state = NoiseState::new();
+        for relative in -104..=104 {
+            assert_eq!(
+                state.at(relative),
+                Some(sequence[(relative + 104) as usize]),
+                "u({relative})"
+            );
+        }
+        assert_eq!(state.at(-105), None);
+        assert_eq!(state.at(105), None);
+        state.advance_frame();
+        for relative in -104..=104 {
+            assert_eq!(
+                state.at(relative),
+                Some(sequence[N + (relative + 104) as usize]),
+                "u({relative}) after one frame"
+            );
+        }
+        assert_eq!(NoiseState::default().at(0), NoiseState::new().at(0));
+    }
+
+    /// `norm_sqr_q16` is `|re + j im|^2` in Q16.16 through an `i128` intermediate: the 3-4-5 triangle,
+    /// a negative component, zero, and a component whose `i64` square would overflow.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:ComplexQ16_norm_sqr_q16]
+    fn norm_sqr_q16_is_the_squared_magnitude_without_overflow() {
+        let c = |re: i64, im: i64| ComplexQ16 { re, im }.norm_sqr_q16();
+        assert_eq!(c(3 << 16, 4 << 16), 25 << 16);
+        assert_eq!(c(-(3 << 16), 4 << 16), 25 << 16);
+        assert_eq!(c(0, 0), 0);
+        assert_eq!(c(1 << 16, 0), 1 << 16);
+        assert_eq!(c(1 << 31, 1 << 31), 1 << 47);
+    }
+
+    /// `mul_div_wide` is `a * b / c` in one `i128` division (truncating toward zero), returns 0 for a
+    /// zero divisor, and handles operands whose product exceeds `i64`.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:mul_div_wide]
+    fn mul_div_wide_divides_the_widened_product_once() {
+        let q = |x: i64| x << 16;
+        assert_eq!(mul_div_wide(q(3), q(2), q(6)), q(1));
+        assert_eq!(mul_div_wide(7, 1, 2), 3);
+        assert_eq!(mul_div_wide(-7, 1, 2), -3);
+        assert_eq!(mul_div_wide(7, -1, 2), -3);
+        assert_eq!(mul_div_wide(123, 456, 0), 0);
+        assert_eq!(mul_div_wide(1 << 50, 1 << 50, 1 << 40), 1 << 60);
+    }
+
+    /// `twiddle_q16(m, n)` is `(cos, sin)` of `2 pi m n / 256`: the identity at `m n = 0`, the exact
+    /// quarter, half and three-quarter turns, symmetry in `m` and `n`, period 256, unit length
+    /// everywhere, and the same value for the negative index as the matching positive one.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:twiddle_q16]
+    fn twiddle_q16_is_the_unit_circle_at_256_phases() {
+        assert_eq!(twiddle_q16(0, 99), (65536, 0));
+        assert_eq!(twiddle_q16(64, 1), (0, 65536));
+        assert_eq!(twiddle_q16(128, 1), (-65536, 0));
+        assert_eq!(twiddle_q16(192, 1), (0, -65536));
+        for (m, n) in [(1, 1), (5, 17), (-9, 33), (100, -3), (127, 127), (-128, 2)] {
+            assert_eq!(twiddle_q16(m, n), twiddle_q16(n, m), "symmetric ({m},{n})");
+            assert_eq!(
+                twiddle_q16(m + 256, n),
+                twiddle_q16(m, n),
+                "period ({m},{n})"
+            );
+            let (c, s) = twiddle_q16(m, n);
+            let length_sq = (c as i64 * c as i64 + s as i64 * s as i64) >> 16;
+            assert!(
+                (length_sq - 65536).abs() < 16,
+                "unit length ({m},{n}): {length_sq}"
+            );
+        }
+        let (c, s) = twiddle_q16(3, 5);
+        let (c_neg, s_neg) = twiddle_q16(-3, 5);
+        assert_eq!((c_neg, s_neg), (c, -s));
     }
 }

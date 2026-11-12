@@ -965,7 +965,7 @@ mod tests {
         // min = ceil(48000/170) = 283, max (exclusive) = floor(48000/100) = 480: midpoint 381.
         assert_eq!(two_tone_window_len(48_000, 170.0, 100.0), Some(381));
         let w = two_tone_window_len(48_000, 170.0, 100.0).unwrap();
-        assert!(w >= 283 && w < 480);
+        assert!((283..480).contains(&w));
         // Too narrow a shift for too high a baud: 8000/170 -> 48 needed, 8000/300 -> only 26 allowed.
         assert_eq!(two_tone_window_len(8_000, 170.0, 300.0), None);
         // An empty band (min == max) is also None.

@@ -21,6 +21,7 @@ use crate::ambe::float::tia_102_baba::tables::{
 
 /// The fixed-point equivalent of `dequantize_uniform` (Eq. 68/71's shared bin-center formula):
 /// `0` if `bits == 0`, otherwise `step_size * (quantizer_value - 2^(bits-1) + 0.5)`.
+// [@ANCHOR: ham_digital_modes:dequantize_uniform_q16]
 fn dequantize_uniform_q16(quantizer_value: u32, bits: u8, step_size_q16: i32) -> i32 {
     if bits == 0 {
         return 0;
@@ -158,4 +159,25 @@ pub fn reconstruct_spectral_amplitudes_q16(
             })
             .collect(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `dequantize_uniform_q16` is `step * (value - 2^(bits-1) + 0.5)`: zero for zero bits, the bin
+    /// centres either side of the middle for three bits, and linear in the step size.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:dequantize_uniform_q16]
+    fn dequantize_uniform_returns_the_bin_centre_times_the_step() {
+        let one = 65536;
+        assert_eq!(dequantize_uniform_q16(5, 0, one), 0);
+        // bits = 3: half range 4; value 4 is +0.5, value 3 is -0.5, value 0 is -3.5, value 7 is +3.5.
+        assert_eq!(dequantize_uniform_q16(4, 3, one), 32768);
+        assert_eq!(dequantize_uniform_q16(3, 3, one), -32768);
+        assert_eq!(dequantize_uniform_q16(0, 3, one), -229376);
+        assert_eq!(dequantize_uniform_q16(7, 3, one), 229376);
+        assert_eq!(dequantize_uniform_q16(7, 3, one / 2), 114688);
+        assert_eq!(dequantize_uniform_q16(7, 3, 0), 0);
+    }
 }
