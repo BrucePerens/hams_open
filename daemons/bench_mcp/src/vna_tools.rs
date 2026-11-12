@@ -702,7 +702,10 @@ mod tests {
             json!({"start_hz": 1e6, "stop_hz": 2e6, "points": 3, "point_ms": 1}),
             json!({"start_hz": 1e6, "stop_hz": 9e6, "points": 3, "band_hz": 5000}),
         ] {
-            assert!(spectrum(&Config::default(), &bad, &dir, &sim).is_err(), "{bad}");
+            assert!(
+                spectrum(&Config::default(), &bad, &dir, &sim).is_err(),
+                "{bad}"
+            );
         }
         assert_eq!(sim.vna_opens.get(), opens);
     }
@@ -716,7 +719,10 @@ mod tests {
         let v = calibrate_measure(&Config::default(), &args, &dir, &sim).unwrap();
         assert_eq!(v["points"], 3);
         assert_eq!(v["standard"], "open");
-        assert!(std::path::Path::new(v["file"].as_str().unwrap()).exists(), "{v}");
+        assert!(
+            std::path::Path::new(v["file"].as_str().unwrap()).exists(),
+            "{v}"
+        );
         assert_eq!(sim.vna_opens.get(), 1);
     }
 }

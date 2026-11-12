@@ -445,7 +445,9 @@ fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String>
             "bench_vna_generator_level" => vna_tools::generator_level(args),
             "bench_vna_generator_am" => vna_tools::generator_am(args),
             "bench_vna_meter" => vna_tools::meter(&inst.vna, args),
-            "bench_vna_spectrum" => vna_tools::spectrum(&inst.vna, args, &out_dir(), &vna::Hardware),
+            "bench_vna_spectrum" => {
+                vna_tools::spectrum(&inst.vna, args, &out_dir(), &vna::Hardware)
+            }
             "bench_vna_calibrate_measure" => {
                 vna_tools::calibrate_measure(&inst.vna, args, &out_dir(), &vna::Hardware)
             }

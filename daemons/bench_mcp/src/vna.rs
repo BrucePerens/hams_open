@@ -633,8 +633,10 @@ pub(crate) mod tests {
             // Codec 1: reference left, S11 (half the reference) right. Codec 2: S21 (equal to the reference) left, reference right.
             let w = 2.0 * std::f64::consts::PI * cfg.if_hz / 48_000.0;
             let tone = move |scale: f64, i: u64| (8000.0 * scale * (w * i as f64).sin()) as i16;
-            let (c1, f1) = vnwa_open::capture::synthetic_capture(move |i| [tone(1.0, i), tone(0.5, i)]);
-            let (c2, f2) = vnwa_open::capture::synthetic_capture(move |i| [tone(1.0, i), tone(1.0, i)]);
+            let (c1, f1) =
+                vnwa_open::capture::synthetic_capture(move |i| [tone(1.0, i), tone(0.5, i)]);
+            let (c2, f2) =
+                vnwa_open::capture::synthetic_capture(move |i| [tone(1.0, i), tone(1.0, i)]);
             self.feeds.borrow_mut().extend([f1, f2]);
             Ok(Vna::with_parts(
                 cfg,
@@ -665,7 +667,10 @@ pub(crate) mod tests {
         dead.read_error = Some(vnwa_open::transport::TransferError::Other("stalled".into()));
         let v = status(&Config::default(), &dead).unwrap();
         assert_eq!(v["usb"], "present but not answering");
-        assert!(v["usb_read"]["error"].as_str().unwrap().contains("stalled"), "{v}");
+        assert!(
+            v["usb_read"]["error"].as_str().unwrap().contains("stalled"),
+            "{v}"
+        );
         assert_eq!(v["instrument_monitoring"], Value::Null);
 
         // Not on the bus, and no codecs found: both are said, the configured codec names win over the found ones.
@@ -675,28 +680,42 @@ pub(crate) mod tests {
         let v = status(&Config::default(), &gone).unwrap();
         assert_eq!(v["usb"], "not found or no permission");
         assert_eq!(v["codecs_error"], "no codecs");
-        assert_eq!((&v["codec_s11"], &v["codec_s21"]), (&Value::Null, &Value::Null));
+        assert_eq!(
+            (&v["codec_s11"], &v["codec_s21"]),
+            (&Value::Null, &Value::Null)
+        );
         let named = Config {
             codec_s11: Some("hw:A,".into()),
             codec_s21: Some("hw:B,".into()),
             ..Config::default()
         };
         let v = status(&named, &gone).unwrap();
-        assert_eq!((v["codec_s11"].as_str(), v["codec_s21"].as_str()), (Some("hw:A,"), Some("hw:B,")));
+        assert_eq!(
+            (v["codec_s11"].as_str(), v["codec_s21"].as_str()),
+            (Some("hw:A,"), Some("hw:B,"))
+        );
 
         // The sound server lists a codec: a warning with the fix, not an error.
         let mut exposed = Sim::healthy();
-        exposed.exposure = vnwa_open::sound_server::Exposure::Exposed(vec![
-            vnwa_open::sound_server::Card {
+        exposed.exposure =
+            vnwa_open::sound_server::Exposure::Exposed(vec![vnwa_open::sound_server::Card {
                 description: "USB Audio CODEC".into(),
                 port: Some("2.2.2".into()),
                 id: Some(77),
-            },
-        ]);
+            }]);
         let v = status(&Config::default(), &exposed).unwrap();
         assert_eq!(v["codecs_protected_from_sound_server"], false);
-        assert!(v["codecs_protection_warning"].as_str().unwrap().contains("wpctl set-profile"), "{v}");
-        assert_eq!(v["codecs_protection_detail"]["exposed_cards"][0]["sound_server_id"], 77);
+        assert!(
+            v["codecs_protection_warning"]
+                .as_str()
+                .unwrap()
+                .contains("wpctl set-profile"),
+            "{v}"
+        );
+        assert_eq!(
+            v["codecs_protection_detail"]["exposed_cards"][0]["sound_server_id"],
+            77
+        );
     }
 
     // Tests [@ANCHOR: bench_vna_sweep]
@@ -728,7 +747,10 @@ pub(crate) mod tests {
         assert_eq!(sim.vna_opens.get(), before);
         let mut gone = Sim::healthy();
         gone.usb = false;
-        assert_eq!(sweep(&Config::default(), &args, &dir, &gone).unwrap_err(), "no VNWA on the bus");
+        assert_eq!(
+            sweep(&Config::default(), &args, &dir, &gone).unwrap_err(),
+            "no VNWA on the bus"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

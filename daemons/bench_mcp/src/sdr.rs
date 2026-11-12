@@ -432,7 +432,9 @@ fn load_api_from(names: &[&str]) -> Result<Api, String> {
 fn api() -> Result<&'static Api, String> {
     // [@ANCHOR: bench_mcp_sdr_api]
     static API: OnceLock<Result<Api, String>> = OnceLock::new();
-    fake_api().map(Ok).unwrap_or_else(|| API.get_or_init(load_api).as_ref().map_err(|e| e.clone()))
+    fake_api()
+        .map(Ok)
+        .unwrap_or_else(|| API.get_or_init(load_api).as_ref().map_err(|e| e.clone()))
 }
 
 /// The unit tests give each test thread its own fake SoapySDR (no library, no radio); production has none.
@@ -1152,7 +1154,9 @@ mod tests {
     }
 
     extern "C" fn f_make(args: *const c_char) -> Dev {
-        let a = unsafe { CStr::from_ptr(args) }.to_string_lossy().into_owned();
+        let a = unsafe { CStr::from_ptr(args) }
+            .to_string_lossy()
+            .into_owned();
         st(|s| {
             s.log.push(format!("make {a}"));
             if s.fail_open {
@@ -1191,7 +1195,9 @@ mod tests {
         n: usize,
         _k: *const Kwargs,
     ) -> Stream {
-        let fmt = unsafe { CStr::from_ptr(fmt) }.to_string_lossy().into_owned();
+        let fmt = unsafe { CStr::from_ptr(fmt) }
+            .to_string_lossy()
+            .into_owned();
         st(|s| {
             s.log.push(format!("setup_stream {fmt} x{n}"));
             if s.fail == Some("setup_stream") {
@@ -1260,7 +1266,10 @@ mod tests {
             .iter()
             .map(|k| CString::new(*k).unwrap().into_raw())
             .collect();
-        let (keys, vals) = (Box::leak(keys.into_boxed_slice()), Box::leak(vals.into_boxed_slice()));
+        let (keys, vals) = (
+            Box::leak(keys.into_boxed_slice()),
+            Box::leak(vals.into_boxed_slice()),
+        );
         Kwargs {
             size: 2,
             keys: keys.as_mut_ptr(),
@@ -1330,7 +1339,9 @@ mod tests {
         let e = load_api_from(&["libno_such_soapy.so.9"]).err().unwrap();
         assert!(e.contains("SoapySDR is not installed"), "{e}");
         // libc loads but has none of the SoapySDR functions.
-        let e = load_api_from(&["libno_such_soapy.so.9", "libc.so.6"]).err().unwrap();
+        let e = load_api_from(&["libno_such_soapy.so.9", "libc.so.6"])
+            .err()
+            .unwrap();
         assert_eq!(e, "libSoapySDR has no SoapySDRDevice_makeStrArgs");
         // `api()` hands out the thread's fake while one is installed (the real library is never loaded in the tests).
         fake(|_| {});
@@ -1365,7 +1376,10 @@ mod tests {
 
         fake(|s| s.fail_open = true);
         let e = Radio::open(&c).err().unwrap();
-        assert_eq!(e, "cannot open the limesdr (driver=lime,serial=ca3e): fake failure");
+        assert_eq!(
+            e,
+            "cannot open the limesdr (driver=lime,serial=ca3e): fake failure"
+        );
     }
 
     // Tests [@ANCHOR: bench_mcp_sdr_identify]
@@ -1382,7 +1396,9 @@ mod tests {
         assert_eq!(v["rx_channels"], 2);
         assert!(log().contains(&"kwargs_clear".to_string()));
         fake(|s| s.fail_open = true);
-        assert!(identify(&lime()).unwrap_err().starts_with("cannot open the limesdr"));
+        assert!(identify(&lime())
+            .unwrap_err()
+            .starts_with("cannot open the limesdr"));
     }
 
     // Tests [@ANCHOR: bench_mcp_sdr_capture]
@@ -1441,9 +1457,15 @@ mod tests {
         assert!(capture(&lime(), &args, &dir).is_ok());
         fake(|s| s.read_script = [-1; 6].into());
         let e = capture(&lime(), &args, &dir).unwrap_err();
-        assert!(e.starts_with("the radio delivered no samples (5 read timeouts"), "{e}");
+        assert!(
+            e.starts_with("the radio delivered no samples (5 read timeouts"),
+            "{e}"
+        );
         fake(|s| s.read_script = [-2].into());
-        assert_eq!(capture(&lime(), &args, &dir).unwrap_err(), "read error -2: fake failure");
+        assert_eq!(
+            capture(&lime(), &args, &dir).unwrap_err(),
+            "read error -2: fake failure"
+        );
         // Overflows are counted and do not stop the capture.
         fake(|s| s.read_script = [-4, -4, -4].into());
         let v = capture(&lime(), &args, &dir).unwrap();
@@ -1456,7 +1478,8 @@ mod tests {
     fn a_survey_steps_across_the_band_and_finds_the_tone_in_the_stitched_spectrum() {
         let dir = crate::testdir::TestDir::new("bench_sdr_survey");
         fake(|s| s.tone_hz = 98.0e6);
-        let args = json!({"start_hz": 88e6, "stop_hz": 108e6, "fft_len": 1024, "samples_per_step": 8192});
+        let args =
+            json!({"start_hz": 88e6, "stop_hz": 108e6, "fft_len": 1024, "samples_per_step": 8192});
         let v = survey(&lime(), &args, &dir).unwrap();
         assert_eq!(v["steps"], 3);
         let l = log();
@@ -1468,13 +1491,18 @@ mod tests {
         assert_eq!(tunes[2], "freq 105500000");
         let csv = std::fs::read_to_string(v["csv_file"].as_str().unwrap()).unwrap();
         assert!(csv.starts_with("freq_hz,power_dbfs\n"));
-        assert_eq!(csv.lines().count() - 1, v["points"].as_u64().unwrap() as usize);
+        assert_eq!(
+            csv.lines().count() - 1,
+            v["points"].as_u64().unwrap() as usize
+        );
         let strongest = v["peaks"][0]["freq_hz"].as_f64().unwrap();
         assert!((strongest - 98.0e6).abs() < 25_000.0, "{strongest}");
         assert_eq!(v["overflows"], 0);
         // A radio that cannot open is an error and bad arguments never reach it.
         fake(|s| s.fail_open = true);
-        assert!(survey(&lime(), &args, &dir).unwrap_err().starts_with("cannot open the limesdr"));
+        assert!(survey(&lime(), &args, &dir)
+            .unwrap_err()
+            .starts_with("cannot open the limesdr"));
         assert!(survey(&lime(), &json!({}), &dir).is_err());
         std::fs::remove_dir_all(&dir).ok();
     }
