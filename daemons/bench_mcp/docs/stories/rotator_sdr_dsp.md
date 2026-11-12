@@ -392,6 +392,48 @@ Errors: the argument texts above, "SoapySDR is not installed (libSoapySDR.so not
 
 See also: `bench_mcp_sdr_phase_math`, `bench_mcp_sdr_limits`; the coherence test cites this anchor.
 
+### `load_api` [@ANCHOR: bench_mcp_sdr_load_api]
+
+Loads SoapySDR at run time. `fn load_api_from(names: &[&str]) -> Result<Api, String>`; `load_api()` calls it with `libSoapySDR.so.0.8`, `.0.7` and `libSoapySDR.so`. The first name that `dlopen` accepts is used, then each of the 19 functions the tools need is looked up with `dlsym`. Errors: "SoapySDR is not installed (libSoapySDR.so not found; ...)" when no name loads, "libSoapySDR has no <function>" when a symbol is missing. The tests give it a name that does not exist and `libc.so.6` (which loads but has no SoapySDR functions); the radio itself is replaced by a fake in the other tests.
+
+See also: `bench_mcp_sdr_radio_open`.
+
+### `Radio::open` [@ANCHOR: bench_mcp_sdr_radio_open]
+
+Opens the radio with the SoapySDR argument string of `soapy_args` (`SoapySDRDevice_makeStrArgs`). `Err("cannot open the <driver> (<args>): <SoapySDR error>")` when the library returns no device. The handle closes the radio when dropped. Receive only. The tests run it against a fake SoapySDR (a set of Rust `extern "C"` functions standing in for the library, installed per test thread), never a real radio.
+
+### `Radio::check` [@ANCHOR: bench_mcp_sdr_radio_check]
+
+Turns a SoapySDR return code into a result: 0 is `Ok`, anything else is `Err("<what>: <SoapySDR error>")`, where `<what>` names the step (antenna, sample rate, gain, frequency correction, frequency, activate). `fn check(&self, what: &str, rc: c_int) -> Result<(), String>`; `what` is borrowed and only used in the error text. No state changes; any thread that holds the radio.
+
+### `last_error` [@ANCHOR: bench_mcp_sdr_last_error]
+
+The text of the library's last error, or "unknown SoapySDR error" when it returns none. Used by `Radio::open`, `Radio::check`, the stream setup and the read error. `fn last_error(a: &Api) -> String`: the pointer the library returns is borrowed (the library owns it), so the text is copied; never fails and never panics. Reads library state only, so call it right after the failing call.
+
+### `Radio::string` [@ANCHOR: bench_mcp_sdr_radio_string]
+
+Copies a string the library allocated (hardware key, driver key) into a Rust `String` and frees the library's copy with `SoapySDR_free`; a null pointer gives an empty string and frees nothing. `fn string(&self, p: *mut c_char) -> String`: ownership of `p` passes to this call, which frees it exactly once, so the caller must not use or free it afterwards; invalid UTF-8 is replaced, never an error.
+
+### `Radio::capture` [@ANCHOR: bench_mcp_sdr_radio_capture]
+
+Tunes the radio for a `Capture` and reads it. For each channel: antenna (if chosen), sample rate, gain, frequency correction (only when `ppm` is not 0), frequency; then it sets up a `CF32` stream, runs `read_stream`, and always deactivates and closes the stream afterwards, also when the read failed. Returns the channels' samples, the number of overflows the driver reported and the streaming time. A failing step is `Err("<step>: <SoapySDR error>")`, a stream that cannot be set up `Err("stream setup: ...")`.
+
+### `Radio::read_stream` [@ANCHOR: bench_mcp_sdr_radio_read_stream]
+
+Activates the stream and reads `samples + 8192` complex samples per channel in blocks of at most 65536, and drops the first 8192 (the front end settling; fewer for a short capture). A read that returns -4 counts as an overflow and the read goes on; -1 is a timeout, tolerated five times, the sixth gives `Err("the radio delivered no samples (5 read timeouts after <n> samples)")`; any other negative value is `Err("read error <n>: <SoapySDR error>")`; a capture over 120 s is `Err("capture took longer than 120 s")`.
+
+### `identify` [@ANCHOR: bench_mcp_sdr_identify]
+
+`pub fn identify(c: &Config) -> Result<Value, String>`: opens the radio and returns `{driver, soapy_args, soapy_driver, hardware, info, rx_channels}`, with `info` the driver's hardware info (firmware and gateware versions) as an object. The library's info list is cleared after it is copied. Nothing is tuned and nothing transmitted.
+
+### `capture` [@ANCHOR: bench_mcp_sdr_capture]
+
+`pub fn capture(c: &Config, args: &Value, out: &Path) -> Result<Value, String>`: checks the arguments (`capture_args`; a bad one never opens the radio), captures one block, writes the raw I/Q to `out/sdr_<driver>_<freq_hz>_<unix seconds>.cf32` and returns the statistics: RMS (dBFS), peak amplitude, DC offset, clipped samples, driver overflows, noise floor, the strongest peaks (frequency and level), the stream and real-time seconds, and `continuous` (`continuous` with the RTL-SDR's 0.3 s start-up taken off). Receive only. Tests: a fake radio delivering a tone 100 kHz above the centre is found as the strongest peak, the file has the right size, and every failing step gives its own error text.
+
+### `survey` [@ANCHOR: bench_mcp_sdr_survey]
+
+`pub fn survey(c: &Config, args: &Value, out: &Path) -> Result<Value, String>`: checks the arguments (`survey_args`), then for each step (`Survey::steps`, each covering 70 % of the sample rate) tunes to the middle of its slice, captures, computes the spectrum, replaces the radio's own DC spike by the values around it, and appends the usable middle part to one stitched spectrum. Saves `out/sdr_survey_<driver>_<unix seconds>.csv` (`freq_hz,power_dbfs`) and returns the span, step count, bin width, median floor, the strongest peaks, the overflows and the CSV path. Tests use the fake radio: three tunes at the slice middles, a CSV row per point, and a tone found at its frequency.
+
 ## The scope spectrum maths (`spectrum.rs`)
 
 Used only by the scope tool `bench_scope_spectrum` (`scope.rs`, anchor `bench_mcp_scope_spectrum`), which fetches a waveform, converts it to volts and calls `spectrum` and `peaks` here. The scope's 8-bit samples limit the dynamic range to about 48 dB per bin before the window's
