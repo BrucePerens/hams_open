@@ -200,3 +200,24 @@ cc tests/c_link_reference_bitstream_test.c -Iinclude -Ltarget/release \
    ../ham_digital_modes/tests/fixtures/codec2_3200/synthetic_c_encoded_bits.bin \
    ../ham_digital_modes/tests/fixtures/codec2_3200/synthetic_c_decoded_pcm.bin
 ```
+
+### `CODEC2` [@ANCHOR: codec2_3200_capi:codec2_state_struct]
+
+**Purpose and location.** The codec handle behind the C type `struct CODEC2`: what `codec2_create` returns, every other entry point takes, and `codec2_destroy` frees. Defined in `src/lib.rs` as a Rust struct; C callers see only an opaque `struct CODEC2 *` (the header `include/codec2.h` declares the type without its members, as the real upstream library does), so they can neither build nor inspect one.
+
+**Definition.** `pub struct CODEC2 { encoder: EncoderFixed, decoder: Decoder }`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `encoder` | `ham_digital_modes::codec2_3200::EncoderFixed` | The integer-only 3200 bit/s encoder with its history window and pitch and voicing state, advanced by `codec2_encode` (one 20 ms frame of 160 samples in, 8 bytes out). |
+| `decoder` | `ham_digital_modes::codec2_3200::Decoder` | The decoder with its overlap-add and spectral state, advanced by `codec2_decode` and `codec2_decode_ber`. |
+
+**Ownership and lifetime.** Created by `codec2_create(CODEC2_MODE_3200)` with `Box::into_raw` (any other mode returns NULL, as the real library does for a mode compiled out); the caller owns the pointer until `codec2_destroy`, which asserts it is not NULL and drops the box. Using a handle after `codec2_destroy`, destroying it twice, or passing NULL is a contract violation: the entry points abort cleanly (a Rust `assert`, not undefined behaviour from a NULL read).
+
+**Concurrency.** The state is mutated by every encode and decode call, and the entry points take a raw pointer with no lock, so one handle must be used by one thread at a time; different handles are independent. The struct holds no secrets and does no I/O.
+
+**Serialized form.** None; the bitstream is the 64-bit frames the encoder writes (`bytes_per_frame` = 8, `samples_per_frame` = 160, `bits_per_frame` = 64) and the decoder reads.
+
+**Functions that touch it.** `codec2_create`, `codec2_destroy`, `codec2_encode`, `codec2_decode`, `codec2_decode_ber`, `codec2_samples_per_frame`, `codec2_bits_per_frame` and `codec2_bytes_per_frame`.
+
+**See also:** the unit test that exercises all of them in `src/lib.rs` and the two C programs in `tests/`.

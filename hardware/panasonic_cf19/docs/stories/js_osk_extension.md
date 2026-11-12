@@ -2,6 +2,8 @@
 
 The CF-19's keyboard button shows and hides GNOME's on-screen keyboard. Tests: `tests/test_osk_extension.py`.
 
+## `Cf19OskExtension` [@ANCHOR: panasonic_cf19:js_osk_extension_class]
+
 The file defines one class, `Cf19OskExtension`, the default export of a GNOME Shell extension (GNOME 45 or later module
 style). GNOME has no public command to raise or lower its on-screen keyboard, so this is the one piece of the CF-19
 support that has to live in the shell; the rotation button, the "security" button and the keyboard setting in tablet mode

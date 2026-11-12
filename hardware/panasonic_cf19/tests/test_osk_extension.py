@@ -22,6 +22,7 @@ class TestOskExtension(unittest.TestCase):
 
     def test_enable_binds_the_key_and_owns_the_bus_name(self):
         # Tests [@ANCHOR: panasonic_cf19:js_osk_enable]
+        # Tests [@ANCHOR: panasonic_cf19:js_osk_extension_class]
         self.run_harness("enable")
 
     def test_disable_undoes_enable_and_switches_the_setting_off_in_laptop_position(self):
