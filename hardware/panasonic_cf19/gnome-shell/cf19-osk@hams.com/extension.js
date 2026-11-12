@@ -38,6 +38,7 @@ const TABLET_MODE_PATH = '/sys/bus/acpi/devices/MAT0020:00/tablet_mode';
  * (Toggle, Show, Hide).
  */
 export default class Cf19OskExtension extends Extension {
+    // [@ANCHOR: panasonic_cf19:js_osk_enable]
     enable() {
         console.log(`${TAG} enable() start`);
         try {
@@ -69,6 +70,7 @@ export default class Cf19OskExtension extends Extension {
         }
     }
 
+    // [@ANCHOR: panasonic_cf19:js_osk_disable]
     disable() {
         console.log(`${TAG} disable()`);
         Main.wm.removeKeybinding('toggle-osk');
@@ -88,6 +90,7 @@ export default class Cf19OskExtension extends Extension {
         this._settings = null;
     }
 
+    // [@ANCHOR: panasonic_cf19:js_osk_read_tablet]
     _readTablet() {
         try {
             const [ok, bytes] = GLib.file_get_contents(TABLET_MODE_PATH);
@@ -97,6 +100,7 @@ export default class Cf19OskExtension extends Extension {
         }
     }
 
+    // [@ANCHOR: panasonic_cf19:js_osk_set_enabled]
     _setEnabled(value) {
         if (this._a11y.get_boolean(KEY) !== value)
             this._a11y.set_boolean(KEY, value);
@@ -104,12 +108,14 @@ export default class Cf19OskExtension extends Extension {
         Main.keyboard._syncEnabled?.();
     }
 
+    // [@ANCHOR: panasonic_cf19:js_osk_on_visibility]
     _onVisibility() {
         // Laptop position: once the keyboard is hidden, stop it popping up on its own.
         if (!this._readTablet() && !Main.keyboard.visible)
             this._setEnabled(false);
     }
 
+    // [@ANCHOR: panasonic_cf19:js_osk_toggle]
     Toggle() {
         const vis = !!Main.keyboard.visible;
         console.log(`${TAG} Toggle() visible=${vis} tablet=${this._readTablet()}`);
@@ -119,6 +125,7 @@ export default class Cf19OskExtension extends Extension {
             this.Show();
     }
 
+    // [@ANCHOR: panasonic_cf19:js_osk_show]
     Show() {
         try {
             this._setEnabled(true);
@@ -130,6 +137,7 @@ export default class Cf19OskExtension extends Extension {
         }
     }
 
+    // [@ANCHOR: panasonic_cf19:js_osk_hide]
     Hide() {
         console.log(`${TAG} Hide()`);
         Main.keyboard.close();
