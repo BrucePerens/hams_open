@@ -9,6 +9,7 @@
 use crate::error::{ErrorKind, RigError};
 use crate::rig::RigHandle;
 
+// [@ANCHOR: radioctl_core_keyer_key_line]
 /// The serial control lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyLine {
@@ -18,6 +19,7 @@ pub enum KeyLine {
     Dtr,
 }
 
+// [@ANCHOR: radioctl_core_keyer_control_line]
 /// A serial control line a protocol engine may drive as data (never a keying line): the two
 /// modem outputs and the break state of the transmit line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +50,7 @@ pub trait ControlLines: Send + Sync {
     }
 }
 
+// [@ANCHOR: radioctl_core_keyer_line_keyer]
 /// Keys a transmitter through one control line.
 #[derive(Debug)]
 pub struct LineKeyer<C: ControlLines> {
@@ -118,6 +121,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_control_lines_set_control]
+    // Tests [@ANCHOR: radioctl_core_keyer_control_line]
     #[test]
     fn a_transport_that_does_not_drive_lines_as_data_refuses_cleanly() {
         let recorder = Recorder::default();
@@ -131,6 +135,8 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_keyer_new]
     // Tests [@ANCHOR: radioctl_core_keyer_release]
     // Tests [@ANCHOR: radioctl_core_keyer_drop]
+    // Tests [@ANCHOR: radioctl_core_keyer_line_keyer]
+    // Tests [@ANCHOR: radioctl_core_keyer_key_line]
     #[test]
     fn a_new_keyer_makes_its_line_inactive_and_release_and_drop_do_too() {
         let high = Recorder::default();

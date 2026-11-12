@@ -1612,6 +1612,7 @@ verified = { state = "unverified" }
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_check_timing]
+    // Tests [@ANCHOR: radioctl_core_description_timing]
     #[test]
     fn timing_that_would_delay_or_defeat_an_unkey_is_rejected() {
         expect_rejected(
@@ -1687,6 +1688,7 @@ verified = { state = "unverified" }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    // Tests [@ANCHOR: radioctl_core_description_elecraft_params]
     #[test]
     fn the_elecraft_family_needs_its_own_block_and_fact() {
         let elecraft = GOOD
@@ -1794,6 +1796,7 @@ verified = { state = "unverified" }
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    // Tests [@ANCHOR: radioctl_core_description_yaesu_clarifier]
     #[test]
     fn yaesu_clarifier_cf_needs_a_fact_and_refuses_other_words() {
         let yaesu = GOOD
@@ -1908,6 +1911,7 @@ verified = { state = "unverified" }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
+    // Tests [@ANCHOR: radioctl_core_description_yaesu_params]
     #[test]
     fn a_yaesu_frequency_width_is_8_or_9_and_a_non_default_needs_its_fact() {
         let yaesu = GOOD
@@ -1977,6 +1981,7 @@ verified = { state = "unverified" }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_build_power_meter]
     // Tests [@ANCHOR: radioctl_core_powermeter_cal]
+    // Tests [@ANCHOR: radioctl_core_description_power_meter_params]
     #[test]
     fn a_power_meter_block_needs_a_calibration_and_its_fact() {
         let fact = "\n[[facts]]\nkey = \"power_meter.raw_to_milliwatts\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
@@ -2028,6 +2033,7 @@ verified = { state = "unverified" }
     // Tests [@ANCHOR: radioctl_core_levelparams_attenuator_step]
     // Tests [@ANCHOR: radioctl_core_levelparams_attenuator_db]
     // Tests [@ANCHOR: radioctl_core_levelparams_max_attenuation]
+    // Tests [@ANCHOR: radioctl_core_description_level_params]
     #[test]
     fn a_levels_block_is_sane_and_needs_its_facts() {
         let levels = "\n[levels]\nattenuator_db = [6, 12, 18]\npreamp_steps = 2\n";
@@ -2074,6 +2080,7 @@ verified = { state = "unverified" }
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_build_scope]
+    // Tests [@ANCHOR: radioctl_core_description_scope_params]
     #[test]
     fn a_scope_block_is_icom_only_sane_and_needs_its_facts() {
         let scope = "\n[scope]\nreceivers = 1\nline_length = 475\nsamples_per_frame = 50\namplitude_max = 160\nspans_hz = [5000, 10000]\n";

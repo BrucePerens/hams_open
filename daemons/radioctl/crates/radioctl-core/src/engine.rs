@@ -18,6 +18,7 @@ use crate::scope::{FilterScopeFrame, ScopeFrame};
 /// A partial frame older than this when more bytes arrive is discarded as stale.
 pub const PARTIAL_FRAME_TIMEOUT: Duration = Duration::from_millis(500);
 
+// [@ANCHOR: radioctl_core_engine_reply_kind]
 /// What the actor should wait for after sending a request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplyKind {
@@ -29,6 +30,7 @@ pub enum ReplyKind {
     Observation(Field),
 }
 
+// [@ANCHOR: radioctl_core_engine_request]
 /// The bytes for one command and the reply to expect.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Request {
@@ -38,6 +40,7 @@ pub struct Request {
     pub reply: ReplyKind,
 }
 
+// [@ANCHOR: radioctl_core_engine_line_step]
 /// One step of a control-line sequence: set a line, then hold for `hold` before the next step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LineStep {
@@ -49,6 +52,7 @@ pub struct LineStep {
     pub hold: Duration,
 }
 
+// [@ANCHOR: radioctl_core_engine_inbound]
 /// Something decoded from received bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inbound {
@@ -176,6 +180,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_engine_box_encode_lines]
     // Tests [@ANCHOR: radioctl_core_engine_box_link_restored]
     // Tests [@ANCHOR: radioctl_core_engine_box_open_requests]
+    // Tests [@ANCHOR: radioctl_core_engine_inbound]
     #[test]
     fn a_boxed_engine_is_an_engine() {
         let mut boxed: Box<dyn ProtocolEngine> = Box::new(Echo(RigDescription::ic7300()));

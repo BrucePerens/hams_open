@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 
+// [@ANCHOR: radioctl_core_capability_capability]
 /// One thing a rig can do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Capability {
@@ -98,6 +99,7 @@ impl Capability {
     }
 }
 
+// [@ANCHOR: radioctl_core_capability_capability_set]
 /// The set of capabilities of one rig.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CapabilitySet(BTreeSet<Capability>);
@@ -127,6 +129,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctl_core_capability_transmits]
+    // Tests [@ANCHOR: radioctl_core_capability_capability]
     #[test]
     fn only_ptt_and_cw_transmit() {
         assert!(Capability::SetPtt.transmits());
@@ -149,6 +152,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_capability_set_of]
     // Tests [@ANCHOR: radioctl_core_capability_set_has]
     // Tests [@ANCHOR: radioctl_core_capability_set_iter]
+    // Tests [@ANCHOR: radioctl_core_capability_capability_set]
     #[test]
     fn set_membership_and_order() {
         let set = CapabilitySet::of(&[Capability::SetMode, Capability::ReadFrequency]);

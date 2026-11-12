@@ -522,6 +522,7 @@ async fn a_split_link_keeps_status_and_counters_on_the_monitor() {
 // Tests [@ANCHOR: radioctl_core_serial_config_with_description]
 // Tests [@ANCHOR: radioctl_core_serial_open_port]
 // Tests [@ANCHOR: radioctl_core_rigfile_parse]
+// Tests [@ANCHOR: radioctl_core_engine_line_step]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_vendor_descriptions_seven_even_two_line_reaches_the_port() {
     // The RFT EKD-500 states 7 data bits, even parity, 2 stop bits and RTS/CTS flow control in its

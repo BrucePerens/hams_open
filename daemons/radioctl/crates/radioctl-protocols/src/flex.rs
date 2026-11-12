@@ -1270,6 +1270,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_flex_engine_new]
+    // Tests [@ANCHOR: radioctl_core_description_flex_params]
     #[test]
     fn only_a_flex_description_builds_an_engine() {
         assert!(FlexEngine::new(RigDescription::ic7300()).is_err());

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Typed physical values. Frequencies are integer hertz, never floating point.
 
+// [@ANCHOR: radioctl_core_units_hz]
 /// A frequency in hertz.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Hz(pub u64);
@@ -19,6 +20,7 @@ impl Hz {
     }
 }
 
+// [@ANCHOR: radioctl_core_units_mode]
 /// An operating mode. Per-family code tables live in the rig description, not here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Mode {
@@ -90,6 +92,7 @@ impl Mode {
     }
 }
 
+// [@ANCHOR: radioctl_core_units_receiver]
 /// A receiver (band) of a dual-receiver rig: the Main band or the Sub band (Icom Main/Sub, Yaesu
 /// Main/VFO-A band and Sub/VFO-B band of the FTDX 3000/5000/9000/1200).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -100,6 +103,7 @@ pub enum Receiver {
     Sub,
 }
 
+// [@ANCHOR: radioctl_core_units_vfo]
 /// A VFO. Only the VFOs a description lists are usable on a given rig.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Vfo {
@@ -139,6 +143,7 @@ impl Vfo {
     }
 }
 
+// [@ANCHOR: radioctl_core_units_level]
 /// A level the rig exposes as a number in its own units (see the rig description for ranges).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Level {
@@ -187,6 +192,7 @@ const LEVEL_NAMES: [(Level, &str); 11] = [
     (Level::Antenna, "antenna"),
 ];
 
+// [@ANCHOR: radioctl_core_units_meter]
 /// A transmitter or power-supply meter read in the rig's own raw scale. Unlike
 /// [`crate::op::Observation::Swr`] (tenths of a ratio) these are not calibrated: Icom radios report a
 /// 0 to 255 meter deflection and the mapping to a ratio, a fraction, volts or amperes is a per-model
@@ -265,6 +271,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_mode_name]
     // Tests [@ANCHOR: radioctl_core_mode_from_name]
+    // Tests [@ANCHOR: radioctl_core_units_mode]
     #[test]
     fn mode_names_round_trip() {
         for (mode, name) in MODE_NAMES {
@@ -276,6 +283,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_level_name]
     // Tests [@ANCHOR: radioctl_core_level_from_name]
+    // Tests [@ANCHOR: radioctl_core_units_level]
     #[test]
     fn level_names_round_trip() {
         for (level, name) in LEVEL_NAMES {
@@ -287,6 +295,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_meter_name]
     // Tests [@ANCHOR: radioctl_core_meter_from_name]
+    // Tests [@ANCHOR: radioctl_core_units_meter]
     #[test]
     fn meter_names_round_trip() {
         for (meter, name) in METER_NAMES {
@@ -300,6 +309,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_core_vfo_other]
     // Tests [@ANCHOR: radioctl_core_vfo_name]
     // Tests [@ANCHOR: radioctl_core_vfo_from_name]
+    // Tests [@ANCHOR: radioctl_core_units_vfo]
     #[test]
     fn vfo_names_round_trip() {
         for vfo in [Vfo::A, Vfo::B] {
@@ -311,6 +321,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_hz_from_khz]
+    // Tests [@ANCHOR: radioctl_core_units_hz]
     #[test]
     fn from_khz_scales_and_detects_overflow() {
         assert_eq!(Hz::from_khz(14_074), Some(Hz(14_074_000)));

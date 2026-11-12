@@ -12,6 +12,7 @@ use std::time::Duration;
 use crate::capability::{Capability, CapabilitySet};
 use crate::units::{Hz, Level, Mode};
 
+// [@ANCHOR: radioctl_core_description_family]
 /// A protocol family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Family {
@@ -47,6 +48,7 @@ pub enum Family {
     UsbDevice,
 }
 
+// [@ANCHOR: radioctl_core_description_vendor_protocol]
 /// The protocol of a [`Family::SerialVendor`] rig; each has its own engine file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VendorProtocol {
@@ -174,6 +176,7 @@ impl VendorProtocol {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_vendor_params]
 /// Parameters of a [`Family::SerialVendor`] rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VendorParams {
@@ -191,6 +194,7 @@ pub struct VendorParams {
     pub flow: String,
 }
 
+// [@ANCHOR: radioctl_core_description_usb_protocol]
 /// The USB protocol of a [`Family::UsbDevice`] rig.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UsbProtocol {
@@ -246,6 +250,7 @@ impl UsbProtocol {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_usb_params]
 /// Parameters of a [`Family::UsbDevice`] rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UsbParams {
@@ -263,6 +268,7 @@ pub struct UsbParams {
     pub multiplier: u8,
 }
 
+// [@ANCHOR: radioctl_core_description_receiver_protocol]
 /// Which protocol engine a [`Family::Receiver`] description uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReceiverProtocol {
@@ -310,6 +316,7 @@ impl ReceiverProtocol {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_receiver_params]
 /// Receiver-family parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReceiverParams {
@@ -332,6 +339,7 @@ pub struct ReceiverParams {
     pub flow: String,
 }
 
+// [@ANCHOR: radioctl_core_description_civ_params]
 /// CI-V parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CivParams {
@@ -353,6 +361,7 @@ pub struct CivParams {
     pub main_sub: CivMainSub,
 }
 
+// [@ANCHOR: radioctl_core_description_civ_main_sub]
 /// The Main/Sub band commands of a dual-receiver Icom (command `07`, sub commands `B0` to `D2`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum CivMainSub {
@@ -367,6 +376,7 @@ pub enum CivMainSub {
     Full,
 }
 
+// [@ANCHOR: radioctl_core_description_civ_command_set]
 /// The command numbers a CI-V model uses to set the frequency and to read and set the mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum CivCommandSet {
@@ -390,6 +400,7 @@ impl CivParams {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_kenwood_dialect]
 /// Which command set a Kenwood-style rig speaks.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum KenwoodDialect {
@@ -450,6 +461,7 @@ impl KenwoodDialect {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_ky_form]
 /// How a Kenwood model takes `KY` (send CW text), as its own manual documents it. The command is
 /// used only where a manual of that model documents it (Bruce's decision of 2026-11-02): the
 /// text field width, the characters and the stop differ per model.
@@ -463,6 +475,7 @@ pub enum KyForm {
     Variable,
 }
 
+// [@ANCHOR: radioctl_core_description_ky_stop]
 /// How a documented `KY` message is stopped in flight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KyStop {
@@ -475,6 +488,7 @@ pub enum KyStop {
     Blank,
 }
 
+// [@ANCHOR: radioctl_core_description_ky_params]
 /// The `KY` capability of one Kenwood model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KyParams {
@@ -554,6 +568,7 @@ impl KyParams {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_kenwood_params]
 /// Kenwood-style parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KenwoodParams {
@@ -568,6 +583,7 @@ pub struct KenwoodParams {
     pub scope_serial: bool,
 }
 
+// [@ANCHOR: radioctl_core_description_hh_dialect]
 /// Which command set a Kenwood handheld or mobile speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HhDialect {
@@ -606,6 +622,7 @@ impl HhDialect {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_kenwood_hh_params]
 /// Kenwood handheld and mobile parameters.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KenwoodHhParams {
@@ -613,6 +630,7 @@ pub struct KenwoodHhParams {
     pub dialect: HhDialect,
 }
 
+// [@ANCHOR: radioctl_core_description_elecraft_params]
 /// Elecraft-style parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ElecraftParams {
@@ -643,6 +661,7 @@ impl ElecraftParams {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_scope_params]
 /// Spectrum scope (band scope) parameters of a model, for waveform data the rig sends on its own
 /// (Icom CI-V command 0x27).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -659,6 +678,7 @@ pub struct ScopeParams {
     pub spans_hz: Vec<u64>,
 }
 
+// [@ANCHOR: radioctl_core_description_power_meter_params]
 /// The calibration points of a rig's raw power meter: `(raw, milliwatts)`, ascending in both.
 /// A rig that reports only a relative bar has none, and radioctl then reports a relative value.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -680,6 +700,7 @@ impl PowerMeterParams {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_level_params]
 /// The receive attenuator and preamplifier steps a model has. Empty and zero mean the model has
 /// neither, or radioctl knows no command for them: the engines then refuse the levels.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -753,6 +774,7 @@ impl LevelParams {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_yaesu_params]
 /// Yaesu newcat parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct YaesuParams {
@@ -776,6 +798,7 @@ pub struct YaesuParams {
     pub tx_band: bool,
 }
 
+// [@ANCHOR: radioctl_core_description_yaesu_clarifier]
 /// The command that switches the clarifier on a Yaesu newcat model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum YaesuClarifier {
@@ -805,6 +828,7 @@ impl YaesuParams {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_yaesu_legacy_params]
 /// Yaesu legacy five-byte CAT parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct YaesuLegacyParams {
@@ -818,6 +842,7 @@ pub struct YaesuLegacyParams {
     pub block: Option<LegacyBlock>,
 }
 
+// [@ANCHOR: radioctl_core_description_legacy_freq_form]
 /// How a frequency is written into five-byte-block bytes (a command's parameters or a field of a
 /// status record).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -980,6 +1005,7 @@ impl LegacyFreqForm {
     }
 }
 
+// [@ANCHOR: radioctl_core_description_legacy_command]
 /// A five-byte command with a slot for a parameter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyCommand {
@@ -991,6 +1017,7 @@ pub struct LegacyCommand {
     pub form: Option<LegacyFreqForm>,
 }
 
+// [@ANCHOR: radioctl_core_description_legacy_flag]
 /// A flag in a status record: a byte offset, a mask, and whether the feature is on when a bit of the mask is set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LegacyFlag {
@@ -1002,6 +1029,7 @@ pub struct LegacyFlag {
     pub on_when_set: bool,
 }
 
+// [@ANCHOR: radioctl_core_description_legacy_read]
 /// One status read: the request, the reply length and where the fields are in the reply.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyRead {
@@ -1024,6 +1052,7 @@ pub struct LegacyRead {
     pub vfo_mode: Option<LegacyFlag>,
 }
 
+// [@ANCHOR: radioctl_core_description_legacy_block]
 /// The commands and status reads of a block-protocol Yaesu legacy model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LegacyBlock {
@@ -1043,6 +1072,7 @@ pub struct LegacyBlock {
     pub echo: bool,
 }
 
+// [@ANCHOR: radioctl_core_description_flex_params]
 /// FlexRadio SmartSDR parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlexParams {
@@ -1055,6 +1085,7 @@ pub struct FlexParams {
     pub slice: u8,
 }
 
+// [@ANCHOR: radioctl_core_description_hpsdr_params]
 /// OpenHPSDR network radio parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HpsdrParams {
@@ -1066,6 +1097,7 @@ pub struct HpsdrParams {
     pub anan10: bool,
 }
 
+// [@ANCHOR: radioctl_core_description_timing]
 /// Command timing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
@@ -1077,6 +1109,7 @@ pub struct Timing {
     pub inter_command: Duration,
 }
 
+// [@ANCHOR: radioctl_core_description_rig_description]
 /// Everything radioctl knows about one model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RigDescription {
@@ -1268,6 +1301,7 @@ impl RigDescription {
 mod tests {
     // Tests [@ANCHOR: radioctl_core_hh_dialect_name]
     // Tests [@ANCHOR: radioctl_core_hh_dialect_from_name]
+    // Tests [@ANCHOR: radioctl_core_description_hh_dialect]
     #[test]
     fn handheld_dialect_names_round_trip() {
         for d in [
@@ -1285,6 +1319,7 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_description_mode_code]
     // Tests [@ANCHOR: radioctl_core_description_code_mode]
+    // Tests [@ANCHOR: radioctl_core_description_rig_description]
     #[test]
     fn mode_tables_round_trip() {
         for desc in [RigDescription::ic7300(), RigDescription::ts2000()] {
@@ -1300,6 +1335,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_usbprotocol_name]
     // Tests [@ANCHOR: radioctl_core_usbprotocol_from_name]
+    // Tests [@ANCHOR: radioctl_core_description_usb_params]
+    // Tests [@ANCHOR: radioctl_core_description_usb_protocol]
     #[test]
     fn usb_protocol_names_round_trip() {
         for p in UsbProtocol::ALL {
@@ -1310,6 +1347,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_vendorprotocol_from_name]
     // Tests [@ANCHOR: radioctl_core_vendorprotocol_name]
+    // Tests [@ANCHOR: radioctl_core_description_vendor_params]
+    // Tests [@ANCHOR: radioctl_core_description_vendor_protocol]
     #[test]
     fn vendor_protocol_names_round_trip() {
         assert_eq!(
@@ -1409,6 +1448,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_kenwood_dialect_name]
     // Tests [@ANCHOR: radioctl_core_kenwood_dialect_from_name]
+    // Tests [@ANCHOR: radioctl_core_description_kenwood_hh_params]
+    // Tests [@ANCHOR: radioctl_core_description_kenwood_dialect]
     #[test]
     fn kenwood_dialect_names_round_trip() {
         for d in [
@@ -1428,6 +1469,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_receiver_protocol_name]
     // Tests [@ANCHOR: radioctl_core_receiver_protocol_from_name]
+    // Tests [@ANCHOR: radioctl_core_description_receiver_params]
+    // Tests [@ANCHOR: radioctl_core_description_receiver_protocol]
     #[test]
     fn receiver_protocol_names_round_trip() {
         for p in [
@@ -1444,6 +1487,10 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_description_ic7300]
+    // Tests [@ANCHOR: radioctl_core_description_civ_command_set]
+    // Tests [@ANCHOR: radioctl_core_description_civ_main_sub]
+    // Tests [@ANCHOR: radioctl_core_description_civ_params]
+    // Tests [@ANCHOR: radioctl_core_description_family]
     #[test]
     fn ic7300_is_civ_at_0x94() {
         let desc = RigDescription::ic7300();
@@ -1454,6 +1501,10 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_description_ts2000]
+    // Tests [@ANCHOR: radioctl_core_description_kenwood_params]
+    // Tests [@ANCHOR: radioctl_core_description_ky_params]
+    // Tests [@ANCHOR: radioctl_core_description_ky_stop]
+    // Tests [@ANCHOR: radioctl_core_description_ky_form]
     #[test]
     fn ts2000_is_kenwood_without_ptt_readback() {
         let desc = RigDescription::ts2000();

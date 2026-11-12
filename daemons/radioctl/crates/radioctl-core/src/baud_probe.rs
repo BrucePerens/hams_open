@@ -50,6 +50,7 @@ pub trait ProbePort: Send {
     fn close(&mut self) -> impl Future<Output = ()> + Send;
 }
 
+// [@ANCHOR: radioctl_core_baud_probe_probe_result]
 /// What the probe found.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProbeResult {
@@ -162,6 +163,7 @@ pub fn rates_text(rates: &[u32]) -> String {
         .join(", ")
 }
 
+// [@ANCHOR: radioctl_core_baud_probe_serial_probe_port]
 /// A real serial port as a [`ProbePort`]: each `open` is [`open_serial`] with the configured
 /// port at the given rate (lines managed or not as configured, so DTR and RTS are made inactive
 /// after every open exactly as for the real link), and `close` waits for the supervisor to

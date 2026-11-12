@@ -14,6 +14,7 @@ use crate::capability::{Capability, CapabilitySet};
 use crate::op::{Field, Op};
 use crate::units::Vfo;
 
+// [@ANCHOR: radioctl_core_poll_poll_config]
 /// Polling intervals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PollConfig {
@@ -45,6 +46,7 @@ impl Default for PollConfig {
     }
 }
 
+// [@ANCHOR: radioctl_core_poll_poll_entry]
 /// One polled field.
 #[derive(Debug, Clone)]
 pub struct PollEntry {
@@ -60,6 +62,7 @@ pub struct PollEntry {
     polled_at: Instant,
 }
 
+// [@ANCHOR: radioctl_core_poll_poll_schedule]
 /// The poll schedule of one rig.
 #[derive(Debug, Clone)]
 pub struct PollSchedule {
@@ -202,6 +205,9 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_poll_for_capabilities]
+    // Tests [@ANCHOR: radioctl_core_poll_poll_schedule]
+    // Tests [@ANCHOR: radioctl_core_poll_poll_entry]
+    // Tests [@ANCHOR: radioctl_core_poll_poll_config]
     #[test]
     fn only_readable_fields_are_polled() {
         let now = Instant::now();
