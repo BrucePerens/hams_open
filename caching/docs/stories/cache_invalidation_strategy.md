@@ -9,7 +9,7 @@ Service Workers persist their cache until explicitly told otherwise. Traditional
 ## The Solution
 The `caching` module uses a filesystem-linked versioning strategy.
 
-1. **Detection**: The system monitors the maximum `mtime` (modification time) of all files in the `static/` directories of all installed modules ([@ANCHOR: COMM_caching_fs_scan_logic]).
+1. **Detection**: The system monitors the maximum `mtime` (modification time) of all files in the `static/` directories of all installed modules ([@ANCHOR: COMM_caching_fs_scan_logic]). `caching.mixin.get_fs_stats` walks each installed module's `static/` directory recursively with `os.scandir`, skipping dot-files and each module's `static/description` folder, never following symlinks, and returns the newest `st_mtime` it saw together with every file size sorted largest first (the sizes feed the quota story). It runs as the narrow `caching.user_caching_service` account and its result is kept by `@distributed_cache`, so a server restart alone may not trigger a new scan.
 
 2. **Injection**: This timestamp is used to generate a unique `CACHE_NAME` (e.g., `odoo-assets-cache-1712345678-v1`) which is injected into the `/sw.js` file whenever it is served ([@ANCHOR: COMM_caching_sw_serve_route]).
 3. **Activation**: When the Service Worker script is updated (because a file changed and the `mtime` increased), the browser detects the change, installs the new worker, and the `activate` event listener in the SW purges all old caches that don't match the new `CACHE_NAME`.
