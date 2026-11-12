@@ -232,6 +232,7 @@ class _RedirectProbe:
 class PostReportRefusesARedirectTests(unittest.TestCase):
     def test_a_redirect_from_odoo_is_refused_and_the_key_never_reaches_the_second_host(self):
         # Tests [@ANCHOR: hams_helpdesk:daemon_no_redirect]
+        # Tests [@ANCHOR: hams_helpdesk:hams_helpdesk_daemon_exception_reporter_no_redirect]
         # Tests [@ANCHOR: hams_helpdesk:daemon_post_report]
         with _RedirectProbe() as probe, mock.patch.object(er, "load_key", return_value="reporter-key"):
             with self.assertRaises(er.ReportError) as raised:

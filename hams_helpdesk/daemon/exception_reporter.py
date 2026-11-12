@@ -31,6 +31,7 @@ import urllib.error
 import urllib.request
 
 
+# [@ANCHOR: hams_helpdesk_daemon_exception_reporter_no_redirect]
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Refuses every redirect. urllib copies all request headers, the credential included, to wherever a 3xx answer
     points; a refused redirect surfaces as the HTTPError of the 3xx status."""
