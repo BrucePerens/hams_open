@@ -50,6 +50,7 @@ class TestPagerControllers(HamsHttpCase):
         response = self.url_open("/api/v1/pager/heartbeat/no-such-uuid")
         self.assertEqual(response.status_code, 404)
 
+    # Tests [@ANCHOR: pager_duty_board_pager_board]
     def test_02_board_security_and_render(self):
         # [@ANCHOR: test_pager_board_url]
         # Tests [@ANCHOR: pager_duty:pager_board_route]
@@ -149,6 +150,7 @@ class TestPagerControllers(HamsHttpCase):
         )
         self.assertIn("error", response.json())
 
+    # Tests [@ANCHOR: pager_duty_domain_api_pager_duty_controller]
     def test_03_update_domains_rejects_an_empty_payload(self):
         # update_domains had zero test coverage; this call's own real hmac
         # shared-secret gate had never been exercised end to end.

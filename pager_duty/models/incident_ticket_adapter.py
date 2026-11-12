@@ -43,6 +43,7 @@ def _is_inbound_email_source(source):
     return prefix == "email" or prefix.endswith("-email")
 
 
+# [@ANCHOR: pager_duty_incident_ticket_adapter_pager_duty_incident_ticket_adapter]
 class PagerDutyIncidentTicketAdapter(models.Model):
     _inherit = "pager.incident"
 

@@ -6,6 +6,7 @@ from odoo import http, fields
 from odoo.http import request
 
 
+# [@ANCHOR: pager_duty_ping_api_pager_ping_api]
 class PagerPingAPI(http.Controller):
     @http.route(
         "/api/v1/pager/ping", type="http", auth="public", methods=["GET"], csrf=False

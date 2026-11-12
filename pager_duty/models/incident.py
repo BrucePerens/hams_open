@@ -37,6 +37,7 @@ TREND_TRACKED_SEVERITIES = ("low", "medium")
 REPAGE_HOURS = 6
 
 
+# [@ANCHOR: pager_duty_incident_pager_incident]
 class PagerIncident(models.Model):
     """
     Represents an incident detected by the monitoring system.

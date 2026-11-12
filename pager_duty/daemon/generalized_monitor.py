@@ -75,6 +75,7 @@ REDIS_USERNAME = os.getenv("REDIS_USERNAME") or None
 ODOO_KEY_ENV_FILE = os.environ.get("PAGER_KEY_ENV_FILE", "/opt/hams/etc/keys/pager_duty.env")
 
 
+# [@ANCHOR: pager_duty_generalized_monitor_odoo_client]
 class OdooClient:
     # [@ANCHOR: pager_duty:odoo_client_init]
     def __init__(self, url, db, user, password):

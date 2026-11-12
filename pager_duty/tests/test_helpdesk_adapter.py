@@ -32,6 +32,7 @@ class TestHelpdeskAdapter(HamsTransactionCase):
             create=True,
         )
 
+    # Tests [@ANCHOR: pager_duty_schedule_pager_schedule]
     def test_01_adapter_creates_ticket_and_event(self):
         """Verify the adapter successfully creates a ticket and a calendar event when an incident fires."""
         # Tests [@ANCHOR: pd_helpdesk_adapter]

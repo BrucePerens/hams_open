@@ -46,6 +46,8 @@ class TestLogAnalyzerReal(RealTransactionCase):
         self.assertEqual(res.status_code, 200)
         return res.json()
 
+    # Tests [@ANCHOR: pager_duty_log_analyzer_pager_log_search_job]
+    # Tests [@ANCHOR: pager_duty_log_api_pager_log_api]
     def test_03_async_bastion_pattern(self):
         """
         Verify that search_logs creates a pager.log.search.job and returns its UUID instead of blocking.

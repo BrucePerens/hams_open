@@ -168,6 +168,8 @@ class ExpectedOffTests(unittest.TestCase):
 
 
 class SystemctlShowTests(unittest.TestCase):
+    # Tests [@ANCHOR: pager_duty_log_analyzer_pager_log_file]
+    # Tests [@ANCHOR: pager_duty_log_analyzer_pager_log_pattern]
     def test_properties_are_read_as_a_dict_and_garbage_lines_are_skipped(self):
         # Tests [@ANCHOR: pager_duty:provisioned_units_systemctl_show]
         done = mock.Mock(stdout="LoadState=loaded\nActiveState=active\nnoise without equals\nDescription=a=b\n")

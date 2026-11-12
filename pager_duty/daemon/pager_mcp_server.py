@@ -54,6 +54,7 @@ logger = logging.getLogger("pager_mcp_server")
 mcp = MCPServer("PagerDutyTriage")
 
 
+# [@ANCHOR: pager_duty_pager_mcp_server_odoo_client]
 class OdooClient:
     """Same JSON-2 API shape as generalized_monitor.py's own OdooClient --
     duplicated rather than imported, since that module is a standalone

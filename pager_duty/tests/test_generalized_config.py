@@ -43,6 +43,7 @@ class TestGeneralizedConfig(HamsTransactionCase):
         }
         """
 
+    # Tests [@ANCHOR: pager_duty_incident_ticket_adapter_pager_duty_incident_ticket_adapter]
     def test_01_bdd_json_parsing_and_db_sync(self):
         """
         BDD: Given the Generalized Pager Config Wizard (ADR-0051)
