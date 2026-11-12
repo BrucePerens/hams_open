@@ -8,6 +8,7 @@
 
 use crate::error::HpsdrError;
 
+// [@ANCHOR: hpsdr_types_protocol]
 /// Which wire protocol a radio speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol {
@@ -17,6 +18,7 @@ pub enum Protocol {
     P2,
 }
 
+// [@ANCHOR: hpsdr_types_board]
 /// A board type as reported by discovery. Protocol 1 and 2 number boards differently; both map here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Board {
@@ -94,6 +96,7 @@ impl Board {
     }
 }
 
+// [@ANCHOR: hpsdr_types_rate]
 /// A DDC sample rate. Protocol 1 supports the first four; Protocol 2 all six (spec v4.4 DDC Specific
 /// bytes 18-19: 48/96/192/384/768/1536 ksps).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,6 +169,7 @@ impl Rate {
     }
 }
 
+// [@ANCHOR: hpsdr_types_hardware_status]
 /// Hardware status gathered from Protocol 1 command-and-control bytes or the Protocol 2 high-priority
 /// status packet. Raw ADC counts are kept; the methods convert them.
 ///
@@ -233,6 +237,7 @@ impl HardwareStatus {
 mod tests {
     use super::*;
 
+    // Tests [@ANCHOR: hpsdr_types_board]
     #[test]
     fn board_ids_map_and_unknown_is_kept() {
         // Tests [@ANCHOR: hpsdr_types_board_from_p1_id]
@@ -252,6 +257,7 @@ mod tests {
         assert_eq!(Board::Orion.power_constant(false), None);
     }
 
+    // Tests [@ANCHOR: hpsdr_types_rate]
     #[test]
     fn rates_round_trip() {
         // Tests [@ANCHOR: hpsdr_types_rate_hz]
@@ -272,6 +278,7 @@ mod tests {
         assert_eq!(Rate::from_ksps(768), Ok(Rate::K768));
     }
 
+    // Tests [@ANCHOR: hpsdr_types_hardware_status]
     #[test]
     fn power_and_swr_from_counts() {
         // Tests [@ANCHOR: hpsdr_types_status_supply_volts]

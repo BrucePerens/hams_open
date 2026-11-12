@@ -18,6 +18,7 @@ use tokio::net::UdpSocket;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
+// [@ANCHOR: hpsdr_emulator_tone]
 /// A synthetic carrier at an absolute radio frequency.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Tone {
@@ -27,6 +28,7 @@ pub struct Tone {
     pub amplitude: f64,
 }
 
+// [@ANCHOR: hpsdr_emulator_emulator_config]
 /// What the emulated radio is and how it behaves.
 #[derive(Debug, Clone)]
 pub struct EmulatorConfig {
@@ -69,6 +71,7 @@ impl Default for EmulatorConfig {
     }
 }
 
+// [@ANCHOR: hpsdr_emulator_emulator_counters]
 /// What the emulator has seen from the client.
 #[derive(Debug, Default)]
 pub struct EmulatorCounters {
@@ -90,6 +93,7 @@ pub struct EmulatorCounters {
     pub ep6_sent: AtomicU64,
 }
 
+// [@ANCHOR: hpsdr_emulator_emulator]
 /// A running emulator.
 #[derive(Debug)]
 pub struct Emulator {

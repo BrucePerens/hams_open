@@ -14,6 +14,7 @@ use tokio::net::UdpSocket;
 use tokio::runtime::Handle;
 use tokio::time::Instant as TokioInstant;
 
+// [@ANCHOR: hpsdr_discovery_discovered]
 /// A radio that answered discovery.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Discovered {

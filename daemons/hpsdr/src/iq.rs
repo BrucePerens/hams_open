@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+// [@ANCHOR: hpsdr_iq_complex]
 /// One complex baseband sample, scaled so that full scale is +/-1.0.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Complex {
@@ -18,6 +19,7 @@ pub struct Complex {
     pub im: f32,
 }
 
+// [@ANCHOR: hpsdr_iq_iq_block]
 /// A contiguous run of samples from one receiver (DDC).
 #[derive(Debug, Clone, PartialEq)]
 pub struct IqBlock {
@@ -35,6 +37,7 @@ pub struct IqBlock {
     pub samples: Vec<Complex>,
 }
 
+// [@ANCHOR: hpsdr_iq_stream_counters]
 /// Counters shared between the producer task and the consumer.
 #[derive(Debug, Default)]
 pub struct StreamCounters {
@@ -45,6 +48,7 @@ pub struct StreamCounters {
     malformed: AtomicU64,
 }
 
+// [@ANCHOR: hpsdr_iq_stream_stats]
 /// A snapshot of [`StreamCounters`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct StreamStats {
@@ -99,6 +103,7 @@ impl StreamCounters {
     }
 }
 
+// [@ANCHOR: hpsdr_iq_seq_tracker]
 /// Tracks a 32-bit sequence number and reports gaps.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SeqTracker {
@@ -135,6 +140,7 @@ pub trait IqStream {
     fn stats(&self) -> StreamStats;
 }
 
+// [@ANCHOR: hpsdr_iq_channel_stream]
 /// An [`IqStream`] fed by a bounded channel from the receive task.
 #[derive(Debug)]
 pub struct ChannelStream {
@@ -169,6 +175,8 @@ impl IqStream for ChannelStream {
 mod tests {
     use super::*;
 
+    // Tests [@ANCHOR: hpsdr_iq_stream_stats]
+    // Tests [@ANCHOR: hpsdr_iq_stream_counters]
     #[test]
     fn counters_accumulate() {
         // Tests [@ANCHOR: hpsdr_iq_counters_delivered]
@@ -194,6 +202,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: hpsdr_iq_seq_tracker]
     #[test]
     fn seq_gaps_and_wrap() {
         // Tests [@ANCHOR: hpsdr_iq_seq_observe]
@@ -207,6 +216,9 @@ mod tests {
         assert_eq!(w.observe(1), 1, "wraps through zero");
     }
 
+    // Tests [@ANCHOR: hpsdr_iq_channel_stream]
+    // Tests [@ANCHOR: hpsdr_iq_iq_block]
+    // Tests [@ANCHOR: hpsdr_iq_complex]
     #[tokio::test]
     async fn channel_stream_delivers_in_order() {
         // Tests [@ANCHOR: hpsdr_iq_channel_new]

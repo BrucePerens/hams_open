@@ -3,6 +3,7 @@
 
 use std::fmt;
 
+// [@ANCHOR: hpsdr_error_hpsdr_error]
 /// Why an operation or a datagram was rejected.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HpsdrError {
@@ -58,6 +59,8 @@ impl From<std::io::Error> for HpsdrError {
 mod tests {
     use super::*;
 
+    // Tests [@ANCHOR: hpsdr_error_hpsdr_error]
+    // Tests [@ANCHOR: hpsdr_emulator_p2_io]
     #[test]
     fn display_and_from_io() {
         // Tests [@ANCHOR: hpsdr_error_fmt]
