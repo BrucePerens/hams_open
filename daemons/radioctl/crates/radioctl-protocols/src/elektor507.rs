@@ -185,6 +185,7 @@ struct Samples<'a> {
 }
 
 impl Samples<'_> {
+    // [@ANCHOR: radioctl_elektor507_samples_sda]
     fn sda(&mut self, high: bool) {
         *self.port = if high {
             *self.port | PIN_SDA
@@ -194,6 +195,7 @@ impl Samples<'_> {
         self.out.push(*self.port);
     }
 
+    // [@ANCHOR: radioctl_elektor507_samples_scl]
     fn scl(&mut self, high: bool) {
         *self.port = if high {
             *self.port | PIN_SCL
@@ -203,6 +205,7 @@ impl Samples<'_> {
         self.out.push(*self.port);
     }
 
+    // [@ANCHOR: radioctl_elektor507_samples_byte]
     fn byte(&mut self, value: u8) {
         for bit in (0..8).rev() {
             self.sda(value & (1 << bit) != 0);
@@ -215,6 +218,7 @@ impl Samples<'_> {
         self.scl(false);
     }
 
+    // [@ANCHOR: radioctl_elektor507_samples_write]
     fn write(&mut self, register: u8, values: &[u8]) {
         self.scl(true);
         self.sda(true);
@@ -278,6 +282,7 @@ impl Elektor507Engine {
         }
     }
 
+    // [@ANCHOR: radioctl_elektor507_engine_samples]
     fn samples(&mut self, writes: &[(u8, Vec<u8>)]) -> Vec<u8> {
         let mut samples = Samples {
             port: &mut self.port,
@@ -482,6 +487,7 @@ impl Elektor507Twin {
         (self.port & MUX_MASK) >> 2
     }
 
+    // [@ANCHOR: radioctl_elektor507_twin_sample]
     fn sample(&mut self, byte: u8) {
         let scl = byte & PIN_SCL != 0;
         let sda = byte & PIN_SDA != 0;
@@ -512,6 +518,7 @@ impl Elektor507Twin {
         self.sda = sda;
     }
 
+    // [@ANCHOR: radioctl_elektor507_twin_finish]
     fn finish(&mut self) {
         if self.in_transaction && self.bytes.first() == Some(&CHIP_ADDRESS) {
             if let Some((&register, values)) = self.bytes.get(1..).and_then(<[u8]>::split_first) {

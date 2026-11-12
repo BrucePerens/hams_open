@@ -203,6 +203,13 @@ fn the_register_values_follow_the_pump_ranges_and_the_fixed_dividers() {
     }
 }
 
+// Tests [@ANCHOR: radioctl_elektor507_samples_sda]
+// Tests [@ANCHOR: radioctl_elektor507_samples_scl]
+// Tests [@ANCHOR: radioctl_elektor507_samples_byte]
+// Tests [@ANCHOR: radioctl_elektor507_samples_write]
+// Tests [@ANCHOR: radioctl_elektor507_engine_samples]
+// Tests [@ANCHOR: radioctl_elektor507_twin_sample]
+// Tests [@ANCHOR: radioctl_elektor507_twin_finish]
 // Tests [@ANCHOR: radioctl_elektor507_engine_encode]
 // Tests [@ANCHOR: radioctl_elektor507_twin_frequency]
 // Tests [@ANCHOR: radioctl_elektor507_twin_attenuation]

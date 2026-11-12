@@ -761,6 +761,7 @@ fn listen_address(
     Ok(listen)
 }
 
+// [@ANCHOR: radioctld_config_serial_target]
 /// A serial transport's port: exactly one of a path and USB ids.
 fn serial_target(path: Option<String>, usb: Option<UsbSection>) -> Result<PortTarget, String> {
     match (path, usb) {
@@ -774,6 +775,7 @@ fn serial_target(path: Option<String>, usb: Option<UsbSection>) -> Result<PortTa
     }
 }
 
+// [@ANCHOR: radioctld_config_line_control]
 /// A serial transport's `lines`: managed (the default) or unmanaged.
 fn line_control(lines: Option<&str>) -> Result<LineControl, String> {
     match lines {
@@ -1214,6 +1216,8 @@ kind = "virtual"
     // Tests [@ANCHOR: radioctld_config_transport]
     // Tests [@ANCHOR: radioctld_config_baud_rate]
     // Tests [@ANCHOR: radioctld_config_baud_setting]
+    // Tests [@ANCHOR: radioctld_config_serial_target]
+    // Tests [@ANCHOR: radioctld_config_line_control]
     #[test]
     fn transports_are_validated() {
         let with = |transport: &str| parse(&MINIMAL.replace("kind = \"virtual\"", transport));

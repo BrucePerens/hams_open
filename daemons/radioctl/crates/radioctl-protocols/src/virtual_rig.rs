@@ -1270,6 +1270,7 @@ impl VirtualRig {
         matches!(&self.wire, Wire::Yaesu { params, .. } if params.clarifier == YaesuClarifier::CfRxTx)
     }
 
+    // [@ANCHOR: radioctl_virtual_yaesu_cf_set]
     /// The eight characters of a `CF` set: `000` + receive + transmit + `000`, or `001` + sign + four digits.
     fn yaesu_cf_set(&mut self, body: &str) -> Option<String> {
         let bytes = body.as_bytes();
@@ -2419,6 +2420,7 @@ mod tests {
         assert_eq!(rig.feed(b"CF0;", T0), b"?;");
     }
 
+    // Tests [@ANCHOR: radioctl_virtual_yaesu_cf_set]
     // Tests [@ANCHOR: radioctl_virtual_yaesu_cf]
     #[test]
     fn the_ft_710_twin_switches_both_clarifiers_and_sets_the_offset_with_cf() {

@@ -213,6 +213,7 @@ impl YaesuEngine {
         self.desc.yaesu.as_ref().is_some_and(|y| y.split_st)
     }
 
+    // [@ANCHOR: radioctl_yaesu_engine_split_read]
     /// The read command for the split state and the transmit VFO.
     fn split_read(&self) -> String {
         if self.split_st() { "ST;" } else { "FT;" }.to_string()
@@ -800,6 +801,18 @@ mod tests {
             assert!(e.encode(&Op::SetXit(true)).is_err());
             assert!(e.encode(&Op::GetXit).is_err());
         }
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_engine_split_read]
+    #[test]
+    fn split_is_read_with_ft_on_the_models_without_st_and_with_st_on_the_others() {
+        let b = |e: &mut YaesuEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+        let mut old = YaesuEngine::new(shipped("yaesu-ft-991a")).expect("engine");
+        assert!(!old.split_st());
+        assert_eq!(b(&mut old, Op::GetSplit), b"FT;");
+        assert_eq!(b(&mut old, Op::GetTxVfo), b"FT;");
+        let mut st = YaesuEngine::new(shipped("yaesu-ft-891")).expect("engine");
+        assert_eq!(b(&mut st, Op::GetSplit), b"ST;");
     }
 
     // Tests [@ANCHOR: radioctl_yaesu_engine_split_st]
