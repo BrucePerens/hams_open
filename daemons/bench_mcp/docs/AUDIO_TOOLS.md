@@ -95,24 +95,24 @@ Tests read a recording of this development machine's PipeWire graph in `tests/au
 `tests/hil_audio.rs` (ignored by default) runs the tools through the MCP protocol against the real PipeWire with a virtual sink and source made by `pw-loopback`, so nothing is audible:
 `cargo test --test hil_audio -- --ignored --test-threads=1`.
 
-* The `audio` config entry parses, defaults, and refuses bad entries; the VNWA codec is always reserved. [@ANCHOR: audio_config]
-* `pw-dump` output becomes the device list: defaults from the active metadata, USB path, route availability, formats; the VNWA codecs are reserved by usb id. [@ANCHOR: audio_devices_parse]
-* `wpctl get-volume` output parses. [@ANCHOR: audio_levels_parse]
-* WAV files read (16, 24, 32-bit, float) and write. [@ANCHOR: audio_wav]
-* Generated tones have the requested level, edges and arguments. [@ANCHOR: audio_tones]
-* Level statistics: peak, RMS, clipping, silence fraction, all-zero input, one tone's amplitude. [@ANCHOR: audio_analysis]
-* Was a tone heard: over the noise before it, over neighbouring frequencies, with onset and offset; dead input and noise bursts. [@ANCHOR: audio_heard_tone]
-* The volume limits: cap, per-output cap, quiet hours, urgent. [@ANCHOR: audio_safety_limits]
-* The volume guard lowers, unmutes and restores, and refuses reserved devices before asking anything. [@ANCHOR: audio_safety_guard]
-* Managed files only, and retention. [@ANCHOR: audio_store_managed] [@ANCHOR: audio_store_retention]
-* Record, play, loopback and volume tools end to end on a virtual sink and source. [@ANCHOR: audio_record_tool] [@ANCHOR: audio_play_tool] [@ANCHOR: audio_loopback_tool] [@ANCHOR: audio_set_volume_tool]
-* Events: thresholds, merging, pitch, clicks, quiet rooms. [@ANCHOR: audio_events_detect] [@ANCHOR: audio_events_tool]
-* Morse decoding of keyed tones with the speed. [@ANCHOR: audio_morse]
-* The verification judgment: each expectation is a check with its own reason. [@ANCHOR: audio_verify_judge] [@ANCHOR: audio_verify_tool]
-* A stream aimed at a missing node fails; it does not fall back to the default device. [@ANCHOR: audio_engine_no_fallback]
-* Synthesizer choice, voices, safe codes, and command lines. [@ANCHOR: audio_speak_choose] [@ANCHOR: audio_speak_voices] [@ANCHOR: audio_speak_tool]
-* Alert volumes by severity and quiet hours; the alert always returns its text. [@ANCHOR: audio_alert_volume] [@ANCHOR: audio_alert_tool]
-* Discovery conclusions on synthetic observations: heard, not heard, muted and all-zero inputs, no microphone, HDMI last, default first, crosstalk, shared tone, jack state as evidence only. [@ANCHOR: audio_discover_conclude]
-* The volume ladder, the staleness fingerprint and the stored result. [@ANCHOR: audio_discover_ladder] [@ANCHOR: audio_discover_stale]
-* `auto` follows the stored discovery and falls back to the default; an alert listens again only for a changed device list. [@ANCHOR: audio_select_auto] [@ANCHOR: audio_discover_auto_rerun]
-* Discovery end to end on a virtual output and input. [@ANCHOR: audio_discover_tool]
+* The `audio` config entry parses, defaults, and refuses bad entries; the VNWA codec is always reserved.
+* `pw-dump` output becomes the device list: defaults from the active metadata, USB path, route availability, formats; the VNWA codecs are reserved by usb id.
+* `wpctl get-volume` output parses.
+* WAV files read (16, 24, 32-bit, float) and write.
+* Generated tones have the requested level, edges and arguments.
+* Level statistics: peak, RMS, clipping, silence fraction, all-zero input, one tone's amplitude.
+* Was a tone heard: over the noise before it, over neighbouring frequencies, with onset and offset; dead input and noise bursts.
+* The volume limits: cap, per-output cap, quiet hours, urgent.
+* The volume guard lowers, unmutes and restores, and refuses reserved devices before asking anything.
+* Managed files only, and retention.
+* Record, play, loopback and volume tools end to end on a virtual sink and source.
+* Events: thresholds, merging, pitch, clicks, quiet rooms.
+* Morse decoding of keyed tones with the speed.
+* The verification judgment: each expectation is a check with its own reason.
+* A stream aimed at a missing node fails; it does not fall back to the default device.
+* Synthesizer choice, voices, safe codes, and command lines.
+* Alert volumes by severity and quiet hours; the alert always returns its text.
+* Discovery conclusions on synthetic observations: heard, not heard, muted and all-zero inputs, no microphone, HDMI last, default first, crosstalk, shared tone, jack state as evidence only.
+* The volume ladder, the staleness fingerprint and the stored result.
+* `auto` follows the stored discovery and falls back to the default; an alert listens again only for a changed device list.
+* Discovery end to end on a virtual output and input.
