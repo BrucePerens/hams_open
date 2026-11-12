@@ -20,6 +20,7 @@ export class SWToast extends Component {
         </div>
     `;
 
+    // [@ANCHOR: caching:js_toast_setup]
     setup() {
         this.state = useState({ show: false });
 
@@ -58,10 +59,12 @@ export class SWToast extends Component {
         this.state.show = true;
     }
 
+    // [@ANCHOR: caching:js_toast_close]
     close() {
         this.state.show = false;
     }
 
+    // [@ANCHOR: caching:js_toast_reload]
     reload() {
         document.location.reload();
     }
