@@ -5,6 +5,7 @@ import { Component, onWillStart, useState, onMounted, onWillUnmount } from "@odo
 import { registry } from "@web/core/registry";
 
 export class CloudflareAnalyticsDashboard extends Component {
+    // [@ANCHOR: cloudflare:js_analytics_setup]
     setup() {
         this.state = useState({
             requests: 0,
