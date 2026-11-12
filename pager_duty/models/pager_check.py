@@ -920,6 +920,7 @@ class PagerCheck(models.Model):
             },
         }
 
+    @api.private
     @api.model
     # [@ANCHOR: pager_duty:update_lets_encrypt_domains]
     def update_lets_encrypt_domains(self, domains):

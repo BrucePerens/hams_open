@@ -433,6 +433,7 @@ class PagerIncident(models.Model):
             subtype_xmlid="mail.mt_note",
         )
 
+    @api.private
     @api.model
     def report_incident(self, vals):
         """

@@ -27,6 +27,7 @@ class PagerSchedule(models.Model):
     # cover the same moment, the most recently created one wins.
     ON_DUTY_SHIFT_ORDER = "create_date desc, id desc"
 
+    @api.private
     @api.model
     def get_current_on_duty_admin(self):
         """
