@@ -13,6 +13,7 @@ import requests
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: edge_routing_domain_edge_routing_domain]
 class EdgeRoutingDomain(models.Model):
     _name = "edge.routing.domain"
     _description = "Custom Domain Mapping"

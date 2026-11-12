@@ -41,6 +41,8 @@ class TestCustomDomains(HamsTransactionCase):
                 domain_cls, "_create_cloudflare_custom_hostname_batch"
             )
 
+    # Tests [@ANCHOR: edge_routing_routing_mixin_edge_routing_mixin]
+    # Tests [@ANCHOR: edge_routing_domain_edge_routing_domain]
     def test_01_domain_crud(self):
         # Tests [@ANCHOR: edge_routing:COMM_domain_create]
 

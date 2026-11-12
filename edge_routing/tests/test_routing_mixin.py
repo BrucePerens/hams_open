@@ -93,6 +93,7 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         self.assertFalse(user1.website_slug)
         self.assertFalse(user2.website_slug)
 
+    # Tests [@ANCHOR: edge_routing_res_users_res_users_edge_routing]
     def test_get_routing_models_dynamic(self):
         # Tests [@ANCHOR: edge_routing:COMM_get_routing_models]
         models = self.env['edge.routing.mixin']._get_routing_models()
