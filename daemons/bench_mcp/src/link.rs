@@ -288,6 +288,16 @@ impl Link {
             .map_err(|_| format!("{cmd}: not a number: {r:?}"))
     }
 
+    /// Sends `head`, then `data` as a `#9nnnnnnnnn` block (nine digits of length), then the terminator, for a command whose argument is binary
+    /// (the scope's `PNSU` setup restore). The data may hold any byte, newlines included.
+    pub fn send_block(&mut self, head: &str, data: &[u8]) -> Result<(), String> {
+        // [@ANCHOR: bench_mcp_link_send_block]
+        let mut msg = format!("{head}#9{:09}", data.len()).into_bytes();
+        msg.extend_from_slice(data);
+        msg.extend_from_slice(self.eol.as_bytes());
+        self.p.write_all(&msg).map_err(|e| format!("send: {e}"))
+    }
+
     /// A `#9nnnnnnnnn` block, skipping any text before the `#`. Returns the payload.
     pub fn block(&mut self, cmd: &str) -> Result<Vec<u8>, String> {
         // [@ANCHOR: bench_mcp_link_block]
@@ -545,6 +555,23 @@ mod tests {
         assert_eq!(l.block("BAD?").unwrap_err(), "bad block header");
         drop(l);
         server.join().unwrap();
+    }
+
+    // Tests [@ANCHOR: bench_mcp_link_send_block]
+    #[test]
+    fn a_binary_block_goes_out_with_its_length_and_every_byte_intact() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut got = Vec::new();
+            s.read_to_end(&mut got).unwrap();
+            got
+        });
+        let mut l = Link::tcp("127.0.0.1", port).unwrap();
+        l.send_block("PNSU ", &[0, 10, 13, 255, b'x']).unwrap();
+        drop(l);
+        assert_eq!(server.join().unwrap(), b"PNSU #9000000005\0\n\r\xffx\n");
     }
 
     // Tests [@ANCHOR: bench_mcp_link_raw_until_idle]

@@ -15,6 +15,7 @@ One section per build version (`## <version>`), one line per page: `- <page path
 - instruments/scope/troubleshooting: the scope entry's `connect_waits_s` (pauses between connection attempts) for waiting out a stale SCPI session
 - tools/bench_scope_history: History (segmented) memory: mode, frame list, frame select, frame read-out.
 - tools/bench_scope_reference: Reference waveforms: select, store, show, scale and close.
+- tools/bench_scope_setup: Save, recall, export and restore the scope's whole setup.
 - tools/bench_scope_math: channel 1 op channel 2 on the host from one frozen frame
 - tools/bench_scope_cursors: values at chosen times and the differences between two cursors, from the waveform memory
 - tools/bench_scope_acquire: acquisition mode, average count and memory depth with read-back
