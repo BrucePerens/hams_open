@@ -10,11 +10,14 @@ use std::time::{Duration, Instant};
 
 #[path = "support/radioctld_binary.rs"]
 mod radioctld_binary;
+#[allow(dead_code)]
+#[path = "../src/testdir.rs"]
+mod testdir;
 
 struct Daemon {
     child: Child,
     port: u16,
-    dir: std::path::PathBuf,
+    _dir: testdir::TestDir,
     /// The connection that keyed the rig. radioctld unkeys a rig when the client that keyed it disconnects, so the keying
     /// connection stays open for the test (the guard process has a connection of its own).
     keyer: Option<TcpStream>,
@@ -27,8 +30,7 @@ impl Daemon {
             .local_addr()
             .unwrap()
             .port();
-        let dir = std::env::temp_dir().join(format!("bench_mcp-guard-test-{port}"));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = testdir::TestDir::new(&format!("guard-test-{port}"));
         let conf = dir.join("radioctld.toml");
         // A virtual KX3 with its transmit gate open: the guard's unkey needs a rig that can be keyed.
         std::fs::write(&conf, format!("[server]\ncache_max_age_ms = 0\n\n[[rig]]\nname = \"guard\"\ndescription = \"{}/elecraft-kx3.toml\"\nlisten = \"127.0.0.1:{port}\"\ntransmit = true\n\n[rig.transport]\nkind = \"virtual\"\n", radioctld_binary::rigs_dir().display())).unwrap();
@@ -47,7 +49,7 @@ impl Daemon {
         Daemon {
             child,
             port,
-            dir,
+            _dir: dir,
             keyer: None,
         }
     }
@@ -107,7 +109,6 @@ impl Drop for Daemon {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
-        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 
