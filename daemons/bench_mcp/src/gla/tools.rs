@@ -260,7 +260,7 @@ pub fn capture(ctx: &Ctx, args: &Value) -> Result<Value, String> {
         ));
     }
     let mut b = json!({"pins": pins, "duration_s": d});
-    for k in ["pull", "instrument"] {
+    for k in ["pull", "confirm", "instrument"] {
         if let Some(v) = args.get(k) {
             b[k] = v.clone();
         }

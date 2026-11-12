@@ -1219,14 +1219,14 @@ fn capture_asks_the_backend_with_only_its_own_arguments_and_analyses_the_file() 
         out_dir: out.clone(),
         max_capture_s: 10.0,
     };
-    let r = tools::capture(&ctx, &json!({"pins": "A0:1", "duration_s": 1.5, "pull": "up", "trigger": {"type": "edge", "pin": "A1", "edge": "fall"},
+    let r = tools::capture(&ctx, &json!({"pins": "A0:1", "duration_s": 1.5, "pull": "up", "confirm": true, "trigger": {"type": "edge", "pin": "A1", "edge": "fall"},
         "decode": {"type": "uart", "pin": "A1", "baud": 115200}, "formats": ["vcd"]})).unwrap();
     let calls = f.calls.borrow();
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].0, "bench_glasgow_logic_capture");
     assert_eq!(
         calls[0].1,
-        json!({"pins": "A0:1", "duration_s": 1.5, "pull": "up"})
+        json!({"pins": "A0:1", "duration_s": 1.5, "pull": "up", "confirm": true})
     );
     assert_eq!(r["decode"]["text"], "OK");
     assert_eq!(

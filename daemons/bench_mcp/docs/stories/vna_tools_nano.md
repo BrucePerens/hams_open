@@ -561,14 +561,13 @@ Parses and checks the sweep arguments of a NanoVNA tool call.
 | Argument (key) | Type | Meaning |
 |---|---|---|
 | `start_hz` | number, Hz, required | Start. |
-| `stop_hz` | number, Hz | Stop; default is `start_hz` (see the note below). |
+| `stop_hz` | number, Hz, required | Stop; above `start_hz` (a band: a single-point NanoVNA sweep is not possible). |
 | `points` | whole number | Default is 101, or the unit's limit if lower; 0 and fractions are refused. |
 | `if_hz`, `point_ms`, `rf_level` | any non-null value | The VNWA's settings; refused with `Error::NotSupported("<k> is a VNWA setting; the NanoVNA sets its own IF and level")`. |
 | `id`, `cfg` | `&Identity`, `&Config` | For the limits. |
 
-Returns `Ok((start, stop, points))`. Errors: `Error::Args` for `<k> must be a number`, `start_hz is required`, `points <p> must be a whole number`, and every `check_range`
-message. Pure. Oddity worth knowing: because `stop_hz` defaults to `start_hz` and `check_range` requires `stop_hz` above `start_hz`, a call with no `stop_hz` is
-always refused; a single-point NanoVNA sweep is therefore not possible through this function.
+Returns `Ok((start, stop, points))`. Errors: `Error::Args` for `<k> must be a number`, `start_hz is required`, `stop_hz is required (...)`, `points <p> must be a whole number`, and every `check_range`
+message. Pure. A call with no `stop_hz` is refused at once with its own message (an earlier version defaulted it to `start_hz` and then failed in `check_range`).
 
 ### `sweep_tool` [@ANCHOR: bench_nanovna_sweep_tool]
 
