@@ -55,6 +55,13 @@ class TestCloudflareApiCalls(HamsTransactionCase):
         self.assertEqual(api.unban_ip("rule1", "t", ZONE), (False, "API Error"))
         self.assertEqual(api.unban_ip("rule1", "t", ""), (False, "Missing credentials"))
 
+    def test_01b_unban_of_a_rule_already_gone_counts_as_lifted(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cf_api_unban_ip]
+        self.mock.return_value = _Answer({"success": False}, status=404)
+        self.assertEqual(api.unban_ip("rule1", "t", ZONE), (True, "Rule was already gone"))
+        self.mock.return_value = _Answer({"success": False}, status=500)
+        self.assertEqual(api.unban_ip("rule1", "t", ZONE), (False, "API Error"))
+
     def test_02_verify_turnstile_posts_the_secret_and_the_visitor_address(self):
         # Tests [@ANCHOR: cloudflare:COMM_cf_api_verify_turnstile]
         post = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api.session.post")
