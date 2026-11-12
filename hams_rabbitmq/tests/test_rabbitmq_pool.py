@@ -36,6 +36,7 @@ class TestRabbitMQPool(RealTransactionCase):
         # (11 to 13) set their own short period.
         self.safe_patch_object(rabbitmq_pool, "KEEPALIVE_SECONDS", 3600)
 
+    # Tests [@ANCHOR: hams_rabbitmq_rabbitmq_pool_rabbit_mqpool]
     def test_01_get_channel_connects_with_real_config(self):
         # [@ANCHOR: COMM_test_01_get_channel_connects_with_real_config]
 

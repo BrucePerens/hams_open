@@ -102,6 +102,7 @@ os.register_at_fork(
 )
 
 
+# [@ANCHOR: hams_rabbitmq_rabbitmq_pool_rabbit_mqpool]
 class RabbitMQPool(models.AbstractModel):
     name = fields.Char(string="Name", required=True)
     _name = "hams_rabbitmq.pool"
