@@ -181,3 +181,26 @@ async fn the_unkey_updates_the_cached_ptt_at_once() {
     );
     assert!(!control.state().ptt);
 }
+
+// Tests [@ANCHOR: radioctl_elecraft_engine_encode]
+// Tests [@ANCHOR: radioctl_elecraft_engine_feed]
+#[tokio::test(start_paused = true)]
+async fn a_k3_antenna_jack_is_set_and_read_through_the_actor() {
+    let desc = rigfile::parse(include_str!("../../../rigs/elecraft-k3.toml"))
+        .expect("k3 file")
+        .description;
+    let rig = VirtualRig::from_description(&desc).expect("virtual rig");
+    let (stream, control) = spawn_virtual_rig(&Handle::current(), rig, Duration::ZERO);
+    let engine = ElecraftEngine::new(desc).expect("engine");
+    let handle = spawn(&Handle::current(), engine, stream, quiet()).expect("spawn");
+    handle
+        .execute(Op::SetLevel(Level::Antenna, 2))
+        .await
+        .expect("antenna 2");
+    assert_eq!(control.state().levels.get(&Level::Antenna), Some(&2));
+    let refused = handle
+        .execute(Op::SetLevel(Level::Antenna, 3))
+        .await
+        .expect_err("no third jack");
+    assert_eq!(refused.kind, ErrorKind::Unsupported);
+}
