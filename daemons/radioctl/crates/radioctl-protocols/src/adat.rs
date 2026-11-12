@@ -87,6 +87,7 @@ pub fn parse_frequency(text: &[u8]) -> Option<Hz> {
     Some(Hz(hz))
 }
 
+// [@ANCHOR: radioctl_adat_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -96,6 +97,7 @@ enum Pending {
 }
 
 /// The ADT-200A client engine.
+// [@ANCHOR: radioctl_adat_adat_engine]
 #[derive(Debug)]
 pub struct AdatEngine {
     desc: RigDescription,
@@ -230,6 +232,7 @@ impl ProtocolEngine for AdatEngine {
 }
 
 /// A virtual ADT-200A.
+// [@ANCHOR: radioctl_adat_adat_twin]
 #[derive(Debug)]
 pub struct AdatTwin {
     rx: RxBuffer,
@@ -303,6 +306,9 @@ impl VendorTwin for AdatTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_adat_pending]
+    // Tests [@ANCHOR: radioctl_adat_adat_engine]
+    // Tests [@ANCHOR: radioctl_adat_adat_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

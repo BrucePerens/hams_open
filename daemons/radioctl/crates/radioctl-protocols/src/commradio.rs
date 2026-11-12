@@ -119,6 +119,7 @@ fn frequency_of(payload: &[u8]) -> Option<Hz> {
     Some(Hz(u64::from(u32::from_be_bytes(word))))
 }
 
+// [@ANCHOR: radioctl_commradio_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -127,6 +128,7 @@ enum Pending {
 }
 
 /// The CTX-10 client engine.
+// [@ANCHOR: radioctl_commradio_commradio_engine]
 #[derive(Debug)]
 pub struct CommradioEngine {
     desc: RigDescription,
@@ -219,6 +221,7 @@ impl ProtocolEngine for CommradioEngine {
 }
 
 /// A virtual CTX-10.
+// [@ANCHOR: radioctl_commradio_commradio_twin]
 #[derive(Debug)]
 pub struct CommradioTwin {
     rx: RxBuffer,
@@ -279,6 +282,9 @@ impl VendorTwin for CommradioTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_commradio_pending]
+    // Tests [@ANCHOR: radioctl_commradio_commradio_engine]
+    // Tests [@ANCHOR: radioctl_commradio_commradio_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

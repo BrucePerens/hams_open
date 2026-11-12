@@ -35,6 +35,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The AOR engine.
+// [@ANCHOR: radioctl_aor_aor_engine]
 pub type AorEngine = LineEngine<AorDialect>;
 
 // [@ANCHOR: radioctl_aor_engine]
@@ -44,6 +45,7 @@ pub fn engine(desc: RigDescription) -> Result<AorEngine, RigError> {
 }
 
 /// How a model's `LM` / `LB` signal reading is written.
+// [@ANCHOR: radioctl_aor_signal_style]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SignalStyle {
     /// `LMxx`: two hex digits, bit 7 squelch status (AR8000).
@@ -60,6 +62,7 @@ enum SignalStyle {
 const SR2200_OFFSET: i32 = 73;
 
 /// The AOR command set of one model.
+// [@ANCHOR: radioctl_aor_aor_dialect]
 #[derive(Debug, Clone, Copy)]
 pub struct AorDialect {
     signal: SignalStyle,
@@ -228,6 +231,7 @@ pub fn round_to_50_hz(hz: Hz) -> Option<u64> {
 }
 
 /// The virtual AOR receiver.
+// [@ANCHOR: radioctl_aor_aor_twin]
 #[derive(Debug)]
 pub struct AorTwin {
     dialect: AorDialect,
@@ -313,6 +317,10 @@ impl ReceiverTwin for AorTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_aor_aor_engine]
+    // Tests [@ANCHOR: radioctl_aor_signal_style]
+    // Tests [@ANCHOR: radioctl_aor_aor_dialect]
+    // Tests [@ANCHOR: radioctl_aor_aor_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;

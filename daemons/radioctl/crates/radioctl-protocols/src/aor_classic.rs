@@ -39,6 +39,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The engine of the AR3030 and AR3000A.
+// [@ANCHOR: radioctl_aor_classic_aor_classic_engine]
 pub type AorClassicEngine = LineEngine<AorClassicDialect>;
 
 // [@ANCHOR: radioctl_aorc_engine]
@@ -48,6 +49,7 @@ pub fn engine(desc: RigDescription) -> Result<AorClassicEngine, RigError> {
 }
 
 /// Which of the two command sets a model speaks.
+// [@ANCHOR: radioctl_aor_classic_style]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Style {
     Ar3030,
@@ -80,6 +82,7 @@ const AR3030_LETTERS: [(char, Mode); 5] = [
 ];
 
 /// The command set of one of the two models.
+// [@ANCHOR: radioctl_aor_classic_aor_classic_dialect]
 #[derive(Debug, Clone, Copy)]
 pub struct AorClassicDialect {
     style: Style,
@@ -299,6 +302,7 @@ fn ar3000a_state(line: &str) -> Option<(u64, char)> {
 }
 
 /// The virtual AR3030 or AR3000A.
+// [@ANCHOR: radioctl_aor_classic_aor_classic_twin]
 #[derive(Debug)]
 pub struct AorClassicTwin {
     style: Style,
@@ -417,6 +421,10 @@ impl ReceiverTwin for AorClassicTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_aor_classic_aor_classic_engine]
+    // Tests [@ANCHOR: radioctl_aor_classic_style]
+    // Tests [@ANCHOR: radioctl_aor_classic_aor_classic_dialect]
+    // Tests [@ANCHOR: radioctl_aor_classic_aor_classic_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;
