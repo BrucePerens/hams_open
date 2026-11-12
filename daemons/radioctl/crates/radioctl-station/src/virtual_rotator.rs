@@ -42,6 +42,8 @@ pub struct VirtualRotator {
     pub silent: bool,
     /// Rot2Prog replies carry digit bytes 0 to 9 (as Hamlib reads them) instead of ASCII digits.
     pub raw_digits: bool,
+    /// The bearing a DCU's `AP1` set, which `AM1` starts.
+    pending: f32,
     received: Vec<String>,
     buffer: Vec<u8>,
 }
@@ -75,6 +77,7 @@ impl VirtualRotator {
             stuck: false,
             silent: false,
             raw_digits: true,
+            pending: 0.0,
             received: Vec::new(),
             buffer: Vec::new(),
         }
@@ -131,6 +134,7 @@ impl VirtualRotator {
         }
         let mut out = Vec::new();
         let end = match self.desc.protocol {
+            RotatorProtocol::Dcu => b';',
             RotatorProtocol::Rotctld
             | RotatorProtocol::Easycomm1
             | RotatorProtocol::Easycomm2
@@ -151,6 +155,7 @@ impl VirtualRotator {
                 | RotatorProtocol::Easycomm2
                 | RotatorProtocol::Easycomm3 => self.easycomm(&text),
                 RotatorProtocol::Rot2Prog => Vec::new(), // served by rot2prog_frames
+                RotatorProtocol::Dcu => self.dcu(&text),
             };
             if !self.silent {
                 out.extend_from_slice(&reply);
@@ -188,6 +193,25 @@ impl VirtualRotator {
             }
             _ => b"RPRT -4\n".to_vec(),
         }
+    }
+
+    // [@ANCHOR: radioctl_station_vrot_dcu]
+    /// One DCU command (its `;` may still be on): `AP1nnn` stores a target bearing, `AM1` starts
+    /// the rotation to it (ignored when the stored bearing is outside the travel), `AS1` stops.
+    /// Nothing is ever answered, as a DCU-3 sends nothing back.
+    fn dcu(&mut self, text: &str) -> Vec<u8> {
+        let text = text.trim_end_matches(';');
+        if let Some(n) = text.strip_prefix("AP1") {
+            if let Ok(az) = n.trim().parse::<f32>() {
+                self.pending = az;
+            }
+        } else if text == "AM1" {
+            let az = self.pending;
+            self.set_target(az, 0.0);
+        } else if text == "AS1" {
+            self.state.target_az = self.state.az;
+        }
+        Vec::new()
     }
 
     // [@ANCHOR: radioctl_station_vrot_rot2prog]
@@ -482,6 +506,23 @@ mod tests {
         assert_eq!(r.feed(b"AZ10.0 EL0.0\nSA SE\n", t(1000)), b"");
         assert_eq!(r.state(t(2000)).az, 90.0, "stop froze it");
         assert_eq!(r.feed(b"UP000 XXX\n", t(2000)), b"");
+    }
+
+    // Tests [@ANCHOR: radioctl_station_vrot_dcu]
+    #[test]
+    fn it_speaks_dcu() {
+        let mut r = rot("hygain-dcu3");
+        let t = Duration::from_secs;
+        assert_eq!(r.feed(b"AP1090;", t(0)), b"");
+        assert_eq!(r.state(t(0)).target_az, 0.0, "AP1 alone moves nothing");
+        assert_eq!(r.feed(b"AM1;", t(0)), b"");
+        assert_eq!(r.state(t(0)).target_az, 90.0);
+        assert_eq!(r.state(t(10)).az, 15.0);
+        assert_eq!(r.feed(b"AS1;", t(10)), b"");
+        assert_eq!(r.state(t(100)).az, 15.0, "stop froze it");
+        r.feed(b"AP1999;AM1;", t(100));
+        assert_eq!(r.state(t(100)).target_az, 15.0, "out of travel is ignored");
+        assert_eq!(r.received().len(), 5);
     }
 
     // Tests [@ANCHOR: radioctl_station_vrot_rot2prog]

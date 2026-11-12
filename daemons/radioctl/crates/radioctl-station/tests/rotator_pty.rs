@@ -165,6 +165,43 @@ fn hamlib(model: &str, path: &PathBuf, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_dcu_sets_a_bearing_stops_and_cannot_be_read() {
+    let d = desc("hygain-dcu3");
+    let (path, virt) = pty_rotator(&d);
+    let rot = open(path, &d).await;
+    rot.set_position(270.0, 0.0).await.unwrap();
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(virt.lock().unwrap().received().to_vec(), ["AP1270;", "AM1;"]);
+    assert_eq!(virt.lock().unwrap().state(Duration::ZERO).target_az, 270.0);
+    rot.stop().await.unwrap();
+    assert_eq!(
+        rot.position().await.unwrap_err().kind,
+        StationErrorKind::Refused
+    );
+    assert_eq!(
+        rot.set_position(361.0, 0.0).await.unwrap_err().kind,
+        StationErrorKind::Refused
+    );
+}
+
+#[test]
+fn hamlibs_rotctl_drives_the_virtual_dcu() {
+    if Command::new("rotctl").arg("--version").output().is_err() {
+        eprintln!("rotctl not installed: oracle skipped");
+        return;
+    }
+    let d = desc("hygain-dcu3");
+    let (path, virt) = pty_rotator(&d);
+    hamlib("406", &path, &["P", "123", "0"]).expect("rotctl runs");
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(virt.lock().unwrap().state(Duration::ZERO).target_az, 123.0);
+    hamlib("406", &path, &["S"]).expect("rotctl runs");
+    std::thread::sleep(Duration::from_millis(200));
+    let log = virt.lock().unwrap().received().to_vec();
+    assert_eq!(log, ["AP1123;", "AM1;", "AS1;"]);
+}
+
 #[test]
 fn hamlibs_rotctl_drives_the_virtual_easycomm_rotators() {
     if Command::new("rotctl").arg("--version").output().is_err() {

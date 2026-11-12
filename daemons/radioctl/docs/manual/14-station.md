@@ -197,6 +197,10 @@ pub async fn stop(&self) -> Result<(), StationError>
   `pulses_per_degree` in the description) is written from SPID's public protocol sheet and driven by
   `rotctl -m 901` the same way; a reply's digit bytes are read as ASCII or as plain 0 to 9, because
   the sheet and Hamlib disagree and the bench has to say which a controller sends.
+  Hy-Gain DCU-1/2/3 (`dcu`: `AP1nnn;AM1;`, 4800 8N1, azimuth only, no read) follows Hy-Gain's DCU-3
+  manual; its stop `AS1;` is Hamlib's (not in that manual) and both commands go out in one write
+  (Hamlib pauses 500 ms between them), so those two are bench questions. `rotctl -m 406` drives
+  the virtual DCU.
 - A position outside the description's travel is **refused**, never clamped, and nothing is written.
 - Every wait is bounded (the description's reply timeout); commands are serialised; stale bytes are
   drained before and after a failure so a late reply is never taken for the next one.

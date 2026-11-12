@@ -48,6 +48,8 @@ pub enum RotatorProtocol {
     /// SPID Rot2Prog / MD-01/02 (13-byte command frames, 12-byte replies).
     #[serde(rename = "rot2prog")]
     Rot2Prog,
+    /// Hy-Gain DCU-1/DCU-2/DCU-3 (`AP1nnn;` target, `AM1;` start); azimuth only, no read.
+    Dcu,
 }
 
 /// A park position.
@@ -149,6 +151,11 @@ impl RotatorDescription {
         {
             return bad("GS-232 carries azimuth 0 to 450 and elevation 0 to 180".into());
         }
+        if self.protocol == RotatorProtocol::Dcu
+            && (self.has_elevation || self.az_min < 0.0 || self.az_max > 360.0)
+        {
+            return bad("a DCU is azimuth only, 0 to 360 degrees".into());
+        }
         if self.protocol == RotatorProtocol::Rot2Prog {
             let Some(ppd) = self.pulses_per_degree.filter(|p| (1..=10).contains(p)) else {
                 return bad("Rot2Prog needs pulses_per_degree from 1 to 10".into());
@@ -212,6 +219,7 @@ impl RotatorDescription {
             | RotatorProtocol::Easycomm2
             | RotatorProtocol::Easycomm3 => Box::new(EasycommEngine::new(self.clone())),
             RotatorProtocol::Rot2Prog => Box::new(Rot2ProgEngine::new(self.clone())),
+            RotatorProtocol::Dcu => Box::new(DcuEngine::new(self.clone())),
         })
     }
 }
@@ -799,6 +807,68 @@ impl RotatorEngine for Rot2ProgEngine {
     }
 }
 
+/// The Hy-Gain DCU-1/DCU-2/DCU-3 ASCII protocol, from Hy-Gain's DCU-3 manual ("Command Set":
+/// `AP1nnn;` sets the target bearing, three digits 000 to 359, and `AM1;` starts the rotation to
+/// it; 4800 baud 8N1; the controller sends nothing back). Both commands go out in one write.
+/// Stop is `AS1;`, which Hamlib's DCU-1 backend uses and the DCU-3 manual does not list: a bench
+/// has to confirm it. There is no position read, so `GetPosition` is refused.
+pub struct DcuEngine {
+    desc: RotatorDescription,
+}
+
+impl DcuEngine {
+    // [@ANCHOR: radioctl_station_dcu_new]
+    /// An engine for `desc`.
+    pub fn new(desc: RotatorDescription) -> DcuEngine {
+        DcuEngine { desc }
+    }
+}
+
+impl RotatorEngine for DcuEngine {
+    // [@ANCHOR: radioctl_station_dcu_description]
+    fn description(&self) -> &RotatorDescription {
+        &self.desc
+    }
+
+    // [@ANCHOR: radioctl_station_dcu_encode]
+    fn encode(&self, op: &RotOp) -> Result<Encoded, StationError> {
+        let pos = target(&self.desc, op)?;
+        match (op, pos) {
+            (RotOp::SetPosition { .. } | RotOp::Park, Some((az, _))) => {
+                // 360 is the same bearing as 000, and the controller takes no more than 359.
+                let bearing = az.round() as i32 % 360;
+                Ok(Encoded {
+                    bytes: format!("AP1{bearing:03};AM1;").into_bytes(),
+                    expect: RotExpect::Nothing,
+                })
+            }
+            (RotOp::GetPosition, _) => Err(rot_err(
+                StationErrorKind::Refused,
+                format!("{} (a DCU) cannot report its bearing", self.desc.id),
+            )),
+            _ => Ok(Encoded {
+                bytes: b"AS1;".to_vec(),
+                expect: RotExpect::Nothing,
+            }),
+        }
+    }
+
+    // [@ANCHOR: radioctl_station_dcu_parse]
+    fn parse(
+        &self,
+        expect: RotExpect,
+        _buf: &[u8],
+    ) -> Result<Option<(RotReply, usize)>, StationError> {
+        match expect {
+            RotExpect::Nothing => Ok(Some((RotReply::Done, 0))),
+            _ => Err(rot_err(
+                StationErrorKind::Driver,
+                "a DCU sends nothing back",
+            )),
+        }
+    }
+}
+
 /// A rotator on a transport: commands are serialised, every wait is bounded, and a down link
 /// fails at once.
 pub struct Rotator {
@@ -1014,7 +1084,7 @@ mod tests {
     #[test]
     fn the_shipped_descriptions_are_valid_and_bad_ones_are_refused() {
         let all = RotatorDescription::builtin();
-        assert_eq!(all.len(), 7);
+        assert_eq!(all.len(), 8);
         assert!(all.iter().all(|d| d.validate().is_ok() && !d.verified));
         for d in &all {
             assert_eq!(d.engine().unwrap().description().id, d.id);
@@ -1282,6 +1352,39 @@ mod tests {
             .detail
             .contains("pulses_per_degree"));
         d.pulses_per_degree = Some(11);
+        assert!(d.validate().is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_station_dcu_new]
+    // Tests [@ANCHOR: radioctl_station_dcu_description]
+    // Tests [@ANCHOR: radioctl_station_dcu_encode]
+    // Tests [@ANCHOR: radioctl_station_dcu_parse]
+    #[test]
+    fn dcu_encodes_the_manual_commands_and_reads_nothing() {
+        let e = DcuEngine::new(desc("hygain-dcu3"));
+        assert_eq!(e.description().protocol, RotatorProtocol::Dcu);
+        let set = |az: f32| e.encode(&RotOp::SetPosition { az, el: 0.0 });
+        assert_eq!(set(5.0).unwrap().bytes, b"AP1005;AM1;");
+        assert_eq!(set(359.4).unwrap().bytes, b"AP1359;AM1;");
+        assert_eq!(set(360.0).unwrap().bytes, b"AP1000;AM1;", "360 is 000");
+        assert_eq!(set(359.6).unwrap().bytes, b"AP1000;AM1;");
+        assert_eq!(set(360.5).unwrap_err().kind, StationErrorKind::Refused);
+        assert_eq!(e.encode(&RotOp::Stop).unwrap().bytes, b"AS1;");
+        assert_eq!(
+            e.encode(&RotOp::GetPosition).unwrap_err().kind,
+            StationErrorKind::Refused
+        );
+        assert_eq!(
+            e.encode(&RotOp::Park).unwrap_err().kind,
+            StationErrorKind::Refused
+        );
+        assert_eq!(
+            e.parse(RotExpect::Nothing, b"").unwrap(),
+            Some((RotReply::Done, 0))
+        );
+        assert!(e.parse(RotExpect::Position, b"; 90").is_err());
+        let mut d = desc("hygain-dcu3");
+        d.has_elevation = true;
         assert!(d.validate().is_err());
     }
 
