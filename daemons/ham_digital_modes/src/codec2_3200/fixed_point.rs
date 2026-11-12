@@ -322,6 +322,7 @@ pub(crate) fn exp2_lut(y: f32) -> f32 {
 /// table: the compiler's own expansion of `leading_zeros` on a core without
 /// a count-leading-zeros instruction (RV32IMC, Cortex-M0/M3 class) is several
 /// times as long, and `log2_q23` runs it about a thousand times per frame.
+// [@ANCHOR: ham_digital_modes:clz_nonzero]
 #[inline(always)]
 fn clz_nonzero(x: u32) -> u32 {
     let (mut n, mut x) = (0u32, x);
@@ -461,6 +462,7 @@ fn log2_q23_native(x_q23: i64) -> i64 {
     ((shift as i64) << 23) + interp_q23
 }
 
+// [@ANCHOR: ham_digital_modes:table_is_non_decreasing]
 const fn table_is_non_decreasing(t: &[i32; LOG2_LUT_SIZE]) -> bool {
     let mut i = 0;
     while i + 1 < LOG2_LUT_SIZE {
@@ -1177,5 +1179,46 @@ mod tests {
             max_rel_err < 1e-4,
             "log2_q23/exp2_q23 round trip relative error too large: {max_rel_err}"
         );
+    }
+
+    /// `clz_nonzero` is `leading_zeros` for every nonzero `u32`: each power of two, the values just
+    /// under and over it, and a pseudo-random sweep.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:clz_nonzero]
+    fn clz_nonzero_equals_leading_zeros_for_nonzero_values() {
+        for bit in 0..32u32 {
+            let p = 1u32 << bit;
+            assert_eq!(clz_nonzero(p), 31 - bit, "power of two 2^{bit}");
+            assert_eq!(clz_nonzero(p | (p - 1)), 31 - bit, "all ones below 2^{bit}");
+        }
+        assert_eq!(clz_nonzero(u32::MAX), 0);
+        let mut x = 0x9e37_79b9u32;
+        for _ in 0..2000 {
+            x = x.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            if x != 0 {
+                assert_eq!(clz_nonzero(x), x.leading_zeros(), "x={x:#x}");
+            }
+        }
+    }
+
+    /// `table_is_non_decreasing` accepts the real log2 and exp2 tables (the compile-time assertions
+    /// rely on it), accepts equal neighbours, and rejects a single step down anywhere in the table.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:table_is_non_decreasing]
+    fn table_is_non_decreasing_accepts_the_real_tables_and_rejects_one_step_down() {
+        assert!(table_is_non_decreasing(&super::super::tables::LOG2_LUT_Q23));
+        assert!(table_is_non_decreasing(
+            &super::super::tables::EXP2_LUT_FRAC_Q23
+        ));
+        let flat = [7i32; LOG2_LUT_SIZE];
+        assert!(table_is_non_decreasing(&flat));
+        for at in [0, LOG2_LUT_SIZE / 2, LOG2_LUT_SIZE - 2] {
+            let mut t = [0i32; LOG2_LUT_SIZE];
+            for (i, v) in t.iter_mut().enumerate() {
+                *v = i as i32;
+            }
+            t[at + 1] = t[at] - 1;
+            assert!(!table_is_non_decreasing(&t), "a drop after index {at}");
+        }
     }
 }

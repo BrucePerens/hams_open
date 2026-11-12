@@ -361,6 +361,7 @@ const LOWPASS_PAIRS: [(u8, i32); 9] = [
     (1, 1535028),
 ];
 
+// [@ANCHOR: ham_digital_modes:window_fits_i32]
 const fn window_fits_i32(w: &[i64]) -> bool {
     let mut i = 0;
     while i < w.len() {
@@ -410,6 +411,7 @@ fn fft_fixed(input: &[i64; NDEC], re: &mut [i64; PE_FFT_SIZE], im: &mut [i64; PE
 }
 
 /// `re^2 + im^2` as an exact `i128`: the estimator's power of one spectrum bin.
+// [@ANCHOR: ham_digital_modes:power_bin]
 #[inline(always)]
 fn power_bin(re: i64, im: i64) -> i128 {
     if super::fixed_point::NATIVE_64_BIT {
@@ -427,6 +429,7 @@ fn power_bin_native(re: i64, im: i64) -> i128 {
 /// The square of a 64-bit magnitude as (low, high) 64-bit words, from three 32x32->64
 /// products (a core with 32-bit multiplies cannot do better; the compiler's own 128-bit
 /// multiply is several times as long).
+// [@ANCHOR: ham_digital_modes:square_words]
 #[inline(always)]
 fn square_words(x: u64) -> (u64, u64) {
     let (h, l) = (x >> 32, x & 0xffff_ffff);
@@ -1313,5 +1316,63 @@ mod tests {
     fn f0_to_wo_matches_the_format_wo_range() {
         assert!((f0_to_wo(50.0) - W0_MIN).abs() < 1e-3);
         assert!((f0_to_wo(400.0) - W0_MAX).abs() < 1e-3);
+    }
+
+    /// `window_fits_i32` is true only when every `i64` entry survives a round trip through `i32`:
+    /// the `i32` limits pass, one past either limit fails, and an empty window passes.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:window_fits_i32]
+    fn window_fits_i32_is_true_only_when_every_entry_fits() {
+        assert!(window_fits_i32(&[]));
+        assert!(window_fits_i32(&[
+            0,
+            1,
+            -1,
+            i32::MAX as i64,
+            i32::MIN as i64
+        ]));
+        assert!(!window_fits_i32(&[0, i32::MAX as i64 + 1]));
+        assert!(!window_fits_i32(&[i32::MIN as i64 - 1, 0]));
+        assert!(!window_fits_i32(&[1, 2, 3, i64::MAX]));
+    }
+
+    /// `square_words` is the exact 128-bit square as (low, high) words; `power_bin` is the exact
+    /// `re^2 + im^2` for components far beyond `i32` (and either kernel it dispatches to agrees).
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:square_words]
+    // Tests [@ANCHOR: ham_digital_modes:power_bin]
+    fn square_words_and_power_bin_are_the_exact_wide_squares() {
+        let mut x = 0x1234_5678_9abc_def1u64;
+        let mut next = || {
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            x
+        };
+        for shift in [0u32, 8, 20, 31, 32, 40, 48, 60] {
+            for _ in 0..200 {
+                let v = next() >> shift;
+                let want = v as u128 * v as u128;
+                let (lo, hi) = square_words(v);
+                assert_eq!(((hi as u128) << 64) | lo as u128, want, "v={v:#x}");
+            }
+        }
+        assert_eq!(square_words(0), (0, 0));
+        let edge = [
+            0i64,
+            1,
+            -1,
+            1 << 31,
+            -(1 << 31),
+            (1 << 40) + 12345,
+            -(1 << 50) - 7,
+            i64::MAX >> 2,
+        ];
+        for &re in &edge {
+            for &im in &edge {
+                let want = re as i128 * re as i128 + im as i128 * im as i128;
+                assert_eq!(power_bin(re, im), want, "re={re} im={im}");
+            }
+        }
     }
 }

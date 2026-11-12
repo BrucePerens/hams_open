@@ -247,6 +247,7 @@ impl ModelFixed {
     }
 }
 
+// [@ANCHOR: ham_digital_modes:mag_sq_q23]
 fn mag_sq_q23(c: ComplexQ23) -> i64 {
     // The transform of real linear-prediction coefficients keeps both components in `i32` (the
     // 32-bit kernel guarantees it): two signed 32x32->64 squares whose sum stays under 2^63.
@@ -840,5 +841,45 @@ mod tests {
                 h[m]
             );
         }
+    }
+
+    /// `mag_sq_q23` is the squared magnitude `(re^2 + im^2)` rounded to Q23 on all three of its
+    /// paths: both parts in `i32`, both under 2^31 in magnitude, and the exact `i128` form.
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:mag_sq_q23]
+    fn mag_sq_q23_equals_the_exact_rounded_square_on_every_path() {
+        let mut seed = 424242u64;
+        let mut next = |bits: u32| -> i64 {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let v = (seed >> 16) as i64 % (1i64 << bits);
+            if seed & 1 == 0 {
+                v
+            } else {
+                -v
+            }
+        };
+        for &bits in &[4u32, 20, 30, 31, 32, 36, 40] {
+            for _ in 0..400 {
+                let c = ComplexQ23 {
+                    re: next(bits),
+                    im: next(bits),
+                };
+                let want = rshift_round_i128(
+                    c.re as i128 * c.re as i128 + c.im as i128 * c.im as i128,
+                    FRAC_BITS,
+                );
+                assert_eq!(mag_sq_q23(c), want, "bits={bits} re={} im={}", c.re, c.im);
+            }
+        }
+        assert_eq!(mag_sq_q23(ComplexQ23 { re: 0, im: 0 }), 0);
+        assert_eq!(
+            mag_sq_q23(ComplexQ23 {
+                re: 1 << FRAC_BITS,
+                im: 0
+            }),
+            1 << FRAC_BITS
+        );
     }
 }
