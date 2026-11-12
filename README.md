@@ -121,4 +121,66 @@ and marked `skip-worktree` so it cannot be committed. It also sets `fetch.recurs
 config (`extensions.worktreeConfig`; the main checkout and other worktrees keep git's default), because git refuses to
 fetch into a submodule path that is a symlink: without it every `git fetch`, `git pull` and prmerge.sh run in the worktree
 failed with "expected submodule path 'hams_shared' not to be a symbolic link" (tests: `python3 -m unittest test_fix_worktree_symlinks`).
-Anchors for its steps: `[@ANCHOR: fix_worktree_symlinks:git]`, `[@ANCHOR: fix_worktree_symlinks:main_checkout_root]`, `[@ANCHOR: fix_worktree_symlinks:is_empty_dir]`, `[@ANCHOR: fix_worktree_symlinks:is_populated_checkout]`, `[@ANCHOR: fix_worktree_symlinks:link]`, `[@ANCHOR: fix_worktree_symlinks:stop_submodule_recursion]`, `[@ANCHOR: fix_worktree_symlinks:recorded_sha]`, `[@ANCHOR: fix_worktree_symlinks:fix_worktree]`, `[@ANCHOR: fix_worktree_symlinks:main]`.
+### Anchors for `fix_worktree_symlinks.py`
+
+Code in `fix_worktree_symlinks.py`; tests in `test_fix_worktree_symlinks.py` (`python3 -m unittest test_fix_worktree_symlinks`). The script never signals a process and never touches the network. Its only writes are inside the worktree it runs in (symlinks, `skip-worktree` bits and the worktree's own git config).
+
+### `_git(args, cwd, check=True) -> str` [@ANCHOR: fix_worktree_symlinks:git]
+
+Runs `git` with `args` in `cwd` and returns its standard output stripped of surrounding whitespace. Every other function here goes through it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args` | list of str | git arguments, without the leading `git` |
+| `cwd` | path | the directory git runs in (a worktree root) |
+| `check` | bool, default `True` | when true a non-zero exit raises `subprocess.CalledProcessError`; when false the (possibly empty) output is returned and the failure ignored |
+
+Standard error is captured and discarded, so a failing call explains itself only through the exception. Blocking, synchronous, no timeout. Side effects are whatever the git command does (`update-index` and `config` write the index and config of `cwd`). Tests: `test_fix_worktree_symlinks.py` ("Tests" citations for `git`).
+
+### `main_checkout_root(this_root) -> str` [@ANCHOR: fix_worktree_symlinks:main_checkout_root]
+
+Finds the root of the main (non-worktree) checkout that the worktree `this_root` belongs to, however deeply the worktree is nested. It asks `git rev-parse --git-common-dir`, makes a relative answer absolute against `this_root`, normalises it and returns its parent directory. For the main checkout itself the result equals `this_root`, which is how `fix_worktree` detects "nothing to do". Argument `this_root` is the worktree root path. Raises `CalledProcessError` when `this_root` is not inside a git repository. Pure apart from the git read.
+
+### `_is_empty_dir(path) -> bool` [@ANCHOR: fix_worktree_symlinks:is_empty_dir]
+
+True only for a real directory (not a symlink to one) that contains nothing. This is what `git worktree add` leaves in place of a submodule it did not populate. Argument `path` is the candidate path. Returns a bool and never raises for a missing path (it is simply false). Read-only.
+
+### `_is_populated_checkout(path) -> bool` [@ANCHOR: fix_worktree_symlinks:is_populated_checkout]
+
+True when `path` is a directory holding a `.git` entry, file or directory (a submodule working tree has a `.git` file, a normal clone a directory). `fix_worktree` uses it to refuse linking to a main-checkout submodule that was itself never populated. Argument `path` is the candidate directory. Returns a bool; read-only; a missing path is false.
+
+### `_link(this_root, rel_path, target) -> None` [@ANCHOR: fix_worktree_symlinks:link]
+
+Replaces whatever is at `rel_path` in the worktree with a symlink to `target`, then marks the path `skip-worktree` so `git commit -a` or `git add -A` can never commit the absolute, machine-specific target.
+
+| Argument | Meaning |
+|---|---|
+| `this_root` | worktree root |
+| `rel_path` | path of the entry, relative to `this_root` |
+| `target` | absolute path the link points at (the main checkout's real path) |
+
+An existing symlink is removed; an existing directory is removed with `os.rmdir`, which only succeeds for an empty one (callers guarantee that, and `OSError` surfaces if they were wrong); then `os.symlink` creates the link and `git update-index --skip-worktree` runs. Returns nothing. Not atomic: a crash between the remove and the link leaves the entry missing, and rerunning the script repairs it (idempotent).
+
+### `_stop_submodule_recursion(this_root) -> None` [@ANCHOR: fix_worktree_symlinks:stop_submodule_recursion]
+
+Makes `git fetch`, `git pull` and `prmerge.sh` in this worktree skip the submodule that was replaced by a symlink. Git's default `fetch.recurseSubmodules=on-demand` walks every gitlink and refuses a symlinked path ("expected submodule path 'hams_shared' not to be a symbolic link"), so every fetch exited non-zero before this was added. Argument `this_root` is the worktree root. It turns on `extensions.worktreeConfig` in the repository config when it is not already `true` (that setting is what allows a per-worktree config file), then writes `fetch.recurseSubmodules=false` with `--worktree`, so the main checkout and other worktrees keep git's default. Idempotent; returns nothing; a git failure raises `CalledProcessError`.
+
+### `_recorded_sha(entry_meta) -> str` [@ANCHOR: fix_worktree_symlinks:recorded_sha]
+
+Extracts the object id from the metadata half of a `git ls-files -s` line (`<mode> <sha> <stage>`): the second whitespace-separated field. For a gitlink this is the submodule commit the worktree records, which `fix_worktree` compares with the main checkout's HEAD to warn about a mismatch. Argument `entry_meta` is that metadata string; returns the sha as a string. Raises `IndexError` on a string with fewer than two fields. Pure.
+
+### `fix_worktree(this_root) -> (int, list[str])` [@ANCHOR: fix_worktree_symlinks:fix_worktree]
+
+The whole repair for one worktree. Returns `(fixed, messages)`: the number of entries it relinked and the human-readable lines to print.
+
+1. If the main checkout root equals `this_root`, returns `(0, ["Running in the main checkout -- nothing to fix."])`.
+2. Lists `git ls-files -s`, gitlinks (mode 160000) first, because the tracked symlinks `agents`, `tools`, `docs`, `AGENTS.md` resolve through `hams_shared`.
+3. For a gitlink: already a working symlink means it only runs `_stop_submodule_recursion` (heals worktrees linked by an older version) and moves on; a populated directory (a real `git submodule update`) is left alone; if the main checkout's copy is not populated it says so and skips; otherwise it links to the real path of the main copy, stops recursion, counts it, and, when the main copy's HEAD differs from `_recorded_sha`, adds a note that the worktree tests against the main copy's commit.
+4. For a tracked symlink (mode 120000) that dangles here: it relinks to the main checkout's resolved target, or reports that it is broken there too.
+5. Ends with "No empty submodules or broken cross-repo symlinks found." or a "Fixed N entries locally, uncommitted (do not commit)." line.
+
+Errors: `CalledProcessError` from git. Side effects: only local, uncommitted symlinks, `skip-worktree` bits and the worktree config. Idempotent. Tests: the unit tests cover the main checkout, the empty-submodule and symlink repairs and the recursion setting.
+
+### `main() -> int` [@ANCHOR: fix_worktree_symlinks:main]
+
+Command-line entry point (`python3 fix_worktree_symlinks.py`, run from anywhere inside the worktree). No arguments. It finds the worktree root with `git rev-parse --show-toplevel` from the current directory, runs `fix_worktree`, prints the messages one per line and returns 0 (also when nothing needed fixing; a git failure raises). Test: the `main` test in `test_fix_worktree_symlinks.py`.
