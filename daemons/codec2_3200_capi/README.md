@@ -1,6 +1,6 @@
 # codec2_3200_capi
 
-A C ABI drop-in layer over `ham_digital_modes`'s independent Codec2
+A C ABI (application binary interface, the calling convention compiled code agrees on) drop-in layer over `ham_digital_modes`'s independent Codec2
 3200bps port (`daemons/ham_digital_modes/src/codec2_3200/`), so it can
 replace real Codec2's own `libcodec2` at link time for a C/C++ caller
 that only needs `CODEC2_MODE_3200`.
@@ -17,7 +17,7 @@ that Rust module into something a C build can link against exactly like
 the real library, without changing the caller's own source or link
 flags.
 
-**Where this does and doesn't connect to M17 specifically, checked
+**Where this does and doesn't connect to M17 (an open digital voice radio protocol) specifically, checked
 directly against real dependency source rather than assumed**: the M17
 Rust toolkit this codebase previously scoped (`thombles/m17rt`, see
 `hams_com/docs/proposals/blocked/M17_IMPLEMENTATION_PLAN.md` -- still
