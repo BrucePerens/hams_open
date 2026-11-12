@@ -355,11 +355,42 @@ because each post also queues a Cloudflare purge and a cache notice, so unbounde
 exemption. Verified by `[@ANCHOR: test_blog_post_quota_limit]` (`tests/test_blog_limits.py`).
 
 ## Technical Notes
-- Site creation uses a service account to bypass standard Odoo restrictions while maintaining strict ownership ([@ANCHOR: mixin_proxy_ownership_create]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
 
-- Page edits are restricted to the owner or administrators ([@ANCHOR: mixin_proxy_ownership_write]). Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
+### Ownership Check on Create: `mixin_proxy_ownership_create` [@ANCHOR: mixin_proxy_ownership_create]
 
-- URL slugs are cached in Redis for high-performance routing ([@ANCHOR: slug_cache_invalidation]). Verified by `[@ANCHOR: test_slug_cache_invalidation]`.
+Site creation uses a service account to bypass standard Odoo restrictions while maintaining strict ownership. Verified by
+`[@ANCHOR: test_mixin_ownership_validation]`.
+
+`_check_proxy_ownership_create(self, vals_list)` in `models/user_websites_owned_mixin.py` is called from the `create` of every
+model that carries the owner mixin (website pages, blog posts and blogs, and models of other modules that use it). `vals_list`
+is the list of value dictionaries; it is edited in place, a missing owner being filled in with the current user unless that user
+is the public user. Rules for an ordinary caller: exactly one of `owner_user_id` and `user_websites_group_id` must be set
+(both set raises `ValidationError`, neither raises `AccessError`); an owner must be the caller; a group must be one the caller is
+a member of (members are read once, as the service account, for the whole batch). `su`, system administrators, module
+administrators and the capability group `group_user_websites_ownership_bypass` skip the membership rules but still may not set both
+fields. If the service account is not provisioned yet the group check is skipped (debug log). Nothing is written.
+
+### Ownership Check on Write: `mixin_proxy_ownership_write` [@ANCHOR: mixin_proxy_ownership_write]
+
+Page edits are restricted to the owner or administrators. Verified by `[@ANCHOR: test_mixin_ownership_validation]`.
+
+`_check_proxy_ownership_write(self, vals)` in the same file guards every `write`. `vals` is the dictionary being written. For an
+ordinary caller any key `owner_user_id` or `user_websites_group_id` raises `AccessError` ("You cannot transfer ownership"), so
+ownership can never be moved or spoofed after creation. Administrators, `su`, system users and the bypass group may change them,
+but if the result would give a record both an owner and a group (the new values, or the stored one for a field not being
+changed) `ValidationError` is raised, for each record of the recordset. Records are pre-fetched to avoid a query per record.
+Returns nothing and writes nothing. The same group set is used by `_check_proxy_ownership_create`.
+
+### Slug Cache: `slug_cache_invalidation` [@ANCHOR: slug_cache_invalidation]
+
+URL slugs are cached in Redis for high-performance routing. Verified by `[@ANCHOR: test_slug_cache_invalidation]`.
+
+`get_record_by_slug(slug)` on `res.users` and `user.websites.group` (from `edge.routing.mixin` in `edge_routing/models/routing_mixin.py`)
+is decorated `@distributed_cache()`: the id behind a slug is held in process memory and Redis, so a page request does no SQL for a
+known slug. It lower-cases the slug, searches `website_slug` with plain `=` (never `=ilike`, so `%` or `_` in a URL cannot match other
+slugs), and runs as the edge-routing service account. The mixin's `write()` collects the slugs before and after a change of
+`website_slug` or `name` and calls `_notify_cache_invalidation` so every worker drops them; a notify failure is logged and does not
+abort the write. Deleting a record does the same in `unlink()`. The test `test_04_bdd_ormcache_query_counting_slugs` counts the SQL.
 
 ## Creating Blog Posts
 
@@ -386,23 +417,49 @@ Bruce asked that every member and group site live at `hams.com/<callsign>`, with
 This section supersedes the `/my-username/home` addresses in the scenarios above.
 
 - **Given** a member whose website name is `k6bp`, **when** anyone opens `/k6bp`, **then** the member's
-  home page is served there ([@ANCHOR: user_websites:COMM_user_home_fallback]), or, for the owner of a
-  site that has no home page yet, the placeholder with the "Create Your Home" button. Verified by
-  `[@ANCHOR: test_member_site_home_url]`.
+  home page is served there, or, for the owner of a
+  site that has no home page yet, the placeholder with the "Create Your Home" button.
 - **When** anyone opens the old `/k6bp/home`, **then** they get a permanent (301) redirect to `/k6bp`
-  ([@ANCHOR: user_websites:COMM_user_home_legacy_redirect]), so bookmarks and search-engine entries
+  so bookmarks and search-engine entries
   keep working. The target is built from the stored slug, never from the request path.
 - **When** a request for `/K6BP` arrives, **then** it is redirected (301) to the lower-case `/k6bp`.
 - A single path segment that is not a member or group slug is handed back to Odoo's own page,
   redirect and attachment lookup, so `/contactus` and `website.rewrite` redirects are unaffected.
-- Existing databases are migrated by `migrations/0.5/post-migration.py`
-  ([@ANCHOR: user_websites:migrate_home_url_to_slug]), which renames each member or group page
+- Existing databases are migrated by `migrations/0.5/post-migration.py`, which renames each member or group page
   `/<slug>/home` to `/<slug>`.
 - Reserved words (`home`, `admin`, `blog`, `my`, `privacy`, `manual`, `api`, and every other first
   segment of a platform route) cannot be claimed as a slug (`edge_routing.utils.RESERVED_SLUGS`).
   A guard test fails when a new static platform route is missing from that list, and the constraint also refuses any
   first segment of a route registered in the running database (`edge_routing.utils.reserved_slug_words`), so a route added later
   cannot be shadowed even before the list is updated.
+
+### Home Route: `COMM_user_home_fallback` [@ANCHOR: user_websites:COMM_user_home_fallback]
+
+`GET /<uwslug:website_slug>` (`user_home_fallback(self, website_slug, **kwargs)` in `controllers/main.py`; public,
+`sitemap=False`) serves the home of a member or group site. The slug is resolved through the service account. Not a member or group
+slug: a retired slug gets its 301 to the live site first, then the request goes to Odoo's own page, redirect and attachment lookup
+(`_serve_core_fallback`, which removes `website_slug` from the request parameters so the stock page cache still works), else 404.
+A hidden or suspended member, or a suspended group, is 404. A spelling other than the stored slug (`/K6BP`) gets a 301 to the
+lower-case one. If a published page exists at `/<slug>` the view counter in Redis is incremented (not for administrators; Redis
+errors are only logged) and the stock page is served. Otherwise the placeholder is rendered, with the home state for the owner
+(see `_owner_home`). Verified by `[@ANCHOR: test_member_site_home_url]`.
+
+### Legacy Home Redirect: `COMM_user_home_legacy_redirect` [@ANCHOR: user_websites:COMM_user_home_legacy_redirect]
+
+`GET /<uwslug:website_slug>/home` (`user_home_legacy_redirect`; public, `sitemap=False`) answers a permanent 301 from the old home
+address to `/<slug>`. The target is made from the slug as stored (lower-case, `[a-z0-9-]` by a database constraint) and
+quoted, never from the request path, so it is always a same-origin path and cannot be steered to another host; a single segment
+can never redirect to itself, so there is no loop. If the slug is not a member or group, a retired slug is redirected to the
+live site, then the stock page lookup is tried, else 404. No stored redirect rows are needed. Tests: `test_member_site_home_url.py`.
+
+### Home Migration: `migrate_home_url_to_slug` [@ANCHOR: user_websites:migrate_home_url_to_slug]
+
+The post-migration `migrations/0.5/post-migration.py` has the entry `migrate(cr, version)` and is run by Odoo on the module upgrade
+to 0.5 (`cr` is the database cursor; `version` is the version being left and is not used). It runs one `UPDATE` on `website_page`
+that renames every page whose `url` is exactly `/<slug>/home` and that belongs to a member or a group, to `/<slug>`, skipping a page
+when the target already exists on the same website (the unique `(url, website_id)` constraint would refuse it; the page already
+there wins). Menu items that pointed at the old address are moved with them. Plain SQL, no superuser environment. It
+returns nothing, logs the count, and is idempotent. Its test is `test_migration_home_url_to_slug`.
 
 ## Owner Toolbar, Dashboard and Editor (2026-10-12)
 
@@ -411,32 +468,114 @@ The models and routes existed, but nothing on the site led to them, and the site
 footer. This section adds the owner's interface and the member site's own layout.
 
 - **Given** I am signed in and I open any page of my own site (a member of the owning group, for a group site),
-  **then** an owner toolbar sits above the site menu ([@ANCHOR: user_websites:UX_OWNER_TOOLBAR]): Manage site,
+  **then** an owner toolbar sits above the site menu: Manage site,
   New page, New blog post, Edit this page / post, Images, Privacy, Publish / Unpublish this page, and View as
   visitor. This holds for internal users, an administrator included, on their own slug only. Visitors and other
-  members never see it. Verified by `[@ANCHOR: test_owner_toolbar_visible_to_owner_only]`.
-- **When** I open Manage site, **then** the dashboard (`/my/site/<slug>`,
-  [@ANCHOR: user_websites:UX_OWNER_DASHBOARD]) lists my pages, blog posts and images with Edit, Publish and
-  Unpublish. Unpublish hides and keeps; nothing is deleted. Verified by
-  `[@ANCHOR: test_owner_site_dashboard_lists_content]`.
-- **When** I create or edit a page ([@ANCHOR: user_websites:UX_OWNER_PAGE_EDITOR]) or a post
-  ([@ANCHOR: user_websites:UX_BLOG_POST_EDIT_FORM]), **then** I write in a WYSIWYG editor
-  ([@ANCHOR: user_websites:UX_RICH_EDITOR]) with headings, bold, italic, underline, code, lists, quotes,
-  alignment, links, images, undo and redo, and paste cleanup. I never type markup. Verified by
-  `[@ANCHOR: test_tour_owner_site]` and `[@ANCHOR: test_owner_page_editor_renders_wysiwyg]`.
+  members never see it.
+- **When** I open Manage site, **then** the dashboard (`/my/site/<slug>`) lists my pages, blog posts and images with Edit, Publish and
+  Unpublish. Unpublish hides and keeps; nothing is deleted.
+- **When** I create or edit a page or a post, **then** I write in a WYSIWYG editor
+  with headings, bold, italic, underline, code, lists, quotes,
+  alignment, links, images, undo and redo, and paste cleanup. I never type markup.
 - **And** the server keeps only allow-listed markup whoever I am, including an internal administrator
-  ([@ANCHOR: user_websites:member_html_sanitize]); hostile markup is stripped and reported through the
-  content-violation pipeline. Verified by `[@ANCHOR: test_member_html_sanitize_strips_hostile_markup]`.
+  ; hostile markup is stripped and reported through the
+  content-violation pipeline.
 - **And** images are JPEG, PNG, GIF or WebP, at most 2 MB, 100 per site, stored as public attachments of my
-  account ([@ANCHOR: user_websites:COMM_owner_image_upload]); writes are rate limited per user
-  ([@ANCHOR: user_websites:owner_rate_limit]). Verified by `[@ANCHOR: test_owner_image_upload_rules]` and
-  `[@ANCHOR: test_owner_write_rate_limited]`.
-- **And** page addresses are `/<slug>/<address>` and cannot be a word the site itself uses
-  ([@ANCHOR: user_websites:member_page_reserved_subpaths]). Verified by `[@ANCHOR: test_member_page_slug_reserved]`.
+  account; writes are rate limited per user.
+- **And** page addresses are `/<slug>/<address>` and cannot be a word the site itself uses.
 - **Then** a member site shows its own header (callsign, name, menu of its published pages and blog) and a small
-  footer (callsign, a link to hams.com, Report, Privacy, Terms), and none of hams.com's menu, banners or footer
-  ([@ANCHOR: user_websites:member_site_standalone_layout]). Verified by
-  `[@ANCHOR: test_member_site_has_no_hams_chrome]`.
+  footer (callsign, a link to hams.com, Report, Privacy, Terms), and none of hams.com's menu, banners or footer.
+
+### Owner Toolbar: `UX_OWNER_TOOLBAR` [@ANCHOR: user_websites:UX_OWNER_TOOLBAR]
+
+The template `user_websites.owner_toolbar` (`views/owner_site_templates.xml`) is a dark bar with the label "Your site", drawn above
+the site's own navbar by `user_navbar` when `is_owner` is true and the request has no `?visitor=1`. Buttons: Manage site (`/my/site/<slug>`),
+New page, New blog post (a POST form to `/<slug>/create_blog_post` with a CSRF token), Edit this page or post (only when the main
+object is a page or post), Images, Privacy, Publish or Unpublish this page (POST with a `next` address), Delete (not shown for the
+home page) and View as visitor. It reads `resolved_slug` and `main_object` from the render context and writes nothing itself.
+Visitors and other members never get `is_owner`. Verified by `[@ANCHOR: test_owner_toolbar_visible_to_owner_only]`.
+
+### Owner Dashboard: `UX_OWNER_DASHBOARD` [@ANCHOR: user_websites:UX_OWNER_DASHBOARD]
+
+The template `user_websites.owner_site_dashboard` is the page at `/my/site/<slug>`, rendered by `owner_site_dashboard` in
+`controllers/owner_site.py` (`COMM_owner_site_dashboard`). Sections: Pages (up to 200, with address, status badge, Edit, Publish or
+Unpublish, and Delete, none for the home page), Blog posts (up to 200, newest first), Images (public attachments of the site,
+up to 100) and a collapsed Deleted list with Restore buttons (up to 100 each). It shows a banner for `?saved=` and `?error=`
+(`home_delete`, `home_blocked`, `image`) and a form to create the home page when it does not exist. The data comes through the
+service account after the ownership check. A help link points at the documentation anchor of the same name. Verified by
+`[@ANCHOR: test_owner_site_dashboard_lists_content]` (`tests/test_owner_site.py`).
+
+### Owner Page Editor: `UX_OWNER_PAGE_EDITOR` [@ANCHOR: user_websites:UX_OWNER_PAGE_EDITOR]
+
+The template `user_websites.owner_page_edit` (`views/owner_site_templates.xml`) is the form to create or change one page, at
+`/my/site/<slug>/page/new` and `/my/site/<slug>/page/<id>`. Fields: hidden `page_id`, `title` (up to 120 characters), the page
+address (the part after `/<slug>/`: lower-case letters, digits and hyphens, not a reserved word), the rich editor body and a
+publish checkbox. It posts to `/my/site/<slug>/page/save`. It shows the messages for the errors `title`, `address`, `exists`,
+`too_long` and `not_editable`; a page built with the website builder's advanced blocks cannot be edited here and the form is
+replaced by a notice. The blog post form is the same pattern (`UX_BLOG_POST_EDIT_FORM`). Tested in `tests/test_owner_site.py`.
+
+### Rich Editor: `UX_RICH_EDITOR` [@ANCHOR: user_websites:UX_RICH_EDITOR]
+
+The template `user_websites.rich_editor` is the WYSIWYG block that page and post forms call with `editor_name`, `editor_label`,
+`editor_html` (initial, already sanitised body) and `upload_url` (where images go; the image button is disabled when empty). It
+draws a toolbar (bold, italic, underline, code, headings H2 and H3, paragraph, quote, code block, lists, alignment, link, unlink,
+image, undo, redo), a link bar, a hidden file input, a contenteditable area, a status line and a hidden field that
+`static/src/js/rich_editor.js` fills with the area's HTML on submit; the `<noscript>` text says the editor needs JavaScript. The
+browser script only produces sensible markup and cleans pasted text; the server (`member_html_sanitize`) is the authority. Tested
+by `[@ANCHOR: test_tour_owner_site]` (the browser tour) and `[@ANCHOR: test_owner_page_editor_renders_wysiwyg]`.
+
+### Member HTML Sanitiser: `member_html_sanitize` [@ANCHOR: user_websites:member_html_sanitize]
+
+The server keeps only allow-listed markup whoever I am, including an internal administrator. `models/member_html.py` defines
+`sanitize_member_html(source)`, which returns `(clean_html, hostile)`. `source` is the untrusted HTML text, cut to twice
+`MAX_BODY_CHARS` (200,000). The result is a well-formed fragment holding only the tags the toolbar can produce (`ALLOWED_TAGS`:
+paragraphs, headings, inline formatting, lists, quotes, code, links, images, simple tables), with at most the three alignment
+classes, links limited to `http`, `https`, `mailto`, same-site paths and `#` anchors, and images limited to `/web/image/` and
+`/web/content/` paths; no `style`, `data-*` or `t-*` attributes. Script, frame, form and similar elements are dropped with their
+content and SVG goes through the SVG allow-list. `hostile` is True when something only a hand-made request would send was found
+(script, event handlers, QWeb attributes, `javascript:` URLs); callers file that as an automated violation. It does no I/O and
+is applied in the request path, because the model-level sanitisers skip administrators. Verified by
+`[@ANCHOR: test_member_html_sanitize_strips_hostile_markup]`.
+
+### Image Upload: `COMM_owner_image_upload` [@ANCHOR: user_websites:COMM_owner_image_upload]
+
+`POST /my/site/<site_slug>/image` (`owner_image_upload(self, site_slug, ufile=None, json_reply="")`; `auth="user"`, CSRF protected) stores
+one picture. `ufile` is the uploaded file; `json_reply`, when non-empty, asks for a JSON answer `{"ok", "error", "url"}` (used by
+the editor) instead of a 303 redirect to the dashboard with `?saved=1` or `?error=image`. Checks in order: the caller may manage the
+site (404 otherwise), the upload rate (10 a minute), a file was sent (400), it is not empty (400), at most 2 MB (413), the first bytes
+are JPEG, PNG, GIF or WebP, judged by content and not by the file name (415), and the site holds fewer than 100 images (409).
+Then an `ir.attachment` is created by the service account: public, owned by the member or group, described `user_websites site
+image`, named from the sanitised file name. Returns the address `/web/image/<id>`. Not idempotent: each call stores a new copy.
+Verified by `[@ANCHOR: test_owner_image_upload_rules]`.
+
+### Write Rate Limit: `owner_rate_limit` [@ANCHOR: user_websites:owner_rate_limit]
+
+`_rate_limit(self, bucket, limit)` in `controllers/owner_site.py` limits how many changes one signed-in user makes a minute.
+`bucket` is a string naming the kind of action (`"write"` allows `WRITES_PER_MINUTE` = 30, `"upload"` allows `UPLOADS_PER_MINUTE` = 10) and
+`limit` is that number. The counter is a Redis key `uw:rl:<database>:<bucket>:<user id>` that expires after 60 seconds, incremented
+by `expiring_counter`. Over the limit it raises `TooManyRequests` ("Too many changes in a minute") (HTTP 429). If Redis cannot be
+reached it logs an error and raises `ServiceUnavailable` (HTTP 503): it fails closed, never open. The counter is per user, shared by
+all workers, and has no lock beyond Redis's own atomic increment. Verified by `[@ANCHOR: test_owner_write_rate_limited]`.
+
+### Reserved Page Addresses: `member_page_reserved_subpaths` [@ANCHOR: user_websites:member_page_reserved_subpaths]
+
+`RESERVED_PAGE_SLUGS` in `models/member_html.py` is a frozen set of the second path segments a member page can never use because
+they are routes or sections of the site itself: `home`, `blog`, `manage`, `create-site`, `create_site`, `create_blog`,
+`create_blog_post`, `subscribe`, `logbook`, `qso`, `page`, `post`, `edit`, `new`, `admin`, `my`, `feed`, `rss`, `sitemap`, `privacy`,
+`terms`, `report`, `image`, `images`, `files`. A page address must also match `PAGE_SLUG_RE` (`[a-z0-9]`, hyphens inside, 1 to 60
+characters). The page editor refuses a violating address with the `address` error, and `menu_pages` leaves those pages out of the
+site menu. The set is a constant; add a word here when a new route under `/<slug>/` is added. Verified by
+`[@ANCHOR: test_member_page_slug_reserved]`.
+
+### Standalone Member-Site Layout: `member_site_standalone_layout` [@ANCHOR: user_websites:member_site_standalone_layout]
+
+In the `layout_inherit_user_navbar` view (`views/user_websites_templates.xml`, an extension of `website.layout`) a block sets
+`member_site` to true for the site's own pages (a `website.page`, `blog.blog`, `blog.post`, the home and blog index whose main
+object is the profile record) and for the owner tool pages, which pass `member_site=True` themselves. When it is true the layout sets
+`no_header` and `no_footer`, so the site shows its own header (`user_navbar`: callsign, name, menu of up to 8 published pages and
+the blog) and its own small footer (`member_site_footer`: callsign, a link to hams.com, Report for visitors, Privacy, Terms) instead of
+hams.com's menu, banners and footer. It reads the context variables and writes nothing. Verified by
+`[@ANCHOR: test_member_site_has_no_hams_chrome]`.
 
 ## One site per member, eligibility and Delete (2026-10-13, append-only)
 
@@ -448,27 +587,97 @@ Bruce: "hams1 publishes two web sites for the user. One is bruce-perens-k6bp, an
   redirect that would shadow the new site is dropped. A page that would collide with one already at the new address is
   kept, unpublished, at `/<slug>/former-home`. Nothing is deleted. Before this, the pages stayed at the old address,
   which Odoo serves before it reads any redirect: a second site, and an owner toolbar whose Edit and Unpublish
-  answered 404 because the page was not under the current slug. ([@ANCHOR: user_websites:fn_rehome_site]; migration
-  0.7 repairs existing sites [@ANCHOR: user_websites:migrate_rehome_stale_site_pages]. Verified by
-  `[@ANCHOR: test_site_slug_one_site]`.)
+  answered 404 because the page was not under the current slug.
 - **When** anyone opens a retired address, public or the owner's tools (`/my/site/<old>/...`), **then** they are
   redirected to the same URL under the live slug: 301 for a GET, 308 for a POST so a form left open across a rename
-  still lands. ([@ANCHOR: user_websites:owner_redirect_legacy_slug], [@ANCHOR: user_websites:fn_main_legacy_slug_redirect].)
+  still lands.
 - **Slug policy.** `user_websites.slug_policy` is `name_callsign` (open source: the slug is made from the name) unless a
   deployment sets `callsign` and supplies the member's callsign through `_slug_identity()`. Under `callsign` a member
   has one address, never a name-derived one; with no callsign there is no site address yet; two members can never share
-  one (an error, not a `-1` suffix). Existing slugs are never cleared. ([@ANCHOR: user_websites:COMM_res_users_slug_policy].)
+  one (an error, not a `-1` suffix). Existing slugs are never cleared.
 - **Eligibility.** `_website_eligibility_gaps()` is the extension point for "who may have a website and blog"; open source
   returns none. A member with a gap has no public site (404 everywhere), their content is unpublished and marked, the
   owner's tools explain what is missing, new pages and posts are refused, and everything returns when the gap closes.
-  Administrators are not exempt on the public site. ([@ANCHOR: user_websites:site_eligibility]. Verified by
-  `[@ANCHOR: test_site_eligibility_hook]`.)
+  Administrators are not exempt on the public site.
 - **When** I press Delete on a page or blog post (dashboard, editor, owner toolbar), **then** I am asked "Delete this
   page? It will be removed from your site and can't be seen by visitors." (a dialog; a plain confirmation page without
   JavaScript); on confirming it disappears from my site, my lists and every public surface, and its address answers 404.
   The record is kept archived with a `deleted_by_owner` time: the platform retains data and the interface does not
-  promise erasure. The home page cannot be deleted. ([@ANCHOR: user_websites:COMM_owner_delete].)
+  promise erasure. The home page cannot be deleted.
 - **And** I can Restore from the collapsed Deleted list on the dashboard; the item comes back unpublished, at its old
   address if free. Restore is allowed because it recovers an accident and the data was never erased; a page archived by
-  moderation is not in my list and cannot be restored by me. ([@ANCHOR: user_websites:COMM_owner_restore]. Verified by
-  `[@ANCHOR: test_owner_delete_page_and_post]`.)
+  moderation is not in my list and cannot be restored by me.
+
+### Re-home a Renamed Site: `fn_rehome_site` [@ANCHOR: user_websites:fn_rehome_site]
+
+`rehome_site(env, owner_field, owner_id, old, new)` in `models/site_slug.py` runs on every rename of a member or group slug.
+`owner_field` is `"owner_user_id"` or `"user_websites_group_id"`, `owner_id` the owner's id, `old` and `new` the slugs without the
+slash. It returns a log list of tuples (`drop_redirect`, `repoint_redirect`, `move_page`) and does nothing if `old` or `new` is
+empty or they are equal. As the service account it (1) deletes redirects that would shadow the new site, (2) repoints redirects
+that pointed at the old slug, (3) moves every page at `/<old>` or `/<old>/...` to the same path under `/<new>`; a page that would
+collide with one already at the new address is kept unpublished at `/<new>/former-home` (or `<rest>-former`, numbered if needed), (4)
+creates a 301 from each moved sub-page's old path, and (5) moves the menu items. At most 1000 rows per kind. Nothing is deleted
+except shadowing redirects. Verified by `[@ANCHOR: test_site_slug_one_site]`. The upgrade `migrations/0.7/post-migration.py`
+(`[@ANCHOR: user_websites:migrate_rehome_stale_site_pages]`) does the same for pages left behind by older renames, in plain SQL: it finds pages
+whose first segment is a slug that now 301-redirects to the owner's slug, moves them (or keeps a colliding one unpublished),
+adds the redirect, moves menu items, logs every move at INFO, and leaves a longer redirect chain for an operator. It is idempotent
+and returns the list of moves; flush the Redis slug caches after it. Its test is `test_migration_rehome_stale_site_pages`.
+
+### Owner-Tool Retired-Slug Redirect: `owner_redirect_legacy_slug` [@ANCHOR: user_websites:owner_redirect_legacy_slug]
+
+`_redirect_legacy_slug(self, site_slug)` in `controllers/owner_site.py` is called by `_resolve_site` when `/my/site/<site_slug>/...`
+names no member or group. If `site_slug` is a retired slug (see `legacy_slug_target`) and the request path really starts with
+`/my/site/<site_slug>`, it raises a `SiteResponse` that the `@answers_site_response` decorator turns into a redirect to the same
+path and query string under the live slug: 301 for GET and HEAD, 308 otherwise so a form left open across a rename still posts (the
+session and CSRF token are unchanged). The new slug is quoted, so the target is always a local path. With no retired slug it
+returns and the caller answers 404. No writes. Verified by `[@ANCHOR: test_site_slug_one_site]`.
+
+### Public Retired-Slug Redirect: `fn_main_legacy_slug_redirect` [@ANCHOR: user_websites:fn_main_legacy_slug_redirect]
+
+`_legacy_slug_redirect(website_slug, rest="")` in `controllers/main.py` returns a 301 response from a retired site slug to the same
+page of the site that holds it now, or `None`. `rest` is the part of the path after the slug (`""` or `"/blog"`). The target comes from
+`legacy_slug_target(env, slug)`, which follows the `website.rewrite` 301 rows (at most three hops, no loops) to a slug a member or group
+holds today; it is built from the slug as stored and quoted, so it is always a same-origin path. Used by the home, blog index, blog
+and legacy-home routes before any stock page is looked up, so a page left at an old address cannot shadow the redirect. No writes.
+Verified by `[@ANCHOR: test_site_slug_one_site]`.
+
+### Slug Policy: `COMM_res_users_slug_policy` [@ANCHOR: user_websites:COMM_res_users_slug_policy]
+
+The model `res.users` (`models/res_users.py`) applies the deployment's slug policy in `create` and `write` through
+`_apply_slug_policy(record, vals)`, which rewrites `vals` in place. The policy is the system parameter `user_websites.slug_policy`, read
+with a direct query so a change takes effect at once: `name_callsign` (default, open source: the slug comes from the name) or `callsign`.
+Under `callsign`, `_slug_identity(vals)` (open source returns False; a deployment returns the callsign) is slugified (K6BP/P becomes
+`k6bp-p`) and checked free of any other member or group (`ValidationError` "The site address '%s' is already taken."), so a member
+has one address, never a name-derived one. With no callsign the method returns True and the caller blocks name-derived slugs. Service
+accounts are never touched, an existing slug is never cleared, and an explicit slug for a member with no callsign is kept.
+`_slug_identity_fields()` lists the fields that trigger recomputation. Verified by `[@ANCHOR: test_site_slug_one_site]`.
+
+### Site Eligibility: `site_eligibility` [@ANCHOR: user_websites:site_eligibility]
+
+`models/site_eligibility.py` holds the extension point for who may have a member website and blog. `ResUsers._website_eligibility_gaps()`
+returns a list of `{"code", "message", "url"}` dictionaries, one per missing requirement; the open-source version returns an empty list,
+so everyone is eligible. A deployment overrides it. `_hams_website_eligible()` is true when there are no gaps and
+`_website_publicly_visible()` also requires that the member is not suspended; public routes ask it live and answer 404. The cron
+`ir_cron_reconcile_website_eligibility` (every 10 minutes) and the owner dashboard call `reconcile_website_eligibility(user_ids=None)`,
+which unpublishes the pages and posts of a member with gaps (marking `hidden_by_eligibility`, and setting `website_ineligible`) and
+republishes exactly the marked items when the gap closes; it returns `{user_id: "hidden" | "shown"}` and is idempotent. Nothing is
+deleted and an item the member unpublished is never republished. Verified by `[@ANCHOR: test_site_eligibility_hook]`.
+
+### Delete: `COMM_owner_delete` [@ANCHOR: user_websites:COMM_owner_delete]
+
+`POST /my/site/<site_slug>/<page|post>/<int:item_id>/delete` (`owner_delete(self, site_slug, kind, item_id)`; `auth="user"`, CSRF
+protected) removes a page or post from the site without erasing it. After the ownership check and the write rate limit it, as the service
+account, archives the item (`active` false, `deleted_by_owner` set to now, unpublished). A page is first moved to the private address
+`/<slug>/deleted-<id>` (its old address kept in `deleted_original_url`) so the address can be reused; `no_cow` stops Odoo copying a generic
+view. The home page cannot be deleted: the answer is a 303 back to the dashboard with `error=home_delete`. Success is a 303 to
+the dashboard with `saved=deleted`. A GET to the same address (`owner_delete_confirm`) shows the confirmation page for no-JavaScript
+browsers. Another member's item is 404. Data is retained. Verified by `[@ANCHOR: test_owner_delete_page_and_post]`.
+
+### Restore: `COMM_owner_restore` [@ANCHOR: user_websites:COMM_owner_restore]
+
+`POST /my/site/<site_slug>/<page|post>/<int:item_id>/restore` (`owner_restore`; `auth="user"`, CSRF protected, rate limited like Delete)
+brings back something the owner deleted. It returns the item UNPUBLISHED: publishing is a separate act. A page goes back to its old address
+when that is still under the site's own slug and free, otherwise to `/<slug>/restored-<id>`; `deleted_by_owner` and `deleted_original_url`
+are cleared and `active` is set. A post becomes active again. An item that was not deleted by its owner (for example a page archived by
+moderation) answers 404 and cannot be restored this way. Success is a 303 to the dashboard with `saved=restored`. Runs as the service
+account after the ownership check. Verified by `[@ANCHOR: test_owner_delete_page_and_post]`.
