@@ -66,7 +66,6 @@ LEAK_CHECK_FALLBACK_TABLES = frozenset({
     "ir_cron_trigger",
 })
 
-# [@ANCHOR: zero_sudo:COMM_count_rows_in_batches]
 # Exact row counts for many tables without holding many relation locks at once. One UNION ALL over every public table
 # (776 tables, about 3700 relations with indexes) inside one transaction locks them all until it ends, which exhausted
 # Postgres' shared lock table (max_locks_per_transaction=64) when several test shards ran together ("out of shared memory").
@@ -75,6 +74,7 @@ LEAK_CHECK_FALLBACK_TABLES = frozenset({
 COUNT_BATCH_SIZE = 8
 
 
+# [@ANCHOR: zero_sudo:COMM_count_rows_in_batches]
 def count_rows_in_batches(db_name, tables, batch_size=COUNT_BATCH_SIZE, on_batch=None):
     """Returns {table: exact row count} for `tables`, counting `batch_size` tables per short transaction.
     `on_batch(cr)`, if given, is called after each batch's query and before its transaction ends (the test uses it to
