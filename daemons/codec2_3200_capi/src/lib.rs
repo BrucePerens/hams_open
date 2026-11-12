@@ -105,6 +105,7 @@ pub unsafe extern "C" fn codec2_destroy(codec2_state: *mut CODEC2) {
 /// `speech_in` must point to at least `codec2_samples_per_frame` valid
 /// `int16_t`s; `bytes` must point to at least `codec2_bytes_per_frame`
 /// writable bytes.
+// [@ANCHOR: codec2_encode_impl]
 unsafe fn encode_impl(codec2_state: *mut CODEC2, bytes: *mut u8, speech_in: *const i16) {
     assert!(
         !codec2_state.is_null(),
@@ -160,6 +161,7 @@ pub unsafe extern "C" fn codec2_decode(
 ///
 /// # Safety
 /// Same pointer/length contract as `codec2_decode`.
+// [@ANCHOR: codec2_decode_ber_impl]
 unsafe fn decode_ber_impl(
     codec2_state: *mut CODEC2,
     speech_out: *mut i16,
@@ -266,6 +268,8 @@ mod tests {
     // Tests [@ANCHOR: codec2_samples_per_frame]
     // Tests [@ANCHOR: codec2_bits_per_frame]
     // Tests [@ANCHOR: codec2_bytes_per_frame]
+    // Tests [@ANCHOR: codec2_encode_impl]
+    // Tests [@ANCHOR: codec2_decode_ber_impl]
     fn create_encode_decode_destroy_round_trip_over_the_c_abi_matches_direct_rust_use() {
         // Exercises the exact same call sequence a C caller makes,
         // through the actual `extern "C"` entry points (not the
@@ -352,6 +356,7 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: codec2_encode]
     #[should_panic(expected = "codec2_encode: bytes must not be NULL")]
+    // Tests [@ANCHOR: codec2_encode_impl]
     fn encode_rejects_null_bytes_out_pointer() {
         unsafe {
             let h = codec2_create(CODEC2_MODE_3200);
@@ -363,6 +368,7 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: codec2_encode]
     #[should_panic(expected = "codec2_encode: speech_in must not be NULL")]
+    // Tests [@ANCHOR: codec2_encode_impl]
     fn encode_rejects_null_speech_in_pointer() {
         unsafe {
             let h = codec2_create(CODEC2_MODE_3200);
@@ -374,6 +380,7 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: codec2_decode_ber]
     #[should_panic(expected = "codec2_decode_ber: speech_out must not be NULL")]
+    // Tests [@ANCHOR: codec2_decode_ber_impl]
     fn decode_ber_rejects_null_speech_out_pointer() {
         unsafe {
             let h = codec2_create(CODEC2_MODE_3200);
@@ -385,6 +392,7 @@ mod tests {
     #[test]
     // Tests [@ANCHOR: codec2_decode_ber]
     #[should_panic(expected = "codec2_decode_ber: bytes must not be NULL")]
+    // Tests [@ANCHOR: codec2_decode_ber_impl]
     fn decode_ber_rejects_null_bytes_pointer() {
         unsafe {
             let h = codec2_create(CODEC2_MODE_3200);
