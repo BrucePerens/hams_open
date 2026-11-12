@@ -23,11 +23,13 @@ _start:
 struct Uart;
 impl Write for Uart {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        // [@ANCHOR: codec2_riscv32_bench_uart_write_str]
         for b in s.bytes() { unsafe { core::ptr::write_volatile(0x1000_0000 as *mut u8, b) }; }
         Ok(())
     }
 }
 fn exit(code: u32) -> ! {
+    // [@ANCHOR: codec2_riscv32_bench_exit]
     unsafe { core::ptr::write_volatile(0x10_0000 as *mut u32, if code == 0 { 0x5555 } else { (code << 16) | 0x3333 }) };
     loop {}
 }
@@ -45,6 +47,7 @@ extern "C" {
 }
 /// Fill the unused part of the stack area with a pattern so the high-water mark can be read back.
 fn paint_stack() -> usize {
+    // [@ANCHOR: codec2_riscv32_bench_paint_stack]
     unsafe {
         let lo = &__bss_end as *const u8 as usize;
         let sp: usize;
@@ -60,6 +63,7 @@ fn paint_stack() -> usize {
 /// Bytes of stack used below the stack pointer `sp` that `paint_stack` returned, i.e. by the callees
 /// only (not by `main`'s own frame, which here holds the 28 KB decoder state being constructed).
 fn stack_high_water(sp: usize) -> usize {
+    // [@ANCHOR: codec2_riscv32_bench_stack_high_water]
     unsafe {
         let lo = &__bss_end as *const u8 as usize;
         let mut p = lo;
@@ -102,6 +106,7 @@ fn do_decode_16k(dec: &mut DecoderFixed, fr: &[u8; BYTES_PER_FRAME]) -> [i16; 2 
 
 #[no_mangle]
 pub extern "C" fn main() -> ! {
+    // [@ANCHOR: codec2_riscv32_bench_main]
     let mut u = Uart;
     let n = SPEECH.len() / 2 / SAMPLES_PER_FRAME;
     let _ = writeln!(u, "sizeof EncoderFixed {} bytes, DecoderFixed {} bytes", core::mem::size_of::<EncoderFixed>(), core::mem::size_of::<DecoderFixed>());
