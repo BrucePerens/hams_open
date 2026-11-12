@@ -29,7 +29,7 @@ itself wrong. PR numbers are hams_open pull requests.
 | audio config: a mistyped value (for example a string `volume_cap`) silently kept the default | bug, fixed (error naming the key) | 1704 |
 | PSU `set` sent the voltage before the current was checked; non-number setpoint ignored | bug, fixed | 1706 |
 | rx888 and radioctl TX `mode` that is not text treated as absent | bug, fixed | 1706 |
-| gla `decode` options of the wrong JSON type replaced by defaults | bug, fixed | this PR |
+| gla `decode` options of the wrong JSON type replaced by defaults | bug, fixed | 1709 |
 | procedure config: unknown keys ignored | intended (project-wide convention for instrument entries); not changed | - |
 | `checklist` oddities (README prose only entry, legacy driver list in a function, tests citing manual anchors) | intended; wording | - |
 | event/log write failures are dropped (procedure events, TX keyed-interval log) | intended best effort; not changed | - |
