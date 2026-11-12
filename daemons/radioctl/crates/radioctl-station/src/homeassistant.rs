@@ -56,6 +56,8 @@ use tokio_rustls::TlsConnector;
 const WRITABLE: [&str; 4] = ["switch", "input_boolean", "light", "fan"];
 /// Domains that can only be read (a sensor channel).
 const READ_ONLY: [&str; 1] = ["binary_sensor"];
+/// Why a session ends when the WebSocket auth fails.
+const TOKEN_REJECTED: &str = "Home Assistant rejected the access token";
 const MAX_ENTITIES: usize = 64;
 const MAX_MESSAGE: usize = 16 * 1024 * 1024;
 const MAX_CATALOG: usize = 20_000;
@@ -715,6 +717,10 @@ async fn run_sessions(inner: Arc<Inner>) {
             Err(e) => e,
         };
         inner.record("websocket lost", None, Err(&why));
+        // A wrong token will not become right by asking again, and repeated bad logins can get the client banned by Home Assistant.
+        if why == TOKEN_REJECTED {
+            return;
+        }
         failures = failures.saturating_add(1);
         sleep(inner.cfg.backoff.delay(failures)).await;
     }
@@ -836,7 +842,7 @@ async fn session(inner: &Arc<Inner>, failures: &mut u32) -> Result<(), String> {
                         }
                         "auth_invalid" => {
                             inner.record("websocket auth", None, Err("token rejected"));
-                            return Err("Home Assistant rejected the access token".into());
+                            return Err(TOKEN_REJECTED.into());
                         }
                         "event" => {
                             let data = v.pointer("/event/data");
