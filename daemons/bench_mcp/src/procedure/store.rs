@@ -89,6 +89,7 @@ pub fn run_dir(cfg: &Config, id: &str) -> Result<PathBuf, String> {
     }
 }
 
+// [@ANCHOR: bench_mcp_procedure_store_event_log]
 /// The append-only list of a run's events. Each line is `{"seq", "t", "kind", ...}`; `seq` counts from 1 and is the cursor of
 /// `bench_proc_output`.
 pub struct EventLog {

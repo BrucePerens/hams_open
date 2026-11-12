@@ -12,6 +12,7 @@ use serde_json::Value;
 use std::path::PathBuf;
 use std::time::Duration;
 
+// [@ANCHOR: bench_mcp_procedure_backend_limits]
 /// The operating-system limits a program runs under.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Limits {
@@ -25,6 +26,7 @@ pub struct Limits {
     pub file_mb: u64,
 }
 
+// [@ANCHOR: bench_mcp_procedure_backend_spawn_spec]
 /// What a backend needs to start one run.
 #[derive(Clone, Debug)]
 pub struct SpawnSpec {
@@ -35,6 +37,7 @@ pub struct SpawnSpec {
     pub limits: Limits,
 }
 
+// [@ANCHOR: bench_mcp_procedure_backend_incoming]
 /// What `Session::recv` found.
 #[derive(Debug, PartialEq)]
 pub enum Incoming {

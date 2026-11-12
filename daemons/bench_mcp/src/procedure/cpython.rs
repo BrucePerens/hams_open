@@ -27,12 +27,14 @@ const TASK_MARGIN: u64 = 2048;
 /// The longest protocol line accepted from the program, bytes.
 const MAX_LINE: u64 = 16 << 20;
 
+// [@ANCHOR: bench_mcp_procedure_cpython_cpython]
 pub struct CPython {
     pub python: String,
     /// `none`, or `systemd-run` to start the program inside a transient user scope with the memory and task limits.
     pub wrapper: String,
 }
 
+// [@ANCHOR: bench_mcp_procedure_cpython_py_session]
 struct PySession {
     child: Child,
     stdin: Option<ChildStdin>,

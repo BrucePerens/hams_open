@@ -8,6 +8,7 @@
 /// The prefix of the reserved names.
 pub const PREFIX: &str = "example-";
 
+// [@ANCHOR: bench_mcp_procedure_examples_example]
 pub struct Example {
     pub name: &'static str,
     pub tier: &'static str,
