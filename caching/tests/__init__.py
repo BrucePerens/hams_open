@@ -6,3 +6,4 @@ from . import test_sw_fetch
 from . import test_tour
 from . import test_caching_hoot
 from . import test_rpc_exposure
+from . import test_sw_unit
