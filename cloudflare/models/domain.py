@@ -9,6 +9,7 @@ from odoo.addons.cloudflare.utils import cloudflare_api as cf_utils
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: cloudflare_domain_cloudflare_routing_domain]
 class CloudflareRoutingDomain(models.Model):
     _inherit = "edge.routing.domain"
 

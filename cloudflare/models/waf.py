@@ -4,6 +4,7 @@ from odoo import models, api, fields, _
 from odoo.exceptions import AccessError
 
 
+# [@ANCHOR: cloudflare_waf_cloudflare_waf]
 class CloudflareWAF(models.AbstractModel):
     _name = "cloudflare.waf"
     _description = "Cloudflare WAF Interface"

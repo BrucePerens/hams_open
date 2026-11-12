@@ -15,6 +15,7 @@ SECRET_MASK = "********"
 SECRET_FIELDS = ("cloudflare_api_token", "cloudflare_turnstile_secret")
 
 
+# [@ANCHOR: cloudflare_res_config_settings_res_config_settings]
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 

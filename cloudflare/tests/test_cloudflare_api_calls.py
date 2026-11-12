@@ -36,6 +36,7 @@ class TestCloudflareApiCalls(HamsTransactionCase):
         args, kwargs = self.mock.call_args
         return args[0], args[1], kwargs.get("json")
 
+    # Tests [@ANCHOR: cloudflare_waf_cloudflare_waf]
     def test_01_ban_and_unban_use_the_access_rules_endpoint(self):
         # Tests [@ANCHOR: cloudflare:COMM_cf_api_ban_ip]
         # Tests [@ANCHOR: cloudflare:COMM_cf_api_unban_ip]

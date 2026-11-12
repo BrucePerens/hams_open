@@ -4,6 +4,7 @@ from odoo import models, api, fields
 from ..utils.cloudflare_api import verify_turnstile
 
 
+# [@ANCHOR: cloudflare_turnstile_cloudflare_turnstile]
 class CloudflareTurnstile(models.AbstractModel):
     _name = "cloudflare.turnstile"
     _description = "Cloudflare Turnstile Interface"

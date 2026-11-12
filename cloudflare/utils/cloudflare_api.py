@@ -40,6 +40,7 @@ NON_IDEMPOTENT_RETRY_STATUSES = frozenset({429})
 # # Verified by [@ANCHOR: test_cf_post_429_is_retried]
 
 
+# [@ANCHOR: cloudflare_cloudflare_api_idempotency_aware_retry]
 class IdempotencyAwareRetry(Retry):
     """Retry 5xx only for idempotent methods; retry POST/PATCH only on 429.
 

@@ -3,6 +3,7 @@
 from odoo import models, fields
 
 
+# [@ANCHOR: cloudflare_config_backup_cloudflare_config_backup]
 class CloudflareConfigBackup(models.Model):
     _name = "cloudflare.config.backup"
     _description = "Cloudflare Configuration Backup"

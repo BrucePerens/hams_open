@@ -81,6 +81,7 @@ class TestRequestContext(HamsHttpCase):
         self.assertIsNone(context["city"])
         self.assertIsNone(context["threat_score"])
 
+    # Tests [@ANCHOR: cloudflare_trusted_ip_ranges_cloudflare_trusted_ip_utils]
     def test_01c_get_request_context_from_an_allowlisted_non_tunnel_peer_trusts_cf_headers(self):
         # Tests [@ANCHOR: COMM_cf_get_request_context]
         """A self-hosted admin running Cloudflare WITHOUT Tunnel, who has explicitly turned on

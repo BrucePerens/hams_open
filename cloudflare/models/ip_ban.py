@@ -6,6 +6,7 @@ from ..utils.cloudflare_api import ban_ip, unban_ip
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: cloudflare_ip_ban_cloudflare_ipban]
 class CloudflareIPBan(models.Model):
     _name = "cloudflare.ip.ban"
     _description = "Cloudflare IP Ban / Honeypot Registry"

@@ -73,6 +73,7 @@ class TestEnqueueUrlsBatch(RealTransactionCase):
         self.PurgeQueue.enqueue_urls_batch({})
         self.assertEqual(self.PurgeQueue.search_count([]), before)
 
+    # Tests [@ANCHOR: cloudflare_purge_mixin_cloudflare_purge_mixin]
     def test_falsy_urls_in_the_list_are_skipped(self):
         # assertIn, not an exact-set match: creating self.website in setUp() has its own,
         # unrelated side effect of queuing a purge for the new site's auto-created homepage (a

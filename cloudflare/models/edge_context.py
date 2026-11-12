@@ -8,6 +8,7 @@ _logger = logging.getLogger(__name__)
 
 
 
+# [@ANCHOR: cloudflare_edge_context_cloudflare_utils]
 class CloudflareUtils(models.AbstractModel):
     _name = "cloudflare.utils"
     _description = "Cloudflare Edge Context Utilities"

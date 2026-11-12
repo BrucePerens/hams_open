@@ -28,6 +28,7 @@ class TestCloudflareTenantKey(HamsTransactionCase):
         self.company_a = self.env["res.company"].create({"name": "Tenant A"})
         self.company_b = self.env["res.company"].create({"name": "Tenant B"})
 
+    # Tests [@ANCHOR: cloudflare_tenant_key_cloudflare_tenant_key]
     def test_two_companies_get_independent_keys(self):
         # Tests [@ANCHOR: cloudflare:COMM_tenant_key_fields]
         fernet_a = self.env["cloudflare.tenant.key"]._get_or_create_fernet(
