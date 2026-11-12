@@ -146,6 +146,20 @@ class TestAlarm(CanaryCase):
             self.assertNotIn(SECRET, text)
         self.assertIn("log", alarms.output[0])
 
+    def test_logging_never_raises_in_the_caller_whatever_the_record_or_the_state(self):
+        # Tests [@ANCHOR: hams_secret_canary:watch_log_records]
+        token = "abcdefghijklmnopqrstuvwxyz0123456789"
+        secret_canary._tables["no_state_db"] = (time.monotonic(), None, {})  # installed, but the state row is gone
+        self.addCleanup(secret_canary._tables.pop, "no_state_db", None)
+        logger = logging.getLogger("some.addon")
+        with self.assertNoLogs("hams_secret_canary.alarm"):
+            # Each of these is an ordinary line of an Odoo log, or a malformed call that logging itself survives.
+            logger.makeRecord("some.addon", logging.INFO, "f", 1, "fetched key %s", (token,), None)
+            logger.makeRecord("some.addon", logging.INFO, "f", 1, "two %s and %s", ("args",), None)  # too few arguments
+            logger.makeRecord("some.addon", logging.INFO, "f", 1, {"k": token}, (), None)
+            logger.makeRecord("some.addon", logging.ERROR, "f", 1,
+                              "Importing test framework, avoid importing from business modules", (), None, sinfo="stack")
+
 
 @tagged("post_install", "-at_install")
 class TestPlanting(CanaryCase):

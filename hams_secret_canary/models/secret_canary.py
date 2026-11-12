@@ -24,17 +24,24 @@ _original_call = []
 
 # [@ANCHOR: hams_secret_canary:watch_log_records]
 def _watch_log_records(factory):
+    """The log record factory that scans each message. It must never make a logging call fail: a malformed call such as
+    `logger.info("%s %s", one_arg)` only prints "--- Logging error ---" to stderr without this hook, but would raise in the
+    caller if `getMessage()` raised here, and a database whose canary state is empty (salt None, no table) has nothing to
+    scan for. Any failure leaves the record as it was made."""
     def make_record(*args, **kwargs):
         record = factory(*args, **kwargs)
         if _tables and not record.name.startswith("hams_secret_canary"):
-            message = record.getMessage()
-            for _loaded, salt, table in list(_tables.values()):
-                matches = detector.find_matches(message, salt, table)
-                if matches:
-                    record.msg, record.args = detector.redact(message, salt, table), None
-                    for label, kind in matches:
-                        alerts.logging_backend(None, alerts.Alarm(label, kind, "log", record.name))
-                    break
+            try:
+                message = record.getMessage()
+                for _loaded, salt, table in list(_tables.values()):
+                    matches = detector.find_matches(message, salt, table) if table else []
+                    if matches:
+                        record.msg, record.args = detector.redact(message, salt, table), None
+                        for label, kind in matches:
+                            alerts.logging_backend(None, alerts.Alarm(label, kind, "log", record.name))
+                        break
+            except Exception:  # audit-ignore-catch-all: a detector must not break the logging call it is watching
+                pass
         return record
     return make_record
 
