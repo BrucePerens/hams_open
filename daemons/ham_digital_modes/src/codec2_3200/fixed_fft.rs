@@ -1023,6 +1023,7 @@ const fn build_bit_reverse_table<const N: usize>() -> [u16; N] {
 /// at most `2^23` in magnitude, so the `i64` source tables above (kept as
 /// the checked-in, regenerated-and-diffed reference data) narrow exactly,
 /// and the run-time table is half the size.
+// [@ANCHOR: fixed_fft:narrow_twiddles]
 const fn narrow_twiddles<const M: usize>(src: &[(i64, i64); M]) -> [(i32, i32); M] {
     let mut out = [(0i32, 0i32); M];
     let mut i = 0;
@@ -1039,6 +1040,7 @@ const fn narrow_twiddles<const M: usize>(src: &[(i64, i64); M]) -> [(i32, i32); 
 /// as integers (true of the decoder's tables, not of the pitch estimator's).
 /// [`block_inv_i64`] can then multiply by a first-quadrant twiddle after an
 /// exact rotation of the data by a quarter turn, which is cheaper.
+// [@ANCHOR: fixed_fft:quadrant_symmetric]
 const fn quadrant_symmetric<const M: usize>(t: &[(i32, i32); M]) -> bool {
     let q = M / 2;
     let mut m = 1;
@@ -1054,6 +1056,7 @@ const fn quadrant_symmetric<const M: usize>(t: &[(i32, i32); M]) -> bool {
 /// Every entry other than the first (exactly `1`) and the quarter turn (exactly `-j`), which the
 /// butterflies never multiply by, is strictly under `2^23` in magnitude in both components,
 /// which lets the 32-bit butterfly pre-scale a twiddle by `2^8` inside an `i32`.
+// [@ANCHOR: fixed_fft:twiddles_below_unity]
 const fn twiddles_below_unity<const M: usize>(t: &[(i32, i32); M]) -> bool {
     let mut m = 1;
     while m < M {
@@ -1289,6 +1292,7 @@ fn round_shift_neg((lo, hi): (u32, u32)) -> i64 {
 /// rotation of the data, which needs no negated twiddle and one rounding
 /// of each sign.
 #[inline(always)]
+// [@ANCHOR: fixed_fft:block_inv_i64]
 fn block_inv_i64<const SYM: bool>(
     re: &mut [i64],
     im: &mut [i64],
@@ -1368,6 +1372,7 @@ const PRUNE_PENULTIMATE: u8 = 2;
 /// same arithmetic as in [`block_inv_i64`], so it is bit-identical; the
 /// other positions are left as they were (unspecified to the caller).
 #[inline(always)]
+// [@ANCHOR: fixed_fft:block_inv_i64_pruned]
 fn block_inv_i64_pruned<const PRUNE: u8, const MODE: u8>(
     re: &mut [i64],
     im: &mut [i64],
@@ -1454,6 +1459,7 @@ fn i32_twiddle_plain(wr: i32, wi: i32, yr: i32, yi: i32) -> (i32, i32) {
 /// Same integers as [`i32_twiddle_plain`], scaled so that the rounded result is the high word of
 /// the 64-bit sum (fewer instructions on a 32-bit core).
 #[inline(always)]
+// [@ANCHOR: fixed_fft:i32_twiddle_scaled]
 fn i32_twiddle_scaled(wr: i32, wi: i32, yr: i32, yi: i32) -> (i32, i32) {
     let (w8r, w8i) = ((wr << 8) as i64, (wi << 8) as i64);
     let (y2r, y2i) = (yr.wrapping_shl(1) as i64, yi.wrapping_shl(1) as i64);
@@ -1464,6 +1470,7 @@ fn i32_twiddle_scaled(wr: i32, wi: i32, yr: i32, yi: i32) -> (i32, i32) {
 }
 
 #[inline(always)]
+// [@ANCHOR: fixed_fft:bf]
 fn bf<const FWD: bool, const MODE: u8>(
     ar: &mut i64,
     ai: &mut i64,
@@ -1518,6 +1525,7 @@ fn bf<const FWD: bool, const MODE: u8>(
 /// Those butterflies are add/subtract only, bit-identical to the generic
 /// butterfly.
 #[inline(always)]
+// [@ANCHOR: fixed_fft:bf_one]
 fn bf_one(ar: &mut i64, ai: &mut i64, br: &mut i64, bi: &mut i64) {
     let (xr, xi, yr, yi) = (*ar, *ai, *br, *bi);
     *ar = xr + yr;
@@ -1527,6 +1535,7 @@ fn bf_one(ar: &mut i64, ai: &mut i64, br: &mut i64, bi: &mut i64) {
 }
 
 #[inline(always)]
+// [@ANCHOR: fixed_fft:bf_quarter]
 fn bf_quarter<const FWD: bool>(ar: &mut i64, ai: &mut i64, br: &mut i64, bi: &mut i64) {
     let (xr, xi, yr, yi) = (*ar, *ai, *br, *bi);
     let (vr, vi) = if FWD { (yi, -yr) } else { (-yi, yr) };
@@ -1543,6 +1552,7 @@ fn bf_quarter<const FWD: bool>(ar: &mut i64, ai: &mut i64, br: &mut i64, bi: &mu
 /// compact fallback. `hi_zero` says the upper half is all zero (sparse
 /// input), which makes every butterfly `(a, a)`.
 #[inline(always)]
+// [@ANCHOR: fixed_fft:block]
 fn block<const FWD: bool, const MODE: u8>(
     re: &mut [i64],
     im: &mut [i64],
@@ -1597,6 +1607,7 @@ fn stage_dense<const N: usize, const FWD: bool, const MODE: u8>(
 /// block exists (`r < N / len`) and has a zero upper half (`r + N / len >=
 /// nz`) exactly while `len <= N / max(nz - r, r + 1)`; this is the largest
 /// such power of two.
+// [@ANCHOR: fixed_fft:prefix_fill_len]
 const fn prefix_fill_len(n: usize, nz: usize, r: usize) -> usize {
     let m = if nz - r > r + 1 { nz - r } else { r + 1 };
     let q = n / m;
@@ -1621,6 +1632,7 @@ impl<const N: usize, const NZ: usize> FillLens<N, NZ> {
 /// position, filling the `fill` positions of the block that stay constant
 /// (see [`prefix_fill_len`]); `im` is zero there.
 #[inline(always)]
+// [@ANCHOR: fixed_fft:scatter_prefix]
 fn scatter_prefix<const N: usize>(
     re: &mut [i64; N],
     im: &mut [i64; N],
@@ -1639,6 +1651,7 @@ fn scatter_prefix<const N: usize>(
 /// on a core without an optimised library; `zero` is opaque to the optimiser on purpose, because a
 /// loop that stores a literal zero is turned back into that call.
 #[inline(always)]
+// [@ANCHOR: fixed_fft:scatter_prefix_short]
 fn scatter_prefix_short<const N: usize>(
     re: &mut [i64; N],
     im: &mut [i64; N],
@@ -1665,6 +1678,7 @@ fn scatter_prefix_short<const N: usize>(
 /// repeated input that [`scatter_prefix`] already wrote, so it is skipped
 /// too; the arrays do not have to be cleared beforehand.
 #[inline(always)]
+// [@ANCHOR: fixed_fft:stage_prefix]
 fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8, const PRUNE: bool>(
     re: &mut [i64; N],
     im: &mut [i64; N],
@@ -1701,6 +1715,7 @@ fn stage_prefix<const N: usize, const FWD: bool, const MODE: u8, const PRUNE: bo
 }
 
 #[inline(always)]
+// [@ANCHOR: fixed_fft:stages_prefix_hot]
 fn stages_prefix_hot<const N: usize, const FWD: bool, const MODE: u8, const PRUNE: bool>(
     re: &mut [i64; N],
     im: &mut [i64; N],
@@ -1746,6 +1761,7 @@ fn stages_dense_loop<const N: usize, const FWD: bool, const MODE: u8>(
 }
 
 #[inline(never)]
+// [@ANCHOR: fixed_fft:stages_prefix_loop]
 fn stages_prefix_loop<const N: usize, const FWD: bool, const MODE: u8>(
     re: &mut [i64; N],
     im: &mut [i64; N],
@@ -1839,6 +1855,7 @@ pub(crate) fn fft_fixed_sparse_prefix<const N: usize>(
 
 /// The compact, any-mode form of the sparse-prefix transform for an
 /// arbitrary twiddle table (the decoder's, or the pitch estimator's).
+// [@ANCHOR: fixed_fft:prefix_general]
 fn prefix_general<const N: usize>(
     input: &[i64],
     re: &mut [i64; N],
@@ -1870,6 +1887,7 @@ fn prefix_general<const N: usize>(
 /// real LPC coefficients) the whole transform runs in one fully specialised
 /// instance: every block position, copy decision and twiddle stride is a
 /// constant.
+// [@ANCHOR: fixed_fft:fft_fixed_sparse_prefix_forward]
 pub(crate) fn fft_fixed_sparse_prefix_forward<const N: usize, const NZ: usize>(
     input: &[i64; NZ],
     re: &mut [i64; N],
@@ -1934,6 +1952,7 @@ pub(crate) fn pitch_fft_512<const NZ: usize>(
 
 /// [`pitch_fft_512`] with the "values under 2^39" kernel named (`MODE_I64` or
 /// `MODE_I64_NATIVE`); the tests run both on the same inputs.
+// [@ANCHOR: fixed_fft:pitch_fft_512_kernel]
 fn pitch_fft_512_kernel<const NZ: usize, const K: u8>(
     input: &[i64; NZ],
     re: &mut [i64; FFT_ENC],
@@ -1983,6 +2002,7 @@ fn prefix_forward_i32_hot<const N: usize, const NZ: usize>(
 /// Real part of `(wr + j wi) * (br + j bi)` rounded back to Q23, for the
 /// inverse direction (`wi = -wif`), in the given mode.
 #[inline(always)]
+// [@ANCHOR: fixed_fft:twiddle_real_inverse]
 fn twiddle_real_inverse<const MODE: u8>((wr, wif): (i32, i32), br: i64, bi: i64) -> i64 {
     if MODE == MODE_CHECKED {
         // Same range check as `twiddle_mul`, real part only.
@@ -2019,6 +2039,7 @@ fn set_flag(flags: &mut [u32; FLAG_WORDS], bit: usize) {
 /// (`step = N >> s` residues) with residue `r` is nonzero when either of
 /// its halves (residues `r` and `r + step` of the previous level) is.
 /// Level `s` starts at bit `2N - 2 * step`.
+// [@ANCHOR: fixed_fft:fold_flags]
 fn fold_flags<const N: usize>(flags: &mut [u32; FLAG_WORDS]) {
     let mut step = N / 2;
     while step >= 1 {
@@ -2045,6 +2066,7 @@ fn fold_flags<const N: usize>(flags: &mut [u32; FLAG_WORDS]) {
 /// half; one whose lower half is all zero gets that half cleared first and
 /// then takes the ordinary butterfly (rare, so not worth its own kernel).
 #[inline(always)]
+// [@ANCHOR: fixed_fft:stage_sparse]
 fn stage_sparse<const N: usize, const MODE: u8>(
     re: &mut [i64; N],
     im: &mut [i64; N],
@@ -2079,6 +2101,7 @@ fn stage_sparse<const N: usize, const MODE: u8>(
 }
 
 #[inline(always)]
+// [@ANCHOR: fixed_fft:stages_sparse_hot]
 fn stages_sparse_hot<const N: usize, const MODE: u8>(
     re: &mut [i64; N],
     im: &mut [i64; N],
@@ -2105,6 +2128,7 @@ fn stages_sparse_hot<const N: usize, const MODE: u8>(
 }
 
 #[inline(never)]
+// [@ANCHOR: fixed_fft:stages_sparse_loop]
 fn stages_sparse_loop<const N: usize, const MODE: u8>(
     re: &mut [i64; N],
     im: &mut [i64; N],
@@ -2124,6 +2148,7 @@ fn stages_sparse_loop<const N: usize, const MODE: u8>(
 /// `N - NS + 1 .. N` (upper half, i.e. indices `N/2 - NS + 1 .. N/2` of the
 /// upper half). Nothing else is written. Requires `NS < N / 4`.
 #[inline(always)]
+// [@ANCHOR: fixed_fft:final_stage_real]
 fn final_stage_real<const N: usize, const NS: usize, const MODE: u8>(
     re: &mut [i64; N],
     im: &[i64; N],
@@ -2226,6 +2251,7 @@ where
     /// Sets bin `b` (`1 <= b < N / 2`) and its mirror. A later `put` at the
     /// same bin overwrites the earlier one, as the dense fill did.
     #[inline(always)]
+    // [@ANCHOR: fixed_fft:SparseInverse_put]
     pub(crate) fn put(&mut self, b: usize, v: ComplexQ23) {
         let bitrev = <Size<N> as FftTables>::BITREV;
         let (p, pm) = (bitrev[b] as usize, bitrev[N - b] as usize);
@@ -2250,6 +2276,7 @@ where
 
     /// [`run`](Self::run) with the "values under 2^39" kernel named
     /// (`MODE_I64` or `MODE_I64_NATIVE`); the tests run both.
+    // [@ANCHOR: fixed_fft:SparseInverse_run_kernel]
     fn run_kernel<const NS: usize, const K: u8>(mut self) {
         let bitrev = <Size<N> as FftTables>::BITREV;
         let tw = <Size<N> as FftTables>::TW;
@@ -2299,6 +2326,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // Tests [@ANCHOR: fixed_fft:i32_twiddle_scaled]
     fn i32_twiddle_kernels_agree_bit_for_bit() {
         let mut seed = 0x0dd_ba11u64;
         let mut next = || {
@@ -2635,6 +2663,10 @@ mod tests {
     /// bit, at both sizes, in both directions, on inputs small enough
     /// for the fast path and large enough to force the checked path.
     #[test]
+    // Tests [@ANCHOR: fixed_fft:block]
+    // Tests [@ANCHOR: fixed_fft:bf_one]
+    // Tests [@ANCHOR: fixed_fft:bf_quarter]
+    // Tests [@ANCHOR: fixed_fft:block_inv_i64]
     // Tests [@ANCHOR: fft_fixed]
     fn optimized_fft_is_bit_identical_to_the_textbook_i128_loop() {
         let mut seed = 42u64;
@@ -2693,6 +2725,12 @@ mod tests {
     /// `fft_fixed_sparse_prefix` (skipped/copied blocks) equals the dense
     /// reference on real inputs with only the first `nz` entries set.
     #[test]
+    // Tests [@ANCHOR: fixed_fft:stage_prefix]
+    // Tests [@ANCHOR: fixed_fft:stages_prefix_loop]
+    // Tests [@ANCHOR: fixed_fft:prefix_general]
+    // Tests [@ANCHOR: fixed_fft:scatter_prefix]
+    // Tests [@ANCHOR: fixed_fft:block_inv_i64_pruned]
+    // Tests [@ANCHOR: fixed_fft:fft_fixed_sparse_prefix_forward]
     // Tests [@ANCHOR: fft_fixed_sparse_prefix]
     fn sparse_prefix_fft_is_bit_identical_to_the_dense_reference() {
         let mut seed = 7u64;
@@ -2769,6 +2807,9 @@ mod tests {
     /// against the dense textbook transform with the estimator's twiddles: bins `0..=128`
     /// must match bit for bit, including near the value limit.
     #[test]
+    // Tests [@ANCHOR: fixed_fft:pitch_fft_512_kernel]
+    // Tests [@ANCHOR: fixed_fft:scatter_prefix_short]
+    // Tests [@ANCHOR: fixed_fft:stages_prefix_hot]
     fn pitch_transform_matches_the_dense_reference_in_both_64_bit_kernels() {
         fn one<const K: u8>(input: &[i64; 64]) {
             let mut re = [0x5a5a_5a5ai64; FFT_ENC];
@@ -2817,6 +2858,7 @@ mod tests {
     /// Every butterfly form of the 64-bit-range kernel (32-bit halves, native products, and
     /// the range-checked reference) computes the same integers.
     #[test]
+    // Tests [@ANCHOR: fixed_fft:bf]
     fn butterfly_kernels_agree_bit_for_bit() {
         let mut seed = 5150u64;
         for &bits in &[8u32, 24, 33, 37, 38] {
@@ -2971,6 +3013,14 @@ mod tests {
     /// sizes, across input magnitudes that select the fast and checked
     /// kernels.
     #[test]
+    // Tests [@ANCHOR: fixed_fft:SparseInverse_put]
+    // Tests [@ANCHOR: fixed_fft:SparseInverse_run_kernel]
+    // Tests [@ANCHOR: fixed_fft:fold_flags]
+    // Tests [@ANCHOR: fixed_fft:stage_sparse]
+    // Tests [@ANCHOR: fixed_fft:stages_sparse_hot]
+    // Tests [@ANCHOR: fixed_fft:stages_sparse_loop]
+    // Tests [@ANCHOR: fixed_fft:final_stage_real]
+    // Tests [@ANCHOR: fixed_fft:twiddle_real_inverse]
     fn sparse_harmonic_inverse_is_bit_identical_to_the_dense_reference_at_the_used_outputs() {
         let mut seed = 2026u64;
         sparse_inverse_case::<FFT_ENC, 80>(&mut seed);
@@ -3166,5 +3216,52 @@ mod tests {
         assert_eq!(round_shift((0, 0)), 0);
         assert_eq!(round_shift_neg(words(1 << 22)), 0);
         assert_eq!(round_shift_neg(words(-(1i64 << 22))), 1);
+    }
+
+    /// The three const helpers that vet the twiddle tables at compile time, run on real tables and on
+    /// deliberately broken ones: `narrow_twiddles` keeps every value, a table built from the generating
+    /// formula is quadrant symmetric and below unity, and a perturbed table is neither; and
+    /// `prefix_fill_len` is the largest power of two with `len <= n / max(nz - r, r + 1)`.
+    #[test]
+    // Tests [@ANCHOR: fixed_fft:narrow_twiddles]
+    // Tests [@ANCHOR: fixed_fft:quadrant_symmetric]
+    // Tests [@ANCHOR: fixed_fft:twiddles_below_unity]
+    // Tests [@ANCHOR: fixed_fft:prefix_fill_len]
+    fn const_table_checks_accept_the_real_tables_and_reject_broken_ones() {
+        let narrowed = narrow_twiddles(&TWIDDLES_512_Q23);
+        for (n, w) in narrowed.iter().zip(TWIDDLES_512_Q23.iter()) {
+            assert_eq!((n.0 as i64, n.1 as i64), *w);
+        }
+        assert_eq!(narrowed, TW_512_DATA);
+        assert!(quadrant_symmetric(&narrowed));
+        assert!(twiddles_below_unity(&narrowed));
+
+        let mut bad = narrowed;
+        bad[3].0 += 1;
+        assert!(
+            !quadrant_symmetric(&bad),
+            "a perturbed entry breaks the quarter-turn symmetry"
+        );
+        let mut big = narrowed;
+        big[5].0 = 1 << FRAC_BITS;
+        assert!(
+            !twiddles_below_unity(&big),
+            "an entry of magnitude 2^23 is not below unity"
+        );
+
+        // r = 0: the block exists and is wholly prefix while len <= n / max(nz, 1).
+        assert_eq!(prefix_fill_len(512, 64, 0), 8);
+        assert_eq!(prefix_fill_len(512, 100, 0), 4);
+        assert_eq!(prefix_fill_len(512, 1, 0), 512);
+        for (n, nz) in [(512usize, 11usize), (1024, 13), (512, 100)] {
+            for r in 0..nz {
+                let len = prefix_fill_len(n, nz, r);
+                let m = (nz - r).max(r + 1);
+                assert!(
+                    len.is_power_of_two() && len <= n / m && 2 * len > n / m,
+                    "n={n} nz={nz} r={r}"
+                );
+            }
+        }
     }
 }
