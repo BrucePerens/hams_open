@@ -309,6 +309,19 @@ Any value of the wrong type or range is refused (`<arg> must be ...`) before the
 
 The order is save, recall, export, import, so a slot can be saved and exported in one call. All values are checked and the import file is read before anything is sent. After the commands and 300 ms it reads `TDIV?` and `TRIG_MODE?` into `after`. Returns `saved_slot`, `recalled_slot`, `exported` (`file`, `bytes`), `imported_bytes`, `after`, `note`. The scope's reply to a refused slot or setup is nothing at all, so `after` is how the caller sees a refusal. Test: `a_setup_is_saved_recalled_exported_and_restored_from_a_file` against the fake scope.
 
+### `bench_mcp_scope_passfail` [@ANCHOR: bench_mcp_scope_passfail]
+
+`passfail(s, args)` is `bench_scope_passfail` (tier `read_config`): the pass/fail mask test.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `args.enable`, `args.display`, `args.stop_on_fail`, `args.output`, `args.run` | boolean | `PFEN`, `PFDS`, `PFFS`, `PFBF`, `PFOP`, `ON` or `OFF`. |
+| `args.source` | `C1` or `C2` | `PFSC`. |
+| `args.x_mask_div`, `args.y_mask_div` | number 0.04 to 4.0, a multiple of 0.04, both or neither | Sent as `PFST XMASK,<x>,YMASK,<y>`. One alone: `x_mask_div and y_mask_div go together`; off the step: `<key> must be from 0.04 to 4.0 in steps of 0.04`. |
+| `args.create_mask`, `args.clear` | boolean | `PFCM`, `PACL`. |
+
+Order sent: enable, source, tolerance, create, display, stop on fail, output, clear, run. Everything is checked before the first command. Each command is followed by 100 ms and a read-back. Returns `sent`, `readback`, `note`, `settings` (all six read back), `mask_tolerance` and `result` (`failed`, `passed`, `total` from `PFDD?`). The scope accepts `PFCM` only with the test on and stopped, and counts only while running with a mask, so an out-of-order request shows as unchanged counts. Test: `a_mask_test_is_set_up_created_run_and_its_counts_are_read` against the fake scope.
+
 ## The bench supply (`src/psu.rs`)
 
 The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port, SCPI at 115200 8N1. The configured `max_volts` and `max_amps` cap every setpoint. The output is switched on only if the setpoints already stored in the supply are within those caps. Switching the output on is the `full` tier tool `bench_psu_output` and needs `dry_run` or `confirm_load_connected`; this process switches the output off again after `for_s` seconds (at most the configured `max_on_s`, default 600 s per the tool text), because the driver knows of no output timer in the supply. The data types in this file are `Limits` (`max_volts` volts, `max_amps` amperes, `max_on_s` seconds, taken from the instrument's config entry by `call`) and `Timer`, described in the entry of `bench_mcp_psu_arm_switch_off`.
