@@ -6,6 +6,7 @@ from collections import Counter
 import os
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
@@ -108,6 +109,7 @@ class BinaryVersion(models.Model):
             path = record._get_central_path()
             record.is_downloaded = os.path.exists(path) and os.access(path, os.X_OK)
 
+    @public_rpc
     def action_download_to_pool(self):
         # [@ANCHOR: binary_version_download_pool]
         """Downloads and verifies the binary into the central version pool."""
@@ -151,6 +153,7 @@ class BinaryVersion(models.Model):
         return True
 
     # [@ANCHOR: binary_version_action_notify_tenants]
+    @public_rpc
     def action_notify_tenants(self):
         self.ensure_one()
         # Adversarial security review, 2026-09-03: no group check at all --
