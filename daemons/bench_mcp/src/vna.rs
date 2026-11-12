@@ -147,6 +147,39 @@ pub fn ensure_present(tool: &str, present: &dyn Fn() -> bool) -> Result<(), Stri
     Ok(())
 }
 
+/// The hardware `status` and `sweep` reach: the real unit, codecs and sound server in production (`Hardware`), a simulated unit in the tests.
+pub trait Backend {
+    /// The USB side of the unit alone (no audio).
+    fn open_usb(&self) -> Result<vnwa_open::usb::Vnwa, String>;
+    /// The ALSA ids of the unit's two codecs, found from the USB tree.
+    fn codecs(&self) -> Result<vnwa_open::topology::Codecs, String>;
+    /// Whether the sound server lists the unit's codecs.
+    fn sound_server(&self) -> vnwa_open::sound_server::Exposure;
+    /// The unit and both codecs, open for measuring.
+    fn open_vna(&self, cfg: Config) -> Result<Vna, String>;
+}
+
+/// The real VNWA on this machine.
+pub struct Hardware;
+
+impl Backend for Hardware {
+    fn open_usb(&self) -> Result<vnwa_open::usb::Vnwa, String> {
+        vnwa_open::usb::Vnwa::open()
+    }
+    fn codecs(&self) -> Result<vnwa_open::topology::Codecs, String> {
+        vnwa_open::topology::codecs()
+    }
+    fn sound_server(&self) -> vnwa_open::sound_server::Exposure {
+        vnwa_open::sound_server::check(
+            std::path::Path::new("/sys"),
+            &vnwa_open::sound_server::run_program,
+        )
+    }
+    fn open_vna(&self, cfg: Config) -> Result<Vna, String> {
+        Vna::open(cfg)
+    }
+}
+
 pub fn identify(cfg: &Config) -> Value {
     json!({
         "idn": format!("DG8SAQ VNWA ({:04x}:{:04x}) driven by vnwa_open", vnwa_open::VID, vnwa_open::PID),
@@ -157,11 +190,12 @@ pub fn identify(cfg: &Config) -> Value {
 }
 
 /// What is connected, and the settings a sweep starts from.
-pub fn status(cfg: &Config) -> Result<Value, String> {
+pub fn status(cfg: &Config, hw: &dyn Backend) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_status]
     // The unit must answer a harmless read (request 0x3a, the generator's read-back, 2 bytes) and not only be on the bus: a
     // unit that is listed but does not answer needs a power cycle.
     let mut monitor = Value::Null;
-    let (usb, answers) = match vnwa_open::usb::Vnwa::open() {
+    let (usb, answers) = match hw.open_usb() {
         Ok(u) => match u.read(0x3a, 0, 0, 2) {
             Ok(b) => {
                 monitor = instrument_monitoring(&u);
@@ -171,7 +205,7 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
         },
         Err(e) => ("not found or no permission", json!({"error": e})),
     };
-    let found = vnwa_open::topology::codecs();
+    let found = hw.codecs();
     let (s11, s21) = match (&cfg.codec_s11, &cfg.codec_s21, &found) {
         (Some(a), Some(b), _) => (Some(a.clone()), Some(b.clone())),
         (_, _, Ok(c)) => (
@@ -181,10 +215,7 @@ pub fn status(cfg: &Config) -> Result<Value, String> {
         _ => (None, None),
     };
     // Are the unit's USB codecs hidden from the sound server? A warning only: a sweep never fails because of it.
-    let exposure = vnwa_open::sound_server::check(
-        std::path::Path::new("/sys"),
-        &vnwa_open::sound_server::run_program,
-    );
+    let exposure = hw.sound_server();
     Ok(json!({
         "codecs_protected_from_sound_server": vnwa_open::sound_server::protected(&exposure),
         "codecs_protection_detail": match &exposure {
@@ -322,9 +353,15 @@ pub fn power_cycle(cfg: &Config, args: &Value) -> Result<Value, String> {
     Ok(out)
 }
 
-pub fn sweep(cfg: &Config, args: &Value, out_dir: &Path) -> Result<Value, String> {
+pub fn sweep(
+    cfg: &Config,
+    args: &Value,
+    out_dir: &Path,
+    hw: &dyn Backend,
+) -> Result<Value, String> {
+    // [@ANCHOR: bench_vna_sweep]
     let a = sweep_args(args, cfg)?;
-    let mut vna = Vna::open(a.config.clone())?;
+    let mut vna = hw.open_vna(a.config.clone())?;
     let points = vna.sweep(a.start_hz, a.stop_hz, a.points)?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -510,5 +547,192 @@ mod tests {
             lines[1],
             "10000000,-0.500000,0.000000,-6.021,180.000,0.000000,1.000000,0.000,90.000"
         );
+    }
+
+    /// A unit on the USB side that answers every read with zeros (or fails every read with `read_error`).
+    struct Unit {
+        read_error: Option<vnwa_open::transport::TransferError>,
+    }
+    impl vnwa_open::transport::Transport for Unit {
+        fn reset(&self) -> Result<(), vnwa_open::transport::TransferError> {
+            Ok(())
+        }
+        fn write(
+            &self,
+            _t: u8,
+            _r: u8,
+            _v: u16,
+            _i: u16,
+            d: &[u8],
+        ) -> Result<usize, vnwa_open::transport::TransferError> {
+            Ok(d.len())
+        }
+        fn read(
+            &self,
+            _r: u8,
+            _v: u16,
+            _i: u16,
+            b: &mut [u8],
+        ) -> Result<usize, vnwa_open::transport::TransferError> {
+            match &self.read_error {
+                Some(e) => Err(e.clone()),
+                None => {
+                    b.fill(0);
+                    Ok(b.len())
+                }
+            }
+        }
+    }
+
+    /// A simulated VNWA: no USB bus, no sound card, no sound server.
+    struct Sim {
+        usb: bool,
+        read_error: Option<vnwa_open::transport::TransferError>,
+        codecs: Result<vnwa_open::topology::Codecs, String>,
+        exposure: vnwa_open::sound_server::Exposure,
+        vna_opens: std::cell::Cell<u32>,
+        /// The simulated codecs' feeder threads, stopped when the `Sim` drops.
+        feeds: std::cell::RefCell<Vec<vnwa_open::capture::SyntheticFeed>>,
+    }
+    impl Sim {
+        fn healthy() -> Sim {
+            Sim {
+                usb: true,
+                read_error: None,
+                codecs: Ok(vnwa_open::topology::Codecs {
+                    s11: "hw:CARD=CODEC,".into(),
+                    s21: "hw:CARD=CODEC_1,".into(),
+                }),
+                exposure: vnwa_open::sound_server::Exposure::Protected,
+                vna_opens: std::cell::Cell::new(0),
+                feeds: std::cell::RefCell::new(Vec::new()),
+            }
+        }
+    }
+    impl Backend for Sim {
+        fn open_usb(&self) -> Result<vnwa_open::usb::Vnwa, String> {
+            if self.usb {
+                Ok(vnwa_open::usb::Vnwa::with_transport(Box::new(Unit {
+                    read_error: self.read_error.clone(),
+                })))
+            } else {
+                Err("no VNWA on the bus".into())
+            }
+        }
+        fn codecs(&self) -> Result<vnwa_open::topology::Codecs, String> {
+            self.codecs.clone()
+        }
+        fn sound_server(&self) -> vnwa_open::sound_server::Exposure {
+            self.exposure.clone()
+        }
+        fn open_vna(&self, cfg: Config) -> Result<Vna, String> {
+            self.vna_opens.set(self.vna_opens.get() + 1);
+            if !self.usb {
+                return Err("no VNWA on the bus".into());
+            }
+            // Codec 1: reference left, S11 (half the reference) right. Codec 2: S21 (equal to the reference) left, reference right.
+            let w = 2.0 * std::f64::consts::PI * cfg.if_hz / 48_000.0;
+            let tone = move |scale: f64, i: u64| (8000.0 * scale * (w * i as f64).sin()) as i16;
+            let (c1, f1) = vnwa_open::capture::synthetic_capture(move |i| [tone(1.0, i), tone(0.5, i)]);
+            let (c2, f2) = vnwa_open::capture::synthetic_capture(move |i| [tone(1.0, i), tone(1.0, i)]);
+            self.feeds.borrow_mut().extend([f1, f2]);
+            Ok(Vna::with_parts(
+                cfg,
+                vnwa_open::usb::Vnwa::with_transport(Box::new(Unit { read_error: None })),
+                c1,
+                c2,
+            ))
+        }
+    }
+
+    // Tests [@ANCHOR: bench_vna_status]
+    #[test]
+    fn status_reports_the_unit_its_codecs_and_the_sound_server_without_a_real_unit() {
+        let v = status(&Config::default(), &Sim::healthy()).unwrap();
+        assert_eq!(v["usb"], "present");
+        assert_eq!(v["usb_read"]["bytes"], json!([0, 0]));
+        assert_eq!(v["codec_s11"], "hw:CARD=CODEC,");
+        assert_eq!(v["codec_s21"], "hw:CARD=CODEC_1,");
+        assert_eq!(v["codecs_error"], Value::Null);
+        assert_eq!(v["codecs_protected_from_sound_server"], true);
+        assert_eq!(v["codecs_protection_warning"], Value::Null);
+        assert_eq!(v["if_hz"], 12_000.0);
+        assert_eq!(v["calibrated"], false);
+        assert!(v["instrument_monitoring"]["firmware"].is_string(), "{v}");
+
+        // Listed but not answering: the read failure is reported, not hidden, and monitoring is skipped.
+        let mut dead = Sim::healthy();
+        dead.read_error = Some(vnwa_open::transport::TransferError::Other("stalled".into()));
+        let v = status(&Config::default(), &dead).unwrap();
+        assert_eq!(v["usb"], "present but not answering");
+        assert!(v["usb_read"]["error"].as_str().unwrap().contains("stalled"), "{v}");
+        assert_eq!(v["instrument_monitoring"], Value::Null);
+
+        // Not on the bus, and no codecs found: both are said, the configured codec names win over the found ones.
+        let mut gone = Sim::healthy();
+        gone.usb = false;
+        gone.codecs = Err("no codecs".into());
+        let v = status(&Config::default(), &gone).unwrap();
+        assert_eq!(v["usb"], "not found or no permission");
+        assert_eq!(v["codecs_error"], "no codecs");
+        assert_eq!((&v["codec_s11"], &v["codec_s21"]), (&Value::Null, &Value::Null));
+        let named = Config {
+            codec_s11: Some("hw:A,".into()),
+            codec_s21: Some("hw:B,".into()),
+            ..Config::default()
+        };
+        let v = status(&named, &gone).unwrap();
+        assert_eq!((v["codec_s11"].as_str(), v["codec_s21"].as_str()), (Some("hw:A,"), Some("hw:B,")));
+
+        // The sound server lists a codec: a warning with the fix, not an error.
+        let mut exposed = Sim::healthy();
+        exposed.exposure = vnwa_open::sound_server::Exposure::Exposed(vec![
+            vnwa_open::sound_server::Card {
+                description: "USB Audio CODEC".into(),
+                port: Some("2.2.2".into()),
+                id: Some(77),
+            },
+        ]);
+        let v = status(&Config::default(), &exposed).unwrap();
+        assert_eq!(v["codecs_protected_from_sound_server"], false);
+        assert!(v["codecs_protection_warning"].as_str().unwrap().contains("wpctl set-profile"), "{v}");
+        assert_eq!(v["codecs_protection_detail"]["exposed_cards"][0]["sound_server_id"], 77);
+    }
+
+    // Tests [@ANCHOR: bench_vna_sweep]
+    #[test]
+    fn a_sweep_measures_the_points_and_writes_the_csv_with_a_simulated_unit() {
+        let dir = crate::testdir::TestDir::new("bench_vna_sweep");
+        let sim = Sim::healthy();
+        let args = json!({"start_hz": 1e6, "stop_hz": 3e6, "points": 3, "point_ms": 5});
+        let v = vna_sweep_ok(&sim, &args, &dir);
+        assert_eq!(v["points"], 3);
+        assert_eq!(v["calibrated"], false);
+        assert_eq!(v["recovery"]["power_cycles"], 0);
+        assert_eq!(v["rows"].as_array().unwrap().len(), 3);
+        let r = &v["rows"][1];
+        assert_eq!(r["freq_hz"], 2e6);
+        assert!(r["s21_db"].as_f64().unwrap().abs() < 0.2, "{r}");
+        assert!((r["s11_db"].as_f64().unwrap() + 6.02).abs() < 0.2, "{r}");
+        let csv = std::fs::read_to_string(v["file"].as_str().unwrap()).unwrap();
+        assert_eq!(csv.lines().count(), 4, "{csv}");
+
+        // A calibration needs the text of the cable it was made with.
+        let with_cal = json!({"start_hz": 1e6, "points": 1, "point_ms": 5, "calibration": "/nonexistent.json"});
+        let e = sweep(&Config::default(), &with_cal, &dir, &sim).unwrap_err();
+        assert!(e.contains("cable is required with calibration"), "{e}");
+
+        // Bad arguments never open the unit; a unit that cannot be opened is the error.
+        let before = sim.vna_opens.get();
+        assert!(sweep(&Config::default(), &json!({}), &dir, &sim).is_err());
+        assert_eq!(sim.vna_opens.get(), before);
+        let mut gone = Sim::healthy();
+        gone.usb = false;
+        assert_eq!(sweep(&Config::default(), &args, &dir, &gone).unwrap_err(), "no VNWA on the bus");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn vna_sweep_ok(sim: &Sim, args: &Value, dir: &crate::testdir::TestDir) -> Value {
+        sweep(&Config::default(), args, dir, sim).unwrap()
     }
 }
