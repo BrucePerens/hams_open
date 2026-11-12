@@ -220,6 +220,7 @@ fn fifi_write(index: u16, data: Vec<u8>) -> (UsbTransfer, ReplyKind, Pending) {
     )
 }
 
+// [@ANCHOR: radioctl_si570_usb_fifi_mode_code]
 fn fifi_mode_code(mode: Mode) -> Option<u8> {
     match mode {
         Mode::Lsb => Some(0),
@@ -486,6 +487,7 @@ impl ProtocolEngine for Si570UsbEngine {
         }]
     }
 
+    // [@ANCHOR: radioctl_si570_usb_engine_link_restored]
     fn link_restored(&mut self) -> Vec<Request> {
         self.pending = Pending::Nothing;
         self.rx.clear();

@@ -237,6 +237,17 @@ fn the_si570_engine_encodes_the_documented_requests() {
     assert!(radioctl_protocols::usb_family::engine_for(&by_id("fifi-sdr")).is_ok());
 }
 
+// Tests [@ANCHOR: radioctl_si570_usb_engine_link_restored]
+#[test]
+fn after_a_reopened_link_the_si570_engine_repeats_its_open_requests() {
+    use radioctl_core::engine::ProtocolEngine;
+    let mut fifi = Si570UsbEngine::new(by_id("fifi-sdr")).expect("engine");
+    let first: Vec<Vec<u8>> = fifi.open_requests().into_iter().map(|r| r.bytes).collect();
+    let again: Vec<Vec<u8>> = fifi.link_restored().into_iter().map(|r| r.bytes).collect();
+    assert!(!first.is_empty());
+    assert_eq!(first, again);
+}
+
 // Tests [@ANCHOR: radioctl_si570_usb_twin_new]
 // Tests [@ANCHOR: radioctl_si570_usb_twin_ptt]
 // Tests [@ANCHOR: radioctl_si570_usb_twin_control]
@@ -686,6 +697,7 @@ async fn the_loader_backend_loads_the_users_firmware_on_open_and_names_a_missing
     assert!(error.detail.contains("fx2.hex"), "{}", error.detail);
 }
 
+// Tests [@ANCHOR: radioctl_si570_usb_fifi_mode_code]
 // Tests [@ANCHOR: radioctl_si570_usb_fifi_answer]
 // Tests [@ANCHOR: radioctl_si570_usb_engine_open_requests]
 #[tokio::test]

@@ -67,6 +67,7 @@ struct PinVerifier {
 }
 
 impl ServerCertVerifier for PinVerifier {
+    // [@ANCHOR: radioctl_station_tls_verify_server_cert]
     fn verify_server_cert(
         &self,
         end_entity: &CertificateDer<'_>,
@@ -210,6 +211,25 @@ mod tests {
             pin_sha256: Some("ab".repeat(32)),
         };
         assert!(connector(&pin).is_ok());
+    }
+
+    // Tests [@ANCHOR: radioctl_station_tls_verify_server_cert]
+    #[test]
+    fn only_the_pinned_certificate_is_accepted() {
+        let cert = CertificateDer::from(b"a fake certificate, only its hash matters".to_vec());
+        let verifier = PinVerifier {
+            pin: Sha256::digest(cert.as_ref()).into(),
+            provider: Arc::new(ring::default_provider()),
+        };
+        let name = server_name("192.168.1.20".parse().expect("ip"));
+        let now = UnixTime::since_unix_epoch(std::time::Duration::from_secs(0));
+        assert!(verifier
+            .verify_server_cert(&cert, &[], &name, &[], now)
+            .is_ok());
+        let other = CertificateDer::from(b"some other certificate".to_vec());
+        assert!(verifier
+            .verify_server_cert(&other, &[], &name, &[], now)
+            .is_err());
     }
 
     // Tests [@ANCHOR: radioctl_station_tls_server_name]
