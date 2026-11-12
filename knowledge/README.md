@@ -70,17 +70,19 @@ Inherits from `mail.thread`, `mail.activity.mixin`, `website.published.mixin`, `
 ## 3. Core Features & Logic
 *   **Article Feedback:** Atomic helpfulness increments: a single SQL `UPDATE ... SET helpful_count = COALESCE(helpful_count, 0) + 1` (or `unhelpful_count`) executed on the request's database cursor after a read-access check on the article, so concurrent votes cannot overwrite each other. The controller also resolves the Knowledge service account's environment, but the SQL statement itself is not subject to Odoo access rules. (`data/procedures.xml` also installs a `knowledge_increment_helpful()` Postgres function, but the controller does not call it.) `[@ANCHOR: controller_manual_feedback]`.
 
-*   **Search Engine:** Case-insensitive substring (`ilike`) search over title and body, with multi-tenant filtering `[@ANCHOR: controller_manual_search]`.
+*   **Search Engine:** `manual_search(search="")` on `/manual/search` (public, website route). It builds the Help domain (published member manuals plus articles shared with the reader by name, and the website filter), adds a case-insensitive substring match (`ilike`) on title or body when a term is given, and returns at most 1000 articles rendered with `knowledge.search_results_template` and the sidebar context. It is not a ranked full-text index, an empty term lists every article the reader may see, and it never raises for a term: the ORM applies the record rules. `[@ANCHOR: controller_manual_search]`.
 
-*   **URL Resolution:** Dynamic slug generation including ID prefix `[@ANCHOR: manual_compute_website_url]`.
+*   **URL Resolution:** `_compute_website_url` (depends on `name`) calls the website mixin first, then for a saved article lowercases the name, folds accents to ASCII with NFKD (dropping any character that has none), turns each run of non-alphanumerics into one hyphen, strips hyphens from the ends and returns `/manual/<id>-<safe-name>`; an unsaved record gets an empty URL. "API Documentation v2.0 (Alpha)!" becomes `/manual/<id>-api-documentation-v2-0-alpha`. The controller reads only the number before the first hyphen, so a renamed article's old URL still resolves. `[@ANCHOR: manual_compute_website_url]`.
 
-*   **Hierarchy Integrity:** Recursive cycle detection using `_has_cycle()` `[@ANCHOR: manual_check_hierarchy]`.
+*   **Hierarchy Integrity:** `_check_hierarchy` is an `api.constrains("parent_id")` check on `knowledge.article`. It calls the ORM's `_has_cycle()` and, when an article would become its own ancestor (A, then B under A, then C under B, then A moved under C), raises `ValidationError` ("You cannot create recursive articles.") so the write is rolled back. It takes no arguments, returns nothing and writes nothing. `[@ANCHOR: manual_check_hierarchy]`.
 
-*   **Recursive Breadcrumbs:** Path computation from root to current node; archived ancestors and ancestors the viewer cannot read are left out `[@ANCHOR: manual_compute_breadcrumbs]`.
+*   **Recursive Breadcrumbs:** `_compute_breadcrumb_article_ids` (depends on `parent_id`) fills `breadcrumb_article_ids` with the path from the root to the article's parent. One recursive SQL query walks the ancestors of all records at once, to a depth of 50 (a guard against a cycle that slipped in), ordered root first; the ids are then re-read through an ORM `search()` so an archived ancestor, or one the viewer's record rules hide, is dropped instead of being shown or raising an access error. An unsaved record walks `parent_id` in Python and stops at the first ancestor it may not read. `[@ANCHOR: manual_compute_breadcrumbs]`.
 
-*   **Reading Time Calculation:** Automatic estimation of reading time based on word count `[@ANCHOR: manual_compute_reading_time]`.
+*   **Reading Time Calculation:** `_compute_reading_time` (depends on `body`) turns the HTML body into plain text with Odoo's `html2plaintext`, counts the words and stores `max(1, round(words / 200))` minutes (200 words per minute); an article with no body gets 0. No I/O beyond the field read. Tests: `tests/test_ui_enhancements.py` `[@ANCHOR: manual_compute_reading_time]`.
+
 *   **Author Attribution:** Automatically identifies and displays the article author based on the last editor.
-*   **Optimized Sidebar Search:** Combined ORM domain to fetch all root articles in a single database round-trip `[@ANCHOR: manual_sidebar_search_optimization]`.
+
+*   **Optimized Sidebar Search:** `_get_sidebar_articles` fetches the root articles of the sidebar with one combined domain (no parent, the Help domain, and for non-managers the permission, shared-member or own-private clause) limited to 5000 records, then splits the one result in memory into workspace, shared and private lists, instead of three separate database round-trips. A Manual Administrator skips the permission clause. Tests: `tests/test_controllers.py` `[@ANCHOR: manual_sidebar_search_optimization]`.
 
 ## 4. Detailed Method Reference
 
