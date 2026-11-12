@@ -2,6 +2,7 @@
 import logging
 
 from odoo import api, fields, models
+from odoo.addons.zero_sudo import public_rpc
 
 
 _logger = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ class ResConfigSettings(models.TransientModel):
                 })
         return res
 
+    @public_rpc
     def set_values(self):
         # [@ANCHOR: hams_s3_set_values]
         super(ResConfigSettings, self).set_values()
