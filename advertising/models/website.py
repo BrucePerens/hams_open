@@ -3,6 +3,7 @@
 from odoo import fields, models
 
 
+# [@ANCHOR: advertising_website_website]
 class Website(models.Model):
     _inherit = "website"
     # This model is multi-tenant and multi-website, matching caching's own

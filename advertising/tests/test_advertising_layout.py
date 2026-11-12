@@ -61,6 +61,8 @@ class TestAdvertisingLayout(HamsHttpCase):
         self.assertNotIn("adsense_loader", response.text)
         self.assertNotIn("advertising_footer_slot", response.text)
 
+    # Tests [@ANCHOR: advertising_website_website]
+    # Tests [@ANCHOR: advertising_res_config_settings_res_config_settings]
     def test_02_client_id_alone_loads_script_but_no_footer_slot(self):
         # Tests [@ANCHOR: xpath_rendering_advertising_head]
         self.website.google_adsense_client_id = "ca-pub-1234567890123456"
