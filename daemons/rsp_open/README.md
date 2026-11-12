@@ -328,13 +328,36 @@ Converts the user's reference-oscillator correction from parts per million to th
 
 Builds the 20-bit payload of MSi001 register r0: bits 19:17 select the first-LO plan, bits 16:14 the IF bandwidth code, bits 13:12 the IF mode code, bits 11:4 the band-mode byte. The plan bits are 2 for the 120 MHz first IF and for every non-AM mode (the `Direct`, `UpBy120M` and `DownBy120M` plans), 1 for `DownBy144M` and 0 for `DownBy168M`. Arguments are by value (`mode_byte` from `mode_byte()`, `plan` from the band, `if_mode` and `bw` from the current settings). The result is a payload to be wrapped by `tuner_word(0, ...)`; `r0()` is the same call with `LoPlan::Direct`. No errors, no I/O. Test: `device.rs::first_if_plan_bits_follow_the_band_in_375_to_420_mhz`.
 
-- [@ANCHOR: rsp_open:rsp_device_rsp_open_auto] Opens whichever supported receiver is present: a running one if there is one, otherwise the first cold one.
-- [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_with] Opens the first receiver in the boot-ROM state (bcdDevice 2.00) and drives it without any firmware.
-- [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_model_with] As above, but only a receiver of one model (RSP2pro, RSP1A or RSP1), so a second receiver on the bus is not driven by mistake.
-- [@ANCHOR: rsp_open:rsp_device_rsp_need_board] Refuses a board control (antenna, notch, bias-T, reference output) in boot-ROM mode, where the board is not reachable.
-- [@ANCHOR: rsp_open:rsp_device_rsp_set_notch] Switches the broadcast notch; `Error::Unsupported` in boot-ROM mode.
-- [@ANCHOR: rsp_open:rsp_device_rsp_set_bias_t] Switches the bias-T (off at open, active low on the board); `Error::Unsupported` in boot-ROM mode.
-- [@ANCHOR: rsp_open:rsp_device_sampleiter_next_chunk] The next sample chunk, or `Error::Stalled` when nothing arrived within the timeout, or `Error::Stream` when the stream ended.
+### `pub fn open_auto(settings: Settings) -> Result<Rsp, Error>` [@ANCHOR: rsp_open:rsp_device_rsp_open_auto]
+
+Opens whichever supported receiver is present, so a caller need not know whether SDRplay's software ever ran. It lists SDRplay-vendor devices (descriptors only): if any supported model (RSP2pro 0x3010, RSP1A 0x3000) is in the running state (bcdDevice 2.07) it calls `open_with`; if none is running but one in the boot-ROM state (2.00, including the RSP1) exists it calls `open_boot_rom_with`; if there are neither it falls to `open_with`, which reports `NotFound` or `UnsupportedModel`. `settings` is the initial configuration (`Settings::default()` is 100 MHz, zero IF, 2 MHz ADC clock). Errors are those of the delegate, plus `Usb` from listing. A running receiver is preferred over a cold one. Nothing is sent to devices that are not opened. Test: `hil.rs::hil_open_auto` (hardware).
+
+### `pub fn open_boot_rom_with(settings: Settings) -> Result<Rsp, Error>` / private `open_boot_rom_filtered` [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_with]
+
+Opens the first receiver in the boot-ROM personality (bcdDevice 2.00, no firmware loaded) and drives it with no firmware: the ROM already handles register writes, start/stop and the isochronous stream (PROTOCOL.md 5). The anchor sits in `open_boot_rom_filtered(only_pid, settings)`, which both this function (no filter) and `open_boot_rom_model_with` (one product ID) call. It lists devices, takes the first with a boot-ROM PID (0x3010, 0x3000, 0x2500) at 2.00, opens it with `UsbTransport::open` (which refuses a device whose kernel node is in use), re-checks the opened descriptor, reads the serial and runs `with_transport_boot_rom` with a 300 ms settle time. In this mode requests 0x48 and 0x49 are never sent, so antenna, notch, bias-T, reference output and front-end steps cannot be set.
+
+Errors: `NotFound` when no cold receiver exists, `UnknownState` if the opened device is no longer at 2.00, plus those of `UsbTransport::open` and the open sequence. It sends no firmware download or reset. Test: `hil.rs::hil_boot_rom_reference_spurs` (hardware).
+
+### `pub fn open_boot_rom_model_with(model: Model, settings: Settings) -> Result<Rsp, Error>` [@ANCHOR: rsp_open:rsp_device_rsp_open_boot_rom_model_with]
+
+As `open_boot_rom_with` but restricted to one model, so on a bus with several receivers a different one is not driven by mistake. `model` must be `Model::Rsp2` (PID 0x3010), `Model::Rsp1a` (0x3000) or `Model::Rsp1` (0x2500, which this crate drives only in this cold mode); any other model returns `Error::UnsupportedModel { pid: 0, name }` before the bus is touched. It then calls `open_boot_rom_filtered(Some(pid), settings)`. Other errors and the board-control limits are those of `open_boot_rom_with`. Tests: `hil.rs::hil_boot_rom_rsp1_reference_spurs`, `hil_boot_rom_rsp1a_reference_spurs` (hardware).
+
+### `fn need_board(&self, what: &str) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_need_board]
+
+Guard for operations that need the board expander: returns `Error::Unsupported("<what> needs the board expander (request 0x49), which the boot ROM does not answer")` in boot-ROM mode and `Ok(())` otherwise. `what` is a short phrase for the message ("the notch", "the bias-T", "the DAB notch", "the reference output"). It is called first by `set_notch`, `set_dab_notch`, `set_bias_t` and `set_ext_ref_out`, so in boot-ROM mode no cached setting changes and nothing is sent. Pure read of a flag. Test: `device.rs::boot_rom_sends_no_board_or_0x48_requests`.
+
+### `pub fn set_notch(&mut self, on: bool) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_set_notch]
+
+Switches the broadcast notch: the RSP2pro's MW/FM notch or the RSP1A's FM/MW notch; `on = true` enables it. It checks the board is reachable (`need_board`), caches the new flag, writes port B (`front_byte`) and restores the old flag if the write fails, so the cache always reflects what the hardware accepted. Error: `Error::Unsupported` in boot-ROM mode, or the transport's `Error::Usb`. One request 0x49; allowed while streaming; no gap in the stream. Tests: `device.rs::boot_rom_sends_no_board_or_0x48_requests`, `a_failed_board_write_leaves_the_cached_settings_unchanged_on_the_rsp2`.
+
+### `pub fn set_bias_t(&mut self, on: bool) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_set_bias_t]
+
+Switches the bias-T, DC power for an active antenna on the antenna port (active low on both boards' port B bit). It is off at open and the open functions refuse `bias_t = true`; nothing in the tests or examples turns it on, because no antenna was ever connected. Safety: a wrong DC on the port can damage equipment, so the cached flag is restored when the write fails, preventing a later full tune from building port B with a bias-T value the hardware never accepted. Error: `Error::Unsupported` in boot-ROM mode or the transport's `Error::Usb`. One request 0x49. No transmitter is involved (receive-only crate). Tests: `device.rs::boot_rom_sends_no_board_or_0x48_requests`, `a_failed_board_write_leaves_the_cached_settings_unchanged_on_the_rsp2`.
+
+### `pub fn next_chunk(&mut self) -> Result<Vec<IqI16>, Error>` on `SampleIter` [@ANCHOR: rsp_open:rsp_device_sampleiter_next_chunk]
+
+Waits for the next chunk of samples from `start_stream_iter`. One chunk is the samples of one isochronous packet (up to 3 blocks). It blocks the calling thread for at most the iterator's timeout, fixed at 2 seconds. Returns `Ok(Vec<IqI16>)`; `Err(Error::Stalled { waited_ms: 2000 })` when nothing arrived in time (the receiver stopped delivering; the caller may keep waiting or close); `Err(Error::Stream("stream ended"))` when the producing side is gone, that is after `stop_stream` or close. Chunks are produced on the USB thread into a bounded channel; when the consumer is slower than the channel capacity chunks are dropped, counted by `SampleIter::dropped`. The plain `Iterator` implementation ends on either condition without telling which. Take `&mut self`: one consumer thread. Test: `device.rs::next_chunk_reports_a_stall_and_the_end`.
+
 ### `pub(crate) fn inspect_in(sys: &Path, dev: &Path, proc_: &Path, bus: u8, address: u8) -> Result<Option<KernelDriverUse>, Error>` [@ANCHOR: rsp_open:rsp_kernel_inspect_in]
 
 Finds out whether a kernel driver is bound to the receiver at `bus`/`address` and who uses its device nodes. `inspect` calls it with `/sys`, `/dev` and `/proc`; tests pass a fake tree. It reads only: it scans `sys/bus/usb/devices` for the device directory whose `busnum`/`devnum` match, follows the `<dev>:1.0/driver` symlink for the driver name, finds the nodes by following `sys/class/video4linux/*/device` back to the interface, then calls `holders_of`.
@@ -360,35 +383,158 @@ A counter mismatch increments `stats.gaps` and adds the distance to `stats.lost_
 
 Decodes the 1008-byte payload of one block to 16-bit left-aligned `IqI16` samples appended to `out`. S14: little-endian 16-bit words, I then Q, 14-bit signed, shifted left 2. S12: three bytes per pair, I the low 12 bits and Q the high 12, shifted left 4. S8: two signed bytes per pair, shifted left 8. S10x384: six groups of 164 bytes, each 16 runs of 10 bytes holding four I/Q pairs of 10-bit values plus a 32-bit word with a 2-bit scale per run (shift 4, 5 or 6); the last 24 bytes carry no samples. `p` must be exactly `PAYLOAD_LEN` (1008) bytes: a debug build asserts it and a shorter slice would panic in the group indexing; `push_packet` always passes the right length. Pure apart from the append. Tests: `stream.rs::s14_packet_with_gap`, `s12_decode`, `s384_decode`, `s8_decode`.
 
-- [@ANCHOR: rsp_open:rsp_dsp_fft] Radix-2 FFT used by the tests and examples.
-- [@ANCHOR: rsp_open:rsp_dsp_power_spectrum_db] Averaged, windowed power spectrum in dBFS.
-- [@ANCHOR: rsp_open:rsp_dsp_median] Median of a spectrum (noise-floor estimate).
-- [@ANCHOR: rsp_open:rsp_dsp_peak_near] Strongest spectral line near an expected offset, and its level over the floor.
-- [@ANCHOR: rsp_open:rsp_transport_mocktransport_vendor_in] Recording mock: answers request 0x48 as the device does.
-- [@ANCHOR: rsp_open:rsp_transport_mocktransport_start_iso] Recording mock: delivers queued packets when streaming starts.
-- [@ANCHOR: rsp_open:rsp_usb_context_new] Owned libusb context.
-- [@ANCHOR: rsp_open:rsp_usb_with_devices] Walks the USB device list reading descriptors only.
-- [@ANCHOR: rsp_open:rsp_usb_usbtransport_open] Opens and claims interface 0 of the selected device.
-- [@ANCHOR: rsp_open:rsp_usb_usbtransport_serial] Reads the serial-number string descriptor.
-- [@ANCHOR: rsp_open:rsp_usb_usbtransport_vendor_out] Vendor OUT request on EP0.
-- [@ANCHOR: rsp_open:rsp_usb_usbtransport_vendor_in] Vendor IN request on EP0.
-- [@ANCHOR: rsp_open:rsp_usb_usbtransport_set_alt] SET_INTERFACE, refusing the bulk alternate setting 3.
-- [@ANCHOR: rsp_open:rsp_usb_usbtransport_start_iso] Submits isochronous transfers and runs the USB event thread.
-- [@ANCHOR: rsp_open:rsp_usb_iso_callback] Per-transfer completion: delivers packets, resubmits while running.
-- [@ANCHOR: rsp_open:rsp_usb_usbtransport_stop_iso] Cancels the transfers, joins the event thread, frees the transfers.
-- [@ANCHOR: rsp_open:rsp_usb_usbtransport_release] Releases the interface and closes the device.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_open_with] Finds the first RSP2/RSP2pro or RSP1A, checks its state from the descriptor, opens it.
-- [@ANCHOR: rsp_open:rsp_device_rsp_open_model_with] Opens the first device of one given model.
-- [@ANCHOR: rsp_open:rsp_device_rsp_open_device] Checks the state, opens and claims the device, re-checks, runs the open sequence.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_with_transport] Runs the RSP2/RSP2pro open sequence on a transport.
-- [@ANCHOR: rsp_open:rsp_device_rsp_with_transport_model] Validates the settings for a model and runs the open sequence on a transport.
+### `pub fn fft(re: &mut [f64], im: &mut [f64])` [@ANCHOR: rsp_open:rsp_dsp_fft]
+
+In-place radix-2 decimation-in-time FFT over separate real and imaginary arrays, used by the unit tests and the examples (`rsp_spectrum`, `rsp_measure`), not by the driver itself. The forward transform uses the `e^(-j...)` convention and no scaling (a unit tone of N samples gives a bin of magnitude N).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `re` | `&mut [f64]` | real parts, replaced by the transform; length a power of two |
+| `im` | `&mut [f64]` | imaginary parts, same length as `re`, replaced |
+
+Returns nothing. Panics (an `assert!`) when the length is not a power of two or the two slices differ in length. The twiddle factors are advanced by repeated multiplication, which is accurate enough for 2^16-point test spectra but is not a general-purpose library routine. Pure compute, no locks or I/O. Test: `dsp.rs::tone_lands_in_right_bin`.
+
+### `pub fn power_spectrum_db(x: &[IqI16], n: usize) -> Vec<f64>` [@ANCHOR: rsp_open:rsp_dsp_power_spectrum_db]
+
+Computes an averaged power spectrum of captured samples in dB relative to full scale. It removes the DC mean of the whole capture, splits `x` into `x.len() / n` non-overlapping segments, applies a Hann window to each, runs `fft`, sums the power and normalises by the window sum, so a full-scale complex tone reads about 0 dB. The result is FFT-shifted: element `n/2` is 0 Hz, element 0 is -fs/2.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `x` | `&[IqI16]` | samples, at least `n` of them; the I/Q values are scaled by 1/32768 |
+| `n` | `usize` | segment and FFT size, a power of two |
+
+Returns `n` values in dB, floored at -300 dB (power clamped to 1e-30). Panics if `n` is not a power of two or `x` is shorter than `n`. Trailing samples that do not fill a segment are ignored. Pure compute. Test: `dsp.rs::tone_lands_in_right_bin`.
+
+### `pub fn median(v: &[f64]) -> f64` [@ANCHOR: rsp_open:rsp_dsp_median]
+
+Returns the median of a slice (the element at index `len/2` of a sorted copy, so the upper middle for even lengths). `peak_near` uses it as the noise-floor estimate of a spectrum, which is robust against a few strong lines. `v` is borrowed and copied before sorting. Panics when `v` is empty (index out of range) or contains NaN (the comparison unwraps); callers pass the output of `power_spectrum_db`, which has neither. Cost is O(n log n). Test: `dsp.rs::tone_lands_in_right_bin`.
+
+### `pub fn peak_near(spec_db: &[f64], fs: f64, offset_hz: f64, half_width_hz: f64, exclude_dc_hz: f64) -> (f64, f64, f64)` [@ANCHOR: rsp_open:rsp_dsp_peak_near]
+
+Finds the strongest spectral line close to an expected offset, for the hardware tests that look for the receiver's own 24 MHz reference harmonics.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `spec_db` | `&[f64]` | FFT-shifted spectrum from `power_spectrum_db`, dB |
+| `fs` | `f64` | sample rate, Hz; bin width is `fs / len` |
+| `offset_hz` | `f64` | expected line offset from the tuned frequency, Hz |
+| `half_width_hz` | `f64` | search radius around `offset_hz`, Hz |
+| `exclude_dc_hz` | `f64` | bins within this many Hz of 0 are ignored (DC spur) |
+
+Returns `(peak offset in Hz, peak level in dB, level above the spectrum median in dB)`. If no bin qualifies the offset is 0.0 and the level is negative infinity. Panics only through `median` on an empty slice. Pure compute. Test: `dsp.rs::tone_lands_in_right_bin`.
+
+### `fn vendor_in(&mut self, req: u8, value: u16, index: u16, buf: &mut [u8]) -> Result<usize, Error>` on `MockTransport` [@ANCHOR: rsp_open:rsp_transport_mocktransport_vendor_in]
+
+Test double for the vendor IN request. It appends `Op::In { req, value, index, len }` to the shared log (`MockTransport::log`, an `Arc<Mutex<Vec<Op>>>`) and answers request 0x48, the one-byte read the real device does at open, with the single byte 0x04 (the RSP2pro's value; it returns `Ok(1)`). Any other request gets `Ok(0)` and an untouched buffer. It never fails. Tests use `MockTransport::ops()` to compare the exact request sequence against captured sequences. It is a test aid and is not used on the real USB path. Test: `device.rs::open_sequence_matches_api_capture`.
+
+### `fn start_iso(&mut self, sink: PacketSink) -> Result<(), Error>` on `MockTransport` [@ANCHOR: rsp_open:rsp_transport_mocktransport_start_iso]
+
+Test double for starting the isochronous stream. It logs `Op::IsoStart` and then, synchronously on the caller's thread, drains every packet queued earlier with `queue_packet` and passes each to `sink` in order; after that no more packets arrive. `sink` is the `PacketSink` closure the driver supplies (normally run on the USB event thread, here run inline, so the user callback and the statistics are updated before `start_iso` returns). Always returns `Ok(())`. There is no timing or flow control; `stop_iso` only logs `Op::IsoStop`. Test: `device.rs::streaming_and_close`.
+
+### `fn Context::new() -> Result<Arc<Context>, Error>` [@ANCHOR: rsp_open:rsp_usb_context_new]
+
+Creates the owned libusb context that every USB operation hangs off: it calls `libusb_init` and wraps the raw pointer in a private `Context` newtype that is `Send + Sync` (libusb contexts are thread-safe) and calls `libusb_exit` when the last `Arc` is dropped. Returns `Arc<Context>`. Error: `Error::Usb { what: "libusb_init", code, name }` when initialisation fails (no USB subsystem, out of memory). Each `list_devices` call and each `UsbTransport` gets its own context, so a transport keeps its context alive for the event thread. No device is touched. Test: `hil.rs::hil_vhf_reference_spurs` (hardware).
+
+### `fn with_devices<T>(ctx: &Context, f: impl FnMut(*mut libusb_device, &libusb_device_descriptor) -> Option<T>) -> Result<Vec<T>, Error>` [@ANCHOR: rsp_open:rsp_usb_with_devices]
+
+Walks the system's USB device list and calls `f` with each device and its descriptor; every `Some(v)` is collected into the result. Only descriptors are read (`libusb_get_device_descriptor`): nothing is opened, no control transfer is sent, so enumerating is safe for devices that another program is using. A device whose descriptor cannot be read is skipped. The libusb list is freed before returning; a closure that wants to keep a device (as `UsbTransport::open` does) must take its own reference with `libusb_ref_device`. Error: `Error::Usb` when `libusb_get_device_list` fails. Callers: `list_devices` and `UsbTransport::open`. Test: `hil.rs::hil_vhf_reference_spurs`.
+
+### `pub fn open(pid: u16, at: Option<(u8, u8)>) -> Result<UsbTransport, Error>` on `UsbTransport` [@ANCHOR: rsp_open:rsp_usb_usbtransport_open]
+
+Opens one receiver and claims its interface 0. Only descriptors are read before the caller has checked the device state (`check_state`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `pid` | `u16` | USB product ID to match (vendor must be 1df7) |
+| `at` | `Option<(u8, u8)>` | `(bus, address)` to open that exact device; `None` takes the first match |
+
+Returns a `UsbTransport` with `info` filled from the descriptor, alt setting 0 and no stream. Errors: `NotFound` when nothing matches; `KernelDriverInUse` when the Linux `msi2500` driver is bound and a program has its `/dev/swradio*` node open (checked with `kernel::inspect`, so the receiver is not taken from under a user); `Usb` for `libusb_open` or `libusb_claim_interface` failures (for example no permission). It asks libusb to detach an idle kernel driver automatically and reattach it on close. Blocking, thread-safe, no locks held afterwards. It does not reset the device. Test: `hil.rs::hil_vhf_reference_spurs`.
+
+### `pub fn serial(&self) -> Option<String>` on `UsbTransport` [@ANCHOR: rsp_open:rsp_usb_usbtransport_serial]
+
+Reads string descriptor 1 (the serial number) as ASCII, at most 64 bytes. Returns `None` when the read fails or yields nothing, which is normal for a boot-ROM receiver, whose descriptor has no serial; a running device returns it. It is one standard control transfer (GET_DESCRIPTOR), done once at open, and it only reads. The value is informational (stored in `Rsp::serial`), is not secret, and is not checked against anything. Test: `hil.rs::hil_vhf_reference_spurs`.
+
+### `fn vendor_out(&mut self, request: u8, value: u16, index: u16) -> Result<(), Error>` on `UsbTransport` [@ANCHOR: rsp_open:rsp_usb_usbtransport_vendor_out]
+
+Sends a vendor OUT control request on endpoint 0 (bmRequestType 0x40) with no data stage and a 1000 ms timeout. This is how every register write (request 0x41 with `reg_write_args`), start (0x43), stop (0x45) and board write (0x49 with `board_write_args`) reaches the device. The driver never sends 0x40, 0x42, 0x44, 0x46 or 0x47 (see Provenance). Blocking: it returns when the device has accepted the transfer. Error: `Error::Usb { what: "vendor OUT 0x..", code, name }` for any negative libusb result (timeout, stall, device gone). Needs `&mut self`, so the `Rsp` serialises calls; it is not called from the USB event thread. Test: `hil.rs::hil_vhf_reference_spurs`.
+
+### `fn vendor_in(&mut self, request: u8, value: u16, index: u16, buf: &mut [u8]) -> Result<usize, Error>` on `UsbTransport` [@ANCHOR: rsp_open:rsp_usb_usbtransport_vendor_in]
+
+Sends a vendor IN control request on endpoint 0 (bmRequestType 0xc0), reading up to `buf.len()` bytes into `buf` with a 1000 ms timeout. The only request the driver issues this way is 0x48, a one-byte read at open whose meaning is unknown (stored in `Rsp::read48`, recorded only; to-do: identify it). Returns the number of bytes the device sent. Error: `Error::Usb { what: "vendor IN 0x..", code, name }` on a negative libusb result. Blocking; the boot-ROM personality does not answer 0x48, so `Rsp` skips it there. Test: `hil.rs::hil_vhf_reference_spurs`.
+
+### `fn set_alt(&mut self, alt: u8) -> Result<(), Error>` on `UsbTransport` [@ANCHOR: rsp_open:rsp_usb_usbtransport_set_alt]
+
+Issues SET_INTERFACE for interface 0 with the given alternate setting and remembers it in `self.alt` (which `start_iso` uses to size packets). Alt 0 is idle, alt 1 the three-blocks-per-microframe isochronous endpoint and alt 2 the one-block endpoint. Alt 3, the bulk setting, and any value above 2 is refused with `Error::Unsupported` before anything is sent, because the driver never uses it. A libusb failure gives `Error::Usb { what: "set_interface_alt_setting", .. }`. Must not be called while a stream runs; `Rsp` stops the stream first (STOP, alt change, restart). Blocking. Tests: `hil.rs::hil_live_reconfiguration`, `hil_vhf_reference_spurs`.
+
+### `fn start_iso(&mut self, sink: PacketSink) -> Result<(), Error>` on `UsbTransport` [@ANCHOR: rsp_open:rsp_usb_usbtransport_start_iso]
+
+Starts isochronous reception on endpoint 0x81. It allocates 16 transfers of 32 packets each (packet length 3072 bytes in alt 1, 1024 in alt 2), submits them all, and spawns the `rsp_open-usb` thread that runs `libusb_handle_events_timeout_completed` in 50 ms steps until the transfers have ended. `sink` (a boxed `FnMut(&[u8]) + Send`) is called from that thread for every packet with data, under a mutex, so it must not block for long and must not call back into the transport.
+
+Errors: `InvalidArgument` if a stream is already running or the alt setting has no isochronous endpoint (alt 0); `Usb` if a transfer submit fails; `InvalidArgument("cannot start USB thread")`. On a failure after allocation the partly started stream is torn down with `stop_iso`. The START request (0x43) is sent separately by the caller after this returns. Tests: `hil.rs::hil_live_reconfiguration`, `hil_vhf_reference_spurs`.
+
+### `extern "system" fn iso_callback(t: *mut libusb_transfer)` [@ANCHOR: rsp_open:rsp_usb_iso_callback]
+
+libusb's per-transfer completion callback, run on the USB event thread. For a completed transfer it locks the shared sink mutex and hands every packet with a good status and non-zero length to the sink; packets with an error status are counted in the shared `packet_errors` counter (read by `UsbTransport::packet_errors`) and skipped. It then resubmits the transfer while the `running` flag is set and the status is neither cancelled nor no-device, so the 16 transfers keep the endpoint busy; if it does not resubmit (stopped, cancelled, device removed, or the resubmit fails) it decrements the `active` count that `stop_iso` waits on. `unsafe`: it trusts libusb's pointers, and the `Shared` structure behind `user_data` must outlive all transfers (which `stop_iso` guarantees by leaking it when transfers are still pending). It never panics across the FFI boundary and returns nothing. Test: `hil.rs::hil_vhf_reference_spurs`.
+
+### `fn stop_iso(&mut self) -> Result<(), Error>` on `UsbTransport` [@ANCHOR: rsp_open:rsp_usb_usbtransport_stop_iso]
+
+Stops the isochronous stream: clears the `running` flag, cancels every transfer, joins the USB event thread (which itself gives up after 3 seconds), and frees the transfers when none is still owned by libusb. Returns `Ok(())` at once when no stream is running, so it is safe to call twice. Error: `Error::Stream("isochronous transfers did not finish cancelling")` when some transfer is still pending after the join; the buffers and shared state are then leaked deliberately rather than freed under the kernel, and the caller treats the receiver as unusable. Blocking for up to the event thread's wait; do not call it from the sink. The STOP request (0x45) is sent by `Rsp::stop_stream` before this. Tests: `hil.rs::hil_live_reconfiguration`, `hil_vhf_reference_spurs`.
+
+### `fn release(&mut self) -> Result<(), Error>` on `UsbTransport` [@ANCHOR: rsp_open:rsp_usb_usbtransport_release]
+
+Ends the session: stops any stream (`stop_iso`, propagating its error), releases interface 0 and closes the handle, which lets libusb reattach a kernel driver it detached. It is idempotent: a `released` flag makes later calls (including the `Drop` implementation, which calls it and ignores the result) return `Ok(())` at once. Error: `Error::Usb { what: "release_interface", .. }` for a libusb failure, except that "no device" (the receiver was unplugged) counts as success. It never sends a USB reset. Blocking, called from the thread that owns the `Rsp`. Test: `hil.rs::hil_vhf_reference_spurs`.
+
+### `pub fn open_with(settings: Settings) -> Result<Rsp, Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_open_with]
+
+Opens the first running RSP2/RSP2pro or RSP1A on the bus (`open()` is this call with default settings). It lists devices by descriptor, picks the first with a supported PID and calls `open_device`, which checks the state before opening. If no supported device is present but another SDRplay device is, it returns `Error::UnsupportedModel` naming that product; with no SDRplay device at all, `Error::NotFound`. A boot-ROM device gives `Error::NotRunning` (use `open_boot_rom_with` or `open_auto` instead). Settings are validated by the open sequence (`with_transport_model`). Blocking for the open sequence and the 300 ms settle. Test: exercised through `open_model_with` in `hil.rs::hil_rsp1a_reference_spurs`.
+
+### `pub fn open_model_with(model: Model, settings: Settings) -> Result<Rsp, Error>` [@ANCHOR: rsp_open:rsp_device_rsp_open_model_with]
+
+Opens the first running receiver of one model: `Model::Rsp2` (the RSP2 and RSP2pro) or `Model::Rsp1a`. Other models fail with `Error::UnsupportedModel { pid: 0, name }`. It lists devices, finds the first with that PID (`NotFound` if none) and calls `open_device`, so a boot-ROM unit of that model gives `NotRunning`. Use it when two different receivers may be on the bus. `settings` as for `open_with`. Test: `hil.rs::hil_rsp1a_reference_spurs` (hardware).
+
+### `fn open_device(pid: u16, bus: u8, address: u8, bcd_device: u16, settings: Settings) -> Result<Rsp, Error>` [@ANCHOR: rsp_open:rsp_device_rsp_open_device]
+
+Private core of the running-device openers. The arguments (from the descriptor listing) identify the device: product ID, bus number, address and bcdDevice. It runs `check_state` on them before anything is opened, opens and claims the device with `UsbTransport::open` at that bus and address, runs `check_state` again on the opened handle's descriptor (the device may have re-enumerated between listing and opening), reads the serial, and builds the receiver with `with_transport_model` using a 300 ms settle time. Errors: those of `check_state`, `UsbTransport::open` (including `KernelDriverInUse`) and the open sequence. Test: `hil.rs::hil_rsp1a_reference_spurs` (hardware).
+
+### `pub fn with_transport(t: T, settings: Settings, settle: Duration) -> Result<Rsp<T>, Error>` [@ANCHOR: rsp_open:rsp_device_rsp2_with_transport]
+
+Builds an `Rsp2pro` receiver on any `Transport` (typically `MockTransport` in tests) whose device state the caller has already checked, and sends the open sequence. It is `with_transport_model(t, Model::Rsp2, settings, settle)`. `t` is taken by value and owned by the receiver; `settle` is the pause the open sequence makes while the hardware stabilises (300 ms for real devices, zero for mocks). Errors are those of `with_transport_model`. It does no state check of its own. Tests: `device.rs::open_sequence_matches_api_capture`, `open_sequence_matches_rsp2verify`, `refuses_bias_t_at_open_and_unsupported_band`.
+
+### `fn with_transport_state(t: T, model: Model, settings: Settings, settle: Duration, boot_rom: bool) -> Result<Rsp<T>, Error>` (behind `with_transport_model` and `with_transport_boot_rom`) [@ANCHOR: rsp_open:rsp_device_rsp_with_transport_model]
+
+Validates settings for a model, then runs the open sequence on a transport. The public wrappers pass `boot_rom` false (`with_transport_model`) or true (`with_transport_boot_rom`, which skips requests 0x48 and 0x49).
+
+| Check | Error |
+|---|---|
+| model is `Rsp2` or `Rsp1a` (or `Rsp1` in boot-ROM mode) | `UnsupportedModel` |
+| `settings.bias_t` is false | `InvalidArgument` (bias-T is never on at open) |
+| frequency inside a band (`model_band`) | `InvalidArgument` |
+| antenna allowed (`check_antenna`) and model options (`check_model_options`) | `Unsupported` / `InvalidArgument` |
+| stream config exists for ADC clock and IF mode | `InvalidArgument` / `Unsupported` |
+| LNA state below the table length for this band | `InvalidArgument` |
+| IF gain reduction at most 59 dB | `InvalidArgument` |
+
+The ppb correction is clamped to +-1 000 000. Then `init()` writes the open sequence; any failure of it is returned and the transport is dropped. No locks. Test: `device.rs::rsp1a_open_sequence_matches_api_capture`.
+
 - [@ANCHOR: rsp_open:rsp_device_model_band] The band table of a model.
 - [@ANCHOR: rsp_open:rsp_device_model_table] The LNA-state table of a model for a band and port.
 - [@ANCHOR: rsp_open:rsp_device_check_model_options] Refuses settings a model does not have (RSP1A reference output, RSP2pro DAB notch).
-- [@ANCHOR: rsp_open:rsp_device_rsp_band_byte] Port A value for the current model, band and LNA state.
-- [@ANCHOR: rsp_open:rsp_device_rsp_front_byte] Port B value for the current model, LNA state, notches and bias-T.
-- [@ANCHOR: rsp_open:rsp_device_rsp_transient_b] Port B value written between port A and the direction registers in a full tune.
-- [@ANCHOR: rsp_open:rsp_device_rsp_board] Board-expander write (request 0x49), remembering the last port-B value.
+### `fn band_byte(&self) -> u8` [@ANCHOR: rsp_open:rsp_device_rsp_band_byte]
+
+Computes the port A value (byte 0x12) for the current band, antenna and LNA state: on the RSP1A `rsp1a::board_a_byte(band.filter, step.board_step)` (filter plus attenuator step); on the RSP2pro `board_band_byte(band.filter, antenna, ext_ref_out)` (antenna, filter and reference-output bit). Pure read of cached state, no I/O, no errors. Called by the full tune, the gain write (RSP1A) and `set_ext_ref_out`. Test: `device.rs::rsp1a_open_sequence_matches_api_capture`.
+
+### `fn front_byte(&self) -> u8` [@ANCHOR: rsp_open:rsp_device_rsp_front_byte]
+
+Computes the port B value (byte 0x13) for the receiver's current state: the board step of the current LNA state from `step()`, the notch flags and the bias-T flag, through `rsp1a::board_b_byte` on an RSP1A (with FM/MW and DAB notches) or `board_front_byte` on an RSP2pro. It only reads `self`; the setters call it after updating the cached flag, and full tunes and gain writes use it to write port B. Because the bias-T bit comes from `Settings::bias_t`, a setting that was not accepted by the hardware must never remain cached (the setters restore it on failure). No I/O, no errors; it indexes the LNA table with the current state, which is kept in range. Tests: `device.rs::rsp1a_open_sequence_matches_api_capture`, `rsp1a_toggles_match_capture`.
+
+### `fn transient_b(&self) -> u8` [@ANCHOR: rsp_open:rsp_device_rsp_transient_b]
+
+Gives the port B value the full tune writes between port A and the direction registers (PROTOCOL.md 2.7). RSP2pro: the constant 0xa5 pattern with the current bias-T bit (`board_front_transient`), so a retune does not glitch the bias supply. RSP1A: the port B value already in force (`last_b`), or at the first tune after open `rsp1a::open_transient_b`, 0xdf with both notches off. Pure read; no I/O, no errors. Tests: `device.rs::rsp1a_open_sequence_matches_api_capture`, `rsp1a_retune_sequences`.
+
+### `fn board(&mut self, addr: u8, byte: u8) -> Result<(), Error>` [@ANCHOR: rsp_open:rsp_device_rsp_board]
+
+Writes one byte to a register of the board's MCP23S18 expander with vendor request 0x49 (`board_write_args`). `addr` is `MCP_GPIOA` (0x12), `MCP_GPIOB` (0x13), `MCP_IODIRA` (0x00) or `MCP_IODIRB` (0x01); `byte` is the value from `band_byte`, `front_byte`, `transient_b` or 0 for the direction registers. In boot-ROM mode nothing is sent (the ROM does not answer 0x49), but the bookkeeping still happens. When `addr` is GPIOB the byte is remembered in `last_b`, which the RSP1A reuses as the transient value of the next full tune. Error: the transport's `Error::Usb`. The caller holds `&mut self`, so writes are serialised. Test: `device.rs::rsp1a_open_sequence_matches_api_capture`.
+
 - [@ANCHOR: rsp_open:rsp_device_rsp_set_ext_ref_out] RSP2pro reference-clock output; refused on the RSP1A.
 - [@ANCHOR: rsp_open:rsp_device_rsp_write_gain] The gain write (r1, then the model's board bytes).
 - [@ANCHOR: rsp_open:rsp_device_rsp_set_dab_notch] RSP1A DAB notch (port B, then the gain write).
@@ -402,7 +548,10 @@ Decodes the 1008-byte payload of one block to 16-bit left-aligned `IqI16` sample
 - [@ANCHOR: rsp_open:rsp_device_check_antenna] Refuses Hi-Z at or above 60 MHz, and any port but A on the RSP1A.
 - [@ANCHOR: rsp_open:rsp_device_rsp2_set_ppm] Reference correction applied to the ADC clock and the tuner PLL.
 - [@ANCHOR: rsp_open:rsp_device_rsp2_set_sampling] Sample-rate and IF-mode changes, with the STOP/alt/restart sequence when the format changes.
-- [@ANCHOR: rsp_open:rsp_device_rsp2_output_rate] Output sample rate (halved in the low-IF modes).
+### `pub fn output_rate(&self) -> f64` [@ANCHOR: rsp_open:rsp_device_rsp2_output_rate]
+
+Returns the sample rate of the delivered stream in samples per second: the ADC clock in `Settings::adc_hz`, halved when the current stream configuration decimates by 2 (the three low-IF modes: 450 kHz at 2 MHz gives 1 MS/s, 1.62 MHz at 6 MHz gives 3 MS/s, 2.048 MHz at 8.192 MHz gives 4.096 MS/s). The value is the nominal rate; it does not include the ppm correction. Pure read of the cached settings, no I/O, no errors. Test: `device.rs::sample_rate_change_sequence`.
+
 - [@ANCHOR: rsp_open:rsp_device_rsp2_sink_for] Packet sink that parses blocks and calls the user callback.
 - [@ANCHOR: rsp_open:rsp_device_rsp2_restart_stream] (re)starts streaming: transfers first, then the START request.
 - [@ANCHOR: rsp_open:rsp_device_rsp2_start_stream] Starts streaming to a callback.
