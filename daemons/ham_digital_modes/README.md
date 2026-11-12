@@ -485,10 +485,29 @@ deviation into phase.
 
 ## WSPR encode internals (`wspr.rs`)
 
-The two character tables behind the packers use different digit and letter codes. [@ANCHOR: callsign_char_code] maps
-a digit to 0-9, a space to 36 and a capital letter to 10-35, and anything else (including lower case) to nothing;
-callers upper-case first. [@ANCHOR: grid_char_code] maps a digit to 0-9, a space to 36 and a letter to 0-25 (so `A`
-is 0, not 10), which is what the Maidenhead arithmetic in the grid packer needs.
+### `callsign_char_code` [@ANCHOR: callsign_char_code]
+
+Maps one byte of a callsign to the 6-bit-ish code the WSPR callsign packer uses: a digit to 0-9, a space to 36 and a capital letter to 10-35 (`A` is 10). Anything else, including lower case, has no code. `pack_call` calls it for each of the six positions of the padded callsign and fails the whole pack if any position has none, so callers upper-case the callsign first.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `u8` | One byte (ASCII character) of the padded six-character callsign. |
+
+**Returns:** `Option<u8>`: `Some(code)` in 0..=36, `None` for an unmappable byte. **Errors:** none; `None` is the failure signal. **Special concerns:** private and pure. No I/O, no locks, no transmit side effects (a pure function). It is deliberately a different table from `grid_char_code` (letters start at 10 here and at 0 there).
+
+**Location:** `src/wspr.rs`. **Signature:** `fn callsign_char_code(c: u8) -> Option<u8>`. **See also:** `grid_char_code`; test `sync_vector_has_the_documented_symbol_count` (`wspr.rs`).
+
+### `grid_char_code` [@ANCHOR: grid_char_code]
+
+Maps one byte of a Maidenhead grid locator to the code the WSPR grid packer needs: a digit to 0-9, a space to 36 and a capital letter to 0-25 (`A` is 0, not 10, which is what the Maidenhead base-18 and base-10 arithmetic in the grid packer wants). Anything else, including lower case, has no code. `pack_grid4_power` calls it for the four characters of the locator.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `u8` | One byte of the locator. |
+
+**Returns:** `Option<u8>`: `Some(code)`, `None` for an unmappable byte. **Errors:** none; `None` is the failure signal. **Special concerns:** private and pure. No I/O, no locks, no transmit side effects (a pure function). Not interchangeable with `callsign_char_code`.
+
+**Location:** `src/wspr.rs`. **Signature:** `fn grid_char_code(c: u8) -> Option<u8>`. **See also:** `callsign_char_code`; test `sync_vector_has_the_documented_symbol_count` (`wspr.rs`).
 
 [@ANCHOR: interleave_permutation] produces the interleaver's order: it runs the integers 0..255 through an 8-bit bit
 reversal and keeps, in order, the results below 162. Coded bit `p` is sent in symbol position `perm[p]`, so the
@@ -505,11 +524,31 @@ are transmitted.
 align 2, 16 bits) and a `data` chunk with the samples in little-endian order, so `data` always starts at byte 36 and
 the samples at byte 44.
 
-The noise generator for the fixtures is a SplitMix64 pseudo-random generator, deterministic for a given seed and not
-for cryptographic use. [@ANCHOR: SplitMix64::next_u64] adds the golden-ratio constant `0x9E3779B97F4A7C15` to the
-state and scrambles it with two xor-shift-multiply rounds, returning 64 bits. The Gaussian samples come from
-[@ANCHOR: SplitMix64::next_gaussian], which draws two uniform numbers in (0, 1] (never 0, so the logarithm is
-finite) and applies the Box-Muller transform, using only the cosine branch: `sqrt(-2 ln u1) * cos(2 pi u2)`.
+The noise generator for the fixtures is a SplitMix64 pseudo-random generator, deterministic for a given seed and not for cryptographic use:
+
+### `SplitMix64::next_u64` [@ANCHOR: SplitMix64::next_u64]
+
+Advances the test-fixture noise generator by one step and returns 64 pseudo-random bits. The generator is SplitMix64: it adds the golden-ratio constant `0x9E3779B97F4A7C15` to its state (wrapping) and scrambles the result with two xor-shift-multiply rounds (shifts 30 and 27, multipliers `0xBF58476D1CE4E5B9` and `0x94D049BB133111EB`) and a final xor-shift by 31. It is deterministic for a given seed and is not for cryptographic use; it exists so the WSPR WAV fixtures are reproducible.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut SplitMix64` | The generator; its one `u64` of state is mutated. |
+
+**Returns:** `u64`, 64 bits of output. **Errors:** none (wrapping arithmetic never panics). **Special concerns:** private to the fixture noise generator (`add_awgn`), not thread-safe by itself (`&mut self`; one generator per caller). No I/O, no locks. Never use it for anything secret.
+
+**Location:** `src/wspr.rs`. **Signature:** `fn next_u64(&mut self) -> u64`. **See also:** `SplitMix64::next_gaussian`; test `wav_fixture_returns_none_for_the_same_out_of_scope_messages_as_the_underlying_encoder` (`wspr.rs`).
+
+### `SplitMix64::next_gaussian` [@ANCHOR: SplitMix64::next_gaussian]
+
+Draws one standard-normal (mean 0, standard deviation 1) sample for the fixture noise: two uniform numbers in (0, 1] (from `next_open01`, which never returns 0 so the logarithm is finite) go through the Box-Muller transform, keeping only the cosine branch, `sqrt(-2 ln u1) * cos(2 pi u2)`. The fixture scales it by the requested noise standard deviation and adds it to the samples.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut SplitMix64` | The generator; advanced by two `next_u64` steps. |
+
+**Returns:** `f64`, a normally distributed sample. **Errors:** none. **Special concerns:** private, deterministic for a given seed, not cryptographic. No I/O, no locks, no transmit side effects (a pure function).
+
+**Location:** `src/wspr.rs`. **Signature:** `fn next_gaussian(&mut self) -> f64`. **See also:** `SplitMix64::next_u64`; test `wav_fixture_returns_none_for_the_same_out_of_scope_messages_as_the_underlying_encoder` (`wspr.rs`).
 
 ## WSPR sequential decode internals (`wspr_decode.rs`)
 
@@ -526,8 +565,17 @@ inverse. The decoder is given the data-bit soft value of each symbol, never the 
 
 ## WSPR sync search internals (`wspr_sync.rs`)
 
-[@ANCHOR: samples_per_symbol] is the rounded `sample_rate / (12000/8192)`, 8192 at 12 kHz. It is also the FFT length,
-because WSPR's tone spacing equals its symbol rate, so every FFT bin is exactly one tone wide.
+### `samples_per_symbol` [@ANCHOR: samples_per_symbol]
+
+Computes how many audio samples make up one WSPR symbol at a given sample rate: `sample_rate / (12000 / 8192)`, rounded, so 8192 at 12 kHz. The same number is the FFT length of the sync search, because WSPR's tone spacing equals its symbol rate, so every FFT bin is exactly one tone wide. A zero sample rate gives 0, which callers refuse before planning an FFT.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `sample_rate` | `u32` | Audio sample rate in hertz. |
+
+**Returns:** `usize`, samples per symbol (8192 at 12000 Hz). **Errors:** none; the callers (`find_sync` and its helpers) reject a zero result before using it as a length. **Special concerns:** private and pure. No I/O, no locks, no transmit side effects (a pure function).
+
+**Location:** `src/wspr_sync.rs`. **Signature:** `fn samples_per_symbol(sample_rate: u32) -> usize`. **See also:** `spectrum_matrix`, `block_spectrum`; test `sample_rate_zero_returns_none_instead_of_reaching_a_zero_length_fft` (`wspr_sync.rs`).
 
 [@ANCHOR: spectrum_matrix] builds the 162-row table of magnitudes for a start position: row `s` is the spectrum of
 the block starting at `start + s * samples_per_symbol`, restricted to bins `bin_lo..=bin_hi_inclusive` and
@@ -537,15 +585,58 @@ past the end of the audio or the bin range is empty or beyond the FFT length. Th
 for each block, so the result depends only on the block position and offset, which lets `find_sync` cache blocks),
 take the FFT with a plan supplied by the caller, and return the magnitudes of the requested bins.
 
-[@ANCHOR: tone_magnitudes_from_matrix] cuts four consecutive columns starting at `base_bin` out of each row of that
-table, giving the magnitudes of tones 0-3 for every symbol; `base_bin` must not be below `bin_lo`.
+### `tone_magnitudes_from_matrix` [@ANCHOR: tone_magnitudes_from_matrix]
 
-The score for a candidate is built from three pieces. [@ANCHOR: sync_pattern] is the sync vector as +1/-1.
-[@ANCHOR: sync_statistic] gives per symbol `max(tone 1, tone 3) - max(tone 0, tone 2)`, which is positive when the
-sync bit is 1 and negative when it is 0 if the window is aligned, whatever the data bit. [@ANCHOR: cosine_score]
-compares the two as `sum(tt * pattern) / (|tt| * |pattern|)`, in -1..1, and gives 0 for an all-zero statistic. It
-replaced a mean-absolute-value normalisation, which scored the maximum whenever all signs merely agreed and so
-accepted noise.
+Cuts four consecutive columns, starting at `base_bin`, out of each of the 162 rows of the spectrum table, giving the magnitudes of tones 0 to 3 for every symbol. The sync search calls it once per candidate frequency to get the evidence that `sync_statistic` and the decoder use.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `mat` | `&[Row]` where `Row: AsRef<[f64]>` | The spectrum table from `spectrum_matrix`: one row per symbol, columns are FFT bins from `bin_lo`. |
+| `bin_lo` | `usize` | The FFT bin that column 0 of the table represents. |
+| `base_bin` | `usize` | FFT bin of tone 0; must be at least `bin_lo` and leave room for four columns. |
+
+**Returns:** `[[f64; 4]; 162]`, the four tone magnitudes of every symbol. **Errors:** none, but it panics (index out of range or underflow of `base_bin - bin_lo`) if `base_bin` is below `bin_lo` or fewer than four columns remain; the callers choose the bin range so this cannot happen. **Special concerns:** private and pure. No I/O, no locks, no transmit side effects (a pure function).
+
+**Location:** `src/wspr_sync.rs`. **Signature:** `fn tone_magnitudes_from_matrix<Row: AsRef<[f64]>>(mat: &[Row], bin_lo: usize, base_bin: usize) -> [[f64; 4]; WSPR_NUM_SYMBOLS]`. **See also:** `spectrum_matrix`; test `expected_decodable_bits` (`wspr_sync.rs`).
+
+The score for a candidate is built from three pieces, each its own entry below.
+
+### `sync_pattern` [@ANCHOR: sync_pattern]
+
+Returns the WSPR sync vector (`SYNC_VECTOR`, 162 bits) as +1.0 for a 1 bit and -1.0 for a 0 bit, which is the reference that the candidate's sync statistic is compared against in `cosine_score`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** `[f64; 162]` of +1.0 and -1.0. **Errors:** none. **Special concerns:** private and pure; the values are constants of the WSPR specification. No I/O, no locks, no transmit side effects (a pure function).
+
+**Location:** `src/wspr_sync.rs`. **Signature:** `fn sync_pattern() -> [f64; WSPR_NUM_SYMBOLS]`. **See also:** `sync_statistic`, `cosine_score`; test `expected_decodable_bits` (`wspr_sync.rs`).
+
+### `sync_statistic` [@ANCHOR: sync_statistic]
+
+Reduces the four tone magnitudes of each symbol to one number that carries the sync bit: `max(tone 1, tone 3) - max(tone 0, tone 2)`. WSPR sends the sync bit in the low bit of the tone number, so with the window correctly aligned the value is positive when the sync bit is 1 and negative when it is 0, whatever the data bit; misaligned or noise-only windows give values with no consistent sign.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `tone_mags` | `&[[f64; 4]; 162]` | Magnitudes of tones 0 to 3 for every symbol (from `tone_magnitudes_from_matrix`). |
+
+**Returns:** `[f64; 162]`, the signed statistic per symbol. **Errors:** none. **Special concerns:** private and pure. No I/O, no locks, no transmit side effects (a pure function).
+
+**Location:** `src/wspr_sync.rs`. **Signature:** `fn sync_statistic(tone_mags: &[[f64; 4]; WSPR_NUM_SYMBOLS]) -> [f64; WSPR_NUM_SYMBOLS]`. **See also:** `sync_pattern`, `cosine_score`; test `expected_decodable_bits` (`wspr_sync.rs`).
+
+### `cosine_score` [@ANCHOR: cosine_score]
+
+Scores how well a candidate's sync statistic matches the sync pattern as a cosine similarity, `sum(tt * pattern) / (|tt| * |pattern|)`, in -1..1; an all-zero statistic scores 0. It replaced a mean-absolute-value normalisation, which gave the maximum score whenever all signs merely agreed and so accepted noise; random noise scores at most about 0.29, a real signal much more (see the comment on the minimum acceptable score in `wspr_sync.rs`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `tt` | `&[f64; 162]` | The sync statistic from `sync_statistic`. |
+| `pattern` | `&[f64; 162]` | The +1/-1 sync pattern from `sync_pattern` (its norm is taken as the square root of 162). |
+
+**Returns:** `f64` in -1.0..=1.0; 0.0 when `tt` has zero norm. **Errors:** none. **Special concerns:** private and pure. No I/O, no locks, no transmit side effects (a pure function).
+
+**Location:** `src/wspr_sync.rs`. **Signature:** `fn cosine_score(tt: &[f64; WSPR_NUM_SYMBOLS], pattern: &[f64; WSPR_NUM_SYMBOLS]) -> f64`. **See also:** `sync_statistic`, `sync_pattern`; test `expected_decodable_bits` (`wspr_sync.rs`).
 
 [@ANCHOR: extract_all_four_tone_magnitudes] is the shared extraction step: after rejecting a zero sample rate, a
 non-finite or negative `base_hz`, or one above half the sample rate, it takes the nearest bin to `base_hz`, applies
@@ -569,118 +660,313 @@ and the equations behind each stage, in the order the encoder meets them. Equati
 
 ### Bit prioritization helpers
 
-`raster_unscan_bits` is the inverse of the raster scan: given the flat scanned bits and the column widths, it walks the same
-level-by-level, column-by-column order and rebuilds each column's value. It returns `None` if the bit count does not match the
-widths exactly (too few bits, or bits left over).
-*(Reference: `src/ambe/float/tia_102_baba/bit_prioritization.rs` -> `[@ANCHOR: raster_unscan_bits]`)*
+#### `raster_unscan_bits` [@ANCHOR: raster_unscan_bits]
 
-`read_bits` reads the next `n` bits of a bit slice, most significant first, as an integer and moves the cursor; it returns `None`
-if fewer than `n` bits remain. `deprioritize_bits` uses it for each fixed-width field.
-*(Reference: `src/ambe/float/tia_102_baba/bit_prioritization.rs` -> `[@ANCHOR: read_bits]`)*
+The inverse of the raster scan used by the bit prioritization step: given the flat list of scanned bits and the width in bits of each column, it walks the same order (most significant bit level first, and within a level column by column, skipping columns narrower than the level) and rebuilds the integer value of each column. `deprioritize_bits` calls it to undo the transmit-side ordering that puts the most important bits first.
 
-`set_bit` writes one bit of the de-interleaved code vectors: it sets bit `source.1` (0 = least significant) of vector
-`source.0` when the received symbol bit is 1, and does nothing for a 0 (the vectors start as zero).
-*(Reference: `src/ambe/float/tia_102_baba/interleave.rs` -> `[@ANCHOR: set_bit]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `bits` | `&[bool]` | The scanned bits, in transmit order; borrowed. |
+| `widths` | `&[u8]` | Width in bits of each column, one entry per column. |
+
+**Returns:** `Option<Vec<u32>>`: one value per column. **Errors:** `None` when the number of bits does not match the widths exactly: too few bits (the cursor runs off the end) or bits left over. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/bit_prioritization.rs`. **Signature:** `fn raster_unscan_bits(bits: &[bool], widths: &[u8]) -> Option<Vec<u32>>`. **See also:** `read_bits`, `deprioritize_bits`; test `extract_fundamental_frequency_quantizer_is_independent_of_l_hat_and_k_hat` (`ambe/float/tia_102_baba/bit_prioritization.rs`).
+
+#### `read_bits` [@ANCHOR: read_bits]
+
+Reads the next `n` bits of a bit slice, most significant first, as an integer and advances the caller's cursor past them. `deprioritize_bits` calls it once for each fixed-width field of the frame.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `bits` | `&[bool]` | The bit slice; borrowed. |
+| `idx` | `&mut usize` | Cursor: index of the next unread bit; advanced by `n` on success (partly advanced on failure, so discard it). |
+| `n` | `usize` | How many bits to read; at most 32 to fit the result. |
+
+**Returns:** `Option<u32>`: the value, first bit read is the most significant. **Errors:** `None` when fewer than `n` bits remain. **Special concerns:** private; mutates only the cursor passed in. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/bit_prioritization.rs`. **Signature:** `fn read_bits(bits: &[bool], idx: &mut usize, n: usize) -> Option<u32>`. **See also:** `raster_unscan_bits`; test `extract_fundamental_frequency_quantizer_is_independent_of_l_hat_and_k_hat` (`ambe/float/tia_102_baba/bit_prioritization.rs`).
+
+#### `set_bit` [@ANCHOR: set_bit]
+
+Writes one received bit into the de-interleaved code vectors: it sets bit `source.1` (0 is the least significant) of vector `source.0` when the received symbol bit is 1, and does nothing for a 0, because the vectors start as zero. The de-interleaver calls it for each of the frame's bit positions in turn.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `&mut [u32; 8]` | The eight code vectors being rebuilt, mutated in place. |
+| `source` | `BitSource` | A `(vector index, bit index)` pair: which vector (0..=7) and which bit of it; must be in range or the call panics. |
+| `value` | `bool` | The received bit. |
+
+**Returns:** nothing. **Errors:** panics if `source.0` is 8 or more or `source.1` is 32 or more; the interleave tables only contain valid positions. **Special concerns:** private; mutates only `c`. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/interleave.rs`. **Signature:** `fn set_bit(c: &mut [u32; 8], source: BitSource, value: bool)`. **See also:** `deinterleave_from_dibit_symbols`; test `symbol_0_matches_annex_h_hand_read_values` (`ambe/float/tia_102_baba/interleave.rs`).
 
 ### Pitch analysis (section 5.1)
 
-The analysis works on a lowpass-filtered copy of the speech. `lowpass_filtered_sample` computes one sample of it (Eq. 9): the sum
-of 21 input samples around `center + n`, weighted by the symmetric Annex D filter taps. It indexes the raw buffer directly, so the
-buffer must extend at least 10 samples past both ends of the range being asked for, or it panics.
-*(Reference: `src/ambe/float/tia_102_baba/pitch.rs` -> `[@ANCHOR: lowpass_filtered_sample]`)*
+#### `lowpass_filtered_sample` [@ANCHOR: lowpass_filtered_sample]
 
-`PitchAnalysisFrame::new` prepares everything the pitch error function needs once per frame: the 301 lowpassed samples around
-`center`, their windowed energy with the Annex B window, the sum of the window's fourth powers, and the autocorrelation table
-`r(t)` of the doubly-windowed signal for integer lags 0 to 151 (Eq. 7; terms that fall outside the window vanish). The raw buffer
-needs 160 samples of margin on each side of `center` (150 for the window plus 10 for the filter).
-*(Reference: `src/ambe/float/tia_102_baba/pitch.rs` -> `[@ANCHOR: PitchAnalysisFrame::new]`)*
+Computes one sample of the lowpass-filtered copy of the speech that pitch analysis works on (Eq. 9): the sum of 21 input samples around `center + n`, weighted by the symmetric Annex D filter taps (`lowpass_filter_tap(j)` for j from -10 to 10).
 
-`PitchAnalysisFrame::r` returns `r(t)` for a fractional lag by linear interpolation between the two neighbouring table entries
-(Eq. 8); the table only holds non-negative lags because `r` is even.
-*(Reference: `src/ambe/float/tia_102_baba/pitch.rs` -> `[@ANCHOR: PitchAnalysisFrame::r]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `raw` | `&[f64]` | The raw speech buffer; borrowed. |
+| `center` | `usize` | Index in `raw` of the analysis frame's centre sample. |
+| `n` | `i32` | Offset from the centre of the sample wanted, -150..=150 for the pitch window. |
 
-`PitchAnalysisFrame::error_function` is `E(P)` of Eq. 5 for a candidate period `P` in samples: the energy minus `P` times the sum
-of `r(nP)` over the multiples of `P` that fit in the window, divided by the energy times `1 - P * sum(w^4)`. Small is good. Two
-deliberate departures are in the code and the comment above it: a value that comes out slightly negative is raised to 0 (the look-ahead
-ratio tests would otherwise be ill-defined), and a silent frame (denominator near zero) returns 1.0, the worst error, instead of
-`0/0`.
-*(Reference: `src/ambe/float/tia_102_baba/pitch.rs` -> `[@ANCHOR: PitchAnalysisFrame::error_function]`)*
+**Returns:** `f64`, the filtered sample. **Errors:** panics (index out of range) if `raw` does not extend at least 10 samples past both ends of the range asked for; `PitchAnalysisFrame::new` documents the 160-sample margin it needs. **Special concerns:** private and pure; it indexes the buffer directly with no bounds check of its own. Pure computation: no I/O, no locks, no global state, no transmit side effects.
 
-`look_back_pitch_tracking` (Eq. 10-12) looks for continuity with the past. Among the candidate periods 21, 21.5, ..., 122 that lie
-within 0.8 to 1.2 times the previous frame's pitch, it takes the one with the smallest current error `E(P)` and returns it with the
-cumulative error `CE_B`, which is that error plus the previous two frames' errors. A stream's first frames pass `(100.0, 0.0)` for
-both previous entries, the standard's initial values. It panics if no candidate lies within 0.8 to 1.2 times the previous pitch, which cannot happen when that pitch is itself a candidate.
-*(Reference: `src/ambe/float/tia_102_baba/pitch.rs` -> `[@ANCHOR: look_back_pitch_tracking]`)*
+**Location:** `src/ambe/float/tia_102_baba/pitch.rs`. **Signature:** `fn lowpass_filtered_sample(raw: &[f64], center: usize, n: i32) -> f64`. **See also:** `PitchAnalysisFrame::new`; test `periodic_pulse_train` (`ambe/float/tia_102_baba/pitch.rs`).
 
-`look_ahead_pitch_tracking` (Eq. 13-20) looks at the two following frames, whose error functions can already be computed. For each
-candidate `P0` it finds the cheapest chain of pitches for the next two frames, each within 0.8 to 1.2 times the one before, and the
-cumulative error `CE_F` is the sum of the three errors. It picks the `P0` with the smallest `CE_F`, then tests its sub-multiples
-`P0/2, P0/3, ...` (snapped to the candidate grid, smallest first) against the three accept rules of Eq. 18 to 20 so that a pitch
-doubled by mistake is corrected. It returns the chosen period and its `CE_F`.
-*(Reference: `src/ambe/float/tia_102_baba/pitch.rs` -> `[@ANCHOR: look_ahead_pitch_tracking]`)*
+#### `PitchAnalysisFrame::new` [@ANCHOR: PitchAnalysisFrame::new]
 
-`choose_initial_pitch_estimate` (Eq. 21-23) makes the final pick between the two trackers: the look-back pitch if its cumulative
-error is at most 0.48 or no larger than the look-ahead error, otherwise the look-ahead pitch. The first two conditions are kept as
-the standard's two separate rules even though they choose the same thing.
-*(Reference: `src/ambe/float/tia_102_baba/pitch.rs` -> `[@ANCHOR: choose_initial_pitch_estimate]`)*
+Prepares everything the pitch error function needs once per frame: the 301 lowpassed samples around `center`, their energy windowed with the Annex B window, the sum of the window's fourth powers, and the autocorrelation table `r(t)` of the doubly windowed signal for integer lags 0 to 151 (Eq. 7; terms that fall outside the window vanish because the window is zero there). The three results are stored in the frame and reused for all 203 candidate periods.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `raw` | `&[f64]` | The raw speech buffer; needs 160 samples of margin on each side of `center` (150 for the window plus 10 for the filter). |
+| `center` | `usize` | Index of the frame's centre sample in `raw`. |
+
+**Returns:** a `PitchAnalysisFrame { energy, r_table, w4_sum }`. **Errors:** panics from `lowpass_filtered_sample` if the margin is missing. **Special concerns:** public constructor, no shared state; the frame is read-only afterwards, so it can be shared across threads. The cost is about 301 * 152 multiply-adds, paid once per frame. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch.rs`. **Signature:** `pub fn new(raw: &[f64], center: usize) -> Self`. **See also:** `PitchAnalysisFrame::error_function`, `PitchAnalysisFrame::r`; test `periodic_pulse_train` (`ambe/float/tia_102_baba/pitch.rs`).
+
+#### `PitchAnalysisFrame::r` [@ANCHOR: PitchAnalysisFrame::r]
+
+Returns the autocorrelation `r(t)` for a fractional lag by linear interpolation between the two neighbouring table entries (Eq. 8). The table only holds non-negative lags because `r` is an even function; the upper neighbour is clamped to the last entry (lag 151).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&PitchAnalysisFrame` | The prepared frame. |
+| `t` | `f64` | Lag in samples, 0.0 to 151.0. |
+
+**Returns:** `f64`, the interpolated autocorrelation. **Errors:** panics if `t` is negative or `floor(t)` is above 151; `error_function` only passes `n * P` with `n * P` at most 150. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch.rs`. **Signature:** `fn r(&self, t: f64) -> f64`. **See also:** `PitchAnalysisFrame::error_function`; test `periodic_pulse_train` (`ambe/float/tia_102_baba/pitch.rs`).
+
+#### `PitchAnalysisFrame::error_function` [@ANCHOR: PitchAnalysisFrame::error_function]
+
+Evaluates `E(P)` of Eq. 5 for a candidate pitch period `P` in samples: the energy minus `P` times the sum of `r(nP)` over the multiples of `P` that fit in the window, divided by the energy times `1 - P * sum(w^4)`. A small value means a good period. Two deliberate departures are in the code and the comment above it: a value that comes out slightly negative is raised to 0 (the look-ahead ratio tests would otherwise be ill-defined, as in the OP25 reference), and a silent frame (denominator near zero) returns 1.0, the worst error, instead of 0/0. The value is not capped at 1.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&PitchAnalysisFrame` | The prepared frame. |
+| `p` | `f64` | Candidate period in samples; the candidate set is 21.0 to 122.0 in steps of 0.5. |
+
+**Returns:** `f64` error, 0.0 or more; 1.0 for silence. **Errors:** none. **Special concerns:** public and pure; called up to 203 times per frame per tracker, each call a short sum. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch.rs`. **Signature:** `pub fn error_function(&self, p: f64) -> f64`. **See also:** `look_back_pitch_tracking`, `look_ahead_pitch_tracking`; test `periodic_pulse_train` (`ambe/float/tia_102_baba/pitch.rs`).
+
+#### `look_back_pitch_tracking` [@ANCHOR: look_back_pitch_tracking]
+
+Looks for continuity with the past (Eq. 10-12). Among the candidate periods 21, 21.5, ..., 122 that lie within 0.8 to 1.2 times the previous frame's pitch, it takes the one with the smallest current error `E(P)` and returns it with the cumulative error `CE_B`: that error plus the previous two frames' errors. A stream's first frames pass `(100.0, 0.0)` for both previous entries, the standard's initial values.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `error_fn` | `impl Fn(f64) -> f64` | The current frame's `E(P)`, normally `|p| frame.error_function(p)`. |
+| `prev1` | `(f64, f64)` | The previous frame's final pitch and its error. |
+| `prev2` | `(f64, f64)` | The frame before that: pitch (unused) and error. |
+
+**Returns:** `(f64, f64)`: the look-back pitch `P_B` and the cumulative error `CE_B`. **Errors:** panics if no candidate lies within 0.8 to 1.2 times `prev1.0`, which cannot happen when that pitch is itself a candidate (it is always a prior result or 100.0). **Special concerns:** public and pure; calls `error_fn` for each candidate in range. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch.rs`. **Signature:** `pub fn look_back_pitch_tracking(error_fn: impl Fn(f64) -> f64, prev1: (f64, f64), prev2: (f64, f64)) -> (f64, f64)`. **See also:** `look_ahead_pitch_tracking`, `choose_initial_pitch_estimate`; test `error_function_is_much_larger_for_a_period_far_from_the_true_one` (`ambe/float/tia_102_baba/pitch.rs`).
+
+#### `look_ahead_pitch_tracking` [@ANCHOR: look_ahead_pitch_tracking]
+
+Looks at the two following frames, whose error functions can already be computed (Eq. 13-20). For each candidate `P0` it finds the cheapest chain of pitches for the next two frames, each within 0.8 to 1.2 times the one before, and the cumulative error `CE_F` is the sum of the three errors. It picks the `P0` with the smallest `CE_F`, then tests its sub-multiples `P0/2, P0/3, ...` (each snapped to the candidate grid, smallest first) against the three accept rules (Eq. 18: `CE_F` at most 0.85 and at most 1.7 times the reference; Eq. 19: at most 0.4 and 3.5 times; Eq. 20: at most 0.05) so that a pitch doubled by mistake is corrected. The ratio tests are written in multiplied-out form because `E` is floored at zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `error_fn` | `impl Fn(f64) -> f64` | `E(P)` of the current frame. |
+| `future1_error_fn` | `impl Fn(f64) -> f64` | `E1(P)` of the next frame. |
+| `future2_error_fn` | `impl Fn(f64) -> f64` | `E2(P)` of the frame after that. |
+
+**Returns:** `(f64, f64)`: the chosen period `P_F` and its `CE_F`. **Errors:** none. **Special concerns:** public and pure; each error function is sampled once over the 203 candidates and the nested minimum is built bottom-up, so the cost is small. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch.rs`. **Signature:** `pub fn look_ahead_pitch_tracking(error_fn: impl Fn(f64) -> f64, future1_error_fn: impl Fn(f64) -> f64, future2_error_fn: impl Fn(f64) -> f64) -> (f64, f64)`. **See also:** `look_back_pitch_tracking`, `choose_initial_pitch_estimate`; test `choose_initial_pitch_estimate_prefers_whichever_cumulative_error_is_smaller_otherwise` (`ambe/float/tia_102_baba/pitch.rs`).
+
+#### `choose_initial_pitch_estimate` [@ANCHOR: choose_initial_pitch_estimate]
+
+Makes the final pick between the two trackers (Eq. 21-23): the look-back pitch if its cumulative error is at most 0.48 or no larger than the look-ahead error, otherwise the look-ahead pitch. The first two conditions are kept as the standard's two separate rules (a confidence override, then a comparison) even though they choose the same thing; clippy's `if_same_then_else` is silenced for that reason.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `p_hat_b` | `f64` | Look-back pitch. |
+| `ce_b` | `f64` | Look-back cumulative error. |
+| `p_hat_f` | `f64` | Look-ahead pitch. |
+| `ce_f` | `f64` | Look-ahead cumulative error. |
+
+**Returns:** `f64`, the initial pitch estimate (one of the two inputs). **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no global state, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch.rs`. **Signature:** `pub fn choose_initial_pitch_estimate(p_hat_b: f64, ce_b: f64, p_hat_f: f64, ce_f: f64) -> f64`. **See also:** `look_back_pitch_tracking`, `look_ahead_pitch_tracking`; test `look_back_tracking_falls_back_to_the_spec_default_with_no_real_history` (`ambe/float/tia_102_baba/pitch.rs`).
 
 ### Pitch refinement (section 5.1.5)
 
-`window_dft_16384` is `W_R(m)` (Eq. 30), the spectrum of the refinement window at a 16384-point resolution. It sums the cosine
-terms of the window's 221 non-zero samples directly (the sine terms cancel by symmetry) instead of running a transform; because
-it is even in `m` and queried thousands of times per frame, the half-line `m = 0..=8192` is tabulated once per process and
-anything beyond is computed on demand.
-*(Reference: `src/ambe/float/tia_102_baba/pitch_refinement.rs` -> `[@ANCHOR: window_dft_16384]`)*
+#### `window_dft_16384` [@ANCHOR: window_dft_16384]
 
-`RefinementFrame::new` computes the frame's spectrum `S_w(m)` (Eq. 29): the 256-point DFT of the 221 speech samples around
-`center` multiplied by the refinement window, for bins `m = -127..=128`, once per frame. It needs 110 samples of margin on both
-sides of `center` and panics otherwise.
-*(Reference: `src/ambe/float/tia_102_baba/pitch_refinement.rs` -> `[@ANCHOR: RefinementFrame::new]`)*
+Returns `W_R(m)` (Eq. 30), the spectrum of the pitch refinement window at a 16384-point resolution. It sums the cosine terms of the window's 221 non-zero samples directly (the sine terms cancel by symmetry) instead of running a transform. Because it is even in `m` and queried thousands of times per frame, the half-line `m = 0..=8192` is tabulated once per process in a `OnceLock` and anything beyond is computed on demand.
 
-`RefinementFrame::sw_at` returns one bin of that spectrum and gives zero outside `-127..=128`, so loops near the edge of the pitch
-range read "no energy there" instead of panicking.
-*(Reference: `src/ambe/float/tia_102_baba/pitch_refinement.rs` -> `[@ANCHOR: RefinementFrame::sw_at]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `m` | `i32` | Frequency index at 16384-point resolution; the sign is ignored (the function is even). |
 
-`harmonic_amplitude` estimates the complex amplitude `A_l(omega0)` of harmonic `l` (Eq. 26-28) as a least-squares fit: the sum
-over the bins of the harmonic's band of `S_w(m)` times the window spectrum `W_R` at the matching offset, divided by the sum of
-`W_R` squared. An empty or vanishingly narrow band returns zero.
-*(Reference: `src/ambe/float/tia_102_baba/pitch_refinement.rs` -> `[@ANCHOR: harmonic_amplitude]`)*
+**Returns:** `f64`, the real-valued window spectrum. **Errors:** none. **Special concerns:** `pub(crate)`; the first call builds the 8193-entry table (thread-safe through `OnceLock`, later calls only read it), so it is safe to call from several threads. No I/O. Used by `harmonic_amplitude`.
 
-`refinement_error` is `E_R(omega0)` (Eq. 24): the squared distance between the real spectrum and the synthetic harmonic spectrum
-for a candidate pitch, summed from bin 50 up to the last bin covered by the harmonics it implies. The encoder tries candidates
-around the half-sample estimate and keeps the one with the smallest error.
-*(Reference: `src/ambe/float/tia_102_baba/pitch_refinement.rs` -> `[@ANCHOR: refinement_error]`)*
+**Location:** `src/ambe/float/tia_102_baba/pitch_refinement.rs`. **Signature:** `pub(crate) fn window_dft_16384(m: i32) -> f64`. **See also:** `harmonic_amplitude`; test `harmonic_signal` (`ambe/float/tia_102_baba/pitch_refinement.rs`).
+
+#### `RefinementFrame::new` [@ANCHOR: RefinementFrame::new]
+
+Computes the frame's spectrum `S_w(m)` (Eq. 29) once per frame: the 256-point DFT of the 221 speech samples around `center`, each multiplied by the pitch refinement window, for bins `m = -127..=128`. All later refinement and voicing work reads this spectrum through `sw_at`. A direct 256-point sum with a precomputed twiddle table is used, about 221 * 256 complex multiply-adds.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `raw` | `&[f64]` | The raw speech buffer; needs 110 samples of margin on both sides of `center`. |
+| `center` | `usize` | Index of the frame's centre sample in `raw`. |
+
+**Returns:** a `RefinementFrame` holding the 256 complex bins. **Errors:** panics (index out of range) if `raw` lacks the 110-sample margin on either side. **Special concerns:** public constructor, no shared state; the result is read-only so it may be shared by threads. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch_refinement.rs`. **Signature:** `pub fn new(raw: &[f64], center: usize) -> Self`. **See also:** `RefinementFrame::sw_at`, `refinement_error`, `voicing_measure`; test `harmonic_signal` (`ambe/float/tia_102_baba/pitch_refinement.rs`).
+
+#### `RefinementFrame::sw_at` [@ANCHOR: RefinementFrame::sw_at]
+
+Returns one bin of the frame spectrum `S_w(m)`, and zero outside `-127..=128`, so loops near the edge of the pitch range read "no energy there" instead of panicking.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&RefinementFrame` | The frame. |
+| `m` | `i32` | Bin index, -127 to 128 inside the table. |
+
+**Returns:** `Complex`; `Complex::ZERO` for an index outside the table. **Errors:** none. **Special concerns:** `pub(crate)` and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch_refinement.rs`. **Signature:** `pub(crate) fn sw_at(&self, m: i32) -> Complex`. **See also:** `RefinementFrame::new`; test `harmonic_signal` (`ambe/float/tia_102_baba/pitch_refinement.rs`).
+
+#### `harmonic_amplitude` [@ANCHOR: harmonic_amplitude]
+
+Estimates the complex amplitude `A_l(omega0)` of harmonic `l` (Eq. 26-28) as a least-squares fit: the sum over the bins of the harmonic's band (from `ceil(a_l)` up to but not including `ceil(b_l)`, the band edges at `l - 1/2` and `l + 1/2` times `omega0`) of `S_w(m)` times the window spectrum `W_R` at the matching offset, divided by the sum of `W_R` squared. An empty or vanishingly narrow band returns zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | The frame spectrum. |
+| `l` | `u32` | Harmonic number, 1 or more. |
+| `omega0` | `f64` | Fundamental frequency in radians per sample. |
+
+**Returns:** `Complex`, the amplitude of harmonic `l`. **Errors:** none. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch_refinement.rs`. **Signature:** `fn harmonic_amplitude(frame: &RefinementFrame, l: u32, omega0: f64) -> Complex`. **See also:** `SyntheticSpectrum`, `window_dft_16384`; test `harmonic_signal` (`ambe/float/tia_102_baba/pitch_refinement.rs`).
+
+#### `refinement_error` [@ANCHOR: refinement_error]
+
+Computes `E_R(omega0)` (Eq. 24): the squared distance between the real spectrum and the synthetic harmonic spectrum for a candidate pitch, summed from bin 50 up to the last bin covered by the harmonics the pitch implies (`0.9254 pi / omega0` harmonics at most). The encoder tries candidates around the half-sample pitch estimate and keeps the one with the smallest error.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | The frame spectrum. |
+| `omega0` | `f64` | Candidate fundamental frequency in radians per sample. |
+
+**Returns:** `f64`, the sum of squared differences (0 or more). **Errors:** none. **Special concerns:** public and pure; cost grows with the number of harmonics, it is called for a handful of candidates per frame. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/pitch_refinement.rs`. **Signature:** `pub fn refinement_error(frame: &RefinementFrame, omega0: f64) -> f64`. **See also:** `harmonic_amplitude`; test `harmonic_signal` (`ambe/float/tia_102_baba/pitch_refinement.rs`).
 
 ### Voiced/unvoiced decision (section 5.2)
 
-`frequency_bands_count` is `K_hat` (Eq. 34): the number of V/UV bands, `ceil(L/3)` for up to 36 harmonics and 12 above that.
-*(Reference: `src/ambe/float/tia_102_baba/vuv.rs` -> `[@ANCHOR: frequency_bands_count]`)*
+#### `frequency_bands_count` [@ANCHOR: frequency_bands_count]
 
-`voicing_measure` is `D_k` (Eq. 35, and Eq. 36 for the top band): the share of a band's spectral energy that the harmonic model
-fails to explain, `sum |S_w - synthetic|^2 / sum |S_w|^2` over the band's bins. Near 0 means voiced, near 1 unvoiced. A band with no
-energy at all counts as 1 (unvoiced). The top band extends to the last harmonic.
-*(Reference: `src/ambe/float/tia_102_baba/vuv.rs` -> `[@ANCHOR: voicing_measure]`)*
+Returns `K_hat` (Eq. 34), the number of voiced/unvoiced bands for a frame with `l_hat` harmonics: `ceil(l_hat / 3)` for up to 36 harmonics and 12 above that. Each band covers three harmonics, except that the top band absorbs the rest.
 
-`update_xi_max` tracks the loudness reference `xi_max` (Eq. 41): when the current frame energy `xi_0` exceeds it, the new value is
-the average of the two; otherwise it decays as `0.99 * old + 0.01 * xi_0` and is never allowed below 20000.
-*(Reference: `src/ambe/float/tia_102_baba/vuv.rs` -> `[@ANCHOR: update_xi_max]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `l_hat` | `u32` | Number of harmonics in the frame, from `harmonics_count`. |
 
-`energy_dependent_function` is `M(xi)` (Eq. 42): `(0.0025 xi_max + xi_0) / (0.01 xi_max + xi_0)`, scaled down by
-`sqrt(xi_LF / (5 xi_HF))` when the low-frequency energy is under five times the high-frequency energy.
-*(Reference: `src/ambe/float/tia_102_baba/vuv.rs` -> `[@ANCHOR: energy_dependent_function]`)*
+**Returns:** `u32`, the band count (at most 12). **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
 
-`voicing_threshold` is `Theta(k, omega0)` (Eq. 37): band `k` is voiced when its measure is below it. It is zero for every band
-after the first if the initial pitch error exceeds 0.5; otherwise `0.5625` (band was voiced in the previous frame) or `0.45` times
-`1 - 0.3096 (k - 1) omega0` times `M(xi)`.
-*(Reference: `src/ambe/float/tia_102_baba/vuv.rs` -> `[@ANCHOR: voicing_threshold]`)*
+**Location:** `src/ambe/float/tia_102_baba/vuv.rs`. **Signature:** `pub fn frequency_bands_count(l_hat: u32) -> u32`. **See also:** `determine_voicing`, `harmonics_count`; test `harmonics_count_matches_eq31_at_representative_omega0_values` (`ambe/float/tia_102_baba/vuv.rs`).
 
-`determine_voicing` runs the whole decision for a frame (Fig. 11): it computes `L` and `K`, the energy terms and `M(xi)`, and then
-one voiced/unvoiced flag per band. It returns the flags and the updated `xi_max`. A previous frame with fewer bands (or none) reads
-as unvoiced for the missing bands, which is this implementation's choice since the standard is silent on it.
-*(Reference: `src/ambe/float/tia_102_baba/vuv.rs` -> `[@ANCHOR: determine_voicing]`)*
+#### `voicing_measure` [@ANCHOR: voicing_measure]
 
-`encode_voicing_decisions` packs the per-band flags into `b_hat_1` (Eq. 49): band 1 is the most significant of the `K` bits.
-*(Reference: `src/ambe/float/tia_102_baba/parameter_encoding.rs` -> `[@ANCHOR: encode_voicing_decisions]`)*
+Computes `D_k` (Eq. 35, and Eq. 36 for the top band): the share of a band's spectral energy that the harmonic model fails to explain, `sum |S_w - synthetic|^2 / sum |S_w|^2` over the band's bins. A value near 0 means voiced, near 1 unvoiced. A band with no energy at all counts as 1 (unvoiced). The top band extends to the last harmonic instead of stopping at harmonic `3k`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | The frame spectrum. |
+| `k` | `u32` | Band number, 1-based. |
+| `l_hat` | `u32` | Number of harmonics in the frame. |
+| `omega0_hat` | `f64` | Refined fundamental in radians per sample. |
+| `is_highest_band` | `bool` | True for band `K_hat`, which extends to harmonic `l_hat`. |
+
+**Returns:** `f64`, `D_k` (0 voiced to about 1 unvoiced). **Errors:** none. **Special concerns:** public and pure; it builds a `SyntheticSpectrum` for the frame, so call it once per band. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/vuv.rs`. **Signature:** `pub fn voicing_measure(frame: &RefinementFrame, k: u32, l_hat: u32, omega0_hat: f64, is_highest_band: bool) -> f64`. **See also:** `voicing_threshold`, `determine_voicing`; test `harmonic_signal` (`ambe/float/tia_102_baba/vuv.rs`).
+
+#### `update_xi_max` [@ANCHOR: update_xi_max]
+
+Updates the loudness reference `xi_max` (Eq. 41), a slowly decaying maximum of frame energy. When the current frame energy `xi_0` exceeds the previous reference, the new value is the average of the two; otherwise it decays as `0.99 * old + 0.01 * xi_0` and is never allowed below 20000.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `xi_max_prev` | `f64` | The reference after the previous frame (the caller supplies the initial value for the first frame). |
+| `xi_0` | `f64` | The current frame's energy. |
+
+**Returns:** `f64`, the new `xi_max`, at least 20000 in the decaying case. **Errors:** none. **Special concerns:** public and pure; the caller carries the state between frames. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/vuv.rs`. **Signature:** `pub fn update_xi_max(xi_max_prev: f64, xi_0: f64) -> f64`. **See also:** `determine_voicing`; test `energy_dependent_function_matches_eq42_in_both_branches` (`ambe/float/tia_102_baba/vuv.rs`).
+
+#### `energy_dependent_function` [@ANCHOR: energy_dependent_function]
+
+Computes `M(xi)` (Eq. 42), the loudness term of the voicing threshold: `(0.0025 xi_max + xi_0) / (0.01 xi_max + xi_0)`, scaled down by `sqrt(xi_LF / (5 xi_HF))` when the low-frequency energy is under five times the high-frequency energy. Quiet frames get a larger value, which makes the threshold more forgiving.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `xi_max` | `f64` | The loudness reference from `update_xi_max`. |
+| `xi_0` | `f64` | Frame energy. |
+| `xi_lf` | `f64` | Low-frequency energy. |
+| `xi_hf` | `f64` | High-frequency energy. |
+
+**Returns:** `f64`, `M(xi)`. **Errors:** none; a zero `xi_hf` takes the unscaled branch. The denominator is positive because `update_xi_max` keeps `xi_max` at 20000 or more. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/vuv.rs`. **Signature:** `pub fn energy_dependent_function(xi_max: f64, xi_0: f64, xi_lf: f64, xi_hf: f64) -> f64`. **See also:** `voicing_threshold`; test `frequency_bands_count_matches_eq34_including_the_l_le_36_boundary` (`ambe/float/tia_102_baba/vuv.rs`).
+
+#### `voicing_threshold` [@ANCHOR: voicing_threshold]
+
+Computes `Theta(k, omega0)` (Eq. 37): band `k` is voiced when its measure `D_k` is below the threshold. The threshold is zero for every band after the first when the initial pitch error exceeds 0.5 (no band can then be voiced); otherwise it is `0.5625` (the band was voiced in the previous frame) or `0.45` (it was not), times `1 - 0.3096 (k - 1) omega0`, times `M(xi)`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `k` | `u32` | Band number, 1-based. |
+| `omega0_hat` | `f64` | Refined fundamental in radians per sample. |
+| `initial_pitch_error` | `f64` | The initial pitch error `E(P)` of the chosen pitch. |
+| `previous_band_voiced` | `bool` | Whether band `k` was voiced in the previous frame. |
+| `m_xi` | `f64` | `M(xi)` from `energy_dependent_function`. |
+
+**Returns:** `f64`, the threshold (0 or more). **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/vuv.rs`. **Signature:** `pub fn voicing_threshold(k: u32, omega0_hat: f64, initial_pitch_error: f64, previous_band_voiced: bool, m_xi: f64) -> f64`. **See also:** `voicing_measure`, `determine_voicing`; test `voicing_measure_is_near_zero_for_the_first_band_of_a_real_harmonic_signal` (`ambe/float/tia_102_baba/vuv.rs`).
+
+#### `determine_voicing` [@ANCHOR: determine_voicing]
+
+Runs the whole voiced/unvoiced decision for a frame (Fig. 11): it computes `L` and `K`, the energy terms (`xi_lf`, `xi_hf`, `xi_0`), the updated `xi_max` and `M(xi)`, then one flag per band, voiced when `voicing_measure < voicing_threshold`. A previous frame with fewer bands (or none) reads as unvoiced for the missing bands, which is this implementation's choice because the standard is silent on it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | The frame spectrum. |
+| `omega0_hat` | `f64` | Refined fundamental in radians per sample. |
+| `initial_pitch_error` | `f64` | Error of the initial pitch estimate. |
+| `xi_max_prev` | `f64` | Loudness reference from the previous frame. |
+| `previous_v` | `&[bool]` | The previous frame's band flags (may be shorter or empty). |
+
+**Returns:** `(Vec<bool>, f64)`: the per-band voiced flags (length `K_hat`) and the new `xi_max` to carry to the next frame. **Errors:** none. **Special concerns:** public and pure; the caller owns the cross-frame state (`xi_max`, flags). Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/vuv.rs`. **Signature:** `pub fn determine_voicing(frame: &RefinementFrame, omega0_hat: f64, initial_pitch_error: f64, xi_max_prev: f64, previous_v: &[bool]) -> (Vec<bool>, f64)`. **See also:** `encode_voicing_decisions`, `voicing_measure`, `voicing_threshold`, `update_xi_max`; test `voicing_measure_is_near_zero_for_the_first_band_of_a_real_harmonic_signal` (`ambe/float/tia_102_baba/vuv.rs`).
+
+#### `encode_voicing_decisions` [@ANCHOR: encode_voicing_decisions]
+
+Packs the per-band voiced flags into the quantizer value `b_hat_1` (Eq. 49): band 1 is the most significant of the `K` bits and a voiced band is a 1.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `voiced` | `&[bool]` | The flags, band 1 first; length `K_hat` (at most 12). |
+
+**Returns:** `u32`, the packed bits. **Errors:** none; more than 32 flags would overflow the shift (never produced, `K_hat` is at most 12). **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/parameter_encoding.rs`. **Signature:** `pub fn encode_voicing_decisions(voiced: &[bool]) -> u32`. **See also:** `determine_voicing`; test `decode_voicing_decisions_per_harmonic_matches_eq51s_own_literal_formula` (`ambe/float/tia_102_baba/parameter_encoding.rs`).
 
 ### Spectral amplitude estimation (section 5.3)
 
