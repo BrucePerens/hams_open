@@ -15,7 +15,7 @@ The daemons that file a safety ticket authenticate as the service account with a
 registry row was added by hand on hams.com, so a new install never had the key and a flagged contact could not become a ticket. This
 function registers the row, so the key is issued and rotated like every other daemon key (every 59 days; the bots read the file again
 for each ticket, so a rotation costs them nothing). `post_init_hook` calls it on a fresh install and `migrations/1.1` calls it once on
-an installed database (the migration's `migrate(cr, version)` does nothing when there is no version, and raises `ValueError` when the service account is missing) [@ANCHOR: hams_ai_safety_reporting:migrate].
+an installed database (`migrate(cr, version)`, documented last).
 
 | Argument | Type and range | Meaning |
 |---|---|---|
@@ -56,3 +56,23 @@ observer file safety tickets with, from the moment the module is installed.
 Behaviour worth knowing: it writes `/opt/hams/etc/keys/ai_safety_reporting_service_internal.env` as a side effect, so a test host that
 installs the module gets that file (the same is true of every module that registers a daemon key). It is not idempotent in effect (each
 call mints a new key) but it runs only once per install. Tests: `tests/test_ai_safety_reporting_key.py`.
+
+## `migrate(cr, version)`: registering the key on an installed database
+
+`migrations/1.1/post-register-ai-safety-reporting-key.py`, run by Odoo's upgrade machinery [@ANCHOR: hams_ai_safety_reporting:migrate]
+
+Version 1.0 never registered the service account's daemon key (it was added by hand on hams.com), and `post_init_hook` runs only on a fresh install, so an already installed database gets the key here when it is upgraded to 1.1. It looks up the service account (`hooks.SERVICE_XMLID`) in `ir_model_data` with a plain SQL query, then calls `register_ai_safety_reporting_key` with an environment for that user. Odoo calls it once per upgrade past 1.1; it takes no other action.
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `cr` | database cursor | The upgrade's cursor, inside the upgrade transaction. |
+| `version` | str or `None` | The previously installed version; `None` or empty on a fresh install. |
+
+| Result | Meaning |
+|---|---|
+| `None` (nothing done) | `version` is empty: a fresh install, where `post_init_hook` does the work. |
+| `None` (key registered) | The registry row exists or was updated, and a fresh key was minted and written, exactly as `register_ai_safety_reporting_key` does. |
+| `ValueError` (raised) | The service account's external id is not in `ir_model_data`; the upgrade stops. |
+| any exception of `register_ai_safety_reporting_key` | Passes through, so the upgrade fails rather than leaving the bots without a key. |
+
+Behaviour worth knowing: a row already holding the key file is kept under its own name (see above), so the migration is safe on hams.com's hand-made row. Each run mints a new key and writes `/opt/hams/etc/keys/ai_safety_reporting_service_internal.env`, so it must not be run repeatedly. The environment is the service account's own, not the superuser's. Tests: `tests/test_ai_safety_reporting_key.py` (`test_the_migration_registers_the_key_on_an_installed_database_only`: no version does nothing, version 1.0 registers the key, a second run updates the same row); the `ValueError` branch for a missing account has no direct test (to-do: add one).
