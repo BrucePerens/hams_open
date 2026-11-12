@@ -1395,68 +1395,195 @@ Chains the enhancement and smoothing steps into the final synthesis inputs: spec
 
 ### Speech synthesis (section 11)
 
-`SynthesisState::synthesize_core` produces 160 samples from final parameters: it advances the shared noise generator by one frame
-(except before the first), runs unvoiced and voiced synthesis and adds them as Eq. 142, the unvoiced part times a per-mode gain
-that is 1 for the standard. Normal frames and repeated frames both end here.
-*(Reference: `src/ambe/float/tia_102_baba/synthesis.rs` -> `[@ANCHOR: SynthesisState::synthesize_core]`)*
+#### `SynthesisState::synthesize_core` [@ANCHOR: SynthesisState::synthesize_core]
 
-`synthesis_window` is the Annex I window `w_S(n)`: a trapezoid equal to 1 for `|n| <= 55`, falling linearly to 0 at `|n| = 105`,
-and 0 outside. It is computed by formula instead of table.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: synthesis_window]`)*
+Produces the 160 output samples of one frame from the final synthesis parameters. It advances the shared noise generator by one frame (except before the first frame), runs the unvoiced and the voiced synthesizers, and adds them as Eq. 142, the unvoiced part multiplied by a per-mode gain that is 1.0 for the standard. Normal frames and repeated frames both end here.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut SynthesisState` | The decoder's synthesis state. |
+| `omega0_tilde` | `f64` | Fundamental in radians per sample. |
+| `voiced` | `&[bool]` | Per-harmonic voiced flags, harmonic 1 first. |
+| `final_amplitudes` | `&[f64]` | Per-harmonic amplitudes after enhancement and smoothing; same length as `voiced`. |
+
+**Returns:** `Option<[f64; 160]>`, the audio frame (floating point, scaled by the caller). **Errors:** `None` when the slices differ in length or have more than 56 harmonics (from the two sub-synthesizers). **Special concerns:** private; mutates the noise generator, the overlap history and the phase state, so frames must be synthesized in order from one thread at a time. No I/O. Not a transmit path (it makes audio, it does not key anything).
+
+**Location:** `src/ambe/float/tia_102_baba/synthesis.rs`. **Signature:** `fn synthesize_core(&mut self, omega0_tilde: f64, voiced: &[bool], final_amplitudes: &[f64]) -> Option<[f64; N]>`. **See also:** `UnvoicedState::synthesize`, `VoicedState::synthesize`; test `synthesize_comfort_frame_does_not_perturb_the_shared_noise_state` (`ambe/float/tia_102_baba/synthesis.rs`).
+
+#### `synthesis_window` [@ANCHOR: synthesis_window]
+
+Evaluates the Annex I synthesis window `w_S(n)`: a trapezoid equal to 1 for `|n| <= 55`, falling linearly to 0 at `|n| = 105`, and 0 outside. It is computed by the formula `0.02 * (105 - |n|)` clamped to 0..1 instead of being read from a table.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `n` | `i32` | Sample offset from the window centre. |
+
+**Returns:** `f64` in 0.0..=1.0. **Errors:** none. **Special concerns:** public and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `pub fn synthesis_window(n: i32) -> f64`. **See also:** `UnvoicedState::synthesize`, `VoicedState::synthesize`; test `default` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
 
 The unvoiced half uses a deterministic noise sequence (Eq. 117, `u(n+1) = (171 u(n) + 11213) mod 53125`, starting at 3147).
-`NoiseState::new` builds the generator's window of 209 values, `u(-104)..u(104)`, by stepping the recurrence 209 times.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: NoiseState::new]`)*
+#### `NoiseState::new` [@ANCHOR: NoiseState::new]
 
-`NoiseState::step` advances the recurrence one value and slides the window by one.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: NoiseState::step]`)*
+Creates the deterministic noise generator of the unvoiced half and of the voiced phase randomisation (Eq. 117, `u(n+1) = (171 u(n) + 11213) mod 53125`, starting at `u(-105) = 3147`). It builds the generator's window of 209 values, `u(-104)..u(104)`, by stepping the recurrence 209 times.
 
-`NoiseState::advance_frame` moves the window on by one frame, 160 steps.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: NoiseState::advance_frame]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
 
-`NoiseState::at` reads `u(relative)` for `relative` in `-104..=104` and returns `None` outside it. Both the unvoiced transform and the
-voiced phase randomisation read the same window.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: NoiseState::at]`)*
+**Returns:** a `NoiseState` holding the last value and the 209-value window. **Errors:** none. **Special concerns:** public constructor; the noise is deterministic, so two decoders given the same frames produce the same audio. No I/O. Not for any security purpose.
 
-`unvoiced_dft` is `U_w(m)` (Eq. 118): the 256-point DFT of the windowed noise for `m = -128..=127` (note the one-bin offset from the
-analysis spectrum's range). It uses a shared table of the 256 complex exponentials.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: unvoiced_dft]`)*
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `pub fn new() -> Self`. **See also:** `NoiseState::step`, `NoiseState::at`; test `advance_noise_matches_a_hand_computed_sequence_from_the_real_seed` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
 
-`unvoiced_scaling_coefficient` is the constant `gamma_w` (Eq. 121) relating the analysis and synthesis windows, about 146.64,
-computed once from the two windows.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: unvoiced_scaling_coefficient]`)*
+#### `NoiseState::step` [@ANCHOR: NoiseState::step]
 
-`unvoiced_spectrum` builds the shaped noise spectrum (Eq. 119-120, 124): all bins start at zero; for each *unvoiced* harmonic, the
-noise spectrum inside its band is rescaled so its mean power matches that harmonic's amplitude, and the matching negative-frequency
-bins get the same scaling. Bands that reach past the Nyquist bin are clipped. It returns `None` if the two input slices differ in
-length.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: unvoiced_spectrum]`)*
+Advances the noise recurrence by one value and slides the 209-value window by one (the oldest value is dropped).
 
-`unvoiced_time_domain` inverts that spectrum with a 256-point inverse DFT (Eq. 125) and keeps the real part, which is the whole
-result because the spectrum is conjugate-symmetric.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: unvoiced_time_domain]`)*
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut NoiseState` | The generator, mutated. |
 
-`time_domain_at` reads one sample of that 256-sample result for `n` in `-128..=127`, and returns 0 outside.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: time_domain_at]`)*
+**Returns:** nothing. **Errors:** none. **Special concerns:** private; mutates the state. Pure computation: no I/O, no locks, no transmit side effects.
 
-`UnvoicedState::synthesize` produces the 160 unvoiced samples (Eq. 117-126): it builds this frame's time-domain noise and
-overlap-adds it with the previous frame's, each weighted by the synthesis window and normalised by the sum of the squared windows.
-The current result becomes the next call's history. `None` if the voicing and amplitude slices differ in length.
-*(Reference: `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs` -> `[@ANCHOR: UnvoicedState::synthesize]`)*
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `fn step(&mut self)`. **See also:** `NoiseState::advance_frame`; test `advance_noise_matches_a_hand_computed_sequence_from_the_real_seed` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
 
-`delta_omega` is `Delta omega_l` of Eq. 137-138, the small frequency correction that makes a harmonic's phase ramp across the frame
-land exactly on the target phase: the phase error, after removing the nominal advance and wrapping into `[-pi, pi)`, divided by 160.
-It is a per-harmonic constant, so it is computed once per harmonic.
-*(Reference: `src/ambe/float/tia_102_baba/voiced_synthesis.rs` -> `[@ANCHOR: delta_omega]`)*
+#### `NoiseState::advance_frame` [@ANCHOR: NoiseState::advance_frame]
 
-`VoicedState::synthesize` produces the 160 voiced samples (Eq. 127-141) as a sum of sinusoids, one per harmonic. First every
-harmonic's phase is advanced (the phase accumulator `psi`, plus a random offset from the shared noise for harmonics above `L/4`
-that are in use). Then each harmonic is rendered according to whether it was voiced in the previous frame and is voiced now: not at
-all, faded out under the window, faded in under the window, or, if voiced in both, either the two halves cross-faded (for harmonics
-8 and up, or a pitch change of 10% or more) or one continuous sinusoid with interpolated amplitude and frequency. Everything is
-multiplied by 2. It then stores the frame's parameters as the history. It returns `None` for mismatched slices or more than 56
-harmonics.
-*(Reference: `src/ambe/float/tia_102_baba/voiced_synthesis.rs` -> `[@ANCHOR: VoicedState::synthesize]`)*
+Moves the noise window on by one frame, 160 steps of the recurrence. `synthesize_core` calls it before every frame except the first, so each frame sees the next stretch of noise.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut NoiseState` | The generator, mutated. |
+
+**Returns:** nothing. **Errors:** none. **Special concerns:** public; mutates the state (160 recurrence steps). Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `pub fn advance_frame(&mut self)`. **See also:** `NoiseState::step`; test `unvoiced_spectrum_band_edge_stays_in_range_for_every_valid_b0` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
+
+#### `NoiseState::at` [@ANCHOR: NoiseState::at]
+
+Reads `u(relative)` from the noise window for `relative` in `-104..=104`. Both the unvoiced transform and the voiced phase randomisation read the same window.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&NoiseState` | The generator. |
+| `relative` | `i32` | Position relative to the frame centre. |
+
+**Returns:** `Option<i64>`, the noise value (0..53125). **Errors:** `None` outside `-104..=104`. **Special concerns:** public and read-only. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `pub fn at(&self, relative: i32) -> Option<i64>`. **See also:** `NoiseState::new`; test `advance_noise_matches_a_hand_computed_sequence_from_the_real_seed` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
+
+#### `unvoiced_dft` [@ANCHOR: unvoiced_dft]
+
+Computes `U_w(m)` (Eq. 118): the 256-point DFT of the current frame's windowed noise `u(n) * w_S(n)` for `m = -128..=127` (note the one-bin offset from the analysis spectrum's range `-127..=128`, a real difference between Eq. 29 and Eq. 118). It reduces every product `m * n` to a shared table of the 256 complex exponentials (`twiddles`, computed once in a `OnceLock`). The source anchor `unvoiced_dft` sits on that `twiddles` helper; the function `unvoiced_dft` itself also carries the namespaced anchor `ham_digital_modes:float_tia_102_baba_unvoiced_synthesis_unvoiced_dft`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `noise` | `&NoiseState` | The generator; the window `-104..=104` must be present. |
+
+**Returns:** `[Complex; 256]`, bins `m = -128..=127` at index `m + 128`. **Errors:** none (it expects the noise window to be full, which `NoiseState::new` guarantees; it would panic otherwise). **Special concerns:** private; about 256 * 209 complex multiply-adds per frame. The twiddle table is initialised once and shared (thread-safe). Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `fn unvoiced_dft(noise: &NoiseState) -> [Complex; 256]`. **See also:** `unvoiced_spectrum`; test `unvoiced_scaling_coefficient_matches_imbe_rs_own_hardcoded_constant` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
+
+#### `unvoiced_scaling_coefficient` [@ANCHOR: unvoiced_scaling_coefficient]
+
+Returns the constant `gamma_w` (Eq. 121) that relates the pitch refinement window to the synthesis window, about 146.64. It is a constant of the two window definitions alone, not frame data, so it is computed once on first use and cached in a `OnceLock`; a test compares it with an independent implementation's hardcoded value.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| (none) | | |
+
+**Returns:** `f64`, about 146.6432708. **Errors:** none. **Special concerns:** public; the first call computes it, later calls read the cache; thread-safe. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `pub fn unvoiced_scaling_coefficient() -> f64`. **See also:** `unvoiced_spectrum`; test `noise_state_new_fills_the_first_frames_window_starting_from_the_real_seed` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
+
+#### `unvoiced_spectrum` [@ANCHOR: unvoiced_spectrum]
+
+Builds the shaped noise spectrum `U~_w(m)` (Eq. 119-120 and 124): all 256 bins start at zero; for each unvoiced harmonic, the noise spectrum inside its band (`ceil(a_l)` to `ceil(b_l)`) is rescaled so its mean power matches that harmonic's amplitude times `gamma_w`, and the matching negative-frequency bins get the same scaling. Voiced harmonics leave their band zero. Bands that reach past the Nyquist bin are clipped to 128.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `noise` | `&NoiseState` | The generator. |
+| `omega0_tilde` | `f64` | Fundamental in radians per sample. |
+| `voiced` | `&[bool]` | Per-harmonic voiced flags. |
+| `spectral_amplitudes` | `&[f64]` | Per-harmonic amplitudes, same length as `voiced`. |
+| `gamma_w` | `f64` | The constant from `unvoiced_scaling_coefficient`. |
+
+**Returns:** `Option<[Complex; 256]>`. **Errors:** `None` when `voiced` and `spectral_amplitudes` differ in length. **Special concerns:** private and pure apart from reading the noise window. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `fn unvoiced_spectrum(noise: &NoiseState, omega0_tilde: f64, voiced: &[bool], spectral_amplitudes: &[f64], gamma_w: f64) -> Option<[Complex; 256]>`. **See also:** `unvoiced_dft`, `unvoiced_time_domain`; test `unvoiced_scaling_coefficient_matches_imbe_rs_own_hardcoded_constant` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
+
+#### `unvoiced_time_domain` [@ANCHOR: unvoiced_time_domain]
+
+Inverts the shaped noise spectrum with a 256-point inverse DFT (Eq. 125) and keeps the real part, which is the whole result because the spectrum is conjugate-symmetric.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `spectrum` | `&[Complex; 256]` | The spectrum from `unvoiced_spectrum`, bins `-128..=127` at index `m + 128`. |
+
+**Returns:** `[f64; 256]`, samples `n = -128..=127` at index `n + 128`. **Errors:** none. **Special concerns:** private and pure; about 256 * 256 complex multiply-adds per frame using the shared twiddle table. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `fn unvoiced_time_domain(spectrum: &[Complex; 256]) -> [f64; 256]`. **See also:** `time_domain_at`; test `unvoiced_spectrum_band_edge_stays_in_range_for_every_valid_b0` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
+
+#### `time_domain_at` [@ANCHOR: time_domain_at]
+
+Reads one sample of the 256-sample unvoiced time-domain result for `n` in `-128..=127`, and returns 0 outside that range (the spec's convention that the sequence is zero elsewhere), so the overlap-add can index two shifted frames without bounds checks.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `samples` | `&[f64; 256]` | The time-domain result. |
+| `n` | `i32` | Sample offset. |
+
+**Returns:** `f64`. **Errors:** none. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `fn time_domain_at(samples: &[f64; 256], n: i32) -> f64`. **See also:** `UnvoicedState::synthesize`; test `unvoiced_spectrum_band_edge_stays_in_range_for_every_valid_b0` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
+
+#### `UnvoicedState::synthesize` [@ANCHOR: UnvoicedState::synthesize]
+
+Produces the 160 unvoiced samples of a frame (Eq. 117-126): it builds this frame's time-domain noise from `unvoiced_spectrum` and overlap-adds it with the previous frame's, each weighted by the synthesis window and normalised by the sum of the squared windows. The current time-domain result becomes the history for the next call.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut UnvoicedState` | Holds the previous frame's 256 time-domain samples; replaced. |
+| `noise` | `&NoiseState` | The generator. |
+| `omega0_tilde` | `f64` | Fundamental in radians per sample. |
+| `voiced` | `&[bool]` | Per-harmonic voiced flags. |
+| `spectral_amplitudes` | `&[f64]` | Per-harmonic amplitudes. |
+
+**Returns:** `Option<[f64; 160]>`. **Errors:** `None` if the voicing and amplitude slices differ in length (the history is not changed in that case). **Special concerns:** public; mutates the history, so frames must be fed in order by one owner. No I/O. No transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`. **Signature:** `pub fn synthesize(&mut self, noise: &NoiseState, omega0_tilde: f64, voiced: &[bool], spectral_amplitudes: &[f64]) -> Option<[f64; N]>`. **See also:** `SynthesisState::synthesize_core`; test `unvoiced_spectrum_band_edge_stays_in_range_for_every_valid_b0` (`ambe/float/tia_102_baba/unvoiced_synthesis.rs`).
+
+#### `delta_omega` [@ANCHOR: delta_omega]
+
+Computes `Delta omega_l` (Eq. 137-138), the small frequency correction that makes a harmonic's phase ramp across the frame land exactly on the target phase: the phase error, after removing the nominal advance `(omega0_prev + omega0_curr) * l * 160 / 2` and wrapping into `[-pi, pi)`, divided by 160. It is a per-harmonic constant, so it is computed once per harmonic and frame.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `phi_prev` | `f64` | Phase of the harmonic at the start of the frame. |
+| `phi_curr` | `f64` | Target phase at the end of the frame. |
+| `omega0_prev` | `f64` | Previous frame's fundamental in radians per sample. |
+| `omega0_curr` | `f64` | This frame's fundamental. |
+| `l` | `u32` | Harmonic number. |
+
+**Returns:** `f64`, the frequency correction in radians per sample. **Errors:** none. **Special concerns:** private and pure. Pure computation: no I/O, no locks, no transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/voiced_synthesis.rs`. **Signature:** `fn delta_omega(phi_prev: f64, phi_curr: f64, omega0_prev: f64, omega0_curr: f64, l: u32) -> f64`. **See also:** `VoicedState::synthesize`; test `default` (`ambe/float/tia_102_baba/voiced_synthesis.rs`).
+
+#### `VoicedState::synthesize` [@ANCHOR: VoicedState::synthesize]
+
+Produces the 160 voiced samples of a frame (Eq. 127-141) as a sum of sinusoids, one per harmonic. First every harmonic's phase is advanced (the phase accumulator `psi`, plus a random offset from the shared noise for harmonics above `L/4` that are in use). Then each harmonic is rendered according to whether it was voiced in the previous frame and is voiced now: not at all, faded out under the window, faded in under the window, or, if voiced in both, either the two halves cross-faded (for harmonic 8 and up, or a fundamental change of 10% or more) or one continuous sinusoid with interpolated amplitude and frequency. Every term is multiplied by 2 (Eq. 127). It then stores the frame's parameters as the history.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `self` | `&mut VoicedState` | Holds the phase accumulators, the previous fundamental, flags and amplitudes; replaced at the end. |
+| `noise` | `&NoiseState` | The generator, read for the phase randomisation. |
+| `omega0_curr` | `f64` | This frame's fundamental in radians per sample. |
+| `voiced` | `&[bool]` | Per-harmonic voiced flags. |
+| `spectral_amplitudes` | `&[f64]` | Per-harmonic amplitudes, same length as `voiced`. |
+
+**Returns:** `Option<[f64; 160]>`. **Errors:** `None` for mismatched slices or more than 56 harmonics (the history is not changed). **Special concerns:** public; mutates the history, so frames must be fed in order by one owner. No I/O. The amplitude interpolation shape is the identity for the standard and may be replaced for D-STAR and AMBE+2 by `set_amplitude_interpolation_shape`. No transmit side effects.
+
+**Location:** `src/ambe/float/tia_102_baba/voiced_synthesis.rs`. **Signature:** `pub fn synthesize(&mut self, noise: &NoiseState, omega0_curr: f64, voiced: &[bool], spectral_amplitudes: &[f64]) -> Option<[f64; N]>`. **See also:** `delta_omega`, `SynthesisState::synthesize_core`; test `eq134_branch_reduces_to_the_hand_computed_value_at_n_equals_zero` (`ambe/float/tia_102_baba/voiced_synthesis.rs`).
 
 ## Codec2 1600 decoder LSP (line spectral pair, a way of representing the speech filter) post-processing
 
