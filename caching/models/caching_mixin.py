@@ -11,6 +11,7 @@ from odoo.addons.distributed_redis_cache.redis_cache import distributed_cache, i
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: caching_caching_mixin_caching_mixin]
 class CachingMixin(models.AbstractModel):
     _name = 'caching.mixin'
     _description = 'Caching Utilities'

@@ -9,6 +9,7 @@ from odoo.addons.distributed_redis_cache.redis_pool import redis, get_redis_conn
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: caching_main_service_worker_controller]
 class ServiceWorkerController(http.Controller):
 
     @http.route("/sw.js", type="http", auth="public", sitemap=False, website=True)

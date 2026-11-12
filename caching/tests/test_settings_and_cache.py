@@ -10,6 +10,8 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 @tagged("post_install", "-at_install")
 class TestSettingsAndCache(RealTransactionCase):
 
+    # Tests [@ANCHOR: caching_website_website]
+    # Tests [@ANCHOR: caching_res_config_settings_res_config_settings]
     def test_01_quota_config_updates_sw(self):
         # [@ANCHOR: test_settings_and_cache_01]
 

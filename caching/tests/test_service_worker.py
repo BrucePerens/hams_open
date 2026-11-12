@@ -11,6 +11,7 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 @tagged("post_install", "-at_install")
 class TestServiceWorker(HamsHttpCase):
 
+    # Tests [@ANCHOR: caching_main_service_worker_controller]
     def test_01_sw_headers(self):
         # [@ANCHOR: COMM_test_service_worker_01]
 
@@ -100,6 +101,7 @@ class TestServiceWorker(HamsHttpCase):
         self.assertNotIn("__TEST_HOOKS_ENABLED__", body)
         broken.get.assert_called_once_with("caching_sw_js_content")
 
+    # Tests [@ANCHOR: caching_pwa_pwacontroller]
     def test_02_offline_fallback_page_renders(self):
         # Tests [@ANCHOR: COMM_test_caching_pwa_offline_view]
 

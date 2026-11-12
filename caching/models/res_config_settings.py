@@ -11,6 +11,7 @@ HELP_SAFE_QUOTA = """Maximum total size in MB of cached files. If total files ex
 HELP_INVALIDATION = """Increment this value to force users' browsers to immediately wipe their cache."""
 
 
+# [@ANCHOR: caching_res_config_settings_res_config_settings]
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
