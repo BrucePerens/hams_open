@@ -3059,17 +3059,447 @@ the two halves into `i64` Q16.16 (Eq. 142). The sum stays `i64` rather than bein
 
 ## Fixed and float AMBE quantizers, reconstruction and wire decode anchored in slice 8
 
-`decode_frame` (RATET(27) wire bytes to the eight confirmed sub-blocks) is cited by the tests on a real captured DTMF frame and a real DTX silence frame. The
-shared MBE quantizer (`quantize_speech`, `nearest`, `prev_at`, fixed and float) is cited by the tests that invert the decoder over random indices and that
-compare fixed with float on thousands of random frames; `dequantize_speech` and its `prev_at` by the fixed-versus-float dequantize test;
-`analyze_at_pitch` (float) and the fixed `analyze_and_quantize`, `frequency_bands_count` and the TIA quantizers (`quantize_gain_vector_q16`,
-`quantize_higher_order_coefficients_q16`, `encode_prioritized_bits`, float and fixed) by the real-speech parity tests. The TIA reconstruction chain
-(`reconstruct_gain_vector_q16`, `inverse_gain_vector_dct_q16`, `reconstruct_higher_order_coefficients_q16`, `inverse_block_dct_q16`,
-`predicted_and_bias_correction_q16`) is cited by the representative-sequence test against the float reconstruction, `weight_q16` by the enhancement test, the
-float refiner's `SyntheticSpectrum::at` and `window_dft_16384_direct` by the pitch-refinement test, and `synthesize_repeated_frame_scaled` (fixed and
-float) and the fixed `Concealer::continuity_cost_q16` by the concealment policy test.
+These are the shared MBE quantizer (the inverse of the decoder), the TIA-102 quantizers and reconstruction chain, and the RATET(27) frame decoder. All are pure computations (state is
+passed in explicitly), with no I/O, locks or transmitter involvement; the fixed versions are Q16.16 integer code that the tests compare with the float versions on thousands of random frames and on real speech.
 
-  *(Reference: `src/ambe/dvsi_p25fec/frame.rs` -> `[@ANCHOR: ham_digital_modes:dvsi_p25fec_frame_decode_frame]`; `src/ambe/fixed/general/concealment.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_concealment_Concealer_continuity_cost_q16]`; `src/ambe/fixed/general/mbe_encode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_quantize_speech]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_nearest]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_prev_at]`; `src/ambe/float/mbe_encode.rs` -> `[@ANCHOR: ham_digital_modes:float_mbe_encode_quantize_speech]`, `[@ANCHOR: ham_digital_modes:float_mbe_encode_nearest]`, `[@ANCHOR: ham_digital_modes:float_mbe_encode_prev_at]`, `[@ANCHOR: ham_digital_modes:float_mbe_encode_analyze_at_pitch]`; `src/ambe/fixed/general/mbe_speech.rs` -> `[@ANCHOR: ham_digital_modes:fixed_general_mbe_speech_dequantize_speech]`, `[@ANCHOR: ham_digital_modes:fixed_general_mbe_speech_prev_at]`; `src/ambe/fixed/mbe_encode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_mbe_encode_analyze_and_quantize]`; `src/ambe/fixed/tia_102_baba/encode.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encode_encode_prioritized_bits]`; `src/ambe/float/tia_102_baba/mod.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_mod_encode_prioritized_bits]`; `src/ambe/fixed/tia_102_baba/quantize.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_quantize_quantize_gain_vector_q16]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_quantize_quantize_higher_order_coefficients_q16]`; `src/ambe/fixed/tia_102_baba/reconstruct.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_reconstruct_gain_vector_q16]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_inverse_gain_vector_dct_q16]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_reconstruct_higher_order_coefficients_q16]`, `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_inverse_block_dct_q16]`; `src/ambe/fixed/tia_102_baba/prediction.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_prediction_predicted_and_bias_correction_q16]`; `src/ambe/fixed/tia_102_baba/enhancement.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_enhancement_weight_q16]`; `src/ambe/fixed/tia_102_baba/vuv.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_frequency_bands_count]`; `src/ambe/float/tia_102_baba/pitch_refinement.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_pitch_refinement_SyntheticSpectrum_at]`, `[@ANCHOR: ham_digital_modes:float_tia_102_baba_pitch_refinement_window_dft_16384_direct]`; `src/ambe/fixed/tia_102_baba/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_repeated_frame_scaled]`; `src/ambe/float/tia_102_baba/synthesis.rs` -> `[@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_repeated_frame_scaled]`)*
+### `decode_frame` (RATET27 wire) [@ANCHOR: ham_digital_modes:dvsi_p25fec_frame_decode_frame]
+
+Decodes a RATET(27) channel frame, the DVSI chip's 144-bit `CHAND` field, into all eight confirmed sub-blocks. The 18 bytes are unpacked MSB-first into 144 wire bits, then each block is decoded with `decode_block`: four Golay blocks (`g0` to `g3`), three Hamming blocks
+(`u4` to `u6`) and the raw unprotected field `c7`. Each result carries the decoded value and its FEC distance (corrected-bit count; always 0 for `c7`).
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `wire_bytes` | `&[u8; 18]` | The frame bytes starting at the packet's `BITS_OFFSET` |
+
+**Returns:** `Ratet27Frame` (`g0`..`g3`, `u4`..`u6`, `c7` as `DecodedBlock { value, distance }`); helpers on it give `total_distance`, `dtmf_digit` and `is_dtx_silence`.
+**Errors:** none; uncorrectable blocks return the nearest codeword and a nonzero distance.
+**Special concerns:** pure; it does not classify `VOICE_ACTIVE` (not possible from `g0` alone) and does no `PKT_CHANFMT` parsing.
+**Signature:** `pub fn decode_frame(wire_bytes: &[u8; 18]) -> Ratet27Frame`
+**See also:** tests in `src/ambe/dvsi_p25fec/frame.rs` (a real captured DTMF frame and a real DTX silence frame).
+
+### `Concealer::continuity_cost_q16` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_concealment_Concealer_continuity_cost_q16]
+
+Cost, in nats as Q16.16, of a candidate reading given the previous accepted frame; `decide` adds it to the bit-flip cost. With no previous frame it is zero. Otherwise it sums level change in dB over `level_scale`, spectral-shape RMS difference
+over `shape_scale`, a fixed cost per differing voicing band, and (when both frames are voiced) the absolute log-ratio of the pitches over `pitch_scale`. Each scale is widened by `1 + widen_per_repeat * repeats`, so the prior loosens as repeats accumulate.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `c` | `&Descriptor` | Candidate frame description |
+
+**Returns:** `i64`, cost, Q16.16.
+**Errors:** none.
+**Special concerns:** private; reads the stored previous descriptor and repeat count; pure otherwise.
+**Signature:** `fn continuity_cost_q16(&self, c: &Descriptor) -> i64`
+**See also:** test in `tests/ambe_error_policy.rs` (the concealment policy test); `fixed_general_concealment_Concealer_decide`.
+
+### `quantize_speech` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_quantize_speech]
+
+The fixed-point mode-independent quantizer of one frame's MBE speech parameters (D-STAR and AMBE+2), the inverse of `dequantize_speech` using the decoder's exact integer prediction terms. It chooses `b1`, the voicing pattern agreeing best with the target (amplitude-weighted),
+`b2` the nearest gain delta, then DCTs the zero-mean log-amplitude residual in four blocks to find the PRBA vectors `b3` and `b4` and the four higher-order indices `b5` to `b8` by nearest-row search.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `target` | `&SpeechTarget` | `l`, `vuv_f0_q16`, per-harmonic `voiced`, linear `ml_q16` (as V/UV weights) and `log2_ml_q16` (index 0 unused) |
+| `prev` | `&PrevState` | Mirror of the decoder state (`l`, `log2_ml_q16`, `gamma_q16`) |
+| `tables` | `&ModeTables` | Mode tables (V/UV, DG, PRBA24/58, LMPRBL, HOC) and the decoder constants |
+
+**Returns:** `QuantizedSpeech` (`b1` to `b8`).
+**Errors:** none raised; `target` slices must have length `l + 1`.
+**Special concerns:** pure; O(table sizes); the agreement with the float quantizer is measured in `tests/ambe_fixed_mbe_encode.rs`.
+**Signature:** `pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTables) -> QuantizedSpeech`
+**See also:** tests in `tests/ambe_fixed_mbe_encode.rs`; `fixed_general_mbe_encode_nearest`, `fixed_mbe_encode_analyze_and_quantize`.
+
+### `nearest` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_nearest]
+
+Finds the row of a Q16.16 codebook closest to a target vector: the index of the minimum squared distance over the first `used` columns, accumulated in `i64`. With `only_even` set it skips odd rows (D-STAR `b8` only carries even indices). The first row wins ties.
+`quantize_speech` uses it for the PRBA and higher-order searches.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `table` | `&[[i32; N]]` | Codebook rows |
+| `target` | `&[i32; N]` | Target vector |
+| `used` | `usize` | Number of leading columns compared |
+| `only_even` | `bool` | Consider even rows only |
+
+**Returns:** `u32`, the row index (0 for an empty table).
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn nearest<const N: usize>(table: &[[i32; N]], target: &[i32; N], used: usize, only_even: bool) -> u32`
+**See also:** tests in `tests/ambe_fixed_mbe_encode.rs`; `float_mbe_encode_nearest`.
+
+### `prev_at` (fixed encoder) [@ANCHOR: ham_digital_modes:fixed_general_mbe_encode_prev_at]
+
+Reads the previous frame's log2 amplitude `log2_ml_q16[idx]` for the prediction, as the decoder does: index 0 reads index 1 (mbelib sets the previous `log2Ml[0]` to `log2Ml[1]`), and an index past the end reads the last element, because the previous frame's `L` can differ
+from this frame's. An empty slice gives 0. The result is widened to `i64`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `log2_ml_q16` | `&[i32]` | Previous frame's log2 amplitudes, Q16.16 |
+| `idx` | `usize` | Harmonic index (interpolation position) |
+
+**Returns:** `i64`.
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i64`
+**See also:** tests in `tests/ambe_fixed_mbe_encode.rs`; `fixed_general_mbe_speech_prev_at`.
+
+### `quantize_speech` (float) [@ANCHOR: ham_digital_modes:float_mbe_encode_quantize_speech]
+
+The float reference quantizer: the same structure as the fixed one, taking linear amplitudes and computing `ln(m) / 0.693` inside (the decoder's constant). It panics if any `target.ml[1..=l]` is non-finite, so a NaN amplitude cannot silently be floored and quantized into a confident-looking frame.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `target` | `&SpeechTarget` | `l`, `w0`, `vuv_f0`, `voiced`, `ml` (index 0 unused) |
+| `prev` | `&PrevState` | Mirror of the decoder state |
+| `tables` | `&ModeTables` | Mode tables and decoder constants |
+
+**Returns:** `QuantizedSpeech` (`b1` to `b8`).
+**Errors:** panics on a non-finite amplitude.
+**Special concerns:** pure.
+**Signature:** `pub fn quantize_speech(target: &SpeechTarget, prev: &PrevState, tables: &ModeTables) -> QuantizedSpeech`
+**See also:** test in `tests/ambe_float_quantizer_round_trip.rs` (inverts the decoder over random indices); `fixed_general_mbe_encode_quantize_speech`.
+
+### `nearest` (float) [@ANCHOR: ham_digital_modes:float_mbe_encode_nearest]
+
+Row of an `f64` codebook nearest a target vector by squared distance over the first `used` columns; odd rows are skipped when `only_even` is set, and the first row wins ties. The float counterpart of the fixed `nearest`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `table` | `&[[f64; N]]` | Codebook rows |
+| `target` | `&[f64; N]` | Target |
+| `used` | `usize` | Leading columns compared |
+| `only_even` | `bool` | Even rows only |
+
+**Returns:** `u32`, the row index.
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn nearest<const N: usize>(table: &[[f64; N]], target: &[f64; N], used: usize, only_even: bool) -> u32`
+**See also:** test in `tests/ambe_float_quantizer_round_trip.rs`; `fixed_general_mbe_encode_nearest`.
+
+### `prev_at` (float encoder) [@ANCHOR: ham_digital_modes:float_mbe_encode_prev_at]
+
+The previous frame's `log2Ml` at a harmonic index for the prediction, with index 0 read as index 1 and an index past the end clamped to the last element (0.0 if empty), matching the decoder.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `prev` | `&PrevState` | Mirror of the decoder state |
+| `idx` | `usize` | Index |
+
+**Returns:** `f64`.
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn prev_at(prev: &PrevState, idx: usize) -> f64`
+**See also:** test in `tests/ambe_float_quantizer_round_trip.rs`; `fixed_general_mbe_encode_prev_at`.
+
+### `analyze_at_pitch` (float) [@ANCHOR: ham_digital_modes:float_mbe_encode_analyze_at_pitch]
+
+Per-harmonic voicing and amplitudes for one frame at an already-quantized pitch `w0` (rad/sample) with `l` harmonics, reusing TIA-102.BABA's analysis (`vuv::determine_voicing` and `spectral_amplitude`), whose amplitude scale is the one the shared synthesis expects. Both returned vectors are
+1-indexed (index 0 unused), length `l + 1`. The fixed `analyze_at_pitch` mirrors it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&FrameAnalysis` | The streaming analyzer's output for the frame |
+| `w0` | `f64` | Quantized fundamental, radians per sample |
+| `l` | `u32` | Harmonic count |
+| `state` | `&mut AnalysisState` | `xi_max` and previous band decisions; updated |
+
+**Returns:** `(Vec<bool>, Vec<f64>)`: voicing flags and amplitudes.
+**Errors:** none.
+**Special concerns:** mutates `state`, so frames go in order.
+**Signature:** `pub fn analyze_at_pitch(frame: &FrameAnalysis, w0: f64, l: u32, state: &mut AnalysisState) -> (Vec<bool>, Vec<f64>)`
+**See also:** test `fixed_voicing_and_amplitudes_match_float_on_real_speech_q30_omega0`; `fixed_mbe_encode_analyze_at_pitch`.
+
+### `dequantize_speech` (fixed) [@ANCHOR: ham_digital_modes:fixed_general_mbe_speech_dequantize_speech]
+
+The fixed-point speech branch shared by the AMBE+2 and D-STAR dequantizers. Given the caller's resolved `l` and fundamentals, it derives per-harmonic voicing from `b1` (slot `floor(h * 16 * f0)`, at most 7), updates the gain `gamma` from `b2`, rebuilds `Gm`, `Ri` and the DCT coefficients from `b3` to `b8`,
+and predicts and reconstructs the log amplitudes against the previous frame, updating `state` in place exactly as the float version does.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `l` | `u32` | Harmonic count |
+| `w0_q16`, `w0_q32` | `i32`, `i64` | Fundamental in radians per sample, Q16.16 and Q32 |
+| `vuv_w0_q16` | `i32` | Fundamental used only for the V/UV slot lookup |
+| `raw` | `&RawSpeechParameters` | Indices `b1` to `b8` |
+| `tables` | `&SpeechTables` | Mode tables |
+| `state` | `&mut MbeDecoderState` | Previous frame's `l`, `gamma_q16`, log2 amplitudes; updated |
+
+**Returns:** `SpeechParameters` (`l`, `w0_q16`, `w0_q32`, `voiced`, `ml_q16`).
+**Errors:** none; out-of-range indices would panic on table lookup (callers pass extracted bits).
+**Special concerns:** rare, expected voicing disagreement with float at floor boundaries (16 of 7056 `(harmonic, b0)` pairs; one frame in 3320 on real speech, as documented in the source).
+**Signature:** `pub fn dequantize_speech(l, w0_q16, w0_q32, vuv_w0_q16, raw, tables, state) -> SpeechParameters`
+**See also:** test `fixed_dequantize_matches_float_across_representative_sequences`; `fixed_dstar_decode_dequantize`.
+
+### `prev_at` (fixed decoder) [@ANCHOR: ham_digital_modes:fixed_general_mbe_speech_prev_at]
+
+Reads `log2_ml_q16[idx]` from the previous frame for the decoder's resampling: index 0 reads index 1, and an out-of-range index reads the last element, matching the float `.get(idx).copied().unwrap_or(*last)` behavior. It is needed because the previous frame's `L` can differ from the current one. Returns `i32`; an empty slice gives 0.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `log2_ml_q16` | `&[i32]` | Previous frame's log2 amplitudes |
+| `idx` | `usize` | Index |
+
+**Returns:** `i32`.
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn prev_at(log2_ml_q16: &[i32], idx: usize) -> i32`
+**See also:** test in `tests/ambe_fixed_dstar.rs`; `fixed_general_mbe_encode_prev_at`.
+
+### `analyze_and_quantize` (fixed) [@ANCHOR: ham_digital_modes:fixed_mbe_encode_analyze_and_quantize]
+
+Analysis and quantization of one frame at an already-chosen pitch, shared by the fixed D-STAR and AMBE+2 streaming encoders. It analyses voicing and amplitudes at the decoder's own `w0` (the table entry for the chosen `b0`), converts them to the decoder's log2 domain with `target_log2_ml_q16`, and
+quantizes against `prev`, the mirror of the decoder state. `w0` and the V/UV pitch are derived as the fixed decoder derives them, so the search inverts the fixed decoder.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&FrameAnalysis` | Analyzer output |
+| `l` | `u32` | Harmonic count from `L_TABLE[b0]` |
+| `f0_q16` | `i32` | Table fundamental in cycles per sample, Q16.16 |
+| `w0_q32` | `i64` | Table fundamental, radians per sample, Q32 |
+| `tables` | `&ModeTables` | Mode tables |
+| `prev` | `&MbeDecoderState` | Mirror decoder state |
+| `state` | `&mut AnalysisState` | Analysis history; updated |
+
+**Returns:** `QuantizedSpeech`.
+**Errors:** none.
+**Special concerns:** mutates `state` only (the mirror is advanced separately by the encoder's `dequantize`).
+**Signature:** `pub fn analyze_and_quantize(frame, l, f0_q16, w0_q32, tables, prev, state) -> QuantizedSpeech`
+**See also:** test in `tests/ambe_fixed_dstar_encoder.rs`; `fixed_dstar_encoder_Encoder_next_frame`.
+
+### `encode_prioritized_bits` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_encode_encode_prioritized_bits]
+
+`encode_frame` stopping before FEC: it returns the eight prioritized bit vectors `u_hat_0..u_hat_7` and the next `FrameState`. It derives `L_hat` and `K_hat` from the pitch, decides voicing and amplitudes, takes the prediction residuals against the previous state, partitions into six blocks and DCTs them, then
+quantizes the gain vector and higher-order coefficients and prioritizes the bits.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Windowed DFT |
+| `pitch` | `&Pitch` | Refined pitch |
+| `initial_pitch_error_q16` | `i32` | `E(P_hat_I)` |
+| `previous_state` | `&FrameState` | State from the previous frame |
+| `sync_bit` | `bool` | Frame sync bit value |
+
+**Returns:** `Option<([u32; 8], FrameState)>`; `None` when `L_hat` is out of range or a later step fails.
+**Errors:** none raised.
+**Special concerns:** pure; the caller commits the returned state.
+**Signature:** `pub fn encode_prioritized_bits(frame, pitch, initial_pitch_error_q16, previous_state, sync_bit) -> Option<([u32; 8], FrameState)>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_encode.rs`; `fixed_tia_102_baba_encoder_Encoder_next_frame`.
+
+### `encode_prioritized_bits` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_mod_encode_prioritized_bits]
+
+The float pipeline of `encode_frame` stopping one stage earlier: it returns the prioritized bit vectors `u_hat_0..u_hat_7` (Fig. 22) before FEC and modulation, so real-chip validation can compare this crate's `u_hat` semantics with a chip's decoded values for the same PCM. The source warns that the textbook TIA-102
+interleave is confirmed not to match the real RATET(27) chip's wire format, so claims about which vector carries which parameter need re-checking against the chip's own deinterleave.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `frame` | `&RefinementFrame` | Windowed DFT |
+| `omega0_hat` | `f64` | Refined fundamental |
+| `initial_pitch_error` | `f64` | `E(P_hat_I)` |
+| `previous_state` | `&FrameState` | Previous state |
+| `sync_bit` | `bool` | Sync bit |
+
+**Returns:** `Option<([u32; 8], FrameState)>`.
+**Errors:** none raised.
+**Special concerns:** pure.
+**Signature:** `pub fn encode_prioritized_bits(frame, omega0_hat, initial_pitch_error, previous_state, sync_bit) -> Option<([u32; 8], FrameState)>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_encode.rs`; `fixed_tia_102_baba_encode_encode_prioritized_bits`.
+
+### `quantize_gain_vector_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_quantize_quantize_gain_vector_q16]
+
+Eq. 62: quantizes `G_hat_2..G_hat_6` into `(value, bits)` pairs, using the bit width from `gain_vector_bits(L, element)` and the per-`L` step size from `GAIN_BIT_ALLOCATION_STEP_Q16_16`, with saturating uniform quantization.
+`G_hat_1` is quantized separately as `b2`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `g_hat_q16` | `&[i32; 6]` | Gain vector `G_hat_1..G_hat_6`, Q16.16 |
+| `l` | `u32` | Harmonic count (9 to 56) |
+
+**Returns:** `Option<[(u32, u8); 5]>`; `None` when `L` is outside 9 to 56 or a bit allocation is missing.
+**Errors:** none raised.
+**Special concerns:** pure.
+**Signature:** `pub fn quantize_gain_vector_q16(g_hat_q16: &[i32; 6], l: u32) -> Option<[(u32, u8); 5]>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_encode.rs`; `fixed_tia_102_baba_reconstruct_reconstruct_gain_vector_q16`.
+
+### `quantize_higher_order_coefficients_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_quantize_quantize_higher_order_coefficients_q16]
+
+Eq. 63: quantizes every transmitted higher-order DCT coefficient in the flat `[C_1,2 ... C_6,J6]` order, each paired with its bit width. Positions whose allocation is zero bits are skipped. The step is `multiplier[bits] * sigma[k]`, with saturating uniform quantization.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `dct_blocks_q16` | `&[Vec<i32>; 6]` | The six blocks' DCT coefficients, Q16.16 |
+| `l` | `u32` | Harmonic count |
+
+**Returns:** `Option<Vec<(u32, u8)>>`; `None` when the bit allocation or positions are missing, or a coefficient index is out of range.
+**Errors:** none raised.
+**Special concerns:** pure.
+**Signature:** `pub fn quantize_higher_order_coefficients_q16(dct_blocks_q16: &[Vec<i32>; 6], l: u32) -> Option<Vec<(u32, u8)>>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_encode.rs`; `fixed_tia_102_baba_reconstruct_reconstruct_higher_order_coefficients_q16`.
+
+### `reconstruct_gain_vector_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_reconstruct_gain_vector_q16]
+
+The fixed Eq. 68: reconstructs `G_hat_1..G_hat_6`. `G_hat_1` comes from the gain quantizer level table indexed by `b2`; elements 2 to 6 are uniformly dequantized from their quantizer values with the bit width and step size for this `L`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `b2` | `u8` | Gain quantizer index |
+| `gain_values` | `[u32; 5]` | Quantizer values of elements 2 to 6 |
+| `l` | `u32` | Harmonic count (9 to 56) |
+
+**Returns:** `Option<[i32; 6]>`, Q16.16; `None` for an out-of-range `b2` or `L`.
+**Errors:** none raised.
+**Special concerns:** pure.
+**Signature:** `pub fn reconstruct_gain_vector_q16(b2: u8, gain_values: [u32; 5], l: u32) -> Option<[i32; 6]>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_reconstruct.rs`; `quantize_gain_vector_q16`.
+
+### `inverse_gain_vector_dct_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_inverse_gain_vector_dct_q16]
+
+The fixed Eq. 69 and 70: the 6-point inverse DCT that reconstructs `R_hat_1..R_hat_6` from `G_hat_1..G_hat_6`, with weight 1 for the first coefficient and 2 for the others, cosines from `cos_pi_frac` and `i64` accumulation.
+Each `R_hat_i` becomes the first coefficient of block `i`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `g_hat` | `&[i32; 6]` | Gain vector, Q16.16 |
+
+**Returns:** `[i32; 6]`, Q16.16.
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn inverse_gain_vector_dct_q16(g_hat: &[i32; 6]) -> [i32; 6]`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_reconstruct.rs`; `reconstruct_spectral_amplitudes_q16`.
+
+### `reconstruct_higher_order_coefficients_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_reconstruct_higher_order_coefficients_q16]
+
+The fixed Eq. 71 and 72: dequantizes the transmitted higher-order coefficients into six blocks whose lengths come from `L`. For each position with a nonzero bit allocation it takes the next quantizer value and dequantizes it with step `multiplier[bits] * sigma[k]`; zero-bit positions are 0.
+Index 0 of each block is left for the gain-vector coefficient.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `quantized_values` | `&[u32]` | Quantizer values in flat transmitted order |
+| `l` | `u32` | Harmonic count |
+
+**Returns:** `Option<[Vec<i32>; 6]>`; `None` if the allocation tables are missing, or the number of values is wrong (too few or left over).
+**Errors:** none raised.
+**Special concerns:** pure.
+**Signature:** `pub fn reconstruct_higher_order_coefficients_q16(quantized_values: &[u32], l: u32) -> Option<[Vec<i32>; 6]>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_reconstruct.rs`; `quantize_higher_order_coefficients_q16`.
+
+### `inverse_block_dct_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_reconstruct_inverse_block_dct_q16]
+
+The fixed Eq. 73 and 74: the inverse DCT for a block of arbitrary length `J`, reconstructing the block's `c` values from its DCT coefficients (weight 1 for the first coefficient, 2 for the others). The six reconstructed blocks are concatenated into the `T_hat` vector of
+log-amplitude residuals.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `dct_coeffs` | `&[i32]` | One block's DCT coefficients, Q16.16 |
+
+**Returns:** `Vec<i32>`, the block's values (empty for an empty input).
+**Errors:** none.
+**Special concerns:** pure; O(J^2).
+**Signature:** `pub fn inverse_block_dct_q16(dct_coeffs: &[i32]) -> Vec<i32>`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_reconstruct.rs`; `reconstruct_spectral_amplitudes_q16`.
+
+### `predicted_and_bias_correction_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_prediction_predicted_and_bias_correction_q16]
+
+Computes the two terms of the spectral-amplitude prediction for harmonic `l`: the prediction `rho * ((1 - delta) log2 M_prev(floor k) + delta log2 M_prev(floor k + 1))`, with `k` the harmonic index ratio into the previous frame, and the bias correction, the same interpolation averaged over all
+harmonics of the current frame, times `rho`, divided by `L_hat`. The prediction residual and the amplitude reconstruction share this one implementation so they cannot diverge.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `l` | `u32` | Harmonic |
+| `l_hat_curr`, `l_hat_prev` | `u32` | Harmonic counts of this and the previous frame |
+| `previous_m_q16` | `&[i32]` | Previous frame's amplitudes, Q16.16 |
+
+**Returns:** `(i32, i32)`: (prediction, bias correction), Q16.16.
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn predicted_and_bias_correction_q16(l: u32, l_hat_curr: u32, l_hat_prev: u32, previous_m_q16: &[i32]) -> (i32, i32)`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_reconstruct.rs`; `reconstruct_log2_amplitude_q16`.
+
+### `weight_q16` [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_enhancement_weight_q16]
+
+The enhancement weight of Eq. 107 in the log domain, returning the raw weight (not yet clamped to [0.5, 1.2]; the caller clamps). With `k = R_M1 / R_M0` (bounded by Cauchy-Schwarz) the formula needs only one un-squared `R_M0`, so
+`log2(weight) = 0.5 log2(M_l) + 0.25 log2(ratio)` is computed with `log2_q16_i64` and `exp2_q16`, never squaring the wide energy. A zero amplitude gives 0; a degenerate boundary case (`k` near plus or minus 1) returns 0.5 (no enhancement) rather than dividing by near zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `m_l_q16` | `i32` | Harmonic amplitude, Q16.16 |
+| `l` | `i32` | Harmonic number |
+| `omega0_q32` | `i64` | Fundamental, Q32 |
+| `r_m0`, `r_m1` | `i64` | Energy sums `R_M0`, `R_M1` (Eq. 105 and 106), Q16 in `i64` |
+
+**Returns:** `i32`, the weight, Q16.16.
+**Errors:** none.
+**Special concerns:** private; pure.
+**Signature:** `fn weight_q16(m_l_q16: i32, l: i32, omega0_q32: i64, r_m0: i64, r_m1: i64) -> i32`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_enhancement.rs`; `enhance_spectral_amplitudes_q16`.
+
+### `frequency_bands_count` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_vuv_frequency_bands_count]
+
+`K_hat`, the number of voicing frequency bands (Eq. 34): `ceil(L_hat / 3)` for `L_hat <= 36`, else 12. The voicing decisions, amplitude estimation and bit allocation all use it.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `l_hat` | `u32` | Harmonic count |
+
+**Returns:** `u32`, 1 to 12 for `L_hat >= 1` (0 for `L_hat = 0`).
+**Errors:** none.
+**Special concerns:** pure.
+**Signature:** `pub fn frequency_bands_count(l_hat: u32) -> u32`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_vuv_amplitude.rs`; `fixed_tia_102_baba_vuv_determine_voicing`.
+
+### `SyntheticSpectrum::at` (float) [@ANCHOR: ham_digital_modes:float_tia_102_baba_pitch_refinement_SyntheticSpectrum_at]
+
+Returns the synthetic spectrum `S_w(m, omega0)` at bin `m` for the float refiner: it finds the harmonic `l` whose band `[ceil(a_l), ceil(b_l))` contains `m` and returns that harmonic's complex amplitude (computed on first use and cached) scaled by the window DFT `W_R` at the bin's offset from the harmonic. A bin in no band gives zero.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `m` | `i32` | DFT bin |
+
+**Returns:** `Complex`.
+**Errors:** none.
+**Special concerns:** `pub(crate)`; needs `&mut self` for the amplitude cache.
+**Signature:** `pub(crate) fn at(&mut self, m: i32) -> Complex`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_pitch_refinement.rs`; `fixed_tia_102_baba_pitch_refinement_spectrum_error_and_energy`.
+
+### `window_dft_16384_direct` (float) [@ANCHOR: ham_digital_modes:float_tia_102_baba_pitch_refinement_window_dft_16384_direct]
+
+Computes `W_R(m)` (Eq. 30) directly: the 16384-point DFT of the refinement window as a sum over its 221 nonzero samples (`n = -110..=110`) of `w_R(n) cos(2 pi m n / 16384)` (only the cosine term, since the window is real and even). The cached `window_dft_16384` tabulates `m = 0..=8192` once from this, and falls back to it for other `m`.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `m` | `i32` | Bin index |
+
+**Returns:** `f64`.
+**Errors:** none.
+**Special concerns:** private; 221 cosines per call, which is why the table exists.
+**Signature:** `fn window_dft_16384_direct(m: i32) -> f64`
+**See also:** test in `tests/ambe_fixed_tia_102_baba_pitch_refinement.rs`; `fixed_tia_102_baba_pitch_refinement_window_dft_16384_q22`.
+
+### `synthesize_repeated_frame_scaled` (fixed TIA-102) [@ANCHOR: ham_digital_modes:fixed_tia_102_baba_synthesis_SynthesisState_synthesize_repeated_frame_scaled]
+
+Repeats the previous frame with every final amplitude multiplied by `scale_q16` (a fade), through `synthesize_core`. The stored last-frame parameters stay untouched, so cumulative fading is applied to the original amplitudes each time. The concealment policy uses it for the faded repeat.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `scale_q16` | `i32` | Fade factor, Q16.16 (0 gives silence amplitudes) |
+
+**Returns:** `Option<[i64; N]>`; `None` before any real frame has run.
+**Errors:** none raised.
+**Special concerns:** advances the noise window and synthesis history like any frame.
+**Signature:** `pub fn synthesize_repeated_frame_scaled(&mut self, scale_q16: i32) -> Option<[i64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_general_concealment_Concealer_decide`.
+
+### `synthesize_repeated_frame_scaled` (float TIA-102) [@ANCHOR: ham_digital_modes:float_tia_102_baba_synthesis_SynthesisState_synthesize_repeated_frame_scaled]
+
+The float twin: a repeated frame with every amplitude multiplied by `scale` (a fade), leaving the stored last frame untouched so the caller's cumulative fade is applied to the original amplitudes each time.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `scale` | `f64` | Fade factor |
+
+**Returns:** `Option<[f64; N]>`; `None` before any real frame has run.
+**Errors:** none raised.
+**Special concerns:** advances the synthesis state.
+**Signature:** `pub fn synthesize_repeated_frame_scaled(&mut self, scale: f64) -> Option<[f64; N]>`
+**See also:** test in `tests/ambe_error_policy.rs`; `fixed_tia_102_baba_synthesis_SynthesisState_synthesize_repeated_frame_scaled`.
 
 ## Codec2 fixed-point internals anchored in slice 9 (LPC, envelope phase, overlap-add, LSP table) and the timing autocorrelation profile
 
