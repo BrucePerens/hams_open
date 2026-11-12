@@ -6,6 +6,7 @@ use crate::capability::Capability;
 use crate::scope::{ScopeAction, ScopeAxis, ScopeSetting};
 use crate::units::{Hz, Level, Meter, Mode, Receiver, Vfo};
 
+// [@ANCHOR: radioctl_core_op_op]
 /// A command to a rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
@@ -111,6 +112,7 @@ pub enum Op {
     GetDualWatch,
 }
 
+// [@ANCHOR: radioctl_core_op_field]
 /// A kind of value the actor caches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Field {
@@ -173,6 +175,7 @@ pub enum Field {
     Alarm,
 }
 
+// [@ANCHOR: radioctl_core_op_alarm]
 /// A safety condition the actor reports on its own. It is not a value read from the rig and it
 /// is never deduplicated: every occurrence is an event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -192,6 +195,7 @@ pub enum Alarm {
     LinkRestored,
 }
 
+// [@ANCHOR: radioctl_core_op_observation]
 /// A value reported by a rig, solicited or not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Observation {
@@ -372,6 +376,12 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_observation_field]
     // Tests [@ANCHOR: radioctl_core_units_receiver]
+    // Tests [@ANCHOR: radioctl_core_scope_scope_action]
+    // Tests [@ANCHOR: radioctl_core_scope_scope_setting]
+    // Tests [@ANCHOR: radioctl_core_op_observation]
+    // Tests [@ANCHOR: radioctl_core_op_alarm]
+    // Tests [@ANCHOR: radioctl_core_op_field]
+    // Tests [@ANCHOR: radioctl_core_op_op]
     #[test]
     fn observation_maps_to_its_field() {
         assert_eq!(

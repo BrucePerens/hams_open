@@ -3,6 +3,7 @@
 
 use crate::op::{Field, Observation};
 
+// [@ANCHOR: radioctl_core_event_source]
 /// Where a change came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Source {
@@ -19,6 +20,7 @@ pub enum Source {
     Watchdog,
 }
 
+// [@ANCHOR: radioctl_core_event_change]
 /// One changed field with its old and new value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Change {
@@ -30,6 +32,7 @@ pub struct Change {
     pub new: Observation,
 }
 
+// [@ANCHOR: radioctl_core_event_rig_event]
 /// A status change of one rig.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RigEvent {
@@ -76,6 +79,9 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_core_event_merge]
+    // Tests [@ANCHOR: radioctl_core_event_rig_event]
+    // Tests [@ANCHOR: radioctl_core_event_change]
+    // Tests [@ANCHOR: radioctl_core_event_source]
     #[test]
     fn merge_keeps_earliest_old_and_latest_new() {
         let mut first = RigEvent {

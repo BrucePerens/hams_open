@@ -407,6 +407,7 @@ async fn line_keying_needs_the_open_gate_but_release_never_does() {
 }
 
 // Tests [@ANCHOR: radioctl_core_tcp_connect]
+// Tests [@ANCHOR: radioctl_core_tcp_tcp_config]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tcp_connects_moves_bytes_and_fails_in_bounded_time() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -453,6 +454,7 @@ async fn tcp_connects_moves_bytes_and_fails_in_bounded_time() {
 // Tests [@ANCHOR: radioctl_core_usb_list_sysfs]
 // Tests [@ANCHOR: radioctl_core_usb_read_trimmed]
 // Tests [@ANCHOR: radioctl_core_usb_list_ports]
+// Tests [@ANCHOR: radioctl_core_usb_port_info]
 #[test]
 fn sysfs_lists_usb_ports_and_skips_the_rest() {
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("sysfs-{}", std::process::id()));

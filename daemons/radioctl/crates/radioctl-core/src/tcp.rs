@@ -12,6 +12,7 @@ use tokio::time::{sleep, timeout};
 use crate::backoff::Backoff;
 use crate::error::{ErrorKind, RigError};
 
+// [@ANCHOR: radioctl_core_tcp_tcp_config]
 /// How to reach a rig over TCP.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TcpConfig {

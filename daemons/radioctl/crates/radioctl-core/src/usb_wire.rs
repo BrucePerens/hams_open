@@ -28,6 +28,7 @@ pub const MAX_DATA: usize = 4096;
 const REQUEST_HEADER: usize = 9;
 const REPLY_HEADER: usize = 4;
 
+// [@ANCHOR: radioctl_core_usb_wire_usb_status]
 /// The status byte of a reply.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsbStatus {
@@ -69,6 +70,7 @@ impl UsbStatus {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_wire_usb_transfer]
 /// One USB transfer, as a request frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UsbTransfer {
@@ -139,6 +141,7 @@ pub enum UsbTransfer {
     },
 }
 
+// [@ANCHOR: radioctl_core_usb_wire_frame_error]
 /// Why a frame could not be decoded.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameError {
@@ -308,6 +311,7 @@ impl UsbTransfer {
     }
 }
 
+// [@ANCHOR: radioctl_core_usb_wire_usb_reply]
 /// The reply frame to one [`UsbTransfer`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UsbReply {
