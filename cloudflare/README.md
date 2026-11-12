@@ -70,7 +70,7 @@ When the optional `hams_secret_canary` addon is installed, a newly written API t
 
 * **Configuration Backups:** Management of `cloudflare.config.backup` for pre-Odoo state snapshots (created at install by `initialize_cloudflare_state()`).
 
-* **Zone settings wizard.** "Always Use HTTPS" is sent to Cloudflare for the zone when the administrator picks a value, and left alone when none is picked. [@ANCHOR: cloudflare:COMM_zone_settings_always_use_https] The HSTS choice is sent as Cloudflare's `security_header` setting: on carries the max age (86400 seconds when blank), include-subdomains, nosniff and, if asked, preload; off sends a disabled header with a zero max age. [@ANCHOR: cloudflare:COMM_zone_settings_security_header] The "Respect Existing Headers" box sends Browser Cache TTL 0, so a zone stops overriding the origin's `Cache-Control: no-store` with its own max-age; a plain TTL of 0 is still never sent. [@ANCHOR: cloudflare:COMM_zone_settings_browser_cache_respect_headers]
+* **Zone settings wizard.** "Always Use HTTPS" is sent to Cloudflare for the zone when the administrator picks a value, and left alone when none is picked. The HSTS choice is sent as Cloudflare's `security_header` setting: on carries the max age (86400 seconds when blank), include-subdomains, nosniff and, if asked, preload; off sends a disabled header with a zero max age. The "Respect Existing Headers" box sends Browser Cache TTL 0, so a zone stops overriding the origin's `Cache-Control: no-store` with its own max-age; a plain TTL of 0 is still never sent.
 
 * **Tunnel entry points are gated.** `action_sync_tunnels` is a public model method that any logged-in session, including the public website user, could dispatch; `_check_tunnel_caller_authorized()` refuses it unless the caller is in the Cloudflare Tunnel group, a Settings administrator or a service account, before any Cloudflare call is made. [@ANCHOR: cloudflare:COMM_check_tunnel_caller_authorized]
 
@@ -78,21 +78,21 @@ When the optional `hams_secret_canary` addon is installed, a newly written API t
 
 * **WAF IP Banning:** `env['cloudflare.waf'].ban_ip(...)` creates a Cloudflare IP Access Rule (block or challenge) for the address on the website's zone and records it in `cloudflare.ip.ban` `[@ANCHOR: cf_execute_ban]`. Supports multiple websites. Callers must be in the Cloudflare WAF group, be Settings administrators, or be service accounts. Repeat calls for an already-active ban do nothing; a ban that could not be sent (no credentials, API error) is recorded with state `failed` and retried on the next call.
 
-* **WAF Management:** Pull `[@ANCHOR: cf_action_pull_waf_rules]` and push `[@ANCHOR: cf_action_push_waf_rules]` firewall rules.
+* **WAF Management:** Pull and push firewall rules.
 
-* **Cache Purging:** `env['cloudflare.purge.queue'].enqueue_urls(...)` and `enqueue_tags(...)`. Processes an asynchronous queue grouped by website to prevent credential mixing `[@ANCHOR: cf_process_queue_logic]`. The "Process Cache Purge Queue" cron runs it every minute as the purge service account, up to 10 batches of 30 entries per run. A successful purge deletes its entries; an "everything" purge also drops that website's other pending entries. Entries for a website with no API token or Zone ID are dropped (they can never be sent) and a pager incident `Cloudflare purge queue` (medium) tells the on-call that the website's purges are not reaching Cloudflare `[@ANCHOR: cloudflare:COMM_report_purge_failure]`. Entries whose API call fails are marked `failed`, raise the same incident at high severity, and are set back to pending once, an hour later, if the website has credentials `[@ANCHOR: cloudflare:COMM_requeue_failed_purges]`. A later batch of that website that succeeds closes the incident `[@ANCHOR: cloudflare:COMM_resolve_purge_failure]`. The incident is raised only when `pager_duty` is installed (`_pager_incidents()` returns None otherwise) `[@ANCHOR: cloudflare:COMM_purge_pager_incidents]`. After saving a token for a website, run Manual Cache Purge with "Everything" for it.
-* **Purge incident posts as the pager account:** while the purge queue opens or closes its pager incident, the pager service account is the transaction's default env, because Odoo re-checks `res.partner` read on message recipients as the cron's own account, which must not read contacts `[@ANCHOR: cloudflare:COMM_purge_pager_default_env]`.
+* **Cache Purging:** `env['cloudflare.purge.queue'].enqueue_urls(...)` and `enqueue_tags(...)`. Processes an asynchronous queue grouped by website to prevent credential mixing. The "Process Cache Purge Queue" cron runs it every minute as the purge service account, up to 10 batches of 30 entries per run. A successful purge deletes its entries; an "everything" purge also drops that website's other pending entries. Entries for a website with no API token or Zone ID are dropped (they can never be sent) and a pager incident `Cloudflare purge queue` (medium) tells the on-call that the website's purges are not reaching Cloudflare. Entries whose API call fails are marked `failed`, raise the same incident at high severity, and are set back to pending once, an hour later, if the website has credentials. A later batch of that website that succeeds closes the incident. The incident is raised only when `pager_duty` is installed (`_pager_incidents()` returns None otherwise). After saving a token for a website, run Manual Cache Purge with "Everything" for it.
+* **Purge incident posts as the pager account:** while the purge queue opens or closes its pager incident, the pager service account is the transaction's default env, because Odoo re-checks `res.partner` read on message recipients as the cron's own account, which must not read contacts.
 
-* **Turnstile API:** `env['cloudflare.turnstile'].verify_token(...)` evaluates tokens against the Cloudflare API `[@ANCHOR: cf_turnstile_verify]`.
+* **Turnstile API:** `env['cloudflare.turnstile'].verify_token(...)` evaluates tokens against the Cloudflare API.
 
 * **Edge Context:** `env['cloudflare.utils'].get_request_context()` extracts geographic and threat data from trusted headers `[@ANCHOR: cf_get_request_context]`. "Trusted" means the `CF-*` headers are used only when the connecting peer is loopback (the Tunnel case) or inside the trusted Cloudflare IP range allow-list (empty unless an administrator turns on **Trust Cloudflare's Published IP Ranges** in Settings, for a deployment without a Tunnel); from any other peer every geographic and threat field is returned as `None`, so a direct request to the origin cannot forge them.
 
-* **Tunnel Management:** Wizard generates installation commands `[@ANCHOR: cf_tunnel_setup]`. Sync and delete tunnels across accounts `[@ANCHOR: cf_sync_tunnels]`, `[@ANCHOR: cf_delete_tunnel]`.
+* **Tunnel Management:** Wizard generates installation commands. Sync and delete tunnels across accounts,.
 
-* **Multi-website tunnels:** one server fronting several websites is the ordinary case here. The "Ensure Tunnel Daemon Running" cron keeps **every** tunnel that has credentials up `[@ANCHOR: ensure_tunnel_running]`, one `cloudflared` daemon per tunnel, each tracked under its own Cloudflare tunnel id: a running tunnel is never started twice, a dead one is restarted, and one website's Cloudflare failure never stops another's tunnel `[@ANCHOR: ensure_one_tunnel_running]`. "Routes pushed yet?" lives on the tunnel record (`routes_provisioned`); installs carrying the old single `cloudflare.tunnel.provisioned` system parameter have it folded onto the one tunnel it was really about, once `[@ANCHOR: migrate_global_provisioned_flag]`.
+* **Multi-website tunnels:** one server fronting several websites is the ordinary case here. The "Ensure Tunnel Daemon Running" cron keeps **every** tunnel that has credentials up, one `cloudflared` daemon per tunnel, each tracked under its own Cloudflare tunnel id: a running tunnel is never started twice, a dead one is restarted, and one website's Cloudflare failure never stops another's tunnel. "Routes pushed yet?" lives on the tunnel record (`routes_provisioned`); installs carrying the old single `cloudflare.tunnel.provisioned` system parameter have it folded onto the one tunnel it was really about, once.
 
 ## 3. Automated Subsystems
-* **Header Injection:** Injects `Cloudflare-CDN-Cache-Control` headers via `ir.http._post_dispatch` `[@ANCHOR: edge_cache:COMM_ir_http_post_dispatch_headers]`. This code, the first-visit cookie rules and the CSRF refresh script live in the `edge_cache` module (a dependency of this one, usable on its own by an instance with no Redis). Dynamic and sensitive routes `[@ANCHOR: cf_nocache_routes]` are excluded.
+* **Header Injection:** Injects `Cloudflare-CDN-Cache-Control` headers via `ir.http._post_dispatch`. This code, the first-visit cookie rules and the CSRF refresh script live in the `edge_cache` module (a dependency of this one, usable on its own by an instance with no Redis). Dynamic and sensitive routes are excluded.
 
 * **Request Context Safety:** Safely extracts edge headers even in non-HTTP or unbound request contexts `[@ANCHOR: cf_get_request_context]`.
 * **Boot-time Sync:** `_trigger_edge_purge_static_assets()` scans installed modules' `static/` folders and queues an `odoo-static-assets` tag purge for every website with credentials when the newest file is newer than the `cloudflare.last_static_mtime` system parameter. Nothing currently calls it at boot (only its test does), so this runs only when invoked explicitly.
@@ -113,26 +113,26 @@ The module enforces website-level isolation through the website's company: recor
 <stories_and_journeys>
 ## 5. Architectural Stories & Journeys
 
-* [Asynchronous Cache Purging](docs/stories/cache_purging.md) `[@ANCHOR: story_cache_purging]`
+* [Asynchronous Cache Purging](docs/stories/cache_purging.md)
 
-* [Geo-Aware Request Context](docs/stories/request_context.md) `[@ANCHOR: story_request_context]`
+* [Geo-Aware Request Context](docs/stories/request_context.md)
 
-* [Secure Edge Bridging via Tunnels](docs/stories/tunnels.md) `[@ANCHOR: story_tunnels]`
+* [Secure Edge Bridging via Tunnels](docs/stories/tunnels.md)
 
 * [A custom hostname Cloudflare would not let go](docs/stories/hostname_pending_deletes.md)
 
-* [CAPTCHA Verification with Turnstile](docs/stories/turnstile_verification.md) `[@ANCHOR: story_turnstile]`
+* [CAPTCHA Verification with Turnstile](docs/stories/turnstile_verification.md)
 
-* [Automated WAF IP Banning](docs/stories/waf_banning.md) `[@ANCHOR: story_waf_banning]`
+* [Automated WAF IP Banning](docs/stories/waf_banning.md)
 
 ### Journeys
-* [High-Performance Content Invalidation](docs/journeys/content_invalidation.md) `[@ANCHOR: journey_content_invalidation]`
+* [High-Performance Content Invalidation](docs/journeys/content_invalidation.md)
 
-* [Managing Edge Security](docs/journeys/edge_security.md) `[@ANCHOR: journey_edge_security]`
+* [Managing Edge Security](docs/journeys/edge_security.md)
 
-* [Infrastructure Provisioning](docs/journeys/infrastructure.md) `[@ANCHOR: journey_infrastructure]`
+* [Infrastructure Provisioning](docs/journeys/infrastructure.md)
 
-* [Intelligent Traffic Handling](docs/journeys/traffic_handling.md) `[@ANCHOR: journey_traffic_handling]`
+* [Intelligent Traffic Handling](docs/journeys/traffic_handling.md)
 </stories_and_journeys>
 
 ## 6. External Dependencies
@@ -233,3 +233,123 @@ The module enforces website-level isolation through the website's company: recor
 - `[@ANCHOR: cloudflare:COMM_systemd_write_secure_file]` `_write_secure_file(path, content, mandatory_prefix)` writes `content` atomically at mode 0600 (a new temp file in the same directory, then rename); it raises `ValueError`, writing nothing, when the resolved path is not strictly inside `mandatory_prefix` as a directory. **Tests:** `test_10_write_secure_file_writes_atomically_at_0600`, `test_09_write_secure_file_refuses_paths_outside_the_mandatory_prefix`, `test_11_write_secure_file_refuses_a_sibling_directory_sharing_the_prefix`.
 - `[@ANCHOR: cloudflare:COMM_dns_plan_normalize_name]` `normalize_name(name)` returns a DNS name stripped of blanks and trailing dots and lower-cased; None gives the empty string. **Tests:** `test_14_names_compare_equal_whatever_their_case_trailing_dot_or_blanks`.
 - `[@ANCHOR: cloudflare:COMM_wsgi_get_cached_trusted_networks]` `_get_cached_trusted_networks()` returns the tuple of trusted networks the env-less WSGI hook uses, read from Redis at most once per cache TTL per process; when Redis fails or holds malformed data it keeps the last good list (empty at cold start, so loopback only), never widening trust. **Tests:** `test_13_cached_networks_are_read_once_per_ttl_and_the_last_good_list_survives_failures`, `test_05e_redis_outage_after_a_successful_read_keeps_serving_the_last_known_good_list`.
+
+## Anchor reference: zone settings, WAF, purge queue, Turnstile, tunnels, edge headers
+
+Each entry below documents one anchor that the sections above only mention. Tests cite each anchor by its tag.
+
+### Zone settings: Always Use HTTPS [@ANCHOR: cloudflare:COMM_zone_settings_always_use_https]
+
+Part of `CloudflareZoneSettingsWizard.action_apply_settings()` in `models/zone_settings_wizard.py` (a `@public_rpc` wizard method). When the administrator has picked a value in the `always_use_https` selection (`on` or `off`), it calls `update_zone_setting("always_use_https", value, token, zone_id)` with the credentials of the wizard's website. With nothing picked the field is empty and the zone's current value is left alone. A failure is not raised at once: its message is added to a list and the whole list becomes one `UserError` after every other setting has been tried. The wizard's `default_get` pre-fills the field from the zone's live value. No stored data is written. See also test `test_01_apply_sends_always_use_https` in `tests/test_zone_settings_always_https.py`.
+
+### Zone settings: HSTS security header [@ANCHOR: cloudflare:COMM_zone_settings_security_header]
+
+Part of `action_apply_settings()`. When `hsts_status` is set, one Cloudflare setting, `security_header`, is sent as `{"strict_transport_security": {...}}`. With `on` the object carries `enabled` true, `max_age` (`hsts_max_age`, 86400 when blank or zero), `include_subdomains`, `nosniff` and, only when `hsts_preload` is ticked, `preload: true`. With `off` it carries `enabled` false, `max_age` 0, and false for include-subdomains and nosniff, which switches the header off. With `hsts_status` empty nothing is sent. A failed call is collected as "Security Header (HSTS): message" and reported with the other failures at the end. Preload is a commitment that is hard to undo, so it is never sent unless asked for. See also `test_06_apply_sends_hsts_security_header` in `tests/test_zone_settings_always_https.py`.
+
+### Zone settings: Respect Existing Headers [@ANCHOR: cloudflare:COMM_zone_settings_browser_cache_respect_headers]
+
+Part of `action_apply_settings()`. The wizard sends the `browser_cache_ttl` setting when the "Respect Existing Headers" box (`browser_cache_respect_headers`) is ticked or the TTL field is non-zero. With the box ticked it sends 0, which tells Cloudflare to respect the origin's own `Cache-Control` (so an origin `no-store` is not overridden by a zone max-age); otherwise it sends the typed TTL in seconds. A TTL of 0 typed without the box is deliberately never sent: Odoo's Integer field cannot tell "unset" from 0, so an untouched wizard would otherwise wipe a configured TTL. Errors are collected as "Browser Cache TTL: message" and raised together at the end. See also `test_10_respect_existing_headers_sends_zero` in `tests/test_zone_settings_always_https.py`.
+
+### Pull WAF rules from Cloudflare [@ANCHOR: cf_action_pull_waf_rules]
+
+`CloudflareConfigManager.action_pull_waf_rules(website_id=None)` in `models/config_manager.py` is a private model method (`@api.private`, `@api.model`) that copies a zone's custom firewall ruleset into Odoo. It first calls `_check_waf_caller_authorized()`, then reads the `http_request_firewall_custom` ruleset for the website's token and Zone ID (`website_id` is the website to use; the current website when None). It returns `(True, message)` on success or `(False, "No custom firewall ruleset found ...")` when the zone has none. It deletes every existing `cloudflare.waf.rule` of that website (up to 1000) and creates one per remote rule with sequence 10, 20, 30, ..., the name taken from the description before its first colon (50 characters), and the action, expression and enabled flag. It overwrites local edits and changes nothing at Cloudflare. See also `test_03_cf_action_pull_waf_rules` in `tests/test_waf_management.py`.
+
+### Push WAF rules to Cloudflare [@ANCHOR: cf_action_push_waf_rules]
+
+`CloudflareConfigManager.action_push_waf_rules(website_id=None)` in `models/config_manager.py` is a private model method that publishes the website's `cloudflare.waf.rule` rows (up to 1000, in sequence order) as the zone's `http_request_firewall_custom` ruleset, named "Odoo WAF Rules - <website>". It calls `_check_waf_caller_authorized()` first. Each rule is sent as action, expression, description (or the name) and enabled flag. If a ruleset already exists it is replaced with a PUT (`update_zone_ruleset`), else it is created (`create_zone_ruleset`); the whole ruleset is replaced, so a rule added only at Cloudflare is lost. It returns `(True, message)` or `(False, message)`, and `(False, "Missing API credentials ...")` without a request when the token or Zone ID is missing. See also `test_04_cf_action_push_waf_rules` in `tests/test_waf_management.py`.
+
+### Purge queue processing [@ANCHOR: cf_process_queue_logic]
+
+`CloudflarePurgeQueue.process_queue()` in `models/purge_queue.py` is the private method the "Process Cache Purge Queue" cron calls every minute. It switches to the `cloudflare.user_cloudflare_purge` service user, calls `requeue_failed()`, then runs at most 10 batches of up to 30 pending rows. Each batch is the rows of the first website in the search (ordered by website and id), so two websites' credentials are never mixed. With no token or Zone ID the batch is deleted, logged, and reported at medium severity. Otherwise an `everything` row purges the zone and also deletes the website's other pending rows that existed before the call; then URL rows and tag rows are sent with `purge_urls` and `purge_tags`. A successful call deletes its rows; a failed one marks them `failed`. It commits after every batch, sleeps 0.1 seconds, and re-triggers its cron if all 10 batches were used. See also `test_01_bdd_queue_batching_and_rate_limiting` in `tests/test_purge_queue.py` and `test_purge_queued_during_the_wipe_is_kept` in `tests/test_purge_everything.py`.
+
+### Opening the purge pager incident [@ANCHOR: cloudflare:COMM_report_purge_failure]
+
+`_report_purge_failure(website, description, severity)` in `models/purge_queue.py` opens (or adds an occurrence to) the pager incident that says a website's purges are not reaching Cloudflare. `website` is the record, `description` the reason and `severity` is `medium` (no credentials) or `high` (API call failed). The incident source is the constant `PURGE_INCIDENT_SOURCE`, "Cloudflare purge queue", and the text names the website and its id. It returns what `report_incident` returns, or False when `pager_duty` is not installed. The call runs inside `_pager_default_env`. Called by `process_queue` once per failed batch. See also `test_01_no_credentials_drops_rows_and_pages_medium` and `test_02_api_failure_keeps_rows_failed_and_pages_high` in `tests/test_purge_queue.py`.
+
+### Retrying failed purges [@ANCHOR: cloudflare:COMM_requeue_failed_purges]
+
+`requeue_failed()` in `models/purge_queue.py` (private, called at the start of every `process_queue` run) makes one more attempt at purges that failed on an API error. It looks at up to 1000 rows in state `failed` whose `write_date` is at least `RETRY_FAILED_AFTER_HOURS` (1) old, keeps only those of websites that now have both an API token and a Zone ID, and sets them back to `pending`. It returns the number of rows set back. A row that fails again goes back to `failed` with a new write date, so the retry repeats hourly while the pager incident stays open. Rows of a website without credentials are left alone (credential failures are deleted, not marked failed). See also `test_04_failed_rows_are_retried_once_an_hour_later_with_credentials` and `test_05_failed_rows_without_credentials_are_not_retried` in `tests/test_purge_queue.py`.
+
+### Closing the purge pager incident [@ANCHOR: cloudflare:COMM_resolve_purge_failure]
+
+`_resolve_purge_failure(website)` in `models/purge_queue.py` closes the purge incident for one website after a batch of its purges succeeded. It calls the pager model's `auto_resolve_incidents(PURGE_INCIDENT_SOURCE, website_id=website.id)` inside `_pager_default_env` and returns its result, or False when `pager_duty` is not installed. `process_queue` calls it after every successful batch of a website that has a record, so a later success closes an incident an earlier failure opened. It never raises for the absence of the pager module. See also `test_03_success_resolves_the_incident` and `test_01_resolve_posts_the_note_when_the_purge_account_is_the_default_env` in `tests/test_purge_queue.py`.
+
+### Pager model access [@ANCHOR: cloudflare:COMM_purge_pager_incidents]
+
+`_pager_incidents()` in `models/purge_queue.py` returns the `pager.incident` model as the `pager_duty.user_pager_service_internal` service user, or None when `"pager.incident" not in self.env`, which is the case for a tenant instance that runs this module without `pager_duty`. In that case the failure is only logged and `_report_purge_failure` and `_resolve_purge_failure` return False. No arguments, no side effects, no database access beyond resolving the service user. See also `test_06_pager_incidents_is_none_without_pager_duty` in `tests/test_purge_queue.py`.
+
+### Pager default environment [@ANCHOR: cloudflare:COMM_purge_pager_default_env]
+
+`_pager_default_env(incidents)` is a static context manager in `models/purge_queue.py`. While active it sets the transaction's `default_env` to the pager service environment (`incidents.env`) and restores the previous one afterwards, even when an exception is raised. Odoo 19 re-checks read access to `res.partner` for the recipients of a message as the transaction's default environment, ignoring the `with_user()` the pager code uses; the cron's purge account must not read contacts, so without this posting an incident note raised an access error. It changes transaction state only for the duration of the `with` block and never raises by itself. See also `test_01_resolve_posts_the_note_when_the_purge_account_is_the_default_env` in `tests/test_purge_queue.py`.
+
+### Turnstile token verification [@ANCHOR: cf_turnstile_verify]
+
+`CloudflareTurnstile.verify_token(token, remote_ip=None, website_id=None)` in `models/turnstile.py` (private, so not reachable over RPC) tells whether a Turnstile CAPTCHA response is valid. `token` is the response from the visitor's browser, `remote_ip` the visitor address (sent to Cloudflare when known) and `website_id` the website whose secret is used (the current website when None). It reads `cloudflare_turnstile_secret` as the `cloudflare.user_cloudflare_waf` service user, because an anonymous visitor's request is the normal caller and may not read that field; this is safe because only a boolean ever leaves. It returns False without a request when no secret is stored, else `verify_turnstile(...)`: True only when Cloudflare answers `success: true`; a failed request is False. See also `test_02_turnstile_secret_fetch` and `test_02b_verify_token_works_for_an_unprivileged_caller` in `tests/test_cloudflare_apis.py`.
+
+### Tunnel setup command [@ANCHOR: cf_tunnel_setup]
+
+`action_generate_tunnel_command()` in `models/res_config_settings.py` (a `@public_rpc` settings action) creates a Cloudflare tunnel and opens a wizard showing the command that installs it. It uses the settings' website (else the current one) and raises `UserError` if its API token or Account ID is missing. It calls `create_cfd_tunnel` with the name `odoo-edge-tunnel-<unix time>`, then `get_cfd_tunnel_token`, and builds `cloudflared service install <token>`; a failure of either call is raised with Cloudflare's message. The command holds a one-time secret, so it is passed only in the action's context to the transient `cloudflare.tunnel.wizard` and is never stored. Side effect: a real tunnel is created at Cloudflare; the Odoo record appears at the next sync. See also `test_03_tunnel_setup` in `tests/test_cloudflare_apis.py`.
+
+### Sync tunnels [@ANCHOR: cf_sync_tunnels]
+
+`CloudflareTunnel.action_sync_tunnels()` in `models/tunnel.py` (a `@public_rpc` model method, called by a button or cron) first runs `_check_tunnel_caller_authorized()`, then calls `_sync_tunnels_for_website` for up to 1000 websites. Each website runs in its own database savepoint inside a try block, so one website's Cloudflare error or constraint violation is logged and the others still sync. `_sync_tunnels_for_website` works as the `cloudflare.user_cloudflare_tunnel` service user: it skips a website with no token or Account ID, lists the account's tunnels and creates or updates one `cloudflare.tunnel` row per tunnel (id, name, status, creation time). Tunnels missing at Cloudflare are not deleted locally. It returns a "Tunnels sync" success notification. See also `test_04_sync_tunnels` and `test_04a_sync_tunnels_isolates_one_websites_failure_from_the_rest` in `tests/test_cloudflare_apis.py`.
+
+### Delete tunnels [@ANCHOR: cf_delete_tunnel]
+
+`CloudflareTunnel.action_delete_tunnel()` in `models/tunnel.py` (`@public_rpc`, operates on the selected records) deletes each tunnel at Cloudflare with `delete_cfd_tunnel(account_id, token, cf_tunnel_id)`. On success it stops that tunnel's `cloudflared` systemd unit with `stop_tunnel_daemon` (so no orphan keeps running) and deletes the local record. A tunnel whose website lacks a token or Account ID, or whose Cloudflare delete fails, is collected as a failure and left in place. If every tunnel failed it raises `UserError` with all messages. With a mix it returns a sticky warning notification rather than raising, because raising would roll back the local deletes already made in the same request. With no failures it returns nothing. See also `test_05_delete_tunnel` in `tests/test_cloudflare_apis.py`.
+
+### Keep every tunnel running [@ANCHOR: ensure_tunnel_running]
+
+`CloudflareTunnel.action_ensure_tunnel_running()` in `models/tunnel.py` (private, run by the "Ensure Tunnel Daemon Running" cron) makes sure every `cloudflare.tunnel` record has its `cloudflared` daemon running. It searches the tunnel records first (up to 10000), which is also the access check, and returns an all-zero summary at once if there are none. Otherwise it runs `_migrate_global_provisioned_flag()` and then `_ensure_one_tunnel_running` for each tunnel inside its own savepoint, so an exception is logged and counted as `failed` without stopping the rest. It returns and logs a dict with the counts `started`, `already_running`, `skipped` and `failed`. See also `test_01_every_website_s_tunnel_is_started_not_just_the_first`, `test_02_a_tunnel_already_running_is_not_restarted` and `test_09_no_tunnels_at_all_is_a_clean_no_op` in `tests/test_tunnel_multi_website.py`.
+
+### Bring one tunnel up [@ANCHOR: ensure_one_tunnel_running]
+
+`CloudflareTunnel._ensure_one_tunnel_running(tunnel)` in `models/tunnel.py` brings one tunnel up and returns one word: `skipped`, `already_running`, `started` or `failed`. It returns `skipped` for a tunnel with no Cloudflare id or whose website has no token or Account ID, and `already_running` when `routes_provisioned` is set and `is_tunnel_daemon_running(id)` is true (no API call is made then). Otherwise it fetches the run token with `get_cfd_tunnel_token`; an error or empty token is logged (the token itself never is) and gives `failed`. If routes were not yet pushed it calls `action_push_configuration()` and sets `routes_provisioned`; a failure there is logged and does not stop the daemon. Then `start_tunnel_daemon(token, tunnel_key=id)` starts it. See also `test_03_one_failing_tunnel_does_not_stop_the_others`, `test_04_the_provisioned_marker_is_per_tunnel` and `test_08_a_tunnel_whose_website_has_no_credentials_is_skipped` in `tests/test_tunnel_multi_website.py`.
+
+### Fold the old provisioned flag [@ANCHOR: migrate_global_provisioned_flag]
+
+`CloudflareTunnel._migrate_global_provisioned_flag()` in `models/tunnel.py` moves the old system-wide `cloudflare.tunnel.provisioned` parameter onto the per-tunnel field `routes_provisioned`. It reads the parameter with `redis_bypass_cache` (the cached read would otherwise keep returning the old value and the migration would repeat every cron tick). If the value is empty or already the "migrated" sentinel it returns False and does nothing. Otherwise it sets `routes_provisioned` on the lowest-id tunnel (the record the old single-tunnel code worked on), not on every tunnel, writes the sentinel into the parameter (kept, not deleted, so a rollback does not re-provision), and returns True. It is called by `action_ensure_tunnel_running` on every run and is safe to repeat. See also `test_05_legacy_global_flag_migrates_onto_the_lowest_id_tunnel`, `test_06_the_migration_runs_once_and_is_a_no_op_afterwards` and `test_07_an_install_that_never_had_the_flag_migrates_nothing` in `tests/test_tunnel_multi_website.py`.
+
+### Edge cache header injection [@ANCHOR: edge_cache:COMM_ir_http_post_dispatch_headers]
+
+`IrHttp._post_dispatch(response)` in `edge_cache/models/ir_http.py` runs after every dispatched response and only ever adds caching directives; it never rejects a request. After the framework's own handling it removes the internal `X-Cloudflare-Edge-Cacheable` opt-in marker (it must never reach the client), marks every 4xx/5xx response `Cache-Control: no-store`, and then sets `Cloudflare-CDN-Cache-Control`: `/web/assets` answers with status 200 or 304 and no cookie get `max-age=31536000` and the `odoo-static-assets` Cache-Tag; the dynamic routes of the next entry get `no-cache, no-store`; a public page gets `max-age=86400` only when it opted in and `_cloudflare_edge_cacheable` accepts it (GET or HEAD, status 200 or 304, public user, no stateful cookie, no Set-Cookie), else `no-cache, no-store`. A cacheable response also gets the tag `odoo-website-<id>` when the request has a website. Returns the framework's result. See also tests `test_01_static_asset_caching`, `test_02_dynamic_route_no_store` and `test_04_website_cache_tag_localproxy` in `edge_cache/tests/test_edge_cache_headers.py`.
+
+### Dynamic routes never cached [@ANCHOR: cf_nocache_routes]
+
+The route classifier inside `IrHttp._post_dispatch` in `edge_cache/models/ir_http.py` marks a response `Cloudflare-CDN-Cache-Control: no-cache, no-store` when the request path starts with `/my/`, `/odoo`, `/web/`, `/api/`, `/shop/cart`, `/shop/checkout`, `/shop/confirm_order` or `/helpdesk/`, and returns at once, whatever the response or opt-in marker says. `/web/` is included on purpose, so `/web/image` and `/web/content` (attachments that depend on the user's access rights) can never be stored and replayed to other visitors; only `/web/assets` is handled earlier and may be cached. The list is a source constant; there is no setting. See also `test_02_dynamic_route_no_store` in `edge_cache/tests/test_edge_cache_headers.py` and `test_login_page_and_post_targets_are_never_cacheable` in `edge_cache/tests/test_edge_cache_cookies.py`.
+
+### Story: asynchronous cache purging [@ANCHOR: story_cache_purging]
+
+The story in `docs/stories/cache_purging.md` follows a content manager saving a blog post: the save calls `enqueue_tags`, `enqueue_urls` or `enqueue_everything`, the requests are stored as `cloudflare.purge.queue` rows without waiting for the CDN, and the minute cron runs `process_queue` to send them to Cloudflare in website batches. It also records that deleting a blog post or product queues a purge of its URL before the record is removed. It cites the queue tests as its verification. Nothing in it is code; the behaviour is documented under the purge queue entries here.
+
+### Story: geo-aware request context [@ANCHOR: story_request_context]
+
+The story in `docs/stories/request_context.md` follows a developer who reads the visitor's country from the Cloudflare headers (an example request from France carrying `CF-IPCountry: FR`) through `env['cloudflare.utils'].get_request_context()` to show regional prices. It states the trust rule: the `CF-*` headers are believed only from a loopback or Cloudflare-range peer, and otherwise every geographic and threat field is None so a direct request cannot forge them. Verified by the request context tests in `tests/test_request_context.py`.
+
+### Story: secure edge bridging via tunnels [@ANCHOR: story_tunnels]
+
+The story in `docs/stories/tunnels.md` follows an administrator who connects Odoo to Cloudflare without opening inbound ports: generate the install command in Settings, sync and delete tunnels, review and push ingress routes (sorted by sequence, with a mandatory catch-all, the SSH route off by default), run several websites' tunnels on one server, and see how each `cloudflared` runs as a `systemd --user` unit with its run token in a private file. The code behind each step is documented under the tunnel entries here; the tests are the ones those entries cite.
+
+### Story: CAPTCHA verification with Turnstile [@ANCHOR: story_turnstile]
+
+The story in `docs/stories/turnstile_verification.md` follows a contact form: the browser widget makes a token, the controller calls `env['cloudflare.turnstile'].verify_token(...)`, Cloudflare validates it, and the form is processed only when it is valid. A second scenario covers saving a Cloudflare token or Turnstile secret, which registers its salted fingerprint with the optional `hams_secret_canary` addon (and does nothing without it). Verified by `test_02_turnstile_secret_fetch` in `tests/test_cloudflare_apis.py` and `TestCanaryRegistration` in `tests/test_canary_registration.py`.
+
+### Story: automated WAF IP banning [@ANCHOR: story_waf_banning]
+
+The story in `docs/stories/waf_banning.md` follows a honeypot hit: a security module calls `env['cloudflare.waf'].ban_ip(...)`, the module's `_execute_ban` creates an IP Access Rule at Cloudflare and records it in `cloudflare.ip.ban`, and an administrator lifts it later with `action_lift_ban`. The story text says a timed automatic lift exists; the README entry on WAF IP banning is the accurate one (no expiry, lifted by an administrator), and the story's wording is a known inconsistency to fix. It also lists the UI tours that cover the ban, rule, purge and settings views. Tests are in `tests/test_waf_management.py`.
+
+### Journey: high-performance content invalidation [@ANCHOR: journey_content_invalidation]
+
+The journey in `docs/journeys/content_invalidation.md` has three phases: a record update causes URLs or tags to be enqueued through `enqueue_urls` and `enqueue_tags`; the requests persist in `cloudflare.purge.queue` so user requests never wait on the CDN; and the cron runs `process_queue`, which batches the records by website and credentials and sends them to Cloudflare. It notes the README's limits (every minute, up to 10 batches of 30, failed entries retried once). Verified by the queue batching and rate-limit test in `tests/test_purge_queue.py`.
+
+### Journey: managing edge security [@ANCHOR: journey_edge_security]
+
+The journey in `docs/journeys/edge_security.md` covers the life of an IP ban in three phases: detection by a honeypot or security module that calls `env['cloudflare.waf'].ban_ip(ip)`; enforcement, where `cloudflare.ip.ban` triggers `_execute_ban`, Cloudflare is told to block the address and the UI shows the banned state; and resolution, the lifting step. It notes that the README is accurate where it says a ban has no expiry and stays until an administrator lifts it. See `tests/test_waf_management.py`.
+
+### Journey: infrastructure provisioning [@ANCHOR: journey_infrastructure]
+
+The journey in `docs/journeys/infrastructure.md` covers setup of edge connectivity in three phases: the administrator enters API tokens in Settings, runs the Tunnel Wizard (which creates the tunnel at Cloudflare and shows a one-time install command), and then uses Sync Tunnels to align Odoo with Cloudflare and deletes obsolete tunnels. The code and its tests are described in the tunnel setup, sync and delete entries of this README (`tests/test_cloudflare_apis.py`).
+
+### Journey: intelligent traffic handling [@ANCHOR: journey_traffic_handling]
+
+The journey in `docs/journeys/traffic_handling.md` shows how edge data is used: the visitor reaches Cloudflare, which adds geographic and threat headers and where `_post_dispatch` adds the caching headers; the application calls `get_request_context()` and gets a dictionary (every geographic and threat field is None when the peer is not trusted); and a controller may use `threat_score` or country to decide on Turnstile verification. Verified by `tests/test_request_context.py` and `tests/test_cloudflare_apis.py`.
