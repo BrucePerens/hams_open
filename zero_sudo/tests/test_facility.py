@@ -6,7 +6,7 @@
 
 import logging
 from odoo.tests.common import tagged
-from .real_transaction import LEAK_CHECK_FALLBACK_TABLES, RealTransactionCase
+from .real_transaction import LEAK_CHECK_FALLBACK_TABLES, RealTransactionCase, count_rows_in_batches
 
 _logger = logging.getLogger(__name__)
 
@@ -17,6 +17,8 @@ class TestRealTransactionFacility(RealTransactionCase):
     # Tests [@ANCHOR: zero_sudo:COMM_cursor_hijacking]
     # ---
     # Tests [@ANCHOR: zero_sudo:COMM_leak_snapshotting]
+    # ---
+    # Tests [@ANCHOR: zero_sudo:COMM_count_rows_in_batches]
     # ---
     # Tests [@ANCHOR: zero_sudo:COMM_orm_instrumentation]
     # ---
@@ -51,6 +53,37 @@ class TestRealTransactionFacility(RealTransactionCase):
         # 2. Verify snapshotting
         self.assertTrue(len(self._initial_counts) > 0)
         self.assertIn("res_users", self._initial_counts)
+
+    def test_00b_count_rows_in_batches_releases_locks(self):
+        # [@ANCHOR: zero_sudo:COMM_test_count_rows_in_batches]
+        # ---
+        # # Verified by [@ANCHOR: zero_sudo:COMM_test_count_rows_in_batches]
+        """Counting must be exact, and must not accumulate relation locks across batches."""
+        tables = list(self._tables)
+        self.assertGreater(len(tables), 20)
+        self.assertEqual(
+            count_rows_in_batches(self.registry.db_name, tables[:20], batch_size=3),
+            count_rows_in_batches(self.registry.db_name, tables[:20], batch_size=20),
+        )
+        # Before each batch's transaction ends, read how many relation locks that backend holds. Small batches must hold far
+        # fewer than one big batch over the same tables, i.e. locks do not pile up from batch to batch.
+        def peak_locks(batch_size, subset):
+            peak = {"locks": 0}
+
+            def watch_locks(cr):
+                cr.execute("SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'relation'")
+                peak["locks"] = max(peak["locks"], cr.fetchone()[0])
+
+            counts = count_rows_in_batches(self.registry.db_name, subset, batch_size=batch_size, on_batch=watch_locks)
+            return peak["locks"], counts
+
+        subset = tables[:24]
+        big_locks, _big_counts = peak_locks(len(subset), subset)
+        small_locks, _small_counts = peak_locks(2, subset)
+        counts = count_rows_in_batches(self.registry.db_name, tables, batch_size=4)
+        self.assertGreater(small_locks, 0)
+        self.assertLess(small_locks * 3, big_locks, "locks piled up across batches: %s vs %s" % (small_locks, big_locks))
+        self.assertEqual(set(counts), set(tables))
 
     def test_01_auto_cleanup_tracking(self):
         # [@ANCHOR: zero_sudo:COMM_test_orm_instrumentation]

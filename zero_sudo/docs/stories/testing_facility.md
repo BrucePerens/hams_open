@@ -22,7 +22,7 @@ The [module README](../../README.md) attributes the end-of-test Database Leak Pr
 The testing facility provides a safe environment.
 
 
-- **Leak Snapshotting** `[@ANCHOR: zero_sudo:COMM_leak_snapshotting]`: Prior to the test, the system records the exact sizes of all active database tables.
+- **Leak Snapshotting** `[@ANCHOR: zero_sudo:COMM_leak_snapshotting]`: Prior to the test, the system records the exact sizes of all active database tables. Counting runs in small batches, each committed on its own short connection, so no more than a few dozen relation locks are held at once (`[@ANCHOR: zero_sudo:COMM_count_rows_in_batches]`); a single query over every table ran Postgres out of shared lock slots when shards ran in parallel.
 The testing facility provides a safe environment.
 
 
