@@ -98,6 +98,7 @@ class TestListenerSocket(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:open_listener]
     # Tests [@ANCHOR: hams_rpc_guard:peer_of]
 
+    # Tests [@ANCHOR: hams_rpc_guard_unix_listener_listener_error]
     def test_config(self):
         self.assertIsNone(unix_listener.listener_config({}))
         self.assertEqual(unix_listener.listener_config({unix_listener.OPTION_PATH: "/run/odoo/rpc.sock"}),
@@ -339,6 +340,7 @@ class TestUnixLoginBinding(HamsTransactionCase):
     def test_identity_is_absent_off_the_socket(self):
         self.assertEqual(guard.unix_identity(), ("", None))
 
+    # Tests [@ANCHOR: hams_rpc_guard_policy_call]
     def test_identity_names_the_local_user(self):
         self.environ[gate.UNIX_PEER_ENVIRON_KEY] = gate.Peer(1, 1001, 1001, "hamsd_fcc", "hamsd").as_dict()
         self.environ[gate.UNIX_LOGINS_ENVIRON_KEY] = frozenset({"callbook_sync"})

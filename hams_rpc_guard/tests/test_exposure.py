@@ -101,6 +101,7 @@ class TestExposureFiles(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:load_exposure]
     # Tests [@ANCHOR: hams_rpc_guard:manifest_of]
 
+    # Tests [@ANCHOR: hams_rpc_guard_exposure_exposure]
     def test_merge_reads_every_section_and_ignores_junk(self):
         result = exposure.Exposure()
         with self.assertLogs(exposure._logger, "WARNING"):

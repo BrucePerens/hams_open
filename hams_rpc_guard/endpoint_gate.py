@@ -101,6 +101,7 @@ _counts = collections.Counter()
 _counts_lock = threading.Lock()
 
 
+# [@ANCHOR: hams_rpc_guard_endpoint_gate_config_error]
 class ConfigError(ValueError):
     """A gate setting that does not parse. Raised when it is written; logged and failed closed when it is read."""
 

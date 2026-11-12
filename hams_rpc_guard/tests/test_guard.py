@@ -123,6 +123,7 @@ class TestWrapper(GuardCase, HamsTransactionCase):
         with self.assertLogs(policy._logger, "WARNING"), self.assertRaises(AccessError):
             service_model.get_public_method(visitor, "search_read")
 
+    # Tests [@ANCHOR: hams_rpc_guard_ir_http_ir_http]
     def test_a_daemon_is_limited_to_its_own_entry(self):
         self._as_rpc()
         daemon = build_persona(self.env, "internal_staff")

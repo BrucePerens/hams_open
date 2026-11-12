@@ -20,6 +20,7 @@ PARSERS = {
 }
 
 
+# [@ANCHOR: hams_rpc_guard_ir_config_parameter_ir_config_parameter]
 class IrConfigParameter(models.Model):
     _inherit = "ir.config_parameter"
 

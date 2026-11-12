@@ -14,6 +14,7 @@ from .. import policy
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: hams_rpc_guard_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
 
