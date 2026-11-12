@@ -25,6 +25,8 @@ class TestSEOController(HamsTransactionCase):
         )
         self.controller = UserWebsitesSEOController()
 
+    # Tests [@ANCHOR: user_websites_seo_res_users_res_users_seo]
+    # Tests [@ANCHOR: user_websites_seo_main_user_websites_seocontroller]
     def test_controller_no_ssti_elevation(self):
         # Tests [@ANCHOR: COMM_controller_user_blog_index_seo_override]
 

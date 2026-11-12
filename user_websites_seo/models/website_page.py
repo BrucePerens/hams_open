@@ -3,6 +3,7 @@
 from odoo import models
 
 
+# [@ANCHOR: user_websites_seo_website_page_website_page_seo]
 class WebsitePageSEO(models.Model):
     _name = "website.page"
     _inherit = ["website.page", "user.websites.seo.metadata.mixin"]

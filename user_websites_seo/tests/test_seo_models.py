@@ -84,6 +84,8 @@ class TestSEOModels(RealTransactionCase):
             self.env.flush_all()
         self.env.flush_all()
 
+    # Tests [@ANCHOR: user_websites_seo_user_websites_group_user_websites_group_seo]
+    # Tests [@ANCHOR: user_websites_seo_seo_metadata_mixin_seometadata_mixin]
     def test_check_access_rule_res_users_seo_self_write_survives_a_non_main_company(self):
         # Tests [@ANCHOR: COMM_res_users_seo_write_elevation]
 
@@ -273,6 +275,8 @@ class TestSEOModels(RealTransactionCase):
             "The Social Media field must exist in user.websites.group arch.",
         )
 
+    # Tests [@ANCHOR: user_websites_seo_website_page_website_page_seo]
+    # Tests [@ANCHOR: user_websites_seo_blog_post_blog_post_seo]
     def test_xpath_rendering_pages_posts(self):
         # [@ANCHOR: COMM_test_xpath_rendering_pages_posts]
         """Prove that the SEO page renders in website.page and blog.post."""
@@ -293,6 +297,7 @@ class TestSEOModels(RealTransactionCase):
         msg = "The SEO page must exist in blog.post arch."
         self.assertIn('name="seo_settings"', arch, msg)
 
+    # Tests [@ANCHOR: user_websites_seo_blog_blog_blog_blog_seo]
     def test_mixin_base_check_seo_write_permission_is_abstract(self):
         # Tests [@ANCHOR: user_websites_seo:COMM_mixin_check_seo_write_permission]
         """Every concrete model using this mixin overrides

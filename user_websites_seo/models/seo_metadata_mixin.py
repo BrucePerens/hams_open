@@ -3,6 +3,7 @@
 from odoo import models
 
 
+# [@ANCHOR: user_websites_seo_seo_metadata_mixin_seometadata_mixin]
 class SEOMetadataMixin(models.AbstractModel):
     _name = "user.websites.seo.metadata.mixin"
     _description = "User Websites SEO Metadata Mixin"
