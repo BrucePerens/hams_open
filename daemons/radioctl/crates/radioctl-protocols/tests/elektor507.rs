@@ -336,3 +336,9 @@ async fn a_rig_over_the_link_and_the_fake_bus_sets_up_and_tunes() {
         .count();
     assert_eq!(writes, 2, "the chip set-up, then the tuning");
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_elektor507_elektor507_engine]
+// Tests [@ANCHOR: radioctl_elektor507_elektor507_twin]
+// Tests [@ANCHOR: radioctl_elektor507_pll]
+// Tests [@ANCHOR: radioctl_elektor507_samples]

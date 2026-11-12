@@ -236,6 +236,7 @@ pub fn cwx_text(text: &str) -> Result<String, RigError> {
 }
 
 /// A decoded `R` line.
+// [@ANCHOR: radioctl_flex_reply]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reply {
     /// The sequence number of the command.
@@ -272,6 +273,7 @@ pub fn parse_pairs(text: &str) -> Vec<(&str, &str)> {
 }
 
 /// What `info` told us about the radio ("TCPIP info").
+// [@ANCHOR: radioctl_flex_radio_info]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RadioInfo {
     /// The model, e.g. `FLEX-6300`.
@@ -347,6 +349,7 @@ pub fn parse_firmware(text: &str) -> Option<(u8, u8)> {
 }
 
 /// A radio announced by the discovery broadcast.
+// [@ANCHOR: radioctl_flex_discovery]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Discovery {
     /// Model name.
@@ -413,6 +416,7 @@ pub fn parse_discovery(packet: &[u8]) -> Option<Discovery> {
 }
 
 /// What the engine knows about one slice receiver.
+// [@ANCHOR: radioctl_flex_slice_state]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SliceState {
     /// `in_use`.
@@ -438,6 +442,7 @@ pub struct SliceState {
 }
 
 /// What the engine knows about one panadapter.
+// [@ANCHOR: radioctl_flex_panadapter_state]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PanadapterState {
     /// `center`.
@@ -453,6 +458,7 @@ pub struct PanadapterState {
 }
 
 /// What the engine knows about the transmitter and its interlock.
+// [@ANCHOR: radioctl_flex_transmit_state]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TransmitState {
     /// `interlock state=`.
@@ -465,6 +471,7 @@ pub struct TransmitState {
     pub mic_level: Option<u16>,
 }
 
+// [@ANCHOR: radioctl_flex_kind]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Kind {
     /// A subscription: the reply is not shown to the actor.
@@ -479,12 +486,14 @@ enum Kind {
     Version,
 }
 
+// [@ANCHOR: radioctl_flex_pending]
 struct Pending {
     seq: u32,
     kind: Kind,
 }
 
 /// The FlexRadio SmartSDR protocol engine.
+// [@ANCHOR: radioctl_flex_flex_engine]
 pub struct FlexEngine {
     desc: RigDescription,
     slice: u8,

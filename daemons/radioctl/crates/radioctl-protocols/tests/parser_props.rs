@@ -181,3 +181,14 @@ proptest! {
         let _ = engine.feed(line.as_bytes(), NOW);
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_flex_discovery]
+// Tests [@ANCHOR: radioctl_flex_flex_engine]
+// Tests [@ANCHOR: radioctl_flex_kind]
+// Tests [@ANCHOR: radioctl_flex_panadapter_state]
+// Tests [@ANCHOR: radioctl_flex_pending]
+// Tests [@ANCHOR: radioctl_flex_radio_info]
+// Tests [@ANCHOR: radioctl_flex_reply]
+// Tests [@ANCHOR: radioctl_flex_slice_state]
+// Tests [@ANCHOR: radioctl_flex_transmit_state]

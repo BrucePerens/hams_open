@@ -79,6 +79,7 @@ pub fn initial_frame() -> [u8; FRAME_LEN] {
 }
 
 /// The HiQSDR client engine.
+// [@ANCHOR: radioctl_hiqsdr_hiqsdr_engine]
 #[derive(Debug)]
 pub struct HiqsdrEngine {
     desc: RigDescription,
@@ -164,6 +165,7 @@ impl ProtocolEngine for HiqsdrEngine {
 }
 
 /// A virtual HiQSDR: it keeps the last control frame it was sent.
+// [@ANCHOR: radioctl_hiqsdr_hiqsdr_twin]
 #[derive(Debug)]
 pub struct HiqsdrTwin {
     frame: [u8; FRAME_LEN],
@@ -222,6 +224,8 @@ impl VendorTwin for HiqsdrTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_hiqsdr_hiqsdr_engine]
+    // Tests [@ANCHOR: radioctl_hiqsdr_hiqsdr_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);

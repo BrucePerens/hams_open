@@ -225,3 +225,10 @@ async fn protocol_2_virtual_anan_tunes_and_keeps_the_gate_closed() {
     eventually("unkeyed", || P2Counters::get(&c.ptt_now) == 0).await;
     emu.stop();
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: radioctl_hpsdr_io_hpsdr_control]
+// Tests [@ANCHOR: radioctl_hpsdr_io_hpsdr_link]
+// Tests [@ANCHOR: radioctl_hpsdr_io_hpsdr_options]
+// Tests [@ANCHOR: radioctl_hpsdr_io_shared]
+// Tests [@ANCHOR: radioctl_hpsdr_io_state]
