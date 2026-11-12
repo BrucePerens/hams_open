@@ -6,6 +6,7 @@
 use serde_json::{json, Value};
 use std::path::Path;
 
+// [@ANCHOR: bench_mcp_radioctl_models_rig]
 /// What the head of a description file says about the rig.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Rig {

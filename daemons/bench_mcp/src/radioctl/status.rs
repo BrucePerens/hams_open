@@ -67,6 +67,7 @@ pub fn s_text(db_rel_s9: f64) -> String {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_status_read]
 /// A read whose rig-side refusal is data (`Ok(Err)`) and whose link failure is an error.
 pub type Read<T> = Result<Result<T, RigError>, String>;
 
@@ -374,6 +375,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_bounded]
+    // Tests [@ANCHOR: bench_mcp_radioctl_status_read]
     #[test]
     fn bounded_refuses_what_is_out_of_range_or_not_a_number() {
         assert_eq!(bounded(&json!({}), "count", 3.0, 1.0, 5.0).unwrap(), 3.0);

@@ -73,6 +73,7 @@ pub fn rx_ranges(c: &mut Client, cfg: &Config) -> Result<(Vec<(f64, f64)>, Strin
     Ok(combine_ranges(&rig, &cfg.rx_ranges_hz))
 }
 
+// [@ANCHOR: bench_mcp_radioctl_control_tx_range]
 /// A transmit range as `dump_state` gives it: (low Hz, high Hz, lowest power mW, highest power mW).
 pub type TxRange = (f64, f64, f64, f64);
 
@@ -155,6 +156,7 @@ fn ptt_is_on(c: &mut Client) -> Result<bool, String> {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_control_plan]
 /// Everything `bench_radioctl_set` will do, checked.
 struct Plan {
     freq: Option<f64>,
@@ -598,6 +600,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctl_dump_ranges]
+    // Tests [@ANCHOR: bench_mcp_radioctl_control_tx_range]
     #[test]
     fn dump_state_ranges_are_read_until_the_zero_lines() {
         // The first three lines of the real dump are single numbers (protocol, model, region), then the receive list, then the transmit list.

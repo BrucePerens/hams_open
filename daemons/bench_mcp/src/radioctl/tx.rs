@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+// [@ANCHOR: bench_mcp_radioctl_tx_active]
 /// A rig that may be keyed right now, for the release when the server stops.
 #[derive(Clone, Debug)]
 struct Active {
@@ -71,6 +72,7 @@ pub fn log_event(dir: &Path, rig: &str, event: &str, fields: Value) {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_tx_purpose]
 /// What a keyed interval is for, written to the log and the state file.
 #[derive(Clone, Debug)]
 pub struct Purpose {
@@ -84,6 +86,7 @@ pub struct Purpose {
     pub kind: String,
 }
 
+// [@ANCHOR: bench_mcp_radioctl_tx_sample]
 /// One set of meter readings during the keyed interval.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sample {
@@ -107,6 +110,7 @@ pub fn believable_swr(x: f64) -> Option<f64> {
     (x.is_finite() && (1.0..=100.0).contains(&x)).then_some(x)
 }
 
+// [@ANCHOR: bench_mcp_radioctl_tx_keyed_run]
 #[derive(Debug)]
 pub struct KeyedRun {
     pub samples: Vec<Sample>,
@@ -117,6 +121,7 @@ pub struct KeyedRun {
     pub ptt_read_back: bool,
 }
 
+// [@ANCHOR: bench_mcp_radioctl_tx_keying]
 /// What `key` needs to know. `limit_swr` and `limit_power_w` stop the interval at once when a meter passes them.
 pub struct Keying<'a> {
     pub rig: &'a str,
@@ -131,6 +136,7 @@ pub struct Keying<'a> {
     pub previous_rfpower: Option<f64>,
 }
 
+// [@ANCHOR: bench_mcp_radioctl_tx_keyed]
 struct Keyed<'a> {
     k: &'a Keying<'a>,
     watch: Option<Box<dyn Watch>>,
@@ -473,6 +479,10 @@ mod tests {
     use std::sync::Arc;
 
     // Tests [@ANCHOR: radioctl_tx_keyed_drop]
+    // Tests [@ANCHOR: bench_mcp_radioctl_tx_keyed]
+    // Tests [@ANCHOR: bench_mcp_radioctl_tx_keying]
+    // Tests [@ANCHOR: bench_mcp_radioctl_tx_purpose]
+    // Tests [@ANCHOR: bench_mcp_radioctl_tx_active]
     #[test]
     fn a_panic_while_keyed_still_releases_the_rig_and_sets_the_minimum_power() {
         let mut sim = Sim::new();

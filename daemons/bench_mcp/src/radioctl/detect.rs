@@ -28,6 +28,7 @@ const TICK_MIN_CONTRAST_DB: f64 = 8.0;
 const TICK_MIN_CONSISTENT: f64 = 0.6;
 const TICK_MIN_SECONDS: usize = 6;
 
+// [@ANCHOR: bench_mcp_radioctl_detect_tone_hit]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ToneHit {
     pub hz: f64,
@@ -35,6 +36,7 @@ pub struct ToneHit {
     pub over_floor_db: f64,
 }
 
+// [@ANCHOR: bench_mcp_radioctl_detect_tick_hit]
 #[derive(Clone, Debug, PartialEq)]
 pub struct TickHit {
     pub hz: f64,
@@ -45,6 +47,7 @@ pub struct TickHit {
     pub consistent: f64,
 }
 
+// [@ANCHOR: bench_mcp_radioctl_detect_findings]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Findings {
     pub all_zero: bool,
@@ -279,6 +282,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_detect_ticks]
+    // Tests [@ANCHOR: bench_mcp_radioctl_detect_tick_hit]
     #[test]
     fn a_one_second_tick_train_is_found_with_and_without_noise_and_silence_has_none() {
         let clean = ticks(10.0, 1000.0, 5.0, 0.3, 0.37);
@@ -306,6 +310,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_detect_tones]
+    // Tests [@ANCHOR: bench_mcp_radioctl_detect_tone_hit]
     #[test]
     fn minute_tones_are_found_by_their_narrow_peak_and_broadband_noise_is_not_a_tone() {
         for hz in [440.0, 500.0, 600.0] {
@@ -358,6 +363,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_detect_analyze]
+    // Tests [@ANCHOR: bench_mcp_radioctl_detect_findings]
     #[test]
     fn analysis_reports_silence_and_dead_inputs_and_a_full_station() {
         let dead = analyze(&vec![0.0; R as usize * 4], R).unwrap();

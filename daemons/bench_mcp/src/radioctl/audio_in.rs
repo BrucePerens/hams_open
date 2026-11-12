@@ -21,6 +21,7 @@ pub trait AudioSource {
     fn describe(&self) -> String;
 }
 
+// [@ANCHOR: bench_mcp_radioctl_audio_in_pipe_wire_input]
 pub struct PipeWireInput {
     node: String,
 }
@@ -77,6 +78,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: radioctl_audio_capture]
+    // Tests [@ANCHOR: bench_mcp_radioctl_audio_in_pipe_wire_input]
     #[test]
     fn a_capture_has_bounds_and_a_missing_node_is_an_error_not_a_fall_back_to_the_default_input() {
         let src = PipeWireInput {

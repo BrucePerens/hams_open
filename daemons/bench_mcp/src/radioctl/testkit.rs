@@ -11,6 +11,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
+// [@ANCHOR: bench_mcp_radioctl_testkit_reply]
 /// What the far end does with one command (given without the `+\` prefix).
 pub enum Reply {
     /// Lines to send after the echo line, and the return code.

@@ -7,6 +7,7 @@ use super::testkit::*;
 use super::*;
 use std::sync::{Arc, Mutex};
 
+// [@ANCHOR: bench_mcp_radioctl_tests_dir]
 /// A fresh directory for a test's state files and logs; removed by `Dir::drop`.
 pub struct Dir(pub std::path::PathBuf);
 
@@ -146,6 +147,7 @@ fn config_takes_a_managed_or_an_existing_radioctld_and_refuses_the_rest() {
 // Tests [@ANCHOR: radioctl_connect]
 // Tests [@ANCHOR: radioctl_reopen]
 // Tests [@ANCHOR: radioctl_exchange]
+// Tests [@ANCHOR: bench_mcp_radioctl_proto_client]
 #[test]
 fn a_command_gets_its_reply_and_a_rig_error_is_an_error_with_a_next_step() {
     let fake = FakeRadioctld::serve(|c| match c {
@@ -287,6 +289,8 @@ fn the_daemon_config_binds_localhost_and_carries_only_the_owners_settings() {
 // Tests [@ANCHOR: radioctl_daemon_explicit_start]
 // Tests [@ANCHOR: radioctl_daemon_status]
 // Tests [@ANCHOR: radioctl_daemon_stop]
+// Tests [@ANCHOR: bench_mcp_radioctl_tests_dir]
+// Tests [@ANCHOR: bench_mcp_radioctl_rigd_slot]
 #[test]
 fn the_managed_daemon_starts_on_demand_stops_on_request_and_starts_again() {
     let dir = Dir::new("daemon");
@@ -554,6 +558,7 @@ fn a_frequency_outside_the_receive_limits_is_refused_with_the_limit_and_its_sour
 }
 
 // Tests [@ANCHOR: radioctl_set_plan]
+// Tests [@ANCHOR: bench_mcp_radioctl_control_plan]
 #[test]
 fn set_arguments_are_checked_before_anything_is_sent_and_transmit_side_settings_are_refused() {
     let fake = FakeRadioctld::serve(|_| ok(&[]));
@@ -1014,6 +1019,7 @@ fn the_station_tools_list_the_table_and_the_owner_edits_it() {
 
 // Tests [@ANCHOR: radioctl_load_baseline_tool]
 // Tests [@ANCHOR: radioctl_baseline_problems]
+// Tests [@ANCHOR: bench_mcp_radioctl_loadtools_prepared]
 #[test]
 fn the_baseline_needs_the_confirmation_the_attested_range_and_a_quiet_path() {
     let dir = Dir::new("baseline");
@@ -1141,6 +1147,7 @@ fn the_baseline_needs_the_confirmation_the_attested_range_and_a_quiet_path() {
 // Tests [@ANCHOR: radioctl_loadtools_measure]
 // Tests [@ANCHOR: radioctl_loadtools_prepare]
 // Tests [@ANCHOR: radioctl_load_gate]
+// Tests [@ANCHOR: bench_mcp_radioctl_load_measured]
 #[test]
 fn the_load_check_passes_at_the_baseline_and_refuses_a_signal_a_station_a_dead_input_and_a_broken_meter(
 ) {
@@ -1289,6 +1296,7 @@ fn the_load_tools_exist_only_for_a_rig_with_a_transmit_attestation_and_refuse_wi
 
 // Tests [@ANCHOR: radioctl_rx_check]
 // Tests [@ANCHOR: radioctl_rx_listen]
+// Tests [@ANCHOR: bench_mcp_radioctl_load_original]
 #[test]
 fn the_receiver_check_reports_signal_against_audio_and_the_tone_offset_and_restores_the_rig() {
     let dir = Dir::new("rxcheck");
@@ -1520,6 +1528,7 @@ fn the_rig_daemon_program_is_never_empty() {
 }
 
 // Tests [@ANCHOR: radioctl_tx_args]
+// Tests [@ANCHOR: bench_mcp_radioctl_txtools_test_args]
 #[test]
 fn a_test_is_refused_above_the_power_cap_outside_the_ranges_in_a_mode_not_allowed_or_too_long() {
     let b = TxBench::new("tx_args", false);
@@ -1783,6 +1792,8 @@ fn the_rig_is_read_first_and_a_split_xit_keyed_or_over_cap_rig_is_refused_withou
 // Tests [@ANCHOR: radioctl_tx_restore]
 // Tests [@ANCHOR: radioctl_tx_set_verified]
 // Tests [@ANCHOR: radioctl_tx_summary]
+// Tests [@ANCHOR: bench_mcp_radioctl_tx_keyed_run]
+// Tests [@ANCHOR: bench_mcp_radioctl_tx_sample]
 #[test]
 fn a_key_test_passes_every_gate_probes_keys_releases_restores_and_logs_each_interval() {
     let b = TxBench::new("tx_ok", true);
@@ -2144,6 +2155,8 @@ fn a_rig_that_will_not_unkey_is_reported_loudly_and_left_to_the_watchdog() {
 
 // Tests [@ANCHOR: radioctl_guard_run]
 // Tests [@ANCHOR: radioctl_guard_unkey]
+// Tests [@ANCHOR: bench_mcp_radioctl_guard_process_watch]
+// Tests [@ANCHOR: bench_mcp_radioctl_guard_word]
 #[test]
 fn the_watchdog_unkeys_on_its_deadline_on_a_closed_pipe_and_on_abort_and_stands_down_on_done() {
     let run = |send: Option<&str>,
@@ -2229,6 +2242,7 @@ fn the_watchdog_unkeys_on_its_deadline_on_a_closed_pipe_and_on_abort_and_stands_
 
 // Tests [@ANCHOR: radioctl_tx_release_all]
 // Tests [@ANCHOR: radioctl_shutdown_all]
+// Tests [@ANCHOR: bench_mcp_radioctl_txtools_deps]
 #[test]
 fn stopping_the_server_releases_a_rig_that_is_keyed_before_the_daemons_are_stopped() {
     let b = TxBench::new("tx_stop", true);
@@ -2520,6 +2534,7 @@ fn the_transmit_tools_exist_only_with_the_attestation_at_the_full_tier_and_the_s
 }
 
 // Tests [@ANCHOR: radioctl_tx_alert]
+// Tests [@ANCHOR: bench_mcp_radioctl_txtools_audio_alert]
 #[test]
 fn the_operator_alert_goes_to_the_audio_instrument_and_an_unknown_one_is_an_error_without_sound() {
     let none: Vec<Instrument> = vec![];
@@ -2551,6 +2566,7 @@ fn the_watchdog_entry_point_refuses_bad_arguments_before_it_reads_anything() {
 }
 
 // Tests [@ANCHOR: radioctl_guard_spawn]
+// Tests [@ANCHOR: bench_mcp_radioctl_guard_process_spawner]
 #[test]
 fn a_watchdog_that_does_not_report_armed_stops_the_keying_before_it_starts() {
     // In a test binary the program that is started again is the test harness, which does not know the flag and never says armed;

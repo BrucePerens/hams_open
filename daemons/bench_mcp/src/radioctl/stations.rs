@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 pub const AUDIO_KINDS: &[&str] = &["wwv", "wwvh", "carrier", "voice", "none"];
 const HEARD_RECENTLY_DAYS: i64 = 30;
 
+// [@ANCHOR: bench_mcp_radioctl_stations_station]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Station {
     pub id: String,
@@ -253,6 +254,7 @@ pub fn check(s: &Station) -> Result<(), String> {
     Ok(())
 }
 
+// [@ANCHOR: bench_mcp_radioctl_stations_table]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Table {
     pub stations: Vec<Station>,
@@ -433,6 +435,7 @@ mod tests {
     // Tests [@ANCHOR: radioctl_stations_defaults]
     // Tests [@ANCHOR: radioctl_station_check]
     // Tests [@ANCHOR: radioctl_station_class]
+    // Tests [@ANCHOR: bench_mcp_radioctl_stations_station]
     #[test]
     fn the_shipped_table_lists_wwv_wwvh_am_and_weather_but_not_chu_and_every_entry_is_valid() {
         let d = defaults();
@@ -480,6 +483,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_stations_select]
+    // Tests [@ANCHOR: bench_mcp_radioctl_stations_table]
     #[test]
     fn references_follow_the_band_the_rig_coverage_and_the_time_of_day() {
         let t = Table {

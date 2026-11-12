@@ -9,6 +9,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
+// [@ANCHOR: bench_mcp_radioctl_proto_rig_error]
 /// Why a command did not give a value.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RigError {
@@ -82,6 +83,7 @@ fn code_next_step(code: i32) -> &'static str {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_proto_reply]
 /// The text of a reply: the lines between the echo of the command and `RPRT`, and the return code.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Reply {
@@ -139,6 +141,7 @@ pub fn check_arg(s: &str) -> Result<&str, String> {
     Ok(s)
 }
 
+// [@ANCHOR: bench_mcp_radioctl_proto_client]
 pub struct Client {
     host: String,
     port: u16,
@@ -292,6 +295,9 @@ mod tests {
     // Tests [@ANCHOR: radioctl_error_codes]
     // Tests [@ANCHOR: radioctl_error_display]
     // Tests [@ANCHOR: radioctl_code_next_step]
+    // Tests [@ANCHOR: bench_mcp_radioctl_txtools_rig]
+    // Tests [@ANCHOR: bench_mcp_radioctl_proto_rig_error]
+    // Tests [@ANCHOR: bench_mcp_radioctl_models_rig]
     #[test]
     fn return_codes_have_names_and_a_next_step() {
         assert_eq!(code_name(-5), "the rig did not answer (timeout)");
@@ -339,6 +345,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_reply_number]
+    // Tests [@ANCHOR: bench_mcp_radioctl_testkit_reply]
+    // Tests [@ANCHOR: bench_mcp_radioctl_proto_reply]
     #[test]
     fn reply_helpers_read_keys_and_bare_values_and_refuse_garbage() {
         let r = Reply {

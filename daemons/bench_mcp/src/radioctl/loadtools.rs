@@ -65,6 +65,7 @@ pub fn station_set(cfg: &Config, args: &Value) -> Result<Value, String> {
     )
 }
 
+// [@ANCHOR: bench_mcp_radioctl_loadtools_prepared]
 struct Prepared<'a> {
     tx: &'a Transmit,
     range: (f64, f64),

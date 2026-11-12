@@ -25,6 +25,7 @@ use serde_json::Value;
 pub const HARD_MAX_SECONDS: f64 = 60.0;
 pub const HARD_MAX_POWER_W: f64 = 200.0;
 
+// [@ANCHOR: bench_mcp_radioctl_attest_load_check]
 /// Settings of the load plausibility check; the defaults are the safe ones.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LoadCheck {
@@ -60,6 +61,7 @@ impl Default for LoadCheck {
     }
 }
 
+// [@ANCHOR: bench_mcp_radioctl_attest_transmit]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Transmit {
     pub attested_by: String,
@@ -233,6 +235,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_attest_config]
     // Tests [@ANCHOR: radioctl_attest_number]
+    // Tests [@ANCHOR: bench_mcp_radioctl_attest_transmit]
+    // Tests [@ANCHOR: bench_mcp_radioctl_attest_load_check]
     #[test]
     fn a_transmit_block_needs_the_attestation_and_every_limit_and_nothing_defaults_wider() {
         let t = parse_transmit(&good()).unwrap();
