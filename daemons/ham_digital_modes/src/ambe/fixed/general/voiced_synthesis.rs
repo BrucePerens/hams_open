@@ -132,6 +132,7 @@ fn theta_q32_i64(
 /// Persistent voiced-synthesis state -- see this module's own doc comment for why `psi`/`phi` are
 /// stored as phases, and the float sibling's own doc comment for the full Annex A initial-value
 /// derivation (`M_bar_l(-1) = 0.0`, `v_bar_l(-1) = false`, `L~(-1) = 30`, all reused unchanged here).
+// [@ANCHOR: voiced_synthesis_voiced_state_struct]
 pub struct VoicedState {
     psi_phase: [u32; MAX_HARMONICS],
     phi_phase: [u32; MAX_HARMONICS],
@@ -332,6 +333,7 @@ impl Default for VoicedState {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: voiced_synthesis_voiced_state_struct]
     use super::*;
 
     /// The fixed-point analogue of the float sibling's own

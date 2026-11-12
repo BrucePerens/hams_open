@@ -658,3 +658,9 @@ fn log2_target_helper_matches_float_formula() {
         }
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: mbe_encode_mode_tables_struct]
+// Tests [@ANCHOR: mbe_encode_prev_state_struct]
+// Tests [@ANCHOR: mbe_encode_quantized_speech_struct]
+// Tests [@ANCHOR: mbe_encode_speech_target_struct]

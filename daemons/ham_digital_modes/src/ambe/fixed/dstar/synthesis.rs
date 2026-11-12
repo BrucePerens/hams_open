@@ -18,6 +18,7 @@ use crate::ambe::fixed::general::unvoiced_synthesis::N;
 use crate::ambe::float::dstar::decode::{parse_frame, FrameKind};
 use crate::ambe::float::mbe_synthesis::{BadFrameAction, ErrorPolicy};
 
+// [@ANCHOR: synthesis_dstar_synthesis_decoder_struct]
 pub struct DStarSynthesisDecoder {
     dequant: MbeDecoderState,
     synth: MbeSynthesizer,

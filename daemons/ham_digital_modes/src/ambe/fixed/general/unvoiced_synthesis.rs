@@ -52,6 +52,7 @@ pub const N: usize = 160;
 
 /// A spectral value at `i64` Q16.16 precision -- see this module's own doc comment for why the
 /// ordinary `i32` Q16.16 convention isn't wide enough here.
+// [@ANCHOR: unvoiced_synthesis_complex_q16_struct]
 #[derive(Clone, Copy)]
 pub(crate) struct ComplexQ16 {
     pub re: i64,
@@ -113,6 +114,7 @@ pub(crate) fn advance_noise(u: i64) -> i64 {
 /// Persistent state for the noise generator `u(n)` -- see the float sibling's own doc comment for the
 /// full derivation; this is a verbatim duplicate (not a numeric port) since the recurrence was already
 /// pure integer.
+// [@ANCHOR: unvoiced_synthesis_noise_state_struct]
 pub struct NoiseState {
     last: i64,
     window: VecDeque<i64>,
@@ -351,6 +353,7 @@ fn time_domain_at_q16(samples: &[i64; 256], n: i32) -> i64 {
 /// Persistent unvoiced-synthesis state: the previous frame's own time-domain unvoiced signal, for
 /// Eq. 126's own overlap-add. See the float sibling's own doc comment for why the noise generator
 /// itself is owned by the caller, shared with voiced synthesis, not by this struct.
+// [@ANCHOR: unvoiced_synthesis_unvoiced_state_struct]
 pub struct UnvoicedState {
     previous_time_domain_q16: [i64; 256],
 }
@@ -410,6 +413,9 @@ impl Default for UnvoicedState {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: unvoiced_synthesis_complex_q16_struct]
+    // Tests [@ANCHOR: unvoiced_synthesis_noise_state_struct]
+    // Tests [@ANCHOR: unvoiced_synthesis_unvoiced_state_struct]
     use super::*;
 
     /// The noise generator is the integer recurrence `u(n+1) = (171 u(n) + 11213) mod 53125` from

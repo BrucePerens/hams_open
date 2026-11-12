@@ -29,6 +29,7 @@ pub use crate::ambe::float::dstar::decode::{
 const HZ_PER_INDEX_Q16_16: i32 = 2_048_000;
 
 /// The fixed-point equivalent of `ambe::float::dstar::decode::ToneKind`.
+// [@ANCHOR: decode_tone_kind_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToneKind {
     Invalid,
@@ -53,6 +54,7 @@ pub fn classify_tone_index(index: u32) -> ToneKind {
 }
 
 /// The fixed-point equivalent of `ambe::float::dstar::decode::DequantizedFrame`.
+// [@ANCHOR: dstar_decode_dequantized_frame_enum]
 pub enum DequantizedFrame {
     Speech(SpeechParameters),
     Tone(TonePayload),

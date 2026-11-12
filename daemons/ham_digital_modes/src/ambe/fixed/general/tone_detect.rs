@@ -30,6 +30,7 @@ const DTMF_COL_HZ_Q16: [i32; 4] = [1209 * HZ_Q16, 1336 * HZ_Q16, 1477 * HZ_Q16, 
 const SCAN_STEP_Q16: i32 = 819_200;
 const HZ_PER_INDEX_Q16: i32 = 2_048_000;
 
+// [@ANCHOR: tone_detect_detected_tone_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DetectedTone {
     Dtmf {
@@ -43,6 +44,7 @@ pub enum DetectedTone {
     },
 }
 
+// [@ANCHOR: tone_detect_detection_struct]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Detection {
     pub tone: DetectedTone,
@@ -179,6 +181,8 @@ pub fn detect_tone(frame: &[i16]) -> Option<Detection> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: tone_detect_detected_tone_enum]
+    // Tests [@ANCHOR: tone_detect_detection_struct]
     use super::*;
 
     /// Integer test tone: `amp * sin(2*pi*hz*(offset+i)/8000)` from the fixed sine table itself.

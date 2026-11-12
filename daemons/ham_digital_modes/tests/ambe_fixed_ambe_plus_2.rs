@@ -142,3 +142,6 @@ fn fixed_dequantize_matches_float_across_representative_sequences() {
         }
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: decode_dequantized_frame_enum]

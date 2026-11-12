@@ -282,3 +282,6 @@ fn bad_frame_policy_matches_float_repeat_three_times_then_mute_then_recover() {
     let recovered = snr_db(&pairs[8].0, &pairs[8].1);
     assert!(recovered >= 30.0, "first frame after mute: {recovered} dB");
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: mbe_synthesis_mbe_synthesizer_struct]

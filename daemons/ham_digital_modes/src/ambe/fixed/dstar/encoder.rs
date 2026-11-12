@@ -25,6 +25,7 @@ use crate::ambe::fixed::mbe_encode::{analyze_and_quantize, AnalysisState};
 use crate::ambe::fixed::tia_102_baba::encoder::{FrameAnalyzer, HighPassFilter};
 use crate::ambe::float::dstar::tables::L_TABLE;
 
+// [@ANCHOR: dstar_encoder_encoder_struct]
 pub struct Encoder {
     analyzer: FrameAnalyzer,
     high_pass: HighPassFilter,

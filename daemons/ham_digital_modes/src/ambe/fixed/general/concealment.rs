@@ -32,6 +32,7 @@ fn amplitude_db_q16(amplitude_q16: i64) -> i64 {
 }
 
 /// What the continuity prior looks at, from one decoded frame (fixed-point sibling of `Descriptor`).
+// [@ANCHOR: concealment_descriptor_struct]
 #[derive(Clone, Debug)]
 pub struct Descriptor {
     pub w0_q16: i32,
@@ -67,6 +68,7 @@ impl Descriptor {
 }
 
 /// Tunable constants in fixed point; `Default` equals the float `ConcealParams::default()` (checked by a test).
+// [@ANCHOR: concealment_conceal_params_struct]
 #[derive(Clone, Copy, Debug)]
 pub struct ConcealParams {
     pub level_scale_db_q16: i64,
@@ -105,6 +107,7 @@ impl Default for ConcealParams {
 }
 
 /// Decision for one frame.
+// [@ANCHOR: concealment_decision_enum]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decision {
     Accept(usize),
@@ -115,6 +118,7 @@ pub enum Decision {
     },
 }
 
+// [@ANCHOR: concealment_concealer_struct]
 pub struct Concealer {
     pub params: ConcealParams,
     previous: Option<Descriptor>,

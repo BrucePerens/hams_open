@@ -25,6 +25,7 @@ use crate::ambe::float::mbe_synthesis::{BadFrameAction, ErrorPolicy};
 /// `round(31.25 * 65536)`, exact: a single tone's frequency is `tone_idx * 31.25` Hz.
 const HZ_PER_INDEX_Q16_16: i32 = 2_048_000;
 
+// [@ANCHOR: synthesis_ambe_plus2_synthesis_decoder_struct]
 pub struct AmbePlus2SynthesisDecoder {
     dequant: MbeDecoderState,
     synth: MbeSynthesizer,

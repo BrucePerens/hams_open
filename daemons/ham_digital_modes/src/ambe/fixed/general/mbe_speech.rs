@@ -32,6 +32,7 @@ const POINT_2046_Q16_16: i32 = 13409;
 
 /// The nine raw parameter indices needed by [`dequantize_speech`] -- `b0` itself is not included
 /// since the caller has already used it to resolve `l`/`w0` before calling this function.
+// [@ANCHOR: mbe_speech_raw_speech_parameters_struct]
 pub struct RawSpeechParameters {
     pub b1: u32,
     pub b2: u32,
@@ -48,6 +49,7 @@ pub struct RawSpeechParameters {
 /// mode's own `tables_q16.rs` generator for the exact provenance). `prba24`/`prba58` and the four
 /// `hoc_b*` tables are kept as separate fields (not one array) since their own row widths differ (3,
 /// 4, and 4 columns respectively).
+// [@ANCHOR: mbe_speech_speech_tables_struct]
 pub struct SpeechTables<'a> {
     pub vuv: &'a [[bool; 8]],
     pub dg_q16: &'a [i32],
@@ -69,6 +71,7 @@ pub struct SpeechTables<'a> {
 /// Persistent decoder state across frames, generic over every MBE-family mode -- the fixed-point
 /// equivalent of `ambe_plus_2::decode::DecoderState`/`dstar::decode::DStarDecoderState` (which are
 /// themselves identical in shape, just duplicated per mode in the float tree).
+// [@ANCHOR: mbe_speech_mbe_decoder_state_struct]
 pub struct MbeDecoderState {
     pub l: u32,
     pub log2_ml_q16: Vec<i32>,
@@ -91,6 +94,7 @@ impl MbeDecoderState {
 
 /// One frame's own real, dequantized semantic parameters -- the `FrameKind::Speech` case only (the
 /// caller handles `Erasure`/`Silence`/`Tone`/mode-specific special frames itself).
+// [@ANCHOR: mbe_speech_speech_parameters_struct]
 pub struct SpeechParameters {
     pub l: u32,
     pub w0_q16: i32,

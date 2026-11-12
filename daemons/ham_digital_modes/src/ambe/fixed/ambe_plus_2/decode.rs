@@ -25,6 +25,7 @@ pub use crate::ambe::float::ambe_plus_2::decode::{
 };
 
 /// The fixed-point equivalent of `ambe::float::ambe_plus_2::decode::DequantizedFrame`.
+// [@ANCHOR: decode_dequantized_frame_enum]
 pub enum DequantizedFrame {
     Speech(SpeechParameters),
     /// `b0=121` or `123` only -- see `FrameKind::Erasure`'s own doc comment (float sibling).

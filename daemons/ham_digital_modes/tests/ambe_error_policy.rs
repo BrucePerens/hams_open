@@ -308,3 +308,11 @@ mod dstar_reserved_codes {
         assert!(out[0].iter().any(|&s| s != 0));
     }
 }
+
+// Data-structure anchors (ADR 0113) exercised by the tests above.
+// Tests [@ANCHOR: synthesis_ambe_plus2_synthesis_decoder_struct]
+// Tests [@ANCHOR: synthesis_dstar_synthesis_decoder_struct]
+// Tests [@ANCHOR: concealment_conceal_params_struct]
+// Tests [@ANCHOR: concealment_concealer_struct]
+// Tests [@ANCHOR: concealment_decision_enum]
+// Tests [@ANCHOR: concealment_descriptor_struct]
