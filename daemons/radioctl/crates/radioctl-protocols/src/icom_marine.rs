@@ -37,6 +37,7 @@ use crate::receiver::{Dialect, LineEngine, ReceiverTwin};
 use crate::virtual_rig::RigState;
 
 /// The marine engine.
+// [@ANCHOR: radioctl_icom_marine_marine_engine]
 pub type MarineEngine = LineEngine<MarineDialect>;
 
 // [@ANCHOR: radioctl_marine_engine]
@@ -67,6 +68,7 @@ pub fn sentence(id: u8, command: &str) -> String {
 }
 
 /// The command set of one model.
+// [@ANCHOR: radioctl_icom_marine_marine_dialect]
 #[derive(Debug, Clone)]
 pub struct MarineDialect {
     id: u8,
@@ -241,6 +243,7 @@ impl MarineDialect {
 }
 
 /// The parts of a received `$PICOA` sentence.
+// [@ANCHOR: radioctl_icom_marine_fields]
 struct Fields<'a> {
     /// Everything after the radio ids: the command and its parameter.
     command_and_param: &'a str,
@@ -268,6 +271,7 @@ impl<'a> Fields<'a> {
 }
 
 /// The virtual marine radio.
+// [@ANCHOR: radioctl_icom_marine_marine_twin]
 #[derive(Debug)]
 pub struct MarineTwin {
     desc: RigDescription,
@@ -368,6 +372,10 @@ impl ReceiverTwin for MarineTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_icom_marine_marine_engine]
+    // Tests [@ANCHOR: radioctl_icom_marine_marine_dialect]
+    // Tests [@ANCHOR: radioctl_icom_marine_fields]
+    // Tests [@ANCHOR: radioctl_icom_marine_marine_twin]
     use std::time::Duration;
 
     use radioctl_core::engine::ProtocolEngine;

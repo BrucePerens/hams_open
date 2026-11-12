@@ -55,6 +55,7 @@ const MAX_OFFSET_HZ: u16 = 9_999;
 const MAX_HZ: u64 = 99_999_999_999;
 
 /// What the tokenizer found.
+// [@ANCHOR: radioctl_kenwood_token]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     /// A command or reply without its terminator (`FA00014074000`).
@@ -64,6 +65,7 @@ pub enum Token {
 }
 
 /// Splits a byte stream on `;`. Holds a partial command between calls.
+// [@ANCHOR: radioctl_kenwood_tokenizer]
 #[derive(Debug, Default)]
 pub struct Tokenizer {
     pending: Vec<u8>,
@@ -138,6 +140,7 @@ pub fn parse_digits(text: &str) -> Option<u64> {
 }
 
 /// The Kenwood-style client engine for one rig.
+// [@ANCHOR: radioctl_kenwood_kenwood_engine]
 #[derive(Debug)]
 pub struct KenwoodEngine {
     desc: RigDescription,
@@ -481,6 +484,7 @@ fn vfo_of(digit: &str) -> Vfo {
 
 /// How a level is written on the wire: the command, whether a leading `0` (main receiver)
 /// follows it, and the largest value.
+// [@ANCHOR: radioctl_kenwood_level_wire_struct]
 struct LevelWire {
     name: &'static str,
     main_digit: bool,
@@ -723,6 +727,10 @@ impl ProtocolEngine for KenwoodEngine {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_kenwood_token]
+    // Tests [@ANCHOR: radioctl_kenwood_tokenizer]
+    // Tests [@ANCHOR: radioctl_kenwood_kenwood_engine]
+    // Tests [@ANCHOR: radioctl_kenwood_level_wire_struct]
     use super::*;
     use radioctl_core::capability::{Capability, CapabilitySet};
     use radioctl_core::units::{Level, Mode};

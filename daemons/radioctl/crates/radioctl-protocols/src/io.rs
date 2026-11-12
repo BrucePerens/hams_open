@@ -20,6 +20,7 @@ use crate::virtual_rig::{PanelChange, RigState, VirtualRig};
 
 const STREAM_BYTES: usize = 4096;
 
+// [@ANCHOR: radioctl_io_shared]
 struct Shared {
     rig: Mutex<VirtualRig>,
     delay: Mutex<Duration>,
@@ -67,6 +68,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// Control of a running virtual rig: inspect its state, turn its knobs, change its speed.
+// [@ANCHOR: radioctl_io_virtual_rig_control]
 #[derive(Clone)]
 pub struct VirtualRigControl {
     shared: Arc<Shared>,
@@ -234,6 +236,8 @@ impl VirtualRigControl {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_io_shared]
+    // Tests [@ANCHOR: radioctl_io_virtual_rig_control]
     use super::*;
     use radioctl_core::description::RigDescription;
     use radioctl_core::units::Hz;

@@ -72,6 +72,7 @@ pub fn mode_name(code: u8) -> Option<&'static str> {
     }
 }
 
+// [@ANCHOR: radioctl_lowe_pending]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Pending {
     Nothing,
@@ -81,6 +82,7 @@ enum Pending {
 }
 
 /// The Lowe client engine.
+// [@ANCHOR: radioctl_lowe_lowe_engine]
 #[derive(Debug)]
 pub struct LoweEngine {
     desc: RigDescription,
@@ -185,6 +187,7 @@ impl ProtocolEngine for LoweEngine {
 }
 
 /// A virtual HF-235.
+// [@ANCHOR: radioctl_lowe_lowe_twin]
 #[derive(Debug)]
 pub struct LoweTwin {
     rx: RxBuffer,
@@ -259,6 +262,9 @@ impl VendorTwin for LoweTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_lowe_pending]
+    // Tests [@ANCHOR: radioctl_lowe_lowe_engine]
+    // Tests [@ANCHOR: radioctl_lowe_lowe_twin]
     use super::*;
     use radioctl_core::units::Mode;
 

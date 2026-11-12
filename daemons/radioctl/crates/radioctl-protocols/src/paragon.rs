@@ -95,6 +95,7 @@ pub fn decode_status(block: &[u8]) -> Option<(Hz, Option<Mode>)> {
 }
 
 /// The Paragon client engine.
+// [@ANCHOR: radioctl_paragon_paragon_engine]
 #[derive(Debug)]
 pub struct ParagonEngine {
     desc: RigDescription,
@@ -177,6 +178,7 @@ impl ProtocolEngine for ParagonEngine {
 }
 
 /// A virtual Paragon.
+// [@ANCHOR: radioctl_paragon_paragon_twin]
 #[derive(Debug)]
 pub struct ParagonTwin {
     rx: RxBuffer,
@@ -330,6 +332,8 @@ impl VendorTwin for ParagonTwin {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: radioctl_paragon_paragon_engine]
+    // Tests [@ANCHOR: radioctl_paragon_paragon_twin]
     use super::*;
 
     const T0: Duration = Duration::from_secs(1);
