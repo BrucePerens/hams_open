@@ -10,6 +10,7 @@ use super::{levels, store, tones, wav, Config, Run};
 use serde_json::{json, Value};
 use std::time::Duration;
 
+// [@ANCHOR: bench_mcp_audio_tools_ctx_type]
 /// What every tool needs: the program runner, the config, the device list, and the minute of the local day.
 pub struct Ctx<'a> {
     pub run: &'a dyn Run,
@@ -88,6 +89,7 @@ pub fn stats_json(s: &analysis::Stats) -> Value {
     })
 }
 
+// [@ANCHOR: bench_mcp_audio_tools_taken_type]
 /// Records from the start of the stream until `need` samples are available, or, with a threshold, until the level passes it.
 struct Taken {
     samples: Vec<f32>,
@@ -236,6 +238,7 @@ pub fn meter(ctx: &Ctx, args: &Value) -> Result<Value, String> {
     }))
 }
 
+// [@ANCHOR: bench_mcp_audio_tools_source_type]
 /// A sound file or generated tone, ready to play: the file, its length, and whether the file is temporary.
 struct Source {
     path: std::path::PathBuf,
@@ -616,6 +619,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_tools_take]
+    // Tests [@ANCHOR: bench_mcp_audio_tools_taken_type]
     #[test]
     fn a_take_is_the_first_seconds_or_starts_when_the_level_passes_the_threshold() {
         let rate = 48000;
@@ -652,6 +656,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_tools_meter]
+    // Tests [@ANCHOR: bench_mcp_audio_tools_ctx_type]
     #[test]
     fn the_meter_reports_peak_and_rms_per_interval() {
         let devs = devbox_devices();

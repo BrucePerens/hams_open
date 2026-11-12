@@ -7,6 +7,7 @@ use super::{Config, Run};
 use serde_json::{json, Value};
 use std::path::Path;
 
+// [@ANCHOR: bench_mcp_audio_devices_dir_type]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Dir {
     Output,
@@ -23,6 +24,7 @@ impl Dir {
     }
 }
 
+// [@ANCHOR: bench_mcp_audio_devices_device_type]
 #[derive(Clone, Debug)]
 pub struct Device {
     /// The PipeWire object id; it changes when the device is re-plugged, so persistent names use `node_name`.
@@ -387,6 +389,7 @@ mod tests {
     use crate::audio::testkit::{devbox_devices, recorded};
 
     // Tests [@ANCHOR: audio_devices_parse]
+    // Tests [@ANCHOR: bench_mcp_audio_devices_dir_type]
     #[test]
     fn the_recorded_devbox_lists_its_sinks_and_sources_with_defaults() {
         let devs = devbox_devices();
@@ -429,6 +432,7 @@ mod tests {
         assert!(!mic2.is_default);
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_devices_device_type]
     #[test]
     fn hdmi_ports_without_a_monitor_report_unavailable_as_evidence() {
         let devs = devbox_devices();

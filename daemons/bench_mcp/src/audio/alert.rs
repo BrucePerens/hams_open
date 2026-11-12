@@ -17,6 +17,7 @@ use std::time::Duration;
 pub const MAX_ALERT_S: f64 = 30.0;
 const RATE: u32 = 48000;
 
+// [@ANCHOR: bench_mcp_audio_alert_severity_type]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Severity {
     Info,
@@ -218,6 +219,7 @@ mod tests {
 
     // Tests [@ANCHOR: audio_alert_volume]
     // Tests [@ANCHOR: bench_mcp_audio_alert_severity_volume_share]
+    // Tests [@ANCHOR: bench_mcp_audio_alert_severity_type]
     #[test]
     fn quiet_hours_give_the_lowest_volume_except_for_urgent() {
         // Outside quiet hours the limit is the cap (0.5); inside, it is the quiet volume (0.15) unless urgent (cap).
@@ -244,6 +246,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_alert_tool]
+    // Tests [@ANCHOR: bench_mcp_audio_testkit_scripted_type]
     #[test]
     fn a_dry_run_of_an_alert_returns_the_text_and_the_plan_and_makes_no_sound() {
         use crate::audio::testkit::{devbox_devices, scratch, Scripted};

@@ -537,6 +537,7 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_sa_bin_hz]
     // Tests [@ANCHOR: bench_mcp_sa_find_peaks]
     // Tests [@ANCHOR: bench_mcp_sa_peak]
+    // Tests [@ANCHOR: bench_mcp_audio_analysis_peak_type]
     #[test]
     fn peaks_are_local_maxima_above_the_median_strongest_first_and_not_adjacent() {
         let mut v = vec![-90.0; 751];

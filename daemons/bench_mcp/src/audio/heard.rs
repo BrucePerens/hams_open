@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 const WIN_S: f64 = 0.03;
 const HOP_S: f64 = 0.01;
 
+// [@ANCHOR: bench_mcp_audio_heard_heard_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Heard {
     pub heard: bool,

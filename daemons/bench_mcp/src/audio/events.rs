@@ -5,6 +5,7 @@
 use super::analysis::{db, dominant, rms, spectrum, tone_amp, FLOOR_DB};
 use serde_json::{json, Value};
 
+// [@ANCHOR: bench_mcp_audio_events_params_type]
 #[derive(Clone, Debug)]
 pub struct Params {
     pub frame_ms: f64,
@@ -35,6 +36,7 @@ impl Default for Params {
     }
 }
 
+// [@ANCHOR: bench_mcp_audio_events_event_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Event {
     pub onset_s: f64,
@@ -106,6 +108,7 @@ pub fn percentile(v: &[f64], p: f64) -> f64 {
     x[((x.len() - 1) as f64 * p).round() as usize]
 }
 
+// [@ANCHOR: bench_mcp_audio_events_detection_type]
 pub struct Detection {
     pub noise_dbfs: f64,
     pub threshold_dbfs: f64,
@@ -231,6 +234,7 @@ const MORSE: &[(&str, char)] = &[
     ("-....-", '-'),
 ];
 
+// [@ANCHOR: bench_mcp_audio_events_morse_type]
 #[derive(Debug, PartialEq)]
 pub struct Morse {
     pub text: String,
@@ -315,6 +319,8 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_audio_events_levels_for]
     // Tests [@ANCHOR: bench_mcp_audio_events_percentile]
     // Tests [@ANCHOR: bench_mcp_audio_events_tone_levels]
+    // Tests [@ANCHOR: bench_mcp_audio_events_event_type]
+    // Tests [@ANCHOR: bench_mcp_audio_events_params_type]
     #[test]
     fn three_beeps_are_found_with_their_times_levels_and_pitch() {
         let s = beeps(
@@ -379,6 +385,7 @@ mod tests {
         assert!(detect(&s, R, &other).events.is_empty());
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_events_detection_type]
     #[test]
     fn digital_silence_gives_no_events_and_a_fixed_threshold_is_honoured() {
         assert!(detect(&vec![0.0; 48000], R, &Params::default())
@@ -409,6 +416,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_morse]
+    // Tests [@ANCHOR: bench_mcp_audio_events_morse_type]
     #[test]
     fn keyed_cw_decodes_to_text_with_its_speed() {
         // "CQ DE K": 60 ms dots (20 wpm), dashes 3 dots, letter gap 3 dots, word gap 7 dots.

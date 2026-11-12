@@ -31,6 +31,7 @@ const TAIL_S: f64 = 0.5;
 const MIN_SNR_DB: f64 = 12.0;
 pub const FILE: &str = "audio_discovery.json";
 
+// [@ANCHOR: bench_mcp_audio_discover_obs_type]
 /// One output heard (or not) by one input.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Obs {
@@ -45,6 +46,7 @@ pub struct Obs {
     pub reason: String,
 }
 
+// [@ANCHOR: bench_mcp_audio_discover_in_state_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InState {
     pub name: String,
@@ -57,6 +59,7 @@ pub struct InState {
     pub noise_rms_dbfs: f64,
 }
 
+// [@ANCHOR: bench_mcp_audio_discover_out_state_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutState {
     pub name: String,
@@ -69,6 +72,7 @@ pub struct OutState {
     pub error: Option<String>,
 }
 
+// [@ANCHOR: bench_mcp_audio_discover_conclusion_type]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Conclusion {
     pub inputs: Vec<Value>,
@@ -316,6 +320,7 @@ pub fn fingerprint(devs: &[Device]) -> Vec<String> {
     v
 }
 
+// [@ANCHOR: bench_mcp_audio_discover_stored_type]
 /// What is stored from the last run.
 #[derive(Clone, Debug)]
 pub struct Stored {
@@ -681,6 +686,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: audio_discover_conclude]
+    // Tests [@ANCHOR: bench_mcp_audio_discover_conclusion_type]
     #[test]
     fn a_speaker_and_a_microphone_are_present_only_because_one_heard_the_other() {
         let outs = [
@@ -710,6 +716,7 @@ mod tests {
         assert!(c.operator_check.is_none());
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_discover_in_state_type]
     #[test]
     fn a_muted_or_all_zero_input_is_dead_and_never_chosen_and_never_proves_a_speaker() {
         let outs = [out("speaker", true, false, 1000.0)];
@@ -737,6 +744,7 @@ mod tests {
         assert!(c.operator_check.is_some() && c.verify_input.is_none());
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_discover_out_state_type]
     #[test]
     fn a_failed_stream_is_unavailable_and_an_output_that_could_not_play_is_an_error_not_silence() {
         let mut bad_in = inp("usb", false, false);
@@ -846,6 +854,7 @@ mod tests {
         assert!(ladder(0.15, 0.5).windows(2).all(|w| w[0] < w[1]));
     }
 
+    // Tests [@ANCHOR: bench_mcp_audio_discover_obs_type]
     #[test]
     fn the_measurement_hears_each_outputs_own_tone_and_not_another_outputs() {
         // Output k plays FREQS[k]; the recording holds output 1's tone at 1300 Hz over room noise.
@@ -865,6 +874,7 @@ mod tests {
 
     // Tests [@ANCHOR: audio_discover_stale]
     // Tests [@ANCHOR: bench_mcp_audio_discover_fingerprint]
+    // Tests [@ANCHOR: bench_mcp_audio_discover_stored_type]
     #[test]
     fn a_changed_device_list_makes_the_result_stale_and_reserved_devices_do_not() {
         let devs = devbox_devices();

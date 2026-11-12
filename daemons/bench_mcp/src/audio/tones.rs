@@ -5,6 +5,7 @@
 use serde_json::Value;
 use std::f64::consts::PI;
 
+// [@ANCHOR: bench_mcp_audio_tones_tone_type]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Tone {
     Sine { hz: f64 },
@@ -113,6 +114,7 @@ mod tests {
 
     // Tests [@ANCHOR: audio_tones]
     // Tests [@ANCHOR: bench_mcp_audio_tones_hz]
+    // Tests [@ANCHOR: bench_mcp_audio_tones_tone_type]
     #[test]
     fn a_sine_has_the_requested_peak_and_fades_at_its_edges() {
         let s = generate(Tone::Sine { hz: 1000.0 }, 48000, 0.5, -12.0);

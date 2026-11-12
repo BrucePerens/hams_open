@@ -4,6 +4,7 @@
 
 use super::Run;
 
+// [@ANCHOR: bench_mcp_audio_levels_level_type]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Level {
     pub volume: f64,
@@ -81,6 +82,7 @@ mod tests {
     use super::*;
 
     // Tests [@ANCHOR: audio_levels_parse]
+    // Tests [@ANCHOR: bench_mcp_audio_levels_level_type]
     #[test]
     fn wpctl_volume_lines_parse_with_and_without_mute() {
         assert_eq!(

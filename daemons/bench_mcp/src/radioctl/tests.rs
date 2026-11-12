@@ -62,6 +62,7 @@ fn parse(extra: &str) -> Result<Config, String> {
 }
 
 // Tests [@ANCHOR: radioctl_config]
+// Tests [@ANCHOR: bench_mcp_audio_tools_source_type]
 #[test]
 fn config_takes_a_managed_or_an_existing_radioctld_and_refuses_the_rest() {
     let c = parse(r#""rig":"elecraft-kx3""#).unwrap();
