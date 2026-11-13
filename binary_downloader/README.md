@@ -263,37 +263,37 @@ Purpose: the "Install Now" button on a manifest. `binary.manifest.action_install
 
 Behaviour: calls `ensure_executable(self.name)`, which resolves the manifest (current company, then global), downloads and verifies the file into `<data_dir>/hams_bin/` if it is not already there. Returns a client action: a "Success" notification ("Installation of X completed successfully.") followed by a page reload. Errors from `ensure_executable` (`UserError`) are passed on. Blocking for the length of the download. Tests: `test_07_action_install` and `test_12_action_install_permissions` in `tests/test_binary_manifest.py`, UI tour `test_binary_install_tour`.
 
-### `COMM_binary_unlink` [@ANCHOR: COMM_binary_unlink]
+### `COMM_binary_unlink` [@ANCHOR: binary_downloader:binary_manifest_unlink]
 Purpose: delete a manifest without breaking anything that still shares its file. `binary.manifest.unlink()` takes no arguments and returns `True`. It runs as the service account, builds the `(name, checksum)` key of each record being deleted, asks `_count_binary_file_references` how many manifest and version rows map to the same file, subtracts the rows being deleted in this same call, and calls `_unlink_binary_file` only for files nothing else references, then does the standard unlink.
 
 Special concerns: the file name depends on both name and checksum, so two records with the same checksum but different names do not protect each other's files. Deleting several records that share one file in a single call still removes it. A removal failure is logged, not raised. Tests: `test_19_unlink_privilege_escalation`, `test_20_unlink_deletes_the_real_file_when_the_checksum_is_not_shared` and `test_21_unlink_batch_deletes_the_file_when_every_sharing_record_is_removed_together` in `tests/test_binary_manifest.py`.
 
-### `COMM_tenant_link_apply` [@ANCHOR: COMM_tenant_link_apply]
+### `COMM_tenant_link_apply` [@ANCHOR: binary_downloader:pure_python_symlink_engine]
 Purpose: the pure-Python engine that gives each tenant its own link to a shared binary. `binary.tenant.link.apply_symlink()` is `@api.private` (not callable over RPC) and needs one record. It downloads the active version to the pool first when `is_downloaded` is false, returns `False` if `symlink_path` is not set, creates `<data_dir>/tenant_bins/site_<id>/` (mode `0o750`) if needed, leaves a link that already points at the right file alone (returns `True`), removes a wrong link or file at the path and creates `os.symlink(central_path, symlink_path)`. Returns `True` on success.
 
 Special concerns: it changes the file system and may download; no shell is involved. Called by `create` and by `write` when `active_version_id` changes. Because tenants point at one shared file, upgrades never copy the payload. Test: `test_pure_python_symlink_engine` in `tests/test_binary_manifest_integration.py`.
 
-### `COMM_tenant_link_upgrade` [@ANCHOR: COMM_tenant_link_upgrade]
+### `COMM_tenant_link_upgrade` [@ANCHOR: binary_downloader:binary_tenant_link_action_upgrade_to_latest]
 Purpose: the "1-Click Upgrade to Latest" button. `binary.tenant.link.action_upgrade_to_latest()` is `@public_rpc` and needs one record. It finds the `binary.version` of the same manifest with the newest `release_date` (ties go to the highest id).
 
 Returns: `False` when the manifest has no versions; a client notification "Up to Date" (type info) when the tenant already uses the newest; otherwise it sets `active_version_id` (which triggers `write`, hence the download and re-symlink) and returns an "Upgrade Successful" notification with the version number and a page reload. Errors: `UserError` from the download. It does not check the caller's group beyond the model's access rules (write access to the link is needed). Tests: `test_action_upgrade_to_latest_repoints_to_the_newest_version` and `test_action_upgrade_to_latest_is_a_no_op_when_already_current` in `tests/test_binary_tenant_link.py`.
 
-### `COMM_binary_version_path` [@ANCHOR: COMM_binary_version_path]
+### `COMM_binary_version_path` [@ANCHOR: binary_downloader:binary_version_get_central_path]
 Purpose: where a release lives in the shared pool. `binary.version._get_central_path()` takes no arguments, requires exactly one record (`ensure_one`) and returns the absolute path `<data_dir>/hams_bin/<name>_<id>` built from `_get_target_filename(manifest name, checksum)`; `data_dir` comes from the Odoo configuration, default `/var/lib/odoo`.
 
 Special concerns: the pool is not a separate store; a release and a manifest with the same name and checksum map to the same file. The method only builds the path and does not check that the file exists. Used by `_compute_is_downloaded`, `apply_symlink` (the link target) and the download action. Test: `test_get_central_path` in `tests/test_binary_version.py`.
 
-### `COMM_binary_version_download` [@ANCHOR: COMM_binary_version_download]
+### `COMM_binary_version_download` [@ANCHOR: binary_downloader:binary_version_download_pool]
 Purpose: put a release into the shared pool. `binary.version.action_download_to_pool()` is `@public_rpc`, needs one record and returns `True`. Access: raises `UserError` unless the caller is in the Binary Downloader Manager group or is an administrator (portal users can read global versions, so without this any of them could trigger a download).
 
 Behaviour: takes a transaction-scoped advisory lock keyed on manifest name, version and checksum, creates `hams_bin` (mode `0o750`) if missing, then calls `_download_and_extract(manifest name, url, checksum, archive_type, extract_member)`, with all its checksum, SSRF and archive checks. Errors: `UserError` from those checks. Blocking for the length of the download. Test: `test_download_to_pool_raw` in `tests/test_binary_version.py`.
 
-### `COMM_binary_version_notify` [@ANCHOR: COMM_binary_version_notify]
+### `COMM_binary_version_notify` [@ANCHOR: binary_downloader:binary_version_action_notify_tenants]
 Purpose: tell tenants that a newer release exists. `binary.version.action_notify_tenants()` is a `@public_rpc` button method; it requires one record (`ensure_one`) and no other arguments. Access: raises `UserError` unless the caller is in the Binary Downloader Manager group or is an administrator (portal users can read versions, so the check is essential: without it any reader could raise real on-call pages).
 
 Behaviour: it pages through `binary.tenant.link` rows of the same manifest whose `active_version_id` is not this release (100 per page, by id), groups them by the website's company, and creates one `pager.incident` per link (source `binary_update`, severity `medium`, description "New binary version X is available for Y", with the website) as the service account, one company at a time; it commits after each page. Returns a client notification action ("Tenants notified via PagerDuty."). Side effects: real incidents in the `pager_duty` module, so repeating the action re-pages. Tests: `test_pager_integration_batching` in `tests/test_binary_manifest_integration.py` and `test_action_download_to_pool_and_notify_tenants_reject_an_unprivileged_caller` in `tests/test_binary_version.py`.
 
-### `COMM_binary_utils_download` [@ANCHOR: COMM_binary_utils_download]
+### `COMM_binary_utils_download` [@ANCHOR: binary_downloader:binary_utils_download_and_extract]
 Purpose: the one download engine used for raw binaries, `.tar.gz` and `.zip` archives. `binary_downloader.mixin._download_and_extract(cmd_name, url, checksum, archive_type, extract_member=None)` is an `@api.model` method in `models/binary_utils.py`, called by `binary.manifest.ensure_executable` and `binary.version.action_download_to_pool`.
 
 | Argument | Type | Meaning |
@@ -306,12 +306,12 @@ Purpose: the one download engine used for raw binaries, `.tar.gz` and `.zip` arc
 
 Returns the absolute path `<data_dir>/hams_bin/<name>_<16 hex digits of sha256("<name>_<checksum>")>` of the executable (mode `0o750`). Errors (all `UserError`): not Linux on x86_64, aarch64 or armv7l; non-https URL; unsafe host or redirect (see `binary_utils_assert_host_is_ssrf_safe`); more than 1 GiB downloaded; checksum mismatch; archive member missing or a link; network or archive failure. Locking: takes the transaction-scoped PostgreSQL advisory lock `pg_advisory_xact_lock` keyed on name and checksum, so concurrent workers install once; the lock lasts until the transaction ends. Blocking network I/O with a 15 second timeout per request (a failed HEAD is only logged). An existing raw file is re-hashed and replaced if wrong; an existing extracted file is trusted. Writes go through `_atomic_write_target`. Tests: `test_04_successful_download_and_checksum`, the tar and zip tests `test_10` to `test_17`, `test_23_download_exceeding_size_cap_is_rejected` in `tests/test_binary_manifest.py`, and `tests/test_binary_manifest_integration.py`.
 
-### `COMM_binary_utils_filename` [@ANCHOR: COMM_binary_utils_filename]
+### `COMM_binary_utils_filename` [@ANCHOR: binary_downloader:binary_utils_get_target_filename]
 Purpose: the one place that decides the file name of an installed binary. `_get_target_filename(cmd_name, checksum)` is an `@api.model` method of `binary_downloader.mixin` taking the binary name and its SHA-256 checksum (both str) and returning `<cmd_name>_<id>`, where `<id>` is the first 16 hex digits of the SHA-256 of the text `<cmd_name>_<checksum>`.
 
 Special concerns: pure computation, no file or database access, safe to call anywhere. The name is stable for a given name and checksum, and a new checksum gives a new file, so an upgrade never overwrites a running binary and two records with the same name and checksum share one file. Callers: `_compute_is_installed`, `_get_central_path`, `_unlink_binary_file`; `_download_and_extract` computes the same value inline. Test: `test_06_is_installed_compute` in `tests/test_binary_manifest.py`.
 
-### `COMM_binary_utils_unlink` [@ANCHOR: COMM_binary_utils_unlink]
+### `COMM_binary_utils_unlink` [@ANCHOR: binary_downloader:binary_utils_unlink_binary_file]
 Purpose: delete an installed binary file. `_unlink_binary_file(cmd_name, checksum)` is an `@api.model` method of `binary_downloader.mixin`; both arguments are str. It computes the file name with `_get_target_filename`, resolves the real path under `<data_dir>/hams_bin` and refuses (`UserError`, "Path traversal attempt detected") a name with a `..` component or a resolved path that is outside `hams_bin`. If the file exists it is unlinked; an `OSError` is logged as a warning and not raised. Returns nothing.
 
 Special concerns: it does not count references; the callers (`binary.manifest.unlink`, `binary.version.unlink`) must decide that first with `_count_binary_file_references`. It does not remove tenant symlinks, which would dangle. Test: `test_unlink_ignores_a_differently_named_manifest_sharing_the_checksum` and `test_unlink_does_not_remove_a_still_referenced_binary_file` in `tests/test_binary_version.py`.
