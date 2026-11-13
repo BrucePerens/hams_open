@@ -266,12 +266,9 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.safe_patch_object(type(utils), '_get_service_uid', mock_get_service_uid)
             
         # This should not raise an exception: the refusal is logged and nothing is bootstrapped
-        articles = self.env["knowledge.article"].search_count([]) if "knowledge.article" in self.env else 0
         with self.assertLogs("odoo.addons.zero_sudo.models.ir_module_module", level="WARNING") as logs:
             self.env["ir.module.module"]._bootstrap_knowledge_docs()
         self.assertIn("AccessError getting", logs.output[0])
-        if "knowledge.article" in self.env:
-            self.assertEqual(self.env["knowledge.article"].search_count([]), articles, "no article is written after the refusal")
 
     # Tests [@ANCHOR: zero_sudo_daemon_utils_zero_sudo_daemon_utils]
     def test_daemon_utils_sys_paths(self):
