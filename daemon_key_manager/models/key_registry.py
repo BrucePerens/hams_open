@@ -1056,6 +1056,8 @@ class DaemonKeyRegistry(models.Model):
                     env_file.write("ODOO_RPC_LOGIN=%s\n" % login)
                     env_file.write("ODOO_RPC_KEY=%s\n" % key)
                     env_file.flush()
+                    # On disk before the rename: a power loss must not publish an empty key file.
+                    os.fsync(env_file.fileno())
                     if gid is not None:
                         os.fchmod(env_file.fileno(), KEY_FILE_GROUP_MODE)
                 os.rename(tmp_path, path)
