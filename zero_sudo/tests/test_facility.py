@@ -77,7 +77,7 @@ class TestRealTransactionFacility(RealTransactionCase):
             counts = count_rows_in_batches(self.registry.db_name, subset, batch_size=batch_size, on_batch=watch_locks)
             return peak["locks"], counts
 
-        subset = tables[:24]
+        subset = sorted(tables)[:24]  # fixed subset: information_schema order is arbitrary and lock counts depend on each table's indexes
         big_locks, _big_counts = peak_locks(len(subset), subset)
         small_locks, _small_counts = peak_locks(2, subset)
         counts = count_rows_in_batches(self.registry.db_name, tables, batch_size=4)
