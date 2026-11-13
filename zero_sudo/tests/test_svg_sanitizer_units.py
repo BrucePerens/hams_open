@@ -4,7 +4,6 @@
 """Database-free boundary tests of `zero_sudo.svg_sanitizer`, added to kill the mutation survivors of the second mutation
 pass (2026-11-13): every limit at its exact edge, every validator's accept/reject set, the budgets, the text rules, the
 placeholder swap around Odoo's cleaner and the XML-tree entry point."""
-import logging
 import secrets
 from types import SimpleNamespace
 
@@ -402,7 +401,8 @@ class TestPlaceholderSwap(SafePatchMixin, BaseCase):
             return "R2"
         self.assertEqual(svg.clean_document(doc, cleaner), "R2")
         self.assertEqual(asked, [12])
-        self.assertTrue(seen[1][0].startswith("hamssvg") and len(seen[1][0]) == len("hamssvg") + 24 + len("x0x"))
+        self.assertTrue(seen[1][0].startswith("hamssvg"))
+        self.assertEqual(len(seen[1][0]), len("hamssvg") + 24 + len("x0x"))
         self.assertEqual(len(doc.findall("svg")), 1)
         self.assertEqual(list(doc.iter(etree.Comment)), [])
 
