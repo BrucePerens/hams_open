@@ -123,7 +123,7 @@ Finds radios on the network. It opens an ephemeral UDP socket with broadcast ena
 | `targets` | `&[SocketAddr]` | Where to send the request: `broadcast_target()` to find all radios, or one unicast address to find one. |
 | `wait` | `Duration` | How long to keep collecting replies. |
 
-**Returns:** a `Vec<Discovered>`; replies that fail to parse are skipped, and each radio appears once (same MAC and address). **Errors:** `HpsdrError::Io` if the socket cannot be opened or a send or receive fails. **Special concerns:** async; it suspends for the whole `wait` time and holds no locks. It sends only discovery packets, which carry no PTT, drive or I/Q, so the relay lock, band check and transmit gate do not apply.
+**Returns:** a `Vec<Discovered>`; replies that fail to parse are skipped, and each radio appears once (same MAC and address). **Errors:** `HpsdrError::Io` if the socket cannot be opened or a send or receive fails. **Special concerns:** async; it suspends for the whole `wait` time and holds no locks. It sends only discovery packets, which carry no PTT (push-to-talk), drive or I/Q, so the relay lock, band check and transmit gate do not apply.
 
 **Signature:** `pub async fn discover(handle: &Handle, targets: &[SocketAddr], wait: Duration) -> Result<Vec<Discovered>, HpsdrError>`. **See also:** test `discovery_finds_the_emulator_with_board_and_version` (session.rs).
 
@@ -140,7 +140,7 @@ The default configuration of the Protocol 1 emulator: board id 1 (Hermes), MAC `
 | `pace` | `Duration` | Interval between EP6 datagrams. |
 | `skip_every` | `u32` | When non-zero, every Nth datagram is numbered but not sent. |
 
-**Returns:** an `EmulatorConfig`. **Errors:** none. **Special concerns:** pure; the values model the published documents, not a real radio (`verified=unverified`). Transmit: nothing in this entry can key a transmitter or produce RF; the emulator only counts what a transmit request would have been. The relay lock and band check do not apply to it. The crate itself contains no relay lock (unknown whether the relay holds one around the gate; to-do: record that in the relay docs once the relay consumes this crate).
+**Returns:** an `EmulatorConfig`. **Errors:** none. **Special concerns:** pure; the values model the published documents, not a real radio (`verified=unverified`). Transmit: nothing in this entry can key a transmitter or produce RF (radio frequency); the emulator only counts what a transmit request would have been. The relay lock and band check do not apply to it. The crate itself contains no relay lock (unknown whether the relay holds one around the gate; to-do: record that in the relay docs once the relay consumes this crate).
 
 **Signature:** `impl Default for EmulatorConfig { fn default() -> Self }`. **See also:** test `discovery_finds_the_emulator_with_board_and_version`.
 

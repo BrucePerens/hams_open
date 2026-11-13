@@ -7,7 +7,7 @@ The Barrett and CODAN engines can encode `SetPtt` (`XP1` and `XP0`; `connect tcv
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_prm80_engine_feed]
 
-Processes bytes received from the PRM8060 at `now`. A stale partial frame is discarded and reported `Unrecognised`. A `>` prompt left over from the previous command may arrive first: while one appears among the first 22 buffered bytes, the bytes up to and including it are dropped. With a read pending and 22 bytes available, they are taken as the `E` state answer and decoded with `decode_state`; the pending field then yields the receive frequency (VFO A), the transmit frequency (VFO B), the PTT flag or the raw signal strength as an observation. A line that does not decode is `Unrecognised`. No answer in the buffer produces nothing. No I/O.
+Processes bytes received from the PRM8060 at `now`. A stale partial frame is discarded and reported `Unrecognised`. A `>` prompt left over from the previous command may arrive first: while one appears among the first 22 buffered bytes, the bytes up to and including it are dropped. With a read pending and 22 bytes available, they are taken as the `E` state answer and decoded with `decode_state`; the pending field then yields the receive frequency (VFO (variable frequency oscillator, the tuning control) A), the transmit frequency (VFO B), the PTT (push-to-talk) flag or the raw signal strength as an observation. A line that does not decode is `Unrecognised`. No answer in the buffer produces nothing. No I/O.
 
 ### `pub fn new(desc: &RigDescription) -> Result<Prm80Twin, RigError>` [@ANCHOR: radioctl:radioctl_prm80_twin_new]
 

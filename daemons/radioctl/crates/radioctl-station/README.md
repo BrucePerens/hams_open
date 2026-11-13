@@ -11,7 +11,7 @@ path stays behind radioctl's closed gate.
 Which relay and switch products suit it, and which do not: [docs/RECOMMENDED_HARDWARE.md](../../docs/RECOMMENDED_HARDWARE.md).
 
 **Interlock rule (decided by Bruce, 2026-10-31; emergency operations are never blocked).** The
-guard classifies every command by what it does to the RF path (`station::Action`):
+guard classifies every command by what it does to the RF (radio frequency) path (`station::Action`):
 
 - **Power-off of any device** (the amplifier, the rig; the standby step an amplifier power-off
   begins with) passes in every keyed state: known keyed, unknown (link down or never read) and
@@ -127,7 +127,7 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
   `MemorySecrets` is for tests), lives in a `Secret` whose `Debug` is redacted, and is sent only as
   the bearer header and the WebSocket auth message. Not in config, errors, the audit log or logs.
 - **Private IP literals only** (default port 8123). The link is plain HTTP and WebSocket unless
-  `HaConfig::tls` is set: then HTTPS and `wss`, trusting only the owner's CA (PEM; the address must
+  `HaConfig::tls` is set: then HTTPS and `wss`, trusting only the owner's CA (PEM: Privacy-Enhanced Mail text encoding for keys and certificates; the address must
   be an IP entry of the certificate) or one pinned SHA-256 certificate fingerprint (`tls.rs`).
   Verification is never off and the system's public roots are not used. Tested against a fake
   Home Assistant with a CA-signed certificate; not run against a real Home Assistant.

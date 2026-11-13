@@ -8,7 +8,7 @@ Transmit gate: parsing a command (`set_ptt`, `send_morse`) only builds a typed `
 
 ### `fn kenwood_level(&mut self, name: &str, arg: &str) -> Option<String>` [@ANCHOR: radioctl:radioctl_virtual_kenwood_level]
 
-Handles a Kenwood level command on the virtual radio. `&mut self`; `name` is the two-letter command (`AG` AF gain 0 to 255, `RG` RF gain 0 to 255, `MG` mic 0 to 100, `ML` monitor 0 to 9, `KS` keyer speed 10 to 60, anything else is RF power `PC` 5 to 100) and `arg` is the text after it.
+Handles a Kenwood level command on the virtual radio. `&mut self`; `name` is the two-letter command (`AG` AF gain 0 to 255, `RG` RF (radio frequency) gain 0 to 255, `MG` mic 0 to 100, `ML` monitor 0 to 9, `KS` keyer speed 10 to 60, anything else is RF power `PC` 5 to 100) and `arg` is the text after it.
 A read is a bare command, except AF gain, which needs its main-receiver digit: a lone `0` reads and `0nnn` sets. A read returns `Some("<name>[0]<3 digits>;")` from the stored value (0 if never set). A set needs exactly 3 digits inside the range; a bad digit string or a value outside the range returns `Some("?;")`, the Kenwood error, and changes nothing. A successful set stores the value and returns `None` (no answer line). Simulated state only.
 
 
@@ -54,7 +54,7 @@ The result is used to build the mode masks and the per-mode lines of `\dump_stat
 
 ### `fn range_line(low: u64, high: u64, modes: u64, power: (i64, i64), vfos: u32) -> String` [@ANCHOR: radioctl:radioctld_caps_range_line]
 
-Formats one frequency range line of the Hamlib `\dump_state` text. `low` and `high` are the range limits in hertz, `modes` is the bit mask of the modes allowed in the range, `power` is the (minimum, maximum) transmit power pair in milliwatts (the receive range uses -1, -1), and `vfos` is the VFO mask (1 for A only, 3 for A and B).
+Formats one frequency range line of the Hamlib `\dump_state` text. `low` and `high` are the range limits in hertz, `modes` is the bit mask of the modes allowed in the range, `power` is the (minimum, maximum) transmit power pair in milliwatts (the receive range uses -1, -1), and `vfos` is the VFO (variable frequency oscillator, the tuning control) mask (1 for A only, 3 for A and B).
 The line has the form `<low>.000000 <high>.000000 <modes hex> <min power> <max power> <vfos hex> 0x1\n`, where the trailing `0x1` is the antenna mask. Pure, no errors.
 
 ### `fn level_gran(levels: &[LevelInfo], description: &RigDescription) -> String` [@ANCHOR: radioctl:radioctld_caps_gran]

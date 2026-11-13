@@ -30,7 +30,7 @@ Before Alice even wakes up, an on-call AI triage assistant (running as an MCP cl
 
 ### How the MCP Server Bridges the Assistant to Odoo
 
-The MCP server (`daemon/pager_mcp_server.py`) is a thin, stateless adapter process the AI assistant's own MCP client talks to -- it holds no incident logic of its own, only translates three tool calls into RPCs against the real `pager.incident` model methods.
+The MCP (Model Context Protocol) server (`daemon/pager_mcp_server.py`) is a thin, stateless adapter process the AI assistant's own MCP client talks to -- it holds no incident logic of its own, only translates three tool calls into RPCs against the real `pager.incident` model methods.
 
 1.  **Getting a Client:** `_get_client()` reads the server's own API key from its environment and fails loudly (a `RuntimeError`, not a silent no-op) if that key is missing, rather than letting a misconfigured deployment quietly serve unauthenticated requests.
 

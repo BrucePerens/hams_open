@@ -507,7 +507,7 @@
 
 ### `RadioPorts` [@ANCHOR: hpsdr:hpsdr_p2_radio_ports]
 
-**Purpose and location.** The UDP ports of a session (P2, "General Packet to SDR", bytes 5..22). Zero means "use the default". Defined in `daemons/hpsdr/src/p2.rs:37` as a pub `struct`. It derives Debug, Clone, Copy, PartialEq, Eq.
+**Purpose and location.** The UDP ports of a session (P2, "General Packet to SDR (software-defined radio)", bytes 5..22). Zero means "use the default". Defined in `daemons/hpsdr/src/p2.rs:37` as a pub `struct`. It derives Debug, Clone, Copy, PartialEq, Eq.
 
 | Field | Type | Meaning |
 |---|---|---|

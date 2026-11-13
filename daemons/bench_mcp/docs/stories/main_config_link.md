@@ -159,7 +159,7 @@ VNWA checks its arguments and that the unit is present, installs the power-cycle
 to the `sdr` functions; a scope or supply opens the link with `connect` and runs the `scope`, `scope_more` or `psu` function. A name that the kind does
 not support returns `<tool> does not apply to "<name>"`.
 
-Blocking and side effects: it blocks while it waits for the lock and for the instrument, and the lock is held until the function returns. RF: the VNA
+Blocking and side effects: it blocks while it waits for the lock and for the instrument, and the lock is held until the function returns. RF (radio frequency): the VNA
 generator, sweep and meter tools put RF on the unit's TX port; this function gates them only by the `read_config` tier of their `TOOLS` rows (the
 band check and the TX gate of the radio tools are not applied here: unknown whether the VNA code applies any, see the VNA story). The supply's
 `bench_psu_output` is the `full`-tier row and has its own confirm flag (see `psu_output`). Poisoned locks are taken over. It does not panic on bad

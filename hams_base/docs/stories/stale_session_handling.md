@@ -13,7 +13,7 @@ every page.
 
 Odoo core builds `request.env` from the raw, unvalidated `session.uid` and runs
 `ir.http._match` before it validates the session. website's URL matching reads `website` and
-`res.lang` records in that window, so a session whose user had been deleted failed the ACL check
+`res.lang` records in that window, so a session whose user had been deleted failed the ACL (access control list) check
 there. Seen on hams.com production 2026-09-23/24 as 35 hits for a nonexistent `uid: 99`.
 
 ## The Process

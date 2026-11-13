@@ -18,7 +18,7 @@ The value is passed to `attenuation::virtual_set`, which accepts only values the
 
 ### `fn civ_level_get(&self, sub: u8) -> CivReply` [@ANCHOR: radioctl:radioctl_virtual_civ_level]
 
-Answers a `14 <sub>` level read on the virtual Icom radio (the function is `civ_level_get`). `&self`; `sub` is the sub-command byte (AF 01, RF 02, power 0A, mic 0B, keyer speed 0C, monitor 15). The level is found with `civ_level_of`; a sub-command that is unknown, or a level the description marks as absent, gives `CivReply::Ng`.
+Answers a `14 <sub>` level read on the virtual Icom radio (the function is `civ_level_get`). `&self`; `sub` is the sub-command byte (AF 01, RF (radio frequency) 02, power 0A, mic 0B, keyer speed 0C, monitor 15). The level is found with `civ_level_of`; a sub-command that is unknown, or a level the description marks as absent, gives `CivReply::Ng`.
 For the keyer speed the rig stores words per minute while the wire carries the 0 to 255 scale, so the value is converted with `keyer_wpm_to_raw`. The reply is `CivReply::Data(0x14, [sub, BCD value (2 bytes)])`. A level with no stored value is also `Ng`. Read-only; no hardware.
 
 ### `fn civ_level_set(&mut self, sub: u8, value: &[u8]) -> CivReply` [@ANCHOR: radioctl:radioctl_virtual_civ_level_set]
@@ -38,7 +38,7 @@ The index is converted to hertz with `filter_index_to_hz`; the table depends on 
 
 ### `fn scope_sweep(&mut self) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_virtual_scope_sweep]
 
-Gives the bytes the virtual radio sends on its own for one scope sweep of the Main receiver, at the VFO A frequency, as unsolicited frames (built by `unsolicited_civ`, not answers to a request). `&mut self`; each call advances the sweep counter.
+Gives the bytes the virtual radio sends on its own for one scope sweep of the Main receiver, at the VFO (variable frequency oscillator, the tuning control) A frequency, as unsolicited frames (built by `unsolicited_civ`, not answers to a request). `&mut self`; each call advances the sweep counter.
 For a TS-890 it returns the Kenwood sweep instead (`ts890_sweep`). For an Icom CI-V model with a scope, each frame of the simulated scope's sweep is wrapped as command 27, sub-command `00`, in a CI-V envelope. The result is empty when the model has no scope, waveform output is off, or the scope is held. No hardware.
 
 ### `fn filter_scope_sweep(&mut self) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_virtual_filter_scope_sweep]
@@ -71,7 +71,7 @@ Returns `None` above 250, the top of the table, which the radio never sends. Res
 
 ### `fn meter_sub(meter: Meter) -> u8` [@ANCHOR: radioctl:radioctl_civ_meter_sub]
 
-Maps a raw meter to its CI-V `15` sub-command byte, following Hamlib's `icom_defs.h`: SWR `12`, ALC (automatic level control) `13`, compression `14`, supply voltage (Vd) `15`, drain current (Id) `16`. `meter` is by value. Total, pure, no errors.
+Maps a raw meter to its CI-V `15` sub-command byte, following Hamlib's `icom_defs.h`: SWR (standing wave ratio) `12`, ALC (automatic level control) `13`, compression `14`, supply voltage (Vd) `15`, drain current (Id) `16`. `meter` is by value. Total, pure, no errors.
 The inverse is `sub_meter`. Reading a meter never keys the radio; the transmit meters read zero while unkeyed.
 
 ### `fn sub_meter(sub: u8) -> Option<Meter>` [@ANCHOR: radioctl:radioctl_civ_sub_meter]

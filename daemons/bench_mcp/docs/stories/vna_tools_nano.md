@@ -1,6 +1,6 @@
 # The Extra VNA Tools and the NanoVNA Driver: Generator, Meter, Spectrum, Calibration Files and a Text-Shell Instrument
 
-As the person (or the AI agent) running the bench, I want `bench_mcp` to drive a vector network analyser beyond a plain sweep: switch the VNWA 3E's CW generator
+As the person (or the AI agent) running the bench, I want `bench_mcp` to drive a vector network analyser beyond a plain sweep: switch the VNWA 3E's CW (continuous wave, Morse code) generator
 (with AM and FM) on and off, read its frequency meter and spectrum analyzer, measure calibration standards and build and apply an open/short/load/thru
 calibration, and I want a NanoVNA-H to answer the same `bench_vna_*` sweep and calibration tools through its USB text shell. This story documents every anchor
 of two source files: `daemons/bench_mcp/src/vna_tools.rs` (the VNWA's separate tools and the instrument-independent calibration file handling) and
@@ -79,7 +79,7 @@ No hardware is touched. The depth (AM) and the deviation (FM) are checked by the
 ### `generator_on` [@ANCHOR: bench_vna_tools_generator_on]
 
 The tool `bench_vna_generator_on`: switches the VNWA's CW generator on at one frequency and level and leaves it on until `bench_vna_generator_off`. It is the
-only tool that leaves RF on the TX port after it returns. Called by `main.rs` dispatch for a `vnwa_open` instrument.
+only tool that leaves RF (radio frequency) on the TX port after it returns. Called by `main.rs` dispatch for a `vnwa_open` instrument.
 
 | Argument (key) | Type | Meaning |
 |---|---|---|

@@ -7,7 +7,7 @@ Several of these decide which frequency a rig would transmit on. None of them ke
 
 ### `pub fn active_tx_frequency(&self) -> Option<Hz>` [@ANCHOR: radioctl:radioctl_core_txstate_active_tx_frequency]
 
-Returns the frequency the rig transmits on now, or will when keyed, in hertz: the frequency of the transmit VFO as derived by `tx_vfo`. It is correct in split operation and while keyed, and it is what an amplifier, tuner, antenna selector or band decoder follows; the actor publishes it as `Observation::ActiveTxFrequency` after every observation. It returns `None` until that VFO's frequency has been read. Caution: when the split state has not been read it assumes "not split", so for a rig that can split it can name the wrong VFO. Anything that decides whether to key must use `known_for_transmit`, which refuses that case. Pure, takes `&self`, no side effects.
+Returns the frequency the rig transmits on now, or will when keyed, in hertz: the frequency of the transmit VFO (variable frequency oscillator, the tuning control) as derived by `tx_vfo`. It is correct in split operation and while keyed, and it is what an amplifier, tuner, antenna selector or band decoder follows; the actor publishes it as `Observation::ActiveTxFrequency` after every observation. It returns `None` until that VFO's frequency has been read. Caution: when the split state has not been read it assumes "not split", so for a rig that can split it can name the wrong VFO. Anything that decides whether to key must use `known_for_transmit`, which refuses that case. Pure, takes `&self`, no side effects.
 
 ### `pub fn known_for_transmit(&self, split_capable: bool) -> Option<Hz>` [@ANCHOR: radioctl:radioctl_core_txstate_known_for_transmit]
 
@@ -143,7 +143,7 @@ Looks up the per-model wire range of an Elecraft level in the description's `[el
 
 ### `pub fn level_range(&self, level: Level) -> Option<(u16, u16)>` [@ANCHOR: radioctl:radioctl_core_yaesu_level_range]
 
-Looks up the per-model wire range of a Yaesu newcat level in the description's `[yaesu] levels`. `level` is by value. Returns `Some((min, max))` for the first entry that names the level, or `None` when the description gives none, in which case the engine's default range applies (the FT-891's `RG` is 0 to 30 and the FTDX5000's `MG` and `PC` are 0 to 255, as examples of overrides). `&self`; pure; no errors. How the engine applies the range is in the Yaesu newcat engine (unknown here; check its level wire code); the figures must come from the model's CAT manual.
+Looks up the per-model wire range of a Yaesu newcat level in the description's `[yaesu] levels`. `level` is by value. Returns `Some((min, max))` for the first entry that names the level, or `None` when the description gives none, in which case the engine's default range applies (the FT-891's `RG` is 0 to 30 and the FTDX5000's `MG` and `PC` are 0 to 255, as examples of overrides). `&self`; pure; no errors. How the engine applies the range is in the Yaesu newcat engine (unknown here; check its level wire code); the figures must come from the model's CAT (computer-aided transceiver control) manual.
 
 ## `crates/radioctl-core/src/power.rs`
 

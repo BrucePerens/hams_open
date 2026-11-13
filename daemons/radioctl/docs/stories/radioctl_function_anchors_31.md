@@ -7,15 +7,15 @@ None of these functions keys a transmitter. The self-test entries state explicit
 
 ### `pub fn mode_bit(mode: Mode) -> u64` [@ANCHOR: radioctl:radioctld_names_mode_bit]
 
-Returns the one-bit mask of a single mode in Hamlib's mode-mask numbering, for example USB gives 0x4 and LSB 0x8. It is a thin wrapper that calls `mode_mask` with a one-element slice, so the bit positions live in one table (`MODES`) only. The argument is a `radioctl_core::units::Mode` passed by value. A mode that has no row in the table yields 0, never a panic. Pure, no side effects; used when building the mode lists that `\dump_state` writes.
+Returns the one-bit mask of a single mode in Hamlib's mode-mask numbering, for example USB gives 0x4 and LSB (lower sideband) 0x8. It is a thin wrapper that calls `mode_mask` with a one-element slice, so the bit positions live in one table (`MODES`) only. The argument is a `radioctl_core::units::Mode` passed by value. A mode that has no row in the table yields 0, never a panic. Pure, no side effects; used when building the mode lists that `\dump_state` writes.
 
 ### `pub fn nominal_width(mode: Mode) -> u32` [@ANCHOR: radioctl:radioctld_names_nominal_width]
 
-Gives a typical receive bandwidth in hertz for a mode, used as the passband that `get_mode` reports when the rig cannot say its own. Values come from the `MODES` table: 500 Hz for CW and RTTY, 2400 for USB and LSB (lower sideband), 3000 for the packet modes, 6000 for AM and the synchronous AM modes, 6250 for D-STAR, 15000 for FM and 230000 for wide FM. A mode with no table row returns 0, meaning "no typical width". Pure and total; it is a nominal figure, not a measured filter width.
+Gives a typical receive bandwidth in hertz for a mode, used as the passband that `get_mode` reports when the rig cannot say its own. Values come from the `MODES` table: 500 Hz for CW (continuous wave, Morse code) and RTTY (radio teletype), 2400 for USB and LSB (lower sideband), 3000 for the packet modes, 6000 for AM and the synchronous AM modes, 6250 for D-STAR, 15000 for FM and 230000 for wide FM. A mode with no table row returns 0, meaning "no typical width". Pure and total; it is a nominal figure, not a measured filter width.
 
 ### `pub fn parse_vfo(token: &str) -> Option<VfoSel>` [@ANCHOR: radioctl:radioctld_names_parse_vfo]
 
-Decides whether one word of a client request names a VFO, so the command parser can tell `VFOB` from a frequency or a mode. Matching ignores case. `currVFO` gives `Current`; `VFOA`, `Main` and `MainA` give `A`; `VFOB` and `MainB` give `B`; `RX` and `TX` give `Rx` and `Tx`; the names Hamlib knows but radioctl rigs lack (`VFOC`, `Sub`, `SubA`, `SubB`, `MEM`, `Mem`, `None`) give `Absent` so the caller can answer "not available". Any other token, such as `14074000` or `USB`, returns `None`. Pure; never fails.
+Decides whether one word of a client request names a VFO (variable frequency oscillator, the tuning control), so the command parser can tell `VFOB` from a frequency or a mode. Matching ignores case. `currVFO` gives `Current`; `VFOA`, `Main` and `MainA` give `A`; `VFOB` and `MainB` give `B`; `RX` and `TX` give `Rx` and `Tx`; the names Hamlib knows but radioctl rigs lack (`VFOC`, `Sub`, `SubA`, `SubB`, `MEM`, `Mem`, `None`) give `Absent` so the caller can answer "not available". Any other token, such as `14074000` or `USB`, returns `None`. Pure; never fails.
 
 ### `pub fn vfo_name(vfo: Vfo) -> &'static str` [@ANCHOR: radioctl:radioctld_names_vfo_name]
 
@@ -27,7 +27,7 @@ Classifies a level name from a `get_level` or `set_level` request, ignoring case
 
 ### `pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u16)>` [@ANCHOR: radioctl:radioctld_names_level_range]
 
-Returns the inclusive (minimum, maximum) raw integer range the rig's protocol engine accepts for a numeric level, so a client's 0..1 fraction can be scaled and out-of-range values refused. `description` is borrowed read-only; `level` is the core `Level`. The attenuator and preamp ranges come from the description's own `[levels]` block (0 to the maximum attenuation in dB, 0 to the preamp step count) whatever the family. Otherwise the range depends on the family: Elecraft reads it from the engine, Icom CI-V is 0..255 except keyer speed (the CI-V WPM limits), Kenwood has a table (the TS-890S dialect has its own: no monitor level, keyer speed from 4), Yaesu Newcat asks the Yaesu engine, Flex uses 0..100 for AF gain, mic gain and RF power. Returns `None` where there is no level command (legacy Yaesu, Kenwood HH, HPSDR, radiod, vendor serial, receivers, USB devices) or the level is not supported for that family. The CI-V and Kenwood numbers are copies of private engine tables; the test `level_ranges_match_what_each_engine_accepts` pins them to the engines. Pure.
+Returns the inclusive (minimum, maximum) raw integer range the rig's protocol engine accepts for a numeric level, so a client's 0..1 fraction can be scaled and out-of-range values refused. `description` is borrowed read-only; `level` is the core `Level`. The attenuator and preamp ranges come from the description's own `[levels]` block (0 to the maximum attenuation in dB, 0 to the preamp step count) whatever the family. Otherwise the range depends on the family: Elecraft reads it from the engine, Icom CI-V is 0..255 except keyer speed (the CI-V WPM limits), Kenwood has a table (the TS-890S dialect has its own: no monitor level, keyer speed from 4), Yaesu Newcat asks the Yaesu engine, Flex uses 0..100 for AF gain, mic gain and RF (radio frequency) power. Returns `None` where there is no level command (legacy Yaesu, Kenwood HH, HPSDR, radiod, vendor serial, receivers, USB devices) or the level is not supported for that family. The CI-V and Kenwood numbers are copies of private engine tables; the test `level_ranges_match_what_each_engine_accepts` pins them to the engines. Pure.
 
 ### `pub fn served_levels(description: &RigDescription) -> Vec<LevelInfo>` [@ANCHOR: radioctl:radioctld_names_served_levels]
 
@@ -79,7 +79,7 @@ The `feed` method of `BoxedEngine`: hands bytes received from the radio to the w
 
 ### `fn encode_lines(&mut self, op: &Op) -> Result<Option<Vec<radioctl_core::engine::LineStep>>, RigError>` [@ANCHOR: radioctl:radioctld_rigs_boxed_encode_lines]
 
-The control-line hook of `BoxedEngine`, forwarded to the wrapped engine. For a receiver tuned by changing serial control lines (RTS, DTR, break) instead of sending bytes, `Ok(Some(steps))` is the ordered list the actor drives on the port; `Ok(None)` is the usual answer and means the command is an ordinary byte request. An `Err` is the engine's refusal. Without this forwarding the wrapper would use the trait default (always `None`) and silently drop such rigs' tuning, which is what the test guards against. A transmitting op is never driven this way; the actor refuses it. No I/O here.
+The control-line hook of `BoxedEngine`, forwarded to the wrapped engine. For a receiver tuned by changing serial control lines (RTS: request to send, DTR: data terminal ready, break) instead of sending bytes, `Ok(Some(steps))` is the ordered list the actor drives on the port; `Ok(None)` is the usual answer and means the command is an ordinary byte request. An `Err` is the engine's refusal. Without this forwarding the wrapper would use the trait default (always `None`) and silently drop such rigs' tuning, which is what the test guards against. A transmitting op is never driven this way; the actor refuses it. No I/O here.
 
 ### `fn link_restored(&mut self) -> Vec<Request>` [@ANCHOR: radioctl:radioctld_rigs_boxed_link_restored]
 
@@ -97,7 +97,7 @@ Reads one rig description TOML file from disk and returns its validated `RigDesc
 
 ### `pub fn is_read_only(op: &Op) -> bool` [@ANCHOR: radioctl:radioctld_selftest_is_read_only]
 
-The self-test's safety filter: true only for operations that read from the radio (frequency, mode, PTT state, signal, power, split, TX VFO, RIT and XIT and offset, filter width, levels, SWR, meters, model id, firmware, power amplifier), false for everything else including every set and any transmit or PTT (push to talk) command. It is a whitelist, so a new `Op` variant is refused until someone adds it here. The operation is borrowed; pure; no errors. `run_checks_logged` calls it before every execution, so even a planned write would be refused and the transmit gate is never an issue.
+The self-test's safety filter: true only for operations that read from the radio (frequency, mode, PTT (push-to-talk) state, signal, power, split, TX VFO, RIT and XIT and offset, filter width, levels, SWR, meters, model id, firmware, power amplifier), false for everything else including every set and any transmit or PTT (push to talk) command. It is a whitelist, so a new `Op` variant is refused until someone adds it here. The operation is borrowed; pure; no errors. `run_checks_logged` calls it before every execution, so even a planned write would be refused and the transmit gate is never an issue.
 
 ### `pub fn plan_checks(description: &RigDescription) -> Vec<(String, Op)>` [@ANCHOR: radioctl:radioctld_selftest_plan_checks]
 

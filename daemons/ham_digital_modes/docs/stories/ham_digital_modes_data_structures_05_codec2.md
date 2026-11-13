@@ -4,7 +4,7 @@ As a developer changing this code, I want every data structure in `src/codec2_16
 
 ## `FrameFields1600` [@ANCHOR: ham_digital_modes:bits_frame_fields1600_struct]
 
-**Purpose.** One 1600 bit/s (M17) frame's field values: 64 bits per 40 ms, as the reference's `codec2_encode_1600` orders them: two voicing bits, pitch and energy of the first 20 ms half, two voicing bits, pitch and energy of the second half, then ten LSP indices (36 bits in all).
+**Purpose.** One 1600 bit/s (M17: an open digital voice protocol) frame's field values: 64 bits per 40 ms, as the reference's `codec2_encode_1600` orders them: two voicing bits, pitch and energy of the first 20 ms half, two voicing bits, pitch and energy of the second half, then ten LSP indices (36 bits in all).
 
 **Definition.** `pub struct FrameFields1600` (struct) in `daemons/ham_digital_modes/src/codec2_1600/bits.rs`.
 

@@ -410,7 +410,7 @@ connection per call, so no shared state or lock; blocking, so do not call it ins
 
 ## Odoo core's secrets (`database.secret`, the Web Push VAPID private key)
 
-Odoo core reads two secrets from `ir.config_parameter`, so both sit in every database dump: `database.secret` (CSRF tokens in
+Odoo core reads two secrets from `ir.config_parameter`, so both sit in every database dump: `database.secret` (CSRF (cross-site request forgery) tokens in
 `odoo/http.py`, `odoo.tools.misc.hmac` for portal, mail and mass-mailing links, and the session token, which `res.users` reads
 with its own SQL past `get_param`) and `mail.web_push_vapid_private_key` (signs every Web Push message). Core code signs with
 them itself, so they are Tier A secrets: the value is in Odoo memory, and the Tier B broker cannot serve them. A store that has

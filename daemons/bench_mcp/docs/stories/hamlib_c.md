@@ -78,7 +78,7 @@ reads for one managed rig. It is pure (it writes nothing; `radioctl_daemon_start
 The text has a `[server]` table with `cache_max_age_ms = 0` (a read is never served from the daemon's cache, because scans and the load check need
 what the rig says now), one `[[rig]]` with `listen = "127.0.0.1:<port>"` (the address is fixed in this function; there is no option to change it, so
 the daemon is reachable only from this machine), `transmit = <bool>`, and `tx_power_mw = <full_power_w * 1000>` when the owner gave `full_power_w`
-(the full-scale RF output the transmit tools use to turn watts into a power setting), and a `[rig.transport]` table: `kind = "serial"` with `path` and `baud`, or
+(the full-scale RF (radio frequency) output the transmit tools use to turn watts into a power setting), and a `[rig.transport]` table: `kind = "serial"` with `path` and `baud`, or
 `kind = "virtual"`. **Transmit gate**: the caller `radioctl_daemon_ensure` passes `transmit = cfg.transmit.is_some()`, so the daemon's gate is open
 only for a rig whose bench config carries the owner's dummy-load attestation (`transmit` block). The tier, the band and power checks, the load check and
 the keyed-interval watchdog are done by this driver's tools before any key command (documented in `hamlib_b.md`), not by this function; what the
@@ -262,7 +262,7 @@ run `radioctl_rx_listen`; then **always** restore, even after a failure: `set_mo
 The result of the listening is returned with an added `rig_settings_not_restored` (a list, empty when all went back); if the listening failed, its error is returned instead
 (and the restoring has still been tried). Other errors: `frequency_hz is required (Hz)`, bound errors (`<key> <value> is outside <lo> to <hi>`), `mode is not a rig mode name`,
 `the rig reports PTT on; the receiver check does nothing while it transmits`. Transmit side: no key command is sent; the tier is `read_config`, the transmit gate and
-the dummy-load check are not involved, and the band check is the receive-range check above; the VFO, split, RIT (receiver incremental tuning) and XIT (transmitter incremental tuning) are neither read nor restored. Blocking: about 0.3 s settling, 5 meter reads
+the dummy-load check are not involved, and the band check is the receive-range check above; the VFO (variable frequency oscillator, the tuning control), split, RIT (receiver incremental tuning) and XIT (transmitter incremental tuning) are neither read nor restored. Blocking: about 0.3 s settling, 5 meter reads
 80 ms apart and then the recording (`seconds`), all with the instrument lock held. Example: `{"frequency_hz": 10e6, "seconds": 5, "expect_tone_hz": 1000}`
 gives AM at 10 MHz with `signal`, `squelch_open` and an `audio` object. Tests: `tests.rs` (cited as `radioctl_rx_check`: a test of the receiver check against a rig with synthetic audio). Related: `radioctl_rx_listen`, `radioctl_rx_ranges`, `radioctl_bounded`, `radioctl_detect_analyze`.
 
@@ -337,7 +337,7 @@ Arguments are borrowed. Tests: `stations.rs` (cited as `radioctl_stations_recent
 
 `defaults() -> Vec<Station>` is the table that ships, used when no `stations.json` exists. It lists 28 entries, all with `last_heard` none, not retired and not owner-added: WWV (`wwv-2_5`, `wwv-5`,
 `wwv-10`, `wwv-15`, `wwv-20`; AM; audio `wwv`; kind `time_station`), WWVH (`wwvh-2_5`, `wwvh-5`, `wwvh-10`, `wwvh-15`; AM; audio `wwvh`; kind `time_station`), twelve US medium-wave samples (`am-640`, 680, 710, 760, 810, 880, 1010,
-1070, 1120, 1200, 1500, 1600 kHz; AM; audio `voice`; kind `am_band`) and the seven NOAA Weather Radio channels (`wx-162400` to `wx-162550`, 162.400 to 162.550 MHz in 25 kHz steps; FM; audio `voice`; kind `weather`). The notes say in the code's own
+1070, 1120, 1200, 1500, 1600 kHz; AM; audio `voice`; kind `am_band`) and the seven NOAA (National Oceanic and Atmospheric Administration) Weather Radio channels (`wx-162400` to `wx-162550`, 162.400 to 162.550 MHz in 25 kHz steps; FM; audio `voice`; kind `weather`). The notes say in the code's own
 words where the status was checked (NIST's published station information, January 2026, with the warning that budget proposals threaten WWV and WWVH, so the owner is to check again) and that
 the AM and weather entries are samples whose usefulness depends on the owner's location. The Canadian station CHU is deliberately not listed: a code comment says its shortwave
 transmissions stopped on 2026-06-22 (this page cannot check that). The frequencies are rounded to whole Hz. No arguments, no errors; a fresh vector on every call. The owner is expected to review the list and to retire or replace
@@ -391,7 +391,7 @@ preparation (`loadtools.rs`) and `bench_radioctl_stations` (with a `frequency_hz
 | `limit` | usize | At most this many stations are returned. |
 
 Selection: not retired, same class as `tx_hz`, and `covers(station frequency)`. Order: owner-added entries first (they were chosen for this site), then time stations, then AM-band stations, then the rest (weather and local); inside a group, at night the lower
-frequencies first, by day the higher first (HF propagation); the sort is stable. The result borrows from the table; it is not modified. Pure, no errors; an empty result is possible (a VHF transmit frequency with the shipped table gives only the weather channels). The result
+frequencies first, by day the higher first (HF (high frequency, 3 to 30 MHz) propagation); the sort is stable. The result borrows from the table; it is not modified. Pure, no errors; an empty result is possible (a VHF (very high frequency, 30 to 300 MHz) transmit frequency with the shipped table gives only the weather channels). The result
 is a list of candidates only: the check needs no station to be heard. Tests: `stations.rs` (cited as `radioctl_stations_select`).
 
 ### `radioctl_stations_edit` [@ANCHOR: radioctl_stations_edit]

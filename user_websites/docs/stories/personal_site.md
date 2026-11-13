@@ -35,7 +35,7 @@ the arch. All writes run as the service account. Returns a redirect (302 or 303)
 
 The "Create Your Home" button is a form in the `placeholder_page` template (`views/user_websites_templates.xml`) with the
 CSS class `o_tour_create_site_btn`. It is shown only to the owner of a site that has no served home page: for a visitor
-the same page says the user has not created their home yet. It posts, with a CSRF token, to `/<slug>/create_site` (home) or
+the same page says the user has not created their home yet. It posts, with a CSRF (cross-site request forgery) token, to `/<slug>/create_site` (home) or
 `/<slug>/create_blog` (blog), and the label changes with the state that `_owner_home()` found: "Create Your Home", "Publish
 Your Home" or "Restore Your Home". A small help link goes to the documentation page with `#UX_CREATE_SITE` in the address.
 The tour `create_site_tour.js` clicks the button and waits for the new home page to render.

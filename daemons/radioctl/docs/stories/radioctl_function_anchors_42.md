@@ -19,7 +19,7 @@ Builds the AR3030/AR3000A dialect from the description. It uses `style_of`: `ar3
 
 ### `fn encode(&mut self, desc: &RigDescription, op: &Op) -> Result<(Vec<u8>, ReplyKind), RigError>` [@ANCHOR: radioctl:radioctl_aorc_dialect_encode]
 
-Spells an operation for one of the two models. Line ending: CR for the AR3030, CR LF for the AR3000A. Reads: `GetFrequency(A)` and `GetMode` send `D` (the dial state), `GetSignal` sends `Y`; all expect an observation. Settings: on the AR3030 `SetFrequency(A, hz)` sends megahertz with six decimals and expects an `Ack` (range 30 kHz to 30 MHz, else `Unsupported` "frequency out of range"); on the AR3000A the frequency is rounded to 50 Hz, must lie within 100 kHz to 2036 MHz, is sent in megahertz with five decimals, and expects no reply, since that radio does not acknowledge settings. `SetMode(mode)` sends the description's one-letter mode code (`Unsupported` if the description lacks it), expecting an `Ack` on the AR3030 and nothing on the AR3000A. Everything else, including VFO B, is `Unsupported`. No transmit. No I/O.
+Spells an operation for one of the two models. Line ending: CR for the AR3030, CR LF for the AR3000A. Reads: `GetFrequency(A)` and `GetMode` send `D` (the dial state), `GetSignal` sends `Y`; all expect an observation. Settings: on the AR3030 `SetFrequency(A, hz)` sends megahertz with six decimals and expects an `Ack` (range 30 kHz to 30 MHz, else `Unsupported` "frequency out of range"); on the AR3000A the frequency is rounded to 50 Hz, must lie within 100 kHz to 2036 MHz, is sent in megahertz with five decimals, and expects no reply, since that radio does not acknowledge settings. `SetMode(mode)` sends the description's one-letter mode code (`Unsupported` if the description lacks it), expecting an `Ack` on the AR3030 and nothing on the AR3000A. Everything else, including VFO (variable frequency oscillator, the tuning control) B, is `Unsupported`. No transmit. No I/O.
 
 ### `fn status(&mut self, expecting: ReplyKind, line: &str) -> Option<Vec<Inbound>>` [@ANCHOR: radioctl:radioctl_aorc_dialect_status]
 
@@ -27,7 +27,7 @@ Handles the lines that carry no data. An empty line is the AR3030's acknowledgem
 
 ### `fn decode(&mut self, desc: &RigDescription, expecting: ReplyKind, line: &str) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_aorc_dialect_decode]
 
-Reads a data line when an observation is expected (any other expectation gives `Inbound::Unrecognised`). The result depends on style and field. Frequency and mode come from the dial-state line parsed by `ar3030_state` or `ar3000a_state`; the mode letter is mapped through the AR3030 letter table or the AR3000A read table (`Q` FM, `R` WFM, `S` AM, `T` LSB, `U` USB, `V` CW) and kept only if the description has a code for that mode. The AR3030 signal is two hex digits no larger than 0x3F. The AR3000A signal is `%` (squelch closed) as 0, or a letter `A` to `P` as 1 to 16. Anything that does not match gives `Unrecognised` carrying the bytes; no error is returned. Pure.
+Reads a data line when an observation is expected (any other expectation gives `Inbound::Unrecognised`). The result depends on style and field. Frequency and mode come from the dial-state line parsed by `ar3030_state` or `ar3000a_state`; the mode letter is mapped through the AR3030 letter table or the AR3000A read table (`Q` FM, `R` WFM, `S` AM, `T` LSB: lower sideband, `U` USB, `V` CW: continuous wave, Morse code) and kept only if the description has a code for that mode. The AR3030 signal is two hex digits no larger than 0x3F. The AR3000A signal is `%` (squelch closed) as 0, or a letter `A` to `P` as 1 to 16. Anything that does not match gives `Unrecognised` carrying the bytes; no error is returned. Pure.
 
 ### `fn ar3030_state(line: &str) -> Option<(u64, char)>` [@ANCHOR: radioctl:radioctl_aorc_ar3030_state]
 
@@ -123,7 +123,7 @@ Executes the controller's bytes as AR7030 commands, one byte each: the high nibb
 
 ### `pub fn engine(desc: RigDescription) -> Result<RsHfEngine, RigError>` [@ANCHOR: radioctl:radioctl_rshf_engine]
 
-Builds the protocol engine for a Rohde and Schwarz HF receiver with the line-feed framed `F` / `I` commands (EK 895, EK 896, XK 2100) or the `*F` / `*I` / `*O1` set (XK 852). `desc` is taken by value. A thin wrapper over `LineEngine::new` with `ReceiverProtocol::RohdeSchwarz`; `ErrorKind::Unsupported` comes back for the wrong family or protocol or a dialect other than `ek895`, `ek896`, `xk2100` and `xk852`. PTT is not implemented, so nothing here keys a transmitter. No I/O.
+Builds the protocol engine for a Rohde and Schwarz HF (high frequency, 3 to 30 MHz) receiver with the line-feed framed `F` / `I` commands (EK 895, EK 896, XK 2100) or the `*F` / `*I` / `*O1` set (XK 852). `desc` is taken by value. A thin wrapper over `LineEngine::new` with `ReceiverProtocol::RohdeSchwarz`; `ErrorKind::Unsupported` comes back for the wrong family or protocol or a dialect other than `ek895`, `ek896`, `xk2100` and `xk852`. PTT is not implemented, so nothing here keys a transmitter. No I/O.
 
 ### `pub fn handles(desc: &RigDescription) -> bool` [@ANCHOR: radioctl:radioctl_rshf_handles]
 

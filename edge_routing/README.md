@@ -23,7 +23,7 @@ The `edge_routing` module is the foundational routing layer for high-speed slug 
     externally, never writes them back) -- Odoo core's `_can_execute_action_on_records()` still
     requires write access to the cron's own `model_id` before it will run at all, so `group_ids` on
     the cron authorizes this specific action for this specific group instead of broadening the
-    model's real ACL. (Entries `COMM_domain_push_pagerduty` and `edge_routing_push_pager_duty_cron_runs` below.)
+    model's real ACL (access control list). (Entries `COMM_domain_push_pagerduty` and `edge_routing_push_pager_duty_cron_runs` below.)
 * **`res.users` Extension (`models/res_users.py`)**:
   * Adds `edge.routing.mixin` to `res.users`, so users resolve by `website_slug` exactly like any other routing model, through the same cache. There is no login fallback: a slug that matches no `website_slug` resolves to nothing, even if it equals a user's login. (An earlier fallback to `login` was removed because logins are email addresses, so it let anyone test whether an account existed for an address.)
 

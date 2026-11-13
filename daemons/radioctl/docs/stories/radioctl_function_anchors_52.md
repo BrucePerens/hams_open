@@ -24,7 +24,7 @@ Returns the serial speed to use when the configuration gives none: 38400 for bot
 
 ### `pub fn requests(self) -> &'static [&'static [u8]]` [@ANCHOR: radioctl:radioctl_station_meter_driver_requests]
 
-Returns the byte strings one poll sends, in order, each sent only after the previous reply has been read. The KPA500 sends the single request `^WS;` (power and SWR); the KPA1500 sends `^PWF;` (forward power) then `^PWR;` (reflected power). The slices are static and borrowed; the argument is the enum by value. Cannot fail, no I/O, no locks. `MeterPoller::poll` iterates it.
+Returns the byte strings one poll sends, in order, each sent only after the previous reply has been read. The KPA500 sends the single request `^WS;` (power and SWR: standing wave ratio); the KPA1500 sends `^PWF;` (forward power) then `^PWR;` (reflected power). The slices are static and borrowed; the argument is the enum by value. Cannot fail, no I/O, no locks. `MeterPoller::poll` iterates it.
 
 ### `pub fn has_reflected(self) -> bool` [@ANCHOR: radioctl:radioctl_station_meter_driver_has_reflected]
 

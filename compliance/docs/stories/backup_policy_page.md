@@ -2,7 +2,7 @@
 
 ## User Persona
 A prospective or existing member who wants to verify, for themselves, that hams.com is not exposed
-to the kind of incident that struck the ARRL in May 2024 (a ransomware attack that encrypted its
+to the kind of incident that struck the ARRL (American Radio Relay League) in May 2024 (a ransomware attack that encrypted its
 systems, ending in a reported $1 million ransom payment).
 
 ## Scenario

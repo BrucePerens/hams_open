@@ -1,7 +1,7 @@
 # radioctl function anchors, batch 35
 
 Function anchors for the `radioctld` TCP server (`server.rs`) and the per-rig command service (`service.rs`): the accept loop, the per-client task, reply writing, and the service functions behind the Hamlib `rigctld` commands for mode, split, RIT/XIT, keying and Morse. Each entry follows ADR 0113 and is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
-Several of these functions can put RF on the air: `check_transmit`, `key` and `send_morse` take the fail-closed path (transmit gate open and link up, and the single transmitter owner), while `unkey`, `stop_morse`, `disconnect` and `shutdown` are stop paths that always work, with the gate open or closed.
+Several of these functions can put RF (radio frequency) on the air: `check_transmit`, `key` and `send_morse` take the fail-closed path (transmit gate open and link up, and the single transmitter owner), while `unkey`, `stop_morse`, `disconnect` and `shutdown` are stop paths that always work, with the gate open or closed.
 
 ## `crates/radioctld/src/server.rs`
 
@@ -15,7 +15,7 @@ The task that takes connections until it is aborted by `shutdown`. For each conn
 
 ### `pub async fn answer(service: &RigService, client: u64, line: &Line) -> (String, bool)` [@ANCHOR: radioctl:radioctld_server_answer]
 
-Produces the reply to one request line for one client. A line that is not text (`Line::Invalid`) answers `RPRT -1` and does not close. Text that parses to nothing (a blank line) answers an empty string. Otherwise it builds the response header (extended-format flag, command name, VFO echo from `vfo_echo`, arguments), runs the command through `RigService::execute` with the client id and VFO selection (or uses the parse error code), and renders the result with `render`. The second value is true when the command asked to close the connection (the `q` command). `client` identifies who is asking, for transmitter ownership. Async; the command may reach the radio, including a transmit command that the service gates.
+Produces the reply to one request line for one client. A line that is not text (`Line::Invalid`) answers `RPRT -1` and does not close. Text that parses to nothing (a blank line) answers an empty string. Otherwise it builds the response header (extended-format flag, command name, VFO (variable frequency oscillator, the tuning control) echo from `vfo_echo`, arguments), runs the command through `RigService::execute` with the client id and VFO selection (or uses the parse error code), and renders the result with `render`. The second value is true when the command asked to close the connection (the `q` command). `client` identifies who is asking, for transmitter ownership. Async; the command may reach the radio, including a transmit command that the service gates.
 
 ### `fn render_invalid() -> String` [@ANCHOR: radioctl:radioctld_server_render_invalid]
 
@@ -117,7 +117,7 @@ The fail-closed check in front of every command that can put RF on the air. Firs
 
 ### `async fn key(&self, client: ClientId) -> Result<Body, i32>` [@ANCHOR: radioctl:radioctld_service_key]
 
-Keys the transmitter (PTT on) on behalf of `client`. Steps: `check_transmit` (gate open and link up, otherwise `ERJCTED` or `EIO`); then try to claim the single transmitter owner record for this client, and if another client owns it count a conflict and refuse with `ERJCTED` (-9), also counted as a refusal; then send `SetPtt(true)` to the rig. If the rig refuses or fails, the claim is given back so the owner record never claims a transmitter that is not keyed. Answers `Done` or the `RPRT` code. The owner lock is held only briefly and never across the rig call. Async. The rig actor's own limit (`max_transmit`) can still unkey after a time.
+Keys the transmitter (PTT (push-to-talk) on) on behalf of `client`. Steps: `check_transmit` (gate open and link up, otherwise `ERJCTED` or `EIO`); then try to claim the single transmitter owner record for this client, and if another client owns it count a conflict and refuse with `ERJCTED` (-9), also counted as a refusal; then send `SetPtt(true)` to the rig. If the rig refuses or fails, the claim is given back so the owner record never claims a transmitter that is not keyed. Answers `Done` or the `RPRT` code. The owner lock is held only briefly and never across the rig call. Async. The rig actor's own limit (`max_transmit`) can still unkey after a time.
 
 ### `async fn unkey(&self) -> Result<Body, i32>` [@ANCHOR: radioctl:radioctld_service_unkey]
 
@@ -125,7 +125,7 @@ Unkeys the transmitter by sending `SetPtt(false)`. It is open to every client an
 
 ### `async fn send_morse(&self, client: ClientId, text: &str) -> Result<Body, i32>` [@ANCHOR: radioctl:radioctld_service_send_morse]
 
-Sends Morse (CW) text from the rig's keyer, which puts RF on the air, so it follows the same rules as keying. It runs `check_transmit` (gate open, link up), then claims the transmitter for `client` (refused with `ERJCTED` and counted as a conflict if another client owns it), then sends the text with `SendCw`. If the rig refuses, the claim is released. The sender keeps ownership afterwards, so a disconnect unkeys the rig. `text` is borrowed and copied; its length limits are the engine's (`unknown` here: check the engine for the allowed characters and length). Async.
+Sends Morse (CW: continuous wave, Morse code) text from the rig's keyer, which puts RF on the air, so it follows the same rules as keying. It runs `check_transmit` (gate open, link up), then claims the transmitter for `client` (refused with `ERJCTED` and counted as a conflict if another client owns it), then sends the text with `SendCw`. If the rig refuses, the claim is released. The sender keeps ownership afterwards, so a disconnect unkeys the rig. `text` is borrowed and copied; its length limits are the engine's (`unknown` here: check the engine for the allowed characters and length). Async.
 
 ### `async fn stop_morse(&self) -> Result<Body, i32>` [@ANCHOR: radioctl:radioctld_service_stop_morse]
 

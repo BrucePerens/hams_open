@@ -68,7 +68,7 @@ Returns the datetime when the retry after `attempts_made` failures becomes due: 
 
 `action_mark_abandoned()`, `@public_rpc`. After `_check_pending_delete_admin` it writes `state = "abandoned"` and clears `next_attempt_at` on the selected records, so the cron stops retrying them while they stay on the list; the attempt count and last error are kept. Returns `True`. No network call. It is for a hostname the administrator removed by hand. Test: `test_09_an_admin_can_retry_a_record_by_hand`, which also presses Abandon.
 
-11. Both buttons are mine alone: they make a real, credentialed Cloudflare call, so they check for real admin rights before reaching the network, and no ACL row grants this model to an ordinary user at all.
+11. Both buttons are mine alone: they make a real, credentialed Cloudflare call, so they check for real admin rights before reaching the network, and no ACL (access control list) row grants this model to an ordinary user at all.
 
 ### Admin check [@ANCHOR: COMM_pending_delete_check_admin]
 

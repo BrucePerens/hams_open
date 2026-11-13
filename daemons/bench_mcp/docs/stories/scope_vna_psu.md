@@ -91,7 +91,7 @@ Returns an object with `channel`, `samples`, `sample_interval_s` (1 / sample rat
 
 ### `bench_mcp_scope_spectrum` [@ANCHOR: bench_mcp_scope_spectrum]
 
-`spectrum(s, args, out)` is `bench_scope_spectrum` (tier `read_config`, because it may change the memory depth and the timebase): the spectrum of one channel's waveform, computed on this host with the FFT in `spectrum.rs`, and the strongest peaks. More time per division gives finer frequency resolution but fewer samples per carrier cycle.
+`spectrum(s, args, out)` is `bench_scope_spectrum` (tier `read_config`, because it may change the memory depth and the timebase): the spectrum of one channel's waveform, computed on this host with the FFT (fast Fourier transform) in `spectrum.rs`, and the strongest peaks. More time per division gives finer frequency resolution but fewer samples per carrier cycle.
 
 | Argument | Type | Meaning |
 |---|---|---|
@@ -555,7 +555,7 @@ The thread sleeps `secs`, takes the instrument lock (waiting for any call in pro
 
 ## The VNWA's sweep, status and power cycle (`src/vna.rs`)
 
-The VNWA 3E is driven through the `vnwa_open` crate: USB control transfers to the unit and the audio of its two codecs, no vendor software. Results are raw (uncalibrated) ratios: S21 from the RX channel and S11 from the reflection channel, in the vendor program's convention. A sweep needs tier `read_config` because it puts RF on the TX port. Constants: `MAX_POINTS` 401 (each point about 0.2 s) and `MAX_HZ` 1.3 GHz. The struct `SweepArgs { start_hz: f64, stop_hz: f64, points: usize, config: Config }` is what `sweep_args` returns: the checked frequencies in hertz, the number of points, and the `vnwa_open::sweep::Config` this sweep uses (the instrument's configured settings with any per-call overrides; fields include `if_hz`, `point_ms`, `rf_level`, `hub`, `retries`). It is built per call, owned by the caller and never shared.
+The VNWA 3E is driven through the `vnwa_open` crate: USB control transfers to the unit and the audio of its two codecs, no vendor software. Results are raw (uncalibrated) ratios: S21 from the RX (receive) channel and S11 from the reflection channel, in the vendor program's convention. A sweep needs tier `read_config` because it puts RF (radio frequency) on the TX port. Constants: `MAX_POINTS` 401 (each point about 0.2 s) and `MAX_HZ` 1.3 GHz. The struct `SweepArgs { start_hz: f64, stop_hz: f64, points: usize, config: Config }` is what `sweep_args` returns: the checked frequencies in hertz, the number of points, and the `vnwa_open::sweep::Config` this sweep uses (the instrument's configured settings with any per-call overrides; fields include `if_hz`, `point_ms`, `rf_level`, `hub`, `retries`). It is built per call, owned by the caller and never shared.
 
 ### `bench_mcp_vna_number` [@ANCHOR: bench_mcp_vna_number]
 

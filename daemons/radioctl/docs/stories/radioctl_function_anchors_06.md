@@ -121,11 +121,11 @@ Parses the output of `rigctl -l` into one dict per model with `model_id` (int), 
 
 ### `def parse_dump(text: str) -> dict` [@ANCHOR: radioctl:radioctl_caps_parse_dump]
 
-Parses one `rigctl --dump-caps` report into the `dump` fields: identity (model, manufacturer, backend version and status, rig and port type), VFO list and operations, modes, get and set functions, levels and parameters (with min, max and step), preamp, attenuator, CTCSS (continuous tone-coded squelch system) and DCS counts, memory banks, spectrum data, serial settings, write and timeout timing, RIT/XIT limits and the `Can` and `Has` Y/N/E flags. Absent keys become empty strings, lists or zero; it does not raise on a missing field. Pure, reads only its argument.
+Parses one `rigctl --dump-caps` report into the `dump` fields: identity (model, manufacturer, backend version and status, rig and port type), VFO (variable frequency oscillator, the tuning control) list and operations, modes, get and set functions, levels and parameters (with min, max and step), preamp, attenuator, CTCSS (continuous tone-coded squelch system) and DCS counts, memory banks, spectrum data, serial settings, write and timeout timing, RIT/XIT limits and the `Can` and `Has` Y/N/E flags. Absent keys become empty strings, lists or zero; it does not raise on a missing field. Pure, reads only its argument.
 
 ### `def parse_ranges(lines: list[str]) -> dict` [@ANCHOR: radioctl:radioctl_caps_parse_ranges]
 
-Summarises the TX and RX frequency range blocks of a dump. For each of `TX` and `RX` it returns `count` of ranges, lowest and highest hertz (`min_hz`, `max_hz`, `None` when there are none), and for TX also `max_power_w`, the highest `High power` figure in watts seen. Range headers like `TX ranges #1 for ...` select the section; lines outside a section are ignored. Pure and tolerant: unparsable lines are skipped, not raised.
+Summarises the TX and RX (receive) frequency range blocks of a dump. For each of `TX` and `RX` it returns `count` of ranges, lowest and highest hertz (`min_hz`, `max_hz`, `None` when there are none), and for TX also `max_power_w`, the highest `High power` figure in watts seen. Range headers like `TX ranges #1 for ...` select the section; lines outside a section are ignored. Pure and tolerant: unparsable lines are skipped, not raised.
 
 ### `def classify_family(mfg: str, model: str, port_type: str) -> dict` [@ANCHOR: radioctl:radioctl_caps_classify_family]
 
@@ -159,4 +159,4 @@ Command-line entry point. Options: `--out-dir DIR` (required), `--jobs N` (threa
 
 ### `pub fn transmits(self) -> bool` [@ANCHOR: radioctl:radioctl_core_capability_transmits]
 
-Says whether using a capability can put RF on the air. It is true only for `SetPtt` and `SendCw`; reads, frequency and mode changes, levels and meters return false. This is the predicate the transmit gate relies on when deciding which operations need transmit authority, so adding a capability that can key the transmitter must be reflected here. Takes `self` by value (`Copy`), pure and infallible.
+Says whether using a capability can put RF (radio frequency) on the air. It is true only for `SetPtt` and `SendCw`; reads, frequency and mode changes, levels and meters return false. This is the predicate the transmit gate relies on when deciding which operations need transmit authority, so adding a capability that can key the transmitter must be reflected here. Takes `self` by value (`Copy`), pure and infallible.

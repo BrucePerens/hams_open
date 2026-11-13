@@ -257,7 +257,7 @@
 
 ### `KyForm` [@ANCHOR: radioctl:radioctl_core_description_ky_form]
 
-**Purpose and location.** How a Kenwood model takes `KY` (send CW text), as its own manual documents it. The command is used only where a manual of that model documents it (Bruce's decision of 2026-11-02): the text field width, the characters and the stop differ per model. Defined in `daemons/radioctl/crates/radioctl-core/src/description.rs:457` as a pub `enum`. It derives Debug, Clone, Copy, PartialEq, Eq.
+**Purpose and location.** How a Kenwood model takes `KY` (send CW (continuous wave, Morse code) text), as its own manual documents it. The command is used only where a manual of that model documents it (Bruce's decision of 2026-11-02): the text field width, the characters and the stop differ per model. Defined in `daemons/radioctl/crates/radioctl-core/src/description.rs:457` as a pub `enum`. It derives Debug, Clone, Copy, PartialEq, Eq.
 
 | Variant | Definition | Meaning |
 |---|---|---|
@@ -480,7 +480,7 @@
 
 ### `YaesuLegacyParams` [@ANCHOR: radioctl:radioctl_core_description_yaesu_legacy_params]
 
-**Purpose and location.** Yaesu legacy five-byte CAT parameters. Defined in `daemons/radioctl/crates/radioctl-core/src/description.rs:810` as a pub `struct`. It derives Debug, Clone, PartialEq, Eq.
+**Purpose and location.** Yaesu legacy five-byte CAT (computer-aided transceiver control) parameters. Defined in `daemons/radioctl/crates/radioctl-core/src/description.rs:810` as a pub `struct`. It derives Debug, Clone, PartialEq, Eq.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -1130,7 +1130,7 @@
 
 ### `Vfo` [@ANCHOR: radioctl:radioctl_core_units_vfo]
 
-**Purpose and location.** A VFO. Only the VFOs a description lists are usable on a given rig. Defined in `daemons/radioctl/crates/radioctl-core/src/units.rs:105` as a pub `enum`. It derives Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash.
+**Purpose and location.** A VFO (variable frequency oscillator, the tuning control). Only the VFOs a description lists are usable on a given rig. Defined in `daemons/radioctl/crates/radioctl-core/src/units.rs:105` as a pub `enum`. It derives Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash.
 
 | Variant | Definition | Meaning |
 |---|---|---|
@@ -1173,7 +1173,7 @@
 
 ### `Meter` [@ANCHOR: radioctl:radioctl_core_units_meter]
 
-**Purpose and location.** A transmitter or power-supply meter read in the rig's own raw scale. Unlike [`crate::op::Observation::Swr`] (tenths of a ratio) these are not calibrated: Icom radios report a 0 to 255 meter deflection and the mapping to a ratio, a fraction, volts or amperes is a per-model measurement table that no source radioctl may copy provides. A reading is meaningful only while the rig transmits (SWR, ALC, COMP, Id) or at any time (Vd); the read itself never transmits. Defined in `daemons/radioctl/crates/radioctl-core/src/units.rs:196` as a pub `enum`. It derives Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash.
+**Purpose and location.** A transmitter or power-supply meter read in the rig's own raw scale. Unlike [`crate::op::Observation::Swr`] (tenths of a ratio) these are not calibrated: Icom radios report a 0 to 255 meter deflection and the mapping to a ratio, a fraction, volts or amperes is a per-model measurement table that no source radioctl may copy provides. A reading is meaningful only while the rig transmits (SWR: standing wave ratio, ALC: automatic level control, COMP, Id) or at any time (Vd); the read itself never transmits. Defined in `daemons/radioctl/crates/radioctl-core/src/units.rs:196` as a pub `enum`. It derives Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash.
 
 | Variant | Definition | Meaning |
 |---|---|---|

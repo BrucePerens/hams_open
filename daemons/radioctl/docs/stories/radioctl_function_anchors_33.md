@@ -61,7 +61,7 @@ Reads a complete HTTP/1.1 response that was read to the end of the connection an
 
 ### `pub async fn request(method: &str, url: &str, body: &[u8], max_response: usize, timeout: Duration) -> Result<(u16, Vec<u8>), String>` [@ANCHOR: radioctl:radioctld_upload_request]
 
-Makes one HTTP request and returns the status and body. `method` is `POST` (with a JSON `body`) or `GET` (with an empty one); `url` follows `parse_server` (https anywhere, http only to loopback); at most `max_response` bytes of the answer are read; the whole exchange must finish within `timeout`. Errors are one short line: a URL that does not parse, `cannot connect`, TLS trouble, a timeout (`timed out after N s`) or no HTTP answer. Async network I/O that opens a new connection with `Connection: close` each time, with no retries and no redirects. Shared by the report upload and the update check.
+Makes one HTTP request and returns the status and body. `method` is `POST` (with a JSON `body`) or `GET` (with an empty one); `url` follows `parse_server` (https anywhere, http only to loopback); at most `max_response` bytes of the answer are read; the whole exchange must finish within `timeout`. Errors are one short line: a URL that does not parse, `cannot connect`, TLS (Transport Layer Security) trouble, a timeout (`timed out after N s`) or no HTTP answer. Async network I/O that opens a new connection with `Connection: close` each time, with no retries and no redirects. Shared by the report upload and the update check.
 
 ### `async fn exchange(server: &ServerUrl, method: &str, body: &[u8], max_response: usize) -> Result<(u16, Vec<u8>), String>` [@ANCHOR: radioctl:radioctld_upload_exchange]
 
@@ -105,7 +105,7 @@ The name of the self-test executable inside a release bundle: `radioctl-selftest
 
 ### `pub fn claims_unsolicited(description: &RigDescription) -> bool` [@ANCHOR: radioctl:radioctld_knob_claims_unsolicited]
 
-True when the rig description claims the `Transceive` capability, meaning the radio reports changes (such as a turned VFO knob) on its own without being polled: Icom CI-V transceive, Elecraft and Kenwood auto-information, Yaesu or Flex subscriptions. The knob check runs only for such descriptions. The description is borrowed; pure; no errors.
+True when the rig description claims the `Transceive` capability, meaning the radio reports changes (such as a turned VFO (variable frequency oscillator, the tuning control) knob) on its own without being polled: Icom CI-V transceive, Elecraft and Kenwood auto-information, Yaesu or Flex subscriptions. The knob check runs only for such descriptions. The description is borrowed; pure; no errors.
 
 ### `pub async fn watch_knob(rig: &RigHandle, wait: Duration, enter: &mut dyn FnMut() -> bool) -> KnobOutcome` [@ANCHOR: radioctl:radioctld_knob_watch]
 
@@ -135,7 +135,7 @@ Converts the raw drain-current meter reading (0 to 255) to amperes of final-ampl
 
 ### `pub fn level(cal: &MeterCal, meter: radioctl_core::units::Meter, raw: u16) -> f64` [@ANCHOR: radioctl:radioctld_meter_cal_level]
 
-The single entry point that converts a raw deflection into the value a `rigctl` client expects for a given meter: SWR gives a ratio of 1.0 or more, ALC (automatic level control) a fraction from 0 to 1, COMP decibels, Vd volts and Id amperes. It dispatches to `swr_ratio`, `alc_fraction`, `comp_db`, `vd_volts` and `id_amps`. The match over `Meter` is exhaustive. Used when serving `get_level` for the meter levels. Pure; an unverified estimate.
+The single entry point that converts a raw deflection into the value a `rigctl` client expects for a given meter: SWR (standing wave ratio) gives a ratio of 1.0 or more, ALC (automatic level control) a fraction from 0 to 1, COMP decibels, Vd volts and Id amperes. It dispatches to `swr_ratio`, `alc_fraction`, `comp_db`, `vd_volts` and `id_amps`. The match over `Meter` is exhaustive. Used when serving `get_level` for the meter levels. Pure; an unverified estimate.
 
 ### `pub fn full_scale(cal: &MeterCal, meter: radioctl_core::units::Meter) -> f64` [@ANCHOR: radioctl:radioctld_meter_cal_range]
 

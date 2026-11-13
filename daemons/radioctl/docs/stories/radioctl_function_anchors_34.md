@@ -93,7 +93,7 @@ Pairs wire frames into request and answer exchanges. Each `tx` frame starts an `
 
 ### `def op_of(command: str) -> str | None` [@ANCHOR: radioctl:radioctl_wire_op_of]
 
-Translates a console command line into the inline TOML `op` table of a conformance transcript step. It knows `mode`, `signal`, `split`, `rit`, `ritoffset` and `filter` (reads), `freq [a|b]`, and the writes `setfreq a|b HZ`, `setmode MODE`, `setsplit 0|1`, `setritoffset HZ` and `setfilter HZ`, with the VFO defaulting to `a` for reads and the mode lower-cased. Returns `None` for an empty line, an unknown command or arguments of the wrong shape, and the caller then leaves the step out with a comment. Pure; no I/O. It can emit write operations, but only as test data, never to a radio.
+Translates a console command line into the inline TOML `op` table of a conformance transcript step. It knows `mode`, `signal`, `split`, `rit`, `ritoffset` and `filter` (reads), `freq [a|b]`, and the writes `setfreq a|b HZ`, `setmode MODE`, `setsplit 0|1`, `setritoffset HZ` and `setfilter HZ`, with the VFO (variable frequency oscillator, the tuning control) defaulting to `a` for reads and the mode lower-cased. Returns `None` for an empty line, an unknown command or arguments of the wrong shape, and the caller then leaves the step out with a comment. Pure; no I/O. It can emit write operations, but only as test data, never to a radio.
 
 ### `def expect_of(result: str) -> str | None` [@ANCHOR: radioctl:radioctl_wire_expect_of]
 

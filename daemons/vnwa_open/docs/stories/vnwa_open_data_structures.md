@@ -348,7 +348,7 @@
 
 ### `IfRef` [@ANCHOR: vnwa_open:vnwa_open_if_reference_vectors_if_ref]
 
-**Purpose and location.** One recorded IF-response check from 2026-10-26 with TX connected to RX: the vendor program's S21 at 5 MHz and each codec's frames, kept as a test vector. Defined in `daemons/vnwa_open/src/if_reference_vectors.rs:5` as a pub `struct`. It derives no traits.
+**Purpose and location.** One recorded IF-response check from 2026-10-26 with TX (transmit) connected to RX: the vendor program's S21 at 5 MHz and each codec's frames, kept as a test vector. Defined in `daemons/vnwa_open/src/if_reference_vectors.rs:5` as a pub `struct`. It derives no traits.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -722,7 +722,7 @@
 
 ### `Config` [@ANCHOR: vnwa_open:vnwa_open_sweep_config]
 
-**Purpose and location.** Everything that is fixed for one measurement session: which codecs and hub port, the IF, point time, RF level, retry limits and timing. Defined in `daemons/vnwa_open/src/sweep.rs:23` as a pub `struct`. It derives Clone, Debug.
+**Purpose and location.** Everything that is fixed for one measurement session: which codecs and hub port, the IF, point time, RF (radio frequency) level, retry limits and timing. Defined in `daemons/vnwa_open/src/sweep.rs:23` as a pub `struct`. It derives Clone, Debug.
 
 | Field | Type | Meaning |
 |---|---|---|

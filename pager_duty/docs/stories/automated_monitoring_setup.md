@@ -71,7 +71,7 @@ The call the NOC Board makes when it opens and whenever the bus tells it to refr
 
 ### `ping(self, **kw)` [@ANCHOR: ping]
 
-`GET /api/v1/pager/ping` in `controllers/ping_api.py`: a public (`auth="public"`, no CSRF) liveness answer for the Odoo HTTP stack. Arguments: none used (`**kw` swallows any query string). Returns an HTTP response with `Content-Type: application/json` and body `{"status": "ok"}`. It does no database work and no authentication, so it proves only that a worker answers; the autodiscovered "WSGI HTTP Ping" check polls it. It cannot fail except by the server being down. Tests: `test_01_ping_endpoint` in `tests/test_controllers.py`.
+`GET /api/v1/pager/ping` in `controllers/ping_api.py`: a public (`auth="public"`, no CSRF: cross-site request forgery) liveness answer for the Odoo HTTP stack. Arguments: none used (`**kw` swallows any query string). Returns an HTTP response with `Content-Type: application/json` and body `{"status": "ok"}`. It does no database work and no authentication, so it proves only that a worker answers; the autodiscovered "WSGI HTTP Ping" check polls it. It cannot fail except by the server being down. Tests: `test_01_ping_endpoint` in `tests/test_controllers.py`.
 
 ### `heartbeat(self, hb_uuid, **kw)` [@ANCHOR: heartbeat]
 

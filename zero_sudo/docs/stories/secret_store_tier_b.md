@@ -229,7 +229,7 @@ which systemd collects; no value or request argument is ever logged.
 ### The web account cannot read the credentials
 
 The broker refuses to start on a host where the web process could read its secrets: the file is judged by owner, group, other
-bits and the POSIX access ACL for each account in `deny_readers`.
+bits and the POSIX access ACL (access control list) for each account in `deny_readers`.
 
 #### `check_not_readable(paths, deny_readers, ids=account_ids)` `[@ANCHOR: zero_sudo:secret_broker_check_not_readable]`
 

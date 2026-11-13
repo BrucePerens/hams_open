@@ -14,7 +14,7 @@ Builds a virtual HiQSDR for tests. `desc` is borrowed; the dialect must be `hiqs
 
 ### `fn snapshot(&self) -> Option<TwinSnapshot>` [@ANCHOR: radioctl:radioctl_hiqsdr_twin_snapshot]
 
-Reports the twin's state for the Hamlib oracle batch. Always `Some`. `frequency` is the receive phase word of the last accepted frame converted back to hertz with `word_frequency`; until a frame with a non-zero receive word has been seen it is the description's default frequency, so a freshly opened twin does not report 0 Hz. `mode_code` is the mode byte reduced to its CW bit (0x01) and other bit (0x02); `ptt` is true when the keyed bit 0x08 is set. Immutable, no side effects.
+Reports the twin's state for the Hamlib oracle batch. Always `Some`. `frequency` is the receive phase word of the last accepted frame converted back to hertz with `word_frequency`; until a frame with a non-zero receive word has been seen it is the description's default frequency, so a freshly opened twin does not report 0 Hz. `mode_code` is the mode byte reduced to its CW (continuous wave, Morse code) bit (0x01) and other bit (0x02); `ptt` is true when the keyed bit 0x08 is set. Immutable, no side effects.
 
 ### `fn feed(&mut self, bytes: &[u8], _now: Duration) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_hiqsdr_twin_feed]
 
@@ -32,7 +32,7 @@ Wraps a command string for the Barrett 4100 serial line: a line feed (0x0A), the
 
 ### `pub fn new(desc: RigDescription) -> Result<Barrett4100Engine, RigError>` [@ANCHOR: radioctl:radioctl_barrett4100_engine_new]
 
-Builds the client engine for a Barrett 4100 HF transceiver. `desc` is owned and kept. The dialect must be `barrett4100`, otherwise (or for a non-vendor description) `Unsupported`. The engine starts not yet in remote mode (`entered` false), with an empty buffer and an empty queue of expected answers. No I/O; the remote-mode command is sent with the first operation.
+Builds the client engine for a Barrett 4100 HF (high frequency, 3 to 30 MHz) transceiver. `desc` is owned and kept. The dialect must be `barrett4100`, otherwise (or for a non-vendor description) `Unsupported`. The engine starts not yet in remote mode (`entered` false), with an empty buffer and an empty queue of expected answers. No I/O; the remote-mode command is sent with the first operation.
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_barrett4100_engine_encode]
 
@@ -40,7 +40,7 @@ Builds the bytes for an operation and queues the answers that are expected. `op`
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_barrett4100_engine_feed]
 
-Matches the radio's answers, which are framed by XOFF at the start and XON (0x11) at the end, to the expectations queued by `encode`. A partial answer older than 500 ms is returned as `Inbound::Unrecognised`. For each complete answer the framing is removed, the text trimmed and the oldest expectation consumed. A session answer (reply to the remote-mode command) produces nothing. For a write expectation of n answers: text starting with `s` counts down and the last gives `Inbound::Ack`; any other text gives `Inbound::Nak` immediately and the remaining owed answers of that operation are dropped. For a frequency expectation `gRF<digits>` gives a VFO A frequency observation in hertz, else `Unrecognised`. An answer with nothing expected is `Unrecognised`.
+Matches the radio's answers, which are framed by XOFF at the start and XON (0x11) at the end, to the expectations queued by `encode`. A partial answer older than 500 ms is returned as `Inbound::Unrecognised`. For each complete answer the framing is removed, the text trimmed and the oldest expectation consumed. A session answer (reply to the remote-mode command) produces nothing. For a write expectation of n answers: text starting with `s` counts down and the last gives `Inbound::Ack`; any other text gives `Inbound::Nak` immediately and the remaining owed answers of that operation are dropped. For a frequency expectation `gRF<digits>` gives a VFO (variable frequency oscillator, the tuning control) A frequency observation in hertz, else `Unrecognised`. An answer with nothing expected is `Unrecognised`.
 
 ### `fn link_restored(&mut self) -> Vec<Request>` [@ANCHOR: radioctl:radioctl_barrett4100_engine_link_restored]
 
@@ -70,7 +70,7 @@ Simulates a knob on the radio. `panel` is owned. `Panel::Frequency(hz)` sets bot
 
 ### `pub fn mode_code(mode: Mode) -> Option<u8>` [@ANCHOR: radioctl:radioctl_wj_mode_code]
 
-Maps a shared `Mode` to the three-bit mode field of a WJ-8888 command frame: AM 0, FM 1, CW 2, LSB 5, USB 6. `mode` is passed by value. Any other mode (for example RTTY) returns `None`, which the engine reports as `Unsupported`. Pure.
+Maps a shared `Mode` to the three-bit mode field of a WJ-8888 command frame: AM 0, FM 1, CW 2, LSB (lower sideband) 5, USB 6. `mode` is passed by value. Any other mode (for example RTTY: radio teletype) returns `None`, which the engine reports as `Unsupported`. Pure.
 
 ### `pub fn bcd_digits(hz: Hz) -> [u8; 4]` [@ANCHOR: radioctl:radioctl_wj_bcd_digits]
 
@@ -78,7 +78,7 @@ Reproduces Hamlib's BCD routine for the WJ-8888 frequency. `hz` is in hertz and 
 
 ### `pub fn command_frame(hz: Hz, mode: u8, width: u8) -> [u8; FRAME_LEN]` [@ANCHOR: radioctl:radioctl_wj_command_frame]
 
-Builds the ten byte command frame the WJ-8888 receiver takes. `hz` is the frequency in hertz, `mode` is the three-bit mode code from `mode_code` and `width` is the three-bit IF bandwidth code (only the low three bits of each are used). Byte 0 is 0x48; bytes 1 to 4 carry the BCD digits of the frequency shifted into the frame's 6-bit groups (so the lowest bit of the 100 Hz digit is lost); byte 5 holds width and mode; bytes 6 to 8 carry the fixed BFO (no shift, 0x400) and full RF gain (0x7f), and the AGC (automatic gain control) is slow. Byte 9 is zero. Returns a fixed array; pure. This follows Hamlib's captured frames and is not verified on a radio.
+Builds the ten byte command frame the WJ-8888 receiver takes. `hz` is the frequency in hertz, `mode` is the three-bit mode code from `mode_code` and `width` is the three-bit IF bandwidth code (only the low three bits of each are used). Byte 0 is 0x48; bytes 1 to 4 carry the BCD digits of the frequency shifted into the frame's 6-bit groups (so the lowest bit of the 100 Hz digit is lost); byte 5 holds width and mode; bytes 6 to 8 carry the fixed BFO (no shift, 0x400) and full RF (radio frequency) gain (0x7f), and the AGC (automatic gain control) is slow. Byte 9 is zero. Returns a fixed array; pure. This follows Hamlib's captured frames and is not verified on a radio.
 
 ### `pub fn decode_frame(buf: &[u8]) -> Option<(Hz, u8)>` [@ANCHOR: radioctl:radioctl_wj_decode_frame]
 
@@ -90,7 +90,7 @@ Builds the client engine for a WJ-8888 receiver. `desc` is owned and kept. The d
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_wj_engine_encode]
 
-Updates the engine's frequency or mode and returns the whole ten byte command frame as the request (no reply expected). `op` is borrowed. `SetFrequency(A, hz)` must be 5 kHz to 30 MHz inclusive or `Unsupported` is returned. `SetMode` must have a code in `mode_code` else `Unsupported`, and it also sets the width code to 2 (the width Hamlib's wire shows after a mode write). Other operations (there are no reads and no PTT; this is a receiver) or missing capabilities return `Unsupported`. State is changed only on success.
+Updates the engine's frequency or mode and returns the whole ten byte command frame as the request (no reply expected). `op` is borrowed. `SetFrequency(A, hz)` must be 5 kHz to 30 MHz inclusive or `Unsupported` is returned. `SetMode` must have a code in `mode_code` else `Unsupported`, and it also sets the width code to 2 (the width Hamlib's wire shows after a mode write). Other operations (there are no reads and no PTT: push-to-talk; this is a receiver) or missing capabilities return `Unsupported`. State is changed only on success.
 
 ### `fn feed(&mut self, bytes: &[u8], _now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_wj_engine_feed]
 

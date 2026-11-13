@@ -136,7 +136,7 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
 - Streaming at 2.0/2.048/3/6/8/9/10 MHz ADC clocks in all four sample formats, 0 counter
   gaps in steady state (one occasional gap in the first blocks after START).
 - Tuning in every supported band: the internal 24 MHz harmonics land within one 122 Hz FFT (fast Fourier transform)
-  bin of the expected offset in VHF, B3, HF AM, the 250-375 MHz AM down-conversion band,
+  bin of the expected offset in VHF (very high frequency, 30 to 300 MHz), B3, HF (high frequency, 3 to 30 MHz) AM, the 250-375 MHz AM down-conversion band,
   B4/5 and L band (`tests/hil.rs`).
 - Changes while streaming, all with 0 counter gaps (`hil_live_reconfiguration`,
   `hil_gaps_during_control`): retune in band and across bands, gain, antenna A/B, notch,
@@ -144,7 +144,7 @@ clock and reg 0x05 to their close values, alt 0, release the interface.
   moves +0.98 kHz at 95.8 MHz, as expected), sample rate 2 -> 6 -> 2 MHz (STOP, alt change,
   restart handled inside `set_sample_rate`), and the three low-IF modes.
 - Low-IF modes: stream at the halved rate (1, 3, 4.096 MS/s) with the 504-per-block counter
-  step confirmed (no gaps). **Where RF lands in the low-IF output is not characterised yet**
+  step confirmed (no gaps). **Where RF (radio frequency) lands in the low-IF output is not characterised yet**
   (tuned 95.8 MHz, the strongest line was at -200 kHz / -600 kHz / -1712 kHz for the 450 k /
   1.62 M / 2.048 M modes); `set_frequency` writes the same LO as in zero IF, whereas the API moves the LO up by the IF
   in these modes (`docs/PROTOCOL.md` 2.14; correcting it is deferred),

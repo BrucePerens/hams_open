@@ -29,11 +29,11 @@ The reverse of `mode_code`: finds the `Mode` for a wire code received from the r
 
 ### `pub fn ic7300() -> RigDescription` [@ANCHOR: radioctl:radioctl_core_description_ic7300]
 
-Constructs an in-memory Icom IC-7300 style description: family CI-V, radio address 0x94, controller 0xE0, five frequency bytes, standard command set, no echo, the capabilities read and set frequency, read and set mode, read and set PTT, signal, power, CW and transceive, the CI-V mode codes 0x00 to 0x08, a 1000 ms timeout with 3 retries, and a default of 14.074 MHz USB. It comes from our own simulator and relay bridge code, not a radio, and is unverified; the shipped `rigs/` files are the real data. Used by tests and the virtual rig. Allocates a new value each call and cannot fail.
+Constructs an in-memory Icom IC-7300 style description: family CI-V, radio address 0x94, controller 0xE0, five frequency bytes, standard command set, no echo, the capabilities read and set frequency, read and set mode, read and set PTT, signal, power, CW (continuous wave, Morse code) and transceive, the CI-V mode codes 0x00 to 0x08, a 1000 ms timeout with 3 retries, and a default of 14.074 MHz USB. It comes from our own simulator and relay bridge code, not a radio, and is unverified; the shipped `rigs/` files are the real data. Used by tests and the virtual rig. Allocates a new value each call and cannot fail.
 
 ### `pub fn ts2000() -> RigDescription` [@ANCHOR: radioctl:radioctl_core_description_ts2000]
 
-Constructs an in-memory Kenwood TS-2000 style description: family Kenwood ASCII, model id 19, classic dialect, the capabilities read and set frequency, second VFO, read and set mode, set PTT, signal and transceive, ASCII mode codes `1` to `7` and `9`, a 200 ms timeout with 3 retries, and a default of 14.074 MHz USB. It is derived from our own bridge code and is unverified against a radio. Used by tests and the virtual rig. Pure, allocates, cannot fail.
+Constructs an in-memory Kenwood TS-2000 style description: family Kenwood ASCII, model id 19, classic dialect, the capabilities read and set frequency, second VFO (variable frequency oscillator, the tuning control), read and set mode, set PTT, signal and transceive, ASCII mode codes `1` to `7` and `9`, a 200 ms timeout with 3 retries, and a default of 14.074 MHz USB. It is derived from our own bridge code and is unverified against a radio. Used by tests and the virtual rig. Pure, allocates, cannot fail.
 
 ## `crates/radioctl-protocols/src/alinco.rs`
 
@@ -97,7 +97,7 @@ Decodes a Drake read-frequency answer of the form `*fffff.ff*uHz` (CR and LF alr
 
 ### `pub fn decode_mode(mode: u8, width: u8) -> Option<Mode>` [@ANCHOR: radioctl:radioctl_drake_decode_mode]
 
-Decodes the mode from the mode and width bytes of an `RM` state line (bytes 3 and 4 of the 8-byte line; the synchronous-detector byte is ignored). The width byte, after masking flag bits, must be an ASCII digit `0` to `4`; if it is a plain digit `0` to `4` (bit 3 clear) the lower-sideband family applies (0 LSB, 1 RTTY, 2 FM), and with bit 3 set the upper family (0 USB, 1 CW, 2 AM). The mode byte is masked with 0x33 first. Unknown combinations return `None`. Pure.
+Decodes the mode from the mode and width bytes of an `RM` state line (bytes 3 and 4 of the 8-byte line; the synchronous-detector byte is ignored). The width byte, after masking flag bits, must be an ASCII digit `0` to `4`; if it is a plain digit `0` to `4` (bit 3 clear) the lower-sideband family applies (0 LSB, 1 RTTY: radio teletype, 2 FM), and with bit 3 set the upper family (0 USB, 1 CW, 2 AM). The mode byte is masked with 0x33 first. Unknown combinations return `None`. Pure.
 
 ### `pub fn new(desc: RigDescription) -> Result<DrakeEngine, RigError>` [@ANCHOR: radioctl:radioctl_drake_engine_new]
 

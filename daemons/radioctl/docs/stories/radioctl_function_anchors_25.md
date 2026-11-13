@@ -33,7 +33,7 @@ Called before a normal command is written. While an abandoned command's reply ma
 
 ### `fn apply_set(&mut self, op: &Op, source: Source)` [@ANCHOR: radioctl:radioctl_core_actor_apply_set]
 
-Records a successful set command in the cache, as an observation with `source`, so a reader sees the new value at once and polling reconciles it later: frequency, mode, PTT (push to talk), split, RIT (receiver incremental tuning) and XIT (transmitter incremental tuning), offset, filter width, levels, scope settings and the other set ops each become the matching observation. Setting split also moves the transmit VFO in the same step (entering split first sets the transmit VFO to the other one; leaving first clears the split flag) so the derived transmit frequency changes once and never names the wrong VFO. A keying result arms the watchdog through `observe`, `SendCw` arms it directly, and `StopCw` changes nothing because the rig may still be keyed. Called only after the rig accepted the command or none was expected.
+Records a successful set command in the cache, as an observation with `source`, so a reader sees the new value at once and polling reconciles it later: frequency, mode, PTT (push to talk), split, RIT (receiver incremental tuning) and XIT (transmitter incremental tuning), offset, filter width, levels, scope settings and the other set ops each become the matching observation. Setting split also moves the transmit VFO (variable frequency oscillator, the tuning control) in the same step (entering split first sets the transmit VFO to the other one; leaving first clears the split flag) so the derived transmit frequency changes once and never names the wrong VFO. A keying result arms the watchdog through `observe`, `SendCw` arms it directly, and `StopCw` changes nothing because the rig may still be keyed. Called only after the rig accepted the command or none was expected.
 
 ### `async fn await_reply( &mut self, expect: ReplyKind, seq: u64, until: Instant, source: Source, may_preempt: bool, ) -> Wait` [@ANCHOR: radioctl:radioctl_core_actor_await_reply]
 
@@ -65,7 +65,7 @@ Unkeys the rig when the actor cannot trust its state: when the outcome of a tran
 
 ### `async fn unkey_on_stop(&mut self)` [@ANCHOR: radioctl:radioctl_core_actor_unkey_on_stop]
 
-Runs when the last handle is gone and the actor is about to end. If the cached PTT is on, or the transmit gate is open (so the rig could have been keyed without the cache knowing), it unkeys through `unkey_fail_closed` before the actor ends, so a dropped handle never leaves RF on the air. Best effort: a failure is counted and alarmed there but nobody is left to hear it. When the rig is receiving and the gate is closed it does nothing.
+Runs when the last handle is gone and the actor is about to end. If the cached PTT is on, or the transmit gate is open (so the rig could have been keyed without the cache knowing), it unkeys through `unkey_fail_closed` before the actor ends, so a dropped handle never leaves RF (radio frequency) on the air. Best effort: a failure is counted and alarmed there but nobody is left to hear it. When the rig is receiving and the gate is closed it does nothing.
 
 ### `async fn restore_session(&mut self)` [@ANCHOR: radioctl:radioctl_core_actor_restore_session]
 

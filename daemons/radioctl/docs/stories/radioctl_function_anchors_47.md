@@ -48,7 +48,7 @@ Classifies the current slot of a radio: `Absent` when there is no slot; `Retryin
 
 ### `async fn unkey_pass(&self, radio: &DeviceId, handle: &RigHandle) -> Result<KnownState, StationError>` [@ANCHOR: radioctl:radioctl_station_actorlink_unkey_pass]
 
-Runs on a newly spawned actor before it is reported up. If the actor's capabilities include `SetPtt`, it sends `Op::SetPtt(false)` with `execute_within` and the unkey timeout; this releases a transmitter that may have been left keyed by a dead link. A failure or timeout returns a `Driver` `StationError` naming the radio. A radio that cannot key skips the unkey and says so in the journal. It then reads frequency (VFO A) and mode freshly and returns them in a `KnownState`; read failures are ignored and leave those fields unset. Settings are never restored. Async, talks to the radio.
+Runs on a newly spawned actor before it is reported up. If the actor's capabilities include `SetPtt`, it sends `Op::SetPtt(false)` with `execute_within` and the unkey timeout; this releases a transmitter that may have been left keyed by a dead link. A failure or timeout returns a `Driver` `StationError` naming the radio. A radio that cannot key skips the unkey and says so in the journal. It then reads frequency (VFO (variable frequency oscillator, the tuning control) A) and mode freshly and returns them in a `KnownState`; read failures are ignored and leave those fields unset. Settings are never restored. Async, talks to the radio.
 
 ### `fn name(&self) -> String` [@ANCHOR: radioctl:radioctl_station_livekey_name]
 

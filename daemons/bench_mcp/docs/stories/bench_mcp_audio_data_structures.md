@@ -42,7 +42,7 @@
 
 ### `Spectrum` [@ANCHOR: bench_mcp:bench_mcp_audio_analysis_spectrum_type]
 
-**Purpose and location.** The magnitude spectrum of one recording from an FFT: bin spacing and linear amplitude per bin from 0 Hz to Nyquist. Built by `Spectrum::new` (bad FFT lengths are errors) and used for peak finding and spectrum correlation. Defined in `daemons/bench_mcp/src/audio/analysis.rs:117` as a pub `struct`. It derives Clone, Debug.
+**Purpose and location.** The magnitude spectrum of one recording from an FFT (fast Fourier transform): bin spacing and linear amplitude per bin from 0 Hz to Nyquist. Built by `Spectrum::new` (bad FFT lengths are errors) and used for peak finding and spectrum correlation. Defined in `daemons/bench_mcp/src/audio/analysis.rs:117` as a pub `struct`. It derives Clone, Debug.
 
 | Field | Type | Meaning |
 |---|---|---|

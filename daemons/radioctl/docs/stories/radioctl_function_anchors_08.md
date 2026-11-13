@@ -29,7 +29,7 @@ Appends one byte to an outgoing CommRadio frame, escaping the three reserved val
 
 ### `fn table_of(vfo: Vfo) -> u8` [@ANCHOR: radioctl:radioctl_gomspace_table_of]
 
-Gives the GS100 configuration table number for a VFO: VFO A is table 1 (receive) and VFO B is table 5 (transmit). The engine sends `param mem <n>` with this number before each frequency get or set, so setting VFO B changes the transmit frequency table, not a receive one. Takes the VFO by value, exhaustive, cannot fail. Pure.
+Gives the GS100 configuration table number for a VFO (variable frequency oscillator, the tuning control): VFO A is table 1 (receive) and VFO B is table 5 (transmit). The engine sends `param mem <n>` with this number before each frequency get or set, so setting VFO B changes the transmit frequency table, not a receive one. Takes the VFO by value, exhaustive, cannot fail. Pure.
 
 ### `fn slot(&mut self) -> Option<&mut Hz>` [@ANCHOR: radioctl:radioctl_gomspace_twin_slot]
 
@@ -107,7 +107,7 @@ Applies a scripted front-panel action to the twin: `Panel::Frequency(hz)` sets t
 
 ## `crates/radioctl-protocols/src/drt1.rs`
 
-The DRT1 has no byte stream: the host programs an AD9951 DDS by wiggling the serial port's RTS, DTR and break lines, so these functions build and decode line sequences (`LineStep`: a line, asserted or not, and a hold time).
+The DRT1 has no byte stream: the host programs an AD9951 DDS by wiggling the serial port's RTS (request to send), DTR (data terminal ready) and break lines, so these functions build and decode line sequences (`LineStep`: a line, asserted or not, and a hold time).
 
 ### `pub fn cfr2_word(ref_mult: u32, pump_ua: u32) -> u32` [@ANCHOR: radioctl:radioctl_drt1_cfr2_word]
 

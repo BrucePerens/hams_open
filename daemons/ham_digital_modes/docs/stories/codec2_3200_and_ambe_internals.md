@@ -94,7 +94,7 @@ of the arrays is unused.
 
 The Q23 integer twin of `Model::new`, used by the no-float Codec2 3200 path. It computes the harmonic count as `pi_q23() / wo_q23.max(1)`
 capped at `MAX_AMP`, so a zero `wo_q23` is treated as one and saturates to the same maximum count the float version reaches through
-IEEE infinity. It also precomputes `k_q23 = synth_k_q23(wo)`, the Q23 value of `wo * FFT_ENC / TAU` the synthesis uses to find FFT bins.
+IEEE infinity. It also precomputes `k_q23 = synth_k_q23(wo)`, the Q23 value of `wo * FFT_ENC / TAU` the synthesis uses to find FFT (fast Fourier transform) bins.
 
 | Argument | Type | Meaning |
 |---|---|---|
@@ -806,7 +806,7 @@ the transmit path; the check does not validate the callsign's content, only its 
 
 ### `two_tone_window_len` [@ANCHOR: ham_digital_modes:two_tone_window_len]
 
-Chooses the analysis window length, in samples, for the two-tone timing feature of the RTTY timing characteriser. The window must span at
+Chooses the analysis window length, in samples, for the two-tone timing feature of the RTTY (radio teletype) timing characteriser. The window must span at
 least one cycle of the shift frequency (`ceil(sample_rate / shift_hz)`) and be shorter than one symbol at the fastest baud rate
 searched (`floor(sample_rate / max_baud)`, exclusive), so that its own geometry artifact cannot land in the baud range and pass as an
 answer. It returns the midpoint of that band.

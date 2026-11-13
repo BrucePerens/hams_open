@@ -33,7 +33,7 @@ Full design context: `docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md` (ha
 
 ## Scenario: The report packet an admin actually reviews
 
-5. The whole report packet (reported user, QSO recording playback URL, hams.com reporting contact)
+5. The whole report packet (reported user, QSO (two-way radio contact) recording playback URL, hams.com reporting contact)
    is built as a snapshot on the ticket itself the moment it's created, deliberately never
    recomputed later, so a later config or data change can't retroactively rewrite what an
    already-filed report actually said `[@ANCHOR: hams_helpdesk:COMM_ncmec_assemble_report_packet]`.

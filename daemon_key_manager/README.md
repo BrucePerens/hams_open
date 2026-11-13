@@ -185,7 +185,7 @@ writes these files (`remote_self_rotation` is set), neither the cron nor `action
 
 **Things that are not among the 32 keys.** `hams_relay_bridge` presents `BRIDGE_API_KEY` from `bridge.env`, matched against the Odoo
 parameter `ham_relay_bridge.api_key`; it is not a registry key and is not rotated. `hams_auth_gateway`, `hams_data_relay`,
-`shack_console` and `hams_simulated_band` hold no Odoo API key (the gateway's only HTTP client fetches public revocation lists and CRLs). `pager_mcp_server.py`
+`shack_console` and `hams_simulated_band` hold no Odoo API key (the gateway's only HTTP client fetches public revocation lists and CRLs: certificate revocation list). `pager_mcp_server.py`
 uses `PAGER_MCP_API_KEY` from its environment, creates a client per tool call, is not registered here and is not deployed.
 `zero_sudo/daemon/json_rpc_client.py` reloads on 401 and has no caller. No Odoo module other than this one reads a key file or holds a
 daemon key in memory (searched: `/opt/hams/etc/keys`, `ODOO_RPC_KEY`, `Bearer`, `/json/2` across `hams_open` and `hams_com`).

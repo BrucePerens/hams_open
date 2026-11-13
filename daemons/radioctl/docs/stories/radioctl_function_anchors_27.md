@@ -8,7 +8,7 @@ Transmit gate: nothing here opens the transmit gate. The CI-V functions only enc
 
 ### `fn front_panel(&mut self, panel: Panel) -> Result<Vec<u8>, String>` [@ANCHOR: radioctl:radioctl_conformance_stand_in_front_panel]
 
-Makes the stand-in radio behave as if the operator turned a knob, and returns the bytes the radio would send unasked (an unsolicited report) so a transcript replay can check them. `&mut self` advances the stand-in's state; `panel` is the typed knob change by value (frequency, mode, PTT, signal, split, RIT offset).
+Makes the stand-in radio behave as if the operator turned a knob, and returns the bytes the radio would send unasked (an unsolicited report) so a transcript replay can check them. `&mut self` advances the stand-in's state; `panel` is the typed knob change by value (frequency, mode, PTT: push-to-talk, signal, split, RIT offset).
 The generic virtual rig accepts every knob through `panel_change`. The virtual FlexRadio accepts only frequency (tune), mode and PTT (MOX) and returns an `Err` string for any other knob; the vendor twin handles it itself. The HPSDR bridge, the radiod bridge and the USB board have no unsolicited output and return an `Err` naming that. Errors are messages, never panics. No hardware is touched.
 
 ### `fn feed(&mut self, bytes: &[u8]) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_conformance_bridge_stand_in_feed]
@@ -69,7 +69,7 @@ Returns `None` for any other length or when a nibble of a digit byte is above 9 
 
 ### `fn filter_index_to_hz(am: bool, index: u8) -> Option<u32>` [@ANCHOR: radioctl:radioctl_civ_filter_index_to_hz]
 
-Converts an Icom filter index, as read with command `1A 03`, into a filter width in hertz. `am` selects the table: in AM the index 0 to 49 gives 200 to 10000 Hz in steps of 200; otherwise (SSB, CW, RTTY) the index 0 to 9 gives 50 to 500 Hz in steps of 50 and 10 to 40 gives 600 to 3600 Hz in steps of 100.
+Converts an Icom filter index, as read with command `1A 03`, into a filter width in hertz. `am` selects the table: in AM the index 0 to 49 gives 200 to 10000 Hz in steps of 200; otherwise (SSB: single sideband, CW: continuous wave, Morse code, RTTY: radio teletype) the index 0 to 9 gives 50 to 500 Hz in steps of 50 and 10 to 40 gives 600 to 3600 Hz in steps of 100.
 `index` is a plain binary index (the BCD decoding is done by the caller). Returns `None` outside the table. Pure, no I/O.
 
 ### `fn filter_hz_to_index(am: bool, hz: u32) -> Option<u8>` [@ANCHOR: radioctl:radioctl_civ_filter_hz_to_index]
@@ -185,7 +185,7 @@ The value is `(index * 7 + sweep) mod (amplitude_max + 1)`, with wrapping arithm
 
 ### `fn civ_slot(&mut self, other: bool) -> &mut Hz` [@ANCHOR: radioctl:radioctl_virtual_civ_slot]
 
-Picks the frequency cell of the simulated radio a CI-V command acts on. `&mut self`; `other` is false for the selected VFO and true for the other one. It returns a mutable reference to `freq_a` or `freq_b` in the state, depending on whether VFO B is the selected one (`civ_b_selected`) and on `other`.
+Picks the frequency cell of the simulated radio a CI-V command acts on. `&mut self`; `other` is false for the selected VFO (variable frequency oscillator, the tuning control) and true for the other one. It returns a mutable reference to `freq_a` or `freq_b` in the state, depending on whether VFO B is the selected one (`civ_b_selected`) and on `other`.
 This is how the commands that address the selected VFO and the ones that address the unselected VFO share code. No errors; changes nothing by itself, the caller writes through the reference.
 
 ### `fn civ_set_freq(&mut self, params: &CivParams, other: bool, bcd: &[u8]) -> CivReply` [@ANCHOR: radioctl:radioctl_virtual_civ_set_freq]

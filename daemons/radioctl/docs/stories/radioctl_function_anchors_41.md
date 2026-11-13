@@ -19,7 +19,7 @@ The virtual JRC radio's reaction to one command line (CR already removed). `stat
 
 ### `fn set(&mut self, kind: Kind, state: &mut RigState, line: &str)` [@ANCHOR: radioctl:radioctl_jrc_twin_set]
 
-Applies a setting line to the virtual radio's shared state. A line starting `F` has trailing `A` or `B` (the JST VFO letter) removed and the rest parsed as a decimal `u64`; on success `state.freq_a` is set, multiplied by 10 for the NRD-525 (units of 10 Hz) and as hertz otherwise. A line starting `D` takes its first following byte as a mode code and, when the description knows it, sets `state.mode`. Anything else, an unparseable number or an unknown mode code is silently ignored, because these radios never refuse a command. `kind` is the model variant (copied), `state` is mutated, `line` borrowed. No reply, no I/O.
+Applies a setting line to the virtual radio's shared state. A line starting `F` has trailing `A` or `B` (the JST VFO (variable frequency oscillator, the tuning control) letter) removed and the rest parsed as a decimal `u64`; on success `state.freq_a` is set, multiplied by 10 for the NRD-525 (units of 10 Hz) and as hertz otherwise. A line starting `D` takes its first following byte as a mode code and, when the description knows it, sets `state.mode`. Anything else, an unparseable number or an unknown mode code is silently ignored, because these radios never refuse a command. `kind` is the model variant (copied), `state` is mutated, `line` borrowed. No reply, no I/O.
 
 ## `crates/radioctl-protocols/src/icom_pcr.rs`
 
@@ -29,7 +29,7 @@ Builds the protocol engine for an Icom PCR computer-controlled receiver (IC-PCR1
 
 ### `pub fn tuning_command(hz: Hz, mode: u8, filter: u8) -> Option<String>` [@ANCHOR: radioctl:radioctl_pcr_tuning_command]
 
-Spells the PCR `K0` tuning command, which sets frequency, mode and filter in one. `hz` is the frequency in hertz and must not exceed 9,999,999,999 (the ten digits it is written in), otherwise `None`. `mode` is the radio's mode character (`0` LSB, `1` USB, `2` AM, `3` CW, `5` FM, `6` WFM) and `filter` the filter character (the engine passes `2`, 15 kHz); neither is validated here. The result is `K0`, ten zero-padded digits, `0`, the mode, `0`, the filter and `00`, ended by a line feed. Public so the virtual twin and tests build the same bytes. Pure.
+Spells the PCR `K0` tuning command, which sets frequency, mode and filter in one. `hz` is the frequency in hertz and must not exceed 9,999,999,999 (the ten digits it is written in), otherwise `None`. `mode` is the radio's mode character (`0` LSB: lower sideband, `1` USB, `2` AM, `3` CW: continuous wave, Morse code, `5` FM, `6` WFM) and `filter` the filter character (the engine passes `2`, 15 kHz); neither is validated here. The result is `K0`, ten zero-padded digits, `0`, the mode, `0`, the filter and `00`, ended by a line feed. Public so the virtual twin and tests build the same bytes. Pure.
 
 ### `fn from_description(desc: &RigDescription) -> Result<PcrDialect, RigError>` [@ANCHOR: radioctl:radioctl_pcr_dialect_from_description]
 
@@ -71,7 +71,7 @@ Builds one complete command sentence. `id` is the radio's remote id (the control
 
 ### `fn from_description(desc: &RigDescription) -> Result<MarineDialect, RigError>` [@ANCHOR: radioctl:radioctl_marine_dialect_from_description]
 
-Builds the marine dialect. The `receiver.dialect` string selects the RTTY mode name: `icmarine` uses `J2B`, `icm710` uses `AFS`; any other name returns `ErrorKind::Unsupported` ("unknown marine dialect"). The `receiver.address` is the radio's remote id and must be present and at most 99, else `Unsupported` ("marine description needs a remote id 0 to 99"). The dialect starts with no echoes outstanding. `desc` borrowed. Pure.
+Builds the marine dialect. The `receiver.dialect` string selects the RTTY (radio teletype) mode name: `icmarine` uses `J2B`, `icm710` uses `AFS`; any other name returns `ErrorKind::Unsupported` ("unknown marine dialect"). The `receiver.address` is the radio's remote id and must be present and at most 99, else `Unsupported` ("marine description needs a remote id 0 to 99"). The dialect starts with no echoes outstanding. `desc` borrowed. Pure.
 
 ### `fn encode(&mut self, desc: &RigDescription, op: &Op) -> Result<(Vec<u8>, ReplyKind), RigError>` [@ANCHOR: radioctl:radioctl_marine_dialect_encode]
 

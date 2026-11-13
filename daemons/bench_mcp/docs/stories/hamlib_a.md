@@ -89,7 +89,7 @@ It is called at the start of almost every rig tool (status, get, watch, set, mem
 Steps: (1) `rigd::endpoint` returns the address: the configured host and port for an existing rig, or `127.0.0.1` and the daemon's port for a managed rig, starting
 the daemon on demand (a leftover daemon of a dead server is stopped first, a daemon that failed four times in ten minutes is not restarted by itself, a
 missing or unusable serial device is reported before the start). (2) If the rig's config has a `transmit` attestation, `tx::startup_check` runs once per rig
-name per run of this server: it sends `set_ptt 0` (un-key; a receiving rig ignores it), reads the PTT state and any state file a crashed server left behind,
+name per run of this server: it sends `set_ptt 0` (un-key; a receiving rig ignores it), reads the PTT (push-to-talk) state and any state file a crashed server left behind,
 and if it finds the rig keyed it also sets the lowest power setting and leaves a note for `radioctl_startup_note`. This happens on the first call of any tier,
 even a `read_only` status call, because the question "did a crash leave the rig transmitting" must be answered before anything else; it never keys.
 (3) `Client::connect` opens the TCP connection with `reply_timeout_s` as the reply limit.
@@ -187,8 +187,8 @@ running keyed interval is ended by its own release or by its watchdog). Side eff
 
 ## Receiver control (`control.rs`, tier `read_config`)
 
-Nothing in this file keys the transmitter. The tools refuse, before sending anything, every level and function that sets what the transmitter does (RF power,
-microphone gain, key speed, compression, VOX, tuner, tone, monitor, break-in, stored morse and voice messages: the list `TRANSMIT_SIDE`), they refuse to act while the
+Nothing in this file keys the transmitter. The tools refuse, before sending anything, every level and function that sets what the transmitter does (RF (radio frequency) power,
+microphone gain, key speed, compression, VOX: voice-operated transmit, tuner, tone, monitor, break-in, stored morse and voice messages: the list `TRANSMIT_SIDE`), they refuse to act while the
 rig reports PTT on, and they send only these commands: `set_vfo`, `set_freq`, `set_mode`, `set_split_vfo`, `set_rit`, `set_xit`, `set_level`, `set_func`, `set_mem` and reads.
 There is no band check for transmitting here because nothing here can transmit; the receive-range check (`radioctl_freq_guard`) is the only frequency check, and the
 transmit lock, tier and gate (`full` tier, attestation, owner's ranges, load check, watchdog) belong to the transmit tools. `split` and `xit` change which frequency a
@@ -208,7 +208,7 @@ Tests: `tests.rs`. Related: `radioctl_dump_ranges`, `radioctl_combine_ranges`, `
 `parse_dump_ranges(lines: &[String]) -> (Vec<(f64, f64)>, Vec<TxRange>)` reads the frequency lists out of the lines of a `dump_state` reply. `TxRange` is
 `(low_hz, high_hz, lowest_power_mw, highest_power_mw)` (`f64`s). The reply starts with three single-value lines (protocol version, model, region), which are skipped; then
 the receive list, ended by an all-zero line, then the transmit list, ended by a second all-zero line. Each list line has seven whitespace-separated fields: low and high
-frequency in Hz, modes mask, lowest power, highest power, VFO mask, antenna mask. The parser takes fields 0 and 1 as Hz; for the transmit list it takes fields 3 and 4 as
+frequency in Hz, modes mask, lowest power, highest power, VFO (variable frequency oscillator, the tuning control) mask, antenna mask. The parser takes fields 0 and 1 as Hz; for the transmit list it takes fields 3 and 4 as
 power (a field that is not a number becomes `-1.0`, as radioctld writes `-1 -1` for receive lines). The first line that does not have seven fields, or whose first two fields are
 not numbers, ends the parse silently, so a malformed or truncated reply gives the ranges found so far, possibly none. Returns `(receive, transmit)`; both may be empty. A pure function; no
 errors and no panics. Receive ranges feed `rx_ranges`; the transmit list is used by the transmit path to check the owner's frequency against the rig's own transmit range before
@@ -338,7 +338,7 @@ restores the rig. Blocking and sleeping on the calling thread; no lock of its ow
 ## The connection test (`diag.rs`, tier `read_only`)
 
 The tool `bench_radioctl_diagnose` answers "why does my rig not answer". It reads the configuration and the system. It never opens the serial port and never starts the daemon: opening a serial port can change the
-DTR and RTS lines, and some interfaces key the transmitter from them. It does talk to a daemon that is already running (one `get_freq`).
+DTR (data terminal ready) and RTS (request to send) lines, and some interfaces key the transmitter from them. It does talk to a daemon that is already running (one `get_freq`).
 
 ### `radioctl_device_holders` [@ANCHOR: radioctl_device_holders]
 
@@ -371,7 +371,7 @@ Transmitter: nothing here can key; the only rig traffic is one `get_freq` read t
 
 ## Time-station detection (`detect.rs`)
 
-Finding a real signal in the audio of a receiver, used by the receiver test and by the load plausibility check (a dummy load must not hear WWV). All functions take mono samples `&[f32]` at full scale 1.0 and a sample rate in Hz, and
+Finding a real signal in the audio of a receiver, used by the receiver test and by the load plausibility check (a dummy load must not hear WWV: the NIST time-signal station). All functions take mono samples `&[f32]` at full scale 1.0 and a sample rate in Hz, and
 are pure. A time station (WWV, WWVH) sends a 1 kHz (WWV) or 1.2 kHz (WWVH) tick every second and, at set minutes, 440, 500 and 600 Hz tones; the module does not rely on the schedule. Mains hum (60 or 50 Hz and its harmonics) is
 recognised as a comb of peaks and is not a signal; the harmonics that coincide with a station tone are left out of the tone check. The constants `TIME_TONES_HZ` = 440, 500, 600, 1000, 1200 and `TICK_HZ` = 1000, 1200 are shared by all of them. Levels are in dBFS
 (`audio::analysis::db`: 20 log10 of the amplitude, -200 for silence).

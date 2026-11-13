@@ -6,7 +6,7 @@ Function anchors for the `radioctl-protocols` crate (CODAN, Dorji, Guohe and Kac
 
 ### `pub fn new(desc: &RigDescription) -> Result<CodanTwin, RigError>` [@ANCHOR: radioctl:radioctl_codan_twin_new]
 
-Builds a virtual CODAN radio (the "twin") in the state the rig description names. It is called by the twin factory and by tests. `desc` is borrowed and read only: its vendor dialect must be `codan`, its `default_frequency` (hertz) becomes both the receive and transmit frequency, and its `default_mode` is turned into a mode code through `mode_code` (falling back to `U`, upper sideband, if the description has none). PTT starts off and the receive buffer starts empty. Returns `RigError` of kind `Unsupported` if the description is not a vendor serial one (from `vendor_of`) or the dialect is not `codan`. Pure construction: no I/O, no clock.
+Builds a virtual CODAN radio (the "twin") in the state the rig description names. It is called by the twin factory and by tests. `desc` is borrowed and read only: its vendor dialect must be `codan`, its `default_frequency` (hertz) becomes both the receive and transmit frequency, and its `default_mode` is turned into a mode code through `mode_code` (falling back to `U`, upper sideband, if the description has none). PTT (push-to-talk) starts off and the receive buffer starts empty. Returns `RigError` of kind `Unsupported` if the description is not a vendor serial one (from `vendor_of`) or the dialect is not `codan`. Pure construction: no I/O, no clock.
 
 ### `fn answer(&mut self, line: &str) -> String` [@ANCHOR: radioctl:radioctl_codan_twin_answer]
 
@@ -32,7 +32,7 @@ Maps the dialect name of a Dorji module description to its band: `dra818u` gives
 
 ### `pub fn contains(self, hz: u64) -> bool` [@ANCHOR: radioctl:radioctl_dorji_band_contains]
 
-Says whether a frequency is inside the range the module can tune. `hz` is in hertz. UHF accepts 400,000,000 to 480,000,000 inclusive and VHF accepts 134,000,000 to 174,000,000 inclusive. The check is on the value as given, so callers pass the already rounded channel frequency. It is a capability check of the module, not a licence or band-plan check, and it does not itself prevent a transmission; it is used by the engine to refuse out-of-range tuning and by the twin to answer a bad group command with a refusal. Pure.
+Says whether a frequency is inside the range the module can tune. `hz` is in hertz. UHF accepts 400,000,000 to 480,000,000 inclusive and VHF (very high frequency, 30 to 300 MHz) accepts 134,000,000 to 174,000,000 inclusive. The check is on the value as given, so callers pass the already rounded channel frequency. It is a capability check of the module, not a licence or band-plan check, and it does not itself prevent a transmission; it is used by the engine to refuse out-of-range tuning and by the twin to answer a bad group command with a refusal. Pure.
 
 ### `pub fn channel(hz: Hz) -> Hz` [@ANCHOR: radioctl:radioctl_dorji_channel]
 
@@ -52,7 +52,7 @@ Builds the client engine for a Dorji DRA818 module from a vendor serial descript
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_dorji_engine_encode]
 
-Turns one operation into the module's `AT+DMOSETGROUP` command and the reply to expect (`ReplyKind::Ack`). `op` is borrowed. The module has only a set command, so only `SetFrequency` on VFO A and `SetMode` are supported. A frequency is rounded to a 12.5 kHz channel and must be inside the band, otherwise `Unsupported` ("frequency outside the module's band"); a mode must exist in the description and code `1` selects wide bandwidth, anything else narrow. Every other operation, including `SetPtt` (the module keys from a hardware pin), returns `Unsupported`, as does an operation whose capability the description lacks. The bytes carry the same frequency for transmit and receive, tone codes 0000 and a fixed squelch of 4. On success the engine remembers it is waiting for an answer and clears its receive buffer. Mutates the engine; no I/O; the actor writes the bytes and applies any transmit gate before calling.
+Turns one operation into the module's `AT+DMOSETGROUP` command and the reply to expect (`ReplyKind::Ack`). `op` is borrowed. The module has only a set command, so only `SetFrequency` on VFO (variable frequency oscillator, the tuning control) A and `SetMode` are supported. A frequency is rounded to a 12.5 kHz channel and must be inside the band, otherwise `Unsupported` ("frequency outside the module's band"); a mode must exist in the description and code `1` selects wide bandwidth, anything else narrow. Every other operation, including `SetPtt` (the module keys from a hardware pin), returns `Unsupported`, as does an operation whose capability the description lacks. The bytes carry the same frequency for transmit and receive, tone codes 0000 and a fixed squelch of 4. On success the engine remembers it is waiting for an answer and clears its receive buffer. Mutates the engine; no I/O; the actor writes the bytes and applies any transmit gate before calling.
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_dorji_engine_feed]
 

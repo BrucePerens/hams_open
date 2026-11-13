@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Story: Tests Run As the Users of Production
 
-As a developer, I want a test to run code as the people who run it on hams.com, so that an access rule, an ACL row or a cron cannot pass the suite
+As a developer, I want a test to run code as the people who run it on hams.com, so that an access rule, an ACL (access control list) row or a cron cannot pass the suite
 while failing for every real user. The decision and the incidents behind it are in `hams_shared/docs/adrs/0111_tests_run_as_the_personas_of_production.md`.
 
 All of it is in `zero_sudo/tests/test_persona_support.py` (a support module, not a test file; it is imported by the test base classes

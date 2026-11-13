@@ -31,7 +31,7 @@ get. No private key is ever read.
     more urgent than a near one. Otherwise it prints the days left and exits 1 with the severity from the ladder, or exits 0
     with a healthy message (entry `main` below).
 
-`check_auth_cert_expiry.py --profile turn` (entry `--profile turn` below) does the same for the members-only TURN server's certificate (`/etc/hams/turn/turn.crt`, served by
+`check_auth_cert_expiry.py --profile turn` (entry `--profile turn` below) does the same for the members-only TURN (Traversal Using Relays around network address translation) server's certificate (`/etc/hams/turn/turn.crt`, served by
 coturn as turn.hams.com, renewed by `hams-turn-cert-renew.timer`), with the same warning and paging ladder and `HAMS_TURN_CERT_*` overrides.
 
 ## The recordings disk

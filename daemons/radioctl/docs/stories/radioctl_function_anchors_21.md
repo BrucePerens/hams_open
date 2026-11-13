@@ -27,7 +27,7 @@ The reader thread body. It reads up to 256 bytes at a time from its own clone of
 
 ### `pub async fn open_serial(runtime: &Handle, config: SerialConfig) -> Result<SerialLink, RigError>` [@ANCHOR: radioctl:radioctl_core_serial_open]
 
-Opens the serial port described by `config` and returns a `SerialLink`: an in-memory byte stream (4096 bytes of buffer) that the rig actor reads and writes, the control lines (DTR/RTS) handle, a status watch and the counters. `runtime` is borrowed and gets two bridge tasks (stream to command queue, reader chunks to stream); one OS thread (`radioctl-serial`) runs the supervisor. It waits for the first open: it returns `Ok` once that succeeded, or the supervisor's error (a `LinkDown` error from `open_port` naming the port and the cause) after `first_open_attempts` tries, or `LinkDown` if the thread ended before answering or could not be spawned. The write queue holds 64 commands; when full the bridge retries every 5 ms rather than dropping. Dropping the stream sends `Shutdown` and ends the thread and closes the port. It does not itself key anything; DTR and RTS are driven to their configured idle levels when the line control is `Managed`.
+Opens the serial port described by `config` and returns a `SerialLink`: an in-memory byte stream (4096 bytes of buffer) that the rig actor reads and writes, the control lines (DTR/RTS) handle, a status watch and the counters. `runtime` is borrowed and gets two bridge tasks (stream to command queue, reader chunks to stream); one OS thread (`radioctl-serial`) runs the supervisor. It waits for the first open: it returns `Ok` once that succeeded, or the supervisor's error (a `LinkDown` error from `open_port` naming the port and the cause) after `first_open_attempts` tries, or `LinkDown` if the thread ended before answering or could not be spawned. The write queue holds 64 commands; when full the bridge retries every 5 ms rather than dropping. Dropping the stream sends `Shutdown` and ends the thread and closes the port. It does not itself key anything; DTR (data terminal ready) and RTS are driven to their configured idle levels when the line control is `Managed`.
 
 ## `crates/radioctl-core/src/baud_probe.rs`
 
@@ -71,7 +71,7 @@ Creates the IC-7300 CI-V personality. `address` is the CI-V address it answers a
 
 ### `pub fn mode_code(&self, mode: Mode) -> Option<u8>` [@ANCHOR: radioctl:radioctl_splitter_civ_mode_code]
 
-Maps a `Mode` to the IC-7300 CI-V mode byte. The data modes have no byte of their own here and map to the sideband they sit on (`Data` to USB, `DataR` to LSB), which is a stated limit of this personality. Any other mode is looked up in the IC-7300 table; `None` means the IC-7300 has no code for it, and callers answer NG or send no unsolicited mode frame. Pure.
+Maps a `Mode` to the IC-7300 CI-V mode byte. The data modes have no byte of their own here and map to the sideband they sit on (`Data` to USB, `DataR` to LSB: lower sideband), which is a stated limit of this personality. Any other mode is looked up in the IC-7300 table; `None` means the IC-7300 has no code for it, and callers answer NG or send no unsolicited mode frame. Pure.
 
 ### `fn classify(&self, frame: &Frame) -> Action` [@ANCHOR: radioctl:radioctl_splitter_civ_classify]
 

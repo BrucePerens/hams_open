@@ -907,7 +907,7 @@
 
 ### `Synth` [@ANCHOR: bench_mcp:bench_mcp_elad_testkit_synth]
 
-**Purpose and location.** A receiver that synthesises its samples on demand: tones at absolute RF frequencies seen through the tuning word the driver last sent, plus deterministic Gaussian noise. Control requests go to a recording `FakeTransport`. Defined in `daemons/bench_mcp/src/elad/testkit.rs:144` as a pub `struct`. It derives no traits.
+**Purpose and location.** A receiver that synthesises its samples on demand: tones at absolute RF (radio frequency) frequencies seen through the tuning word the driver last sent, plus deterministic Gaussian noise. Control requests go to a recording `FakeTransport`. Defined in `daemons/bench_mcp/src/elad/testkit.rs:144` as a pub `struct`. It derives no traits.
 
 | Field | Type | Meaning |
 |---|---|---|

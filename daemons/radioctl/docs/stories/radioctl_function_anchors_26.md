@@ -59,7 +59,7 @@ Returns `Some(mode)` for a known name and `None` otherwise, with no trimming or 
 
 ### `fn name(self) -> &'static str` [@ANCHOR: radioctl:radioctl_core_vfo_name]
 
-Returns the file-format name of a VFO: `a` for VFO A and `b` for VFO B, lowercase. `self` is a `Vfo` passed by value. Used when writing or comparing description and transcript fields that name a VFO.
+Returns the file-format name of a VFO (variable frequency oscillator, the tuning control): `a` for VFO A and `b` for VFO B, lowercase. `self` is a `Vfo` passed by value. Used when writing or comparing description and transcript fields that name a VFO.
 It is the inverse of `Vfo::from_name`; the round-trip test checks that for both VFOs. Pure, returns a `'static` string, no errors, no allocation. Only these two VFOs exist in the type, so a rig's own list of usable VFOs is held separately in its description.
 
 ### `fn from_name(name: &str) -> Option<Vfo>` [@ANCHOR: radioctl:radioctl_core_vfo_from_name]
@@ -121,7 +121,7 @@ It then validates and builds each block: CI-V (`frequency_bytes` must be 4, 5 or
 
 ### `fn build_ky(k: &KySection) -> Result<KyParams, RigError>` [@ANCHOR: radioctl:radioctl_core_rigfile_build_ky]
 
-Builds the Kenwood `KY` (send CW text) parameters from the `[kenwood.ky]` block. `k` is borrowed. `form` is `undocumented`, `padded` or `variable`; `undocumented` must stand alone (a `width`, `lowercase`, `at_sign` or `stop` alongside it is an error) and gives `KyParams::UNDOCUMENTED`, meaning the manual does not document `KY` for the model.
+Builds the Kenwood `KY` (send CW (continuous wave, Morse code) text) parameters from the `[kenwood.ky]` block. `k` is borrowed. `form` is `undocumented`, `padded` or `variable`; `undocumented` must stand alone (a `width`, `lowercase`, `at_sign` or `stop` alongside it is an error) and gives `KyParams::UNDOCUMENTED`, meaning the manual does not document `KY` for the model.
 Otherwise `width` is required, 1 to 64 characters, and `stop` must be `none`, `ky0` or `blank`, how a message in progress is stopped. `lowercase` and `at_sign` say whether those characters are in the model's CW character table. Errors are `Malformed` `RigError`s naming the field. Pure, no I/O.
 
 
@@ -175,7 +175,7 @@ Returns a plain bool; `key` is the description key being explained. Both argumen
 
 ### `fn build_expect(spec: ExpectSpec) -> Result<Expect, RigError>` [@ANCHOR: radioctl:radioctl_core_transcript_build_expect]
 
-Converts the file's expectation (`ExpectSpec`, by value) of a transcript step into the typed `Expect`: what the engine must decode from the `rx` bytes. It covers observations (frequency with VFO and hertz, mode, PTT, signal, power, split, RX and TX VFO, RIT, XIT, RIT offset, filter width, level, SWR, meter, model id, firmware major and minor) and the plain `Ack` and `Nak`.
+Converts the file's expectation (`ExpectSpec`, by value) of a transcript step into the typed `Expect`: what the engine must decode from the `rx` bytes. It covers observations (frequency with VFO and hertz, mode, PTT, signal, power, split, RX and TX VFO, RIT, XIT, RIT offset, filter width, level, SWR: standing wave ratio, meter, model id, firmware major and minor) and the plain `Ack` and `Nak`.
 Names for VFO, mode, level and meter are looked up through the name tables; an unknown name returns a `Malformed` `RigError`. Pure, no I/O.
 
 ### `fn build_op(spec: OpSpec) -> Result<Op, RigError>` [@ANCHOR: radioctl:radioctl_core_transcript_build_op]

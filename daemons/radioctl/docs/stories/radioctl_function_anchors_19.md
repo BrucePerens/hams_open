@@ -6,7 +6,7 @@ Function anchors for `radioctl-protocols`: the OpenHPSDR bridge (`hpsdr_io.rs`),
 
 ### `fn default() -> Self` [@ANCHOR: radioctl:radioctl_hpsdr_options_default]
 
-`Default` for `HpsdrOptions`, the bridge's settings. `ptt_lease` is 3 seconds: how long one `P 1` keys the radio before the bridge unkeys by itself. `drive` is 0, the drive level (0 to 255) sent while keyed, so a default bridge keys with no drive. `status_every` is 250 ms, the interval of the unsolicited power and SWR lines. `power_constant` is 0.095, the SWR power constant for an ANAN-100 (0.09 is the ANAN-10 value). Pure, cannot fail. A caller that wants drive must set it explicitly.
+`Default` for `HpsdrOptions`, the bridge's settings. `ptt_lease` is 3 seconds: how long one `P 1` keys the radio before the bridge unkeys by itself. `drive` is 0, the drive level (0 to 255) sent while keyed, so a default bridge keys with no drive. `status_every` is 250 ms, the interval of the unsolicited power and SWR (standing wave ratio) lines. `power_constant` is 0.095, the SWR power constant for an ANAN-100 (0.09 is the ANAN-10 value). Pure, cannot fail. A caller that wants drive must set it explicitly.
 
 ### `pub fn set_attenuator(&self, db: u8) -> Result<(), hpsdr::error::HpsdrError>` [@ANCHOR: radioctl:radioctl_hpsdr_control_set_attenuator]
 
@@ -68,7 +68,7 @@ Reads or sets one numeric level (AF, RF gain, mic, monitor, keyer speed, RF powe
 
 ### `fn elecraft_if(&self) -> String` [@ANCHOR: radioctl:radioctl_virtual_elecraft_if]
 
-Builds the `IF` answer for the current state: 11-digit VFO A frequency, five blanks, the RIT/XIT offset (sign and four digits), RIT (receiver incremental tuning) and XIT (transmitter incremental tuning) flags, a fixed ` 00`, the transmit flag, the mode code, a fixed `00`, the split flag and a constant `001 ;` tail. The mode is `0` if the description has no code for the mode. Pure, no errors. It is the inverse of `decode_if` in the Elecraft engine and is also pushed by auto-information.
+Builds the `IF` answer for the current state: 11-digit VFO (variable frequency oscillator, the tuning control) A frequency, five blanks, the RIT/XIT offset (sign and four digits), RIT (receiver incremental tuning) and XIT (transmitter incremental tuning) flags, a fixed ` 00`, the transmit flag, the mode code, a fixed `00`, the split flag and a constant `001 ;` tail. The mode is `0` if the description has no code for the mode. Pure, no errors. It is the inverse of `decode_if` in the Elecraft engine and is also pushed by auto-information.
 
 ### `fn elecraft_panel(&self, change: PanelChange) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_virtual_elecraft_panel]
 
@@ -84,7 +84,7 @@ The model identifier a virtual Elecraft rig reports for `ID`: the `model_id` fro
 
 ### `pub fn from_description(desc: &RigDescription) -> Result<VirtualRig, RigError>` [@ANCHOR: radioctl:radioctl_virtual_from_description]
 
-Builds a virtual rig of the described model in its default state. `desc` is borrowed and cloned. The wire protocol follows the description's family (CI-V, Kenwood, Elecraft, Kenwood handheld, Yaesu legacy, receiver, Yaesu newcat) and its family block; a description lacking the block for its family gives `Unsupported` ("description lacks its family block"), and a receiver description can fail with that module's own error. Initial state: both VFOs at the default frequency and mode, not keyed, signal 30, no CW sent, transceive on only for CI-V, filter width 500 Hz, default levels (Kenwood models start with their own monitor, keyer speed and RF power), SWR 10, auto-information 0. Nothing here touches the transmitter.
+Builds a virtual rig of the described model in its default state. `desc` is borrowed and cloned. The wire protocol follows the description's family (CI-V, Kenwood, Elecraft, Kenwood handheld, Yaesu legacy, receiver, Yaesu newcat) and its family block; a description lacking the block for its family gives `Unsupported` ("description lacks its family block"), and a receiver description can fail with that module's own error. Initial state: both VFOs at the default frequency and mode, not keyed, signal 30, no CW (continuous wave, Morse code) sent, transceive on only for CI-V, filter width 500 Hz, default levels (Kenwood models start with their own monitor, keyer speed and RF power), SWR 10, auto-information 0. Nothing here touches the transmitter.
 
 ### `pub fn state(&self) -> &RigState` [@ANCHOR: radioctl:radioctl_virtual_state]
 

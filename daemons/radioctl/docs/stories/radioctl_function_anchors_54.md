@@ -12,7 +12,7 @@ Constructor of `NetConfig`: builds the default configuration for reaching a rig 
 
 ### `fn keepalive_sent(&mut self)` [@ANCHOR: radioctl:radioctl_core_net_framing_keepalive_sent]
 
-Default method of the `Framing` trait, called by the session loop right after each keep-alive probe was written to the socket, so a framing that expects an answer to its probe can recognise and swallow that answer in `decode` instead of passing it up as CAT data. The only argument is `&mut self`, the framing's own state. The default body does nothing and returns nothing, so a framing without a keep-alive never needs it. It is called once per probe, after a successful send; a failed send ends the session before the call. No I/O of its own, cannot fail.
+Default method of the `Framing` trait, called by the session loop right after each keep-alive probe was written to the socket, so a framing that expects an answer to its probe can recognise and swallow that answer in `decode` instead of passing it up as CAT (computer-aided transceiver control) data. The only argument is `&mut self`, the framing's own state. The default body does nothing and returns nothing, so a framing without a keep-alive never needs it. It is called once per probe, after a successful send; a failed send ends the session before the call. No I/O of its own, cannot fail.
 
 ### `fn reset(&mut self)` [@ANCHOR: radioctl:radioctl_core_net_raw_reset]
 

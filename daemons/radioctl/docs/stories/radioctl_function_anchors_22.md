@@ -47,7 +47,7 @@ Answers a read request. If the rig handle has a cached value for `field` no olde
 
 ### `async fn read_frequency(&self, vfo: Vfo) -> Outcome` [@ANCHOR: radioctl:radioctl_splitter_read_frequency]
 
-Answers a frequency read for `vfo`. If the split-while-keyed rule applies (the configuration allows it, `vfo` is VFO A, and the cached PTT is on, split is on and the active transmit frequency is known), it answers with the transmit frequency, because OmniRig-style clients assume the plain read gives the transmit frequency while keyed in split. Otherwise it is an ordinary `read` of the VFO's frequency (cache first, then the rig). Returns `Outcome::Value(Observation::Frequency(..))` or `Refused`. Reads of the other VFO are not altered.
+Answers a frequency read for `vfo`. If the split-while-keyed rule applies (the configuration allows it, `vfo` is VFO (variable frequency oscillator, the tuning control) A, and the cached PTT is on, split is on and the active transmit frequency is known), it answers with the transmit frequency, because OmniRig-style clients assume the plain read gives the transmit frequency while keyed in split. Otherwise it is an ordinary `read` of the VFO's frequency (cache first, then the rig). Returns `Outcome::Value(Observation::Frequency(..))` or `Refused`. Reads of the other VFO are not altered.
 
 ### `async fn read_status(&self) -> Outcome` [@ANCHOR: radioctl:radioctl_splitter_read_status]
 
@@ -59,7 +59,7 @@ Carries out one parsed client request and returns its outcome. It counts a `requ
 
 ### `async fn send_cw(&self, client: ClientId, text: &str) -> Outcome` [@ANCHOR: radioctl:radioctl_splitter_send_cw]
 
-Sends Morse `text` on behalf of `client`. Morse puts RF on the air, so it is treated like a key: the arbiter claim is taken first (`try_key`), and if another client owns the transmitter the call counts a `ptt_conflicts` and returns `Refused` without contacting the rig. Then `Op::SendCw` goes to the rig; if the rig refuses (gate closed, unsupported, link down, no frequency known) the claim is given back with `release`, so a refused send never strands ownership. If it is done, the client keeps ownership, and when that client goes away `cleanup` unkeys the rig. `text` is borrowed and copied into the op. The rig's own transmit watchdog still limits the transmission.
+Sends Morse `text` on behalf of `client`. Morse puts RF (radio frequency) on the air, so it is treated like a key: the arbiter claim is taken first (`try_key`), and if another client owns the transmitter the call counts a `ptt_conflicts` and returns `Refused` without contacting the rig. Then `Op::SendCw` goes to the rig; if the rig refuses (gate closed, unsupported, link down, no frequency known) the claim is given back with `release`, so a refused send never strands ownership. If it is done, the client keeps ownership, and when that client goes away `cleanup` unkeys the rig. `text` is borrowed and copied into the op. The rig's own transmit watchdog still limits the transmission.
 
 ### `async fn key(&self, client: ClientId) -> Outcome` [@ANCHOR: radioctl:radioctl_splitter_key]
 
@@ -73,7 +73,7 @@ The task that serves one client until it ends. It subscribes to the rig's event 
 
 ### `pub fn new() -> Ts2000Personality` [@ANCHOR: radioctl:radioctl_splitter_ts2000_new]
 
-Creates the Kenwood TS-2000 CAT personality for one client. Its mode table comes from `RigDescription::ts2000()` (a digit per mode), the tokenizer starts empty, and auto-information is off, so no unsolicited `FA`, `FB` or `MD` is sent until the client sends `AI2;`. `Default` calls it. Cannot fail.
+Creates the Kenwood TS-2000 CAT (computer-aided transceiver control) personality for one client. Its mode table comes from `RigDescription::ts2000()` (a digit per mode), the tokenizer starts empty, and auto-information is off, so no unsolicited `FA`, `FB` or `MD` is sent until the client sends `AI2;`. `Default` calls it. Cannot fail.
 
 ### `fn status_answer(&self, status: &Status) -> Option<Vec<u8>>` [@ANCHOR: radioctl:radioctl_splitter_ts2000_status_answer]
 

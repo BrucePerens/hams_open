@@ -195,7 +195,7 @@ that binds `html_sanitize` by name and the data-file load path),
 `knowledge/tests/test_svg_article.py` (manual article), `user_websites/tests/
 test_user_websites_blog_post.py` (blog route). The real-browser tests (shapes have non-zero
 rendered boxes, `currentColor` follows the page and the theme, the diagram scales at 375 px, no
-script ran, no console error, no CSP violation) live in hams_com's `theme_hams` tests, which need the
+script ran, no console error, no CSP (Content Security Policy) violation) live in hams_com's `theme_hams` tests, which need the
 site's own theme and Content-Security-Policy.
 
 Modules to rehearse the upgrade on: `zero_sudo`, `knowledge`, `user_websites` (hams_open); the

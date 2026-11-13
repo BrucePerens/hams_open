@@ -6,7 +6,7 @@ It works on a scalar feature series derived from the audio.
 
 ## `two_tone_ratio_feature` [@ANCHOR: two_tone_ratio_feature]
 
-`two_tone_ratio_feature` makes that series for two-tone FSK such as RTTY. For each hop it correlates a window
+`two_tone_ratio_feature` makes that series for two-tone FSK such as RTTY (radio teletype). For each hop it correlates a window
 against both tones and reports the ratio of their energies in dB (positive when tone A is stronger). The window
 must be long enough to tell the tones apart; the hop should be much shorter than a symbol, around a
 sixteenth to an eighth of the window. Zero window, hop or sample rate returns an empty series.
@@ -25,7 +25,7 @@ sixteenth to an eighth of the window. Zero window, hop or sample rate returns an
 
 ## `envelope_feature` [@ANCHOR: envelope_feature]
 
-`envelope_feature` makes the series for on-off keyed signals (CW, Hellschreiber): the RMS level of each
+`envelope_feature` makes the series for on-off keyed signals (CW: continuous wave, Morse code, Hellschreiber): the RMS level of each
 consecutive frame of `frame_len` samples, dropping a trailing partial frame. The frame should be much shorter
 than the shortest keyed element.
 

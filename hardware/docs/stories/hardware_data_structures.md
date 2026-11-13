@@ -134,7 +134,7 @@
 
 ### `Heartbeater` [@ANCHOR: hardware:hardware_hams_fx2_heartbeater]
 
-**Purpose and location.** The host side of the FX2 station-I/O board's heartbeat: it sends sequence-numbered heartbeats that carry the commanded state of every channel, the way the relay's transmit task does. If the heartbeats stop, the board's firmware releases the channels (drops PTT) after the configured time-out, so this is a transmit-safety path on the host. Defined in `hardware/fx2_station_io/tools/hams_fx2.py`; used by the behaviour tests (`tests/test_fx2_ptt.py`) and by the command-line tool.
+**Purpose and location.** The host side of the FX2 station-I/O board's heartbeat: it sends sequence-numbered heartbeats that carry the commanded state of every channel, the way the relay's transmit task does. If the heartbeats stop, the board's firmware releases the channels (drops PTT: push-to-talk) after the configured time-out, so this is a transmit-safety path on the host. Defined in `hardware/fx2_station_io/tools/hams_fx2.py`; used by the behaviour tests (`tests/test_fx2_ptt.py`) and by the command-line tool.
 
 **Definition.** `class Heartbeater`, built as `Heartbeater(t)`.
 
