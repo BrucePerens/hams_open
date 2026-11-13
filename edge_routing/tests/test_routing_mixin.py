@@ -223,6 +223,18 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         self.env.cr.postcommit.run()  # the invalidation is deferred to the commit
         self.assertEqual(self.User.get_record_by_slug(slug), user.id)
 
+    def test_create_survives_a_failed_cache_notify(self):
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_create]
+        # The cache ping is best effort: write() and unlink() log a failed notify, so create() must not abort the new record either.
+        utils_cls = type(self.env['zero_sudo.security.utils'])
+        self.safe_patch_object(utils_cls, '_notify_cache_invalidation', side_effect=RuntimeError('notify down'))
+        user = self.User.create({
+            'name': 'Notify Down User',
+            'login': 'notify_down_user@example.com',
+            'website_slug': 'notify-down-user',
+        })
+        self.assertEqual(user.website_slug, 'notify-down-user')
+
     def test_batch_write_clears_the_cached_miss_of_the_new_slugs(self):
         # Tests [@ANCHOR: edge_routing:COMM_mixin_write]
         # The batch name write gives slugless records a slug with a raw UPDATE; a miss cached for those slugs must be cleared too.
