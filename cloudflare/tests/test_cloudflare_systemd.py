@@ -138,8 +138,13 @@ class TestCloudflareSystemd(HamsTransactionCase):
 
     # Tests [@ANCHOR: cloudflare:stop_tunnel_daemon]
     def test_06e_stopping_a_tunnel_that_has_no_token_file_is_quiet(self):
-        self._mock_run(returncode=0)
-        cf_systemd.stop_tunnel_daemon("cftun-never-started")  # must not raise
+        mock_run = self._mock_run(returncode=0)
+        with self.assertNoLogs("odoo.addons.cloudflare.utils.cloudflare_systemd", level="ERROR"):
+            cf_systemd.stop_tunnel_daemon("cftun-never-started")
+        mock_run.assert_called_once()
+        self.assertEqual(
+            mock_run.call_args[0][0], ["systemctl", "--user", "disable", "--now", "cloudflared@cftun-never-started.service"]
+        )
 
     def test_07_stop_tunnel_daemon_without_key_disables_every_discovered_unit(self):
         # No in-memory registry of "keys this process started" any more -- discovery goes
