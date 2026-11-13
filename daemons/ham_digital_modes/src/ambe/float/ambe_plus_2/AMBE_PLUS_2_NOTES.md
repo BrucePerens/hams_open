@@ -301,7 +301,7 @@ source/structure), completeness-checked (all 512 indices present exactly once) b
 ### Annex F: PRBA58 Vector Quantizer Levels (`b4` -> 4-dim vector `G5,G6,G7,G8`)
 
 128 entries (`b4` 0-127, 7-bit index), each a 4-dimensional codeword. Extracted to
-`ambe/half_rate_reference/half_rate_prba58_b4.csv` (header: `b4,G5,G6,G7,G8`), same completeness
+`daemons/ham_digital_modes/src/ambe/float/ambe_plus_2/half_rate_reference/half_rate_prba58_b4.csv` (header: `b4,G5,G6,G7,G8`), same completeness
 check.
 
 ### Annex G: Quantization Tables for Higher Order Coefficients (`b5`..`b8` -> 4-dim vectors)
@@ -440,7 +440,7 @@ buildable, separate from the patent-clearance gate this whole file already exist
 **Update, 2026-09-17: this next step is now done.** The vector-quantization search question above
 was answered by direct inspection of mbelib's own real, working `ambe3600x2450.c`/
 `ambe3600x2450_const.h` source (nearest-codeword search is confirmed correct -- see
-`src/ambe_plus_2/quantize.rs`'s own doc comment), not by reading the addendum's own encoder/decoder
+`daemons/ham_digital_modes/src/ambe/float/ambe_plus_2/quantize.rs`'s own doc comment), not by reading the addendum's own encoder/decoder
 prose directly (mbelib's source was sufficient and already cross-checked value-for-value against
 every annex table above). See the dated section below for the full implementation and real
 chip-test results.
