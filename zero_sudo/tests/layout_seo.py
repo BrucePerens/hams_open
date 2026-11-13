@@ -11,6 +11,7 @@ TITLE_NAMES = ("additional_title", "title")
 DESCRIPTION_NAME = "website_meta_description"
 
 
+# [@ANCHOR: zero_sudo:layout_seo_slot]
 def _slot(call, names):
     for child in call:
         if child.tag == "t" and child.get("t-set") in names:
@@ -18,6 +19,7 @@ def _slot(call, names):
     return None
 
 
+# [@ANCHOR: zero_sudo:layout_seo_slot_text]
 def _slot_text(slot):
     """The literal text of a slot, or None when its value is an expression computed per request."""
     if slot.get("t-value"):
@@ -25,6 +27,7 @@ def _slot_text(slot):
     return " ".join("".join(slot.itertext()).split())
 
 
+# [@ANCHOR: zero_sudo:assert_layout_seo]
 def assert_layout_seo(test, xmlids):
     """For each template xmlid, every website.layout call sets a non-empty title and meta description slot.
 

@@ -1081,6 +1081,7 @@ class DaemonKeyRegistry(models.Model):
             _logger.error(msg, path, e)
             raise
 
+    # [@ANCHOR: daemon_key_manager:mark_rotation_failed]
     def _mark_rotation_failed(self, reg):
         """Records, in its own committed write, that the cron just failed to rotate `reg`."""
         reg.last_rotation_failed_at = fields.Datetime.now()

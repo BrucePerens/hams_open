@@ -72,6 +72,10 @@ The scheduled action, in `data/cron.xml` (`noupdate`), that starts rotation. It 
 
 The rotation worker run by the cron. No arguments; returns nothing. It runs as the manager service account, selects up to 10 registries that are not remote self-rotating, whose service account is active and whose `last_rotated` is empty or older than 59 days, oldest first, and prefetches their old API keys in one query. Each is rotated and committed on its own; a managed failure (OS, user, validation or access error) rolls back that one, is logged, and leaves `last_rotated` untouched so it is retried on the next run instead of being exempted for 59 days. When a full batch of 10 was found it triggers the cron again for the rest. Tests: `test_cron_rotate_all_keys`.
 
+### `DaemonKeyRegistry._mark_rotation_failed(self, reg)` [@ANCHOR: daemon_key_manager:mark_rotation_failed]
+
+Records that the cron just failed to rotate one registry. Argument `reg`: the registry row. Sets `last_rotation_failed_at` to now and commits at once, in its own write, so the mark survives the rollback of the failed rotation. Returns nothing. The cron orders its batch by this field (never-failed first), so a registry that fails on every run goes to the back of the queue instead of filling the batch of 10 for ever. Called by `_cron_rotate_all_keys` for a managed failure. Tests: `test_failing_registries_do_not_block_a_good_one`.
+
 ### `_rotate_key_and_write_file`: revoke the old keys [@ANCHOR: COMM_revoke_old_keys_logic]
 
 The first half of a rotation. For this registry's service account it deletes the `res.users.apikeys` rows named `<daemon name>_key` (at most 100, or those from the batch's prefetched set after an `exists()` check, because an earlier registry in the run may already have deleted its own). Only keys with that daemon's name are removed, so another daemon sharing the account keeps its key. Deleting is the revocation: the old key stops working at once, which is why daemons must re-read their key file after an HTTP 401. Tests: `test_cron_rotate_all_keys`, `test_key_ownership`.

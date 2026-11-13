@@ -442,3 +442,17 @@ The constructor stores them, creates a `requests.Session`, and calls `_load_cred
 ### SecureJSONRPCClient._load_credentials `[@ANCHOR: zero_sudo:json_rpc_client_load_credentials]`
 
 `_load_credentials(self)` reads the `.env` file at `self.env_path` line by line and sets `self.login` from the line `ODOO_RPC_LOGIN=...` and `self.api_key` from `ODOO_RPC_KEY=...` (the value is everything after the first `=`, stripped of the line ending; later lines win). **Errors.** `FileNotFoundError` with a message that the daemon must be registered and the key-manager cron must have run when the file does not exist; `ValueError` ("Malformed credential file ... Missing LOGIN or KEY") when either value is absent or empty. It is called from the constructor and again by `call` after a 401 or 403, which is how a real key rotation mid-run is healed without restarting the daemon. It reads a file only; the key is never logged.
+
+## Layout SEO helper
+
+### `assert_layout_seo(test, xmlids)` [@ANCHOR: zero_sudo:assert_layout_seo]
+
+Test helper in `zero_sudo/tests/layout_seo.py`. Argument `test`: the running test case; `xmlids`: view keys of public templates. For each template it asserts that every `website.layout` call sets a non-empty page title (`additional_title` or `title`) and a non-empty `website_meta_description`; a plain-text description must be 150 to 160 characters, while a `t-value` expression is only checked to be non-empty. Fails the test (`AssertionError`) with the view key named; reads views with `ir.ui.view.search`. Tests: `test_layout_seo_helper_fails_without_title_or_description`.
+
+### `_slot(call, names)` [@ANCHOR: zero_sudo:layout_seo_slot]
+
+Returns the first direct `<t t-set=...>` child of a `website.layout` call whose name is in `names`, or `None`. Argument `call`: the lxml element of the `t-call`; `names`: the accepted `t-set` names. Returns an element or `None`; never raises. Pure, no I/O, no database access. Tests: `test_layout_seo_helper_fails_without_title_or_description`.
+
+### `_slot_text(slot)` [@ANCHOR: zero_sudo:layout_seo_slot_text]
+
+Returns the literal text of a slot with whitespace collapsed, or `None` when the slot has a `t-value` (computed per request), so the caller can tell a literal description from an expression. Argument `slot`: the lxml `t-set` element. Returns `str` or `None`; never raises. Pure, no I/O, no database access. Tests: `test_layout_seo_helper_fails_without_title_or_description`.
