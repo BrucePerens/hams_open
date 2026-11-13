@@ -19,3 +19,4 @@ from . import test_svg_article
 from . import test_help_audience
 from . import test_doc_audience_installer
 from . import test_manual_redesign_t21
+from . import test_layout_seo

@@ -80,6 +80,8 @@
     <template id="article_template" name="Manual Article">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
         <t t-call="website.layout">
+            <t t-set="additional_title" t-value="article.name"/>
+            <t t-set="website_meta_description" t-value="('Read the hams.com help article %s: a how-to guide for members, with a manual contents list and search to help you find related topics.' % article.name)[:160]"/>
             <!-- Verified by [@ANCHOR: test_tour_manual_basic_browsing] -->
             <div id="wrap" class="oe_structure oe_empty">
                 <div class="container-fluid pt-4 pb-5">
@@ -184,6 +186,8 @@
     <template id="search_results_template" name="Manual Search Results">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
         <t t-call="website.layout">
+            <t t-set="additional_title" t-value="('Help search: %s' % search_term)"/>
+            <t t-set="website_meta_description" t-value="('Help articles and manuals on hams.com that match your search for %s. Open a result to read the full guide.' % search_term)[:160]"/>
             <!-- Verified by [@ANCHOR: test_tour_manual_search] -->
             <div id="wrap" class="oe_structure oe_empty">
                 <div class="container-fluid pt-4 pb-5">
@@ -243,6 +247,8 @@
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
         <!-- burn-ignore-tour -->
         <t t-call="website.layout">
+            <t t-set="additional_title">Help and user manuals</t>
+            <t t-set="website_meta_description">How-to guides and user manuals for the features of hams.com. Browse by topic or use the search box to find the answer to your question about the site.</t>
             <div id="wrap" class="oe_structure oe_empty">
                 <div class="container pt-4 pb-5">
                     <header class="mb-4 pb-3 border-bottom">
@@ -284,6 +290,8 @@
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_manual_templates_rendering] -->
         <!-- burn-ignore-tour -->
         <t t-call="website.layout">
+            <t t-set="additional_title">Internal documentation</t>
+            <t t-set="website_meta_description">Engineering and developer documents for hams.com administrators. Help does not show these to members. Search the list by title or text, or go back to Help.</t>
             <div id="wrap" class="oe_structure oe_empty">
                 <div class="container pt-4 pb-5">
                     <div class="alert alert-warning" role="note">
