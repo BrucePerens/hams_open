@@ -531,7 +531,7 @@ The server keeps only allow-listed markup whoever I am, including an internal ad
 `MAX_BODY_CHARS` (200,000). The result is a well-formed fragment holding only the tags the toolbar can produce (`ALLOWED_TAGS`:
 paragraphs, headings, inline formatting, lists, quotes, code, links, images, simple tables), with at most the three alignment
 classes, links limited to `http`, `https`, `mailto`, same-site paths and `#` anchors, and images limited to `/web/image/` and
-`/web/content/` paths; no `style`, `data-*` or `t-*` attributes. Script, frame, form and similar elements are dropped with their
+`/web/content/` paths without a `..` segment; no `style`, `data-*` or `t-*` attributes. Script, frame, form and similar elements are dropped with their
 content and SVG goes through the SVG allow-list. `hostile` is True when something only a hand-made request would send was found
 (script, event handlers, QWeb attributes, `javascript:` URLs); callers file that as an automated violation. It does no I/O and
 is applied in the request path, because the model-level sanitisers skip administrators. Verified by
@@ -543,8 +543,8 @@ is applied in the request path, because the model-level sanitisers skip administ
 one picture. `ufile` is the uploaded file; `json_reply`, when non-empty, asks for a JSON answer `{"ok", "error", "url"}` (used by
 the editor) instead of a 303 redirect to the dashboard with `?saved=1` or `?error=image`. Checks in order: the caller may manage the
 site (404 otherwise), the upload rate (10 a minute), a file was sent (400), it is not empty (400), at most 2 MB (413), the first bytes
-are JPEG, PNG, GIF or WebP, judged by content and not by the file name (415), and the site holds fewer than 100 images (409).
-Then an `ir.attachment` is created by the service account: public, owned by the member or group, described `user_websites site
+are JPEG, PNG, GIF or WebP, judged by content and not by the file name (415), the picture can be decoded and has at most 16 million pixels (415), and the site holds fewer than 100 images (409).
+JPEG, PNG and WebP are re-encoded with Pillow (`clean_member_image`, `[@ANCHOR: user_websites:owner_image_reencode]`) before they are stored, which drops EXIF (including GPS), comments and bytes appended after the picture and applies the EXIF rotation; GIF is stored as sent. Then an `ir.attachment` is created by the service account: public, owned by the member or group, described `user_websites site
 image`, named from the sanitised file name. Returns the address `/web/image/<id>`. Not idempotent: each call stores a new copy.
 Verified by `[@ANCHOR: test_owner_image_upload_rules]`.
 
