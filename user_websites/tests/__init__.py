@@ -55,8 +55,8 @@ from . import test_report_shield
 from . import test_mail_sender_fallback
 from . import test_rpc_exposure
 from . import test_open_source_defaults
+from . import test_layout_seo
 
 from .open_source_defaults import pin_package
 
 pin_package(__name__)
-from . import test_layout_seo
