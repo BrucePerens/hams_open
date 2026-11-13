@@ -3,6 +3,8 @@
     <template id="pwa_offline_template" name="Offline">
         <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_caching_pwa_offline_view] -->
         <t t-call="website.layout">
+            <t t-set="additional_title">You are offline</t>
+            <t t-set="website_meta_description">hams.com cannot reach the network right now. Please check your internet connection and try again. Pages you opened recently may still be saved on your device.</t>
             <div id="wrap" class="oe_structure oe_empty">
                 <div class="container text-center mt-5 mb-5">
                     <i class="fa fa-wifi fa-5x text-muted mb-4" aria-hidden="true"/>
