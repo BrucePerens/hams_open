@@ -9,9 +9,11 @@ members must NOT type raw HTML, and the standalone member site (hams.com/<slug>)
 the hams.com headers and footer.
 """
 import base64
+import io
 import re
 
 import redis
+from PIL import Image
 
 import odoo.http
 from odoo.tests import tagged
@@ -31,7 +33,15 @@ from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 # (id="bottom"). Member sites must carry neither.
 HAMS_HEADER = 'id="top"'
 HAMS_FOOTER = 'id="bottom"'
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+
+def _picture(fmt, size=(8, 8), **save_args):
+    out = io.BytesIO()
+    Image.new("RGB", size, (200, 30, 30)).save(out, fmt, **save_args)
+    return out.getvalue()
+
+
+PNG = _picture("PNG")
 
 
 def _editor_textareas(html):
@@ -135,6 +145,34 @@ class TestMemberHtmlSanitizer(BaseCase):
         # `$` also matched before a final newline; both URL patterns now end with \Z
         self.assertIsNone(IMAGE_PATH_RE.match("/web/image/12\n"))
         self.assertTrue(IMAGE_PATH_RE.match("/web/image/12"))
+
+    def test_image_reencode_drops_location_and_trailing_data(self):
+        # Tests [@ANCHOR: user_websites:owner_image_reencode]
+        # [@ANCHOR: test_owner_image_reencode]
+        exif = Image.Exif()
+        exif[0x8825] = {1: "N", 2: (37.0, 46.0, 29.0), 3: "W", 4: (122.0, 25.0, 9.0)}
+        exif[0x010F] = "PhoneMaker"
+        photo = _picture("JPEG", exif=exif) + b"<script>alert(1)</script>"
+        self.assertIn(b"PhoneMaker", photo)
+        for mimetype, data in (("image/jpeg", photo), ("image/png", PNG + b"trailer")):
+            cleaned = owner_site.clean_member_image(data, mimetype)
+            self.assertEqual(owner_site._image_mimetype(cleaned), mimetype)
+            self.assertNotIn(b"PhoneMaker", cleaned)
+            self.assertNotIn(b"<script>", cleaned)
+            self.assertNotIn(b"trailer", cleaned)
+            self.assertEqual(Image.open(io.BytesIO(cleaned)).getexif().get_ifd(0x8825), {})
+        webp = _picture("WEBP", exif=exif.tobytes())
+        self.assertNotIn(b"PhoneMaker", owner_site.clean_member_image(webp, "image/webp"))
+        self.assertEqual(Image.open(io.BytesIO(owner_site.clean_member_image(webp, "image/webp"))).getexif().get_ifd(0x8825), {})
+
+    def test_image_reencode_rejects_unreadable_and_huge(self):
+        # Tests [@ANCHOR: user_websites:owner_image_reencode]
+        self.assertIsNone(owner_site.clean_member_image(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64, "image/png"))
+        self.assertIsNone(owner_site.clean_member_image(PNG[:40], "image/png"))
+        huge = _picture("PNG", size=(5000, 5000), compress_level=9)
+        self.assertLess(len(huge), owner_site.MAX_IMAGE_BYTES)
+        self.assertIsNone(owner_site.clean_member_image(huge, "image/png"))
+        self.assertEqual(owner_site.clean_member_image(b"GIF89a-as-sent", "image/gif"), b"GIF89a-as-sent")
 
     def test_image_magic_numbers(self):
         # Tests [@ANCHOR: user_websites:owner_image_mimetype]
