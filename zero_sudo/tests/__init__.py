@@ -33,6 +33,8 @@ from . import test_core_secrets_from_store
 from . import test_secret_broker
 from . import test_tdd_fixes
 from . import test_views
+from . import layout_seo
+from . import test_layout_seo
 from . import test_facility
 from . import test_harness_setup_classes
 from . import test_ir_module_doc_helpers
