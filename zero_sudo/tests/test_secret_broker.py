@@ -18,6 +18,7 @@ import ssl
 import struct
 import tempfile
 import threading
+import time
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -186,11 +187,12 @@ class TestSecretBrokerPolicy(BaseCase):
             self._ask(broker, "hmac_sign", name="stripe.webhook_secret", payload="p"),
             self._ask(broker, "hmac_verify", name="stripe.webhook_secret", payload="p", signature="00"),
             self._ask(broker, "stripe_webhook_verify", name="stripe.webhook_secret", payload="b",
-                      signature_header="t=1,v1=00", now=1),
+                      signature_header="t=1,v1=00"),
             self._ask(broker, "https_request", name="stripe.secret_key", method="GET", path="/v1/charges?limit=1"),
             self._ask(broker, "https_request", name="stripe.secret_key", method="POST", path="/v1/redirect",
                       body="a=1", headers={"Idempotency-Key": "k1"}),
         ]
+        self.assertFalse(replies[2]["result"])  # an old timestamp is outside the broker's own tolerance
         for reply in replies:
             self.assertTrue(reply["ok"], reply)
             self.assertNotIn(SECRET, json.dumps(reply))
@@ -253,6 +255,26 @@ class TestSecretBrokerPolicy(BaseCase):
         broker = self._broker(config)  # base_url port 1 of TEST_HOST: nothing listens there
         reply = self._ask(broker, "https_request", name="stripe.secret_key", method="GET", path="/v1/x")
         self.assertEqual(reply, {"ok": False, "error": "upstream_failed"})
+
+    def test_caller_cannot_choose_now_for_the_webhook_window(self):
+        broker = self._broker(_config(os.path.join(self.tmp, "b.sock")))
+        header = "t=1,v1=" + ops.hmac_sign(WEBHOOK, "1.b")
+        # Valid signature at t=1: only a caller-chosen `now` could make it pass; the broker refuses the argument.
+        reply = self._ask(broker, "stripe_webhook_verify", name="stripe.webhook_secret", payload="b",
+                          signature_header=header, now=1)
+        self.assertEqual(reply, {"ok": False, "error": "bad_request"})
+        reply = self._ask(broker, "stripe_webhook_verify", name="stripe.webhook_secret", payload="b",
+                          signature_header=header)
+        self.assertEqual(reply, {"ok": True, "result": False})
+        now = int(time.time())
+        fresh = f"t={now},v1=" + ops.hmac_sign(WEBHOOK, f"{now}.b")
+        self.assertTrue(self._ask(broker, "stripe_webhook_verify", name="stripe.webhook_secret", payload="b",
+                                  signature_header=fresh)["result"])
+        stale = f"t={now - 400},v1=" + ops.hmac_sign(WEBHOOK, f"{now - 400}.b")
+        self.assertFalse(self._ask(broker, "stripe_webhook_verify", name="stripe.webhook_secret", payload="b",
+                                   signature_header=stale)["result"])
+        self.assertTrue(self._ask(broker, "stripe_webhook_verify", name="stripe.webhook_secret", payload="b",
+                                  signature_header=stale, tolerance=500)["result"])
 
     # Tests [@ANCHOR: zero_sudo_broker_refused]
     def test_paths(self):

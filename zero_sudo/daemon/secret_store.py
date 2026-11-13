@@ -336,8 +336,8 @@ class SecretStore:
         if self.broker is not None:
             return self.broker.call(
                 "stripe_webhook_verify", name=name, payload=payload,
-                signature_header=signature_header, tolerance=tolerance, now=now,
-            )
+                signature_header=signature_header, tolerance=tolerance,
+            )  # the broker uses its own clock; `now` applies only to the in-process check
         return secret_operations.stripe_webhook_verify(self.get(name), payload, signature_header, tolerance, now)
 
     # [@ANCHOR: zero_sudo:secret_store_https_request]
