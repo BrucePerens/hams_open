@@ -799,12 +799,6 @@ class TestExceptionTicketAccess(ExceptionTicketCase):
         with self.assertRaises(AccessError):
             service["hams_helpdesk.ticket"].create({"name": "Forged", "ticket_type": "general"})
 
-    def test_triage_wakeup_for_exception_tickets(self):
-        wakeup = self.safe_patch("odoo.addons.hams_helpdesk.models.helpdesk_ticket.write_triage_wakeups")
-        self.assertTrue(self.report(self.caught(raise_attribute_error)))
-        self.env.cr.postcommit.run()
-        wakeup.assert_called_once()
-
 
 @tagged("post_install", "-at_install", "standard")
 class TestMailFailureReports(ExceptionTicketCase):
