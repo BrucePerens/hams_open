@@ -20,7 +20,7 @@ import os
 import uuid
 
 from odoo.exceptions import AccessError, UserError, ValidationError
-from odoo.tests.common import Form, new_test_user, tagged
+from odoo.tests import Form, new_test_user, tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.cloudflare.utils import cloudflare_api, dns_plan
 from cryptography.fernet import Fernet
