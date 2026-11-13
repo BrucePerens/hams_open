@@ -205,7 +205,7 @@
 
                         <div class="card shadow-sm border-0 mb-4">
                             <div class="card-body">
-                                <h4 class="card-title fw-bold"><i class="fa fa-download text-primary me-2" aria-hidden="true"/> Download My Data <a href="/user-websites/documentation#UX_GDPR_EXPORT" class="text-info fs-5 ms-1" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a></h4>
+                                <h3 class="h4 card-title fw-bold"><i class="fa fa-download text-primary me-2" aria-hidden="true"/> Download My Data <a href="/user-websites/documentation#UX_GDPR_EXPORT" class="text-info fs-5 ms-1" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a></h3>
                                 <p class="text-muted">Get a copy of your personal website pages and blog posts in a machine-readable JSON format for data portability purposes.</p>
                                 <form action="/my/privacy/export" method="post">
                                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
@@ -216,7 +216,7 @@
 
                         <div class="card shadow-sm border-0 border-danger border border-1">
                             <div class="card-body">
-                                <h4 class="card-title fw-bold text-danger"><i class="fa fa-trash text-danger me-2" aria-hidden="true"/> Right to Erasure <a href="/user-websites/documentation#UX_GDPR_ERASURE" class="text-info fs-5 ms-1" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a></h4>
+                                <h3 class="h4 card-title fw-bold text-danger"><i class="fa fa-trash text-danger me-2" aria-hidden="true"/> Right to Erasure <a href="/user-websites/documentation#UX_GDPR_ERASURE" class="text-info fs-5 ms-1" title="Help"><i class="fa fa-question-circle" aria-hidden="true"/></a></h3>
                                 <div class="alert alert-warning d-flex align-items-start" role="alert">
                                     <i class="fa fa-info-circle mt-1 me-2" aria-hidden="true"/>
                                     <div>Download a copy of your data above <strong>before</strong> erasing anything below. Once this runs, there is no way to get your content back.</div>
