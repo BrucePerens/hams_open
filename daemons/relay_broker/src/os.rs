@@ -98,6 +98,10 @@ pub trait Os {
     ) -> io::Result<()>;
     /// Stops the hub's programs and removes its files.
     fn hub_stop(&self) -> io::Result<()>;
+    /// Writes the takeover configuration and starts `dnsmasq` on the user's own subnet (no access point, no address change).
+    fn hub_takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()>;
+    /// Stops the takeover `dnsmasq`.
+    fn hub_takeover_stop(&self) -> io::Result<()>;
     /// Whether the hub's access point and DHCP/DNS programs are running.
     fn hub_status(&self) -> (bool, bool);
     /// Upgrades the installed relay package through the system package manager.
@@ -406,6 +410,14 @@ impl Os for LinuxOs {
 
     fn hub_stop(&self) -> io::Result<()> {
         self.hub.stop()
+    }
+
+    fn hub_takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()> {
+        self.hub.takeover_start(dnsmasq_conf)
+    }
+
+    fn hub_takeover_stop(&self) -> io::Result<()> {
+        self.hub.takeover_stop()
     }
 
     fn hub_status(&self) -> (bool, bool) {

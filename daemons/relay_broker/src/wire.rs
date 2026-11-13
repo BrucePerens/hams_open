@@ -10,7 +10,7 @@
 //! most `MAX_STRING` bytes. A passed file descriptor is not in the body: it rides in SCM_RIGHTS
 //! ancillary data alongside an `Opened` response.
 
-use crate::hub::HubSettings;
+use crate::hub::{HubSettings, TakeoverSettings};
 use std::net::Ipv4Addr;
 
 /// Protocol version carried in every body. A peer speaking another version gets
@@ -124,6 +124,10 @@ pub enum Request {
     },
     /// Read-only: the broker's clock and its time-step limits.
     TimeStatus,
+    /// Phase 0 of the emergency hub: serve DHCP on the user's own subnet because the router is gone (only with `hub = true`).
+    HubTakeoverStart(TakeoverSettings),
+    /// Stop serving DHCP on the user's subnet (the router is back).
+    HubTakeoverStop,
 }
 
 /// The kind of source a clock step rests on.
@@ -408,6 +412,21 @@ impl Request {
                 out.push(*agreeing);
             }
             Request::TimeStatus => out.push(11),
+            Request::HubTakeoverStart(t) => {
+                out.push(12);
+                put_string(&mut out, &t.interface);
+                out.extend_from_slice(&t.hub_address.octets());
+                out.extend_from_slice(&t.gateway.octets());
+                put_string(&mut out, &t.relay_name);
+                match t.uplink_dns {
+                    Some(dns) => {
+                        out.push(1);
+                        out.extend_from_slice(&dns.octets());
+                    }
+                    None => out.push(0),
+                }
+            }
+            Request::HubTakeoverStop => out.push(13),
         }
         out
     }
@@ -488,6 +507,14 @@ impl Request {
                 agreeing: r.u8()?,
             },
             11 => Request::TimeStatus,
+            12 => Request::HubTakeoverStart(TakeoverSettings {
+                interface: r.string()?,
+                hub_address: r.ipv4()?,
+                gateway: r.ipv4()?,
+                relay_name: r.string()?,
+                uplink_dns: if r.bool()? { Some(r.ipv4()?) } else { None },
+            }),
+            13 => Request::HubTakeoverStop,
             other => return Err(WireError::BadTag(other)),
         };
         r.finish()?;
@@ -755,6 +782,14 @@ mod tests {
             }),
             Request::HubStop,
             Request::HubStatus,
+            Request::HubTakeoverStart(crate::hub::TakeoverSettings {
+                interface: "br0".into(),
+                hub_address: Ipv4Addr::new(192, 168, 1, 5),
+                gateway: Ipv4Addr::new(192, 168, 1, 1),
+                relay_name: "relay".into(),
+                uplink_dns: Some(Ipv4Addr::new(192, 168, 1, 1)),
+            }),
+            Request::HubTakeoverStop,
             Request::UpdatePackage,
             Request::SetSystemTime {
                 target_unix_secs: 1_793_500_000,

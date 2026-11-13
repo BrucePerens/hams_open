@@ -101,6 +101,8 @@ impl Broker {
             Request::HubStart(_) => "hub_start",
             Request::HubStop => "hub_stop",
             Request::HubStatus => "hub_status",
+            Request::HubTakeoverStart(_) => "hub_takeover_start",
+            Request::HubTakeoverStop => "hub_takeover_stop",
             Request::UpdatePackage => "update_package",
             Request::SetSystemTime { .. } => "set_system_time",
             Request::TimeStatus => "time_status",
@@ -135,6 +137,8 @@ impl Broker {
             Request::HubStart(settings) => self.hub_start(peer, settings),
             Request::HubStop => self.hub_stop(peer),
             Request::HubStatus => self.hub_status(peer),
+            Request::HubTakeoverStart(t) => self.hub_takeover_start(peer, t),
+            Request::HubTakeoverStop => self.hub_takeover_stop(peer),
             Request::UpdatePackage => self.update_package(peer),
             Request::SetSystemTime {
                 target_unix_secs,
@@ -323,6 +327,71 @@ impl Broker {
             }
             Err(e) => {
                 self.log(peer, "hub_stop", "failed", e.to_string());
+                (Response::error(Status::Failed, format!("hub: {e}")), None)
+            }
+        }
+    }
+
+    // [@ANCHOR: relay_broker_broker_hub_takeover_start]
+    /// The takeover start action: allowed only when the hub is enabled; the settings are validated, the same-subnet `dnsmasq` configuration written from its fixed
+    /// template and one `dnsmasq` started.
+    fn hub_takeover_start(
+        &mut self,
+        peer: Peer,
+        settings: &hub::TakeoverSettings,
+    ) -> (Response, Option<OwnedFd>) {
+        if !self.hub_enabled {
+            self.log(
+                peer,
+                "hub_takeover_start",
+                "denied",
+                "hub not enabled".into(),
+            );
+            return (Response::error(Status::Denied, "hub not enabled"), None);
+        }
+        let conf = match hub::takeover_dnsmasq_conf(settings) {
+            Ok(c) => c,
+            Err(why) => {
+                self.log(peer, "hub_takeover_start", "denied", why.clone());
+                return (Response::error(Status::Denied, why), None);
+            }
+        };
+        match self.os.hub_takeover_start(&conf) {
+            Ok(()) => {
+                self.log(
+                    peer,
+                    "hub_takeover_start",
+                    "allowed",
+                    settings.interface.clone(),
+                );
+                (self.hub_answer(), None)
+            }
+            Err(e) => {
+                self.log(peer, "hub_takeover_start", "failed", e.to_string());
+                (Response::error(Status::Failed, format!("hub: {e}")), None)
+            }
+        }
+    }
+
+    // [@ANCHOR: relay_broker_broker_hub_takeover_stop]
+    /// The takeover stop action: allowed only when the hub is enabled; stops the takeover `dnsmasq`.
+    fn hub_takeover_stop(&mut self, peer: Peer) -> (Response, Option<OwnedFd>) {
+        if !self.hub_enabled {
+            self.log(
+                peer,
+                "hub_takeover_stop",
+                "denied",
+                "hub not enabled".into(),
+            );
+            return (Response::error(Status::Denied, "hub not enabled"), None);
+        }
+        match self.os.hub_takeover_stop() {
+            Ok(()) => {
+                self.log(peer, "hub_takeover_stop", "allowed", String::new());
+                (self.hub_answer(), None)
+            }
+            Err(e) => {
+                self.log(peer, "hub_takeover_stop", "failed", e.to_string());
                 (Response::error(Status::Failed, format!("hub: {e}")), None)
             }
         }

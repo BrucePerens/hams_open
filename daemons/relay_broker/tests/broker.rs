@@ -559,6 +559,67 @@ fn hub_settings() -> relay_broker::hub::HubSettings {
     }
 }
 
+// Tests [@ANCHOR: relay_broker_broker_hub_takeover_start]
+// Tests [@ANCHOR: relay_broker_broker_hub_takeover_stop]
+#[test]
+fn a_takeover_is_refused_unless_enabled_and_valid_then_written_from_its_template() {
+    use relay_broker::hub::TakeoverSettings;
+    let now = Instant::now();
+    let good = TakeoverSettings {
+        interface: "br0".into(),
+        hub_address: std::net::Ipv4Addr::new(192, 168, 1, 5),
+        gateway: std::net::Ipv4Addr::new(192, 168, 1, 1),
+        relay_name: "relay".into(),
+        uplink_dns: None,
+    };
+    let os = FakeOs::typical();
+    let peer = os.peer;
+    let mut broker = broker_with(&test_config(), os, None);
+    let (resp, _) = broker.handle(peer, &Request::HubTakeoverStart(good.clone()), now);
+    assert!(
+        matches!(
+            resp,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+    let mut cfg = test_config();
+    cfg.hub_enabled = true;
+    let os = FakeOs::typical();
+    let seen = os.takeover.clone();
+    let mut broker = broker_with(&cfg, os, None);
+    let mut off_subnet = good.clone();
+    off_subnet.gateway = std::net::Ipv4Addr::new(10, 0, 0, 1);
+    let (resp, _) = broker.handle(peer, &Request::HubTakeoverStart(off_subnet), now);
+    assert!(
+        matches!(
+            resp,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+    assert!(
+        seen.lock().unwrap().is_none(),
+        "a refused takeover never reaches the OS"
+    );
+    let (resp, _) = broker.handle(peer, &Request::HubTakeoverStart(good), now);
+    assert!(matches!(resp, Response::Hub { .. }), "{resp:?}");
+    let conf = seen.lock().unwrap().clone().expect("started");
+    assert!(
+        conf.contains("dhcp-range=192.168.1.200,192.168.1.250"),
+        "{conf}"
+    );
+    let (resp, _) = broker.handle(peer, &Request::HubTakeoverStop, now);
+    assert!(matches!(resp, Response::Hub { .. }), "{resp:?}");
+    assert!(seen.lock().unwrap().is_none());
+}
+
 // Tests [@ANCHOR: relay_broker_broker_hub_start]
 // Tests [@ANCHOR: relay_broker_broker_hub_stop]
 #[test]
