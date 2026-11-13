@@ -245,3 +245,39 @@ No arguments, no return value; it is a coroutine (`async def`) that normally run
 **Special concerns.** Holds the module-level `redis_client` global. Exactly one database is listened to; it does not enumerate the cluster's databases. Each notification becomes its own background task in `postgres_notify_handler`, so a stalled Redis cannot block the loop (the socket timeouts make a stall a per-call failure). The password is read only from the family key directory and is never logged.
 
 **See also.** `test_main_refuses_to_start_without_a_database_password` in `daemons/test_cache_manager.py` (the guard is wired into `main`).
+
+## The supervised upgrade tool (`scripts/odoo_upgrade.py`)
+
+The anchor scan skips `scripts/` directories, so the two anchors of this tool are documented here (a README is read as a contract, which does not need the anchor to be visible in the scan). Tests: `scripts/test_odoo_upgrade.py`.
+
+### The tool `odoo_upgrade.py` [@ANCHOR: distributed_redis_cache:COMM_odoo_upgrade_tool]
+
+**Purpose.** Runs `odoo -u <modules>` on a server with exactly the environment the `odoo` systemd service gets. A bare `sudo -u odoo odoo -u ...` has none of the service's `EnvironmentFile=` settings (`REDIS_USERNAME` and `REDIS_PASSWORD` from the Redis env file, the broker and database credentials), production Redis refuses unauthenticated clients, and every cache invalidation of the upgrade then failed with a warning while the Redis cache kept its pre-upgrade entries. Called by an operator (root) as part of a deploy, after `pagerduty-maintenance start` and `systemctl stop odoo`.
+
+**Interface.** `sudo python3 odoo_upgrade.py --db NAME --modules a,b [--install c,d] [--log FILE] [--dry-run] [--no-css-check]`, or `--db NAME --shell < script.py` for a one-off `odoo shell` in the same environment.
+
+| Option | Meaning |
+|---|---|
+| `--db` | Database name (required); an invalid name is refused with `UpgradeError`. |
+| `--modules` | Comma-separated module names (`[a-z0-9_]+` each) or `all`; required unless `--shell`. |
+| `--install` | Comma-separated modules that are new on the database; adds `-i` to the same run (`-u all` does not install a new `auto_install` module). |
+| `--log` | Write odoo's output to this file instead of standard output. |
+| `--dry-run` | Prints the `systemd-run` command and runs nothing. |
+| `--no-css-check` | Skips the stylesheet check (only to recover from a broken checker). |
+| `--shell` | Runs `odoo shell` with the script on standard input in the unit `odoo-shell-run`; takes neither `--modules` nor `--install`. |
+
+**Behaviour.** Reads the service's `EnvironmentFiles=`, `Environment=`, `User=` and `Group=` from `systemctl show odoo` and hands them to a transient `systemd-run` unit named `odoo-upgrade` (so systemd, as root, reads the files; their contents never enter this process's output, arguments or log). Refuses to run while the `odoo` service is active, and when no EnvironmentFile defines `REDIS_PASSWORD`. A second upgrade cannot start while one runs (a fixed unit name). After a successful upgrade, before odoo is started again, it compiles every stylesheet bundle in the unit `odoo-upgrade-css-check` (`check_asset_bundles_shell.py` on standard input, nothing written) because Odoo otherwise answers HTTP 200 with a "css error" stub stylesheet and the site is unstyled.
+
+**Exit status.** `0` success (or a dry run); `2` a precondition failed (`UpgradeError`, printed as `refusing: ...`); `3`, or the upgrade's own non-zero status, when the output shows Redis authentication failures; `4` a stylesheet bundle does not compile (the rollback steps are printed; do not start odoo); otherwise the status of `odoo -u`.
+
+**Special concerns.** Needs root; blocking for the length of the upgrade; holds odoo's HTTP port while it runs, so do not `systemctl restart odoo` until `systemctl is-active odoo-upgrade` reports inactive; does not stop or start odoo and does not set the pagerduty maintenance flag. The HTTPS check of the live site (`production_readiness_check.py --site-css-only`) is still the mandatory last step.
+
+### `UpgradeError` [@ANCHOR: distributed_redis_cache:distributed_redis_cache_scripts_odoo_upgrade_upgrade_error]
+
+**Purpose and location.** The exception class `UpgradeError(Exception)` in `scripts/odoo_upgrade.py`, raised when a precondition of the upgrade fails: an invalid `--db`, `--modules` or `--install`, `--shell` combined with `--modules` or `--install`, the `odoo` service still running, a service without a readable EnvironmentFile that defines `REDIS_PASSWORD`, or an undeterminable `User=`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| message (the one constructor argument) | str | What failed. Safe to print: it never contains a value read from an environment file (only key names, paths and the service name). |
+
+**Invariants and lifetime.** Nothing on the system is changed before it is raised. `main()` catches it, prints `refusing: <message>` to standard error and returns status 2; any other exception is a bug and propagates. It is created, raised and caught inside one single-threaded process, never stored or sent. Raised by `require_redis_credentials`, `build_command` and the argument checks in `run`; reported by `main`.
