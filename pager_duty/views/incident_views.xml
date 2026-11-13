@@ -75,6 +75,6 @@
         <field name="view_mode">kanban,list,form</field>
     </record>
 
-    <menuitem id="menu_admin_root" name="Pager Duty" sequence="70"/>
+    <menuitem id="menu_admin_root" name="Pager Duty" sequence="70" groups="pager_duty.group_pager_admin"/>
     <menuitem id="menu_pager_incident" name="Incidents" parent="menu_admin_root" action="action_pager_incident" sequence="20"/>
 </odoo>
