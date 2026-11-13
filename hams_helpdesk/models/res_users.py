@@ -15,6 +15,7 @@ GDPR_SERVICE = "zero_sudo.gdpr_service_internal"
 EXPORT_LIMIT = 1000
 
 
+# [@ANCHOR: hams_helpdesk:res_users_helpdesk]
 class ResUsersHelpdesk(models.Model):
     _inherit = "res.users"
 
