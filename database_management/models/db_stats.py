@@ -45,7 +45,7 @@ class DatabaseTableStat(models.Model):
             """
             CREATE OR REPLACE VIEW database_table_stat AS (
                 SELECT
-                    row_number() OVER () as id,
+                    t.relid::bigint as id,
                     'SQL View'::varchar as name,
                     t.relname as table_name,
                     t.n_live_tup as live_tuples,

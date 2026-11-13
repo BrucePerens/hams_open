@@ -40,6 +40,15 @@ class TestDatabaseManagement(HamsTransactionCase):
             stat.action_vacuum_analyze()
             mock_run.assert_called()
 
+    def test_01b_table_stat_id_is_the_table_oid_so_it_survives_between_reads(self):
+        # Tests [@ANCHOR: COMM_db_table_stat_init]
+        # A row's id must name its table. A positional row_number() shifts whenever a table is
+        # created or dropped between listing the rows and clicking "Vacuum", so the action ran on
+        # whichever table then held that position.
+        stat = self.env["database.table.stat"].search([("table_name", "=", "res_users")], limit=1)
+        self.env.cr.execute("SELECT 'public.res_users'::regclass::oid")
+        self.assertEqual(stat.id, self.env.cr.fetchone()[0])
+
     def test_01a_vacuum_uses_the_local_socket_and_never_a_password(self):
         # Tests [@ANCHOR: COMM_vacuum_analyze]
         mock_run = self.safe_patch("subprocess.run")
