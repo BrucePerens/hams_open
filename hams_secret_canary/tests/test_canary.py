@@ -235,6 +235,14 @@ class TestResponseHook(CanaryCase, HamsHttpCase):
         self.assertEqual(len(logs.output), 1)  # one response, one alarm: the wrapper does not scan it again
         self.assertIn("page_token", logs.output[0])
 
+    def test_a_scan_that_fails_does_not_change_the_response(self):
+        secret_canary._tables.clear()  # the scan has to read its state, as it does once the cache has expired
+        body = '<?xml version="1.0"?><methodCall><methodName>version</methodName><params/></methodCall>'
+        with patch.object(type(self.canary), "_scan_text", side_effect=RuntimeError("cursor closed")):
+            with self.assertLogs("odoo.addons.hams_secret_canary.models.ir_http", "ERROR"):
+                response = self.url_open("/xmlrpc/2/common", data=body, headers={"Content-Type": "text/xml"})
+        self.assertIn("server_version", response.text)
+
 
 def _wsgi(body, content_type="text/xml", chunks=1):
     """A WSGI application answering `body` in `chunks` pieces."""
