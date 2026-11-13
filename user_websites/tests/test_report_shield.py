@@ -295,3 +295,21 @@ class TestReportShield(HamsHttpCase):
         trap = self.post(email="", description="A member who fills the honeypot.", fs_homepage="x")
         self.assertIn("report_submitted=1", trap.headers["Location"])
         self.assertFalse(self.Report.search([("description", "=", "A member who fills the honeypot.")]))
+
+    # [@ANCHOR: user_websites:test_report_stores_only_the_address]
+    def test_report_stores_only_the_address(self):
+        # Tests [@ANCHOR: user_websites:report_violation_shield]
+        # The stored reporter address becomes the From of the moderators' mail, so a display name or
+        # trailing comment the guest typed must not be kept, and a member's free text is no address.
+        spoofed = 'URGENT from the bank <store.only@example.com> (call 555-0100)'
+        response = self.post(email=spoofed, **shield_fields(self.env, FORM))
+        self.assertIn("report_submitted=1", response.headers["Location"])
+        self.assertTrue(self.reports("store.only@example.com"))
+        self.assertFalse(self.reports(spoofed))
+        self.owner.password = "shieldowner-pass"
+        self.authenticate(self.owner.login, "shieldowner-pass")
+        self.token = odoo.http.Request.csrf_token(self)
+        self.post(email="free text, not an address", description="A member typed free text.")
+        stored = self.Report.search([("description", "=", "A member typed free text.")])
+        self.assertEqual(len(stored), 1)
+        self.assertFalse(stored.reported_by_email)

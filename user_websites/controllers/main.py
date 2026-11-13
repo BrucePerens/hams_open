@@ -428,8 +428,12 @@ class UserWebsitesController(http.Controller):
                 "description": description,
                 "state": "new",
             }
-            if email:
-                create_vals["reported_by_email"] = email
+            # Verified by [@ANCHOR: user_websites:test_report_stores_only_the_address]
+            # Only the bare address: it is the From of the moderators' mail, so a display name,
+            # comment or free text the reporter typed must not be stored.
+            reporter_address = email_normalize((email or "").strip(), strict=True)
+            if reporter_address:
+                create_vals["reported_by_email"] = reporter_address
             # [@ANCHOR: report_violation_records_logged_in_reporter]
             # Verified by [@ANCHOR: test_report_violation_records_logged_in_reporter]
             # Record who filed it when a signed-in member did. The service env creates the row,
