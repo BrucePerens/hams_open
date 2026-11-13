@@ -32,7 +32,7 @@ from odoo.addons.hams_helpdesk.models import daemon_exception
 from odoo.addons.hams_helpdesk.models import exception_fingerprint as reporter
 from odoo.addons.hams_helpdesk.models import exception_scrub as scrub
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase, count_rows_in_batches
 
 _logger = logging.getLogger(__name__)
 
@@ -1077,6 +1077,8 @@ class TestDaemonReporterHelper(RealTransactionCase):
         self.addCleanup(reporter._RECENT_WRITES.clear)
         self.helper = load_daemon_reporter()
         self.helper._LAST_REPORT.clear()
+        # The reports these tests post commit on the server's own connection; leave none for the next test.
+        self.addCleanup(self.drop_committed_reports)
         uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
         # The key comes from the Daemon Key Manager, as in production: the registry row its post_init_hook made for this account.
         manager_uid = self.env["zero_sudo.security.utils"]._get_service_uid("daemon_key_manager.user_daemon_key_manager_service")
@@ -1091,6 +1093,11 @@ class TestDaemonReporterHelper(RealTransactionCase):
         os.chmod(handle.name, 0o600)
         self.key_file = handle.name
         self.options = {"url": self.base_url(), "key_file": self.key_file, "database": self.env.cr.dbname}
+
+    def drop_committed_reports(self):
+        self.env.cr.rollback()
+        drop_leaked_reports(self.env)
+        self.env.cr.commit()
 
     def rows(self):
         self.env.cr.rollback()
@@ -1217,6 +1224,9 @@ class TestExceptionHooks(RealTransactionCase):
         # Real commits: nothing rolls these rows back, so every test starts and ends with none.
         self.drop_committed_reports()
         self.addCleanup(self.drop_committed_reports)
+        # RealTransactionCase counted rows before the drop above; a row an earlier test or the harness
+        # committed would otherwise show up at teardown as a leak of -1. Count again from the clean start.
+        self._initial_counts = count_rows_in_batches(self.registry.db_name, self._tables)
 
     def drop_committed_reports(self):
         self.env.cr.rollback()
