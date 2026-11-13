@@ -318,7 +318,10 @@ class TestGeneralizedConfig(HamsTransactionCase):
         # Tests [@ANCHOR: pager_duty:pager_check_unlink]
         # Tests [@ANCHOR: pager_duty:schedule_config_export]
         check = self.env["pager.check"].create({"name": "Export Fails", "check_type": "system", "target": "cpu"})
-        self.safe_patch_object(type(check), "action_push_to_json", side_effect=OSError("disk full"))
+        export = self.safe_patch_object(type(check), "action_push_to_json", side_effect=OSError("disk full"))
         self.env.cr.postcommit.run()
+        export.reset_mock()
         check.unlink()
         self.env.cr.postcommit.run()  # must not raise
+        export.assert_called_once()  # the export really was attempted, and failed
+        self.assertFalse(check.exists(), "the delete stays committed")

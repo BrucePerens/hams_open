@@ -565,7 +565,18 @@ class TestPagerIncidentIntegration(HamsTransactionCase):
         self.assertEqual(incident.status, "resolved")
 
     def test_03_bus_notification_on_create_integration(self):
+        """The real bus runs (no stand-in): creating an incident reaches it with the board-update message."""
+        bus_model = type(self.env["bus.bus"])
+        real_sendone = bus_model._sendone
+        sent = []
+
+        def spy(bus, target, notification_type, message):
+            sent.append((target, notification_type))
+            return real_sendone(bus, target, notification_type, message)
+
+        self.safe_patch_object(bus_model, "_sendone", spy)
         incident = self.incident_model.create(
             {"source": "manual", "severity": "low", "description": "Bus test"}
         )
-        self.assertTrue(incident.id)
+        self.assertTrue(incident.exists())
+        self.assertIn(("pager_duty", "update_board"), sent)
