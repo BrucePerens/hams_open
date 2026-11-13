@@ -9,6 +9,7 @@ back), the policy refusals, and the provisioning plan. Story: zero_sudo/docs/sto
 import base64
 import contextlib
 import datetime
+import errno
 import http.server
 import io
 import json
@@ -307,6 +308,23 @@ class TestSecretBrokerIsolation(BaseCase):
         self.assertFalse(sb.acl_grants_read(_acl(*base, (0x02, 4, 1234), (0x10, 4, -1)), 999, set()))
         self.assertTrue(sb.acl_grants_read(_acl(*base, (0x08, 4, 77), (0x10, 4, -1)), 999, {77}))
         self.assertTrue(sb.acl_grants_read(b"\x02\x00", 1, set()))  # malformed: counts as readable
+
+    def test_readable_by_fails_closed_on_an_unexpected_getxattr_error(self):
+        # Tests [@ANCHOR: zero_sudo:secret_broker_readable_by]
+        path = os.path.join(self.tmp, "secrets")
+        with open(path, "w") as handle:
+            handle.write("a=b\n")
+        os.chmod(path, 0o600)
+
+        def failing(errno_value):
+            def getxattr(p, n):
+                raise OSError(errno_value, "boom")
+            return getxattr
+        other = self.os_uid + 1
+        self.assertFalse(sb.readable_by(path, other, set(), getxattr=failing(errno.ENODATA)))
+        self.assertFalse(sb.readable_by(path, other, set(), getxattr=failing(errno.ENOTSUP)))
+        for code in (errno.EACCES, errno.EIO):
+            self.assertTrue(sb.readable_by(path, other, set(), getxattr=failing(code)))
 
     def test_readable_by(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_readable_by]
