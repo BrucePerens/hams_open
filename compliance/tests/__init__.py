@@ -9,3 +9,4 @@ from . import test_index_signed_in
 from . import test_pages
 from . import test_security
 from . import test_ui_tours
+from . import test_layout_seo
