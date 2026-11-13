@@ -113,4 +113,10 @@ from . import test_svg_review_findings  # noqa: E402
 from . import test_harness_helpers  # noqa: E402
 from . import test_rpc_public  # noqa: E402
 from . import test_security_dashboard_hoot  # noqa: E402
-from . import test_trust_units
+from . import test_trust_units  # noqa: E402
+
+from . import test_security_utils_units  # noqa: E402
+from . import test_css_sanitizer_units  # noqa: E402
+from . import test_secret_broker_units  # noqa: E402
+from . import test_secret_provision_units  # noqa: E402
+from . import test_secret_store_units  # noqa: E402
