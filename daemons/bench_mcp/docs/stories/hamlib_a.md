@@ -5,7 +5,7 @@ why it does not answer, without ever being able to key the transmitter by accide
 wrong. This story covers the first half of the `radioctl` driver of `daemons/bench_mcp` (the files `src/radioctl/mod.rs`, `control.rs`, `detect.rs`,
 `diag.rs` and `guard.rs`). The driver was called `hamlib` until pull request #1568 replaced Hamlib's `rigctld` by `radioctld` (the program of
 `daemons/radioctl`, which speaks the same line protocol over a TCP socket); the tools are now `bench_radioctl_*` and every anchor id starts with
-`radioctl_`. This page describes the code as it is now. The users are the MCP tool dispatcher (`call`), the other files of the driver (`status.rs`,
+`radioctl_`. This page describes the code as it is now. The users are the MCP (Model Context Protocol) tool dispatcher (`call`), the other files of the driver (`status.rs`,
 `tx.rs`, `txtools.rs`, `loadtools.rs`, `rxcheck.rs`, `rigd.rs`), and the people who extend them. The rest of the driver (the transmit path, the load
 check, the station table, the daemon manager) is documented in its own story files. The tool list and the safety model are in
 `docs/RADIOCTL_TOOLS.md`.
@@ -260,7 +260,7 @@ at the start of the tool, not between the steps of a scan. Tests: `tests.rs`. Re
 | `passband_hz` | number, 0 to 250000 | 0 means the rig's default; needs `mode` in the same call. |
 | `vfo` | string | one of `VFOA VFOB VFOC currVFO MEM Main Sub MainA MainB SubA SubB`, case-insensitive, stored in the spelling of the list. |
 | `split` | object | `enabled` (bool, required); `tx_vfo` optional, same list as `vfo`. |
-| `levels` | object name to number | the name (case-insensitive) must be in `SETTABLE_LEVELS`: AF, RF, SQL, APF, NR, NB, BAL are 0 to 1; IF, PBT_IN, PBT_OUT are -10000 to 10000; CWPITCH 300 to 1000; NOTCHF 0 to 10000; AGC 0 to 6; ATT 0 to 60 dB; PREAMP 0 to 30 dB. |
+| `levels` | object name to number | the name (case-insensitive) must be in `SETTABLE_LEVELS`: AF, RF, SQL, APF, NR, NB, BAL are 0 to 1; IF, PBT_IN, PBT_OUT are -10000 to 10000; CWPITCH 300 to 1000; NOTCHF 0 to 10000; AGC (automatic gain control) 0 to 6; ATT 0 to 60 dB; PREAMP 0 to 30 dB. |
 | `functions` | object name to bool | the name must be in `SETTABLE_FUNCS`: NB NB2 NR ANF APF AIP MN LOCK MUTE SQL AFLT ANL FAGC. |
 | `rit_hz`, `xit_hz` | number, -9999 to 9999 | |
 
@@ -285,7 +285,7 @@ read each change back. Arguments are those of `radioctl_set_plan`.
 Steps: (1) `plan` checks everything. (2) If a frequency is given, `rx_ranges` and `check_freq` refuse one outside the receive limits. (3) `ptt_is_on`: when the rig reports PTT on, the call is refused with
 `Nothing was changed` and the advice to find out who keyed it (`bench_radioctl_safe_state` releases it where the transmit tools exist). (4) The changes, in this fixed order: VFO (`set_vfo`), frequency
 (`set_freq`, rounded to whole Hz, then `get_freq`), mode (`set_mode M W`, then `get_mode`; a different mode read back adds a `warning`), split (`set_split_vfo <0|1> <tx_vfo>`; with no `tx_vfo` the
-transmit VFO is sent as `VFOB`; read back with `get_split_vfo`), RIT and XIT (`set_rit`, `set_xit`, read back), each level (`set_level`, read back with `get_level`) and each function
+transmit VFO is sent as `VFOB`; read back with `get_split_vfo`), RIT (receiver incremental tuning) and XIT (`set_rit`, `set_xit`, read back), each level (`set_level`, read back with `get_level`) and each function
 (`set_func`, read back with `get_func`). Every name sent is first checked by `check_arg` (letters, digits and `_ . + - / :`, at most 64 characters), so an argument cannot carry a second command.
 
 Returns `{"changes": [{"set", "requested", "read_back", ...}]}` in the order applied. A read-back that differs from the request is reported, not an error (except that a differing mode adds a warning). Errors: every
@@ -417,7 +417,7 @@ keeps those above -85 dBFS, not within 6 Hz of a mains harmonic, more than 12 Hz
 | `mains_hum_hz` | `Option<f64>` | 60 or 50 when hum is recognised. |
 
 `Findings::time_station()` is true when any tone or tick was found; `Findings::json()` gives the report form (levels rounded to 0.1 dB, `time_station_heard`, `beat_notes_hz` rounded to whole Hz). When the block is all zeros or shorter than 8192 samples the detectors are not run and
-only `all_zero` and `rms_dbfs` are filled. Otherwise a Welch spectrum with an 8192-point FFT is computed. The `Err` is the spectrum's, which can only be an invalid FFT length, a constant here; whether other inputs (such as a rate of 0) can fail is unknown. Callers: the receiver test and the load check. Pure and
+only `all_zero` and `rms_dbfs` are filled. Otherwise a Welch spectrum with an 8192-point FFT (fast Fourier transform) is computed. The `Err` is the spectrum's, which can only be an invalid FFT length, a constant here; whether other inputs (such as a rate of 0) can fail is unknown. Callers: the receiver test and the load check. Pure and
 CPU only, a fraction of a second for ten seconds of audio. Tests: `detect.rs`. Related: `radioctl_detect_hum`, `radioctl_detect_tones`, `radioctl_detect_ticks`, `radioctl_detect_beats`.
 
 ## The transmit watchdog (`guard.rs`)

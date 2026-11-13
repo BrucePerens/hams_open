@@ -49,7 +49,7 @@ Called by the rig actor after the USB link reopened the device. It forgets any r
 
 ### `VirtualRig::yaesu_cf_set(&mut self, body: &str) -> Option<String>` [@ANCHOR: radioctl:radioctl_virtual_yaesu_cf_set]
 
-Applies the eight characters after `CF` of a clarifier set on the virtual Yaesu. `body` is `000`, receive flag, transmit flag, `000` to switch the receive and transmit clarifiers, or `001`, a sign and four digits to set the offset in hertz (plus or minus, at most 9999). It updates the twin's RIT, XIT and offset state and returns `None`, since a Yaesu does not answer a set. Anything else, a bad flag, sign or digits, gives `Some("?;")`. Only twin state changes; there is no radio and no transmission.
+Applies the eight characters after `CF` of a clarifier set on the virtual Yaesu. `body` is `000`, receive flag, transmit flag, `000` to switch the receive and transmit clarifiers, or `001`, a sign and four digits to set the offset in hertz (plus or minus, at most 9999). It updates the twin's RIT (receiver incremental tuning), XIT (transmitter incremental tuning) and offset state and returns `None`, since a Yaesu does not answer a set. Anything else, a bad flag, sign or digits, gives `Some("?;")`. Only twin state changes; there is no radio and no transmission.
 
 ## `crates/radioctl-protocols/src/yaesu.rs`
 

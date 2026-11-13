@@ -334,7 +334,7 @@ Deletes one tunnel with `DELETE /accounts/<account_id>/cfd_tunnel/<tunnel_id>`. 
 
 ### `create_custom_hostname(hostname, token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_create_custom_hostname]
 
-Registers a tenant's own domain as a Custom Hostname with `POST /zones/<zone_id>/custom_hostnames`, asking for HTTP validation (`method: http`), a domain-validated certificate (`type: dv`) and a minimum TLS version of 1.2. It returns `(True, hostname_object)` with Cloudflare's result (its `id` and certificate status) on a 200, `(False, "Missing credentials or hostname")` without a request, `(False, refusal)` without a request when the hostname has a callsign-shaped label below `hams.com` (`member_name_refusal`), and `(False, "API Error")` otherwise. It creates a hostname and a certificate order at Cloudflare. **Tests:** `TestCloudflareApiCalls.test_09_custom_hostname_create_get_delete`.
+Registers a tenant's own domain as a Custom Hostname with `POST /zones/<zone_id>/custom_hostnames`, asking for HTTP validation (`method: http`), a domain-validated certificate (`type: dv`) and a minimum TLS (Transport Layer Security) version of 1.2. It returns `(True, hostname_object)` with Cloudflare's result (its `id` and certificate status) on a 200, `(False, "Missing credentials or hostname")` without a request, `(False, refusal)` without a request when the hostname has a callsign-shaped label below `hams.com` (`member_name_refusal`), and `(False, "API Error")` otherwise. It creates a hostname and a certificate order at Cloudflare. **Tests:** `TestCloudflareApiCalls.test_09_custom_hostname_create_get_delete`.
 
 ### `get_custom_hostname(hostname_id, token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_get_custom_hostname]
 

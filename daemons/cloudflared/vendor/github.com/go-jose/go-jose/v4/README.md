@@ -65,8 +65,8 @@ standard where possible. The Godoc reference has a list of constants.
 |:------------------|:--------------------------------------------|
 | RSASSA-PKCS#1v1.5 | RS256, RS384, RS512                         |
 | RSASSA-PSS        | PS256, PS384, PS512                         |
-| HMAC              | HS256, HS384, HS512                         |
-| ECDSA             | ES256, ES384, ES512                         |
+| HMAC (keyed-hash message authentication code)              | HS256, HS384, HS512                         |
+| ECDSA (elliptic-curve digital signature algorithm)             | ES256, ES384, ES512                         |
 | Ed25519           | EdDSA<sup>2</sup>                           |
 | ML-DSA            | ML-DSA-44, ML-DSA-65, ML-DSA-87<sup>3</sup> |
 

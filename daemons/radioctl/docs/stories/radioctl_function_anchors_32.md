@@ -143,7 +143,7 @@ Settles which contact details are sent. Each field separately takes the command-
 
 ### `pub fn parse_server(url: &str) -> Result<ServerUrl, String>` [@ANCHOR: radioctl:radioctld_upload_parse_server]
 
-Splits an upload URL into TLS flag, host, port and path. `https://HOST[:PORT]/PATH` is always accepted (default port 443, path `/` if none); `http://` (default port 80) is accepted only for a loopback host, `localhost`, `127.0.0.1` or `::1` (bracketed form `[::1]` supported), so a report can never travel in the clear to another machine. Errors, all strings naming the URL: not starting with `https://` or `http://`, bad bracketed address, a port that is not a number up to 65535, an empty host or one with whitespace, and plain http to a non-loopback host. Pure; no name lookup.
+Splits an upload URL into TLS (Transport Layer Security) flag, host, port and path. `https://HOST[:PORT]/PATH` is always accepted (default port 443, path `/` if none); `http://` (default port 80) is accepted only for a loopback host, `localhost`, `127.0.0.1` or `::1` (bracketed form `[::1]` supported), so a report can never travel in the clear to another machine. Errors, all strings naming the URL: not starting with `https://` or `http://`, bad bracketed address, a port that is not a number up to 65535, an empty host or one with whitespace, and plain http to a non-loopback host. Pure; no name lookup.
 
 ### `pub async fn post_report(url: &str, body: &[u8]) -> Result<(), String>` [@ANCHOR: radioctl:radioctld_upload_post_report]
 

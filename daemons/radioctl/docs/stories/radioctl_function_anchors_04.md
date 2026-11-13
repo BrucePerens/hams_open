@@ -151,8 +151,8 @@ Returns the VFO the rig transmits on. If split is known to be off, it is the rec
 
 ### `pub fn rx_frequency(&self) -> Option<Hz>` [@ANCHOR: radioctl:radioctl_core_txstate_rx_frequency]
 
-Returns the receive frequency in hertz: the cached frequency of the receive VFO (`rx_vfo`), or `None` until it has been read. No arguments; pure; it does not consider RIT, which would move the actual receive frequency by a few kilohertz. A follower that wants the VFO frequency (a band decoder, for example) can rely on this.
+Returns the receive frequency in hertz: the cached frequency of the receive VFO (`rx_vfo`), or `None` until it has been read. No arguments; pure; it does not consider RIT (receiver incremental tuning), which would move the actual receive frequency by a few kilohertz. A follower that wants the VFO frequency (a band decoder, for example) can rely on this.
 
 ### `pub fn tx_frequency(&self) -> Option<Hz>` [@ANCHOR: radioctl:radioctl_core_txstate_tx_frequency]
 
-Returns the frequency of the transmit VFO (`tx_vfo`) in hertz, or `None` when that VFO's frequency has not been read. It equals the receive frequency when the rig is not split. XIT is not folded in. Pure, cannot fail. This is the value the derivation publishes as the active transmit frequency, but because it assumes "not split" when split is unread, the transmit gate uses `known_for_transmit` instead.
+Returns the frequency of the transmit VFO (`tx_vfo`) in hertz, or `None` when that VFO's frequency has not been read. It equals the receive frequency when the rig is not split. XIT (transmitter incremental tuning) is not folded in. Pure, cannot fail. This is the value the derivation publishes as the active transmit frequency, but because it assumes "not split" when split is unread, the transmit gate uses `known_for_transmit` instead.

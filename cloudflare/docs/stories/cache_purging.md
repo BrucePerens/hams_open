@@ -1,7 +1,7 @@
 # Story: Asynchronous Cache Purging
 
 As a **Content Manager**,
-I want my content updates to be reflected on the CDN edge immediately without slowing down my edit session,
+I want my content updates to be reflected on the CDN (content delivery network) edge immediately without slowing down my edit session,
 so that users see the latest version of the site while I maintain high productivity.
 
 ## Scenario: Updating a Blog Post

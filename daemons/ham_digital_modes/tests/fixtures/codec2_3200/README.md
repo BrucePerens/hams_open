@@ -54,7 +54,7 @@ energy -- at specific call sites, one line per real analysis frame.
   reference's own full `codec2_encode`/`codec2_decode` round trip --
   `synthetic_c_encoded_bits.bin` is 200 real packed frames (raw bytes,
   `BYTES_PER_FRAME` each, back-to-back), `synthetic_c_decoded_pcm.bin` is
-  the real reference decoder's own real PCM output for them (raw
+  the real reference decoder's own real PCM (pulse-code modulation) output for them (raw
   little-endian i16, no WAV header). Used by
   `codec2_3200::tests::decoder_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream`
   to check `Decoder`'s real output against the real reference decoder's
@@ -72,7 +72,7 @@ speech waveform samples), or real decoded PCM audio, from the real
 donated voice recordings above -- unlike the scalar features, both are
 audio-domain data close enough to the original recordings to warrant the
 same caution `tests/fixtures/`'s own `.gitignore` entry already applies
-to the real off-air WSPR recording used elsewhere in this crate.
+to the real off-air WSPR (weak signal propagation reporter, a beacon mode) recording used elsewhere in this crate.
 
 ## Regenerating
 

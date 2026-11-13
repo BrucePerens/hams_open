@@ -63,7 +63,7 @@ The virtual radio's reaction to one command line (line feed removed). Answers ar
 
 ### `pub fn engine(desc: RigDescription) -> Result<MarineEngine, RigError>` [@ANCHOR: radioctl:radioctl_marine_engine]
 
-Builds the protocol engine for an Icom marine transceiver (IC-M700PRO, IC-M710, IC-M802, IC-M803), which speaks `$PICOA` NMEA-style sentences. `desc` is taken by value. It wraps `LineEngine::new` with `ReceiverProtocol::IcomMarine`; an `ErrorKind::Unsupported` error is returned for the wrong family or protocol, for an unknown dialect name, or when the description has no remote id from 0 to 99 (see `from_description`). These are transmitters: PTT is encoded, so the transmit gate is applied by the caller. No I/O.
+Builds the protocol engine for an Icom marine transceiver (IC-M700PRO, IC-M710, IC-M802, IC-M803), which speaks `$PICOA` NMEA-style sentences. `desc` is taken by value. It wraps `LineEngine::new` with `ReceiverProtocol::IcomMarine`; an `ErrorKind::Unsupported` error is returned for the wrong family or protocol, for an unknown dialect name, or when the description has no remote id from 0 to 99 (see `from_description`). These are transmitters: PTT (push to talk) is encoded, so the transmit gate is applied by the caller. No I/O.
 
 ### `pub fn sentence(id: u8, command: &str) -> String` [@ANCHOR: radioctl:radioctl_marine_sentence]
 

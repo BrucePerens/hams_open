@@ -1658,7 +1658,7 @@ assertions on the real tables.
 
 Each function here already had an exact-value or float-parity test; the tests cite them. These are the chip-compatible FEC encoders, the D-STAR and AMBE+2
 dequantizers and frame classifiers, the pitch quantizers, and the D-STAR wire interleave and frame builder. All are plain synchronous functions: no
-I/O, no locks, no global state, no transmitter keying. They sit on the vocoder path only (frames in memory), so no PTT, band or transmit-gate logic applies.
+I/O, no locks, no global state, no transmitter keying. They sit on the vocoder path only (frames in memory), so no PTT (push to talk), band or transmit-gate logic applies.
 
 ### `g3_encode` [@ANCHOR: ham_digital_modes:dvsi_p25fec_fec_g3_encode]
 

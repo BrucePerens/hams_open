@@ -36,7 +36,7 @@ As a developer changing this code, I want every data structure in `src/ambe/fixe
 
 **Used by.** `advance_history` (functions whose signature names it).
 
-**Notes.** Everything a non-repeat frame decode recovers, exposed so a caller (notably the round-trip tests) can check exact parameter fidelity, not only that synthesis produced PCM.
+**Notes.** Everything a non-repeat frame decode recovers, exposed so a caller (notably the round-trip tests) can check exact parameter fidelity, not only that synthesis produced PCM (pulse-code modulation).
 
 ## `FrameOutcome` [@ANCHOR: ham_digital_modes:decode_frame_outcome_enum]
 

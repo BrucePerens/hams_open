@@ -40,7 +40,7 @@ phase jump at MARK/SPACE changes, and stretches every stop bit to 1.5 bit period
 | `mark_hz` | `f64` | MARK tone in hertz (2125 is the usual choice); SPACE is `mark_hz + 170`. |
 | `sample_rate` | `u32` | Output samples per second. |
 
-**Returns:** `Vec<i16>`, mono PCM, peak 0.9 of full scale, with continuous phase across tone changes. **Errors:** none. **Special concerns:** pure and synchronous. It only builds audio; sending it to a radio is the caller's job and has to pass the relay's transmit lock, band check and transmit gate. **Signature:** `pub fn rtty_modulate(text: &str, mark_hz: f64, sample_rate: u32) -> Vec<i16>`. **See also:** `text_to_framed_bits`, `framed_bits_to_audio` and the tests tagged `rtty_modulate`.
+**Returns:** `Vec<i16>`, mono PCM (pulse-code modulation), peak 0.9 of full scale, with continuous phase across tone changes. **Errors:** none. **Special concerns:** pure and synchronous. It only builds audio; sending it to a radio is the caller's job and has to pass the relay's transmit lock, band check and transmit gate. **Signature:** `pub fn rtty_modulate(text: &str, mark_hz: f64, sample_rate: u32) -> Vec<i16>`. **See also:** `text_to_framed_bits`, `framed_bits_to_audio` and the tests tagged `rtty_modulate`.
 
 *(Reference: `src/rtty.rs`)*
 

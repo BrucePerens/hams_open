@@ -13,7 +13,7 @@ As a developer changing this code, I want every data structure in `src/tentec.rs
 | `Orion` | - | Orion TT-565/566 and Eagle TT-599: ASCII. |
 | `Argonaut` | - | Argonaut V TT-516: binary with `G` acknowledgements. |
 | `Jupiter` | - | Jupiter TT-538: binary, no acknowledgements. |
-| `OmniVii` | - | Omni VII TT-588: binary, no acknowledgements, its own PTT frame. |
+| `OmniVii` | - | Omni VII TT-588: binary, no acknowledgements, its own PTT (push to talk) frame. |
 
 **Used by.** `from_name` (functions whose signature names it).
 

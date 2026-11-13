@@ -60,7 +60,7 @@ As a developer changing the DVSI chip probe examples, I want every data structur
 | Field | Type | Meaning |
 |---|---|---|
 | `idx` | `usize` | Frame number in the capture. |
-| `chip_rms`, `float_rms` | `f64` | RMS of the chip's and of the float decoder's PCM for the frame (sample units). |
+| `chip_rms`, `float_rms` | `f64` | RMS of the chip's and of the float decoder's PCM (pulse-code modulation) for the frame (sample units). |
 | `ratio` | `f64` | `chip_rms / float_rms`. |
 | `b2` | `u32` | Quantised gain index of the float decoder; 0 unless decoded. |
 | `l_hat` | `u32` | Number of harmonics; 0 unless decoded. |

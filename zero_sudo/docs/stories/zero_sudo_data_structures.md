@@ -266,7 +266,7 @@
 
 ### `_SSRFSafeHTTPSHandler` [@ANCHOR: zero_sudo:zero_sudo_ssrf_safe_fetch_ssrfsafe_httpshandler]
 
-**Purpose and location.** HTTPS counterpart of `_SSRFSafeHTTPHandler`. `context=self._context` (an `ssl.SSLContext`, defaulted the same way `urllib.request.HTTPSHandler` itself defaults it -- `ssl.create_default_context()`-equivalent, real certificate + hostname verification) is forwarded exactly the way stock `HTTPSHandler.https_open()` forwards it, so nothing about TLS verification changes -- only which raw address the socket dials. Defined in `zero_sudo/daemon/ssrf_safe_fetch.py:252` as a class; bases: `urllib.request.HTTPSHandler`.
+**Purpose and location.** HTTPS counterpart of `_SSRFSafeHTTPHandler`. `context=self._context` (an `ssl.SSLContext`, defaulted the same way `urllib.request.HTTPSHandler` itself defaults it -- `ssl.create_default_context()`-equivalent, real certificate + hostname verification) is forwarded exactly the way stock `HTTPSHandler.https_open()` forwards it, so nothing about TLS (Transport Layer Security) verification changes -- only which raw address the socket dials. Defined in `zero_sudo/daemon/ssrf_safe_fetch.py:252` as a class; bases: `urllib.request.HTTPSHandler`.
 
 **Fields.** none declared by this class.
 

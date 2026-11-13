@@ -67,7 +67,7 @@
 | `connect_waits_s` | `Vec<f64>` | Scope only: the pause after each failed connection attempt (`connect_waits_s`), seconds; one more attempt than there are pauses. |
 | `vna` | `vnwa_open::sweep::Config` | VNA only: the settings of `vnwa_open::sweep::Config`. |
 | `nanovna` | `crate::nanovna::Config` | The NanoVNA module's settings. |
-| `sdr` | `crate::sdr::Config` | The SDR module's settings. |
+| `sdr` | `crate::sdr::Config` | The SDR (software-defined radio) module's settings. |
 | `usb` | `crate::usb_hub::Config` | The USB hub module's settings. |
 | `audio` | `crate::audio::Config` | The audio module's settings. |
 | `radioctl` | `crate::radioctl::Config` | The radio control module's settings. |
@@ -604,7 +604,7 @@
 | `driver` | `String` | `bladerf`, `limesdr` or `rtlsdr` (the config file's driver name). |
 | `serial` | `Option<String>` | Hex serial (or any prefix of it) to pick one of several boards. |
 | `xb200` | `Option<String>` | bladeRF only: the XB-200 transverter setting passed to SoapySDR. |
-| `direct_samp` | `Option<String>` | RTL-SDR only: direct sampling mode `1` (I branch) or `2` (Q branch). |
+| `direct_samp` | `Option<String>` | RTL-SDR (a low-cost USB software-defined radio receiver) only: direct sampling mode `1` (I branch) or `2` (Q branch). |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 
@@ -667,7 +667,7 @@
 | `stop_hz` | `f64` | Last frequency in hertz. |
 | `rate_hz` | `f64` | Sample rate per step. |
 | `gain_db` | `f64` | Gain in dB. |
-| `fft_len` | `usize` | FFT length per step. |
+| `fft_len` | `usize` | FFT (fast Fourier transform) length per step. |
 | `samples_per_step` | `usize` | Samples per step. |
 | `antenna` | `Option<String>` | The antenna input, if set. |
 | `ppm` | `f64` | Frequency correction in ppm. |
@@ -1055,7 +1055,7 @@
 | `lo` | `f32` | Low edge of the passband. |
 | `hi` | `f32` | High edge of the passband. |
 | `channels` | `u64` | Number of output channels. |
-| `agc` | `bool` | Whether AGC is on. |
+| `agc` | `bool` | Whether AGC (automatic gain control) is on. |
 | `gain` | `f32` | Gain setting. |
 | `demod` | `u64` | Demodulator type. |
 | `bins` | `u64` | Number of spectrum bins. |

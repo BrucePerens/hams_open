@@ -78,7 +78,7 @@ Reproduces Hamlib's BCD routine for the WJ-8888 frequency. `hz` is in hertz and 
 
 ### `pub fn command_frame(hz: Hz, mode: u8, width: u8) -> [u8; FRAME_LEN]` [@ANCHOR: radioctl:radioctl_wj_command_frame]
 
-Builds the ten byte command frame the WJ-8888 receiver takes. `hz` is the frequency in hertz, `mode` is the three-bit mode code from `mode_code` and `width` is the three-bit IF bandwidth code (only the low three bits of each are used). Byte 0 is 0x48; bytes 1 to 4 carry the BCD digits of the frequency shifted into the frame's 6-bit groups (so the lowest bit of the 100 Hz digit is lost); byte 5 holds width and mode; bytes 6 to 8 carry the fixed BFO (no shift, 0x400) and full RF gain (0x7f), and the AGC is slow. Byte 9 is zero. Returns a fixed array; pure. This follows Hamlib's captured frames and is not verified on a radio.
+Builds the ten byte command frame the WJ-8888 receiver takes. `hz` is the frequency in hertz, `mode` is the three-bit mode code from `mode_code` and `width` is the three-bit IF bandwidth code (only the low three bits of each are used). Byte 0 is 0x48; bytes 1 to 4 carry the BCD digits of the frequency shifted into the frame's 6-bit groups (so the lowest bit of the 100 Hz digit is lost); byte 5 holds width and mode; bytes 6 to 8 carry the fixed BFO (no shift, 0x400) and full RF gain (0x7f), and the AGC (automatic gain control) is slow. Byte 9 is zero. Returns a fixed array; pure. This follows Hamlib's captured frames and is not verified on a radio.
 
 ### `pub fn decode_frame(buf: &[u8]) -> Option<(Hz, u8)>` [@ANCHOR: radioctl:radioctl_wj_decode_frame]
 

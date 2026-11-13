@@ -689,7 +689,7 @@ Three variants added to the table above. All are sent as explicit parameters:
   single-sideband variants keep 100 Hz of the other side so the carrier stays inside the passband (the
   placement of `radiod`'s `[ame]` preset, mirrored for the lower sideband). The PLL also turns on `radiod`'s
   carrier squelch; its documentation says an opening threshold of -1000 dB keeps it open, and a listener
-  should hear a fading carrier rather than silence, so both thresholds are sent as -1000 and the SNR squelch
+  should hear a fading carrier rather than silence, so both thresholds are sent as -1000 and the SNR (signal-to-noise ratio) squelch
   is off.
 - **`PLL_BW` is not sent.** The documented default (100 Hz) is used. The wire form of a written `PLL_BW` was
   not seen in the trial, so the client leaves it alone rather than guess; the status reports it (`pll_bw_hz`).

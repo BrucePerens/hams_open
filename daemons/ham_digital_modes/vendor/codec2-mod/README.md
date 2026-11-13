@@ -55,7 +55,7 @@ The `main` branch offers an encoder that is bitstream-compatible with the refere
 The meaning, width, ordering, and allocation of all frame bit fields are all preserved. Bitstreams produced
 by this encoder can be decoded by an unmodified Codec2 decoder (and vice versa).
 
-The internal DSP implementation, floating-point operations, and decoded audio
+The internal DSP (digital signal processing) implementation, floating-point operations, and decoded audio
 signals are not required to be identical to the reference implementation.
 
 Other branches may introduce experimental DSP changes (e.g. post-filters,

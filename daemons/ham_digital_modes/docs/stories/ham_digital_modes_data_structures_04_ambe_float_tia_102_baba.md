@@ -21,7 +21,7 @@ As a developer changing this code, I want every data structure in `src/ambe/floa
 
 ## `DecodedParameters` [@ANCHOR: ham_digital_modes:tia_102_baba_decode_decoded_parameters_struct]
 
-**Purpose.** Everything [`DecoderState::decode_parameters`] recovers from a non-repeat frame, exposed on its own (rather than only fed straight into synthesis) so a caller -- notably this module's own round-trip test -- can assert exact parameter fidelity against what was encoded, not just that synthesis produced *some* finite PCM.
+**Purpose.** Everything [`DecoderState::decode_parameters`] recovers from a non-repeat frame, exposed on its own (rather than only fed straight into synthesis) so a caller -- notably this module's own round-trip test -- can assert exact parameter fidelity against what was encoded, not just that synthesis produced *some* finite PCM (pulse-code modulation).
 
 **Definition.** `pub struct DecodedParameters` (struct) in `daemons/ham_digital_modes/src/ambe/float/tia_102_baba/decode.rs`.
 
@@ -255,7 +255,7 @@ As a developer changing this code, I want every data structure in `src/ambe/floa
 
 ## `Complex` [@ANCHOR: ham_digital_modes:unvoiced_synthesis_complex_struct]
 
-**Purpose.** A complex number with two `f64` parts used by the unvoiced-synthesis FFT. Private to `unvoiced_synthesis.rs`.
+**Purpose.** A complex number with two `f64` parts used by the unvoiced-synthesis FFT (fast Fourier transform). Private to `unvoiced_synthesis.rs`.
 
 **Definition.** `struct Complex` (struct) in `daemons/ham_digital_modes/src/ambe/float/tia_102_baba/unvoiced_synthesis.rs`; derives `Clone`, `Copy`.
 

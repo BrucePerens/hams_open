@@ -132,7 +132,7 @@ As a developer changing this code, I want every data structure in `src/ambe/floa
 
 ## `AmbePlus2SynthesisDecoder` [@ANCHOR: ham_digital_modes:ambe_plus_2_synthesis_ambe_plus2_synthesis_decoder_struct]
 
-**Purpose.** Streaming float AMBE+2 half-rate frame-to-PCM decoder: `decode_frame` takes one logical frame and returns 20 ms of PCM.
+**Purpose.** Streaming float AMBE+2 half-rate frame-to-PCM decoder: `decode_frame` takes one logical frame and returns 20 ms of PCM (pulse-code modulation).
 
 **Definition.** `pub struct AmbePlus2SynthesisDecoder` (struct) in `daemons/ham_digital_modes/src/ambe/float/ambe_plus_2/synthesis.rs`.
 

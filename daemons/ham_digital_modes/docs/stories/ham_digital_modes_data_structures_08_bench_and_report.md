@@ -11,7 +11,7 @@ As a developer changing this code, I want the data structures in `examples/ambe_
 | Field | Type | Meaning |
 |---|---|---|
 | `.0` | `&'static str` | Name printed in the report, for example `D-STAR float`. |
-| `.1` | `fn(&[i16]) -> Vec<f64>` | Round trip: PCM in, decoded PCM out (a whole number of 160-sample frames). |
+| `.1` | `fn(&[i16]) -> Vec<f64>` | Round trip: PCM (pulse-code modulation) in, decoded PCM out (a whole number of 160-sample frames). |
 
 **Notes.** `codec_table()` builds the list: the D-STAR and TIA-102.BABA float and fixed ports, plus the AMBE+2 float and fixed ports when the `ambe_plus_2` feature is on. The functions are pure; there is no state between calls and no hardware. Test: `tests::every_codec_in_the_table_turns_pcm_into_finite_pcm_of_whole_frames` in the example.
 

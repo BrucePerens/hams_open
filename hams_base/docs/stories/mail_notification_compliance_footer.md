@@ -9,7 +9,7 @@ organization, configurable per deployment rather than hardcoded.
 * **Story:** As a recipient of a system notification email, I want to see which organization
   sent it, so I can tell a legitimate hams.com notification from anything else landing in my
   inbox.
-    * **BDD Criteria:**
+    * **BDD (behaviour-driven development) Criteria:**
         * *Given* `hams_base.compliance_org_name` is configured (or left unset, falling back to
           the name of the sending company, `company.name`)
         * *When* any notification email renders through Odoo's stock notification layout

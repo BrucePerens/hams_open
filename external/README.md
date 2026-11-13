@@ -76,7 +76,7 @@ license text each library's own license requires, not just its SPDX identifier.
 - **Purpose:** The primitive layer (X25519 key agreement, SHA-256 hashing, HKDF key derivation, ChaCha20-Poly1305 authenticated encryption) underneath
   `hams_com`'s browser-side Noise_XX handshake (`ham_shack/static/src/js/noise_xx.js`,
   `docs/proposals/TRANSMITTER_HIJACK_PREVENTION.md` section 1). These used to be imported live from
-  `cdn.jsdelivr.net` on every handshake -- a real, unmitigated CDN dependency for the exact code
+  `cdn.jsdelivr.net` on every handshake -- a real, unmitigated CDN (content delivery network) dependency for the exact code
   establishing a secure session, against this same self-hosting policy. Fixed by vendoring.
 - **Local Path:** `/external/static/src/node_modules/noble/{curves/ed25519.js,hashes/sha2.js,
   hashes/hkdf.js,ciphers/chacha.js}`
@@ -113,7 +113,7 @@ license text each library's own license requires, not just its SPDX identifier.
 - **Version:** jsPDF 4.2.1, fabric.js 7.4.0 (replacing the 2.5.1 and 5.3.0 that pages used to load from `cdn.jsdelivr.net`; both
   old lines have published advisories with no fix, see `VENDORED.md`).
 - **License:** MIT (both). Texts in `static/src/node_modules/{jspdf,fabric}/LICENSE`, reproduced in `THIRD_PARTY_LICENSES.md`.
-- **Purpose:** hams_com's `ham_logbook`: "Download PDF" on the QSL Collection and Awards Dashboard (jsPDF), and the Award Designer (fabric.js).
+- **Purpose:** hams_com's `ham_logbook`: "Download PDF" on the QSL (contact confirmation) Collection and Awards Dashboard (jsPDF), and the Award Designer (fabric.js).
 - **Local Path:** `/external/static/src/node_modules/jspdf/jspdf.umd.min.js`, `/external/static/src/node_modules/fabric/fabric.min.js`
 - **Source, integrity and hashes:** `VENDORED.md` (npm tarball, `dist.integrity` checked, compared with unpkg, sha256 of each file; unmodified,
   `tests/test_vendored_files.py` enforces the hashes). Not fetched by `fetch_assets.py`; update by the steps in `VENDORED.md`.

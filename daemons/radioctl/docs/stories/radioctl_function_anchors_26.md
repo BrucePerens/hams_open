@@ -19,7 +19,7 @@ It is used by `check_coverage` (every key needs a fact, every fact a key) and by
 ### `fn fact_for(&self, key: &str) -> Option<&Fact>` [@ANCHOR: radioctl:radioctl_core_rigfile_fact_for]
 
 Finds the provenance fact that explains one description key. `key` is a dotted key such as `capability.set-ptt`, borrowed; the result borrows from `self` and is `None` when no fact covers it. An exact key match is preferred; only if there is none does it fall back to the first fact whose key is a wildcard (`prefix.*`) that covers the key, by `matches_key`.
-It lets a file state one fact for a whole group (for example all capabilities from one manual table) while a single key can still be overridden with its own, stricter fact, such as hardware verification of the PTT capability. Pure and read-only, linear in the number of facts, no errors. When several wildcards match, the first in file order wins.
+It lets a file state one fact for a whole group (for example all capabilities from one manual table) while a single key can still be overridden with its own, stricter fact, such as hardware verification of the PTT (push to talk) capability. Pure and read-only, linear in the number of facts, no errors. When several wildcards match, the first in file order wins.
 
 ### `fn verification_summary(&self) -> BTreeMap<&'static str, usize>` [@ANCHOR: radioctl:radioctl_core_rigfile_verification_summary]
 
@@ -180,7 +180,7 @@ Names for VFO, mode, level and meter are looked up through the name tables; an u
 
 ### `fn build_op(spec: OpSpec) -> Result<Op, RigError>` [@ANCHOR: radioctl:radioctl_core_transcript_build_op]
 
-Converts the file's command (`OpSpec`, by value) of a transcript step into the typed `Op` the engine would encode, such as `GetFrequency`, `SetFrequency` (VFO and hertz), `SetMode`, `SetPtt`, `SendCw`, `SetLevel` and the get and set operations for split, RIT, XIT and filter width.
+Converts the file's command (`OpSpec`, by value) of a transcript step into the typed `Op` the engine would encode, such as `GetFrequency`, `SetFrequency` (VFO and hertz), `SetMode`, `SetPtt`, `SendCw`, `SetLevel` and the get and set operations for split, RIT (receiver incremental tuning), XIT (transmitter incremental tuning) and filter width.
 Names for VFO, mode, level and meter go through the name tables; an unknown one returns a `Malformed` `RigError`. Pure and transcripts are replayed only against stand-ins, so a `SetPtt` or `SendCw` step here never keys a real transmitter.
 
 ### `fn build_panel(spec: PanelSpec) -> Result<Panel, RigError>` [@ANCHOR: radioctl:radioctl_core_transcript_build_panel]

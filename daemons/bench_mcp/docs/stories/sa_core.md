@@ -1,6 +1,6 @@
 # The Spectrum Analyzer Driver's Core: Config, Tool List, Shared Helpers, Status and Dispatch
 
-As an operator with a Siglent SSA3000X spectrum analyzer (with the tracking generator option) on the bench LAN, I want the MCP server to list only the
+As an operator with a Siglent SSA3000X spectrum analyzer (with the tracking generator option) on the bench LAN, I want the MCP (Model Context Protocol) server to list only the
 spectrum analyzer tools my configured tier allows, to refuse an address that is not an SSA3000X before it sends anything else, and to give a model clear,
 step-by-step errors when the instrument is silent. This story covers `daemons/bench_mcp/src/sa/mod.rs`: the config entry, the fixed limits, the tool
 table, the argument and reply helpers shared with `sweep.rs` and `tg.rs`, the identity check, `bench_sa_status`, and the dispatcher. The sweep, marker and

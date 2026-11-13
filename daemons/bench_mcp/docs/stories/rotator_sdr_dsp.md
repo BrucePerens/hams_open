@@ -7,7 +7,7 @@ check, the move, the stop and the park), the SDR module (`src/sdr.rs`: configura
 spectrum maths (`src/spectrum.rs`, used by `bench_scope_spectrum` in `scope.rs`) and the I/Q signal processing (`src/dsp.rs`, used by the SDR tools). The configuration
 examples and the tool tiers are in the README (sections "Rotators" and the SDR driver list).
 
-Facts that apply to every entry. Nothing here can transmit radio frequency energy: the SDR tools are receive only, the spectrum and DSP code are pure functions, and the
+Facts that apply to every entry. Nothing here can transmit radio frequency energy: the SDR tools are receive only, the spectrum and DSP (digital signal processing) code are pure functions, and the
 rotator moves a motor, not a transmitter. The transmit gate, the band check and the `full` tier therefore do not apply to any function below, and no entry keys a
 transmitter. The rotator is the one thing here that can do physical harm, so its tools are gated by tier (`bench_rotator_status` is `read_only`; point, stop and park are
 `read_config`; the SDR tools are all `read_config`), by the owner's limits, and by a pre-flight check that runs before anything is sent. The server (`main.rs`) holds a

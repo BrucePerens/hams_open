@@ -1,6 +1,6 @@
 # Story: FT8 messages, tones and audio (ham_digital_modes)
 
-FT8 is a 15-second slotted mode. The operator gets message text packed into the 77-bit payload and 79 tones, a
+FT8 (a weak-signal digital mode) is a 15-second slotted mode. The operator gets message text packed into the 77-bit payload and 79 tones, a
 waveform to transmit, and decoded messages with signal-to-noise and audio frequency for each. Packing,
 error-correction coding and decoding come from the vendored `ft8_lib` through a small C shim.
 
@@ -58,5 +58,5 @@ before the next slot.
 
 `Ft8Decoder::decode_timed` is `decode` with a fourth value per message: the signal's start in seconds from the
 first sample fed since the last `reset` (slightly negative is possible). With audio fed from the slot boundary,
-the DT that WSJT-X reports is this value minus 0.5 s.
+the DT that WSJT-X (a weak-signal digital-mode program) reports is this value minus 0.5 s.
 *(Reference: `src/ft8.rs`)*

@@ -1,7 +1,7 @@
 # radioctl function anchors, batch 07
 
 Function anchors for `radioctl-core` (capability sets, the mode-code lookups and the two built-in descriptions) and for the Drake, Alinco and Racal vendor engines and virtual twins in `radioctl-protocols`, written to the ADR 0113 standard. Each anchor is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
-The Drake and Racal engines are receive-only and have no PTT. The Alinco DX-SR8 engine can encode `SetPtt`; an engine only checks that the description lists the capability, and the lock, band check and transmit gate are applied by the caller that owns the engine (unknown from these files; check `radioctld`), never by the engine or the twin.
+The Drake and Racal engines are receive-only and have no PTT (push to talk). The Alinco DX-SR8 engine can encode `SetPtt`; an engine only checks that the description lists the capability, and the lock, band check and transmit gate are applied by the caller that owns the engine (unknown from these files; check `radioctld`), never by the engine or the twin.
 
 ## `crates/radioctl-core/src/capability.rs`
 

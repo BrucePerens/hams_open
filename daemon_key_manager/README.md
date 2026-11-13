@@ -158,10 +158,10 @@ main (checked 2026-11-05), and every `get_odoo_client()` daemon was restarted at
 | 12 | Ham Radio Callbook DNS Export Service | `dns_export/callbook_dns_export_service_internal.key` | `callbook.dns.export`, `callbook.delta.export` | oneshot, timer | file at start, reload | safe: one-shot | - |
 | 13 | Ham Radio DNS API Service | `dns_sync/dns_api_service_internal.key` | `pdns.sync` | simple, `Restart=always` | `get_odoo_client()` at start, reload on 401 (its PowerDNS key is a different credential) | safe: reload | - |
 | 14 | Ham DX Daemon Service | `dx_daemon/dx_daemon_service.key` | `ham.dx.daemon`; `skimmer.list.sync` | simple, `Restart=always`; oneshot, timer | `get_odoo_client()` at start (30 s call timeout), reload on 401; file at start | safe: reload; one-shot | - |
-| 15 | AI Event Enrichment Service | `event_ai_correction_service_internal.key` | `event.ai.enrichment`; `run-event-enrichment-mcp.sh` -> `hams_event_enrichment_mcp` | oneshot, timer; MCP process lives one session | file at start; a new `get_odoo_client()` per tool call | safe: one-shot; per call | - |
+| 15 | AI Event Enrichment Service | `event_ai_correction_service_internal.key` | `event.ai.enrichment`; `run-event-enrichment-mcp.sh` -> `hams_event_enrichment_mcp` | oneshot, timer; MCP (Model Context Protocol) process lives one session | file at start; a new `get_odoo_client()` per tool call | safe: one-shot; per call | - |
 | 16 | Ham Radio Event Sync Service | `event_sync/event_sync_service_internal.key` | the nine `event_sync` units (`wa7bnm.contest`, `arrl.hamfests`, `event.cover.image`, `rac.events`, `sm3cer.contest`, `electronicsfleamarket`, `hamstudy.sessions`, `radio.history.events`, `monthly.events.recheck`) | oneshot, timer | file at start, reload | safe: one-shot | - |
 | 17 | Exception Reporter (OnFailure and daemon helper) | `exception_reporter.env` | `hams-exception-report@` (`exception_reporter.py report-unit`, also run from daemons' `ExecStopPost=`) | oneshot | `load_key()` reads the file on every report (`post_report`) | safe: per call | - |
-| 18 | FCC ULS Sync (mac1) | `fcc_uls_sync_mac1.env` (on mac1: `keys/fcc_uls_sync.env`) | `fcc-uls-sync` on the mac1 VM | oneshot, hourly timer | `get_odoo_client()`, then `rotate_own_key_if_due(client)` | safe: self-rotation, see below | - |
+| 18 | FCC (US Federal Communications Commission) ULS Sync (mac1) | `fcc_uls_sync_mac1.env` (on mac1: `keys/fcc_uls_sync.env`) | `fcc-uls-sync` on the mac1 VM | oneshot, hourly timer | `get_odoo_client()`, then `rotate_own_key_if_due(client)` | safe: self-rotation, see below | - |
 | 19 | FCC ULS Sync (pi500-1) | `fcc_uls_sync_pi500.env` | `fcc.uls.sync` on pi500-1 | oneshot, timer | same | safe: self-rotation, see below | - |
 | 20 | GDPR CSV Export Service | `gdpr_export/gdpr_export_service_internal.key` | `gdpr.csv.export` | simple, `Restart=always` | a new `get_odoo_client()` for each export request (`_consume_token`), reload on 401 | safe: per call + reload | - |
 | 21 | HamCall Verify Index Sync Service | `hamcall_sync/hamcall_verify_sync_service_internal.key` | `hamcall.idx.sync` | oneshot, timer | file at start, reload | safe: one-shot | - |
@@ -190,7 +190,7 @@ uses `PAGER_MCP_API_KEY` from its environment, creates a client per tool call, i
 `zero_sudo/daemon/json_rpc_client.py` reloads on 401 and has no caller. No Odoo module other than this one reads a key file or holds a
 daemon key in memory (searched: `/opt/hams/etc/keys`, `ODOO_RPC_KEY`, `Bearer`, `/json/2` across `hams_open` and `hams_com`).
 `dx.firehose` has no key by design. Its `_read_qsos()` used to call `get_odoo_client()`, which exits for want of `ODOO_KEY_FILE` (it had not
-met a QSO yet); fixed 2026-11-05 (hams_com #3109) by reading the QSOs with the PostgreSQL login it already holds (`db_app.env`), so it
+met a QSO (radio contact) yet); fixed 2026-11-05 (hams_com #3109) by reading the QSOs with the PostgreSQL login it already holds (`db_app.env`), so it
 holds no daemon key, needs no registry row and no `ROTATED_KEY_RELOAD_POLICY` row.
 
 **The guard.** `ROTATED_KEY_RELOAD_POLICY` in `hams_shared/tools/infrastructure.py` lists every non-oneshot `MANIFEST` unit and MCP wrapper

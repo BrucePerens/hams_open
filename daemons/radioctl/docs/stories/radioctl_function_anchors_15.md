@@ -48,11 +48,11 @@ Decodes the radio's answer bytes one by one; the time argument is unused. The go
 
 ### `pub fn new(desc: &RigDescription) -> Result<SkantiTwin, RigError>` [@ANCHOR: radioctl:radioctl_skanti_twin_new]
 
-Builds a virtual Skanti radio for tests. `desc` is borrowed; the dialect selects the command set (unknown name gives `Unsupported`). Receive and transmit frequencies start at the description's default in 100 Hz units, the mode at the default mode's code, or the first code of the mode table, or ASCII `X`; the list of valid mode codes is kept. PTT is off and the line buffer is empty. No I/O.
+Builds a virtual Skanti radio for tests. `desc` is borrowed; the dialect selects the command set (unknown name gives `Unsupported`). Receive and transmit frequencies start at the description's default in 100 Hz units, the mode at the default mode's code, or the first code of the mode table, or ASCII `X`; the list of valid mode codes is kept. PTT (push to talk) is off and the line buffer is empty. No I/O.
 
 ### `fn apply_8000(&mut self, line: &[u8]) -> bool` [@ANCHOR: radioctl:radioctl_skanti_twin_apply_8000]
 
-Applies one CR-stripped TRP8000 command line to the twin and returns whether the radio would accept it (true produces the `>` prompt). `Z` plus six digits sets the receive frequency and `T` plus six digits the transmit frequency (units of 100 Hz; non-digits are refused); `XN` keys and `XF` unkeys the modelled PTT; `A1` selects CW when the description has `A`, and a single mode code in the description (other than `A`) selects that mode. The filter, AGC, RF and power commands Hamlib sends after a mode write (`I`, `V`, `N`, `W`, `AS`, `AA`, `AF`) are accepted but not kept. Any other line returns false. Mutates the twin only.
+Applies one CR-stripped TRP8000 command line to the twin and returns whether the radio would accept it (true produces the `>` prompt). `Z` plus six digits sets the receive frequency and `T` plus six digits the transmit frequency (units of 100 Hz; non-digits are refused); `XN` keys and `XF` unkeys the modelled PTT; `A1` selects CW when the description has `A`, and a single mode code in the description (other than `A`) selects that mode. The filter, AGC (automatic gain control), RF and power commands Hamlib sends after a mode write (`I`, `V`, `N`, `W`, `AS`, `AA`, `AF`) are accepted but not kept. Any other line returns false. Mutates the twin only.
 
 ### `fn feed_8255(&mut self, b: u8) -> u8` [@ANCHOR: radioctl:radioctl_skanti_twin_feed_8255]
 
@@ -92,7 +92,7 @@ Chooses the filter index the engine selects for a mode. `mode` is passed by valu
 
 ### `fn sideband(mode: Mode) -> i64` [@ANCHOR: radioctl:radioctl_tentec_rx320_sideband]
 
-Gives the sideband sign `m` of the tuning formula: -1 for LSB, CW and CW reverse (the lower side), +1 for USB, and 0 for every other mode (AM, FM and so on). `mode` is passed by value. Pure, no errors. The value multiplies the correction in `tuning_words_for` and `frequency_of_for`.
+Gives the sideband sign `m` of the tuning formula: -1 for LSB (lower sideband), CW and CW reverse (the lower side), +1 for USB, and 0 for every other mode (AM, FM and so on). `mode` is passed by value. Pure, no errors. The value multiplies the correction in `tuning_words_for` and `frequency_of_for`.
 
 ### `fn correction(variant: Variant, mode: Mode, width: u32) -> i64` [@ANCHOR: radioctl:radioctl_tentec_rx320_correction]
 

@@ -251,7 +251,7 @@ Reads the `fft_len` argument for the spectrum tools: 256 to 65536, default 4096,
 
 Tool `bench_elad_spectrum` (tier `read_config`): a spectrum snapshot around `freq_hz` as a CSV in `capture_dir`, with the noise floor and the strongest peaks.
 
-Arguments: `freq_hz` and `name` (required), `fft_len` (see above), `rate_hz`, `filters`, `attenuator`. It reads 16 FFT lengths of samples (at least two, at most 16 million; for example 65536 x 16 = 1048576) and averages them with Welch's method (Hann window, 50 % overlap, `dsp::welch`).
+Arguments: `freq_hz` and `name` (required), `fft_len` (see above), `rate_hz`, `filters`, `attenuator`. It reads 16 FFT (fast Fourier transform) lengths of samples (at least two, at most 16 million; for example 65536 x 16 = 1048576) and averages them with Welch's method (Hann window, 50 % overlap, `dsp::welch`).
 
 Returns `summary` plus `file`, `bins`, `bin_hz`, `noise_floor_dbfs` (the median bin) and up to five `peaks` (each `offset_hz`, `freq_hz`, `power_dbfs`). The CSV header is `offset_hz,freq_hz,power_dbfs`; power is dBFS relative to a full-scale complex tone. The peak call is `dsp::peaks(&sp, 5, 40.0, 3, 3)`: at most 5 peaks, at least 40 dB over the floor, with 3 as the minimum separation in bins and 3 as the DC bins skipped (argument order as in `dsp::peaks`). Errors: as `capture`, plus `dsp::welch` errors. Receive only. Test: `bench_mcp_elad_spectrum`.
 

@@ -58,7 +58,7 @@ As a developer changing this code, I want every data structure in `src/codec2_16
 
 ## `Decoder` [@ANCHOR: ham_digital_modes:codec2_1600_decoder_struct]
 
-**Purpose.** Persistent per-decoder state: the previous frame's own decoded `Wo`/voiced/LSPs/energy (sub-frame 3's own, needed to interpolate the next frame's sub-frames 0/1/2), plus `synthesis::SynthesisState`'s own overlap-add memory and a forward FFT plan. `spectral_bridge` is the same opt-in 16kHz harmonic-extension state `codec2_3200::Decoder` carries -- see `decode_16k` below and `codec2_3200::spectral_bridge`'s own doc comment; `.enabled` toggles it (on by default), the ordinary `decode()` above never touches it.
+**Purpose.** Persistent per-decoder state: the previous frame's own decoded `Wo`/voiced/LSPs/energy (sub-frame 3's own, needed to interpolate the next frame's sub-frames 0/1/2), plus `synthesis::SynthesisState`'s own overlap-add memory and a forward FFT (fast Fourier transform) plan. `spectral_bridge` is the same opt-in 16kHz harmonic-extension state `codec2_3200::Decoder` carries -- see `decode_16k` below and `codec2_3200::spectral_bridge`'s own doc comment; `.enabled` toggles it (on by default), the ordinary `decode()` above never touches it.
 
 **Definition.** `pub struct Decoder` (struct) in `daemons/ham_digital_modes/src/codec2_1600/mod.rs`.
 

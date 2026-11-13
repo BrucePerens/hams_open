@@ -10,7 +10,7 @@ DMARC, RUA, SPF and DKIM are expanded in the Email & DMARC Handling section of [
 
 * **Story:** As an administrator, I want to browse received DMARC aggregate reports in a list, so I
   can spot domains sending on our behalf or scan for alignment failures at a glance.
-    * **BDD Criteria:**
+    * **BDD (behaviour-driven development) Criteria:**
         * *Given* one or more `hams_base.dmarc.report` records
         * *When* I open the report list
         * *Then* I see the reporting organization, domain, and evaluated policy for each report,

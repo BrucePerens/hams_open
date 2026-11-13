@@ -94,7 +94,7 @@ returns or logs the secret).
 
 | Argument | Type | Meaning |
 |---|---|---|
-| `name` | `str` | the secret that is the HMAC key |
+| `name` | `str` | the secret that is the HMAC (keyed-hash message authentication code) key |
 | `payload` | `str` | the text to sign (UTF-8) |
 | `digest` | `str` | `sha256` or `sha512` |
 

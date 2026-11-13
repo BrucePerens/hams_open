@@ -34,7 +34,7 @@ Builds the three command lines that turn the radio's pushed status on or off: `s
 
 ### `fn shadow_value(&self, field: Field) -> Option<Observation>` [@ANCHOR: radioctl:radioctl_flex_shadow_value]
 
-Answers a read from the status the engine has already seen. Supported fields, all for the engine's slice: frequency of VFO A, mode, filter width (high edge minus low edge, and `None` if the difference is negative), AF gain from the slice's `audio_level`, mic gain and RF power from the transmit status (percent 0 to 100), and PTT from the interlock state through `interlock_keyed`. Returns `None` for any other field or when the needed status has not been received yet, in which case the engine parks the read and answers it from the first status line that carries the field. Borrows the engine immutably; pure.
+Answers a read from the status the engine has already seen. Supported fields, all for the engine's slice: frequency of VFO A, mode, filter width (high edge minus low edge, and `None` if the difference is negative), AF gain from the slice's `audio_level`, mic gain and RF power from the transmit status (percent 0 to 100), and PTT (push to talk) from the interlock state through `interlock_keyed`. Returns `None` for any other field or when the needed status has not been received yet, in which case the engine parks the read and answers it from the first status line that carries the field. Borrows the engine immutably; pure.
 
 ### `fn commands(&self, op: &Op) -> Result<Vec<(String, Kind)>, RigError>` [@ANCHOR: radioctl:radioctl_flex_engine_commands]
 

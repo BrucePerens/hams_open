@@ -1,7 +1,7 @@
 # radioctl function anchors, batch 02
 
 Function anchors for the `radioctl-core` crate (the USB link and the libusb backend) and the `radioctl-protocols` crate (the Si570 USB kits, the FUNcube dongles and the Elektor SDR-USB), written to the ADR 0113 standard. Tests cite its anchor with `Tests [@ANCHOR: ...]`.
-Only the Si570 engine can key a transmitter, through its PTT request (`Op::SetPtt`); that request is encoded only for descriptions that list the capability, and the daemon's transmit gate (lock, band check, operator opening) sits in front of the engine, not inside it. The FUNcube and Elektor boards are receive only.
+Only the Si570 engine can key a transmitter, through its PTT (push to talk) request (`Op::SetPtt`); that request is encoded only for descriptions that list the capability, and the daemon's transmit gate (lock, band check, operator opening) sits in front of the engine, not inside it. The FUNcube and Elektor boards are receive only.
 
 ## `crates/radioctl-core/src/usb_link.rs`
 

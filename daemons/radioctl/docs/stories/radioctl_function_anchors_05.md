@@ -15,7 +15,7 @@ The gate input of every transmit-capable command: the transmit frequency when it
 
 ### `fn frequency(&self, vfo: Vfo) -> Option<Hz>` [@ANCHOR: radioctl:radioctl_core_txstate_frequency]
 
-Looks up the cached frequency of one VFO in the state: `Vfo::A` gives the stored VFO A frequency, `Vfo::B` the stored VFO B frequency, each `None` when it has not been read. `vfo` is passed by value (it is `Copy`). Private helper of `rx_frequency` and `tx_frequency`; it does no derivation and no I/O. Cannot fail. The frequency is in whole hertz; a RIT or XIT offset is not included.
+Looks up the cached frequency of one VFO in the state: `Vfo::A` gives the stored VFO A frequency, `Vfo::B` the stored VFO B frequency, each `None` when it has not been read. `vfo` is passed by value (it is `Copy`). Private helper of `rx_frequency` and `tx_frequency`; it does no derivation and no I/O. Cannot fail. The frequency is in whole hertz; a RIT (receiver incremental tuning) or XIT (transmitter incremental tuning) offset is not included.
 
 ## `crates/radioctl-core/src/rig.rs`
 
@@ -63,7 +63,7 @@ Waits for the next filter-scope sweep and returns it as a `FilterScopeFrame`. Re
 
 ### `fn keyed_split_frequency(&self, vfo: Vfo) -> Option<Hz>` [@ANCHOR: radioctl:radioctl_splitter_keyed_split_frequency]
 
-Decides whether a plain read of the current frequency, from a client of the splitter, should be answered with the transmit frequency instead. It returns `Some(hz)` only when all of these hold: `vfo` is VFO A (the current VFO of both personalities); the splitter configuration has `report_tx_frequency_while_keyed` switched on; and the cache shows PTT on, split on and an active transmit frequency. In every other case it returns `None`, meaning "answer as usual". It reads only cached observations, with no I/O and no locks beyond the cache's; it cannot fail. It never keys or changes anything; it affects only what a client is told while the rig is already transmitting in split, which is useful to amplifier and logging software that read "the frequency".
+Decides whether a plain read of the current frequency, from a client of the splitter, should be answered with the transmit frequency instead. It returns `Some(hz)` only when all of these hold: `vfo` is VFO A (the current VFO of both personalities); the splitter configuration has `report_tx_frequency_while_keyed` switched on; and the cache shows PTT (push to talk) on, split on and an active transmit frequency. In every other case it returns `None`, meaning "answer as usual". It reads only cached observations, with no I/O and no locks beyond the cache's; it cannot fail. It never keys or changes anything; it affects only what a client is told while the rig is already transmitting in split, which is useful to amplifier and logging software that read "the frequency".
 
 ## `crates/radioctld/src/service.rs`
 

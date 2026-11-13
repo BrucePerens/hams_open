@@ -455,7 +455,7 @@ no side effects. See also: `tools_are_listed_by_tier_and_the_instrument_is_chose
 
 ### `glasgow_tool_defs` [@ANCHOR: glasgow_tool_defs]
 
-Builds the list of MCP tool definitions this driver offers for the current config. The server calls it when a client asks for the tool list. A tool is listed only when at least one
+Builds the list of MCP (Model Context Protocol) tool definitions this driver offers for the current config. The server calls it when a client asks for the tool list. A tool is listed only when at least one
 configured glasgow instrument is at or above the tool's tier, so a `read_only` instrument shows no driving tool.
 
 ```rust

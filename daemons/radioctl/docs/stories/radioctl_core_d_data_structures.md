@@ -150,14 +150,14 @@
 | `GetSignal` | `GetSignal` | Read the S-meter (raw units). |
 | `GetPower` | `GetPower` | Read the power meter (raw units). |
 | `SendCw` | `SendCw(String)` | Send Morse text. |
-| `StopCw` | `StopCw` | Stop Morse in progress: clear the rig's CW text buffer and end the element being sent. It is a stop path, so it jumps the queue like an unkey and needs no transmit gate. It does not unkey a rig held keyed by PTT; polling reconciles the transmit state after it. |
+| `StopCw` | `StopCw` | Stop Morse in progress: clear the rig's CW text buffer and end the element being sent. It is a stop path, so it jumps the queue like an unkey and needs no transmit gate. It does not unkey a rig held keyed by PTT (push to talk); polling reconciles the transmit state after it. |
 | `SetTransceive` | `SetTransceive(bool)` | Turn the rig's unsolicited reporting on or off. |
 | `GetSplit` | `GetSplit` | Read split operation. |
 | `GetTxVfo` | `GetTxVfo` | Read which VFO the rig transmits on. |
 | `SetSplit` | `SetSplit(bool)` | Enter (`true`) or leave (`false`) split operation. |
-| `GetRit` | `GetRit` | Read whether RIT is on. |
+| `GetRit` | `GetRit` | Read whether RIT (receiver incremental tuning) is on. |
 | `SetRit` | `SetRit(bool)` | Turn RIT on or off. |
-| `GetXit` | `GetXit` | Read whether XIT is on. |
+| `GetXit` | `GetXit` | Read whether XIT (transmitter incremental tuning) is on. |
 | `SetXit` | `SetXit(bool)` | Turn XIT on or off. |
 | `GetRitOffset` | `GetRitOffset` | Read the RIT/XIT offset in hertz. |
 | `SetRitOffset` | `SetRitOffset(i16)` | Set the RIT/XIT offset in hertz (the rig limits the range). |
@@ -165,7 +165,7 @@
 | `SetFilterWidth` | `SetFilterWidth(Hz)` | Set the receive filter bandwidth. |
 | `GetLevel` | `GetLevel(Level)` | Read a level. |
 | `SetLevel` | `SetLevel(Level, u16)` | Set a level, in the rig's units. |
-| `GetSwr` | `GetSwr` | Read the SWR meter (tenths of a unit). |
+| `GetSwr` | `GetSwr` | Read the SWR (standing wave ratio) meter (tenths of a unit). |
 | `GetMeter` | `GetMeter(Meter)` | Read a transmitter or supply meter in the rig's raw scale (see [`Meter`]). Read-only: it works with the transmit gate closed and means most while the rig is keyed by other means. |
 | `GetModelId` | `GetModelId` | Read the rig's model identifier. |
 | `GetFirmware` | `GetFirmware` | Read the rig's main firmware revision. |

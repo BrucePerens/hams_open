@@ -2,7 +2,7 @@
 
 ## Persona
 **Bob**, who runs the hams.com host and wants the monitor to warn him about two slow failures long before they stop anything:
-the auth.hams.com certificate that the certificate-login gateway serves, and the disk that the QSO recordings fill.
+the auth.hams.com certificate that the certificate-login gateway serves, and the disk that the QSO (radio contact) recordings fill.
 
 ## Context
 Both checks are standalone scripts that a `pager.check` of type "synthetic" runs. Each exits 0 when healthy and 1 when failing,
@@ -79,7 +79,7 @@ Finds the certificate's expiry from the best source. Arguments: `path` (`str`, t
 
 ### `main(argv=None)` [@ANCHOR: pager_duty:auth_cert_main]
 
-The check entry point. `argv` is the argument list (default `sys.argv[1:]`); the only option is `--profile auth|turn`. Settings come from the environment with the prefix of the profile (`HAMS_AUTH_CERT_` or `HAMS_TURN_CERT_`): `PATH`, `HOST`, `PORT`, `WARN_DAYS`, `PAGE_DAYS`. Returns the process exit status: 0 healthy (prints "<host> certificate healthy, expires in N days (date, source)"); 1 failing (prints `SEVERITY:<level>` and then the message on stderr, which the monitor reads); 2 for an unknown profile. If the certificate cannot be read at all it prints `SEVERITY:high` and "<profile> certificate unreadable: ...", because having no expiry is more urgent than a near one. It reads one local file or makes one TLS connection, and logs nothing secret. Tests: `test_healthy_certificate_exits_zero`, `test_under_thirty_days_warns_with_low_severity`, `test_under_fourteen_days_pages_with_high_severity`, `test_an_unreadable_certificate_pages`.
+The check entry point. `argv` is the argument list (default `sys.argv[1:]`); the only option is `--profile auth|turn`. Settings come from the environment with the prefix of the profile (`HAMS_AUTH_CERT_` or `HAMS_TURN_CERT_`): `PATH`, `HOST`, `PORT`, `WARN_DAYS`, `PAGE_DAYS`. Returns the process exit status: 0 healthy (prints "<host> certificate healthy, expires in N days (date, source)"); 1 failing (prints `SEVERITY:<level>` and then the message on stderr, which the monitor reads); 2 for an unknown profile. If the certificate cannot be read at all it prints `SEVERITY:high` and "<profile> certificate unreadable: ...", because having no expiry is more urgent than a near one. It reads one local file or makes one TLS (Transport Layer Security) connection, and logs nothing secret. Tests: `test_healthy_certificate_exits_zero`, `test_under_thirty_days_warns_with_low_severity`, `test_under_fourteen_days_pages_with_high_severity`, `test_an_unreadable_certificate_pages`.
 
 ### `--profile turn` of `main` [@ANCHOR: pager_duty:auth_cert_main]
 

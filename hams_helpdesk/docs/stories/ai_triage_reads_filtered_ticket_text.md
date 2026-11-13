@@ -1,6 +1,6 @@
 # Story: The External AI Triage Server Reads Only Filtered, Fenced Ticket Text
 
-As the **external ticket-triage MCP server** (`daemons/hams_ticket_triage_mcp`, hams_com),
+As the **external ticket-triage MCP (Model Context Protocol) server** (`daemons/hams_ticket_triage_mcp`, hams_com),
 I want to read a ticket's subject, callsign and description, and what the customer wrote after my last
 note, only as filtered text inside a clearly marked untrusted block, so that a hidden instruction a
 stranger put in a ticket cannot steer me, and a ticket that tries it is withheld from me entirely

@@ -38,7 +38,7 @@ A feature is called implemented only if this manual's author found it in the cod
 | [7. Protocol engines](07-protocol-engines.md) | see what each protocol family covers and what is not verified |
 | [8. The protocol splitter](08-protocol-splitter.md) | present one radio as an IC-7300 or TS-2000 to several programs |
 | [9. radioctld](09-radioctld.md) | run the `rigctld`-compatible server, configure it, know where it differs from Hamlib |
-| [10. Safety](10-safety.md) | learn the transmit gate, PTT ownership and what radioctl does not guarantee |
+| [10. Safety](10-safety.md) | learn the transmit gate, PTT (push to talk) ownership and what radioctl does not guarantee |
 | [11. Testing](11-testing.md) | run the test suites, the Hamlib oracle, and follow the anchor convention |
 | [12. Provenance and licensing](12-provenance-and-licensing.md) | see where facts about radios came from and what is licensed how |
 | [13. Roadmap and open items](13-roadmap.md) | find what is planned and what is known to be missing |

@@ -59,7 +59,7 @@ See also: the test `a_key_test_passes_every_gate_probes_keys_releases_restores_a
 
 ### `believable_swr` [@ANCHOR: radioctl_tx_swr_valid]
 
-Decides whether a standing-wave-ratio reading from the rig is believable enough to record and to act on. A real SWR is at least 1.0; the virtual rig and some radios
+Decides whether a standing-wave-ratio reading from the rig is believable enough to record and to act on. A real SWR (standing wave ratio) is at least 1.0; the virtual rig and some radios
 answer a constant 0 or nothing on the SWR meter, and treating that as "SWR 0, perfect" would hide an open or shorted connection, so those readings are "not reported".
 
 | Argument | Type | Meaning |
@@ -125,7 +125,7 @@ Reads one set of meter values from the rig while it is keyed. Called once per sa
 | `full_scale_w` | `Option<f64>` | The rig's full-scale transmit power in watts at the test frequency, used to turn a fractional power meter (`RFPOWER_METER`) into watts; `None` leaves such a reading out. |
 
 Return value: `Ok(Sample)` with the fields it could fill (`power_w`, `swr`, `alc`, `temp`, each `Option<f64>`; `None` is "not reported"). For each meter the command is
-`get_level <NAME>`: SWR goes through `believable_swr`; ALC and temperature are stored as read, in whatever unit the rig gives; the watts meter is stored as watts; the
+`get_level <NAME>`: SWR goes through `believable_swr`; ALC (automatic level control) and temperature are stored as read, in whatever unit the rig gives; the watts meter is stored as watts; the
 fraction meter becomes watts (`v * full_scale_w`) only if no watts meter already filled `power_w`. Errors: `Err(text)` when a read fails for any reason other than the
 rig answering RPRT -11, -4 or -18 (those three mean "this meter is not offered" and clear the flag): the text is `reading the <NAME> meter while keyed failed: <error>`, and
 the caller aborts the keyed interval on it. A non-numeric value also ends in `Err`. Blocking socket I/O, one round trip per available meter; no sleeping. No lock (the
@@ -342,7 +342,7 @@ before the dry-run answer, so even a `dry_run` is checked against the real rig.
 Return value: `Ok(Rig)`, what the rig said before anything was changed: `f_min` (lowest RFPOWER setting, fraction), `f_req` (the setting for the requested watts), `f_prev` (the setting now),
 `w_prev` (watts of the setting now), `w_full` (watts at full scale), `prev_freq` (Hz), `prev_mode` (mode name and passband Hz, or `None` when the rig does not say). `Err(text)` when any of these
 fail; every text ends with, or states, that nothing was sent. The checks in order: `dump_state` readable; the frequency inside one of the rig's own transmit ranges (the second band check); PTT
-already on (refused; who keyed it must be found out, `bench_radioctl_safe_state` releases it); split on (the transmit frequency would be the other VFO's, which is not checked); XIT not zero (it
+already on (refused; who keyed it must be found out, `bench_radioctl_safe_state` releases it); split on (the transmit frequency would be the other VFO's, which is not checked); XIT (transmitter incremental tuning) not zero (it
 shifts the transmit frequency); the lowest power setting known (`rfpower_min`); the setting for the requested power not below that lowest setting; the requested setting, converted by the rig's full
 scale, not over 1.02 times the owner's cap; the current setting readable, and not over 1.02 times the cap unless `allow_lowering_power` is true (then the tool lowers it and restores it afterwards). A
 rig that refuses `get_ptt`, `get_split_vfo` or `get_xit` as unsupported is let through on that check (the refusal is data, not an error); a link failure on any read is an error. Blocking; one round
@@ -463,7 +463,7 @@ or nothing and the owner may turn the probe off and accept the risk); the worst 
 
 ### `key_test` [@ANCHOR: radioctl_tx_key_test]
 
-The body of the MCP tool `bench_radioctl_tx_key_test`: transmit for a few seconds into the attested dummy load at a stated power and frequency, read the meters, and put the rig back.
+The body of the MCP (Model Context Protocol) tool `bench_radioctl_tx_key_test`: transmit for a few seconds into the attested dummy load at a stated power and frequency, read the meters, and put the rig back.
 
 Control points, in order. **Tier:** the tool is `full`; `call` refuses it for an instrument below that, and the tool is listed only for a rig with a `transmit` block. **Lock:** `call` holds the
 instrument's lock for the whole call, so no other tool touches the rig meanwhile except `safe_state`, which can end the keyed interval. **Band check and caps:** `check_args` (owner's frequency ranges,

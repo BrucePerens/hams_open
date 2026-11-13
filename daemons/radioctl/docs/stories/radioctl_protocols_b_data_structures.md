@@ -530,7 +530,7 @@ As a developer changing this code, I want every data structure in `src/easy.rs`,
 |---|---|---|
 | `ptt_lease` | `Duration` | How long one `P 1` keys the radio before the bridge unkeys by itself. |
 | `drive` | `u8` | Drive level 0..=255 sent while keyed. |
-| `status_every` | `Duration` | Interval of the unsolicited power and SWR lines. |
+| `status_every` | `Duration` | Interval of the unsolicited power and SWR (standing wave ratio) lines. |
 | `power_constant` | `f64` | Power constant 2 for SWR (0.095 ANAN-100, 0.09 ANAN-10). |
 
 **Used by.** `handle_line`, `serve_hpsdr`, `swr_tenths` (functions whose signature names it).

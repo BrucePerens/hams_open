@@ -6,7 +6,7 @@ Function anchors for the `radioctl-protocols` crate (Kachina twin, Lowe HF-235, 
 
 ### `pub fn new(desc: &RigDescription) -> Result<KachinaTwin, RigError>` [@ANCHOR: radioctl:radioctl_kachina_twin_new]
 
-Builds a virtual Kachina 505DSP for tests. `desc` is borrowed and read only: the dialect must be `505dsp` (else `Unsupported`, which is also returned for a non-vendor description). The default frequency in hertz becomes both the receive and the transmit frequency. The mode is the description's default mode code, or the first code in its mode table, or ASCII `4` as a last resort; the list of valid mode codes is kept so a later `M` command can be checked. PTT starts off and the receive buffer is empty. No I/O.
+Builds a virtual Kachina 505DSP for tests. `desc` is borrowed and read only: the dialect must be `505dsp` (else `Unsupported`, which is also returned for a non-vendor description). The default frequency in hertz becomes both the receive and the transmit frequency. The mode is the description's default mode code, or the first code in its mode table, or ASCII `4` as a last resort; the list of valid mode codes is kept so a later `M` command can be checked. PTT (push to talk) starts off and the receive buffer is empty. No I/O.
 
 ### `fn take_frame(&mut self) -> Option<u8>` [@ANCHOR: radioctl:radioctl_kachina_twin_frame]
 

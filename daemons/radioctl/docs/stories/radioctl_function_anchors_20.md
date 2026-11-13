@@ -6,7 +6,7 @@ Function anchors for `radioctl-protocols` (the virtual rig's stop-Morse, Kenwood
 
 ### `fn stop_cw(&mut self)` [@ANCHOR: radioctl:radioctl_virtual_stop_cw]
 
-Records that a stop-Morse command arrived at the virtual rig: it empties the record of Morse text received so far (`state.cw_sent`) and adds one to the stop counter (`state.cw_stops`, a saturating count that never wraps). It takes no arguments and returns nothing. Called by the CI-V `17 FF` handler, the Elecraft `KY <EOT>` stop and the Kenwood `KY` stop forms. Tests read the counter to prove a stop reached the radio. It does not change the key flag: a virtual rig held keyed by PTT stays keyed. No I/O.
+Records that a stop-Morse command arrived at the virtual rig: it empties the record of Morse text received so far (`state.cw_sent`) and adds one to the stop counter (`state.cw_stops`, a saturating count that never wraps). It takes no arguments and returns nothing. Called by the CI-V `17 FF` handler, the Elecraft `KY <EOT>` stop and the Kenwood `KY` stop forms. Tests read the counter to prove a stop reached the radio. It does not change the key flag: a virtual rig held keyed by PTT (push to talk) stays keyed. No I/O.
 
 ### `fn kenwood_command(&mut self, text: &str) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_virtual_kenwood_command]
 
