@@ -186,6 +186,12 @@ class TestOsGroupKeyFile(RealTransactionCase):
             self.assertIn("ODOO_RPC_KEY=old\n", key_file.read())
         self.assertEqual(self._family_files(), ["dir_refused.env"])
 
+    def test_the_key_file_is_flushed_to_disk_before_the_rename(self):
+        # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
+        fsync = self.safe_patch("os.fsync", wraps=os.fsync)
+        self._write(os.path.join(TEST_DIR, "flushed.env"))
+        self.assertGreaterEqual(fsync.call_count, 1)
+
     def test_without_a_group_the_file_stays_0600(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
         path = os.path.join(TEST_DIR, "plain.env")
