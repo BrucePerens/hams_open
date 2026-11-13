@@ -3,6 +3,7 @@
 
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
+from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 from odoo.exceptions import UserError
@@ -36,6 +37,22 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
         msg = "Must use SELECT dba_explain_query(%s) to prevent injection and avoid latency issue."
         self.assertTrue(called, msg)
 
+
+    def test_tdd_explain_refuses_data_modifying_with(self):
+        # Tests [@ANCHOR: COMM_db_explain_query]
+        cr = self.env.cr
+        cr.execute("CREATE TABLE explain_ro_probe (x int)")
+        cr.execute("SELECT dba_explain_query(%s)", ("SELECT 1",))
+        self.assertIn("Result", cr.fetchone()[0])
+        with self.assertRaises(Exception), mute_logger("odoo.sql_db"), cr.savepoint():
+            cr.execute(
+                "SELECT dba_explain_query(%s)",
+                ("WITH i AS (INSERT INTO explain_ro_probe VALUES (1) RETURNING x) SELECT * FROM i",),
+            )
+        cr.execute("SELECT count(*) FROM explain_ro_probe")
+        self.assertEqual(cr.fetchone()[0], 0)
+        # the cursor is writable again afterwards
+        cr.execute("INSERT INTO explain_ro_probe VALUES (2)")
 
     def test_tdd_db_stats_semicolon(self):
         # Tests [@ANCHOR: COMM_db_explain_query]
