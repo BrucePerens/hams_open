@@ -63,7 +63,10 @@ class MailThread(models.AbstractModel):
 
         if is_bounce_route or is_not_read_route or is_postmaster_route:
             # Check for unsubscribe intent
-            if 'unsubscribe' in subject or 'unsubscribe' in body:
+            # A recognized bounce (DSN) is not a request: it quotes the failed mail, footer included,
+            # and must reach Odoo's bounce handling below.
+            is_bounce_notice = message_dict.get('bounced_email') or message_dict.get('bounced_partner')
+            if not is_bounce_notice and ('unsubscribe' in subject or 'unsubscribe' in body):
                 _logger.info("Recognized manual unsubscribe request from %s", message_dict.get('email_from'))
                 # We could auto-unsubscribe them here, or send them an email pointing to the unsubscribe page.
                 # For now, we will log it and drop it so it doesn't create garbage tickets.
