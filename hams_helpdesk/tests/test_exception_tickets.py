@@ -1214,6 +1214,14 @@ class TestExceptionHooks(RealTransactionCase):
         self.addCleanup(reporter._GATE.clear)
         self.addCleanup(reporter._RECENT_WRITES.clear)
         self.Fingerprint = self.env["hams_helpdesk.exception.fingerprint"]
+        # Real commits: nothing rolls these rows back, so every test starts and ends with none.
+        self.drop_committed_reports()
+        self.addCleanup(self.drop_committed_reports)
+
+    def drop_committed_reports(self):
+        self.env.cr.rollback()
+        drop_leaked_reports(self.env)
+        self.env.cr.commit()
 
     def rows(self, domain=()):
         self.env.cr.rollback()  # a fresh snapshot: the reporter committed on its own connection
@@ -1322,6 +1330,12 @@ class TestExceptionHooks(RealTransactionCase):
         )
         self.assertTrue(written)
         self.assertEqual(len(self.rows()), 1)
+
+    def test_a_row_another_test_or_the_harness_committed_is_gone_before_a_test_starts(self):
+        self.assertTrue(reporter.report_exception(self.env.registry, KeyError("stray"), "rpc", uid=2, logged_in=True, path="/stray"))
+        self.assertTrue(self.rows())
+        self.drop_committed_reports()
+        self.assertFalse(self.rows())
 
 
 @tagged("post_install", "-at_install", "standard")
