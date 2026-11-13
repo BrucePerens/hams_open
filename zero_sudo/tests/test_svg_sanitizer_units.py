@@ -196,6 +196,7 @@ class TestRebuild(SafePatchMixin, BaseCase):
         self.assertEqual(dict(out.attrib), {"height": "4000px", "xmlns": NS})
         self.assertEqual(dict(out[0].attrib), {"transform": "translate(1 2)", "width": "5000"})
         self.assertEqual(dict(_clean('<svg xmlns="%s" width="12" height="13"/>' % NS).attrib), {"width": "12", "height": "13", "xmlns": NS})
+        self.assertEqual(dict(_clean('<svg xmlns="%s" width="4000" height="4001"/>' % NS).attrib), {"width": "4000", "xmlns": NS})
 
     def test_xml_space_is_kept_in_its_namespace_and_checked(self):
         out = _clean('<svg xmlns="%s" xmlns:xml="http://www.w3.org/XML/1998/namespace"><text xml:space="preserve">a</text><text xml:space="bad">b</text></svg>' % NS)
@@ -480,6 +481,19 @@ class TestXmlEntryPoint(BaseCase):
         lonely.tail = "t"
         self.assertIsNone(svg._drop_keeping_tail(lonely))
         self.assertEqual(lonely.tail, "t")
+
+    def test_an_oversize_last_block_at_exactly_the_limit_is_not_hostile(self):
+        body = "".join('<svg xmlns="%s"/>' % NS for _ in range(svg.MAX_TOTAL_SVG_BLOCKS - 1))
+        big = '<svg xmlns="%s"><title>%s</title></svg>' % (NS, "x" * svg.MAX_SVG_BYTES)
+        with self.assertLogs(svg._logger, level="WARNING"):
+            root, found = self.run_tree("<p>%s%s</p>" % (body, big))
+        self.assertIs(found, False)
+
+    def test_prefixed_names_in_an_html_parsed_tree_are_read_by_their_local_name(self):
+        tree = lxml.html.fromstring('<div><svg><s:script></s:script><rect s:onclick="x"></rect></svg></div>')
+        self.assertTrue(svg._looks_hostile(tree.find("svg")))
+        self.assertTrue(svg._looks_hostile(lxml.html.fromstring('<svg><rect s:onclick="x"></rect></svg>')))
+        self.assertFalse(svg._looks_hostile(lxml.html.fromstring('<svg><rect s:fill="x"></rect></svg>')))
 
     def test_looks_hostile_ignores_comments_and_reads_local_names(self):
         self.assertFalse(svg._looks_hostile(_el('<svg xmlns="%s"><!--script--><rect/></svg>' % NS)))
