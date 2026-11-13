@@ -34,7 +34,7 @@ license text each library's own license requires, not just its SPDX identifier.
 - **`d3-geo-projection` was vendored on disk with no README entry until an earlier pass** -- same
   "real file, nothing documenting it" gap shape as other findings that night, just in documentation.
 - **Resolved (2026-08-26):** the byte-level provenance gap is now understood precisely -- see
-  `docs/proposals/VENDORED_ASSET_LICENSE_ATTRIBUTION.md`'s "Resolved: D3.js/topojson-client
+  `hams_com/docs/proposals/done/VENDORED_ASSET_LICENSE_ATTRIBUTION.md`'s "Resolved: D3.js/topojson-client
   provenance" section for the full account, including why an earlier attempt to just replace these
   files with a naive fresh unpkg fetch broke 12 tests and was reverted. In short:
   `topojson-client.min.js` is byte-identical to a fresh unpkg download once the
@@ -75,7 +75,7 @@ license text each library's own license requires, not just its SPDX identifier.
 - **License:** MIT (all three)
 - **Purpose:** The primitive layer (X25519 key agreement, SHA-256 hashing, HKDF key derivation, ChaCha20-Poly1305 authenticated encryption) underneath
   `hams_com`'s browser-side Noise_XX handshake (`ham_shack/static/src/js/noise_xx.js`,
-  `docs/proposals/TRANSMITTER_HIJACK_PREVENTION.md` section 1). These used to be imported live from
+  `hams_com/docs/proposals/done/TRANSMITTER_HIJACK_PREVENTION.md` section 1). These used to be imported live from
   `cdn.jsdelivr.net` on every handshake -- a real, unmitigated CDN (content delivery network) dependency for the exact code
   establishing a secure session, against this same self-hosting policy. Fixed by vendoring.
 - **Local Path:** `/external/static/src/node_modules/noble/{curves/ed25519.js,hashes/sha2.js,

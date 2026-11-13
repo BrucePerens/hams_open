@@ -149,7 +149,7 @@ Node built-ins each resolve to a bare `"?xxxx"` placeholder id (webpack's marker
 Node-only dependency it could not bundle for a browser target), so none of those six actually ship
 real code in this file -- only `@huggingface/jinja`, `onnxruntime-common`, and `onnxruntime-web`
 resolve to real bundled module paths (`./node_modules/@huggingface/jinja/dist/index.js`,
-`./node_modules/onnxruntime-common/dist/lib/index.js`,
+`external/static/src/node_modules/sipjs/lib/index.js`,
 `./node_modules/onnxruntime-web/dist/ort-web.min.js`) and need attribution here:
 
 ### `@huggingface/jinja` -- MIT
@@ -466,7 +466,7 @@ that feature's chart library (`odoo/addons/spreadsheet/static/lib/chartjs-chart-
 chartjs-chart-geo.js`) was checked directly for a bundled copy of D3/topojson-client source --
 it contains at most one incidental substring match, not a real embedded copy, so this is not where
 these three files came from. **Resolved 2026-08-26**: the precise byte-level provenance is now
-documented in `docs/proposals/VENDORED_ASSET_LICENSE_ATTRIBUTION.md`'s "Resolved:
+documented in `hams_com/docs/proposals/done/VENDORED_ASSET_LICENSE_ATTRIBUTION.md`'s "Resolved:
 D3.js/topojson-client provenance" section -- in short, all three are the stated versions' real
 unpkg `dist/` builds with the banner prepended; `d3-geo-projection.v4.min.js` additionally has its
 UMD wrapper's `require("d3-geo")`/`require("d3-array")` calls replaced with nonexistent
