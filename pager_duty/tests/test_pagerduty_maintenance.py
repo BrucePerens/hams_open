@@ -232,3 +232,19 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
                 self.assertEqual(mine["state"], theirs["state"], (data, at))
                 if mine["state"] in ("active", "expired"):
                     self.assertEqual(mine["until"], theirs["until"])
+
+    def test_a_flag_that_cannot_be_removed_stays_and_end_reports_it(self):
+        # Tests [@ANCHOR: pager_duty:maintenance_main]
+        # Tests [@ANCHOR: pager_duty:maintenance_remove_expired]
+        self._write(set_at=NOW, until=NOW + 600)
+        out, err = io.StringIO(), io.StringIO()
+        unlink = self.safe_patch_object(pm.os, "unlink", side_effect=PermissionError(13, "denied"))
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(pm.main(["--file", self.path, "end"], now=NOW, out=out), 2)
+            self.assertFalse(pm.remove_expired(self.path, NOW + 10 ** 6))  # expired, but it cannot be removed
+        unlink.side_effect = None
+        unlink.side_effect = os.remove  # the same call, allowed again
+        self.assertIn("only root can clear it", err.getvalue())
+        self.assertTrue(os.path.exists(self.path), "the flag must still pause paging")
+        self.assertEqual(pm.main(["--file", self.path, "end"], now=NOW, out=out), 0)
+        self.assertFalse(os.path.exists(self.path))
