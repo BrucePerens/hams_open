@@ -307,6 +307,12 @@ class EdgeRoutingMixin(models.AbstractModel):
                             params.extend([rid, slug])
                         self.env.cr.execute(query, params)
                         records_to_update.invalidate_recordset(['website_slug'])
+                        # the raw UPDATE above skipped create/write, so a miss cached for one of the new slugs must be cleared here
+                        try:
+                            self.env["zero_sudo.security.utils"]._notify_cache_invalidation(self._name, [slug for _rid, slug in updates if slug])
+                        except Exception as e:  # audit-ignore-catch-all
+                            # same best-effort cache ping as above: a DB/connection error must not abort the update
+                            _logger.warning("Failed to notify cache invalidation for the batch slugs: %s", e)
 
         return res
 

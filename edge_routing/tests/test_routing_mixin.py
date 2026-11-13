@@ -222,3 +222,17 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
         self.assertEqual(user.website_slug, slug)
         self.env.cr.postcommit.run()  # the invalidation is deferred to the commit
         self.assertEqual(self.User.get_record_by_slug(slug), user.id)
+
+    def test_batch_write_clears_the_cached_miss_of_the_new_slugs(self):
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_write]
+        # The batch name write gives slugless records a slug with a raw UPDATE; a miss cached for those slugs must be cleared too.
+        user1 = self.User.create({'name': 'Batch Miss A', 'login': 'batch_miss_a@example.com'})
+        user2 = self.User.create({'name': 'Batch Miss B', 'login': 'batch_miss_b@example.com'})
+        user1.website_slug = False
+        user2.website_slug = False
+        self.assertFalse(self.User.get_record_by_slug('batch-miss-new'))
+        self.assertFalse(self.User.get_record_by_slug('batch-miss-new-1'))
+        (user1 | user2).write({'name': 'Batch Miss New'})
+        self.env.cr.postcommit.run()  # the invalidation is deferred to the commit
+        self.assertEqual(self.User.get_record_by_slug('batch-miss-new'), user1.id)
+        self.assertEqual(self.User.get_record_by_slug('batch-miss-new-1'), user2.id)
