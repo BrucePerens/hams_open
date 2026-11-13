@@ -201,6 +201,30 @@ class TestMonitorExhaustive(HamsTransactionCase):
         self.assertFalse(success)
         self.assertIn("HTTP status 500", msg)
 
+    def test_05b_http_check_cuts_off_an_endless_body(self):
+        """A target that never stops sending is read only up to the body cap, never to the end."""
+        asked = []
+
+        class EndlessBody:
+            status = 200
+
+            def read(self, size=-1):
+                asked.append(size)
+                if size is None or size < 0 or size > 2 * generalized_monitor.MAX_CHECK_BODY_BYTES:
+                    raise AssertionError("the check read an unbounded body")
+                return b"x" * size
+
+        mock_urlopen = self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.urllib.request.urlopen"
+        )
+        mock_urlopen.return_value.__enter__.return_value = EndlessBody()
+        success, msg = generalized_monitor.execute_check(
+            {"type": "http", "target": "http://test", "expect": "nothere"}
+        )
+        self.assertFalse(success)
+        self.assertIn("mismatch", msg)
+        self.assertEqual(asked, [generalized_monitor.MAX_CHECK_BODY_BYTES])
+
     def test_06_tcp_checks(self):
         """Verify raw hex socket handshakes (e.g. RabbitMQ AMQP)."""
         mock_conn = self.safe_patch(

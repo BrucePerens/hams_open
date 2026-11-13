@@ -199,6 +199,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("generalized_monitor")
 
+# An http/json-rpc check looks at the start of the body only; a target that never stops sending is cut off here.
+MAX_CHECK_BODY_BYTES = 1 << 20
+
 
 # [@ANCHOR: pager_duty:utcnow]
 def _utcnow():
@@ -1149,7 +1152,9 @@ def execute_check(check, client=None):
             req = urllib.request.Request(target, headers=headers)
             with urllib.request.urlopen(req, timeout=5) as response:
                 if response.status == 200:
-                    body = response.read().decode("utf-8")
+                    body = response.read(MAX_CHECK_BODY_BYTES).decode(
+                        "utf-8", errors="replace"
+                    )
                     expect = parse_env(check.get("expect"))
                     if expect and expect not in body:
                         return False, "HTTP body mismatch"
@@ -1326,7 +1331,9 @@ def execute_check(check, client=None):
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=5) as response:
-                body = response.read().decode("utf-8")
+                body = response.read(MAX_CHECK_BODY_BYTES).decode(
+                    "utf-8", errors="replace"
+                )
                 if expect and expect not in body:
                     return False, "JSON-RPC output mismatch"
             return True, "OK"
@@ -1479,7 +1486,7 @@ def execute_check(check, client=None):
             try:
                 req = urllib.request.Request("https://api.ipify.org", headers=headers)
                 with urllib.request.urlopen(req, timeout=10) as ip_resp:
-                    my_ip = ip_resp.read().decode("utf-8").strip()
+                    my_ip = ip_resp.read(256).decode("utf-8").strip()
 
                 domain_list = [d.strip() for d in domains.split(",") if d.strip()]
                 for d in domain_list:
