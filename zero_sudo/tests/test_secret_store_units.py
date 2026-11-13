@@ -6,6 +6,8 @@ entry point (secret_broker/main.py), added to kill the mutation survivors of the
 exact refusal messages, permission bits, size and time limits at their edges, the request the client sends, and the
 defaults taken from the environment."""
 import base64
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -289,7 +291,9 @@ class TestBrokerClientAndStore(_TempCase):
     def test_stripe_default_tolerance_is_300_seconds_and_the_broker_is_told_so(self):
         secret, payload, now = "whsec_unit", "{}", 1700000000
         store = ss.SecretStore([type("B", (), {"label": "x", "get": lambda self, name: secret})()])
-        header = lambda t: "t=%d,v1=%s" % (t, ops.hmac_sign(secret, "%d.%s" % (t, payload)))  # noqa: E731
+        def header(t):
+            return "t=%d,v1=%s" % (t, ops.hmac_sign(secret, "%d.%s" % (t, payload)))
+
         self.assertTrue(store.stripe_webhook_verify("n", payload, header(now - 300), now=now))
         self.assertFalse(store.stripe_webhook_verify("n", payload, header(now - 301), now=now))
         self.assertTrue(store.stripe_webhook_verify("n", payload, header(now - 301), tolerance=301, now=now))
@@ -359,7 +363,8 @@ class TestStoreFromSpec(_TempCase):
         self.assertEqual(ss.default_spec(exists=lambda path: False), "")
 
     def test_default_spec_order(self):
-        both = lambda path: True  # noqa: E731
+        def both(path):
+            return True
         self.assertEqual(ss.default_spec({"CREDENTIALS_DIRECTORY": "/d"}, exists=both),
                          "broker:%s,systemd,file:%s" % (ss.DEFAULT_BROKER_SOCKET, ss.DEFAULT_CREDENTIALS_FILE))
         self.assertEqual(ss.default_spec({}, exists=lambda path: path == ss.DEFAULT_CREDENTIALS_FILE),
@@ -524,8 +529,6 @@ class TestBrokerMain(_TempCase):
         self.assertEqual(opened, ["/etc/hams_secret_broker/broker.json"])
 
     def test_the_help_text_describes_the_broker(self):
-        import contextlib
-        import io
         out = io.StringIO()
         with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
             broker_main.main(["--help"])

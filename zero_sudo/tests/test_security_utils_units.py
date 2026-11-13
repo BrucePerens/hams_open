@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Database-free tests of `zero_sudo.models.security_utils` (everything except the tunnel-peer helper) against a fake
 environment, added to kill the mutation survivors of the second mutation pass (2026-11-13)."""
+import itertools
 import logging
 import os
 import psycopg2.errors
 import shutil
 import tempfile
+import types
 import importlib.util
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -20,6 +22,7 @@ from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 from odoo.addons.zero_sudo.models import security_utils as su
 
+_COUNTER = itertools.count()
 FACILITY = "zero_sudo.odoo_facility_service_internal"
 CONFIG = "zero_sudo.config_service_internal"
 READ_WHITELIST = (
@@ -455,7 +458,7 @@ class TestSecurityUtilsUnits(HamsTransactionCase):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(source)
-        spec = importlib.util.spec_from_file_location("callermod_" + str(abs(hash(path))), path)
+        spec = importlib.util.spec_from_file_location("callermod_%d" % next(_COUNTER), path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
@@ -479,9 +482,9 @@ class TestSecurityUtilsUnits(HamsTransactionCase):
         here = os.getcwd()
         self.addCleanup(os.chdir, here)
         os.chdir(root)  # a relative "<not-a-file>" would otherwise resolve into a directory that has a manifest
-        scope = {"util": _utils()}
-        exec(compile("result = util._caller_module_name()", "<not-a-file>", "exec"), scope)  # noqa: S102
-        self.assertIsNone(scope["result"])
+        module_code = compile("def call(util):\n    return util._caller_module_name()\n", "<not-a-file>", "exec")
+        function_code = [const for const in module_code.co_consts if isinstance(const, types.CodeType)][0]
+        self.assertIsNone(types.FunctionType(function_code, {})(_utils()))
 
     # ---- _is_test_mode -----------------------------------------------------------------------------------------
 
@@ -647,15 +650,13 @@ class TestSecurityUtilsUnits(HamsTransactionCase):
     # ---- _get_crypto_secret ------------------------------------------------------------------------------------
 
     def _secret(self, env=None, file_text=None, config=None, read_error=False):
-        saved = os.environ.get("HAMS_CRYPTO_KEY")
+        saved = os.environ.pop("HAMS_CRYPTO_KEY", None)
 
         def restore():
-            if saved is None:
-                os.environ.pop("HAMS_CRYPTO_KEY", None)
-            else:
+            os.environ.pop("HAMS_CRYPTO_KEY", None)
+            if saved is not None:
                 os.environ["HAMS_CRYPTO_KEY"] = saved
         self.addCleanup(restore)
-        os.environ.pop("HAMS_CRYPTO_KEY", None)
         if env is not None:
             os.environ["HAMS_CRYPTO_KEY"] = env
         opened, checked = [], []

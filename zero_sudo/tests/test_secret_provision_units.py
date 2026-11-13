@@ -8,6 +8,7 @@ import contextlib
 import io
 import json
 import os
+import pwd
 import shutil
 import stat
 import tempfile
@@ -164,7 +165,9 @@ class TestProvisionApply(SafePatchMixin, BaseCase):
             self.assertEqual(handle.read(), "secret text\n")
         self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
         self.assertEqual(self.chowns, [(path, 0, 0)])
-        self.assertTrue(self.flags[0] & os.O_EXCL and self.flags[0] & os.O_NOFOLLOW and self.flags[0] & os.O_CREAT)
+        self.assertTrue(self.flags[0] & os.O_EXCL)
+        self.assertTrue(self.flags[0] & os.O_NOFOLLOW)
+        self.assertTrue(self.flags[0] & os.O_CREAT)
         self.assertFalse(self.flags[0] & os.O_TRUNC)
 
     def test_an_existing_file_if_absent_is_left_alone_even_a_dangling_link(self):
@@ -193,7 +196,6 @@ class TestProvisionApply(SafePatchMixin, BaseCase):
         self.assertTrue(self.flags[0] & os.O_NOFOLLOW)
 
     def test_account_exists_asks_the_system(self):
-        import pwd
         self.assertTrue(provision.account_exists(pwd.getpwall()[0].pw_name))
         self.assertFalse(provision.account_exists("no_such_account_for_unit_test_x1"))
 

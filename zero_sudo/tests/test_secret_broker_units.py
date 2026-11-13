@@ -4,7 +4,10 @@
 """Database-free tests of the Tier B broker (secret_broker/broker.py), added to kill the mutation survivors of the second
 mutation pass (2026-11-13): exact refusal codes and messages, limits at their exact edges, the ACL parser byte by byte,
 the path filter, what `https_call` hands to the HTTPS client, and the connection loop."""
+import base64
 import errno
+import hashlib
+import hmac
 import json
 import os
 import shutil
@@ -213,7 +216,7 @@ class TestBrokerAcl(_Case):
         with self.assertLogs("hams_secret_broker", level="WARNING") as logs:
             self.assertIs(sb.readable_by(path, ME + 1, {5}, getxattr=failing(errno.EIO)), True)
         self.assertEqual(logs.output, ["WARNING:hams_secret_broker:cannot read the ACL of %s (errno %d); treating it as readable" % (path, errno.EIO)])
-        self.assertIs(sb.readable_by.__defaults__[0], getattr(os, "getxattr", None))
+        self.assertIs(sb.readable_by.__defaults__[0], os.getxattr)
 
     def test_account_ids(self):
         entry = SimpleNamespace(pw_name="bob", pw_gid=5, pw_uid=9)
@@ -359,7 +362,6 @@ class TestHttpsCall(_Case):
         self.assertEqual(self.contexts, ["/ca.pem"])
 
     def test_auth_schemes(self):
-        import base64
         self._call(policy={"auth": "basic", "username": "user"}, data=b"echo " + base64.b64encode(b"user:sk_secret_1"))
         pair = base64.b64encode(b"user:sk_secret_1").decode()
         self.assertEqual(self.made[0].requests[0][3], {"Authorization": "Basic " + pair})
@@ -443,8 +445,6 @@ class TestBrokerHandle(_Case):
 
     def test_digest_and_signature_arguments_reach_the_operations(self):
         broker = self.broker()
-        import hmac
-        import hashlib
         expected = hmac.new(b"sekret-value", b"p", hashlib.sha512).hexdigest()
         self.assertEqual(self.ask(broker, "hmac_sign", name="key", payload="p", digest="sha512"), {"ok": True, "result": expected})
         self.assertEqual(self.ask(broker, "hmac_verify", name="key", payload="p", signature=expected, digest="sha512"), {"ok": True, "result": True})
@@ -600,11 +600,8 @@ class TestBrokerConnections(_Case):
         path = broker.config["socket"]
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            try:
-                if stat.S_ISSOCK(os.stat(path).st_mode):
-                    break
-            except FileNotFoundError:
-                pass
+            if os.path.exists(path) and stat.S_ISSOCK(os.stat(path).st_mode):
+                break
             time.sleep(0.01)
         return worker, path
 
