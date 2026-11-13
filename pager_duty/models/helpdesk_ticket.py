@@ -23,6 +23,21 @@ class HelpdeskTicket(models.Model):
                 ("status", "=", "resolved"),
             ]
         )
-        for incident in incidents.filtered(lambda i: not _is_inbound_email_source(i.source)):
+        # Several incidents can share one ticket (joined unit tickets): it clears only when none of them is still unresolved.
+        still_open = set(
+            self.env["pager.incident"]
+            .with_user(pd_uid)
+            .search(
+                [
+                    ("helpdesk_ticket_model", "=", "hams_helpdesk.ticket"),
+                    ("helpdesk_ticket_id", "in", incidents.mapped("helpdesk_ticket_id")),
+                    ("status", "!=", "resolved"),
+                ]
+            )
+            .mapped("helpdesk_ticket_id")
+        )
+        for incident in incidents.filtered(
+            lambda i: not _is_inbound_email_source(i.source) and i.helpdesk_ticket_id not in still_open
+        ):
             cleared.setdefault(incident.helpdesk_ticket_id, _("The pager incident %s is resolved.") % incident.name)
         return cleared

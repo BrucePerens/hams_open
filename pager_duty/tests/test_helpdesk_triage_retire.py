@@ -49,3 +49,19 @@ class TestHelpdeskTriageRetire(HamsTransactionCase):
         ticket = self.env["hams_helpdesk.ticket"].create({"name": "Human", "description": "<p>x</p>"})
         self.assertFalse(ticket._triage_retire_stale())
         self.assertEqual(ticket.stage, "new")
+
+    def test_05_a_ticket_shared_with_an_unresolved_incident_is_kept(self):
+        ticket, _incident = self._pair("resolved")
+        self.env["pager.incident"].create(
+            {
+                "name": "y",
+                "source": "other_check",
+                "severity": "high",
+                "description": "y",
+                "status": "open",
+                "helpdesk_ticket_id": ticket.id,
+                "helpdesk_ticket_model": "hams_helpdesk.ticket",
+            }
+        )
+        self.assertFalse(ticket._triage_retire_stale())
+        self.assertEqual(ticket.stage, "new")
