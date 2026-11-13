@@ -243,7 +243,7 @@ Daemon tests (for example `test_generalized_monitor.py`, `test_pager_log_analyze
 
 Entries for anchors that the sections above mention only in passing. Paths are relative to `pager_duty/`.
 
-### The `pager_duty` module [@ANCHOR: pager_duty_module_root]
+### The `pager_duty` module
 
 The module-level anchor. `pager_duty` (version 1.2, category Ham Radio, AGPL-3) depends on `base`, `mail`, `calendar`, `bus`, `zero_sudo`, `distributed_redis_cache`, `hams_helpdesk`, `website` and `knowledge`; it also uses `binary_downloader` at run time through the manifest's `depends_cycle` entry (not a real Odoo key), because that module depends on this one. Python libraries: `psutil`, `redis`, `mcp`. Its models are `pager.check`, `pager.incident`, the `calendar.event` extension for on-call shifts, `pager.log.file`, `pager.log.pattern` and `pager.log.search.job`; `hooks.py` installs the PostgreSQL board function and registers the daemon keys; the standalone daemons live in `daemon/`. It declares one knowledge article, four security groups (pager admin, pager service, MCP triage service and incident creator) and the record rules that confine each website and company. No code runs at the anchor; it exists so documents can cite the module as a whole. Related entries: `action_push_to_json`, `report_incident`, `execute_check`.
 
