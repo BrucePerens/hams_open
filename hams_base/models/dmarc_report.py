@@ -222,8 +222,11 @@ class DmarcReport(models.Model):
         # first one. A report with no report_id can never legitimately be
         # deduplicated (there is nothing to key on), so always create a
         # new record for it instead of searching.
+        # report_id is unique per reporting organization, not globally, so the key is (org_name, report_id).
         if report_id:
-            existing = self.env['hams_base.dmarc.report'].search([('report_id', '=', report_id)], limit=1)
+            existing = self.env['hams_base.dmarc.report'].search(
+                [('report_id', '=', report_id), ('org_name', '=', org_name or False)], limit=1
+            )
             if existing:
                 return existing
 
