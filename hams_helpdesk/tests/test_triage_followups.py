@@ -122,3 +122,13 @@ class TestTriageCustomerFollowups(HamsTransactionCase):
         shown = self._ask({str(self.ticket.id): self.long_ago})[str(self.ticket.id)]
         tokens = {m["untrusted_block"].split("<<<UNTRUSTED-")[1].split(" ")[0] for m in shown}
         self.assertEqual(len(tokens), 2)
+
+    def test_11_a_follow_up_behind_more_than_twenty_staff_messages_is_still_reported(self):
+        for i in range(25):
+            self.ticket.with_user(self.admin).message_post(
+                body="<p>Staff reply %d</p>" % i, author_id=self.admin.partner_id.id, message_type="comment",
+                subtype_xmlid="mail.mt_comment",
+            )
+        self._customer_says("<p>customer after the staff flood</p>")
+        result = self._ask({str(self.ticket.id): self.long_ago})
+        self.assertIn("customer after the staff flood", result[str(self.ticket.id)][0]["untrusted_block"])

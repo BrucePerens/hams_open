@@ -1315,6 +1315,7 @@ class HelpdeskTicket(models.Model):
                     ("res_id", "=", ticket.id),
                     ("message_type", "in", ("email", "comment")),
                     ("subtype_id.internal", "=", False),
+                    ("author_id.user_ids", "not any", [("share", "=", False)]),  # staff replies dropped BEFORE the limit
                     ("date", ">", wanted[ticket.id]),
                 ],
                 order="date asc, id asc",
