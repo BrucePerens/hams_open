@@ -5,5 +5,6 @@
 from . import incident
 from . import incident_ticket_adapter
 from . import log_analyzer
+from . import mail_mail
 from . import pager_check
 from . import schedule
