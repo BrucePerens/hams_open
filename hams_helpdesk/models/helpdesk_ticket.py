@@ -900,7 +900,9 @@ class HelpdeskTicket(models.Model):
         ):
             raise AccessError(_("You are not authorized to close this ticket."))
 
-        if self.stage != "closed":
+        # A quarantined (spam) ticket stays in quarantine: closing it would take it out of the Spam stage,
+        # which write() treats as a person's recovery (override record, followers, the held notification).
+        if self.stage not in ("closed", "spam"):
             utils = self.env["zero_sudo.security.utils"]
             hd_env = utils._get_service_env("hams_helpdesk.user_helpdesk_service")
             self.with_env(hd_env).with_context(mail_notrack=True).write({"stage": "closed"})
