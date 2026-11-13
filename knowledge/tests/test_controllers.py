@@ -10,6 +10,13 @@ import odoo.http
 @tagged("post_install", "-at_install")
 class TestManualControllers(HamsHttpCase):
 
+    def test_internal_index_is_not_in_the_public_sitemap(self):
+        # Tests [@ANCHOR: knowledge:internal_index]
+        rules = [r for r in self.env["ir.http"].routing_map().iter_rules() if r.rule == "/manual/internal"]
+        self.assertTrue(rules)
+        for rule in rules:
+            self.assertIs(rule.endpoint.routing.get("sitemap"), False)
+
     def setUp(self):
         super(TestManualControllers, self).setUp()
         self.env["ir.config_parameter"].set_param("auth_signup.invitation_scope", "b2c")  # open sign-up: no invite-only redirect
