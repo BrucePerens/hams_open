@@ -11,6 +11,7 @@ from . import link_defang
 from . import mail_message_defanged
 from . import helpdesk_ticket
 from . import res_partner
+from . import res_users
 from . import shift_handoff
 from . import triage_wakeup
 from . import exception_scrub
