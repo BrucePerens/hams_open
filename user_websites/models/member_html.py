@@ -57,7 +57,8 @@ def _clean_url(value, image=False):
     if not value or any(ord(c) < 32 for c in value):
         return None
     if image:
-        return value if IMAGE_PATH_RE.match(value) else None
+        # A ".." segment would let the browser resolve the address to any other same-site GET route.
+        return value if IMAGE_PATH_RE.match(value) and ".." not in value.split("?")[0].split("/") else None
     if value.startswith("#"):
         return value
     parts = urlsplit(value)

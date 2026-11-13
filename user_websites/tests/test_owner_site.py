@@ -174,6 +174,14 @@ class TestMemberHtmlSanitizer(BaseCase):
         self.assertIsNone(owner_site.clean_member_image(huge, "image/png"))
         self.assertEqual(owner_site.clean_member_image(b"GIF89a-as-sent", "image/gif"), b"GIF89a-as-sent")
 
+    def test_image_src_cannot_climb_out_of_web_image(self):
+        # Tests [@ANCHOR: user_websites:fn_hmtl_clean_url]
+        clean, _hostile = sanitize_member_html('<img src="/web/image/1/../../logout" alt="x">')
+        self.assertNotIn("logout", clean)
+        self.assertNotIn("src=", clean)
+        clean, _hostile = sanitize_member_html('<img src="/web/image/1/pic..v2.png" alt="x">')
+        self.assertIn('src="/web/image/1/pic..v2.png"', clean)
+
     def test_image_magic_numbers(self):
         # Tests [@ANCHOR: user_websites:owner_image_mimetype]
         # [@ANCHOR: test_owner_image_upload_rules]
