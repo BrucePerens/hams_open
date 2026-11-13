@@ -207,3 +207,18 @@ class TestEdgeRoutingMixin(HamsTransactionCase):
                 'website_slug': 'arrl',
             })
             self.env.flush_all()
+
+    def test_create_clears_the_cached_miss_of_the_new_slug(self):
+        # Tests [@ANCHOR: edge_routing:COMM_mixin_create]
+        # get_record_by_slug() caches a miss (False) like a hit, for the process lifetime in the L1 cache. A visit to /<slug> before the record
+        # existed must not keep that slug dead after create() gives it to a new record (write() and unlink() already invalidate).
+        slug = 'cached-miss-before-create'
+        self.assertFalse(self.User.get_record_by_slug(slug))
+        user = self.User.create({
+            'name': 'Cached Miss User',
+            'login': 'cached_miss_user@example.com',
+            'website_slug': slug,
+        })
+        self.assertEqual(user.website_slug, slug)
+        self.env.cr.postcommit.run()  # the invalidation is deferred to the commit
+        self.assertEqual(self.User.get_record_by_slug(slug), user.id)
