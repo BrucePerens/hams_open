@@ -119,6 +119,18 @@ class TestDmarcParser(common.TransactionCase):
         self.assertTrue(report)
         self.assertEqual(report.org_name, "google.com")
 
+    def test_message_new_accepts_the_gateways_three_field_attachments(self):
+        # Tests [@ANCHOR: hams_base:COMM_dmarc_message_new]
+        # Odoo's mail gateway hands message_new() attachments as (fname, content, info)
+        # namedtuples (mail.thread._Attachment), not 2-tuples; unpacking them as pairs raised
+        # ValueError for every real DMARC report mail.
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w') as z:  # audit-ignore-path
+            z.writestr('report.xml', self.sample_xml)
+        attachment = self.env['mail.thread']._Attachment('report.zip', buf.getvalue(), {'encoding': None})
+        report = self.DmarcReport.message_new({'subject': 'DMARC Report', 'attachments': [attachment]})
+        self.assertEqual(report.org_name, "google.com")
+
     def test_message_new_with_malformed_zip_does_not_crash(self):
         # [!] DIAGNOSTIC FOR AI: this is the real-world shape the fixed
         # bug hit on essentially every genuine DMARC report -- reachable
