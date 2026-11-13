@@ -285,6 +285,18 @@ class TestGithubWebhookHttp(HamsHttpCase):
         self.assertIn(payload["workflow_run"]["html_url"], ticket.description)
         self.assertIn("main", ticket.description)
 
+    def test_github_webhook_workflow_run_escapes_payload_text_in_description(self):
+        # A fork's head_branch / workflow name is attacker-chosen text: it must reach the ticket HTML escaped.
+        self._configure_secret()
+        payload = _workflow_run_payload(run_id=77)
+        payload["workflow_run"]["head_branch"] = "<b>ZZBRANCH</b>"
+        payload["workflow_run"]["name"] = "<i>ZZNAME</i>"
+        self.assertEqual(self._post("workflow_run", payload).status_code, 200)
+        ticket = self.Ticket.search([("github_source_url", "=", payload["workflow_run"]["html_url"])])
+        self.assertEqual(len(ticket), 1)
+        self.assertNotIn("<b>ZZBRANCH", ticket.description)
+        self.assertIn("&lt;b&gt;ZZBRANCH", ticket.description)
+
     def test_github_webhook_workflow_run_not_completed_creates_nothing(self):
         self._configure_secret()
         payload = _workflow_run_payload(action="requested", conclusion=None)
