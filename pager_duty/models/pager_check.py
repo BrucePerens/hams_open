@@ -804,6 +804,7 @@ class PagerCheck(models.Model):
                 capture_output=True,
                 text=True,
                 shell=False,
+                timeout=15,
             )
             active_services = res.stdout
 
@@ -864,7 +865,7 @@ class PagerCheck(models.Model):
                         "comment": "Autodiscovered Docker daemon monitor",
                     }
                 )
-        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError, subprocess.TimeoutExpired) as e:  # audit-ignore-catch-all
             _logger.warning("An error occurred interacting with systemd: %s", e)
 
         # 4. Odoo Web Server

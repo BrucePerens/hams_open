@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 import json
 import os
+import subprocess
 import tempfile
 
 from psycopg2 import IntegrityError
@@ -108,6 +109,21 @@ class TestGeneralizedConfig(HamsTransactionCase):
             len(checks) > 0, "Autodiscovery should generate multiple baseline checks."
         )
         mock_push.assert_called()
+
+    def test_02b_autodiscovery_survives_a_hung_systemctl(self):
+        # Tests [@ANCHOR: pager_duty:run_autodiscovery]
+        """systemctl is asked with a time limit; when it does not answer the baseline is still built."""
+        self.safe_patch_object(type(self.env["pager.check"]), "action_push_to_json")
+        seen = {}
+
+        def hung(cmd, **kwargs):
+            seen["timeout"] = kwargs.get("timeout")
+            raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
+
+        self.safe_patch("odoo.addons.pager_duty.models.pager_check.subprocess.run", side_effect=hung)
+        self.env["pager.check"].with_user(self.admin).action_autodiscover()
+        self.assertIsNotNone(seen["timeout"])
+        self.assertTrue(self.env["pager.check"].search_count([("check_type", "=", "http")], limit=1))
 
     def test_03_views_render(self):
         """Verify the new graphical configuration views render successfully."""
