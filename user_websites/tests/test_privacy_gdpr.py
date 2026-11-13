@@ -417,6 +417,23 @@ class TestPrivacyGDPR(HamsHttpCase):
             "User must be removed from the public directory.",
         )
 
+    def test_02b_account_is_deactivated_before_content_is_erased_in_batches(self):
+        """Erasure commits its batches as it goes, so a failure part way used to leave a half-erased
+        account that was still active. The account is now deactivated before the first batch."""
+        seen = {}
+
+        def failing_unlink(pages):
+            seen["active"] = self.user_privacy.active
+            raise ValueError("simulated failure part way through erasure")
+
+        self.safe_patch_object(type(self.env["website.page"]), "unlink", new=failing_unlink)
+        with self.assertRaises(ValueError):
+            self.user_privacy._execute_gdpr_erasure()
+        self.assertEqual(
+            seen.get("active"), False,
+            "The account must already be deactivated when the first batch is erased.",
+        )
+
     def test_03_self_writeable_fields_idiom(self):
         # Tests [@ANCHOR: test_user_websites_self_writeable_fields]
         # Tests [@ANCHOR: user_websites:fn_users_self_writeable_fields]
