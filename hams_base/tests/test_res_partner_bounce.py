@@ -73,12 +73,19 @@ class TestResPartnerBounce(HamsTransactionCase):
         standalone = self.env["res.partner"].create(
             {"name": "Standalone Ham", "email": "standalone@example.com"}
         )
+        messages = self.env["mail.message"]
+        before = messages.search_count([("model", "=", "res.partner")])
         # Must not raise even though there is no club to notify at all.
         standalone._message_receive_bounce("standalone@example.com", standalone)
+        self.assertEqual(messages.search_count([("model", "=", "res.partner")]), before, "no club, so nothing is posted anywhere")
+        self.assertFalse(standalone.message_ids.filtered(lambda m: "bounc" in (m.body or "").lower()))
 
     def test_a_falsy_partner_is_a_no_op(self):
         # _message_receive_bounce(email, partner) with partner=empty recordset -- the real shape
         # Odoo's own mail-bounce processing calls this with when no partner could be resolved.
         empty_partner = self.env["res.partner"]
-        # Must not raise.
+        messages = self.env["mail.message"]
+        before = messages.search_count([("model", "=", "res.partner")])
         empty_partner._message_receive_bounce("unknown@example.com", empty_partner)
+        self.assertEqual(messages.search_count([("model", "=", "res.partner")]), before, "nothing is posted for an unresolved partner")
+        self.assertFalse(self.club.message_ids.filtered(lambda m: "unknown@example.com" in (m.body or "")))
