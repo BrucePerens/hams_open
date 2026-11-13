@@ -11,7 +11,7 @@ This journey describes the execution of complex, multi-step browser-like journey
 - **Healing:** If missing, it dynamically downloads the required static binaries to `/var/lib/odoo/hams_bin/`.
 
 ## 3. Execution & Spooling
-- **Trigger:** The `pager-synthetic-spooler.timer` triggers the service.
+- **Trigger:** `pager-synthetic-spooler.service` (`Type=simple`, `Restart=always`) runs `pager_synthetic_spooler.py`, which loops forever and runs each check when its own `interval` has elapsed; there is no timer unit.
 - **Isolated Run:** The script executes in a subprocess.
 - **Capture:** Output and error codes are captured.
 
@@ -24,7 +24,7 @@ This journey describes the execution of complex, multi-step browser-like journey
 
 - **SMART Disk Health:** A separate, simpler spooler, `pager_smart_spooler.py`, walks the host's own block devices and writes each one's real SMART health data (temperature, reallocated-sector count, overall pass/fail) into a spool file `generate_smart_spool()` [@ANCHOR: generate_smart_spool] produces -- the same "write a JSON file the monitor daemon reads back" pattern as the synthetic journey spooler, just for hardware rather than scripted journeys.
 
-- **Synthetic Spooler Entrypoint:** The synthetic journey spooler's own `main()` [@ANCHOR: synthetic_spooler_main] is what ties steps 1 through 4 together on a real timer tick -- reading the check's config, preparing the environment, running the scripted journey, and writing the resulting spool file in one pass, so `pager-synthetic-spooler.timer` only ever has one entrypoint to invoke.
+- **Synthetic Spooler Entrypoint:** The synthetic journey spooler's own `main()` [@ANCHOR: synthetic_spooler_main] is what ties steps 1 through 4 together on a real loop pass -- reading the check's config, preparing the environment, running the scripted journey, and writing the resulting spool file in one pass, so `pager-synthetic-spooler.service` only ever has one entrypoint to invoke.
 
 ## Function reference
 
