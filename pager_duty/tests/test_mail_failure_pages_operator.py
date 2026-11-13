@@ -1,6 +1,8 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """A refused outgoing mail raises ONE pager incident, without any address in it. The mail server is mocked."""
+from odoo.addons.pager_duty.models import incident as incident_module
+from odoo.addons.pager_duty.models.mail_mail import page_mail_failure
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests.common import tagged
 
@@ -16,15 +18,31 @@ class TestMailFailurePagesOperator(HamsTransactionCase):
         mode = self.enter_registry_test_mode()
         mode.__enter__()
         self.addCleanup(mode.__exit__, None, None, None)
+        # report_incident throttles a source for 60 s in Redis; an earlier test in the run may have used it up.
+        if incident_module.redis and incident_module.redis_pool:
+            incident_module.redis.Redis(connection_pool=incident_module.redis_pool).delete(f"pager_rate_limit:{SOURCE}:global")
+            website = self.env["website"].get_current_website()
+            incident_module.redis.Redis(connection_pool=incident_module.redis_pool).delete(f"pager_rate_limit:{SOURCE}:{website.id}")
         self.mail = self.env["mail.mail"].create(
             {"subject": "Secret subject", "body_html": "<p>token=abc123</p>", "email_to": VICTIM,
              "email_from": "noreply@example.org"}
         )
         self.env.flush_all()
+        # Other tests in a combined run may have left an open incident of this source; the rule is "one open
+        # incident", so these tests start from none.
+        self.env.invalidate_all()
+        self.env.cr.execute(  # audit-ignore-sql: constant text, test cleanup; Tested by [@ANCHOR: pager_duty:mail_failure_pages_operator]
+            "UPDATE pager_incident SET status = 'resolved' WHERE source = %s", (SOURCE,)
+        )
+        self.env.invalidate_all()
+
+    def pager(self):
+        # The pager service account sees every incident, including ones an earlier test of the run left behind.
+        return self.env["pager.incident"].with_user(self.env.ref("pager_duty.user_pager_service_internal"))
 
     def incidents(self):
         self.env.invalidate_all()
-        return self.env["pager.incident"].search([("source", "=", SOURCE)])
+        return self.pager().search([("source", "=", SOURCE), ("status", "=", "open")])
 
     def fail(self, reason="554 Message rejected: Email address is not verified.", failure_type="mail_smtp"):
         self.mail._postprocess_sent_message([], [], failure_reason=reason, failure_type=failure_type)
@@ -55,6 +73,9 @@ class TestMailFailurePagesOperator(HamsTransactionCase):
         self.assertFalse(self.incidents())
 
     def test_a_broken_alarm_does_not_break_the_mail_queue(self):
-        self.safe_patch("odoo.addons.pager_duty.models.mail_mail._service_env", side_effect=ValueError("boom"))
-        self.fail()  # must not raise
+        class BrokenRegistry:
+            def cursor(self):
+                raise ValueError("boom")
+
+        page_mail_failure(BrokenRegistry(), "mail_smtp")  # must not raise
         self.assertFalse(self.incidents())
