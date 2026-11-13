@@ -20,6 +20,9 @@ class TestLayoutSeo(HamsTransactionCase):
         return "zero_sudo.%s" % key
 
     def test_layout_seo_helper_fails_without_title_or_description(self):
+        # Tests [@ANCHOR: zero_sudo:assert_layout_seo]
+        # Tests [@ANCHOR: zero_sudo:layout_seo_slot]
+        # Tests [@ANCHOR: zero_sudo:layout_seo_slot_text]
         good = self._template("seo_ok", '<t t-set="additional_title">A page</t><t t-set="website_meta_description">%s</t>' % DESCRIPTION)
         assert_layout_seo(self, [good])
         for key, body in (

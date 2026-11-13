@@ -176,6 +176,18 @@ An `api.constrains("key", "value")` check on `ir.config_parameter`. For each rec
 
 Clears zero_sudo's cache after a gate setting changes. Argument `keys`: the parameter keys that were created, written or deleted. If any starts with `hams_rpc_guard.` it calls `_invalidate_model_cache("zero_sudo.security.utils")`, which clears the process cache and tells the other workers through Redis. Without it a changed mode, transport, peer list or network list would not reach a running worker for up to the cache lifetime (24 hours in Redis). The `create`, `write` and `unlink` overrides call it after `super`. Tests: `test_a_changed_setting_is_read_fresh_not_from_the_zero_sudo_cache`.
 
+### `IrConfigParameter.create(self, vals_list)` [@ANCHOR: hams_rpc_guard:parameter_create_flush]
+
+The `ir.config_parameter` `create` override. It creates the records through `super`, then calls `_flush_hams_rpc_guard_cache` with the new keys. Arguments: `vals_list`, the list of value dicts for the new parameters. Returns what `super().create` returns. Errors: whatever `super` raises (including the key/value validation `ValidationError`); the cache is not flushed if `super` raised. Side effects: when a key starts with `hams_rpc_guard.`, zero_sudo's cache of `_get_system_param` is cleared and the other workers are told through Redis. Runs in the caller's transaction, takes no lock of its own. Tests: `test_a_changed_setting_is_read_fresh_not_from_the_zero_sudo_cache`.
+
+### `IrConfigParameter.write(self, vals)` [@ANCHOR: hams_rpc_guard:parameter_write_flush]
+
+The `ir.config_parameter` `write` override. It collects the keys before the write (plus a new `key` value if one is being set), writes through `super`, then flushes the cache for all of them. Arguments: `vals`, the values to write. Returns what `super().write` returns. Errors: whatever `super` raises (including the key/value validation `ValidationError`); the cache is not flushed if `super` raised. Side effects: when a key starts with `hams_rpc_guard.`, zero_sudo's cache of `_get_system_param` is cleared and the other workers are told through Redis. Runs in the caller's transaction, takes no lock of its own. Tests: `test_a_changed_setting_is_read_fresh_not_from_the_zero_sudo_cache`.
+
+### `IrConfigParameter.unlink(self)` [@ANCHOR: hams_rpc_guard:parameter_unlink_flush]
+
+The `ir.config_parameter` `unlink` override. It collects the keys, deletes through `super`, then flushes the cache for them. Argument: none besides the records themselves. Returns what `super().unlink` returns. Errors: whatever `super` raises (including the key/value validation `ValidationError`); the cache is not flushed if `super` raised. Side effects: when a key starts with `hams_rpc_guard.`, zero_sudo's cache of `_get_system_param` is cleared and the other workers are told through Redis. Runs in the caller's transaction, takes no lock of its own. Tests: `test_a_changed_setting_is_read_fresh_not_from_the_zero_sudo_cache`.
+
 ## `hams_rpc_guard/patch.py`
 
 ### `unix_identity() -> (str, frozenset | None)` [@ANCHOR: hams_rpc_guard:unix_identity]

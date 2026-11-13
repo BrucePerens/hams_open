@@ -49,17 +49,20 @@ class IrConfigParameter(models.Model):
             self.env["zero_sudo.security.utils"]._invalidate_model_cache("zero_sudo.security.utils")
 
     @api.model_create_multi
+    # [@ANCHOR: hams_rpc_guard:parameter_create_flush]
     def create(self, vals_list):
         records = super().create(vals_list)
         self._flush_hams_rpc_guard_cache(records.mapped("key"))
         return records
 
+    # [@ANCHOR: hams_rpc_guard:parameter_write_flush]
     def write(self, vals):
         keys = self.mapped("key") + ([vals["key"]] if "key" in vals else [])
         result = super().write(vals)
         self._flush_hams_rpc_guard_cache(keys)
         return result
 
+    # [@ANCHOR: hams_rpc_guard:parameter_unlink_flush]
     def unlink(self):
         keys = self.mapped("key")
         result = super().unlink()

@@ -14,6 +14,7 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 class TestCronFailingRegistriesDoNotStarveOthers(RealTransactionCase):
     def test_failing_registries_do_not_block_a_good_one(self):
         # Tests [@ANCHOR: COMM_cron_rotation_logic]
+        # Tests [@ANCHOR: daemon_key_manager:mark_rotation_failed]
         manager = self.env.ref("daemon_key_manager.user_daemon_key_manager_service")
         model = self.env["daemon.key.registry"].with_user(manager.id)
         user = self.env["res.users"].create(

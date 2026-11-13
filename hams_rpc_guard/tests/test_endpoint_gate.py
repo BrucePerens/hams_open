@@ -207,6 +207,9 @@ class TestSettings(HamsTransactionCase):
         2026-11-12 rehearsal, where `rpc_transport` and `unix_peers` stayed stale in every worker after being set, and so
         would a switch from report to enforce, or back to `off` as a rollback."""
         # Tests [@ANCHOR: hams_rpc_guard:parameter_cache_flush]
+        # Tests [@ANCHOR: hams_rpc_guard:parameter_create_flush]
+        # Tests [@ANCHOR: hams_rpc_guard:parameter_write_flush]
+        # Tests [@ANCHOR: hams_rpc_guard:parameter_unlink_flush]
         utils = self.env["zero_sudo.security.utils"]
         params = self.env["ir.config_parameter"]
         params.search([("key", "=", gate.UNIX_PEERS_PARAM)]).unlink()
