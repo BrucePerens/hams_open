@@ -10,13 +10,17 @@ import tempfile
 
 logger = logging.getLogger(__name__)
 
+# A dying disk can make smartctl hang; the spooler must not hang with it.
+SMARTCTL_TIMEOUT_SECONDS = 30
+
 
 # [@ANCHOR: pager_duty:generate_smart_spool]
 def generate_smart_spool():
     try:
         # 1. Autodiscover all block devices supporting SMART
         scan_res = subprocess.run(
-            ["smartctl", "--scan", "-j"], shell=False, capture_output=True, text=True, check=True
+            ["smartctl", "--scan", "-j"], shell=False, capture_output=True, text=True, check=True,
+            timeout=SMARTCTL_TIMEOUT_SECONDS,
         )
         devices = json.loads(scan_res.stdout).get("devices", [])
 
@@ -25,9 +29,15 @@ def generate_smart_spool():
             name = dev.get("name")
             if name:
                 # 2. Query overall health status (-H) for each device
-                health_res = subprocess.run(
-                    ["smartctl", "-H", "-j", name], shell=False, capture_output=True, text=True
-                )
+                try:
+                    health_res = subprocess.run(
+                        ["smartctl", "-H", "-j", name], shell=False, capture_output=True, text=True,
+                        timeout=SMARTCTL_TIMEOUT_SECONDS,
+                    )
+                except subprocess.TimeoutExpired:
+                    # One hung disk must not cost the health data of every other disk.
+                    logger.warning("smartctl timed out for %s", name)
+                    continue
                 try:
                     out[name] = json.loads(health_res.stdout)
                 except json.JSONDecodeError as e:
@@ -42,11 +52,16 @@ def generate_smart_spool():
 
         # Atomic Write: Write to a tmp file and rename to prevent the main daemon from reading a partial write
         fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(spool_file))
-        with os.fdopen(fd, "w") as f:
-            json.dump(out, f)
-
-        os.chmod(tmp_file, 0o644)
-        os.rename(tmp_file, spool_file)
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(out, f)
+            os.chmod(tmp_file, 0o644)
+            os.rename(tmp_file, spool_file)
+        except OSError:
+            # Do not leave a stray temp file in the spool directory.
+            if os.path.exists(tmp_file):
+                os.unlink(tmp_file)
+            raise
 
     except (subprocess.SubprocessError, OSError, json.JSONDecodeError) as e:
         logger.error(f"Failed to generate SMART spool: {e}")
