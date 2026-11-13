@@ -18,17 +18,17 @@
                             <h1 class="mb-4 fw-bold">Accessibility Statement</h1>
                             <p class="text-muted">Last Updated: January 01, 2026</p>
 
-                            <h3 class="mt-4">1. Our Commitment</h3>
+                            <h2 class="h3 mt-4">1. Our Commitment</h2>
                             <p>We are committed to ensuring digital accessibility for people with disabilities. We are continually improving the user experience for everyone and applying the relevant accessibility standards.</p>
 
-                            <h3 class="mt-4">2. Conformance Status</h3>
+                            <h2 class="h3 mt-4">2. Conformance Status</h2>
                             <p>The Web Content Accessibility Guidelines (WCAG) defines requirements for designers and developers to improve accessibility for people with disabilities. It defines three levels of conformance: Level A, Level AA, and Level AAA. This platform is partially conformant with WCAG 2.1 level AA.</p>
 
                             <!-- Empty slot: a theme that offers display and reading choices (theme_hams) replaces it with its own section. Without such a theme there is no panel to describe. -->
                             <!-- [@ANCHOR: COMM_compliance_accessibility_display_slot] Verified by [@ANCHOR: COMM_test_accessibility_statement_has_no_theme_only_panel_text] -->
                             <div id="accessibility_display_choices"/>
 
-                            <h3 class="mt-4">3. Feedback</h3>
+                            <h2 class="h3 mt-4">3. Feedback</h2>
                             <p>We welcome your feedback on the accessibility of our website. Please let us know if you encounter accessibility barriers:</p>
                             <ul>
                                 <li>E-mail: <a t-attf-href="mailto:#{res_company.email}"><t t-out="res_company.email or 'admin@example.com'"/></a></li>

@@ -20,7 +20,7 @@
                             member can answer a notice, and what happens to people who repeatedly infringe. The law behind
                             it is the Digital Millennium Copyright Act, 17 U.S.C. 512.</p>
 
-                            <h3 class="mt-4" id="designated-agent">Our designated agent</h3>
+                            <h2 class="h3 mt-4" id="designated-agent">Our designated agent</h2>
                             <div class="alert alert-info" role="alert" id="dmca_agent">
                                 <p class="mb-2"><strong>Service provider:</strong> <span id="dmca_agent_name"><t t-out="agent"/></span></p>
                                 <p class="mb-2"><strong>Attn:</strong> Copyright Agent</p>
@@ -37,7 +37,7 @@
                                     <a t-attf-href="mailto:{{res_company.email}}"><t t-out="res_company.email"/></a></p>
                             </div>
 
-                            <h3 class="mt-4">How to send a notice</h3>
+                            <h2 class="h3 mt-4">How to send a notice</h2>
                             <p>Send your notice in writing to the agent above, by post or by email. To count as a notice under
                             17 U.S.C. 512(c)(3), it must include all of the following:</p>
                             <ol>
@@ -51,10 +51,10 @@
                             </ol>
                             <p>A notice that leaves these out may not be enough for us to act on it, and we may ask you to complete it.</p>
 
-                            <h3 class="mt-4">What we do when we receive a valid notice</h3>
+                            <h2 class="h3 mt-4">What we do when we receive a valid notice</h2>
                             <p>We remove the material or disable access to it, and we tell the person who posted it, who may answer with a counter-notice.</p>
 
-                            <h3 class="mt-4">Counter-notice</h3>
+                            <h2 class="h3 mt-4">Counter-notice</h2>
                             <p>If you posted material that was removed and you believe that was a mistake, you may send the agent above a
                             counter-notice. Under 17 U.S.C. 512(g)(3) it must include:</p>
                             <ol>
@@ -70,12 +70,12 @@
                             have filed a court action against you, we restore the material no sooner than 10 and no later than 14 business days after we
                             receive the counter-notice. These are the periods the statute sets.</p>
 
-                            <h3 class="mt-4">False notices</h3>
+                            <h2 class="h3 mt-4">False notices</h2>
                             <p>Under 17 U.S.C. 512(f), a person who knowingly and materially misrepresents that material is infringing, or that it was
                             removed by mistake, is liable for the damages that result, including costs and attorney's fees. Please do not send a notice or a
                             counter-notice unless you mean it.</p>
 
-                            <h3 class="mt-4">People who repeatedly infringe</h3>
+                            <h2 class="h3 mt-4">People who repeatedly infringe</h2>
                             <p>We close the accounts of people who repeatedly infringe.</p>
 
                             <p class="small text-muted mt-4">This page is general information, not legal advice. See also our

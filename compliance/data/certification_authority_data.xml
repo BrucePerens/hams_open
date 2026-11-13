@@ -27,14 +27,14 @@
                                 Google logs every request. If someone stole that permission, the damage would be limited to what the next sections describe.</p>
                             </div>
 
-                            <h3 class="mt-4">What the CA is for</h3>
+                            <h2 class="h3 mt-4">What the CA is for</h2>
                             <p>Our relay software runs on your own computer and serves a web page on your local network. Your browser will only show a
                             padlock for that page if some authority it trusts has signed a certificate for the relay's name. Rather than ask you to trust a
                             general-purpose CA, we run a small one that can only ever sign names that belong to us or to a local network. It is
                             <strong>optional</strong>: without it the relay uses a self-signed certificate and your browser asks you to click through once. We
                             also use a second branch of the same hierarchy to issue the identity certificates that prove a member's callsign when signing in.</p>
 
-                            <h3 class="mt-4">Why it is safe to accept the root</h3>
+                            <h2 class="h3 mt-4">Why it is safe to accept the root</h2>
                             <p>Every CA certificate in the hierarchy, from the root down through the relay branch, carries a critical X.509 <em>name
                             constraint</em> that permits only:</p>
                             <ul>
@@ -49,7 +49,7 @@
                             certificates that carry a callsign and no server name. Software that does not enforce name constraints is the one
                             exception to this protection, which is a reason to install the root only on current browsers and operating systems.</p>
 
-                            <h3 class="mt-4">How the signing keys are held</h3>
+                            <h2 class="h3 mt-4">How the signing keys are held</h2>
                             <p>The two keys that sign certificates day to day (the relay issuing key and the identity issuing key), and the separate key
                             that signs relay operator lists and theft check-in answers (the relay issuer key), live inside a Google Cloud HSM. They are not files. They are generated or imported into the
                             hardware, they cannot be exported, and nobody at Google or at hams.com can read them. The server that runs hams.com holds,
@@ -60,7 +60,7 @@
                             <p>The root and intermediate keys above the day-to-day keys (the master root, the second master, and the relay and identity roots)
                             are never present on the hams.com servers. They are used only to certify the CAs below them, under our key custody procedure.</p>
 
-                            <h3 class="mt-4">What an attacker could and could not do</h3>
+                            <h2 class="h3 mt-4">What an attacker could and could not do</h2>
                             <p>Every scenario below needs the attacker to obtain one of three Google service-account credentials held on the hams.com
                             server, or to take over that server (which yields all three). We know of no other way to make our CA sign anything: the keys cannot
                             be read, and the ordinary software path refuses requests outside its own policy. Each credential can sign with exactly one
@@ -95,7 +95,7 @@
                             relay transmit for it unless the user's own key was exposed. We still advise
                             treating a padlock as a statement about the name in the address bar, not as proof that a device is yours.</p>
 
-                            <h3 class="mt-4">Lifetimes and revocation</h3>
+                            <h2 class="h3 mt-4">Lifetimes and revocation</h2>
                             <p>The two roots and the master certificates are valid for thirty years, the two issuing CAs for twenty, and each relay server certificate
                             for 800 days (renewed by the relay after 400). Signed revocation lists are published at
                             <code>https://hams.com/relay-ca/crl</code> and <code>https://hams.com/identity-ca/crl</code> for the issuing CAs, and at
@@ -103,7 +103,7 @@
                             names its list. The relay checks the lists and keeps working if hams.com is unreachable (it does not fail closed on a missing list, so
                             a relay on an isolated network still runs).</p>
 
-                            <h3 class="mt-4">Verify what you are trusting</h3>
+                            <h2 class="h3 mt-4">Verify what you are trusting</h2>
                             <p>The public certificates are available from your own relay at <code>/trust/hams-roots.pem</code> and from the project source
                             (<code>daemons/relay_ca/public_certs/</code>). Only install a root whose SHA-256 fingerprint matches this table (published 2026-10-05):</p>
                             <div class="table-responsive">

@@ -26,7 +26,7 @@
                             today -- where something is designed but not yet shipped, that's said
                             plainly, not rounded up.</p>
 
-                            <h3 class="mt-4">Your LoTW certificate never touches our application</h3>
+                            <h2 class="h3 mt-4">Your LoTW certificate never touches our application</h2>
                             <p>You can use your ARRL Logbook of the World certificate to become a
                             Verified Ham, or to add a licence, once you are signed in (you sign in
                             with your password or a hams.com certificate, never with LoTW).
@@ -36,7 +36,7 @@
                             your private key never leaves your browser.</p>
                             <p><a href="/lotw-trust">Read the full LoTW Trust and Certificate Custody page &#8594;</a></p>
 
-                            <h3 class="mt-4">We can never remotely control your transmitter</h3>
+                            <h2 class="h3 mt-4">We can never remotely control your transmitter</h2>
                             <p>The local relay software that connects your radio to hams.com
                             enforces a frequency safety interlock directly against your radio's own
                             live state, immediately before every key-on. This is local
@@ -45,7 +45,7 @@
                             were ever fully compromised.</p>
                             <p><a href="/transmitter-safety">Read the full Transmitter Safety Commitments page &#8594;</a></p>
 
-                            <h3 class="mt-4">Disclosed source: you can read what the relay software actually does</h3>
+                            <h2 class="h3 mt-4">Disclosed source: you can read what the relay software actually does</h2>
                             <p>The local relay daemon that talks to your radio stays proprietary
                             software -- publishing its source isn't a license change -- but its real
                             source is published at <a href="/relay/source">/relay/source</a> for
@@ -53,7 +53,7 @@
                             description of code you can't see. This is the same software
                             responsible for the frequency-safety interlock above.</p>
 
-                            <h3 class="mt-4">Signed releases and reproducible builds</h3>
+                            <h2 class="h3 mt-4">Signed releases and reproducible builds</h2>
                             <p>The relay daemon verifies every self-update against a cryptographic
                             signature before installing it, so a compromise of the release
                             infrastructure alone can't push malicious code to already-running
@@ -69,7 +69,7 @@
                             real signature today. This page will be updated the day that changes,
                             not before.</p>
 
-                            <h3 class="mt-4">A revoked daemon version warns you loudly -- it doesn't get bricked</h3>
+                            <h2 class="h3 mt-4">A revoked daemon version warns you loudly -- it doesn't get bricked</h2>
                             <p>If a released daemon version is ever found to have a real problem,
                             hams.com can mark that specific version as revoked. The daemon tries to
                             update itself immediately -- but if that update fails, it does not
@@ -79,7 +79,7 @@
                             policy. Your radio stays usable unless there's a specifically-flagged
                             safety reason for it not to be.</p>
 
-                            <h3 class="mt-4">We are not exposed to a ransomware pay-to-recover scenario</h3>
+                            <h2 class="h3 mt-4">We are not exposed to a ransomware pay-to-recover scenario</h2>
                             <p>Our production data is backed up off-site to storage that cannot be
                             deleted or overwritten by anyone -- including our own regular operating
                             credentials -- for the length of its retention period, and we maintain
@@ -88,7 +88,7 @@
                             capability, not an assumption.</p>
                             <p><a href="/backup-policy">Read the full Backup and Data Resilience Policy &#8594;</a></p>
 
-                            <h3 class="mt-4">Everything above, together</h3>
+                            <h2 class="h3 mt-4">Everything above, together</h2>
                             <p>None of these protections depend on trusting hams.com's servers to
                             stay honest or uncompromised forever: the frequency interlock lives on
                             your own machine, the source is published for you to read, the builds
