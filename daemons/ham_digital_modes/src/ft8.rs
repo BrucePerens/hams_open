@@ -631,7 +631,10 @@ mod tests {
             }
             let hz = d / (2.0 * std::f64::consts::PI) / ((b - a) as f64 / sr as f64);
             let want = (tones[n] as f64 - 3.5) / FT8_SYMBOL_PERIOD_S;
-            assert!((hz - want).abs() < 2.0, "symbol {n}: {hz} Hz vs tone {want} Hz");
+            assert!(
+                (hz - want).abs() < 2.0,
+                "symbol {n}: {hz} Hz vs tone {want} Hz"
+            );
         }
     }
 

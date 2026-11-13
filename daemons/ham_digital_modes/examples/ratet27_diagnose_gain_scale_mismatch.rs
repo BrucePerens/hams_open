@@ -441,8 +441,16 @@ mod tests {
             u0_bits5_3: 0b101,
         };
         let rows = vec![row(0, 3.0), row(1, 1.0), row(2, 0.5)];
-        let louder: Vec<usize> = rows.iter().filter(|r| r.ratio > 2.0).map(|r| r.idx).collect();
-        let quieter: Vec<usize> = rows.iter().filter(|r| r.ratio < 0.7).map(|r| r.idx).collect();
+        let louder: Vec<usize> = rows
+            .iter()
+            .filter(|r| r.ratio > 2.0)
+            .map(|r| r.idx)
+            .collect();
+        let quieter: Vec<usize> = rows
+            .iter()
+            .filter(|r| r.ratio < 0.7)
+            .map(|r| r.idx)
+            .collect();
         assert_eq!((louder, quieter), (vec![0], vec![2]));
         assert_eq!(rows[0].header_bytes, [0x80, 0x00]);
     }

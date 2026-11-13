@@ -228,7 +228,8 @@ mod tests {
     // Tests [@ANCHOR: ham_digital_modes:ambe_bit_sensitivity_decoder_struct]
     #[test]
     fn a_decoder_maps_a_slice_of_wire_frames_to_one_pcm_vector() {
-        let decode: Decoder = Box::new(|frames: &[u128]| frames.iter().map(|&f| f as f64).collect());
+        let decode: Decoder =
+            Box::new(|frames: &[u128]| frames.iter().map(|&f| f as f64).collect());
         assert_eq!(decode(&[1, 2, 3]), vec![1.0, 2.0, 3.0]);
         assert!(decode(&[]).is_empty());
     }

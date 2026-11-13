@@ -486,13 +486,19 @@ mod tests {
                 let (ptype, payload) = parse_packet(&buf[..len]).unwrap();
                 assert_eq!(ptype, TYPE_CHANNEL);
                 seen_tx.send(payload.to_vec()).unwrap();
-                server.send_to(&build_speech(&[n as i16; FRAME_SAMPLES]), from).unwrap();
+                server
+                    .send_to(&build_speech(&[n as i16; FRAME_SAMPLES]), from)
+                    .unwrap();
             }
         });
         let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
         sock.connect(addr).unwrap();
         sock.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-        let mut chip = Chip { sock: &sock, buf: [0; 1024], header: vec![0xAA, 0xBB] };
+        let mut chip = Chip {
+            sock: &sock,
+            buf: [0; 1024],
+            header: vec![0xAA, 0xBB],
+        };
         let c = [0u32; 8];
         let frames = chip.decode_repeated(&c);
         handle.join().unwrap();

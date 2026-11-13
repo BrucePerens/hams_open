@@ -255,7 +255,10 @@ mod tests {
         let pcm: Vec<i16> = (0..3200)
             .map(|n| {
                 ((1..=10)
-                    .map(|k| (2.0 * std::f64::consts::PI * 150.0 * k as f64 * n as f64 / 8000.0).sin() / k as f64)
+                    .map(|k| {
+                        (2.0 * std::f64::consts::PI * 150.0 * k as f64 * n as f64 / 8000.0).sin()
+                            / k as f64
+                    })
                     .sum::<f64>()
                     * 6000.0) as i16
             })
@@ -264,7 +267,11 @@ mod tests {
         assert!(table.len() >= 4);
         for (name, run) in table {
             let out = run(&pcm);
-            assert!(!out.is_empty() && out.len() % 160 == 0, "{name}: {} samples", out.len());
+            assert!(
+                !out.is_empty() && out.len() % 160 == 0,
+                "{name}: {} samples",
+                out.len()
+            );
             assert!(out.iter().all(|v| v.is_finite()), "{name}");
         }
     }

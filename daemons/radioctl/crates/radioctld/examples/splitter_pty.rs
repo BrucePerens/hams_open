@@ -125,7 +125,13 @@ mod tests {
         let mut wrapped = AnyEngine(engine_for(&description).unwrap());
         assert_eq!(wrapped.description().id, "icom-ic-7300");
         let op = Op::GetFrequency(radioctl_core::units::Vfo::A);
-        assert_eq!(wrapped.encode(&op).unwrap().bytes, direct.encode(&op).unwrap().bytes);
-        assert_eq!(wrapped.feed(&[], Duration::ZERO).len(), direct.feed(&[], Duration::ZERO).len());
+        assert_eq!(
+            wrapped.encode(&op).unwrap().bytes,
+            direct.encode(&op).unwrap().bytes
+        );
+        assert_eq!(
+            wrapped.feed(&[], Duration::ZERO).len(),
+            direct.feed(&[], Duration::ZERO).len()
+        );
     }
 }
