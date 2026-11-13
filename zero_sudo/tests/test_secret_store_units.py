@@ -45,8 +45,6 @@ class _TempCase(SafePatchMixin, BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestSecretStoreFileChecks(_TempCase):
-    # Tests [@ANCHOR: zero_sudo:secret_store_check_name]
-    # Tests [@ANCHOR: zero_sudo:secret_store_check_private_file]
 
     def test_check_name_message_names_the_value(self):
         for bad, shown in (("../x", "'../x'"), ("A", "'A'"), (5, "5"), ("a..b", "'a..b'"), ("", "''"), (None, "None")):
@@ -136,9 +134,6 @@ class TestSecretStoreFileChecks(_TempCase):
 
 @tagged("post_install", "-at_install")
 class TestSecretStoreBackends(_TempCase):
-    # Tests [@ANCHOR: zero_sudo:secret_store_systemd_backend]
-    # Tests [@ANCHOR: zero_sudo:secret_store_encrypted_backend]
-    # Tests [@ANCHOR: zero_sudo:secret_store_encrypt_value]
 
     def test_systemd_backend_refuses_world_bits_and_non_files(self):
         backend = ss.SystemdCredentialBackend(self.dir)
@@ -229,8 +224,6 @@ class _OneShotBroker:
 
 @tagged("post_install", "-at_install")
 class TestBrokerClientAndStore(_TempCase):
-    # Tests [@ANCHOR: zero_sudo:secret_store_broker_client]
-    # Tests [@ANCHOR: zero_sudo:secret_store_store]
 
     def _broker(self, reply):
         broker = _OneShotBroker(self.dir, reply)
@@ -315,9 +308,6 @@ class TestBrokerClientAndStore(_TempCase):
 
 @tagged("post_install", "-at_install")
 class TestStoreFromSpec(_TempCase):
-    # Tests [@ANCHOR: zero_sudo:secret_store_store_from_spec]
-    # Tests [@ANCHOR: zero_sudo:secret_store_default_spec]
-    # Tests [@ANCHOR: zero_sudo:secret_store_default_store]
 
     def _environment(self, **values):
         saved = {key: os.environ.get(key) for key in values}
@@ -383,9 +373,6 @@ class TestStoreFromSpec(_TempCase):
 
 @tagged("post_install", "-at_install")
 class TestSecretOperationsEdges(BaseCase):
-    # Tests [@ANCHOR: zero_sudo:secret_operations_hmac_sign]
-    # Tests [@ANCHOR: zero_sudo:secret_operations_hmac_verify]
-    # Tests [@ANCHOR: zero_sudo:secret_operations_stripe_webhook_verify]
 
     SECRET, PAYLOAD = "whsec_ops", '{"a":1}'
 
@@ -452,8 +439,6 @@ class TestSecretOperationsEdges(BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestBrokerMain(_TempCase):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_main]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_build]
 
     def test_build_refuses_root_and_names_the_credentials_unit_setting(self):
         with self.assertRaises(broker_main.broker.BrokerConfigError) as caught:

@@ -14,8 +14,6 @@ ATTRIBUTE = css.sanitize_style_attribute
 
 @tagged("post_install", "-at_install")
 class TestCssSanitizerBoundaries(BaseCase):
-    # Tests [@ANCHOR: zero_sudo:css_stylesheet_filter]
-    # Tests [@ANCHOR: zero_sudo:css_style_attribute_filter]
 
     def test_the_scans_treat_capital_x_and_other_letters_as_ordinary_text(self):
         self.assertEqual(SHEET(".aXb{font-family:Xyz}"), (".aXb{font-family:Xyz}", False))

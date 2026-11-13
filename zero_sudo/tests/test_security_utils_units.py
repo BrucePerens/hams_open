@@ -188,14 +188,6 @@ def _utils(cursor=None, user=None, registry=None, context=None, models=None):
 
 @tagged("post_install", "-at_install")
 class TestSecurityUtilsUnits(HamsTransactionCase):
-    # Tests [@ANCHOR: zero_sudo:register_hook_preload_service_uids]
-    # Tests [@ANCHOR: zero_sudo:preload_service_uid_cache]
-    # Tests [@ANCHOR: zero_sudo:COMM_deterministic_hash]
-    # Tests [@ANCHOR: zero_sudo:COMM_get_service_uid]
-    # Tests [@ANCHOR: zero_sudo:get_service_env]
-    # Tests [@ANCHOR: zero_sudo:ground_truth_ids]
-    # Tests [@ANCHOR: zero_sudo:erase_via_service_account]
-    # Tests [@ANCHOR: zero_sudo:resolve_dependency_cycle]
 
     def _stub(self, name, function):
         """Replace a method of the model class for this test; `function` takes the call's arguments without self."""

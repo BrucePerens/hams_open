@@ -67,7 +67,6 @@ class _Case(SafePatchMixin, BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestBrokerConfig(_Case):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_validate_config]
 
     def bad(self, config, message):
         with self.assertRaises(sb.BrokerConfigError) as caught:
@@ -132,10 +131,6 @@ class TestBrokerConfig(_Case):
 
 @tagged("post_install", "-at_install")
 class TestBrokerAcl(_Case):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_acl_grants_read]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_readable_by]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_account_ids]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_check_not_readable]
 
     USER, GROUP, MASK = 0x02, 0x08, 0x10
 
@@ -246,9 +241,6 @@ class TestBrokerAcl(_Case):
 
 @tagged("post_install", "-at_install")
 class TestRedactScrubPath(_Case):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_redact]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_scrub]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_check_path]
 
     def test_redact(self):
         self.assertEqual(sb.redact("a abcd b", "abcd"), "a [redacted by secret broker] b")
@@ -321,7 +313,6 @@ class _FakeConnection:
 
 @tagged("post_install", "-at_install")
 class TestHttpsCall(_Case):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_https_call]
 
     POLICY = {"base_url": "https://api.example.com", "methods": ["GET", "POST"], "path_prefixes": ["/v1/"], "auth": "bearer"}
 
@@ -419,8 +410,6 @@ class _Backend:
 
 @tagged("post_install", "-at_install")
 class TestBrokerHandle(_Case):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_broker]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_handle]
 
     def broker(self, secrets=None, **values):
         config = _config(secrets=secrets or {"key": {"operations": list(sb.OPERATIONS[:3])}})
@@ -493,9 +482,6 @@ class _TapConnection:
 
 @tagged("post_install", "-at_install")
 class TestBrokerConnections(_Case):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_serve_connection]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_serve]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_peer_credentials]
 
     def broker(self, allowed=None):
         config = _config(socket=os.path.join(self.dir, "b.sock"), secrets={"key": {"operations": ["hmac_sign"]}})

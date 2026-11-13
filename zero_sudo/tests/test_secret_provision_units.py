@@ -63,10 +63,6 @@ def _capture(function, *args, **kwargs):
 
 @tagged("post_install", "-at_install")
 class TestProvisionPlan(BaseCase):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_provision_unit_text]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_provision_odoo_dropin_text]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_provision_default_config]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_provision_plan]
 
     def test_the_unit_text_is_exactly_this(self):
         self.assertEqual(provision.unit_text("/opt/zs/daemon", "/usr/bin/python3"), UNIT)
@@ -108,9 +104,6 @@ class TestProvisionPlan(BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestProvisionApply(SafePatchMixin, BaseCase):
-    # Tests [@ANCHOR: zero_sudo:secret_broker_provision_account_exists]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_provision_apply]
-    # Tests [@ANCHOR: zero_sudo:secret_broker_provision_main]
 
     def setUp(self):
         super().setUp()
