@@ -227,7 +227,12 @@ class EdgeRoutingMixin(models.AbstractModel):
             elif vals.get("name") and not self.env.context.get("edge_routing_no_name_slug"):
                 vals["website_slug"] = self._generate_unique_slug(vals["name"], forbidden_slugs=assigned_slugs)
                 assigned_slugs.add(vals["website_slug"])
-        return super().create(vals_list)
+        records = super().create(vals_list)
+        # get_record_by_slug() caches a miss too: a visit to /<slug> before this record existed must not keep the new slug dead
+        slugs = [s for s in records.mapped("website_slug") if s]
+        if slugs:
+            self.env["zero_sudo.security.utils"]._notify_cache_invalidation(self._name, slugs)
+        return records
 
     # # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
 
