@@ -27,11 +27,11 @@ Nothing here touches the hams.com modules' own tests: they live in other package
 """
 
 import sys
-from unittest import mock
 
 from odoo.tests.common import HttpCase, TransactionCase, get_db_name
 import odoo.sql_db
 
+from odoo.addons.zero_sudo.tests.common import SafePatchMixin
 from odoo.addons.user_websites.models.site_eligibility import ResUsersSiteEligibility
 
 _SLUG_POLICY_KEY = "user_websites.slug_policy"
@@ -79,7 +79,10 @@ def _wrap(cls):
         for key in _FORM_SHIELD_TUNING_KEYS:
             c.addClassCleanup(_set_committed_param, key, _set_committed_param(key, None))
         inner(c)
-        patcher = mock.patch.object(c.registry["res.users"], "_website_eligibility_gaps", _open_source_eligibility_gaps)
+        # safe_patch_object_cm never reads self, so the class stands in for it in this class-level hook.
+        patcher = SafePatchMixin.safe_patch_object_cm(
+            c, c.registry["res.users"], "_website_eligibility_gaps", _open_source_eligibility_gaps
+        )
         patcher.start()
         c.addClassCleanup(patcher.stop)
 
