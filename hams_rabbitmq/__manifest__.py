@@ -4,6 +4,7 @@
     "description": """
         Provides a global connection pool for RabbitMQ.
     """,
+    "author": "Bruce Perens K6BP",
     "version": "1.0",
     "category": "Hidden",
     "depends": ["base", "zero_sudo"],
