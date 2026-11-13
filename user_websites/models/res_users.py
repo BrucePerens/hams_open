@@ -115,6 +115,7 @@ class ResUsers(models.Model):
     Inherits from `res.users` to add features for personal user websites.
     """
 
+    _name = "res.users"
     _inherit = ["res.users", "edge.routing.mixin"]
     _website_slug_format = models.Constraint("CHECK(website_slug IS NULL OR website_slug = '' OR website_slug ~ '^[a-z0-9\\-]+$')", 'The Website Slug can only contain lowercase letters, numbers, and hyphens.')
 
