@@ -3,9 +3,12 @@ import importlib.util
 import os
 from unittest.mock import MagicMock
 
+from psycopg2 import IntegrityError
+
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import tagged
+from odoo.tools import mute_logger
 
 from .. import request_state
 from ..hooks import post_init_hook
@@ -47,13 +50,11 @@ class TestTenantSitesModels(HamsTransactionCase):
     def test_a_hostname_belongs_to_one_site_only(self):
         other = self.env["website"].create({"name": "Tenant B"})
         other_site = self.env["tenant.site"].create({"name": "B", "website_id": other.id})
-        with self.assertRaises(Exception), self.cr.savepoint():
+        with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"), self.cr.savepoint():
             self.env["tenant.site.host"].create({"name": "a.tenant.example", "site_id": other_site.id})
             self.env.flush_all()
-        with self.assertRaises(Exception), self.cr.savepoint():
+        with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"), self.cr.savepoint():
             self.env["tenant.site"].create({"name": "again", "website_id": other.id})
-            self.env.flush_all()
-            self.env["tenant.site"].create({"name": "again 2", "website_id": other.id})
             self.env.flush_all()
 
     # [@ANCHOR: tenant_sites:COMM_test_own_host_normalize]
