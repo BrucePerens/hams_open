@@ -786,11 +786,11 @@ class TestExceptionTicketAccess(ExceptionTicketCase):
     def test_portal_cannot_choose_the_category(self):
         self.assertIn("server_exception", helpdesk_portal._PORTAL_EXCLUDED_TICKET_TYPES)
 
-    def test_external_ai_triage_account_cannot_see_it(self):
+    def test_external_ai_triage_account_can_see_it(self):
         self.assertTrue(self.report(self.caught(raise_attribute_error)))
         ticket = self.fingerprints().ticket_id
         triage = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_ai_triage_service")
-        self.assertFalse(triage["hams_helpdesk.ticket"].search([("id", "=", ticket.id)]))
+        self.assertTrue(triage["hams_helpdesk.ticket"].search([("id", "=", ticket.id)]))
 
     def test_service_account_cannot_touch_other_tickets(self):
         service = self.env["zero_sudo.security.utils"]._get_service_env(reporter.SERVICE_XMLID)
@@ -798,12 +798,6 @@ class TestExceptionTicketAccess(ExceptionTicketCase):
         self.assertFalse(service["hams_helpdesk.ticket"].search([("id", "=", general.id)]))
         with self.assertRaises(AccessError):
             service["hams_helpdesk.ticket"].create({"name": "Forged", "ticket_type": "general"})
-
-    def test_no_triage_wakeup_for_exception_tickets(self):
-        wakeup = self.safe_patch("odoo.addons.hams_helpdesk.models.helpdesk_ticket.write_triage_wakeups")
-        self.assertTrue(self.report(self.caught(raise_attribute_error)))
-        self.env.cr.postcommit.run()
-        wakeup.assert_not_called()
 
 
 @tagged("post_install", "-at_install", "standard")

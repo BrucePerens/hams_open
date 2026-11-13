@@ -212,3 +212,29 @@ class TestHelpdeskAiTriageExternalAllowlist(HamsTransactionCase):
         with self.assertRaises(AccessError):
             excluded_ticket.with_user(self.ai_triage_uid).mcp_mark_spam("should never apply")
             self.env.flush_all()
+
+    def test_10_the_triage_agent_reads_and_notes_a_server_exception_ticket_but_cannot_quarantine_it(self):
+        # Tests [@ANCHOR: hams_helpdesk:mcp_post_internal_note]
+        # Tests [@ANCHOR: hams_helpdesk:mcp_mark_spam]
+        # Tests [@ANCHOR: hams_helpdesk:mcp_record_verdict]
+        ticket = (
+            self.env["hams_helpdesk.ticket"]
+            .with_user(self.admin)
+            .create(
+                {
+                    "name": "Daemon failure: nz.rsm.sync.service",
+                    "description": "<p>unit failed</p>",
+                    "ticket_type": "server_exception",
+                }
+            )
+        )
+        as_agent = ticket.with_user(self.ai_triage_uid)
+        self.assertEqual(as_agent.search_count([("id", "=", ticket.id)]), 1)
+        self.assertIn("untrusted", as_agent.mcp_safe_read()[0]["untrusted_block"].lower())
+        as_agent.mcp_post_internal_note("Read: the unit failed once.")
+        self.assertIn("unit failed once", ticket.message_ids.sorted(key=lambda m: m.id)[-1].body)
+        with self.assertRaises(UserError):
+            as_agent.mcp_mark_spam("looks like spam")
+        as_agent.mcp_record_verdict("spam", "not spam, but the agent said so")
+        self.assertEqual(ticket.stage, "new", "an automatic exception ticket is never quarantined")
+

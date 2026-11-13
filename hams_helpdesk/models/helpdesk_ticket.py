@@ -542,7 +542,6 @@ class HelpdeskTicket(models.Model):
                 ticket.id
                 for ticket, vals in zip(tickets, vals_list)
                 if (vals.get("stage") or "new") == "new"
-                and vals.get("ticket_type") != "server_exception"
             ]
         )
 
@@ -1144,7 +1143,7 @@ class HelpdeskTicket(models.Model):
         exist for it, and the writes run as the helpdesk service account."""
         self.ensure_one()
         self._require_triage_caller()
-        current = self.read(["stage", "triage_overridden"])[0]
+        current = self.read(["stage", "triage_overridden", "ticket_type"])[0]
         if current["stage"] != "new":
             raise UserError(_("Only a ticket in the New stage can be judged by the triage agent."))
         if current["triage_overridden"]:
@@ -1156,7 +1155,8 @@ class HelpdeskTicket(models.Model):
         hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
         ticket = self.with_env(hd_env)
         ticket._triage_record_verdict(verdict, text, "agent")
-        quarantine = verdict in self._triage_quarantine_verdicts()
+        # An automatic server-exception ticket is a real alarm, never mail to quarantine: the agent only records its read.
+        quarantine = verdict in self._triage_quarantine_verdicts() and current["ticket_type"] != "server_exception"
         if quarantine:
             ticket.write({"stage": "spam"})
             # A verdict that arrives after the notice went out stops any further mail about the ticket: nobody follows it.
@@ -1234,7 +1234,8 @@ class HelpdeskTicket(models.Model):
         """
         # [@ANCHOR: hams_helpdesk:mcp_mark_spam]
         self.ensure_one()
-        if self.read(["stage"])[0]["stage"] != "new":
+        current = self.read(["stage", "ticket_type"])[0]
+        if current["stage"] != "new" or current["ticket_type"] == "server_exception":
             raise UserError(_("Only a ticket in the New stage can be marked as spam by the triage agent."))
         return self.mcp_record_verdict("spam", reason)
 
