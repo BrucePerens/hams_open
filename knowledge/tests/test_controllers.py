@@ -176,7 +176,10 @@ class TestManualControllers(HamsHttpCase):
         # Tests [@ANCHOR: story_article_view]
 
         # Tests [@ANCHOR: journey_user_browsing]
-        self.url_open("/manual")
+        response = self.url_open("/manual")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"How-to guides and user manuals", response.content, "the Help index template rendered")
+        self.assertNotIn(b"Admin Passwords", response.content, "a private article is not listed to a guest")
 
     def test_07_knowledge_home_alias_exact_match_redirects_straight_to_the_article(self):
         # Tests [@ANCHOR: knowledge:COMM_knowledge_home_alias]
