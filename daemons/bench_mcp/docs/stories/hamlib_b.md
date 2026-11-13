@@ -82,7 +82,7 @@ bench_radioctl_daemon restart; if it repeats the rig is misreporting.`). Pure, n
 
 Decides whether a piece of caller-supplied text may be placed in a command to `radioctld`, so that no text from a caller can become a second command or a different one. The
 client frames a command as one line, so a newline or any space could inject another command; this check is applied by the control and status tools (`control.rs`, `status.rs`) to names they paste into commands (a
-VFO name, a level name, a function name).
+VFO (variable frequency oscillator, the tuning control) name, a level name, a function name).
 
 | Argument | Type | Meaning |
 |---|---|---|
@@ -344,7 +344,7 @@ Transmit: none, but this file is what the TX gate compares with, so recording a 
 
 ### `mode_for` [@ANCHOR: radioctl_load_mode_for]
 
-Picks the receive mode used for the reading at the transmit frequency itself: AM when the frequency is in the HF class (below 30 MHz, per `class_of`), FM otherwise (VHF and UHF). The transmit frequency has no station to say which mode to use, and the check only listens, so a plain demodulator
+Picks the receive mode used for the reading at the transmit frequency itself: AM when the frequency is in the HF (high frequency, 3 to 30 MHz) class (below 30 MHz, per `class_of`), FM otherwise (VHF (very high frequency, 30 to 300 MHz) and UHF). The transmit frequency has no station to say which mode to use, and the check only listens, so a plain demodulator
 suits.
 
 Argument: `hz: f64`. Return value: `"AM"` or `"FM"` (`&'static str`). Pure, no I/O, no errors. Note that a non-finite `hz` falls in the UHF branch of `class_of` and so gives `FM`; callers check the frequency before. This mode is the one that is set on the rig for the reading, and the rig's own mode is restored
@@ -425,7 +425,7 @@ Note: hearing a time station through the supposed dummy load also makes `decide`
 
 ### `stations` [@ANCHOR: radioctl_stations_tool]
 
-The body of `bench_radioctl_stations`: shows the table of reference stations the load check listens for (the shipped WWV, WWVH, AM band samples and weather radio entries and the owner's own), with notes, the date each was last heard and whether that is recent. Tier `read_only`; `mod.rs::call` dispatches it without
+The body of `bench_radioctl_stations`: shows the table of reference stations the load check listens for (the shipped WWV: the NIST time-signal station, WWVH, AM band samples and weather radio entries and the owner's own), with notes, the date each was last heard and whether that is recent. Tier `read_only`; `mod.rs::call` dispatches it without
 the instrument lock because it only reads one file. Never keys.
 
 | Argument (JSON) | Type | Meaning |

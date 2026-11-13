@@ -1455,7 +1455,7 @@
 
 ### `ProfileDef` [@ANCHOR: radioctl:radioctl_station_model_profile_def]
 
-**Purpose and location.** A named group, for example "HF station on". Defined in `daemons/radioctl/crates/radioctl-station/src/model.rs:311` as a pub `struct`. It derives Debug, Clone, PartialEq, Eq, Serialize, Deserialize.
+**Purpose and location.** A named group, for example "HF (high frequency, 3 to 30 MHz) station on". Defined in `daemons/radioctl/crates/radioctl-station/src/model.rs:311` as a pub `struct`. It derives Debug, Clone, PartialEq, Eq, Serialize, Deserialize.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -1473,7 +1473,7 @@
 
 ### `PowerMeterDef` [@ANCHOR: radioctl:radioctl_station_model_power_meter_def]
 
-**Purpose and location.** An external RF power meter: "the power meter for rig X" (`docs/DESIGN.md` decision 26). Defined in `daemons/radioctl/crates/radioctl-station/src/model.rs:327` as a pub `struct`. It derives Debug, Clone, PartialEq, Eq, Serialize, Deserialize.
+**Purpose and location.** An external RF (radio frequency) power meter: "the power meter for rig X" (`docs/DESIGN.md` decision 26). Defined in `daemons/radioctl/crates/radioctl-station/src/model.rs:327` as a pub `struct`. It derives Debug, Clone, PartialEq, Eq, Serialize, Deserialize.
 
 | Field | Type | Meaning |
 |---|---|---|

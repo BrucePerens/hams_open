@@ -15,7 +15,7 @@ Reads a fixed-width number from the XK 852's fixed-column `*O1` status line. It 
 
 ### `pub fn new(desc: &RigDescription) -> Result<RsHfTwin, RigError>` [@ANCHOR: radioctl:radioctl_rshf_twin_new]
 
-Builds the virtual Rohde and Schwarz HF receiver. The dialect style (EK, XK 2100 or XK 852) is derived with `RsHfDialect::from_description`, so a dialect that is not `ek895`, `ek896`, `xk2100` or `xk852` returns `ErrorKind::Unsupported`; the style and a clone of the description (for mode-code lookups) are kept. `desc` is borrowed. The twin has no frequency or mode of its own: they live in the shared `RigState` passed to each `line` call. No I/O.
+Builds the virtual Rohde and Schwarz HF (high frequency, 3 to 30 MHz) receiver. The dialect style (EK, XK 2100 or XK 852) is derived with `RsHfDialect::from_description`, so a dialect that is not `ek895`, `ek896`, `xk2100` or `xk852` returns `ErrorKind::Unsupported`; the style and a clone of the description (for mode-code lookups) are kept. `desc` is borrowed. The twin has no frequency or mode of its own: they live in the shared `RigState` passed to each `line` call. No I/O.
 
 ### `fn reply(text: &str) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_rshf_twin_reply]
 
@@ -87,7 +87,7 @@ The virtual scanner's reaction to one command line (CR removed), split on commas
 
 ### `fn mode_name(&self, desc: &RigDescription, mode: Mode) -> Option<&'static str>` [@ANCHOR: radioctl:radioctl_marine_mode_name]
 
-Gives the name the Icom marine radio uses for a mode. `mode` is looked up in the description's code table; no code for it gives `None`. Code 5 (RTTY) returns the dialect's own RTTY name (`J2B`, or `AFS` on the IC-M710); codes 1 to 4 return `LSB`, `USB`, `CW` and `AM`; any other code gives `None`. The result is a static string. Used when encoding `SetMode` and by the twin to name modes. Pure, read-only.
+Gives the name the Icom marine radio uses for a mode. `mode` is looked up in the description's code table; no code for it gives `None`. Code 5 (RTTY: radio teletype) returns the dialect's own RTTY name (`J2B`, or `AFS` on the IC-M710); codes 1 to 4 return `LSB`, `USB`, `CW` and `AM`; any other code gives `None`. The result is a static string. Used when encoding `SetMode` and by the twin to name modes. Pure, read-only.
 
 ## `crates/radioctl-protocols/src/icom_pcr.rs`
 

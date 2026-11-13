@@ -1,7 +1,7 @@
 # Story: Ingesting Inbound Email via SES/SNS Webhooks
 
 ## Context
-Amazon SES delivers inbound email to this platform as an HTTPS webhook call
+Amazon SES (Amazon Simple Email Service) delivers inbound email to this platform as an HTTPS webhook call
 from Amazon SNS, rather than over SMTP directly. `ses_webhook` receives that
 call, authenticates it, and hands the raw email off to Odoo's standard
 `mail.thread.message_process` pipeline for the matched tenant company.

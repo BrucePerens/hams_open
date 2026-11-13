@@ -160,7 +160,7 @@ As a developer changing this code, I want every data structure in `src/ambe/floa
 
 ## `BitSource` [@ANCHOR: ham_digital_modes:interleave_bit_source_struct]
 
-**Purpose.** One row of Annex H's own table: `(bit1_source, bit0_source)`, where each source is `(vector_index, bit_index)` -- `vector_index` selects which of `c_hat_0..c_hat_7` the bit comes from, and `bit_index` is that vector's own bit position (bit 0 = LSB, matching this codec's existing convention throughout `fec.rs`/`modulation.rs`).
+**Purpose.** One row of Annex H's own table: `(bit1_source, bit0_source)`, where each source is `(vector_index, bit_index)` -- `vector_index` selects which of `c_hat_0..c_hat_7` the bit comes from, and `bit_index` is that vector's own bit position (bit 0 = LSB: lower sideband, matching this codec's existing convention throughout `fec.rs`/`modulation.rs`).
 
 **Definition.** `type BitSource = (u8, u8);` (type) in `daemons/ham_digital_modes/src/ambe/float/tia_102_baba/interleave.rs`.
 

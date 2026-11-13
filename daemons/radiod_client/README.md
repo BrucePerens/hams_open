@@ -8,12 +8,12 @@ radiod trial; findings and numbers are in `hams_com/docs/reviews/RADIOD_TRIAL_20
 * `tlv`: bounds-checked parser and a crate-private writer for the type/length/value format.
 * `command`: the **closed command schema**. Typed audio and spectrum channels, validated against a `Policy`
   (frequency range, bin count, bin width, averaging, lifetime). Every channel command carries a non-zero
-  lifetime (a bare poll of an unknown SSRC (the RTP stream identifier) makes `radiod` create an immortal channel). A spectrum request never exceeds 16,000 float or 60,000 byte bins whatever the policy
+  lifetime (a bare poll of an unknown SSRC (the RTP (Real-time Transport Protocol) stream identifier) makes `radiod` create an immortal channel). A spectrum request never exceeds 16,000 float or 60,000 byte bins whatever the policy
   says (larger requests segfault `radiod`). There is no field for a
   data destination, no raw-bytes entry point, and nothing that touches the front end.
 * `status`: decoded channel status, including float and byte spectrum bins.
 * `rtp`: RTP (Real-time Transport Protocol) header parsing, loss accounting, 16-bit PCM (pulse-code modulation, plain digital audio samples) and Opus decoding.
-* `net`: tokio multicast sockets (TTL 0 (time to live zero, so packets stay on the local machine), a named interface), request with tag acknowledgement. No runtime
+* `net`: tokio multicast sockets (TTL (time to live) 0 (time to live zero, so packets stay on the local machine), a named interface), request with tag acknowledgement. No runtime
   of its own: the caller passes a `tokio::runtime::Handle` when a socket is opened, and the acknowledgement
   rules (`next_tag`, `is_ack`, `classify`) are sans-IO.
 
@@ -398,7 +398,7 @@ result (for example `ChannelStatus::decode` refuses an SSRC above 32 bits). Test
 
 Reads an entry value as a boolean: any non-zero integer is true, and an empty value (how `radiod` sends 0) is
 false. Errors as `uint`: a value over 8 bytes is `TlvError::BadValue(type)`. Pure. Used for the flags of the
-channel status such as AGC, RF AGC, PLL on and lock. Test: `bool_and_float_values`.
+channel status such as AGC, RF (radio frequency) AGC, PLL on and lock. Test: `bool_and_float_values`.
 
 ### `Entry::f32(&self) -> Result<f32, TlvError>` [@ANCHOR: radiod_client:radiod_client_tlv_entry_f32]
 

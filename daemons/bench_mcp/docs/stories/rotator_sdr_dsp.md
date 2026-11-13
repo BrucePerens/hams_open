@@ -296,7 +296,7 @@ Reads an optional number argument. `fn number(args: &Value, key: &str) -> Result
 ### `whole` [@ANCHOR: bench_mcp_sdr_whole]
 
 Reads an optional whole-number argument with a default and a range. `fn whole(args: &Value, key: &str, default: usize, min: usize, max: usize) -> Result<usize, String>`, `args` and `key` borrowed; `default`, `min` and `max` are counts
-(samples, FFT points, repeats, channel numbers). Returns `default` when absent or `null`, the value when it has no fractional part and is within `min..=max` inclusive, otherwise
+(samples, FFT (fast Fourier transform) points, repeats, channel numbers). Returns `default` when absent or `null`, the value when it has no fractional part and is within `min..=max` inclusive, otherwise
 `Err("<key> <x> must be a whole number from <min> to <max>")`; a non-number is the `bench_mcp_sdr_number` error. Pure.
 
 See also: `bench_mcp_sdr_number`; the limits tests cite this anchor.

@@ -1,6 +1,6 @@
 # `zero_sudo/static/src/js/offline_store.js`
 
-The offline queue keeps what a page could not send (a QSO, an ICS form) in the browser's IndexedDB until it can be sent. It is a
+The offline queue keeps what a page could not send (a QSO: two-way radio contact, an ICS (Incident Command System) form) in the browser's IndexedDB until it can be sent. It is a
 shared, generic class: it began in the ham shack module with fixed database names and was moved here and parameterised so
 `ics_forms` and any other page can queue locally without depending on the ham shack. Each page uses its own instance. Tests:
 `static/tests/offline_store.test.js`. A stored entry is `{uuid, timestamp, data}`: `uuid` is the key, `timestamp` is indexed,

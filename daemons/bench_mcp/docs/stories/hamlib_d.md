@@ -28,7 +28,7 @@ This is the transmit path, so each entry says how the four controls apply to it.
 speaker. The tests that cite the anchors below talk to a simulated rig (`Sim` in `testkit.rs`, served by `FakeRadioctld`), whose "PTT" is a boolean in memory,
 and run the watchdog (`guard::run`) as a thread (`ThreadSpawner`) because a test binary is not `bench_mcp`. `tests/radioctl_guard.rs` runs the real watchdog
 process against a virtual `radioctld` rig started on a free localhost port. The operator alert is recorded by `RecordingAlert`, not played. A test that needed
-real RF or sound would have to be `#[ignore]` and run by the owner; none of the entries below has one.
+real RF (radio frequency) or sound would have to be `#[ignore]` and run by the owner; none of the entries below has one.
 
 The software cannot know what is connected to the rig. The owner's attestation and the load check are the controls, and every keyed tool's result carries the
 sentence `CANNOT_KNOW` saying so.
@@ -342,7 +342,7 @@ before the dry-run answer, so even a `dry_run` is checked against the real rig.
 Return value: `Ok(Rig)`, what the rig said before anything was changed: `f_min` (lowest RFPOWER setting, fraction), `f_req` (the setting for the requested watts), `f_prev` (the setting now),
 `w_prev` (watts of the setting now), `w_full` (watts at full scale), `prev_freq` (Hz), `prev_mode` (mode name and passband Hz, or `None` when the rig does not say). `Err(text)` when any of these
 fail; every text ends with, or states, that nothing was sent. The checks in order: `dump_state` readable; the frequency inside one of the rig's own transmit ranges (the second band check); PTT
-already on (refused; who keyed it must be found out, `bench_radioctl_safe_state` releases it); split on (the transmit frequency would be the other VFO's, which is not checked); XIT (transmitter incremental tuning) not zero (it
+already on (refused; who keyed it must be found out, `bench_radioctl_safe_state` releases it); split on (the transmit frequency would be the other VFO (variable frequency oscillator, the tuning control)'s, which is not checked); XIT (transmitter incremental tuning) not zero (it
 shifts the transmit frequency); the lowest power setting known (`rfpower_min`); the setting for the requested power not below that lowest setting; the requested setting, converted by the rig's full
 scale, not over 1.02 times the owner's cap; the current setting readable, and not over 1.02 times the cap unless `allow_lowering_power` is true (then the tool lowers it and restores it afterwards). A
 rig that refuses `get_ptt`, `get_split_vfo` or `get_xit` as unsupported is let through on that check (the refusal is data, not an error); a link failure on any read is an error. Blocking; one round

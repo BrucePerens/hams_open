@@ -32,7 +32,7 @@ Maps the dialect name of a Ten-Tec description to the `Dialect` enum: `orion` (O
 
 ### `pub fn vfo_letter(vfo: Vfo) -> u8` [@ANCHOR: radioctl:radioctl_tentec_vfo_letter]
 
-Returns the ASCII letter Ten-Tec commands use for a VFO: `b'A'` for `Vfo::A`, `b'B'` for `Vfo::B`. It appears in Orion text commands (`?AF`, `*BF...`) and in the binary frames (`?A`, `*B` plus four bytes, and the `A`/`B` that starts a frequency reply). The engine also compares the letter of a reply with the VFO it asked for, so a reply for the wrong VFO is reported as unrecognised. Pure, total over the two-variant `Vfo`, no errors.
+Returns the ASCII letter Ten-Tec commands use for a VFO (variable frequency oscillator, the tuning control): `b'A'` for `Vfo::A`, `b'B'` for `Vfo::B`. It appears in Orion text commands (`?AF`, `*BF...`) and in the binary frames (`?A`, `*B` plus four bytes, and the `A`/`B` that starts a frequency reply). The engine also compares the letter of a reply with the VFO it asked for, so a reply for the wrong VFO is reported as unrecognised. Pure, total over the two-variant `Vfo`, no errors.
 
 ### `pub fn encode_frequency(hz: Hz) -> Option<[u8; 4]>` [@ANCHOR: radioctl:radioctl_tentec_encode_frequency]
 
@@ -96,7 +96,7 @@ Reports what the Ten-Tec twin holds, for the Hamlib oracle comparison and the se
 
 ### `fn front_panel(&mut self, panel: Panel) -> Result<Vec<u8>, String>` [@ANCHOR: radioctl:radioctl_tentec_twin_front_panel]
 
-Simulates the operator touching the radio. `Panel::Frequency(hz)` sets VFO A's frequency, `Panel::Ptt(on)` sets the key flag; both return an empty byte vector (this family sends no unsolicited reports). `Panel::Mode(_)` is refused with the message that the twin takes mode changes over the wire, and any other panel knob with a message naming it. The `String` is a human-readable reason for the test or simulator. `panel` is owned. In-memory only; the flag models a transmitter but no RF exists.
+Simulates the operator touching the radio. `Panel::Frequency(hz)` sets VFO A's frequency, `Panel::Ptt(on)` sets the key flag; both return an empty byte vector (this family sends no unsolicited reports). `Panel::Mode(_)` is refused with the message that the twin takes mode changes over the wire, and any other panel knob with a message naming it. The `String` is a human-readable reason for the test or simulator. `panel` is owned. In-memory only; the flag models a transmitter but no RF (radio frequency) exists.
 
 ## `crates/radioctl-protocols/src/alinco.rs`
 

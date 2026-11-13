@@ -75,7 +75,7 @@
 
 ### `RawFraming` [@ANCHOR: radioctl:radioctl_core_net_raw_framing]
 
-**Purpose and location.** No framing: the CAT stream is the wire stream, nothing is greeted, nothing is kept alive. Defined in `daemons/radioctl/crates/radioctl-core/src/net.rs:141` as a pub `struct`. It derives Debug, Clone, Copy, Default.
+**Purpose and location.** No framing: the CAT (computer-aided transceiver control) stream is the wire stream, nothing is greeted, nothing is kept alive. Defined in `daemons/radioctl/crates/radioctl-core/src/net.rs:141` as a pub `struct`. It derives Debug, Clone, Copy, Default.
 
 **Fields.** none (unit or opaque definition).
 

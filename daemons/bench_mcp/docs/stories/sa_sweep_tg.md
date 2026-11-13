@@ -8,7 +8,7 @@ its level and measure a scalar S21 against a stored "through" reference, with th
 `number`, `flag`, `on_off`, `options`), `bench_sa_status` and the dispatcher are in `sa_core.md`.
 
 Nothing here transmits on the air. The tracking generator is a bench signal source with a rated output of -20 to 0 dBm into a cable between the TG OUTPUT and
-the RF INPUT; it is handled at tier `read_config` (the tool table in `src/sa/mod.rs`; `bench_sa_screenshot` is `read_only`), with no confirm flag, band
+the RF (radio frequency) INPUT; it is handled at tier `read_config` (the tool table in `src/sa/mod.rs`; `bench_sa_screenshot` is `read_only`), with no confirm flag, band
 check or TX gate. The safety rule instead is that the generator is "off unless a tool turned it on", and every path that turns it on also tries to turn it off
 and read it back (`ensure_tg_off`). All the instrument calls of one analyzer run one at a time under the server's per-instrument lock (see `sa_core.md`); the
 functions here take `&mut Link`, so they never share a connection.

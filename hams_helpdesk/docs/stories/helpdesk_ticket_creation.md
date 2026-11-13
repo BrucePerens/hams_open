@@ -37,7 +37,7 @@ QWeb template `hams_helpdesk.portal_my_tickets`, rendered by the route `GET /my/
 
 ### The portal ticket detail [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_detail]
 
-QWeb template `hams_helpdesk.portal_ticket_detail`, rendered by `GET /my/ticket/<id>`. It shows the subject, status badge, callsign, priority, the description and the communication history (internal notes are excluded by the portal thread), and a Close Ticket form (CSRF token) while the ticket is not closed. A ticket that does not exist, belongs to another partner or to another website redirects to `/my`. Tested by `test_portal_ticket_detail_shows_own_ticket_and_denies_others` and the portal tour.
+QWeb template `hams_helpdesk.portal_ticket_detail`, rendered by `GET /my/ticket/<id>`. It shows the subject, status badge, callsign, priority, the description and the communication history (internal notes are excluded by the portal thread), and a Close Ticket form (CSRF (cross-site request forgery) token) while the ticket is not closed. A ticket that does not exist, belongs to another partner or to another website redirects to `/my`. Tested by `test_portal_ticket_detail_shows_own_ticket_and_denies_others` and the portal tour.
 
 ### The portal new-ticket form [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_new]
 
@@ -45,7 +45,7 @@ QWeb template `hams_helpdesk.portal_ticket_new`, rendered by `GET /my/tickets/ne
 
 ## Amazon SES scan verdicts count as spam signals [@ANCHOR: hams_helpdesk:ses_verdicts]
 
-Mail to the support addresses passes through Amazon SES, whose receipt rule has scanning on, so each stored message carries
+Mail to the support addresses passes through Amazon SES (Amazon Simple Email Service), whose receipt rule has scanning on, so each stored message carries
 `X-SES-Spam-Verdict` and `X-SES-Virus-Verdict`. `message_parse` keeps them and both inbound routes (admin@/support@ through
 `hams_helpdesk.ticket.message_new`, info@/postmaster@ through `pager.incident.message_new`) treat a `FAIL` of either like
 any other spam signal: the ticket starts in the Spam / Phishing stage with the reason in its first note, the same reversible

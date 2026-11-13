@@ -23,7 +23,7 @@ Returns the rig's identifier string, taken from the engine's description when th
 
 ### `pub fn capabilities(&self) -> &CapabilitySet` [@ANCHOR: radioctl:radioctl_core_handle_capabilities]
 
-Returns what the rig can do (read frequency, set PTT, second VFO, split, scope and so on) as a borrowed `CapabilitySet` copied from the description at spawn. Commands whose required capability is missing are refused with `Unsupported` at submission, so callers can check here first. The set never changes during the life of the rig. Read-only, cannot fail.
+Returns what the rig can do (read frequency, set PTT: push-to-talk, second VFO: variable frequency oscillator, the tuning control, split, scope and so on) as a borrowed `CapabilitySet` copied from the description at spawn. Commands whose required capability is missing are refused with `Unsupported` at submission, so callers can check here first. The set never changes during the life of the rig. Read-only, cannot fail.
 
 ### `pub fn open_transmit_gate(&self, permit: TransmitPermit)` [@ANCHOR: radioctl:radioctl_core_handle_open_gate]
 
@@ -111,7 +111,7 @@ Sets the frequency of `vfo` to `hz` (hertz, a `Hz` newtype). Goes through `execu
 
 ### `pub async fn mode(&self, freshness: Freshness) -> Result<Cached<Mode>, RigError>` [@ANCHOR: radioctl:radioctl_core_handle_mode]
 
-Reads the operating mode (`Mode`: LSB, USB, CW, FM and so on) honouring `freshness` (`Cached`, `MaxAge`, `Fresh`). Returns the value with its age. Errors as for `execute`; `Malformed` if the answer is not a mode or there was no value. Never transmits.
+Reads the operating mode (`Mode`: LSB: lower sideband, USB, CW: continuous wave, Morse code, FM and so on) honouring `freshness` (`Cached`, `MaxAge`, `Fresh`). Returns the value with its age. Errors as for `execute`; `Malformed` if the answer is not a mode or there was no value. Never transmits.
 
 ### `pub async fn set_mode(&self, mode: Mode) -> Result<(), RigError>` [@ANCHOR: radioctl:radioctl_core_handle_set_mode]
 
@@ -143,7 +143,7 @@ Reads and validates a rig description. `which` is either a rig id found in `rigs
 
 ### `pub async fn level(&self, level: Level, freshness: Freshness) -> Result<Cached<u16>, RigError>` [@ANCHOR: radioctl:radioctl_core_easy_level]
 
-Reads a numeric level (such as AF gain, RF power or the antenna selector, one of the `Level` variants) in the rig's own units as a `u16`. `freshness` chooses a cached, bounded-age or fresh value. Returns the value with its age, or the error from `execute`; `Malformed` when the rig answered with a different level than the one asked, or with no value. Never transmits.
+Reads a numeric level (such as AF gain, RF (radio frequency) power or the antenna selector, one of the `Level` variants) in the rig's own units as a `u16`. `freshness` chooses a cached, bounded-age or fresh value. Returns the value with its age, or the error from `execute`; `Malformed` when the rig answered with a different level than the one asked, or with no value. Never transmits.
 
 ### `pub async fn set_level(&self, level: Level, value: u16) -> Result<(), RigError>` [@ANCHOR: radioctl:radioctl_core_easy_set_level]
 

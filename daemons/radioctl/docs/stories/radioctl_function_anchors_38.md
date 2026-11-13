@@ -13,7 +13,7 @@ Builds the Kenwood handheld and mobile engine (TH-D7A, TM-D710, TH-D72, TH-D74 a
 
 Encodes an `Op` as one carriage-return ended command and records what answer to expect in `pending`. First requires the op's capability in the description (`Unsupported` otherwise). Supported ops: frequency get and set, mode get and set, PTT (push to talk), and the signal read (`SM 0`). The `FO` dialects (`tm710`, `th72`, `th74`) read with `FO b` and set by rewriting the whole remembered line (`edited_line`), so a set before the band has been read is refused. The `th` dialect uses `FQ` (eleven digits, step code chosen by `th_step_and_frequency`), and only band A, since `FQ` has no band argument.
 
-Errors, all `Unsupported`: VFO B on `th`, a frequency over ten digits (`FO`) or eleven (`FQ`), a mode without a code of 0 to 9, a set before the band is read, any other op. The TH-D74 sets the mode with `MD 0,k`. Keying: `SetPtt(true)` is `TX` and false is `RX`, answered by an echo; the engine does not decide whether transmitting is allowed, the rig layer does before calling. Side effect: it replaces `pending` and clears the receive buffer, so call it once per request, in order.
+Errors, all `Unsupported`: VFO (variable frequency oscillator, the tuning control) B on `th`, a frequency over ten digits (`FO`) or eleven (`FQ`), a mode without a code of 0 to 9, a set before the band is read, any other op. The TH-D74 sets the mode with `MD 0,k`. Keying: `SetPtt(true)` is `TX` and false is `RX`, answered by an echo; the engine does not decide whether transmitting is allowed, the rig layer does before calling. Side effect: it replaces `pending` and clears the receive buffer, so call it once per request, in order.
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_hh_engine_feed]
 
@@ -53,7 +53,7 @@ Errors, `Unsupported`: no line remembered for that band yet ("read the band firs
 
 ### `fn line(&mut self, line: &str, state: &mut RigState, signal: u16) -> String` [@ANCHOR: radioctl:radioctl_hh_sim_line]
 
-The virtual handheld's answer to one command line (without CR). `state` is mutated for PTT, `signal` is the S-meter value to report. It handles `FO b` reads and `FO` line sets (the line must have the dialect's exact length; frequency digits and mode digit are checked, then both stored and the line echoed), `FQ` read and `FQ <11 digits>,<step>` set on the `th` dialect, `MD` read and set (`MD b,k` on the TH-D74), `TX` and `RX` (set the virtual PTT flag and echo), and `SM 0` (`SM 0,n`). Anything else, or malformed, answers `?`. Sets answer with an echo of the line, as the radios do. Virtual: no RF.
+The virtual handheld's answer to one command line (without CR). `state` is mutated for PTT, `signal` is the S-meter value to report. It handles `FO b` reads and `FO` line sets (the line must have the dialect's exact length; frequency digits and mode digit are checked, then both stored and the line echoed), `FQ` read and `FQ <11 digits>,<step>` set on the `th` dialect, `MD` read and set (`MD b,k` on the TH-D74), `TX` and `RX` (set the virtual PTT flag and echo), and `SM 0` (`SM 0,n`). Anything else, or malformed, answers `?`. Sets answer with an echo of the line, as the radios do. Virtual: no RF (radio frequency).
 
 ## `crates/radioctl-protocols/src/kenwood_ts890.rs`
 

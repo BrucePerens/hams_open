@@ -121,7 +121,7 @@ A non-interactive configuration module that enforces baseline regulatory complia
 
   * **Our Certification Authority** (`/compliance/certification-authority`) explains why it is safe to accept the hams.com root
     certificate: the CA is limited inside the certificates themselves to hams.com and local-network names, its signing keys sit
-    in a Google HSM that nobody can read, and the page says what a thief of the signing permission could and could not do. It
+    in a Google HSM (hardware security module) that nobody can read, and the page says what a thief of the signing permission could and could not do. It
     lists the permitted names (hams.com, .local, .lan, .home.arpa, .internal and the private address ranges), and a test checks the page names each of them. `[@ANCHOR: compliance:certification_authority_page]` The page is the QWeb template `certification_authority_template` in `data/certification_authority_data.xml` with a published `website.page` and a `compliance.document` row (`doc_certification_authority`), so `/compliance` lists it. Its sections are what the CA is for, why accepting the root is safe, how the signing keys are held, what an attacker could and could not do, lifetimes and revocation, and how to verify what you are trusting. Test: `test_certification_authority_page_reachable_and_registered`.
 
   * **DMCA Notice and Designated Agent** (`/compliance/dmca`) gives the DMCA notice procedure, the counter-notice steps and the

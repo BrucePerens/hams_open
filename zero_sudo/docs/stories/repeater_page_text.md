@@ -24,7 +24,7 @@ cleaned text of `polite_fetcher.clean_for_model`: one line per block-level eleme
    note "page dated 14-Jan-2021, may be out of date". It is a note, never a rejection.
 4. The page's structure decides whose a repeater is, in code, whatever the model said. Headings such as 'Other Local Repeaters', 'Local and Regional Repeaters',
    'Useful ... Repeaters' or 'KERN Linked Repeater System' set the repeaters under them apart; a callsign taken from another block is removed; the club's own
-   callsign (the title bar, the footer, with an APRS suffix or /R ignored), a club section, 'our' or 'operated by <the club>' are club evidence; a list of several
+   callsign (the title bar, the footer, with an APRS (Automatic Packet Reporting System) suffix or /R ignored), a club section, 'our' or 'operated by <the club>' are club evidence; a list of several
    licensees with none of that is 'unclear'.
 5. A repeater whose frequency is not on the page was invented, and a page that is only an unedited default page has none to list.
 6. A "repeater" in orbit (the ISS cross-band repeater, an amateur satellite) is recognised from the item's own name, section, address, callsign (NA1SS, RS0ISS, ...)
@@ -196,7 +196,7 @@ for amounts. A non-number `value` gives False. Pure; never raises.
 **Signature.** `grounded_notes(notes, page_text) -> (str, list[str])`
 
 **Returns.** `(kept, dropped)`. `notes` is split into sentences; a sentence is dropped when it makes a specific claim the page does not back: an amount with a unit
-(W, watts, kW, miles, km, feet, meters) whose number is not on the page, or an agency or service from a fixed list (Navy, Army, Coast Guard, FEMA, Red Cross, NOAA,
+(W, watts, kW, miles, km, feet, meters) whose number is not on the page, or an agency or service from a fixed list (Navy, Army, Coast Guard, FEMA, Red Cross, NOAA: National Oceanic and Atmospheric Administration,
 Skywarn, Sheriff, Police, Fire Department, Hospital...) that the page never names. Any other sentence is paraphrase and is kept. `kept` is the kept sentences joined by a space, `dropped` the removed sentences.
 `("", [])` for empty or non-string notes. Pure.
 

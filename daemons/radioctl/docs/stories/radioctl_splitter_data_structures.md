@@ -326,7 +326,7 @@
 
 ### `Ts2000Personality` [@ANCHOR: radioctl:radioctl_splitter_ts2000_personality_ts2000_personality]
 
-**Purpose and location.** The TS-2000 emulated by a CAT endpoint: it tokenizes `;`-terminated commands and answers as the rig would. Defined in `daemons/radioctl/crates/radioctl-splitter/src/ts2000_personality.rs:29` as a pub `struct`. It derives no traits.
+**Purpose and location.** The TS-2000 emulated by a CAT (computer-aided transceiver control) endpoint: it tokenizes `;`-terminated commands and answers as the rig would. Defined in `daemons/radioctl/crates/radioctl-splitter/src/ts2000_personality.rs:29` as a pub `struct`. It derives no traits.
 
 | Field | Type | Meaning |
 |---|---|---|

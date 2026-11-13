@@ -1,6 +1,6 @@
 # Story: Privacy and GDPR Compliance
 
-As a **Community Member**, I want full control over my personal data so that I can exercise my "Right to be Forgotten" and "Right to Portability" as required by GDPR.
+As a **Community Member**, I want full control over my personal data so that I can exercise my "Right to be Forgotten" and "Right to Portability" as required by GDPR (the EU General Data Protection Regulation).
 
 Each behaviour is explained in full in the "Anchor reference" at the end of this file (ADR 0113). The entry names are given in square brackets.
 

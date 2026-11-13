@@ -44,7 +44,7 @@ Builds the client engine for a Lowe HF-235 receiver. `desc` is owned and kept. T
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_lowe_engine_encode]
 
-Builds the command text for an operation, CR terminated. `op` is borrowed. `GetFrequency(A)` sends `FRQ?` and expects a frequency observation; `SetFrequency(A, hz)` sends `FRQ` plus `khz_text(hz)` and expects an acknowledgement (no range check is done here); `GetMode` sends `MOD?`; `SetMode` sends `MOD` plus the mode name, which must come from the description's code through `mode_name` or `Unsupported` is returned. All other operations, other VFOs, and operations whose capability the description lacks return `Unsupported`. A receiver, so nothing keys a transmitter. The engine remembers what answer it expects and clears its receive buffer.
+Builds the command text for an operation, CR terminated. `op` is borrowed. `GetFrequency(A)` sends `FRQ?` and expects a frequency observation; `SetFrequency(A, hz)` sends `FRQ` plus `khz_text(hz)` and expects an acknowledgement (no range check is done here); `GetMode` sends `MOD?`; `SetMode` sends `MOD` plus the mode name, which must come from the description's code through `mode_name` or `Unsupported` is returned. All other operations, other VFOs (variable frequency oscillator, the tuning control), and operations whose capability the description lacks return `Unsupported`. A receiver, so nothing keys a transmitter. The engine remembers what answer it expects and clears its receive buffer.
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_lowe_engine_feed]
 
@@ -120,7 +120,7 @@ Builds the client engine for an XG3 signal source. `desc` is owned and kept. The
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_xg3_engine_encode]
 
-Builds a `;` terminated command. `op` is borrowed. `GetFrequency(A)` sends `F;`, `GetPtt` sends `O;` and `GetFirmware` sends `V;`, each expecting an observation. `SetFrequency(A, hz)` sends `F,` plus eleven digits and must be 1,500,000 to 1,400,000,000 Hz inclusive, otherwise `Unsupported`. `SetPtt(on)` sends `O,01;` or `O,00;`, switching the RF output on or off (the radio's equivalent of keying: a signal is produced) and expecting no answer. Other operations or missing capabilities return `Unsupported`. The actor applies the transmit gate before the output-on command; the engine only builds bytes. The receive buffer is cleared.
+Builds a `;` terminated command. `op` is borrowed. `GetFrequency(A)` sends `F;`, `GetPtt` sends `O;` and `GetFirmware` sends `V;`, each expecting an observation. `SetFrequency(A, hz)` sends `F,` plus eleven digits and must be 1,500,000 to 1,400,000,000 Hz inclusive, otherwise `Unsupported`. `SetPtt(on)` sends `O,01;` or `O,00;`, switching the RF (radio frequency) output on or off (the radio's equivalent of keying: a signal is produced) and expecting no answer. Other operations or missing capabilities return `Unsupported`. The actor applies the transmit gate before the output-on command; the engine only builds bytes. The receive buffer is cleared.
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_xg3_engine_feed]
 

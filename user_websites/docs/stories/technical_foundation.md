@@ -289,7 +289,7 @@ Form submission is handled securely. In the browser, `_onModalShow(ev)` in `stat
 `ViolationReportModal`, selector `.user-websites-report-container`) runs when the Bootstrap report modal opens: it copies the
 `data-url` of the button that opened it into the hidden `url` input, and clears the description and email fields, so a
 previous report's text is never shown or resent. It does nothing if no button opened it. The server side is
-`POST /website/report_violation` in `controllers/main.py` (CSRF protected): a filled honeypot field is silently treated as
+`POST /website/report_violation` in `controllers/main.py` (CSRF (cross-site request forgery) protected): a filled honeypot field is silently treated as
 success, then `form_shield` checks, then structural checks, then the report is created through the service account with
 the description cut to 5000 characters. Tested by `test_tour_violation_report`.
 

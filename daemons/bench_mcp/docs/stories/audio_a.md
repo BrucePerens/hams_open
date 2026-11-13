@@ -511,7 +511,7 @@ A `p` over 1.0 would index past the end and panic: callers pass constants 0.2 an
 ### `detect` [@ANCHOR: audio_events_detect]
 
 Finds the sound events in a recording: where each starts and stops, how loud, and the pitch when there is a clear one. Used for relays clicking, a
-rotor motor, an alarm, beeps and keyed CW.
+rotor motor, an alarm, beeps and keyed CW (continuous wave, Morse code).
 
 | Argument | Type | Meaning |
 |---|---|---|

@@ -23,7 +23,7 @@ With the scope's expand setting on, the rig sends a sweep wider than the span sh
 
 ### `fn scope_frame(&mut self, body: &str) -> Option<ScopeFrame>` [@ANCHOR: radioctl:radioctl_ts890_engine_scope_frame]
 
-Turns a `##DD2` body (or a completed serial `DD2` sweep) of 640 samples into a `ScopeFrame`. The frame has no frequency of its own, so it is placed from what the engine last saw (`note`): in center mode the receive VFO's frequency plus or minus half the span (or half the expanded width, `expanded_span`, when expand is on; unknown expand state drops the sweep); in fixed mode the edges from the last `BSM0` read; in auto scroll the same edges if expand is off. Samples are flipped to `0x8C - value` (0 at the bottom) with `amplitude_max` 0x8C, receiver 0 and sequence 0 (the actor numbers it). `out_of_range` is set when the receive frequency lies outside non-center edges.
+Turns a `##DD2` body (or a completed serial `DD2` sweep) of 640 samples into a `ScopeFrame`. The frame has no frequency of its own, so it is placed from what the engine last saw (`note`): in center mode the receive VFO (variable frequency oscillator, the tuning control)'s frequency plus or minus half the span (or half the expanded width, `expanded_span`, when expand is on; unknown expand state drops the sweep); in fixed mode the edges from the last `BSM0` read; in auto scroll the same edges if expand is off. Samples are flipped to `0x8C - value` (0 at the bottom) with `amplitude_max` 0x8C, receiver 0 and sequence 0 (the actor numbers it). `out_of_range` is set when the receive frequency lies outside non-center edges.
 
 Returns `None`, and increments `scope.dropped`, when the samples are malformed or the axis, span, frequency or edges are not yet known. Mutates only that counter; no I/O.
 
@@ -61,7 +61,7 @@ True when the described rig selects VFO and split with `FN` and `SP` (dialects `
 
 ### `pub(super) fn ts440_command(&mut self, text: &str) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_virtual_ts440_command]
 
-Interprets one command of the older Kenwood dialects for a virtual rig; `text` is the command without its `;`. Answers `FA`/`FB` reads and sets, `ID`, `IF` (`kenwood_if`), `AI` 0 or 1, and sets (no reply) `MD` (the mode is set only, read from `IF`), `FN` and `SP` (TS-440S) or `FR` and `FT` (TS-450S), `RT`, `XT`, `RC`, and `RU`/`RD`, which take no parameter and move the offset by our own virtual 10 Hz step, clamped to plus or minus 9990 Hz (the manual gives no step). `TX` and `RX` set the virtual PTT (push to talk) flag. Returns the reply bytes: none for a setting, `?;` for any refusal (an unknown command, a bare `MD`, a form of the other dialect). Virtual: no RF.
+Interprets one command of the older Kenwood dialects for a virtual rig; `text` is the command without its `;`. Answers `FA`/`FB` reads and sets, `ID`, `IF` (`kenwood_if`), `AI` 0 or 1, and sets (no reply) `MD` (the mode is set only, read from `IF`), `FN` and `SP` (TS-440S) or `FR` and `FT` (TS-450S), `RT`, `XT`, `RC`, and `RU`/`RD`, which take no parameter and move the offset by our own virtual 10 Hz step, clamped to plus or minus 9990 Hz (the manual gives no step). `TX` and `RX` set the virtual PTT (push to talk) flag. Returns the reply bytes: none for a setting, `?;` for any refusal (an unknown command, a bare `MD`, a form of the other dialect). Virtual: no RF (radio frequency).
 
 ## `crates/radioctl-protocols/src/virtual_ts990.rs`
 

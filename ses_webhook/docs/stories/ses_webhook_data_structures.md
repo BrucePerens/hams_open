@@ -14,7 +14,7 @@
 
 ### `SesWebhookDomain` [@ANCHOR: ses_webhook:ses_webhook_ses_webhook_domain_ses_webhook_domain]
 
-**Purpose and location.** Model description: SES Webhook Domain Configuration. Defined in `ses_webhook/models/ses_webhook_domain.py:5` as an Odoo model; bases: `models.Model`. (model `ses.webhook.domain`.) It is a stored model with its own database table.
+**Purpose and location.** Model description: SES (Amazon Simple Email Service) Webhook Domain Configuration. Defined in `ses_webhook/models/ses_webhook_domain.py:5` as an Odoo model; bases: `models.Model`. (model `ses.webhook.domain`.) It is a stored model with its own database table.
 
 | Field | Type | Meaning |
 |---|---|---|

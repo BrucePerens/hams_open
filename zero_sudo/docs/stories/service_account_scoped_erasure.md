@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Story: Service-Account-Scoped Erasure and Account Integrity
 
-This story describes how the GDPR erasure utility avoids a real failure mode -- a service account whose own group memberships incidentally pick up an unrelated, restrictive `ir.rule`, silently narrowing its `search()` visibility below the real record set -- and how a handful of other small, independent account-integrity mechanisms fit alongside them.
+This story describes how the GDPR (the EU General Data Protection Regulation) erasure utility avoids a real failure mode -- a service account whose own group memberships incidentally pick up an unrelated, restrictive `ir.rule`, silently narrowing its `search()` visibility below the real record set -- and how a handful of other small, independent account-integrity mechanisms fit alongside them.
 
 ## Ground Truth vs. a Service Account's Own Visibility
 `_ground_truth_ids` `[@ANCHOR: zero_sudo:ground_truth_ids]` returns the literal set of ids matching a domain, bypassing both `ir.model.access` and `ir.rule` entirely via `Model._search(domain, bypass_access=True)` -- Odoo's own narrower, documented mechanism for this, not `.sudo()` (forbidden platform-wide). Used ONLY as a comparison baseline, never to perform the actual mutation.

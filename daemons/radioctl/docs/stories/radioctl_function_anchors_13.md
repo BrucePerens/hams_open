@@ -10,7 +10,7 @@ Builds the client engine for a Transfox transceiver. `desc` is owned and kept by
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_transfox_engine_encode]
 
-Builds one `;` terminated command. `op` is borrowed. `GetFrequency(A)` sends `FA;` and expects a frequency observation; `GetPtt` sends `Cs;` and expects a PTT (push to talk) observation. `SetFrequency(A, hz)` sends `FA` plus eleven zero padded digits of hertz and expects no reply; the frequency must be 1,000,000 to 1,450,000,000 Hz inclusive or `Unsupported` is returned. `SetPtt(on)` sends `TX;` to key or `RX;` to unkey and expects no reply. Anything else, a missing capability or another VFO returns `Unsupported`. The engine builds bytes only: the actor applies the transmit gate and the fail-closed unkey around `SetPtt`. The receive buffer is cleared on success.
+Builds one `;` terminated command. `op` is borrowed. `GetFrequency(A)` sends `FA;` and expects a frequency observation; `GetPtt` sends `Cs;` and expects a PTT (push to talk) observation. `SetFrequency(A, hz)` sends `FA` plus eleven zero padded digits of hertz and expects no reply; the frequency must be 1,000,000 to 1,450,000,000 Hz inclusive or `Unsupported` is returned. `SetPtt(on)` sends `TX;` to key or `RX;` to unkey and expects no reply. Anything else, a missing capability or another VFO (variable frequency oscillator, the tuning control) returns `Unsupported`. The engine builds bytes only: the actor applies the transmit gate and the fail-closed unkey around `SetPtt`. The receive buffer is cleared on success.
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_transfox_engine_feed]
 
@@ -40,7 +40,7 @@ Builds the Paragon frequency command: megahertz with five decimals, the letter `
 
 ### `pub fn mode_command(mode: Mode) -> Option<&'static str>` [@ANCHOR: radioctl:radioctl_paragon_mode_command]
 
-Returns the command text that selects a mode on the Paragon: LSB (lower sideband) `N`, USB `O`, CW `P`, FM `L`, AM `M`, RTTY `XP`. `mode` is the shared `Mode` enum, passed by value. Any other mode returns `None`, which the engine reports as `Unsupported`. Pure.
+Returns the command text that selects a mode on the Paragon: LSB (lower sideband) `N`, USB `O`, CW (continuous wave, Morse code) `P`, FM `L`, AM `M`, RTTY (radio teletype) `XP`. `mode` is the shared `Mode` enum, passed by value. Any other mode returns `None`, which the engine reports as `Unsupported`. Pure.
 
 ### `pub fn decode_status(block: &[u8]) -> Option<(Hz, Option<Mode>)>` [@ANCHOR: radioctl:radioctl_paragon_decode_status]
 
@@ -48,7 +48,7 @@ Decodes the 30 byte status block the radio sends after a `\` request. `block` mu
 
 ### `pub fn new(desc: RigDescription) -> Result<ParagonEngine, RigError>` [@ANCHOR: radioctl:radioctl_paragon_engine_new]
 
-Builds the client engine for a Paragon HF transceiver. `desc` is owned and kept. The dialect must be `paragon`, otherwise (or for a non-vendor description) `Unsupported`. The buffer starts empty. No I/O.
+Builds the client engine for a Paragon HF (high frequency, 3 to 30 MHz) transceiver. `desc` is owned and kept. The dialect must be `paragon`, otherwise (or for a non-vendor description) `Unsupported`. The buffer starts empty. No I/O.
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_paragon_engine_encode]
 

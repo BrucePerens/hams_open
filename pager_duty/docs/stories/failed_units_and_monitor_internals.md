@@ -16,7 +16,7 @@ The "Systemd Failed Services Tracker" check (type systemd, target `*`) and the `
 2.  **Describing them.** `failed_units_report()` produces one line per failed unit with systemd's Result and the time it
     failed, and folds the instances of one template unit into a single entry, so a template is counted once however many
     instances failed. [@ANCHOR: pager_duty:failed_units_report]
-3.  **Timer-driven one-shots are healthy while inactive.** A `Type=oneshot` service driven by a timer (the TLE and FCC syncs)
+3.  **Timer-driven one-shots are healthy while inactive.** A `Type=oneshot` service driven by a timer (the TLE and FCC (Federal Communications Commission) syncs)
     sits "inactive" between runs for its whole life. `_oneshot_last_run_succeeded()` says a unit is fine when it is a loaded
     oneshot whose last Result was success, and anything unreadable counts as not healthy.
     [@ANCHOR: pager_duty:oneshot_last_run_succeeded]

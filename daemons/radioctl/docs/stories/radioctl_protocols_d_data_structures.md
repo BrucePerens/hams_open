@@ -313,7 +313,7 @@ As a developer changing this code, I want every data structure in `src/perseus.r
 
 ## `AudioFrame` [@ANCHOR: radioctl:radioctl_radiod_io_audio_frame]
 
-**Purpose.** One decoded RTP packet of the channel's audio.
+**Purpose.** One decoded RTP (Real-time Transport Protocol) packet of the channel's audio.
 
 **Definition.** `pub struct AudioFrame` (struct) in `daemons/radioctl/crates/radioctl-protocols/src/radiod_io.rs`; derives `Debug`, `Clone`, `PartialEq`.
 
@@ -534,7 +534,7 @@ As a developer changing this code, I want every data structure in `src/perseus.r
 
 ## `RsHfEngine` [@ANCHOR: radioctl:radioctl_rs_hf_rs_hf_engine]
 
-**Purpose.** The engine of the Rohde and Schwarz HF dialects.
+**Purpose.** The engine of the Rohde and Schwarz HF (high frequency, 3 to 30 MHz) dialects.
 
 **Definition.** `pub type RsHfEngine = LineEngine<RsHfDialect>;` (type) in `daemons/radioctl/crates/radioctl-protocols/src/rs_hf.rs`.
 

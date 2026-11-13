@@ -92,7 +92,7 @@
 
 ### `Command` [@ANCHOR: radioctl:radioctl_d_command_command]
 
-**Purpose and location.** A parsed command, independent of the VFO token and of the response format. Defined in `daemons/radioctl/crates/radioctld/src/command.rs:27` as a pub `enum`. It derives Debug, Clone, PartialEq.
+**Purpose and location.** A parsed command, independent of the VFO (variable frequency oscillator, the tuning control) token and of the response format. Defined in `daemons/radioctl/crates/radioctld/src/command.rs:27` as a pub `enum`. It derives Debug, Clone, PartialEq.
 
 | Variant | Definition | Meaning |
 |---|---|---|
@@ -397,7 +397,7 @@
 
 ### `TcpFraming` [@ANCHOR: radioctl:radioctl_d_config_tcp_framing]
 
-**Purpose and location.** What a TCP transport wraps the CAT stream in. Defined in `daemons/radioctl/crates/radioctld/src/config.rs:214` as a pub `enum`. It derives Debug, Clone, PartialEq, Eq.
+**Purpose and location.** What a TCP transport wraps the CAT (computer-aided transceiver control) stream in. Defined in `daemons/radioctl/crates/radioctld/src/config.rs:214` as a pub `enum`. It derives Debug, Clone, PartialEq, Eq.
 
 | Variant | Definition | Meaning |
 |---|---|---|

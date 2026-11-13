@@ -32,7 +32,7 @@ measured signal arrives as audio from the two codecs):
 presamples and postsamples) and divides the left channel by the right (reference) channel; `vendor_convention` conjugates the
 result to the vendor program's sign. Against the vendor program's own uncalibrated S21 on a TX-to-RX loopback (codec 2) it agrees
 to 0.7 to 0.9 percent in magnitude and phase at 1, 10, 20 and 30 MHz, and to 1.5 percent rms over the first 15 points of a sweep when
-the points are laid out in time (the unit drifts smoothly with time while it settles; the loopback is flat in RF frequency). It also
+the points are laid out in time (the unit drifts smoothly with time while it settles; the loopback is flat in RF (radio frequency) frequency). It also
 reproduces the unit's IF-dependent response (|S21| 0.874 at IF 12 kHz down to 0.767 at 1 kHz, nine IFs) to 0.1 to 1 percent on both codecs
 (`Reference::Left` for codec 1, `Reference::Right` for codec 2). Not covered: a device under test with a frequency-dependent response, the open/short/load/through calibration (now `cal`, see below); the low-frequency range needs no special filtering down to 200 Hz
 and the time-domain transforms with their windows and time gating (`timedomain::gate`) are in `timedomain` (details in `docs/PROTOCOL.md`).
@@ -46,9 +46,9 @@ All of these are built from the same operations (set the two DDS frequencies and
 so an open driver can offer them once those are decoded:
 
 1. **Vector network analyzer**: S11, S21 (both at once on a 3E), with the open/short/load/through calibration.
-2. **Signal generator**: CW with variable level; on a VNWA3/3E also AM or FM with a sine up to about 3 kHz. Output is
+2. **Signal generator**: CW (continuous wave, Morse code) with variable level; on a VNWA3/3E also AM or FM with a sine up to about 3 kHz. Output is
    about -17 dBm into 50 ohms at 1 MHz, falling with frequency, and it cannot run during a sweep. AM and FM are decoded and verified on a scope (`generator::modulate`); pulse is not.
-3. **Frequency meter**: the phase of the RX input against the unit's reference at equal time steps; accuracy is the
+3. **Frequency meter**: the phase of the RX (receive) input against the unit's reference at equal time steps; accuracy is the
    12 MHz TCXO's (about 0.3 ppm in the vendor's own comparison). Needs no calibration kit.
 4. **Spectrum analyzer** (rudimentary, per the vendor): the LO is unfiltered so ghost lines appear, worst at higher
    frequencies; use below about 100 MHz. The unit is a direct-conversion receiver in this mode, so it also responds to
@@ -91,7 +91,7 @@ Converts a frequency in Hz to the 32-bit DDS (direct digital synthesis) tuning w
 
 ### `generator::level_for_attenuation(db: f64) -> Result<u16, String>` [@ANCHOR: vnwa_open_generator_level]
 
-Turns a generator attenuation into the unit's 14-bit amplitude: `round(16383 * 10^(dB/20))`. Argument `db` runs from 0 down to -50 dB (`MIN_ATTENUATION_DB`); anything outside, or NaN, is an error string naming the range. The vendor program sent 52, 163 and 518 for -50, -40 and -30 dB, within one count of this formula (its own rounding is not known). Returns the count only; sending is done by `generator::on`. Pure. Output level note: the generator is a low-level RF source on the TX port, about -17 dBm at full scale; this is the amplitude limit that keeps it so.
+Turns a generator attenuation into the unit's 14-bit amplitude: `round(16383 * 10^(dB/20))`. Argument `db` runs from 0 down to -50 dB (`MIN_ATTENUATION_DB`); anything outside, or NaN, is an error string naming the range. The vendor program sent 52, 163 and 518 for -50, -40 and -30 dB, within one count of this formula (its own rounding is not known). Returns the count only; sending is done by `generator::on`. Pure. Output level note: the generator is a low-level RF source on the TX (transmit) port, about -17 dBm at full scale; this is the amplitude limit that keeps it so.
 
 ### `protocol::sweep_word(freq_hz: f64, n_rf: u8, n_lo: u8) -> u64` [@ANCHOR: vnwa_open_sweep_word]
 

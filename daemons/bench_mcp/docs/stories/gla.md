@@ -497,7 +497,7 @@ The decoders work on the change list, not on samples, so they are exact to the c
 
 ### `gla_decode_uart` [@ANCHOR: gla_decode_uart]
 
-`pub fn uart(w: &Wave, pin: usize, baud: f64, bits: u32, parity: &str, invert: bool) -> Result<Value, String>`: decodes asynchronous serial on one pin: idle high (low with `invert`), a start bit, `bits` data bits LSB first, an optional parity bit, then at least one stop bit (only the first is checked).
+`pub fn uart(w: &Wave, pin: usize, baud: f64, bits: u32, parity: &str, invert: bool) -> Result<Value, String>`: decodes asynchronous serial on one pin: idle high (low with `invert`), a start bit, `bits` data bits LSB (lower sideband) first, an optional parity bit, then at least one stop bit (only the first is checked).
 
 | Argument | Type | Meaning |
 |---|---|---|

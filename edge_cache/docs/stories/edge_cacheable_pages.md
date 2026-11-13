@@ -46,7 +46,7 @@ A page for a visitor who already has a session or a consent choice, a page with 
 ## Scenario: A visitor posts a form on a cached page
 
 ### Client-side token refresh [@ANCHOR: COMM_edge_cache_csrf_refresh]
-6. The page's CSRF token belongs to no session. Before the form posts, a script fetches a fresh token and
+6. The page's CSRF (cross-site request forgery) token belongs to no session. Before the form posts, a script fetches a fresh token and
    the session cookie it is bound to. `edge_cache_csrf.js` runs only for anonymous website visitors (`session.is_website_user`); it starts the fetch lazily when the visitor first focuses or presses a token form, replays a held submit once the token is applied, and fetches again at every submit, because a late `session_id` from another cookieless request can replace the cookie an earlier token was bound to. A failed fetch only logs a warning and the form posts with the token it has. Tests: `edge_cache_csrf.test.js`, `test_edge_cached_form_posts_after_token_fetch`.
 
 ### Token route [@ANCHOR: COMM_cloudflare_csrf_token_route]

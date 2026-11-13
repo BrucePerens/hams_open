@@ -615,7 +615,7 @@ As a developer changing this code, I want every data structure in `src/adat.rs`,
 
 ## `DdsState` [@ANCHOR: radioctl:radioctl_drt1_dds_state]
 
-**Purpose.** The state of the virtual DRT1 AD9951 DDS chip: the three control lines, the data bits clocked in since DTR went up and the register values it latched.
+**Purpose.** The state of the virtual DRT1 AD9951 DDS chip: the three control lines, the data bits clocked in since DTR (data terminal ready) went up and the register values it latched.
 
 **Definition.** `struct DdsState` (struct) in `daemons/radioctl/crates/radioctl-protocols/src/drt1.rs`; derives `Debug`.
 

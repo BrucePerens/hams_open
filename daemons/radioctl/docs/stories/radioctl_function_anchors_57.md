@@ -39,7 +39,7 @@ Closes an I2C transaction seen by the twin. When the first byte received was the
 
 ### `fifi_mode_code(mode: Mode) -> Option<u8>` [@ANCHOR: radioctl:radioctl_si570_usb_fifi_mode_code]
 
-Maps a radioctl mode to the FiFi-SDR's mode byte: LSB 0, USB 1, AM 2, FM 3. Every other mode, CW and the digital modes among them, gives `None`, and the engine turns that into an unsupported-operation error before anything is sent. `fifi_mode_of` uses the same table in reverse. Pure, no side effects. The board only selects its demodulator, so there is no transmit effect.
+Maps a radioctl mode to the FiFi-SDR's mode byte: LSB (lower sideband) 0, USB 1, AM 2, FM 3. Every other mode, CW (continuous wave, Morse code) and the digital modes among them, gives `None`, and the engine turns that into an unsupported-operation error before anything is sent. `fifi_mode_of` uses the same table in reverse. Pure, no side effects. The board only selects its demodulator, so there is no transmit effect.
 
 ### `Si570UsbEngine::link_restored(&mut self) -> Vec<Request>` [@ANCHOR: radioctl:radioctl_si570_usb_engine_link_restored]
 
@@ -55,7 +55,7 @@ Applies the eight characters after `CF` of a clarifier set on the virtual Yaesu.
 
 ### `YaesuEngine::split_read(&self) -> String` [@ANCHOR: radioctl:radioctl_yaesu_engine_split_read]
 
-The CAT command that reads the split state and the transmit VFO: `ST;` on models whose description says `yaesu.split = "st"`, `FT;` on the others. No arguments, no errors, no I/O. `GetSplit` and `GetTxVfo` both use it, and the answer is decoded by the matching field. A read only; it never changes split or keys the radio.
+The CAT (computer-aided transceiver control) command that reads the split state and the transmit VFO (variable frequency oscillator, the tuning control): `ST;` on models whose description says `yaesu.split = "st"`, `FT;` on the others. No arguments, no errors, no I/O. `GetSplit` and `GetTxVfo` both use it, and the answer is decoded by the matching field. A read only; it never changes split or keys the radio.
 
 ## `crates/radioctl-station/src/tls.rs`
 

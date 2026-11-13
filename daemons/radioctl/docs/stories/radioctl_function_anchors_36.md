@@ -19,7 +19,7 @@ Returns `Body::Fields` with one unlabeled value, floats printed without trailing
 
 ### `async fn meter(&self, meter: Meter) -> Result<u16, i32>` [@ANCHOR: radioctl:radioctld_service_meter]
 
-Reads one transmitter meter (`Meter` names SWR, ALC, compression, supply voltage, drain current and the like) as the raw unscaled number the engine reports, in the family's own units; callers apply `meter_cal` to turn it into a Hamlib value. It goes through `read`, so a cached value younger than the configured maximum age is returned without touching the radio.
+Reads one transmitter meter (`Meter` names SWR, ALC: automatic level control, compression, supply voltage, drain current and the like) as the raw unscaled number the engine reports, in the family's own units; callers apply `meter_cal` to turn it into a Hamlib value. It goes through `read`, so a cached value younger than the configured maximum age is returned without touching the radio.
 
 Returns `Ok(raw)`; `EIO` if the answer is not a `Meter` observation for the same meter; other codes come from `read`. Async. Reading a meter never keys the transmitter: on an unkeyed rig the transmit meters simply read near zero. No side effects beyond a cache refresh.
 
@@ -27,7 +27,7 @@ Returns `Ok(raw)`; `EIO` if the answer is not a `Meter` observation for the same
 
 Answers Hamlib `L`: sets a numeric level on the rig. `name` is a level name; `value` is a 0 to 1 fraction when the served entry is a fraction (it must lie in 0..=1) or a whole number (rounded to nearest) otherwise. The fraction is scaled onto the model's `(min, max)` from `level_range` and rounded to the nearest step, except transmit power (`RFPOWER`), which is rounded down, with a tolerance of 0.0001 so the six-decimal text a client prints (5/15 as 0.333333) keeps its step; a request is never exceeded.
 
-Only levels read from the radio can be set: meters and derived values answer `ENAVAIL`. Errors: `EINVAL` for an unknown name, a fraction outside 0..=1, a result outside the model range, or a front-end value (attenuator dB, preamp step) the model has no step for; `ENAVAIL` when not served or no range; otherwise the mapped rig error. On success `Body::Done`. It sends `Op::SetLevel` through `set`; changing RF power does not key the transmitter, and the rig layer still gates any key-on.
+Only levels read from the radio can be set: meters and derived values answer `ENAVAIL`. Errors: `EINVAL` for an unknown name, a fraction outside 0..=1, a result outside the model range, or a front-end value (attenuator dB, preamp step) the model has no step for; `ENAVAIL` when not served or no range; otherwise the mapped rig error. On success `Body::Done`. It sends `Op::SetLevel` through `set`; changing RF (radio frequency) power does not key the transmitter, and the rig layer still gates any key-on.
 
 ### `async fn get_func(&self, name: &str) -> Result<Body, i32>` [@ANCHOR: radioctl:radioctld_service_get_func]
 
@@ -43,7 +43,7 @@ Returns `Body::Done` on success. Errors: `EINVAL` for an unknown name, `ENAVAIL`
 
 ### `async fn vfo_info(&self, vfo: Vfo) -> Result<Body, i32>` [@ANCHOR: radioctl:radioctld_service_vfo_info]
 
-Answers Hamlib `\get_vfo_info` for the VFO the command selected (`vfo`, `Vfo::A` or `Vfo::B`). It collects the frequency of that VFO in hertz, the mode and passband width, and the split flag, by calling `frequency`, `mode_and_width` and `split_vfo`.
+Answers Hamlib `\get_vfo_info` for the VFO (variable frequency oscillator, the tuning control) the command selected (`vfo`, `Vfo::A` or `Vfo::B`). It collects the frequency of that VFO in hertz, the mode and passband width, and the split flag, by calling `frequency`, `mode_and_width` and `split_vfo`.
 
 Returns `Body::Fields` labeled `Freq`, `Mode` (the Hamlib mode name), `Width` (hertz, as `mode_and_width` reports), `Split` (`0` or `1`, defaulting to `0` when the split answer has no value) and `SatMode`, which is always `0` because satellite mode is not modeled. Errors: any code from the three reads, and `EIO` if `split_vfo` does not answer with fields. Read only; several reads may hit the rig if the cache is stale.
 
@@ -97,7 +97,7 @@ Maps a `Level` to the newcat command that carries it, with its default valid ran
 
 ### `pub fn level_range(desc: &RigDescription, level: Level) -> Option<(u16, u16)>` [@ANCHOR: radioctl:radioctl_yaesu_level_range]
 
-Returns the inclusive `(min, max)` raw values of a level for the described model, or `None` when newcat has no command for that level. `desc` is borrowed. If the description's `[yaesu]` table lists a range for the level it wins; otherwise the default from `level_wire` applies. The shipped descriptions use it for, among others, the FT-891 `RG` (0 to 30) and the 0 to 255 `MG`/`PC` models; these numbers come from the CAT books and are unverified against hardware. Used by the engine (`SetLevel` range check), the virtual rig and the daemon (`get_level`/`set_level` scaling). Pure.
+Returns the inclusive `(min, max)` raw values of a level for the described model, or `None` when newcat has no command for that level. `desc` is borrowed. If the description's `[yaesu]` table lists a range for the level it wins; otherwise the default from `level_wire` applies. The shipped descriptions use it for, among others, the FT-891 `RG` (0 to 30) and the 0 to 255 `MG`/`PC` models; these numbers come from the CAT (computer-aided transceiver control) books and are unverified against hardware. Used by the engine (`SetLevel` range check), the virtual rig and the daemon (`get_level`/`set_level` scaling). Pure.
 
 ### `fn decode_level(name: &str, digits: &str) -> Option<Observation>` [@ANCHOR: radioctl:radioctl_yaesu_decode_level]
 

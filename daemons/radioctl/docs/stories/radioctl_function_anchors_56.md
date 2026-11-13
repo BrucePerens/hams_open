@@ -2,7 +2,7 @@
 
 Function anchors for the `radioctl-protocols` crate that still had one-line stubs: the Kenwood TS-890S LAN session in `kenwood_ts890_lan.rs`. `Ts890LanFraming` implements `radioctl_core::net::Framing` for the radio's LAN dialect: the `##CN;` connection request, the `##ID` login with the account and password, and the `ID;` keep-alive, in front of the ordinary TS-890S CAT stream. `LanCredentials` holds the account. Each anchor is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
 
-Transmit safety in this batch: nothing here keys a transmitter. The framing only logs in, passes CAT bytes through and sends the read-only `ID;` probe; it never builds a CAT command, and the transmit gate and every keying decision stay with the rig actor and the protocol engine above it. The only secret handled is the LAN password, which `Debug` hides and which is sent only in the login frame.
+Transmit safety in this batch: nothing here keys a transmitter. The framing only logs in, passes CAT (computer-aided transceiver control) bytes through and sends the read-only `ID;` probe; it never builds a CAT command, and the transmit gate and every keying decision stay with the rig actor and the protocol engine above it. The only secret handled is the LAN password, which `Debug` hides and which is sent only in the login frame.
 
 ## `crates/radioctl-protocols/src/kenwood_ts890_lan.rs`
 

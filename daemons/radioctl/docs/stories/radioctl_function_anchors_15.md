@@ -6,7 +6,7 @@ Function anchors for the `radioctl-protocols` crate (AnyTone D578A twin, Skanti 
 
 ### `pub fn new(desc: &RigDescription) -> Result<AnytoneTwin, RigError>` [@ANCHOR: radioctl:radioctl_anytone_twin_new]
 
-Builds a virtual AnyTone D578A for tests. `desc` is borrowed; the dialect must be `d578a` or `Unsupported` is returned. Both VFOs start at the description's default frequency in hertz and the receive buffer is empty. No I/O.
+Builds a virtual AnyTone D578A for tests. `desc` is borrowed; the dialect must be `d578a` or `Unsupported` is returned. Both VFOs (variable frequency oscillator, the tuning control) start at the description's default frequency in hertz and the receive buffer is empty. No I/O.
 
 ### `fn snapshot(&self) -> Option<TwinSnapshot>` [@ANCHOR: radioctl:radioctl_anytone_twin_snapshot]
 
@@ -32,7 +32,7 @@ Converts a frequency to the six-digit field of the Skanti command: units of 100 
 
 ### `fn mode_text(code: u8) -> String` [@ANCHOR: radioctl:radioctl_skanti_mode_text]
 
-Gives the text the TRP8000 takes for a mode code of the description. `code` is the one byte ASCII code. The code `A` (CW) must be sent as the two characters `A1`; every other code is sent as that single character. Returns a new string, pure, no errors. The mode set itself comes from the rig description.
+Gives the text the TRP8000 takes for a mode code of the description. `code` is the one byte ASCII code. The code `A` (CW: continuous wave, Morse code) must be sent as the two characters `A1`; every other code is sent as that single character. Returns a new string, pure, no errors. The mode set itself comes from the rig description.
 
 ### `pub fn new(desc: RigDescription) -> Result<SkantiEngine, RigError>` [@ANCHOR: radioctl:radioctl_skanti_engine_new]
 
@@ -52,7 +52,7 @@ Builds a virtual Skanti radio for tests. `desc` is borrowed; the dialect selects
 
 ### `fn apply_8000(&mut self, line: &[u8]) -> bool` [@ANCHOR: radioctl:radioctl_skanti_twin_apply_8000]
 
-Applies one CR-stripped TRP8000 command line to the twin and returns whether the radio would accept it (true produces the `>` prompt). `Z` plus six digits sets the receive frequency and `T` plus six digits the transmit frequency (units of 100 Hz; non-digits are refused); `XN` keys and `XF` unkeys the modelled PTT; `A1` selects CW when the description has `A`, and a single mode code in the description (other than `A`) selects that mode. The filter, AGC (automatic gain control), RF and power commands Hamlib sends after a mode write (`I`, `V`, `N`, `W`, `AS`, `AA`, `AF`) are accepted but not kept. Any other line returns false. Mutates the twin only.
+Applies one CR-stripped TRP8000 command line to the twin and returns whether the radio would accept it (true produces the `>` prompt). `Z` plus six digits sets the receive frequency and `T` plus six digits the transmit frequency (units of 100 Hz; non-digits are refused); `XN` keys and `XF` unkeys the modelled PTT; `A1` selects CW when the description has `A`, and a single mode code in the description (other than `A`) selects that mode. The filter, AGC (automatic gain control), RF (radio frequency) and power commands Hamlib sends after a mode write (`I`, `V`, `N`, `W`, `AS`, `AA`, `AF`) are accepted but not kept. Any other line returns false. Mutates the twin only.
 
 ### `fn feed_8255(&mut self, b: u8) -> u8` [@ANCHOR: radioctl:radioctl_skanti_twin_feed_8255]
 
@@ -88,7 +88,7 @@ Reads the number in a frequency reply according to the dialect. `text` is the di
 
 ### `pub fn default_filter(mode: Mode) -> u8` [@ANCHOR: radioctl:radioctl_tentec_rx320_default_filter]
 
-Chooses the filter index the engine selects for a mode. `mode` is passed by value. The wanted width is 600 Hz for CW and CW reverse, 2400 Hz for LSB and USB, and 6000 Hz for every other mode; the result is the position of that width in the radio's 34 entry `FILTERS` table (the index byte the radio takes). Returns 0 if the width were missing from the table, which does not happen for these values. Pure.
+Chooses the filter index the engine selects for a mode. `mode` is passed by value. The wanted width is 600 Hz for CW and CW reverse, 2400 Hz for LSB (lower sideband) and USB, and 6000 Hz for every other mode; the result is the position of that width in the radio's 34 entry `FILTERS` table (the index byte the radio takes). Returns 0 if the width were missing from the table, which does not happen for these values. Pure.
 
 ### `fn sideband(mode: Mode) -> i64` [@ANCHOR: radioctl:radioctl_tentec_rx320_sideband]
 

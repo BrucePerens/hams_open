@@ -2,7 +2,7 @@
 
 One MCP (Model Context Protocol, the way AI tools call outside tools) server (official `rmcp` SDK, the software development kit; stdio) for the bench: about 100 tools, each with a manual page served through the MCP itself.
 It drives a Siglent **oscilloscope** (SDS1000X-E, over the LAN), a Siglent **spectrum analyzer** with tracking generator (SSA3000X), a bench **power supply** (Abestop ATM6301), a **vector network
-analyser** (DG8SAQ VNWA 3E, no vendor software), **SDRs** (bladeRF, LimeSDR, RTL-SDR), **USB hubs** (topology, diagnosis, and port power
+analyser** (DG8SAQ VNWA 3E, no vendor software), **SDRs (software-defined radio)** (bladeRF, LimeSDR, RTL-SDR), **USB hubs** (topology, diagnosis, and port power
 cycling to reset a device), **sound devices** (play, record, meter, loopback, speech, with discovery by signature), **radios**
 through radioctl's `radioctld`, **antenna rotators**, and a **procedure runner**: long multi-step **Python programs** (CPython 3 with numpy and scipy) that run next to the server and call any
 bench tool through the normal tier and safety checks, with structured failure reports and safe-state cleanup, so a soak or a
@@ -165,7 +165,7 @@ a hand-written libusb client and libsigrok alike. Ethernet has no such limit.
 * The arguments of a sweep are checked and override the instrument's settings for that sweep.
 * The hub port and retries of the VNA entry are read, and only as a pair.
 * The power-cycle tool needs a hub in the config and read_config, and the VNA's lock does not hold up the scope or the supply.
-* The host FFT finds a tone's frequency and level in every window, and the spectrum tool does so through a scope link.
+* The host FFT (fast Fourier transform) finds a tone's frequency and level in every window, and the spectrum tool does so through a scope link.
 * A calibration is built from stored standards and refused at other settings, cable or range; measuring a standard needs a valid session, standard and cable.
 * Several instances: an entry whose members are all instrument objects is a group of named instances (`"vnas": {"vnwa": {...}, "nano": {...}}`), the old single-object entry is one instance named by its key, every tool that takes `instrument` also takes `device`, omitting both with several fitting instances is an error that lists the names, `bench_identify` and `bench_status` without a device list every instance, each instance has its own tier and lock, and a config in which two instances claim one serial port, scope host, VNWA unit or hub port is refused. This dev box can run both VNAs: the VNWA 3E on its USB hub and the NanoVNA-H on `/dev/serial/by-id/usb-STMicroelectronics_ChibiOS_RT_Virtual_COM_Port_400-if00`.
 * A VNWA that is not connected fails its tools with `device not present` before anything is attempted.
@@ -274,7 +274,7 @@ Checks this crate makes for the manual (anchors):
 
 ## Tests
 
-`BENCH_MCP_RTLSDR_CONFIG=<file> cargo test --test hil -- --ignored rtlsdr` opens the RTL-SDR dongle (an `rtlsdr` entry named "rtl"), captures the NOAA weather radio channels at 162.4 to 162.55 MHz and checks for a carrier over the noise floor (FM broadcast as the fallback); nothing is transmitted.
+`BENCH_MCP_RTLSDR_CONFIG=<file> cargo test --test hil -- --ignored rtlsdr` opens the RTL-SDR dongle (an `rtlsdr` entry named "rtl"), captures the NOAA (National Oceanic and Atmospheric Administration) weather radio channels at 162.4 to 162.55 MHz and checks for a carrier over the noise floor (FM broadcast as the fallback); nothing is transmitted.
 
 `cargo test` runs the pure checks. `BENCH_MCP_CONFIG=<file> cargo test -- --ignored` needs the real
 instruments: it starts the server binary, does the MCP handshake and calls tools; it never switches
@@ -354,7 +354,7 @@ Registration, tiers, the volume cap, quiet hours and the reserved VNWA codecs ar
 
 ## Radioctl rigs (`radioctl` driver)
 
-`bench_radioctl_*` tools drive radios through the `radioctld` daemon of `daemons/radioctl` (a separate program, started by this server on 127.0.0.1 or already running; it serves the `rigctld` line protocol): the rig list, the rigs and their state, a receiver's status in one call, single values and signal readings, receiver control (frequency, mode, VFO, split, RIT/XIT, levels, functions, memory recall, a bounded scan), a connection test, a polling watch of the dial, the reference station table, a receiver test with the rig's audio (through the sound module's input names), the dummy-load plausibility check and its baseline (evidence, not proof; for rigs with the owner's transmit attestation), and the managed daemon (`bench_radioctl_daemon`). An entry is `{"driver": "radioctl", "tier": "read_only", "rig": "elecraft-kx3"}` (a virtual rig made from the radioctl rig description `elecraft-kx3`, no hardware), `{"driver": "radioctl", "tier": "read_only", "rig": "icom-ic-7300", "device": "/dev/serial/by-id/usb-EXAMPLE_rig-if00-port0", "speed": 19200}` (a real rig; `full_power_w` is the rig's full-scale RF watts and is required with a `transmit` block, because radioctld has no power conversion and the power cap is turned into a power setting with it; `rigs_dir`, or the `RADIOCTL_RIGS` variable, names the directory of the description files, and `BENCH_MCP_RADIOCTLD` the program if it is not on the search path) or `{"driver": "radioctl", "tier": "read_only", "radioctld_port": 4532}` (a radioctld that already runs). The old `"hamlib"` driver and its `model` and `set_conf` settings were removed and give an error that names the new ones; the Hamlib `rigctld` is no longer started or needed. Keys, tiers and the safety model are in `docs/RADIOCTL_TOOLS.md` and the manual pages `instruments/radioctl/*`. Tests run against virtual radioctl rigs through a managed radioctld on a free localhost port (the test code builds `radioctld` from this repository when `BENCH_MCP_RADIOCTLD` is not set), and against a scripted fake of radioctld for faults; nothing here has run on a real rig through radioctl yet (`bench-mcp-hardware-checks-after-legacy-hardening`). radioctld does not serve memory channels (`RPRT -4`), so `bench_radioctl_memory` and `get` with `item` memory or channel report that.
+`bench_radioctl_*` tools drive radios through the `radioctld` daemon of `daemons/radioctl` (a separate program, started by this server on 127.0.0.1 or already running; it serves the `rigctld` line protocol): the rig list, the rigs and their state, a receiver's status in one call, single values and signal readings, receiver control (frequency, mode, VFO: variable frequency oscillator, the tuning control, split, RIT/XIT, levels, functions, memory recall, a bounded scan), a connection test, a polling watch of the dial, the reference station table, a receiver test with the rig's audio (through the sound module's input names), the dummy-load plausibility check and its baseline (evidence, not proof; for rigs with the owner's transmit attestation), and the managed daemon (`bench_radioctl_daemon`). An entry is `{"driver": "radioctl", "tier": "read_only", "rig": "elecraft-kx3"}` (a virtual rig made from the radioctl rig description `elecraft-kx3`, no hardware), `{"driver": "radioctl", "tier": "read_only", "rig": "icom-ic-7300", "device": "/dev/serial/by-id/usb-EXAMPLE_rig-if00-port0", "speed": 19200}` (a real rig; `full_power_w` is the rig's full-scale RF (radio frequency) watts and is required with a `transmit` block, because radioctld has no power conversion and the power cap is turned into a power setting with it; `rigs_dir`, or the `RADIOCTL_RIGS` variable, names the directory of the description files, and `BENCH_MCP_RADIOCTLD` the program if it is not on the search path) or `{"driver": "radioctl", "tier": "read_only", "radioctld_port": 4532}` (a radioctld that already runs). The old `"hamlib"` driver and its `model` and `set_conf` settings were removed and give an error that names the new ones; the Hamlib `rigctld` is no longer started or needed. Keys, tiers and the safety model are in `docs/RADIOCTL_TOOLS.md` and the manual pages `instruments/radioctl/*`. Tests run against virtual radioctl rigs through a managed radioctld on a free localhost port (the test code builds `radioctld` from this repository when `BENCH_MCP_RADIOCTLD` is not set), and against a scripted fake of radioctld for faults; nothing here has run on a real rig through radioctl yet (`bench-mcp-hardware-checks-after-legacy-hardening`). radioctld does not serve memory channels (`RPRT -4`), so `bench_radioctl_memory` and `get` with `item` memory or channel report that.
 
 * The config takes a managed or an existing radioctld, refuses remote daemons and bad values.
 * Return codes have names and next steps; arguments cannot carry a second command.
@@ -367,16 +367,16 @@ Registration, tiers, the volume cap, quiet hours and the reserved VNWA codecs ar
 * Receiver control: the receive ranges come from the rig and the owner's limits and a frequency outside them is refused with the source of the limit; arguments are checked before anything is sent and transmit-side settings are refused; every change is read back; a keyed rig is left alone.
 * A scan is bounded in steps and time, ranks the strongest and restores the rig, also after a failure.
 * The connection test reads the system and opens no serial port.
-* The transmit attestation is required in full, defaults nothing wider and refuses a false or future-dated one; the station table ships WWV, WWVH, AM samples and weather radio (not CHU), is edited by the owner, and records last heard from detections.
+* The transmit attestation is required in full, defaults nothing wider and refuses a false or future-dated one; the station table ships WWV (the NIST time-signal station), WWVH, AM samples and weather radio (not CHU), is edited by the owner, and records last heard from detections.
 * Time-station detection on synthetic audio: the one-second tick rhythm with and without noise, 440/500/600 Hz tones, a carrier beat note, silence, and mains hum that must not trigger.
 * The load plausibility check: the decision on readings (at the baseline, above it, unsteady, no baseline, other settings, a station heard, a dead or unreadable input), the baseline files, the measurement that restores the rig, and the tools.
 * The receiver test with the rig's audio, and how the audio input is found from the sound module's names.
-* Transmitting into the attested dummy load: the arguments against the attestation, the rig read first (transmit range, PTT, split, XIT, the power setting against the cap, the lowest power), the load check as a gate, the operator alert, the low-power SWR (standing wave ratio) probe, the keyed interval with its watchdog, release and read-back on every path, the keyed-interval log, the power sweep and the safe state.
+* Transmitting into the attested dummy load: the arguments against the attestation, the rig read first (transmit range, PTT: push-to-talk, split, XIT, the power setting against the cap, the lowest power), the load check as a gate, the operator alert, the low-power SWR (standing wave ratio) probe, the keyed interval with its watchdog, release and read-back on every path, the keyed-interval log, the power sweep and the safe state.
 * The transmit watchdog process: its unkey, its run loop (deadline, closed pipe, abort, done), its entry point and how the tool starts it.
 * Plumbing of the transmit path: the meter readings, the verified settings, the restore, the keyed call, the summary, the watchdog's stand-down, `dump_state` read to its `done` line and the shutdown of all rigs.
 * Watching the dial by polling, and releasing a possibly keyed rig before its daemon is stopped.
 * Internals of the client and the daemon manager: connection, exchange, error text, daemon directory, endpoint, start, stop, status, log tail, shutdown, the rig choice and file-safe names.
-* Helpers of the status and control tools: argument bounds, level text, tolerated rig refusals, applied-change reporting, the keyed-rig check, range combination, scan stepping, and the connection test's note on the DTR and RTS lines.
+* Helpers of the status and control tools: argument bounds, level text, tolerated rig refusals, applied-change reporting, the keyed-rig check, range combination, scan stepping, and the connection test's note on the DTR (data terminal ready) and RTS (request to send) lines.
 
 ## Rotators (`rotator` driver)
 
@@ -410,7 +410,7 @@ Checks this crate makes for the template instrument (anchors):
 
 A Siglent **SSA3000X** spectrum analyzer (written against an SSA3021X, firmware 1.3.9.10, 9 kHz to 2.1 GHz) over its LAN raw SCPI socket (port 5025), with its **tracking generator** (the TG option). Config entry: `{"driver": "siglent_ssa", "tier": "read_config", "host": "192.168.10.42", "port": 5025}`; `max_tg_dbm` (-20 to 0, default 0) is an optional extra cap on the tracking-generator level. The USB connection is not used: its replies are cut short.
 
-**Only the base analyzer and the tracking generator are used.** The Meas, EMI and CAT options are trial options that lapse; no tool depends on them, and `bench_sa_status` merely lists whatever the unit reports. The tracking generator is treated like any other instrument setting: tier `read_config`, no confirm flags (its output is at most 0 dBm, so the manual says that it puts RF on the TG OUTPUT connector and nothing more). It is OFF unless a tool turns it on; the S21 tools switch it off again by default, and every switch-off is read back from the unit.
+**Only the base analyzer and the tracking generator are used.** The Meas, EMI and CAT (computer-aided transceiver control) options are trial options that lapse; no tool depends on them, and `bench_sa_status` merely lists whatever the unit reports. The tracking generator is treated like any other instrument setting: tier `read_config`, no confirm flags (its output is at most 0 dBm, so the manual says that it puts RF on the TG OUTPUT connector and nothing more). It is OFF unless a tool turns it on; the S21 tools switch it off again by default, and every switch-off is read back from the unit.
 
 | Tool | Tier | What it does |
 |---|---|---|
@@ -783,7 +783,7 @@ Generator on at `level` (`switch_on`), one sweep (`run_sweep`) and, unless `leav
 
 ## RX-888 receiver (`rx888` driver)
 
-The RX-888 MkII (Cypress FX3, 16-bit direct-sampling ADC, 0 to 30 MHz at 64.8 Msps) is run through ka9q-radio. Its `rx888_boot` loads the firmware, and its `radiod` (GPL-3.0, run unmodified as a separate process) runs the receiver on loopback multicast with TTL 0. The tools talk to `radiod` through the `radiod_client` crate (`daemons/radiod_client`). They are receive only, so none is tier `full`. Manual: `instruments/rx888`. Verified on the unit with no antenna (2026-11-05):
+The RX-888 MkII (Cypress FX3, 16-bit direct-sampling ADC, 0 to 30 MHz at 64.8 Msps) is run through ka9q-radio. Its `rx888_boot` loads the firmware, and its `radiod` (GPL-3.0, run unmodified as a separate process) runs the receiver on loopback multicast with TTL (time to live) 0. The tools talk to `radiod` through the `radiod_client` crate (`daemons/radiod_client`). They are receive only, so none is tier `full`. Manual: `instruments/rx888`. Verified on the unit with no antenna (2026-11-05):
 - boot to 5000 Mb/s;
 - `radiod` at 64.8 Msps, measured 64.8 MS/s;
 - overrange 0, RF AGC (automatic gain control) at 34 dB, IF power -52.4 dBFS;
@@ -931,7 +931,7 @@ The SSRC `ssrc_base + which`: 0 tune, 1 spectrum, 2 capture. Each call uses a fi
 
 #### `bench_mcp_rx888_edges` - `edges(mode, width: f64) -> (f32, f32)`
 
-Passband edges in Hz from the carrier for a width: USB `(50, 50+w)`, LSB (lower sideband) `(-50-w, -50)`, CW `(600-w/2, 600+w/2)`, AM, FM and I/Q `(-w/2, w/2)`. These match radioctl's radiod channel. Pure.
+Passband edges in Hz from the carrier for a width: USB `(50, 50+w)`, LSB (lower sideband) `(-50-w, -50)`, CW (continuous wave, Morse code) `(600-w/2, 600+w/2)`, AM, FM and I/Q `(-w/2, w/2)`. These match radioctl's radiod channel. Pure.
 
 #### `bench_mcp_rx888_ask` - `ask(rt, c, cmd, wait) -> Result<ChannelStatus, String>`
 
@@ -1006,7 +1006,7 @@ The 44-byte RIFF/WAVE header for 16-bit little-endian PCM. Pure.
 | `seconds` | number | 0.1 to 60 | 5 |
 | `gain_db` | number | -20 to 160 (iq only) | chosen so the noise is near -30 dBFS |
 
-It opens the channel; for I/Q it reads the baseband power and sets the fixed gain. It then joins the data group and collects this SSRC's packets of the announced payload type for up to `seconds + 3`, renewing the lifetime every second, and converts them from big- to little-endian. The result goes to `rx888_<name>_<kind>_<ms>.wav`, and the channel is removed. Returns the file, rate, channels, frames, seconds, RTP received/lost/out-of-order/skipped counts, the gain used, RMS in dBFS and peak counts. Error when no audio arrived.
+It opens the channel; for I/Q it reads the baseband power and sets the fixed gain. It then joins the data group and collects this SSRC's packets of the announced payload type for up to `seconds + 3`, renewing the lifetime every second, and converts them from big- to little-endian. The result goes to `rx888_<name>_<kind>_<ms>.wav`, and the channel is removed. Returns the file, rate, channels, frames, seconds, RTP (Real-time Transport Protocol) received/lost/out-of-order/skipped counts, the gain used, RMS in dBFS and peak counts. Error when no audio arrived.
 
 ## Procedure runner (`procedure` driver)
 

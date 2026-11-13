@@ -147,7 +147,7 @@ was set. Now `_refuse()` then `super().manager(**kw)`. Test: `test_pages_and_act
 
 ### `create(self, *args, **kw)` [@ANCHOR: hams_base:database_lockdown_create]
 
-Route `/web/database/create`, POST, `auth="none"`, CSRF off in core. Core takes `master_pwd, name, lang, password` and
+Route `/web/database/create`, POST, `auth="none"`, CSRF (cross-site request forgery) off in core. Core takes `master_pwd, name, lang, password` and
 creates a database. After `_refuse()` on production nothing in core runs, so no database can be created through this
 route. In developer mode the arguments are passed unchanged to the core method. Test: `test_pages_and_actions_are_not_found`.
 

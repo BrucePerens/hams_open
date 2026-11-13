@@ -145,7 +145,7 @@
 
 ### `HamGdprExportToken` [@ANCHOR: user_websites:user_websites_ham_gdpr_export_token_ham_gdpr_export_token]
 
-**Purpose and location.** Model description: Short-lived, single-use token authorizing one GDPR CSV/zip export download. Defined in `user_websites/models/ham_gdpr_export_token.py:28` as an Odoo model; bases: `models.Model`. (model `ham.gdpr.export.token`.) It is a stored model with its own database table.
+**Purpose and location.** Model description: Short-lived, single-use token authorizing one GDPR (the EU General Data Protection Regulation) CSV/zip export download. Defined in `user_websites/models/ham_gdpr_export_token.py:28` as an Odoo model; bases: `models.Model`. (model `ham.gdpr.export.token`.) It is a stored model with its own database table.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -437,7 +437,7 @@
 
 **Purpose and location.** The confirmation dialog for deleting a page or post on the owner's site. A public interaction defined in `user_websites/static/src/js/owner_delete_dialog.js`; it attaches to `#uw_delete_dialog` (a native `dialog` element).
 
-**Behaviour.** `start` does nothing when the browser has no `showModal`. Otherwise every `.uw-delete-link` gets a click handler that cancels the link, copies the link's `data-uw-action`, `data-uw-what` and `data-uw-title` into the dialog's form action and texts, opens the dialog and focuses the Cancel button. The Cancel button closes it. Submitting the dialog's form is the only thing that deletes; the server checks ownership and the CSRF token. The class has no fields.
+**Behaviour.** `start` does nothing when the browser has no `showModal`. Otherwise every `.uw-delete-link` gets a click handler that cancels the link, copies the link's `data-uw-action`, `data-uw-what` and `data-uw-title` into the dialog's form action and texts, opens the dialog and focuses the Cancel button. The Cancel button closes it. Submitting the dialog's form is the only thing that deletes; the server checks ownership and the CSRF (cross-site request forgery) token. The class has no fields.
 
 **See also:** the tests in `user_websites/static/tests/owner_delete_dialog.test.js`.
 

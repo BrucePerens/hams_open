@@ -1,6 +1,6 @@
 # ham_digital_modes
 
-Amateur-radio digital-mode encoders and decoders as a library crate (LGPL-3.0-or-later): PSK31 (phase-shift keying at 31 baud, a keyboard digital mode), RTTY, FT8 (a weak-signal digital mode), WSPR (digital amateur-radio modes), the D-STAR header,
+Amateur-radio digital-mode encoders and decoders as a library crate (LGPL-3.0-or-later): PSK31 (phase-shift keying at 31 baud, a keyboard digital mode), RTTY (radio teletype), FT8 (a weak-signal digital mode), WSPR (digital amateur-radio modes), the D-STAR header,
 Codec2 1600/3200 voice frames, and the AMBE voice codec family (D-STAR, P25 and, behind the `ambe_plus_2` feature, AMBE+2 half-rate).
 The hams_local_relay daemon depends on it as a pinned git dependency. `--no-default-features` builds only the fixed-point Codec2 3200
 path as `no_std` (see `docs/CODEC2_NO_STD.md`); everything else needs the default `std` feature. `cargo test` runs the unit and
@@ -42,7 +42,7 @@ called by the encoder only; the decoder uses the inverse lookup `code_to_char`.
 
 **Signature:** `fn char_to_code(c: u8) -> Option<(u16, u8)>`
 
-**See also:** test `varicode_matches_the_arrl_spec_sample_entries` in `src/psk31.rs` (spot-checks space, `A`, `a`, NUL and DEL against the ARRL published values); `psk31_encode_bits`.
+**See also:** test `varicode_matches_the_arrl_spec_sample_entries` in `src/psk31.rs` (spot-checks space, `A`, `a`, NUL and DEL against the ARRL (American Radio Relay League) published values); `psk31_encode_bits`.
 
 ### `correlate_symbol_iq` [@ANCHOR: correlate_symbol_iq]
 
@@ -567,7 +567,7 @@ inverse. The decoder is given the data-bit soft value of each symbol, never the 
 
 ### `samples_per_symbol` [@ANCHOR: samples_per_symbol]
 
-Computes how many audio samples make up one WSPR symbol at a given sample rate: `sample_rate / (12000 / 8192)`, rounded, so 8192 at 12 kHz. The same number is the FFT length of the sync search, because WSPR's tone spacing equals its symbol rate, so every FFT bin is exactly one tone wide. A zero sample rate gives 0, which callers refuse before planning an FFT.
+Computes how many audio samples make up one WSPR symbol at a given sample rate: `sample_rate / (12000 / 8192)`, rounded, so 8192 at 12 kHz. The same number is the FFT (fast Fourier transform) length of the sync search, because WSPR's tone spacing equals its symbol rate, so every FFT bin is exactly one tone wide. A zero sample rate gives 0, which callers refuse before planning an FFT.
 
 | Argument | Type | Meaning |
 |---|---|---|

@@ -1,7 +1,7 @@
 # SES Webhook Receiver
 
 ## Overview
-A module to securely receive Amazon SNS (Simple Notification Service) webhooks containing SES incoming emails. It routes emails to the appropriate tenant company within Odoo by passing them to `mail.thread.message_process`.
+A module to securely receive Amazon SNS (Simple Notification Service) webhooks containing SES (Amazon Simple Email Service) incoming emails. It routes emails to the appropriate tenant company within Odoo by passing them to `mail.thread.message_process`.
 
 ## Developer Guide
 

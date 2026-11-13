@@ -698,7 +698,7 @@
 
 ### `YaesuLegacySection` [@ANCHOR: radioctl:radioctl_core_rigfile_yaesu_legacy_section]
 
-**Purpose and location.** The `[yaesu_legacy]` table: the five-byte CAT commands and status reads of a legacy Yaesu rig. Defined in `daemons/radioctl/crates/radioctl-core/src/rigfile.rs:254` as a private `struct`. It derives Deserialize.
+**Purpose and location.** The `[yaesu_legacy]` table: the five-byte CAT (computer-aided transceiver control) commands and status reads of a legacy Yaesu rig. Defined in `daemons/radioctl/crates/radioctl-core/src/rigfile.rs:254` as a private `struct`. It derives Deserialize.
 
 | Field | Type | Meaning |
 |---|---|---|

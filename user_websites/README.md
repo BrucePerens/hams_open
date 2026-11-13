@@ -12,7 +12,7 @@ Welcome to User Websites! This Odoo 19 module allows you to build and manage you
 *   **Start a Blog:** Share your thoughts and stories with the community. Everyone gets their own blog section.
 *   **Collaborate with Groups:** Create shared websites for your team, club, or project.
 *   **Join the Community:** Choose to show off your site in our public directory and discover what others are building.
-*   **Control What Is Public:** You decide which of your pages are published. There is no expectation of privacy for anything you publish or enter. We also provide GDPR data export and content-erasure tools, which exist because the law requires them.
+*   **Control What Is Public:** You decide which of your pages are published. There is no expectation of privacy for anything you publish or enter. We also provide GDPR (the EU General Data Protection Regulation) data export and content-erasure tools, which exist because the law requires them.
 
 ## 🚀 Getting Started
 
@@ -67,7 +67,7 @@ We used a few neat tricks to make this secure and fast:
 The `user_websites` module enables decentralized content creation. It employs the **Proxy Ownership Pattern**: standard Odoo users cannot create `ir.ui.view` or `website.page` records due to core security. The module securely circumvents this by assigning an `owner_user_id`, evaluating custom Record Rules against it, and escalating privileges via a dedicated Service Account (`.with_user(svc_uid)`) strictly for the database write.
 * **Ownership Validation:** Safely asserted by mixin create `mixin_proxy_ownership_create` and write `mixin_proxy_ownership_write` methods. Explicitly verified by `test_mixin_ownership_validation`.
 
-* **Tenant Isolation:** Enforced via strict record rules verified by `test_tenant_view_isolation` and ACL overhead elimination to prevent log spam `test_acl_overhead_loop_elimination`.
+* **Tenant Isolation:** Enforced via strict record rules verified by `test_tenant_view_isolation` and ACL (access control list) overhead elimination to prevent log spam `test_acl_overhead_loop_elimination`.
 * **Lazy JIT Provisioning:** Websites and Blogs do not exist upon user creation. They are provisioned Just-In-Time when the owner visits their slug root and triggers a POST request to `create_site`. This ensures explicit user consent to publish.
 </core_patterns>
 
@@ -425,7 +425,7 @@ Test `test_01_gdpr_export_hook` in `tests/test_sdk_extensibility.py`. It creates
 
 ### `test_gdpr_erasure_pages` [@ANCHOR: test_gdpr_erasure_pages]
 
-Test `test_02_right_to_erasure` in `tests/test_privacy_gdpr.py` (a page half of it; the source comment in `res_users.py` cites this anchor). An authenticated member with a page and a post POSTs to `/my/privacy/delete_content` with a CSRF token. The test asserts HTTP 200 landing on `/privacy/erased` with the text "Your data has been erased", the account deactivated, the page record gone (`exists()` False) and the directory flag off. It also cites `gdpr_sudo_erasure` and `UX_GDPR_ERASURE`. Another test, `test_01_gdpr_erasure_suspended_user` in `tests/test_audit_edge_cases.py`, checks that a suspended user's content is unlinked, not merely unpublished.
+Test `test_02_right_to_erasure` in `tests/test_privacy_gdpr.py` (a page half of it; the source comment in `res_users.py` cites this anchor). An authenticated member with a page and a post POSTs to `/my/privacy/delete_content` with a CSRF (cross-site request forgery) token. The test asserts HTTP 200 landing on `/privacy/erased` with the text "Your data has been erased", the account deactivated, the page record gone (`exists()` False) and the directory flag off. It also cites `gdpr_sudo_erasure` and `UX_GDPR_ERASURE`. Another test, `test_01_gdpr_erasure_suspended_user` in `tests/test_audit_edge_cases.py`, checks that a suspended user's content is unlinked, not merely unpublished.
 
 ### `test_gdpr_erasure_posts` [@ANCHOR: test_gdpr_erasure_posts]
 

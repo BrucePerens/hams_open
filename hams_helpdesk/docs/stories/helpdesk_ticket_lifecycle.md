@@ -35,7 +35,7 @@ Operators can formally hand off tickets to the next shift. `action_shift_handoff
 
 ## Portal Close [@ANCHOR: COMM_helpdesk_portal_close]
 
-Portal users can close their own tickets. `action_portal_close()` (`@api.private`, one ticket) raises `AccessError` unless the caller's partner is the ticket's customer or the caller is in `group_helpdesk_user`. A ticket not yet closed is written to `closed` under the helpdesk service account with `mail_notrack`, and a "Ticket closed by customer." note is posted; a closed ticket is left alone. The route is `POST /my/ticket/<id>/close` (CSRF protected, `auth="user"`). Tested by `test_portal_close_ticket` in `tests/test_ui_tours.py`.
+Portal users can close their own tickets. `action_portal_close()` (`@api.private`, one ticket) raises `AccessError` unless the caller's partner is the ticket's customer or the caller is in `group_helpdesk_user`. A ticket not yet closed is written to `closed` under the helpdesk service account with `mail_notrack`, and a "Ticket closed by customer." note is posted; a closed ticket is left alone. The route is `POST /my/ticket/<id>/close` (CSRF (cross-site request forgery) protected, `auth="user"`). Tested by `test_portal_close_ticket` in `tests/test_ui_tours.py`.
 
 ### Staff Close [@ANCHOR: hams_helpdesk:COMM_helpdesk_action_close]
 A "Close Ticket" button on the backend ticket form lets staff (`group_helpdesk_user` and
@@ -53,7 +53,7 @@ with an internal note listing the reasons, and a human can move it back to "New"
 positive. Production tickets #2 and #43 arrived this way before the filter covered this path.
 
 The call is `inbound_spam_reasons(subject, body_html, signals, verdicts, trusted_sender)`, with the raw message's header facts and HTML
-shape (parked by `message_parse`) and the SES verdicts, so bulk marketing mail is caught by its headers and shape, not only by its
+shape (parked by `message_parse`) and the SES (Amazon Simple Email Service) verdicts, so bulk marketing mail is caught by its headers and shape, not only by its
 subject; mail from a member (a sender with a user account) is never flagged. The full interface, the rules and their weights are in
 `helpdesk_ticket_creation.md` ([@ANCHOR: hams_helpdesk:inbound_spam_reasons]). Odoo's own assignment email is switched off for a ticket
 created in this stage (`hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail`).

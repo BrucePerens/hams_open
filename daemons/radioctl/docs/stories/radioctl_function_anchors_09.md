@@ -7,11 +7,11 @@ The ADAT engine can encode `SetPtt` (`$MOX>` and `$MOX<`); the PRM80 engine is r
 
 ### `fn set_line(&self, _line: KeyLine, _asserted: bool) -> Result<(), RigError>` [@ANCHOR: radioctl:radioctl_drt1_twin_set_line]
 
-The `ControlLines` method for a transmit key line (the PTT or CW key). The DRT1 is a receiver and has no keying line, so the twin always returns an `Unsupported` error and ignores both arguments. This guarantees a DRT1 can never be keyed through the line interface. It takes `&self`, changes no state and does not lock.
+The `ControlLines` method for a transmit key line (the PTT or CW (continuous wave, Morse code) key). The DRT1 is a receiver and has no keying line, so the twin always returns an `Unsupported` error and ignores both arguments. This guarantees a DRT1 can never be keyed through the line interface. It takes `&self`, changes no state and does not lock.
 
 ### `fn set_control(&self, line: ControlLine, asserted: bool) -> Result<(), RigError>` [@ANCHOR: radioctl:radioctl_drt1_twin_set_control]
 
-Applies one serial control-line change to the virtual AD9951 serial port; it always returns `Ok`. It takes the shared state lock for the call. RTS just records its level. A DTR rising edge clears the collected bits, and a DTR falling edge latches the register (`latch`) before the level is stored. A break rising edge while DTR is up clocks in one bit, whose value is the inverse of RTS (RTS is asserted for a 0). Changes that repeat the current level, and breaks while DTR is low, do nothing. This is how `write_register` sequences are decoded.
+Applies one serial control-line change to the virtual AD9951 serial port; it always returns `Ok`. It takes the shared state lock for the call. RTS (request to send) just records its level. A DTR (data terminal ready) rising edge clears the collected bits, and a DTR falling edge latches the register (`latch`) before the level is stored. A break rising edge while DTR is up clocks in one bit, whose value is the inverse of RTS (RTS is asserted for a 0). Changes that repeat the current level, and breaks while DTR is low, do nothing. This is how `write_register` sequences are decoded.
 
 ### `fn snapshot(&self) -> Option<TwinSnapshot>` [@ANCHOR: radioctl:radioctl_drt1_twin_snapshot]
 
@@ -41,7 +41,7 @@ Builds the engine for an ADAT ADT-200A description, taking it by value. It must 
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_adat_engine_encode]
 
-Builds the bytes for an operation after refusing (`Unsupported`) any whose capability the description lacks. Supported: get frequency on VFO A (`$FRA?` CR) and get mode (`$MOD?`), both expecting an observation; set frequency on VFO A (`$FR1:<Hz>` CR) and set mode (`$MOD:<nn>`, the description's code as two digits, `Unsupported` if the mode has no code), neither answered; set PTT (`$MOX>` to key and `$MOX<` to unkey, not answered) and get PTT (`$MTR?`). Any other op is `Unsupported`. `SetPtt` can key the transmitter, and the caller owns the gate. It records the pending read and clears the receive buffer.
+Builds the bytes for an operation after refusing (`Unsupported`) any whose capability the description lacks. Supported: get frequency on VFO (variable frequency oscillator, the tuning control) A (`$FRA?` CR) and get mode (`$MOD?`), both expecting an observation; set frequency on VFO A (`$FR1:<Hz>` CR) and set mode (`$MOD:<nn>`, the description's code as two digits, `Unsupported` if the mode has no code), neither answered; set PTT (`$MOX>` to key and `$MOX<` to unkey, not answered) and get PTT (`$MTR?`). Any other op is `Unsupported`. `SetPtt` can key the transmitter, and the caller owns the gate. It records the pending read and clears the receive buffer.
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_adat_engine_feed]
 

@@ -92,7 +92,7 @@ Record every change here.
 - **`radioctl-splitter`**
   - It is a separate crate so the library crates stay free of pty code.
   - It depends on core and protocols.
-  - `radioctld` uses its PTT arbiter (`PttOwner`), so the two share one set of ownership semantics.
+  - `radioctld` uses its PTT (push-to-talk) arbiter (`PttOwner`), so the two share one set of ownership semantics.
 - **`radioctl-station` and `radioctl-capi`**
   - Both are workspace crates; the station layer is a radioctl module (Bruce, 2026-10-30), not a sibling crate.
   - `radioctld` serves rotators through the station crate's engines.
@@ -189,7 +189,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 
 - The first four Icom files (IC-7300, 705, 7610, 9700) are **not written from Icom's guides**. For the 19 later models Icom's instruction manuals were read for facts, under Bruce Perens' decision of 2026-10-31 (the terms are unreasonable and would not survive a court): Icom's download endpoint is excluded by robots.txt and the direct path is 403, so the archive.org mirror copies were read; they are kept outside every repository (`~/manuals/icom/`, sha256 in `SHA256SUMS`) and are not redistributed.
 - Their facts were read from Hamlib 4.6.2 source (facts only, provenance kind `hamlib-source`, file and function named per fact) and from `rigctl --dump-caps` output.
-- Engine features: VFO B, split, RIT/XIT (receiver and transmitter incremental tuning, small frequency offsets), levels, filter, model id.
+- Engine features: VFO (variable frequency oscillator, the tuning control) B, split, RIT/XIT (receiver and transmitter incremental tuning, small frequency offsets), levels, filter, model id.
 - Raw meters (`Op::GetMeter`: SWR (standing wave ratio), ALC (automatic level control), COMP (speech compression), Vd and Id (power-amplifier drain voltage and current) as 0 to 255 deflections, uncalibrated) and data modes (`USB-D`, `LSB-D`; `M PKTUSB` / `PKTLSB` through `radioctld`) are implemented for the IC-7300. `radioctld` serves them as Hamlib's `ALC`, `SWR`, `COMP_METER`, `VD_METER` and `ID_METER` through unverified scale points (manual chapters 9 and C). The engine takes the mode being set as the mode for the filter table.
 - Scope (command 0x27) is in `crates/radioctl-protocols/src/civ_scope.rs`:
   - reachable through `Op` (`SetScopeOutput`, `SetScopeAxis`, `SetScopeSpan`, `SetScopeEdges`, `SetScopeReference` and their reads), capability `scope`, on the IC-7300 and IC-7610;
@@ -202,7 +202,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
   - Data modes (command 26) only where Hamlib treats 26 as always present (IC-7760 and IC-7850/7851); the others use forms (`1A 06`) the engine does not send.
   - Hamlib's Main/Sub flow (`07 C2`, `07 D0`) differs from radioctl's on the IC-7600, 7800, 7850/7851 and 7760, and the IC-7700 ends in a different mode: pinned as open questions in `known_icom_batch_divergences`.
   - Icom's manuals were read for the IC-7200, 7410, 7600, 7700, 7800, 7850/7851, 9100, R75, R9500, 746, 746PRO, 706MkIIG (CI-V command tables) and the IC-7100, R8600, 718 (CI-V address only). Not obtainable as readable text: the IC-7000 (only a service manual), IC-7760, IC-706 and IC-706MkII (image scans without text). Each fact states which: `manual-checked` where the page was read (CI-V address, mode codes of the IC-7200, 7410 and 9100, split `0F`), otherwise still Hamlib's.
-  - Corrections from the manuals: the IC-7600, 7700 and 7800 tables have no command 25 and no command 21, so `second-vfo` and `rit-xit` were removed from those three files. The IC-706MkIIG table has no command 14: fixed by `levels.absent`, a per-description list of the plain `14` levels a model lacks (AF, RF, mic, monitor, keyer, power), which the engine and the virtual rig then refuse.
+  - Corrections from the manuals: the IC-7600, 7700 and 7800 tables have no command 25 and no command 21, so `second-vfo` and `rit-xit` were removed from those three files. The IC-706MkIIG table has no command 14: fixed by `levels.absent`, a per-description list of the plain `14` levels a model lacks (AF, RF: radio frequency, mic, monitor, keyer, power), which the engine and the virtual rig then refuse.
   - Third batch (16 models, plus the IC-735 and IC-905 for the new `civ.frequency_bytes` field: 4 bytes for the IC-735, 5 or 6 for the IC-905; the IC-820H and 821H wait for their unit, Hamlib facts only, no manual read, none verified): IC-703, 756, 756PRO, 756PROII, 756PROIII, 910, 2730, 78, 707, 729, 736, 737, 738, 775, 781 and 970. `levels.absent` is set from the levels Hamlib's list for the model lacks. On the IC-756 family and IC-2730 Hamlib's split starts with `07 D0` (Main band), which the virtual rig does not model: pinned as open questions like the IC-7600's.
   - Fourth batch (20 models, Hamlib facts only, no manual read, none verified): IC-725, 726, 728, 751, 761, 765, 1275, 271, 275, 375, 471, 475, 575 and the receivers R71, R72, R7000, R7100, R8500, R9000, RX7.
   - Fifth batch (9 models, Hamlib facts only, no manual read, none verified): the D-STAR models ID-5100, ID-31, ID-4100 and ID-51 (new mode `d-star`, CI-V mode 17), ID-1 and the handheld receivers IC-R6, R10, R20, R30. Hamlib modes without a radioctl name (FMN, AMN, SAM, P25, DPMR, NXDN, DCR) are listed in each file as not described. The IC-92D (Hamlib has no frequency or mode functions for it) and IC-F8101 (frequency and mode through `1A 34`/`35`/`36`) are not described yet, see the plan.
@@ -211,7 +211,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 
 ### Yaesu newcat and Elecraft (batch of October 31, 2026)
 
-- 11 Yaesu newcat models and 4 Elecraft models, all `unverified`. Sources: Yaesu's CAT Operation Reference Books for the FT-450D, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000, FTDX9000 (FT DX 9000 Series), FT-891, FT-710 and FTDX101MP/D (each fact names the file, the PDF page and the sha256); Elecraft's K3S/K3/KX3/KX2 Programmer's Reference Rev. G5 (K3, K3S, KX2) and the K4 Programmer's Reference Rev. D11. The FT-450 uses Hamlib 4.6.2 facts only (`hamlib-source`), because Yaesu's FT-450D guide is for another radio.
+- 11 Yaesu newcat models and 4 Elecraft models, all `unverified`. Sources: Yaesu's CAT (computer-aided transceiver control) Operation Reference Books for the FT-450D, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000, FTDX9000 (FT DX (long-distance contact) 9000 Series), FT-891, FT-710 and FTDX101MP/D (each fact names the file, the PDF page and the sha256); Elecraft's K3S/K3/KX3/KX2 Programmer's Reference Rev. G5 (K3, K3S, KX2) and the K4 Programmer's Reference Rev. D11. The FT-450 uses Hamlib 4.6.2 facts only (`hamlib-source`), because Yaesu's FT-450D guide is for another radio.
 - The FT-450, FT-450D, FT-950, FT-2000, FTDX1200, FTDX3000, FTDX5000 and FTDX9000 write the frequency with **8 digits** (the IF answer is 27 characters): `yaesu.frequency_digits = 8` in the description, implemented in the engine and in the virtual rig; the others use 9.
 - A command the guide has in a different form is left out, not guessed: no `levels` on the FT-450D, FT-950, FT-2000, FTDX5000 and FTDX9000 (MG and PC are 0-255 there, the engine's ranges are the FT-991A's 0-100 and 5-100) or on the FT-891 (RG is 0-30); no `split` on the dual-receiver models (FT selects the main or sub band transmitter) or the FT-891 (ST); no `rit-xit` on the FT-450 family, FT-891 and FT-710; `read-power` only where RM 5 is the PO meter.
 - The K4 is described in its K3-compatible mode only: frequency, modes, PTT (TQ, TX, RX), KY text and AI; its AG, RG, KS, MG, PC, RA and PA differ from the K3 forms the engine sends.
@@ -283,7 +283,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 
 - Rig: one receive channel of a ka9q-radio `radiod`; family `radiod-channel`, no family block; file `radiod-channel`. Each channel is a virtual rig, so one RX-888 can serve many of them, one per SSRC.
 - **Receive only.** The file claims `read-frequency`, `set-frequency`, `read-mode`, `set-mode`, `filter` and `read-signal`. The engine refuses any `radiod-channel` description that claims a transmit capability, and it encodes no transmit operation. radioctld therefore reports no PTT (`ptt_type=0x0`, "Can set PTT: N"), even with `transmit = true`, and a console reading those capabilities hides Transmit. `radiod` itself has no transmit path.
-- Structure, as for OpenHPSDR: a line-protocol engine (`radiod_net.rs`) over an in-memory stream to a bridge (`radiod_io.rs`). The bridge owns the `radiod_client` sockets (`daemons/radiod_client`, a closed command schema in which every channel command carries a lifetime) and the channel's RTP audio.
+- Structure, as for OpenHPSDR: a line-protocol engine (`radiod_net.rs`) over an in-memory stream to a bridge (`radiod_io.rs`). The bridge owns the `radiod_client` sockets (`daemons/radiod_client`, a closed command schema in which every channel command carries a lifetime) and the channel's RTP (Real-time Transport Protocol) audio.
 - Configuration (radioctld):
 
   ```toml
@@ -299,7 +299,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
   #           lifetime_frames = 500, refresh_ms = 2000, min_hz = 10000, max_hz = 30000000
   ```
 
-- Mode changes bring back the mode's own passband. `SetFilterWidth` places the passband per mode: USB and LSB (lower sideband) keep their 50 Hz edge next to the carrier, CW centres on its 600 Hz tone, AM and FM centre on the carrier.
+- Mode changes bring back the mode's own passband. `SetFilterWidth` places the passband per mode: USB and LSB (lower sideband) keep their 50 Hz edge next to the carrier, CW (continuous wave, Morse code) centres on its 600 Hz tone, AM and FM centre on the carrier.
 - Signal (`RAWSTR`): the channel's baseband power in tenths of a dB above -200 dB re full scale. It is referred to the input (`radiod` removes the front end's RF gain), not calibrated to dBm, and not an S-meter.
 - The channel is kept by re-asserting its whole state every `refresh_ms`, never by a bare poll. So a `radiod` that restarted gets the channel back at the right frequency (seen on the RX-888: one missed acknowledgement, then the channel was back at 14.074 MHz). When the rig is dropped the channel is removed. If the process dies, the channel expires by its lifetime.
 - Audio is `RadiodControl::take_audio` (16-bit PCM decoded to mono `f32`, 12 kHz, 24 kHz for FM), not a radioctl operation. `RadiodControl::front_end` gives the front end's overrange count and RF gain.
