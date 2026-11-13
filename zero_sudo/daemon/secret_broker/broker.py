@@ -27,6 +27,7 @@ Story: zero_sudo/docs/stories/secret_store_tier_b.md.
 
 import base64
 import concurrent.futures
+import errno
 import grp
 import http.client
 import json
@@ -178,8 +179,12 @@ def readable_by(path, uid, gids, getxattr=getattr(os, "getxattr", None)):
         return False
     try:
         raw = getxattr(path, "system.posix_acl_access")
-    except OSError:
-        return False
+    except OSError as exc:
+        if exc.errno in (errno.ENODATA, errno.ENOTSUP):
+            return False  # no ACL on the file, or a filesystem without ACLs: the mode bits were the answer
+        # Anything else (EACCES, EIO...): we cannot tell, so answer "readable" and the broker will not start.
+        _logger.warning("cannot read the ACL of %s (errno %s); treating it as readable", path, exc.errno)
+        return True
     return acl_grants_read(raw, uid, gids)
 
 
