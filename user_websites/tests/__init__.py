@@ -59,3 +59,4 @@ from . import test_open_source_defaults
 from .open_source_defaults import pin_package
 
 pin_package(__name__)
+from . import test_layout_seo

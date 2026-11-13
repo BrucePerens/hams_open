@@ -242,6 +242,8 @@
     <template id="privacy_erased" name="Privacy: Content Erased">
         <!-- Tested by [@ANCHOR: user_websites:test_privacy_erased_public_page] -->
         <t t-call="website.layout">
+            <t t-set="additional_title">Your data has been erased</t>
+            <t t-set="website_meta_description">We erased your website pages and blog posts, removed you from the community directory and deactivated your account. This cannot be undone. See what remains.</t>
             <div id="wrap" class="oe_structure">
                 <div class="container mt-5 mb-5">
                     <div class="row">
@@ -299,6 +301,8 @@
     <template id="blog_index" name="User Blog Index">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
+            <t t-set="additional_title" t-value="('%s Blog' % entity_name)"/>
+            <t t-set="website_meta_description" t-value="('Blog posts from %s on hams.com: stories about ham radio, projects and operating, newest first. Read, share and subscribe to the weekly digest.' % entity_name)[:160]"/>
             <div id="user_websites_dropzone_blog_header"></div>
             <div class="container mt-5">
                 <t t-set="entity_name" t-value="profile_user.name if profile_user else (profile_group.name if profile_group else '')"/>
@@ -360,6 +364,8 @@
 
         <!-- [@ANCHOR: user_websites:UX_BLOG_POST_EDIT_FORM] -->
         <t t-call="website.layout">
+            <t t-set="additional_title">Edit blog post</t>
+            <t t-set="website_meta_description">Write or change a blog post on your hams.com website. Add text and pictures, save a draft, and publish when you are ready for readers to see it on your blog.</t>
             <div id="wrap" class="container mt-4 mb-5">
                 <h1 class="h2">Edit Blog Post</h1>
                 <div class="card shadow-sm mt-3">
@@ -451,6 +457,8 @@
     <template id="community_directory" name="Community Directory">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
+            <t t-set="additional_title">Community directory</t>
+            <t t-set="website_meta_description">Discover websites made by hams.com members. Browse the community directory to find operators, clubs and projects and follow their pages, blogs and updates.</t>
             <div class="container mt-5">
                 <div class="row">
                     <div class="col-12 text-center mb-5">
@@ -566,6 +574,8 @@
     <template id="report_violation_page" name="Report Violation Page">
         <!-- audit-ignore-view: Tested by [@ANCHOR: form_shield:test_question_form_page_renders_accessible_question] -->
         <t t-call="website.layout">
+            <t t-set="additional_title">Report a content violation</t>
+            <t t-set="website_meta_description">Tell us about a member website or blog post that breaks the community rules. Anyone can report one. Describe what you saw and our moderators will review it.</t>
             <div id="wrap" class="container my-5" style="max-width: 640px;">
                 <h1 class="h3">Report a content violation</h1>
                 <div t-if="notice" class="alert alert-warning" role="alert" t-out="notice"/>
@@ -604,6 +614,8 @@
     <template id="unsubscribe_success" name="Unsubscription Success">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
+            <t t-set="additional_title">You are unsubscribed</t>
+            <t t-set="website_meta_description">You were removed from this site's mailing list and will not get its weekly digest again. You can subscribe once more from the site if you change your mind.</t>
             <div class="container mt-5 pt-5 text-center">
                 <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">
                     <div class="card-body p-5">
@@ -623,6 +635,8 @@
     <template id="documentation_page" name="User Websites Documentation">
         <!-- audit-ignore-view: Tested by [@ANCHOR: test_user_websites_backend_views_rendering] -->
         <t t-call="website.layout">
+            <t t-set="additional_title">User websites documentation</t>
+            <t t-set="website_meta_description">Documentation for the hams.com user websites feature: how members create personal or group websites and blogs, what each part does, and how it is kept safe.</t>
             <div class="container mt-5 mb-5 shadow-sm p-5 bg-white rounded">
                 <div class="row">
                     <div class="col-12">
@@ -639,6 +653,8 @@
     <template id="placeholder_page" name="Website Placeholder">
         <!-- Tested by [@ANCHOR: user_websites:test_tour_create_site] -->
         <t t-call="website.layout">
+            <t t-set="additional_title" t-value="('Welcome, %s' % entity_name)"/>
+            <t t-set="website_meta_description">Your home page exists but is not published, so visitors cannot see it yet. Use the button on this page to publish it, or to bring back a deleted home page.</t>
             <div class="container mt-5 mb-5 text-center">
                 <t t-set="entity_name" t-value="profile_user.name if profile_user else profile_group.name"/>
                 <t t-set="entity_slug" t-value="resolved_slug"/>
