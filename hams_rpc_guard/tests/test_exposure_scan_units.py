@@ -10,8 +10,8 @@ import json
 import os
 import tempfile
 
-from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.tests.common import BaseCase, tagged
+from odoo.addons.zero_sudo.tests.common import SafePatchMixin
 
 from odoo.addons.hams_rpc_guard import exposure_scan as scan
 
@@ -21,7 +21,7 @@ def _scan(source):
 
 
 @tagged("post_install", "-at_install")
-class TestExposureScanUnits(HamsTransactionCase):
+class TestExposureScanUnits(SafePatchMixin, BaseCase):
     # Tests [@ANCHOR: hams_rpc_guard:scan_decorator_names]
     # Tests [@ANCHOR: hams_rpc_guard:scan_string_values]
     # Tests [@ANCHOR: hams_rpc_guard:scan_model_of_class]

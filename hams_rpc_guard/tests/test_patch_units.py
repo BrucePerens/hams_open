@@ -8,8 +8,8 @@ from types import SimpleNamespace
 
 from odoo.addons.rpc.controllers import json2
 from odoo.service import model as service_model
-from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.tests.common import BaseCase, tagged
+from odoo.addons.zero_sudo.tests.common import SafePatchMixin
 
 from odoo.addons.hams_rpc_guard import endpoint_gate as gate, exposure, patch as guard, policy
 
@@ -49,7 +49,7 @@ def _user(uid=5, login="u", public=False, internal=True):
 
 
 @tagged("post_install", "-at_install")
-class TestPatchUnits(HamsTransactionCase):
+class TestPatchUnits(SafePatchMixin, BaseCase):
     # Tests [@ANCHOR: hams_rpc_guard:call_is_rpc]
     # Tests [@ANCHOR: hams_rpc_guard:module_is_managed]
     # Tests [@ANCHOR: hams_rpc_guard:describe_call]
