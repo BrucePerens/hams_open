@@ -206,7 +206,7 @@ Adds one to today's counter for `(form_id, reason)` as the service account `form
 
 ### `_upsert(form_id, reason)` [@ANCHOR: form_shield:count_upsert]
 
-One parameterised `INSERT ... ON CONFLICT (day, form_id, reason) DO UPDATE SET count = count + 1` into `form_shield_rejection` with today's date, `form_id` and `reason` cut to 64 characters; flushes the model first and invalidates its cache after. Atomic under concurrency, so no counts are lost. Test: `test_counters_keep_no_personal_data`.
+One parameterised `INSERT ... ON CONFLICT (day, form_id, reason) DO UPDATE SET count = count + 1` into `form_shield_rejection` with today's date, `form_id` and `reason` cut to 64 characters; flushes the model first and invalidates its cache after. Atomic under concurrency, so no counts are lost. Test: `test_counters_keep_no_personal_data`; the day is UTC whatever the context time zone: `test_counter_day_is_utc_whatever_the_context_time_zone`.
 
 ### `_cron_purge()` [@ANCHOR: form_shield:purge] `@api.model`, no arguments, returns an int. It searches in one query with `day < today - retention_days` and unlinks the rows, so counters older than the retention window disappear and the table stays small; a retention parameter that is not a number falls back to 90 with an error log. It runs as the service account, whose group may delete this model.
 

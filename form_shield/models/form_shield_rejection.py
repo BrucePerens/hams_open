@@ -50,6 +50,7 @@ class FormShieldRejection(models.Model):
 
     # [@ANCHOR: form_shield:count_upsert]
     # Verified by [@ANCHOR: form_shield:test_counters_keep_no_personal_data]
+    # Verified by [@ANCHOR: form_shield:test_counter_day_is_utc_whatever_the_context_time_zone]
     @api.model
     def _upsert(self, form_id, reason):
         # UTC day, not the visitor's time zone: the own-cursor path runs with an empty context, so a
