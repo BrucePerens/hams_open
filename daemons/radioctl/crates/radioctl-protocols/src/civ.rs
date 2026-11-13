@@ -200,34 +200,44 @@ impl FrameParser {
         }
         self.last_byte_at = now;
         self.pending.extend_from_slice(bytes);
+        // A cursor, not a drain per frame: draining the front of a large buffer once per frame
+        // made a big burst of short frames quadratic.
+        let mut pos = 0;
         loop {
-            let Some(start) = find_preamble(&self.pending) else {
-                self.drop_leading_junk(&mut out);
+            let Some(start) = find_preamble(&self.pending[pos..]) else {
+                pos = self.drop_leading_junk(pos, &mut out);
                 break;
             };
             if start > 0 {
-                out.push(Parsed::Junk(self.pending.drain(..start).collect()));
+                out.push(Parsed::Junk(self.pending[pos..pos + start].to_vec()));
+                pos += start;
             }
-            let Some(end) = self.pending.iter().position(|b| *b == END) else {
-                if self.pending.len() > MAX_PENDING {
-                    out.push(Parsed::Junk(std::mem::take(&mut self.pending)));
+            let Some(end) = self.pending[pos..].iter().position(|b| *b == END) else {
+                if self.pending.len() - pos > MAX_PENDING {
+                    out.push(Parsed::Junk(self.pending[pos..].to_vec()));
+                    pos = self.pending.len();
                 }
                 break;
             };
-            let raw: Vec<u8> = self.pending.drain(..=end).collect();
+            let raw = self.pending[pos..=pos + end].to_vec();
+            pos += end + 1;
             out.push(frame_or_junk(raw));
         }
+        self.pending.drain(..pos);
         out
     }
 
     // [@ANCHOR: radioctl_civ_parser_drop_leading_junk]
-    /// With no preamble pending, everything but a trailing lone `FE` is junk.
-    fn drop_leading_junk(&mut self, out: &mut Vec<Parsed>) {
-        let keep = usize::from(self.pending.last() == Some(&PREAMBLE));
-        let cut = self.pending.len().saturating_sub(keep);
+    /// With no preamble at or after `pos`, everything but a trailing lone `FE` is junk. Returns
+    /// the position after the junk.
+    fn drop_leading_junk(&self, pos: usize, out: &mut Vec<Parsed>) -> usize {
+        let rest = &self.pending[pos..];
+        let keep = usize::from(rest.last() == Some(&PREAMBLE));
+        let cut = rest.len().saturating_sub(keep);
         if cut > 0 {
-            out.push(Parsed::Junk(self.pending.drain(..cut).collect()));
+            out.push(Parsed::Junk(rest[..cut].to_vec()));
         }
+        pos + cut
     }
 }
 
