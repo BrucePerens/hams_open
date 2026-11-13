@@ -951,8 +951,10 @@ class HelpdeskTicket(models.Model):
         the one ticket that pages. Only new tickets of a type the agent may see, created in the last day, that are not
         suspicious (the agent never reads those) and have no verdict. Returns how many tickets it marked."""
         raw = str(self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_STALL, "0") or "0").strip()
-        threshold = int(raw) if raw.isascii() and raw.isdigit() else 0
-        if threshold <= 0:
+        # A threshold longer than the lookback window can never be reached; the length cap also keeps int() and
+        # timedelta from raising on a huge digit string.
+        threshold = int(raw) if raw.isascii() and raw.isdigit() and len(raw) <= 9 else 0
+        if threshold <= 0 or threshold >= _TRIAGE_STALL_LOOKBACK_SECONDS:
             return 0
         now = fields.Datetime.now()
         stalled = self.search(
