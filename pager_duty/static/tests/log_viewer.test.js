@@ -113,6 +113,32 @@ describe("pager_duty_log_viewer", () => {
         expect(viewer.state.loading).toBe(false);
     });
 
+    test("a newer search is not overwritten by an older search that finishes later", async () => {
+        // Tests [@ANCHOR: pager_duty:js_log_viewer_execute_search]
+        const polls = { j1: 0, j2: 0 };
+        let started = 0;
+        mockFetch((url, init) => {
+            const params = JSON.parse(init.body).params;
+            if (url === "/api/v1/pager/logs/search") {
+                started += 1;
+                return { result: { job_id: `j${started}` } };
+            }
+            polls[params.job_id] += 1;
+            if (params.job_id === "j1") {
+                return { result: polls.j1 < 3 ? { status: "running" } : { status: "done", matches: ["old"] } };
+            }
+            return { result: { status: "done", matches: ["new"] } };
+        });
+        const viewer = bareViewer();
+        const first = viewer.executeSearch();
+        await animationFrame();
+        viewer.state.regexQuery = "WARN";
+        const second = viewer.executeSearch();
+        await finish(Promise.all([first, second]));
+        expect(viewer.state.results).toEqual(["new"]);
+        expect(viewer.state.loading).toBe(false);
+    });
+
     test("executeSearch reports no matches, a server error, an invalid reply and a failed request", async () => {
         // Tests [@ANCHOR: pager_duty:js_log_viewer_execute_search]
         stubApi({
