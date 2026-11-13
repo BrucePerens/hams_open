@@ -72,6 +72,9 @@ CLOSED_STAGES = ("resolved", "closed")
 # A closed ticket whose failure was last seen at least this long ago is reopened by the next occurrence
 # even with no release in between: a failure that comes back after a quiet day is not the one that was closed.
 QUIET_REOPEN = timedelta(hours=24)
+# A New server-exception ticket whose failure was last seen longer ago than this is resolved automatically
+# (helpdesk_ticket._triage_retire_stale) instead of being announced: the failure has cleared.
+STALE_AFTER = timedelta(hours=6)
 
 
 # [@ANCHOR: hams_helpdesk_models_exception_fingerprint_reentry_state]

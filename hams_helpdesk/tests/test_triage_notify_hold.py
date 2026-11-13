@@ -206,11 +206,15 @@ class TestTriageNotifyHold(HamsTransactionCase):
         ticket.message_post(body="<p>More mail from the sender</p>", message_type="comment", subtype_xmlid="mail.mt_comment")
         self._assert_silent(watch, "later messages on a spam ticket are not mailed")
 
-    def test_12_tickets_the_agent_cannot_judge_are_never_held_and_a_mixed_batch_keeps_its_order(self):
+    def test_12_quiet_exception_tickets_and_spam_are_never_held_and_a_mixed_batch_keeps_its_order(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_triage_notification_state_on_create]
         self._hold(20)
         exception_ticket = self._new_ticket("A server exception", ticket_type="server_exception")
-        self.assertEqual(exception_ticket.notify_state, "sent", "a type the agent cannot see is never delayed")
+        self.assertEqual(exception_ticket.notify_state, "held", "an automatic exception ticket is judged too")
+        quiet_ticket = self.Ticket.with_context(hams_exception_quiet=True).create(
+            {"name": "Quiet exception", "description": "<p>x</p>", "ticket_type": "server_exception"}
+        )
+        self.assertEqual(quiet_ticket.notify_state, "sent", "an exception ticket that pages nobody has nothing to hold")
         batch = self.Ticket.create(
             [
                 {"name": "batch held", "description": "<p>x</p>", "ticket_type": "general"},

@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 
 from markupsafe import Markup
 
+from .exception_fingerprint import STALE_AFTER
 from .inbound_spam_filter import inbound_spam_reasons
 from .link_defang import DEFANG_WARNING_TEXT, defang_html
 from .mail_thread_untrusted import stash_for
@@ -58,7 +59,11 @@ _TRIAGE_STALL_UNIT = "ticket.triage.event.service"
 _TRIAGE_MAX_HOLD_SECONDS = 300
 # The ticket types the triage agent is allowed to see (rule_helpdesk_ticket_ai_triage_external_allowlist). Only these
 # can be held for its review; a type it cannot judge is never delayed.
-_TRIAGE_HELD_TYPES = ("general", "hams_local_relay")
+_TRIAGE_HELD_TYPES = ("general", "hams_local_relay", "server_exception")
+# The held types a person files; the stall alarm covers only these (an exception ticket stalling the triage alarm would feed itself).
+_TRIAGE_STALL_TYPES = ("general", "hams_local_relay")
+# A New automatic ticket (server_exception, or a pager-created general one) older than this is looked at by the stale sweep.
+_AUTO_RETIRE_LOOKBACK_DAYS = 30
 
 # ham_communications_consent (hams_com, proprietary) is NOT a dependency of this module --
 # hams_helpdesk lives in hams_open and must remain installable/testable standalone (see
@@ -492,6 +497,9 @@ class HelpdeskTicket(models.Model):
                 hold_seconds
                 and (vals.get("stage") or "new") == "new"
                 and (vals.get("ticket_type") or "general") in _TRIAGE_HELD_TYPES
+                # An exception ticket opened inside the notification window of an earlier one pages nobody (see
+                # _automated_routing_and_notification), so there is no notification to hold.
+                and not (vals.get("ticket_type") == "server_exception" and self.env.context.get("hams_exception_quiet"))
             ):
                 vals["notify_state"] = "held"
                 vals["notify_release_at"] = fields.Datetime.add(fields.Datetime.now(), seconds=hold_seconds)
@@ -964,7 +972,7 @@ class HelpdeskTicket(models.Model):
         stalled = self.search(
             [
                 ("stage", "=", "new"),
-                ("ticket_type", "in", list(_TRIAGE_HELD_TYPES)),
+                ("ticket_type", "in", list(_TRIAGE_STALL_TYPES)),
                 ("triage_verdict", "=", False),
                 ("triage_stalled_at", "=", False),
                 ("suspicious", "=", False),
@@ -1010,6 +1018,8 @@ class HelpdeskTicket(models.Model):
         so it is safe to call twice."""
         hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
         due = self.with_env(hd_env).filtered(lambda t: t.notify_state != "sent" and t.stage != "spam")
+        # An automatic ticket whose condition has already cleared is retired, not announced.
+        due -= due._triage_retire_stale()
         if not due:
             return
         due.write({"notify_state": "sent", "notify_release_at": False})
@@ -1024,6 +1034,7 @@ class HelpdeskTicket(models.Model):
         """The end of the hold window, run every minute by the helpdesk service account. A held ticket whose window has
         ended is released whatever the agent did (fail open: the agent may be down, and a real request must not be lost);
         one that has meanwhile been put in the Spam stage is suppressed instead. Returns the number released."""
+        self._triage_sweep_stale()
         held = self.search(
             [("notify_state", "=", "held"), ("notify_release_at", "<=", fields.Datetime.now())], limit=500
         )
@@ -1036,6 +1047,51 @@ class HelpdeskTicket(models.Model):
             )
             due._triage_release_notification()
         return len(due)
+
+    # [@ANCHOR: hams_helpdesk:triage_cleared]
+    def _triage_cleared(self):
+        """{ticket id: reason} for the tickets in self whose automatic condition has cleared. Only server_exception tickets
+        here: the exception fingerprint behind the ticket was last seen more than ``STALE_AFTER`` ago (a failing daemon unit
+        is re-reported every time it is checked, so a unit that still fails is never that old). pager_duty adds the tickets
+        of resolved pager incidents. A human-filed ticket is never in the result."""
+        exceptions = self.filtered(lambda t: t.ticket_type == "server_exception")
+        if not exceptions:
+            return {}
+        stale = self.env["hams_helpdesk.exception.fingerprint"].search(
+            [("ticket_id", "in", exceptions.ids), ("last_seen", "<", fields.Datetime.now() - STALE_AFTER)]
+        )
+        reason = _("This server exception has not been seen for more than %s hours.") % (STALE_AFTER.total_seconds() // 3600)
+        return {fingerprint.ticket_id.id: reason for fingerprint in stale}
+
+    # [@ANCHOR: hams_helpdesk:triage_retire_stale]
+    def _triage_retire_stale(self):
+        """Moves the New tickets in self whose automatic condition has cleared (``_triage_cleared``) to Resolved with an
+        internal note saying why, and marks their notification suppressed so nobody is mailed about them. Returns them."""
+        hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+        candidates = self.with_env(hd_env).filtered(lambda t: t.stage == "new")
+        reasons = candidates._triage_cleared()
+        retired = candidates.filtered(lambda t: t.id in reasons)
+        for ticket in retired:
+            ticket.with_context(mail_notrack=True).write(
+                {"stage": "resolved", "notify_state": "suppressed", "notify_release_at": False}
+            )
+            ticket.message_post(
+                body=_("Resolved automatically before anyone was notified: %s") % reasons[ticket.id],
+                subtype_xmlid="mail.mt_note",
+            )
+        return retired
+
+    @api.model
+    # [@ANCHOR: hams_helpdesk:triage_sweep_stale]
+    def _triage_sweep_stale(self):
+        """Runs with the one-minute release cron: retires the New automatic tickets whose condition has cleared, whether or
+        not their notification was held. Returns how many."""
+        since = fields.Datetime.subtract(fields.Datetime.now(), days=_AUTO_RETIRE_LOOKBACK_DAYS)
+        candidates = self.search(
+            [("stage", "=", "new"), ("ticket_type", "in", ["server_exception", "general"]), ("create_date", ">=", since)],
+            limit=500,
+        )
+        return len(candidates._triage_retire_stale())
 
     @api.model
     # [@ANCHOR: hams_helpdesk:triage_quarantine_verdicts]

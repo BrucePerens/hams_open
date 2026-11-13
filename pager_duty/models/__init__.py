@@ -4,6 +4,7 @@
 
 from . import incident
 from . import incident_ticket_adapter
+from . import helpdesk_ticket
 from . import log_analyzer
 from . import mail_mail
 from . import pager_check

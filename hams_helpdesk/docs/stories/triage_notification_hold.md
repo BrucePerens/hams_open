@@ -41,3 +41,23 @@ same to it, which is the point. Tickets over a day old, suspicious tickets (the 
 picked up are not its business.
 
 **Status:** Verified by `tests/test_triage_stall_alarm.py`.
+
+## An automatic ticket whose condition has cleared is retired, not announced
+
+Bruce, 2026-11-13: "if the ticket is stale, it should retire it by itself before I get an email about it." The decision is
+deterministic code, not the AI: the AI only writes its read (its write path stays the one note and the verdict).
+Server-exception tickets are now held for the review window like the others (unless the ticket opens inside the notification
+window of an earlier page and pages nobody anyway). Before a held notification is released, and once a minute for every New
+automatic ticket (`_triage_sweep_stale`, called by the release cron) `[@ANCHOR: hams_helpdesk:triage_sweep_stale]`, the
+ticket is checked `[@ANCHOR: hams_helpdesk:triage_cleared]`:
+
+| Ticket | Cleared when |
+|---|---|
+| `server_exception` (exception, failed unit, daemon failure) | its fingerprint's `last_seen` is more than `STALE_AFTER` (6 hours) ago; a unit that still fails is re-reported at every check, so it is never that old |
+| created from a pager incident (`pager_duty`, [@ANCHOR: pager_duty:helpdesk_ticket_triage_cleared]) | the pager incident is resolved (an inbound-mail incident is a person's message and never counts) |
+
+A cleared ticket in the New stage moves to Resolved with an internal note saying why, its notification is marked suppressed and
+nobody is mailed `[@ANCHOR: hams_helpdesk:triage_retire_stale]`. Human-filed tickets and tickets already picked up are never
+touched; a ticket that still fires pages as before. To change the threshold edit `STALE_AFTER` in `exception_fingerprint.py`.
+
+**Status:** Verified by `tests/test_triage_auto_retire.py` (hams_helpdesk) and `tests/test_helpdesk_triage_retire.py` (pager_duty).
