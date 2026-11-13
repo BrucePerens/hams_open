@@ -8,10 +8,10 @@ from types import SimpleNamespace
 
 from odoo.addons.rpc.controllers import json2
 from odoo.service import model as service_model
-from odoo.tests.common import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.tests.common import BaseCase, tagged
+from odoo.addons.zero_sudo.tests.common import SafePatchMixin
 
-from odoo.addons.hams_rpc_guard import exposure, patch as guard, policy
+from odoo.addons.hams_rpc_guard import endpoint_gate as gate, exposure, patch as guard, policy
 
 
 class _Headers(dict):
@@ -49,7 +49,7 @@ def _user(uid=5, login="u", public=False, internal=True):
 
 
 @tagged("post_install", "-at_install")
-class TestPatchUnits(HamsTransactionCase):
+class TestPatchUnits(SafePatchMixin, BaseCase):
     # Tests [@ANCHOR: hams_rpc_guard:call_is_rpc]
     # Tests [@ANCHOR: hams_rpc_guard:module_is_managed]
     # Tests [@ANCHOR: hams_rpc_guard:describe_call]
@@ -190,11 +190,11 @@ class TestPatchUnits(HamsTransactionCase):
 
     # ---- certificate_identity ----------------------------------------------------------------------------------
 
-    def _cert_utils(self, header="X-Cert", proxies="127.0.0.1"):
+    def _cert_utils(self, header="X-Cert", proxies="127.0.0.0/8"):
         return _Utils({policy.CLIENT_CERT_HEADER_PARAM: header, "hams_rpc_guard.trusted_proxies": proxies})
 
     def test_certificate_identity(self):
-        self._req(environ={"REMOTE_ADDR": "127.0.0.1"}, headers={"X-Cert": "  CN=bob "})
+        self._req(environ={"REMOTE_ADDR": "127.0.0.2"}, headers={"X-Cert": "  CN=bob "})
         utils = self._cert_utils()
         self.assertEqual(guard.certificate_identity(utils), "cert:CN=bob")
         self.assertEqual(utils.asked[0], (policy.CLIENT_CERT_HEADER_PARAM, ""))
@@ -203,25 +203,24 @@ class TestPatchUnits(HamsTransactionCase):
         self.assertEqual(guard.certificate_identity(self._cert_utils(proxies="10.0.0.0/8")), "")
         self._req(environ={"REMOTE_ADDR": "8.8.8.8"}, headers={"X-Cert": "CN=bob"})
         self.assertEqual(guard.certificate_identity(self._cert_utils(proxies="0.0.0.0/0")), "")
-        self._req(environ={"REMOTE_ADDR": "127.0.0.1"}, headers={})
+        self._req(environ={"REMOTE_ADDR": "127.0.0.2"}, headers={})
         self.assertEqual(guard.certificate_identity(self._cert_utils()), "")
-        self._req(environ={"REMOTE_ADDR": "127.0.0.1"}, headers={"X-Cert": "   "})
+        self._req(environ={"REMOTE_ADDR": "127.0.0.2"}, headers={"X-Cert": "   "})
         self.assertEqual(guard.certificate_identity(self._cert_utils()), "")
-        self._req(environ={"REMOTE_ADDR": "127.0.0.1"}, headers={"Other": "CN=bob"})
+        self._req(environ={"REMOTE_ADDR": "127.0.0.2"}, headers={"Other": "CN=bob"})
         self.assertEqual(guard.certificate_identity(self._cert_utils()), "")
 
     def test_certificate_identity_without_request(self):
         class NoRequest:
             def __bool__(self):
                 return False
-            httprequest = _request(environ={"REMOTE_ADDR": "127.0.0.1"}, headers={"X-Cert": "CN=a"}).httprequest
+            httprequest = _request(environ={"REMOTE_ADDR": "127.0.0.2"}, headers={"X-Cert": "CN=a"}).httprequest
         self.safe_patch_object(guard, "request", new=NoRequest())
         self.assertEqual(guard.certificate_identity(self._cert_utils()), "")
 
     # ---- unix_identity -----------------------------------------------------------------------------------------
 
     def test_unix_identity(self):
-        from odoo.addons.hams_rpc_guard import endpoint_gate as gate
         class NoRequest:
             def __bool__(self):
                 return False
@@ -299,12 +298,10 @@ class TestPatchUnits(HamsTransactionCase):
         self.assertFalse(seen["decide"][2])
 
     def test_check_rpc_call_local_identity_beats_certificate(self):
-        from odoo.addons.hams_rpc_guard import endpoint_gate as gate
         seen = self._check(environ={gate.UNIX_PEER_ENVIRON_KEY: {"user": "alice", "uid": 1}}, cert="cert:me")
         self.assertEqual(seen["describe"][4], "unix:alice")
 
     def test_check_rpc_call_login_binding(self):
-        from odoo.addons.hams_rpc_guard import endpoint_gate as gate
         peer = {gate.UNIX_PEER_ENVIRON_KEY: {"user": "alice", "uid": 1}}
         seen = self._check(environ=dict(peer, **{gate.UNIX_LOGINS_ENVIRON_KEY: frozenset({"other"})}), login="u")
         self.assertEqual(seen["apply"][1:], (policy.DENY, "unix-login-not-bound", policy.MODE_ENFORCE))
