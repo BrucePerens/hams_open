@@ -13,3 +13,4 @@ from . import test_database_lockdown
 from . import test_visitor_track_dedup
 from . import test_canonical_url_dot_segments
 from . import test_login_case_insensitive
+from . import test_layout_seo
