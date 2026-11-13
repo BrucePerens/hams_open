@@ -41,6 +41,8 @@
          Verified by [@ANCHOR: form_shield:test_refusal_response_by_outcome] -->
     <template id="refused_page" name="Form shield refusal">
         <t t-call="website.layout">
+            <t t-set="additional_title" t-value="('Too many submissions' if verdict.outcome == 'limited' else 'Form temporarily unavailable')"/>
+            <t t-set="website_meta_description">This form did not accept your submission, either because of too many attempts or a temporary problem. Please wait a while and try again. A link takes you back.</t>
             <div id="wrap" class="container my-5" style="max-width: 640px;">
                 <h1 class="h3">
                     <t t-if="verdict.outcome == 'limited'">Too many submissions</t>
