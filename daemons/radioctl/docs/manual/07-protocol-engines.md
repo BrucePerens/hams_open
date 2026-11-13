@@ -295,6 +295,9 @@ radio. The `Sources` paragraph at the top of each file names the manual or heade
   twin and the device to look for on the bus (chapter [5](05-transports.md#usb-devices)).
 - **`perseus_engine.rs`**: the Microtelecom Perseus as an engine; it encodes each operation as one control
   transfer for the `perseus` loader (known gap 11, chapter [13](13-roadmap.md)).
+- **`barrett4100.rs`**: the Barrett 4100 HF transceiver (Hamlib's Beta-quality driver is the only source; no
+  Barrett document was read).
+- **`rshfiq.rs`**: the HobbyPCB RS-HFIQ transceiver (commands start with `*` and end with CR).
 - **`easy.rs`**: the one-call constructors behind the prelude (`VirtualRig::spawn`, `spawn_virtual`);
   chapter [2](02-quick-start.md).
 
