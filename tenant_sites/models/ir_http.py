@@ -92,6 +92,7 @@ class IrHttp(models.AbstractModel):
     # Verified by [@ANCHOR: tenant_sites:COMM_test_match_guard]
     @classmethod
     def _match(cls, path_info):
+        cls._tenant_ensure_request_uri()  # every request passes here, routed or not
         kind = cls._tenant_classify()
         if kind == KIND_MAIN:
             return super()._match(path_info)
@@ -165,7 +166,6 @@ class IrHttp(models.AbstractModel):
     # Verified by [@ANCHOR: tenant_sites:COMM_test_serve_fallback]
     @classmethod
     def _serve_fallback(cls):
-        cls._tenant_ensure_request_uri()
         kind = cls._tenant_classify()
         if kind == KIND_TENANT and request.httprequest.method not in utils.SAFE_METHODS:
             return cls._tenant_plain_response("not found", 404)

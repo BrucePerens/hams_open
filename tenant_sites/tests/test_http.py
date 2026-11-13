@@ -130,6 +130,20 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertEqual(self.get("/websocket.js", MAIN).status_code, 404)
         self.assertEqual(self.get("/old", TENANT).status_code, 301)  # the tenant's own redirect still works
 
+    def test_a_routed_page_without_request_uri_renders(self):
+        # Tests [@ANCHOR: tenant_sites:ensure_request_uri]
+        # Gate round 56: a page that matches a route (/web/login), not only the fallback, renders the website layout,
+        # whose canonical URL reads environ['REQUEST_URI'] unguarded: KeyError, HTTP 500.
+        real = WSGIRequestHandler.make_environ
+
+        def without_request_uri(handler):
+            environ = real(handler)
+            environ.pop("REQUEST_URI", None)
+            return environ
+
+        self.safe_patch_object(WSGIRequestHandler, "make_environ", without_request_uri)
+        self.assertEqual(self.get("/web/login", MAIN).status_code, 200)
+
     # Tests [@ANCHOR: tenant_sites_scoped_content_blog_post]
     def test_tenant_blog_shows_only_its_own_posts(self):
         response = self.get("/blog", TENANT)
