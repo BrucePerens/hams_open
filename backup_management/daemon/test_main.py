@@ -1121,3 +1121,23 @@ class TestJson2CallRefusesARedirect(unittest.TestCase):
         self.assertIn("302", str(raised.exception))
         self.assertEqual(probe.first_headers[0]["authorization"], "Bearer backup-key")
         self.assertEqual(probe.sink_headers, [], "the redirect target must never be asked")
+
+
+class TestKopiaPolicyFlagsPrecedeTheTarget(unittest.TestCase):
+    # kopia treats everything after "--" as a positional target, so a policy command built as
+    # "kopia policy set -- <target> --keep-daily=7" fails and never applies any retention.
+
+    def test_policy_flags_come_before_the_double_dash(self):
+        proc = MagicMock()
+        proc.stdout.read.side_effect = [""]
+        proc.wait.return_value = 0
+        payload = {"job_id": 5, "engine": "kopia_policy", "target_path": "/data/my dir", "config_id": 2,
+                   "keep_daily": 7, "keep_weekly": 4, "keep_monthly": 6, "exclude_patterns": "*.tmp"}
+        with patch("main._json2_call"), patch("main.shutil.which", return_value="/usr/bin/kopia"), \
+                patch("main.subprocess.Popen", return_value=proc) as popen:
+            backup_worker.execute_job(MagicMock(), MagicMock(), MagicMock(), json.dumps(payload))
+        cmd = popen.call_args.args[0]
+        self.assertEqual(cmd[:3], ["kopia", "policy", "set"])
+        self.assertEqual(cmd[-2:], ["--", "/data/my dir"])
+        self.assertIn("--keep-daily=7", cmd[3:-2])
+        self.assertIn("--add-ignore=*.tmp", cmd[3:-2])

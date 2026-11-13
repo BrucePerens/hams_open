@@ -650,7 +650,9 @@ def execute_job(ch, method, properties, body):
             keep_monthly = config.get("keep_monthly", 6)
             exclude_patterns = config.get("exclude_patterns", "")
 
-            cmd = ["kopia", "policy", "set", "--", target_path]
+            # Flags first: kopia treats everything after "--" as a target, so flags placed
+            # after it made the command fail and no retention was ever applied.
+            cmd = ["kopia", "policy", "set"]
             cmd.extend(
                 [
                     f"--keep-latest={keep_daily}",
@@ -663,6 +665,7 @@ def execute_job(ch, method, properties, body):
                 for line in exclude_patterns.splitlines():
                     if line.strip():
                         cmd.append(f"--add-ignore={line.strip()}")
+            cmd.extend(["--", target_path])
         elif engine == "sync_snapshots":
             if config.get("config_engine") == "kopia":
                 cmd = ["kopia", "snapshot", "list", "--json"]
