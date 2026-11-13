@@ -21,6 +21,7 @@ import hmac
 import json
 
 from odoo.addons.hams_helpdesk.controllers.github_webhook_api import _verify_github_signature
+from odoo.addons.hams_helpdesk.tests.test_exception_tickets import drop_leaked_reports
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase, HamsTransactionCase
 from odoo.exceptions import UserError
 from odoo.tests.common import tagged
@@ -80,6 +81,7 @@ class TestGithubWebhookHttp(HamsHttpCase):
     def setUp(self):
         super().setUp()
         self.Ticket = self.env["hams_helpdesk.ticket"]
+        drop_leaked_reports(self.env)
 
     def _configure_secret(self, secret=_TEST_SECRET):
         utils = self.env["zero_sudo.security.utils"]

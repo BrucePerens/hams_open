@@ -84,6 +84,16 @@ class FakeClock:
         return self.now
 
 
+def drop_leaked_reports(env):
+    """Removes the exception rows and tickets other tests, or the harness's own requests, committed.
+
+    A failed request the test harness itself sends (the health poll between tests) is reported on the
+    reporter's own cursor and stays in the database, so a test that expects an empty table starts from
+    whatever ran before it in the same database. The deletes roll back with the test."""
+    env["hams_helpdesk.exception.fingerprint"].search([]).unlink()
+    env["hams_helpdesk.ticket"].search([]).unlink()
+
+
 class ExceptionTicketCase(HamsTransactionCase):
     @classmethod
     def setUpClass(cls):
@@ -93,6 +103,7 @@ class ExceptionTicketCase(HamsTransactionCase):
 
     def setUp(self):
         super().setUp()
+        drop_leaked_reports(self.env)
         # New cursors (the reporter's own) join this test's transaction and roll back with it.
         registry_test_mode = self.enter_registry_test_mode()
         registry_test_mode.__enter__()
@@ -1311,3 +1322,14 @@ class TestExceptionHooks(RealTransactionCase):
         )
         self.assertTrue(written)
         self.assertEqual(len(self.rows()), 1)
+
+
+@tagged("post_install", "-at_install", "standard")
+class TestDropLeakedReports(ExceptionTicketCase):
+    def test_rows_and_tickets_present_before_a_test_are_gone_for_it(self):
+        self.assertTrue(self.report(self.caught(raise_attribute_error), "rpc"))
+        self.assertTrue(self.fingerprints())
+        self.assertTrue(self.Ticket.search([]))
+        drop_leaked_reports(self.env)
+        self.assertFalse(self.fingerprints())
+        self.assertFalse(self.Ticket.search([]))
