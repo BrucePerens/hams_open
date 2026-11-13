@@ -659,28 +659,61 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     # Tests [@ANCHOR: COMM_helpdesk_handoff_execution]
     def test_helpdesk_handoff_execution(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+        ticket = self.env["hams_helpdesk.ticket"].create({"name": "Handoff note visibility", "user_id": self.manager_user.id})
+        new_user = self.env["res.users"].create(
+            {"name": "Next Op", "login": "next_op_exec", "group_ids": [(6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_user").id])]}
+        )
+        wizard = self.env["hams_helpdesk.shift_handoff"].create(
+            {"ticket_id": ticket.id, "old_user_id": self.manager_user.id, "new_user_id": new_user.id, "handoff_notes": "internal-only context"}
+        )
+        action = wizard.action_confirm_handoff()
+        self.assertEqual(action, {"type": "ir.actions.act_window_close"})
+        note = self.env["mail.message"].search(
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket"), ("body", "ilike", "internal-only context")]
+        )
+        self.assertEqual(len(note), 1)
+        self.assertEqual(note.subtype_id, self.env.ref("mail.mt_note"), "the briefing must stay off the customer's portal thread")
+        self.assertIn(new_user.partner_id, note.partner_ids)
+        self.assertIn("Helpdesk Manager", note.body, "the relinquishing operator is named")
 
     # Tests [@ANCHOR: COMM_helpdesk_ticket_lifecycle]
     def test_helpdesk_ticket_lifecycle(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+        ticket = self.env["hams_helpdesk.ticket"].create({"name": "Lifecycle", "partner_id": self.portal_user.partner_id.id})
+        self.assertEqual(ticket.stage, "new")
+        for stage in ("in_progress", "resolved", "closed"):
+            ticket.write({"stage": stage})
+            self.assertEqual(ticket.stage, stage)
 
     # Tests [@ANCHOR: COMM_helpdesk_ticket_creation]
     def test_helpdesk_ticket_creation(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Caller cannot pre-judge triage", "triage_verdict": "real", "triage_verdict_source": "agent", "notify_state": "suppressed"}
+        )
+        self.assertFalse(ticket.triage_verdict, "create() strips the triage verdict fields the caller supplied")
+        self.assertFalse(ticket.triage_verdict_source)
+        self.assertEqual(ticket.notify_state, "sent", "a caller cannot suppress the assignment notice")
+        self.assertEqual(ticket.stage, "new")
 
     # Tests [@ANCHOR: COMM_helpdesk_micro_privilege]
     def test_helpdesk_micro_privilege(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+        ticket = self.env["hams_helpdesk.ticket"].create({"name": "Mine", "partner_id": self.portal_user.partner_id.id})
+        as_portal = ticket.with_user(self.portal_user)
+        for vals in ({"stage": "closed"}, {"user_id": self.portal_user.id}, {"partner_id": self.manager_partner.id}, {"ncmec_report_state": "report_confirmed"}):
+            with self.subTest(vals=vals), self.assertRaises(AccessError):
+                as_portal.write(vals)
+        self.assertEqual((ticket.stage, ticket.partner_id), ("new", self.portal_user.partner_id))
 
     # Tests [@ANCHOR: COMM_helpdesk_shift_handoff]
     def test_helpdesk_shift_handoff(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+        ticket = self.env["hams_helpdesk.ticket"].create({"name": "Open wizard", "user_id": self.manager_user.id})
+        action = ticket.action_shift_handoff()
+        self.assertEqual(action["res_model"], "hams_helpdesk.shift_handoff")
+        self.assertEqual(action["target"], "new")
+        self.assertEqual(action["context"], {"default_ticket_id": ticket.id, "default_old_user_id": self.manager_user.id})
+        self.assertEqual(ticket.user_id, self.manager_user, "opening the wizard changes nothing")
+        unassigned = self.env["hams_helpdesk.ticket"].create({"name": "No owner"})
+        unassigned.user_id = False
+        self.assertFalse(unassigned.action_shift_handoff()["context"]["default_old_user_id"])
 
     def test_portal_templates_use_theme_aware_surfaces(self):
         """The ticket card header must follow the page's light or dark mode: a fixed bg-light stays
@@ -694,8 +727,16 @@ class TestHelpdeskCore(HamsTransactionCase):
 
     # Tests [@ANCHOR: COMM_helpdesk_portal_close]
     def test_helpdesk_portal_close(self):
-        x = 1 + 1
-        self.assertEqual(x, 2)
+        ticket = self.env["hams_helpdesk.ticket"].create({"name": "Close me", "partner_id": self.portal_user.partner_id.id})
+        stranger = self.env["res.users"].create(
+            {"name": "Stranger", "login": "portal_stranger_close", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
+        )
+        with self.assertRaises(AccessError):
+            ticket.with_user(stranger).action_portal_close()
+        self.assertEqual(ticket.stage, "new")
+        ticket.with_user(self.portal_user).action_portal_close()
+        self.assertEqual(ticket.stage, "closed")
+        self.assertIn("Ticket closed by customer.", ticket.message_ids.mapped("body")[0])
 
     # Tests [@ANCHOR: COMM_helpdesk_portal_close]
     def test_portal_close_cannot_take_a_ticket_out_of_spam_quarantine(self):
