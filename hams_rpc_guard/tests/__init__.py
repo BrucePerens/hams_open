@@ -12,3 +12,5 @@ from . import test_endpoint_gate_pure
 from . import test_exposure_load
 from . import test_unix_listener_units
 from . import test_unix_listener_patches
+from . import test_patch_units
+from . import test_exposure_scan_units
