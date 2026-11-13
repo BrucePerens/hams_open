@@ -12,7 +12,7 @@ Transmit safety in this batch: this is the layer that decides whether switching 
 
 ### `fn key_state(&self) -> BoxFuture<'_, KeyState>` [@ANCHOR: radioctl:radioctl_station_rig_key_state]
 
-`KeyedSource` method for a `RigHandle`: the radio's keyed state for the interlock. If the rig's link is down it returns `Unknown`. If the rig has the `ReadPtt` capability it asks the actor for PTT with a freshness of at most one second: a true value gives `Keyed`, false gives `Unkeyed`, and a read error gives `Unknown`. Without that capability it uses the cached PTT observation (`Keyed`, `Unkeyed`, or `Unknown` when there is none). Async; may send a PTT read to the radio. It never opens the transmit gate or transmits, and it never fails, returning `Unknown` instead.
+`KeyedSource` method for a `RigHandle`: the radio's keyed state for the interlock. If the rig's link is down it returns `Unknown`. If the rig has the `ReadPtt` capability it asks the actor for PTT (push to talk) with a freshness of at most one second: a true value gives `Keyed`, false gives `Unkeyed`, and a read error gives `Unknown`. Without that capability it uses the cached PTT observation (`Keyed`, `Unkeyed`, or `Unknown` when there is none). Async; may send a PTT read to the radio. It never opens the transmit gate or transmits, and it never fails, returning `Unknown` instead.
 
 ### `pub fn new(def: StationDef, board: Arc<Switchboard>, keyed: Vec<Arc<dyn KeyedSource>>, ready: Option<Arc<dyn Readiness>>) -> Result<Station, StationError>` [@ANCHOR: radioctl:radioctl_station_station_new]
 

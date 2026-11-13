@@ -55,7 +55,7 @@ As a developer changing this code, I want every data structure in `src/civ.rs`, 
 | `mode` | `Option<Mode>` | The last mode the rig reported; the filter index tables depend on it. |
 | `filter_number` | `u8` | The filter number (1 to 3) the rig last reported with its mode; resent with `26 00`. |
 | `scope` | `Option<ScopeAssembler>` | The sweep assembler for the spectrum scope, `None` for a model without one. |
-| `awaiting_ptt_ack` | `bool` | True between a PTT set and the next reply: some Xiegu radios answer it with `1C 00 <state>` instead of `FB` (Hamlib's `x108g_set_ptt` comment), which counts as the acknowledgement. |
+| `awaiting_ptt_ack` | `bool` | True between a PTT (push to talk) set and the next reply: some Xiegu radios answer it with `1C 00 <state>` instead of `FB` (Hamlib's `x108g_set_ptt` comment), which counts as the acknowledgement. |
 
 **Used by.** `engine`, `new` (functions whose signature names it).
 
@@ -253,7 +253,7 @@ As a developer changing this code, I want every data structure in `src/civ.rs`, 
 
 ## `BridgeStandIn` [@ANCHOR: radioctl:radioctl_conformance_bridge_stand_in]
 
-**Purpose.** What the `hpsdr_io` bridge answers on its line protocol, with no radio behind it: frequency, PTT and attenuator are kept; forward power reads 0 and SWR 1.0 (`10` tenths), as the bridge reports with no forward power. Transcripts for the ANAN files are of this protocol, not of the radio's UDP wire (chapter 7 of the manual).
+**Purpose.** What the `hpsdr_io` bridge answers on its line protocol, with no radio behind it: frequency, PTT and attenuator are kept; forward power reads 0 and SWR (standing wave ratio) 1.0 (`10` tenths), as the bridge reports with no forward power. Transcripts for the ANAN files are of this protocol, not of the radio's UDP wire (chapter 7 of the manual).
 
 **Definition.** `struct BridgeStandIn` (struct) in `daemons/radioctl/crates/radioctl-protocols/src/conformance.rs`.
 
@@ -363,8 +363,8 @@ As a developer changing this code, I want every data structure in `src/civ.rs`, 
 | `cw_stops` | `u32` | How many times a stop-Morse command cleared the buffer (`cw_sent` is emptied too). |
 | `transceive` | `bool` | True when the rig reports front-panel changes on its own (CI-V transceive, Kenwood AI). |
 | `split` | `bool` | Split operation (Elecraft). |
-| `rit` | `bool` | RIT on (Elecraft). |
-| `xit` | `bool` | XIT on (Elecraft). |
+| `rit` | `bool` | RIT (receiver incremental tuning) on (Elecraft). |
+| `xit` | `bool` | XIT (transmitter incremental tuning) on (Elecraft). |
 | `rit_offset` | `i16` | RIT/XIT offset in hertz (Elecraft). |
 | `filter_width` | `Hz` | Receive filter bandwidth (Elecraft). |
 | `levels` | `BTreeMap<Level, u16>` | Numeric levels (Elecraft). |

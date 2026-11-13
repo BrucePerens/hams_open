@@ -1,6 +1,6 @@
 # Story: BPSK31 text to audio and back (ham_digital_modes)
 
-An operator typing into a PSK31 window gets Varicode text turned into a narrow, phase-keyed audio tone, and
+An operator typing into a PSK31 (phase-shift keying at 31 baud, a keyboard digital mode) window gets Varicode text turned into a narrow, phase-keyed audio tone, and
 gets text back out of received audio. The pipeline is pure Rust, runs at 31.25 baud, and has no forward error
 correction (as in the original mode, the operator notices garbles and asks for a repeat).
 
@@ -30,7 +30,7 @@ at the symbol edges, so the reversals do not splatter outside the roughly 31 Hz 
 | Argument | Type | Meaning |
 |---|---|---|
 | `bits` | `&[bool]`, borrowed | Bitstream from `psk31_encode_bits`; `false` reverses the phase. |
-| `carrier_hz` | `f64` | Audio carrier frequency in hertz, typically 500 to 2500 for an SSB transmitter's passband. |
+| `carrier_hz` | `f64` | Audio carrier frequency in hertz, typically 500 to 2500 for an SSB (single sideband) transmitter's passband. |
 | `sample_rate` | `u32` | Output samples per second (for example 8000, 12000 or 48000); symbol length is `sample_rate / 31.25` rounded. |
 
 **Returns:** `Vec<i16>`, mono 16-bit PCM, `bits.len() * samples_per_symbol` samples, full scale of the envelope peak (about +/-32767). **Errors:** none; a sample rate under 16 Hz yields zero samples per symbol and an empty result. **Special concerns:** pure and synchronous; the carrier phase is continuous across symbols except for the intended reversals. The function makes audio only. Whatever plays it into a radio must go through the relay's transmit lock, band check and transmit gate; this crate never keys a transmitter. **Signature:** `pub fn psk31_modulate(bits: &[bool], carrier_hz: f64, sample_rate: u32) -> Vec<i16>`. **See also:** tests tagged `psk31_modulate`, and `psk31_demodulate` as the inverse.
@@ -50,7 +50,7 @@ sample rate too low to give one sample per symbol returns no bits.
 
 | Argument | Type | Meaning |
 |---|---|---|
-| `samples` | `&[i16]`, borrowed | Complete mono PCM buffer whose first sample starts a symbol. |
+| `samples` | `&[i16]`, borrowed | Complete mono PCM (pulse-code modulation) buffer whose first sample starts a symbol. |
 | `carrier_hz` | `f64` | Carrier frequency in hertz; must be close to the real one, since no search is done. |
 | `sample_rate` | `u32` | Samples per second of `samples`. |
 

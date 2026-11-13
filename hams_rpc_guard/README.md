@@ -207,7 +207,7 @@ local user is calling, the key which Odoo account.
 service login. A process of another local user cannot connect (filesystem) or is refused (`unix_peers`), even with a
 stolen key; nothing answers the endpoints on TCP.
 
-**Off the host**: a private network (WireGuard) and the reverse-proxy pattern above, or mutual TLS at nginx
+**Off the host**: a private network (WireGuard) and the reverse-proxy pattern above, or mutual TLS (Transport Layer Security) at nginx
 (`hams_rpc_guard.client_cert_header`, below). Never a public network on `allowed_networks`.
 
 **TLS on loopback** adds little against a local attacker: a process that can read a daemon's memory already has its key.

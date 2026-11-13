@@ -1,6 +1,6 @@
 # radioctl function anchors, batch 44
 
-Function anchors for the `radioctl-station` crate, part 1: the error type (`error.rs`), the band follower (`band_follow.rs`), the pinned-certificate TLS connector (`tls.rs`), the rig spawner (`spawner.rs`), the board catalog and pin map (`gpio_map.rs`), the network relay driver for Shelly and Tasmota (`http_relay.rs`) and the powered-off radio record file (`record.rs`). Each anchor is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
+Function anchors for the `radioctl-station` crate, part 1: the error type (`error.rs`), the band follower (`band_follow.rs`), the pinned-certificate TLS (Transport Layer Security) connector (`tls.rs`), the rig spawner (`spawner.rs`), the board catalog and pin map (`gpio_map.rs`), the network relay driver for Shelly and Tasmota (`http_relay.rs`) and the powered-off radio record file (`record.rs`). Each anchor is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
 Transmit safety in this batch: none of these functions keys a transmitter. `follow_tx_frequency` and `follow_configured` do move an antenna selector, but only through `Station::select`, which applies the station interlock (refused while a rig is keyed or its keyed state is unknown). The HTTP relay driver's `write_line` switches a real relay when the station tells it to; the interlock and the transmit gate are applied by the `Station` above it, not here. `RigSpawner::spawn` leaves radioctl's transmit gate closed.
 
 ## `crates/radioctl-station/src/error.rs`

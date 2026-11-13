@@ -1,7 +1,7 @@
 # radioctl function anchors, batch 09
 
 Function anchors for the DRT1 twin, and the ADAT, GomSpace, CommRadio and PRM80 vendor helpers, engines and virtual twins in `radioctl-protocols`, written to the ADR 0113 standard. Each anchor is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
-The ADAT engine can encode `SetPtt` (`$MOX>` and `$MOX<`); the PRM80 engine is read only, and the DRT1 and CommRadio CTX-10 have no PTT. An engine only checks that the description lists the capability; the lock, band check and transmit gate are applied by the caller that owns the engine (unknown from these files; check `radioctld`), never by an engine or twin.
+The ADAT engine can encode `SetPtt` (`$MOX>` and `$MOX<`); the PRM80 engine is read only, and the DRT1 and CommRadio CTX-10 have no PTT (push to talk). An engine only checks that the description lists the capability; the lock, band check and transmit gate are applied by the caller that owns the engine (unknown from these files; check `radioctld`), never by an engine or twin.
 
 ## `crates/radioctl-protocols/src/drt1.rs`
 

@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 # Story: A Repeater's Callsign Is the One the Page Ties to the Repeater
 
 As a **Club Webmaster**, I title my page "K&Oslash;HNY/R" and say "EchoLink node 469520 operated by KC&Oslash;REO", and I want hams.com to list the
-repeater as K0HNY and not as the node operator's callsign or with a "/R" the FCC never licensed. As an **Administrator**, I want to
+repeater as K0HNY and not as the node operator's callsign or with a "/R" the FCC (US Federal Communications Commission) never licensed. As an **Administrator**, I want to
 know when a page is old.
 
 ## The Process
@@ -188,7 +188,7 @@ A non-number `freq` (including a bool) gives False. Pure; never raises.
 
 ### number_on_page `[@ANCHOR: zero_sudo:repeater_page_text_number_on_page]`
 
-`number_on_page(page_text, value, tolerance=0.06) -> bool` is True when the page states a number within `tolerance` of `value`. The default 0.06 suits a CTCSS tone (such as 107.2 or 100.0). `grounded_notes` uses 0.001
+`number_on_page(page_text, value, tolerance=0.06) -> bool` is True when the page states a number within `tolerance` of `value`. The default 0.06 suits a CTCSS (continuous tone-coded squelch system) tone (such as 107.2 or 100.0). `grounded_notes` uses 0.001
 for amounts. A non-number `value` gives False. Pure; never raises.
 
 ### grounded_notes `[@ANCHOR: zero_sudo:repeater_page_text_grounded_notes]`

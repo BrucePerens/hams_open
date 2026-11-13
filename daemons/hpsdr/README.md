@@ -1,7 +1,7 @@
 # hpsdr
 
 A Rust client for OpenHPSDR (the open High Performance Software Defined Radio protocol and hardware family) radios (ANAN-10, ANAN-100, Hermes, and the other boards of the family), built
-for the relay SDR plan (`hams_com/docs/proposals/SDR_RECEIVE_ENGINE_AND_TRANSMIT_PATH.md` sections 2 to 4)
+for the relay SDR (software-defined radio) plan (`hams_com/docs/proposals/SDR_RECEIVE_ENGINE_AND_TRANSMIT_PATH.md` sections 2 to 4)
 and the transmit safety baseline (`RELAY_SDR_RADIOCTL_ROADMAP.md` section 2a). Prototype: **everything here is
 `verified=unverified`** until it has run against a real radio. No hardware was used to write it.
 
@@ -377,7 +377,7 @@ Private function that folds a DDC-specific packet (Protocol 2, to the DDC-specif
 
 ### `apply_hp` [@ANCHOR: hpsdr:hpsdr_emulator_p2_apply_hp]
 
-Private function that folds a High Priority packet into the emulator's state and counters. It counts the packet, tracks run-bit transitions (`run_starts`, `run_stops`), records PTT (bit 1 of byte 4) in `ptt_now` and `ptt_frames`, counts non-zero drive (byte 345) and a non-zero transmit frequency (bytes 329 to 332), stores the ADC0 attenuator (byte 1443), and decodes each DDC frequency word from bytes 9 onward, converting phase words to hertz with the board's DSP clock when phase words are in use.
+Private function that folds a High Priority packet into the emulator's state and counters. It counts the packet, tracks run-bit transitions (`run_starts`, `run_stops`), records PTT (bit 1 of byte 4) in `ptt_now` and `ptt_frames`, counts non-zero drive (byte 345) and a non-zero transmit frequency (bytes 329 to 332), stores the ADC0 attenuator (byte 1443), and decodes each DDC frequency word from bytes 9 onward, converting phase words to hertz with the board's DSP (digital signal processing) clock when phase words are in use.
 
 | Argument | Type | Meaning |
 |---|---|---|
@@ -1656,7 +1656,7 @@ Converts a raw forward or reverse power count to watts: `(adc / 4095 * 3.3)^2 / 
 
 ### `HardwareStatus::swr` [@ANCHOR: hpsdr:hpsdr_types_status_swr]
 
-Computes the standing wave ratio from the forward and reverse power counts: the reflection coefficient is the square root of reverse over forward power, and the SWR is `(1 + rho) / (1 - rho)`. Returns `None` when there is no forward power, and infinity when reverse is at least forward.
+Computes the standing wave ratio from the forward and reverse power counts: the reflection coefficient is the square root of reverse over forward power, and the SWR (standing wave ratio) is `(1 + rho) / (1 - rho)`. Returns `None` when there is no forward power, and infinity when reverse is at least forward.
 
 | Argument | Type | Meaning |
 |---|---|---|

@@ -1,6 +1,6 @@
 # ham_digital_modes
 
-Amateur-radio digital-mode encoders and decoders as a library crate (LGPL-3.0-or-later): PSK31, RTTY, FT8, WSPR (digital amateur-radio modes), the D-STAR header,
+Amateur-radio digital-mode encoders and decoders as a library crate (LGPL-3.0-or-later): PSK31 (phase-shift keying at 31 baud, a keyboard digital mode), RTTY, FT8 (a weak-signal digital mode), WSPR (digital amateur-radio modes), the D-STAR header,
 Codec2 1600/3200 voice frames, and the AMBE voice codec family (D-STAR, P25 and, behind the `ambe_plus_2` feature, AMBE+2 half-rate).
 The hams_local_relay daemon depends on it as a pinned git dependency. `--no-default-features` builds only the fixed-point Codec2 3200
 path as `no_std` (see `docs/CODEC2_NO_STD.md`); everything else needs the default `std` feature. `cargo test` runs the unit and
@@ -155,7 +155,7 @@ lengthened to 1.5 times, so it assumes the input is built from 7-bit frames.
 | `mark_hz` | `f64` | MARK tone frequency in Hz (the default in this module is 2125 Hz). |
 | `sample_rate` | `u32` | Output sample rate in Hz. |
 
-**Returns:** `Vec<i16>` of mono PCM at 0.9 of full scale. Empty input gives an empty vector.
+**Returns:** `Vec<i16>` of mono PCM (pulse-code modulation) at 0.9 of full scale. Empty input gives an empty vector.
 
 **Errors:** None; it does not validate the frame structure.
 
@@ -650,7 +650,7 @@ minus the window mean of the smaller; noise the square root of the summed varian
 floored at 1e-9. The window is the symbol plus `half_width` neighbours each side, clamped at both ends.
 [@ANCHOR: evidence_to_symbol_values_windowed_clean_reference] is the alternative that takes the noise from the
 impossible-tone reference instead (population standard deviation of the 2 x window values). It measured worse at low
-SNR and is kept only for the diagnostic tests that record that result.
+SNR (signal-to-noise ratio) and is kept only for the diagnostic tests that record that result.
 
 ## AMBE (TIA-102.BABA) float codec internals: bit handling, pitch, voicing, quantization and synthesis
 
@@ -2160,7 +2160,7 @@ percent of frames, by design (see hams_com `docs/reviews/M17_CODEC2_WOJCIECH_202
 
 ## Codec2 3200 spectral pitch and voicing analysis (`src/codec2_3200/encoder_mbe.rs`)
 
-`EncoderMbe` is the 3200 bit/s encoder for hosts with a floating-point unit, and the relay's M17 voice encoder. It
+`EncoderMbe` is the 3200 bit/s encoder for hosts with a floating-point unit, and the relay's M17 (an open digital voice mode) voice encoder. It
 replaces `EncoderFixed`'s pitch bin and energy/zero-crossing voicing heuristic with the multi-band-excitation analysis
 every Codec2 encoder in the wild uses (Griffin and Lim, 1988, as Codec2 applies it; Codec2-mod keeps it): the windowed
 speech spectrum, a harmonic-sum pitch refinement and a harmonic-fit voicing decision. Energy and line spectral pairs
@@ -4101,7 +4101,7 @@ pub fn mul_q16(a: i32, b: i32) -> i32
 |---|---|---|
 | `a`, `b` | `i32` | Q16.16 factors (`real = value / 65536`), passed by value. |
 
-**Returns.** `(a * b) >> 16` with half an LSB added first, computed in `i64` so the product itself never overflows. The final cast to `i32` wraps if the true result is outside `+-32768.0`; callers keep their operands scaled to avoid that.
+**Returns.** `(a * b) >> 16` with half an LSB (lower sideband) added first, computed in `i64` so the product itself never overflows. The final cast to `i32` wraps if the true result is outside `+-32768.0`; callers keep their operands scaled to avoid that.
 
 **Special concerns.** Pure. Known limitation: for a negative product the half is subtracted and the shift floors, so such a result can be one count (1/65536) lower than round-to-nearest; filed as `night_shift_todo/low/ambe-fixed-mul-q16-negative-rounding-bias-*`. The test asserts the one-count bound, not exact negative results.
 

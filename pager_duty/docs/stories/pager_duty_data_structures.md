@@ -263,7 +263,7 @@
 
 **Definition.** `class _NoRedirect(urllib.request.HTTPRedirectHandler)` with the single method `redirect_request(self, req, fp, code, msg, headers, newurl)`, which always returns `None`.
 
-**Behaviour.** Returning `None` makes `urllib` raise the `HTTPError` of the 3xx status instead of following it; `OdooClient.execute` lets that error out, so the caller sees the status. No attributes, no state: one shared instance, safe on any thread. The class is private to the module; the MCP server and the PAT-expiry check each define their own identical copy (unknown why they do not share one).
+**Behaviour.** Returning `None` makes `urllib` raise the `HTTPError` of the 3xx status instead of following it; `OdooClient.execute` lets that error out, so the caller sees the status. No attributes, no state: one shared instance, safe on any thread. The class is private to the module; the MCP (Model Context Protocol) server and the PAT-expiry check each define their own identical copy (unknown why they do not share one).
 
 **Functions that touch it.** `_NoRedirect.redirect_request`, `OdooClient.execute`.
 

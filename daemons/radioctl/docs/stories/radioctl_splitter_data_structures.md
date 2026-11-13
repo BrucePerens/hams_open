@@ -85,8 +85,8 @@
 | `frequency` | `Hz` | Frequency of the receive VFO. |
 | `mode` | `Mode` | Operating mode. |
 | `ptt` | `bool` | Transmitting. |
-| `rit` | `bool` | RIT on (off when the rig cannot say). |
-| `xit` | `bool` | XIT on (off when the rig cannot say). |
+| `rit` | `bool` | RIT (receiver incremental tuning) on (off when the rig cannot say). |
+| `xit` | `bool` | XIT (transmitter incremental tuning) on (off when the rig cannot say). |
 | `rit_offset` | `i16` | RIT/XIT offset in hertz (0 when the rig cannot say). |
 | `split` | `bool` | Split operation on (off when the rig cannot say). |
 
@@ -215,7 +215,7 @@
 | Variant | Definition | Meaning |
 |---|---|---|
 | `Bytes` | `Bytes(Vec<u8>)` | Bytes the client sent. |
-| `Disconnected` | `Disconnected` | The client went away (a stream ended, or a pty was closed by the program using it); its PTT is given up. |
+| `Disconnected` | `Disconnected` | The client went away (a stream ended, or a pty was closed by the program using it); its PTT (push to talk) is given up. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 

@@ -1,7 +1,7 @@
 # radioctl function anchors, batch 45
 
 Function anchors for the `radioctl-station` crate, part 2: the radio lifecycle state machine (`lifecycle.rs`), the station definition and its validation (`model.rs`) and the host side of the FX2 Station I/O board (`fx2.rs`). Each anchor is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
-Transmit safety in this batch: the lifecycle machine and the definition checks are pure and key nothing. The `fx2.rs` functions are the ones that can key a transmitter: `Board::key` asks the firmware to key a PTT pin, and `Board::heartbeat` keeps the board's hardware time-out alive. They are sans-IO (a `ControlTransport` carries the USB transfers) and are reached only through the station's interlock; the board itself releases every output when the heartbeat lapses, on a USB reset or after the per-line maximum on-time, which is why `require_station_io` refuses any board that does not report those three safeguards.
+Transmit safety in this batch: the lifecycle machine and the definition checks are pure and key nothing. The `fx2.rs` functions are the ones that can key a transmitter: `Board::key` asks the firmware to key a PTT (push to talk) pin, and `Board::heartbeat` keeps the board's hardware time-out alive. They are sans-IO (a `ControlTransport` carries the USB transfers) and are reached only through the station's interlock; the board itself releases every output when the heartbeat lapses, on a USB reset or after the per-line maximum on-time, which is why `require_station_io` refuses any board that does not report those three safeguards.
 
 ## `crates/radioctl-station/src/lifecycle.rs`
 

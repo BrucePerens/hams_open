@@ -28,7 +28,7 @@ Returns the byte strings one poll sends, in order, each sent only after the prev
 
 ### `pub fn has_reflected(self) -> bool` [@ANCHOR: radioctl:radioctl_station_meter_driver_has_reflected]
 
-Says whether this driver's poll yields a reflected-power figure: true for the KPA1500, which has the separate `^PWR;` request, and false for the KPA500, whose single reply carries forward power and an SWR figure that the parser discards. The argument is the enum by value. Pure, cannot fail, no I/O, no locks.
+Says whether this driver's poll yields a reflected-power figure: true for the KPA1500, which has the separate `^PWR;` request, and false for the KPA500, whose single reply carries forward power and an SWR (standing wave ratio) figure that the parser discards. The argument is the enum by value. Pure, cannot fail, no I/O, no locks.
 
 ### `pub fn parse_kpa500(frame: &str) -> Result<Sample, StationError>` [@ANCHOR: radioctl:radioctl_station_meter_parse_kpa500]
 

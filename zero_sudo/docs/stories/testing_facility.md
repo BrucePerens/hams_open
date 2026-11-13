@@ -22,7 +22,7 @@ The `zero_sudo` module provides a comprehensive testing framework that enables t
 
 ### HamsHttpCase `[@ANCHOR: zero_sudo:COMM_hams_http_case]`
 
-**Purpose.** The base class for HTTP, tour (UI) and browser tests: `class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin)` in `zero_sudo/tests/common.py`. It keeps Odoo's `HttpCase` isolation (the server thread and the test share one `TestCursor` over the class's savepoint transaction, so nothing a test writes survives it) and adds this project's setup and teardown, a TLS proxy, the Chrome pool and the browser patches described below.
+**Purpose.** The base class for HTTP, tour (UI) and browser tests: `class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin)` in `zero_sudo/tests/common.py`. It keeps Odoo's `HttpCase` isolation (the server thread and the test share one `TestCursor` over the class's savepoint transaction, so nothing a test writes survives it) and adds this project's setup and teardown, a TLS (Transport Layer Security) proxy, the Chrome pool and the browser patches described below.
 
 **Class data.** `_hams_tour_failed` (bool, default `False`; set by `start_tour` when a tour raises, and read by `tearDown` to decide whether to clear V8 hang logs), `server_thread`, `server`, `browser` (the test's `ChromeBrowser`, `None` until a test asks for one), `_socat_proc` (the HTTPS proxy process of the class), and the two class-level defaults `http_request_key = ""` and `http_request_allow_all = False`, which exist so that a health poll arriving between `current_test` being set and the first `setUp` does not crash Odoo's cursor check with an `AttributeError`.
 

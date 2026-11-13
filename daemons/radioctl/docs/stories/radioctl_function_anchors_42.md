@@ -1,7 +1,7 @@
 # radioctl function anchors, batch 42
 
 Function anchors for the `radioctl-protocols` crate: the rest of the AOR AR3030/AR3000A engine and twin (`aor_classic.rs`), the AOR AR7030 binary engine and twin (`ar7030.rs`), and the Rohde and Schwarz HF engine (`rs_hf.rs`) up to its decoder. Each anchor is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
-None of these radios is keyed by these functions: the dialects have no PTT operation (an operation not listed is refused as `Unsupported`), so the transmit gate, lock and band check never come into play here.
+None of these radios is keyed by these functions: the dialects have no PTT (push to talk) operation (an operation not listed is refused as `Unsupported`), so the transmit gate, lock and band check never come into play here.
 
 ## `crates/radioctl-protocols/src/aor_classic.rs`
 
@@ -47,7 +47,7 @@ Formats one answer line the way both radios send it: the text followed by CR and
 
 ### `fn state_line(&self, state: &RigState) -> String` [@ANCHOR: radioctl:radioctl_aorc_twin_state_line]
 
-Produces the dial-state answer to `D` from the shared state. For the AR3030: `D R0 G0 B0 T0 F`, the frequency as eight digits in units of 10 Hz, a space and the mode letter (default `A`, AM, when the mode has no letter). For the AR3000A: the fixed prefix `#--J0X Z000.05 Y`, the frequency as nine digits of 10-Hz units with a point after the fourth, then the mode letter from the read table (default `S`, AM). The attenuator, AGC, filter, tone, memory and step fields are constants. `state` is borrowed read-only. Pure.
+Produces the dial-state answer to `D` from the shared state. For the AR3030: `D R0 G0 B0 T0 F`, the frequency as eight digits in units of 10 Hz, a space and the mode letter (default `A`, AM, when the mode has no letter). For the AR3000A: the fixed prefix `#--J0X Z000.05 Y`, the frequency as nine digits of 10-Hz units with a point after the fourth, then the mode letter from the read table (default `S`, AM). The attenuator, AGC (automatic gain control), filter, tone, memory and step fields are constants. `state` is borrowed read-only. Pure.
 
 ### `fn apply(&mut self, state: &mut RigState, line: &str)` [@ANCHOR: radioctl:radioctl_aorc_twin_apply]
 

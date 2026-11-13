@@ -92,7 +92,7 @@ C: `int rctl_rig_open_serial(rctl_runtime *runtime, const char *rigfile_toml, co
 
 ### `pub unsafe extern "C" fn rctl_rig_close(rig: *mut RctlRig) -> i32` [@ANCHOR: radioctl:radioctl_capi_rig_close]
 
-C: `int rctl_rig_close(rctl_rig *rig)`. Ends a rig handle. If the rig can set PTT it first sends an unkey command, waiting at most 2 seconds and ignoring the outcome, then closes the transmit gate, then frees the handle and releases the actor and transport; the runtime's open count drops by one. Null is `RCTL_ERR_NULL` (not a no-op); a wrong magic is `RCTL_ERR_BAD_HANDLE`. After success the pointer is dangling; closing twice is undefined behaviour, and no other thread may use the handle. Blocks the calling thread up to about 2 seconds. It only ever unkeys; it cannot key a transmitter.
+C: `int rctl_rig_close(rctl_rig *rig)`. Ends a rig handle. If the rig can set PTT (push to talk) it first sends an unkey command, waiting at most 2 seconds and ignoring the outcome, then closes the transmit gate, then frees the handle and releases the actor and transport; the runtime's open count drops by one. Null is `RCTL_ERR_NULL` (not a no-op); a wrong magic is `RCTL_ERR_BAD_HANDLE`. After success the pointer is dangling; closing twice is undefined behaviour, and no other thread may use the handle. Blocks the calling thread up to about 2 seconds. It only ever unkeys; it cannot key a transmitter.
 
 ### `pub unsafe extern "C" fn rctl_rig_get_frequency(rig: *mut RctlRig, vfo_code: c_int, out_hz: *mut u64) -> i32` [@ANCHOR: radioctl:radioctl_capi_rig_get_frequency]
 

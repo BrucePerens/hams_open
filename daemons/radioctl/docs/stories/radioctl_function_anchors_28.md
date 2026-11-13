@@ -1,7 +1,7 @@
 # radioctl function anchors, batch 28
 
 Anchors for the `radioctl-protocols` crate (ADR 0113 standard): the virtual rig's Icom CI-V and Kenwood command handlers, and the Icom CI-V and Kenwood engine encoders and decoders for levels, filter width, modes, meters, RIT/XIT, the front end (attenuator, preamplifier) and the Kenwood `IF` answer. Tests cite each anchor with `Tests [@ANCHOR: ...]`.
-Transmit gate: nothing here opens the transmit gate. Virtual rig functions change only simulated state; the engine functions only build or read byte strings. Setting a level or a mode never keys the radio, and the gate is applied by the layer that sends PTT or send-cw.
+Transmit gate: nothing here opens the transmit gate. Virtual rig functions change only simulated state; the engine functions only build or read byte strings. Setting a level or a mode never keys the radio, and the gate is applied by the layer that sends PTT (push to talk) or send-cw.
 
 
 ## `virtual_rig.rs`
@@ -71,7 +71,7 @@ Returns `None` above 250, the top of the table, which the radio never sends. Res
 
 ### `fn meter_sub(meter: Meter) -> u8` [@ANCHOR: radioctl:radioctl_civ_meter_sub]
 
-Maps a raw meter to its CI-V `15` sub-command byte, following Hamlib's `icom_defs.h`: SWR `12`, ALC `13`, compression `14`, supply voltage (Vd) `15`, drain current (Id) `16`. `meter` is by value. Total, pure, no errors.
+Maps a raw meter to its CI-V `15` sub-command byte, following Hamlib's `icom_defs.h`: SWR `12`, ALC (automatic level control) `13`, compression `14`, supply voltage (Vd) `15`, drain current (Id) `16`. `meter` is by value. Total, pure, no errors.
 The inverse is `sub_meter`. Reading a meter never keys the radio; the transmit meters read zero while unkeyed.
 
 ### `fn sub_meter(sub: u8) -> Option<Meter>` [@ANCHOR: radioctl:radioctl_civ_sub_meter]
@@ -81,7 +81,7 @@ Used when decoding a reply so that the right observation is produced. Pure, no e
 
 ### `fn base_mode(mode: Mode) -> (Mode, bool)` [@ANCHOR: radioctl:radioctl_civ_base_mode]
 
-Splits a mode into the sideband to send and the DATA flag. `mode` is by value. `Data` is USB with DATA on and `DataR` is LSB with DATA on; every other mode is itself with DATA off. The result is `(Mode, bool)`.
+Splits a mode into the sideband to send and the DATA flag. `mode` is by value. `Data` is USB with DATA on and `DataR` is LSB (lower sideband) with DATA on; every other mode is itself with DATA off. The result is `(Mode, bool)`.
 Icom radios express a data mode as a sideband plus a flag carried by command `26`; radioctl has separate `Data` and `DataR` modes. Total, pure. The inverse is `mode_with_data`.
 
 ### `fn mode_with_data(base: Mode, data: bool) -> Option<Mode>` [@ANCHOR: radioctl:radioctl_civ_mode_with_data]
@@ -131,7 +131,7 @@ Encodes the Main/Sub band ops of a dual-receiver Icom, by the description's `civ
 
 ### `fn encode_rit_xit(&self, op: &Op) -> Option<Result<Request, RigError>>` [@ANCHOR: radioctl:radioctl_civ_engine_encode_rit_xit]
 
-Encodes RIT, XIT and RIT offset operations for Icom radios. `&self`; `op` is the operation. `GetRit` and `SetRit` use `21 01`, `GetXit` and `SetXit` use `21 02` (a flag byte for set), and `GetRitOffset` and `SetRitOffset` use `21 00`, the set carrying the 3 bytes from `encode_rit_offset`.
+Encodes RIT, XIT (transmitter incremental tuning) and RIT offset operations for Icom radios. `&self`; `op` is the operation. `GetRit` and `SetRit` use `21 01`, `GetXit` and `SetXit` use `21 02` (a flag byte for set), and `GetRitOffset` and `SetRitOffset` use `21 00`, the set carrying the 3 bytes from `encode_rit_offset`.
 An offset beyond 9999 Hz is refused with an `Unsupported` `RigError`. Any other operation returns `None` so another encoder can handle it. Builds a request only.
 
 ### `fn encode_f8101(&mut self, op: &Op) -> Option<Result<Request, RigError>>` [@ANCHOR: radioctl:radioctl_civ_engine_encode_f8101]
@@ -167,7 +167,7 @@ Display and output (`10`, `11`) are read with no data and set with one flag byte
 
 ### `fn decode_if(&self, body: &str) -> Option<Vec<Inbound>>` [@ANCHOR: radioctl:radioctl_kenwood_engine_decode_if]
 
-Decodes the answer to the Kenwood `IF` (information) command. `&self`; `body` is the answer without `IF` and `;`, which must be 35 ASCII characters (an R-5000 answer of 30 is widened by inserting five zeros after the frequency). Fields read: frequency (11 digits), the RIT/XIT offset region (10 characters, `parse_if_offset`), RIT flag, XIT flag, transmit flag and split flag.
+Decodes the answer to the Kenwood `IF` (information) command. `&self`; `body` is the answer without `IF` and `;`, which must be 35 ASCII characters (an R-5000 answer of 30 is widened by inserting five zeros after the frequency). Fields read: frequency (11 digits), the RIT/XIT offset region (10 characters, `parse_if_offset`), RIT (receiver incremental tuning) flag, XIT flag, transmit flag and split flag.
 Returns `Some(list of Inbound observations)` or `None` when the length, character set or any field is wrong. Pure. The transmit flag is only reported, nothing is keyed.
 
 ### `fn level_wire(level: Level) -> LevelWire` [@ANCHOR: radioctl:radioctl_kenwood_level_wire]

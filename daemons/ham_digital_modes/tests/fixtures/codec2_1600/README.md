@@ -12,7 +12,7 @@ all).
   build of plain upstream Codec2's own `c2enc 1600` / `c2dec 1600`.
   `synthetic_c_encoded_bits.bin` is 200 real packed frames (raw bytes, 8
   bytes each, back-to-back, 40ms/frame); `synthetic_c_decoded_pcm.bin` is
-  the real reference decoder's own real PCM output for them (raw
+  the real reference decoder's own real PCM (pulse-code modulation) output for them (raw
   little-endian i16, no WAV header). Used by
   `codec2_1600::tests::decoder_matches_the_real_reference_decoder_on_a_real_captured_synthetic_signal_bitstream`
   to check `Decoder`'s real output against the real reference decoder's

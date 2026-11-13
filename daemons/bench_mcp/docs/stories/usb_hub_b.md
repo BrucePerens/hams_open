@@ -640,7 +640,7 @@ no lock; repeating an operation is harmless. Nothing here keys a transmitter. Se
 ### `main` [@ANCHOR: bench_mcp_usb_hub_privileged_main]
 
 The entry point of `--usb-priv`: refuses to run unless root, runs the operation on the real `/sys` and prints the outcome. Called from `main.rs` when the first
-command-line argument is `--usb-priv`, whose result becomes the process exit code; it takes no config and serves no MCP.
+command-line argument is `--usb-priv`, whose result becomes the process exit code; it takes no config and serves no MCP (Model Context Protocol).
 
 | Argument | Type | Meaning |
 |---|---|---|

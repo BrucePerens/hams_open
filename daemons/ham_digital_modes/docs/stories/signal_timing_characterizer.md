@@ -13,7 +13,7 @@ sixteenth to an eighth of the window. Zero window, hop or sample rate returns an
 
 | Argument | Type | Meaning |
 |---|---|---|
-| `samples` | `&[i16]`, borrowed | Mono PCM, normalised internally by `i16::MAX`. |
+| `samples` | `&[i16]`, borrowed | Mono PCM (pulse-code modulation), normalised internally by `i16::MAX`. |
 | `tone_a_hz`, `tone_b_hz` | `f64` | The two keyed tones in hertz. |
 | `sample_rate` | `u32` | Samples per second; zero gives an empty result. |
 | `window_len` | `usize` | Samples correlated per output value; long enough to separate the tones. |

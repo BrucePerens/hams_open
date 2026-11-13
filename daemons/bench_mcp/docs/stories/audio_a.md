@@ -7,7 +7,7 @@ command returned". This story documents the core of that: the module root and th
 (`daemons/bench_mcp/src/audio/mod.rs`), the PipeWire streams (`engine.rs`), the device list and name resolution (`devices.rs`), sound-event
 detection and the Morse decoder (`events.rs`) and audio path discovery (`discover.rs`). The tool pages for the agent are in
 `docs/AUDIO_TOOLS.md`. None of these functions keys a transmitter: they drive sound cards through `pw-dump`, `pw-record`, `pw-play` and
-`wpctl`, never a radio's PTT; the safety that applies is the tier of the `audio` instrument, the volume cap, the quiet hours and the reserved
+`wpctl`, never a radio's PTT (push to talk); the safety that applies is the tier of the `audio` instrument, the volume cap, the quiet hours and the reserved
 list, and every entry says which of them it touches.
 
 ## The module root: running programs, the `audio` settings, picking the instrument, dispatching a tool

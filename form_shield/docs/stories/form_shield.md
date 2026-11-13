@@ -95,7 +95,7 @@ The wire format of a challenge is `v1.<kind>.<issued>.<expires>.<difficulty>.<no
 
 ### `parse_challenge(key, token)` [@ANCHOR: form_shield:parse_challenge]
 
-`-> (Parsed, None) | (None, reason)`. Checks a challenge's shape and signature. The reason is `bad_format` for anything that is not eight dot-separated fields starting with `v1` or whose times or difficulty are not integers, and `bad_signature` when the HMAC does not match; the signature is compared with `hmac.compare_digest` on bytes, so a non-ASCII visitor-supplied signature cannot raise. It does not check expiry, network or use; `form.shield._check_response` does. Pure. Test: `test_tampered_challenge_is_refused`.
+`-> (Parsed, None) | (None, reason)`. Checks a challenge's shape and signature. The reason is `bad_format` for anything that is not eight dot-separated fields starting with `v1` or whose times or difficulty are not integers, and `bad_signature` when the HMAC (keyed-hash message authentication code) does not match; the signature is compared with `hmac.compare_digest` on bytes, so a non-ASCII visitor-supplied signature cannot raise. It does not check expiry, network or use; `form.shield._check_response` does. Pure. Test: `test_tampered_challenge_is_refused`.
 
 ### `leading_zero_bits(digest)` [@ANCHOR: form_shield:leading_zero_bits] The value for an all-zero 32-byte digest is 256; the value for a digest whose first byte is 0x00 and second 0x80 is 8. `pow_valid` compares it with the challenge's difficulty. Argument `digest` is raw bytes, not hex; an empty bytes object gives 0.
 

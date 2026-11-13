@@ -121,7 +121,7 @@ Parses the output of `rigctl -l` into one dict per model with `model_id` (int), 
 
 ### `def parse_dump(text: str) -> dict` [@ANCHOR: radioctl:radioctl_caps_parse_dump]
 
-Parses one `rigctl --dump-caps` report into the `dump` fields: identity (model, manufacturer, backend version and status, rig and port type), VFO list and operations, modes, get and set functions, levels and parameters (with min, max and step), preamp, attenuator, CTCSS and DCS counts, memory banks, spectrum data, serial settings, write and timeout timing, RIT/XIT limits and the `Can` and `Has` Y/N/E flags. Absent keys become empty strings, lists or zero; it does not raise on a missing field. Pure, reads only its argument.
+Parses one `rigctl --dump-caps` report into the `dump` fields: identity (model, manufacturer, backend version and status, rig and port type), VFO list and operations, modes, get and set functions, levels and parameters (with min, max and step), preamp, attenuator, CTCSS (continuous tone-coded squelch system) and DCS counts, memory banks, spectrum data, serial settings, write and timeout timing, RIT/XIT limits and the `Can` and `Has` Y/N/E flags. Absent keys become empty strings, lists or zero; it does not raise on a missing field. Pure, reads only its argument.
 
 ### `def parse_ranges(lines: list[str]) -> dict` [@ANCHOR: radioctl:radioctl_caps_parse_ranges]
 

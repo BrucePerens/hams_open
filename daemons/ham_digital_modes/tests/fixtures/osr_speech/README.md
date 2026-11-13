@@ -12,7 +12,7 @@ voice, which is a real, previously-unaddressed gap in test coverage this fixture
 Four files from OSR's "American English" set (Harvard sentences -- phonetically balanced, the
 standard reference sentence set for speech-intelligibility testing), two female (`OSR_us_000_0010_8k`,
 `OSR_us_000_0011_8k`) and two male (`OSR_us_000_0030_8k`, `OSR_us_000_0031_8k`) voices, 8kHz 16-bit
-mono PCM WAV -- already at this codec's own native sample rate, no resampling needed.
+mono PCM (pulse-code modulation) WAV -- already at this codec's own native sample rate, no resampling needed.
 
 OSR's own stated conditions of use: "The material on this site is freely available for use in VoIP
 testing, research, development, marketing and any other reasonable application. The material may be

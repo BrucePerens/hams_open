@@ -163,7 +163,7 @@ Test id for the scheduled bloat check and the stat models. `test_02_bloat_cron` 
 
 ### `COMM_test_db_security` [@ANCHOR: COMM_test_db_security]
 
-Test id for access control. `tests/test_db_security.py` creates standard, website, ham, SWL and public personas and asserts that each gets `AccessError` reading `database.table.stat` and `database.pg.setting` or creating `pg.optimize.wizard` and `pg.ha.wizard` records (`test_01_security`); that every access row of the seven view-backed models has write, create and unlink switched off (`test_02_view_models_readonly`); and that the administrator can read the views and create the wizards (`test_03_admin_success`). This id has no separate tag in the code; the test method cites `COMM_db_security_prefetch`. Unknown whether a test method should carry this id directly (to-do).
+Test id for access control. `tests/test_db_security.py` creates standard, website, ham, SWL (shortwave listener) and public personas and asserts that each gets `AccessError` reading `database.table.stat` and `database.pg.setting` or creating `pg.optimize.wizard` and `pg.ha.wizard` records (`test_01_security`); that every access row of the seven view-backed models has write, create and unlink switched off (`test_02_view_models_readonly`); and that the administrator can read the views and create the wizards (`test_03_admin_success`). This id has no separate tag in the code; the test method cites `COMM_db_security_prefetch`. Unknown whether a test method should carry this id directly (to-do).
 
 ### `COMM_test_db_bloat_tour` [@ANCHOR: COMM_test_db_bloat_tour]
 

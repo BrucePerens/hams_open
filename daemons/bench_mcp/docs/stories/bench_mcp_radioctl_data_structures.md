@@ -25,7 +25,7 @@
 
 ### `Transmit` [@ANCHOR: bench_mcp:bench_mcp_radioctl_attest_transmit]
 
-**Purpose and location.** The owner's written attestation that allows the keyed (transmit) tools of this server for one rig: who attested, when, the cabling, and the limits on power, time, frequency, mode and SWR. Without it nothing is keyed. Defined in `daemons/bench_mcp/src/radioctl/attest.rs:64` as a pub `struct`. It derives Clone, Debug, PartialEq.
+**Purpose and location.** The owner's written attestation that allows the keyed (transmit) tools of this server for one rig: who attested, when, the cabling, and the limits on power, time, frequency, mode and SWR (standing wave ratio). Without it nothing is keyed. Defined in `daemons/bench_mcp/src/radioctl/attest.rs:64` as a pub `struct`. It derives Clone, Debug, PartialEq.
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -91,8 +91,8 @@
 | `mode` | `Option<(String, f64)>` | New mode and passband width in hertz, if requested. |
 | `vfo` | `Option<String>` | VFO to select, if requested. |
 | `split` | `Option<(bool, Option<String>)>` | Split on or off and the transmit VFO, if requested. |
-| `rit` | `Option<f64>` | RIT offset in hertz, if requested. |
-| `xit` | `Option<f64>` | XIT offset in hertz, if requested. |
+| `rit` | `Option<f64>` | RIT (receiver incremental tuning) offset in hertz, if requested. |
+| `xit` | `Option<f64>` | XIT (transmitter incremental tuning) offset in hertz, if requested. |
 | `levels` | `Vec<(String, f64)>` | Level settings as (name, value) pairs. |
 | `funcs` | `Vec<(String, bool)>` | Function switches as (name, on or off) pairs. |
 
@@ -592,7 +592,7 @@
 | `t_s` | `f64` | Seconds since keying. |
 | `power_w` | `Option<f64>` | Power in watts, if the rig reports it. |
 | `swr` | `Option<f64>` | Standing-wave ratio, if reported. |
-| `alc` | `Option<f64>` | ALC reading, if reported. |
+| `alc` | `Option<f64>` | ALC (automatic level control) reading, if reported. |
 | `temp` | `Option<f64>` | Temperature reading, if reported. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
@@ -612,7 +612,7 @@
 | `samples` | `Vec<Sample>` | Meter samples in time order. |
 | `seconds_keyed` | `f64` | How long the rig was keyed in seconds. |
 | `aborted` | `Option<String>` | Why the interval ended early, if it did (for example an SWR or power limit passed). |
-| `ptt_read_back` | `bool` | PTT was read back as off after release; false when the rig cannot report PTT. |
+| `ptt_read_back` | `bool` | PTT (push to talk) was read back as off after release; false when the rig cannot report PTT. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 

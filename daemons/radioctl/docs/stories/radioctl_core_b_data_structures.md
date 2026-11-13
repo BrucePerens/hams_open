@@ -863,7 +863,7 @@
 |---|---|---|
 | `Frequency` | `Frequency(Hz)` | VFO A moved. |
 | `Mode` | `Mode(Mode)` | The mode changed. |
-| `Ptt` | `Ptt(bool)` | The PTT switch moved. |
+| `Ptt` | `Ptt(bool)` | The PTT (push to talk) switch moved. |
 | `Signal` | `Signal(u16)` | The signal strength changed. |
 | `Split` | `Split(bool)` | Split was switched on or off. |
 | `RitOffset` | `RitOffset(i16)` | The RIT/XIT offset was turned to this many hertz. |
@@ -975,9 +975,9 @@
 | `SetTransceive` | `SetTransceive { on: bool }` | Switch the rig's transceive (unsolicited reports) on or off. |
 | `GetSplit` | `GetSplit` | Read split. |
 | `SetSplit` | `SetSplit { on: bool }` | Set split on or off. |
-| `GetRit` | `GetRit` | Read RIT on or off. |
+| `GetRit` | `GetRit` | Read RIT (receiver incremental tuning) on or off. |
 | `SetRit` | `SetRit { on: bool }` | Set RIT on or off. |
-| `GetXit` | `GetXit` | Read XIT on or off. |
+| `GetXit` | `GetXit` | Read XIT (transmitter incremental tuning) on or off. |
 | `SetXit` | `SetXit { on: bool }` | Set XIT on or off. |
 | `GetRitOffset` | `GetRitOffset` | Read the RIT offset. |
 | `SetRitOffset` | `SetRitOffset { hz: i16 }` | Set the RIT offset in hertz. |

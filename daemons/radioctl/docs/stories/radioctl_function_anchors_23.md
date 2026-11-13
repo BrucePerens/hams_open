@@ -59,7 +59,7 @@ Runs when the transmit watchdog lapses, so a rig cannot transmit for ever. It ta
 
 ### `fn arm_watchdog(&mut self, now: Instant)` [@ANCHOR: radioctl:radioctl_core_actor_arm_watchdog]
 
-Starts the transmit watchdog if it is not already running: when `keyed_since` is `None` it is set to `now` and `WATCHDOG armed` is added to the transcript. If already armed it does nothing, so the time limit is measured from the first moment the rig was keyed (or Morse sent), not from each report. Called when a key or Morse command succeeds and when an observation shows PTT on. `now` is a monotonic Tokio instant. No return, cannot fail.
+Starts the transmit watchdog if it is not already running: when `keyed_since` is `None` it is set to `now` and `WATCHDOG armed` is added to the transcript. If already armed it does nothing, so the time limit is measured from the first moment the rig was keyed (or Morse sent), not from each report. Called when a key or Morse command succeeds and when an observation shows PTT (push to talk) on. `now` is a monotonic Tokio instant. No return, cannot fail.
 
 ### `fn alarm(&mut self, alarm: Alarm, source: Source)` [@ANCHOR: radioctl:radioctl_core_actor_alarm]
 

@@ -38,7 +38,7 @@ samples, about 110.6 seconds, at full scale amplitude. The symbols are not valid
 produces a higher tone.
 
 **Test recordings.** To exercise a receiver without a radio, the crate can build a WAV file of a transmission with a
-known amount of noise added. [@ANCHOR: add_awgn] adds white Gaussian noise to PCM samples at a requested
+known amount of noise added. [@ANCHOR: add_awgn] adds white Gaussian noise to PCM (pulse-code modulation) samples at a requested
 signal-to-noise ratio in dB, measured over the whole sample-rate bandwidth (not WSJT-X's 2500 Hz convention, so the
 number does not match what `wsprd` prints for the same file); the same seed always gives the same noise, and a silent
 input is returned unchanged. [@ANCHOR: wspr_encode_wav_bytes_with_noise] encodes a message, adds that noise, and

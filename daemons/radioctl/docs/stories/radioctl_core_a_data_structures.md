@@ -17,7 +17,7 @@
 | `KenwoodHh` | `KenwoodHh` | Kenwood handheld and mobile ASCII commands ended by a carriage return (TH-D7, TM-D710, ...). |
 | `SerialVendor` | `SerialVendor` | Vendor serial protocols of the smaller makers (Ten-Tec, Drake, Racal, ...): one engine per protocol, chosen by [`VendorParams::protocol`]. |
 | `Receiver` | `Receiver` | Receivers, scanners and marine radios with a line or frame protocol of their own (AOR, Uniden, JRC, Rohde and Schwarz, Icom PCR and marine); see [`ReceiverProtocol`]. |
-| `UsbDevice` | `UsbDevice` | USB radios and SDR boards that speak vendor control requests or HID reports (Si570 kits, FUNcube, FiFi-SDR, ...). Described, but without an engine: radioctl has no USB control or HID transport yet. |
+| `UsbDevice` | `UsbDevice` | USB radios and SDR (software-defined radio) boards that speak vendor control requests or HID reports (Si570 kits, FUNcube, FiFi-SDR, ...). Described, but without an engine: radioctl has no USB control or HID transport yet. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 
@@ -567,7 +567,7 @@
 | `length` | `u16` | Reply length in bytes. |
 | `frequency` | `Option<(u16, LegacyFreqForm)>` | Offset and form of the frequency, if the reply has it. |
 | `mode` | `Option<(u16, u8)>` | Offset and mask of the mode byte, if the reply has it. |
-| `ptt` | `Option<LegacyFlag>` | PTT flag. |
+| `ptt` | `Option<LegacyFlag>` | PTT (push to talk) flag. |
 | `split` | `Option<LegacyFlag>` | Split flag. |
 | `vfo_mode` | `Option<LegacyFlag>` | "A VFO, not a memory, is displayed" flag, with VFO A the one active. radioctl never reads it; a controller that does (Hamlib's FT-840, FT-890 and FT-900 backends read it at open and refuse to set a mode or read a frequency when neither it nor a memory flag is set) needs a virtual rig to set it. |
 
@@ -782,7 +782,7 @@
 | `SendCw` | `SendCw` | Send Morse text. Transmit-capable. |
 | `Transceive` | `Transceive` | Report changes without being polled (CI-V transceive, Kenwood auto-information). |
 | `Split` | `Split` | Read and set split operation. |
-| `RitXit` | `RitXit` | Read and set RIT, XIT and their offset. |
+| `RitXit` | `RitXit` | Read and set RIT (receiver incremental tuning), XIT (transmitter incremental tuning) and their offset. |
 | `Filter` | `Filter` | Read and set the receive filter bandwidth. |
 | `Levels` | `Levels` | Read and set numeric levels (gains, keyer speed, power setting). |
 | `ReadSwr` | `ReadSwr` | Read the SWR meter. |
@@ -1178,7 +1178,7 @@
 | Variant | Definition | Meaning |
 |---|---|---|
 | `Swr` | `Swr` | SWR meter deflection. |
-| `Alc` | `Alc` | ALC meter deflection. |
+| `Alc` | `Alc` | ALC (automatic level control) meter deflection. |
 | `Comp` | `Comp` | Speech compressor meter deflection. |
 | `Vd` | `Vd` | Supply (drain) voltage meter deflection. |
 | `Id` | `Id` | Final-stage drain current meter deflection. |

@@ -135,7 +135,7 @@ Converts the raw drain-current meter reading (0 to 255) to amperes of final-ampl
 
 ### `pub fn level(cal: &MeterCal, meter: radioctl_core::units::Meter, raw: u16) -> f64` [@ANCHOR: radioctl:radioctld_meter_cal_level]
 
-The single entry point that converts a raw deflection into the value a `rigctl` client expects for a given meter: SWR gives a ratio of 1.0 or more, ALC a fraction from 0 to 1, COMP decibels, Vd volts and Id amperes. It dispatches to `swr_ratio`, `alc_fraction`, `comp_db`, `vd_volts` and `id_amps`. The match over `Meter` is exhaustive. Used when serving `get_level` for the meter levels. Pure; an unverified estimate.
+The single entry point that converts a raw deflection into the value a `rigctl` client expects for a given meter: SWR gives a ratio of 1.0 or more, ALC (automatic level control) a fraction from 0 to 1, COMP decibels, Vd volts and Id amperes. It dispatches to `swr_ratio`, `alc_fraction`, `comp_db`, `vd_volts` and `id_amps`. The match over `Meter` is exhaustive. Used when serving `get_level` for the meter levels. Pure; an unverified estimate.
 
 ### `pub fn full_scale(cal: &MeterCal, meter: radioctl_core::units::Meter) -> f64` [@ANCHOR: radioctl:radioctld_meter_cal_range]
 

@@ -438,7 +438,7 @@
 | `Virtual` | `Virtual { reply_delay: Duration, }` | An in-memory virtual rig generated from the description. How long the virtual rig takes to answer. |
 | `Serial` | `Serial { target: PortTarget, baud: BaudSetting, lines: LineControl, }` | A serial or USB-serial port. The port, by path or by USB ids. The baud rate, fixed or probed. Whether the port has modem control lines this daemon may use. |
 | `Tcp` | `Tcp { address: String, framing: TcpFraming, idle_timeout: Option<Duration>, }` | A TCP connection (a network serial server or a radio with its own CAT port), reconnected with backoff after a loss. `host:port`. The session around the CAT stream. Silence on the wire after which the link is declared lost and reconnected. |
-| `Usb` | `Usb { vid: Option<u16>, pid: Option<u16>, serial: Option<String>, transfer_timeout: Duration, firmware_dir: Option<PathBuf>, }` | A USB SDR board or dongle driven by vendor control transfers or HID reports (`radioctl_core::usb_link`), reopened with backoff after an unplug. The description names the vendor and product ids and strings; these keys narrow or override them. Vendor id override (default: the description's). Product id override (default: the description's). The serial number string, to tell two identical boards apart. Longest wait for one USB transfer. Where a board that needs the user's own firmware (the Microtelecom Perseus) finds it; default `RADIOCTL_PERSEUS_FIRMWARE_DIR`, else `~/.config/radioctl/firmware/perseus`. |
+| `Usb` | `Usb { vid: Option<u16>, pid: Option<u16>, serial: Option<String>, transfer_timeout: Duration, firmware_dir: Option<PathBuf>, }` | A USB SDR (software-defined radio) board or dongle driven by vendor control transfers or HID reports (`radioctl_core::usb_link`), reopened with backoff after an unplug. The description names the vendor and product ids and strings; these keys narrow or override them. Vendor id override (default: the description's). Product id override (default: the description's). The serial number string, to tell two identical boards apart. Longest wait for one USB transfer. Where a board that needs the user's own firmware (the Microtelecom Perseus) finds it; default `RADIOCTL_PERSEUS_FIRMWARE_DIR`, else `~/.config/radioctl/firmware/perseus`. |
 | `Radiod` | `Radiod(RadiodTransport)` | One receive channel of a ka9q-radio `radiod`, reached on its multicast groups (`radioctl_protocols::radiod_io`); only for a `radiod-channel` description. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
@@ -687,8 +687,8 @@
 
 | Field | Type | Meaning |
 |---|---|---|
-| `swr` | `&'static [(f64, f64)]` | SWR scale points as ascending (raw deflection, ratio) pairs. |
-| `alc_full` | `f64` | The deflection at which the ALC meter reads its maximum. |
+| `swr` | `&'static [(f64, f64)]` | SWR (standing wave ratio) scale points as ascending (raw deflection, ratio) pairs. |
+| `alc_full` | `f64` | The deflection at which the ALC (automatic level control) meter reads its maximum. |
 | `comp` | `&'static [(f64, f64)]` | Compression meter points as (raw, decibels) pairs. |
 | `vd` | `&'static [(f64, f64)]` | Supply voltage meter points as (raw, volts) pairs. |
 | `id` | `&'static [(f64, f64)]` | Drain current meter points as (raw, amperes) pairs. |
@@ -807,8 +807,8 @@
 
 | Variant | Definition | Meaning |
 |---|---|---|
-| `Rit` | `Rit` | RIT on or off. |
-| `Xit` | `Xit` | XIT on or off. |
+| `Rit` | `Rit` | RIT (receiver incremental tuning) on or off. |
+| `Xit` | `Xit` | XIT (transmitter incremental tuning) on or off. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 

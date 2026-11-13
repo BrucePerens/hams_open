@@ -18,7 +18,7 @@ Encodes a level or meter value as two BCD bytes, most significant pair first (12
 
 ### `pub fn new(desc: RigDescription) -> Result<CivEngine, RigError>` [@ANCHOR: radioctl:radioctl_civ_engine_new]
 
-Builds the Icom CI-V client engine. `desc` is taken by value and kept; it must be an `IcomCiv` family description that carries CI-V parameters (rig address, controller address, command set, frequency field length). Otherwise it returns `ErrorKind::Unsupported` with "not a CI-V description". If the description has a scope section the engine also creates a scope assembler for command 27 waveform frames. The new engine has an empty parser, no known mode, filter number 1 and no PTT acknowledgement pending. No I/O.
+Builds the Icom CI-V client engine. `desc` is taken by value and kept; it must be an `IcomCiv` family description that carries CI-V parameters (rig address, controller address, command set, frequency field length). Otherwise it returns `ErrorKind::Unsupported` with "not a CI-V description". If the description has a scope section the engine also creates a scope assembler for command 27 waveform frames. The new engine has an empty parser, no known mode, filter number 1 and no PTT (push to talk) acknowledgement pending. No I/O.
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_civ_engine_encode]
 
@@ -52,7 +52,7 @@ Returns the description's `KY` (send Morse text) record for this model, or `Unsu
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_kenwood_engine_encode]
 
-`ProtocolEngine::encode` for Kenwood ASCII: commands end in `;`. Reads wait for an observation (`FA;`/`FB;`, `MD;`, `SM0;`, `ID;`, and `IF;` for PTT, split, RIT, XIT and offset); writes wait for nothing (`FA` plus 11 digits, `MD<c>`, `RT`, `XT`, `FR0;FT<n>;` for split). `SetPtt(true)` sends `TX;` and `SetPtt(false)` sends `RX;`. Older and TS-990 dialects try their own encoder first. `SetRitOffset` sends `RC;` then `RU` or `RD` with five digits. `SendCw` and `StopCw` use `KY` only when `ky()` allows it. `SetTransceive` sends `AI2;` or `AI0;` and remembers it for reconnection. Errors, all `Unsupported`: capability not in the description, frequency above 11 digits, a mode with no code, RIT offset beyond 9999 Hz, a level the rig does not have or outside its range, `KY` text or stop the model cannot express, and any other op. `TX;` and `KY` text can transmit; the actor applies the gate, band check and lock before calling.
+`ProtocolEngine::encode` for Kenwood ASCII: commands end in `;`. Reads wait for an observation (`FA;`/`FB;`, `MD;`, `SM0;`, `ID;`, and `IF;` for PTT, split, RIT, XIT and offset); writes wait for nothing (`FA` plus 11 digits, `MD<c>`, `RT`, `XT`, `FR0;FT<n>;` for split). `SetPtt(true)` sends `TX;` and `SetPtt(false)` sends `RX;`. Older and TS-990 dialects try their own encoder first. `SetRitOffset` sends `RC;` then `RU` or `RD` with five digits. `SendCw` and `StopCw` use `KY` only when `ky()` allows it. `SetTransceive` sends `AI2;` or `AI0;` and remembers it for reconnection. Errors, all `Unsupported`: capability not in the description, frequency above 11 digits, a mode with no code, RIT (receiver incremental tuning) offset beyond 9999 Hz, a level the rig does not have or outside its range, `KY` text or stop the model cannot express, and any other op. `TX;` and `KY` text can transmit; the actor applies the gate, band check and lock before calling.
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_kenwood_engine_feed]
 
@@ -90,7 +90,7 @@ Parses the `NN.NN` revision of an `RVM` answer (after the engine has removed the
 
 ### `pub fn decode_if(payload: &str, desc: &RigDescription) -> Option<Vec<Observation>>` [@ANCHOR: radioctl:radioctl_elecraft_decode_if]
 
-Decodes the answer to `IF`, which Elecraft sends as one long fixed-column line. `payload` is the text after `IF` with the terminator removed, 34 or 35 ASCII characters; `desc` supplies the mode-code table. It returns eight observations in order: VFO A frequency (11 digits, hertz), RIT/XIT offset, RIT on/off, XIT on/off, transmit state, mode, split, and the transmit VFO (B when split is on, A otherwise, as a KX3 does). `None` when the length is wrong, a fixed blank or `" 00"` field is wrong, a number or flag is malformed, or the mode digit has no entry in the description. Pure; no side effects.
+Decodes the answer to `IF`, which Elecraft sends as one long fixed-column line. `payload` is the text after `IF` with the terminator removed, 34 or 35 ASCII characters; `desc` supplies the mode-code table. It returns eight observations in order: VFO A frequency (11 digits, hertz), RIT/XIT offset, RIT on/off, XIT (transmitter incremental tuning) on/off, transmit state, mode, split, and the transmit VFO (B when split is on, A otherwise, as a KX3 does). `None` when the length is wrong, a fixed blank or `" 00"` field is wrong, a number or flag is malformed, or the mode digit has no entry in the description. Pure; no side effects.
 
 ### `pub fn new(desc: RigDescription) -> Result<ElecraftEngine, RigError>` [@ANCHOR: radioctl:radioctl_elecraft_engine_new]
 

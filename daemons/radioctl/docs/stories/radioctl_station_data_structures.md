@@ -146,7 +146,7 @@
 
 | Variant | Definition | Meaning |
 |---|---|---|
-| `Mediated` | `Mediated` | The command reaches the device through another system that can be down, slow or stale (Home Assistant). Never a PTT path, and an amplifier behind it needs an independent stop. |
+| `Mediated` | `Mediated` | The command reaches the device through another system that can be down, slow or stale (Home Assistant). Never a PTT (push to talk) path, and an amplifier behind it needs an independent stop. |
 | `Recorded` | `Recorded` | The host talks to the device directly and the device acknowledged the write, but it cannot report its state (a relay board whose status read is not trusted): the state is the station's own record of acknowledged writes, never a confirmation. The driver sets a known safe state whenever the link opens, because nothing in the board stops it misbehaving. |
 | `HostSupervised` | `HostSupervised` | The host talks to the device directly and supervises it, but nothing in the device stops it if the host dies (a relay board, a Shelly without its auto-off timer). |
 | `HardwareDeadMan` | `HardwareDeadMan` | The device itself has a dead-man that acts when the host goes silent (the FX2 firmware). |
@@ -759,7 +759,7 @@
 | `confirm_wait` | `Duration` | Longest wait for the state event that confirms a command. |
 | `ping_every` | `Duration` | How often the session pings Home Assistant; a missed pong ends the session. |
 | `backoff` | `Backoff` | Waits between reconnect attempts of the session. |
-| `tls` | `Option<HaTls>` | TLS to a Home Assistant that serves only HTTPS: the owner's trust, never off. `None` is plain HTTP and WebSocket. |
+| `tls` | `Option<HaTls>` | TLS (Transport Layer Security) to a Home Assistant that serves only HTTPS: the owner's trust, never off. `None` is plain HTTP and WebSocket. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 

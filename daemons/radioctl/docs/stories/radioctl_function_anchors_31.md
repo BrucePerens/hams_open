@@ -11,7 +11,7 @@ Returns the one-bit mask of a single mode in Hamlib's mode-mask numbering, for e
 
 ### `pub fn nominal_width(mode: Mode) -> u32` [@ANCHOR: radioctl:radioctld_names_nominal_width]
 
-Gives a typical receive bandwidth in hertz for a mode, used as the passband that `get_mode` reports when the rig cannot say its own. Values come from the `MODES` table: 500 Hz for CW and RTTY, 2400 for USB and LSB, 3000 for the packet modes, 6000 for AM and the synchronous AM modes, 6250 for D-STAR, 15000 for FM and 230000 for wide FM. A mode with no table row returns 0, meaning "no typical width". Pure and total; it is a nominal figure, not a measured filter width.
+Gives a typical receive bandwidth in hertz for a mode, used as the passband that `get_mode` reports when the rig cannot say its own. Values come from the `MODES` table: 500 Hz for CW and RTTY, 2400 for USB and LSB (lower sideband), 3000 for the packet modes, 6000 for AM and the synchronous AM modes, 6250 for D-STAR, 15000 for FM and 230000 for wide FM. A mode with no table row returns 0, meaning "no typical width". Pure and total; it is a nominal figure, not a measured filter width.
 
 ### `pub fn parse_vfo(token: &str) -> Option<VfoSel>` [@ANCHOR: radioctl:radioctld_names_parse_vfo]
 
@@ -39,7 +39,7 @@ Converts the rig's raw signal-meter reading `raw` (the engine's unit, a `u16`) i
 
 ### `pub fn func_lookup(name: &str) -> FuncLookup` [@ANCHOR: radioctl:radioctld_names_func_lookup]
 
-Classifies a function (on/off switch) name from `get_func` or `set_func`, ignoring case. `RIT` and `XIT` are `Known` with a `FuncKind` of `Rit` or `Xit`, meaning radioctld serves them if the rig has RIT and XIT. The 30 other Hamlib function names it does not serve (`NB`, `VOX`, `TUNER`, `LOCK`, `MUTE` and so on) give `Unserved`, answered as "not available"; anything else gives `Unknown`, answered as an invalid parameter. Pure, no allocation, no side effects; a function switch is a setting, not a transmit command.
+Classifies a function (on/off switch) name from `get_func` or `set_func`, ignoring case. `RIT` and `XIT` are `Known` with a `FuncKind` of `Rit` or `Xit`, meaning radioctld serves them if the rig has RIT (receiver incremental tuning) and XIT (transmitter incremental tuning). The 30 other Hamlib function names it does not serve (`NB`, `VOX`, `TUNER`, `LOCK`, `MUTE` and so on) give `Unserved`, answered as "not available"; anything else gives `Unknown`, answered as an invalid parameter. Pure, no allocation, no side effects; a function switch is a setting, not a transmit command.
 
 ### `pub fn func_mask(rit_xit: bool) -> u64` [@ANCHOR: radioctl:radioctld_names_func_mask]
 
@@ -47,7 +47,7 @@ Builds the `has_get_func` and `has_set_func` bit mask that `\dump_state` and `\d
 
 ### `pub fn level_mask(levels: &[LevelInfo], settable_only: bool) -> u64` [@ANCHOR: radioctl:radioctld_names_level_mask]
 
-ORs together `1 << bit` for each level in the borrowed slice, giving the `has_get_level` or `has_set_level` mask for `\dump_state`. Pass the output of `served_levels`. With `settable_only` true, only levels whose source is a radio setting (`LevelSource::Radio`) count, because the SWR, power, S-meter and other meters are read-only; with false every listed level counts. An empty slice gives 0. Bits come from each level's own `bit` field (all below 64). Pure, no errors.
+ORs together `1 << bit` for each level in the borrowed slice, giving the `has_get_level` or `has_set_level` mask for `\dump_state`. Pass the output of `served_levels`. With `settable_only` true, only levels whose source is a radio setting (`LevelSource::Radio`) count, because the SWR (standing wave ratio), power, S-meter and other meters are read-only; with false every listed level counts. An empty slice gives 0. Bits come from each level's own `bit` field (all below 64). Pure, no errors.
 
 ## `crates/radioctld/src/reply.rs`
 
@@ -97,11 +97,11 @@ Reads one rig description TOML file from disk and returns its validated `RigDesc
 
 ### `pub fn is_read_only(op: &Op) -> bool` [@ANCHOR: radioctl:radioctld_selftest_is_read_only]
 
-The self-test's safety filter: true only for operations that read from the radio (frequency, mode, PTT state, signal, power, split, TX VFO, RIT and XIT and offset, filter width, levels, SWR, meters, model id, firmware, power amplifier), false for everything else including every set and any transmit or PTT command. It is a whitelist, so a new `Op` variant is refused until someone adds it here. The operation is borrowed; pure; no errors. `run_checks_logged` calls it before every execution, so even a planned write would be refused and the transmit gate is never an issue.
+The self-test's safety filter: true only for operations that read from the radio (frequency, mode, PTT state, signal, power, split, TX VFO, RIT and XIT and offset, filter width, levels, SWR, meters, model id, firmware, power amplifier), false for everything else including every set and any transmit or PTT (push to talk) command. It is a whitelist, so a new `Op` variant is refused until someone adds it here. The operation is borrowed; pure; no errors. `run_checks_logged` calls it before every execution, so even a planned write would be refused and the transmit gate is never an issue.
 
 ### `pub fn plan_checks(description: &RigDescription) -> Vec<(String, Op)>` [@ANCHOR: radioctl:radioctld_selftest_plan_checks]
 
-Builds the ordered list of named read-only checks for what a rig description claims. Each pair is a report label (such as `read frequency A`) and the `Op` to run. The order is fixed: identify (model id, firmware, and the Elecraft power amplifier when levels are claimed), frequency A and B, mode, transmit state, S-meter, power, SWR, the ALC, comp, Vd and Id meters, split and TX VFO, RIT and XIT, filter width, then eight levels. Each check is added only when the matching capability is present, so an empty plan is possible. The description is borrowed. Every planned op passes `is_read_only`. Pure.
+Builds the ordered list of named read-only checks for what a rig description claims. Each pair is a report label (such as `read frequency A`) and the `Op` to run. The order is fixed: identify (model id, firmware, and the Elecraft power amplifier when levels are claimed), frequency A and B, mode, transmit state, S-meter, power, SWR, the ALC (automatic level control), comp, Vd and Id meters, split and TX VFO, RIT and XIT, filter width, then eight levels. Each check is added only when the matching capability is present, so an empty plan is possible. The description is borrowed. Every planned op passes `is_read_only`. Pure.
 
 ### `pub fn redact_target(target: &str) -> String` [@ANCHOR: radioctl:radioctld_selftest_redact_target]
 

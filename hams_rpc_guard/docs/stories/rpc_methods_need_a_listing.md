@@ -40,7 +40,7 @@ The story, step by step. Each function that makes it true has its own entry belo
 
 ## Daemons off the Odoo host: mutual TLS
 
-For a daemon on another machine, the operator terminates TLS at nginx with `ssl_verify_client on;`, one client
+For a daemon on another machine, the operator terminates TLS (Transport Layer Security) at nginx with `ssl_verify_client on;`, one client
 certificate per daemon, and passes the verified subject in a header that nginx sets itself (`proxy_set_header
 X-Client-Cert-Subject $ssl_client_s_dn;`, which replaces anything the client sent). Setting
 `hams_rpc_guard.client_cert_header` to that header name and listing the proxy's loopback address in

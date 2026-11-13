@@ -56,7 +56,7 @@ See also: test `procedure/tests.rs` (cites `proc_instrument`); `proc_call`.
 
 ### `proc_tool_defs` [@ANCHOR: proc_tool_defs]
 
-Builds the MCP tool list entries for the runner's ten tools from the static table `SPECS` (name, tier, description, JSON properties text, required names). The server's `tool_defs` merges the result into the list clients see, and `ToolIndex::build` (`proc_tool_index`) reads the same list to decide what a procedure may call. Signature: `pub fn tool_defs(insts: &[Instrument]) -> Vec<Tool>`.
+Builds the MCP (Model Context Protocol) tool list entries for the runner's ten tools from the static table `SPECS` (name, tier, description, JSON properties text, required names). The server's `tool_defs` merges the result into the list clients see, and `ToolIndex::build` (`proc_tool_index`) reads the same list to decide what a procedure may call. Signature: `pub fn tool_defs(insts: &[Instrument]) -> Vec<Tool>`.
 
 `insts` (borrowed) is every configured instrument. A tool appears only when some `Procedure` instrument has a tier at or above the tool's own tier, so a runner configured `read_only` lists only `bench_proc_status`, `_output`, `_result`, `_cancel`, `_list` and `_load`; the tools that start runs, answer prompts and save or delete (`bench_proc_run`, `_input`, `_save`, `_delete`) need `read_config`. Each tool's description is prefixed with the tier in Debug form, for example `[ReadConfig] PROCEDURE RUNNER: ...`, and `ToolIndex::build` parses that prefix, so the format must not change without changing it. Returns an empty list when no runner is configured.
 

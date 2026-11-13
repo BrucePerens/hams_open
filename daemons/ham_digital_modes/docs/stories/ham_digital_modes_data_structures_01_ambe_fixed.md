@@ -82,7 +82,7 @@ As a developer changing this code, I want every data structure in `src/ambe/dvsi
 
 ## `AmbePlus2SynthesisDecoder` [@ANCHOR: ham_digital_modes:synthesis_ambe_plus2_synthesis_decoder_struct]
 
-**Purpose.** Streaming fixed-point AMBE+2 half-rate frame-to-PCM decoder: `decode_frame` takes one logical frame and returns 20 ms of Q16.16 PCM.
+**Purpose.** Streaming fixed-point AMBE+2 half-rate frame-to-PCM decoder: `decode_frame` takes one logical frame and returns 20 ms of Q16.16 PCM (pulse-code modulation).
 
 **Definition.** `pub struct AmbePlus2SynthesisDecoder` (struct) in `daemons/ham_digital_modes/src/ambe/fixed/ambe_plus_2/synthesis.rs`.
 
@@ -441,7 +441,7 @@ As a developer changing this code, I want every data structure in `src/ambe/dvsi
 
 **Used by.** `unvoiced_dft_q16`, `unvoiced_spectrum_q16`, `unvoiced_time_domain_q16` (functions whose signature names it).
 
-**Notes.** Crate-private working type of the unvoiced-synthesis FFT.
+**Notes.** Crate-private working type of the unvoiced-synthesis FFT (fast Fourier transform).
 
 ## `NoiseState` [@ANCHOR: ham_digital_modes:unvoiced_synthesis_noise_state_struct]
 

@@ -7,7 +7,7 @@ said, not guessed. This story covers four files of the `radioctl` driver of `dae
 `radioctld`), `rxcheck.rs` (the receiver test with audio), `stations.rs` (the reference-station table) and `status.rs` (the read-only tools and
 the helpers that every tool shares). The driver was called `hamlib` until pull request #1568 replaced Hamlib's `rigctld` by `radioctld` (the
 program of `daemons/radioctl`, which speaks the same line protocol over a TCP socket), so the story file keeps the old name (`hamlib_c`) and
-every anchor id starts with `radioctl_`. The users are the MCP tool dispatcher (`radioctl::call` in `mod.rs`), the other files of the driver
+every anchor id starts with `radioctl_`. The users are the MCP (Model Context Protocol) tool dispatcher (`radioctl::call` in `mod.rs`), the other files of the driver
 (`control.rs`, `watch.rs`, `diag.rs`, `tx.rs`, `txtools.rs`, `load.rs`, `loadtools.rs`) and the people who extend them. The front door, the
 receiver control and the watchdog are in `hamlib_a.md`, the transmit path in `hamlib_b.md`. The tool list and the safety model are in
 `docs/RADIOCTL_TOOLS.md`.
@@ -257,12 +257,12 @@ audio source with `audio_in::resolve` (None when the rig has no `audio` setting)
 
 Order of work: validate the arguments (`bounded`); take the receive ranges (`rx_ranges`: the rig's `dump_state` narrowed by the owner's `rx_ranges_hz`) and refuse a
 frequency outside them with the source of the limit (`check_freq`); read `get_ptt` and refuse if the rig reports that it is transmitting (a rig that does not
-report PTT is let through; a link failure is an error); remember the frequency (a rig error is an error), the mode with its passband and the AF level (both optional);
+report PTT (push to talk) is let through; a link failure is an error); remember the frequency (a rig error is an error), the mode with its passband and the AF level (both optional);
 run `radioctl_rx_listen`; then **always** restore, even after a failure: `set_mode <mode> <passband>`, `set_freq`, `set_level AF`, collecting the names of those that failed.
 The result of the listening is returned with an added `rig_settings_not_restored` (a list, empty when all went back); if the listening failed, its error is returned instead
 (and the restoring has still been tried). Other errors: `frequency_hz is required (Hz)`, bound errors (`<key> <value> is outside <lo> to <hi>`), `mode is not a rig mode name`,
 `the rig reports PTT on; the receiver check does nothing while it transmits`. Transmit side: no key command is sent; the tier is `read_config`, the transmit gate and
-the dummy-load check are not involved, and the band check is the receive-range check above; the VFO, split, RIT and XIT are neither read nor restored. Blocking: about 0.3 s settling, 5 meter reads
+the dummy-load check are not involved, and the band check is the receive-range check above; the VFO, split, RIT (receiver incremental tuning) and XIT (transmitter incremental tuning) are neither read nor restored. Blocking: about 0.3 s settling, 5 meter reads
 80 ms apart and then the recording (`seconds`), all with the instrument lock held. Example: `{"frequency_hz": 10e6, "seconds": 5, "expect_tone_hz": 1000}`
 gives AM at 10 MHz with `signal`, `squelch_open` and an `audio` object. Tests: `tests.rs` (cited as `radioctl_rx_check`: a test of the receiver check against a rig with synthetic audio). Related: `radioctl_rx_listen`, `radioctl_rx_ranges`, `radioctl_bounded`, `radioctl_detect_analyze`.
 
@@ -414,7 +414,7 @@ load check listens to; the table's rules say that this never weakens the check, 
 `bench_radioctl_status` (everything the receiver reports, in one call) and `bench_radioctl_get` (one value, or several signal readings) are tier `read_only`: they send only `get_*` commands and
 cannot change or key the rig. A function the rig lacks is reported as unavailable with the reason; a link failure ends the call with an error, so a value that was not just read is never
 returned. The file also holds helpers that other files use (`s_units`, `s_text`, `tolerate`, `bounded`). The constants `STATUS_LEVELS` (23 level names, the receive ones first and then the transmit-side meters, which read zero
-when the rig is not keyed), `STATUS_FUNCS` (15 function names) and the AGC code table (0 off, 1 superfast, 2 fast, 3 slow, 4 user, 5 medium, 6 auto) are the lists the status call walks.
+when the rig is not keyed), `STATUS_FUNCS` (15 function names) and the AGC (automatic gain control) code table (0 off, 1 superfast, 2 fast, 3 slow, 4 user, 5 medium, 6 auto) are the lists the status call walks.
 
 ### `radioctl_s_units` [@ANCHOR: radioctl_s_units]
 

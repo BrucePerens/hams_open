@@ -1,6 +1,6 @@
 # Story: External AI Triage Can Post an Internal Note [@ANCHOR: hams_helpdesk:COMM_story_ai_triage_internal_notes]
 
-As the **external ticket-triage MCP server** (`daemons/hams_ticket_triage_mcp`, hams_com),
+As the **external ticket-triage MCP (Model Context Protocol) server** (`daemons/hams_ticket_triage_mcp`, hams_com),
 I want to post an admin-only internal note onto a ticket I'm scoped to read,
 so that my analysis is visible to staff without ever being customer-visible, and without needing
 write access to the ticket model at all.

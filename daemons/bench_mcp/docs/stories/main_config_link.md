@@ -10,7 +10,7 @@ description of the config is the README. Line numbers are not cited because they
 Safety that applies across this slice. None of these functions keys a radio transmitter. Three of them decide what may drive hardware: the tier of
 an instrument (`read_only`, `read_config`, `full`, parsed by `tier_of`, checked in `call`), the one-call-at-a-time lock (`instrument_lock`) and the
 supply's timed switch-off (`psu_output`, `psu_timer`). `call` checks the tier only for the tools in its own `TOOLS` table (scope, supply, VNA,
-SDR); the tools of the module rows in `MODULES` (audio, ELAD, example, Glasgow, procedures, radioctl, rotator, RX-888, spectrum analyzer, USB hub)
+SDR (software-defined radio)); the tools of the module rows in `MODULES` (audio, ELAD, example, Glasgow, procedures, radioctl, rotator, RX-888, spectrum analyzer, USB hub)
 and the manual tools are handed over before that check, so each of those modules does its own tier check (not verified here: see that module's
 story). The band check and the transmit gate of the radio tools live in the `radioctl` module, not in this file.
 
@@ -218,7 +218,7 @@ Tests: the all-tool-defs tests in `main.rs`.
 
 ### `tool_defs` [@ANCHOR: bench_mcp_main_tool_defs]
 
-The tool list the server returns to an MCP client for the instruments actually configured. This is how the server "does not list tools no
+The tool list the server returns to an MCP (Model Context Protocol) client for the instruments actually configured. This is how the server "does not list tools no
 instrument may use".
 
 | Argument | Type | Meaning |

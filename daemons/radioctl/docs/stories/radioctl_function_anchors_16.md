@@ -56,7 +56,7 @@ Builds the key or unkey command: Orion `*TK` / `*TU` CR, Argonaut `#1` / `#0` CR
 
 ### `fn frame_len(&self, pending: Pending) -> usize` [@ANCHOR: radioctl:radioctl_tentec_frame_len]
 
-Gives the exact byte count of the answer the binary dialects send for the awaited reply, so the engine knows when a whole frame has arrived. Frequency read: 8 bytes on Argonaut (letter, four bytes, CR, `G`, CR), 6 on the others. Mode read: 6 on Argonaut, 4 on the others. PTT read: 6. Bare acknowledgement: 2 (`G` CR). Nothing pending: 0. Pure, private. Orion does not use it because its replies are CR-terminated lines. Only Argonaut can answer `PTT`, so 6 only matters there.
+Gives the exact byte count of the answer the binary dialects send for the awaited reply, so the engine knows when a whole frame has arrived. Frequency read: 8 bytes on Argonaut (letter, four bytes, CR, `G`, CR), 6 on the others. Mode read: 6 on Argonaut, 4 on the others. PTT (push to talk) read: 6. Bare acknowledgement: 2 (`G` CR). Nothing pending: 0. Pure, private. Orion does not use it because its replies are CR-terminated lines. Only Argonaut can answer `PTT`, so 6 only matters there.
 
 ### `fn decode_binary(&mut self, pending: Pending, frame: &[u8]) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_tentec_decode_binary]
 

@@ -34,7 +34,7 @@ Keys (`on` true) or unkeys the radio through the `hpsdr` session, whichever prot
 
 ### `fn handle_line(line: &str, shared: &Shared, st: &mut State, opts: &HpsdrOptions) -> String` [@ANCHOR: radioctl:radioctl_hpsdr_handle_line]
 
-Answers one trimmed request line from the engine and returns the reply text (LF terminated). Holds the link mutex for the whole call; replies `ERR stopped` when the link has gone. `GF`, `GP`, `GA` read the bridge's remembered frequency, key state and attenuation; `GW` is the forward power count; `GR` is the SWR in tenths via `swr_tenths`. `A <db>` sets the attenuator (reply `ERR attenuator` for a value above 255 or one the session refuses). `F <hz>` retunes (`ERR frequency` above 32 bits or on session failure). `P 1` opens the `hpsdr` transmit gate until now plus `ptt_lease`, then requests PTT with the configured drive: `OK` on success, otherwise the gate is closed again and `ERR <reason>`. `P 0` unkeys, always closes the gate and clears the key state, replying `OK` or `ERR unkey`. Anything else is `ERR command`. The rig actor sends `P 1` only with its own gate open.
+Answers one trimmed request line from the engine and returns the reply text (LF terminated). Holds the link mutex for the whole call; replies `ERR stopped` when the link has gone. `GF`, `GP`, `GA` read the bridge's remembered frequency, key state and attenuation; `GW` is the forward power count; `GR` is the SWR in tenths via `swr_tenths`. `A <db>` sets the attenuator (reply `ERR attenuator` for a value above 255 or one the session refuses). `F <hz>` retunes (`ERR frequency` above 32 bits or on session failure). `P 1` opens the `hpsdr` transmit gate until now plus `ptt_lease`, then requests PTT (push to talk) with the configured drive: `OK` on success, otherwise the gate is closed again and `ERR <reason>`. `P 0` unkeys, always closes the gate and clears the key state, replying `OK` or `ERR unkey`. Anything else is `ERR command`. The rig actor sends `P 1` only with its own gate open.
 
 ### `fn status_of(link: &HpsdrLink) -> HardwareStatus` [@ANCHOR: radioctl:radioctl_hpsdr_status_of]
 
@@ -68,7 +68,7 @@ Reads or sets one numeric level (AF, RF gain, mic, monitor, keyer speed, RF powe
 
 ### `fn elecraft_if(&self) -> String` [@ANCHOR: radioctl:radioctl_virtual_elecraft_if]
 
-Builds the `IF` answer for the current state: 11-digit VFO A frequency, five blanks, the RIT/XIT offset (sign and four digits), RIT and XIT flags, a fixed ` 00`, the transmit flag, the mode code, a fixed `00`, the split flag and a constant `001 ;` tail. The mode is `0` if the description has no code for the mode. Pure, no errors. It is the inverse of `decode_if` in the Elecraft engine and is also pushed by auto-information.
+Builds the `IF` answer for the current state: 11-digit VFO A frequency, five blanks, the RIT/XIT offset (sign and four digits), RIT (receiver incremental tuning) and XIT (transmitter incremental tuning) flags, a fixed ` 00`, the transmit flag, the mode code, a fixed `00`, the split flag and a constant `001 ;` tail. The mode is `0` if the description has no code for the mode. Pure, no errors. It is the inverse of `decode_if` in the Elecraft engine and is also pushed by auto-information.
 
 ### `fn elecraft_panel(&self, change: PanelChange) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_virtual_elecraft_panel]
 

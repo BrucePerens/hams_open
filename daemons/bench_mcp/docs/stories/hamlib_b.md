@@ -160,7 +160,7 @@ changes the rig is never sent through this function.
 Return value: the `Reply` of the first or second attempt, or the second attempt's error. A retry happens only when the first attempt gave `RigError::Link(_)` or `RigError::Rig` with code -5
 (rig timeout) or -6 (I/O error); any other result, including success and other refusals such as -11, is returned at once. Before the retry it sleeps 100 ms and drops the connection, so
 the second attempt opens a fresh one. Worst case is therefore two timeouts plus 100 ms and a reconnect. Side effects: network I/O. Lock: caller holds the instrument's lock.
-Transmit: reading PTT through here (`get_ptt`) is how the tools check that a rig is not keyed. See also: `radioctl_command`, `radioctl_dump_state`.
+Transmit: reading PTT (push to talk) through here (`get_ptt`) is how the tools check that a rig is not keyed. See also: `radioctl_command`, `radioctl_dump_state`.
 
 ### `Client::dump_state` [@ANCHOR: radioctl_dump_state]
 
@@ -262,7 +262,7 @@ config parsing; a bad block refuses the configuration with the message). Everyth
 | `max_seconds` | number | yes | 0.1 to 60 (the cap for any keyed interval). |
 | `frequency_ranges` | array of `[low, high]` Hz | yes, non-empty | Each pair: 10 kHz <= low <= high <= 6 GHz. There is no default. |
 | `allowed_modes` | array of strings | yes, non-empty | Each, upper-cased, must be in `control::MODES`. |
-| `max_swr` | number | no | 1 to 5, default 2.0. An SWR above it at the low-power probe refuses the test. |
+| `max_swr` | number | no | 1 to 5, default 2.0. An SWR (standing wave ratio) above it at the low-power probe refuses the test. |
 | `swr_probe` | boolean | no | Default true. |
 | `swr_probe_s` | number | no | 0.1 to 2, default 0.5 seconds. |
 | `allow_lowering_power` | boolean | no | Default false: may a tool lower the rig's power setting to the requested level (restored afterwards). |

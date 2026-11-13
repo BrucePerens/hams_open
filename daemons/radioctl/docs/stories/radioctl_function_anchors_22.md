@@ -1,7 +1,7 @@
 # radioctl function anchors, batch 22
 
 Function anchors for the `radioctl-splitter` crate (client handles, the splitter's session machinery, the TS-2000 personality) and the `radioctl-core` crate (rig handle, event merge, poll schedule, transmit permit, actor spawn), written to the ADR 0113 standard. Each anchor is exercised by a test that cites it with `Tests [@ANCHOR: ...]`.
-For anything that can key a transmitter, the entry says how the gate applies: every splitter request goes through the rig handle, so the per-rig transmit gate, the transmit permit, the actor's frequency and band checks and its watchdog all still apply; the splitter's PTT arbiter only chooses which client may ask.
+For anything that can key a transmitter, the entry says how the gate applies: every splitter request goes through the rig handle, so the per-rig transmit gate, the transmit permit, the actor's frequency and band checks and its watchdog all still apply; the splitter's PTT (push to talk) arbiter only chooses which client may ask.
 
 ## `crates/radioctl-splitter/src/session.rs`
 
@@ -51,7 +51,7 @@ Answers a frequency read for `vfo`. If the split-while-keyed rule applies (the c
 
 ### `async fn read_status(&self) -> Outcome` [@ANCHOR: radioctl:radioctl_splitter_read_status]
 
-Builds the composite status for the Kenwood `IF` answer. The receive VFO comes from the cached `RxVfo` observation (VFO A if the rig never reported one). Frequency of that VFO (through `read_frequency`), mode and transmit state must all be readable: if any is missing the whole request is `Refused`, because an `IF` that guessed the transmit state would lie about the transmitter. RIT on/off, XIT on/off, the RIT offset (as `i16` hertz) and split are optional: a rig that cannot read one is reported at the neutral value (off, 0). Several reads are made one after another, each served from cache where fresh. Returns `Outcome::Status`.
+Builds the composite status for the Kenwood `IF` answer. The receive VFO comes from the cached `RxVfo` observation (VFO A if the rig never reported one). Frequency of that VFO (through `read_frequency`), mode and transmit state must all be readable: if any is missing the whole request is `Refused`, because an `IF` that guessed the transmit state would lie about the transmitter. RIT (receiver incremental tuning) on/off, XIT (transmitter incremental tuning) on/off, the RIT offset (as `i16` hertz) and split are optional: a rig that cannot read one is reported at the neutral value (off, 0). Several reads are made one after another, each served from cache where fresh. Returns `Outcome::Status`.
 
 ### `async fn execute(&self, client: ClientId, request: &Request) -> Outcome` [@ANCHOR: radioctl:radioctl_splitter_execute]
 

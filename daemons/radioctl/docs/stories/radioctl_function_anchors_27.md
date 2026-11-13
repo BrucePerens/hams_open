@@ -1,6 +1,6 @@
 # radioctl function anchors, batch 27
 
-Anchors for the `radioctl-core` and `radioctl-protocols` crates (ADR 0113 standard): the conformance stand-ins, rig file section validators (timing, levels, scope), the Icom CI-V RIT offset, filter and BCD helpers, and the CI-V spectrum scope (command 27) codec, assembler and simulator. Tests cite each anchor with `Tests [@ANCHOR: ...]`.
+Anchors for the `radioctl-core` and `radioctl-protocols` crates (ADR 0113 standard): the conformance stand-ins, rig file section validators (timing, levels, scope), the Icom CI-V RIT (receiver incremental tuning) offset, filter and BCD helpers, and the CI-V spectrum scope (command 27) codec, assembler and simulator. Tests cite each anchor with `Tests [@ANCHOR: ...]`.
 Transmit gate: nothing here opens the transmit gate. The CI-V functions only encode, decode or simulate bytes; a scope or filter command does not key the radio, and the virtual rig functions change only simulated state.
 
 
@@ -59,7 +59,7 @@ It reads the assembler's counter and is for diagnostics, so a flaky link shows u
 
 ### `fn encode_rit_offset(hz: i16) -> Option<[u8; 3]>` [@ANCHOR: radioctl:radioctl_civ_encode_rit_offset]
 
-Encodes a RIT or XIT offset in hertz into the 3 data bytes that follow `21 00` in a CI-V frame: tens and ones as packed BCD, then thousands and hundreds as packed BCD, then a sign byte (1 is negative, 0 positive). `hz` is a signed 16-bit value by value; for example 150 gives `50 01 00`.
+Encodes a RIT or XIT (transmitter incremental tuning) offset in hertz into the 3 data bytes that follow `21 00` in a CI-V frame: tens and ones as packed BCD, then thousands and hundreds as packed BCD, then a sign byte (1 is negative, 0 positive). `hz` is a signed 16-bit value by value; for example 150 gives `50 01 00`.
 Returns `None` when the magnitude is above `MAX_OFFSET_HZ`, 9999 Hz, which is the most the field can hold. Pure, no I/O; the inverse is `decode_rit_offset`.
 
 ### `fn decode_rit_offset(bytes: &[u8]) -> Option<i16>` [@ANCHOR: radioctl:radioctl_civ_decode_rit_offset]

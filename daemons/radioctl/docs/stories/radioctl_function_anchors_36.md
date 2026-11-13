@@ -13,7 +13,7 @@ Returns the `LevelInfo` by value. Errors are Hamlib codes: `EINVAL` (-1) when th
 
 ### `async fn get_level(&self, name: &str) -> Result<Body, i32>` [@ANCHOR: radioctl:radioctld_service_get_level]
 
-Answers the Hamlib `l` command. It calls `served_level`, then reads from the source the entry names: a radio level (through the cache-or-ask `read`), a transmit power or SWR meter, a raw or calibrated S-meter, or a derived value. A radio level that is a fraction is returned as `(raw - min) / (max - min)` using `level_range`; a non-fraction level (attenuator dB, preamp step) is the raw integer. Meters go through `meter_cal` with the calibration for this rig id, and power in watts needs a power-meter calibration in the description.
+Answers the Hamlib `l` command. It calls `served_level`, then reads from the source the entry names: a radio level (through the cache-or-ask `read`), a transmit power or SWR (standing wave ratio) meter, a raw or calibrated S-meter, or a derived value. A radio level that is a fraction is returned as `(raw - min) / (max - min)` using `level_range`; a non-fraction level (attenuator dB, preamp step) is the raw integer. Meters go through `meter_cal` with the calibration for this rig id, and power in watts needs a power-meter calibration in the description.
 
 Returns `Body::Fields` with one unlabeled value, floats printed without trailing zeros (six decimals at most). Errors: the `served_level` codes; `EIO` when the rig answers with the wrong kind of observation or a strength cannot be computed; `ENAVAIL` when a range or calibration is missing; and whatever `read` maps from a rig error (timeout, link down, queue full). Async; takes no lock of its own. Read only: it never keys the rig.
 
@@ -31,7 +31,7 @@ Only levels read from the radio can be set: meters and derived values answer `EN
 
 ### `async fn get_func(&self, name: &str) -> Result<Body, i32>` [@ANCHOR: radioctl:radioctld_service_get_func]
 
-Answers Hamlib `u`: reads a function switch. Only RIT and XIT are served; `func_lookup` classifies the name. The state comes from the cache or the rig (`Field::Rit` or `Field::Xit`) through `read`.
+Answers Hamlib `u`: reads a function switch. Only RIT (receiver incremental tuning) and XIT (transmitter incremental tuning) are served; `func_lookup` classifies the name. The state comes from the cache or the rig (`Field::Rit` or `Field::Xit`) through `read`.
 
 Returns `Body::Fields` with one value, `1` when the observation says on, `0` otherwise (including an observation of another kind, which is not an error here). Errors: `EINVAL` for a name Hamlib does not know, `ENAVAIL` for a known function this daemon does not serve or a rig without the switch, plus mapped rig errors. Read only; no side effects.
 
@@ -59,7 +59,7 @@ Gating: `SetPtt(0)` always unkeys (`unkey`), open to every client; any other `Se
 
 The newcat command interpreter of a virtual Yaesu rig. `text` is one tokenized command without its `;` (a two-letter name plus arguments); the virtual rig's feed loop calls it for each token and answers `?;` itself for junk. It matches `FA`, `FB`, `MD0`, `TX`, `FT`, `ST`, `CF` (FT-891 and FT-710 forms), `RT`, `XT`, `RC`, `RU`/`RD`, `SM0`, `RM5`, `IF`, `ID`, `AI`, `RA`/`PA` and the level commands, plus fixed answers Hamlib needs (`PS`, `SH`, `NA`, `VS`, `RF`). A read returns the reply bytes; a set updates the shared `RigState` and returns nothing, as the real radio is silent; anything unrecognised or out of range returns `?;`.
 
-The model id for `ID` comes from the wire parameters; model id 670 (the FT-991 family) uses shorter `SH` and `RM5` tails and does not answer `VS`, `ST` or `RF`, which the FTDX10 and FTDX101 do. `TX1` only sets the virtual PTT flag: no RF, no gate. Not modeled: VFO selection and roofing filter settings are accepted and ignored. Synchronous, no I/O, mutates only the virtual state.
+The model id for `ID` comes from the wire parameters; model id 670 (the FT-991 family) uses shorter `SH` and `RM5` tails and does not answer `VS`, `ST` or `RF`, which the FTDX10 and FTDX101 do. `TX1` only sets the virtual PTT (push to talk) flag: no RF, no gate. Not modeled: VFO selection and roofing filter settings are accepted and ignored. Synchronous, no I/O, mutates only the virtual state.
 
 ### `fn yaesu_tx_band_model(&self) -> bool` [@ANCHOR: radioctl:radioctl_virtual_yaesu_tx_band]
 

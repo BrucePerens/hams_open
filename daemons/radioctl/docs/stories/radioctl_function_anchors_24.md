@@ -93,7 +93,7 @@ Executes a line sequence synchronously on the calling thread (the actor calls it
 
 ### `fn observe(&mut self, value: Observation, source: Source)` [@ANCHOR: radioctl:radioctl_core_actor_observe]
 
-Records something the rig reported. For a PTT observation it keeps the transmit watchdog in step: `Ptt(true)` arms it (`arm_watchdog`) and `Ptt(false)` disarms it. The value is stored in the cache with the current time, and if it differs from the old value a `Change` (old and new) is created. It then derives the active transmit frequency from the cache (split state, VFOs, keyed state) and, when that derived value changed, stores it and adds a `Change` for `Field::ActiveTxFrequency`, so amplifier and band-decoder subscribers follow the transmit frequency whichever field moved it. If there are changes, one `RigEvent` is emitted with `source`. An unchanged value updates the age only and emits nothing.
+Records something the rig reported. For a PTT (push to talk) observation it keeps the transmit watchdog in step: `Ptt(true)` arms it (`arm_watchdog`) and `Ptt(false)` disarms it. The value is stored in the cache with the current time, and if it differs from the old value a `Change` (old and new) is created. It then derives the active transmit frequency from the cache (split state, VFOs, keyed state) and, when that derived value changed, stores it and adds a `Change` for `Field::ActiveTxFrequency`, so amplifier and band-decoder subscribers follow the transmit frequency whichever field moved it. If there are changes, one `RigEvent` is emitted with `source`. An unchanged value updates the age only and emits nothing.
 
 ### `async fn poll_once(&mut self)` [@ANCHOR: radioctl:radioctl_core_actor_poll_once]
 

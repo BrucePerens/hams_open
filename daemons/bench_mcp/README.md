@@ -17,7 +17,7 @@ calibration does not pass through the agent's context step by step. There is als
 | `nanovna` (VNA) | NanoVNA-H (ChibiOS USB serial shell) behind the same `bench_vna_*` tools; NOT verified on hardware (the unit on the dev box did not answer 2026-10-31), tested against a fake, a pty fake and a synthetic transcript | S11/S21 sweeps (101 points on the H, 401 on the H4, 50 kHz to 900 MHz on the H), software SOLT (short-open-load-through) calibration shared with the VNWA, power cycle with a hub; generator, AM, FM, meter and spectrum return `not supported by this instrument` | [manual page](manual/instruments/vna/nanovna.md) |
 | `vnwa_open` (VNA) | DG8SAQ VNWA 3E vector network analyser through the `vnwa_open` crate, no vendor software | S11/S21 sweeps, calibration (open, short, load, through), generator (CW, level, AM, FM), frequency meter, spectrum analyser, firmware and temperature, reliability ladder with hub power cycle | [The VNA's functions](#the-vnas-functions-as-tools-2026-10-28) |
 | `bladerf`, `limesdr`, `rtlsdr` | SDRs (bladeRF with XB-200, LimeSDR-USB with two coherent receivers, RTL-SDR dongle) | capture, survey, coherence (LimeSDR); receive only | [Tools](#tools) |
-| `rx888` | RX-888 MkII direct-sampling HF receiver (0 to 30 MHz) through ka9q-radio's `radiod` on loopback; verified on the unit with no antenna | firmware boot, radiod start and stop, front end (overrange, RF gain, attenuation), channel level and SNR, spectrum CSV, I/Q or audio WAV; receive only | [RX-888](#rx-888-receiver-rx888-driver) |
+| `rx888` | RX-888 MkII direct-sampling HF receiver (0 to 30 MHz) through ka9q-radio's `radiod` on loopback; verified on the unit with no antenna | firmware boot, radiod start and stop, front end (overrange, RF gain, attenuation), channel level and SNR (signal-to-noise ratio), spectrum CSV, I/Q or audio WAV; receive only | [RX-888](#rx-888-receiver-rx888-driver) |
 | `glasgow` | Glasgow Interface Explorer (1BitSquared, USB 20b7:9db1) FPGA digital multi-tool through a pinned `glasgow` install; identify and port-voltage readback measured on a revC3, everything that drives pins fixtures only | list, status, port voltage set with limit and watchdog, I2C scan/read/write, SPI flash ID, UART transact and sniff, logic capture to VCD (value change dump, a logic-analyzer file format) with summary, GPIO, pattern generator, JTAG scan (a chip-testing interface), SWD (Serial Wire Debug) DPIDR (debug port identification register); parks all pins after each call | [Glasgow](#glasgow-interface-explorer-glasgow-driver), `manual/instruments/glasgow` |
 | `glasgow` (logic analyzer) | The `bench_gla_*` tools on the Glasgow driver: host-side trigger, pre-trigger window, sample rate, VCD, CSV and sigrok `.sr` files, glitch report, UART, I2C and SPI decode, and a bounded pattern generator; the unit links at 12 Mb/s so no capture has run on it; fixtures only | limits, analyze (a VCD file, no device), capture, pattern, safe state | [Logic analyzer tools](#glasgow-logic-analyzer-and-pattern-generator-bench_gla-tools), `docs/GLASGOW_LOGIC_TOOLS.md` |
 | `usb_hub` | USB topology and hub port power (uhubctl) | topology, find, diagnose, bandwidth, watch, history, port power (verified cold reset), protection of devices | [USB hub tools](#usb-hub-tools-usb_hub-driver), `docs/USB_HUB_TOOLS.md` |
@@ -73,7 +73,7 @@ fails after `retries` (default 2) re-measurements gets one cold reset through `s
 `if_hz` (a divisor of 48 kHz: 12000, 6000 or 4000), `point_ms` (0.2 to 100),
 `rf_level` (0 to 16383), `settle_ms` and `window_ms`. A bad value is refused when the file is read.
 
-The SDR entries need SoapySDR with the radio's module (`libsoapysdr0.8`, `soapysdr-module-bladerf`, `soapysdr-module-lms7`, `soapysdr-module-rtlsdr`); the
+The SDR (software-defined radio) entries need SoapySDR with the radio's module (`libsoapysdr0.8`, `soapysdr-module-bladerf`, `soapysdr-module-lms7`, `soapysdr-module-rtlsdr`); the
 library is loaded at run time, so the server runs without it and the SDR tools then say so. Optional: `serial` (hex digits, to
 pick one board of several) and, for the bladeRF only, `xb200` (`50M`, `144M`, `222M`, `auto`, `auto1db`, `auto3db`, `custom`),
 which switches on the XB-200 transverter and its filter bank so the receiver tunes from 9 kHz instead of 237.5 MHz.
@@ -238,7 +238,7 @@ The Glasgow Interface Explorer (USB 20b7:9db1; UART, I2C, SPI, JTAG, SWD, logic 
 
 ## Checks this crate makes for the SDRs (anchors)
 
-* The RTL-SDR is receive only, takes its own tuning, rate (not 0.3 to 0.9 MS/s), gain and `ppm` limits and a `direct_samp` of 1 or 2, and is refused a second channel or an antenna.
+* The RTL-SDR (a low-cost USB software-defined radio receiver) is receive only, takes its own tuning, rate (not 0.3 to 0.9 MS/s), gain and `ppm` limits and a `direct_samp` of 1 or 2, and is refused a second channel or an antenna.
 * The SoapySDR argument string is built from the config and a serial or XB-200 value cannot carry another argument.
 * A capture's arguments are checked against each radio's tuning, rate and gain limits before the radio is opened.
 * A survey is bounded to 400 steps and a power-of-two FFT length.
@@ -370,7 +370,7 @@ Registration, tiers, the volume cap, quiet hours and the reserved VNWA codecs ar
 * Time-station detection on synthetic audio: the one-second tick rhythm with and without noise, 440/500/600 Hz tones, a carrier beat note, silence, and mains hum that must not trigger.
 * The load plausibility check: the decision on readings (at the baseline, above it, unsteady, no baseline, other settings, a station heard, a dead or unreadable input), the baseline files, the measurement that restores the rig, and the tools.
 * The receiver test with the rig's audio, and how the audio input is found from the sound module's names.
-* Transmitting into the attested dummy load: the arguments against the attestation, the rig read first (transmit range, PTT, split, XIT, the power setting against the cap, the lowest power), the load check as a gate, the operator alert, the low-power SWR probe, the keyed interval with its watchdog, release and read-back on every path, the keyed-interval log, the power sweep and the safe state.
+* Transmitting into the attested dummy load: the arguments against the attestation, the rig read first (transmit range, PTT, split, XIT, the power setting against the cap, the lowest power), the load check as a gate, the operator alert, the low-power SWR (standing wave ratio) probe, the keyed interval with its watchdog, release and read-back on every path, the keyed-interval log, the power sweep and the safe state.
 * The transmit watchdog process: its unkey, its run loop (deadline, closed pipe, abort, done), its entry point and how the tool starts it.
 * Plumbing of the transmit path: the meter readings, the verified settings, the restore, the keyed call, the summary, the watchdog's stand-down, `dump_state` read to its `done` line and the shutdown of all rigs.
 * Watching the dial by polling, and releasing a possibly keyed rig before its daemon is stopped.
@@ -785,7 +785,7 @@ Generator on at `level` (`switch_on`), one sweep (`run_sweep`) and, unless `leav
 The RX-888 MkII (Cypress FX3, 16-bit direct-sampling ADC, 0 to 30 MHz at 64.8 Msps) is run through ka9q-radio. Its `rx888_boot` loads the firmware, and its `radiod` (GPL-3.0, run unmodified as a separate process) runs the receiver on loopback multicast with TTL 0. The tools talk to `radiod` through the `radiod_client` crate (`daemons/radiod_client`). They are receive only, so none is tier `full`. Manual: `instruments/rx888`. Verified on the unit with no antenna (2026-11-05):
 - boot to 5000 Mb/s;
 - `radiod` at 64.8 Msps, measured 64.8 MS/s;
-- overrange 0, RF AGC at 34 dB, IF power -52.4 dBFS;
+- overrange 0, RF AGC (automatic gain control) at 34 dB, IF power -52.4 dBFS;
 - channel noise density about -159 to -161 dB/Hz;
 - an 8192-bin spectrum with the floor at -122.7 dB per 5.9 kHz noise bandwidth;
 - I/Q and audio captures with 0 lost.
@@ -930,7 +930,7 @@ The SSRC `ssrc_base + which`: 0 tune, 1 spectrum, 2 capture. Each call uses a fi
 
 #### `bench_mcp_rx888_edges` - `edges(mode, width: f64) -> (f32, f32)`
 
-Passband edges in Hz from the carrier for a width: USB `(50, 50+w)`, LSB `(-50-w, -50)`, CW `(600-w/2, 600+w/2)`, AM, FM and I/Q `(-w/2, w/2)`. These match radioctl's radiod channel. Pure.
+Passband edges in Hz from the carrier for a width: USB `(50, 50+w)`, LSB (lower sideband) `(-50-w, -50)`, CW `(600-w/2, 600+w/2)`, AM, FM and I/Q `(-w/2, w/2)`. These match radioctl's radiod channel. Pure.
 
 #### `bench_mcp_rx888_ask` - `ask(rt, c, cmd, wait) -> Result<ChannelStatus, String>`
 
@@ -1094,7 +1094,7 @@ One line per group of functions; each anchor is also on its functions in `src/`.
 * A tool call is dispatched by name, and the server lists every tool definition.
 * The audio tools plan a sound and a volume change without making them (dry run), and their safe state stops this server's own `pw-play` streams and lowers any output above its volume cap, without muting, unmuting or touching a reserved device.
 * The config reads each instrument's permission tier, the VNA settings (an unknown tier or a bad setting is refused), and the SDR serial and XB-200 setting (the XB-200 for the bladeRF only), and `BENCH_MCP_CONFIG` names the file the server loads.
-* The host DSP finds a tone's amplitude and offset with its radix-2 FFT, windowed blocks, noise floor, strongest peaks and level statistics, and refuses FFT lengths that are not a power of two.
+* The host DSP (digital signal processing) finds a tone's amplitude and offset with its radix-2 FFT, windowed blocks, noise floor, strongest peaks and level statistics, and refuses FFT lengths that are not a power of two.
 * Serial devices are checked before they are opened: the config's top-level `reserved_serial` list (`/dev/serial/by-id/...` paths or `usb:<bus-port>`) names devices no bench tool opens (the SainSmart relay board's place), and a supply is refused on a bare `/dev/ttyUSBn` or `/dev/ttyACMn` when a `/dev/serial/by-id` name points at that device. The checks read the file system and never open the device.
 * The SCPI link opens a TCP socket or a serial port, sends terminated commands, and reads lines, numbers (with units and either header setting), length-prefixed blocks and headerless streams; a refused connection, a peer that hangs up, a silent device and a port that is not a serial port are errors.
 * The supply tool reads volts, amps and power, and sends a setpoint only within the configured caps.

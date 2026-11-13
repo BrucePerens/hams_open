@@ -127,7 +127,7 @@ Chooses the engine for a description of the receiver family, by its receiver pro
 
 ### `pub fn engine(desc: RigDescription) -> Result<JrcEngine, RigError>` [@ANCHOR: radioctl:radioctl_jrc_engine]
 
-Builds the protocol engine for a JRC radio (NRD-525, NRD-535D, NRD-545 DSP, JST-145, JST-245). `desc` is taken by value. A thin wrapper over `LineEngine::new` with `ReceiverProtocol::Jrc`: it returns `ErrorKind::Unsupported` if the description is not a receiver with the JRC protocol and passes on the dialect error for an unknown dialect name. The JST models are transceivers, so the engine can encode PTT for them; the transmit gate is applied by the caller. No I/O.
+Builds the protocol engine for a JRC radio (NRD-525, NRD-535D, NRD-545 DSP, JST-145, JST-245). `desc` is taken by value. A thin wrapper over `LineEngine::new` with `ReceiverProtocol::Jrc`: it returns `ErrorKind::Unsupported` if the description is not a receiver with the JRC protocol and passes on the dialect error for an unknown dialect name. The JST models are transceivers, so the engine can encode PTT (push to talk) for them; the transmit gate is applied by the caller. No I/O.
 
 ### `fn from_description(desc: &RigDescription) -> Result<JrcDialect, RigError>` [@ANCHOR: radioctl:radioctl_jrc_dialect_from_description]
 

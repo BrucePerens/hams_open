@@ -34,7 +34,7 @@ As a developer changing this code, I want every data structure in `src/dstar.rs`
 
 ## `Ft8Decoder` [@ANCHOR: ham_digital_modes:ft8_ft8_decoder_struct]
 
-**Purpose.** Safe wrapper around one FT8 decoding session of the vendored `ft8_lib`: audio is pushed in with `feed`, decoded messages are pulled out. Defined in `ft8.rs`; marked `Send` (one session may move between threads but is used by one thread at a time, which `&mut self` enforces).
+**Purpose.** Safe wrapper around one FT8 (a weak-signal digital mode) decoding session of the vendored `ft8_lib`: audio is pushed in with `feed`, decoded messages are pulled out. Defined in `ft8.rs`; marked `Send` (one session may move between threads but is used by one thread at a time, which `&mut self` enforces).
 
 **Definition.** `pub struct Ft8Decoder` (struct) in `daemons/ham_digital_modes/src/ft8.rs`.
 

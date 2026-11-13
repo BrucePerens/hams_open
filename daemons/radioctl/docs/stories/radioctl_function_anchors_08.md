@@ -57,7 +57,7 @@ Processes bytes received at `now`. A stale partial frame is discarded and report
 
 ### `pub fn new(desc: &RigDescription) -> Result<RshfiqTwin, RigError>` [@ANCHOR: radioctl:radioctl_rshfiq_twin_new]
 
-Builds the virtual RS-HFIQ from a description (borrowed): the description's default frequency, PTT off and power 0 percent. It returns `Unsupported` if the description is not a serial-vendor one. No I/O.
+Builds the virtual RS-HFIQ from a description (borrowed): the description's default frequency, PTT (push to talk) off and power 0 percent. It returns `Unsupported` if the description is not a serial-vendor one. No I/O.
 
 ### `fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_rshfiq_twin_feed]
 

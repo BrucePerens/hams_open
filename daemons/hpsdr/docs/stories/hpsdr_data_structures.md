@@ -142,7 +142,7 @@
 | `run_starts` | `AtomicU64` | Transitions of the run bit from clear to set. |
 | `run_stops` | `AtomicU64` | Transitions of the run bit from set to clear. |
 | `ddc_sent` | `AtomicU64` | DDC packets sent. |
-| `ptt_frames` | `AtomicU64` | High Priority packets whose PTT bit was set. |
+| `ptt_frames` | `AtomicU64` | High Priority packets whose PTT (push to talk) bit was set. |
 | `drive_nonzero_frames` | `AtomicU64` | High Priority packets with a non-zero drive level. |
 | `tx_freq_nonzero_frames` | `AtomicU64` | High Priority packets with a non-zero transmit frequency. |
 | `duc_packets` | `AtomicU64` | Packets received on the DUC0 I/Q port (any content). |

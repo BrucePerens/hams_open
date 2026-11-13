@@ -17,7 +17,7 @@ A thread-safe, async-only Rust rig-control library intended to replace Hamlib in
   - Vocabulary, sans-IO protocol engines and virtual rigs.
   - Rig actor with queue, cache, polling, events and the transmit gate.
   - Real serial (USB-serial identified by vid/pid/serial, hot-plug reconnect, gated line keying) and TCP/UDP network links (reconnect with backoff).
-  - USB SDR boards and dongles (Si570 kits, FiFi-SDR, FUNcube, Digital World Traveller) over a USB link: request/reply frames, a `UsbBackend` trait with a fake and a libusb backend (cargo feature `usb`, off by default), hot-plug reconnect and the same unkey-on-reopen rule. All unverified on hardware.
+  - USB SDR (software-defined radio) boards and dongles (Si570 kits, FiFi-SDR, FUNcube, Digital World Traveller) over a USB link: request/reply frames, a `UsbBackend` trait with a fake and a libusb backend (cargo feature `usb`, off by default), hot-plug reconnect and the same unkey-on-reopen rule. All unverified on hardware.
   - `radioctld` (rig and rotator servers), the protocol splitter, `radioctl-station` and a C ABI sketch.
 - Protocol families: Icom CI-V, Kenwood ASCII (including the TS-890S dialect and the handheld/mobile family), Elecraft, Yaesu newcat and the legacy block protocols, FlexRadio SmartSDR, OpenHPSDR (control plane only), Xiegu (CI-V), the receiver families (AOR, Uniden, JRC, Icom PCR and marine, Rohde and Schwarz), about thirty small serial-vendor engines (Ten-Tec, Racal, Drake, Barrett, CODAN, MDS, MICOM, WJ, Paragon, XG3, Transfox and others), a UDP control frame (HiQSDR) and USB SDR boards.
 - Rig descriptions: <!--count:description_files-->292<!--/count--> files in `rigs/`, <!--count:described-->283<!--/count--> of the <!--count:real_radios-->283<!--/count--> real radios among the <!--count:models-->313<!--/count--> models Hamlib 4.6.2 lists (<!--count:not_applicable-->30<!--/count--> are not radios or have no transport radioctl speaks). The numbers are marked in the text and `python3 tools/doc_counts.py --check` (and its test) fails when they drift from `docs/RIG_SUPPORT.md`, the generated list. <!--count:hardware_verified-->1<!--/count--> description is `hardware-verified`: the Elecraft KX3 (MCU, microcontroller, 3.02 / DSP, digital signal processor, 1.52, bench run with transmit into a dummy load, 2026-11-05); every fact the run exercised says what ran, and front-panel auto-information and the virtual-rig defaults stay unverified. Every other fact is `unverified` or `manual-checked` until a volunteer confirms it with `docs/VOLUNTEER_TESTING.md`.
@@ -132,7 +132,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
 - The harness decides that `rigctld` is ready from the kernel's tables (`/proc/net/tcp`, `/proc/<pid>/fd`), not by connecting, and turns Hamlib's cache off so every answer is read from the radio. It retries when `rigctld` lost the port race and reaps the processes it started.
 - `radioctld`'s own oracle runs Hamlib's `rigctl` client against a virtual KX3, IC-7300 and TS-590SG, and `rotctl -m 2` against the virtual rotator.
 - First results (Hamlib 4.6.2):
-  - KX3 and IC-7300 agree on frequency, mode, PTT read, RIT offset and keyer speed.
+  - KX3 and IC-7300 agree on frequency, mode, PTT read, RIT (receiver incremental tuning) offset and keyer speed.
   - The oracle found and fixed two virtual-rig errors: IC-7300 `26 00` lacked the DATA flag byte, and the virtual KX3 lacked `PS`, `K2`/`K3`, `OM`, `IF`, `RV`, which Hamlib's KX3 backend sends at start-up.
 - Known disagreements are pinned in `tests/rigctld_oracle.rs`: `known_icom_divergences`, `known_ts890_divergences`.
 
@@ -299,7 +299,7 @@ nice -n 10 cargo test -p radioctld --features hamlib-oracle
   #           lifetime_frames = 500, refresh_ms = 2000, min_hz = 10000, max_hz = 30000000
   ```
 
-- Mode changes bring back the mode's own passband. `SetFilterWidth` places the passband per mode: USB and LSB keep their 50 Hz edge next to the carrier, CW centres on its 600 Hz tone, AM and FM centre on the carrier.
+- Mode changes bring back the mode's own passband. `SetFilterWidth` places the passband per mode: USB and LSB (lower sideband) keep their 50 Hz edge next to the carrier, CW centres on its 600 Hz tone, AM and FM centre on the carrier.
 - Signal (`RAWSTR`): the channel's baseband power in tenths of a dB above -200 dB re full scale. It is referred to the input (`radiod` removes the front end's RF gain), not calibrated to dBm, and not an S-meter.
 - The channel is kept by re-asserting its whole state every `refresh_ms`, never by a bare poll. So a `radiod` that restarted gets the channel back at the right frequency (seen on the RX-888: one missed acknowledgement, then the channel was back at 14.074 MHz). When the rig is dropped the channel is removed. If the process dies, the channel expires by its lifetime.
 - Audio is `RadiodControl::take_audio` (16-bit PCM decoded to mono `f32`, 12 kHz, 24 kHz for FM), not a radioctl operation. `RadiodControl::front_end` gives the front end's overrange count and RF gain.
@@ -453,7 +453,7 @@ cd tools && python3 -m unittest test_hamlib_caps_matrix                         
 
 ## radioctld
 
-`radioctld --config FILE [--check]` serves the Hamlib `rigctld` text protocol (as documented in the `rigctl`/`rigctld` man pages and as observed from Hamlib 4.6.2's `rigctld`) for any radioctl rig, real or virtual. WSJT-X, fldigi, loggers and `rigctl -m 2` work against it unchanged.
+`radioctld --config FILE [--check]` serves the Hamlib `rigctld` text protocol (as documented in the `rigctl`/`rigctld` man pages and as observed from Hamlib 4.6.2's `rigctld`) for any radioctl rig, real or virtual. WSJT-X (a weak-signal digital-mode program), fldigi, loggers and `rigctl -m 2` work against it unchanged.
 
 - One `[[rig]]` per radio, each with its own listen address (as with one `rigctld` per radio). See `radioctld.example.toml`.
 - Runtime: the `radioctld` binary owns the one multi-thread tokio runtime; the library takes a `Handle`.
