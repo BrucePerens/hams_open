@@ -80,6 +80,7 @@ class TestZeroSudoControllers(RealTransactionCase):
         # MANDATORY: Commit so the HTTP worker thread can see the new user.
         # RealTransactionCase will handle the cleanup in tearDown.
         self.env.cr.commit()
+        self.addCleanup(self._forget_login_throttle, login)
 
         # 2. Attempt login via POST to /web/login
         # We fetch the login page first to get a session and CSRF token
@@ -199,6 +200,7 @@ class TestZeroSudoControllers(RealTransactionCase):
             "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
         )
         self.env.cr.commit()
+        self.addCleanup(self._forget_login_throttle, login)
 
         # NOTE: this asserts a plain, non-error RETURN VALUE
         # (`{"uid": None}`), NOT a raised exception -- a second, real bug
@@ -338,6 +340,7 @@ class TestZeroSudoControllers(RealTransactionCase):
             "UPDATE res_users SET is_service_account = True WHERE id = %s", (user.id,)
         )
         self.env.cr.commit()
+        self.addCleanup(self._forget_login_throttle, login)
 
         self.make_jsonrpc_request(
             "/web/session/authenticate",
