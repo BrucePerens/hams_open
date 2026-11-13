@@ -459,6 +459,14 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ModbusRelay<T> {
             Framing::Rtu => encode_rtu(self.board.slave, request),
         };
         sleep(Duration::from_millis(self.board.inter_frame_ms)).await; // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
+                                                                       // A late reply to an earlier request that timed out is still in the input; left there it
+                                                                       // would be read as this request's reply, and every later exchange would stay one behind.
+        let mut stale = [0u8; 256];
+        while let Ok(Ok(n)) = timeout(Duration::ZERO, io.read(&mut stale)).await {
+            if n == 0 {
+                break;
+            }
+        }
         io.write_all(&frame)
             .await // lock-scope-ignore: a serial bus is half duplex; the whole request/reply exchange must be serialized
             .map_err(|e| driver_err(format!("modbus: write failed: {e}")))?;
@@ -716,6 +724,15 @@ pub(crate) mod test_peer {
 
     /// Starts a virtual 16-coil module; returns the host's end of the stream.
     pub(crate) fn spawn(coils_at_start: Vec<bool>) -> (DuplexStream, Module) {
+        spawn_with_stale(coils_at_start, Vec::new())
+    }
+
+    /// Like [`spawn`], but the module first sends `stale`: a late reply to an earlier request
+    /// that timed out.
+    pub(crate) fn spawn_with_stale(
+        coils_at_start: Vec<bool>,
+        stale: Vec<u8>,
+    ) -> (DuplexStream, Module) {
         let (host, mut peer) = duplex(4096);
         let m = Module {
             mode: Arc::new(StdMutex::new(Mode::Good)),
@@ -724,6 +741,7 @@ pub(crate) mod test_peer {
         };
         let mm = m.clone();
         tokio::spawn(async move {
+            let _ = peer.write_all(&stale).await;
             let mut buf = Vec::new();
             let mut byte = [0u8; 1];
             while peer.read(&mut byte).await.map(|n| n == 1).unwrap_or(false) {
@@ -920,7 +938,7 @@ mod tests {
         assert_eq!((rtu.framing, rtu.slave), (Framing::Rtu, 7));
     }
 
-    use super::test_peer::{spawn, Mode};
+    use super::test_peer::{spawn, spawn_with_stale, Mode};
     use crate::channel::Assurance;
     use crate::gpio_map::BoardCatalog;
 
@@ -969,6 +987,17 @@ mod tests {
         assert_eq!(relay.record()[5].value, Some(true));
         assert!(!relay.record()[0].value.unwrap());
         assert!(relay.record()[0].age.is_some());
+    }
+
+    // Tests [@ANCHOR: radioctl_station_modbus_relay_exchange]
+    #[tokio::test(start_paused = true)]
+    async fn a_late_reply_to_an_earlier_request_is_not_taken_for_this_ones() {
+        let stale = encode_ascii(0xFE, &pdu_write_coil(3, true));
+        let (io, module) = spawn_with_stale(vec![false; 16], stale);
+        let relay = ModbusRelay::new(fast_board(), io);
+        relay.write_line(5, true).await.unwrap();
+        assert_eq!(relay.record()[5].value, Some(true));
+        assert!(module.coils.lock().unwrap()[5]);
     }
 
     // Tests [@ANCHOR: radioctl_station_modbus_relay_reopen]
