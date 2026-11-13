@@ -278,6 +278,13 @@ pub fn psk31_decode_bits(bits: &[bool]) -> String {
             count = 0;
         }
     }
+    // A stream that ends after the first zero of a gap (e.g. the audio was cut mid-gap) still
+    // holds that provisional gap bit in the accumulator; drop it as the "00" branch does,
+    // otherwise the final character never matches a codeword and is lost.
+    if prev_was_zero && count > 0 {
+        acc >>= 1;
+        count -= 1;
+    }
     if count > 0 {
         if let Some(c) = code_to_char(acc, count) {
             out.push(c as char);
