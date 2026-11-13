@@ -6,6 +6,7 @@
     sudo python3 odoo_upgrade.py --db hams_prod --modules hams_helpdesk --dry-run     # print the command, run nothing
     sudo python3 odoo_upgrade.py --db hams_prod --modules all --install ham_spreadsheet_csp   # also install a NEW module
     sudo python3 odoo_upgrade.py --db hams_prod --shell < script.py   # one-off `odoo shell` with the service's environment
+    sudo python3 odoo_upgrade.py --db hams_prod --shell --env STEP=check --env APPLY=1 < script.py   # the same, with extra (non-secret) variables
 
 Why it exists: `sudo -u odoo odoo -u ...` gives the upgrade none of the `EnvironmentFile=`
 settings of the service (REDIS_USERNAME/REDIS_PASSWORD from /opt/hams/etc/redis.env, the broker and database
@@ -59,6 +60,7 @@ UPGRADE_UNIT = "odoo-upgrade"
 ODOO_BIN = "/usr/bin/odoo"
 ODOO_CONF = "/etc/odoo/odoo.conf"
 AUTH_FAILURE = re.compile(r".*(Authentication required|invalid username-password|NOAUTH)", re.I)
+ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=[^\n]*\Z")
 MODULE_NAME = re.compile(r"^[a-z0-9_]+\Z")
 REDIS_SECRET_KEY = "REDIS_PASSWORD"
 # The stylesheet check: a second transient unit (own name, so `systemctl is-active odoo-upgrade` stays about the upgrade) that
@@ -137,10 +139,13 @@ def build_command(service, db, modules, install=()):
     return cmd + [ODOO_BIN, "--config", ODOO_CONF, "-d", db] + install_args + ["-u", ",".join(modules), "--stop-after-init"]
 
 
-def build_shell_command(service, db, unit):
-    """Like build_command, but `odoo shell` (no HTTP server, nothing started) under the transient unit `unit`; the script goes on stdin."""
+def build_shell_command(service, db, unit, extra_env=()):
+    """Like build_command, but `odoo shell` (no HTTP server, nothing started) under the transient unit `unit`; the script goes on stdin.
+    `extra_env` ("NAME=value" strings, e.g. a runbook script's apply switch) is passed with `-E`, after the service's own settings."""
     cmd = build_command(service, db, ["x"])
     cmd[cmd.index(f"--unit={UPGRADE_UNIT}")] = f"--unit={unit}"
+    for assignment in extra_env:
+        cmd[cmd.index(ODOO_BIN):cmd.index(ODOO_BIN)] = ["-E", assignment]
     return cmd[:cmd.index(ODOO_BIN)] + [ODOO_BIN, "shell", "--config", ODOO_CONF, "-d", db, "--no-http"]
 
 
@@ -188,6 +193,10 @@ def run(argv, show=None, read_text=None, execute=None, is_active=None, out=None,
         raise UpgradeError(f"invalid --install {args.install!r}")
     if not re.match(r"^[A-Za-z0-9_]+\Z", args.db):
         raise UpgradeError(f"invalid --db {args.db!r}")
+    if args.env and not args.shell:
+        raise UpgradeError("--env only applies with --shell")
+    if any(not ENV_ASSIGNMENT.match(a) for a in args.env):
+        raise UpgradeError(f"invalid --env {args.env!r}: NAME=value, NAME made of letters, digits and underscores")
     show = show or (lambda: subprocess.run(
         ["systemctl", "show", SERVICE, "-p", "EnvironmentFiles", "-p", "Environment", "-p", "User", "-p", "Group"],
         check=True, capture_output=True, text=True).stdout)
@@ -198,7 +207,7 @@ def run(argv, show=None, read_text=None, execute=None, is_active=None, out=None,
     if args.shell:
         # A shell changes no code and no tables, so the service may keep running (the caller wraps it in pagerduty-maintenance
         # when it writes). Its stdin, stdout and stderr go straight through; the exit code is odoo shell's.
-        shell_cmd = build_shell_command(service, args.db, SHELL_UNIT)
+        shell_cmd = build_shell_command(service, args.db, SHELL_UNIT, args.env)
         print("running: " + shlex.join(shell_cmd), file=out)
         return 0 if args.dry_run else (execute_shell or (lambda c: subprocess.run(c).returncode))(shell_cmd)
     if not args.dry_run and is_active():
@@ -264,6 +273,9 @@ def parse_args(argv):
     p.add_argument("--shell", action="store_true",
                    help="run a one-off `odoo shell` with the service's environment instead of an upgrade (the script on stdin); "
                         "the odoo service may keep running")
+    p.add_argument("--env", action="append", default=[], metavar="NAME=value",
+                   help="with --shell: one more environment variable for the script (a runbook step's apply switch, never a secret: "
+                        "it is printed in the `running:` line). Repeatable")
     p.add_argument("--install", help="comma-separated modules to install in the same run (-i), for a module that is new on this "
                    "database: `-u all` does not install a new auto_install module")
     p.add_argument("--log", help="write odoo's output here instead of stdout")
