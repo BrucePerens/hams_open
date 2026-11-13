@@ -83,6 +83,15 @@ class TestTriageStallAlarm(HamsTransactionCase):
         for ticket in (judged, picked_up, old, suspicious, server_exception):
             self.assertFalse(ticket.triage_stalled_at, ticket.name)
 
+    def test_03b_a_huge_threshold_is_just_never_reached(self):
+        # Tests [@ANCHOR: hams_helpdesk:cron_triage_stall_alarm]
+        # A threshold longer than any datetime (or 5000 digits) must not crash the cron on every run.
+        self._ticket(300)
+        for raw in ("9" * 20, "9" * 5000):
+            self.settings["hams_helpdesk.triage_stall_seconds"] = raw
+            self.assertEqual(self.Ticket._cron_triage_stall_alarm(), 0)
+        self.assertEqual(self.reports, [])
+
     def test_04_the_delay_from_creation_to_the_agents_verdict_is_recorded(self):
         # Tests [@ANCHOR: hams_helpdesk:triage_record_verdict]
         ticket = self._ticket(45)
