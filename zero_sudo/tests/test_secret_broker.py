@@ -261,7 +261,9 @@ class TestSecretBrokerPolicy(BaseCase):
         for good in ("/v1/charges", "/v1/charges?limit=3&a=b", "/api", "/api/x"):
             self.assertEqual(sb.check_path(good, prefixes), good)
         for bad in ("v1/x", "//evil/v1/", "/v1/../admin", "/v1/%2e%2e/x", "/v1/a%2Fb", "/v1//x", "/apix",
-                    "/v1/x@evil", "/v1/x#f", "/v1/x\\y", "/v1/x y", "/v1/\nx", "/v2/x", None):
+                    "/v1/x@evil", "/v1/x#f", "/v1/x\\y", "/v1/x y", "/v1/\nx", "/v2/x", None,
+                    "/v1/a%5cb", "/v1/a%5Cb", "/v1/a%00b", "/v1/a%252fb", 
+                    "/v1/a%255cb", "/v1/a%25252fb", "/v1/a%2525252fb", "/v1/%252e%252e/x"):
             with self.assertRaises(sb.Refused, msg=bad):
                 sb.check_path(bad, prefixes)
 

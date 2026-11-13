@@ -236,13 +236,23 @@ def scrub(value, secret):
 # [@ANCHOR: zero_sudo:secret_broker_check_path]
 def check_path(path, prefixes):
     """Refused('path_not_allowed') unless `path` is an absolute path (query allowed) under one of
-    `prefixes`, with no `..` segment, no `//`, no `@`, no `\\`, no control character and no fragment."""
+    `prefixes`, with no `..` segment, no `//`, no `@`, no `\\`, no control character, no encoded `\\`/NUL/traversal (decoded up to 3 times) and no fragment."""
     if not isinstance(path, str) or not path.startswith("/") or path.startswith("//"):
         raise Refused("path_not_allowed")
     route = path.split("?", 1)[0]
     if any(c in path for c in "@\\#") or any(ord(c) < 0x21 or ord(c) == 0x7F for c in path):
         raise Refused("path_not_allowed")
     if "//" in route or ".." in route.split("/") or "%2e" in route.lower() or "%2f" in route.lower():
+        raise Refused("path_not_allowed")
+    # Decode up to 3 times: refuse a backslash or NUL, a slash that was not in the route as sent
+    # (%2f, %252f...), a `..` segment, or a '%' sequence still decodable after the third pass.
+    decoded = route
+    for _ in range(3):
+        decoded = urllib.parse.unquote(decoded)
+        if ("\\" in decoded or "\x00" in decoded or decoded.count("/") != route.count("/")
+                or ".." in decoded.split("/")):
+            raise Refused("path_not_allowed")
+    if decoded != urllib.parse.unquote(decoded):
         raise Refused("path_not_allowed")
     if not any(route == p.rstrip("/") or route.startswith(p.rstrip("/") + "/") for p in prefixes):
         raise Refused("path_not_allowed")
