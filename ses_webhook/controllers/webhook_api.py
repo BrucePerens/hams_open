@@ -161,9 +161,13 @@ def _fetch_sns_signing_cert(signing_cert_url):
     # _SNS_SIGNING_CERT_URL_RE) before this function is ever reached. The regex fixes the name, not the address, so the
     # fetch itself also refuses a private or loopback address and re-checks every redirect hop.
     with urlopen_ssrf_safe(signing_cert_url, "ses_webhook_sns_signing_cert", https_only=True, timeout=10) as resp:
-        cert_pem = resp.read()
+        cert_pem = resp.read(_MAX_SNS_CERT_BYTES)
     x509.load_pem_x509_certificate(cert_pem)
     return cert_pem
+
+
+# A signing certificate is a couple of kilobytes of PEM; anything larger is not one and is cut off before it is parsed.
+_MAX_SNS_CERT_BYTES = 65536
 
 
 # [@ANCHOR: ses_webhook:COMM_verify_sns_signature]

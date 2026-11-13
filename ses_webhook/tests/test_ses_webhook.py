@@ -720,6 +720,18 @@ class TestSesWebhook(HamsHttpCase):
         )
         _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
 
+    def test_33b_fetch_sns_signing_cert_reads_a_bounded_body(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_fetch_sns_signing_cert]
+        """The certificate response is read with a size cap, so a hostile host cannot stream without end."""
+        _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
+        mock_urlopen = self.safe_patch('odoo.addons.ses_webhook.controllers.webhook_api.urlopen_ssrf_safe')
+        reader = mock_urlopen.return_value.__enter__.return_value.read
+        reader.return_value = self._sns_cert_pem
+        _REAL_FETCH_SNS_SIGNING_CERT("https://sns.us-east-1.amazonaws.com/SimpleNotificationService-captest00000000000000000000000.pem")
+        (size,) = reader.call_args.args
+        self.assertTrue(0 < size <= 1 << 20)
+        _REAL_FETCH_SNS_SIGNING_CERT.cache_clear()
+
     def test_33c_fetch_sns_signing_cert_refuses_a_link_local_address(self):
         # Tests [@ANCHOR: ses_webhook:COMM_fetch_sns_signing_cert]
         """The URL regex fixes the host name; the fetch itself must also refuse an address the server can reach but a
