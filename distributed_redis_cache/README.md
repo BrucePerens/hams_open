@@ -228,6 +228,26 @@ declares no `post_init_hook`).
 
 **See also.** Test `tests/test_hooks.py`; `distributed_redis_cache:unregister_cache_manager_key`.
 
+### 7b. `provision(admin_host, admin_port, admin_user, admin_password, target_db, role_name)` (`scripts/provision_cache_manager_db_role.py`): create the cache manager's database role [@ANCHOR: distributed_redis_cache:provision]
+
+**Purpose.** Creates (or re-keys) the restricted PostgreSQL role the cache-manager daemon logs in with, and returns the new password, for a database host the module's own local provisioning cannot reach.
+
+**Call interface.** Connects to the `postgres` database with the admin credentials (autocommit, closed on every path). It draws a 32-byte URL-safe random password. If `role_name` exists it runs `ALTER ROLE ... LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD`, so the old password stops working; otherwise `CREATE ROLE` with the same flags. It then grants `CONNECT` on `target_db` to the role and nothing else. Role and database names go through `sql.Identifier`, the password through a bound parameter. Returns the password string; it prints only the role name, never the password. A database error propagates.
+
+**Special concerns.** Re-running rotates the password, so a running daemon fails to log in until it reads the new file. A role of the same name that was made for another purpose loses its privilege flags and its password. The role gets no table grants, but PostgreSQL's default privileges for `PUBLIC` (for example `USAGE` on schema `public`) still apply. The admin password is passed in process and never written.
+
+**See also.** Tests `ProvisionTests` in `scripts/test_provision_cache_manager_db_role.py`; `distributed_redis_cache:write_env_file`.
+
+### 7c. `write_env_file(path, role_name, password, admin_host, admin_port, target_db)` (`scripts/provision_cache_manager_db_role.py`): write the daemon's credentials file [@ANCHOR: distributed_redis_cache:write_env_file]
+
+**Purpose.** Stores the role and password `provision` returned in the env file the cache-manager daemon reads, so a new or changed password never sits in a file with looser permissions.
+
+**Call interface.** Creates the directory of `path` with mode 0700 if it is missing. Writes `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASS` (with two comment lines) to a new file `<path>.tmp.<pid>` created with `O_EXCL` at mode 0600, copies the owner and group of an existing file at `path` onto it (when not root, a `PermissionError` is reported and the owner stays the current user), then `os.replace`s it over `path`; the temporary file is removed when anything fails before the replace. Returns `None`. It prints a hint to give the file to the daemon's account (`chown odoo:hamsd_cache_manager`, `chmod 0640`).
+
+**Special concerns.** The mode of an older file is never reused: an existing 0644 file ends up as a 0600 file holding the new password. The temporary name is predictable but opened with `O_EXCL`, so an existing path of that name (including a symlink) makes the call fail instead of being followed. The final mode for the daemon is set by the operator's `chmod`, not here.
+
+**See also.** `WriteEnvFileTests` in `scripts/test_provision_cache_manager_db_role.py`; `distributed_redis_cache:provision`.
+
 ### 8. `main()` (`daemons/cache_manager.py`): the cache manager daemon loop `[@ANCHOR: distributed_redis_cache:cache_manager_main]`
 
 **Purpose.** The whole run of `hams-cache-manager`: it listens on one PostgreSQL channel (`PG_CHANNEL`) of one database and re-publishes every notification to Redis, so every Odoo worker and server sees a cache invalidation. It is the body of `asyncio.run(main())` at the foot of the file.
