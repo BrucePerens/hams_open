@@ -231,7 +231,12 @@ class EdgeRoutingMixin(models.AbstractModel):
         # get_record_by_slug() caches a miss too: a visit to /<slug> before this record existed must not keep the new slug dead
         slugs = [s for s in records.mapped("website_slug") if s]
         if slugs:
-            self.env["zero_sudo.security.utils"]._notify_cache_invalidation(self._name, slugs)
+            try:
+                self.env["zero_sudo.security.utils"]._notify_cache_invalidation(self._name, slugs)
+            except Exception as e:  # audit-ignore-catch-all
+                # Same reason as the write() and unlink() guards: the cache ping is best effort, and a
+                # pg_notify() failure raises a psycopg2 error, which must not abort creating the record.
+                _logger.warning("Failed to notify cache invalidation on create for %s: %s", slugs, e)
         return records
 
     # # Verified by [@ANCHOR: user_websites:test_slug_cache_invalidation]
