@@ -68,6 +68,16 @@ class WriteEnvFileTests(unittest.TestCase):
 
         mode = stat.S_IMODE(os.stat(path).st_mode)
         self.assertEqual(mode, 0o600, "credentials file must not be group/world readable")
+    def test_existing_world_readable_file_ends_up_0600_with_the_new_password(self):
+        path = os.path.join(self.tmp_dir, "cache_manager_db.env")
+        with open(path, "w") as f:
+            f.write("DB_PASS=old\n")
+        os.chmod(path, 0o644)
+        script.write_env_file(path, "cache_manager_ro", "newpw", "dbhost", "5432", "odoo")
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+        with open(path) as f:
+            self.assertIn("DB_PASS=newpw\n", f.read())
+        self.assertEqual(os.listdir(self.tmp_dir), ["cache_manager_db.env"])
 
 
 class ProvisionTests(unittest.TestCase):
