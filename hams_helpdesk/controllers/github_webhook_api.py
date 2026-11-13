@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 
+from markupsafe import escape
 from odoo import _, http
 from odoo.http import request
 
@@ -198,10 +199,10 @@ class GithubWebhookController(http.Controller):
         description = (
             "<p>%s</p><ul><li>%s</li><li>%s</li><li>%s</li></ul>"
             % (
-                _("A dependabot security alert (%s) was reported.") % action,
-                _("Repository: %s") % repo_full_name,
-                _("Severity: %s") % severity,
-                _('Alert: <a href="%(url)s">%(url)s</a>') % {"url": html_url},
+                _("A dependabot security alert (%s) was reported.") % escape(action),
+                _("Repository: %s") % escape(repo_full_name),
+                _("Severity: %s") % escape(severity),
+                _('Alert: <a href="%(url)s">%(url)s</a>') % {"url": escape(html_url)},
             )
         )
         Ticket._github_webhook_ticket_for(
@@ -244,10 +245,10 @@ class GithubWebhookController(http.Controller):
             "<p>%s</p><ul><li>%s</li><li>%s</li><li>%s</li></ul>"
             % (
                 _("A GitHub Actions workflow run failed."),
-                _("Repository: %s") % repo_full_name,
+                _("Repository: %s") % escape(repo_full_name),
                 _("Branch/commit: %(branch)s @ %(commit)s")
-                % {"branch": branch, "commit": commit_sha},
-                _('Run: <a href="%(url)s">%(url)s</a>') % {"url": html_url},
+                % {"branch": escape(branch), "commit": escape(commit_sha)},
+                _('Run: <a href="%(url)s">%(url)s</a>') % {"url": escape(html_url)},
             )
         )
         Ticket._github_webhook_ticket_for(
