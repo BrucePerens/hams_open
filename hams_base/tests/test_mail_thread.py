@@ -32,6 +32,25 @@ class TestMailThread(HamsTransactionCase):
         result = self.env['mail.thread'].message_route('Unsubscribe me please', msg_dict)
         self.assertEqual(result, [])
 
+    def test_bounce_notice_quoting_an_unsubscribe_link_is_not_dropped(self):
+        # Tests [@ANCHOR: hams_base:COMM_message_route]
+        # A delivery-failure notice returned to the bounce alias quotes the mail that failed, which
+        # carries its own "unsubscribe" footer. It must reach Odoo's bounce handling (that is what
+        # blacklists the dead address), not be dropped as a manual unsubscribe request.
+        routed = self.safe_patch(
+            'odoo.addons.mail.models.mail_thread.MailThread.message_route', return_value=['routed']
+        )
+        msg_dict = {
+            'to': 'auto-mail-failure@hams.com',
+            'subject': 'Undelivered Mail Returned to Sender',
+            'body': 'Delivery failed. Original message: ... click here to unsubscribe ...',
+            'email_from': 'mailer-daemon@example.net',
+            'bounced_email': 'gone@example.net',
+        }
+        result = self.env['mail.thread'].message_route('Undelivered', msg_dict)
+        self.assertEqual(result, ['routed'])
+        self.assertTrue(routed.called)
+
     def test_postmaster_vacation_reply_dropped(self):
         # postmaster@ gets the same DSN-bounce/vacation-reply noise
         # filtering as the dedicated bounce alias and not-read@ (see
