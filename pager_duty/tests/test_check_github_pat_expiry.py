@@ -7,6 +7,7 @@ import datetime
 import io
 import os
 import tempfile
+import urllib.error
 from unittest.mock import MagicMock
 
 from odoo.tests.common import tagged
@@ -94,6 +95,19 @@ class TestGithubPatExpiryCheck(HamsTransactionCase):
         read, fail cleanly -- never a raw traceback out of a monitoring check."""
         os.environ["HAMS_GITHUB_PAT_PATH"] = os.path.join(self.tmpdir.name, "does_not_exist.token")
         self.assertEqual(check_mod.main(), 1)
+
+    def test_05b_a_github_outage_exits_nonzero_with_one_line_and_no_token_in_it(self):
+        # Tests [@ANCHOR: pager_duty:github_pat_expiry_main]
+        _write_token(self.token_path)
+        token = open(self.token_path, encoding="utf-8").read().strip()
+        for error in (urllib.error.URLError("connection refused"), TimeoutError("timed out"),
+                      urllib.error.HTTPError("https://api.github.com/user", 302, "Found", {}, None)):
+            self.safe_patch("odoo.addons.pager_duty.daemon.check_github_pat_expiry._OPENER.open", side_effect=error)
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(check_mod.main(), 1, error)
+            self.assertIn("GitHub token check failed", err.getvalue())
+            self.assertNotIn(token, err.getvalue())
 
     def test_05_unparseable_expiration_header_exits_nonzero_not_raises(self):
         _write_token(self.token_path)
