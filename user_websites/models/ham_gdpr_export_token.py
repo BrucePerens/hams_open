@@ -17,6 +17,9 @@ from odoo.addons.zero_sudo import public_rpc
 # window.
 TOKEN_EXPIRY_MINUTES = 5
 
+# Rows the daily vacuum deletes per page.
+TOKEN_VACUUM_PAGE = 1000
+
 
 # [@ANCHOR: user_websites:COMM_gdpr_token_rejected]
 # Verified by [@ANCHOR: test_gdpr_export_token_unknown_rejected]
@@ -142,6 +145,23 @@ class HamGdprExportToken(models.Model):
             raise GdprExportTokenRejected(_("Export token has expired."))
         # # Verified by [@ANCHOR: test_gdpr_export_token_single_use]
         return self.env["res.users"].browse(user_id)
+
+    @api.model
+    # [@ANCHOR: user_websites:gdpr_token_vacuum]
+    def _cron_vacuum_tokens(self):
+        """Daily: deletes every token older than a day (a token is dead after TOKEN_EXPIRY_MINUTES, used or
+        not). Pages by id, a page at a time, until nothing old is left, so no row is skipped by a cap."""
+        # Verified by [@ANCHOR: test_gdpr_token_vacuum]
+        cutoff = fields.Datetime.now() - timedelta(days=1)
+        last_id = 0
+        while True:
+            page = self.search(
+                [("id", ">", last_id), ("create_date", "<", cutoff)], order="id", limit=TOKEN_VACUUM_PAGE
+            )
+            if not page:
+                break
+            last_id = page.ids[-1]
+            page.unlink()
 
     @api.model
     # [@ANCHOR: user_websites:COMM_gdpr_consume_and_export]
