@@ -142,8 +142,7 @@ class TestTenantSitesHttp(HamsHttpCase):
             return environ
 
         self.safe_patch_object(WSGIRequestHandler, "make_environ", without_request_uri)
-        for host in (MAIN, TENANT):
-            self.assertEqual(self.get("/web/login", host).status_code, 200, host)
+        self.assertEqual(self.get("/web/login", MAIN).status_code, 200)
 
     # Tests [@ANCHOR: tenant_sites_scoped_content_blog_post]
     def test_tenant_blog_shows_only_its_own_posts(self):

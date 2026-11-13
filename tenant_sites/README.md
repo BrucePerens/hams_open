@@ -49,8 +49,8 @@ already have those rules, so the guard protects them from the first push.
 **Purpose.** Odoo's `website` module reads `request.httprequest.environ['REQUEST_URI']` without a default in `_serve_redirect` and in the canonical
 URL of every page it renders. Werkzeug's server (Odoo's HTTP workers) sets that key; the gevent server of the websocket worker (port 8072) does not.
 nginx sends everything under the prefix `/websocket` to that worker, so `/websocket.js` and `/websocket.js.map` (browsers and extensions ask for them) reached
-Odoo without the key and ended in `KeyError` and HTTP 500 (tickets 134 and 136, 2026-11-03). Called first thing by `_serve_fallback`, which every
-request that matched no route passes through.
+Odoo without the key and ended in `KeyError` and HTTP 500 (tickets 134 and 136, 2026-11-03). Called first thing by `_match`, which every request passes through, so pages that match a route
+(`/web/login`) are covered as well as the fallback.
 
 **Call interface.**
 
@@ -66,7 +66,7 @@ when there is a query string. A value that is already present is never changed. 
 page is served; it is not a security check and the value is used only to look up redirects and to build canonical URLs.
 
 **See also.** Test `test_a_request_without_request_uri_is_a_404_not_a_server_error` in `tests/test_http.py` (a real request with the key removed from the server's environment);
-`[@ANCHOR: tenant_sites:COMM_serve_fallback]`, the caller.
+`[@ANCHOR: tenant_sites:COMM_match_guard]`, the caller.
 
 ## Model and request helpers
 
