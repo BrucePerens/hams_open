@@ -91,6 +91,16 @@ class TestDmarcParser(common.TransactionCase):
         self.assertEqual(report_a.org_name, "google.com")
         self.assertEqual(report_b.org_name, "yahoo.com")
 
+    def test_same_report_id_from_different_reporters_is_not_deduplicated(self):
+        # report_id is unique per reporting organization, not globally.
+        xml_b = self.sample_xml.replace("<org_name>google.com</org_name>", "<org_name>yahoo.com</org_name>")
+        report_a = self.DmarcReport._parse_dmarc_xml(self.sample_xml)
+        report_b = self.DmarcReport._parse_dmarc_xml(xml_b)
+        self.assertNotEqual(report_a.id, report_b.id)
+        self.assertEqual(report_b.org_name, "yahoo.com")
+        # the same reporter resending the same id is still deduplicated
+        self.assertEqual(self.DmarcReport._parse_dmarc_xml(self.sample_xml).id, report_a.id)
+
     def test_message_new_with_zip(self):
         # Tests [@ANCHOR: hams_base:COMM_dmarc_message_new]
 
