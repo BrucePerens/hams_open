@@ -104,8 +104,10 @@ Few generic tools take an `instrument` name (optional when only one instrument f
 | `bench_psu_safe_state` | read_config (output off, read back) | supply |
 | `bench_scope_self_cal` | full (needs `confirm_inputs_disconnected: true`) | scope |
 | `bench_vna_sweep` | read_config (it puts RF on the TX port) | VNA |
-| `bench_vna_generator_on`, `_off`, `_level`, `_am` | read_config (RF on the TX port at the unit's own level, about -17 dBm at 0 dB) | VNA |
+| `bench_vna_generator_on`, `_off`, `_level`, `_am`, `_fm` | read_config (RF on the TX port at the unit's own level, about -17 dBm at 0 dB) | VNA |
 | `bench_vna_meter` | read_config (the TX DDS runs at the centre during the measurement) | VNA |
+| `bench_vna_spectrum` | read_config (RX port; `tracking_db` also puts RF on the TX port) | VNA |
+| `bench_vna_time_domain` | read_config (host only, sends nothing to the unit) | VNA |
 | `bench_vna_calibrate_measure`, `bench_vna_calibrate_build` | read_config | VNA |
 | `bench_vna_power_cycle` | read_config (switches the unit's hub port; the verification puts RF on the TX port) | VNA |
 | `bench_sa_status`, `bench_sa_screenshot` | read_only | spectrum analyzer |
@@ -307,9 +309,8 @@ The tools `bench_scope_history`, `_reference`, `_setup`, `_passfail`, `_measure_
 ## The VNA's functions as tools (2026-10-28)
 
 `bench_vna_sweep` (optionally corrected with `calibration=<file>` and the same `cable` text), `bench_vna_calibrate_measure` and `_build` (open, short, load, thru; a kit file with
-the real kit's published numbers, see vnwa_open `cal::KitDefinition`), `bench_vna_generator_on`/`_off`/`_level`/`_am`, `bench_vna_meter`, `bench_vna_status`,
-`bench_vna_power_cycle`. There is no spectrum-analyzer tool: the vendor's rudimentary VNA spectrum mode has not been decoded (the scope's `bench_scope_spectrum` is the
-spectrum tool). The AM tool reproduces the one captured setting (500 Hz, 100 %, -20 dB) and only a power cycle stops it. A running generator and a sweep or the meter must not
+the real kit's published numbers, see vnwa_open `cal::KitDefinition`), `bench_vna_generator_on`/`_off`/`_level`/`_am`/`_fm`, `bench_vna_meter`, `bench_vna_spectrum`, `bench_vna_time_domain` (host only), `bench_status`,
+`bench_vna_power_cycle`. `bench_vna_spectrum` is the vendor's rudimentary spectrum mode (uncalibrated counts, use below about 100 MHz; ghost lines and subharmonics are not yet characterised, which needs the unit; `bench_scope_spectrum` is the independent check). AM takes carrier, level, modulation frequency and depth; FM takes a deviation; either ends with `bench_vna_generator_off` (a USB reset of the control chip, no power cycle). A running generator and a sweep or the meter must not
 overlap (the burst overwrites the generator's settings): one VNA call at a time is enforced by the server's per-instrument lock, but switch the generator off before a sweep.
 
 ## USB hub tools (`usb_hub` driver)
@@ -400,7 +401,7 @@ Checks this crate makes for the template instrument (anchors):
 * A pulse needs `confirm`, honours `dry_run`, and ends with the output off and verified off.
 * The safe state is verified by reading it back, and a failure says what to do by hand.
 * The VNWA power-cycle hook is the hub module's one implementation, installed on the VNA.
-* `bench_vna_spectrum` captures a spectrum and `bench_vna_modulation_stop` stops a running modulation; both are exercised on real hardware by `tests/hil.rs` (ignored by default).
+* `bench_vna_spectrum` captures a spectrum and `bench_vna_generator_off` stops a running modulation (anchor `bench_vna_modulation_stop`); both are exercised on real hardware by `tests/hil.rs` (ignored by default).
 * `bench_vna_time_domain` transforms a stored sweep CSV (impulse or step, windows, optional time gate) on the host, without the unit, and reads only a `.csv` in the output directory.
 * The scope's channel math and cursors are computed on the host from the waveform memory (one frozen frame for the two channels), its acquisition, channel and display settings are read back after being set, and `bench_measure` can repeat a reading for statistics.
 * A sound node reserved by its USB topology (the VNWA codecs, found by bus path as well as by id) is refused as a target.
