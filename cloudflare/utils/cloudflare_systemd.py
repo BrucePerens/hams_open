@@ -165,6 +165,8 @@ def _write_secure_file(path, content, mandatory_prefix):
             raise
         with os.fdopen(fd, "w") as f:
             f.write(content)
+            f.flush()
+            os.fsync(f.fileno())  # a power loss must not publish an empty token file
         os.rename(tmp_path, path)
     except BaseException:  # audit-ignore-catch-all
         if os.path.exists(tmp_path):

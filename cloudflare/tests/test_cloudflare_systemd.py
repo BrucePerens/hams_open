@@ -193,6 +193,17 @@ class TestCloudflareSystemd(HamsTransactionCase):
             if os.path.exists(path):
                 os.remove(path)
 
+    def test_10b_write_secure_file_flushes_the_temp_file_before_the_rename(self):
+        # Tests [@ANCHOR: cloudflare:COMM_systemd_write_secure_file]
+        path = os.path.join(cf_systemd._KEYS_DIR, "test_cloudflare_systemd_flush.env")
+        fsync = self.safe_patch("os.fsync", wraps=os.fsync)
+        try:
+            cf_systemd._write_secure_file(path, "FOO=bar\n", cf_systemd._KEYS_DIR)
+            self.assertGreaterEqual(fsync.call_count, 1)
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     # Tests [@ANCHOR: cloudflare:cloudflare_systemd] (secure file writing)
     def test_11_write_secure_file_refuses_a_sibling_directory_sharing_the_prefix(self):
         # Tests [@ANCHOR: cloudflare:COMM_systemd_write_secure_file]
