@@ -33,11 +33,13 @@ Security model, all of it enforced here and again by the models:
 """
 import base64
 import functools
+import io
 import json
 import logging
 from urllib.parse import quote
 
 import redis
+from PIL import Image, ImageOps, UnidentifiedImageError, WebPImagePlugin
 from lxml import etree, html as lxml_html
 from markupsafe import Markup
 from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
@@ -60,6 +62,9 @@ _logger = logging.getLogger(__name__)
 SVC = "user_websites.user_websites_service_account"
 MAX_TITLE_CHARS = 120
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
+MAX_IMAGE_PIXELS = 16_000_000
+# odoo.tools.image turns off Pillow's lazy plugin loading, so WebP is unknown unless its plugin is imported.
+WEBP_READER = WebPImagePlugin.WebPImageFile
 MAX_IMAGES_PER_SITE = 100
 WRITES_PER_MINUTE = 30
 UPLOADS_PER_MINUTE = 10
@@ -82,6 +87,36 @@ def _image_mimetype(data):
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "image/webp"
     return None
+
+
+def clean_member_image(data, mimetype):
+    # [@ANCHOR: user_websites:owner_image_reencode]
+    # Verified by [@ANCHOR: test_owner_image_reencode]
+    """Bytes of the picture without its metadata, or None when it cannot be read or is too many pixels.
+
+    A phone photo carries the GPS position of the place it was taken, often a member's home, and the
+    image is served publicly. JPEG, PNG and WebP are decoded and written out again, which drops EXIF,
+    comments and anything appended after the picture. GIF has no location metadata and is kept as sent.
+    """
+    if mimetype == "image/gif":
+        return data
+    try:
+        picture = Image.open(io.BytesIO(data))
+        width, height = picture.size
+        if width * height > MAX_IMAGE_PIXELS:
+            return None
+        picture = ImageOps.exif_transpose(picture)
+        picture.load()
+        out = io.BytesIO()
+        if mimetype == "image/jpeg":
+            picture.convert("RGB").save(out, "JPEG", quality=90)
+        elif mimetype == "image/png":
+            picture.save(out, "PNG")
+        else:
+            picture.save(out, "WEBP", quality=90)
+    except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
+        return None
+    return out.getvalue()
 
 
 def _page_arch(site_slug, page_key, title, body_html):
@@ -768,6 +803,9 @@ class UserWebsitesOwnerController(http.Controller):
         mimetype = _image_mimetype(data)
         if not mimetype:
             return reply(False, "Use a JPEG, PNG, GIF or WebP image.", status=415)
+        data = clean_member_image(data, mimetype)
+        if data is None:
+            return reply(False, "That image cannot be read, or is too large in pixels.", status=415)
         svc = self._svc()
         res_model, res_id = self._attachment_owner(profile_user, profile_group)
         if (
