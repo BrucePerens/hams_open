@@ -18,6 +18,7 @@ import shutil
 import ssl
 import struct
 import tempfile
+from unittest import mock
 import threading
 import time
 
@@ -216,6 +217,20 @@ class TestSecretBrokerPolicy(BaseCase):
         header = sb.https_call(dict(base, auth="header", header_name="X-Api-Key"), SECRET, "GET", "/api")
         self.assertEqual(json.loads(header["body"])["auth"], "")
 
+    def test_a_provider_response_above_the_size_limit_is_refused_not_relayed(self):
+        # Tests [@ANCHOR: zero_sudo:secret_broker_https_call]
+        server, ca_file = _tls_server(self.tmp)
+        self.addCleanup(server.shutdown)
+        base = {"base_url": f"https://{TEST_HOST}:{server.server_address[1]}", "ca_file": ca_file,
+                "methods": ["GET"], "path_prefixes": ["/api"], "auth": "bearer"}
+        self.assertEqual(sb.https_call(base, SECRET, "GET", "/api")["status"], 200)
+        original = sb.MAX_RESPONSE_BYTES
+        self.addCleanup(setattr, sb, "MAX_RESPONSE_BYTES", original)
+        sb.MAX_RESPONSE_BYTES = 10  # the echoed body is longer than this
+        with self.assertRaises(sb.Refused) as caught:
+            sb.https_call(base, SECRET, "GET", "/api")
+        self.assertEqual(str(caught.exception), "response_too_large")
+
     def test_refusals(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_refused_init]
         broker = self._broker()
@@ -323,6 +338,58 @@ class TestSecretBrokerIsolation(BaseCase):
         self.tmp = tempfile.mkdtemp(prefix="secret_broker_")
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.os_uid = os.getuid()
+
+    def test_a_request_above_the_size_limit_gets_request_too_large_and_is_never_handled(self):
+        # Tests [@ANCHOR: zero_sudo:secret_broker_serve_connection]
+        import socket as _socket
+        broker = sb.Broker(_config(os.path.join(self.tmp, "b.sock")), ss.SecretStore([ss.SystemdCredentialBackend(self.tmp)]), {self.os_uid})
+        handled = []
+        broker.handle = lambda data, uid: handled.append(data) or {"ok": True}
+        client, server_side = _socket.socketpair(_socket.AF_UNIX, _socket.SOCK_STREAM)
+        self.addCleanup(client.close)
+        self.addCleanup(server_side.close)
+        client.settimeout(5)
+        server_side.settimeout(5)
+        sender = threading.Thread(target=lambda: self._send_quietly(client, b"x" * (sb.MAX_REQUEST_BYTES + 70000)))  # burn-ignore-test-daemon-thread: joined below
+        sender.start()
+        broker.serve_connection(server_side)
+        sender.join(10)
+        client.settimeout(5)
+        reply = b""
+        try:
+            while not reply.endswith(b"\n"):
+                chunk = client.recv(65536)
+                if not chunk:
+                    break
+                reply += chunk
+        except OSError:
+            pass
+        self.assertEqual(json.loads(reply), {"ok": False, "error": "request_too_large"})
+        self.assertEqual(handled, [])
+
+    def test_a_peer_whose_kernel_reported_uid_is_not_allowed_is_refused_without_reading_its_request(self):
+        # Tests [@ANCHOR: zero_sudo:secret_broker_serve_connection]
+        import socket as _socket
+        store = ss.SecretStore([ss.SystemdCredentialBackend(self.tmp)])
+        broker = sb.Broker(_config(os.path.join(self.tmp, "b.sock")), store, {self.os_uid + 1})
+        handled = []
+        broker.handle = lambda data, uid: handled.append(data) or {"ok": True}
+        client, server_side = _socket.socketpair(_socket.AF_UNIX, _socket.SOCK_STREAM)
+        self.addCleanup(client.close)
+        client.settimeout(5)
+        client.sendall(b'{"v": 1, "op": "hmac_sign", "args": {}}\n')
+        client.shutdown(_socket.SHUT_WR)  # the broker waits for the caller's EOF before it closes
+        broker.serve_connection(server_side)
+        self.assertEqual(json.loads(client.recv(65536)), {"ok": False, "error": "peer_not_allowed"})
+        self.assertEqual(handled, [])
+
+    @staticmethod
+    def _send_quietly(sock, data):
+        try:
+            sock.sendall(data)
+            sock.shutdown(2 - 1)  # SHUT_WR: end of the request
+        except OSError:
+            pass
 
     def test_acl_entries(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_acl_grants_read]
@@ -516,3 +583,47 @@ class TestSecretBrokerProvisioning(BaseCase):
             self.assertEqual(provision.main(["--web-user", "odoo", "--code-dir", tmp, "--dry-run"]), 0)
             if os.geteuid() != 0:
                 self.assertEqual(provision.main(["--web-user", "odoo", "--code-dir", tmp]), 2)
+
+    def test_apply_writes_files_with_the_stated_mode_and_refuses_to_follow_a_symlink(self):
+        # Tests [@ANCHOR: zero_sudo:secret_broker_provision_apply]
+        tmp = tempfile.mkdtemp(prefix="secret_broker_prov_")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        keep = os.path.join(tmp, "etc", "broker.json")
+        unit = os.path.join(tmp, "units", "broker.service")
+        steps = [("dir", os.path.join(tmp, "creds"), 0o700), ("file_if_absent", keep, 0o600, "{}"),
+                 ("file", unit, 0o644, "unit-v1")]
+        with mock.patch.object(provision.os, "chown") as chown, contextlib.redirect_stdout(io.StringIO()):
+            provision.apply(steps, False)
+            self.assertEqual(os.stat(os.path.join(tmp, "creds")).st_mode & 0o777, 0o700)
+            self.assertEqual(os.stat(keep).st_mode & 0o777, 0o600)
+            self.assertEqual(os.stat(unit).st_mode & 0o777, 0o644)
+            chown.assert_any_call(unit, 0, 0)  # root-owned
+            with open(keep, "w") as handle:
+                handle.write("operator edit")
+            provision.apply([("file_if_absent", keep, 0o600, "{}"), ("file", unit, 0o644, "unit-v2")], False)
+            with open(keep) as handle:
+                self.assertEqual(handle.read(), "operator edit")  # an existing config is never rewritten
+            with open(unit) as handle:
+                self.assertEqual(handle.read(), "unit-v2")  # a unit is refreshed
+            victim = os.path.join(tmp, "victim")
+            with open(victim, "w") as handle:
+                handle.write("untouched")
+            link = os.path.join(tmp, "units", "link.service")
+            os.symlink(victim, link)
+            with self.assertRaises(OSError):
+                provision.apply([("file", link, 0o644, "pwned")], False)
+        with open(victim) as handle:
+            self.assertEqual(handle.read(), "untouched")
+
+    def test_a_failing_provisioning_command_stops_the_run(self):
+        # Tests [@ANCHOR: zero_sudo:secret_broker_provision_apply]
+        import subprocess
+        ran = []
+
+        def run(cmd, check):
+            ran.append(cmd)
+            raise subprocess.CalledProcessError(1, cmd)
+
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(subprocess.CalledProcessError):
+            provision.apply([("run", ["useradd", "x"]), ("run", ["systemctl", "daemon-reload"])], False, run=run)
+        self.assertEqual(ran, [["useradd", "x"]])
