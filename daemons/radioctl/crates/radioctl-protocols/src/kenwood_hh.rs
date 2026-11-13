@@ -172,7 +172,9 @@ impl KenwoodHhEngine {
         }
         let mode = *bytes.get(mode_at)?;
         let hz = digits.parse().ok()?;
-        mode.is_ascii_digit().then_some((Hz(hz), mode - b'0'))
+        mode.checked_sub(b'0')
+            .filter(|d| *d <= 9)
+            .map(|d| (Hz(hz), d))
     }
 
     fn mode_observation(&self, digit: u8) -> Option<Inbound> {
