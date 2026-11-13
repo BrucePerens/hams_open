@@ -220,11 +220,18 @@ class DatabaseQueryStat(models.Model):
                 plan_line text;
                 full_plan text := '';
             BEGIN
-                EXECUTE 'SET LOCAL default_transaction_read_only = on';
-                FOR plan_line IN EXECUTE 'EXPLAIN (ANALYZE, BUFFERS) ' || q LOOP
-                    full_plan := full_plan || plan_line || E'\\n';
-                END LOOP;
-                RETURN full_plan;
+                -- The inner block is a subtransaction: SET LOCAL transaction_read_only makes the
+                -- EXPLAIN ANALYZE refuse any write, and raising at the end rolls the subtransaction
+                -- back (restoring the setting) while carrying the plan out in the message.
+                BEGIN
+                    SET LOCAL transaction_read_only = on;
+                    FOR plan_line IN EXECUTE 'EXPLAIN (ANALYZE, BUFFERS) ' || q LOOP
+                        full_plan := full_plan || plan_line || E'\\n';
+                    END LOOP;
+                    RAISE EXCEPTION USING ERRCODE = 'DBX01', MESSAGE = full_plan;
+                EXCEPTION WHEN SQLSTATE 'DBX01' THEN
+                    RETURN SQLERRM;
+                END;
             END;
             $$ LANGUAGE plpgsql;
         """)
