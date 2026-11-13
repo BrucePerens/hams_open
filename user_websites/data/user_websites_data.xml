@@ -134,6 +134,19 @@
             <field name="active" eval="True"/>
         </record>
 
+        <record id="ir_cron_vacuum_gdpr_export_tokens" model="ir.cron">
+            <!-- [@ANCHOR: ir_cron_vacuum_gdpr_export_tokens] -->
+            <!-- audit-ignore-cron: Tested by [@ANCHOR: test_gdpr_token_vacuum] -->
+            <field name="name">User Websites: Delete Old GDPR Export Tokens</field>
+            <field name="model_id" ref="user_websites.model_ham_gdpr_export_token"/>
+            <field name="user_id" ref="user_websites.user_gdpr_export_service"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_vacuum_tokens()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active" eval="True"/>
+        </record>
+
         <record id="ir_cron_flush_view_counters" model="ir.cron">
             <!-- [@ANCHOR: ir_cron_flush_view_counters] -->
 

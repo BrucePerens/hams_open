@@ -5,6 +5,7 @@ import odoo.tests
 from odoo import fields
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
+from odoo.addons.user_websites.models import ham_gdpr_export_token as token_model
 from odoo.addons.user_websites.models.ham_gdpr_export_token import (
     TOKEN_EXPIRY_MINUTES,
     GdprExportTokenRejected,
@@ -215,6 +216,33 @@ class TestPrivacyGDPR(HamsHttpCase):
 
         with self.assertRaises(odoo.exceptions.AccessError):
             Token._consume("an-old-token")
+
+    def test_01g_vacuum_deletes_every_old_token_across_pages_and_keeps_recent_ones(self):
+        # Tests [@ANCHOR: user_websites:gdpr_token_vacuum]
+        # Tests [@ANCHOR: ir_cron_vacuum_gdpr_export_tokens]
+        # [@ANCHOR: test_gdpr_token_vacuum]
+        """Tokens were never deleted. The daily vacuum removes all those older than a day, even
+        when they span several pages, and leaves a recent one alone."""
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "user_websites.user_gdpr_export_service"
+        )
+        Token = self.env["ham.gdpr.export.token"].with_user(svc_uid)
+        self.safe_patch_object(token_model, "TOKEN_VACUUM_PAGE", 2)
+        old = Token.create(
+            [{"user_id": self.user_privacy.id, "token": f"vacuum-old-{n}"} for n in range(5)]
+        )
+        recent = Token.create({"user_id": self.user_privacy.id, "token": "vacuum-recent"})
+        stale = fields.Datetime.now() - timedelta(days=2)
+        self.env.cr.execute(
+            "UPDATE ham_gdpr_export_token SET create_date = %s WHERE id IN %s",
+            (stale, tuple(old.ids)),
+        )
+        old.invalidate_recordset(["create_date"])
+
+        Token._cron_vacuum_tokens()
+
+        self.assertFalse(old.exists(), "Every old token must be deleted, across all pages.")
+        self.assertTrue(recent.exists(), "A recent token must be kept.")
 
     def test_01d2_every_token_rejection_is_the_distinct_error_the_daemon_matches(self):
         # Tests [@ANCHOR: user_websites:COMM_gdpr_token_rejected]
