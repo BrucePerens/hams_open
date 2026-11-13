@@ -1018,6 +1018,16 @@ class HelpdeskTicket(models.Model):
         so it is safe to call twice."""
         hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
         due = self.with_env(hd_env).filtered(lambda t: t.notify_state != "sent" and t.stage != "spam")
+        if due:
+            # Claim the rows in the database: a release running in another transaction (the cron against a triage verdict)
+            # has either committed "sent" already or holds the row lock, and either way this one must send nothing for it.
+            due.flush_recordset(["notify_state", "stage"])
+            self.env.cr.execute(
+                "SELECT id FROM hams_helpdesk_ticket WHERE id IN %s AND notify_state != 'sent' AND stage != 'spam' "
+                "FOR UPDATE SKIP LOCKED",
+                (tuple(due.ids),),
+            )
+            due = due.browse([row[0] for row in self.env.cr.fetchall()])
         # An automatic ticket whose condition has already cleared is retired, not announced.
         due -= due._triage_retire_stale()
         if not due:
