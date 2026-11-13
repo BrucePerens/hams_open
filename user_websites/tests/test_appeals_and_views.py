@@ -151,6 +151,24 @@ class TestAppealsAndViews(RealTransactionCase):
             "User should be automatically pardoned.",
         )
 
+    def test_02b_appeal_needs_a_suspension_and_only_one_pending(self):
+        # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
+        self.authenticate(self.user_public.login, self.user_public.login)
+        post = {"csrf_token": odoo.http.Request.csrf_token(self), "reason": "Please look again."}
+        Appeal = self.env["content.violation.appeal"]
+        domain = [("user_id", "=", self.user_public.id)]
+
+        self.url_open("/website/submit_appeal", data=post, method="POST")
+        self.env.cr.commit()
+        self.assertEqual(Appeal.search_count(domain), 0, "A member who is not suspended has nothing to appeal.")
+
+        self.user_public.is_suspended_from_websites = True
+        self.env.cr.commit()
+        self.url_open("/website/submit_appeal", data=post, method="POST")
+        self.url_open("/website/submit_appeal", data=post, method="POST")
+        self.env.cr.commit()
+        self.assertEqual(Appeal.search_count(domain), 1, "One pending appeal per target is enough.")
+
     def test_03_reject_appeal_leaves_suspension_in_place(self):
         # Tests [@ANCHOR: user_websites:COMM_appeal_action_reject]
 
