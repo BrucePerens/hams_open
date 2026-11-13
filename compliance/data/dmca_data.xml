@@ -9,6 +9,8 @@
         <template id="dmca_template" name="DMCA Notice and Designated Agent">
             <!-- [@ANCHOR: compliance:dmca_page] -->
             <t t-call="website.layout">
+                <t t-set="additional_title">DMCA notice and designated agent</t>
+                <t t-set="website_meta_description">Who to contact if you believe something on hams.com infringes your copyright, what a takedown notice must say, and what we do when we receive one. For owners.</t>
                 <t t-set="agent" t-value="dmca_agent_name or res_company.name"/>
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">

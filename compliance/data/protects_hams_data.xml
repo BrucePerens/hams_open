@@ -12,6 +12,8 @@
         <template id="protects_hams_template" name="How Hams.com Protects Hams">
             <!-- [@ANCHOR: compliance:protects_hams_page] -->
             <t t-call="website.layout">
+                <t t-set="additional_title">How hams.com protects hams</t>
+                <t t-set="website_meta_description">One page on what hams.com does to protect your logins, your transmitter and your ability to prove who you are, with links to the details behind each protection.</t>
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">

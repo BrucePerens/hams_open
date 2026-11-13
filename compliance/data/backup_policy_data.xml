@@ -6,6 +6,8 @@
         <template id="backup_policy_template" name="Backup and Data Resilience Policy">
             <!-- [@ANCHOR: compliance:backup_policy_page] -->
             <t t-call="website.layout">
+                <t t-set="additional_title">Backup and data resilience policy</t>
+                <t t-set="website_meta_description">How hams.com backs up its data every day to an independent off-site provider, so members can check that one failure cannot wipe out the site or their records.</t>
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">

@@ -6,6 +6,8 @@
         <template id="intellectual_property_template" name="Intellectual Property: Filed Patent Applications and Open Source Publication">
             <!-- [@ANCHOR: compliance:intellectual_property_page] -->
             <t t-call="website.layout">
+                <t t-set="additional_title">Patent filings and open source publication</t>
+                <t t-set="website_meta_description">Records the patent applications filed for the hams.com project and the open source code we publish, so you can see what is patented and what is free to reuse.</t>
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">

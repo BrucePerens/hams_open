@@ -12,6 +12,8 @@
 
             <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
             <t t-call="website.layout">
+                <t t-set="additional_title">Accessibility statement</t>
+                <t t-set="website_meta_description">Our commitment to making hams.com usable by people with disabilities, the accessibility standard we aim for, and how to tell us about a problem you have found.</t>
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
@@ -69,6 +71,8 @@
 
             <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_ui_tour] -->
             <t t-call="website.layout">
+                <t t-set="additional_title">Privacy policy</t>
+                <t t-set="website_meta_description">How hams.com collects, uses and protects your personal information when you use our community services and member websites, and the choices you have over it.</t>
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
@@ -131,6 +135,8 @@
 
             <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_views] -->
             <t t-call="website.layout">
+                <t t-set="additional_title">Cookie policy</t>
+                <t t-set="website_meta_description">What cookies are, which ones hams.com sets on your device, why we use them, and how you can control or turn them off in your browser. Written in plain language.</t>
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
@@ -187,6 +193,8 @@
 
             <!-- audit-ignore-view: Tested by [@ANCHOR: COMM_test_compliance_views] -->
             <t t-call="website.layout">
+                <t t-set="additional_title">Terms of service</t>
+                <t t-set="website_meta_description">The rules for using hams.com, including member websites and the knowledge base. By registering an account you agree to these terms and the community guidelines.</t>
                 <div id="wrap" class="oe_structure oe_empty">
                     <section class="s_text_block pt40 pb40">
                         <div class="container s_allow_columns shadow-sm p-5 bg-white rounded mt-4 mb-4">
