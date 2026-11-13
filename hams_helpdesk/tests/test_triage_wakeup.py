@@ -111,6 +111,11 @@ class TestTriageWakeup(HamsTransactionCase):
         self._fire_postcommit()
         self.assertEqual(self._files(), [])
 
+    def test_01b_a_server_exception_ticket_wakes_the_triage_agent_too(self):
+        ticket = self.Ticket.create({"name": "Daemon failure: x.service", "ticket_type": "server_exception"})
+        self._fire_postcommit()
+        self.assertEqual(self._files(), [f"ticket-{ticket.id}.json"])
+
     def test_07_inbound_mail_the_spam_filter_flags_emits_nothing_but_normal_mail_does(self):
         self._ingest("Action Required: 5 Pending Violation Reports")
         spam = self.Ticket.search([("name", "ilike", "Pending Violation Reports")], limit=1)

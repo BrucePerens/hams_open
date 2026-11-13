@@ -39,3 +39,15 @@ deleted, staff move the ticket back to New to undo it, and the sender is never m
 **Status:** Verified by `test_07_mcp_mark_spam_moves_a_new_ticket_to_the_spam_stage_with_a_note`,
 `test_08_mcp_mark_spam_refuses_a_ticket_a_human_already_picked_up` and
 `test_09_mcp_mark_spam_enforces_allowlist_before_elevating` (tests/test_helpdesk_ai_triage_external.py).
+
+## The triage agent also reads automatic server-exception tickets
+
+Bruce, 2026-11-13: "For each ticket I expect to see its read on what is going on." The allow-list rule
+(`rule_helpdesk_ticket_ai_triage_external_allowlist`) includes `server_exception`, the automatic exception, failed-unit
+and pager-mirrored tickets, and a new one wakes the agent like any other. It sees them only through the same filtered
+untrusted block, and may post its internal note; it cannot quarantine one (`mcp_mark_spam` refuses, `mcp_record_verdict`
+records the verdict but leaves the ticket in New).
+
+**Status:** Verified by `test_10_the_triage_agent_reads_and_notes_a_server_exception_ticket_but_cannot_quarantine_it`
+(tests/test_helpdesk_ai_triage_external.py) and `test_01b_a_server_exception_ticket_wakes_the_triage_agent_too`
+(tests/test_triage_wakeup.py).
