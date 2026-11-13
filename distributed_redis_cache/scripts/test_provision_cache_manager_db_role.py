@@ -55,6 +55,7 @@ class WriteEnvFileTests(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp()
 
     def test_writes_the_real_values_and_locks_permissions_to_0600(self):
+        # Tests [@ANCHOR: distributed_redis_cache:write_env_file]
         path = os.path.join(self.tmp_dir, "sub", "cache_manager_db.env")
         script.write_env_file(path, "cache_manager_ro", "s3cr3t", "dbhost", "5432", "odoo")
 
@@ -69,6 +70,7 @@ class WriteEnvFileTests(unittest.TestCase):
         mode = stat.S_IMODE(os.stat(path).st_mode)
         self.assertEqual(mode, 0o600, "credentials file must not be group/world readable")
     def test_existing_world_readable_file_ends_up_0600_with_the_new_password(self):
+        # Tests [@ANCHOR: distributed_redis_cache:write_env_file]
         path = os.path.join(self.tmp_dir, "cache_manager_db.env")
         with open(path, "w") as f:
             f.write("DB_PASS=old\n")
@@ -150,6 +152,7 @@ class ProvisionTests(unittest.TestCase):
             conn.close()
 
     def test_creates_a_role_with_no_elevated_privileges(self):
+        # Tests [@ANCHOR: distributed_redis_cache:provision]
         script.provision(PG_HOST, PG_PORT, PG_ADMIN_USER, PG_ADMIN_PASSWORD, TARGET_DB, self.ROLE_NAME)
 
         rolsuper, rolcreatedb, rolcreaterole, rolreplication = self._role_attrs()
@@ -201,6 +204,7 @@ class ProvisionTests(unittest.TestCase):
             conn.close()
 
     def test_calling_provision_again_rotates_the_password(self):
+        # Tests [@ANCHOR: distributed_redis_cache:provision]
         # Checks Postgres's own stored credential (pg_authid.rolpassword)
         # rather than trying a live connection with the old password --
         # this dev environment's own pg_hba.conf trust-authenticates

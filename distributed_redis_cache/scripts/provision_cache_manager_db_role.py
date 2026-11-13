@@ -82,6 +82,7 @@ def parse_args():
     return args
 
 
+# [@ANCHOR: distributed_redis_cache:provision]
 def provision(admin_host, admin_port, admin_user, admin_password, target_db, role_name):
     conn = psycopg2.connect(
         host=admin_host, port=admin_port, user=admin_user, password=admin_password, dbname="postgres",
@@ -130,6 +131,7 @@ def provision(admin_host, admin_port, admin_user, admin_password, target_db, rol
     return password
 
 
+# [@ANCHOR: distributed_redis_cache:write_env_file]
 def write_env_file(path, role_name, password, admin_host, admin_port, target_db):
     directory = os.path.dirname(path)
     os.makedirs(directory, mode=0o700, exist_ok=True)
