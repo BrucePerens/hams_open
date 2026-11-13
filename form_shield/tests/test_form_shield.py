@@ -226,7 +226,6 @@ class TestFormShield(HamsTransactionCase):
         with self.assertRaises(Exception):
             self.env["form.shield.rejection"].with_user(self.public).search([])
 
-    # [@ANCHOR: form_shield:test_counter_day_is_utc_whatever_the_context_time_zone]
     def test_counter_day_is_utc_whatever_the_context_time_zone(self):
         # Tests [@ANCHOR: form_shield:count_upsert]
         # One of these two zones is on a different calendar day from UTC at every hour.
