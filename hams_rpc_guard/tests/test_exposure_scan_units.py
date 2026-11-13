@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Database-free tests of `hams_rpc_guard.exposure_scan`, added to kill the mutation survivors of the second mutation
 pass (2026-11-13). The scanner only parses source text, so every case is a literal source string or a temporary tree."""
+import ast
 import contextlib
 import io
 import json
@@ -34,13 +35,13 @@ class TestExposureScanUnits(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:scan_main]
 
     def test_decorator_names_of_every_shape(self):
-        import ast
         function = ast.parse("@a.b\n@c\n@d.e(1)\n@f(2)\n@g[0]\n@(h or i)\ndef x(): pass").body[0]
         self.assertEqual(scan._decorator_names(function), {"b", "c", "e", "f"})
 
     def test_string_values(self):
-        import ast
-        value = lambda text: ast.parse(text, mode="eval").body  # noqa: E731
+        def value(text):
+            return ast.parse(text, mode="eval").body
+
         self.assertEqual(scan._string_values(value("'a.b'")), ["a.b"])
         self.assertEqual(scan._string_values(value("['a.b', 5, 'c.d', x]")), ["a.b", "c.d"])
         self.assertEqual(scan._string_values(value("('a.b',)")), ["a.b"])
@@ -48,8 +49,9 @@ class TestExposureScanUnits(HamsTransactionCase):
         self.assertEqual(scan._string_values(value("x")), [])
 
     def test_model_of_class(self):
-        import ast
-        model = lambda body: scan.model_of_class(ast.parse("class C:\n" + body).body[0])  # noqa: E731
+        def model(body):
+            return scan.model_of_class(ast.parse("class C:\n" + body).body[0])
+
         self.assertEqual(model("    _name = 'a.b'\n    _inherit = 'c.d'"), "a.b")
         self.assertEqual(model("    _inherit = ['c.d', 'e.f']"), "c.d")
         self.assertEqual(model("    _inherit = 'c.d'\n    _name = 'a.b'"), "a.b")
@@ -142,8 +144,9 @@ class TestExposureScanUnits(HamsTransactionCase):
         self.assertEqual(scan.managed_addons(root), ["a", "b"])
 
     def test_is_caller_reference(self):
-        import ast
-        node = lambda text: ast.parse(text, mode="eval").body  # noqa: E731
+        def node(text):
+            return ast.parse(text, mode="eval").body
+
         self.assertTrue(scan._is_caller_reference(node("client.execute")))
         self.assertTrue(scan._is_caller_reference(node("call_kw")))
         self.assertFalse(scan._is_caller_reference(node("client.other")))
@@ -152,7 +155,6 @@ class TestExposureScanUnits(HamsTransactionCase):
         self.assertFalse(scan._is_caller_reference(node("f()")))
 
     def test_module_string_constants(self):
-        import ast
         tree = ast.parse("A = 'a.b'\nB: str = 'm'\nC = 5\nD: int = 6\nE: str\nF, G = 'x', 'y'\nH = I = 'z'\nJ = f('k')\n"
                          "def f():\n    K = 'in.func'\n")
         self.assertEqual(scan.module_string_constants(tree), {"A": "a.b", "B": "m"})
