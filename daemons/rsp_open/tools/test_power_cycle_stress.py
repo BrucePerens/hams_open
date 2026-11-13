@@ -5,10 +5,12 @@ import os
 import sys
 import types
 import unittest
+from typing import Any
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SPEC = importlib.util.spec_from_file_location("power_cycle_stress", os.path.join(HERE, "power_cycle_stress.py"))
-pcs = importlib.util.module_from_spec(SPEC)
+assert SPEC is not None and SPEC.loader is not None
+pcs: Any = importlib.util.module_from_spec(SPEC)
 sys.modules["power_cycle_stress"] = pcs
 SPEC.loader.exec_module(pcs)
 
