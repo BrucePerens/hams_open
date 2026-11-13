@@ -32,6 +32,7 @@ from . import test_request_input_errors
 from . import test_triage_verdict
 from . import test_triage_notify_hold
 from . import test_triage_auto_retire
+from . import test_triage_release_race
 from . import test_triage_stall_alarm
 from . import test_phishing_link_defang
 from . import test_untrusted_text_api
