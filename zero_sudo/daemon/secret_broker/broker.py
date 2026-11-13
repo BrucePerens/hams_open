@@ -368,7 +368,7 @@ class Broker:
         allowed = {
             "hmac_sign": {"name", "payload", "digest"},
             "hmac_verify": {"name", "payload", "signature", "digest"},
-            "stripe_webhook_verify": {"name", "payload", "signature_header", "tolerance", "now"},
+            "stripe_webhook_verify": {"name", "payload", "signature_header", "tolerance"},
             "https_request": {"name", "method", "path", "body", "headers"},
         }[op]
         if not set(args) <= allowed:
@@ -381,7 +381,7 @@ class Broker:
         if op == "stripe_webhook_verify":
             return secret_operations.stripe_webhook_verify(
                 secret, args.get("payload"), args.get("signature_header"),
-                args.get("tolerance", 300), args.get("now"),
+                args.get("tolerance", 300),  # always the broker's own clock
             )
         return https_call(policy["https"], secret, args.get("method"), args.get("path"),
                           args.get("body"), args.get("headers"))
