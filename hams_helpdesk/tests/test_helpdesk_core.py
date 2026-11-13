@@ -697,6 +697,22 @@ class TestHelpdeskCore(HamsTransactionCase):
         x = 1 + 1
         self.assertEqual(x, 2)
 
+    # Tests [@ANCHOR: COMM_helpdesk_portal_close]
+    def test_portal_close_cannot_take_a_ticket_out_of_spam_quarantine(self):
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Quarantined", "partner_id": self.portal_partner.id, "stage": "spam"}
+        )
+        ticket._triage_record_verdict("spam", "rules said so", "rules")
+        ticket.with_user(self.portal_user).action_portal_close()
+        self.assertEqual(ticket.stage, "spam")
+        self.assertFalse(ticket.triage_overridden)
+        # An ordinary ticket still closes.
+        normal = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Normal", "partner_id": self.portal_partner.id}
+        )
+        normal.with_user(self.portal_user).action_portal_close()
+        self.assertEqual(normal.stage, "closed")
+
     # An admin may reach for unlink() to get a ticket out
     # of the way when there is no button-shaped alternative -- and group_helpdesk_user (an ordinary
     # staff agent) has no unlink access on this model at all, so for that whole class of
