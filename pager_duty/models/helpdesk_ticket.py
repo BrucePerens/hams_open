@@ -1,0 +1,28 @@
+# Copyright © Bruce Perens K6BP.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+from odoo import _, models
+
+from .incident_ticket_adapter import _is_inbound_email_source
+
+
+# [@ANCHOR: pager_duty:helpdesk_ticket_triage_cleared]
+class HelpdeskTicket(models.Model):
+    _inherit = "hams_helpdesk.ticket"
+
+    def _triage_cleared(self):
+        """Adds the tickets a pager incident created, once that incident is resolved, to the automatic tickets that
+        hams_helpdesk retires before notifying anyone (``_triage_retire_stale``). A ticket from inbound mail is a person's
+        message, never retired this way."""
+        cleared = super()._triage_cleared()
+        pd_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_service_internal")
+        incidents = self.env["pager.incident"].with_user(pd_uid).search(
+            [
+                ("helpdesk_ticket_model", "=", "hams_helpdesk.ticket"),
+                ("helpdesk_ticket_id", "in", self.ids),
+                ("status", "=", "resolved"),
+            ]
+        )
+        for incident in incidents.filtered(lambda i: not _is_inbound_email_source(i.source)):
+            cleared.setdefault(incident.helpdesk_ticket_id, _("The pager incident %s is resolved.") % incident.name)
+        return cleared
