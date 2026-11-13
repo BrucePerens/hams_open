@@ -7,11 +7,11 @@ import datetime
 
 from odoo import fields
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
 @tagged("post_install", "-at_install")
-class TestCronFailingRegistriesDoNotStarveOthers(HamsTransactionCase):
+class TestCronFailingRegistriesDoNotStarveOthers(RealTransactionCase):
     def test_failing_registries_do_not_block_a_good_one(self):
         # Tests [@ANCHOR: COMM_cron_rotation_logic]
         model = self.env["daemon.key.registry"]
@@ -30,6 +30,13 @@ class TestCronFailingRegistriesDoNotStarveOthers(HamsTransactionCase):
             "last_rotated": now - datetime.timedelta(days=70),
         })
         self.env.cr.commit()
+
+        def cleanup():
+            (failing | good).unlink()
+            user.unlink()
+            self.env.cr.commit()
+
+        self.addCleanup(cleanup)
 
         def fake_rotate(reg, pre_fetched_keys=None):
             if reg.name.startswith("Starve ") and reg.name != "Starve Good":
