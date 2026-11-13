@@ -74,7 +74,7 @@ def main():
         '"license": "LGPL-3"': '"license": "AGPL-3"'
     })
     replace_in_file(os.path.join(dest_dir, 'storage_backend', 'models', 'storage_backend.py'), {
-        'hasattr(adapter, "validate_config")': 'hasattr(adapter, "validate_config")  # burn-ignore-introspection [@' + 'ANCHOR: install_oca_storage_hasattr]',
+        'hasattr(adapter, "validate_config")': 'hasattr(adapter, "validate_config")  # burn-ignore-introspection: OCA validate_config duck-typing',
         'except Exception as err:': 'except Exception as err:  # audit-ignore-catch-all\n            _logger.exception("Storage backend error")'
     })
     
