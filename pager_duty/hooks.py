@@ -211,7 +211,7 @@ def _claim_info_alias(env):
             and existing.alias_parent_model_id == crm_team_model
             and existing.alias_parent_thread_id == sales_team.id
         ):
-            _logger.warning(
+            _logger.info(
                 "pager_duty: reclaiming the 'info' mail alias from crm's "
                 "default Sales Team (id %s) for pager.incident, per Bruce's "
                 "own direction that info@hams.com routes here.",
