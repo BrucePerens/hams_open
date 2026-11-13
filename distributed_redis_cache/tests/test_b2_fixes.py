@@ -262,8 +262,14 @@ class TestB2Fixes(HamsTransactionCase):
         sec_mock = MagicMock()
         sec_mock._get_system_param.side_effect = ["redis", "invalid_port", "password", "redis", "invalid_port", "password"]
         env_mock.__getitem__.return_value.with_context.return_value = sec_mock
-        
-        redis_pool.get_redis_connection(env_mock)
+
+        connection = redis_pool.get_redis_connection(env_mock)
+        self.assertEqual(
+            connection.connection_pool.connection_kwargs["port"],
+            redis_pool.REDIS_PORT_DEFAULT,
+            "a port that is not a number falls back to the default port",
+        )
+        self.assertEqual(redis_pool._db_configs["test_db7"][1], redis_pool.REDIS_PORT_DEFAULT)
 
     def test_b2_8_parameter_mismatch(self):
 
