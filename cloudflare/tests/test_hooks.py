@@ -26,8 +26,18 @@ class TestCloudflareHooks(HamsTransactionCase):
 
         # Tests [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
         self.env.ref("cloudflare.user_cloudflare_waf")
-        post_init_hook(self.env)  # must not raise
+        get_zone_ruleset = self.safe_patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset")
+        backups = self.env["cloudflare.config.backup"].search_count([])
+        rules = self.env["cloudflare.waf.rule"].search_count([])
+        post_init_hook(self.env)
+        get_zone_ruleset.assert_not_called()  # no website has credentials, so Cloudflare is never asked
+        self.assertEqual(self.env["cloudflare.config.backup"].search_count([]), backups)
+        self.assertEqual(self.env["cloudflare.waf.rule"].search_count([]), rules)
 
     def test_post_init_hook_is_idempotent_on_reinstall(self):
         post_init_hook(self.env)
-        post_init_hook(self.env)  # must not raise the second time either
+        backups = self.env["cloudflare.config.backup"].search_count([])
+        rules = self.env["cloudflare.waf.rule"].search_count([])
+        post_init_hook(self.env)
+        self.assertEqual(self.env["cloudflare.config.backup"].search_count([]), backups, "a second run adds no backups")
+        self.assertEqual(self.env["cloudflare.waf.rule"].search_count([]), rules, "a second run adds no rules")
