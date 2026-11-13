@@ -210,22 +210,31 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
     def test_cache_manager_broadcast_invalid_json_type(self):
         """Test that broadcast_to_redis handles non-dict JSON gracefully."""
 
+        published = []
+
         class FakePipeline:
             async def __aenter__(self): return self
             async def __aexit__(self, exc_type, exc_val, exc_tb): pass
-            def publish(self, channel, payload): return self
-            def incr(self, key): return self
+            def publish(self, channel, payload):
+                published.append(payload)
+                return self
+            def incr(self, key):
+                published.append(key)
+                return self
             async def execute(self): pass
 
         class FakeRedisClient:
             def pipeline(self):
                 return FakePipeline()
-            async def publish(self, channel, payload): pass
-            async def incr(self, key): pass
+            async def publish(self, channel, payload): published.append(payload)
+            async def incr(self, key): published.append(key)
 
         cm.redis_client = FakeRedisClient()
-        # Should not raise AttributeError when data is a list
-        asyncio.run(broadcast_to_redis('["model", "res.users"]'))
+        # Should not raise AttributeError when data is a list, and must publish nothing
+        with self.assertLogs("cache_manager", level="WARNING") as logs:
+            asyncio.run(broadcast_to_redis('["model", "res.users"]'))
+        self.assertEqual(published, [], "a payload that is not a JSON object is never put on the bus")
+        self.assertIn("Invalid payload", logs.output[0])
 
     def test_cache_manager_broadcast_pipeline(self):
         """Test that broadcast_to_redis uses redis pipeline."""
