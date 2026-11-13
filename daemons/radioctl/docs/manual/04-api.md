@@ -550,6 +550,97 @@ pub async fn next(&mut self) -> Option<ScopeFrame>
   the IC-705 and IC-9700 listing the capability, and the relay's own scope-source frame built from a
   `ScopeFrame` (the relay does that, not this crate).
 
+## Every operation and field
+
+The two tables below list every variant of `Op` (what you ask a rig to do) and `Field` (what the actor
+caches), with the meaning taken from the doc comments in `radioctl-core/src/op.rs`. A test
+(`every_op_and_field_is_in_the_api_chapter`) fails when a variant is missing here.
+
+### `Op`
+
+| Variant | Meaning |
+|---|---|
+| `GetFrequency(Vfo)` | Read a VFO's frequency. |
+| `SetFrequency(Vfo, Hz)` | Set a VFO's frequency. |
+| `GetMode` | Read the mode. |
+| `SetMode(Mode)` | Set the mode. |
+| `GetPtt` | Read the transmit state. |
+| `SetPtt(bool)` | Key (`true`) or unkey (`false`) the transmitter. |
+| `GetSignal` | Read the S-meter (raw units). |
+| `GetPower` | Read the power meter (raw units). |
+| `SendCw(String)` | Send Morse text. |
+| `StopCw` | Stop Morse in progress: clear the rig's CW text buffer and end the element being sent. It is a stop path, so it jumps the queue like an unkey and needs no transmit gate. It does not unkey a rig held keyed by PTT; polling reconciles the transmit state after it. |
+| `SetTransceive(bool)` | Turn the rig's unsolicited reporting on or off. |
+| `GetSplit` | Read split operation. |
+| `GetTxVfo` | Read which VFO the rig transmits on. |
+| `SetSplit(bool)` | Enter (`true`) or leave (`false`) split operation. |
+| `GetRit` | Read whether RIT is on. |
+| `SetRit(bool)` | Turn RIT on or off. |
+| `GetXit` | Read whether XIT is on. |
+| `SetXit(bool)` | Turn XIT on or off. |
+| `GetRitOffset` | Read the RIT/XIT offset in hertz. |
+| `SetRitOffset(i16)` | Set the RIT/XIT offset in hertz (the rig limits the range). |
+| `GetFilterWidth` | Read the receive filter bandwidth. |
+| `SetFilterWidth(Hz)` | Set the receive filter bandwidth. |
+| `GetLevel(Level)` | Read a level. |
+| `SetLevel(Level, u16)` | Set a level, in the rig's units. |
+| `GetSwr` | Read the SWR meter (tenths of a unit). |
+| `GetMeter(Meter)` | Read a transmitter or supply meter in the rig's raw scale (see `Meter`). Read-only: it works with the transmit gate closed and means most while the rig is keyed by other means. |
+| `GetModelId` | Read the rig's model identifier. |
+| `GetFirmware` | Read the rig's main firmware revision. |
+| `GetPowerAmplifier` | Read whether the rig has its power amplifier module (Elecraft `OM`: the K3's KPA3, the KX2's and KX3's KXPA100). A power-range question, not a transmit one: read-only. |
+| `SetScopeOutput(bool)` | Switch the rig's waveform output (the scope sweeps it sends on its own) on or off. |
+| `GetScopeOutput` | Read whether waveform output is on. |
+| `SetScopeAxis(u8, ScopeAxis)` | Set how a receiver's scope axis is anchored (receiver 0 is Main, 1 is Sub). |
+| `GetScopeAxis(u8)` | Read a receiver's scope axis mode. |
+| `SetScopeSpan(u8, Hz)` | Set a receiver's scope span (the full width in hertz; the rig offers fixed choices). |
+| `GetScopeSpan(u8)` | Read a receiver's scope span. |
+| `SetScopeEdges(u8, u8, Hz, Hz)` | Set the fixed-mode edges: range number, edge number (1 based), lower and upper edge. |
+| `SetScopeReference(u8, i16)` | Set a receiver's reference level, in hundredths of a dB. |
+| `GetScopeReference(u8)` | Read a receiver's reference level. |
+| `SetScopeSetting(u8, ScopeSetting, u8)` | Set a receiver's scope setting to the rig's own choice code (see `ScopeSetting`). |
+| `GetScopeSetting(u8, ScopeSetting)` | Read a receiver's scope setting. |
+| `ScopeAction(u8, ScopeAction)` | Run a one-shot scope command on a receiver (see `ScopeAction`). |
+| `SelectReceiver(Receiver)` | Make a receiver (band) the one later commands act on (Icom `07 D0`/`D1`). |
+| `GetReceiver` | Read which receiver (band) later commands act on. |
+| `SetTxReceiver(Receiver)` | Choose the band the transmitter follows (Yaesu `FT` on the dual-band FTDX models). Setting it does not key the rig. |
+| `GetTxReceiver` | Read the band the transmitter follows. |
+| `SetDualWatch(bool)` | Turn dual watch (both receivers listening) on or off (Icom `07 C0`/`C1`). |
+| `GetDualWatch` | Read whether dual watch is on. |
+
+### `Field`
+
+| Variant | Meaning |
+|---|---|
+| `Frequency(Vfo)` | A VFO's frequency. |
+| `Mode` | The mode. |
+| `Ptt` | The transmit state. |
+| `Signal` | The S-meter. |
+| `Power` | The power meter. |
+| `Split` | Split operation. |
+| `RxVfo` | The VFO the rig receives on, when it can say (Kenwood `IF`/`FR`); otherwise VFO A. |
+| `TxVfo` | The VFO the rig transmits on. |
+| `ActiveTxFrequency` | The frequency the rig transmits on, derived by the actor from the other fields; no engine reports it and no command reads it. |
+| `Rit` | RIT on or off. |
+| `Xit` | XIT on or off. |
+| `RitOffset` | The RIT/XIT offset. |
+| `FilterWidth` | The receive filter bandwidth. |
+| `Level(Level)` | A numeric level. |
+| `Swr` | The SWR meter. |
+| `Meter(Meter)` | A raw meter. |
+| `ModelId` | The model identifier. |
+| `Firmware` | The firmware revision. |
+| `PowerAmplifier` | Whether the power amplifier module is installed. |
+| `ScopeOutput` | Waveform output on or off. |
+| `ScopeAxis(u8)` | A receiver's scope axis mode. |
+| `ScopeSpan(u8)` | A receiver's scope span. |
+| `ScopeReference(u8)` | A receiver's scope reference level. |
+| `ScopeSetting(u8, ScopeSetting)` | A receiver's scope setting. |
+| `Receiver` | The receiver (band) commands act on. |
+| `TxReceiver` | The band the transmitter follows. |
+| `DualWatch` | Dual watch on or off. |
+| `Alarm` | A safety condition the actor reports on its own (see `Alarm`). |
+
 ## Where the rest of the API is documented
 
 | Topic | Where |

@@ -469,3 +469,30 @@ fn every_protocol_module_is_named_in_the_manual() {
         "radioctl-protocols modules the manual never names: {missing:?}; add them to chapter 7"
     );
 }
+
+/// Every variant of `Op` and `Field` has a row in chapter 4, so a new operation cannot be added
+/// without the API reference naming it.
+#[test]
+fn every_op_and_field_is_in_the_api_chapter() {
+    let src = read(&workspace().join("crates/radioctl-core/src/op.rs"));
+    let chapter = read(&manual_dir().join("04-api.md"));
+    let mut missing = Vec::new();
+    for name in ["Op", "Field"] {
+        let head = format!("pub enum {name} {{");
+        let body = src.split(&head).nth(1).expect("enum present");
+        let body = body.split("\n}").next().expect("enum end");
+        for line in body.lines() {
+            let t = line.trim_start();
+            let starts_variant = line.starts_with("    ")
+                && !line.starts_with("     ")
+                && t.chars().next().is_some_and(|c| c.is_ascii_uppercase());
+            if starts_variant {
+                let variant: String = t.chars().take_while(|c| c.is_alphanumeric()).collect();
+                if !chapter.contains(&format!("| `{variant}")) {
+                    missing.push(format!("{name}::{variant}"));
+                }
+            }
+        }
+    }
+    assert!(missing.is_empty(), "chapter 4 has no row for: {missing:?}");
+}
