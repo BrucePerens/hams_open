@@ -8,6 +8,7 @@ from odoo import models, fields
 class ComplianceDocument(models.Model):
     _name = "compliance.document"
     _description = "Compliance Document"
+    _order = "sequence, id"
     
     name = fields.Char(string="Name", required=True)
     description = fields.Text(string="Description")

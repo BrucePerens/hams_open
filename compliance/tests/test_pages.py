@@ -10,6 +10,15 @@ import re
 @tagged("post_install", "-at_install")
 class TestCompliancePages(HamsTransactionCase):
 
+    def test_compliance_documents_are_listed_by_sequence(self):
+        """The /compliance index lists documents in their sequence, not in creation order."""
+        # Tests [@ANCHOR: COMM_compliance_index_route]
+        documents = self.env["compliance.document"]
+        later = documents.create({"name": "Order test later", "sequence": -1})
+        earlier = documents.create({"name": "Order test earlier", "sequence": -2})
+        found = documents.search([("name", "like", "Order test")])
+        self.assertEqual(found.ids, [earlier.id, later.id])
+
     def test_pages_presence(self):
         """Verify that legal pages are created."""
         # [@ANCHOR: COMM_test_compliance_pages_presence]
