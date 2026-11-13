@@ -5,7 +5,7 @@
 """`res.users`: the helpdesk tickets a member filed, in their GDPR data export.
 
 Export only. What erasure should do with tickets (a thread with staff replies, child-safety reports held for the law)
-is an open policy question: night_shift_todo/medium/helpdesk-tickets-on-member-erasure-*.md in hams_com. Child-safety
+is decided (Bruce, 2026-11-13): tickets are kept as they are, because the thread holds staff replies and child-safety reports are held for the law. Child-safety
 reports (type csam_enticement_trafficking, or any ticket that names a reported user or a recording) are never
 exported to the account they concern.
 """
