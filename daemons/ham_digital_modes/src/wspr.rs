@@ -167,6 +167,11 @@ pub(crate) fn pack_grid4_power(grid4: &str, power_dbm: i32) -> Option<u32> {
         .into_iter()
         .map(|v| v as i64)
         .collect();
+    // WSPR power is 0-60 dBm; the 7-bit field would also pack -64..63, which the decoder
+    // (unpack_grid4_power) then rejects, so refuse such values at encode time.
+    if !(0..=60).contains(&power_dbm) {
+        return None;
+    }
     let m = (179 - 10 * g[0] - g[2]) * 180 + 10 * g[1] + g[3];
     let m = m * 128 + power_dbm as i64 + 64;
     if !(0..(1 << 22)).contains(&m) {
