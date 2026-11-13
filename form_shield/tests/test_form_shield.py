@@ -230,11 +230,13 @@ class TestFormShield(HamsTransactionCase):
         # Tests [@ANCHOR: form_shield:count_upsert]
         # One of these two zones is on a different calendar day from UTC at every hour.
         model = self.env["form.shield.rejection"]
-        for index, tz in enumerate(("Pacific/Kiritimati", "Etc/GMT+12")):
-            form_id = "tzform%s" % index
+        form_ids = ["tzform0", "tzform1"]
+        for form_id, tz in zip(form_ids, ("Pacific/Kiritimati", "Etc/GMT+12")):
             model.with_context(tz=tz)._upsert(form_id, "x")
-            row = model.search([("form_id", "=", form_id)])
-            self.assertEqual(row.day, fields.Date.today(), tz)
+        rows = model.search([("form_id", "in", form_ids)])
+        self.assertEqual(len(rows), 2)
+        for row in rows:
+            self.assertEqual(row.day, fields.Date.today(), row.form_id)
 
     # [@ANCHOR: form_shield:test_purge_drops_old_counters]
     def test_purge_drops_old_counters(self):
