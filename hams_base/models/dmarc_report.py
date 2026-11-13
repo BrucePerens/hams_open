@@ -83,7 +83,8 @@ class DmarcReport(models.Model):
         report = self.env['hams_base.dmarc.report']
         
         for attachment in attachments:
-            name, data = attachment
+            # Odoo's gateway passes (fname, content, info) namedtuples, not pairs.
+            name, data = attachment[0], attachment[1]
             parsed_report = self.process_dmarc_attachment(name, data)
             if parsed_report and not report:
                 report = parsed_report
