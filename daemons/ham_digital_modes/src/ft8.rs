@@ -285,7 +285,9 @@ fn synthesize_waveform_with_pulse(
             if n < 0 || n as usize >= n_symbols {
                 continue;
             }
-            let symbol_center_t = n as f64 * t_sym;
+            // Symbol n occupies [nT, (n+1)T], so its pulse is centred at (n + 0.5) T (as in
+            // ft8_lib and WSJT-X); centring it at nT sent the whole signal half a symbol early.
+            let symbol_center_t = (n as f64 + 0.5) * t_sym;
             let t_over_period = (t - symbol_center_t) / t_sym;
             // The pulse's own support is effectively [-1.5T, 1.5T];
             // outside that erf(x)-erf(x) is numerically ~0 anyway, but
@@ -597,6 +599,42 @@ mod tests {
     /// rectangular pulse (or breaks the erf formula into something with
     /// no real filtering effect) fails this, where the round-trip tests
     /// would not.
+    #[test]
+    // Tests [@ANCHOR: synthesize_waveform_with_pulse]
+    fn each_symbol_is_centred_in_its_own_160ms_slot() {
+        // Demodulate to baseband and measure the mean frequency over the middle of each symbol;
+        // it must equal that symbol's tone (a half-symbol shift would show the neighbour's).
+        let tones = encode_message("K1ABC W9XYZ EN37").unwrap();
+        let sr = 12000usize;
+        let f_base = 1500.0f64;
+        let f0 = f_base + 3.5 / FT8_SYMBOL_PERIOD_S; // mid-band, so every tone is within +-25 Hz
+        let wave = synthesize_waveform(&tones, sr as u32, f_base as f32);
+        let spsym = (FT8_SYMBOL_PERIOD_S * sr as f64) as usize; // 1920
+        let w = 240; // 20 ms boxcar, a whole number of 3 kHz cycles
+        let (mut i_s, mut q_s) = (vec![0.0f64; wave.len()], vec![0.0f64; wave.len()]);
+        for (k, &x) in wave.iter().enumerate() {
+            let a = 2.0 * std::f64::consts::PI * f0 * k as f64 / sr as f64;
+            i_s[k] = x as f64 * a.cos();
+            q_s[k] = -(x as f64) * a.sin();
+        }
+        let avg = |v: &Vec<f64>, c: usize| v[c - w / 2..c + w / 2].iter().sum::<f64>();
+        let phase_at = |c: usize| avg(&q_s, c).atan2(avg(&i_s, c));
+        for n in [1usize, 3, 10, 20, 40, 60, 77] {
+            let mid = n * spsym + spsym / 2;
+            let (a, b) = (mid - spsym / 16, mid + spsym / 16);
+            let mut d = phase_at(b) - phase_at(a);
+            while d < -std::f64::consts::PI {
+                d += 2.0 * std::f64::consts::PI;
+            }
+            while d > std::f64::consts::PI {
+                d -= 2.0 * std::f64::consts::PI;
+            }
+            let hz = d / (2.0 * std::f64::consts::PI) / ((b - a) as f64 / sr as f64);
+            let want = (tones[n] as f64 - 3.5) / FT8_SYMBOL_PERIOD_S;
+            assert!((hz - want).abs() < 2.0, "symbol {n}: {hz} Hz vs tone {want} Hz");
+        }
+    }
+
     #[test]
     // Tests [@ANCHOR: gfsk_pulse]
     // Tests [@ANCHOR: synthesize_waveform_with_pulse]

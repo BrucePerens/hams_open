@@ -201,7 +201,8 @@ int ft8_session_decode(ft8_session_t* s, char out_messages[][FTX_MAX_MESSAGE_LEN
             out_messages[out_count][FTX_MAX_MESSAGE_LENGTH - 1] = '\0';
             out_snr[out_count] = cand->score;
             out_freq_hz[out_count] = ((float)(s->mon.min_bin + cand->freq_offset) + ((float)cand->freq_sub / (float)wf->freq_osr)) / s->mon.symbol_period;
-            out_time_s[out_count] = ((float)cand->time_offset + (float)cand->time_sub / (float)wf->time_osr) * s->mon.symbol_period;
+            out_time_s[out_count] = ((float)cand->time_offset + (float)cand->time_sub / (float)wf->time_osr) * s->mon.symbol_period
+                                 - s->mon.symbol_period; // ft8_lib's index runs one symbol late; calibrated against WSJT-X ft8sim
             ++out_count;
         }
     }
