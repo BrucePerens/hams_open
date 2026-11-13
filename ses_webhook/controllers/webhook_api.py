@@ -444,7 +444,7 @@ class SesWebhookController(http.Controller):
                         request.env['ses.webhook.pending_submission'].with_user(svc_uid).with_company(
                             domain.company_id
                         ).create_and_notify(
-                            sender_email=email_from or 'unknown',
+                            sender_email=email_from or False,
                             raw_content=raw_email,
                             domain=domain,
                         )

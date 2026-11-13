@@ -1301,6 +1301,20 @@ class TestSesWebhook(HamsHttpCase):
         self.assertIn('/web/signup', mail.body_html)
         self.assertIn(mail.state, ('exception', 'outgoing', 'sent'))
 
+    def test_19b_missing_sender_sends_no_mail_to_a_fake_address(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        before = self.env['mail.mail'].search_count([])
+        submission = self.env['ses.webhook.pending_submission'].with_user(svc_uid).with_company(
+            self.company_a
+        ).create_and_notify(sender_email=False, raw_content="x", domain=self.domain_a)
+        self.assertTrue(submission)
+        self.assertFalse(submission.sender_email)
+        self.assertEqual(self.env['mail.mail'].search_count([]), before)
+        self.assertFalse(self.env['mail.mail'].search([('email_to', '=', 'unknown')]))
+
     def test_20_matched_sender_is_not_gated(self):
         """
         The registration gate must not interfere with a real, registered
