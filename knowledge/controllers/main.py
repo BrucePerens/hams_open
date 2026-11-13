@@ -351,7 +351,8 @@ class ManualLibraryController(http.Controller):
         )
 
     # [@ANCHOR: knowledge:internal_index]
-    @http.route(["/manual/internal"], type="http", auth="public", website=True)
+    # sitemap=False: an administrators-only page that answers 404 to everyone else; the public sitemap must not list it.
+    @http.route(["/manual/internal"], type="http", auth="public", website=True, sitemap=False)
     def manual_internal_index(self, search="", **kwargs):
         """Administrators-only list of the documentation Help hides."""
         if not self._is_manual_manager():
