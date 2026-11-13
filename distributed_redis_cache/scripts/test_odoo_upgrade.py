@@ -195,6 +195,21 @@ class TestStylesheetCheck(unittest.TestCase):
             with self.assertRaises(u.UpgradeError):
                 u.run(argv, show=lambda: SHOW, read_text=lambda p: FILES[p], out=io.StringIO())
 
+    def test_shell_mode_passes_extra_environment_variables_before_odoo(self):
+        ran = []
+        u.run(["--db", "hams_prod", "--shell", "--env", "STEP=check", "--env", "APPLY=1"], show=lambda: SHOW, read_text=lambda p: FILES[p],
+              out=io.StringIO(), execute_shell=ran.append)
+        cmd = ran[0]
+        self.assertEqual(cmd[cmd.index("STEP=check") - 1], "-E")
+        self.assertEqual(cmd[cmd.index("APPLY=1") - 1], "-E")
+        self.assertLess(cmd.index("APPLY=1"), cmd.index("/usr/bin/odoo"))
+        self.assertEqual(cmd[-7:], ["/usr/bin/odoo", "shell", "--config", "/etc/odoo/odoo.conf", "-d", "hams_prod", "--no-http"])
+
+    def test_env_needs_shell_and_a_plain_name(self):
+        for argv in (["--db", "d", "--modules", "m", "--env", "A=1"], ["--db", "d", "--shell", "--env", "A B=1"], ["--db", "d", "--shell", "--env", "A"]):
+            with self.assertRaises(u.UpgradeError):
+                u.run(argv, show=lambda: SHOW, read_text=lambda p: FILES[p], out=io.StringIO())
+
     def test_the_check_script_is_shipped_beside_the_tool(self):
         self.assertTrue(os.path.isfile(u.CSS_CHECK_SCRIPT))
 

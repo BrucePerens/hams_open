@@ -62,7 +62,7 @@ sudo systemctl start odoo
 sudo pagerduty-maintenance end
 ```
 
-A one-off `odoo shell` that writes (a runbook step that calls an ORM method, then commits) needs the same environment, or each write logs a failed Redis cache invalidation: `sudo python3 .../odoo_upgrade.py --db hams_prod --shell < script.py` runs it in the unit `odoo-shell-run` with the service's environment files (the service may keep running; the script's output and the exit code come straight through; `--dry-run` prints the command).
+A one-off `odoo shell` that writes (a runbook step that calls an ORM method, then commits) needs the same environment, or each write logs a failed Redis cache invalidation: `sudo python3 .../odoo_upgrade.py --db hams_prod --shell < script.py` runs it in the unit `odoo-shell-run` with the service's environment files (the service may keep running; the script's output and the exit code come straight through; `--dry-run` prints the command). A script that takes its switches from the environment (`STEP=check`, an apply flag) gets them with `--env NAME=value` (repeatable, `--shell` only, never a secret: it is printed in the `running:` line); a plain `sudo -u odoo env X=1 odoo shell` would lose the Redis credentials.
 
 `odoo_upgrade.py` reads the service's own `EnvironmentFiles=`/`Environment=`/`User=` from `systemctl show` and runs
 `odoo -u` in the transient `systemd-run` unit `odoo-upgrade` (check `systemctl is-active odoo-upgrade`; do not `systemctl restart odoo` or copy a deploy while it is active: it holds the HTTP port, so a restart fails "Address already in use" until it ends, as on 2026-10-12) with them (values are never read or printed), refuses to run if the service
