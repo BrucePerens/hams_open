@@ -89,6 +89,12 @@ class DaemonKeyRegistry(models.Model):
         help="The company that owns this daemon registry. Service accounts are company-specific.",
     )
     last_rotated = fields.Datetime(string="Last Rotated", readonly=True)
+    last_rotation_failed_at = fields.Datetime(
+        string="Last Rotation Failure",
+        readonly=True,
+        help="When the cron last failed to rotate this registry. The cron tries registries that have not just failed "
+        "first, so registries that fail on every run cannot keep the others out of its batch of 10.",
+    )
     os_group = fields.Char(
         string="OS Group",
         help="""
@@ -1075,6 +1081,11 @@ class DaemonKeyRegistry(models.Model):
             _logger.error(msg, path, e)
             raise
 
+    def _mark_rotation_failed(self, reg):
+        """Records, in its own committed write, that the cron just failed to rotate `reg`."""
+        reg.last_rotation_failed_at = fields.Datetime.now()
+        self.env.cr.commit()
+
     @api.model
     def _cron_rotate_all_keys(self):
         """
@@ -1101,7 +1112,7 @@ class DaemonKeyRegistry(models.Model):
                 ("last_rotated", "<", threshold),
             ],
             limit=10,
-            order="last_rotated asc",
+            order="last_rotation_failed_at asc nulls first, last_rotated asc, id",
         )
         user_ids = registries.mapped("user_id").ids
         key_names = [f"{reg.name}_key" for reg in registries]
@@ -1110,11 +1121,14 @@ class DaemonKeyRegistry(models.Model):
             ("name", "in", key_names)
         ], limit=1000)
 
+        rotated = 0
         for reg in registries:
             reg_name = reg.name
             try:
                 reg.with_company(reg.company_id.id)._rotate_key_and_write_file(pre_fetched_keys=pre_fetched_keys)
+                reg.last_rotation_failed_at = False
                 self.env.cr.commit()
+                rotated += 1
             except (OSError, UserError, ValidationError, AccessError) as e:
                 # Real, CRITICAL fix, found by an adversarial security
                 # review: this used to run
@@ -1130,16 +1144,19 @@ class DaemonKeyRegistry(models.Model):
                 # and be revoked within 60 days... even if a backup is
                 # stolen") for exactly the registries most likely to
                 # actually need that property enforced. Leaving
-                # `last_rotated` untouched here means this same registry
-                # sorts first (`order="last_rotated asc"`) and gets
-                # retried on every future cron cycle until it genuinely
-                # succeeds, instead of being quietly exempted.
+                # `last_rotated` untouched keeps this registry eligible, so
+                # it is retried on later cycles until it genuinely succeeds;
+                # `last_rotation_failed_at` only sorts it AFTER the registries
+                # that have not just failed, so ten permanent failures cannot
+                # fill the batch of 10 and starve every other registry.
                 self.env.cr.rollback()
+                self._mark_rotation_failed(reg)
                 _logger.error(
                     "Managed failure rotating key for daemon %s: %s", reg_name, e
                 )
             except Exception as e:  # audit-ignore-catch-all
                 self.env.cr.rollback()
+                self._mark_rotation_failed(reg)
                 _logger.error(
                     "Unexpected error during key rotation for daemon %s: %s",
                     reg.name,
@@ -1147,5 +1164,6 @@ class DaemonKeyRegistry(models.Model):
                     exc_info=True,
                 )
 
-        if len(registries) == 10:
+        # Re-trigger only while a batch made progress: a batch of 10 that all failed would otherwise re-trigger forever.
+        if len(registries) == 10 and rotated:
             self.env.ref("daemon_key_manager.ir_cron_rotate_daemon_keys")._trigger()
