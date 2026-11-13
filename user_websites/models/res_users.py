@@ -828,6 +828,10 @@ class ResUsers(models.Model):
             "zero_sudo.gdpr_service_internal"
         )
 
+        # The batches below commit as they go, so a failure part way must not leave a half-erased account that is still
+        # active: the account is deactivated first, before any content is erased.
+        self.with_env(env_svc).write({"active": False})
+
         # [@ANCHOR: gdpr_sudo_erasure]
 
         # # Verified by [@ANCHOR: test_gdpr_erasure_pages]
