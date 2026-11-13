@@ -10,6 +10,7 @@ class TestHelpdeskGdpr(HamsTransactionCase):
     # [@ANCHOR: hams_helpdesk:test_gdpr_export_is_own_tickets_only]
     def test_gdpr_export_is_own_tickets_only(self):
         # Tests [@ANCHOR: hams_helpdesk:res_users_get_gdpr_export_data]
+        # Tests [@ANCHOR: hams_helpdesk:res_users_helpdesk]
         Users = self.env["res.users"]
         group = self.env.ref("base.group_portal")
         ann = Users.create({"name": "Hd Gdpr Ann", "login": "hd_gdpr_ann", "group_ids": [(4, group.id)]})
