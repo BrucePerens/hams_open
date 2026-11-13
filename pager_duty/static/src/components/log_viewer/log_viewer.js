@@ -54,6 +54,10 @@ export class LogViewer extends Component {
             return;
         }
 
+        // A newer search replaces an older one still polling: the older one must not write its results
+        // (or clear "loading") after the newer one has started.
+        this.searchSeq = (this.searchSeq || 0) + 1;
+        const seq = this.searchSeq;
         this.state.loading = true;
         this.state.error = null;
         this.state.results = [];
@@ -69,6 +73,7 @@ export class LogViewer extends Component {
                     }
                 })
             }).then(r => r.json());
+            if (seq !== this.searchSeq) return;
             const data = res.result || {};
 
             if (data.error) {
@@ -78,12 +83,14 @@ export class LogViewer extends Component {
                 let attempts = 0;
                 while (!done && attempts < 30) {
                     await new Promise(resolve => setTimeout(resolve, 1000));
+                    if (seq !== this.searchSeq) return;
                     attempts++;
                     const pollRes = await fetch("/api/v1/pager/logs/search_poll", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ params: { job_id: data.job_id } })
                     }).then(r => r.json());
+                    if (seq !== this.searchSeq) return;
                     const pollData = pollRes.result || {};
                     
                     if (pollData.error) {
@@ -104,9 +111,9 @@ export class LogViewer extends Component {
                 this.state.error = "Invalid API response.";
             }
         } catch {
-            this.state.error = "IPC Request Failed.";
+            if (seq === this.searchSeq) this.state.error = "IPC Request Failed.";
         } finally {
-            this.state.loading = false;
+            if (seq === this.searchSeq) this.state.loading = false;
         }
     }
 }
