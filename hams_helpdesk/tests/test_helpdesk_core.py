@@ -732,7 +732,7 @@ class TestHelpdeskCore(HamsTransactionCase):
             {"name": "Stranger", "login": "portal_stranger_close", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
         )
         with self.assertRaises(AccessError):
-            ticket.with_user(stranger).action_portal_close()
+            ticket.with_user(stranger).sudo().action_portal_close()
         self.assertEqual(ticket.stage, "new")
         ticket.with_user(self.portal_user).action_portal_close()
         self.assertEqual(ticket.stage, "closed")
