@@ -603,9 +603,9 @@ Own README: [`crates/radioctl-station/README.md`](crates/radioctl-station/README
 ## Conventions
 
 - **Anchors** (ADR 0090)
-  - A function carries `// ` in source.
-  - Its test carries `// Tests [@ANCHOR: id]`.
-  - This README, or a story under `docs/stories/`, cites it as `[@ANCHOR: radioctl:id]`. ADR 0113 requires a full entry for every function anchor (purpose, signature, every argument, return, error and special concern, written from the code): the entries are one `###` heading per anchor in `docs/stories/radioctl_function_anchors_NN.md`, and the data structures are explained in the README next to the functions that use them.
+  - A function carries `// [@ANCHOR: <id>]` in source.
+  - Its test carries `// Tests [@ANCHOR: <id>]`.
+  - This README, or a story under `docs/stories/`, cites it as `[@ANCHOR: radioctl:<id>]`. ADR 0113 requires a full entry for every function anchor (purpose, signature, every argument, return, error and special concern, written from the code): the entries are one `###` heading per anchor in `docs/stories/radioctl_function_anchors_NN.md`, and the data structures are explained in the README next to the functions that use them.
   - `crates/radioctl-core/tests/conventions.rs` fails when source, tests and README disagree, and when a Rust file lacks its SPDX header. A crate may keep its own anchor list in its own README (`radioctl-station` does); the test reads every crate README.
 - Protocol engines are sans-IO (see `docs/DESIGN.md`).
 - Tests use the same code paths as production; no test-only features.
