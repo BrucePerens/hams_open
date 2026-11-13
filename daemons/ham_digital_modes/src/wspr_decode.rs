@@ -974,12 +974,16 @@ mod tests {
         let amplitude = [1.0f64; WSPR_NUM_SYMBOLS];
         let noise_stddev = [1.0f64; WSPR_NUM_SYMBOLS];
         let result = sequential_decode(&channel_bit_values, &amplitude, &noise_stddev, 10_000);
-        // Not asserting Ok specifically -- a single outlier symbol amid
-        // otherwise-uninformative 0.5 values may or may not let the search
-        // reach full depth within the cycle budget; the real invariant this
-        // guards is "does not panic," which the surrounding call itself
-        // already proves by returning at all.
-        let _ = result;
+        // Ok or Err are both acceptable (a single outlier amid otherwise-uninformative
+        // 0.5 values may or may not reach full depth within the cycle budget), but what
+        // comes back must not be poisoned: a NaN metric is the original bug, and a
+        // search only gives up once its whole cycle budget is spent.
+        match result {
+            Ok((_, metric)) => assert!(metric.is_finite(), "metric was {metric}"),
+            Err(GaveUp { cycles }) => {
+                assert_eq!(cycles, 10_001, "gave up before its budget was spent")
+            }
+        }
     }
 
     #[test]
