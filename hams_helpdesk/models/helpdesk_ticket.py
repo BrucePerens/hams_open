@@ -25,6 +25,9 @@ from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
 
+# The NCMEC /submit answer is a short XML receipt; this much of it is read and the rest is ignored.
+_NCMEC_RESPONSE_MAX_BYTES = 1 << 20
+
 # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8: the mandatory
 # 18 U.S.C. Sec. 2258A (REPORT Act) reporting workflow. This ticket_type value is the "distinct,
 # faster-SLA... routing for apparent CSAM/enticement/trafficking flags" the proposal calls for --
@@ -1960,10 +1963,10 @@ class HelpdeskTicket(models.Model):
             with _urlopen_ssrf_safe(
                 request, "hams_helpdesk_ncmec_report", https_only=True, timeout=30
             ) as response:
-                response_body = response.read().decode("utf-8", errors="replace")
+                response_body = response.read(_NCMEC_RESPONSE_MAX_BYTES).decode("utf-8", errors="replace")
         except urllib.error.HTTPError as e:
             try:
-                response_body = e.read().decode("utf-8", errors="replace")
+                response_body = e.read(_NCMEC_RESPONSE_MAX_BYTES).decode("utf-8", errors="replace")
             except (OSError, AttributeError):
                 response_body = ""
             _logger.warning(

@@ -456,6 +456,9 @@ class TestNcmecReport(HamsTransactionCase):
         # hardcoded real NCMEC host, and used HTTP Basic Auth as NCMEC's own documentation
         # requires -- and through the SSRF-safe fetch helper, not a bare urlopen()/requests call.
         mock_urlopen.assert_called_once()
+        # The receipt is read with a size cap, never to the end of an endless body.
+        (read_size,) = mock_response.read.call_args.args
+        self.assertTrue(0 < read_size <= 1 << 20)
         called_request = mock_urlopen.call_args.args[0]
         self.assertTrue(called_request.full_url.startswith(_FAKE_NCMEC_BASE_URL))
         self.assertTrue(called_request.get_header("Authorization", "").startswith("Basic "))
