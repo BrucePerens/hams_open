@@ -16,6 +16,7 @@ answers a fixed set of typed requests from authenticated local peers over a Unix
 | `bind_udp` | binds a UDP socket on a port the config lists (default only 123, the relay's time service) on the wildcard address and passes the descriptor; any other port is `Denied` | root (privileged port) |
 | `update_package` | asks for the relay package upgrade: creates `/var/lib/hams-relay-broker/update-requested`, which the package's root-owned `hams-relay-update.path` unit turns into the one fixed `apt-get install --only-upgrade hams-local-relay` (or `dnf upgrade`), because the broker itself holds no right to run a package manager; nothing from the caller; only with `update_package = true` in the config (the relay package's config turns it on) |
 | `set_system_time` / `time_status` | `set_system_time` steps the system clock to a UTC the relay chose (`CLOCK_REALTIME`; needs `CAP_SYS_TIME`), only with `set_time = true` (the relay package's config turns it on). The broker applies its own ceilings and does not trust the relay: the target must not be before the build date (2026-11-01); a step beyond `max_unproven_step_secs` (default 30) needs a GPS source or two agreeing sources; at most `max_time_steps_per_hour` (default 4) steps an hour, then one more attempt trips a circuit breaker that refuses everything for an hour. Every attempt is audited with the clock before, the target, the source and the evidence. `time_status` is read-only: the clock, steps in the last hour, breaker state, the earliest accepted target | root or `CAP_SYS_TIME` |
+| `hub_takeover_start` / `hub_takeover_stop` | phase 0 of the hub: one `dnsmasq` serving the user's own /24 from the high pool .200 to .250 with 5 minute leases while the router is gone; no access point and no address change; only with `hub = true`. |
 | `hub_start` / `hub_stop` / `hub_status` | the stand-alone emergency hub: only with `hub = true` in the config. Validates the typed settings, writes `hostapd.conf` and `dnsmasq.conf` from fixed templates into `/run/hams-relay-broker/hub` (mode 0600), gives the wifi interface the hub address with `ip` and starts `hostapd -B` and `dnsmasq` with fixed argument lists; stop signals only a pid whose `/proc/PID/comm` still names the program, then removes the files | root |
 
 Every request is rate-limited per UID (user ID) and written to an append-only `events.jsonl` audit log (a peer turned away is logged once per UID per minute; the file moves to `events.jsonl.1` at 4 MiB).
@@ -1257,6 +1258,31 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Returns.** `Response::Hub { access_point, dhcp }`, both normally false. **Errors.** `Denied` "hub not enabled"; `Failed` when stopping fails. **Side effects.** Signals only the processes named in the broker's own pid files (see `HubRunner::stop`); audited. **Tests.** `the_hub_is_refused_unless_enabled_and_then_written_from_the_templates` (tests/broker.rs).
 
+### `Broker::hub_takeover_start` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_hub_takeover_start]
+
+**Purpose.** Phase 0 of the emergency hub: the router's DHCP is gone, so serve DHCP for the user's own /24 from a high pool. The settings are validated and the `dnsmasq.conf` is produced from the fixed template `hub::takeover_dnsmasq_conf`; one `dnsmasq` is started through the OS layer. No access point, no address change.
+
+**Signature.** `fn hub_takeover_start(&mut self, peer: Peer, settings: &hub::TakeoverSettings) -> (Response, Option<OwnedFd>)` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `peer` | `Peer` | Caller, audit only. |
+| `settings` | `&TakeoverSettings` | Interface, hub address, gateway (same /24, outside .200 to .250), relay name, optional uplink DNS. |
+
+**Returns.** `Response::Hub { access_point, dhcp }`. **Errors.** `Denied` "hub not enabled" unless `hub = true`, or the validation message; `Failed` when the start fails. **Side effects.** Writes `takeover.conf` (mode 0600) and starts `dnsmasq`; audited. **Tests.** `a_takeover_is_refused_unless_enabled_and_valid_then_written_from_its_template` (tests/broker.rs).
+
+### `Broker::hub_takeover_stop` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_hub_takeover_stop]
+
+**Purpose.** Hands DHCP back to the router: stops the takeover `dnsmasq`. **Signature.** `fn hub_takeover_stop(&mut self, peer: Peer) -> (Response, Option<OwnedFd>)` (private). `peer`: caller, audit only. **Returns.** `Response::Hub`. **Errors.** `Denied` "hub not enabled"; `Failed`. **Side effects.** Signals only the process in the takeover pid file; audited. **Tests.** `a_takeover_is_refused_unless_enabled_and_valid_then_written_from_its_template`.
+
+### `HubRunner::takeover_start` (hub_runner.rs) [@ANCHOR: relay_broker:relay_broker_hub_runner_takeover_start]
+
+**Purpose.** Writes the takeover configuration (mode 0600) and starts one `dnsmasq` with fixed arguments; runs no `ip` command, because the interface already holds the hub's fixed address. **Signature.** `pub fn takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()>`. `dnsmasq_conf`: the generated text. **Returns.** `Ok` when started; on failure it removes its files. **Side effects.** Replaces a running takeover. **Tests.** `a_takeover_runs_only_dnsmasq_and_leaves_the_interface_address_alone`.
+
+### `HubRunner::takeover_stop` (hub_runner.rs) [@ANCHOR: relay_broker:relay_broker_hub_runner_takeover_stop]
+
+**Purpose.** Stops the takeover `dnsmasq` (only a pid whose `/proc/<pid>/comm` is `dnsmasq`) and removes its files; never touches the address. **Signature.** `pub fn takeover_stop(&self) -> io::Result<()>`. **Returns.** `Ok`, also when nothing runs. **Tests.** same as `takeover_start`.
+
 ### `LinuxOs::bind_udp` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_bind_udp]
 
 **Purpose.** Binds a UDP socket on the wildcard address and returns the descriptor, so the relay can serve a privileged port (123, its time service) without any privilege of its own. Dual stack: an IPv6 socket with `IPV6_V6ONLY` off when the kernel has IPv6, plain IPv4 otherwise.
@@ -1674,6 +1700,8 @@ Every data structure of the broker, explained in full (ADR 0113): purpose, field
 | `HubStart` | `(HubSettings)` | Start the stand-alone hub's access point and DHCP/DNS server from the validated settings and fixed templates. |
 | `HubStop` | - | Stop the hub and remove its files. |
 | `HubStatus` | - | Whether the hub's two programs are running. |
+| `HubTakeoverStart` | `(TakeoverSettings)` | Serve DHCP for the user's own subnet (router gone) from a fixed template; `hub = true` only. |
+| `HubTakeoverStop` | - | Stop that DHCP server (router back). |
 | `UpdatePackage` | - | Upgrade the installed relay package through the system package manager (a fixed command, no arguments from the caller; only with `update_package = true`). |
 | `SetSystemTime` | - | Step the system clock to a UTC the relay decided on; the broker applies its own ceilings (`time_guard.rs`). |
 | `TimeStatus` | - | Read-only: the broker's clock and its time-step limits. |

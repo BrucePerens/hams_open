@@ -34,6 +34,8 @@ pub struct FakeOs {
     pub binds: Arc<Mutex<Vec<u16>>>,
     /// The configuration texts and interface of a started hub.
     pub hub: Arc<Mutex<Option<(String, String, String)>>>,
+    /// The takeover `dnsmasq` configuration while a takeover runs.
+    pub takeover: Arc<Mutex<Option<String>>>,
     /// How many times the package manager was asked to upgrade the relay.
     pub updates: Arc<std::sync::atomic::AtomicUsize>,
     /// The fake clock (Unix seconds) and a switch that makes setting it fail.
@@ -106,6 +108,7 @@ impl FakeOs {
             added: Arc::new(Mutex::new(Vec::new())),
             binds: Arc::new(Mutex::new(Vec::new())),
             hub: Arc::new(Mutex::new(None)),
+            takeover: Arc::new(Mutex::new(None)),
             updates: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             clock: Arc::new(std::sync::atomic::AtomicU64::new(1_793_500_000)),
             clock_fails: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -181,6 +184,14 @@ impl Os for FakeOs {
     }
     fn hub_stop(&self) -> io::Result<()> {
         *self.hub.lock().unwrap() = None;
+        Ok(())
+    }
+    fn hub_takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()> {
+        *self.takeover.lock().unwrap() = Some(dnsmasq_conf.to_string());
+        Ok(())
+    }
+    fn hub_takeover_stop(&self) -> io::Result<()> {
+        *self.takeover.lock().unwrap() = None;
         Ok(())
     }
     fn update_package(&self) -> io::Result<()> {

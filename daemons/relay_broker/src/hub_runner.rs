@@ -91,11 +91,59 @@ impl HubRunner {
         }
     }
 
-    /// Whether `hostapd` and `dnsmasq` are running.
+    /// Whether `hostapd` and `dnsmasq` are running; the second is also true while a takeover `dnsmasq` runs.
     pub fn status(&self) -> (bool, bool) {
-        let up =
-            |name: &str| read_pid(&self.pid_file(name)).is_some_and(|pid| is_running(pid, name));
-        (up("hostapd"), up("dnsmasq"))
+        let up = |file: &str, comm: &str| {
+            read_pid(&self.pid_file(file)).is_some_and(|pid| is_running(pid, comm))
+        };
+        (
+            up("hostapd", "hostapd"),
+            up("dnsmasq", "dnsmasq") || up("takeover", "dnsmasq"),
+        )
+    }
+
+    // [@ANCHOR: relay_broker_hub_runner_takeover_start]
+    /// Phase 0: writes the takeover configuration and starts one `dnsmasq` on the user's own subnet. Unlike `start` it touches no address and no access point: the
+    /// interface already carries the hub's fixed address.
+    pub fn takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()> {
+        self.takeover_stop()?;
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&self.dir)?;
+        let conf = self.dir.join("takeover.conf");
+        write_private(&conf, dnsmasq_conf)?;
+        let conf_arg = format!("--conf-file={}", conf.display());
+        let pid_arg = format!("--pid-file={}", self.pid_file("takeover").display());
+        let started = self.run(
+            &self.dnsmasq,
+            &[
+                std::ffi::OsStr::new(&conf_arg),
+                std::ffi::OsStr::new(&pid_arg),
+            ],
+        );
+        if started.is_err() {
+            let _ = self.takeover_stop();
+        }
+        started
+    }
+
+    // [@ANCHOR: relay_broker_hub_runner_takeover_stop]
+    /// Stops the takeover `dnsmasq` and removes its files; the interface address is left alone. Stopping when it is not running succeeds.
+    pub fn takeover_stop(&self) -> io::Result<()> {
+        if let Some(pid) =
+            read_pid(&self.pid_file("takeover")).filter(|p| is_running(*p, "dnsmasq"))
+        {
+            let _ = kill(Pid::from_raw(pid), Signal::SIGTERM);
+        }
+        for file in ["takeover.conf", "takeover.pid"] {
+            match fs::remove_file(self.dir.join(file)) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
     }
 
     // [@ANCHOR: relay_broker_hub_runner_start]
@@ -281,6 +329,34 @@ mod tests {
         assert!(!hub.dir.join("hostapd.conf").exists());
         let ip = fs::read_to_string(root.join("ip.log")).unwrap();
         assert!(ip.contains("addr flush dev wlan0"), "{ip}");
+    }
+
+    // Tests [@ANCHOR: relay_broker_hub_runner_takeover_start]
+    // Tests [@ANCHOR: relay_broker_hub_runner_takeover_stop]
+    #[test]
+    fn a_takeover_runs_only_dnsmasq_and_leaves_the_interface_address_alone() {
+        let (hub, root) = fake("takeover");
+        hub.takeover_start("interface=br0\n").unwrap();
+        for _ in 0..100 {
+            if hub.status() == (false, true) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert_eq!(hub.status(), (false, true));
+        assert!(hub.dir.join("takeover.conf").exists());
+        hub.takeover_stop().unwrap();
+        for _ in 0..50 {
+            if hub.status() == (false, false) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert_eq!(hub.status(), (false, false));
+        assert!(!hub.dir.join("takeover.conf").exists());
+        let ip = fs::read_to_string(root.join("ip.log")).unwrap_or_default();
+        assert_eq!(ip, "", "the takeover never runs ip: {ip}");
+        hub.takeover_stop().unwrap();
     }
 
     #[test]
