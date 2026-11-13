@@ -15,10 +15,11 @@ import io
 import json
 import os
 import shutil
+import socket
 import ssl
+import subprocess
 import struct
 import tempfile
-from unittest import mock
 import threading
 import time
 
@@ -341,11 +342,10 @@ class TestSecretBrokerIsolation(BaseCase):
 
     def test_a_request_above_the_size_limit_gets_request_too_large_and_is_never_handled(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_serve_connection]
-        import socket as _socket
         broker = sb.Broker(_config(os.path.join(self.tmp, "b.sock")), ss.SecretStore([ss.SystemdCredentialBackend(self.tmp)]), {self.os_uid})
         handled = []
         broker.handle = lambda data, uid: handled.append(data) or {"ok": True}
-        client, server_side = _socket.socketpair(_socket.AF_UNIX, _socket.SOCK_STREAM)
+        client, server_side = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         self.addCleanup(client.close)
         self.addCleanup(server_side.close)
         client.settimeout(5)
@@ -362,23 +362,23 @@ class TestSecretBrokerIsolation(BaseCase):
                 if not chunk:
                     break
                 reply += chunk
-        except OSError:
-            pass
+        except OSError as exc:  # the broker may reset after its answer; the answer itself is what is asserted
+            reply_error = exc
+            self.assertTrue(reply, f"no reply before the connection ended: {reply_error}")
         self.assertEqual(json.loads(reply), {"ok": False, "error": "request_too_large"})
         self.assertEqual(handled, [])
 
     def test_a_peer_whose_kernel_reported_uid_is_not_allowed_is_refused_without_reading_its_request(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_serve_connection]
-        import socket as _socket
         store = ss.SecretStore([ss.SystemdCredentialBackend(self.tmp)])
         broker = sb.Broker(_config(os.path.join(self.tmp, "b.sock")), store, {self.os_uid + 1})
         handled = []
         broker.handle = lambda data, uid: handled.append(data) or {"ok": True}
-        client, server_side = _socket.socketpair(_socket.AF_UNIX, _socket.SOCK_STREAM)
+        client, server_side = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         self.addCleanup(client.close)
         client.settimeout(5)
         client.sendall(b'{"v": 1, "op": "hmac_sign", "args": {}}\n')
-        client.shutdown(_socket.SHUT_WR)  # the broker waits for the caller's EOF before it closes
+        client.shutdown(socket.SHUT_WR)  # the broker waits for the caller's EOF before it closes
         broker.serve_connection(server_side)
         self.assertEqual(json.loads(client.recv(65536)), {"ok": False, "error": "peer_not_allowed"})
         self.assertEqual(handled, [])
@@ -388,8 +388,9 @@ class TestSecretBrokerIsolation(BaseCase):
         try:
             sock.sendall(data)
             sock.shutdown(2 - 1)  # SHUT_WR: end of the request
-        except OSError:
-            pass
+        except OSError as exc:  # the broker stops reading once it has refused; a reset here is expected
+            return exc
+        return None
 
     def test_acl_entries(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_acl_grants_read]
@@ -592,12 +593,15 @@ class TestSecretBrokerProvisioning(BaseCase):
         unit = os.path.join(tmp, "units", "broker.service")
         steps = [("dir", os.path.join(tmp, "creds"), 0o700), ("file_if_absent", keep, 0o600, "{}"),
                  ("file", unit, 0o644, "unit-v1")]
-        with mock.patch.object(provision.os, "chown") as chown, contextlib.redirect_stdout(io.StringIO()):
+        chowned = []
+        self.addCleanup(setattr, os, "chown", os.chown)  # this test is not root: record the call instead of making it
+        os.chown = lambda path, uid, gid: chowned.append((path, uid, gid))
+        with contextlib.redirect_stdout(io.StringIO()):
             provision.apply(steps, False)
             self.assertEqual(os.stat(os.path.join(tmp, "creds")).st_mode & 0o777, 0o700)
             self.assertEqual(os.stat(keep).st_mode & 0o777, 0o600)
             self.assertEqual(os.stat(unit).st_mode & 0o777, 0o644)
-            chown.assert_any_call(unit, 0, 0)  # root-owned
+            self.assertIn((unit, 0, 0), chowned)  # root-owned
             with open(keep, "w") as handle:
                 handle.write("operator edit")
             provision.apply([("file_if_absent", keep, 0o600, "{}"), ("file", unit, 0o644, "unit-v2")], False)
@@ -617,7 +621,6 @@ class TestSecretBrokerProvisioning(BaseCase):
 
     def test_a_failing_provisioning_command_stops_the_run(self):
         # Tests [@ANCHOR: zero_sudo:secret_broker_provision_apply]
-        import subprocess
         ran = []
 
         def run(cmd, check):
