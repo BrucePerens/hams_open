@@ -3,6 +3,9 @@ use ham_digital_modes::*;
 #[test]
 fn wspr_out_of_range_power() {
     for p in [-1, 61, 63, -64] {
-        assert!(wspr::wspr_encode_symbols("K6BP", "CM87", p).is_none(), "power {p}");
+        assert!(
+            wspr::wspr_encode_symbols("K6BP", "CM87", p).is_none(),
+            "power {p}"
+        );
     }
 }

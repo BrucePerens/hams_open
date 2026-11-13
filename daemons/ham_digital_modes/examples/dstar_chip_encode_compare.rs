@@ -317,7 +317,10 @@ mod tests {
         let pcm: Vec<f64> = (0..8000)
             .map(|n| {
                 (1..=10)
-                    .map(|k| (2.0 * std::f64::consts::PI * 150.0 * k as f64 * n as f64 / 8000.0).sin() / k as f64)
+                    .map(|k| {
+                        (2.0 * std::f64::consts::PI * 150.0 * k as f64 * n as f64 / 8000.0).sin()
+                            / k as f64
+                    })
                     .sum::<f64>()
                     * 6000.0
             })

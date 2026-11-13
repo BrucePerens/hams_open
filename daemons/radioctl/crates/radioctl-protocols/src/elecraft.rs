@@ -742,7 +742,10 @@ mod tests {
             b"KS020;"
         );
         assert_eq!(bytes(&mut e, Op::GetLevel(Level::MicGain)), b"MG;");
-        assert!(e.encode(&Op::GetLevel(Level::Antenna)).is_err(), "KX3 lists no ports");
+        assert!(
+            e.encode(&Op::GetLevel(Level::Antenna)).is_err(),
+            "KX3 lists no ports"
+        );
         assert_eq!(bytes(&mut e, Op::SetLevel(Level::RfPower, 5)), b"PC005;");
         assert_eq!(bytes(&mut e, Op::GetSignal), b"SM;");
         assert_eq!(bytes(&mut e, Op::GetPower), b"PO;");

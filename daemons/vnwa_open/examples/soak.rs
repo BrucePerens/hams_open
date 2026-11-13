@@ -1032,13 +1032,20 @@ mod tests {
             windows: Mutex::new(Vec::new()),
         }));
         assert!(made.is_ok(), "no other test sets the shared state");
-        shared().journal.lock().unwrap().push_back((100.0, "usb 1-1: USB disconnect".to_string()));
+        shared()
+            .journal
+            .lock()
+            .unwrap()
+            .push_back((100.0, "usb 1-1: USB disconnect".to_string()));
         event("usb_disconnect", "one", "detail", 100.0);
         event("usb_disconnect", "two", "detail", 101.0);
         assert_eq!(shared().counts.lock().unwrap()["usb_disconnect"], 2);
         let written = std::fs::read_to_string(dir.join("events.jsonl")).unwrap();
         assert_eq!(written.lines().count(), 2);
-        assert!(written.contains("USB disconnect"), "the journal slice is attached: {written}");
+        assert!(
+            written.contains("USB disconnect"),
+            "the journal slice is attached: {written}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

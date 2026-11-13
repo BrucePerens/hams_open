@@ -1736,8 +1736,9 @@ impl VirtualRig {
                 Some(format!("AN{port};"))
             }
             ("AN", data) => match data.parse::<u16>() {
-                Ok(p) if data.len() == 1
-                    && (1..=u16::from(self.desc.levels.antenna_ports.min(2))).contains(&p) =>
+                Ok(p)
+                    if data.len() == 1
+                        && (1..=u16::from(self.desc.levels.antenna_ports.min(2))).contains(&p) =>
                 {
                     self.state.levels.insert(Level::Antenna, p);
                     None

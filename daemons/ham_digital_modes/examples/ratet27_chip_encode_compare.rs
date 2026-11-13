@@ -334,7 +334,19 @@ mod tests {
     // Tests [@ANCHOR: ratet27_chip_encode_compare_params_struct]
     #[test]
     fn params_of_reports_one_entry_per_frame_with_in_range_values() {
-        let frames = [[0u32; 8], [0x0123_4567, 0x89ab, 0xcdef, 0x1234, 0x5678, 0x9abc, 0xdef0, 0x0fed]];
+        let frames = [
+            [0u32; 8],
+            [
+                0x0123_4567,
+                0x89ab,
+                0xcdef,
+                0x1234,
+                0x5678,
+                0x9abc,
+                0xdef0,
+                0x0fed,
+            ],
+        ];
         let p = params_of(&frames);
         assert_eq!(p.len(), frames.len());
         for got in p.iter().flatten() {

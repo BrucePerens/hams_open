@@ -231,14 +231,19 @@ mod tests {
     #[test]
     fn plugging_links_a_pty_unplugging_removes_it_and_sends_are_logged_in_hex() {
         let description = rigfile::load("icom-ic-7300").unwrap().description;
-        let rig: SharedRig = Arc::new(Mutex::new(VirtualRig::from_description(&description).unwrap()));
+        let rig: SharedRig = Arc::new(Mutex::new(
+            VirtualRig::from_description(&description).unwrap(),
+        ));
         let dir = std::env::temp_dir().join(format!("virtual_radio_pty_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let (link, wire) = (dir.join("radio"), dir.join("wire.log"));
         let log: SharedLog = Arc::new(Mutex::new(Some(File::create(&wire).unwrap())));
         let mut cable = Cable::plug(&rig, &link, &log).unwrap();
         let target = std::fs::read_link(&link).unwrap();
-        assert!(target.to_string_lossy().starts_with("/dev/pts/"), "{target:?}");
+        assert!(
+            target.to_string_lossy().starts_with("/dev/pts/"),
+            "{target:?}"
+        );
         cable.send(&log, &[0xFE, 0xFE, 0x94]);
         cable.send(&log, &[]);
         cable.unplug();
