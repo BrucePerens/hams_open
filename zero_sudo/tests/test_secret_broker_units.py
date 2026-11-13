@@ -586,8 +586,12 @@ class TestBrokerConnections(_Case):
         path = broker.config["socket"]
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            if os.path.exists(path) and stat.S_ISSOCK(os.stat(path).st_mode):
-                break
+            try:
+                if stat.S_ISSOCK(os.stat(path).st_mode):
+                    break
+            except FileNotFoundError:  # the stale file is being replaced
+                time.sleep(0.01)
+                continue
             time.sleep(0.01)
         return worker, path
 

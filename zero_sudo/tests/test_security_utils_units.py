@@ -18,7 +18,8 @@ from unittest.mock import mock_open
 from odoo import models
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
-from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.tests.common import BaseCase
+from odoo.addons.zero_sudo.tests.common import SafePatchMixin
 
 from odoo.addons.zero_sudo.models import security_utils as su
 
@@ -187,7 +188,7 @@ def _utils(cursor=None, user=None, registry=None, context=None, models=None):
 
 
 @tagged("post_install", "-at_install")
-class TestSecurityUtilsUnits(HamsTransactionCase):
+class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
 
     def _stub(self, name, function):
         """Replace a method of the model class for this test; `function` takes the call's arguments without self."""
