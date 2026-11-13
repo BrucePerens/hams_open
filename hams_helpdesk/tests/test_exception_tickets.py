@@ -1072,7 +1072,11 @@ class TestDaemonReporterHelper(RealTransactionCase):
         self.helper = load_daemon_reporter()
         self.helper._LAST_REPORT.clear()
         # The reports these tests post commit on the server's own connection; leave none for the next test.
+        # Rows an earlier test class committed go first, and the baseline is counted after that drop,
+        # or the first test here would report them as a leak of -1.
+        self.drop_committed_reports()
         self.addCleanup(self.drop_committed_reports)
+        self._initial_counts = count_rows_in_batches(self.registry.db_name, self._tables)
         uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_exception_reporter_service")
         # The key comes from the Daemon Key Manager, as in production: the registry row its post_init_hook made for this account.
         manager_uid = self.env["zero_sudo.security.utils"]._get_service_uid("daemon_key_manager.user_daemon_key_manager_service")
