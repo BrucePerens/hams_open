@@ -21,7 +21,7 @@
                                     <t t-foreach="docs" t-as="doc">
                                         <a t-att-href="doc.url" class="list-group-item list-group-item-action flex-column align-items-start o_tour_compliance_doc_link">
                                             <div class="d-flex w-100 justify-content-between">
-                                                <h5 class="mb-1"><t t-out="doc.name"/></h5>
+                                                <h2 class="h5 mb-1"><t t-out="doc.name"/></h2>
                                             </div>
                                             <p class="mb-1"><t t-out="doc.description"/></p>
                                         </a>
