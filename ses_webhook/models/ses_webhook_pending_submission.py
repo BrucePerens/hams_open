@@ -26,7 +26,7 @@ class SesWebhookPendingSubmission(models.Model):
     _order = 'create_date desc'
 
     name = fields.Char(string='Name', compute='_compute_name', store=True)
-    sender_email = fields.Char(string='Sender Email', required=True, index=True, readonly=True)
+    sender_email = fields.Char(string='Sender Email', index=True, readonly=True)
     raw_content = fields.Text(string='Raw Email Content', readonly=True)
     domain_id = fields.Many2one('ses.webhook.domain', string='Webhook Domain', readonly=True, ondelete='cascade')
     company_id = fields.Many2one('res.company', related='domain_id.company_id', store=True, readonly=True)
@@ -63,6 +63,10 @@ class SesWebhookPendingSubmission(models.Model):
             'raw_content': raw_content,
             'domain_id': domain.id,
         })
+
+        if not sender_email:
+            # No From: header: there is nobody to nudge, so keep the held submission and send nothing.
+            return submission
 
         base_url = self.env['zero_sudo.security.utils']._get_system_param('web.base.url')
         signup_url = f"{base_url}/web/signup"
