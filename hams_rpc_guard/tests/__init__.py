@@ -7,3 +7,8 @@ from . import test_repository
 from . import test_guard
 from . import test_unix_listener
 from . import test_report_summary
+from . import test_policy_mutants
+from . import test_endpoint_gate_pure
+from . import test_exposure_load
+from . import test_unix_listener_units
+from . import test_unix_listener_patches
