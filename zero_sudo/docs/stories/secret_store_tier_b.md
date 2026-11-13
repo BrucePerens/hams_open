@@ -409,7 +409,7 @@ Wire format, one JSON line each way per connection:
 |---|---|---|
 | `hmac_sign` | `name`, `payload` (str), `digest` (`sha256` default, or `sha512`) | hex string |
 | `hmac_verify` | `name`, `payload`, `signature` (hex), `digest` | bool |
-| `stripe_webhook_verify` | `name`, `payload`, `signature_header`, `tolerance` (s, default 300), `now` (unix time or null) | bool |
+| `stripe_webhook_verify` | `name`, `payload`, `signature_header`, `tolerance` (s, default 300); the broker uses its own clock, a `now` argument is `bad_request` | bool |
 | `https_request` | `name`, `method`, `path`, `body` (str or null), `headers` (only `Accept`, `Content-Type`, `Idempotency-Key`, `Stripe-Version`) | `{"status", "content_type", "location", "body"}`, secret redacted |
 
 ### `https_request`
