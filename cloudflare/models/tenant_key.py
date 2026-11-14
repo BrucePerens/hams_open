@@ -5,6 +5,7 @@ import logging
 from psycopg2 import IntegrityError
 
 from odoo import models, fields, api
+from odoo.exceptions import ConcurrencyError
 from cryptography.fernet import Fernet, InvalidToken
 
 _logger = logging.getLogger(__name__)
@@ -80,15 +81,10 @@ class CloudflareTenantKey(models.Model):
                     record = self.create(
                         {"company_id": company.id, "wrapped_key": wrapped}
                     )
-            except IntegrityError:
-                # Two concurrent first-reads for the same company both took
-                # this branch; the loser's create() hit the unique(company_id)
-                # constraint. The savepoint rolls back only this insert, not
-                # the caller's whole transaction -- the winner's row is
-                # already committed-in-transaction and visible here.
-                record = self.search([("company_id", "=", company.id)], limit=1)
-                if not record:
-                    raise
+            except IntegrityError as exc:
+                # A simultaneous first read made the row first. Its commit is invisible to this REPEATABLE READ
+                # snapshot, so searching again finds nothing: ask Odoo to run the request again.
+                raise ConcurrencyError("the company's tenant key was made by a simultaneous request") from exc
 
         try:
             dek = kek.decrypt(record.wrapped_key.encode("utf-8"))
