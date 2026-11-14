@@ -121,10 +121,14 @@ impl Dialect for RsHfDialect {
                 format!("\nF{},{}\r", hz.0, hz.0).into_bytes(),
                 ReplyKind::None,
             ),
-            (Style::Xk852, Op::SetFrequency(Vfo::A, hz)) if (hz.0 + 5) / 10 <= XK852_MAX_UNITS => (
-                format!("\n*F{:07}\r", (hz.0 + 5) / 10).into_bytes(),
-                ReplyKind::Ack,
-            ),
+            (Style::Xk852, Op::SetFrequency(Vfo::A, hz))
+                if hz.0.saturating_add(5) / 10 <= XK852_MAX_UNITS =>
+            {
+                (
+                    format!("\n*F{:07}\r", (hz.0 + 5) / 10).into_bytes(),
+                    ReplyKind::Ack,
+                )
+            }
             (_, Op::SetFrequency(Vfo::A, _)) => return Err(unsupported("frequency out of range")),
             (Style::Ek | Style::Gp2000, Op::GetFrequency(Vfo::A)) => {
                 ask("F?", Field::Frequency(Vfo::A))
@@ -346,6 +350,13 @@ mod tests {
             .expect("rig")
             .state()
             .clone()
+    }
+
+    /// A frequency near `u64::MAX` is refused as out of range, not an overflow panic.
+    #[test]
+    fn a_huge_frequency_is_refused_not_a_panic() {
+        let mut xk = engine(shipped("rs-xk852")).expect("engine");
+        assert!(xk.encode(&Op::SetFrequency(Vfo::A, Hz(u64::MAX))).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_rshf_engine]
