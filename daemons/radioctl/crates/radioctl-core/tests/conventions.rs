@@ -33,6 +33,8 @@ fn files_with_suffix(dir: &Path, suffix: &str, out: &mut Vec<PathBuf>) {
 fn rust_files() -> Vec<PathBuf> {
     let mut out = Vec::new();
     files_with_suffix(&workspace_root().join("crates"), ".rs", &mut out);
+    // testdir.rs sits at the workspace root and is shared into test crates with #[path].
+    out.push(workspace_root().join("testdir.rs"));
     out
 }
 
@@ -94,8 +96,7 @@ fn every_manifest_inherits_the_agpl_licence() {
 
 #[test]
 fn anchors_are_in_parity_between_source_and_tests() {
-    let mut sources = Vec::new();
-    files_with_suffix(&workspace_root().join("crates"), ".rs", &mut sources);
+    let sources = rust_files();
     let declared = anchors(&sources, &declared_marker());
     let tested = anchors(&sources, &tests_marker());
     assert!(!declared.is_empty());
