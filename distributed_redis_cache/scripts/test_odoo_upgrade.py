@@ -9,6 +9,7 @@ import importlib.util
 import io
 import os
 import subprocess
+import tempfile
 import unittest
 import unittest.mock
 
@@ -126,6 +127,18 @@ class TestOdooUpgrade(unittest.TestCase):
             self.assertEqual(u._execute(["x"], None, io.StringIO()), 3)
         finally:
             u.subprocess.Popen = orig
+
+    def test_log_path_that_is_a_symlink_is_refused_and_its_target_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            victim = os.path.join(tmp, "victim")
+            with open(victim, "w", encoding="utf-8") as handle:
+                handle.write("precious\n")
+            link = os.path.join(tmp, "upgrade.log")
+            os.symlink(victim, link)
+            with self.assertRaises(OSError):
+                u._execute(["true"], link, io.StringIO())
+            with open(victim, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "precious\n")
 
 
 OK_LINES = ["noise\n", "ASSET_BUNDLE_CHECK: OK 7 bundle compiles\n"]

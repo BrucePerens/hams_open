@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Run `odoo -u <modules>` on a server with exactly the environment the odoo systemd service gets.
 
-    sudo python3 odoo_upgrade.py --db hams_prod --modules hams_helpdesk,ham_relay_bridge [--log /tmp/upgrade.log]
+    sudo python3 odoo_upgrade.py --db hams_prod --modules hams_helpdesk,ham_relay_bridge [--log /var/log/odoo-upgrade.log]
     sudo python3 odoo_upgrade.py --db hams_prod --modules hams_helpdesk --dry-run     # print the command, run nothing
     sudo python3 odoo_upgrade.py --db hams_prod --modules all --install ham_spreadsheet_csp   # also install a NEW module
     sudo python3 odoo_upgrade.py --db hams_prod --shell < script.py   # one-off `odoo shell` with the service's environment
@@ -242,7 +242,8 @@ def run(argv, show=None, read_text=None, execute=None, is_active=None, out=None,
 
 def _execute(cmd, log_path, out):
     auth_failures = 0
-    log = open(log_path, "w", encoding="utf-8") if log_path else None
+    # Root writes this file: O_NOFOLLOW refuses a symlink planted at the log's name (a /tmp path is guessable).
+    log = open(os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600), "w", encoding="utf-8") if log_path else None
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for line in proc.stdout:
