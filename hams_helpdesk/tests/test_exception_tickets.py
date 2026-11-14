@@ -665,6 +665,20 @@ class TestExceptionQuietPeriodReopen(ExceptionTicketCase):
         self.assertIn("quiet period", ticket.message_ids[0].body)
         self.assertIn("reopened automatically", ticket.message_ids[0].body)
 
+    def test_a_ticket_retired_automatically_reopens_when_the_failure_comes_back(self):
+        # Tests [@ANCHOR: hams_helpdesk:triage_retire_stale]
+        exc = self.caught(raise_attribute_error)
+        self.assertTrue(self.report(exc))
+        row = self.fingerprints()
+        ticket = row.ticket_id
+        row.last_seen = fields.Datetime.now() - reporter.timedelta(hours=8)
+        self.assertEqual(self.env["hams_helpdesk.ticket"]._triage_sweep_stale(), 1)
+        self.assertEqual(ticket.stage, "resolved")
+        self.assertTrue(self.occur_again(exc, last_seen_hours_ago=8))
+        self.assertEqual(ticket.stage, "new")
+        self.assertIn("resolved automatically", ticket.message_ids[0].body)
+        self.assertEqual(ticket.notify_state, "sent")
+
     def test_release_rule_is_unchanged(self):
         exc = self.caught(raise_attribute_error)
         self.assertTrue(self.report(exc))
