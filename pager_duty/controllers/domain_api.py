@@ -55,7 +55,7 @@ class PagerDutyController(http.Controller):
                     )
                     # audit-ignore-i18n: Tested by [@ANCHOR: pd_domain_api_i18n]  # fmt: skip
                     return {"status": "error", "message": _("Too many attempts")}
-            except (redis.exceptions.RedisError, Exception) as e:  # audit-ignore-catch-all
+            except redis.exceptions.RedisError as e:
                 _logger.warning("Redis rate limit check failed: %s", e)
                 r_client = None
 
@@ -74,7 +74,7 @@ class PagerDutyController(http.Controller):
                     pipe.incr(redis_key)
                     pipe.expire(redis_key, FAILED_ATTEMPTS_WINDOW)
                     pipe.execute()
-                except (redis.exceptions.RedisError, Exception) as e:  # audit-ignore-catch-all
+                except redis.exceptions.RedisError as e:
                     _logger.warning("Redis rate limit increment failed: %s", e)
             # audit-ignore-i18n: Tested by [@ANCHOR: pd_domain_api_i18n]  # fmt: skip
             return {"status": "error", "message": _("Unauthorized")}
