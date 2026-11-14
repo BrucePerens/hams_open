@@ -8,8 +8,9 @@ import logging
 import datetime
 import re
 import tempfile
+from psycopg2 import IntegrityError
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError, ValidationError, AccessError
+from odoo.exceptions import UserError, ValidationError, AccessError, ConcurrencyError
 from odoo.addons.base.models.res_users import INDEX_SIZE, KEY_CRYPT_CONTEXT
 from odoo.addons.zero_sudo import public_rpc
 
@@ -300,7 +301,15 @@ class DaemonKeyRegistry(models.Model):
             values["os_group"] = os_group
         if not registry:
             values["name"] = daemon_name
-            registry = self.env["daemon.key.registry"].with_company(user.company_id.id).create(values)
+            try:
+                with self.env.cr.savepoint():
+                    registry = self.env["daemon.key.registry"].with_company(user.company_id.id).create(values)
+            except IntegrityError as exc:
+                if "name_company_uniq" not in (exc.diag.constraint_name or ""):
+                    raise
+                # A simultaneous first register of this name made the row first. Its commit is invisible to this
+                # REPEATABLE READ snapshot, so searching again finds nothing: ask Odoo to run the request again.
+                raise ConcurrencyError("the daemon was registered by a simultaneous request") from exc
         else:
             # [@ANCHOR: COMM_register_daemon_idempotency]
             registry.with_company(user.company_id.id).write(values)
