@@ -127,6 +127,9 @@ impl Dialect for MarineDialect {
         let unsupported = |why: &str| RigError::new(ErrorKind::Unsupported, why.to_string());
         let mhz = |hz: Hz| format!("{}.{:06}", hz.0 / 1_000_000, hz.0 % 1_000_000);
         let (commands, reply): (Vec<String>, ReplyKind) = match op {
+            Op::SetFrequency(Vfo::A, hz) if hz.0 >= 1_000_000_000 => {
+                return Err(unsupported("frequency above 999.999999 MHz"));
+            }
             Op::SetFrequency(Vfo::A, hz) => (
                 vec![format!("TXF,{}", mhz(*hz)), format!("RXF,{}", mhz(*hz))],
                 ReplyKind::Ack,
@@ -403,6 +406,16 @@ mod tests {
             &s[s.find('*').expect("star") + 1..s.len() - 2],
             format!("{sum:02X}")
         );
+    }
+
+    /// A frequency the megahertz field cannot hold is refused before any `TXF` line is built.
+    #[test]
+    fn a_frequency_beyond_the_megahertz_field_is_refused() {
+        let mut e = engine(shipped("icom-ic-m802")).expect("engine");
+        for hz in [u64::MAX, 100_000_000_000, 1_000_000_000] {
+            assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(hz))).is_err(), "{hz}");
+        }
+        assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(999_999_999))).is_ok());
     }
 
     // Tests [@ANCHOR: radioctl_marine_engine]
