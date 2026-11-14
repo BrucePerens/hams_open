@@ -90,10 +90,10 @@ class ResUsers(models.Model):
                             # the same defense-in-depth reason as the bounce
                             # notification in res_partner.py.
                             # The change may be made by an administrator or a service account: write in the member's language.
-                            t = (user.with_context(lang=user.lang) if user.lang else user).env._
+                            tenv = (user.with_context(lang=user.lang) if user.lang else user).env
                             mail_values = {
-                                'subject': t('Security Alert: Your HAMS Email Address was Changed'),
-                                'body_html': t(
+                                'subject': tenv._('Security Alert: Your HAMS Email Address was Changed'),
+                                'body_html': tenv._(
                                     '<p>Hello %s,</p>'
                                     '<p>This is an automated security notification from HAMS.</p>'
                                     '<p>Your account email address has just been changed from <strong>%s</strong> to <strong>%s</strong>.</p>'
