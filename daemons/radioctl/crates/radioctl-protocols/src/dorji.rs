@@ -76,7 +76,7 @@ impl Band {
 // [@ANCHOR: radioctl_dorji_channel]
 /// The frequency rounded to the nearest 12.5 kHz channel.
 pub fn channel(hz: Hz) -> Hz {
-    Hz((hz.0 + 6250) / 12_500 * 12_500)
+    Hz(hz.0.saturating_add(6250) / 12_500 * 12_500)
 }
 
 // [@ANCHOR: radioctl_dorji_mhz_text]
@@ -304,6 +304,14 @@ mod tests {
         radioctl_core::rigfile::parse(&text)
             .expect("loads")
             .description
+    }
+
+    /// A frequency near `u64::MAX` is refused as outside the band, not an overflow panic.
+    #[test]
+    fn a_huge_frequency_is_refused_not_a_panic() {
+        assert_eq!(channel(Hz(u64::MAX)), Hz(u64::MAX / 12_500 * 12_500));
+        let mut e = DorjiEngine::new(shipped("dorji-dra818v")).expect("engine");
+        assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(u64::MAX))).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_dorji_band_from_name]
