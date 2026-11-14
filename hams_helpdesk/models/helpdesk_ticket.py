@@ -869,12 +869,15 @@ class HelpdeskTicket(models.Model):
         if "stage" in vals and vals["stage"] != "spam":
             for ticket in self:
                 if ticket.partner_id:
-                    stage_str = dict(self._fields["stage"]._description_selection(self.env)).get(ticket.stage)
+                    # Staff or a service account moved the ticket: write to the customer in the customer's language.
+                    customer_lang = ticket.partner_id.lang
+                    customer_env = (ticket.with_context(lang=customer_lang) if customer_lang else ticket).env
+                    stage_str = dict(self._fields["stage"]._description_selection(customer_env)).get(ticket.stage)
                     ticket.message_post(
-                        body=_("Your issue has been updated. New Status: %s")
+                        body=customer_env._("Your issue has been updated. New Status: %s")
                         % stage_str,
                         partner_ids=[ticket.partner_id.id],
-                        subject=_("Ticket Update: %s") % ticket.name,
+                        subject=customer_env._("Ticket Update: %s") % ticket.name,
                     )
         return res
 
