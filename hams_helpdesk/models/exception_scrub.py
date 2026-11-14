@@ -59,9 +59,10 @@ _SECRET_KV_RE = re.compile(
     r"(?i)(?<![A-Za-z0-9])((?:[\w.-]{0,40}?(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|apikey|"
     r"session[_-]?id|cookie|authorization|bearer|signature|otp|private[_-]?key|access[_-]?key|credential)"
     r"[\w.-]{0,40})|sid)(['\"]?\s*[=:]\s*)"
-    # A quoted value is taken whole, spaces included (password="two words" must not leave "words" behind); an unterminated
+    # A quoted value is taken whole, spaces and backslash-escaped quotes included (password="two words" or "a\\"b c" must not
+    # leave "words" or "b c" behind); an unterminated
     # quote or a bare value stops at the first separator.
-    r"(\"[^\"\n]*\"|'[^'\n]*'|['\"]?[^\s,;&'\"]+)"
+    r"(\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)*'|['\"]?[^\s,;&'\"]+)"
 )
 # The scheme and the credential of an Authorization header ("Basic <base64>", "Bearer <token>").
 _AUTH_RE = re.compile(

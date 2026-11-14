@@ -277,6 +277,8 @@ class TestExceptionScrubbing(ExceptionTicketCase):
             ("db_password='correct horse battery' x", "horse"),
             ('{"secret": "a b c"}', "b c"),
             ('token="unterminated value', "unterminated"),
+            ('{"password": "ab\\"cd efg"}', "efg"),
+            ("{'password': 'it\\'s a secret'}", "a secret"),
         )
         for text, secret in cases:
             self.assertNotIn(secret, scrub.scrub_text(text, strict=False), text)
