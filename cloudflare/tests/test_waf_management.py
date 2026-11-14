@@ -7,7 +7,8 @@ import re
 from odoo.tests.common import tagged
 from odoo.addons.web.controllers.database import Database
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, ConcurrencyError, UserError
+from odoo.tools import mute_logger
 from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
 
 from ..models.config_manager import DEFAULT_WAF_RULES
@@ -209,6 +210,29 @@ class TestWafManagement(HamsTransactionCase):
         self.assertTrue(ban_record)
         self.assertEqual(ban_record.state, "failed")
         self.assertIn("Missing Cloudflare credentials", ban_record.notes)
+
+    def test_06a_simultaneous_first_ban_reruns(self):
+        # Tests [@ANCHOR: COMM_cf_execute_ban]
+        # Odoo's REPEATABLE READ snapshot cannot see the winner's row, so the loser must ask Odoo to run the
+        # request again, not fail with the raw IntegrityError. The race is made deterministic: the row exists
+        # and the first search is blind to it.
+        mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
+        mock_ban_ip.return_value = (True, "fake_rule_race")
+        Ban = self.env["cloudflare.ip.ban"].with_user(self.svc_uid)
+        Ban._execute_ban("10.0.0.6", website_id=self.website.id)
+        self.env["cloudflare.ip.ban"].search([("ip_address", "=", "10.0.0.6")]).write({"state": "lifted"})
+        real_search = type(Ban).search
+        blind = []
+
+        def blind_first_search(records, *args, **kwargs):
+            if not blind:
+                blind.append(1)
+                return records.browse()
+            return real_search(records, *args, **kwargs)
+
+        self.safe_patch_object(type(Ban), "search", blind_first_search)
+        with mute_logger("odoo.sql_db"), self.assertRaises(ConcurrencyError):
+            Ban._execute_ban("10.0.0.6", website_id=self.website.id)
 
     def test_07_ban_ip_rejects_an_unprivileged_caller(self):
         # Adversarial security review, 2026-09-03: ban_ip is a public

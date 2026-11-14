@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
 from odoo import models, fields, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import ConcurrencyError, UserError
+from psycopg2 import IntegrityError
 from ..utils.cloudflare_api import ban_ip, unban_ip
 from odoo.addons.zero_sudo import public_rpc
 
@@ -89,7 +90,13 @@ class CloudflareIPBan(models.Model):
                 existing.write(vals)
             else:
                 # ADR-0001: Headless Mutation Context
-                self.env["cloudflare.ip.ban"].create(vals)
+                try:
+                    with self.env.cr.savepoint():
+                        self.env["cloudflare.ip.ban"].create(vals)
+                except IntegrityError as exc:
+                    # A simultaneous hit from the same IP made the row first. Its commit is invisible to this
+                    # REPEATABLE READ snapshot, so do not search again: Odoo runs the request again.
+                    raise ConcurrencyError("the IP's ban row was made by a simultaneous hit") from exc
 
         if not token or not zone_id:
             _record(
