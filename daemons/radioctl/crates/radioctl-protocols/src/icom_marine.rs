@@ -127,6 +127,9 @@ impl Dialect for MarineDialect {
         let unsupported = |why: &str| RigError::new(ErrorKind::Unsupported, why.to_string());
         let mhz = |hz: Hz| format!("{}.{:06}", hz.0 / 1_000_000, hz.0 % 1_000_000);
         let (commands, reply): (Vec<String>, ReplyKind) = match op {
+            Op::SetFrequency(Vfo::A, hz) if hz.0 >= 1_000_000_000 => {
+                return Err(unsupported("frequency above 999.999999 MHz"));
+            }
             Op::SetFrequency(Vfo::A, hz) => (
                 vec![format!("TXF,{}", mhz(*hz)), format!("RXF,{}", mhz(*hz))],
                 ReplyKind::Ack,
