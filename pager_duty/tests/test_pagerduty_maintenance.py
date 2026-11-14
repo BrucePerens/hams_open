@@ -87,6 +87,28 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
         self.assertFalse(pm.remove_expired(self.path, NOW), "a malformed flag is left for a human to see")
         self.assertTrue(os.path.exists(self.path))
 
+    def test_03b_remove_expired_keeps_a_flag_replaced_after_it_was_judged_expired(self):
+        # Tests [@ANCHOR: pager_duty:maintenance_remove_expired]
+        self._write(set_at=NOW, until=NOW + 60)
+        real_read_flag = pm.read_flag
+
+        def racing_read_flag(path=None, now=None):
+            info = real_read_flag(path, now)
+            pm.write_flag(20, "fresh", "start", path, NOW + 100)  # a concurrent `start` lands right after the read
+            return info
+
+        self.safe_patch_object(pm, "read_flag", racing_read_flag)
+        self.assertFalse(pm.remove_expired(self.path, NOW + 61))
+        self.assertTrue(os.path.exists(self.path), "the fresh flag survives")
+
+    def test_04b_write_flag_survives_a_stale_temporary_file_with_its_pid(self):
+        # Tests [@ANCHOR: pager_duty:maintenance_write_flag]
+        with open(f"{self.path}.tmp.{os.getpid()}", "w", encoding="utf-8") as handle:
+            handle.write("stale")
+        data = pm.write_flag(20, "why", "bruce", self.path, NOW)
+        self.assertEqual(data["until"], NOW + 1200)
+        self.assertEqual(os.listdir(self.dir), ["maintenance"])
+
     def test_04_write_and_clear(self):
         # Tests [@ANCHOR: pager_duty:maintenance_write_flag]
         # Tests [@ANCHOR: pager_duty:maintenance_clear_flag]
