@@ -488,6 +488,17 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_tentec_rx320_variant_from_name]
+    /// A frequency near `i64::MAX` is a frequency the words cannot hold, not an overflow panic.
+    #[test]
+    fn a_huge_frequency_has_no_tuning_words() {
+        for hz in [i64::MAX as u64, u64::MAX] {
+            for mode in [Mode::Usb, Mode::Lsb, Mode::Am] {
+                assert_eq!(tuning_words_for(Variant::Tt550, Hz(hz), mode, 27), None);
+                assert_eq!(tuning_words(Hz(hz), mode, 27), None);
+            }
+        }
+    }
+
     // Tests [@ANCHOR: radioctl_tentec_rx320_tuning_words_for]
     // Tests [@ANCHOR: radioctl_tentec_rx320_frequency_of_for]
     #[test]
