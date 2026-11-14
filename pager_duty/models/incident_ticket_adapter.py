@@ -2,6 +2,7 @@
 
 import datetime
 import logging
+from markupsafe import Markup
 from odoo import _, fields, models, api
 
 from .incident import TREND_TRACKED_SEVERITIES
@@ -257,14 +258,15 @@ class PagerDutyIncidentTicketAdapter(models.Model):
             "pager_duty.user_pager_service_internal"
         )
 
-        body = (
-            f"🚨 <b>EMERGENCY PAGE (Helpdesk Fallback)</b><br/><br/>"
-            f"The Pager Duty module attempted to create a Helpdesk ticket but failed due to an internal error:<br/>"
-            f"<i>{error_msg}</i><br/><br/>"
-            f"<b>Incident ID:</b> {incident.name}<br/>"
-            f"<b>Severity:</b> {incident.severity}<br/>"
-            f"<b>Details:</b> {incident.description}"
-        )
+        # Markup % escapes each substituted value once; a plain str body would be escaped whole and show the tags.
+        body = Markup(
+            "🚨 <b>EMERGENCY PAGE (Helpdesk Fallback)</b><br/><br/>"
+            "The Pager Duty module attempted to create a Helpdesk ticket but failed due to an internal error:<br/>"
+            "<i>%s</i><br/><br/>"
+            "<b>Incident ID:</b> %s<br/>"
+            "<b>Severity:</b> %s<br/>"
+            "<b>Details:</b> %s"
+        ) % (error_msg, incident.name, incident.severity, incident.description)
 
         partner_ids = []
         if assignee_id:
