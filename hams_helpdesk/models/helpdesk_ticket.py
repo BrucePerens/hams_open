@@ -17,6 +17,7 @@ import xml.etree.ElementTree as ET
 from markupsafe import Markup
 
 from .exception_fingerprint import STALE_AFTER
+from .exception_scrub import scrub_text
 from .inbound_spam_filter import inbound_spam_reasons
 from .link_defang import DEFANG_WARNING_TEXT, defang_html
 from .mail_thread_untrusted import stash_for
@@ -1539,7 +1540,7 @@ class HelpdeskTicket(models.Model):
             # ValueError means is a real fault and still raises.
             if "No possible route found" not in str(e):
                 raise
-            _logger.info("Inbound email is not routable, not ingested: %s", e)
+            _logger.info("Inbound email is not routable, not ingested: %s", scrub_text(str(e)))
             return {"status": "unroutable", "detail": str(e)[:500]}
         return {"status": "ingested"}
 

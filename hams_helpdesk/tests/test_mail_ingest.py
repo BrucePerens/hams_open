@@ -254,6 +254,20 @@ class TestMailIngest(HamsTransactionCase):
         self.assertIn("No possible route found", result["detail"])
         self.assertEqual(self.env["hams_helpdesk.ticket"].search_count([]), tickets_before)
 
+    def test_03c2_the_unroutable_log_line_carries_no_email_address(self):
+        # Tests [@ANCHOR: COMM_helpdesk_mail_ingest]
+        # message_route()'s error text names the sender and recipient addresses; the log line must not.
+        with self.assertLogs("odoo.addons.hams_helpdesk.models.helpdesk_ticket", level="INFO") as logs:
+            self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
+                base64.b64encode(
+                    self._raw_email("no-such-alias-xyzzy@hams.com", from_addr="loggedsender@example.com")
+                ).decode("ascii")
+            )
+        text = "\n".join(logs.output)
+        self.assertIn("not routable", text)
+        self.assertNotIn("loggedsender@example.com", text, "[!] DIAGNOSTIC FOR AI: the log must not carry the sender address.")
+        self.assertNotIn("no-such-alias-xyzzy@hams.com", text)
+
     def test_03d_a_valueerror_that_is_not_a_missing_route_still_raises(self):
         # Tests [@ANCHOR: COMM_helpdesk_mail_ingest]
         raw = self._raw_email("support@hams.com")
