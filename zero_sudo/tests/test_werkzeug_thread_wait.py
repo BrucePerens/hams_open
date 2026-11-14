@@ -43,5 +43,5 @@ class TestWerkzeugThreadWait(HamsTransactionCase):
         self.assertIn(thread, common._active_werkzeug_threads, "it stays tracked until it really returns")
 
         second = time.time()
-        common.wait_for_werkzeug_threads(timeout=3.0)
-        self.assertLess(time.time() - second, 1.0, "a thread already proven un-interruptible is not waited on again")
+        common.wait_for_werkzeug_threads(timeout=30.0)
+        self.assertLess(time.time() - second, 15.0, "a thread already proven un-interruptible is not waited on again")

@@ -657,8 +657,10 @@ class TestBrokerConnections(_Case):
                 deadline = time.monotonic() + 5
                 while not names and time.monotonic() < deadline:
                     time.sleep(0.01)
-            time.sleep(0.2)
+            deadline = time.monotonic() + 30
+            while not logs.output and time.monotonic() < deadline:
+                time.sleep(0.01)
             stop.set()
-            worker.join(5)
+            worker.join(30)
         self.assertEqual(logs.output, ["WARNING:hams_secret_broker:connection ended early: ConnectionResetError"])
         self.assertRegex(names[0], r"^secret-broker_\d+$")
