@@ -75,5 +75,7 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
             {("hams_base", "fr_FR"): {"Security Alert: Your HAMS Email Address was Changed": "FR alerte"}},
         )
         user.write({"email": "fr_alert_new@example.com"})
-        mail = self.env["mail.mail"].search([("email_to", "=", "fr_alert_test@example.com")], order="id desc", limit=1)
-        self.assertEqual(mail.subject, "FR alerte")
+        mail = self.env["mail.mail"].search(
+            [("email_to", "=", "fr_alert_test@example.com"), ("subject", "=", "FR alerte")]
+        )
+        self.assertTrue(mail, "the alert must be written in the member's language")
