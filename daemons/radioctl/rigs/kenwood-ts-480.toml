@@ -23,6 +23,7 @@ stop = "blank"
 attenuator_db = [12]
 attenuator_any_up_to_db = 0
 preamp_steps = 1
+antenna_ports = 2
 
 [timing]
 timeout_ms = 500
@@ -74,6 +75,11 @@ verified = { state = "unverified" }
 key = "kenwood.model_id"
 provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/SAT TRANSCEIVER' (dated 2003/11/28, 26 pages, no document number), file ts480_pc_command.pdf, https://www.radioamatore.info/attachments/059_TS-480_pc_control_command.pdf (a public copy; Kenwood's own site refused automated downloads), sha256 371c55d4c3ce59be1c4ea19d4f367eac0e927f4064794b09c052eba247c8c972, read by us in this session: ID, PDF p. 11 (answer ID020, 020 is the TS-480)", note = "Hamlib 4.6.2 kenwood_ids table also has 20 for this model." }
 verified = { state = "manual-checked", reference = "TS-480 PC control command reference, ID (p. 11)" }
+
+[[facts]]
+key = "levels.antenna_ports"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-480HX/ SAT TRANSCEIVER', file ts_480_pc.pdf, sha256 7508e7fcdd5e4d0597e215f4ebe5ee0007397eab9b70a0613d9cdcbd6fb8e6bd: AN, PDF p. 4: ANp; p 1 ANT1, 2 ANT2" }
+verified = { state = "manual-checked", reference = "AN, PDF p. 4" }
 
 [[facts]]
 key = "timing.*"

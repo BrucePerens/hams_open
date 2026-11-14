@@ -952,9 +952,41 @@ impl VirtualRig {
             ("RA" | "PA", _) => {
                 attenuation::virtual_kenwood(&self.desc, &mut self.state.levels, name, arg)
             }
+            ("AN", _) => self.kenwood_antenna(arg),
             _ => Some("?;".to_string()),
         };
         reply.map(String::into_bytes).unwrap_or_default()
+    }
+
+    // [@ANCHOR: radioctl_virtual_kenwood_antenna]
+    /// `AN` of the TS-480 (`ANp;`, p 1 or 2) and the TS-590S (`ANp1p2p3;`, p1 0 or 1, 9 in p2 and
+    /// p3 for no change); any other model, or a description with no ports, answers `?;`.
+    fn kenwood_antenna(&mut self, arg: &str) -> Option<String> {
+        let id = self.desc.kenwood.as_ref().map(|k| k.model_id);
+        if self.desc.levels.antenna_ports != 2 || !matches!(id, Some(20 | 21)) {
+            return Some("?;".to_string());
+        }
+        let three = id == Some(21);
+        let port = self.state.levels.get(&Level::Antenna).copied().unwrap_or(1);
+        if arg.is_empty() {
+            return Some(if three {
+                format!("AN{}00;", port - 1)
+            } else {
+                format!("AN{port};")
+            });
+        }
+        let chosen = match (three, arg.as_bytes()) {
+            (false, [p @ (b'1' | b'2')]) => Some(u16::from(p - b'0')),
+            (true, [p @ (b'0' | b'1'), b'9', b'9']) => Some(u16::from(p - b'0') + 1),
+            _ => None,
+        };
+        match chosen {
+            Some(p) => {
+                self.state.levels.insert(Level::Antenna, p);
+                None
+            }
+            None => Some("?;".to_string()),
+        }
     }
 
     // [@ANCHOR: radioctl_virtual_legacy_block]
@@ -2161,6 +2193,27 @@ mod tests {
         assert_eq!(rig.feed(b"AN3;AN0;AN12;", T0), b"?;?;?;");
         assert_eq!(rig.state().levels.get(&Level::Antenna), Some(&2));
         assert_eq!(kx3_rig().feed(b"AN;", T0), b"?;");
+    }
+
+    // Tests [@ANCHOR: radioctl_virtual_kenwood_antenna]
+    #[test]
+    fn a_ts480_and_a_ts590s_keep_their_antenna_and_a_590sg_lists_none() {
+        let load = |text: &str| {
+            let desc = radioctl_core::rigfile::parse(text)
+                .expect("rig file")
+                .description;
+            VirtualRig::from_description(&desc).expect("rig")
+        };
+        let mut ts480 = load(include_str!("../../../rigs/kenwood-ts-480.toml"));
+        assert_eq!(ts480.feed(b"AN;", T0), b"AN1;");
+        assert!(ts480.feed(b"AN2;", T0).is_empty());
+        assert_eq!(ts480.feed(b"AN;AN3;", T0), b"AN2;?;");
+        let mut ts590s = load(include_str!("../../../rigs/kenwood-ts-590s.toml"));
+        assert_eq!(ts590s.feed(b"AN;", T0), b"AN000;");
+        assert!(ts590s.feed(b"AN199;", T0).is_empty());
+        assert_eq!(ts590s.feed(b"AN;AN100;", T0), b"AN100;?;");
+        let mut sg = load(include_str!("../../../rigs/kenwood-ts-590sg.toml"));
+        assert_eq!(sg.feed(b"AN;", T0), b"?;");
     }
 
     // Tests [@ANCHOR: radioctl_virtual_elecraft_if]

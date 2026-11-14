@@ -139,6 +139,15 @@ pub fn parse_digits(text: &str) -> Option<u64> {
     text.parse().ok()
 }
 
+/// How a model writes the `AN` (antenna connector) command.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AntennaForm {
+    /// `ANp;`, p 1 or 2.
+    One,
+    /// `ANp1p2p3;`, p1 0 or 1.
+    Three,
+}
+
 /// The Kenwood-style client engine for one rig.
 // [@ANCHOR: radioctl_kenwood_kenwood_engine]
 #[derive(Debug)]
@@ -199,6 +208,20 @@ impl KenwoodEngine {
             if_frequency: dialect == Some(KenwoodDialect::Trc80),
             transceive: false,
         })
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_antenna_form]
+    /// The `AN` form of this model: the TS-480 (ID 20) takes `ANp;` with 1 or 2 (its PC command
+    /// reference, `AN`, PDF p. 4); the TS-590S (ID 21) takes `ANp1p2p3;` with p1 0 or 1 (its PC
+    /// command reference, `AN`, PDF p. 4). Any other model, or a description with no port count,
+    /// is refused: no other Kenwood guide has been read.
+    fn antenna_form(&self) -> Result<AntennaForm, RigError> {
+        let id = self.desc.kenwood.as_ref().map(|k| k.model_id);
+        match (self.desc.levels.antenna_ports, id) {
+            (2, Some(20)) => Ok(AntennaForm::One),
+            (2, Some(21)) => Ok(AntennaForm::Three),
+            _ => Err(Self::unsupported("no antenna port list on this model")),
+        }
     }
 
     // [@ANCHOR: radioctl_kenwood_engine_ky]
@@ -297,6 +320,16 @@ impl KenwoodEngine {
             (Some("RT"), Some(flag @ ("0" | "1"))) => Some(Observation::Rit(*flag == *"1")),
             (Some("XT"), Some(flag @ ("0" | "1"))) => Some(Observation::Xit(*flag == *"1")),
             (Some(name @ ("RA" | "PA")), Some(digits)) => self.decode_front_end(name, digits),
+            (Some("AN"), Some(digits)) => self.antenna_form().ok().and_then(|form| {
+                let port = match (form, digits.as_bytes()) {
+                    (AntennaForm::One, [p @ (b'1' | b'2')]) => p - b'0',
+                    (AntennaForm::Three, [p @ (b'0' | b'1'), b'0' | b'1', b'0' | b'1']) => {
+                        p - b'0' + 1
+                    }
+                    _ => return None,
+                };
+                Some(Observation::Level(Level::Antenna, u16::from(port)))
+            }),
             (Some(name), Some(digits)) => decode_level(name, digits),
             _ => None,
         };
@@ -641,9 +674,26 @@ impl ProtocolEngine for KenwoodEngine {
                 };
                 Self::command(format!("RC;{step}"), none)
             }
-            Op::GetLevel(Level::Dither | Level::Preselector | Level::Antenna)
-            | Op::SetLevel(Level::Dither | Level::Preselector | Level::Antenna, _) => {
+            Op::GetLevel(Level::Dither | Level::Preselector)
+            | Op::SetLevel(Level::Dither | Level::Preselector, _) => {
                 return Err(Self::unsupported("no such level on this rig"));
+            }
+            Op::GetLevel(Level::Antenna) => {
+                self.antenna_form()?;
+                Self::command(
+                    "AN;".into(),
+                    ReplyKind::Observation(Field::Level(Level::Antenna)),
+                )
+            }
+            Op::SetLevel(Level::Antenna, port) => {
+                let text = match (self.antenna_form()?, port) {
+                    (AntennaForm::One, 1 | 2) => format!("AN{port};"),
+                    // P1 0 or 1, P2 and P3 9 (no change): the receive antenna and the drive
+                    // output are left alone.
+                    (AntennaForm::Three, 1 | 2) => format!("AN{}99;", port - 1),
+                    _ => return Err(Self::unsupported("no such antenna port on this model")),
+                };
+                Self::command(text, none)
             }
             Op::GetLevel(level @ (Level::Attenuator | Level::Preamp)) => {
                 attenuation::step_of(&self.desc, *level, 0)?;
@@ -884,6 +934,67 @@ mod tests {
         radioctl_core::rigfile::parse(&text)
             .expect("loads")
             .description
+    }
+
+    // Tests [@ANCHOR: radioctl_kenwood_engine_antenna_form]
+    // Tests [@ANCHOR: radioctl_kenwood_engine_encode]
+    // Tests [@ANCHOR: radioctl_kenwood_engine_feed]
+    #[test]
+    fn the_ts480_and_ts590s_antenna_commands_follow_their_guides() {
+        let mut ts480 = KenwoodEngine::new(shipped("kenwood-ts-480")).expect("ts480");
+        assert_eq!(
+            ts480
+                .encode(&Op::GetLevel(Level::Antenna))
+                .expect("get")
+                .bytes,
+            b"AN;"
+        );
+        assert_eq!(
+            ts480
+                .encode(&Op::SetLevel(Level::Antenna, 2))
+                .expect("set")
+                .bytes,
+            b"AN2;"
+        );
+        assert!(ts480.encode(&Op::SetLevel(Level::Antenna, 3)).is_err());
+        assert!(ts480.encode(&Op::SetLevel(Level::Antenna, 0)).is_err());
+        assert_eq!(
+            ts480.feed(b"AN2;", Duration::ZERO),
+            vec![Inbound::Observation(Observation::Level(Level::Antenna, 2))]
+        );
+        assert!(matches!(
+            ts480.feed(b"AN0;", Duration::ZERO)[0],
+            Inbound::Unrecognised(_)
+        ));
+
+        let mut ts590s = KenwoodEngine::new(shipped("kenwood-ts-590s")).expect("ts590s");
+        assert_eq!(
+            ts590s
+                .encode(&Op::SetLevel(Level::Antenna, 1))
+                .expect("set")
+                .bytes,
+            b"AN099;"
+        );
+        assert_eq!(
+            ts590s
+                .encode(&Op::SetLevel(Level::Antenna, 2))
+                .expect("set")
+                .bytes,
+            b"AN199;"
+        );
+        assert!(ts590s.encode(&Op::SetLevel(Level::Antenna, 3)).is_err());
+        assert_eq!(
+            ts590s.feed(b"AN101;", Duration::ZERO),
+            vec![Inbound::Observation(Observation::Level(Level::Antenna, 2))]
+        );
+        assert!(matches!(
+            ts590s.feed(b"AN2;", Duration::ZERO)[0],
+            Inbound::Unrecognised(_)
+        ));
+
+        // No guide has been read for the TS-590SG: it lists no ports and is refused.
+        let mut sg = KenwoodEngine::new(shipped("kenwood-ts-590sg")).expect("ts590sg");
+        assert!(sg.encode(&Op::GetLevel(Level::Antenna)).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_kenwood_parse_if_offset]

@@ -193,6 +193,10 @@ Returns the signed offset in hertz, or `None` when there is no sign, the digit c
 Builds the virtual Kenwood radio's `IF` answer as a `String`. `&self`. The RIT/XIT offset region depends on the model: TS-990 and TS-590S or SG (ID 021 and 023) put five spaces and a signed 4-digit offset, the TS-440 five zeros and a signed 4-digit offset, other models a 4-digit step and a signed 5-digit offset.
 The frequency is that of the receive VFO (A when `kenwood_rx_vfo` is 0, else B) and the mode is the description's mode code as a character, `0` if unknown. The R-5000's answer lacks five characters after the frequency; how the function shortens its answer for that model is in the source beyond this entry (`unknown`, check it). The rest of the layout (flags and so on) is in the source beyond this entry. Read-only, simulated.
 
+### `fn kenwood_antenna(&mut self, arg: &str) -> Option<String>` [@ANCHOR: radioctl:radioctl_virtual_kenwood_antenna]
+
+Handles `AN` on the virtual Kenwood radio. `&mut self`; `arg` is the text after `AN`. The TS-480 (ID 20) reads and sets `ANp;` (p 1 or 2); the TS-590S (ID 21) reads `ANp1p2p3;` and sets it with p1 0 or 1 and p2, p3 both 9 (no change). A model with no two-port description, or any other form, answers `?;`. Simulated state only.
+
 ### `fn kenwood_select_vfo(&mut self, arg: &str, receive: bool) -> Option<String>` [@ANCHOR: radioctl:radioctl_virtual_kenwood_select_vfo]
 
 Handles the Kenwood commands that choose the receive VFO (`FR`) or the transmit VFO (`FT`) on the virtual radio. `&mut self`; `arg` is the argument text and `receive` is true for the receive command. An argument of `1` selects VFO B and anything else VFO A.
