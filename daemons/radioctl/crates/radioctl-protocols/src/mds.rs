@@ -35,10 +35,13 @@ fn unsupported(what: &str) -> RigError {
     RigError::new(ErrorKind::Unsupported, what.to_string())
 }
 
+/// The highest frequency whose megahertz text (rounded to 100 Hz) keeps three whole digits.
+const MAX_HZ: u64 = 999_999_949;
+
 // [@ANCHOR: radioctl_mds_mhz_text]
 /// A frequency as megahertz with four decimals (`450.0000`), rounded to 100 Hz.
 pub fn mhz_text(hz: Hz) -> String {
-    let units = (hz.0 + 50) / 100;
+    let units = hz.0.saturating_add(50) / 100;
     format!("{}.{:04}", units / 10_000, units % 10_000)
 }
 
@@ -109,6 +112,9 @@ impl ProtocolEngine for MdsEngine {
                 )
             }
             Op::SetFrequency(Vfo::A, hz) => {
+                if hz.0 > MAX_HZ {
+                    return Err(unsupported("frequency above 999.9999 MHz"));
+                }
                 self.waiting = false;
                 let t = mhz_text(*hz);
                 (format!("TX{t}\nRX{t}\n"), ReplyKind::None)
