@@ -143,6 +143,8 @@ class DatabaseTableStat(models.Model):
                     }
                 )
             except (AccessError, UserError) as e:
+                # Best effort by design: this runs from the recurring stats cron, which finds the same
+                # bloat and reports it again on its next run, so a missing pager account costs one cycle.
                 _logger.warning(
                     "Permission or configuration"
                     " error reporting bloat"
