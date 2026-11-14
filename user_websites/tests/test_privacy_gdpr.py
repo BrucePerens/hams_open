@@ -7,6 +7,7 @@ from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.user_websites.models import ham_gdpr_export_token as token_model
 from odoo.addons.user_websites.models.ham_gdpr_export_token import (
+    EXPORT_PAGE_ROWS,
     TOKEN_EXPIRY_MINUTES,
     GdprExportTokenRejected,
 )
@@ -302,22 +303,60 @@ class TestPrivacyGDPR(HamsHttpCase):
         payload = self.env["ham.gdpr.export.token"].with_user(svc_uid).consume_and_export(token)
 
         self.assertIn("data", payload)
-        self.assertIn("streamed", payload)
+        self.assertNotIn("streamed", payload, "no dataset rows may travel in the consume call")
         self.assertEqual(payload["data"]["user"]["name"], "Privacy User")
-        # "pages" is one of _get_gdpr_streamed_keys()'s generator-backed
-        # keys (user_websites/models/res_users.py), not one of
-        # _get_gdpr_export_data()'s plain dict keys -- consume_and_export
-        # deliberately keeps the two separate rather than merging them the
-        # way the JSON export's own generate() does, so this checks the
-        # generator was actually drained into a real, non-empty list, not
-        # just that the key exists.
-        self.assertIn("pages", payload["streamed"])
-        self.assertIsInstance(payload["streamed"]["pages"], list)
-        self.assertEqual(len(payload["streamed"]["pages"]), 1)
-        self.assertEqual(payload["streamed"]["pages"][0]["name"], "My Private Home")
+        # "pages" is one of _get_gdpr_streamed_keys()'s generator-backed keys: the consume call names it, and
+        # export_page() delivers its rows.
+        self.assertIn("pages", payload["streamed_keys"])
+        rows = self.env["ham.gdpr.export.token"].with_user(svc_uid).export_page(token, "pages", 0)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "My Private Home")
 
         record = self.env["ham.gdpr.export.token"].with_user(svc_uid).search([("token", "=", token)], limit=1)
         self.assertTrue(record.consumed, "consume_and_export must consume the token as a side effect.")
+
+    def test_01g_export_page_is_bounded_and_complete(self):
+        # Tests [@ANCHOR: user_websites:gdpr_export_page]
+        # [@ANCHOR: test_gdpr_export_page_is_bounded_and_complete]
+        """A 100k-row dataset is delivered in pages of at most EXPORT_PAGE_ROWS, none lost or repeated, and the
+        consume call carries none of the rows. A token never consumed, or an unknown key, reads nothing."""
+        total = 100000
+        Token = self.env["ham.gdpr.export.token"]
+
+        def many_rows():
+            return iter({"n": i} for i in range(total))
+
+        env_as_user = self.env(user=self.user_privacy)
+        token = env_as_user["ham.gdpr.export.token"].create_for_current_user()
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("user_websites.user_gdpr_export_service")
+        Svc = Token.with_user(svc_uid)
+
+        with self.assertRaises(GdprExportTokenRejected):
+            Svc.export_page(token, "pages", 0)
+
+        users_cls = type(self.env["res.users"])
+        base = users_cls._get_gdpr_streamed_keys
+        self.safe_patch_object(
+            users_cls, "_get_gdpr_streamed_keys", new=lambda rec: dict(base(rec), big=many_rows)
+        )
+        payload = Svc.consume_and_export(token)
+        self.assertIn("big", payload["streamed_keys"])
+        self.assertLess(len(json.dumps(payload)), 10000)
+
+        seen = 0
+        offset = 0
+        while True:
+            page = Svc.export_page(token, "big", offset)
+            self.assertLessEqual(len(page), EXPORT_PAGE_ROWS)
+            if page:
+                self.assertEqual(page[0]["n"], offset)
+            seen += len(page)
+            offset += len(page)
+            if len(page) < EXPORT_PAGE_ROWS:
+                break
+        self.assertEqual(seen, total)
+        with self.assertRaises(GdprExportTokenRejected):
+            Svc.export_page(token, "no_such_key", 0)
 
     def test_01f_consume_and_export_rejects_a_caller_that_is_not_the_daemon_service_account(self):
         # Tests [@ANCHOR: test_gdpr_consume_and_export_payload]
