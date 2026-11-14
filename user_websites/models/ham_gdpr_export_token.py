@@ -173,7 +173,7 @@ class HamGdprExportToken(models.Model):
     @public_rpc  # RPC by design: the gdpr_csv_export daemon calls it over RPC
     def consume_and_export(self, token):
         """The first RPC the export daemon calls. Validates+consumes the token and returns the small part of the
-        export: {"data": the plain dict keys, "streamed_keys": the names of the large per-user datasets}. The
+        export: {"user_id": the member's id, "data": the plain dict keys, "streamed_keys": the names of the large per-user datasets}. The
         large datasets are never built here: the daemon then pulls each one a page at a time with export_page(),
         so no Odoo worker holds a whole export (a member with 100k QSOs) in memory or for one long call."""
         # # Verified by [@ANCHOR: test_gdpr_consume_and_export_payload]
@@ -203,7 +203,7 @@ class HamGdprExportToken(models.Model):
         data = user_as_gdpr_svc._get_gdpr_export_data()
         keys = list(user_as_gdpr_svc._get_gdpr_streamed_keys())
         # The json round trip proves the payload is JSON-serializable (dates, Markup) before it crosses the RPC.
-        return json.loads(json.dumps({"data": data, "streamed_keys": keys}, default=str))
+        return json.loads(json.dumps({"user_id": user.id, "data": data, "streamed_keys": keys}, default=str))
 
     def _export_user(self, user):
         """`user` as zero_sudo.gdpr_service_internal, the already-scoped account that may read a member's export
