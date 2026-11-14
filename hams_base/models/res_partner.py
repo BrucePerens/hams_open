@@ -1,5 +1,6 @@
 from odoo import models
 from odoo.tools.translate import _
+from odoo.addons.hams_base.log_mask import mask_email
 # -*- coding: utf-8 -*-
 # from odoo import models, api, _
 import html
@@ -79,7 +80,7 @@ class ResPartner(models.Model):
             # clause would crash production bounce processing instead of
             # logging and skipping the notification (the except below logs the
             # traceback and returns without notifying any club).
-            _logger.exception("Failed to resolve clubs to notify of bounce for %s: %s", email, e)
+            _logger.exception("Failed to resolve clubs to notify of bounce for %s: %s", mask_email(email), e)
             return
 
         for club in clubs_to_notify:
@@ -133,4 +134,4 @@ class ResPartner(models.Model):
                 # Scoped per-club so one club's failure can't suppress
                 # another club's real notification; the failure is logged
                 # with the club id and the bounced address.
-                _logger.exception("Failed to notify club %s of bounce for %s: %s", club.id, email, e)
+                _logger.exception("Failed to notify club %s of bounce for %s: %s", club.id, mask_email(email), e)

@@ -3,6 +3,7 @@ from odoo import models, api
 import email.utils
 import logging
 from odoo.addons.zero_sudo import public_rpc
+from odoo.addons.hams_base.log_mask import mask_email
 
 _logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class MailThread(models.AbstractModel):
             # and must reach Odoo's bounce handling below.
             is_bounce_notice = message_dict.get('bounced_email') or message_dict.get('bounced_partner')
             if not is_bounce_notice and ('unsubscribe' in subject or 'unsubscribe' in body):
-                _logger.info("Recognized manual unsubscribe request from %s", message_dict.get('email_from'))
+                _logger.info("Recognized manual unsubscribe request from %s", mask_email(message_dict.get('email_from')))
                 # We could auto-unsubscribe them here, or send them an email pointing to the unsubscribe page.
                 # For now, we will log it and drop it so it doesn't create garbage tickets.
                 return []
