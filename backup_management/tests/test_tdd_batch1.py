@@ -93,14 +93,27 @@ class TestTddBatch1(RealTransactionCase):
             if job.state in ("done", "failed"):
                 break
             time.sleep(0.5)  # audit-ignore-sleep
+        # The daemon writes the final state first and only then appends the closing log text to the
+        # same job row. Unlinking the job before that append lands collides with it
+        # (SerializationFailure), so wait for the closing log text.
+        start_time = time.time()
+        while time.time() - start_time < 15.0:
+            job.invalidate_recordset(["output_log"])
+            if "Process exited" in (job.output_log or "") or "Worker Error" in (job.output_log or ""):
+                break
+            time.sleep(0.5)  # audit-ignore-sleep
+            self.env.cr.commit()
         if job.state == "failed":
-            # The daemon marks the job failed first and only then reports the failure, which posts
-            # a message on the config. Unlinking the config before that post lands collides with it
-            # (SerializationFailure on mail_message), so wait for the post.
+            # The daemon reports the failure after that, which posts a message on the config
+            # (not the "created" log message, which already exists). Unlinking the config before
+            # that post lands collides with it (SerializationFailure on mail_message).
             Message = self.env["mail.message"]
             start_time = time.time()
             while time.time() - start_time < 15.0:
-                if Message.search_count([("model", "=", "backup.config"), ("res_id", "=", job.config_id.id)]):
+                if Message.search_count([
+                    ("model", "=", "backup.config"), ("res_id", "=", job.config_id.id),
+                    "|", ("body", "ilike", "failed for job"), ("body", "ilike", "Worker Error"),
+                ]):
                     break
                 time.sleep(0.5)  # audit-ignore-sleep
                 self.env.cr.commit()
