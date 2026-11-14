@@ -245,6 +245,17 @@ mod tests {
         assert_eq!(parse_mhz(".5"), None);
     }
 
+    /// A frequency beyond the three megahertz digits of the wire form is refused, not an
+    /// overflow panic (debug) or a garbled `TX` line (release).
+    #[test]
+    fn a_huge_frequency_is_refused_not_a_panic() {
+        let mut e = MdsEngine::new(shipped("mds-9710")).expect("engine");
+        for hz in [u64::MAX, 1_000_000_000_000, 1_000_000_000] {
+            assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(hz))).is_err(), "{hz}");
+        }
+        assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(928_000_000))).is_ok());
+    }
+
     // Tests [@ANCHOR: radioctl_mds_engine_new]
     #[test]
     fn other_families_are_refused() {
