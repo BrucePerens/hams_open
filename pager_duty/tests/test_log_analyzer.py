@@ -92,6 +92,33 @@ class TestLogAnalyzerReal(RealTransactionCase):
         self.env.invalidate_all()
         self.assertEqual(self.env["pager.log.search.job"].search_count([]), before)
 
+    def test_04b_traversal_and_paths_outside_var_log_are_rejected_even_for_a_pager_admin(self):
+        # Tests [@ANCHOR: pager_duty:search_logs]
+        before = self.env["pager.log.search.job"].search_count([])
+        for path in ("/var/log/../etc/shadow", "/etc/passwd", "/var/logs/syslog"):
+            with self.subTest(path=path):
+                body = self._search(path)
+                self.assertNotIn("result", body)
+                self.assertEqual(body["error"]["data"]["name"], "odoo.exceptions.AccessError")
+                self.assertIn("Illegal path traversal detected", body["error"]["data"]["message"])
+        self.env.invalidate_all()
+        self.assertEqual(self.env["pager.log.search.job"].search_count([]), before)
+
+    def test_04c_a_member_outside_the_pager_admin_group_cannot_search_logs(self):
+        # Tests [@ANCHOR: pager_duty:search_logs]
+        login = "pager_log_non_admin_%s" % uuid.uuid4().hex[:8]
+        self.env["res.users"].create(
+            {"name": "Not A Pager Admin", "login": login, "password": login,
+             "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
+        )
+        self._register_log_file("/var/log/syslog")
+        self.authenticate(login, login)
+        res = self.url_open("/api/v1/pager/logs/search",
+                            json={"params": {"file_path": "/var/log/syslog", "regex_query": "x"}})
+        body = res.json()
+        self.assertNotIn("result", body)
+        self.assertIn("Admins only", body["error"]["data"]["message"])
+
     def test_05_path_registered_for_another_website_is_rejected(self):
         """
         The cross-tenant case search_logs()'s allow-list exists for: another website registered
