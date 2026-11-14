@@ -78,7 +78,9 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
 
         def _capture_create(mail_model, vals_list):
             subjects.extend(
-                vals["subject"] for vals in vals_list if vals.get("email_to") == "fr_alert_test@example.com"
+                vals["subject"]
+                for vals in vals_list
+                if "automated security notification from HAMS" in (vals.get("body_html") or "")
             )
             return mail_model.browse()
 
