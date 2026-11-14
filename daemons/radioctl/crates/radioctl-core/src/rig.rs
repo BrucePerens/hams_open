@@ -241,6 +241,7 @@ struct CacheEntry {
 // [@ANCHOR: radioctl_core_rig_shared]
 struct Shared {
     id: String,
+    frequency_limits: (Hz, Hz),
     capabilities: CapabilitySet,
     cache: Mutex<HashMap<Field, CacheEntry>>,
     gate: AtomicBool,
@@ -306,11 +307,13 @@ pub fn spawn<E: ProtocolEngine, T: Transport>(
     let description = engine.description();
     let id = description.id.clone();
     let capabilities = description.capabilities.clone();
+    let frequency_limits = description.frequency_limits();
     let (events, _) = broadcast::channel(options.stream_capacity.max(1));
     let (scope, _) = broadcast::channel(options.scope_capacity.max(1));
     let (filter_scope, _) = broadcast::channel(options.scope_capacity.max(1));
     let shared = Arc::new(Shared {
         id,
+        frequency_limits,
         capabilities,
         cache: Mutex::new(HashMap::new()),
         gate: AtomicBool::new(false),
@@ -596,6 +599,19 @@ impl RigHandle {
                 ErrorKind::Unsupported,
                 format!("{op:?} is not in the rig description"),
             ));
+        }
+        // The one place a frequency is range-checked, for every engine and every caller.
+        if let Op::SetFrequency(_, hz) = &op {
+            let (min, max) = self.shared.frequency_limits;
+            if *hz < min || *hz > max {
+                return Err(RigError::new(
+                    ErrorKind::Rejected,
+                    format!(
+                        "{} Hz is outside this rig's range {} to {} Hz",
+                        hz.0, min.0, max.0
+                    ),
+                ));
+            }
         }
         if op.transmits() && !self.shared.gate.load(Ordering::Acquire) {
             return Err(RigError::new(

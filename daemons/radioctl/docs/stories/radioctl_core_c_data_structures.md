@@ -971,6 +971,10 @@
 
 **See also:** test `a_levels_block_is_sane_and_needs_its_facts (src/rigfile.rs)`.
 
+### `FrequencySection` [@ANCHOR: radioctl:radioctl_core_rigfile_frequency_section]
+
+**Purpose and location.** The optional `[frequency]` table of a rig file, a private `struct` in `rigfile.rs`: `min_hz` and `max_hz` (u64), the range `SetFrequency` accepts. Loading refuses min above max, and a fact `frequency.*` must cover it. Without the table the description has no range and the generous default (0 Hz to 50 GHz) applies.
+
 ### `PowerMeterSection` [@ANCHOR: radioctl:radioctl_core_rigfile_power_meter_section]
 
 **Purpose and location.** The `[power_meter]` table. Defined in `daemons/radioctl/crates/radioctl-core/src/rigfile.rs:418` as a private `struct`. It derives Deserialize.

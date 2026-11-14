@@ -62,6 +62,32 @@ fn permit() -> TransmitPermit {
     TransmitPermit::new("actor test")
 }
 
+// Tests [@ANCHOR: radioctl_core_description_frequency_limits]
+// Tests [@ANCHOR: radioctl_core_handle_submit]
+#[tokio::test(start_paused = true)]
+async fn set_frequency_outside_the_rig_range_is_refused_before_the_wire() {
+    let mut desc = RigDescription::ic7300();
+    desc.frequency_range = Some((Hz(30_000), Hz(74_800_000)));
+    assert_eq!(desc.frequency_limits(), (Hz(30_000), Hz(74_800_000)));
+    let rig = VirtualRig::from_description(&desc).expect("rig");
+    let (stream, _control) = spawn_virtual_rig(&Handle::current(), rig, Duration::ZERO);
+    let handle =
+        spawn_current(CivEngine::new(desc).expect("engine"), stream, quiet()).expect("spawn");
+    for hz in [0, 29_999, 74_800_001, 100_000_000_000, u64::MAX] {
+        let err = handle
+            .set_frequency(Vfo::A, Hz(hz))
+            .await
+            .expect_err("out of range");
+        assert_eq!(err.kind, ErrorKind::Rejected, "{hz}");
+    }
+    for hz in [30_000, 7_074_000, 74_800_000] {
+        handle.set_frequency(Vfo::A, Hz(hz)).await.expect("in range");
+    }
+    // A description with no range gets the generous default.
+    let plain = RigDescription::ic7300();
+    assert_eq!(plain.frequency_limits(), (Hz(0), Hz(50_000_000_000)));
+}
+
 // Tests [@ANCHOR: radioctl_core_rig_spawn_current]
 // Tests [@ANCHOR: radioctl_core_handle_frequency]
 // Tests [@ANCHOR: radioctl_core_handle_set_frequency]

@@ -19,6 +19,10 @@ Returns an iterator over the capabilities in the set, by value (`Capability` is 
 
 ## `crates/radioctl-core/src/description.rs`
 
+### `pub fn frequency_limits(&self) -> (Hz, Hz)` [@ANCHOR: radioctl:radioctl_core_description_frequency_limits]
+
+The inclusive `(min, max)` frequency `SetFrequency` accepts for the model: the `[frequency]` range of its rig file, or 0 Hz to `DEFAULT_MAX_FREQUENCY` (50 GHz) when the file states none. `RigHandle` reads it once at spawn and refuses any `SetFrequency` outside it with `Rejected`, before the command reaches the engine. Pure.
+
 ### `pub fn mode_code(&self, mode: Mode) -> Option<u8>` [@ANCHOR: radioctl:radioctl_core_description_mode_code]
 
 Looks up the wire code a model uses for an operating mode, by scanning the description's `mode_codes` list of `(Mode, u8)` pairs and returning the first match. The code is a raw byte whose meaning is per family: a CI-V binary value such as 0x01 for USB, or an ASCII character such as `b'2'` for a Kenwood or Drake. `None` means the model has no code for that mode, and engines then refuse `SetMode` with an `Unsupported` error. Pure.
