@@ -25,6 +25,7 @@ class PagerPingAPI(http.Controller):
         csrf=False,
     )
     # [@ANCHOR: pager_duty:heartbeat]
+    # GET may write and csrf is off by design: the uuid in the URL is the secret, like any dead-man's-switch ping URL.
     def heartbeat(self, hb_uuid, **kw):
 
         svc_uid = request.env["zero_sudo.security.utils"]._get_service_uid(
