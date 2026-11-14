@@ -31,6 +31,8 @@ This module enables:
         "content_moderation",
         "form_shield",
     ],
+    # Modules the TESTS need installed although `depends` does not list them: the oversized-id route test needs hams_base's BoundedIntConverter.
+    "test_depends": ["hams_base"],
     "external_dependencies": {
         "python": ["markupsafe"],
     },
