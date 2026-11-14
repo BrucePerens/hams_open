@@ -199,11 +199,13 @@ class TickTests(unittest.TestCase):
     def test_tick_advances_at_one_millisecond_per_count(self):
         sim = SimulatedFx2()
         h.load_ram(sim, {0: 2, 1: 0, 2: 0x40})
+        before = time.monotonic()
         a = h.read_tick(sim)
         time.sleep(0.05)
         b = h.read_tick(sim)
+        wall = time.monotonic() - before  # the counter may not run faster than the wall clock, however loaded the box is
         self.assertGreater(b.seconds - a.seconds, 0.04)
-        self.assertLess(b.seconds - a.seconds, 0.5)
+        self.assertLess(b.seconds - a.seconds, wall + 0.01)
         self.assertLess(b.sub, 4000)
         self.assertEqual(b.loop_max_us, 0x120 * 0.25)
 
