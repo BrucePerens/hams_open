@@ -133,7 +133,9 @@ class Module(models.Model):
         all_doc_infos = []
         last_id = 0
         while True:
-            batch = self.env["ir.module.module"].with_user(facility_uid).search(
+            # The facility account does read ir.module.module although no csv/xml row the checker sees grants it
+            # (proved by test_facility_account_can_read_installed_modules).
+            batch = self.env["ir.module.module"].with_user(facility_uid).search(  # audit-ignore-service-acl: see test
                 [("state", "=", "installed"), ("id", ">", last_id)],
                 limit=1000,
                 order="id asc"

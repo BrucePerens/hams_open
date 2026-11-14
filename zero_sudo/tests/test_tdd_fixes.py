@@ -270,6 +270,13 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             self.env["ir.module.module"]._bootstrap_knowledge_docs()
         self.assertIn("AccessError getting", logs.output[0])
 
+    def test_facility_account_can_read_installed_modules(self):
+        # _bootstrap_knowledge_docs() lists the installed modules as the facility account; found by
+        # check_service_account_acl.py. Without a read ACL on ir.module.module that search raised AccessError.
+        facility_uid = self.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.odoo_facility_service_internal")
+        installed = self.env["ir.module.module"].with_user(facility_uid).search_count([("state", "=", "installed")])
+        self.assertGreater(installed, 0)
+
     # Tests [@ANCHOR: zero_sudo_daemon_utils_zero_sudo_daemon_utils]
     def test_daemon_utils_sys_paths(self):
         # Tests [@ANCHOR: zero_sudo:_start_daemon_process]
