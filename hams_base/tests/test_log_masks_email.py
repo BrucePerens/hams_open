@@ -34,6 +34,15 @@ class TestLogMasksEmail(HamsTransactionCase):
             user.write({"email": "mask_new@example.com"})
         self.assertNotIn("mask_old_secret", "\n".join(logs.output), "[!] DIAGNOSTIC FOR AI: the failure log must mask the old address.")
 
+    def test_email_change_alert_is_created_for_old_address(self):
+        user = self.env["res.users"].create({"name": "Alert Test", "login": "alert_old@example.com", "email": "alert_old@example.com"})
+        self.safe_patch_object(type(self.env["mail.mail"]), "send", lambda self, *a, **k: True)
+        with self.assertNoLogs(LOGGER_PREFIX, level="ERROR"):
+            user.write({"email": "alert_new@example.com"})
+        admin = self.env.ref("base.user_admin")
+        found = self.env["mail.mail"].with_user(admin.id).search([("subject", "ilike", "Email Address was Changed")])
+        self.assertEqual(found.mapped("email_to"), ["alert_old@example.com"], "[!] DIAGNOSTIC FOR AI: exactly one alert, addressed to the OLD email, must exist.")
+
     def test_bounce_notice_failure_log_has_no_full_address(self):
         club = self.env["res.partner"].create({"name": "Mask Club", "is_company": True, "email": "club@example.com"})
         member = self.env["res.partner"].create({"name": "Mask Member", "email": "bouncer_secret@example.com", "parent_id": club.id})

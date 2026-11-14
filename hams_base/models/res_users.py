@@ -107,8 +107,8 @@ class ResUsers(models.Model):
                                 'email_to': old_email,
                                 'email_from': self.env.company.catchall_formatted or self.env.company.email_formatted or 'admin@hams.com',
                             }
-                            # Use the facility service account for mailing
-                            svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('zero_sudo.odoo_facility_service_internal')
+                            # The mail service account holds the mail.mail create ACL (the facility account does not)
+                            svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('zero_sudo.mail_service_internal')
                             mail = self.env['mail.mail'].with_user(svc_uid).create(mail_values)
                             mail.send()
                     except Exception as e:  # audit-ignore-catch-all
