@@ -6,6 +6,7 @@ import os
 
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
+from odoo.tools.translate import code_translations
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 
@@ -201,6 +202,24 @@ class TestHelpdeskCore(HamsTransactionCase):
         admin_tickets = Ticket_as_admin.search([], limit=1000)
         self.assertIn(my_ticket, admin_tickets, "Admin MUST be able to see all tickets in company.")
         self.assertIn(other_ticket, admin_tickets, "Admin MUST be able to see all tickets in company.")
+
+    def test_04b_stage_mailback_is_in_the_customer_language(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]
+        self.env["res.lang"]._activate_lang("fr_FR")
+        self.portal_user.partner_id.lang = "fr_FR"
+        self.safe_patch_object(
+            code_translations,
+            "python_translations",
+            {("hams_helpdesk", "fr_FR"): {"Ticket Update: %s": "FR mise a jour: %s"}},
+        )
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Lang Mailback", "partner_id": self.portal_user.partner_id.id, "stage": "new"}
+        )
+        ticket.with_context(lang="en_US").write({"stage": "in_progress"})
+        self.assertTrue(
+            ticket.message_ids.filtered(lambda m: m.subject == "FR mise a jour: Lang Mailback"),
+            "the customer's status mail must be written in the customer's language",
+        )
 
     def test_04_stage_mailback_automation(self):
         """Verify that transitioning a ticket stage fires an automated mail-back to the subscribed customer."""
