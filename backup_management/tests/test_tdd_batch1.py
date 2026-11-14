@@ -93,6 +93,17 @@ class TestTddBatch1(RealTransactionCase):
             if job.state in ("done", "failed"):
                 break
             time.sleep(0.5)  # audit-ignore-sleep
+        if job.state == "failed":
+            # The daemon marks the job failed first and only then reports the failure, which posts
+            # a message on the config. Unlinking the config before that post lands collides with it
+            # (SerializationFailure on mail_message), so wait for the post.
+            Message = self.env["mail.message"].sudo()
+            start_time = time.time()
+            while time.time() - start_time < 15.0:
+                if Message.search_count([("model", "=", "backup.config"), ("res_id", "=", job.config_id.id)]):
+                    break
+                time.sleep(0.5)  # audit-ignore-sleep
+                self.env.cr.commit()
         self.env.cr.commit()
 
     def test_item1_kopia_restore_whitelist(self):
