@@ -26,5 +26,6 @@ class TestBoundedIntConverter(HamsTransactionCase):
                 self._converter().to_python(text)
 
     def test_03_a_route_can_raise_the_limit(self):
+        # Tests [@ANCHOR: hams_base:bounded_int_converter_init]
         converter = self.env["ir.http"]._get_converters()["int"](Map(), max=9999999999)
         self.assertEqual(converter.to_python("4000000000"), 4000000000)

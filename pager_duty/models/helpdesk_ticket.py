@@ -10,6 +10,8 @@ from .incident_ticket_adapter import _is_inbound_email_source
 class HelpdeskTicket(models.Model):
     _inherit = "hams_helpdesk.ticket"
 
+    # [@ANCHOR: pager_duty:helpdesk_ticket_triage_cleared_method]
+    # Verified by [@ANCHOR: test_01_a_resolved_incident_retires_its_new_ticket_with_a_note]
     def _triage_cleared(self):
         """Adds the tickets a pager incident created, once that incident is resolved, to the automatic tickets that
         hams_helpdesk retires before notifying anyone (``_triage_retire_stale``). A ticket from inbound mail is a person's

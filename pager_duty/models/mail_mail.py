@@ -47,6 +47,8 @@ def page_mail_failure(registry, failure_type):
 class MailMailPagesOperator(models.Model):
     _inherit = "mail.mail"
 
+    # [@ANCHOR: pager_duty:mail_postprocess_sent_message]
+    # Verified by [@ANCHOR: test_a_refused_send_raises_one_alarm_with_no_address]
     def _postprocess_sent_message(self, success_pids, success_emails, failure_reason=False, failure_type=None):
         result = super()._postprocess_sent_message(
             success_pids, success_emails, failure_reason=failure_reason, failure_type=failure_type

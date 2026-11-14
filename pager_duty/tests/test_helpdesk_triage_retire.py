@@ -29,6 +29,7 @@ class TestHelpdeskTriageRetire(HamsTransactionCase):
         return ticket, incident
 
     def test_01_a_resolved_incident_retires_its_new_ticket_with_a_note(self):
+        # Tests [@ANCHOR: pager_duty:helpdesk_ticket_triage_cleared_method]
         ticket, _incident = self._pair("resolved")
         self.assertEqual(ticket._triage_retire_stale(), ticket)
         self.assertEqual(ticket.stage, "resolved")
