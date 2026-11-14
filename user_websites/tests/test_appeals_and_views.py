@@ -169,6 +169,31 @@ class TestAppealsAndViews(RealTransactionCase):
         self.env.cr.commit()
         self.assertEqual(Appeal.search_count(domain), 1, "One pending appeal per target is enough.")
 
+    def test_02c_an_appeal_needs_a_reason_and_a_group_appeal_needs_membership(self):
+        # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
+        Appeal = self.env["content.violation.appeal"]
+        group = self.env["user.websites.group"].create(
+            {"name": "Appeal Group", "website_slug": "appeal-group-02c", "is_suspended_from_websites": True}
+        )
+        self.addCleanup(lambda: group.exists() and group.unlink())
+        self.user_public.is_suspended_from_websites = True
+        self.env.cr.commit()
+        self.authenticate(self.user_public.login, self.user_public.login)
+        token = odoo.http.Request.csrf_token(self)
+
+        res = self.url_open("/website/submit_appeal", data={"csrf_token": token, "reason": ""},
+                            method="POST", allow_redirects=False)
+        self.assertIn("error=missing_reason", res.headers["Location"])
+
+        res = self.url_open("/website/submit_appeal",
+                            data={"csrf_token": token, "reason": "Not my group", "group_id": group.id},
+                            method="POST", allow_redirects=False)
+        self.assertIn("error=appeal_failed", res.headers["Location"])
+        self.env.cr.commit()
+        self.assertEqual(Appeal.search_count([("group_id", "=", group.id)]), 0,
+                         "a non-member must not file an appeal for a group's suspension")
+        self.assertEqual(Appeal.search_count([("user_id", "=", self.user_public.id)]), 0)
+
     def test_03_reject_appeal_leaves_suspension_in_place(self):
         # Tests [@ANCHOR: user_websites:COMM_appeal_action_reject]
 
