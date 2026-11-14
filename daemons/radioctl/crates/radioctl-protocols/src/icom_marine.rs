@@ -405,6 +405,16 @@ mod tests {
         );
     }
 
+    /// A frequency the megahertz field cannot hold is refused before any `TXF` line is built.
+    #[test]
+    fn a_frequency_beyond_the_megahertz_field_is_refused() {
+        let mut e = engine(shipped("icom-ic-m802")).expect("engine");
+        for hz in [u64::MAX, 100_000_000_000, 1_000_000_000] {
+            assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(hz))).is_err(), "{hz}");
+        }
+        assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(999_999_999))).is_ok());
+    }
+
     // Tests [@ANCHOR: radioctl_marine_engine]
     // Tests [@ANCHOR: radioctl_marine_dialect_from_description]
     // Tests [@ANCHOR: radioctl_marine_dialect_encode]
