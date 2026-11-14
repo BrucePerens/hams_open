@@ -44,13 +44,14 @@ class TestTriageAutoRetire(HamsTransactionCase):
 
         self.safe_patch_object(utils_model, "_get_system_param", answer, create=True)
 
-    def _exception_ticket(self, hours_since_seen, name="Daemon failure: nz.rsm.sync.service"):
+    def _exception_ticket(self, hours_since_seen, name="Daemon failure: nz.rsm.sync.service", source="http"):
         ticket = self.Ticket.create({"name": name, "description": "<p>unit failed</p>", "ticket_type": "server_exception"})
         self.env["hams_helpdesk.exception.fingerprint"].create(
             {
                 "name": name,
                 "fingerprint": "fp-%s" % ticket.id,
                 "ticket_id": ticket.id,
+                "source": source,
                 "last_seen": fields.Datetime.now() - timedelta(hours=hours_since_seen),
             }
         )
@@ -110,6 +111,13 @@ class TestTriageAutoRetire(HamsTransactionCase):
         self.assertEqual(ticket.notify_state, "sent")
         self.assertEqual(self.Ticket._triage_sweep_stale(), 1)
         self.assertEqual(ticket.stage, "resolved")
+
+    def test_08_a_failed_unit_is_reported_once_per_failure_so_quiet_does_not_clear_it(self):
+        # A timer unit that runs daily or weekly reports its failure once (OnFailure=); six quiet hours say nothing.
+        self.settings["hams_helpdesk.triage_notify_hold_seconds"] = "0"
+        ticket = self._exception_ticket(9, source="daemon")
+        self.assertEqual(self.Ticket._triage_sweep_stale(), 0)
+        self.assertEqual(ticket.stage, "new")
 
     def test_07_a_ticket_a_person_already_picked_up_is_left_alone(self):
         ticket = self._exception_ticket(9)
