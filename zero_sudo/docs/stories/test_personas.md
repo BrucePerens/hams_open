@@ -238,3 +238,10 @@ row. Call inside a rolled-back savepoint.
 modules in the repository of module `repository` that collapse for an empty attribute, using `rule_user_attributes` and
 `rule_empty_attribute_collapse`. An empty dict means none. A finding must be fixed or listed in the test as deliberate with the reason,
 as the story above says. It creates probe users per rule and attribute, so run it in a rolled-back test.
+
+### cron smoke run `[@ANCHOR: zero_sudo:cron_runs_clean_as_its_user]`
+
+`zero_sudo/tests/test_cron_runs_clean.py` runs the server action of every installed non-core `ir.cron` as the cron's own
+user (inside a savepoint) and fails when it raises or when any WARNING or ERROR log line mentions an access refusal
+(`AccessError`, "not allowed to access"), which catches a method that catches and logs the refusal so the mail is never sent.
+It sees only crons of installed modules, so the whole-system run covers every module.

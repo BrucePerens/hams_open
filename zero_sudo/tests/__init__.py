@@ -15,6 +15,7 @@ from . import test_hypothesis_profile
 from . import test_integration
 from . import test_json_rpc_client
 from . import test_cron_service_access
+from . import test_cron_runs_clean
 from . import test_persona_support
 from . import test_personas
 from . import test_persona_sweeps
