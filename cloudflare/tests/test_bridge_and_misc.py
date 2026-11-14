@@ -18,6 +18,7 @@ from cryptography.fernet import Fernet
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.addons.cloudflare.utils.cloudflare_api import update_cfd_tunnel_configuration
+from odoo.addons.cloudflare.tests.website_credentials import restore_credentials_after_test
 
 
 @tagged("post_install", "-at_install")
@@ -26,6 +27,7 @@ class TestBridgeAndMisc(RealTransactionCase):
         super().setUp()
         self.PurgeQueue = self.env["cloudflare.purge.queue"]
         self.website = self.env["website"].get_current_website()
+        restore_credentials_after_test(self, self.website)
         self.PurgeQueue.search([], limit=10000).unlink()
 
     # Tests [@ANCHOR: cloudflare_purge_queue_cloudflare_purge_queue]

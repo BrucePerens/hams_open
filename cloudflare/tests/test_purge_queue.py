@@ -8,6 +8,8 @@ from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.models import BaseModel
 
+from odoo.addons.cloudflare.tests.website_credentials import restore_credentials_after_test
+
 _logger = logging.getLogger(__name__)
 
 
@@ -17,6 +19,7 @@ class TestPurgeQueue(RealTransactionCase):
         super().setUp()
         self.env["cloudflare.purge.queue"].search([], limit=10000).unlink()
         self.website = self.env["website"].get_current_website()
+        restore_credentials_after_test(self, self.website)
         self.website.write(
             {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
         )
