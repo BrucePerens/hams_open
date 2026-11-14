@@ -491,10 +491,12 @@ mod tests {
     /// A frequency near `i64::MAX` is a frequency the words cannot hold, not an overflow panic.
     #[test]
     fn a_huge_frequency_has_no_tuning_words() {
-        for hz in [i64::MAX as u64, u64::MAX] {
-            for mode in [Mode::Usb, Mode::Lsb, Mode::Am] {
-                assert_eq!(tuning_words_for(Variant::Tt550, Hz(hz), mode, 27), None);
-                assert_eq!(tuning_words(Hz(hz), mode, 27), None);
+        for hz in [i64::MAX as u64, i64::MAX as u64 - 1500, u64::MAX] {
+            for mode in [Mode::Usb, Mode::Lsb, Mode::Cw, Mode::Am] {
+                for filter in 0..FILTERS.len() as u8 {
+                    assert_eq!(tuning_words_for(Variant::Tt550, Hz(hz), mode, filter), None);
+                    assert_eq!(tuning_words(Hz(hz), mode, filter), None);
+                }
             }
         }
     }
