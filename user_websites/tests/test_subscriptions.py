@@ -4,6 +4,7 @@ import ast
 import datetime
 import odoo
 import time
+from werkzeug.exceptions import NotFound
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -336,3 +337,13 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
             method="POST",
         )
         self.assertEqual(response.status_code, 200)
+
+    def test_unsubscribe_route_takes_a_ten_digit_timestamp_but_no_oversized_id(self):
+        # Tests [@ANCHOR: user_websites:COMM_unsubscribe]
+        # Every <int:x> route refuses a number past a database id (hams_base BoundedIntConverter); the signed link's
+        # timestamp is the one number that may be larger, so its own bound must stay explicit on the route.
+        adapter = self.env["ir.http"].routing_map().bind("localhost")
+        rule, _args = adapter.match("/website/unsubscribe/res.partner/1/1/4000000000/token", method="GET", return_rule=True)
+        self.assertEqual(rule.rule.split("/")[2], "unsubscribe")
+        with self.assertRaises(NotFound):
+            adapter.match("/website/unsubscribe/res.partner/99999999999/1/4000000000/token", method="GET")
