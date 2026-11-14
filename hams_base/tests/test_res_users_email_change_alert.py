@@ -77,6 +77,8 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
         subjects = []
 
         def _capture_create(mail_model, vals_list):
+            if isinstance(vals_list, dict):
+                vals_list = [vals_list]
             subjects.extend(
                 vals["subject"]
                 for vals in vals_list
