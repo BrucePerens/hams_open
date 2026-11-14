@@ -1157,9 +1157,24 @@ pub struct RigDescription {
     pub default_frequency: Hz,
     /// Mode a virtual rig of this model starts in.
     pub default_mode: Mode,
+    /// The `(min, max)` frequency the rig can be set to, from the rig file's `[frequency]`
+    /// section. `None` means the model's range is not known: [`RigDescription::frequency_limits`]
+    /// then gives the generous default.
+    pub frequency_range: Option<(Hz, Hz)>,
 }
 
+/// The highest frequency accepted for a model whose range is not stated: 50 GHz, above every
+/// band of every shipped rig. The lowest is 0 Hz.
+pub const DEFAULT_MAX_FREQUENCY: Hz = Hz(50_000_000_000);
+
 impl RigDescription {
+    // [@ANCHOR: radioctl_core_description_frequency_limits]
+    /// The `(min, max)` frequency `SetFrequency` accepts, both inclusive: the model's own range,
+    /// or 0 Hz to [`DEFAULT_MAX_FREQUENCY`] when the rig file states none.
+    pub fn frequency_limits(&self) -> (Hz, Hz) {
+        self.frequency_range.unwrap_or((Hz(0), DEFAULT_MAX_FREQUENCY))
+    }
+
     // [@ANCHOR: radioctl_core_description_mode_code]
     /// The wire code for a mode, if the model has one.
     pub fn mode_code(&self, mode: Mode) -> Option<u8> {
@@ -1237,6 +1252,7 @@ impl RigDescription {
             },
             default_frequency: Hz(14_074_000),
             default_mode: Mode::Usb,
+            frequency_range: None,
         }
     }
 
@@ -1293,6 +1309,7 @@ impl RigDescription {
             },
             default_frequency: Hz(14_074_000),
             default_mode: Mode::Usb,
+            frequency_range: None,
         }
     }
 }

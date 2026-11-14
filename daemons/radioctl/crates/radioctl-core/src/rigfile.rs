@@ -13,7 +13,7 @@
 //! `yaesu.split` (`"st"` when split is the `ST` command; `"ft"` or absent otherwise), `yaesu.tx_band` (true when `FT` picks the Main or Sub transmit band),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
 //! `scope.spans_hz` (an optional `[scope]` block, icom-civ and kenwood-ascii), `levels.attenuator_db` and
-//! `levels.preamp_steps` (an optional `[levels]` block), `capability.<name>`, `mode.<name>`.
+//! `levels.preamp_steps` (an optional `[levels]` block), `frequency.min_hz` and `frequency.max_hz` (an optional `[frequency]` block: the range `SetFrequency` accepts; without it 0 Hz to 50 GHz), `capability.<name>`, `mode.<name>`.
 //!
 //! Verified states: `unverified`; `manual-checked` (needs `reference`); `transcript-checked`
 //! (needs `reference`, the transcript); `hardware-verified` (needs `radio`, `firmware`, `date`
@@ -148,6 +148,8 @@ struct FileDoc {
     levels: Option<LevelsSection>,
     #[serde(default)]
     power_meter: Option<PowerMeterSection>,
+    #[serde(default)]
+    frequency: Option<FrequencySection>,
     timing: TimingSection,
     defaults: DefaultsSection,
     capabilities: Vec<String>,
@@ -447,6 +449,15 @@ struct LevelsSection {
 #[serde(deny_unknown_fields)]
 struct PowerMeterSection {
     raw_to_milliwatts: Vec<(u16, u32)>,
+}
+
+// [@ANCHOR: radioctl_core_rigfile_frequency_section]
+/// The optional `[frequency]` block: the lowest and highest frequency `SetFrequency` accepts.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FrequencySection {
+    min_hz: u64,
+    max_hz: u64,
 }
 
 // [@ANCHOR: radioctl_core_rigfile_timing_section]
@@ -865,6 +876,13 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         scope,
         levels,
         power_meter,
+        frequency_range: match &doc.frequency {
+            None => None,
+            Some(f) if f.min_hz > f.max_hz => {
+                return Err(bad("frequency.min_hz is above frequency.max_hz"))
+            }
+            Some(f) => Some((Hz(f.min_hz), Hz(f.max_hz))),
+        },
         capabilities: CapabilitySet::of(&capabilities),
         // A USB device has no engine yet, so no mode has a wire code.
         mode_codes: build_mode_codes(
@@ -1381,6 +1399,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
             .map(String::from),
         );
     }
+    if description.frequency_range.is_some() {
+        keys.extend(["frequency.min_hz", "frequency.max_hz"].map(String::from));
+    }
     if description.power_meter.is_some() {
         keys.push("power_meter.raw_to_milliwatts".to_string());
     }
@@ -1735,6 +1756,23 @@ verified = { state = "unverified" }
     }
 
     // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
+    // Tests [@ANCHOR: radioctl_core_rigfile_frequency_section]
+    #[test]
+    fn frequency_range_parses_needs_a_fact_and_refuses_nonsense() {
+        let section = "\n[frequency]\nmin_hz = 10000\nmax_hz = 30000000\n";
+        let fact = "\n[[facts]]\nkey = \"frequency.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        expect_rejected(&format!("{GOOD}{section}"), "frequency.min_hz");
+        let loaded = parse(&format!("{GOOD}{section}{fact}")).expect("loads");
+        assert_eq!(
+            loaded.description.frequency_limits(),
+            (Hz(10_000), Hz(30_000_000))
+        );
+        let none = parse(GOOD).expect("loads");
+        assert_eq!(none.description.frequency_range, None);
+        let upside_down = section.replace("30000000", "5000");
+        expect_rejected(&format!("{GOOD}{upside_down}{fact}"), "frequency.min_hz");
+    }
+
     // Tests [@ANCHOR: radioctl_core_rigfile_expected_keys]
     // Tests [@ANCHOR: radioctl_core_description_elecraft_params]
     // Tests [@ANCHOR: radioctl_core_rigfile_elecraft_section]
