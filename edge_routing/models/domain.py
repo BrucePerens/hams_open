@@ -102,7 +102,10 @@ class EdgeRoutingDomain(models.Model):
                     # propagate out of this explicitly-labeled "soft
                     # dependency" block, crashing the whole cron run instead
                     # of just skipping the DNS domains.
-                    _logger.warning("Soft dependency ham.dns.zone failed: %s", e)
+                    # The push REPLACES the certbot check's target, so a list without the DNS zones would
+                    # silently drop them from certificate monitoring: push nothing, the next run retries.
+                    _logger.error("Skipping PagerDuty domain sync: the ham.dns.zone lookup failed, and a partial list would replace the full one: %s", e)
+                    return
 
             unique_domains = list(set(all_domains))
 
