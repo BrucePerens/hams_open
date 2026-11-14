@@ -40,3 +40,4 @@ from . import test_rpc_exposure
 from . import test_board_hoot
 from . import test_log_viewer_hoot
 from . import test_menu_visibility
+from . import test_autodiscovery_race
