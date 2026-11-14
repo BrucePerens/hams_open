@@ -342,7 +342,7 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:COMM_unsubscribe]
         # Every <int:x> route refuses a number past a database id (hams_base BoundedIntConverter); the signed link's
         # timestamp is the one number that may be larger, so its own bound must stay explicit on the route.
-        adapter = self.env["ir.http"].routing_map().bind("localhost")
+        adapter = self.env["ir.http"].routing_map().bind("odoo")
         rule, _args = adapter.match("/website/unsubscribe/res.partner/1/1/4000000000/token", method="GET", return_rule=True)
         self.assertEqual(rule.rule.split("/")[2], "unsubscribe")
         with self.assertRaises(NotFound):
