@@ -138,7 +138,10 @@ pub fn tuning_words(hz: Hz, mode: Mode, filter: u8) -> Option<[u16; 3]> {
 pub fn tuning_words_for(variant: Variant, hz: Hz, mode: Mode, filter: u8) -> Option<[u16; 3]> {
     let width = *FILTERS.get(usize::from(filter))?;
     let c = correction(variant, mode, width);
-    let adjusted = i64::try_from(hz.0).ok()? - 1250 + sideband(mode) * c;
+    let adjusted = i64::try_from(hz.0)
+        .ok()?
+        .checked_sub(1250)?
+        .checked_add(sideband(mode) * c)?;
     if adjusted < 0 {
         return None;
     }
