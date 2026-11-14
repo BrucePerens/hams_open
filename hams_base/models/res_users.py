@@ -1,5 +1,4 @@
 from odoo import api, models
-from odoo.tools.translate import _
 from odoo.addons.hams_base.log_mask import mask_email
 # -*- coding: utf-8 -*-
 # from odoo import models, api, _
