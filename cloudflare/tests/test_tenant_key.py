@@ -4,6 +4,7 @@
 # -*- coding: utf-8 -*-
 from cryptography.fernet import InvalidToken
 from psycopg2 import IntegrityError
+from odoo.exceptions import ConcurrencyError
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -132,3 +133,23 @@ class TestCloudflareTenantKey(HamsTransactionCase):
         self.assertIn("Tenant A", existing.name)
         with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"), self.env.cr.savepoint():
             TenantKey.create({"company_id": self.company_a.id, "wrapped_key": "another"})
+
+    def test_a_simultaneous_first_read_reruns(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tenant_key_get_or_create_fernet]
+        # Odoo's REPEATABLE READ snapshot cannot see the winner's row, so the loser must ask Odoo to run the
+        # request again, not search again and fail with the raw IntegrityError. The race is made deterministic:
+        # the row exists, and the first search is blind to it.
+        TenantKey = self.env["cloudflare.tenant.key"]
+        TenantKey._get_or_create_fernet(self.company_a)
+        real_search = type(TenantKey).search
+        blind = []
+
+        def blind_first_search(records, *args, **kwargs):
+            if not blind:
+                blind.append(1)
+                return records.browse()
+            return real_search(records, *args, **kwargs)
+
+        self.safe_patch_object(type(TenantKey), "search", blind_first_search)
+        with mute_logger("odoo.sql_db"), self.assertRaises(ConcurrencyError):
+            TenantKey._get_or_create_fernet(self.company_a)
