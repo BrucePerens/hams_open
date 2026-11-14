@@ -129,6 +129,37 @@ class TestHelpdeskAdapter(HamsTransactionCase):
             "The adapter MUST execute an emergency SMTP message post if the helpdesk system is unreachable.",
         )
 
+    def test_02b_smtp_fallback_body_is_html_with_escaped_incident_text(self):
+        # Tests [@ANCHOR: pager_duty:execute_smtp_fallback]
+        """The emergency page keeps its own markup and shows inbound incident text as inert text."""
+        manager = self.on_duty_user
+        self.safe_patch_object(
+            type(self.env["calendar.event"]),
+            "get_current_on_duty_admin",
+            lambda self: manager,
+            create=True,
+        )
+        incident = self.env["pager.incident"].create(
+            {
+                "name": "Name <i>x</i>",
+                "source": "test_fallback",
+                "severity": "critical",
+                "description": "<script>alert(1)</script>",
+            }
+        )
+        incident._execute_smtp_fallback(incident, "boom <u>err</u>")
+        self.env.flush_all()
+        messages = self.env["mail.message"].search(
+            [("res_id", "=", incident.id), ("model", "=", "pager.incident"), ("body", "ilike", "EMERGENCY PAGE")]
+        )
+        self.assertTrue(messages)
+        body = messages[0].body
+        self.assertIn("<b>Incident ID:</b>", body)
+        self.assertNotIn("&lt;b&gt;", body)
+        self.assertNotIn("<script>", body)
+        self.assertNotIn("<u>err</u>", body)
+        self.assertIn("&lt;script&gt;", body)
+
     def test_04_spam_flagged_email_incident_is_quarantined_not_dropped(self):
         """Tests [@ANCHOR: pd_helpdesk_adapter]: a real phishing lure (ticket #15's
         own ShareFile/NDA "Secure document" content, per the to-do) must
