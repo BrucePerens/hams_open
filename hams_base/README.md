@@ -19,7 +19,7 @@ The `hams_base` module provides foundational security, compliance, and email tra
 
 ### Security Alerts & Configuration
 * **`res.users` Overrides**:
-  * When a user's email address or login changes, sends a "Security Alert" email to the previous address so the owner can spot an unauthorized change. If sending fails, the change is still saved and the failure is logged. (Password-change notices come from Odoo itself, not from this module.)
+  * When a user's email address or login changes, sends a "Security Alert" email to the previous address so the owner can spot an unauthorized change. If sending fails, the change is still saved and the failure is logged and, when `pager_duty` is installed, a high-severity pager incident is opened (`_report_security_notice_failure`, [@ANCHOR: hams_base:COMM_security_notice_failure_incident]; the address in it is masked). (Password-change notices come from Odoo itself, not from this module.)
 * **`res.config.settings`**:
   * Manages compliance settings (organization name and mailing address, shown in the footer `views/mail_templates.xml` adds to Odoo's notification emails) and exposes recommended SPF and DMARC DNS configurations for the instance domain. The SPF record is a template naming an example provider, to be edited. The DMARC record (`p=quarantine`, reports to `dmarc-reports@<domain>`) is shown only when "Enable Custom DMARC" is on. The domain comes from `mail.catchall.domain`, or else `web.base.url`. DKIM records must be taken from the mail provider.
 

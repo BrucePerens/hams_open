@@ -38,6 +38,44 @@ class ResUsers(models.Model):
                 vals["login"] = self._normalize_login(vals["login"])
         return super().create(vals_list)
 
+    # [@ANCHOR: hams_base:COMM_security_notice_failure_incident]
+    @api.model
+    def _report_security_notice_failure(self, user, masked_old_email):
+        """Open a pager incident saying the email-change warning to a member's old address was not sent.
+
+        Returns False without pager_duty installed (a tenant instance: the log line is the only signal)
+        or when the incident itself cannot be opened (logged); it never raises, because the email change
+        it follows must still be saved.
+        """
+        try:
+            if "pager.incident" not in self.env:
+                return False
+            incidents = self.env["zero_sudo.security.utils"]._get_service_env(
+                "pager_duty.user_pager_service_internal"
+            )["pager.incident"]
+            # Odoo 19's Many2many.write_real() re-checks res.partner read as the transaction's default
+            # env, so the pager service account must be that env while it posts on the incident.
+            transaction = incidents.env.transaction
+            previous = transaction.default_env
+            transaction.default_env = incidents.env
+            try:
+                incidents.report_incident(
+                    {
+                        "source": "Security notice: email change warning not sent",
+                        "severity": "high",
+                        "description": (
+                            f"The security warning to the old address {masked_old_email} of user id {user.id} "
+                            "was not sent after their email or login changed."
+                        ),
+                    }
+                )
+            finally:
+                transaction.default_env = previous
+            return True
+        except Exception:  # audit-ignore-catch-all: reporting must not abort the email change this follows; the original failure is already logged
+            _logger.exception("Could not open the pager incident for user id %s's unsent security warning", user.id)
+            return False
+
     # [@ANCHOR: hams_base:COMM_res_users_write]
     def write(self, vals):
         """
@@ -123,5 +161,8 @@ class ResUsers(models.Model):
                         # otherwise-successful email/login change instead of
                         # just skipping the best-effort security notice.
                         _logger.exception("Failed to send security warning to old email %s: %s", mask_email(old_email), e)
+                        # The member's only warning that someone changed their sign-in address is gone:
+                        # an operator must see that, not just a log line.
+                        self._report_security_notice_failure(user, mask_email(old_email))
 
         return res
