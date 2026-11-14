@@ -70,6 +70,7 @@ class TestBrowserReportSchema(HamsTransactionCase):
         cases = {
             "too_large": encode(good_body(message="m" * 9000)),
             "nul_byte": encode(good_body(message="a\x00b")),
+            "bad_text": encode(good_body(route="/a\ud800")),
             "not_json": b"{not json",
             "not_an_object": b"[1, 2]",
             "wrong_keys": encode(dict(good_body(), extra="x")),
