@@ -6,6 +6,7 @@ import urllib.parse
 from odoo import api, models, tools
 from odoo.http import request
 from odoo.service import security
+from werkzeug.exceptions import BadRequest
 
 
 # [@ANCHOR: hams_base_ir_http_ir_http]
@@ -43,6 +44,20 @@ class IrHttp(models.AbstractModel):
                     request.env.cr, None, request.session.context
                 )
         return super()._match(path)
+
+    @classmethod
+    def _dispatch(cls, endpoint):
+        # [@ANCHOR: hams_base:refuse_nul_in_request_params]
+        """Answer 400 to a request with a NUL character in any parameter.
+
+        PostgreSQL cannot hold a NUL in a string, so a search box or form field that reaches the database with ``%00``
+        in it (``/classifieds?search=a%00b``, a JSON string ``"\\u0000"``) fails with "A string literal cannot contain NUL
+        (0x00) characters": a 500 and an exception ticket. No page of this site has a use for the character, so the
+        request is refused once, here, for every route. Uploaded files are not text and are not looked at.
+        """
+        if _has_nul(request.params):
+            raise BadRequest("A NUL character is not allowed in a request.")
+        return super()._dispatch(endpoint)
 
     @classmethod
     def _url_localized(
@@ -113,3 +128,21 @@ def _has_dot_segment(path):
     except UnicodeDecodeError:
         return True
     return any(segment in (".", "..") for segment in decoded.split("/"))
+
+
+# [@ANCHOR: hams_base:has_nul]
+def _has_nul(value):
+    """True when a string anywhere in ``value`` (nested dicts, lists and tuples; dict keys too) holds a NUL character.
+    Walks with a list, not recursion, so a deeply nested body cannot raise RecursionError."""
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            if "\x00" in item:
+                return True
+        elif isinstance(item, dict):
+            pending.extend(item.keys())
+            pending.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            pending.extend(item)
+    return False
