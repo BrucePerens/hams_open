@@ -57,7 +57,7 @@ Run upgrades with the service's environment:
 ```
 sudo pagerduty-maintenance start --minutes 30 --reason "odoo upgrade"
 sudo systemctl stop odoo
-sudo python3 /opt/hams/src/hams_open/distributed_redis_cache/scripts/odoo_upgrade.py --db hams_prod --modules mod_a,mod_b --log /tmp/upgrade.log   # exit 4: do NOT start odoo
+sudo python3 /opt/hams/src/hams_open/distributed_redis_cache/scripts/odoo_upgrade.py --db hams_prod --modules mod_a,mod_b --log /var/log/odoo-upgrade.log   # exit 4: do NOT start odoo
 sudo systemctl start odoo
 sudo pagerduty-maintenance end
 ```
