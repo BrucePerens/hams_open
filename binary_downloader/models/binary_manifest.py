@@ -76,6 +76,19 @@ class BinaryManifest(models.Model):
             if record.name in (".", ".."):
                 raise ValidationError(_("The binary name cannot be '.' or '..'."))
 
+    @api.constrains("name", "company_id")
+    # [@ANCHOR: binary_manifest_check_global_name_unique]
+    def _check_global_name_unique(self):
+        """UNIQUE(name, company_id) never fires for company-less rows (NULLs differ in SQL)."""
+        globals_ = self.filtered(lambda r: not r.company_id)
+        if not globals_:
+            return
+        counts = Counter(
+            self.env["binary.manifest"].search([("name", "in", globals_.mapped("name")), ("company_id", "=", False)]).mapped("name")
+        )
+        if any(counts[name] > 1 for name in globals_.mapped("name")):
+            raise ValidationError(_("The binary name must be unique per company!"))
+
     @api.constrains("archive_type", "extract_member")
     # [@ANCHOR: binary_manifest_check_extract_member]
     def _check_extract_member(self):

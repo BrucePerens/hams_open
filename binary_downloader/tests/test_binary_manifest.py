@@ -380,6 +380,21 @@ class TestBinaryManifest(HamsTransactionCase):
             self.manifest.write({"name": "bad/bin"})
             self.env.flush_all()
 
+    def test_09_1_global_manifest_name_is_unique(self):
+        # Tests [@ANCHOR: binary_manifest_check_global_name_unique]
+        # UNIQUE(name, company_id) lets duplicates through when company_id is NULL (the shipped
+        # manifests are all company-less), so a second global manifest of the same name must be refused.
+        vals = {
+            "name": "dupglobalbin",
+            "url": "https://example.com/dup",
+            "checksum": "a" * 64,
+            "company_id": False,
+        }
+        self.env["binary.manifest"].create(vals)
+        with self.assertRaises(ValidationError):
+            self.env["binary.manifest"].create(vals)
+            self.env.flush_all()
+
     def test_12_action_install_permissions(self):
         # [!] DIAGNOSTIC FOR AI: Testing permission check for action_install.
         restricted_user = self.env["res.users"].create(
