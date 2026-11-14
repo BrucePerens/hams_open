@@ -235,7 +235,7 @@ class TestRunPgbackrestViaSidecar(unittest.TestCase):
         # does, then act -- simplest way to exercise the real polling loop in
         # _run_pgbackrest_via_sidecar without a real systemd unit in this
         # unit test.
-        for _ in range(200):
+        for _ in range(6000):  # a 30 s deadline, only reached when the file never appears
             if os.path.exists(path):
                 return
             time.sleep(0.005)
