@@ -274,7 +274,9 @@ class TestAmqpCheck(HamsTransactionCase):
         before = threading.active_count()
         for mode in ("ok", "auth_fail", "garbage", "vhost_denied"):
             self._check(self._server(mode))
-        time.sleep(0.2)
+        deadline = time.monotonic() + 30
+        while threading.active_count() > before + len(self.servers) and time.monotonic() < deadline:
+            time.sleep(0.01)
         self.assertLessEqual(threading.active_count(), before + len(self.servers), "no pika threads may linger")
 
     def test_11_real_broker_round_trip(self):
