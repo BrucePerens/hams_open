@@ -16,6 +16,8 @@ ROUTE_INT_LIMIT = 2**31
 class BoundedIntConverter(SignedIntConverter):
     """The ``<int:x>`` route converter, refusing a number a database id cannot be (a clean 404, not a SQL error)."""
 
+    # [@ANCHOR: hams_base:bounded_int_converter_init]
+    # Verified by [@ANCHOR: test_03_a_route_can_raise_the_limit]
     def __init__(self, map, fixed_digits=0, min=-ROUTE_INT_LIMIT + 1, max=ROUTE_INT_LIMIT - 1, signed=True):
         super().__init__(map, fixed_digits=fixed_digits, min=min, max=max, signed=signed)
 

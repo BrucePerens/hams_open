@@ -86,6 +86,10 @@ converter with a default range of -2147483647 to 2147483647 (the largest databas
 the route: a plain 404, for every `<int:...>` route of every module. A route that needs a larger number passes `max`,
 as in `<int(max=9999999999):timestamp>`. Test: `tests/test_bounded_int_converter.py`.
 
+### `BoundedIntConverter.__init__(map, fixed_digits, min, max, signed)` [@ANCHOR: hams_base:bounded_int_converter_init]
+
+The constructor of the `<int:x>` route converter. Arguments: the URL `map` and core's own `fixed_digits`, `min`, `max` and `signed`, with the defaults changed so that the range is -2147483647 to 2147483647 (the largest database id) instead of unbounded. It passes them straight to core's signed integer converter and returns nothing. A route that needs a bigger number overrides `max`, as in `<int(max=9999999999):timestamp>`. Test: `test_03_a_route_can_raise_the_limit`.
+
 ### `_has_dot_segment(path)` [@ANCHOR: hams_base:has_dot_segment]
 
 Module-level function in `hams_base/models/ir_http.py`. `path` is the path part of a URL (`str`). Returns `True` when Odoo's
@@ -234,3 +238,7 @@ literal cannot contain NUL (0x00) characters", a 500 and an exception ticket (on
 answers 400 (`BadRequest`) when `_has_nul` finds a NUL in any string, dict key, list or tuple member; uploaded files are not
 inspected. `_has_nul` walks the data with a list, not recursion, so a deeply nested body is safe. Nothing on the site has a use for the
 character. Test: `tests/test_nul_in_request_params.py`.
+
+### `mask_email(address)` [@ANCHOR: hams_base:log_mask_email]
+
+Masks an email address before it is written to a log line, so a log never holds a member's full address. Argument: `address`, an address or a `Name <address>` string (or nothing). It returns `j***@example.com` (the first character of the local part, three asterisks, then the domain), and `***` for an empty value or anything that is not an address. Pure, no database, never raises. Tests: `test_mask_email_keeps_first_letter_and_domain`.

@@ -14,6 +14,7 @@ def _boom(*args, **kwargs):
 @tagged("post_install", "-at_install")
 class TestLogMasksEmail(HamsTransactionCase):
     def test_mask_email_keeps_first_letter_and_domain(self):
+        # Tests [@ANCHOR: hams_base:log_mask_email]
         self.assertEqual(mask_email("jane@example.com"), "j***@example.com")
         self.assertEqual(mask_email("Jane Doe <jane@example.com>"), "j***@example.com")
         self.assertEqual(mask_email(None), "***")

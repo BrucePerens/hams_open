@@ -49,6 +49,7 @@ class TestMailFailurePagesOperator(HamsTransactionCase):
 
     # Tests [@ANCHOR: pager_duty:mail_failure_pages_operator]
     # Tests [@ANCHOR: pager_duty:page_mail_failure]
+    # Tests [@ANCHOR: pager_duty:mail_postprocess_sent_message]
     def test_a_refused_send_raises_one_alarm_with_no_address(self):
         self.fail(reason=f"554 rejected {VICTIM}")
         found = self.incidents()
