@@ -15,3 +15,4 @@ from . import test_canonical_url_dot_segments
 from . import test_login_case_insensitive
 from . import test_layout_seo
 from . import test_nul_in_request_params
+from . import test_bounded_int_converter

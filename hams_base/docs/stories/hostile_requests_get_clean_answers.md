@@ -77,6 +77,15 @@ covers the double-encoded probe `/@fs/%252e%252e/x`, which reaches the server as
 and non-strings are returned unchanged. Pure, no database, cannot raise on its own. Fixes exception ticket 74. Test:
 `tests/test_canonical_url_dot_segments.py`.
 
+### `ir.http._get_converters()` and `BoundedIntConverter` [@ANCHOR: hams_base:bounded_int_converters] [@ANCHOR: hams_base:bounded_int_converter]
+
+Core's `<int:x>` route converter accepts any number of digits, so `/training/course/1/lesson/99999999999` reached
+`browse(99999999999).exists()` and failed in the database with "integer out of range" (a 500 and an exception ticket);
+each route had to bound its own id. `_get_converters` replaces `int` with `BoundedIntConverter`, core's signed integer
+converter with a default range of -2147483647 to 2147483647 (the largest database id). A number outside it does not match
+the route: a plain 404, for every `<int:...>` route of every module. A route that needs a larger number passes `max`,
+as in `<int(max=9999999999):timestamp>`. Test: `tests/test_bounded_int_converter.py`.
+
 ### `_has_dot_segment(path)` [@ANCHOR: hams_base:has_dot_segment]
 
 Module-level function in `hams_base/models/ir_http.py`. `path` is the path part of a URL (`str`). Returns `True` when Odoo's
