@@ -138,7 +138,10 @@ pub fn tuning_words(hz: Hz, mode: Mode, filter: u8) -> Option<[u16; 3]> {
 pub fn tuning_words_for(variant: Variant, hz: Hz, mode: Mode, filter: u8) -> Option<[u16; 3]> {
     let width = *FILTERS.get(usize::from(filter))?;
     let c = correction(variant, mode, width);
-    let adjusted = i64::try_from(hz.0).ok()? - 1250 + sideband(mode) * c;
+    let adjusted = i64::try_from(hz.0)
+        .ok()?
+        .checked_sub(1250)?
+        .checked_add(sideband(mode) * c)?;
     if adjusted < 0 {
         return None;
     }
@@ -488,6 +491,19 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_tentec_rx320_variant_from_name]
+    /// A frequency near `i64::MAX` is a frequency the words cannot hold, not an overflow panic.
+    #[test]
+    fn a_huge_frequency_has_no_tuning_words() {
+        for hz in [i64::MAX as u64, i64::MAX as u64 - 1500, u64::MAX] {
+            for mode in [Mode::Usb, Mode::Lsb, Mode::Cw, Mode::Am] {
+                for filter in 0..FILTERS.len() as u8 {
+                    assert_eq!(tuning_words_for(Variant::Tt550, Hz(hz), mode, filter), None);
+                    assert_eq!(tuning_words(Hz(hz), mode, filter), None);
+                }
+            }
+        }
+    }
+
     // Tests [@ANCHOR: radioctl_tentec_rx320_tuning_words_for]
     // Tests [@ANCHOR: radioctl_tentec_rx320_frequency_of_for]
     #[test]
