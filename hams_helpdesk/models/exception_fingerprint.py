@@ -513,11 +513,15 @@ class ExceptionFingerprint(models.Model):
     @api.model
     def _reopen_reason(self, record, marker, now):
         """Why a recurrence of ``record`` reopens its closed ticket, or "" when it stays closed (counted
-        only). Three rules: a release since the last occurrence; a daemon / systemd unit failing again
+        only). Four rules: a release since the last occurrence; a daemon / systemd unit failing again
         (always: a unit that fails after its ticket was closed is still broken); and a quiet period of
-        QUIET_REOPEN since the failure was last seen."""
+        QUIET_REOPEN since the failure was last seen; and a ticket the auto-retire resolved before anyone looked (it recurred)."""
         if record.source == "daemon":
             return "a unit failed again after its ticket was closed"
+        if record.ticket_id.stage == "resolved" and record.ticket_id.notify_state == "suppressed":
+            # helpdesk_ticket._triage_retire_stale resolved it because the failure had gone quiet for STALE_AFTER; a person
+            # never closes a ticket into "suppressed". The failure is back, so the ticket is not done.
+            return "it recurred after the ticket was resolved automatically"
         if record.release_marker != marker:
             return "it recurred after a release"
         if record.last_seen and now - record.last_seen >= QUIET_REOPEN:
@@ -534,6 +538,8 @@ class ExceptionFingerprint(models.Model):
             vals = {"description": body}
             if reopen:
                 vals["stage"] = "new"
+                if record.ticket_id.notify_state == "suppressed":
+                    vals["notify_state"] = "sent"  # no longer an automatic retirement, whatever happens to the ticket next
             record.ticket_id.write(vals)
             if reopen:
                 self._announce_reopen(record, reopen, now)
