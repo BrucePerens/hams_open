@@ -33,6 +33,9 @@ from odoo.addons.distributed_redis_cache.redis_pool import REDIS_PASS_DEFAULT, R
 
 _logger = logging.getLogger(__name__)
 
+# Longest appeal reason the form may store.
+_APPEAL_REASON_MAX = 5000
+
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 # Same credentials as distributed_redis_cache's shared pool (REDIS_USERNAME/REDIS_PASSWORD from
@@ -1309,6 +1312,8 @@ class UserWebsitesController(http.Controller):
         # [@ANCHOR: UX_SUBMIT_APPEAL]
         if not reason:
             return request.redirect("/my/home?error=missing_reason")
+        if len(reason) > _APPEAL_REASON_MAX:  # a POST body is caller-controlled
+            return request.redirect("/my/home?error=reason_too_long")
 
         utils = request.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
