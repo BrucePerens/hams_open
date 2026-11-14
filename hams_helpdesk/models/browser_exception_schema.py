@@ -75,8 +75,8 @@ class ReportRejected(Exception):
 
 # [@ANCHOR: hams_helpdesk:browser_parse_body]
 def parse_body(raw):
-    """The report object in ``raw`` (bytes): at most MAX_BODY_BYTES, UTF-8 JSON, no NUL byte (PostgreSQL
-    cannot store one), an object with exactly the known keys. Raises ``ReportRejected``."""
+    """The report object in ``raw`` (bytes): at most MAX_BODY_BYTES, UTF-8 JSON, no NUL byte or lone surrogate (PostgreSQL
+    cannot store them), an object with exactly the known keys. Raises ``ReportRejected``."""
     if len(raw) > MAX_BODY_BYTES:
         raise ReportRejected(413, "too_large")
     if b"\x00" in raw or "\\u0000" in raw.decode("utf-8", "replace"):
@@ -87,6 +87,10 @@ def parse_body(raw):
         raise ReportRejected(400, "not_json") from error
     if not isinstance(data, dict):
         raise ReportRejected(400, "not_an_object")
+    try:
+        json.dumps(data, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError as error:  # a lone surrogate ("\\ud800"): PostgreSQL cannot store it
+        raise ReportRejected(400, "bad_text") from error
     if set(data) != KEYS:
         raise ReportRejected(400, "wrong_keys")
     if data["v"] != SCHEMA_VERSION or isinstance(data["v"], bool):
