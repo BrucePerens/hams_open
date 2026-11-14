@@ -176,6 +176,13 @@ def rollback_advice(list_backups=None):
             "     python3 devbox_tools/production_readiness_check.py --site-css-only")
 
 
+def service_running():
+    """True unless the service is positively `inactive` or `failed`. `systemctl is-active` exits non-zero for `deactivating` (a stop still
+    in progress) and `activating` (including the auto-restart after a failure), so its exit code alone let an upgrade start under them."""
+    state = subprocess.run(["systemctl", "is-active", SERVICE], capture_output=True, text=True).stdout.strip()
+    return state not in ("inactive", "failed")
+
+
 def run(argv, show=None, read_text=None, execute=None, is_active=None, out=None, css_check=None, list_backups=None, execute_shell=None):
     """Returns the process exit code. Dependencies are injectable for tests."""
     out = out or sys.stdout
@@ -201,7 +208,7 @@ def run(argv, show=None, read_text=None, execute=None, is_active=None, out=None,
         ["systemctl", "show", SERVICE, "-p", "EnvironmentFiles", "-p", "Environment", "-p", "User", "-p", "Group"],
         check=True, capture_output=True, text=True).stdout)
     read_text = read_text or (lambda p: open(p, encoding="utf-8").read())
-    is_active = is_active or (lambda: subprocess.run(["systemctl", "is-active", "--quiet", SERVICE]).returncode == 0)
+    is_active = is_active or service_running
     service = parse_service(show())
     require_redis_credentials(service, read_text)
     if args.shell:

@@ -8,7 +8,9 @@ import contextlib
 import importlib.util
 import io
 import os
+import subprocess
 import unittest
+import unittest.mock
 
 import odoo_upgrade as u
 
@@ -80,6 +82,22 @@ class TestOdooUpgrade(unittest.TestCase):
     def test_refuses_while_the_service_is_running(self):
         with self.assertRaisesRegex(u.UpgradeError, "running"):
             self._run(["--db", "d", "--modules", "m"], active=True)
+
+    def test_a_service_that_is_stopping_or_restarting_still_counts_as_running(self):
+        # `systemctl is-active --quiet` exits non-zero for deactivating and activating (auto-restart): only inactive/failed are stopped.
+        for state, rc, refused in (("active", 0, True), ("deactivating", 3, True), ("activating", 3, True),
+                                   ("inactive", 3, False), ("failed", 3, False)):
+            def fake(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, rc, stdout=state + "\n", stderr="")
+            with unittest.mock.patch.object(u.subprocess, "run", fake):
+                if refused:
+                    with self.assertRaisesRegex(u.UpgradeError, "running", msg=state):
+                        u.run(["--db", "d", "--modules", "m"], show=lambda: SHOW, read_text=lambda p: FILES[p],
+                              execute=lambda c, log, out: 0, css_check=lambda c, s, o: ["ASSET_BUNDLE_CHECK: OK"])
+                else:
+                    self.assertEqual(u.run(["--db", "d", "--modules", "m"], show=lambda: SHOW, read_text=lambda p: FILES[p],
+                                           execute=lambda c, log, out: 0, css_check=lambda c, s, o: ["ASSET_BUNDLE_CHECK: OK"],
+                                           out=io.StringIO()), 0, state)
 
     def test_dry_run_is_allowed_while_the_service_runs(self):
         self.assertEqual(self._run(["--db", "d", "--modules", "m", "--dry-run"], active=True)[0], 0)
