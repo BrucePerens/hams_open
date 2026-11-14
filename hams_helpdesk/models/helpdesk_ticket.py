@@ -1065,14 +1065,20 @@ class HelpdeskTicket(models.Model):
     # [@ANCHOR: hams_helpdesk:triage_cleared]
     def _triage_cleared(self):
         """{ticket id: reason} for the tickets in self whose automatic condition has cleared. Only server_exception tickets
-        here: the exception fingerprint behind the ticket was last seen more than ``STALE_AFTER`` ago (a failing daemon unit
-        is re-reported every time it is checked, so a unit that still fails is never that old). pager_duty adds the tickets
+        here: the exception fingerprint behind the ticket was last seen more than ``STALE_AFTER`` ago (a failed daemon unit is
+        never cleared this way: it is reported once per failure, and timer units can be daily or weekly). pager_duty adds the tickets
         of resolved pager incidents. A human-filed ticket is never in the result."""
         exceptions = self.filtered(lambda t: t.ticket_type == "server_exception")
         if not exceptions:
             return {}
         stale = self.env["hams_helpdesk.exception.fingerprint"].search(
-            [("ticket_id", "in", exceptions.ids), ("last_seen", "<", fields.Datetime.now() - STALE_AFTER)]
+            [
+                ("ticket_id", "in", exceptions.ids),
+                ("last_seen", "<", fields.Datetime.now() - STALE_AFTER),
+                # A failed unit is reported once, by systemd's OnFailure=, and a timer unit may run only daily or weekly:
+                # being quiet for six hours says nothing about it.
+                ("source", "!=", "daemon"),
+            ]
         )
         reason = _("This server exception has not been seen for more than %s hours.") % (STALE_AFTER.total_seconds() // 3600)
         return {fingerprint.ticket_id.id: reason for fingerprint in stale}

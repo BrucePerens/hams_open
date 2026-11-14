@@ -53,7 +53,7 @@ ticket is checked `[@ANCHOR: hams_helpdesk:triage_cleared]`:
 
 | Ticket | Cleared when |
 |---|---|
-| `server_exception` (exception, failed unit, daemon failure) | its fingerprint's `last_seen` is more than `STALE_AFTER` (6 hours) ago; a unit that still fails is re-reported at every check, so it is never that old |
+| `server_exception` (exception, failed unit, daemon failure) | its fingerprint's `last_seen` is more than `STALE_AFTER` (6 hours) ago, except a failed daemon or systemd unit, which is reported once per failure (timer units can run daily or weekly) and so is never retired this way |
 | created from a pager incident (`pager_duty`, [@ANCHOR: pager_duty:helpdesk_ticket_triage_cleared]) | the pager incident is resolved (an inbound-mail incident is a person's message and never counts) |
 
 A cleared ticket in the New stage moves to Resolved with an internal note saying why, its notification is marked suppressed and
