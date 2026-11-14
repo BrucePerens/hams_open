@@ -233,3 +233,31 @@ class TestBinaryManifestReal(RealTransactionCase):
         self.assertTrue(mock_incident_create.called, "[!] DIAGNOSTIC FOR AI: Pager incidents should be created")
 
 
+
+    def test_notify_tenants_really_creates_the_pager_incident(self):
+        # Tests [@ANCHOR: binary_version_action_notify_tenants]
+        # test_pager_integration_batching above mocks pager.incident.create, which hid that the binary downloader
+        # service account has no create ACL on pager.incident (found by hams_shared check_service_account_acl.py).
+        # Nothing is mocked here: the incident must really be created.
+        manager_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "binary_downloader.user_binary_downloader_service"
+        )
+        manifest = self.env["binary.manifest"].with_user(manager_svc).create(
+            {"name": "pager_real", "url": "https://example.com/pager", "checksum": "fake"}
+        )
+        old = self.env["binary.version"].with_user(manager_svc).create(
+            {"manifest_id": manifest.id, "version_number": "1.0", "url": "https://example.com/1.0", "checksum": "f1"}
+        )
+        new = self.env["binary.version"].with_user(manager_svc).create(
+            {"manifest_id": manifest.id, "version_number": "2.0", "url": "https://example.com/2.0", "checksum": "f2"}
+        )
+        site = self.env["website"].create({"name": "Notify Real Tenant"})
+        self.safe_patch_object(type(self.env["binary.version"]), "action_download_to_pool")
+        self.env["binary.tenant.link"].with_user(manager_svc).create(
+            {"website_id": site.id, "manifest_id": manifest.id, "active_version_id": old.id}
+        )
+        new.action_notify_tenants()
+        incident = self.env["pager.incident"].search(
+            [("source", "=", "binary_update"), ("website_id", "=", site.id)]
+        )
+        self.assertTrue(incident, "no pager.incident was created for the new binary version")
