@@ -1,5 +1,6 @@
 from odoo import api, models
 from odoo.tools.translate import _
+from odoo.addons.hams_base.log_mask import mask_email
 # -*- coding: utf-8 -*-
 # from odoo import models, api, _
 import html
@@ -120,6 +121,6 @@ class ResUsers(models.Model):
                         # mail-server outage would otherwise abort an
                         # otherwise-successful email/login change instead of
                         # just skipping the best-effort security notice.
-                        _logger.exception("Failed to send security warning to old email %s: %s", old_email, e)
+                        _logger.exception("Failed to send security warning to old email %s: %s", mask_email(old_email), e)
 
         return res
