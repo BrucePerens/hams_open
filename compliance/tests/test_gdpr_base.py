@@ -105,3 +105,18 @@ class TestComplianceGdprBase(HamsTransactionCase):
             "[!] DIAGNOSTIC FOR AI: _get_gdpr_streamed_keys() must always return a dict "
             "of {key: generator_function} pairs, the base contract every override merges into.",
         )
+
+    def test_gdpr_search_marks_a_truncated_key(self):
+        # [@ANCHOR: COMM_test_gdpr_search_marks_a_truncated_key]
+
+        # Tests [@ANCHOR: compliance_gdpr_search]
+        partners = self.env["res.partner"].create([{"name": "Gdpr Cap %d" % i} for i in range(3)])
+        domain = [("id", "in", partners.ids)]
+        data = {}
+        capped = self.user._gdpr_search(data, "partners", self.env["res.partner"], domain, 2, order="id")
+        self.assertEqual(capped.ids, partners.ids[:2], "the search returns only the first `limit` records")
+        self.assertEqual(data.get("truncated"), {"partners": 2}, "a cut-short key must be named in the export")
+        data = {}
+        whole = self.user._gdpr_search(data, "partners", self.env["res.partner"], domain, 3, order="id")
+        self.assertEqual(whole.ids, partners.ids)
+        self.assertNotIn("truncated", data, "a key that fit under the cap gets no marker")

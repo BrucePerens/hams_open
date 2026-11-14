@@ -65,6 +65,20 @@ class ResUsers(models.Model):
         """
         return {}
 
+    def _gdpr_search(self, data, key, model, domain, limit, **kwargs):
+        # [@ANCHOR: compliance_gdpr_search]
+        # # Verified by [@ANCHOR: COMM_test_gdpr_search_marks_a_truncated_key]
+        """
+        The capped search an export hook uses for the export key `key`: returns at most `limit` records of `model`
+        and, when more matched, records the cap in data["truncated"][key] so the export says the key is cut short
+        instead of silently dropping rows. `model` is the model recordset (env["x"]); `kwargs` go to search().
+        """
+        records = model.search(domain, limit=limit + 1, **kwargs)
+        if len(records) > limit:
+            data.setdefault("truncated", {})[key] = limit
+            return records[:limit]
+        return records
+
     def _get_gdpr_streamed_keys(self):
         # [@ANCHOR: compliance_get_gdpr_streamed_keys]
 
