@@ -26,6 +26,7 @@ must not import from this module, so it carries a read-only copy of the same pat
 pager_duty/tests fails if they disagree. This one file is the whole command: copy it to /usr/local/sbin/pagerduty-maintenance (mode 0755) to install it.
 """
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -88,9 +89,16 @@ def remove_expired(path=None, now=None):
     """Delete the flag when it has expired (the commands do this; the monitors never do). Returns True when it was removed. Absent, active and malformed flags are
     left alone (a malformed one is a human's problem to see)."""
     path = path or flag_path()
+    try:
+        before = os.stat(path)
+    except OSError:
+        return False
     if read_flag(path, now)["state"] != EXPIRED:
         return False
     try:
+        after = os.stat(path)
+        if (after.st_ino, after.st_mtime_ns) != (before.st_ino, before.st_mtime_ns):
+            return False  # a concurrent `start` replaced the file after we judged it: that is the fresh flag, keep it
         os.unlink(path)
     except OSError:
         return False
@@ -107,6 +115,8 @@ def write_flag(minutes=DEFAULT_MINUTES, reason="", set_by="", path=None, now=Non
     directory = os.path.dirname(path)
     os.makedirs(directory, mode=0o755, exist_ok=True)
     tmp = f"{path}.tmp.{os.getpid()}"
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(tmp)  # a leftover from an earlier run that had this pid; O_EXCL below must not trip over it
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
