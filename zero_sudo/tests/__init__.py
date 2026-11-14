@@ -122,3 +122,4 @@ from . import test_svg_sanitizer_units  # noqa: E402
 from . import test_secret_broker_units  # noqa: E402
 from . import test_secret_provision_units  # noqa: E402
 from . import test_secret_store_units  # noqa: E402
+from . import test_dashboard_doc_link_rel
