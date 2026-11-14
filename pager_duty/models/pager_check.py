@@ -936,6 +936,12 @@ class PagerCheck(models.Model):
         """
         Updates the target of the 'certbot' pager checks to monitor the provided domains.
         """
+        # A no-change UPDATE of one shared row makes simultaneous updates take turns: the later one fails to
+        # serialize (REPEATABLE READ cannot see the earlier one's new check) and Odoo runs the request again.
+        # UNIQUE(name, website_id) cannot do it: this check has no website, and NULL is never equal.
+        self.env.cr.execute(
+            "UPDATE res_company SET id = id WHERE id = %s", [self.env.ref("base.main_company").id]
+        )
         certbot_checks = self.env["pager.check"].search(
             [("check_type", "=", "certbot")], limit=1
         )
