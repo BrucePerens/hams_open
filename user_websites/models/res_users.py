@@ -30,6 +30,51 @@ from odoo.modules.registry import Registry
 BACKGROUND_EXECUTOR = ThreadPoolExecutor(max_workers=4)
 _logger = logging.getLogger(__name__)
 
+UNPUBLISH_INCIDENT_SOURCE = "User Websites: background unpublish"
+
+
+def _pager_incident_model(env):
+    # [@ANCHOR: user_websites:COMM_unpublish_pager_incident_model]
+    """The pager.incident model as the pager service user, or None when pager_duty is not installed.
+
+    A tenant instance can run this module without pager_duty; there the log line is the only signal.
+    """
+    if "pager.incident" not in env:
+        return None
+    return env["zero_sudo.security.utils"]._get_service_env(
+        "pager_duty.user_pager_service_internal"
+    )["pager.incident"]
+
+
+def _report_unpublish_failure(env, description):
+    # [@ANCHOR: user_websites:COMM_report_unpublish_failure]
+    """Open a pager incident saying a suspension's background unpublish did not finish.
+
+    The member's content stays published while this is open, so a log line alone is not enough.
+    Reporting must never raise out of the background thread (nobody awaits it).
+    """
+    try:
+        incidents = _pager_incident_model(env)
+        if incidents is None:
+            return False
+        # Odoo 19's Many2many.write_real() re-checks res.partner read as the transaction's default env,
+        # so the pager service account must be that env while it posts on the incident (see cloudflare's
+        # purge queue, which does the same).
+        transaction = incidents.env.transaction
+        previous = transaction.default_env
+        transaction.default_env = incidents.env
+        try:
+            incidents.report_incident(
+                {"source": UNPUBLISH_INCIDENT_SOURCE, "severity": "high", "description": description}
+            )
+            env.cr.commit()
+        finally:
+            transaction.default_env = previous
+        return True
+    except Exception:  # audit-ignore-catch-all: reporting a failure must not raise out of an un-awaited background thread; the original failure is already logged
+        _logger.exception("Could not open the pager incident for a failed background unpublish")
+        return False
+
 
 # [@ANCHOR: user_websites:COMM_async_unpublish_content]
 def _async_unpublish_content(db_name, user_ids):
@@ -41,7 +86,8 @@ def _async_unpublish_content(db_name, user_ids):
         cr.execute("SELECT id FROM res_users WHERE login = 'sys_provisioner'")
         row = cr.fetchone()
         if not row:
-            raise ValueError("sys_provisioner missing")
+            _logger.error("Background unpublish for users %s not run: sys_provisioner is missing", user_ids)
+            return
         svc_id = row[0]
         env = odoo.api.Environment(cr, svc_id, {})
         try:
@@ -97,13 +143,15 @@ def _async_unpublish_content(db_name, user_ids):
                     time.sleep(0.1)  # audit-ignore-sleep
         except (odoo.exceptions.AccessError, odoo.exceptions.ValidationError) as e:
             env.cr.rollback()
-            logging.getLogger(__name__).warning(
-                "Background unpublish business logic failure: %s", e
+            _logger.error("Background unpublish business logic failure: %s", e)
+            _report_unpublish_failure(
+                env, f"Unpublishing the content of users {user_ids} failed ({type(e).__name__}); it is still published."
             )
         except (KeyError, ValueError) as e:  # audit-ignore-catch-all
             env.cr.rollback()
-            logging.getLogger(__name__).error(
-                "Fatal error during background unpublish: %s", e
+            _logger.error("Fatal error during background unpublish: %s", e)
+            _report_unpublish_failure(
+                env, f"Unpublishing the content of users {user_ids} failed ({type(e).__name__}); it is still published."
             )
     finally:
         cr.close()
