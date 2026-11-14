@@ -3,6 +3,8 @@
 # -*- coding: utf-8 -*-
 from unittest.mock import MagicMock
 
+import redis as real_redis
+
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -317,3 +319,35 @@ class TestPagerControllers(HamsHttpCase):
             self.env["pager.check"].search([("check_type", "=", "certbot")]),
             "A rate-limited request must not reach the certbot check update.",
         )
+
+    def _redis_failing_with(self, error):
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.controllers.domain_api.redis")
+        mock_redis.exceptions = real_redis.exceptions
+        self.safe_patch("odoo.addons.pager_duty.controllers.domain_api.redis_pool", MagicMock())
+        mock_redis.Redis.return_value.get.side_effect = error
+
+    def _wrong_secret_call(self):
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "the-real-secret")
+        return self.url_open(
+            "/api/v1/pager_duty/update_domains",
+            json={
+                "jsonrpc": "2.0",
+                "method": "call",
+                "params": {"domains": ["example.com"], "api_identity": "wrong-secret"},
+            },
+        )
+
+    def test_09_update_domains_still_answers_when_redis_is_down(self):
+        # Tests [@ANCHOR: pager_duty:update_domains]
+        """Redis down: the limiter steps aside (logged) and the wrong secret is still refused."""
+        self._redis_failing_with(real_redis.exceptions.ConnectionError("redis down"))
+        response = self._wrong_secret_call()
+        self.assertEqual(response.json()["result"]["message"], "Unauthorized")
+
+    def test_10_update_domains_does_not_hide_a_non_redis_failure_in_the_limiter(self):
+        # Tests [@ANCHOR: pager_duty:update_domains]
+        """A bug in the limiter (not a Redis outage) must surface, not turn the brute-force limit off silently."""
+        self._redis_failing_with(TypeError("limiter bug"))
+        response = self._wrong_secret_call()
+        self.assertIn("error", response.json())
+        self.assertNotIn("result", response.json())

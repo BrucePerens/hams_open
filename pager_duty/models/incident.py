@@ -460,10 +460,7 @@ class PagerIncident(models.Model):
                 # SET with NX=True and EX=60 provides an atomic rate limit check-and-set
                 if not r_client.set(redis_key, "1", ex=60, nx=True):
                     return False
-            except (
-                redis.exceptions.RedisError,
-                Exception,
-            ) as e:  # audit-ignore-catch-all
+            except redis.exceptions.RedisError as e:
                 _logger.warning("Redis rate limit check failed: %s", e)
 
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(

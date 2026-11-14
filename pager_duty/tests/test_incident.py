@@ -12,6 +12,8 @@ from odoo.addons.pager_duty import hooks
 from odoo.addons.zero_sudo.rpc_public import MARK as PUBLIC_RPC_MARK
 from odoo.addons.pager_duty.models.incident import REPAGE_HOURS, TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
 from unittest.mock import MagicMock
+
+import redis as real_redis
 from odoo import fields, _
 
 _logger = logging.getLogger(__name__)
@@ -49,6 +51,28 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         method = type(self.incident_model).report_incident
         self.assertTrue(method.__dict__[PUBLIC_RPC_MARK])
         self.assertNotIn("_api_private", method.__dict__)
+
+    def _rate_limit_redis_failing_with(self, error):
+        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", MagicMock())
+        mock_redis_class = self.safe_patch("odoo.addons.pager_duty.models.incident.redis.Redis")
+        mock_redis_class.return_value.set.side_effect = error
+
+    def test_01a_a_redis_outage_does_not_stop_incidents_from_being_reported(self):
+        # Tests [@ANCHOR: pd_redis_rate_limit]
+        """Redis down: the rate limit steps aside (logged) and the incident is still opened."""
+        self._rate_limit_redis_failing_with(real_redis.exceptions.ConnectionError("redis down"))
+        result = self.incident_model.report_incident(
+            {"source": "redis_outage_daemon", "severity": "high", "description": "x"}
+        )
+        self.assertTrue(result)
+
+    def test_01b_a_non_redis_failure_in_the_rate_limit_is_not_hidden(self):
+        # Tests [@ANCHOR: pd_redis_rate_limit]
+        self._rate_limit_redis_failing_with(TypeError("limiter bug"))
+        with self.assertRaises(TypeError):
+            self.incident_model.report_incident(
+                {"source": "redis_bug_daemon", "severity": "high", "description": "x"}
+            )
 
     def test_01_rate_limiting_blocks_spam_standard(self):
         # Tests [@ANCHOR: report_incident_rate_limit]
