@@ -95,10 +95,17 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
 
     def _user_whose_mail_service_is_broken(self, login):
         user = self.env["res.users"].create({"name": "Broken Mail User", "login": login, "email": login})
-        self.safe_patch(
-            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_uid",
-            side_effect=AccessError("simulated: mail service account unusable"),
-        )
+        utils = type(self.env["zero_sudo.security.utils"])
+        real_get_service_uid = utils._get_service_uid
+
+        # Only the alert's own mail account is broken. Odoo's stock "Security Update" notice, sent by the same write(),
+        # looks up other service accounts and must keep working (a blanket failure broke it in the full-system run).
+        def _get_service_uid(this, xml_id, *args, **kwargs):
+            if xml_id == "zero_sudo.mail_service_internal":
+                raise AccessError("simulated: mail service account unusable")
+            return real_get_service_uid(this, xml_id, *args, **kwargs)
+
+        self.safe_patch_object(utils, "_get_service_uid", new=_get_service_uid)
         return user
 
     def test_a_failed_security_alert_opens_a_pager_incident_and_the_change_is_saved(self):
@@ -106,10 +113,15 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
         user = self._user_whose_mail_service_is_broken("alert_fail@example.com")
         incidents = MagicMock()
         incidents.env.transaction = MagicMock()
-        self.safe_patch(
-            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env",
-            return_value={"pager.incident": incidents},
-        )
+        utils = type(self.env["zero_sudo.security.utils"])
+        real_get_service_env = utils._get_service_env
+
+        def _get_service_env(this, xml_id, *args, **kwargs):
+            if xml_id == "pager_duty.user_pager_service_internal":
+                return {"pager.incident": incidents}
+            return real_get_service_env(this, xml_id, *args, **kwargs)
+
+        self.safe_patch_object(utils, "_get_service_env", new=_get_service_env)
         with self.assertLogs("odoo.addons.hams_base.models.res_users", level="ERROR"):
             user.write({"email": "alert_fail_new@example.com"})
         self.assertEqual(user.email, "alert_fail_new@example.com")
