@@ -555,6 +555,16 @@ mod tests {
         assert_eq!(th_step_and_frequency(1_200_013_000), (1_200_010_000, 4));
     }
 
+    /// A frequency near `u64::MAX` rounds without an overflow panic and is then refused for
+    /// having more than eleven digits.
+    #[test]
+    fn a_huge_frequency_does_not_overflow_the_th_rounding() {
+        for hz in [u64::MAX, u64::MAX / 2, u64::MAX / 4 + 1] {
+            let (sent, _) = th_step_and_frequency(hz);
+            assert!(sent > 99_999_999_999, "{hz}");
+        }
+    }
+
     // Tests [@ANCHOR: radioctl_hh_fo_layout]
     // Tests [@ANCHOR: radioctl_hh_engine_new]
     #[test]
