@@ -216,3 +216,12 @@ The body then passes through `scrub_error_body`, so no traceback is sent and an 
 Server Error". Returns a JSON response via `request.make_json_response`. The `assert` on the content type would raise
 `AssertionError` if core changes that header; to-do: replace it with a safe default. Test:
 `TestScrubErrorBody.test_json2_handle_error_has_no_traceback_and_keeps_the_status`.
+
+### `ir.http._dispatch(endpoint)` and `_has_nul(value)` [@ANCHOR: hams_base:refuse_nul_in_request_params] [@ANCHOR: hams_base:has_nul]
+
+PostgreSQL cannot store or compare a string with a NUL character: a search box that passed `%00` on to an `ilike` failed with "A string
+literal cannot contain NUL (0x00) characters", a 500 and an exception ticket (one route, the glossary search, already stripped it).
+`_dispatch` looks at `request.params` (query string, form fields, path arguments and a JSON body) before the endpoint runs, and
+answers 400 (`BadRequest`) when `_has_nul` finds a NUL in any string, dict key, list or tuple member; uploaded files are not
+inspected. `_has_nul` walks the data with a list, not recursion, so a deeply nested body is safe. Nothing on the site has a use for the
+character. Test: `tests/test_nul_in_request_params.py`.
