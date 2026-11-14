@@ -37,6 +37,14 @@ class CloudflareTunnel(models.Model):
     _name = "cloudflare.tunnel"
     _description = "Cloudflare Tunnel"
 
+    # One record per Cloudflare tunnel per website: two syncs running together must not both create it.
+    # [@ANCHOR: cloudflare:tunnel_one_record_per_website]
+    # Verified by [@ANCHOR: test_a_second_record_for_the_same_tunnel_and_website_is_refused]
+    _one_tunnel_per_website = models.Constraint(
+        "UNIQUE(website_id, cf_tunnel_id)",
+        "This tunnel is already recorded for this website.",
+    )
+
     cf_tunnel_id = fields.Char(string="Tunnel ID", readonly=True, required=True)
     name = fields.Char(string="Tunnel Name", readonly=True, required=True)
     status = fields.Char(string="Status", readonly=True)

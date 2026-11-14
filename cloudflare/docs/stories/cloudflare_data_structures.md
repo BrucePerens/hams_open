@@ -640,3 +640,9 @@
 **Behaviour and limit.** The data is a placeholder: `setup` waits 500 ms and then sets the fixed values 154200 requests, `45.2 GB` and 1205 threats (the code comment says "mock data"); it does not call Cloudflare or the server. A real data source is not built yet. No state is kept outside the component.
 
 **See also:** the test in `cloudflare/static/tests/analytics.test.js`.
+
+* **Story:** As the operator, a Cloudflare tunnel is recorded once per website, so two syncs running together never leave two records. *(Reference: cloudflare/models/tunnel.py -> [@ANCHOR: cloudflare:tunnel_one_record_per_website]; cloudflare/migrations/1.12/pre-tunnel-dedupe.py -> [@ANCHOR: cloudflare:migration_tunnel_pair_dedupe])*
+    * **BDD Criteria:**
+        * *Given* a tunnel record exists for a website
+        * *When* another record with the same Cloudflare tunnel id is created for that website
+        * *Then* the database MUST refuse it, and the upgrade MUST delete older duplicates keeping the first.
