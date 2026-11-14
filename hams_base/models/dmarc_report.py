@@ -55,6 +55,15 @@ class DmarcReport(models.Model):
     _inherit = ["mail.thread"]
     _order = "date_range_begin desc"
 
+    # A report id is unique per reporting organization; message_new searches then creates, so two copies arriving together
+    # would both be stored. NULL ids (malformed reports) stay distinct, as message_new intends.
+    # [@ANCHOR: hams_base:dmarc_one_report_per_org_and_id]
+    # Verified by [@ANCHOR: test_a_second_report_with_the_same_org_and_id_is_refused]
+    _one_report_per_org_and_id = models.Constraint(
+        "UNIQUE(org_name, report_id)",
+        "This DMARC report is already stored.",
+    )
+
     name = fields.Char(string="Name", default="New Report")
     org_name = fields.Char(string="Organization")
     email = fields.Char(string="Contact Email")

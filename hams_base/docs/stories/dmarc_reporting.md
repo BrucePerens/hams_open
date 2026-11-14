@@ -87,3 +87,9 @@ Records" shows the read-only computed `dns_spf_record`, a toggle `enable_dmarc_i
 `dns_dmarc_record` and a note that the DKIM record must be copied from the mail provider. The values are stored as system
 parameters `hams_base.compliance_org_name` and so on, and the footer reads them. Test:
 `tests/test_view_rendering_audit_cluster.py::test_res_config_settings_view_form_renders`.
+
+* **Story:** As the operator, a DMARC report is stored once per reporting organization and report id, so a copy that arrives twice at the same moment never leaves two records. *(Reference: hams_base/models/dmarc_report.py -> [@ANCHOR: hams_base:dmarc_one_report_per_org_and_id]; hams_base/migrations/1.1/pre-dmarc-dedupe.py -> [@ANCHOR: hams_base:migration_dmarc_report_dedupe])*
+    * **BDD Criteria:**
+        * *Given* a report from an organization with a given report id is stored
+        * *When* another report with the same organization and id is created
+        * *Then* the database MUST refuse it, and the upgrade MUST delete older duplicates keeping the first.

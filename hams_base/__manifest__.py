@@ -5,7 +5,7 @@
     "description": "Handles email compliance, bounce intelligence, and base policy.",
     "author": "Bruce Perens K6BP",
     "category": "Base",
-    "version": "1.0",
+    "version": "1.1",
     "license": "AGPL-3",
     "depends": ["base", "mail", "website", "compliance", "zero_sudo", "rpc"],
     "data": [
