@@ -54,7 +54,7 @@ pub fn fo_layout(dialect: HhDialect) -> Option<(usize, usize)> {
 
 /// Rounds half away from zero to a multiple of `unit`.
 fn round_to(hz: u64, unit: u64) -> u64 {
-    (hz + unit / 2) / unit * unit
+    hz.saturating_add(unit / 2) / unit * unit
 }
 
 // [@ANCHOR: radioctl_hh_th_step_and_frequency]
@@ -62,7 +62,7 @@ fn round_to(hz: u64, unit: u64) -> u64 {
 /// 6.25 kHz grids (a tie takes 6.25 kHz), and 10 kHz grid with step code 4 from 470 MHz up.
 pub fn th_step_and_frequency(hz: u64) -> (u64, u8) {
     let f5 = round_to(hz, 5_000);
-    let f625 = round_to(hz * 4, 25_000) / 4;
+    let f625 = round_to(hz.saturating_mul(4), 25_000) / 4;
     let (sent, step) = if f5.abs_diff(hz) < f625.abs_diff(hz) {
         (f5, 0)
     } else {
@@ -553,6 +553,16 @@ mod tests {
         assert_eq!(th_step_and_frequency(146_512_500), (146_512_500, 1));
         assert_eq!(th_step_and_frequency(446_003_000), (446_005_000, 0));
         assert_eq!(th_step_and_frequency(1_200_013_000), (1_200_010_000, 4));
+    }
+
+    /// A frequency near `u64::MAX` rounds without an overflow panic and is then refused for
+    /// having more than eleven digits.
+    #[test]
+    fn a_huge_frequency_does_not_overflow_the_th_rounding() {
+        for hz in [u64::MAX, u64::MAX / 2, u64::MAX / 4 + 1] {
+            let (sent, _) = th_step_and_frequency(hz);
+            assert!(sent > 99_999_999_999, "{hz}");
+        }
     }
 
     // Tests [@ANCHOR: radioctl_hh_fo_layout]
