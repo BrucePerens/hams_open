@@ -1426,7 +1426,7 @@ class UserWebsitesController(http.Controller):
         )
 
     @http.route(
-        "/website/unsubscribe/<string:model>/<int:record_id>/<int:partner_id>/<int:timestamp>/<string:token>",
+        "/website/unsubscribe/<string:model>/<int:record_id>/<int:partner_id>/<int(max=99999999999):timestamp>/<string:token>",
         type="http",
         auth="public",
         website=True,

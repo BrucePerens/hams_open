@@ -4,14 +4,30 @@
 import urllib.parse
 
 from odoo import api, models, tools
+from odoo.addons.base.models.ir_http import SignedIntConverter
 from odoo.http import request
 from odoo.service import security
 from werkzeug.exceptions import BadRequest
+
+ROUTE_INT_LIMIT = 2**31
+
+
+# [@ANCHOR: hams_base:bounded_int_converter]
+class BoundedIntConverter(SignedIntConverter):
+    """The ``<int:x>`` route converter, refusing a number a database id cannot be (a clean 404, not a SQL error)."""
+
+    def __init__(self, map, fixed_digits=0, min=-ROUTE_INT_LIMIT + 1, max=ROUTE_INT_LIMIT - 1, signed=True):
+        super().__init__(map, fixed_digits=fixed_digits, min=min, max=max, signed=signed)
 
 
 # [@ANCHOR: hams_base_ir_http_ir_http]
 class IrHttp(models.AbstractModel):
     _inherit = "ir.http"
+
+    @classmethod
+    def _get_converters(cls):
+        # [@ANCHOR: hams_base:bounded_int_converters]
+        return {**super()._get_converters(), "int": BoundedIntConverter}
 
     @classmethod
     def _match(cls, path):
