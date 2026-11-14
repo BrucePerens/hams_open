@@ -15,6 +15,7 @@ use radioctl_core::rigfile;
 use radioctl_protocols::civ_scope::{self, ScopeAssembler, ScopeSegment};
 use radioctl_protocols::flex::{self, FlexEngine};
 use radioctl_protocols::hpsdr_net::HpsdrEngine;
+use radioctl_protocols::radiod_net::RadiodEngine;
 use radioctl_protocols::virtual_flex::VirtualFlex;
 use radioctl_protocols::virtual_rig::VirtualRig;
 use radioctl_protocols::yaesu::YaesuEngine;
@@ -40,6 +41,10 @@ fn flex6400() -> RigDescription {
 
 fn anan100() -> RigDescription {
     shipped(include_str!("../../../rigs/anan-100.toml"))
+}
+
+fn radiod() -> RigDescription {
+    shipped(include_str!("../../../rigs/radiod-channel.toml"))
 }
 
 fn ic7300() -> RigDescription {
@@ -177,6 +182,17 @@ proptest! {
         line in "(OK|ERR|F|P|W|R|A)[ -~]{0,40}\n",
     ) {
         let mut engine = HpsdrEngine::new(anan100()).expect("engine");
+        let _ = engine.feed(&bytes, NOW);
+        let _ = engine.feed(line.as_bytes(), NOW);
+    }
+
+    // Tests [@ANCHOR: radioctl_radiod_engine_parse_line]
+    #[test]
+    fn radiod_control_engine_survives_any_bytes(
+        bytes in proptest::collection::vec(any::<u8>(), 0..600),
+        line in "(OK|ERR|F|W|S|M)[ -~]{0,40}\n",
+    ) {
+        let mut engine = RadiodEngine::new(radiod()).expect("engine");
         let _ = engine.feed(&bytes, NOW);
         let _ = engine.feed(line.as_bytes(), NOW);
     }

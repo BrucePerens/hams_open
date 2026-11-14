@@ -493,11 +493,14 @@ dependencies = [
 name = "radioctl-station"
 version = "0.1.0"
 dependencies = [
+ "futures-core",
  "radioctl-core",
  "radioctl-protocols",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
+ "tokio-rustls",
  "toml",
 ]
 
