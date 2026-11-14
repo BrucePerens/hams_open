@@ -97,7 +97,7 @@ class TestTddBatch1(RealTransactionCase):
             # The daemon marks the job failed first and only then reports the failure, which posts
             # a message on the config. Unlinking the config before that post lands collides with it
             # (SerializationFailure on mail_message), so wait for the post.
-            Message = self.env["mail.message"].sudo()
+            Message = self.env["mail.message"]
             start_time = time.time()
             while time.time() - start_time < 15.0:
                 if Message.search_count([("model", "=", "backup.config"), ("res_id", "=", job.config_id.id)]):
