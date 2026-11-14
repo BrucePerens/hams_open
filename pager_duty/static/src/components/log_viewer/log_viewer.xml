@@ -9,7 +9,7 @@
 
             <div class="row mb-4">
                 <div class="col-md-3">
-                    <select class="form-select bg-dark text-light border-secondary" t-model="state.selectedFile">
+                    <select aria-label="Log file" class="form-select bg-dark text-light border-secondary" t-model="state.selectedFile">
                         <option value="">Select a Log File...</option>
                         <t t-foreach="state.files || []" t-as="file" t-key="file">
                             <option t-att-value="file"><t t-out="file"/></option>
@@ -17,7 +17,7 @@
                     </select>
                 </div>
                 <div class="col-md-7">
-                    <input type="text" class="form-control bg-dark text-light border-secondary" placeholder="Enter RegEx (e.g. .*HTTP/1\.1&quot; 5\d\d)" t-model="state.regexQuery" t-on-keyup="onKeyup"/>
+                    <input type="text" aria-label="Search regular expression" class="form-control bg-dark text-light border-secondary" placeholder="Enter RegEx (e.g. .*HTTP/1\.1&quot; 5\d\d)" t-model="state.regexQuery" t-on-keyup="onKeyup"/>
                 </div>
                 <div class="col-md-2">
                     <button class="btn btn-outline-success w-100" t-on-click="executeSearch" t-att-disabled="state.loading">
