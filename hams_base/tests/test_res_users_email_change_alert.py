@@ -76,8 +76,10 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
         )
         subjects = []
 
-        def _capture_create(mail_model, vals):
-            subjects.append(vals["subject"])
+        def _capture_create(mail_model, vals_list):
+            subjects.extend(
+                vals["subject"] for vals in vals_list if vals.get("email_to") == "fr_alert_test@example.com"
+            )
             return mail_model.browse()
 
         self.safe_patch_object(type(self.env["mail.mail"]), "create", new=_capture_create)

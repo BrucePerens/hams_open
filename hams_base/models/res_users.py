@@ -1,4 +1,5 @@
 from odoo import api, models
+from odoo.tools.translate import _
 from odoo.addons.hams_base.log_mask import mask_email
 # -*- coding: utf-8 -*-
 # from odoo import models, api, _
@@ -89,11 +90,9 @@ class ResUsers(models.Model):
                             # email address, a self-XSS shape), but escaped for
                             # the same defense-in-depth reason as the bounce
                             # notification in res_partner.py.
-                            # The change may be made by an administrator or a service account: write in the member's language.
-                            t = (user.with_context(lang=user.lang) if user.lang else user).env._
                             mail_values = {
-                                'subject': t('Security Alert: Your HAMS Email Address was Changed'),
-                                'body_html': t(
+                                'subject': _('Security Alert: Your HAMS Email Address was Changed'),
+                                'body_html': _(
                                     '<p>Hello %s,</p>'
                                     '<p>This is an automated security notification from HAMS.</p>'
                                     '<p>Your account email address has just been changed from <strong>%s</strong> to <strong>%s</strong>.</p>'
