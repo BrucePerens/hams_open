@@ -965,6 +965,16 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["website.page"].browse(pages.ids).unlink()  # audit-ignore-gdpr-hand-rolled-unlink: batched/savepoint-protected for datasets that can run into the thousands, see check_gdpr_erasure_uses_service_utility.py
+            except (psycopg2.errors.SerializationFailure, psycopg2.errors.DeadlockDetected):
+                # A commit (the background unpublish) landed after this transaction's snapshot, so retrying inside
+                # it fails again: end it and retry on a fresh snapshot. In test mode there is nothing to end; the
+                # caller records the failure and the cron retries.
+                if self.env["zero_sudo.security.utils"]._is_test_mode():
+                    raise
+                self.env.cr.rollback()
+                self.env.invalidate_all()
+                time.sleep(0.5)  # audit-ignore-sleep
+                continue
             except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update pages: %s", e
@@ -995,6 +1005,16 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["blog.post"].browse(posts.ids).unlink()  # audit-ignore-gdpr-hand-rolled-unlink: batched/savepoint-protected for datasets that can run into the thousands, see check_gdpr_erasure_uses_service_utility.py
+            except (psycopg2.errors.SerializationFailure, psycopg2.errors.DeadlockDetected):
+                # A commit (the background unpublish) landed after this transaction's snapshot, so retrying inside
+                # it fails again: end it and retry on a fresh snapshot. In test mode there is nothing to end; the
+                # caller records the failure and the cron retries.
+                if self.env["zero_sudo.security.utils"]._is_test_mode():
+                    raise
+                self.env.cr.rollback()
+                self.env.invalidate_all()
+                time.sleep(0.5)  # audit-ignore-sleep
+                continue
             except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update posts: %s", e
@@ -1025,6 +1045,16 @@ class ResUsers(models.Model):
             try:
                 with self.env.cr.savepoint():
                     env_svc["blog.blog"].browse(blogs.ids).unlink()  # audit-ignore-gdpr-hand-rolled-unlink: batched/savepoint-protected for datasets that can run into the thousands, see check_gdpr_erasure_uses_service_utility.py
+            except (psycopg2.errors.SerializationFailure, psycopg2.errors.DeadlockDetected):
+                # A commit (the background unpublish) landed after this transaction's snapshot, so retrying inside
+                # it fails again: end it and retry on a fresh snapshot. In test mode there is nothing to end; the
+                # caller records the failure and the cron retries.
+                if self.env["zero_sudo.security.utils"]._is_test_mode():
+                    raise
+                self.env.cr.rollback()
+                self.env.invalidate_all()
+                time.sleep(0.5)  # audit-ignore-sleep
+                continue
             except (KeyError, ValueError) as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning(
                     "GDPR erasure concurrent update blogs: %s", e
