@@ -143,6 +143,27 @@ class TestRealBackupWorker(RealTransactionCase):
                 break
             time.sleep(0.5)  # audit-ignore-sleep
 
+        # The daemon writes the final state first, then appends the closing log text to the same
+        # job row and (on failure) posts the failure report on the config. Deleting before those
+        # land collides with them (SerializationFailure), so wait for both.
+        start_time = time.time()
+        while time.time() - start_time < 15.0:
+            job.invalidate_recordset(["output_log"])
+            if "Process exited" in (job.output_log or "") or "Worker Error" in (job.output_log or ""):
+                break
+            time.sleep(0.5)  # audit-ignore-sleep
+            self.env.cr.commit()
+        if job.state == "failed":
+            start_time = time.time()
+            while time.time() - start_time < 15.0:
+                if self.env["mail.message"].search_count([
+                    ("model", "=", "backup.config"), ("res_id", "=", config.id),
+                    "|", ("body", "ilike", "failed for job"), ("body", "ilike", "Worker Error"),
+                ]):
+                    break
+                time.sleep(0.5)  # audit-ignore-sleep
+                self.env.cr.commit()
+
         # Commit to close the test's long-running transaction before we attempt to delete records
         # modified by the daemon's concurrent transaction.
         self.env.cr.commit()
