@@ -429,3 +429,23 @@ class TestHelpdeskTours(HamsHttpCase):
     # Tests [@ANCHOR: COMM_helpdesk_portal_tour]
 #     def test_helpdesk_portal_tour(self):
         pass
+
+    def test_portal_ticket_submit_bounds_the_text_fields(self):
+        # A POST body is caller-controlled: a huge title or description must not be stored whole.
+        self.authenticate("portal_cust_tour", "password")
+        res_page = self.url_open("/my/tickets/new")
+        match = re.search(r'name="csrf_token"\s+value="([^"]+)"', res_page.text)
+        self.url_open(
+            "/my/tickets/submit",
+            data={
+                "name": "B" * 5000,
+                "description": "D" * 100000,
+                "callsign": "C" * 500,
+                "csrf_token": match.group(1) if match else "",
+            },
+        )
+        ticket = self.env["hams_helpdesk.ticket"].search([("name", "=like", "BBBB%")], limit=1)
+        self.assertTrue(ticket, "Ticket should have been created.")
+        self.assertLessEqual(len(ticket.name), 200)
+        self.assertLessEqual(len(ticket.description or ""), 20000 + 20)
+        self.assertLessEqual(len(ticket.callsign or ""), 20)

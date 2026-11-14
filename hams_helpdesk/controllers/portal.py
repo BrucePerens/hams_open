@@ -18,6 +18,10 @@ from odoo.addons.portal.controllers.portal import CustomerPortal, pager as porta
 # helpdesk-manager path meant for a trusted internal flag (bot self-reporting, the Official
 # Observer, or _ncmec_report_ticket_for_recording), not for an ordinary member's own report.
 _PORTAL_EXCLUDED_TICKET_TYPES = {"csam_enticement_trafficking", "server_exception"}
+# Longest title, description and callsign a portal form may store (a POST body is caller-controlled).
+_TICKET_NAME_MAX = 200
+_TICKET_DESCRIPTION_MAX = 20000
+_TICKET_CALLSIGN_MAX = 20
 
 
 # [@ANCHOR: hams_helpdesk_portal_helpdesk_portal]
@@ -230,9 +234,9 @@ class HelpdeskPortal(CustomerPortal):
         )
 
         vals = {
-            "name": name,
-            "description": description,
-            "callsign": callsign or request.env.user.partner_id.callsign,
+            "name": name[:_TICKET_NAME_MAX],
+            "description": (description or "")[:_TICKET_DESCRIPTION_MAX],
+            "callsign": (callsign or "")[:_TICKET_CALLSIGN_MAX] or request.env.user.partner_id.callsign,
             "ticket_type": ticket_type,
             "partner_id": request.env.user.partner_id.id,
             "website_id": req_website.id if req_website else False,
