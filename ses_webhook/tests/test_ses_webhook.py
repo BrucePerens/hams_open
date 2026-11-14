@@ -1327,6 +1327,23 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(self.env['mail.mail'].search_count([]), before)
         self.assertFalse(self.env['mail.mail'].search([('email_to', '=', 'unknown')]))
 
+    def test_19c_the_registration_nudge_is_really_sent_not_left_in_exception(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
+        # Test mode disables outgoing mail, so test_19 only sees that a mail.mail row exists. With the
+        # real send path on (fake SMTP), the service account must be able to send it: state "sent".
+        self.safe_patch_object(type(self.env["ir.mail_server"]), "_disable_send", new=lambda self: False)
+        self.safe_patch_object(type(self.env["ir.mail_server"]), "_connect__", new=lambda self, *a, **k: None)
+        self.safe_patch_object(type(self.env["ir.mail_server"]), "send_email", new=lambda self, *a, **k: "<nudge@example.com>")
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        self.env['ses.webhook.pending_submission'].with_user(svc_uid).with_company(
+            self.company_a
+        ).create_and_notify(sender_email="nudge-send@test-a.com", raw_content="x", domain=self.domain_a)
+        mail = self.env['mail.mail'].search([('email_to', '=', 'nudge-send@test-a.com')])
+        self.assertEqual(len(mail), 1)
+        self.assertEqual(mail.state, "sent", "the nudge was created but never sent: %s" % mail.failure_reason)
+
     def test_20_matched_sender_is_not_gated(self):
         """
         The registration gate must not interfere with a real, registered
