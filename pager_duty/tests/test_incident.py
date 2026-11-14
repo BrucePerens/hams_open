@@ -113,6 +113,29 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.incident_model.auto_resolve_incidents("test_daemon_2")
         self.assertEqual(incident.status, "resolved")
 
+    def test_02b_a_paging_incident_really_posts_to_the_on_duty_admin(self):
+        # Tests [@ANCHOR: pager_duty:notify_on_duty]
+        # No mocked message_post: the page is the real chatter message with the on-duty partner as recipient.
+        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", None)
+        admin = self.env.ref("base.user_admin")
+        now = fields.Datetime.now()
+        self.env["calendar.event"].create(
+            {
+                "name": "Shift",
+                "start": now - datetime.timedelta(hours=1),
+                "stop": now + datetime.timedelta(hours=1),
+                "is_pager_duty": True,
+                "user_id": admin.id,
+            }
+        )
+        incident_id = self.incident_model.report_incident(
+            {"source": "real_page_test", "severity": "critical", "description": "must page"}
+        )
+        incident = self.incident_model.browse(incident_id)
+        page = incident.message_ids.filtered(lambda m: "New Incident Created" in (m.body or ""))
+        self.assertEqual(len(page), 1, "[!] DIAGNOSTIC FOR AI: a critical incident must post exactly one page message.")
+        self.assertIn(admin.partner_id, page.partner_ids, "[!] DIAGNOSTIC FOR AI: the on-duty admin must be a recipient.")
+
     def test_03_bus_notification_on_create_standard(self):
         # Tests [@ANCHOR: pager_duty:incident_create]
         mock_sendone = self.safe_patch_object(type(self.env["bus.bus"]), "_sendone")
