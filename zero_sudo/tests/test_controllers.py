@@ -362,3 +362,30 @@ class TestZeroSudoControllers(RealTransactionCase):
             "client IP resolved by _get_trusted_client_ip(), not the "
             "Cloudflare Tunnel's own loopback peer address.",
         )
+
+    def test_06_json_session_authenticate_lets_an_ordinary_member_in_and_writes_no_block_row(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_json_session_authenticate_interceptor]
+        """The interceptor must deny service accounts only. An ordinary member with the right
+        password gets the normal session payload (a uid), and no `service_account_blocked` row."""
+        login = "test_ordinary_json_session_login"
+        password = "test_password"
+        user = self.env["res.users"].create(
+            {"name": "Test Ordinary JSON Login", "login": login, "password": password,
+             "active": True, "lang": "en_US"}
+        )
+        self.env.cr.commit()
+        self.addCleanup(self._forget_login_throttle, login)
+
+        result = self.make_jsonrpc_request(
+            "/web/session/authenticate",
+            {"db": self.env.cr.dbname, "login": login, "password": password},
+        )
+        self.assertEqual(result.get("uid"), user.id)
+
+        self.env.cr.commit()
+        self.env.invalidate_all()
+        self.assertFalse(
+            self.env["zero_sudo.security.log"].search(
+                [("user_id", "=", user.id), ("reason", "=", "service_account_blocked")], limit=1
+            )
+        )

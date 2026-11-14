@@ -169,7 +169,7 @@ class TestAppealsAndViews(RealTransactionCase):
         self.env.cr.commit()
         self.assertEqual(Appeal.search_count(domain), 1, "One pending appeal per target is enough.")
 
-    def test_02c_an_appeal_needs_a_reason_and_a_group_appeal_needs_membership(self):
+    def test_02d_an_appeal_needs_a_reason_and_a_group_appeal_needs_membership(self):
         # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
         Appeal = self.env["content.violation.appeal"]
         group = self.env["user.websites.group"].create(
@@ -193,6 +193,22 @@ class TestAppealsAndViews(RealTransactionCase):
         self.assertEqual(Appeal.search_count([("group_id", "=", group.id)]), 0,
                          "a non-member must not file an appeal for a group's suspension")
         self.assertEqual(Appeal.search_count([("user_id", "=", self.user_public.id)]), 0)
+
+    def test_02c_an_over_long_appeal_reason_is_refused(self):
+        # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
+        # A POST body is caller-controlled: a huge reason must not be stored whole.
+        self.user_public.is_suspended_from_websites = True
+        self.env.cr.commit()
+        self.authenticate(self.user_public.login, self.user_public.login)
+        res = self.url_open(
+            "/website/submit_appeal",
+            data={"csrf_token": odoo.http.Request.csrf_token(self), "reason": "R" * 100000},
+            method="POST",
+            allow_redirects=False,
+        )
+        self.env.cr.commit()
+        self.assertIn("error=reason_too_long", res.headers["Location"])
+        self.assertEqual(self.env["content.violation.appeal"].search_count([("user_id", "=", self.user_public.id)]), 0)
 
     def test_03_reject_appeal_leaves_suspension_in_place(self):
         # Tests [@ANCHOR: user_websites:COMM_appeal_action_reject]
