@@ -20,9 +20,18 @@ timeout_ms = 1000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 430000000
+max_hz = 440000000
+
 [defaults]
 frequency_hz = 437000000
 mode = "fm"
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "program-output", reference = "`rigctl --dump-caps` (Hamlib 4.6.2) frequency range lines for this model: receive and transmit 430 to 440 MHz", note = "The lowest and highest frequency Hamlib lists, so the gaps between its ranges are accepted; Hamlib's ranges, not a measurement of the radio." }
+verified = { state = "unverified" }
 
 [[facts]]
 key = "rig.*"

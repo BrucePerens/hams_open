@@ -33,6 +33,10 @@ timeout_ms = 1500
 retries = 1
 inter_command_ms = 0
 
+[frequency]
+min_hz = 1000
+max_hz = 500000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -65,6 +69,11 @@ code = 8
 [[modes]]
 mode = "sam"
 code = 9
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/docs/frequency_ranges_todo.md", note = "A generous placeholder, not a Flex specification: the range of each Flex model and of a slice on a transverter is not yet taken from FlexRadio's documentation." }
+verified = { state = "unverified" }
 
 [[facts]]
 key = "rig.*"
