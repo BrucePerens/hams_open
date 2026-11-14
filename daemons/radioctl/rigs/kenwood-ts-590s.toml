@@ -22,6 +22,7 @@ stop = "ky0"
 attenuator_db = [12]
 attenuator_any_up_to_db = 0
 preamp_steps = 1
+antenna_ports = 2
 
 [timing]
 timeout_ms = 500
@@ -73,6 +74,11 @@ verified = { state = "unverified" }
 key = "kenwood.model_id"
 provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (October 23 2014), file ts_590_g_pc_command_e.pdf, sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999, p. 13 (ID: 021 TS-590S, 023 TS-590SG)" }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.antenna_ports"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-590S TRANSCEIVER', file TS-590S_PC_Command_Reference.pdf, sha256 7858741e02a4880560f3468baad755c5d3a47f2e55eb4d18daecbe5b6359b878: AN, PDF p. 4: ANp1p2p3; p1 0 ANT1, 1 ANT2, 9 no change; p2 receive antenna and p3 drive out are left at 9" }
+verified = { state = "manual-checked", reference = "AN, PDF p. 4" }
 
 [[facts]]
 key = "timing.*"

@@ -46,6 +46,10 @@ Parses a decimal number out of a string made only of ASCII digits. `text` is bor
 
 Builds the Kenwood-style ASCII engine. `desc` is taken by value and kept. Errors, both `Unsupported`: the description is not a `KenwoodAscii` family description or has no Kenwood section, or its dialect is `Ts890`, which has its own engine (the generic one would send it `IF` and `MD`). The dialect selects behaviour flags: the older TS-440/TS-450/R-5000 forms (split through `FN`/`SP` for TS-440 and R-5000), the TS-990 mode through `OM0`, the R-5000 shorter `IF` answer and the TRC-80 frequency read through `IF`. Auto-information starts off. No I/O.
 
+### `fn antenna_form(&self) -> Result<AntennaForm, RigError>` [@ANCHOR: radioctl:radioctl_kenwood_engine_antenna_form]
+
+Chooses how this model writes `AN` (antenna connector): the TS-480 (ID 20) takes `ANp;` with p 1 or 2, the TS-590S (ID 21) takes `ANp1p2p3;` with p1 0 or 1. Both need `levels.antenna_ports` of 2. Any other model (the TS-590SG, for which no PC command guide has been read) gets `Unsupported`. Pure; used by `SendLevel` and `GetLevel` for `Level::Antenna` and by the reply decoder.
+
 ### `fn ky(&self) -> Result<radioctl_core::description::KyParams, RigError>` [@ANCHOR: radioctl:radioctl_kenwood_engine_ky]
 
 Returns the description's `KY` (send Morse text) record for this model, or `Unsupported` with "send-CW-text (KY) is not documented for this model" when the description has no `[kenwood.ky]` block, its form is undocumented, or it has no way to stop the keying. The record is `Copy` and is returned by value. The check is deliberately strict because `KY` can key the transmitter; it means only models whose manual documents the form, width, character table and stop can send CW. Used by `SendCw` and `StopCw` encoding. Pure.
