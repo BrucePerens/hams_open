@@ -306,6 +306,14 @@ mod tests {
             .description
     }
 
+    /// A frequency near `u64::MAX` is refused as outside the band, not an overflow panic.
+    #[test]
+    fn a_huge_frequency_is_refused_not_a_panic() {
+        assert_eq!(channel(Hz(u64::MAX)), Hz(u64::MAX / 12_500 * 12_500));
+        let mut e = DorjiEngine::new(shipped("dorji-dra818v")).expect("engine");
+        assert!(e.encode(&Op::SetFrequency(Vfo::A, Hz(u64::MAX))).is_err());
+    }
+
     // Tests [@ANCHOR: radioctl_dorji_band_from_name]
     // Tests [@ANCHOR: radioctl_dorji_band_contains]
     // Tests [@ANCHOR: radioctl_dorji_channel]
