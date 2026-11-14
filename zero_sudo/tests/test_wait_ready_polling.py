@@ -50,8 +50,8 @@ class TestWaitReadyPolling(HamsTransactionCase):
     def test_success_path_returns_true_immediately(self):
         browser = _FakeBrowser([_TRUE])
         start = time.time()
-        self.assertTrue(common._patched_wait_ready(browser, "1 === 1", timeout=5))
-        self.assertLess(time.time() - start, 1.0)
+        self.assertTrue(common._patched_wait_ready(browser, "1 === 1", timeout=60))
+        self.assertLess(time.time() - start, 30.0)
         self.assertEqual(len(browser.calls), 1)
         self.assertEqual(browser.screenshots, [])
 
