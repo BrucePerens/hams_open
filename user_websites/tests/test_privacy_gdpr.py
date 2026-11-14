@@ -529,6 +529,7 @@ class TestPrivacyGDPR(HamsHttpCase):
 
     def test_02d_the_member_is_told_the_erasure_continues_not_given_an_error(self):
         # Tests [@ANCHOR: user_websites:COMM_privacy_delete_content]
+        # Tests [@ANCHOR: user_websites:COMM_privacy_erasing]
         # Tests [@ANCHOR: user_websites:gdpr_erasure_run]
         self.authenticate(self.user_privacy.login, self.user_privacy.login)
         self.env.flush_all()
