@@ -76,7 +76,7 @@ impl Band {
 // [@ANCHOR: radioctl_dorji_channel]
 /// The frequency rounded to the nearest 12.5 kHz channel.
 pub fn channel(hz: Hz) -> Hz {
-    Hz((hz.0 + 6250) / 12_500 * 12_500)
+    Hz(hz.0.saturating_add(6250) / 12_500 * 12_500)
 }
 
 // [@ANCHOR: radioctl_dorji_mhz_text]
