@@ -303,6 +303,10 @@ class TestPrivacyGDPR(HamsHttpCase):
         payload = self.env["ham.gdpr.export.token"].with_user(svc_uid).consume_and_export(token)
 
         self.assertIn("data", payload)
+        self.assertEqual(
+            payload["user_id"], self.user_privacy.id,
+            "the daemon keys its one-export-per-user cap on this; without it every member behind the proxy shares one slot",
+        )
         self.assertNotIn("streamed", payload, "no dataset rows may travel in the consume call")
         self.assertEqual(payload["data"]["user"]["name"], "Privacy User")
         # "pages" is one of _get_gdpr_streamed_keys()'s generator-backed keys: the consume call names it, and
