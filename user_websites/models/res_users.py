@@ -256,6 +256,16 @@ class ResUsers(models.Model):
         default=False,
     )
 
+    # [@ANCHOR: user_websites:gdpr_erasure_pending_field]
+    # Set by `_gdpr_erasure_run` before the account is deactivated and cleared when the whole erasure chain has finished.
+    gdpr_erasure_pending = fields.Boolean(
+        string="GDPR Erasure Unfinished",
+        help="The member asked for erasure and the erasure chain has not finished yet; a cron re-runs it.",
+        default=False,
+        copy=False,
+        index=True,
+    )
+
     # --- Inverse Relationships (Bidirectional Integrity) ---
     appeal_ids = fields.One2many(
         "content.violation.appeal", "user_id", string="Moderation Appeals"
@@ -866,6 +876,44 @@ class ResUsers(models.Model):
             "website_slug": self.website_slug if self.website_slug else False,
         })
         return res
+
+    # [@ANCHOR: user_websites:gdpr_erasure_run]
+    # Verified by [@ANCHOR: user_websites:test_gdpr_erasure_run_marks_and_resumes]
+    def _gdpr_erasure_run(self):
+        """Run the whole erasure chain for one member and say whether it finished.
+
+        The marker and the deactivation are committed first (outside test mode), because the chain commits its
+        batches as it goes: a hook that fails later must not leave a deactivated account that nobody retries. On a
+        failure the uncommitted part is rolled back, the marker stays and `_cron_resume_gdpr_erasure` runs the
+        chain again (every hook is idempotent). Returns True when the chain finished, False when it is pending.
+        """
+        self.ensure_one()
+        env_svc = self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.gdpr_service_internal")
+        is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
+        self.with_env(env_svc).write({"active": False, "gdpr_erasure_pending": True})
+        if not is_test:
+            self.env.cr.commit()
+        try:
+            self._execute_gdpr_erasure()
+        except Exception:  # audit-ignore-catch-all
+            _logger.exception("GDPR erasure of user %s did not finish; the cron will resume it", self.id)
+            if not is_test:
+                self.env.cr.rollback()
+            return False
+        self.with_env(env_svc).write({"gdpr_erasure_pending": False})
+        return True
+
+    # [@ANCHOR: user_websites:cron_resume_gdpr_erasure]
+    # Verified by [@ANCHOR: user_websites:test_gdpr_erasure_run_marks_and_resumes]
+    @api.model
+    def _cron_resume_gdpr_erasure(self):
+        """Run the erasure chain again for every member whose erasure did not finish."""
+        env_svc = self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.gdpr_service_internal")
+        pending = env_svc["res.users"].with_context(active_test=False).search([("gdpr_erasure_pending", "=", True)])
+        is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
+        for user in pending:
+            if user._gdpr_erasure_run() and not is_test:
+                self.env.cr.commit()
 
     def _execute_gdpr_erasure(self):
         """

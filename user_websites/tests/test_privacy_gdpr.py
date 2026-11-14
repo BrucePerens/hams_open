@@ -462,6 +462,50 @@ class TestPrivacyGDPR(HamsHttpCase):
             "The account must already be deactivated when the first batch is erased.",
         )
 
+    def test_02c_a_failing_hook_leaves_a_marker_and_the_cron_finishes_the_erasure(self):
+        # [@ANCHOR: user_websites:test_gdpr_erasure_run_marks_and_resumes]
+        # Tests [@ANCHOR: user_websites:gdpr_erasure_run]
+        # Tests [@ANCHOR: user_websites:cron_resume_gdpr_erasure]
+        # Tests [@ANCHOR: user_websites:ir_cron_resume_gdpr_erasure]
+        # Tests [@ANCHOR: user_websites:gdpr_erasure_pending_field]
+        """A hook that raises leaves the account marked unfinished; the cron then completes the erasure."""
+        page_model = type(self.env["website.page"])
+        real_unlink = page_model.unlink
+
+        def failing_unlink(pages):
+            raise ValueError("simulated hook failure")
+
+        with self.safe_patch_object_cm(page_model, "unlink", new=failing_unlink):
+            self.assertFalse(self.user_privacy._gdpr_erasure_run())
+        user = self.env["res.users"].with_context(active_test=False).browse(self.user_privacy.id)
+        self.assertTrue(user.gdpr_erasure_pending, "A failed erasure must leave the marker set.")
+        self.assertFalse(user.active)
+        self.assertTrue(self.page.exists())
+
+        self.assertEqual(page_model.unlink, real_unlink)
+        self.env["res.users"]._cron_resume_gdpr_erasure()
+        user.invalidate_recordset()
+        self.assertFalse(user.gdpr_erasure_pending, "The re-run must clear the marker.")
+        self.assertFalse(self.page.exists(), "The re-run must finish the erasure.")
+
+    def test_02d_the_member_is_told_the_erasure_continues_not_given_an_error(self):
+        # Tests [@ANCHOR: user_websites:COMM_privacy_delete_content]
+        # Tests [@ANCHOR: user_websites:gdpr_erasure_run]
+        self.authenticate(self.user_privacy.login, self.user_privacy.login)
+        self.env.flush_all()
+
+        def failing_unlink(pages):
+            raise ValueError("simulated hook failure")
+
+        self.safe_patch_object(type(self.env["website.page"]), "unlink", new=failing_unlink)
+        response = self.url_open(
+            "/my/privacy/delete_content",
+            data={"csrf_token": odoo.http.Request.csrf_token(self)},
+            method="POST",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Your erasure is under way", response.text)
+
     def test_03_self_writeable_fields_idiom(self):
         # Tests [@ANCHOR: test_user_websites_self_writeable_fields]
         # Tests [@ANCHOR: user_websites:fn_users_self_writeable_fields]
