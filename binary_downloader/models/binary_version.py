@@ -172,10 +172,12 @@ class BinaryVersion(models.Model):
         limit = 100
         offset = 0
         
-        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("binary_downloader.user_binary_downloader_service")
-        
+        # The downloader's own service account has no create ACL on pager.incident: the pager's incident
+        # creator account is the one made for raising incidents.
+        incident_uid = self.env["zero_sudo.security.utils"]._get_service_uid("pager_duty.user_pager_incident_creator")
+
         LinkModel = self.env["binary.tenant.link"]
-        IncidentModel = self.env["pager.incident"].with_user(svc_uid)
+        IncidentModel = self.env["pager.incident"].with_user(incident_uid)
 
         while True:
             links = LinkModel.search(
