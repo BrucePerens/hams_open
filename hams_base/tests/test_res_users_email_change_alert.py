@@ -74,8 +74,12 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
             "python_translations",
             {("hams_base", "fr_FR"): {"Security Alert: Your HAMS Email Address was Changed": "FR alerte"}},
         )
+        subjects = []
+
+        def _capture_create(mail_model, vals):
+            subjects.append(vals["subject"])
+            return mail_model.browse()
+
+        self.safe_patch_object(type(self.env["mail.mail"]), "create", new=_capture_create)
         user.write({"email": "fr_alert_new@example.com"})
-        mail = self.env["mail.mail"].search(
-            [("email_to", "=", "fr_alert_test@example.com"), ("subject", "=", "FR alerte")]
-        )
-        self.assertTrue(mail, "the alert must be written in the member's language")
+        self.assertEqual(subjects, ["FR alerte"], "the alert must be written in the member's language")
