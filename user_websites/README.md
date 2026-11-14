@@ -223,6 +223,8 @@ This section ensures all module functions and their developer usage are thorough
 
 ### `res.users` (`models/res_users.py`, `models/res_users_moderation.py`)
 *   **`_async_unpublish_content(db_name, user_ids)`**: Background task to unpublish pages/posts for suspended users.
+*   **`_report_unpublish_failure(env, description)`** [@ANCHOR: user_websites:COMM_report_unpublish_failure]: Called when a background unpublish (users or groups) fails after the log line: opens a pager incident (source "User Websites: background unpublish", severity high) because the suspended member's content is still published. Returns False when `pager_duty` is not installed, and never raises (nobody awaits the thread). Tested by `test_async_unpublish_user_failure_opens_a_pager_incident` and `test_async_unpublish_group_failure_opens_a_pager_incident`.
+*   **`_pager_incident_model(env)`** [@ANCHOR: user_websites:COMM_unpublish_pager_incident_model]: The `pager.incident` model as the pager service user, or None when `pager_duty` is not installed (a tenant instance). Tested by `test_report_unpublish_failure_without_pager_duty_or_on_error_does_not_raise`.
 *   **`_register_hook()`**: System hook that creates the `sys_provisioner` service user (if missing) and maps the `user_websites.user_websites_service_account` XML ID to it, so other modules can resolve that account early. (Documentation is bootstrapped by `zero_sudo`, not here; see Documentation Injection above.)
 *   **`_check_reserved_slugs()`**: ORM constraint ensuring `website_slug` doesn't conflict with system routes.
 *   **`_is_admin()`**: Utility returning True if the user belongs to the `base.group_system` or `user_websites.group_user_websites_administrator`.

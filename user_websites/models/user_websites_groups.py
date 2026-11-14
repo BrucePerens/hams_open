@@ -13,7 +13,7 @@ from odoo.addons.user_websites.models.member_html import menu_pages
 from psycopg2 import IntegrityError
 import psycopg2
 import logging
-from .res_users import BACKGROUND_EXECUTOR
+from .res_users import BACKGROUND_EXECUTOR, _report_unpublish_failure
 from odoo.addons.user_websites.models import site_slug
 import time
 import os
@@ -44,6 +44,7 @@ def _async_unpublish_group_content(db_name, group_ids):
     except Exception:  # audit-ignore-catch-all: Tested by [@ANCHOR: user_websites_async_unpublish_registry_failure]  # fmt: skip
         _logger.exception("Async unpublish group content failed to acquire a registry/cursor")
         return
+    env = None
     try:
         cr.execute(
             "SELECT res_id FROM ir_model_data WHERE module = %s AND name = %s",
@@ -120,6 +121,7 @@ def _async_unpublish_group_content(db_name, group_ids):
                     if not os.environ.get("ODOO_DISABLE_SLEEPS"):
                         time.sleep(0.1)  # audit-ignore-sleep
 
+            failed_companies = []
             for company_id, comp_group_ids in company_groups.items():
                 try:
                     _unpublish_for_company(company_id, comp_group_ids)
@@ -152,11 +154,21 @@ def _async_unpublish_group_content(db_name, group_ids):
                         company_id,
                         comp_group_ids,
                     )
+                    failed_companies.append(company_id)
 
         finally:
             env.cr.rollback()
+        if failed_companies:
+            _report_unpublish_failure(
+                env,
+                f"Unpublishing the content of groups {group_ids} failed for companies {failed_companies}; it is still published.",
+            )
     except psycopg2.Error as e:  # audit-ignore-catch-all
         _logger.error("Async unpublish group content failed: %s", e)
+        if env is not None:
+            _report_unpublish_failure(
+                env, f"Unpublishing the content of groups {group_ids} failed ({type(e).__name__}); it is still published."
+            )
     except Exception:  # audit-ignore-catch-all: Tested by [@ANCHOR: user_websites_async_unpublish_catch_all]  # fmt: skip
         # This runs in a background thread submitted via
         # BACKGROUND_EXECUTOR.submit() -- its Future is never awaited, so
@@ -166,6 +178,10 @@ def _async_unpublish_group_content(db_name, group_ids):
         # Environment, not a recordset) previously meant this whole
         # feature failed 100% of the time with zero visibility.
         _logger.exception("Async unpublish group content crashed unexpectedly")
+        if env is not None:
+            _report_unpublish_failure(
+                env, f"Unpublishing the content of groups {group_ids} crashed; it is still published."
+            )
     finally:
         cr.close()
 

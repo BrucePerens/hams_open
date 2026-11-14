@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from unittest.mock import MagicMock
+
+from odoo.exceptions import AccessError
 from odoo.tools import mute_logger
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.addons.user_websites.models.website_page import redis_client
+from odoo.addons.user_websites.models.res_users import (
+    _async_unpublish_content,
+    _report_unpublish_failure,
+)
 from odoo.addons.user_websites.models.user_websites_groups import (
     _async_unpublish_group_content,
 )
@@ -664,6 +671,60 @@ class TestAuditEdgeCases(RealTransactionCase):
             "A registry/cursor acquisition failure in the background "
             "unpublish task must be logged, not swallowed silently.",
         )
+
+    def _recording_pager(self):
+        """Replace the pager model lookup with a recorder; returns the recorder."""
+        incidents = MagicMock()
+        self.safe_patch(
+            "odoo.addons.user_websites.models.res_users._pager_incident_model",
+            return_value=incidents,
+        )
+        return incidents
+
+    def test_async_unpublish_group_failure_opens_a_pager_incident(self):
+        # Tests [@ANCHOR: user_websites:COMM_report_unpublish_failure]
+        """A suspension whose group-content unpublish crashed leaves content published: an operator must see it."""
+        group = self.env["user.websites.group"].create({"name": "Unpublish Incident Group"})
+        incidents = self._recording_pager()
+        mock_get_service_env = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env"
+        )
+        mock_get_service_env.side_effect = TypeError("simulated bug")
+
+        with self.assertLogs("odoo.addons.user_websites.models.user_websites_groups", level="ERROR"):
+            _async_unpublish_group_content(self.env.cr.dbname, [group.id])
+
+        incidents.report_incident.assert_called_once()
+        vals = incidents.report_incident.call_args.args[0]
+        self.assertEqual(vals["source"], "User Websites: background unpublish")
+        self.assertIn(str(group.id), vals["description"])
+
+    def test_async_unpublish_user_failure_opens_a_pager_incident(self):
+        # Tests [@ANCHOR: user_websites:COMM_report_unpublish_failure]
+        """An AccessError while unpublishing a suspended member's content used to be only a warning."""
+        incidents = self._recording_pager()
+        mock_get_service_env = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env"
+        )
+        mock_get_service_env.side_effect = AccessError("simulated refusal")
+
+        with self.assertLogs("odoo.addons.user_websites.models.res_users", level="ERROR"):
+            _async_unpublish_content(self.env.cr.dbname, [self.test_user.id])
+
+        incidents.report_incident.assert_called_once()
+        self.assertIn(str(self.test_user.id), incidents.report_incident.call_args.args[0]["description"])
+
+    def test_report_unpublish_failure_without_pager_duty_or_on_error_does_not_raise(self):
+        # Tests [@ANCHOR: user_websites:COMM_report_unpublish_failure]
+        # Tests [@ANCHOR: user_websites:COMM_unpublish_pager_incident_model]
+        """No pager_duty: False (the log line is the signal). A failing pager: logged, False, never raised."""
+        mock_model = self.safe_patch(
+            "odoo.addons.user_websites.models.res_users._pager_incident_model", return_value=None
+        )
+        self.assertFalse(_report_unpublish_failure(self.env, "x"))
+        mock_model.side_effect = AccessError("pager refused")
+        with self.assertLogs("odoo.addons.user_websites.models.res_users", level="ERROR"):
+            self.assertFalse(_report_unpublish_failure(self.env, "x"))
 
     def test_09_get_user_id_by_slug_resolves_via_the_content_routing_view(self):
         # Tests [@ANCHOR: user_websites:COMM_get_user_id_by_slug]
