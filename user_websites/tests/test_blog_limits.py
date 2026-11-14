@@ -66,6 +66,27 @@ class TestBlogLimits(RealTransactionCase):
             )
             self.env.flush_all()
 
+    def test_01b_group_owned_blogs_are_limited_too_including_within_one_batch(self):
+        # Tests [@ANCHOR: user_websites_blog_quota_check]
+        # A group-owned blog must not skip the quota (the owner_user_id-only hole), whether the blogs
+        # arrive one at a time or in a single create() batch.
+        group = self.env["user.websites.group"].create(
+            {"name": "Blog Limit Group", "website_slug": "blog-limit-group"}
+        )
+        Blog = self.env["blog.blog"]
+        for i in range(2):
+            Blog.create({"name": f"Group Blog {i}", "user_websites_group_id": group.id})
+        with self.assertRaises(ValidationError):
+            Blog.create({"name": "Excess Group Blog", "user_websites_group_id": group.id})
+            self.env.flush_all()
+        other = self.env["user.websites.group"].create(
+            {"name": "Blog Limit Group 2", "website_slug": "blog-limit-group-2"}
+        )
+        with self.assertRaises(ValidationError):
+            Blog.create([{"name": f"Batch {i}", "user_websites_group_id": other.id} for i in range(3)])
+            self.env.flush_all()
+        self.assertEqual(Blog.search_count([("user_websites_group_id", "=", other.id)]), 0)
+
     def test_02_blog_post_creation_is_blocked_past_the_configured_limit(self):
         # Tests [@ANCHOR: user_websites:COMM_get_blog_urls]
 
