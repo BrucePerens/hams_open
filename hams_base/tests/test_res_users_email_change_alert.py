@@ -6,6 +6,9 @@ address whenever their email or login changes; nothing had ever proven that emai
 created, addressed to the right recipient, or that it survives a no-op write (same email, or an
 unrelated field change) without being sent needlessly.
 """
+from unittest.mock import MagicMock
+
+from odoo.exceptions import AccessError
 from odoo.tests import tagged
 from odoo.tools.translate import code_translations
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -89,3 +92,36 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
         self.safe_patch_object(type(self.env["mail.mail"]), "create", new=_capture_create)
         user.write({"email": "fr_alert_new@example.com"})
         self.assertIn("FR alerte", subjects, "the alert must be written in the member's language")
+
+    def _user_whose_mail_service_is_broken(self, login):
+        user = self.env["res.users"].create({"name": "Broken Mail User", "login": login, "email": login})
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_uid",
+            side_effect=AccessError("simulated: mail service account unusable"),
+        )
+        return user
+
+    def test_a_failed_security_alert_opens_a_pager_incident_and_the_change_is_saved(self):
+        # Tests [@ANCHOR: hams_base:COMM_security_notice_failure_incident]
+        user = self._user_whose_mail_service_is_broken("alert_fail@example.com")
+        incidents = MagicMock()
+        incidents.env.transaction = MagicMock()
+        self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env",
+            return_value={"pager.incident": incidents},
+        )
+        with self.assertLogs("odoo.addons.hams_base.models.res_users", level="ERROR"):
+            user.write({"email": "alert_fail_new@example.com"})
+        self.assertEqual(user.email, "alert_fail_new@example.com")
+        incidents.report_incident.assert_called_once()
+        vals = incidents.report_incident.call_args.args[0]
+        self.assertIn(str(user.id), vals["description"])
+        self.assertNotIn("alert_fail@example.com", vals["description"])
+
+    def test_a_failed_pager_report_for_a_failed_alert_is_logged_not_raised(self):
+        # Tests [@ANCHOR: hams_base:COMM_security_notice_failure_incident]
+        user = self._user_whose_mail_service_is_broken("alert_fail2@example.com")
+        with self.assertLogs("odoo.addons.hams_base.models.res_users", level="ERROR") as logs:
+            user.write({"email": "alert_fail2_new@example.com"})
+        self.assertEqual(user.email, "alert_fail2_new@example.com")
+        self.assertTrue(any("security warning" in line for line in logs.output))
