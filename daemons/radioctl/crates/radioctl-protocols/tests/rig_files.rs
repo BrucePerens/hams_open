@@ -234,3 +234,54 @@ fn a_corrupted_byte_in_the_kx3_transcript_is_caught_and_the_kx3_file_is_unverifi
     );
     assert!(loaded.verification_summary().contains_key("unverified"));
 }
+
+// Tests [@ANCHOR: radioctl_core_description_frequency_limits]
+#[test]
+fn the_receivers_and_the_ic905_state_a_range_and_every_start_frequency_is_inside_its_range() {
+    let loaded = load_all();
+    let range = |id: &str| {
+        loaded
+            .iter()
+            .find(|l| l.description.id == id)
+            .unwrap_or_else(|| panic!("{id}"))
+            .description
+            .frequency_range
+            .unwrap_or_else(|| panic!("{id} states no frequency range"))
+    };
+    for id in [
+        "adat-adt-200a",
+        "codan-envoy",
+        "codan-ngt",
+        "gomspace-gs100",
+        "hobbypcb-rs-hfiq",
+        "lowe-hf-235",
+        "racal-ra3702",
+        "racal-ra6790-gm",
+        "rft-ekd-500",
+        "rs-eb200",
+        "rs-esmc",
+        "tentec-rx-331",
+        "tentec-rx-340",
+        "tentec-tt-565",
+        "tentec-tt-599",
+        "icom-ic-905",
+        "flex-6300",
+        "flex-smartsdr-slice-a",
+    ] {
+        range(id);
+    }
+    // The IC-905 tops out at 10.5 GHz, not 100 GHz.
+    assert!(range("icom-ic-905").1 .0 < 100_000_000_000);
+    for l in &loaded {
+        let (min, max) = l.description.frequency_limits();
+        let start = l.description.default_frequency;
+        assert!(
+            start >= min && start <= max,
+            "{}: start frequency {} outside {}..{}",
+            l.description.id,
+            start.0,
+            min.0,
+            max.0
+        );
+    }
+}
