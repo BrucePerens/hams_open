@@ -1279,7 +1279,9 @@ class UserWebsitesController(http.Controller):
     # [@ANCHOR: user_websites:COMM_privacy_delete_content]
     def privacy_delete_content(self, **kwargs):
         user = request.env.user
-        user._execute_gdpr_erasure()
+        if not user._gdpr_erasure_run():
+            # The erasure started and the account is already deactivated; a cron finishes the rest.
+            return request.render("user_websites.privacy_erased", {"continues": True})
         # The account is deactivated by now, so any auth="user" landing page
         # would bounce to the login form and the person would never see that
         # the erasure happened. Land on the public, static confirmation page.
