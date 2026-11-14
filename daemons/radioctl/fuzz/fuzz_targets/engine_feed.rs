@@ -17,6 +17,7 @@ use radioctl_protocols::elecraft::ElecraftEngine;
 use radioctl_protocols::flex::FlexEngine;
 use radioctl_protocols::hpsdr_net::HpsdrEngine;
 use radioctl_protocols::kenwood::KenwoodEngine;
+use radioctl_protocols::radiod_net::RadiodEngine;
 use radioctl_protocols::virtual_flex::VirtualFlex;
 use radioctl_protocols::virtual_rig::VirtualRig;
 use radioctl_protocols::yaesu::YaesuEngine;
@@ -37,6 +38,7 @@ fuzz_target!(|data: &[u8]| {
             include_str!("../../rigs/yaesu-ft-840.toml"),
             include_str!("../../rigs/flex-6400.toml"),
             include_str!("../../rigs/anan-100.toml"),
+            include_str!("../../rigs/radiod-channel.toml"),
         ]
         .iter()
         .map(|text| rigfile::parse(text).expect("shipped rig file").description)
@@ -49,7 +51,7 @@ fuzz_target!(|data: &[u8]| {
     let (first, second) = rest.split_at(cut);
     // Engines built from the built-in descriptions (the ts2000 has no file of its own here).
     let mut engines: Vec<Box<dyn ProtocolEngine>> = Vec::new();
-    match select % 12 {
+    match select % 13 {
         0 => engines.extend(CivEngine::new(files[0].clone()).map(|e| Box::new(e) as _)),
         1 => engines.extend(KenwoodEngine::new(RigDescription::ts2000()).map(|e| Box::new(e) as _)),
         2 => engines.extend(ElecraftEngine::new(files[1].clone()).map(|e| Box::new(e) as _)),
@@ -58,6 +60,7 @@ fuzz_target!(|data: &[u8]| {
         5 => engines.extend(YaesuLegacyEngine::new(files[4].clone()).map(|e| Box::new(e) as _)),
         6 => engines.extend(FlexEngine::new(files[5].clone()).map(|e| Box::new(e) as _)),
         7 => engines.extend(HpsdrEngine::new(files[6].clone()).map(|e| Box::new(e) as _)),
+        11 => engines.extend(RadiodEngine::new(files[7].clone()).map(|e| Box::new(e) as _)),
         8 => {
             // The virtual radios answer whatever a controller (or an attacker on a pty) sends.
             for desc in &files[..5] {
