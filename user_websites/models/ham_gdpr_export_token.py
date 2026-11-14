@@ -5,6 +5,7 @@
 import json
 import secrets
 from datetime import timedelta
+from itertools import islice
 
 from odoo import models, fields, api, _
 from odoo.exceptions import AccessError
@@ -16,6 +17,10 @@ from odoo.addons.zero_sudo import public_rpc
 # session credential, it's scoped to exactly one export, one user, one narrow
 # window.
 TOKEN_EXPIRY_MINUTES = 5
+
+# Rows one export_page call returns at most, and how long after its first use a token may still page its export.
+EXPORT_PAGE_ROWS = 5000
+EXPORT_WINDOW_MINUTES = 60
 
 # Rows the daily vacuum deletes per page.
 TOKEN_VACUUM_PAGE = 1000
@@ -167,23 +172,10 @@ class HamGdprExportToken(models.Model):
     # [@ANCHOR: user_websites:COMM_gdpr_consume_and_export]
     @public_rpc  # RPC by design: the gdpr_csv_export daemon calls it over RPC
     def consume_and_export(self, token):
-        """The one RPC entrypoint the export daemon calls back into Odoo
-        with. Validates+consumes the token, then materializes the full
-        export payload (the in-memory dict plus every streamed generator
-        fully drained into a list) as one JSON-serializable structure.
-
-        Deliberate v1 simplification, disclosed here rather than silently
-        assumed: this still ties up one Odoo worker for the time it takes to
-        build this payload (a real, bounded, DB-bound cost), not zero time.
-        What it does eliminate is the proposal's primary named failure mode --
-        an Odoo worker blocked for the entire duration of a slow client's
-        socket writes while tens of thousands of rows stream out. Draining
-        the streamed generators here, in one RPC call, rather than exposing
-        them as a separate offset/limit-batched RPC method the daemon could
-        pull from repeatedly, is the one open architectural question this
-        implementation did NOT resolve -- see GDPR_CSV_EXPORT.md's own
-        updated Open Questions for why, and what re-architecting the
-        generators to support real batched RPC pulls would take."""
+        """The first RPC the export daemon calls. Validates+consumes the token and returns the small part of the
+        export: {"data": the plain dict keys, "streamed_keys": the names of the large per-user datasets}. The
+        large datasets are never built here: the daemon then pulls each one a page at a time with export_page(),
+        so no Odoo worker holds a whole export (a member with 100k QSOs) in memory or for one long call."""
         # # Verified by [@ANCHOR: test_gdpr_consume_and_export_payload]
         #
         # Hardening: this is a public
@@ -207,27 +199,42 @@ class HamGdprExportToken(models.Model):
                 _("This RPC method may only be called by the GDPR export daemon's own service account.")
             )
         user = self._consume(token)
-        # Reading a user's full export data (arbitrary res.users fields,
-        # website.page/blog.post content, ...) needs broader read access
-        # than gdpr_export_service_internal is granted -- deliberately, so
-        # that narrow token-table account stays narrow (see _consume's own
-        # docstring). zero_sudo.gdpr_service_internal is the existing,
-        # already-scoped service account for exactly this: it already holds
-        # read/write on res.users and read on website.page/blog.post/
-        # blog.blog (see user_websites/security/ir.model.access.csv), the
-        # same account _execute_gdpr_erasure() uses for erasure. Reusing it
-        # here is the Service Account Pattern, not a second sudo().
-        gdpr_svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-            "zero_sudo.gdpr_service_internal"
-        )
-        user_as_gdpr_svc = user.with_user(gdpr_svc_uid)
+        user_as_gdpr_svc = self._export_user(user)
         data = user_as_gdpr_svc._get_gdpr_export_data()
-        streamed = user_as_gdpr_svc._get_gdpr_streamed_keys()
-        materialized = {k: list(gen()) for k, gen in streamed.items()}
-        # json.dumps/loads round-trip here is deliberate, not incidental: it
-        # guarantees the payload crossing the JSON-2 RPC boundary is already
-        # proven JSON-serializable (dates, Markup, etc. would otherwise fail
-        # inside the RPC layer itself with a much less useful error), and it
-        # keeps this method's contract identical regardless of how the RPC
-        # transport itself happens to (de)serialize dicts.
-        return json.loads(json.dumps({"data": data, "streamed": materialized}, default=str))
+        keys = list(user_as_gdpr_svc._get_gdpr_streamed_keys())
+        # The json round trip proves the payload is JSON-serializable (dates, Markup) before it crosses the RPC.
+        return json.loads(json.dumps({"data": data, "streamed_keys": keys}, default=str))
+
+    def _export_user(self, user):
+        """`user` as zero_sudo.gdpr_service_internal, the already-scoped account that may read a member's export
+        data (the same account _execute_gdpr_erasure uses); the token-table account stays narrow."""
+        gdpr_svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.gdpr_service_internal")
+        return user.with_user(gdpr_svc_uid)
+
+    @api.model
+    # [@ANCHOR: user_websites:gdpr_export_page]
+    # Verified by [@ANCHOR: test_gdpr_export_page_is_bounded_and_complete]
+    @public_rpc  # RPC by design: the gdpr_csv_export daemon pulls each streamed dataset page by page
+    def export_page(self, token, key, offset, limit=EXPORT_PAGE_ROWS):
+        """One page (at most EXPORT_PAGE_ROWS rows from `offset`) of the streamed dataset `key` for the member the
+        token was issued to. The token must already have been consumed by consume_and_export (so a token never
+        used for an export reads nothing) and be no older than EXPORT_WINDOW_MINUTES. A page shorter than `limit`
+        is the last. The generator is re-run per page (cheap keyset paging inside); the cost is bounded by the page."""
+        if not (
+            self.env.user == self.env.ref("user_websites.user_gdpr_export_service")
+            or self.env.user.has_group("base.group_system")
+        ):
+            raise AccessError(
+                _("This RPC method may only be called by the GDPR export daemon's own service account.")
+            )
+        limit = max(1, min(int(limit), EXPORT_PAGE_ROWS))
+        offset = max(0, int(offset))
+        cutoff = fields.Datetime.now() - timedelta(minutes=EXPORT_WINDOW_MINUTES)
+        row = self.search([("token", "=", token), ("consumed", "=", True), ("create_date", ">=", cutoff)], limit=1)
+        if not row:
+            raise GdprExportTokenRejected(_("Invalid or expired export token."))
+        streamed = self._export_user(row.user_id)._get_gdpr_streamed_keys()
+        if key not in streamed:
+            raise GdprExportTokenRejected(_("Unknown export dataset."))
+        rows = list(islice(streamed[key](), offset, offset + limit))
+        return json.loads(json.dumps(rows, default=str))

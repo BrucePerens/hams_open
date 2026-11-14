@@ -881,6 +881,12 @@ class PagerCheck(models.Model):
             }
         )
 
+        # A no-change UPDATE of one shared row makes simultaneous autodiscoveries take turns: the later one fails
+        # to serialize (REPEATABLE READ cannot see the earlier one's checks) and Odoo runs the request again.
+        # UNIQUE(name, website_id) cannot do it: autodiscovered checks have no website, and NULL is never equal.
+        self.env.cr.execute(
+            "UPDATE res_company SET id = id WHERE id = %s", [self.env.ref("base.main_company").id]
+        )
         existing_names = set(
             self.env["pager.check"].search([], limit=5000).mapped("name")
         )
