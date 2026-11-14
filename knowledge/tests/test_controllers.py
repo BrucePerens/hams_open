@@ -158,6 +158,29 @@ class TestManualControllers(HamsHttpCase):
             "Honeypot must block mutation.",
         )
 
+    def test_04b_feedback_refused_for_internal_audience_article(self):
+        """A published internal-audience article answers 404 to the public, so a public visitor must not move its counters."""
+        article = self.env["knowledge.article"].create(
+            {
+                "name": "Internal Published Notes",
+                "is_published": True,
+                "internal_permission": "read",
+                "audience": "internal",
+            }
+        )
+        self.authenticate(None, None)
+        self.url_open(
+            "/manual/feedback",
+            data={
+                "csrf_token": odoo.http.Request.csrf_token(self),
+                "article_id": article.id,
+                "is_helpful": "1",
+            },
+            method="POST",
+        )
+        article.invalidate_recordset(["helpful_count"])
+        self.assertEqual(article.helpful_count, 0, "Feedback must not reach an article the reader cannot open.")
+
     def test_05_dynamic_sidebar_categorization(self):
         # Tests [@ANCHOR: manual_sidebar_search_optimization]
         """Verify the controller groups articles properly based on member_ids and permissions."""

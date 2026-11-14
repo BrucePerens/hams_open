@@ -516,6 +516,10 @@ class ManualLibraryController(http.Controller):
             if article.exists():
                 # Enforce access check to prevent voting on articles the user can't read
                 article.check_access("read")
+                # Same gate as opening the article: a published internal-audience
+                # article answers 404 to this reader, so it takes no votes either.
+                if not self._can_open_article(article):
+                    raise AccessError("Article not available to this reader.")
 
                 # Escalate to Service Account for atomic increment
                 svc_uid = request.env["zero_sudo.security.utils"]._get_service_uid(
