@@ -348,6 +348,13 @@ mod tests {
             .clone()
     }
 
+    /// A frequency near `u64::MAX` is refused as out of range, not an overflow panic.
+    #[test]
+    fn a_huge_frequency_is_refused_not_a_panic() {
+        let mut xk = engine(shipped("rs-xk852")).expect("engine");
+        assert!(xk.encode(&Op::SetFrequency(Vfo::A, Hz(u64::MAX))).is_err());
+    }
+
     // Tests [@ANCHOR: radioctl_rshf_engine]
     // Tests [@ANCHOR: radioctl_rshf_handles]
     // Tests [@ANCHOR: radioctl_rshf_style_of]
