@@ -121,10 +121,14 @@ impl Dialect for RsHfDialect {
                 format!("\nF{},{}\r", hz.0, hz.0).into_bytes(),
                 ReplyKind::None,
             ),
-            (Style::Xk852, Op::SetFrequency(Vfo::A, hz)) if (hz.0 + 5) / 10 <= XK852_MAX_UNITS => (
-                format!("\n*F{:07}\r", (hz.0 + 5) / 10).into_bytes(),
-                ReplyKind::Ack,
-            ),
+            (Style::Xk852, Op::SetFrequency(Vfo::A, hz))
+                if hz.0.saturating_add(5) / 10 <= XK852_MAX_UNITS =>
+            {
+                (
+                    format!("\n*F{:07}\r", (hz.0 + 5) / 10).into_bytes(),
+                    ReplyKind::Ack,
+                )
+            }
             (_, Op::SetFrequency(Vfo::A, _)) => return Err(unsupported("frequency out of range")),
             (Style::Ek | Style::Gp2000, Op::GetFrequency(Vfo::A)) => {
                 ask("F?", Field::Frequency(Vfo::A))
