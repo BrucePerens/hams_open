@@ -264,6 +264,7 @@ class ResUsers(models.Model):
         default=False,
         copy=False,
         index=True,
+        prefetch="user_websites",
     )
 
     # --- Inverse Relationships (Bidirectional Integrity) ---
