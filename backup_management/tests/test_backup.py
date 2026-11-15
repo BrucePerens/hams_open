@@ -492,3 +492,25 @@ class TestBackupManagement(RealTransactionCase):
         config.action_trigger_backup()
         config._publish_to_worker("sync_snapshots")
         self.assertEqual(sorted(Job.search([("config_id", "=", config.id)]).mapped("action")), ["kopia", "sync_snapshots"])
+
+    def test_cron_sync_all_backups_sends_one_report_per_config(self):
+        # Tests [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
+        # pager.incident drops a second report for the same source within 60 s, so the stale alert and the job problem
+        # of one configuration must arrive in ONE report.
+        config = self.config_kopia
+        now = fields.Datetime.now()
+        job = self.env["backup.job"].create({"config_id": config.id, "job_type": "kopia", "state": "failed"})
+        self.env.cr.execute(
+            "UPDATE backup_job SET create_date = %s WHERE id = %s", (now - datetime.timedelta(hours=40), job.id)
+        )
+        self.env["backup.snapshot"].search([("config_id", "=", config.id)]).unlink()
+        self.env["backup.snapshot"].create(
+            {"config_id": config.id, "snapshot_id": "snap_old", "start_time": now - datetime.timedelta(hours=40)}
+        )
+        reported = self.safe_patch_object(type(config), "report_backup_failure")
+        self.safe_patch_object(type(config), "action_sync_snapshots")
+        self.env["backup.config"].cron_sync_all_backups()
+        mine = [c for c in reported.call_args_list if config.name in c.args[0]]
+        self.assertEqual(len(mine), 1)
+        self.assertIn("Stale Backup Alert", mine[0].args[0])
+        self.assertIn("No Successful Backup Job", mine[0].args[0])
