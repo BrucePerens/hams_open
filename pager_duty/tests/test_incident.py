@@ -10,7 +10,7 @@ from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase, invalidate_zero_sudo_utils_cache
 from odoo.addons.pager_duty import hooks
 from odoo.addons.zero_sudo.rpc_public import MARK as PUBLIC_RPC_MARK
-from odoo.addons.pager_duty.models.incident import REPAGE_HOURS, TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
+from odoo.addons.pager_duty.models.incident import MAX_DESCRIPTION_CHARS, MAX_SOURCE_CHARS, REPAGE_HOURS, TREND_WINDOW_MINUTES, TREND_OCCURRENCE_THRESHOLD
 from unittest.mock import MagicMock
 
 import redis as real_redis
@@ -102,6 +102,20 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         mock_client.set.assert_called_with(
             f"pager_rate_limit:test_daemon:{website_suffix}", "1", ex=60, nx=True
         )
+
+    def test_01b_a_huge_source_and_description_are_bounded_and_the_source_still_dedupes(self):
+        # Tests [@ANCHOR: report_incident_rate_limit]
+        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", None)  # no rate limit: two reports in a row
+        source = "S" * (MAX_SOURCE_CHARS * 50)
+        first = self.incident_model.report_incident(
+            {"source": source, "severity": "low", "description": "D" * (MAX_DESCRIPTION_CHARS * 20)}
+        )
+        incident = self.incident_model.browse(first)
+        self.assertEqual(len(incident.source), MAX_SOURCE_CHARS)
+        self.assertLessEqual(len(incident.description), MAX_DESCRIPTION_CHARS + 20)
+        self.assertTrue(incident.description.endswith("[truncated]"))
+        second = self.incident_model.report_incident({"source": source, "severity": "low", "description": "again"})
+        self.assertEqual(second, first, "the same oversize source must still land on the one open incident")
 
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]

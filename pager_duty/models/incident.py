@@ -36,6 +36,12 @@ TREND_TRACKED_SEVERITIES = ("low", "medium")
 # the helpdesk "new" stage for nine days, and nothing paged again (ticket 116).
 REPAGE_HOURS = 6
 
+# report_incident is public (the monitor daemons call it over JSON-2), so what it stores is bounded: a source longer than
+# this would also become an unbounded Redis rate-limit key and a huge board title, a description longer than this would
+# bloat the table, the chatter and every notification mail. The cut is deterministic, so the same source still dedupes.
+MAX_SOURCE_CHARS = 200
+MAX_DESCRIPTION_CHARS = 10000
+
 
 # [@ANCHOR: pager_duty_incident_pager_incident]
 class PagerIncident(models.Model):
@@ -442,6 +448,10 @@ class PagerIncident(models.Model):
         Reports a new incident. Supports multi-website partitioning.
         """
         # [@ANCHOR: report_incident_rate_limit]
+        if isinstance(vals.get("source"), str):
+            vals["source"] = vals["source"][:MAX_SOURCE_CHARS]
+        if isinstance(vals.get("description"), str) and len(vals["description"]) > MAX_DESCRIPTION_CHARS:
+            vals["description"] = vals["description"][:MAX_DESCRIPTION_CHARS] + "... [truncated]"
         source = vals.get("source", "unknown")
         website_id = vals.get("website_id") or self.env.context.get("website_id")
 
