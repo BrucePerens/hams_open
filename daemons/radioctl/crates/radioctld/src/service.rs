@@ -351,13 +351,18 @@ impl RigService {
     /// claim is made before the rig is asked and given back if the rig refuses.
     async fn key(&self, client: ClientId) -> Result<Body, i32> {
         self.check_transmit()?;
-        let claim = locked(&self.owner).try_key(client);
+        let (claim, held_before) = {
+            let mut owner = locked(&self.owner);
+            let held_before = owner.owner() == Some(client);
+            (owner.try_key(client), held_before)
+        };
         if claim.is_err() {
             self.counters.ptt_conflicts.fetch_add(1, Ordering::Relaxed);
             return self.refuse(ERJCTED);
         }
         let outcome = self.set(Op::SetPtt(true)).await;
-        if outcome.is_err() {
+        // A claim the client already held stays: the rig may still be keyed from the earlier command.
+        if outcome.is_err() && !held_before {
             locked(&self.owner).release(client);
         }
         outcome
@@ -379,13 +384,18 @@ impl RigService {
     /// given back if the rig refuses, and a sender that disconnects unkeys the rig.
     async fn send_morse(&self, client: ClientId, text: &str) -> Result<Body, i32> {
         self.check_transmit()?;
-        let claim = locked(&self.owner).try_key(client);
+        let (claim, held_before) = {
+            let mut owner = locked(&self.owner);
+            let held_before = owner.owner() == Some(client);
+            (owner.try_key(client), held_before)
+        };
         if claim.is_err() {
             self.counters.ptt_conflicts.fetch_add(1, Ordering::Relaxed);
             return self.refuse(ERJCTED);
         }
         let outcome = self.set(Op::SendCw(text.to_string())).await;
-        if outcome.is_err() {
+        // A claim the client already held stays: the rig may still be keyed from the earlier command.
+        if outcome.is_err() && !held_before {
             locked(&self.owner).release(client);
         }
         outcome
