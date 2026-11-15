@@ -514,3 +514,20 @@ class TestBackupManagement(RealTransactionCase):
         self.assertEqual(len(mine), 1)
         self.assertIn("Stale Backup Alert", mine[0].args[0])
         self.assertIn("No Successful Backup Job", mine[0].args[0])
+
+    def test_cron_does_not_queue_a_second_restore_drill_while_one_is_active(self):
+        # Tests [@ANCHOR: backup_management:COMM_execute_restore_drill]
+        # Tests [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
+        config = self.config_kopia
+        config.restore_drill_script = "/opt/hams/backup/test_restore.sh"
+        config.last_drill_time = fields.Datetime.now() - datetime.timedelta(days=8)
+        self.safe_patch_object(type(config), "action_sync_snapshots")
+        Job = self.env["backup.job"]
+        drills = [("config_id", "=", config.id), ("action", "=", "restore_drill")]
+        Job.search(drills).unlink()
+        self.env["backup.config"].cron_sync_all_backups()
+        self.env["backup.config"].cron_sync_all_backups()  # the next hourly run, the drill still queued
+        self.assertEqual(Job.search_count(drills), 1)
+        Job.search(drills).write({"state": "failed"})  # a failed drill never moved last_drill_time: it is queued again
+        self.env["backup.config"].cron_sync_all_backups()
+        self.assertEqual(Job.search_count(drills), 2)
