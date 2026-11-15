@@ -77,6 +77,15 @@ class TestTenantSitesModels(HamsTransactionCase):
             self.env["tenant.site.host"].create({"name": "relay.main.example", "site_id": self.site.id})
             self.env.flush_all()
 
+    # [@ANCHOR: tenant_sites:test_site_website_change_applies_layout]
+    def test_moving_a_site_to_another_website_hides_its_sign_in_link(self):
+        # Tests [@ANCHOR: tenant_sites:site_write]
+        other = self.env["website"].create({"name": "Tenant Moved"})
+        views = self.env["website"].with_context(website_id=other.id)
+        self.assertTrue(views.viewref("portal.user_sign_in").active)
+        self.site.write({"website_id": other.id})
+        self.assertFalse(views.viewref("portal.user_sign_in").active)
+
     # [@ANCHOR: tenant_sites:COMM_test_own_host_patterns]
     def test_own_patterns_follow_the_data(self):
         # Tests [@ANCHOR: tenant_sites:COMM_own_host_patterns]

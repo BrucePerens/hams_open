@@ -56,10 +56,13 @@ class TenantSite(models.Model):
         return sites
 
     # [@ANCHOR: tenant_sites:site_write]
+    # Verified by [@ANCHOR: tenant_sites:test_site_website_change_applies_layout]
     def write(self, vals):
         result = super().write(vals)
         self.env.registry.clear_cache('assets')
         self.env.registry.clear_cache()
+        if "website_id" in vals:
+            self._apply_public_layout()  # the new website must not keep the sign-in link and foreign layout
         return result
 
     # [@ANCHOR: tenant_sites:site_unlink]
