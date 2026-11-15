@@ -9,6 +9,7 @@ Tests for `zero_sudo/daemon/repeater_page_text.py`, built from http://oscarmn.or
 is written 'K<slashed zero>HNY/R', the page also says 'EchoLink node 469520 operated by KC<slashed zero>REO', and it carries the
 date '14-Jan-2021'. The functions are pure.
 """
+import time
 from datetime import date
 
 from odoo.tests.common import BaseCase, tagged
@@ -382,6 +383,23 @@ class TestOrbitingRepeater(BaseCase):
         )
         for case in negatives:
             self.assertEqual(orbiting_repeater(**case), "", case)
+
+    def test_long_runs_of_digits_and_spaces_are_read_in_linear_time(self):
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_grounded_notes]
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_node_operator_callsigns]
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_page_date]
+        n = 100_000
+        started = time.monotonic()
+        grounded_notes("1," * n + "x", "page")
+        grounded_notes("1" * n + " x", "page")
+        node_operator_callsigns("node" + " " * n)
+        node_operator_callsigns("node operator" + " " * n)
+        page_date("updated" + " " * n)
+        self.assertLess(time.monotonic() - started, 5)
+        # The amounts the notes claim are still found, in any layout.
+        self.assertEqual(grounded_notes("It runs 50 watts. It runs 1,000 miles.", "Power 50 W.")[1], ["It runs 1,000 miles."])
+        self.assertEqual(node_operator_callsigns("node 469520 operated by KC0REO; node operator: W1AW"), {"KC0REO", "W1AW"})
+        self.assertEqual(page_date("Last updated: 14-Jan-2021"), (date(2021, 1, 14), "14-Jan-2021"))
 
     def test_the_matched_text_is_returned_and_hostile_input_never_raises(self):
         # Tests [@ANCHOR: zero_sudo:repeater_page_text_orbiting_repeater]
