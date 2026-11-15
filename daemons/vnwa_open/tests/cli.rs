@@ -65,3 +65,20 @@ fn a_root_option_without_a_directory_is_refused_instead_of_installing_into_the_r
         assert!(o.stdout.is_empty(), "{args:?} printed a plan");
     }
 }
+
+// Tests [@ANCHOR: vnwa_open_cli_main]
+#[test]
+fn an_option_the_command_does_not_know_is_refused_so_a_misspelt_root_cannot_fall_back_to_the_real_system(
+) {
+    // `--root=DIR` is not the documented spelling (`--root DIR`); it used to be ignored, which made the run a real one under sudo.
+    for bad in ["--root=/tmp/vnwa_x", "--rot", "--aply"] {
+        let o = run(&["install-system-config", "--check", bad]);
+        assert_eq!(o.status.code(), Some(2), "{bad}");
+        let err = String::from_utf8_lossy(&o.stderr).to_string();
+        assert!(
+            err.contains("unknown option") && err.contains(bad),
+            "{bad}: {err}"
+        );
+        assert!(o.stdout.is_empty(), "{bad} printed a plan");
+    }
+}
