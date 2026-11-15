@@ -119,6 +119,8 @@ This module enables:
             "user_websites/static/tests/toast_notifications.test.js",
             "user_websites/static/src/js/owner_delete_dialog.js",
             "user_websites/static/tests/owner_delete_dialog.test.js",
+            "user_websites/static/src/js/rich_editor.js",
+            "user_websites/static/tests/rich_editor.test.js",
         ],
     },
     "demo": [],
