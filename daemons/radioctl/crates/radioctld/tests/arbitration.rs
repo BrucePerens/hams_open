@@ -339,3 +339,23 @@ async fn a_width_the_rig_refuses_leaves_the_mode_as_it_was() {
     assert!(client.ask("m").await.starts_with("LSB\n"));
     daemon.stop().await;
 }
+
+// Tests [@ANCHOR: radioctld_service_send_morse]
+// Tests [@ANCHOR: radioctld_service_key]
+// Tests [@ANCHOR: radioctld_service_disconnect]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_refused_command_does_not_drop_the_claim_the_client_already_held() {
+    // This rig can key but has no Morse: the refused `b` must not give up A's earlier claim,
+    // because the rig is still keyed and A's departure has to unkey it.
+    let daemon = start(&config_text("", "g71", "kenwood-th-g71.toml", true, false)).await;
+    let mut a = Client::connect(&daemon).await;
+    assert_eq!(a.ask("T 1").await, "RPRT 0\n");
+    assert_eq!(daemon.rigs[0].service.ptt_owner(), Some(1));
+    assert_ne!(a.ask("b CQ").await, "RPRT 0\n", "the rig has no Morse");
+    assert_eq!(
+        daemon.rigs[0].service.ptt_owner(),
+        Some(1),
+        "A still holds the keyed transmitter"
+    );
+    daemon.stop().await;
+}
