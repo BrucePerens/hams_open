@@ -35,7 +35,7 @@ inter_command_ms = 0
 
 [frequency]
 min_hz = 1000
-max_hz = 500000000
+max_hz = 10500000000
 
 [defaults]
 frequency_hz = 14074000

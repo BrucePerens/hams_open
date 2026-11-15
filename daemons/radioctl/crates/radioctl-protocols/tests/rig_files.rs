@@ -270,6 +270,9 @@ fn the_receivers_and_the_ic905_state_a_range_and_every_start_frequency_is_inside
     ] {
         range(id);
     }
+    // A Flex slice on a 902 MHz to 2.4 GHz transverter band must not be refused by the placeholder range.
+    assert!(range("flex-smartsdr-slice-a").1 .0 >= 2_450_000_000);
+    assert!(range("flex-6300").1 .0 >= 2_450_000_000);
     // The IC-905 tops out at 10.5 GHz, not 100 GHz.
     assert!(range("icom-ic-905").1 .0 < 100_000_000_000);
     for l in &loaded {
