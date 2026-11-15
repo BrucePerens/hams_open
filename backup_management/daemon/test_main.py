@@ -266,7 +266,9 @@ class TestRunPgbackrestViaSidecar(unittest.TestCase):
                 f.write('{"return_code": 0, "outp')
 
         threading.Thread(target=fake_sidecar, daemon=True).start()
-        return_code, output = backup_worker._run_pgbackrest_via_sidecar(["pgbackrest", "backup"], {"storage_type": "local"}, 98)
+        return_code, output = backup_worker._run_pgbackrest_via_sidecar(
+            ["pgbackrest", "backup", "--stanza=hams_prod", "--type=full"], {"storage_type": "local"}, 98
+        )
         self.assertEqual(return_code, 1)
         self.assertIn("unreadable", output)
         self.assertFalse(os.path.exists(os.path.join(self._tmpdir, "result-98.json")))
