@@ -353,6 +353,16 @@ class TestSitemaps(BaseCase):
         unclosed = "<loc>no end"
         self.assertIsNone(spam._inner(unclosed, unclosed.lower(), "loc"))
 
+    def test_14_b_blocks_finds_each_element_and_skips_lookalikes(self):
+        # [@ANCHOR: zero_sudo:test_club_spam_blocks]
+        # Tests [@ANCHOR: zero_sudo:club_spam_blocks]
+        text = '<urlset><url a="1"><loc>x</loc></url><URL><loc>y</loc></URL></urlset>'
+        spans = spam._blocks(text, text.lower(), "url")
+        self.assertEqual([text[a:b] for a, b in spans], ["<loc>x</loc>", "<loc>y</loc>"])
+        self.assertEqual(spam._blocks("<url>never closed", "<url>never closed", "url"), [])
+        self.assertEqual(spam._blocks("<url", "<url", "url"), [])
+        self.assertEqual(spam._blocks("", "", "url"), [])
+
     def test_14_dates_are_ages_and_nonsense_is_unknown(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_age_days]
         for text, expected in [
