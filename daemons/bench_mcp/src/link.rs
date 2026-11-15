@@ -347,6 +347,10 @@ impl Link {
         while start.elapsed().as_secs() < overall_s {
             match self.p.read(&mut buf) {
                 Ok(0) => break,
+                Ok(n) if out.len() + n > MAX_REPLY => {
+                    self.reset_timeout();
+                    return Err(format!("raw reply larger than {MAX_REPLY} bytes"));
+                }
                 Ok(n) => out.extend_from_slice(&buf[..n]),
                 Err(e)
                     if matches!(
@@ -457,6 +461,44 @@ mod tests {
             default,
             "the 300 ms idle timeout stayed"
         );
+    }
+
+    /// A port that streams 64 KiB chunks `left` times, then ends.
+    struct Streaming(usize);
+
+    impl Read for Streaming {
+        fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+            if self.0 == 0 {
+                return Ok(0);
+            }
+            self.0 -= 1;
+            b.fill(7);
+            Ok(b.len())
+        }
+    }
+
+    impl Write for Streaming {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl super::Port for Streaming {
+        fn set_timeout(&mut self, _: Duration) {}
+    }
+
+    // Tests [@ANCHOR: bench_mcp_link_raw_until_idle]
+    #[test]
+    fn a_raw_stream_over_the_reply_limit_is_refused_not_buffered() {
+        // The test limit is 1 MiB: 32 chunks of 64 KiB is 2 MiB.
+        let mut l = Link::new(Box::new(Streaming(32)), "\n");
+        let e = l.raw_until_idle("SCDP", 300, 10).unwrap_err();
+        assert!(e.contains("larger than"), "{e}");
+        let mut ok = Link::new(Box::new(Streaming(8)), "\n");
+        assert_eq!(ok.raw_until_idle("SCDP", 300, 10).unwrap().len(), 8 * 65536);
     }
 
     // Tests [@ANCHOR: bench_mcp_link_tcp]
