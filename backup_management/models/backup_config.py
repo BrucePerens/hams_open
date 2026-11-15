@@ -724,6 +724,13 @@ class BackupConfig(models.Model):
             """, (tuple(configs.ids), now))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:COMM_test_backup_cron]  # fmt: skip
             start_times = {row[0]: row[1] for row in self.env.cr.fetchall()}
             
+        # A drill still queued or running is not queued again behind itself (last_drill_time only moves when one finishes).
+        drill_active = set(
+            self.env["backup.job"]
+            .search([("config_id", "in", configs.ids), ("action", "=", "restore_drill"), ("state", "in", ["pending", "processing"])], limit=1000)
+            .mapped("config_id")
+            .ids
+        )
         for conf in configs:
             conf.action_sync_snapshots()
 
@@ -750,13 +757,7 @@ class BackupConfig(models.Model):
                     if conf.last_drill_time
                     else 9999999
                 )
-                # A drill still queued or running is not queued again behind itself (last_drill_time only moves when one
-                # finishes).
-                drill_active = self.env["backup.job"].search_count(
-                    [("config_id", "=", conf.id), ("action", "=", "restore_drill"), ("state", "in", ["pending", "processing"])],
-                    limit=1,
-                )
-                if delta_drill > (7 * 24 * 60 * 60) and not drill_active:  # 7 Days
+                if delta_drill > (7 * 24 * 60 * 60) and conf.id not in drill_active:  # 7 Days
                     conf._execute_restore_drill()
 
     @api.private
