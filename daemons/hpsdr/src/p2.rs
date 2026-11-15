@@ -318,7 +318,7 @@ pub fn encode_high_priority_tx(
 // [@ANCHOR: hpsdr_p2_encode_duc_iq]
 /// A DUC I/Q packet (to the DUC0 I/Q port): 240 samples of 24-bit I then Q, big-endian (P2, "DUC I&Q
 /// Data Packet"). Returns [`HpsdrError::GateClosed`] unless `gate` is open at `now`. A short slice is
-/// padded with zeros (silence); a sample is never repeated. Samples are signed 24-bit values.
+/// padded with zeros (silence); a sample is never repeated. Samples are signed 24-bit values; one outside that range is refused with `Config`.
 pub fn encode_duc_iq(
     seq: u32,
     iq: &[(i32, i32)],
@@ -330,6 +330,13 @@ pub fn encode_duc_iq(
     }
     if iq.len() > DUC_SAMPLES {
         return Err(HpsdrError::Config("more than 240 samples".into()));
+    }
+    // A value outside 24 bits would lose its top byte and change sign.
+    if iq
+        .iter()
+        .any(|(i, q)| !(-0x80_0000..0x80_0000).contains(i) || !(-0x80_0000..0x80_0000).contains(q))
+    {
+        return Err(HpsdrError::Config("sample outside 24 bits".into()));
     }
     let mut p = vec![0u8; BIG_LEN];
     put32(&mut p, 0, seq);
@@ -625,6 +632,15 @@ mod tests {
             "short slices are padded with silence"
         );
         assert!(encode_duc_iq(0, &vec![(0, 0); 241], &gate, now).is_err());
+        // A value outside 24 bits would wrap (0x800000 would become the most negative sample).
+        for bad in [
+            (0x80_0000, 0),
+            (0, -0x80_0001),
+            (i32::MAX, 0),
+            (0, i32::MIN),
+        ] {
+            assert!(encode_duc_iq(0, &[bad], &gate, now).is_err(), "{bad:?}");
+        }
     }
 
     // Tests [@ANCHOR: hpsdr_p2_ddc_packet]
