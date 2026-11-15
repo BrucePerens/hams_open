@@ -564,7 +564,17 @@ mod tests {
 
     #[test]
     fn a_port_key_that_could_never_match_the_tree_is_refused() {
-        for bad in ["3-2/02", "3-2/+2", "3-2/4294967296", "x-y/1", "3-2./1", "3-2/", "/2", "usb/1", "3-2/2/3"] {
+        for bad in [
+            "3-2/02",
+            "3-2/+2",
+            "3-2/4294967296",
+            "x-y/1",
+            "3-2./1",
+            "3-2/",
+            "/2",
+            "usb/1",
+            "3-2/2/3",
+        ] {
             let e = parse_config(&json!({"ports": {bad: {"critical": true}}})).unwrap_err();
             assert!(e.contains("port key"), "{bad}: {e}");
         }
