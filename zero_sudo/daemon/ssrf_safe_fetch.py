@@ -77,10 +77,10 @@ class SSRFValidationError(Exception):
     this shared module picking one Odoo-flavored type for every caller."""
 
 
-# [@ANCHOR: zero_sudo:ssrf_safe_fetch_is_ssrf_safe_public_ip]
 _NAT64_WELL_KNOWN_PREFIX = ipaddress.ip_network("64:ff9b::/96")
 
 
+# [@ANCHOR: zero_sudo:ssrf_safe_fetch_is_ssrf_safe_public_ip]
 def is_ssrf_safe_public_ip(ip_obj):
     """Returns True only for an address a server-initiated download has any
     legitimate reason to reach. `is_global` alone already excludes every range

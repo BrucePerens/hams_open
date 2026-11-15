@@ -40,8 +40,6 @@ class ResUsersZeroSudo(models.Model):
         groups="base.group_system",
     )
 
-    # [@ANCHOR: zero_sudo:service_accounts_among_self]
-    # Verified by [@ANCHOR: test_a_mixed_set_notifies_only_the_person]
     # [@ANCHOR: zero_sudo:login_cooldown_per_client_ip]
     # Verified by [@ANCHOR: test_cooldown_is_counted_per_visitor_not_per_tunnel]
     @contextlib.contextmanager
@@ -66,6 +64,8 @@ class ResUsersZeroSudo(models.Model):
             if client_ip:
                 environ["REMOTE_ADDR"] = original
 
+    # [@ANCHOR: zero_sudo:service_accounts_among_self]
+    # Verified by [@ANCHOR: test_a_mixed_set_notifies_only_the_person]
     def _service_accounts_among_self(self):
         """The service accounts in `self`. Read with SQL for the reason write() gives below: is_service_account is
         groups="base.group_system", so filtering through the ORM raises AccessError for a narrower caller."""
