@@ -176,6 +176,8 @@ class TestOwnerDelete(HamsHttpCase):
         params = self.env["ir.config_parameter"]
         params.set_param("user_websites.global_website_page_limit", "11")
         params.set_param("user_websites.global_blog_post_limit", "13")
+        # _get_system_param is a distributed cache that set_param does not clear: drop it so the new values are read.
+        self.env["zero_sudo.security.utils"]._invalidate_model_cache("zero_sudo.security.utils")
         self.assertEqual(controller._kind_limit("page", None), 11, "a group site has the global page limit")
         self.assertEqual(controller._kind_limit("post", None), 13, "a group site has the global post limit")
 
