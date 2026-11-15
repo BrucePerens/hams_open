@@ -269,7 +269,7 @@ def _verify_sns_signature(payload):
 # [@ANCHOR: ses_webhook_webhook_api_ses_webhook_controller]
 class SesWebhookController(http.Controller):
     
-    @http.route('/mail/webhook/sns', type='http', auth='public', methods=['POST'], csrf=False)
+    @http.route('/mail/webhook/sns', type='http', auth='public', methods=['POST'], csrf=False, max_content_length=_MAX_WEBHOOK_BODY_BYTES)
     def receive_sns_webhook(self, **kwargs):
         # [@ANCHOR: ses_webhook:COMM_receive_sns_webhook]
         """
@@ -308,13 +308,9 @@ class SesWebhookController(http.Controller):
             _logger.warning("SES Webhook denied: Invalid token.")
             return request.make_response("Forbidden", status=403)
             
-        # The body is read only for a caller that holds a valid token, and never past the cap (SNS
-        # itself sends at most 256 KB).
-        raw_bytes = request.httprequest.stream.read(_MAX_WEBHOOK_BODY_BYTES + 1)
-        if len(raw_bytes) > _MAX_WEBHOOK_BODY_BYTES:
-            _logger.warning("SES Webhook denied: body over %d bytes for domain %s.", _MAX_WEBHOOK_BODY_BYTES, domain.name)
-            return request.make_response("Payload too large", status=413)
-        raw_data = raw_bytes.decode('utf-8', errors='replace')
+        # The body is read only for a caller that holds a valid token; the route's max_content_length
+        # makes Werkzeug refuse anything larger with 413 (AWS SNS itself sends at most 256 KB).
+        raw_data = request.httprequest.get_data(as_text=True)
         if not raw_data.strip():
             return request.make_response("Empty payload", status=400)
             
