@@ -868,11 +868,11 @@ fn rotator_config(
 }
 
 // [@ANCHOR: radioctld_config_check_host_port]
-/// Checks that a TCP address is `host:port`.
+/// Checks that a TCP address is `host:port` (port 1 to 65535).
 fn check_host_port(address: &str) -> Result<(), String> {
     if address
         .rsplit_once(':')
-        .is_none_or(|(h, p)| h.is_empty() || p.parse::<u16>().is_err())
+        .is_none_or(|(h, p)| h.is_empty() || !p.parse::<u16>().is_ok_and(|port| port != 0))
     {
         return Err(format!("tcp address {address:?} is not host:port"));
     }
@@ -1312,6 +1312,8 @@ kind = "virtual"
         assert_eq!(lines_of("lines = \"maybe\""), None);
         assert!(with("kind = \"tcp\"\naddress = \"10.0.0.7:4532\"").is_ok());
         assert!(with("kind = \"tcp\"\naddress = \"nonsense\"").is_err());
+        // Port 0 is no port a radio listens on.
+        assert!(with("kind = \"tcp\"\naddress = \"10.0.0.7:0\"").is_err());
         assert!(with("kind = \"carrier-pigeon\"").is_err());
     }
 
