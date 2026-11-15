@@ -780,9 +780,11 @@ impl<T: Transport> Rsp<T> {
         let cfg = stream_config(adc_hz, if_mode)?;
         let clk = adc_clock(adc_hz, self.s.ppb, false)?;
         if cfg == self.cfg && if_mode == self.s.if_mode {
-            self.s.adc_hz = adc_hz;
+            // The cache follows the writes: a failed write must not leave it describing a clock that was never set.
             self.reg(0x04, clk.reg04)?;
-            return self.reg(0x03, clk.reg03);
+            self.reg(0x03, clk.reg03)?;
+            self.s.adc_hz = adc_hz;
+            return Ok(());
         }
         let was = self.streaming;
         if was {
@@ -2075,6 +2077,25 @@ mod tests {
         m.clear();
         rx.set_frequency(hz).unwrap();
         m.ops()
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_device_rsp2_set_sampling]
+    fn a_failed_sample_rate_write_leaves_the_cached_adc_clock_unchanged() {
+        use std::sync::atomic::Ordering::SeqCst;
+        let (mut rx, _m, fail) = open_failing(Model::Rsp2);
+        assert_eq!(rx.settings().adc_hz, 2_000_000);
+        fail.store(true, SeqCst);
+        // 2.016 MHz uses the same stream configuration as 2.0 MHz, so only the two clock registers are written (the short path);
+        // 2.048 MHz changes the format (the long path).
+        for rate in [2_016_000, 2_048_000] {
+            assert!(rx.set_sample_rate(rate).is_err());
+            assert_eq!(rx.settings().adc_hz, 2_000_000, "after {rate}");
+            assert_eq!(rx.output_rate(), 2_000_000.0, "after {rate}");
+        }
+        fail.store(false, SeqCst);
+        rx.set_sample_rate(2_016_000).unwrap();
+        assert_eq!(rx.settings().adc_hz, 2_016_000);
     }
 
     #[test]
