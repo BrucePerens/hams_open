@@ -28,10 +28,11 @@ class ResUsersHelpdesk(models.Model):
         self.ensure_one()
         data = super()._get_gdpr_export_data()
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(GDPR_SERVICE)
-        tickets = self.env["hams_helpdesk.ticket"].with_user(svc_uid).search(
+        tickets = self._gdpr_search(
+            data, "helpdesk_tickets", self.env["hams_helpdesk.ticket"].with_user(svc_uid),
             [("partner_id", "=", self.partner_id.id), ("ticket_type", "!=", "csam_enticement_trafficking"),
              ("ncmec_reported_user_id", "=", False), ("ncmec_recording_uuid", "=", False)],
-            limit=EXPORT_LIMIT)
+            EXPORT_LIMIT)
         if tickets:
             data["helpdesk_tickets"] = [
                 {"subject": t.name, "description": t.description, "callsign": t.callsign,
