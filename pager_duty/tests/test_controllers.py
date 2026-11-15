@@ -116,6 +116,38 @@ class TestPagerControllers(HamsHttpCase):
         self.assertEqual(result["status"], "done")
         self.assertEqual(result["matches"], ["line 1"])
 
+    def test_02b1_search_logs_redis_failure_does_not_leak_the_redis_error(self):
+        # Tests [@ANCHOR: pd_log_api_i18n]
+        # Tests [@ANCHOR: pager_duty:search_logs]
+        self.env["pager.log.file"].create({"filepath": "/var/log/leak_test_registered.log"})
+        self.env["res.users"].create(
+            {
+                "name": "Log Leak Admin",
+                "login": "log_leak_admin",
+                "password": "log_leak_admin",
+                "group_ids": [(6, 0, [self.env.ref("pager_duty.group_pager_admin").id])],
+            }
+        )
+        self.env.flush_all()
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.controllers.log_api.redis")
+        mock_redis.RedisError = real_redis.RedisError
+        self.safe_patch("odoo.addons.pager_duty.controllers.log_api.redis_pool", MagicMock())
+        mock_redis.Redis.return_value.publish.side_effect = real_redis.ConnectionError(
+            "Error 111 connecting to 10.9.8.7:6379. Connection refused."
+        )
+        self.authenticate("log_leak_admin", "log_leak_admin")
+        response = self.url_open(
+            "/api/v1/pager/logs/search",
+            json={
+                "jsonrpc": "2.0",
+                "method": "call",
+                "params": {"file_path": "/var/log/leak_test_registered.log", "regex_query": "x"},
+            },
+        )
+        error = response.json()["result"]["error"]
+        self.assertNotIn("10.9.8.7", error)
+        self.assertNotIn("6379", error)
+
     def test_02b2_log_files_lists_only_the_registered_active_files_and_only_to_an_admin(self):
         # Tests [@ANCHOR: pager_duty:get_log_files]
         self.env["pager.log.file"].create({"filepath": "/var/log/get_log_files_registered.log"})

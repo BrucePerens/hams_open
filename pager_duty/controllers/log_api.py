@@ -84,7 +84,7 @@ class PagerLogAPI(http.Controller):
         except redis.RedisError as e:
             _logger.error("Redis IPC Failure during log search: %s", e)
             # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
-            return {"error": _("IPC Failure: %s") % e}
+            return {"error": _("IPC Failure: the log search service is unavailable.")}
         except json.JSONDecodeError as e:
             _logger.error("JSON Decode Failure during log search: %s", e)
             # audit-ignore-i18n: Tested by [@ANCHOR: pd_log_api_i18n]  # fmt: skip
