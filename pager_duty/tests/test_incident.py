@@ -117,6 +117,26 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         second = self.incident_model.report_incident({"source": source, "severity": "low", "description": "again"})
         self.assertEqual(second, first, "the same oversize source must still land on the one open incident")
 
+    def test_01c_a_reporter_cannot_set_the_pagers_own_fields(self):
+        # Tests [@ANCHOR: report_incident_rate_limit]
+        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", None)
+        incident_id = self.incident_model.report_incident(
+            {
+                "source": "whitelist_src",
+                "severity": "low",
+                "description": "d",
+                "status": "resolved",
+                "is_escalated": True,
+                "occurrence_count": 99,
+                "helpdesk_ticket_id": 1,
+            }
+        )
+        incident = self.incident_model.browse(incident_id)
+        self.assertEqual(incident.status, "open")
+        self.assertFalse(incident.is_escalated)
+        self.assertEqual(incident.occurrence_count, 1)
+        self.assertFalse(incident.helpdesk_ticket_id)
+
     def test_02_zero_sudo_impersonation_and_mail_standard(self):
         # Tests [@ANCHOR: auto_resolve_incidents]
 

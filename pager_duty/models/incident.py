@@ -41,6 +41,9 @@ REPAGE_HOURS = 6
 # bloat the table, the chatter and every notification mail. The cut is deterministic, so the same source still dedupes.
 MAX_SOURCE_CHARS = 200
 MAX_DESCRIPTION_CHARS = 10000
+# The only fields a reporter may set. report_incident is public, so status, is_escalated, the ticket link, the counters and
+# the like are the pager's own and a caller must not be able to write them (a reporter could open an incident as "resolved").
+REPORTABLE_FIELDS = frozenset({"source", "severity", "description", "website_id", "name", "units"})
 
 
 # [@ANCHOR: pager_duty_incident_pager_incident]
@@ -448,6 +451,7 @@ class PagerIncident(models.Model):
         Reports a new incident. Supports multi-website partitioning.
         """
         # [@ANCHOR: report_incident_rate_limit]
+        vals = {key: value for key, value in vals.items() if key in REPORTABLE_FIELDS}
         if isinstance(vals.get("source"), str):
             vals["source"] = vals["source"][:MAX_SOURCE_CHARS]
         if isinstance(vals.get("description"), str) and len(vals["description"]) > MAX_DESCRIPTION_CHARS:
