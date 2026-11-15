@@ -8,6 +8,7 @@ proving the heuristic does not flag ordinary support requests."""
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
+import time
 from email import message_from_bytes
 
 from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
@@ -424,3 +425,9 @@ class TestBulkMailSignals(HamsTransactionCase):
         # Both halves are needed: a hotel question from a member, or a greeting to an exhibitor, is not flagged.
         self.assertEqual(detect_inbound_spam_signals("Hotel question", "<p>Are hotel rates available near the hamfest?</p>"), [])
         self.assertEqual(detect_inbound_spam_signals("Booth", "<p>Dear Exhibitor, your booth number is 12.</p>"), [])
+
+    def test_32_a_body_of_unclosed_tags_is_read_in_linear_time(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_detect_spam_signals]
+        started = time.monotonic()
+        self.assertEqual(detect_inbound_spam_signals("Hello", "<" * 200000), [])
+        self.assertLess(time.monotonic() - started, 2.0)

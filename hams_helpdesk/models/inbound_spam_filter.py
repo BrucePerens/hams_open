@@ -211,7 +211,9 @@ def detect_inbound_spam_signals(subject, body_html):
         if regex.search(subject):
             reasons.append("subject matches known spam pattern: %s" % reason)
 
-    plain_body = re.sub(r"<[^>]*>", " ", body_html)
+    # "<[^<>]*>", not "<[^>]*>": a body of 100,000 "<" with no ">" took 5.5 s (quadratic), and the message is hostile input.
+    # The body is read up to _SIGNAL_TEXT_LIMIT characters, like the bulk rules.
+    plain_body = re.sub(r"<[^<>]*>", " ", body_html[:_SIGNAL_TEXT_LIMIT])
     if HOUSING_SALUTATION_RE.search(plain_body) and HOUSING_OFFER_RE.search(plain_body):
         reasons.append(
             "body is an unsolicited convention hotel-booking offer to exhibitors (a third-party housing solicitation)"
