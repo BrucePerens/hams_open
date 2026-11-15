@@ -69,6 +69,26 @@ class ContentViolationAppeal(models.Model):
                     )
                 )
 
+    # [@ANCHOR: user_websites:appeal_create_if_none_open]
+    # Verified by [@ANCHOR: user_websites:test_appeal_race]
+    @api.model
+    def _create_if_none_open(self, vals):
+        """Create the appeal `vals` (a user's or a group's) unless that target already has one waiting; returns the
+        appeal, or an empty recordset when one is waiting.
+
+        The target's row is written (no value changes) before the count. Two simultaneous submissions would otherwise both
+        count none: each REPEATABLE READ snapshot predates the other's commit, and a lock would not refresh it. Writing a row
+        the other request changed since the snapshot fails with a serialization failure, and Odoo runs the request again."""
+        if vals.get("group_id"):
+            self.env.cr.execute("UPDATE user_websites_group SET id = id WHERE id = %s", (vals["group_id"],))  # audit-ignore-sql: write-lock on the target's own row
+            target = [("group_id", "=", vals["group_id"])]
+        else:
+            self.env.cr.execute("UPDATE res_users SET id = id WHERE id = %s", (vals["user_id"],))  # audit-ignore-sql: write-lock on the target's own row
+            target = [("user_id", "=", vals["user_id"])]
+        if self.search_count(target + [("state", "=", "new")]):
+            return self.browse()
+        return self.create(vals)
+
     # [@ANCHOR: user_websites:appeal_lock_for_resolution]
     # Verified by [@ANCHOR: user_websites:test_appeal_resolution_refuses_a_row_being_resolved]
     def _lock_for_resolution(self):

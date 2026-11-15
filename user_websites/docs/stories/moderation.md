@@ -89,6 +89,10 @@ Module-level helper in `controllers/main.py` that builds where a visitor goes af
 
 A rule for the three mail templates in `data/user_websites_data.xml` (content violation report, pending-violations summary, weekly digest), written as a comment there and tested by `test_mail_sender_fallback.py`. No template falls back to an invented address. The summary and digest are sent from the company email, then the mail server's own default from address (its `email_from` option); if neither is set the sender is empty, and Odoo refuses to send the mail and records the reason on it. The content violation report is sent from the reporter's own address (signed-in user's email or the address typed in the modal). The abuse report goes to the `user_websites.company_abuse_email` setting, then the company email, then nowhere (the field is empty). This protects a site without a company email from sending mail from, or reports to, a domain it does not own. Configuration only, no code path.
 
+### `_create_if_none_open(vals)` [@ANCHOR: user_websites:appeal_create_if_none_open]
+
+`content.violation.appeal._create_if_none_open(vals)`. Called by `/website/submit_appeal` once the target is known to be suspended: it writes the target's row (the user's, or the group's) with no value change, then creates the appeal only if that target has no appeal in state `new`. Returns the appeal, or an empty recordset when one is waiting. The write is what makes two simultaneous submissions safe: the second sees a serialization failure and Odoo runs it again on a fresh snapshot, where it counts the first's appeal. Test: `test_appeal_race`.
+
 ### `_lock_for_resolution()` [@ANCHOR: user_websites:appeal_lock_for_resolution]
 
 `content.violation.appeal._lock_for_resolution()`. Called first by `action_approve` and `action_reject`: it row-locks the appeals (`SELECT ... FOR UPDATE NOWAIT`, inside a savepoint) and re-reads `state`, so two moderators cannot both see `new` and then approve and reject the same appeal. A row another moderator holds raises `UserError` at once instead of waiting. Test: `test_appeal_resolution_refuses_a_row_being_resolved`.
