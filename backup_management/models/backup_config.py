@@ -785,4 +785,10 @@ class BackupConfig(models.Model):
             "backup_management.user_backup_service_internal"
         )
         configs = self.env["backup.config"].with_user(svc_uid).search([], limit=1000)
-        configs.action_trigger_backup()
+        for conf in configs:
+            # A stored path the validator no longer accepts must not stop the backups of every configuration after it
+            # (and roll back the jobs already queued in this run).
+            try:
+                conf.action_trigger_backup()
+            except UserError as exc:
+                conf.report_backup_failure(_("Scheduled backup refused: %s", exc))
