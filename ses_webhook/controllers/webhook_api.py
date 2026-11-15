@@ -176,6 +176,9 @@ def _fetch_sns_signing_cert(signing_cert_url):
 # A signing certificate is a couple of kilobytes of PEM; anything larger is not one and is cut off before it is parsed.
 _MAX_SNS_CERT_BYTES = 65536
 
+# Largest request body the webhook reads: four times the 256 KB AWS SNS allows.
+_MAX_WEBHOOK_BODY_BYTES = 1024 * 1024
+
 
 # [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
 def _verify_sns_signature(payload):
@@ -266,7 +269,7 @@ def _verify_sns_signature(payload):
 # [@ANCHOR: ses_webhook_webhook_api_ses_webhook_controller]
 class SesWebhookController(http.Controller):
     
-    @http.route('/mail/webhook/sns', type='http', auth='public', methods=['POST'], csrf=False)
+    @http.route('/mail/webhook/sns', type='http', auth='public', methods=['POST'], csrf=False, max_content_length=_MAX_WEBHOOK_BODY_BYTES)
     def receive_sns_webhook(self, **kwargs):
         # [@ANCHOR: ses_webhook:COMM_receive_sns_webhook]
         """
@@ -274,7 +277,6 @@ class SesWebhookController(http.Controller):
         Validates the secret token against configured domains,
         and routes to the appropriate tenant company.
         """
-        raw_data = request.httprequest.get_data(as_text=True)
         token = request.httprequest.args.get('token')
         
         if not token:
@@ -306,7 +308,10 @@ class SesWebhookController(http.Controller):
             _logger.warning("SES Webhook denied: Invalid token.")
             return request.make_response("Forbidden", status=403)
             
-        if not raw_data or not raw_data.strip():
+        # The body is read only for a caller that holds a valid token; the route's max_content_length
+        # makes Werkzeug refuse anything larger with 413 (AWS SNS itself sends at most 256 KB).
+        raw_data = request.httprequest.get_data(as_text=True)
+        if not raw_data.strip():
             return request.make_response("Empty payload", status=400)
             
         try:
