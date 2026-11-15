@@ -288,6 +288,7 @@ fn reject_shared_claims(insts: &[Instrument]) -> Result<(), String> {
 /// The `connect_waits_s` of a scope entry: up to eight pauses of 0 to 3600 s between connection attempts; 2, 5, 10 and 20 s when omitted.
 /// A number field that is absent (or null) takes the default; one that is present must be a number. A mistyped supply limit
 /// (`"max_volts": "3.3"`) must not fall back to the default limit.
+// [@ANCHOR: bench_mcp_config_number]
 fn number(c: &Value, key: &str, default: f64) -> Result<f64, String> {
     match c.get(key) {
         None | Some(Value::Null) => Ok(default),
@@ -295,6 +296,8 @@ fn number(c: &Value, key: &str, default: f64) -> Result<f64, String> {
     }
 }
 
+/// As `number` but an absent field is `None`, not a default.
+// [@ANCHOR: bench_mcp_config_optional_number]
 fn optional_number(c: &Value, key: &str) -> Result<Option<f64>, String> {
     match c.get(key) {
         None | Some(Value::Null) => Ok(None),
@@ -306,6 +309,7 @@ fn optional_number(c: &Value, key: &str) -> Result<Option<f64>, String> {
 }
 
 /// As `number` for a whole number that must fit the field type (a port of 70561 must not become 5025).
+// [@ANCHOR: bench_mcp_config_whole]
 fn whole<T: TryFrom<u64>>(c: &Value, key: &str, default: T) -> Result<T, String> {
     match c.get(key) {
         None | Some(Value::Null) => Ok(default),
@@ -438,6 +442,26 @@ pub fn load() -> Result<Vec<Instrument>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: bench_mcp_config_number]
+    // Tests [@ANCHOR: bench_mcp_config_optional_number]
+    // Tests [@ANCHOR: bench_mcp_config_whole]
+    #[test]
+    fn number_optional_number_and_whole_take_defaults_but_refuse_wrong_types() {
+        let c: Value = serde_json::from_str(r#"{"a":1.5,"n":null,"s":"3","w":70561}"#).unwrap();
+        assert_eq!(number(&c, "a", 9.0), Ok(1.5));
+        assert_eq!(number(&c, "n", 9.0), Ok(9.0));
+        assert_eq!(number(&c, "missing", 9.0), Ok(9.0));
+        assert!(number(&c, "s", 9.0).is_err());
+        assert_eq!(optional_number(&c, "a"), Ok(Some(1.5)));
+        assert_eq!(optional_number(&c, "n"), Ok(None));
+        assert_eq!(optional_number(&c, "missing"), Ok(None));
+        assert!(optional_number(&c, "s").is_err());
+        assert_eq!(whole::<u32>(&c, "w", 5), Ok(70561));
+        assert_eq!(whole::<u16>(&c, "missing", 5025), Ok(5025));
+        assert!(whole::<u16>(&c, "w", 5025).is_err());
+        assert!(whole::<u16>(&c, "a", 5025).is_err());
+    }
 
     // Tests [@ANCHOR: bench_mcp_config]
     #[test]

@@ -261,6 +261,10 @@ Errors: an unknown driver name (`unknown SDR driver "<d>"`); a serial that is em
 
 See also: `bench_mcp_sdr_args`, `bench_mcp_sdr_limits`; the config test cites this anchor.
 
+### `stamp` [@ANCHOR: bench_mcp_sdr_stamp]
+
+`stamp()` (private, `sdr.rs`) returns the unix second plus a process-wide counter (`<secs>_<n>`) for capture file names, so two captures in the same second do not overwrite each other. Takes no arguments and cannot fail; the counter starts at zero for each process run and only grows, so the names are unique within one server run (a restart in the same second could reuse a name, which is acceptable here). No hardware access, no I/O, no locks. Test: `stamps_made_in_the_same_second_differ`.
+
 ### `soapy_args` [@ANCHOR: bench_mcp_sdr_args]
 
 Builds the SoapySDR argument string that opens this radio. Public signature `pub fn soapy_args(c: &Config) -> String`; `c` borrowed. Used by `Radio::open` and by `identify` (which returns it as `soapy_args`).

@@ -690,6 +690,7 @@ fn write_iq(path: &Path, samples: &[Iq]) -> Result<(), String> {
 }
 
 /// The unix second plus a process-wide counter: two captures in the same second must not overwrite each other's file.
+// [@ANCHOR: bench_mcp_sdr_stamp]
 fn stamp() -> String {
     static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let t = std::time::SystemTime::now()
@@ -882,6 +883,7 @@ pub fn coherence(c: &Config, args: &Value) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: bench_mcp_sdr_stamp]
     #[test]
     fn stamps_made_in_the_same_second_differ() {
         let all: std::collections::HashSet<String> = (0..50).map(|_| stamp()).collect();
