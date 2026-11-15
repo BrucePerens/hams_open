@@ -247,6 +247,20 @@ class TestHelpdeskCore(HamsTransactionCase):
             "A stage transition MUST trigger a mail-back notification to the customer.",
         )
 
+    def test_04c_stage_mailback_is_marked_auto_generated_so_autoresponders_do_not_answer_it(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_mailback_auto_submitted]
+        # An out-of-office or ticket-system reply to this mail would come back threaded onto the ticket as a "customer follow-up".
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Auto Header Test", "partner_id": self.portal_user.partner_id.id, "stage": "new"}
+        )
+        ticket.write({"stage": "in_progress"})
+        message = ticket.message_ids.filtered(lambda m: "Your issue has been updated" in (m.body or ""))
+        outgoing = self.env["mail.mail"].search([("mail_message_id", "in", message.ids)])
+        self.assertTrue(outgoing, "the status mail must have been queued")
+        for mail in outgoing:
+            self.assertIn("'Auto-Submitted': 'auto-generated'", mail.headers or "")
+            self.assertIn("'X-Auto-Response-Suppress': 'All'", mail.headers or "")
+
     def test_04b_no_mailback_when_quarantined_as_spam(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]
         # Moving a ticket into "spam" must not mail its From address (the
