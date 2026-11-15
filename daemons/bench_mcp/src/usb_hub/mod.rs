@@ -571,7 +571,9 @@ mod tests {
             }
         }
         assert!(parse_config(&json!({"ports": {"3-2/2": true}})).is_err());
-        let c = parse_config(&json!({"ports": {"3-2/2": {"critical": true, "hub_uplink_ok": null}}})).unwrap();
+        let c =
+            parse_config(&json!({"ports": {"3-2/2": {"critical": true, "hub_uplink_ok": null}}}))
+                .unwrap();
         assert!(c.ports["3-2/2"].critical && !c.ports["3-2/2"].hub_uplink_ok);
     }
 
