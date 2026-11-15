@@ -144,6 +144,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
             }
         )
 
+    # [@ANCHOR: hams_helpdesk:untrusted_bypassed]
     def _untrusted_bypassed(self):
         """True when the context asks to skip the filter (the mixin's own bookkeeping and staff tools) and the caller may.
         The flag is a context key and a client can put any context key on a `call_kw` request, so it is ignored for a
