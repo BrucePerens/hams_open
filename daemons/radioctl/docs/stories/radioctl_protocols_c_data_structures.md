@@ -265,6 +265,21 @@ As a developer changing this code, I want every data structure in `src/icom_mari
 
 **Notes.** Client-side protocol engine implementing `ProtocolEngine`: `encode` turns an abstract `Op` into the bytes of a `Request`, `feed` turns received bytes into `Inbound` events. Sans-IO: no I/O and no clock other than the `now` the caller passes. Owned and driven by one rig actor, so it needs no locking. Transmit-capable ops reach it only through the actor's transmit gate; the engine only encodes them.
 
+## `AntennaForm` [@ANCHOR: radioctl:radioctl_kenwood_antenna_form]
+
+**Purpose.** How a Kenwood model writes the `AN` (antenna connector) command, so the engine encodes and decodes the antenna port the way that model's PC command reference documents.
+
+**Definition.** `enum AntennaForm` (enum) in `daemons/radioctl/crates/radioctl-protocols/src/kenwood.rs`; derives `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `One` | - | The single-parameter form `ANp;`, p 1 or 2 (the TS-480, model ID 20); the port is p. |
+| `Three` | - | The three-parameter form `ANp1p2p3;`, p1 0 or 1 (the TS-590S, model ID 21); the port is p1 plus one, and a write sends `AN` with p1 then `99`. |
+
+**Used by.** `antenna_form` (chooses it from the model ID and the antenna port count; any other model is refused as not supported), the `AN` decoding in `feed` and the antenna level encoding in `encode`.
+
+**Notes.** Private to the Kenwood engine and never sent on the wire itself: it only selects between the two command spellings. Pure value, no I/O, never touches a transmitter.
+
 ## `LevelWire` [@ANCHOR: radioctl:radioctl_kenwood_level_wire_struct]
 
 **Purpose.** How a level is written on the wire: the command, whether a leading `0` (main receiver) follows it, and the largest value.

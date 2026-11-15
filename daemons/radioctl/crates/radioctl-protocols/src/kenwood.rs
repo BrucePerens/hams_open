@@ -139,6 +139,7 @@ pub fn parse_digits(text: &str) -> Option<u64> {
     text.parse().ok()
 }
 
+// [@ANCHOR: radioctl_kenwood_antenna_form]
 /// How a model writes the `AN` (antenna connector) command.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum AntennaForm {
@@ -937,6 +938,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_kenwood_engine_antenna_form]
+    // Tests [@ANCHOR: radioctl_kenwood_antenna_form]
     // Tests [@ANCHOR: radioctl_kenwood_engine_encode]
     // Tests [@ANCHOR: radioctl_kenwood_engine_feed]
     #[test]
