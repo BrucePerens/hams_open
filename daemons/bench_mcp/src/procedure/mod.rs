@@ -32,7 +32,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use run::{recover, shutdown, stop_all};
+pub use run::{recover, stop_all};
 
 /// The `procedure` settings of an instrument entry.
 #[derive(Clone, Debug, PartialEq)]

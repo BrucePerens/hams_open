@@ -861,14 +861,8 @@ pub fn start_ticks(pid: u32) -> Option<u64> {
     after.split_whitespace().nth(19)?.parse().ok()
 }
 
-/// Stops every live run of this server process, asking each to cancel with the reason `shutdown` and waiting for its cleanup and
-/// safe state, so the instruments are left safe when the server ends.
-pub fn shutdown() {
-    // [@ANCHOR: proc_run_shutdown]
-    stop_all(None);
-}
-
-/// `shutdown`, for the runs that use the managed directory `only` (all runs when `None`).
+/// Stops every live run of this server process (or only those using the managed directory `only`), asking each to cancel with the
+/// reason `shutdown` and waiting for its cleanup and safe state, so the instruments are left safe when the server ends.
 pub fn stop_all(only: Option<&std::path::Path>) {
     // [@ANCHOR: proc_run_stop_all]
     let mine = |c: &Arc<RunCtx>| only.is_none_or(|o| store::root(&c.cfg) == o);

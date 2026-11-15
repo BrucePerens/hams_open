@@ -437,17 +437,9 @@ See also: `proc_run_start`, `proc_run_recover_now`. Tested in `src/procedure/tes
 
 ## Shutdown and recovery
 
-### `shutdown` [@ANCHOR: proc_run_shutdown]
-
-Stops every live run of this server process and waits for them, so the instruments are left in a safe state when the server ends. Called when the server is told to exit.
-
-No arguments, no return value. It is `stop_all(None)`: every run is asked to cancel with reason `shutdown`; see `proc_run_stop_all` for the wait (grace time plus 60 s at most) and what a run that does not finish in time means. Blocking for as long as the runs need.
-
-See also: `proc_run_stop_all`, `proc_run_request_cancel`. Tested in `src/procedure/tests.rs`.
-
 ### `stop_all` [@ANCHOR: proc_run_stop_all]
 
-`shutdown` for the runs of one managed directory, or for all of them.
+Stops every live run of this server process, or only those of one managed directory, so the instruments are left safe when the server ends (the server calls it with `None` when told to exit).
 
 | Argument | Type | Meaning |
 |---|---|---|
@@ -455,7 +447,7 @@ See also: `proc_run_stop_all`, `proc_run_request_cancel`. Tested in `src/procedu
 
 No return value and no error. It takes the matching runs from the registry, calls `request_cancel("shutdown")` on each, then polls every 50 ms until none of them is in the registry any more, for at most the longest `grace_s` of the runs plus 60 s. It returns after that time even if a run is still going (nothing reports it; its supervisor continues and its program is limited by `PR_SET_PDEATHSIG`, which fires when the server exits). Blocking: sleeps in the calling thread. Idempotent: repeating asks again with the same reason (the first reason wins, so a run already stopping keeps its reason). Runs started while it waits are not asked.
 
-See also: `proc_run_shutdown`, `proc_run_registry`, `proc_run_request_cancel`. Tested in `src/procedure/tests.rs`.
+See also: `proc_run_registry`, `proc_run_request_cancel`. Tested in `src/procedure/tests.rs`.
 
 ### `recover_now` [@ANCHOR: proc_run_recover_now]
 
