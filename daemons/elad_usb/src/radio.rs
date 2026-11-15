@@ -248,23 +248,24 @@ impl<T: Transport> Radio<T> {
         Ok(())
     }
 
-    /// Stops the sample FIFO.
+    /// Stops the sample FIFO. Cleared only once the unit took the stop, so a failed stop is sent again by the next call (and by drop).
     // [@ANCHOR: elad_radio_stop]
     pub fn stop(&mut self) -> Result<(), Error> {
         if !self.streaming {
             return Ok(());
         }
-        self.streaming = false;
         if self.info.model == Model::Duo {
-            self.send(&protocol::duo_request(protocol::DUO_FIFO_RUN, 0))
+            self.send(&protocol::duo_request(protocol::DUO_FIFO_RUN, 0))?;
         } else {
             self.send(&Request {
                 request: protocol::REQ_FIFO,
                 value: 0,
                 index: 0,
                 data: Vec::new(),
-            })
+            })?;
         }
+        self.streaming = false;
+        Ok(())
     }
 
     /// Reads one bulk transfer and appends its I/Q pairs to `out` (interleaved I, Q floats). Returns the pairs appended.
