@@ -297,6 +297,26 @@ class TestSitemaps(BaseCase):
         self.assertEqual(spam.parse_sitemap("<html>not a sitemap</html>"), ("", [], 0))
         self.assertEqual(spam.parse_sitemap(None), ("", [], 0))
 
+    def test_10_b_hostile_sitemaps_parse_in_linear_time(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_parse_sitemap]
+        n = 100_000
+        hostile = (
+            "<urlset>" + "<url>" * n,
+            "<urlset><url><loc>" + " " * n + "</url>",
+            "<urlset><url>" + "<loc>" * n + "</url>",
+            "<sitemapindex>" + "<sitemap " * n,
+            "<urlset>" + "<url <loc>" * n,
+        )
+        started = time.monotonic()
+        for text in hostile:
+            spam.parse_sitemap(text)
+        self.assertLess(time.monotonic() - started, 5)
+        # The linear reader still handles CDATA, attributes and a `<urlset` that is not a `<url`.
+        kind, entries, total = spam.parse_sitemap(
+            '<urlset><url id="1"><loc> <![CDATA[ http://a.example/x ]]> </loc><lastmod>2026-01-02</lastmod></url></urlset>'
+        )
+        self.assertEqual((kind, entries, total), ("urlset", [("http://a.example/x", "2026-01-02")], 1))
+
     def test_11_an_entity_bomb_is_just_text(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_parse_sitemap]
         bomb = (
