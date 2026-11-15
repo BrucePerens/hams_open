@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
+import psycopg2.errors
+
 from odoo import api, models, fields, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.addons.zero_sudo import public_rpc
@@ -67,6 +69,24 @@ class ContentViolationAppeal(models.Model):
                     )
                 )
 
+    # [@ANCHOR: user_websites:appeal_lock_for_resolution]
+    # Verified by [@ANCHOR: user_websites:test_appeal_resolution_refuses_a_row_being_resolved]
+    def _lock_for_resolution(self):
+        """Row-locks these appeals, then re-reads them, so two moderators cannot both see "new" and
+        one approve while the other rejects (the second would overwrite the first and post a false
+        note). A row already locked by another moderator is refused at once, not waited for."""
+        if not self.ids:
+            return
+        try:
+            with self.env.cr.savepoint():
+                self.env.cr.execute(
+                    "SELECT id FROM content_violation_appeal WHERE id IN %s FOR UPDATE NOWAIT",
+                    (tuple(self.ids),),
+                )
+        except psycopg2.errors.LockNotAvailable:
+            raise UserError(_("Another moderator is resolving this appeal right now. Reload and check its state."))
+        self.invalidate_recordset(["state"])
+
     # [@ANCHOR: user_websites:COMM_appeal_action_approve]
     @public_rpc
     def action_approve(self):
@@ -79,6 +99,7 @@ class ContentViolationAppeal(models.Model):
         a direct RPC or a stale concurrent tab could re-run the pardon and
         re-post an "Appeal approved" message with no server-side check.
         """
+        self._lock_for_resolution()
         for appeal in self:
             if appeal.state != "new":
                 raise UserError(
@@ -117,6 +138,7 @@ class ContentViolationAppeal(models.Model):
         (the user/group was already pardoned), with no server-side check
         preventing it.
         """
+        self._lock_for_resolution()
         for appeal in self:
             if appeal.state != "new":
                 raise UserError(

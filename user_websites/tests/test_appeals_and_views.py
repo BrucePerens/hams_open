@@ -290,3 +290,21 @@ class TestAppealsAndViews(RealTransactionCase):
             rejected.action_reject()
         with self.assertRaises(UserError):
             rejected.action_approve()
+
+    # [@ANCHOR: user_websites:test_appeal_resolution_refuses_a_row_being_resolved]
+    # Tests [@ANCHOR: user_websites:appeal_lock_for_resolution]
+    def test_appeal_resolution_refuses_a_row_being_resolved(self):
+        appeal = self.env["content.violation.appeal"].create(
+            {"user_id": self.user_public.id, "reason": "Race me."}
+        )
+        self.env.cr.commit()
+        # Another moderator's transaction holds the row (it has begun to resolve it).
+        with self.registry.cursor() as other:
+            other.execute("SELECT id FROM content_violation_appeal WHERE id = %s FOR UPDATE", (appeal.id,))
+            with self.assertRaises(UserError):
+                appeal.action_reject()
+            with self.assertRaises(UserError):
+                appeal.action_approve()
+        self.assertEqual(appeal.state, "new")
+        appeal.action_reject()
+        self.assertEqual(appeal.state, "rejected")
