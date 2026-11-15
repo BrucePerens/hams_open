@@ -137,30 +137,36 @@ class TestExhaustiveIsolation(odoo.tests.common.HttpCase):
         ):
             self.community_blog.with_user(self.malice).unlink()
 
-    def test_02_seo_metadata_cross_tenant_idor(self):
+    def test_02_self_writeable_fields_cross_tenant_idor(self):
         """
-        Risk: The SEO module adds metadata to `SELF_WRITEABLE_FIELDS`. Malice might pass Victim's ID.
-        Action: Malice writes SEO data to Victim's res.users record.
-        Expected: AccessError from `check_access_rule`.
-        """
-        if "website_meta_title" in self.env["res.users"]._fields:
-            with self.assertRaises(
-                AccessError,
-                msg="Malice MUST NOT be able to modify Victim's SEO metadata.",
-            ):
-                self.victim.with_user(self.malice).write(
-                    {"website_meta_title": "Hacked SEO Title"}
-                )
-                self.env.flush_all()
+        Risk: The fields in `SELF_WRITEABLE_FIELDS` let a user write their own record; Malice might pass Victim's ID.
+        Action: Malice writes those fields on Victim's res.users record and on Victim's group.
+        Expected: AccessError from `check_access_rule`, and nothing changed.
 
+        This used to be guarded by `if "website_meta_title" in res.users._fields`; that field only exists when
+        user_websites_seo is installed (it has its own copy of this test), so here the test never ran. The fields
+        below are user_websites' own.
+        """
+        for field_name, value in (("website_slug", "hijacked"), ("privacy_show_in_directory", True)):
+            self.assertIn(field_name, self.env["res.users"].SELF_WRITEABLE_FIELDS)
+            before = self.victim[field_name]
             with self.assertRaises(
                 AccessError,
-                msg="Malice MUST NOT be able to modify Victim Group's SEO metadata.",
+                msg=f"Malice MUST NOT be able to write Victim's {field_name}.",
             ):
-                self.victim_group.with_user(self.malice).write(
-                    {"website_meta_title": "Hacked Group SEO"}
-                )
+                self.victim.with_user(self.malice).write({field_name: value})
                 self.env.flush_all()
+            self.victim.invalidate_recordset()
+            self.assertEqual(self.victim[field_name], before)
+
+        with self.assertRaises(
+            AccessError,
+            msg="Malice MUST NOT be able to write Victim Group's slug.",
+        ):
+            self.victim_group.with_user(self.malice).write({"website_slug": "hijacked-group"})
+            self.env.flush_all()
+        self.victim_group.invalidate_recordset()
+        self.assertEqual(self.victim_group.website_slug, "victim-group")
 
     def test_03_group_membership_escalation(self):
         """
