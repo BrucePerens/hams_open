@@ -17,6 +17,10 @@ timeout_ms = 200
 retries = 0
 inter_command_ms = 0
 
+[frequency]
+min_hz = 100000
+max_hz = 470000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -83,3 +87,8 @@ verified = { state = "unverified" }
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu FT-897D Operating Manual, CAT OPERATION opcode chart (file ft897d_manual.pdf, sha256 b7a3ce382fd39bb31e05fc17ecbe0770083d5b6387cec8e2deeb3412560c6176): Operating Mode opcode 07, PDF page 66 (printed 64), figures for Notes 3 to 5 rendered and read: 00 LSB, 01 USB, 02 CW, 03 CWR, 04 AM, 08 FM, 0A DIG", note = "DIG is mapped to radioctl's data mode. PKT (0C), WFM (06, read only) and the FT-857D/FT-897D narrow FM (88) are not mapped." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Yaesu FT-897D Operating Manual EH012M105: Specifications, Frequency Range, receive 0.1-56 MHz, 76-108 MHz, 118-164 MHz, 420-470 MHz", note = "Hull of the receive ranges, so the gaps between them are accepted. The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "Specifications, Frequency Range, receive 0.1-56 MHz, 76-108 MHz, 118-164 MHz, 420-470 MHz" }

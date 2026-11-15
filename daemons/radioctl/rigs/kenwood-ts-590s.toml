@@ -29,6 +29,10 @@ timeout_ms = 500
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 30000
+max_hz = 60000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -124,3 +128,8 @@ verified = { state = "manual-checked", reference = "Kenwood 'TS-590S TS-590SG PC
 key = "kenwood.ky"
 provenance = { kind = "manual", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (2014-10-23), file ts_590_g_pc_command_e.pdf, https://git.sdf.org/scrape/ubitx-v5x/raw/branch/new-main-dev/References/ts_590_g_pc_command_e.pdf (a public copy; Kenwood's site refused automated downloads), sha256 b99787985aa4f0dd758a6301a829519a3e46f9f5354ca4199773b0557b4ad999, PDF p. 16: KY Set 1 (P1 always a space, P2 24 characters), Set 2 `KY0;` stops Set 1, read and answer (P1 0 buffer space, 1 none); table with lower case and @; 'TS-590S / TS-590SG common'", note = "Used as the guide gives it: P2 is a fixed 24-character field, unused characters spaces; I pad on the right. Hamlib 4.6.2 kenwood_send_morse (rigs/kenwood/ts590.c .send_morse and .stop_morse) right-aligns the text for the TS-590S (`KY %24s`) and pads on the right for the SG; the guide does not say which side: pinned open question, bench check needed. A text longer than 24 characters is refused, not split. Unverified on a radio." }
 verified = { state = "manual-checked", reference = "Kenwood 'TS-590S TS-590SG PC CONTROL COMMAND Reference Guide' B5A-0316-00 (2014-10-23), KY (PDF p. 16)" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Kenwood TS-590SG Instruction Manual (TS-590SG_IDM.pdf): Introduction: general coverage reception across the continuous range of 30 kHz through 60 MHz", note = "Taken from the TS-590SG manual (same receiver design; the shared PC command guide covers both); no TS-590S manual states it. The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "Introduction: general coverage reception across the continuous range of 30 kHz through 60 MHz" }

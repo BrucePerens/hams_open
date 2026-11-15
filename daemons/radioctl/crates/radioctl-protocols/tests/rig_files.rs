@@ -116,6 +116,29 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
         "dorji-dra818u",
         "tentec-tt-550",
         "elecraft-xg3",
+        "yaesu-ft-450d",
+        "yaesu-ft-710",
+        "yaesu-ft-891",
+        "yaesu-ft-991a",
+        "yaesu-ftdx10",
+        "yaesu-ftdx101d",
+        "yaesu-ftdx-101mp",
+        "yaesu-ftdx-1200",
+        "yaesu-ftdx-3000",
+        "yaesu-ftdx-5000",
+        "yaesu-ftdx-9000",
+        "yaesu-ftdx-9000-old",
+        "yaesu-ft-817",
+        "yaesu-ft-857d",
+        "yaesu-ft-897d",
+        "icom-ic-7300",
+        "icom-ic-7610",
+        "icom-ic-705",
+        "elecraft-k3",
+        "elecraft-k3s",
+        "elecraft-kx2",
+        "elecraft-k4",
+        "kenwood-ts-2000",
     ];
     for loaded in load_all() {
         let summary = loaded.verification_summary();
@@ -125,7 +148,7 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
             "{id} claims verification: {summary:?}"
         );
         let allowed: &[&str] = if BENCH_RUN.contains(&id) {
-            &["unverified", "hardware-verified"]
+            &["unverified", "hardware-verified", "manual-checked"]
         } else if MANUAL_READ.contains(&id) {
             &["unverified", "manual-checked"]
         } else {
@@ -285,6 +308,44 @@ fn the_receivers_and_the_ic905_state_a_range_and_every_start_frequency_is_inside
             start.0,
             min.0,
             max.0
+        );
+    }
+}
+
+// Tests [@ANCHOR: radioctl_core_description_frequency_limits]
+#[test]
+fn manual_checked_ranges_are_the_manuals_and_marked_manual_checked() {
+    let loaded = load_all();
+    // (id, min Hz, max Hz) as printed in the manual named by the file's frequency.* fact.
+    for (id, min, max) in [
+        ("yaesu-ft-450d", 300_000, 60_000_000),
+        ("yaesu-ft-710", 30_000, 75_000_000),
+        ("yaesu-ft-891", 30_000, 56_000_000),
+        ("yaesu-ft-991a", 30_000, 470_000_000),
+        ("yaesu-ftdx-9000", 300_000, 60_000_000),
+        ("yaesu-ft-857d", 100_000, 470_000_000),
+        ("icom-ic-7300", 30_000, 74_800_000),
+        ("icom-ic-9100", 30_000, 1_320_000_000),
+        ("icom-ic-705", 30_000, 470_000_000),
+        ("elecraft-k3s", 100_000, 148_000_000),
+        ("elecraft-kx3", 310_000, 168_000_000),
+        ("elecraft-kx2", 500_000, 32_000_000),
+        ("kenwood-ts-590sg", 30_000, 60_000_000),
+    ] {
+        let l = loaded
+            .iter()
+            .find(|l| l.description.id == id)
+            .unwrap_or_else(|| panic!("{id}"));
+        let (lo, hi) = l.description.frequency_limits();
+        assert_eq!((lo.0, hi.0), (min, max), "{id}");
+        let fact = l
+            .facts
+            .iter()
+            .find(|f| f.key == "frequency.*")
+            .unwrap_or_else(|| panic!("{id}: no frequency.* fact"));
+        assert!(
+            matches!(fact.verified, radioctl_core::rigfile::Verified::ManualChecked { .. }),
+            "{id}: frequency.* is not manual-checked"
         );
     }
 }

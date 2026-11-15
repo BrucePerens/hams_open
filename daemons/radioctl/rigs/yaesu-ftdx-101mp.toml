@@ -26,6 +26,10 @@ timeout_ms = 2000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 30000
+max_hz = 75000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -119,3 +123,8 @@ verified = { state = "unverified" }
 key = "yaesu.split"
 provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ST SPLIT, PDF p. 23 (set ST P1; read ST; answer ST P1: 0 split off, 1 on, 2 on and the transmitter 5 kHz up)", note = "Split is the ST command on this model, not FT2/FT3; the engine sends ST0 and ST1 and reads P1 0 as off and 1 or 2 as on. Unverified." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Yaesu FTDX101D/MP CAT Operation Reference Manual 2308-L: FA, P1 range 000030000 - 075000000 Hz", note = "The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "FA, P1 range 000030000 - 075000000 Hz" }

@@ -23,6 +23,10 @@ timeout_ms = 2000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 300000
+max_hz = 60000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -116,3 +120,8 @@ verified = { state = "unverified" }
 key = "yaesu.clarifier"
 provenance = { kind = "manual", reference = "Yaesu 'FT-450D CAT Operation Reference Book', file FT-450D_CAT_OM_ENG_1710-B.pdf, sha256 b2f6ce2107171e1bd097bbe911335059fcb7c493ea6b0d28b7f948d31b629f27: RT CLAR PDF p. 15 (P1 0 receive clarifier off, 1 on), RU and RD PDF pp. 15 and 14 (offset 0000-9999 Hz), RC CLAR CLEAR PDF p. 14; IF (P4 receive, P5 transmit flag)", note = "The book has no XT: the transmit clarifier cannot be switched by CAT on this model, so the engine refuses XIT. Unverified." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Yaesu FT-450D CAT Operation Reference Manual 1710-B (FT-450D_CAT_OM_ENG_1710-B.pdf): FA, P1 range 300000 - 60000000 Hz", note = "The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "FA, P1 range 300000 - 60000000 Hz" }

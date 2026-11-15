@@ -33,6 +33,10 @@ timeout_ms = 1000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 30000
+max_hz = 470000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -133,3 +137,8 @@ verified = { state = "unverified" }
 key = "capability.read-meters"
 provenance = { kind = "manual", reference = "Icom IC-705 CI-V Reference Guide (IC-705_ENG_CI-V_6.pdf, sha256 36876db53a4dec7a9d74133ac4546bd161bcb6d56ee7c79668ff00cf1f92ea9c), command 15 table, PDF page 5: 15 11 to 15 16 (Po, SWR, ALC, COMP, Vd, Id meter levels, 0000 to 0255)", note = "Obtained under Icom's download terms (individual use, accepted on the owner's instruction 2026-11-10). Per-model scale points are in radioctld meter_cal; facts only, nothing copied." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Icom IC-705 CI-V Reference Guide (IC-705_ENG_CI-V_6.pdf): PDF page 30, command 27 19 scope selectable frequency ranges, 0.03 ~ 1.60 MHz up to 400.00 ~ 470.00 MHz", note = "The guide gives no coverage line; the scope range table spans the receiver. The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "PDF page 30, Command 27 19 scope selectable frequency ranges, 0.03 ~ 1.60 MHz up to 400.00 ~ 470.00 MHz" }

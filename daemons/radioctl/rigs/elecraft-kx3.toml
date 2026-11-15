@@ -42,6 +42,10 @@ timeout_ms = 600
 retries = 2
 inter_command_ms = 0
 
+[frequency]
+min_hz = 310000
+max_hz = 168000000
+
 [defaults]
 frequency_hz = 14060000
 mode = "cw"
@@ -185,3 +189,8 @@ verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MC
 key = "mode.*"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: MD (Operating Mode) p. 16: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA, 7 CW-REV, 9 DATA-REV", note = "FM does not apply to the KX2." }
 verified = { state = "hardware-verified", radio = "Elecraft KX3", firmware = "MCU 3.02 / DSP 1.52", date = "2026-11-05", tested = "MD1 to MD7 and MD9 each set and read back (LSB, USB, CW, FM, AM, DATA, CW-REV, DATA-REV)" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Elecraft KX3 Owner's Manual C5 (E740163): Specifications, Frequency Range: 310 kHz - 32 MHz and 44-54 MHz; 120-168 MHz with KX3-2M; 65-72 MHz with KX3-4M", note = "Hull including the KX3-2M and KX3-4M options. The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "Specifications, Frequency Range: 310 kHz - 32 MHz and 44-54 MHz; 120-168 MHz with KX3-2M; 65-72 MHz with KX3-4M" }

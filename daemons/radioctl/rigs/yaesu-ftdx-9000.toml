@@ -23,6 +23,10 @@ timeout_ms = 2000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 300000
+max_hz = 60000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -116,3 +120,8 @@ verified = { state = "unverified" }
 key = "yaesu.levels"
 provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: AG p. 5, KS p. 12, MG p. 13, PC p. 15, RG p. 16", note = "AG and RG 000-255 (P1 0 main receiver), MG 000-255, PC 000-255, KS 004-060 WPM; MG and PC differ from the engine's default ranges. Where this block is silent the engine's default range applies." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Yaesu FTDX9000 / PEP9000 CAT Manual EH010H121: FA, P1 range 00300000 - 60000000 Hz", note = "The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "FA, P1 range 00300000 - 60000000 Hz" }

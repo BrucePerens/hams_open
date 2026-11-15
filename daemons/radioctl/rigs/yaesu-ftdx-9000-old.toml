@@ -21,6 +21,10 @@ timeout_ms = 2000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 300000
+max_hz = 60000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -104,3 +108,8 @@ verified = { state = "unverified" }
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, https://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: MD, PDF p. 13: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK (RTTY-LSB), 7 CW-R, 8 PKT-L, 9 FSK-R (RTTY-USB), A PKT-FM, B FM-N, C PKT-U", note = "Mapping to radioctl modes is ours: 6 is rtty, 9 is rtty-r, 8 (PKT-L) is data-r and C (PKT-U) is data; A and B are not described." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Yaesu FTDX9000 / PEP9000 CAT Manual EH010H121: FA, P1 range 00300000 - 60000000 Hz", note = "Hamlib's separate 'Old' model is an older firmware of the same radio; the range is taken from the same guide. The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "FA, P1 range 00300000 - 60000000 Hz" }
