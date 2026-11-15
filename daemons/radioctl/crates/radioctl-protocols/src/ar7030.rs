@@ -342,7 +342,14 @@ impl ReceiverTwin for Ar7030Twin {
                     out.push(self.read());
                     self.address = self.address.wrapping_add(u16::from(x));
                 }
-                0x8 => self.lock = x,
+                0x8 => {
+                    // A setting session starts with a lock level: take the radio's current
+                    // state into working memory, so routine 4 applies only what was written.
+                    if x != 0 {
+                        self.refresh(state);
+                    }
+                    self.lock = x;
+                }
                 _ => {}
             }
         }
@@ -504,5 +511,21 @@ mod tests {
         assert_eq!(ident, b"70");
         assert!(twin.line(&mut state, "D").is_empty());
         assert!(Ar7030Twin::new(&shipped("aor-ar5000")).is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_ar7030_twin_raw]
+    #[test]
+    fn a_mode_set_does_not_retune_the_twin() {
+        let desc = shipped("aor-ar7030");
+        let mut twin = Ar7030Twin::new(&desc).expect("twin");
+        let mut state = fresh_state(&desc);
+        let tuned = state.freq_a;
+        assert_ne!(tuned, Hz(0));
+        let mut e = engine(desc).expect("engine");
+        let bytes = e.encode(&Op::SetMode(Mode::Usb)).expect("encode").bytes;
+        twin.raw(&mut state, &bytes);
+        assert_eq!(state.mode, Mode::Usb);
+        // The 24-bit count quantises to about 2.7 Hz; 0 Hz would be the bug.
+        assert!(state.freq_a.0.abs_diff(tuned.0) <= 2, "{:?}", state.freq_a);
     }
 }
