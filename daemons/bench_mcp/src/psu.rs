@@ -32,9 +32,20 @@ fn is_off(reply: &str) -> bool {
     matches!(reply.trim().to_ascii_uppercase().as_str(), "OFF" | "0")
 }
 
+/// `on`, `off`, or `unknown`: a reply that is neither (garbage, an empty line) must not read as "off", the safe state.
+fn output_word(reply: &str) -> String {
+    if is_on(reply) {
+        "on".into()
+    } else if is_off(reply) {
+        "off".into()
+    } else {
+        format!("unknown (the supply answered {:?})", reply.trim())
+    }
+}
+
 pub fn state(l: &mut Link) -> Result<Value, String> {
     Ok(json!({
-        "output": if is_on(&l.query("OUTP?")?) { "on" } else { "off" },
+        "output": output_word(&l.query("OUTP?")?),
         "set_voltage_v": l.number("VOLT?")?,
         "set_current_a": l.number("CURR?")?,
         "ovp_v": l.number("VOLT:LIM?")?,
@@ -356,6 +367,15 @@ mod tests {
         let expiry = Duration::from_secs_f64(5.0 + 1.5);
         std::thread::sleep(expiry.saturating_sub(armed.elapsed()));
         assert_eq!(count(&dev, "OUTP OFF"), 1, "{:?}", dev.received());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_psu_is_off]
+    #[test]
+    fn an_unrecognised_output_reply_is_not_reported_as_off() {
+        assert_eq!(output_word("ON"), "on");
+        assert_eq!(output_word("0\r"), "off");
+        assert!(output_word("").starts_with("unknown"));
+        assert!(output_word("E-102").starts_with("unknown"));
     }
 
     // Tests [@ANCHOR: bench_mcp_psu_is_off]
