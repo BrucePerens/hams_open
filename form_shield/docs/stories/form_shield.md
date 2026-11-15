@@ -141,6 +141,10 @@ The wire format of a challenge is `v1.<kind>.<issued>.<expires>.<difficulty>.<no
 
 `-> str`. The visitor's address from `zero_sudo.security.utils._get_trusted_client_ip()`, which takes it from the trusted proxy chain and never from a header the visitor can forge. Used only to compute the network hash. Test: `test_challenge_endpoint_issues_signed_uncacheable_json`.
 
+### `question_budget_left()` [@ANCHOR: form_shield:question_budget] Example: `env["form.shield"].question_budget_left()`
+
+`-> bool`. Counts one question-challenge request for the caller's network (keyed hash, one Redis counter, one hour) and says whether it is within 5. The challenge route calls it before issuing kind `q`, which has difficulty 0 and would otherwise let a bot skip the proof of work; over budget the route answers 429 `question_limit`. Redis down gives False. Test: `test_challenge_endpoint_caps_question_requests`.
+
 ### `issue(kind="pow")` [@ANCHOR: form_shield:issue]
 
 `-> dict`. A new challenge for the current visitor, the dict the challenge route returns as JSON: `kind`, `challenge`, `difficulty`, `min_age` (seconds the answer must wait), `expires_in` (the TTL: time to live) and, for kind `q`, `question` (the words). For a proof of work the difficulty is `form_shield.difficulty` clamped to 0 to 28; for a question it is 0. `@api.private` (not callable over RPC). Reads parameters and the key, writes nothing. Test: `test_challenge_endpoint_issues_signed_uncacheable_json`.
@@ -226,7 +230,7 @@ Seeds `form_shield.signing_key` with `secrets.token_hex(32)` when it is not set 
 
 ### Challenge route (`controllers/form_shield_api.py`) [@ANCHOR: form_shield:challenge_route]
 
-`FormShieldController.challenge(self, kind="pow", **_ignored)`, route `POST /form_shield/challenge`, `auth="public"`, `csrf=False`, `readonly=True`, `save_session=False`, no sitemap entry. `kind="q"` asks for a question challenge, anything else a proof of work. Returns the JSON of `form.shield.issue(kind)` with `Cache-Control: no-store`. A POST rather than a GET because pages that call it may come from Cloudflare's edge cache and every visitor needs a challenge of their own (network-bound, single-use). It sets no cookie and writes nothing, so it needs no session or CSRF (cross-site request forgery) token: all it can do is hand out a signed string. Test: `test_challenge_endpoint_issues_signed_uncacheable_json`.
+`FormShieldController.challenge(self, kind="pow", **_ignored)`, route `POST /form_shield/challenge`, `auth="public"`, `csrf=False`, `readonly=True`, `save_session=False`, no sitemap entry. `kind="q"` asks for a question challenge (rationed to 5 an hour per network, then 429), anything else a proof of work. Returns the JSON of `form.shield.issue(kind)` with `Cache-Control: no-store`. A POST rather than a GET because pages that call it may come from Cloudflare's edge cache and every visitor needs a challenge of their own (network-bound, single-use). It sets no cookie and writes nothing, so it needs no session or CSRF (cross-site request forgery) token: all it can do is hand out a signed string. Test: `test_challenge_endpoint_issues_signed_uncacheable_json`.
 
 ### Refusal helpers (`refusal.py`)
 
