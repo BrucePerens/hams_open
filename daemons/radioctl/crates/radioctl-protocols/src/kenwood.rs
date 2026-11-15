@@ -573,7 +573,9 @@ fn decode_level(name: &str, digits: &str) -> Option<Observation> {
     if number.len() != 3 {
         return None;
     }
-    let value = u16::try_from(parse_digits(number)?).ok()?;
+    let value = u16::try_from(parse_digits(number)?)
+        .ok()
+        .filter(|value| *value <= wire.max)?;
     Some(Observation::Level(level, value))
 }
 
@@ -1091,6 +1093,31 @@ mod tests {
             e590.feed(long.as_bytes(), T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    // Tests [@ANCHOR: radioctl_kenwood_decode_level]
+    #[test]
+    fn a_level_answer_above_the_guide_maximum_is_unrecognised() {
+        let mut e = KenwoodEngine::new(shipped("kenwood-ts-590s")).expect("engine");
+        for answer in [
+            &b"AG0256;"[..],
+            b"RG999;",
+            b"MG101;",
+            b"ML010;",
+            b"KS061;",
+            b"PC101;",
+        ] {
+            let out = e.feed(answer, T0);
+            assert!(
+                matches!(out.as_slice(), [Inbound::Unrecognised(_)]),
+                "{answer:?} is above the guide's range: {out:?}"
+            );
+        }
+        let out = e.feed(b"AG0255;", T0);
+        assert_eq!(
+            out,
+            vec![Inbound::Observation(Observation::Level(Level::AfGain, 255))]
+        );
     }
 
     // Tests [@ANCHOR: radioctl_kenwood_engine_encode]
