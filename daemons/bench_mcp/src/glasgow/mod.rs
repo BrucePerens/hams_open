@@ -688,12 +688,8 @@ fn spawn_watchdog(
     });
 }
 
-/// Called when the server stops: every Glasgow this process powered is switched off.
-pub fn shutdown() {
-    shutdown_prefix("");
-}
-
-/// The same for the instruments whose names start with `prefix` (the tests use their own names; production uses the empty prefix).
+/// Called when the server stops: every Glasgow this process powered is switched off, for the instruments whose names start with
+/// `prefix` (the tests use their own names; production uses the empty prefix).
 pub fn shutdown_prefix(prefix: &str) {
     // [@ANCHOR: glasgow_shutdown]
     let names: Vec<String> = with_session(|s| {

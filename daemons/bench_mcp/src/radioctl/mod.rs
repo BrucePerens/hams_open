@@ -674,12 +674,7 @@ fn rigs(insts: &[Instrument], args: &Value) -> Result<Value, String> {
     Ok(json!({"rigs": out}))
 }
 
-/// Stops what this module started: the managed daemons. Called when the server stops.
-pub fn shutdown() {
-    shutdown_prefix("");
-}
-
-/// The same for the rigs whose names start with `prefix`.
+/// Stops what this module started: the managed daemons, for the rigs whose names start with `prefix` (production uses `""`).
 pub fn shutdown_prefix(prefix: &str) {
     // [@ANCHOR: radioctl_shutdown_all]
     // Whatever is keyed is released first: stopping the daemons would make that impossible.

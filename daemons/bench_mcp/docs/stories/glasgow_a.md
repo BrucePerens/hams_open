@@ -415,11 +415,9 @@ switch-off until the call ends. Lock order: instrument mutex, then device file l
 
 ### `glasgow_shutdown` [@ANCHOR: glasgow_shutdown]
 
-Switches off every Glasgow this process powered. `shutdown()` is the production entry (it calls this with the empty prefix) and is called by the server when it stops (twice in
-`src/main.rs`, on the stop paths); `shutdown_prefix` exists so the tests can limit the sweep to the instrument names of their own test.
+Switches off every Glasgow this process powered. The server calls `shutdown_prefix("")` (through `shutdown_only` in `src/main.rs`, on the stop paths); a non-empty prefix lets the tests limit the sweep to the instrument names of their own test.
 
 ```rust
-pub fn shutdown()                                // all instruments
 pub fn shutdown_prefix(prefix: &str)             // instruments whose name starts with prefix
 ```
 

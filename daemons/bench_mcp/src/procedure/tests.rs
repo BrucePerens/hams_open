@@ -1402,7 +1402,6 @@ fn runs_left_active_by_a_dead_server_are_marked_lost_and_their_instruments_made_
     run::recover(&b.insts);
 }
 
-// Tests [@ANCHOR: proc_run_shutdown]
 // Tests [@ANCHOR: proc_run_stop_all]
 #[test]
 fn shutdown_cancels_every_live_run_and_waits_for_its_cleanup_and_safe_state() {

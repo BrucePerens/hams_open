@@ -177,8 +177,7 @@ Tests: `tests.rs`. Related: `radioctl_call`, `radioctl_instrument`, `radioctl_da
 
 ### `radioctl_shutdown_all` [@ANCHOR: radioctl_shutdown_all]
 
-`shutdown_prefix(prefix: &str)` stops what this module started, for the rigs whose instrument name starts with `prefix` (the empty prefix means all of them;
-`shutdown()` is the same with the empty prefix, called when the server stops, see the two calls in `main.rs`). Order matters and is the point of the function: first
+`shutdown_prefix(prefix: &str)` stops what this module started, for the rigs whose instrument name starts with `prefix` (the empty prefix means all of them, as the server uses it when it stops, see `shutdown_only` in `main.rs`). Order matters and is the point of the function: first
 `tx::release_prefix(prefix)` un-keys every rig this process has recorded as possibly keyed (`guard::unkey`, with the rig's minimum power), and every failure is printed to
 standard error as `bench_mcp radioctl: could not confirm the release of a keyed rig: ...`; only then `rigd::shutdown_prefix` kills the managed daemons, because a stopped daemon
 makes a release impossible. Returns nothing; failures are reported, not raised, since the server is exiting. It takes no instrument lock (the server is going down; a
