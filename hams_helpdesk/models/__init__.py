@@ -10,6 +10,7 @@ from . import mail_thread_untrusted
 from . import link_defang
 from . import mail_message_defanged
 from . import helpdesk_ticket
+from . import github_delivery
 from . import res_partner
 from . import res_users
 from . import shift_handoff

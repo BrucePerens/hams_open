@@ -92,9 +92,11 @@ class TestGithubWebhookHttp(HamsHttpCase):
             create=True,
         )
 
-    def _post(self, event_type, payload, secret=_TEST_SECRET, sign=True, include_signature=True):
+    def _post(self, event_type, payload, secret=_TEST_SECRET, sign=True, include_signature=True, delivery=None):
         raw_body = json.dumps(payload).encode("utf-8")
         headers = {"Content-Type": "application/json", "X-GitHub-Event": event_type}
+        if delivery:
+            headers["X-GitHub-Delivery"] = delivery
         if include_signature:
             headers["X-Hub-Signature-256"] = (
                 _sign_github_payload(raw_body, secret) if sign else "sha256=" + "0" * 64
@@ -408,6 +410,30 @@ class TestGithubWebhookHttp(HamsHttpCase):
             2,
             "A closed prior ticket must not absorb a genuinely new later delivery.",
         )
+
+    def test_github_webhook_replayed_delivery_id_opens_no_second_ticket(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_github_delivery_claim]
+        self._configure_secret()
+        payload = _dependabot_alert_payload()
+        url = payload["alert"]["html_url"]
+        self._post("dependabot_alert", payload, delivery="d-1")
+        self.Ticket.search([("github_source_url", "=", url)]).write({"stage": "closed"})
+        self._post("dependabot_alert", payload, delivery="d-1")  # the captured delivery, replayed
+        self.assertEqual(len(self.Ticket.search([("github_source_url", "=", url)])), 1)
+        self.Ticket.search([("github_source_url", "=", url)]).write({"stage": "closed"})
+        self._post("dependabot_alert", payload, delivery="d-2")  # a new delivery is still honoured
+        self.assertEqual(len(self.Ticket.search([("github_source_url", "=", url)])), 2)
+
+    def test_github_webhook_delivery_id_expires_after_the_retention_window(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_github_delivery_claim]
+        Delivery = self.env["hams_helpdesk.github_delivery"]
+        self.assertTrue(Delivery._claim("old-1"))
+        self.assertFalse(Delivery._claim("old-1"))
+        self.env.cr.execute(
+            "UPDATE hams_helpdesk_github_delivery SET create_date = now() - interval '8 days' WHERE name = 'old-1'"
+        )
+        Delivery.invalidate_model()
+        self.assertTrue(Delivery._claim("old-1"))
 
 
 @tagged("post_install", "-at_install", "standard")
