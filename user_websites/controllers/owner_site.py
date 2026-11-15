@@ -668,6 +668,23 @@ class UserWebsitesOwnerController(http.Controller):
             raise request.not_found()
         return page
 
+    # [@ANCHOR: user_websites:fn_owner_restore_full]
+    # Verified by [@ANCHOR: test_owner_restore_respects_the_quota]
+    def _restore_full(self, kind, profile_user, profile_group):
+        """True when this site already holds as many live pages or posts as its limit allows.
+
+        Creating checks the limit against live rows only, so a delete-then-create cycle followed by
+        restoring the old rows would grow a site past it without end; restore asks the same question."""
+        utils = request.env["zero_sudo.security.utils"]
+        model = "website.page" if kind == "page" else "blog.post"
+        if profile_user:
+            limit = profile_user._get_page_limit() if kind == "page" else profile_user._get_blog_post_limit()
+        elif kind == "page":
+            limit = int(utils._get_system_param("user_websites.global_website_page_limit", 100))
+        else:
+            limit = int(utils._get_system_param("user_websites.global_blog_post_limit", 500))
+        return self._svc()[model].search_count(self._owner_domain(profile_user, profile_group)) >= limit
+
     # [@ANCHOR: user_websites:fn_owner_back]
     def _back(self, site_slug, flag):
         return request.redirect(f"/my/site/{quote(site_slug, safe='')}?{flag}", code=303)
@@ -761,6 +778,8 @@ class UserWebsitesOwnerController(http.Controller):
             page = self._own_page_any(profile_user, profile_group, item_id)
             if not page.deleted_by_owner:
                 raise request.not_found()
+            if self._restore_full(kind, profile_user, profile_group):
+                return self._back(site_slug, "error=limit")
             url = page.deleted_original_url or f"/{slug}/restored-{page.id}"
             if not (url == f"/{slug}" or url.startswith(f"/{slug}/")) or self._svc()["website.page"].search_count(
                 [("url", "=", url), ("website_id", "=", page.website_id.id)]
@@ -773,6 +792,8 @@ class UserWebsitesOwnerController(http.Controller):
             post = self._own_post(profile_user, profile_group, item_id)
             if not post.deleted_by_owner:
                 raise request.not_found()
+            if self._restore_full(kind, profile_user, profile_group):
+                return self._back(site_slug, "error=limit")
             post.write({"active": True, "deleted_by_owner": False})
         return self._back(site_slug, "saved=restored")
 
