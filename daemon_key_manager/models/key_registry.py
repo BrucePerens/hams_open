@@ -312,6 +312,11 @@ class DaemonKeyRegistry(models.Model):
                 raise ConcurrencyError("the daemon was registered by a simultaneous request") from exc
         else:
             # [@ANCHOR: COMM_register_daemon_idempotency]
+            if registry.user_id != user and not may_set_group:
+                # [@ANCHOR: COMM_register_daemon_row_bound_to_identity]
+                # The row belongs to the identity it was registered for; another service account may not take it over by name.
+                msg = _("The daemon '%s' is registered to another account.")
+                raise AccessError(msg % daemon_name)
             registry.with_company(user.company_id.id).write(values)
             
         # Flush all pending database changes to trigger @api.constrains now.
