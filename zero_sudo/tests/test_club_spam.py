@@ -757,6 +757,11 @@ class TestRedirectToSpam(BaseCase):
         self.assertNotIn("redirect", evidence)
         self.assertEqual(spam.evaluate_evidence(evidence)["level"], spam.LEVEL_CLEAN)
 
+    def test_64_b_visible_text_offsets_survive_a_character_that_lowercases_to_two(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_visible_text]
+        got = spam._visible_text("\u0130\u0130\u0130<script>x</script> keep <SCRIPT>y</SCRIPT> end")
+        self.assertEqual(" ".join(got.split()), "\u0130\u0130\u0130 keep end")
+
     def test_65_visible_text_keeps_the_visible_words_and_drops_hidden_elements(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_visible_text]
         markup = ("<HEAD><title>T</title></head><p>one <b>two</b></p><Script type=x>var a = '<p>no</p>';</SCRIPT>"

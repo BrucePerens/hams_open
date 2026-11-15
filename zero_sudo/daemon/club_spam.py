@@ -607,7 +607,7 @@ def _visible_text(markup):
     element whose closing tag never comes is left in place, as the regex left it, and its tag is then stripped like any other.
     Pure; never raises."""
     markup = markup[:_MAX_MARKUP_CHARS]
-    lower = markup.lower()
+    lower = markup.translate(_ASCII_LOWER)  # not .lower(): U+0130 lowers to two characters and shifts every offset
     pieces, pos, no_close = [], 0, set()
     while True:
         opened = _OPEN_HIDDEN_RE.search(markup, pos)
