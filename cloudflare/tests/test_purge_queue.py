@@ -26,6 +26,7 @@ class TestPurgeQueue(RealTransactionCase):
 
     def test_01_bdd_queue_batching_and_rate_limiting(self):
         # [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]
+        # Tests [@ANCHOR: cloudflare:restore_credentials_after_test]
 
         # Tests [@ANCHOR: COMM_ir_cron_process_cf_purge_queue]
 
