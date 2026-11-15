@@ -368,6 +368,10 @@ impl Calibration {
         created: String,
     ) -> Result<Calibration, String> {
         // [@ANCHOR: vnwa_open_cal_build]
+        if freqs.iter().any(|f| !f.is_finite()) {
+            // NaN passes the rising test below (`w[1] <= w[0]` is false for it) and infinity is rising.
+            return Err("the calibration frequencies must be finite".into());
+        }
         if freqs.len() < 2 || freqs.windows(2).any(|w| w[1] <= w[0]) {
             return Err("a calibration needs at least two rising frequencies".into());
         }
@@ -478,7 +482,8 @@ impl Calibration {
         // [@ANCHOR: vnwa_open_cal_locate]
         let (lo, hi) = (self.freqs[0], *self.freqs.last().unwrap());
         // A hair of tolerance for the endpoints, so a sweep over exactly the calibrated range is accepted.
-        if f < lo * (1.0 - 1e-9) || f > hi * (1.0 + 1e-9) {
+        // Written so that NaN is outside: both comparisons of the other form are false for it.
+        if !(f >= lo * (1.0 - 1e-9) && f <= hi * (1.0 + 1e-9)) {
             return Err(format!(
                 "{f} Hz is outside the calibrated range {lo} to {hi} Hz"
             ));
@@ -723,6 +728,27 @@ mod tests {
 
     fn freqs() -> Vec<f64> {
         (0..11).map(|i| 1e6 + i as f64 * 15e6).collect()
+    }
+
+    // Tests [@ANCHOR: vnwa_open_cal_build]
+    // Tests [@ANCHOR: vnwa_open_cal_locate]
+    // Tests [@ANCHOR: vnwa_open_cal_s21]
+    #[test]
+    fn a_frequency_that_is_not_finite_is_refused_when_building_and_when_correcting() {
+        // NaN passes both the "rising" test (`w[1] <= w[0]` is false) and the range test (`f < lo` and `f > hi` are false); infinity
+        // passes the rising test too.
+        let thru = [c(1.0, 0.0), c(1.0, 0.0), c(1.0, 0.0)];
+        for bad in [f64::NAN, f64::INFINITY] {
+            let e =
+                Calibration::new(vec![1e6, bad, 3e6], None, None, None, Some(&thru)).unwrap_err();
+            assert!(e.contains("finite"), "{e}");
+        }
+        let cal = Calibration::new(vec![1e6, 2e6, 3e6], None, None, None, Some(&thru)).unwrap();
+        assert!(cal.s21(2e6, c(0.5, 0.0)).is_ok());
+        for bad in [f64::NAN, f64::INFINITY] {
+            let e = cal.s21(bad, c(0.5, 0.0)).unwrap_err();
+            assert!(e.contains("outside"), "{e}");
+        }
     }
 
     // Tests [@ANCHOR: vnwa_open_cal_one_port]
