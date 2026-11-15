@@ -151,7 +151,9 @@ def _async_unpublish_content(db_name, user_ids):
             _report_unpublish_failure(
                 env, f"Unpublishing the content of users {user_ids} failed ({type(e).__name__}); it is still published."
             )
-        except (KeyError, ValueError) as e:  # audit-ignore-catch-all
+        except (KeyError, ValueError, psycopg2.Error) as e:  # audit-ignore-catch-all
+            # psycopg2.Error: a deadlock or lock timeout against the member's own edits; nothing awaits this thread's
+            # Future, so without the page the content would stay published with no signal (the group version catches it).
             env.cr.rollback()
             _logger.error("Fatal error during background unpublish: %s", e)
             _report_unpublish_failure(
