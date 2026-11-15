@@ -579,7 +579,7 @@ class TestSesWebhook(HamsHttpCase):
 
     def test_27c_failed_sender_verdicts_refuse_the_mail(self):
         # Tests [@ANCHOR: ses_webhook:failed_sender_check]
-        """DMARC FAIL under policy quarantine or reject, or SPF and DKIM both FAIL, is logged rejected_sender
+        """DMARC FAIL under policy quarantine or reject, or an SPF FAIL without a DKIM PASS (and no DMARC FAIL), is logged rejected_sender
         and not processed; DMARC FAIL under policy none or no policy, PASS, GRAY, PROCESSING_FAILED, a single
         FAIL and missing verdicts are processed."""
         raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Verdict\n\nTest"
@@ -602,6 +602,9 @@ class TestSesWebhook(HamsHttpCase):
             'v-dmarc-quarantine': (dmarc_fail, 'quarantine'),
             'v-dmarc-reject': (dmarc_fail, 'reject'),
             'v-both': ({'spfVerdict': 'FAIL', 'dkimVerdict': 'FAIL', 'dmarcVerdict': 'GRAY'}, None),
+            'v-spf-fail-dkim-gray': ({'spfVerdict': 'FAIL', 'dkimVerdict': 'GRAY', 'dmarcVerdict': 'GRAY'}, None),
+            'v-spf-fail-dkim-missing': ({'spfVerdict': 'FAIL'}, None),
+            'v-spf-fail-dkim-unaligned': ({'spfVerdict': 'FAIL', 'dkimVerdict': 'PASS', 'dmarcVerdict': 'FAIL'}, 'none'),
         }
         for message_id, (receipt, policy) in refused.items():
             self.assertEqual(deliver(message_id, receipt, policy), 'rejected_sender', message_id)
@@ -611,6 +614,7 @@ class TestSesWebhook(HamsHttpCase):
             'v-pass': {'spfVerdict': 'PASS', 'dkimVerdict': 'PASS', 'dmarcVerdict': 'PASS'},
             'v-gray': {'spfVerdict': 'PASS', 'dkimVerdict': 'PASS', 'dmarcVerdict': 'GRAY'},
             'v-one-fail': {'spfVerdict': 'FAIL', 'dkimVerdict': 'PASS', 'dmarcVerdict': 'GRAY'},
+            'v-forwarded': {'spfVerdict': 'FAIL', 'dkimVerdict': 'PASS', 'dmarcVerdict': 'PASS'},
             'v-pf': {'spfVerdict': 'PROCESSING_FAILED', 'dkimVerdict': 'PROCESSING_FAILED', 'dmarcVerdict': 'PROCESSING_FAILED'},
             'v-none': None,
         }
