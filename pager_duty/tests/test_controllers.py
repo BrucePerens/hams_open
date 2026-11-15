@@ -320,6 +320,21 @@ class TestPagerControllers(HamsHttpCase):
             "A rate-limited request must not reach the certbot check update.",
         )
 
+    def test_08b_the_lockout_log_line_carries_no_ip_address(self):
+        # Tests [@ANCHOR: pager_duty:update_domains]
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "the-real-secret")
+        mock_redis = self.safe_patch("odoo.addons.pager_duty.controllers.domain_api.redis")
+        self.safe_patch("odoo.addons.pager_duty.controllers.domain_api.redis_pool", MagicMock())
+        mock_redis.Redis.return_value.get.return_value = b"10"
+        with self.assertLogs("odoo.addons.pager_duty.controllers.domain_api", level="WARNING") as logs:
+            self.url_open(
+                "/api/v1/pager_duty/update_domains",
+                json={"jsonrpc": "2.0", "method": "call", "params": {"domains": ["example.com"], "api_identity": "x"}},
+            )
+        text = "\n".join(logs.output)
+        self.assertIn("too many failed auth attempts", text)
+        self.assertNotIn("127.0.0.1", text, "[!] DIAGNOSTIC FOR AI: the log must not carry the caller IP address.")
+
     def _redis_failing_with(self, error):
         mock_redis = self.safe_patch("odoo.addons.pager_duty.controllers.domain_api.redis")
         mock_redis.exceptions = real_redis.exceptions
