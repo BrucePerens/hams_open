@@ -22,6 +22,7 @@ from odoo.addons.ses_webhook.controllers.webhook_api import (
     _fetch_sns_signing_cert as _REAL_FETCH_SNS_SIGNING_CERT,
 )
 
+from odoo.addons.ses_webhook.controllers.webhook_api import _verdict
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
@@ -563,6 +564,18 @@ class TestSesWebhook(HamsHttpCase):
         payload = self._sign({"Type": "Notification", "MessageId": "msg-topic-unpinned", "Message": json.dumps(ses_message)})
         self.assertEqual(self.url_open(url, data=json.dumps(payload).encode('utf-8')).status_code, 200)
         self.assertEqual(mock_process.call_count, 2)
+
+    def test_27b_verdict_reads_the_status_or_empty(self):
+        # [@ANCHOR: ses_webhook:test_verdict]
+        # Tests [@ANCHOR: ses_webhook:verdict]
+        message = {"receipt": {"dmarcVerdict": {"status": "FAIL"}, "spfVerdict": {"status": "PASS"}, "dkimVerdict": "bad"}}
+        self.assertEqual(_verdict(message, "dmarcVerdict"), "FAIL")
+        self.assertEqual(_verdict(message, "spfVerdict"), "PASS")
+        self.assertEqual(_verdict(message, "dkimVerdict"), "")
+        self.assertEqual(_verdict(message, "missingVerdict"), "")
+        self.assertEqual(_verdict({}, "dmarcVerdict"), "")
+        self.assertEqual(_verdict({"receipt": "x"}, "dmarcVerdict"), "")
+        self.assertEqual(_verdict({"receipt": {"dmarcVerdict": {"status": 5}}}, "dmarcVerdict"), "")
 
     def test_27c_failed_sender_verdicts_refuse_the_mail(self):
         # Tests [@ANCHOR: ses_webhook:failed_sender_check]
