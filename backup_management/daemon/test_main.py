@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -944,6 +945,25 @@ class TestRunReportsFailures(unittest.TestCase):
         with patch.object(backup_worker, "main") as main:
             backup_worker.run()
         main.assert_called_once_with()
+
+
+# [@ANCHOR: backup_management:COMM_test_prune_old_restores]
+class TestPruneOldRestores(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:COMM_prune_old_restores]
+    def test_removes_only_old_restore_directories(self):
+        base = tempfile.mkdtemp(prefix="restore_prune_test_")
+        self.addCleanup(shutil.rmtree, base, True)
+        old_age = time.time() - 8 * 86400
+        for name in ("restore_1", "restore_2", "other_dir"):
+            os.mkdir(os.path.join(base, name))
+            os.makedirs(os.path.join(base, name, "sub"))
+        for name in ("restore_1", "other_dir"):
+            os.utime(os.path.join(base, name), (old_age, old_age))
+        backup_worker._prune_old_restores(base, 7)
+        self.assertEqual(sorted(os.listdir(base)), ["other_dir", "restore_2"])
+
+    def test_a_missing_base_is_not_an_error(self):
+        backup_worker._prune_old_restores("/nonexistent/restore/base", 7)
 
 
 if __name__ == "__main__":
