@@ -194,7 +194,9 @@ class TestDmarcParser(common.TransactionCase):
         # Tests [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
         """A gzip bomb from any rua= sender must be refused, not inflated into memory."""
         bomb = gzip.compress(b"0" * (_MAX_DECOMPRESSED_BYTES + 1))
-        self.assertFalse(self.DmarcReport.process_dmarc_attachment('report.xml.gz', bomb))
+        with self.assertLogs("odoo.addons.hams_base.models.dmarc_report", level="WARNING") as logs:
+            self.assertFalse(self.DmarcReport.process_dmarc_attachment('report.xml.gz', bomb))
+        self.assertTrue(any("Refusing to decompress" in m for m in logs.output))
 
     def test_unusable_attachments_are_dropped_without_a_record(self):
         # Tests [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
