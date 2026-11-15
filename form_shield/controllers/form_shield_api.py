@@ -25,8 +25,16 @@ class FormShieldController(http.Controller):
         sitemap=False,
     )
     def challenge(self, kind="pow", **_ignored):
+        shield = request.env["form.shield"]
         wanted = tokens.KIND_QUESTION if kind == "q" else tokens.KIND_POW
-        issued = request.env["form.shield"].issue(wanted)
+        if wanted == tokens.KIND_QUESTION and not shield.question_budget_left():
+            # The question skips the proof of work, so the server rations it per network.
+            return request.make_json_response(
+                {"error": "question_limit"},
+                headers=[("Cache-Control", "no-store")],
+                status=429,
+            )
+        issued = shield.issue(wanted)
         return request.make_json_response(
             issued, headers=[("Cache-Control", "no-store")]
         )

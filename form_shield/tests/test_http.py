@@ -46,6 +46,20 @@ class TestFormShieldHttp(HamsHttpCase):
         # A GET is not an issue route: pages that may be edge-cached must never share one.
         self.assertEqual(self.url_open("/form_shield/challenge").status_code, 405)
 
+    # [@ANCHOR: form_shield:test_challenge_endpoint_caps_question_requests]
+    # Tests [@ANCHOR: form_shield:question_budget]
+    def test_challenge_endpoint_caps_question_requests(self):
+        # A bot asking for kind=q (difficulty 0) to skip the proof of work gets only a few.
+        statuses = [
+            self.url_open("/form_shield/challenge", data={"kind": "q"}, method="POST").status_code
+            for _ in range(7)
+        ]
+        self.assertEqual(statuses, [200] * 5 + [429] * 2)
+        # The proof of work is not rationed by this.
+        self.assertEqual(
+            self.url_open("/form_shield/challenge", data={"kind": "pow"}, method="POST").status_code, 200
+        )
+
     def test_challenge_is_bound_to_the_forwarded_network(self):
         # Tests [@ANCHOR: form_shield:ip_tag]
         # Behind the tunnel the peer is loopback and the visitor is in CF-Connecting-IP.
