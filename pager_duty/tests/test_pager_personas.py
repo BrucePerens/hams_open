@@ -27,8 +27,13 @@ class TestPagerIncidentPersonas(HamsTransactionCase):
         if persona.key == "pager_admin":
             self.assertFalse(persona.user.website_id, "a pager admin in production has no website")
             self.assertTrue(visible, "the admin rule hid an incident of a website from an admin with no website")
-        if not persona.allowed:
-            self.assertFalse(visible, f"{persona.key} must not read an incident")
+        # Both directions, for every persona: the test used to assert only the refusal, so a rule that hid the
+        # incident from a user the ACL names (a service account, say) passed it.
+        self.assertEqual(
+            visible, bool(persona.allowed),
+            f"{persona.key}: the incident is {'hidden from' if persona.allowed else 'visible to'} "
+            f"a user the ACL {'names' if persona.allowed else 'does not name'}",
+        )
 
 
 @tagged("post_install", "-at_install")
