@@ -57,17 +57,17 @@ class TestLoginCooldownClientIp(common.HamsTransactionCase):
         self.env["ir.config_parameter"].set_param("base.login_cooldown_after", "1")
         registry = self.env.registry
         registry._login_failures = None
-        request_obj = _FakeRequest("127.0.0.1", {"CF-Connecting-IP": "203.0.113.7"})
+        request_obj = _FakeRequest("::1", {"CF-Connecting-IP": "203.0.113.7"})
         after = self._fail_once(request_obj)
-        self.assertEqual(after, "127.0.0.1", "REMOTE_ADDR must be restored after the login attempt")
+        self.assertEqual(after, "::1", "REMOTE_ADDR must be restored after the login attempt")
         self.assertIn("203.0.113.7", registry._login_failures)
-        self.assertNotIn("127.0.0.1", registry._login_failures)
+        self.assertNotIn("::1", registry._login_failures)
 
     def test_garbage_forwarded_address_falls_back_to_the_peer(self):
         # Tests [@ANCHOR: zero_sudo:login_cooldown_per_client_ip]
         self.env["ir.config_parameter"].set_param("base.login_cooldown_after", "1")
         registry = self.env.registry
         registry._login_failures = None
-        request_obj = _FakeRequest("127.0.0.1", {"CF-Connecting-IP": "not-an-ip"})
+        request_obj = _FakeRequest("::1", {"CF-Connecting-IP": "not-an-ip"})
         self._fail_once(request_obj)
-        self.assertIn("127.0.0.1", registry._login_failures)
+        self.assertIn("::1", registry._login_failures)
