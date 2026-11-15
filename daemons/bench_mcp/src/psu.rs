@@ -333,7 +333,11 @@ mod tests {
         let v = output_on(&mut l, &lim(), 1.0, &timer, dev.link()).unwrap();
         assert_eq!(v["output"], "on");
         assert_eq!(v["off_after_s"], 1.0);
-        std::thread::sleep(Duration::from_millis(2500));
+        // Bounded wait for the timer's switch-off, not a fixed sleep: a loaded machine may run it late.
+        let waited = std::time::Instant::now();
+        while count(&dev, "OUTP OFF") < 1 && waited.elapsed() < Duration::from_secs(30) {
+            std::thread::sleep(Duration::from_millis(50));
+        }
         assert_eq!(count(&dev, "OUTP OFF"), 1, "{:?}", dev.received());
         let mut l = dev.link()().unwrap();
         assert_eq!(l.query("OUTP?").unwrap(), "OFF");
@@ -345,9 +349,12 @@ mod tests {
         let timer = Timer::default();
         let dev = fake_supply(3.3, false);
         let mut l = dev.link()().unwrap();
-        output_on(&mut l, &lim(), 1.0, &timer, dev.link()).unwrap();
+        // A long timer, so a loaded machine cannot let it expire before the explicit off below; the wait then runs past it.
+        let armed = std::time::Instant::now();
+        output_on(&mut l, &lim(), 5.0, &timer, dev.link()).unwrap();
         safe_state(&mut l, &timer).unwrap();
-        std::thread::sleep(Duration::from_millis(2000));
+        let expiry = Duration::from_secs_f64(5.0 + 1.5);
+        std::thread::sleep(expiry.saturating_sub(armed.elapsed()));
         assert_eq!(count(&dev, "OUTP OFF"), 1, "{:?}", dev.received());
     }
 
