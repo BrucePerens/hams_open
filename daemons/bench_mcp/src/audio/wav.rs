@@ -51,8 +51,13 @@ pub fn parse(b: &[u8]) -> Result<Wav, String> {
         let body = at + 8;
         let end = body.saturating_add(size).min(b.len());
         if id == b"fmt " && end - body >= 16 {
+            // WAVE_FORMAT_EXTENSIBLE (0xfffe) names the real format in the first two bytes of its sub-format GUID.
+            let tag = match u16le(b, body) {
+                0xfffe if end - body >= 26 => u16le(b, body + 24),
+                t => t,
+            };
             fmt = Some((
-                u16le(b, body),
+                tag,
                 u16le(b, body + 2),
                 u32le(b, body + 4),
                 u16le(b, body + 14),
@@ -69,19 +74,19 @@ pub fn parse(b: &[u8]) -> Result<Wav, String> {
         return Err("the WAV file has zero channels or a zero sample rate".into());
     }
     let samples: Vec<f32> = match (tag, bits) {
-        (1 | 0xfffe, 16) => data
+        (1, 16) => data
             .as_chunks::<2>()
             .0
             .iter()
             .map(|c| f32::from(i16::from_le_bytes(*c)) / 32768.0)
             .collect(),
-        (1 | 0xfffe, 24) => data
+        (1, 24) => data
             .as_chunks::<3>()
             .0
             .iter()
             .map(|c| (i32::from_le_bytes([0, c[0], c[1], c[2]]) >> 8) as f32 / 8_388_608.0)
             .collect(),
-        (1 | 0xfffe, 32) => data
+        (1, 32) => data
             .as_chunks::<4>()
             .0
             .iter()
@@ -192,6 +197,30 @@ mod tests {
         let mut g = Vec::new();
         g.extend_from_slice(b"RIFF\0\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0\x40\x1f\0\0\0\0\0\0\x03\0\x18\0data\x03\0\0\0\0\0\x40");
         assert_eq!(parse(&g).unwrap().samples, vec![0.5]);
+    }
+
+    // Tests [@ANCHOR: audio_wav]
+    #[test]
+    fn an_extensible_float_file_is_read_as_float_not_integer() {
+        let mut f = Vec::new();
+        f.extend_from_slice(b"RIFF\0\0\0\0WAVE");
+        // fmt: 0xfffe, 1 channel, 8000 Hz, 32 bits, extension size 22, valid bits 32, mask 0, sub-format GUID starting with tag 3 (float).
+        f.extend_from_slice(
+            b"fmt \x28\0\0\0\xfe\xff\x01\0\x40\x1f\0\0\0\0\0\0\x04\0\x20\0\x16\0\x20\0\0\0\0\0",
+        );
+        f.extend_from_slice(&[
+            3, 0, 0, 0, 0, 0, 0x10, 0, 0x80, 0, 0, 0xaa, 0, 0x38, 0x9b, 0x71,
+        ]);
+        f.extend_from_slice(b"data\x04\0\0\0");
+        f.extend_from_slice(&0.25f32.to_le_bytes());
+        assert_eq!(parse(&f).unwrap().samples, vec![0.25]);
+        // The same header with the integer PCM sub-format (tag 1) reads as 32-bit integers.
+        let mut g = f.clone();
+        let at = g.windows(4).position(|w| w == [3, 0, 0, 0]).unwrap();
+        g[at] = 1;
+        let n = g.len();
+        g[n - 4..].copy_from_slice(&0x2000_0000i32.to_le_bytes());
+        assert_eq!(parse(&g).unwrap().samples, vec![0.25]);
     }
 
     #[test]
