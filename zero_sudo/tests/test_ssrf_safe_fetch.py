@@ -170,6 +170,13 @@ class TestSsrfSafeFetch(HamsTransactionCase):
         with self.assertRaisesRegex(sf.SSRFValidationError, "non-public address"):
             sf.resolve_ssrf_safe_addresses("metadata.example", "test-context")
 
+    def test_resolve_ssrf_safe_addresses_refuses_an_address_it_cannot_parse(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_resolve_ssrf_safe_addresses]
+        fake_result = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("not-an-ip", 0))]
+        self.safe_patch("socket.getaddrinfo", return_value=fake_result)
+        with self.assertRaisesRegex(sf.SSRFValidationError, "unparseable address"):
+            sf.resolve_ssrf_safe_addresses("odd.example", "test-context")
+
     def test_resolve_ssrf_safe_addresses_returns_addrinfo_for_a_safe_host(self):
         # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_resolve_ssrf_safe_addresses]
         fake_result = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 0))]

@@ -144,8 +144,10 @@ def resolve_ssrf_safe_addresses(hostname, context):
         sockaddr = info[4]
         try:
             ip_obj = ipaddress.ip_address(sockaddr[0])
-        except ValueError:
-            continue
+        except ValueError as e:
+            raise SSRFValidationError(
+                f"Download URL for {context} resolves to an unparseable address ({sockaddr[0]!r}). Refusing to fetch."
+            ) from e
         if not is_ssrf_safe_public_ip(ip_obj):
             raise SSRFValidationError(
                 f"Download URL for {context} resolves to a non-public address "
