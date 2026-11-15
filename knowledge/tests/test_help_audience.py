@@ -135,6 +135,18 @@ class TestHelpAudience(HamsHttpCase):
             for name in self._internal_names():
                 self.assertNotIn(name, response.content, login)
 
+    def test_03b_like_wildcards_in_the_search_are_literal(self):
+        # Tests [@ANCHOR: knowledge:help_search_member_only]
+        # The sidebar may list the guide on any page, so compare with a search that matches nothing.
+        self._as("zorkmid_manager")
+        needle = b"Zorkmid Relay Setup Guide"
+        for url in ("/manual/search?search=", "/manual/internal?search="):
+            baseline = self.url_open(url + "QQnomatchQQ").content.count(needle)
+            for hostile in ("%25", "_", "%25%25", "Zorkmid_Relay", "%5C"):
+                response = self.url_open(url + hostile)
+                self.assertEqual(response.status_code, 200, (url, hostile))
+                self.assertLessEqual(response.content.count(needle), baseline, (url, hostile))
+
     def test_04_internal_article_url_is_404_for_non_administrators(self):
         # Tests [@ANCHOR: knowledge:internal_article_url_404]
         # Tests [@ANCHOR: knowledge:can_open_article]
