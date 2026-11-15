@@ -278,10 +278,16 @@ def _verdict(ses_message, name):
 
 # [@ANCHOR: ses_webhook:failed_sender_check]
 def _failed_sender_check(ses_message):
-    """Why the mail must be refused, or '' to accept it: DMARC FAIL, or both SPF and DKIM FAIL.
-    PASS, GRAY (a domain with no DMARC record), PROCESSING_FAILED and missing verdicts are accepted."""
+    """Why the mail must be refused, or '' to accept it: a DMARC FAIL when the sender's policy
+    (receipt.dmarcPolicy) is quarantine or reject, or both SPF and DKIM FAIL. A DMARC FAIL under policy
+    none or a missing policy is accepted (logged at info), as are PASS, GRAY (a domain with no DMARC
+    record), PROCESSING_FAILED and missing verdicts."""
     if _verdict(ses_message, 'dmarcVerdict') == 'FAIL':
-        return 'SES reports a DMARC FAIL verdict.'
+        receipt = ses_message.get('receipt')
+        policy = receipt.get('dmarcPolicy') if isinstance(receipt, dict) else None
+        if policy in ('quarantine', 'reject'):
+            return 'SES reports a DMARC FAIL verdict under policy %s.' % policy
+        _logger.info("SES Webhook: DMARC FAIL accepted because the sender's policy is %s.", policy or 'missing')
     if _verdict(ses_message, 'spfVerdict') == 'FAIL' and _verdict(ses_message, 'dkimVerdict') == 'FAIL':
         return 'SES reports FAIL verdicts for both SPF and DKIM.'
     return ''
