@@ -809,7 +809,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
                     )))
                 }
             };
-            if !(5..=8).contains(&v.data_bits) || !(1..=2).contains(&v.stop_bits) {
+            if !(7..=8).contains(&v.data_bits) || !(1..=2).contains(&v.stop_bits) {
                 return Err(bad("vendor line settings out of range"));
             }
             if !matches!(v.flow.as_str(), "none" | "xonxoff" | "rtscts") {
@@ -945,7 +945,7 @@ fn build_receiver(r: &ReceiverSection) -> Result<ReceiverParams, RigError> {
             )))
         }
     };
-    if !(5..=8).contains(&r.data_bits) || !(1..=2).contains(&r.stop_bits) || r.baud == 0 {
+    if !(7..=8).contains(&r.data_bits) || !(1..=2).contains(&r.stop_bits) || r.baud == 0 {
         return Err(bad("receiver line settings out of range"));
     }
     if !matches!(r.flow.as_str(), "none" | "xonxoff" | "rtscts") {
@@ -2284,5 +2284,24 @@ verified = { state = "unverified" }
             &GOOD.replace("14074000", "60000000000"),
             "defaults.frequency_hz",
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_receiver]
+    #[test]
+    fn serial_data_bits_the_port_cannot_open_are_rejected() {
+        let vendor = include_str!("../../../rigs/alinco-dx-77.toml");
+        let receiver = include_str!("../../../rigs/aor-ar5000a.toml");
+        for text in [vendor, receiver] {
+            assert!(parse(text).is_ok());
+            assert!(text.contains("data_bits = 8"));
+            for bad in ["5", "6", "9"] {
+                expect_rejected(
+                    &text.replace("data_bits = 8", &format!("data_bits = {bad}")),
+                    "line settings",
+                );
+            }
+            assert!(parse(&text.replace("data_bits = 8", "data_bits = 7")).is_ok());
+        }
     }
 }
