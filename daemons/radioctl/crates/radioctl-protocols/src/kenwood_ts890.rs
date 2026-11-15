@@ -424,7 +424,10 @@ fn decode_level(name: &str, digits: &str) -> Option<Observation> {
     if digits.len() != 3 {
         return None;
     }
-    let value = u16::try_from(parse_digits(digits)?).ok()?;
+    let wire = level_wire(level)?;
+    let value = u16::try_from(parse_digits(digits)?)
+        .ok()
+        .filter(|value| *value <= wire.max)?;
     Some(Observation::Level(level, value))
 }
 
