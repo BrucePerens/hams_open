@@ -2,15 +2,20 @@
 import secrets
 from odoo import api, fields, models
 
+# The token is a credential (it travels in the URL): only administrators and the webhook service
+# account may read it, not every internal user.
+_TOKEN_GROUPS = 'base.group_system,ses_webhook.group_ses_webhook_service'
+
+
 # [@ANCHOR: ses_webhook_ses_webhook_domain_ses_webhook_domain]
 class SesWebhookDomain(models.Model):
     _name = 'ses.webhook.domain'
     _description = 'SES Webhook Domain Configuration'
     
     name = fields.Char(string='Domain Name', required=True, help="E.g., example.com")
-    secret_token = fields.Char(string='Secret Token', required=True, copy=False, default=lambda self: secrets.token_urlsafe(24))
+    secret_token = fields.Char(string='Secret Token', required=True, copy=False, default=lambda self: secrets.token_urlsafe(24), groups=_TOKEN_GROUPS)
     company_id = fields.Many2one('res.company', string='Tenant (Company)', required=True, default=lambda self: self.env.company)
-    webhook_url = fields.Char(string='Webhook URL', compute='_compute_webhook_url')
+    webhook_url = fields.Char(string='Webhook URL', compute='_compute_webhook_url', groups=_TOKEN_GROUPS)
     log_ids = fields.One2many('ses.webhook.log', 'domain_id', string='Logs')
     
     # [@ANCHOR: ses_webhook:COMM_compute_webhook_url]

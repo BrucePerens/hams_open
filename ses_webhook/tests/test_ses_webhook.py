@@ -934,6 +934,25 @@ class TestSesWebhook(HamsHttpCase):
         with self.assertRaises(AccessError):
             self.domain_c.with_user(user_a).read(["name"])
 
+    def test_10b_secret_token_is_hidden_from_plain_internal_users(self):
+        """The token is a credential in the webhook URL: an internal user sees the domain's name
+        but can read neither secret_token nor webhook_url; an administrator still can."""
+        user_a = self.env["res.users"].create({
+            "name": "SES Webhook User Token",
+            "login": "ses_webhook_user_token",
+            "company_id": self.company_a.id,
+            "company_ids": [(6, 0, [self.company_a.id])],
+            "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+        domain = self.domain_a.with_user(user_a)
+        self.assertEqual(domain.read(["name"])[0]["name"], "test-a.com")
+        with self.assertRaises(AccessError):
+            domain.read(["secret_token"])
+        with self.assertRaises(AccessError):
+            domain.read(["webhook_url"])
+        self.assertEqual(self.domain_a.secret_token, "mock_secret_a")
+        self.assertIn("token=mock_secret_a", self.domain_a.webhook_url)
+
     def test_13_domain_multi_company_isolation_symmetric(self):
         """
         The mirror of test_10 with Company A/B swapped -- only one
