@@ -2218,6 +2218,8 @@ def log_tail_thread(client, check):
                         logger.info(
                             f"[{name}] Suppressed log alert during grace period."
                         )
+                    elif pagerduty_maintenance.read_flag()["state"] == pagerduty_maintenance.ACTIVE:
+                        logger.info(f"[{name}] pagerduty maintenance active: log alert NOT reported: {line.strip()}")
                     else:
                         report(
                             client,
