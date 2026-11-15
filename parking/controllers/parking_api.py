@@ -58,8 +58,13 @@ class ParkingController(http.Controller):
 
     # [@ANCHOR: parking:COMM_inquiry_rate_limited]
     # Verified by [@ANCHOR: parking:COMM_test_inquiry_rate_limited]
+    # Verified by [@ANCHOR: parking:COMM_test_inquiry_race]
     def _rate_limited(self, env, ip_hash):
         since = fields.Datetime.to_string(datetime.datetime.utcnow() - datetime.timedelta(hours=1))
+        # Two simultaneous posts must not both count the same rows and both pass the limits. The service account's row is
+        # written (no value changes) before the count: the second post's UPDATE fails with a serialization failure when the
+        # first has committed since its snapshot, and Odoo runs the request again. A lock alone would not refresh the snapshot.
+        env.cr.execute("UPDATE res_users SET id = id WHERE id = %s", (env.uid,))  # audit-ignore-sql: write-lock on the service account's own row
         inquiries = env["parking.inquiry"]
         per_ip = inquiries.search_count([("ip_hash", "=", ip_hash), ("create_date", ">=", since)])
         everyone = inquiries.search_count([("create_date", ">=", since)])
