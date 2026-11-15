@@ -52,6 +52,25 @@ class PowerTest(unittest.TestCase):
         self.assertEqual(calls[0], ["uhubctl", "-l", "2", "-p", "1", "-a", "off", "-N"])
         self.assertEqual(calls[1], ["on-it"])
 
+    # Tests [@ANCHOR: power_cycle_stress_power]
+    def test_sysfs_backend_never_puts_the_path_in_shell_text(self):
+        calls = []
+
+        def fake_run(cmd, timeout, stdin=None):
+            calls.append((cmd, stdin))
+            return 0, "", ""
+
+        original = pcs.run
+        pcs.run = fake_run
+        try:
+            power = pcs.Power(args(backend="sysfs", sysfs_disable="/sys/x; touch /tmp/pwn"))
+            self.assertEqual(power.off(), (True, ""))
+            self.assertEqual(power.on(), (True, ""))
+        finally:
+            pcs.run = original
+        self.assertEqual(calls[0], (["sudo", "-n", "tee", "/sys/x; touch /tmp/pwn"], "1\n"))
+        self.assertEqual(calls[1][1], "0\n")
+
 
 if __name__ == "__main__":
     unittest.main()

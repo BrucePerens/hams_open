@@ -38,9 +38,9 @@ VID = "1df7"
 PIDS = {"rsp2": "3010", "rsp1a": "3000", "rsp1": "2500"}
 
 
-def run(cmd, timeout=60):
+def run(cmd, timeout=60, stdin=None):
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, input=stdin)
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired:
         return 124, "", "timeout"
@@ -118,7 +118,8 @@ class Power:
         return False, "unknown backend"
 
     def _sysfs(self, val):
-        rc, out, err = run(["sudo", "-n", "sh", "-c", f"echo {val} > {self.a.sysfs_disable}"], timeout=10)
+        # tee, not `sh -c "echo > path"`: the path is data, never shell text
+        rc, out, err = run(["sudo", "-n", "tee", self.a.sysfs_disable], timeout=10, stdin=val + "\n")
         return rc == 0, (out + err)[-300:]
 
 
