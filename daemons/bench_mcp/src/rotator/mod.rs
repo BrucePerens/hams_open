@@ -639,10 +639,18 @@ mod tests {
             }
         });
         let b = bench("rot_nan", fake.port, "read_config", "");
-        let e = call(&b, "bench_rotator_point", &json!({"azimuth_deg": 90, "elevation_deg": 10}))
-            .unwrap_err();
+        let e = call(
+            &b,
+            "bench_rotator_point",
+            &json!({"azimuth_deg": 90, "elevation_deg": 10}),
+        )
+        .unwrap_err();
         assert!(e.contains("reports no limits"), "{e}");
-        assert!(seen.lock().unwrap().iter().all(|c| !c.starts_with("set_pos")));
+        assert!(seen
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|c| !c.starts_with("set_pos")));
     }
 
     // Tests [@ANCHOR: rotator_target_check]
