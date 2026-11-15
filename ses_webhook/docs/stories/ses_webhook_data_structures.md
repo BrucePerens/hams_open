@@ -83,7 +83,7 @@
 
 ### `_failed_sender_check(ses_message)` [@ANCHOR: ses_webhook:failed_sender_check]
 
-`-> str`, module function in `controllers/webhook_api.py`. Reads the SES `receipt` verdicts of a Notification and returns the reason to refuse the mail, or `''` to accept it. A DMARC `FAIL`, or `FAIL` for both SPF and DKIM, is refused: the route logs it with status `rejected_sender` and never calls `message_process` (which would post as the user the From header names). `PASS`, `GRAY` (a domain without a DMARC record), `PROCESSING_FAILED`, a single SPF or DKIM `FAIL` and missing or malformed verdicts are accepted. Test: `test_27c_failed_sender_verdicts_refuse_the_mail`.
+`-> str`, module function in `controllers/webhook_api.py`. Reads the SES `receipt` verdicts of a Notification and returns the reason to refuse the mail, or `''` to accept it. A DMARC `FAIL` while the sender's policy (`receipt.dmarcPolicy`) is `quarantine` or `reject`, or `FAIL` for both SPF and DKIM, is refused: the route logs it with status `rejected_sender` and never calls `message_process` (which would post as the user the From header names). A DMARC `FAIL` under policy `none` or a missing policy is accepted and logged at info. `PASS`, `GRAY` (a domain without a DMARC record), `PROCESSING_FAILED`, a single SPF or DKIM `FAIL` and missing or malformed verdicts are accepted. Test: `test_27c_failed_sender_verdicts_refuse_the_mail`.
 
 ### `_verdict(ses_message, name)` [@ANCHOR: ses_webhook:verdict]
 

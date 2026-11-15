@@ -579,27 +579,32 @@ class TestSesWebhook(HamsHttpCase):
 
     def test_27c_failed_sender_verdicts_refuse_the_mail(self):
         # Tests [@ANCHOR: ses_webhook:failed_sender_check]
-        """DMARC FAIL, or SPF and DKIM both FAIL, is logged rejected_sender and not processed; PASS, GRAY,
-        PROCESSING_FAILED, a single FAIL and missing verdicts are processed."""
+        """DMARC FAIL under policy quarantine or reject, or SPF and DKIM both FAIL, is logged rejected_sender
+        and not processed; DMARC FAIL under policy none or no policy, PASS, GRAY, PROCESSING_FAILED, a single
+        FAIL and missing verdicts are processed."""
         raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Verdict\n\nTest"
         mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
         mock_process.return_value = True
         url = f'/mail/webhook/sns?token={self.domain_a.secret_token}'
 
-        def deliver(message_id, receipt):
+        def deliver(message_id, receipt, policy=None):
             ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
             if receipt is not None:
                 ses_message["receipt"] = {k: {"status": v} for k, v in receipt.items()}
+                if policy is not None:
+                    ses_message["receipt"]["dmarcPolicy"] = policy
             payload = self._sign({"Type": "Notification", "MessageId": message_id, "Message": json.dumps(ses_message)})
             self.assertEqual(self.url_open(url, data=json.dumps(payload).encode('utf-8')).status_code, 200)
             return self.env['ses.webhook.log'].search([('name', '=', message_id)]).status
 
+        dmarc_fail = {'dmarcVerdict': 'FAIL', 'spfVerdict': 'PASS', 'dkimVerdict': 'PASS'}
         refused = {
-            'v-dmarc': {'dmarcVerdict': 'FAIL', 'spfVerdict': 'PASS', 'dkimVerdict': 'PASS'},
-            'v-both': {'spfVerdict': 'FAIL', 'dkimVerdict': 'FAIL', 'dmarcVerdict': 'GRAY'},
+            'v-dmarc-quarantine': (dmarc_fail, 'quarantine'),
+            'v-dmarc-reject': (dmarc_fail, 'reject'),
+            'v-both': ({'spfVerdict': 'FAIL', 'dkimVerdict': 'FAIL', 'dmarcVerdict': 'GRAY'}, None),
         }
-        for message_id, receipt in refused.items():
-            self.assertEqual(deliver(message_id, receipt), 'rejected_sender', message_id)
+        for message_id, (receipt, policy) in refused.items():
+            self.assertEqual(deliver(message_id, receipt, policy), 'rejected_sender', message_id)
         mock_process.assert_not_called()
 
         accepted = {
@@ -611,7 +616,10 @@ class TestSesWebhook(HamsHttpCase):
         }
         for message_id, receipt in accepted.items():
             self.assertEqual(deliver(message_id, receipt), 'success', message_id)
-        self.assertEqual(mock_process.call_count, len(accepted))
+        # A DMARC FAIL is accepted when the sender's policy is none or missing.
+        self.assertEqual(deliver('v-dmarc-policy-none', dmarc_fail, 'none'), 'success')
+        self.assertEqual(deliver('v-dmarc-policy-missing', dmarc_fail), 'success')
+        self.assertEqual(mock_process.call_count, len(accepted) + 2)
 
     def test_28_signature_tampered_rejected(self):
         # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
