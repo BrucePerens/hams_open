@@ -87,7 +87,14 @@ _SUBSCRIBE_SIGNED_FIELDS = ('Message', 'MessageId', 'SubscribeURL', 'Timestamp',
 # how long a captured payload stays replayable; it does not need to match SNS's own multi-day retry
 # window for UNDELIVERED messages, since a delivered-and-replayed message is what this defends
 # against, not a legitimate late first delivery.
+#
+# The 15 minutes is the clock-skew bound (a Timestamp in the future). The past side is wider: after
+# an outage of ours longer than 15 minutes SNS retries the same signed message, and rejecting it
+# would lose a bounce or complaint suppression for good. A replay inside the wider bound is
+# harmless because a MessageId already handled is acknowledged without being processed again
+# (receive_sns_webhook), and an old message that was never handled is exactly the retry we want.
 _MAX_SNS_MESSAGE_AGE = timedelta(minutes=15)
+_MAX_SNS_REDELIVERY_AGE = timedelta(hours=24)
 
 # The only payload_type values ses.webhook.log's own Selection field
 # accepts -- anything else attacker-controlled in the JSON body's "Type"
@@ -217,7 +224,7 @@ def _verify_sns_signature(payload):
             )
             return False
         age = datetime.now(timezone.utc) - message_time
-        if abs(age) > _MAX_SNS_MESSAGE_AGE:
+        if age > _MAX_SNS_REDELIVERY_AGE or -age > _MAX_SNS_MESSAGE_AGE:
             _logger.warning(
                 "SES Webhook: refusing a SNS message outside the %s freshness window "
                 "(Timestamp=%s, age=%s) -- likely a replayed or clock-skewed delivery.",

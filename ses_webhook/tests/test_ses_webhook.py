@@ -646,14 +646,31 @@ class TestSesWebhook(HamsHttpCase):
         log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sig-badversion')])
         self.assertEqual(log.status, 'rejected_signature')
 
+    def test_32a_a_signed_retry_after_a_longer_outage_is_processed_once(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
+        """SNS retried a message after an outage of ours longer than 15 minutes: it is still
+        accepted (inside the 24 hour redelivery bound) and, redelivered again, processed once."""
+        ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
+        old = (datetime.now(timezone.utc) - timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        payload = self._sign(
+            {"Type": "Notification", "MessageId": "msg-late-retry", "Message": json.dumps(ses_message), "Timestamp": old}
+        )
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        url = f'/mail/webhook/sns?token={self.domain_a.secret_token}'
+        for _ in range(2):
+            self.assertEqual(self.url_open(url, data=json.dumps(payload).encode('utf-8')).status_code, 200)
+        self.assertEqual(mock_process.call_count, 1)
+        self.assertEqual(self.env['ses.webhook.log'].search([('name', '=', 'msg-late-retry')]).status, 'success')
+
     def test_32b_signature_stale_timestamp_rejected(self):
         # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
-        """A real, correctly-signed payload whose signed Timestamp is far outside
-        _MAX_SNS_MESSAGE_AGE must be rejected -- this is exactly what a captured-and-replayed
+        """A real, correctly-signed payload whose signed Timestamp is older than
+        _MAX_SNS_REDELIVERY_AGE must be rejected -- this is exactly what a captured-and-replayed
         legitimate message looks like: valid signature, valid cert, but stale. Checked before the
         certificate is ever fetched (cheap-check-first), like test_32's SignatureVersion gate."""
         ses_message = {"notificationType": "Received", "content": "From: a@test-a.com\nTo: c@d.com\n\nX"}
-        stale_timestamp = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        stale_timestamp = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         payload = {
             "Type": "Notification", "MessageId": "msg-sig-stale", "Message": json.dumps(ses_message),
             "Timestamp": stale_timestamp,
