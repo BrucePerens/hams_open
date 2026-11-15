@@ -343,12 +343,16 @@ fn class_nodes(class: &str, dir: &Path, out: &mut Vec<Node>) {
 
 fn interface_of(dir: &Path, name: &str) -> Interface {
     // [@ANCHOR: bench_mcp_usb_hub_sysfs_interface_of]
+    // The kernel prints bInterfaceNumber as "%02x" (hex) and bAlternateSetting as "%2d" (decimal).
     let num = |f: &str| read(&dir.join(f)).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let number = read(&dir.join("bInterfaceNumber"))
+        .and_then(|s| u32::from_str_radix(&s, 16).ok())
+        .unwrap_or(0);
     let mut nodes = Vec::new();
     collect_nodes(dir, 0, &mut nodes);
     Interface {
         name: name.to_string(),
-        number: num("bInterfaceNumber"),
+        number,
         alt: num("bAlternateSetting"),
         class: hex_u8(read(&dir.join("bInterfaceClass"))),
         subclass: hex_u8(read(&dir.join("bInterfaceSubClass"))),
@@ -739,6 +743,20 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_ports_of]
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree]
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_controller]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_interface_of]
+    #[test]
+    fn interface_number_is_read_as_hex_like_the_kernel_prints_it() {
+        let d = crate::testdir::TestDir::new("ifnum");
+        for (n, hex) in [("0a", 10), ("10", 16), ("1f", 31), ("09", 9)] {
+            let dir = d.path().join(n);
+            std::fs::create_dir(&dir).unwrap();
+            std::fs::write(dir.join("bInterfaceNumber"), format!("{n}\n")).unwrap();
+            std::fs::write(dir.join("bAlternateSetting"), " 1\n").unwrap();
+            let i = interface_of(&dir, "x");
+            assert_eq!((i.number, i.alt), (hex, 1), "bInterfaceNumber {n}");
+        }
+    }
+
     #[test]
     fn the_recorded_tree_has_the_vnwa_chain_and_its_topology() {
         let t = Tree::read(&fixture()).unwrap();
