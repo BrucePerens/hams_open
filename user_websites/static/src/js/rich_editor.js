@@ -354,7 +354,8 @@ export class RichEditor extends Interaction {
         for (const child of node.childNodes) {
             if (child.nodeType === Node.TEXT_NODE) {
                 out += child.textContent.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-            } else if (child.nodeType === Node.ELEMENT_NODE && !DROP_TAGS.has(child.tagName)) {
+            } else if (child.nodeType === Node.ELEMENT_NODE && !DROP_TAGS.has(child.tagName.toUpperCase())) {
+                // toUpperCase: an element inside <svg> or <math> keeps the lower case of its own namespace.
                 const inner = this.cleanNode(child);
                 const tag = child.tagName.toLowerCase();
                 if (child.tagName === "A") {
