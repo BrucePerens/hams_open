@@ -481,6 +481,8 @@ class _HomeParser(HTMLParser):
         if tag in _VOID:
             return
         self._stack.append((tag, hidden, recent))
+        if tag == "a":
+            self.finish_anchor()
         if tag == "a" and attrs.get("href"):
             self._anchor = {"href": attrs["href"].strip()[:MAX_URL_CHARS], "text": "", "hidden": hidden, "recent": recent}
 
@@ -494,7 +496,12 @@ class _HomeParser(HTMLParser):
             if self._stack[depth][0] == tag:
                 del self._stack[depth:]
                 break
-        if tag == "a" and self._anchor is not None:
+        if tag == "a":
+            self.finish_anchor()
+
+    def finish_anchor(self):
+        """Keeps the open anchor, if any. Called at `</a>`, at the next `<a>` (HTML ends the open one there) and when the page ends."""
+        if self._anchor is not None:
             self._anchor["text"] = " ".join(self._anchor["text"].split())[:MAX_TITLE_CHARS]
             if len(self.links) < MAX_HOME_LINKS * 4:
                 self.links.append(self._anchor)
@@ -525,6 +532,7 @@ def extract_home_evidence(markup, base_url):
         parser.close()
     except (ValueError, AssertionError):  # a malformed page: use what was read
         logger.info("club_spam: the home page of %s did not parse to the end; the part read is used", base_url)
+    parser.finish_anchor()
     base = urlsplit(base_url or "")
     base_host = (base.hostname or "").lower().removeprefix("www.")
     entries, seen = [], set()

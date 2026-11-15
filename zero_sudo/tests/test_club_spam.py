@@ -442,6 +442,19 @@ class TestHomePage(BaseCase):
             HOST + "/")
         self.assertEqual(css_only["hidden_links"], 0)  # a stylesheet class is not read, only an inline hide
 
+    def test_21b_a_link_with_no_end_tag_is_still_read(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_extract_home_evidence]
+        # Tests [@ANCHOR: zero_sudo:club_spam_parser_start]
+        # `</a>` may be left out: the next `<a>` and the end of the page end the open link, as they do in a browser.
+        spam_href = "http://x.example/casino-slots-online"
+        for markup in ('<p><a href="%s">best casino slots' % spam_href,
+                       '<p><a href="%s">best casino slots<a href="/about">About</a></p>' % spam_href):
+            with self.subTest(markup=markup):
+                home = spam.extract_home_evidence(markup, HOST + "/")
+                self.assertIn(spam_href, [e["u"] for e in home["entries"]])
+                self.assertEqual(home["outbound_links"], 1)
+                self.assertEqual(home["entries"][0]["t"], "best casino slots")
+
     def test_22_hostile_or_broken_markup_does_not_raise(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_extract_home_evidence]
         for markup in ["", None, "<<<<", "<a href=", "<div><a href='http://x.example.org/'>x", "\x00\x01<a href='/y'>",
