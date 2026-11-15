@@ -412,6 +412,8 @@ OUTBOUND_REPEAT_SECONDS = 3600
 LAST_OUTBOUND = {}
 
 
+# [@ANCHOR: pager_duty:outbound_due]
+# Verified by [@ANCHOR: pager_duty:test_outbound_throttle]
 def outbound_due(kind, source, severity=""):
     """True when `kind` ("webhook" or "smtp") may notify a person about `source` at `severity` now; records that it
     did. A higher or lower severity is a different alert and is not held back by an earlier one."""
@@ -423,11 +425,15 @@ def outbound_due(kind, source, severity=""):
     return True
 
 
+# [@ANCHOR: pager_duty:outbound_failed]
+# Verified by [@ANCHOR: pager_duty:test_outbound_throttle]
 def outbound_failed(kind, source, severity=""):
     """A send that did not go out does not count as sent: the next pass tries again."""
     LAST_OUTBOUND.pop((kind, source, severity), None)
 
 
+# [@ANCHOR: pager_duty:outbound_recovered]
+# Verified by [@ANCHOR: pager_duty:test_outbound_throttle]
 def outbound_recovered(source):
     """The source is healthy again, so its next failure is a new alert and notifies at once."""
     for key in [k for k in LAST_OUTBOUND if k[1] == source]:
