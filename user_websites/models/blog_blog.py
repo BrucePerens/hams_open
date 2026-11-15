@@ -25,7 +25,15 @@ class BlogBlog(models.Model):
             slug = slugs.get(blog.id)
             blog.site_path = f"/{slug}/blog" if slug else ""
 
-    _name_owner_uniq = models.Constraint("UNIQUE(name, owner_user_id, user_websites_group_id)", "You already have a blog with this exact title!")
+    # One title per owner. The old UNIQUE(name, owner_user_id, user_websites_group_id) never fired:
+    # one owner column is always NULL, and NULLs are distinct. Rows with no owner of that kind stay free.
+    _name_user_uniq = models.UniqueIndex(
+        "(name, owner_user_id) WHERE owner_user_id IS NOT NULL", "You already have a blog with this exact title!"
+    )
+    _name_group_uniq = models.UniqueIndex(
+        "(name, user_websites_group_id) WHERE user_websites_group_id IS NOT NULL",
+        "This group already has a blog with this exact title!",
+    )
 
     def _check_blog_quota(self, vals_list):
         # [@ANCHOR: user_websites_blog_quota_check]

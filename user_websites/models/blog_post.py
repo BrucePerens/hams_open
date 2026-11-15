@@ -23,7 +23,15 @@ class BlogPost(models.Model):
         string="View Count", default=0, help="Privacy-friendly tracking of post views."
     )
 
-    _name_owner_uniq = models.Constraint("UNIQUE(name, owner_user_id, user_websites_group_id)", "You already have a blog post with this exact title!")
+    # One title per owner. The old UNIQUE(name, owner_user_id, user_websites_group_id) never fired:
+    # one owner column is always NULL, and NULLs are distinct. Rows with no owner of that kind stay free.
+    _name_user_uniq = models.UniqueIndex(
+        "(name, owner_user_id) WHERE owner_user_id IS NOT NULL", "You already have a blog post with this exact title!"
+    )
+    _name_group_uniq = models.UniqueIndex(
+        "(name, user_websites_group_id) WHERE user_websites_group_id IS NOT NULL",
+        "This group already has a blog post with this exact title!",
+    )
 
     # [@ANCHOR: user_websites:blog_post_website_url]
     # Verified by [@ANCHOR: test_user_blog_urls_use_the_callsign]
