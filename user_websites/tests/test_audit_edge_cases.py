@@ -798,6 +798,19 @@ class TestAuditEdgeCases(RealTransactionCase):
         self.assertTrue(any("Fatal error during background unpublish" in m for m in log_ctx.output))
         incidents.report_incident.assert_called_once()
 
+    def test_12b_async_unpublish_database_error_is_logged_and_opens_a_pager_incident(self):
+        # Tests [@ANCHOR: user_websites:COMM_report_unpublish_failure]
+        """A deadlock or lock timeout mid-unpublish also leaves content published: it must be logged and paged too."""
+        incidents = self._recording_pager()
+        mock_get_service_env = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env"
+        )
+        mock_get_service_env.side_effect = psycopg2.errors.DeadlockDetected("simulated deadlock")
+        with self.assertLogs("odoo.addons.user_websites.models.res_users", level="ERROR") as log_ctx:
+            _async_unpublish_content(self.env.cr.dbname, [self.test_user.id])
+        self.assertTrue(any("Fatal error during background unpublish" in m for m in log_ctx.output))
+        incidents.report_incident.assert_called_once()
+
     def test_13_async_unpublish_without_the_provisioner_logs_and_does_nothing(self):
         # Tests [@ANCHOR: user_websites:COMM_async_unpublish_content]
         """With no sys_provisioner the task must log, touch nothing, and still release its cursor."""
