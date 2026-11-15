@@ -193,21 +193,7 @@ class CloudflareConfigManager(models.AbstractModel):
             
             pull_vals = []
             for website, existing_ruleset in websites_to_pull:
-                rules = existing_ruleset.get("rules", [])
-                for i, r in enumerate(rules):
-                    pull_vals.append(
-                        {
-                            "sequence": (i + 1) * 10,
-                            "name": r.get(
-                                "description", "Imported Rule " + r.get("id", "")
-                            ).split(":")[0][:50],
-                            "action": r.get("action", "block"),
-                            "expression": r.get("expression", ""),
-                            "description": r.get("description", ""),
-                            "active": r.get("enabled", True),
-                            "website_id": website.id,
-                        }
-                    )
+                pull_vals += self._waf_rule_vals_from_cloudflare(website, existing_ruleset.get("rules", []))
             if pull_vals:
                 self.env["cloudflare.waf.rule"].create(pull_vals)
                 
@@ -226,6 +212,36 @@ class CloudflareConfigManager(models.AbstractModel):
                 self.action_push_waf_rules(website_id=website.id)
 
     # [@ANCHOR: cloudflare:COMM_check_waf_caller_authorized]
+    def _waf_rule_vals_from_cloudflare(self, website, rules):
+        """Create-values for the Odoo rows of one website's Cloudflare custom-firewall rules.
+
+        A rule's name is the text before the first colon of its description (so the default rules'
+        "SECURITY: ..." descriptions both read "SECURITY"), but names are unique per website and never
+        empty: a repeated or missing name gets " (2)", " (3)" or the rule id, so one such rule cannot
+        make the whole pull fail on the constraint.
+        """
+        vals_list = []
+        used = set()
+        for i, r in enumerate(rules):
+            name = (r.get("description") or "").split(":")[0][:50].strip() or f"Imported Rule {r.get('id') or i + 1}"
+            unique, n = name, 2
+            while unique in used:
+                unique = f"{name} ({n})"
+                n += 1
+            used.add(unique)
+            vals_list.append(
+                {
+                    "sequence": (i + 1) * 10,
+                    "name": unique,
+                    "action": r.get("action", "block"),
+                    "expression": r.get("expression", ""),
+                    "description": r.get("description") or "",
+                    "active": r.get("enabled", True),
+                    "website_id": website.id,
+                }
+            )
+        return vals_list
+
     def _check_waf_caller_authorized(self):
         # Adversarial security review, 2026-09-03: action_pull_waf_rules
         # and action_push_waf_rules are public (non-underscore-prefixed)
@@ -277,22 +293,7 @@ class CloudflareConfigManager(models.AbstractModel):
             [("website_id", "=", website.id)], limit=1000
         ).unlink()
 
-        rules = existing_ruleset.get("rules", [])
-        vals_list = []
-        for i, r in enumerate(rules):
-            vals_list.append(
-                {
-                    "sequence": (i + 1) * 10,
-                    "name": r.get(
-                        "description", "Imported Rule " + r.get("id", "")
-                    ).split(":")[0][:50],
-                    "action": r.get("action", "block"),
-                    "expression": r.get("expression", ""),
-                    "description": r.get("description", ""),
-                    "active": r.get("enabled", True),
-                    "website_id": website.id,
-                }
-            )
+        vals_list = self._waf_rule_vals_from_cloudflare(website, existing_ruleset.get("rules", []))
         if vals_list:
             # ADR-0001: Headless Mutation Context
             self.env["cloudflare.waf.rule"].create(vals_list)
