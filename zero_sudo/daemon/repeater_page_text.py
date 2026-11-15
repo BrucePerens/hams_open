@@ -405,6 +405,8 @@ def number_on_page(page_text, value, tolerance=_TONE_TOLERANCE):
     return _near(_page_numbers(page_text), float(value), tolerance)
 
 
+# [@ANCHOR: zero_sudo:repeater_page_text_unit_amounts]
+# Verified by [@ANCHOR: zero_sudo:test_repeater_page_text_unit_amounts]
 def _unit_amounts(sentence):
     """The numbers of `sentence` that are followed by a unit of power or distance (50 W, 1,000 miles). Each run of digits, commas and
     points is looked at once, from its first digit (a regular expression that started at every digit of a long run was quadratic)."""
