@@ -323,10 +323,49 @@ def score_entry(url, title=""):
 # --------------------------------------------------------------------------------------------------------------------
 # Sitemaps
 
-_BLOCK_URL = re.compile(r"<url\b[^>]*>(.*?)</url>", re.I | re.S)
-_BLOCK_SITEMAP = re.compile(r"<sitemap\b[^>]*>(.*?)</sitemap>", re.I | re.S)
-_LOC = re.compile(r"<loc>\s*(?:<!\[CDATA\[)?\s*(.*?)\s*(?:\]\]>)?\s*</loc>", re.I | re.S)
-_LASTMOD = re.compile(r"<lastmod>\s*(.*?)\s*</lastmod>", re.I | re.S)
+_ASCII_LOWER = {code: code + 32 for code in range(65, 91)}  # str.lower() can change the length (U+0130), which breaks offsets
+_MAX_SITEMAP_CHARS = 10_000_000  # sitemap files are capped at 50 MB by the protocol; the crawler fetches far less
+
+
+def _blocks(text, lower, name):
+    """The inner text of every `<name ...>...</name>` element, found with str.find (linear): the regular expressions this
+    replaces rescanned to the end of the file from every unclosed `<url` and `<loc>`, which took minutes on a hostile sitemap."""
+    found, pos, open_tag, close_tag = [], 0, "<" + name, "</" + name + ">"
+    while True:
+        start = lower.find(open_tag, pos)
+        if start < 0:
+            return found
+        after = start + len(open_tag)
+        if after < len(lower) and (lower[after].isalnum() or lower[after] == "_"):
+            pos = after  # `<urlset` is not `<url`
+            continue
+        tag_end = lower.find(">", after)
+        if tag_end < 0:
+            return found
+        close = lower.find(close_tag, tag_end + 1)
+        if close < 0:
+            return found  # no later opening tag can find a closing one either
+        found.append((tag_end + 1, close))
+        pos = close + len(close_tag)
+
+
+def _inner(text, lower, name):
+    """The stripped text of the first `<name>...</name>` in `text` (CDATA wrapper removed), or None."""
+    start = lower.find("<" + name + ">")
+    if start < 0:
+        return None
+    start += len(name) + 2
+    end = lower.find("</" + name + ">", start)
+    if end < 0:
+        return None
+    value = text[start:end].strip()
+    if value.startswith("<![CDATA["):
+        value = value[9:].lstrip()
+    if value.endswith("]]>"):
+        value = value[:-3].rstrip()
+    return value
+
+
 _SPAM_FEED_SITEMAP = re.compile(r"[?&]feed=xmlsitemap\d*", re.I)
 
 
@@ -335,17 +374,20 @@ def parse_sitemap(text, limit=MAX_SITEMAP_ENTRIES):
     """(kind, entries, total): kind "index" or "urlset" ("" when neither), entries [(loc, lastmod text)] up to `limit`,
     total the number of entries in the file. Regular expressions only."""
     text = text if isinstance(text, str) else ""
-    index = bool(re.search(r"<sitemapindex\b", text, re.I))
-    blocks = _BLOCK_SITEMAP.findall(text) if index else _BLOCK_URL.findall(text)
-    kind = "index" if index else "urlset" if blocks or re.search(r"<urlset\b", text, re.I) else ""
+    text = text[:_MAX_SITEMAP_CHARS]
+    lower = text.translate(_ASCII_LOWER)
+    index = bool(re.search(r"<sitemapindex\b", lower))
+    spans = _blocks(text, lower, "sitemap" if index else "url")
+    blocks = [(text[start:end], lower[start:end]) for start, end in spans]
+    kind = "index" if index else "urlset" if blocks or re.search(r"<urlset\b", lower) else ""
     entries = []
-    for block in blocks:
-        loc = _LOC.search(block)
-        if not loc:
+    for block, block_lower in blocks:
+        loc = _inner(block, block_lower, "loc")
+        if loc is None:
             continue
-        mod = _LASTMOD.search(block)
+        mod = _inner(block, block_lower, "lastmod")
         if len(entries) < limit:
-            entries.append((html.unescape(loc.group(1))[:MAX_URL_CHARS], mod.group(1) if mod else ""))
+            entries.append((html.unescape(loc)[:MAX_URL_CHARS], mod if mod is not None else ""))
     return kind, entries, len(blocks)
 
 
