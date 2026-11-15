@@ -1338,8 +1338,11 @@ class UserWebsitesController(http.Controller):
                 "state": "new",
             }
             if group_id:
-                group = env_svc["user.websites.group"].browse(int(group_id))
-                if not group or request.env.user.id not in group.member_ids.ids:
+                wanted_group = int(group_id)
+                if not 0 < wanted_group < 2**31:  # past the database integer range is "no such group", not a 500
+                    return request.redirect("/my/home?error=appeal_failed")
+                group = env_svc["user.websites.group"].browse(wanted_group)
+                if not group.exists() or request.env.user.id not in group.member_ids.ids:
                     return request.redirect("/my/home?error=appeal_failed")
                 vals["group_id"] = group.id
                 suspended = group.is_suspended_from_websites
