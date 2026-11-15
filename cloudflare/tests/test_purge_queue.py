@@ -8,6 +8,7 @@ from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.models import BaseModel
 
+from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
 from odoo.addons.cloudflare.tests.website_credentials import restore_credentials_after_test
 
 _logger = logging.getLogger(__name__)
@@ -23,6 +24,11 @@ class TestPurgeQueue(RealTransactionCase):
         self.website.write(
             {"cloudflare_api_token": "fake_token", "cloudflare_zone_id": "fake_zone"}
         )
+        # _get_cloudflare_credentials is a distributed_cache whose write-triggered invalidation fires only after
+        # commit, which this uncommitted setUp never reaches: the first batch of process_queue read a cached
+        # "no credentials" entry, dropped its 30 rows and sent 9 requests, not 10. Drop the entry now; the
+        # restore cleanup's commit invalidates again, so the fake credentials do not outlive the test.
+        invalidate_model_cache(self.env, "website")
 
     def test_01_bdd_queue_batching_and_rate_limiting(self):
         # [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]
