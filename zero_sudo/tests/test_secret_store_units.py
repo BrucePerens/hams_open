@@ -178,6 +178,14 @@ class TestSecretStoreBackends(_TempCase):
                 ss.decrypt_value(*args)
             self.assertEqual(str(caught.exception), "secret '%s': does not decrypt with this key and name" % args[1])
 
+    def test_decrypt_refuses_a_stored_value_that_is_not_a_string(self):
+        # Tests [@ANCHOR: zero_sudo:secret_store_decrypt_value]
+        # A hand-edited JSON store may hold a number or a list; that is a token of another format, not an AttributeError.
+        for stored in (5, None, ["hs1.x"], {"a": 1}):
+            with self.subTest(stored=stored), self.assertRaises(ss.SecretStoreError) as caught:
+                ss.decrypt_value(b"k" * 32, "n", stored)
+            self.assertEqual(str(caught.exception), "secret 'n': not a hs1 token or wrong key size")
+
     def test_key_file_and_json_lookup_messages(self):
         short = self.write("short", base64.urlsafe_b64encode(b"k" * 16), 0o600)
         with self.assertRaises(ss.SecretStoreError) as caught:
