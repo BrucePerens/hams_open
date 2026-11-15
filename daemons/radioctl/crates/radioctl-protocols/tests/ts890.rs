@@ -230,3 +230,21 @@ fn the_lan_frames_follow_the_guides_example() {
     assert_eq!(lan_reply("##ID0;"), Some(false));
     assert_eq!(lan_reply("FA;"), None);
 }
+
+// Tests [@ANCHOR: radioctl_ts890_decode_level]
+#[test]
+fn a_level_answer_above_the_guide_maximum_is_unrecognised() {
+    let mut engine = Ts890Engine::new(description()).expect("engine");
+    for answer in [&b"AG256;"[..], b"RG999;", b"MG101;", b"KS061;", b"PC101;"] {
+        let out = engine.feed(answer, NOW);
+        assert!(
+            matches!(out.as_slice(), [Inbound::Unrecognised(_)]),
+            "{answer:?} is above the guide's range: {out:?}"
+        );
+    }
+    let out = engine.feed(b"AG255;", NOW);
+    assert_eq!(
+        out,
+        vec![Inbound::Observation(Observation::Level(Level::AfGain, 255))]
+    );
+}
