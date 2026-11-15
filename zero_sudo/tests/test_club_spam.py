@@ -208,6 +208,21 @@ def _sitemap(name, xml):
     return {"name": name, "url": name, "entries": entries, "total": total, "kind": kind}
 
 
+def assert_scales_linearly(test, run, small, factor=8):
+    """Fails when `run(n)` costs more than 3x `factor` times as much for `factor` times the input (linear is
+    `factor`x, quadratic `factor`^2 x). Compares this machine's own timings, so load does not fail it; best of
+    three on each side drops a one-off stall."""
+    def cost(n):
+        costs = []
+        for _ in range(3):
+            started = time.perf_counter()
+            run(n)
+            costs.append(time.perf_counter() - started)
+        return min(costs)
+    small_cost = cost(small)
+    test.assertLess(cost(small * factor), max(small_cost, 0.02) * factor * 3)
+
+
 @tagged("post_install", "-at_install")
 class TestScoring(BaseCase):
     """The lexicon: what is flagged, and what an amateur radio club legitimately writes is not."""
@@ -299,18 +314,16 @@ class TestSitemaps(BaseCase):
 
     def test_10_b_hostile_sitemaps_parse_in_linear_time(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_parse_sitemap]
-        n = 100_000
-        hostile = (
-            "<urlset>" + "<url>" * n,
-            "<urlset><url><loc>" + " " * n + "</url>",
-            "<urlset><url>" + "<loc>" * n + "</url>",
-            "<sitemapindex>" + "<sitemap " * n,
-            "<urlset>" + "<url <loc>" * n,
-        )
-        started = time.monotonic()
-        for text in hostile:
-            spam.parse_sitemap(text)
-        self.assertLess(time.monotonic() - started, 5)
+        def hostile(n):
+            for text in (
+                "<urlset>" + "<url>" * n,
+                "<urlset><url><loc>" + " " * n + "</url>",
+                "<urlset><url>" + "<loc>" * n + "</url>",
+                "<sitemapindex>" + "<sitemap " * n,
+                "<urlset>" + "<url <loc>" * n,
+            ):
+                spam.parse_sitemap(text)
+        assert_scales_linearly(self, hostile, 5000)
         # The linear reader still handles CDATA, attributes and a `<urlset` that is not a `<url`.
         kind, entries, total = spam.parse_sitemap(
             '<urlset><url id="1"><loc> <![CDATA[ http://a.example/x ]]> </loc><lastmod>2026-01-02</lastmod></url></urlset>'

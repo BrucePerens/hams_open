@@ -13,6 +13,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import generalized_monitor as gm  # noqa: E402
 
 
+def assert_scales_linearly(test, run, small, factor=8):
+    """Fails when `run(n)` costs more than 3x `factor` times as much for `factor` times the input (linear is
+    `factor`x, quadratic `factor`^2 x). Compares this machine's own timings, so load does not fail it; best of
+    three on each side drops a one-off stall."""
+    def cost(n):
+        costs = []
+        for _ in range(3):
+            started = time.perf_counter()
+            run(n)
+            costs.append(time.perf_counter() - started)
+        return min(costs)
+    small_cost = cost(small)
+    test.assertLess(cost(small * factor), max(small_cost, 0.02) * factor * 3)
+
+
 class ScrubLogLine(unittest.TestCase):
     def test_removes_sensitive_parts_and_keeps_the_rest(self):
         line = (
@@ -26,9 +41,8 @@ class ScrubLogLine(unittest.TestCase):
         self.assertIn("disk full", out)
 
     def test_a_very_long_line_is_scrubbed_in_linear_time(self):
-        start = time.monotonic()
+        assert_scales_linearly(self, lambda n: gm.scrub_log_line("a" * n + " k6bp@example.com"), 20000)
         out = gm.scrub_log_line("a" * 200000 + " k6bp@example.com")
-        self.assertLess(time.monotonic() - start, 2.0)
         self.assertNotIn("k6bp@example.com", out)
 
     def test_quoted_value_with_spaces_is_removed_whole(self):
