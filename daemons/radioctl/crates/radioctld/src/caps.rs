@@ -204,7 +204,10 @@ pub fn dump_state(view: &CapsView<'_>) -> String {
             view.rx_low_hz,
             view.rx_high_hz,
             all_modes,
-            (1000, i64::from(view.tx_power_mw)),
+            (
+                1000.min(i64::from(view.tx_power_mw)),
+                i64::from(view.tx_power_mw),
+            ),
             vfos,
         ));
     }
@@ -356,6 +359,23 @@ mod tests {
             Capability::ReadSwr,
         ]);
         desc
+    }
+
+    // Tests [@ANCHOR: radioctld_caps_range_line]
+    // Tests [@ANCHOR: radioctld_caps_dump_state]
+    #[test]
+    fn a_qrp_power_limit_never_makes_the_transmit_range_run_backwards() {
+        let desc = kx3_like();
+        let mut v = view(&desc, true);
+        v.tx_power_mw = 500;
+        let text = dump_state(&v);
+        let tx = text
+            .lines()
+            .find(|l| l.starts_with("30000.000000") && l.contains(" 500 "))
+            .unwrap_or_else(|| panic!("no transmit range with a 500 mW top: {text}"));
+        let fields: Vec<&str> = tx.split(' ').collect();
+        let (low, high): (i64, i64) = (fields[3].parse().unwrap(), fields[4].parse().unwrap());
+        assert!(low <= high, "{tx}");
     }
 
     // Tests [@ANCHOR: radioctld_caps_modes]
