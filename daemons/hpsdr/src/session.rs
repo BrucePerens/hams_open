@@ -169,7 +169,8 @@ async fn run(
 ) {
     let mut builder = Ep2Builder::new();
     let mut trackers = vec![SeqTracker::default(); senders.len()];
-    let mut iv = tokio::time::interval(tick);
+    // A zero period would panic in `interval` and kill the task, so the floor is one microsecond.
+    let mut iv = tokio::time::interval(tick.max(Duration::from_micros(1)));
     iv.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut buf = vec![0u8; 2048];
     loop {
@@ -445,6 +446,31 @@ mod tests {
         })
         .await;
         assert_eq!(d.protocol, Protocol::P1);
+        emu.stop();
+    }
+
+    // Tests [@ANCHOR: hpsdr_session_run]
+    #[tokio::test]
+    async fn a_zero_tick_session_still_streams() {
+        let (emu, d) = setup(EmulatorConfig::default()).await;
+        let mut radio = Radio::start(
+            &Handle::current(),
+            &d,
+            P1Config::default(),
+            TxGate::new(),
+            SessionOptions {
+                tick: Duration::ZERO,
+                ..SessionOptions::default()
+            },
+        )
+        .await
+        .expect("start");
+        let mut streams = radio.take_streams();
+        let b = tokio::time::timeout(WAIT, streams[0].next_block())
+            .await
+            .expect("a block arrives, so the task is alive");
+        assert!(b.is_some());
+        radio.stop().await.expect("stop");
         emu.stop();
     }
 
