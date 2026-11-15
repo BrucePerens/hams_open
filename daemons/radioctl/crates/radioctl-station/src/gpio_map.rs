@@ -4,6 +4,7 @@
 //! model (the pins the board exposes) and per station (the assignment), validated at load.
 
 use crate::error::{StationError, StationErrorKind};
+use crate::model::MAX_MS;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -276,6 +277,19 @@ impl GpioMap {
             {
                 return bad(format!("pin {}: {:?} needs a channel", l.pin, l.function));
             }
+            if [
+                l.debounce_ms,
+                l.pulse_ms.unwrap_or(0),
+                l.max_on_ms.unwrap_or(0),
+            ]
+            .iter()
+            .any(|t| *t > MAX_MS)
+            {
+                return bad(format!(
+                    "pin {}: a time field is at most {MAX_MS} ms",
+                    l.pin
+                ));
+            }
             if l.function == Function::Momentary && l.pulse_ms.unwrap_or(0) == 0 {
                 return bad(format!("pin {}: a momentary line needs pulse_ms", l.pin));
             }
@@ -410,6 +424,18 @@ pulse_ms = 300
                 "max_on_ms",
             ),
             (MAP.replace("pulse_ms = 300", "pulse_ms = 0"), "pulse_ms"),
+            (
+                MAP.replace("max_on_ms = 180000", "max_on_ms = 3600001"),
+                "at most 3600000",
+            ),
+            (
+                MAP.replace("pulse_ms = 300", "pulse_ms = 3600001"),
+                "at most 3600000",
+            ),
+            (
+                MAP.replace("debounce_ms = 20", "debounce_ms = 3600001"),
+                "at most 3600000",
+            ),
             (
                 MAP.replacen("direction = \"input_pull_up\"", "direction = \"output\"", 1),
                 "sensor must be an input",
