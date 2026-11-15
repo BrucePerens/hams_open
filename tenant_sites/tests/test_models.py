@@ -86,6 +86,16 @@ class TestTenantSitesModels(HamsTransactionCase):
         self.site.write({"website_id": other.id})
         self.assertFalse(views.viewref("portal.user_sign_in").active)
 
+    # [@ANCHOR: tenant_sites:test_own_host_cannot_cover_a_tenant]
+    def test_a_main_site_pattern_cannot_cover_a_tenant_hostname(self):
+        # Tests [@ANCHOR: tenant_sites:own_host_not_tenant]
+        with self.assertRaises(ValidationError):
+            self.env["tenant.site.own.host"].create({"name": "*.tenant.example"})
+            self.env.flush_all()
+        with self.assertRaises(ValidationError):
+            self.env["tenant.site.own.host"].create({"name": "a.tenant.example"})
+            self.env.flush_all()
+
     # [@ANCHOR: tenant_sites:COMM_test_own_host_patterns]
     def test_own_patterns_follow_the_data(self):
         # Tests [@ANCHOR: tenant_sites:COMM_own_host_patterns]

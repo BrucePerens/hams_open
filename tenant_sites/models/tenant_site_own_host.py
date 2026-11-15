@@ -43,3 +43,18 @@ class TenantSiteOwnHost(models.Model):
     def write(self, vals):
         self._normalize_vals(vals)
         return super().write(vals)
+
+    # [@ANCHOR: tenant_sites:own_host_not_tenant]
+    # Verified by [@ANCHOR: tenant_sites:test_own_host_cannot_cover_a_tenant]
+    @api.constrains("name")
+    def _check_no_tenant_host(self):
+        """The mirror of tenant.site.host's check: a main-site pattern is matched before tenant
+        hostnames, so one that covers an existing tenant hostname would serve the tenant's name as
+        the main site."""
+        patterns = tuple(self.mapped("name"))
+        hosts = self.env["tenant.site.host"]._service_env()["tenant.site.host"].search([], limit=100000)
+        for host in hosts:
+            if utils.host_matches(host.name, patterns):
+                raise ValidationError(
+                    self.env._("%s already belongs to a tenant site and cannot be a main site hostname.", host.name)
+                )
