@@ -99,7 +99,31 @@ class TestServiceWorker(HamsHttpCase):
         self.assertNotIn("__MAX_FILE_SIZE_BYTES__", body)
         self.assertNotIn("__MAX_STORAGE_BYTES__", body)
         self.assertNotIn("__TEST_HOOKS_ENABLED__", body)
-        broken.get.assert_called_once_with("caching_sw_js_content")
+        self.assertEqual(broken.get.call_count, 1)
+        self.assertTrue(broken.get.call_args[0][0].startswith("caching_sw_js_content:"))
+
+    def test_01c_a_template_cached_before_the_deploy_is_not_served(self):
+        # Tests [@ANCHOR: COMM_caching_sw_serve_route]
+        # The Redis copy of the template is keyed by the template file's modification time, so what an earlier version
+        # of the file left in Redis (here under the old, unversioned key) never reaches a browser.
+        seen = {}
+
+        class FakeRedis:
+            def get(self, key):
+                seen["key"] = key
+                return b"STALE_TEMPLATE __CACHE_NAME__" if key == "caching_sw_js_content" else None
+
+            def setex(self, key, ttl, value):
+                seen["stored"] = key
+
+        self.safe_patch(
+            "odoo.addons.caching.controllers.main.get_redis_connection",
+            new=lambda env=None: FakeRedis(),
+        )
+        response = self.url_open("/sw.js")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"STALE_TEMPLATE", response.content)
+        self.assertEqual(seen["stored"], seen["key"])
 
     # Tests [@ANCHOR: caching_pwa_pwacontroller]
     def test_02_offline_fallback_page_renders(self):
