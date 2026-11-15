@@ -103,6 +103,28 @@ class TestWafManagement(HamsTransactionCase):
             "[!] DIAGNOSTIC FOR AI: action_lift_ban failed to transition state to 'lifted'. Check API mock and logic.",
         )
 
+    def test_03b_pull_keeps_rules_that_share_or_lack_a_name(self):
+        """The default rules pushed to Cloudflare read back as two "SECURITY" rules; the pull must not hit the unique name."""
+        # Tests [@ANCHOR: cf_action_pull_waf_rules]
+        mock_get_ruleset = self.safe_patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset")
+        mock_get_ruleset.return_value = {
+            "rules": [
+                {"id": "r1", "description": r["description"], "action": r["action"], "expression": r["expression"], "enabled": True}
+                for r in DEFAULT_WAF_RULES
+            ]
+            + [{"id": "r4", "action": "block", "expression": "ip.src eq 1.1.1.1"}]
+            + [{"id": "r5", "description": None, "action": "block", "expression": "ip.src eq 2.2.2.2"}]
+        }
+        success, _msg = (
+            self.env["cloudflare.config.manager"].with_user(self.svc_uid).action_pull_waf_rules(website_id=self.website.id)
+        )
+        self.assertTrue(success)
+        rules = self.env["cloudflare.waf.rule"].search([("website_id", "=", self.website.id)], order="sequence")
+        self.assertEqual(
+            rules.mapped("name"),
+            ["SECURITY", "SECURITY (2)", "PERFORMANCE", "Imported Rule r4", "Imported Rule r5"],
+        )
+
     def test_03_cf_action_pull_waf_rules(self):
         # Tests [@ANCHOR: cf_action_pull_waf_rules]
         self.env["cloudflare.waf.rule"].create(
