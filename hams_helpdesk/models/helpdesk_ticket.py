@@ -878,6 +878,10 @@ class HelpdeskTicket(models.Model):
                         % stage_str,
                         partner_ids=[ticket.partner_id.id],
                         subject=customer_env._("Ticket Update: %s") % ticket.name,
+                        # [@ANCHOR: hams_helpdesk:COMM_helpdesk_mailback_auto_submitted]
+                        # Machine-generated: an out-of-office or another ticket system must not answer it (the answer would
+                        # arrive threaded onto this ticket as a customer follow-up and wake staff and the triage agent).
+                        mail_headers={"Auto-Submitted": "auto-generated", "X-Auto-Response-Suppress": "All"},
                     )
         return res
 

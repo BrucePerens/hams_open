@@ -63,6 +63,10 @@ Moving a ticket into "Spam / Phishing" sends no stage-change mail-back: the From
 the spammer (a reply confirms a live inbox) or a real customer whose address was spoofed. Moving
 it back out of that stage mails the customer as usual.
 
+**[@ANCHOR: hams_helpdesk:COMM_helpdesk_mailback_auto_submitted]**
+The stage-change mail-back carries `Auto-Submitted: auto-generated` and `X-Auto-Response-Suppress: All`, so an out-of-office
+reply or another ticket system does not answer it; such an answer would arrive threaded onto the ticket as a customer follow-up.
+
 **[@ANCHOR: hams_helpdesk:COMM_helpdesk_no_assignment_notice_for_spam]**
 A ticket created already in "Spam / Phishing" is still assigned to the on-duty admin, but the
 assignment email, the toast and the "Shift CC" note to the next shift's admins are skipped, and Odoo's own auto-subscribe
