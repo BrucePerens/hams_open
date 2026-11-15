@@ -20,6 +20,8 @@ class MailMailBlacklist(models.Model):
             outgoing._drop_blacklisted_recipients()
         return super()._send(*args, **kwargs)
 
+    # [@ANCHOR: hams_base:mail_drop_blacklisted_recipients]
+    # Verified by [@ANCHOR: test_drop_keeps_other_recipients_and_partners]
     def _drop_blacklisted_recipients(self):
         wanted = set()
         for mail in self:
