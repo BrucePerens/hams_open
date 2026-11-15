@@ -206,6 +206,8 @@ class HamGdprExportToken(models.Model):
         # The json round trip proves the payload is JSON-serializable (dates, Markup) before it crosses the RPC.
         return json.loads(json.dumps({"user_id": user.id, "data": data, "streamed_keys": keys}, default=str))
 
+    # [@ANCHOR: user_websites:gdpr_export_user]
+    # Verified by [@ANCHOR: test_gdpr_export_page_is_bounded_and_complete]
     def _export_user(self, user):
         """`user` as zero_sudo.gdpr_service_internal, the already-scoped account that may read a member's export
         data (the same account _execute_gdpr_erasure uses); the token-table account stays narrow."""

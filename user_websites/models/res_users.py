@@ -919,6 +919,8 @@ class ResUsers(models.Model):
         self.with_env(env_svc).write({"gdpr_erasure_pending": False, "gdpr_erasure_attempts": 0})
         return True
 
+    # [@ANCHOR: user_websites:gdpr_note_erasure_failure]
+    # Verified by [@ANCHOR: user_websites:test_gdpr_erasure_run_marks_and_resumes]
     def _note_gdpr_erasure_failure(self, env_svc, is_test):
         """Count a failed run (committed, so it survives the rollback) and page once when the cron gives up on the member."""
         attempts = self.with_env(env_svc).gdpr_erasure_attempts + 1

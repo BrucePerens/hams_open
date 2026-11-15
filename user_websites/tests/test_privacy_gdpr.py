@@ -321,6 +321,7 @@ class TestPrivacyGDPR(HamsHttpCase):
         self.assertTrue(record.consumed, "consume_and_export must consume the token as a side effect.")
 
     def test_01g_export_page_is_bounded_and_complete(self):
+        # Tests [@ANCHOR: user_websites:gdpr_export_user]
         # Tests [@ANCHOR: user_websites:gdpr_export_page]
         # [@ANCHOR: test_gdpr_export_page_is_bounded_and_complete]
         """A 100k-row dataset is delivered in pages of at most EXPORT_PAGE_ROWS, none lost or repeated, and the
@@ -567,6 +568,7 @@ class TestPrivacyGDPR(HamsHttpCase):
 
     def test_02e_a_permanently_failing_erasure_stops_retrying_and_pages_once(self):
         # Tests [@ANCHOR: user_websites:gdpr_erasure_attempts_field]
+        # Tests [@ANCHOR: user_websites:gdpr_note_erasure_failure]
         # Tests [@ANCHOR: user_websites:cron_resume_gdpr_erasure]
         """After GDPR_ERASURE_MAX_ATTEMPTS failures the cron skips the member and one pager incident is opened."""
         def failing_unlink(pages):
