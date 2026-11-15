@@ -82,6 +82,13 @@ caller's regular expression has already matched a month word, so every call is v
 day, year), `iso` (year, month, day) or `us` (month/day/year), `parts` the matched strings. It returns `None` for a calendar-impossible date (a 31 February,
 month 13), catching the `ValueError`. Month/day/year is always read as US order. Pure.
 
+### _unit_amounts `[@ANCHOR: zero_sudo:repeater_page_text_unit_amounts]`
+
+`_unit_amounts(sentence)` is a generator over the numbers of one sentence that are followed by a unit of power or distance (`50 W`, `1,000 miles`, `2.5 km`).
+Each run of digits, commas and points is looked at once, from its first digit, because a regular expression restarted at every digit of a long run was
+quadratic. Leading commas and points are dropped; a number with no unit after it is skipped. `grounded_notes` uses it to decide whether a notes sentence
+makes a specific claim that the page must back. Pure, never raises. Test: `[@ANCHOR: zero_sudo:test_repeater_page_text_unit_amounts]`.
+
 ### page_date `[@ANCHOR: zero_sudo:repeater_page_text_page_date]`
 
 **Signature.** `page_date(text) -> (date | None, str)`. `text` is the page text.

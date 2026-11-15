@@ -20,6 +20,7 @@ from odoo.addons.zero_sudo.daemon.repeater_page_text import (
     _OTHER_WEAK,
     _PLACEHOLDER_PATTERNS,
     _page_numbers,
+    _unit_amounts,
     apply_page_checks, callsign_adjacent, callsign_core, callsigns_in_text, frequency_on_page, ground_item, grounded_notes,
     header_callsigns, node_operator_callsigns, number_on_page, orbiting_repeater, page_date, placeholder_page, row_ownership,
     section_scope_for_frequency, stale_page_note, strip_repeater_designator,
@@ -150,6 +151,22 @@ class TestRepeaterPageText(BaseCase):
 
 
 @tagged("post_install", "-at_install")
+class TestUnitAmounts(BaseCase):
+    # [@ANCHOR: zero_sudo:test_repeater_page_text_unit_amounts]
+    def test_only_numbers_followed_by_a_unit_are_yielded(self):
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_unit_amounts]
+        self.assertEqual(list(_unit_amounts("It runs 50 W from a tower 1,000 miles away.")), ["50", "1,000"])
+        self.assertEqual(list(_unit_amounts("Output 146.94 MHz, 100 watts and 2.5 km.")), ["100", "2.5"])
+        self.assertEqual(list(_unit_amounts("Net at 7 pm on 146.94 MHz.")), [])
+        self.assertEqual(list(_unit_amounts("")), [])
+
+    def test_a_long_run_of_digits_is_read_once(self):
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_unit_amounts]
+        started = time.monotonic()
+        self.assertEqual(list(_unit_amounts("1" * 20000 + " W")), ["1" * 20000])
+        self.assertLess(time.monotonic() - started, 2)
+
+
 class TestRepeaterPageStructure(BaseCase):
     # Tests [@ANCHOR: zero_sudo:repeater_page_text_section_scope_for_frequency]
 
