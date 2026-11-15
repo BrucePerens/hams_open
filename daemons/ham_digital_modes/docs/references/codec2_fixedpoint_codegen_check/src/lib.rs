@@ -97,14 +97,30 @@ mod tests {
     const ONE_Q40: i64 = 1 << LEVINSON_FRAC_BITS;
     const ONE_Q29: i64 = 1 << CHEB_FRAC_BITS;
 
+    struct ScratchDir(std::path::PathBuf);
+
+    impl ScratchDir {
+        fn new(name: &str) -> Self {
+            // temp-dir-helper: removed when the value is dropped, including while a failing test unwinds.
+            let dir = std::env::temp_dir().join(format!("{}_{}", name, std::process::id()));
+            Self(dir)
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     // The handler exists only in the real no_std build, so the only honest check is to
     // build that crate for a bare-metal target: rustc refuses to produce the static
     // library unless exactly one `#[panic_handler]` with the right signature exists.
     // Tests [@ANCHOR: codegen_check_panic_handler]
     #[test]
     fn the_no_std_build_has_its_panic_handler() {
-        let target_dir =
-            std::env::temp_dir().join(format!("codegen_check_nostd_{}", std::process::id()));
+        let scratch = ScratchDir::new("codegen_check_nostd");
+        let target_dir = scratch.0.clone();
         let out =
             std::process::Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
                 .args([
@@ -122,7 +138,6 @@ mod tests {
         let lib = target_dir
             .join("riscv32imc-unknown-none-elf/release/libcodec2_fixedpoint_codegen_check.a");
         let built = lib.is_file();
-        let _ = std::fs::remove_dir_all(&target_dir);
         assert!(
             out.status.success() && built,
             "no_std build failed: {}",
