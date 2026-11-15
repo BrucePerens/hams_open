@@ -97,7 +97,10 @@ fn missing_target(t: &Tree, cfg: &Config, args: &Value) -> Result<(String, u32),
         args.get("hub").and_then(|v| v.as_str()),
         args.get("port").and_then(|v| v.as_u64()),
     ) {
-        (Some(h), Some(p)) if t.get(h).is_some() => Ok((h.to_string(), p as u32)),
+        (Some(h), Some(p)) if t.get(h).is_some() => Ok((
+            h.to_string(),
+            u32::try_from(p).map_err(|_| "port is too large".to_string())?,
+        )),
         (Some(h), Some(_)) => Err(format!("hub {h} is not in the USB tree")),
         _ => Err("name the device (path or port label), or hub and port".into()),
     }
@@ -512,6 +515,18 @@ mod tests {
                 .any(|(l, w)| l == "warning" && w.contains("powered but nothing is connected")),
             "{v}"
         );
+    }
+
+    #[test]
+    fn a_port_number_beyond_u32_is_refused_not_wrapped_to_a_small_port() {
+        let (_d, sys) = writable_sys();
+        let t = Tree::read(&sys).unwrap();
+        // 2^32 + 1 used to wrap to port 1 of the hub.
+        let e = missing_target(&t, &cfg(), &json!({"hub": "3-2", "port": 4294967297u64}))
+            .unwrap_err();
+        assert!(e.contains("too large"), "{e}");
+        let ok = missing_target(&t, &cfg(), &json!({"hub": "3-2", "port": 1})).unwrap();
+        assert_eq!(ok, ("3-2".to_string(), 1));
     }
 
     #[test]
