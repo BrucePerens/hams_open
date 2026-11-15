@@ -2,8 +2,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
-from odoo import models, fields, _
+import hashlib
+import time
+
+from odoo import api, models, fields, _
 from odoo.exceptions import UserError
+from odoo.http import request
+from odoo.addons.form_shield import tokens
 from odoo.addons.zero_sudo import public_rpc
 
 
@@ -66,6 +71,10 @@ class ContentViolationReport(models.Model):
     )
     reported_by_email = fields.Char(string="Reported By (Guest Email)")
 
+    # A keyed hash of (network prefix, url, day) for a report from a guest: the unique constraint on
+    # (target_url, reported_by_user_id) never fires for them (NULL reporter). No address is stored.
+    guest_dedupe_key = fields.Char(string="Guest Dedupe Key", index=True, copy=False, readonly=True)
+
     company_id = fields.Many2one(
         "res.company",
         string="Company",
@@ -74,8 +83,41 @@ class ContentViolationReport(models.Model):
     )
 
     _report_uniq = models.Constraint("UNIQUE(target_url, reported_by_user_id)", "You have already submitted a report for this URL.")
+    _guest_dedupe_uniq = models.Constraint("UNIQUE(guest_dedupe_key)", "This report was already submitted.")
     _url_not_empty = models.Constraint("CHECK(LENGTH(TRIM(target_url)) > 0)", "The target URL cannot be empty.")
     _desc_not_empty = models.Constraint("CHECK(LENGTH(TRIM(description)) > 0)", "The description cannot be empty.")
+
+    # [@ANCHOR: content_moderation:guest_dedupe_key]
+    # Verified by [@ANCHOR: content_moderation:test_guest_reports_are_deduplicated]
+    @api.model
+    def _guest_dedupe_key(self, target_url):
+        """The dedupe key for a report of `target_url` made now by the current guest visitor, else
+        False (a member, or no web request: the (url, reporter) constraint covers those)."""
+        if not request or not request.env.user._is_public():
+            return False
+        address = self.env["zero_sudo.security.utils"]._get_trusted_client_ip()
+        tag = tokens.ip_tag(self.env["form.shield"]._signing_key(), address)
+        text = f"{tag}|{target_url}|{int(time.time() // 86400)}"
+        return hashlib.sha256(text.encode()).hexdigest()
+
+    # [@ANCHOR: content_moderation:create_guest_dedupe]
+    # Verified by [@ANCHOR: content_moderation:test_guest_reports_are_deduplicated]
+    @api.model_create_multi
+    def create(self, vals_list):
+        """A guest's second report of the same URL from the same network on the same day returns the
+        first report instead of adding another."""
+        records = self.browse()
+        fresh = []
+        for vals in vals_list:
+            key = False if vals.get("reported_by_user_id") else self._guest_dedupe_key(vals.get("target_url"))
+            if key:
+                existing = self.search([("guest_dedupe_key", "=", key)], limit=1)
+                if existing:
+                    records |= existing
+                    continue
+                vals = dict(vals, guest_dedupe_key=key)
+            fresh.append(vals)
+        return records | super().create(fresh) if fresh else records
 
     # --- Moderation Action Methods ---
     #

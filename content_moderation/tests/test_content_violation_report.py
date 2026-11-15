@@ -20,6 +20,9 @@ extension fields or hook override present -- most importantly, that the
 default _apply_enforcement_action() is a real, safe no-op rather than a
 crash or a silently-skipped consequence.
 """
+from types import SimpleNamespace
+from unittest import mock
+
 from odoo.exceptions import UserError
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -160,3 +163,37 @@ class TestContentViolationReport(HamsTransactionCase):
         note_count_before = len(report.message_ids)
         report.action_take_action_and_strike()
         self.assertEqual(len(report.message_ids), note_count_before)
+
+
+@tagged("post_install", "-at_install")
+class TestGuestReportDedupe(HamsTransactionCase):
+    # [@ANCHOR: content_moderation:test_guest_reports_are_deduplicated]
+    # Tests [@ANCHOR: content_moderation:guest_dedupe_key]
+    # Tests [@ANCHOR: content_moderation:create_guest_dedupe]
+    def test_guest_reports_are_deduplicated(self):
+        Report = self.env["content.violation.report"]
+        module = "odoo.addons.content_moderation.models.content_violation_report"
+        guest = SimpleNamespace(env=SimpleNamespace(user=self.env.ref("base.public_user")))
+        utils = type(self.env["zero_sudo.security.utils"])
+
+        def report(url, address):
+            with mock.patch(f"{module}.request", guest), mock.patch.object(
+                utils, "_get_trusted_client_ip", return_value=address
+            ):
+                return Report.create({"target_url": url, "description": "spam"})
+
+        first = report("/forum/post/1", "203.0.113.5")
+        # Same network (/24), same URL, same day: the same report, not a second row.
+        self.assertEqual(report("/forum/post/1", "203.0.113.77"), first)
+        # Another URL, or another network, is a separate report.
+        self.assertNotEqual(report("/forum/post/2", "203.0.113.5"), first)
+        self.assertNotEqual(report("/forum/post/1", "198.51.100.9"), first)
+        self.assertEqual(Report.search_count([("target_url", "=", "/forum/post/1")]), 2)
+        # No address is stored: the key is a 64-character hash.
+        self.assertEqual(len(first.guest_dedupe_key), 64)
+        self.assertNotIn("203.0.113", first.guest_dedupe_key)
+        # Without a web request (internal callers) nothing is deduplicated by this key.
+        a = Report.create({"target_url": "/x", "description": "d"})
+        b = Report.create({"target_url": "/x", "description": "d"})
+        self.assertNotEqual(a, b)
+        self.assertFalse(a.guest_dedupe_key)
