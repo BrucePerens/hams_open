@@ -57,7 +57,7 @@ fn unsupported(what: &str) -> RigError {
 // [@ANCHOR: radioctl_paragon_frequency_text]
 /// The frequency command: megahertz with five decimals, `W` for the point, `@` at the end.
 pub fn frequency_text(hz: Hz) -> String {
-    let units = (hz.0 + 5) / 10;
+    let units = hz.0.saturating_add(5) / 10;
     format!("{}W{:05}@", units / 100_000, units % 100_000)
 }
 
@@ -262,7 +262,8 @@ impl VendorTwin for ParagonTwin {
                             .collect();
                         if let Ok(mhz) = text.parse::<f64>() {
                             let units = (mhz * 100_000.0).round();
-                            if (0.0..1.0e8).contains(&units) {
+                            // Only what the radio and its 7-digit status can hold.
+                            if ((MIN_HZ / 10) as f64..=(MAX_HZ / 10) as f64).contains(&units) {
                                 self.units = units as u64;
                             }
                         }
@@ -434,6 +435,11 @@ mod tests {
         assert!(t.feed(b"14W1", T0).is_empty());
         assert!(t.feed(b"9555@", T0).is_empty());
         assert_eq!(t.snapshot().expect("snapshot").frequency, Hz(14_195_550));
+        // A frequency the radio cannot hold is ignored, not stored and read back truncated.
+        assert!(t.feed(b"50W00000@", T0).is_empty());
+        assert!(t.feed(b"0W05000@", T0).is_empty());
+        assert_eq!(t.snapshot().expect("snapshot").frequency, Hz(14_195_550));
+        assert_eq!(frequency_text(Hz(u64::MAX)), "18446744073709W55161@");
         assert!(t.feed(b"FJV:05<06XYQ", T0).is_empty());
         let status = t.feed(b"\\", T0);
         assert_eq!(status.get(8), Some(&0x08));
