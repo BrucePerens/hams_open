@@ -9,8 +9,8 @@ use crate::stream::{BlockParser, IqI16, StreamStats};
 use crate::transport::{PacketSink, Transport};
 use crate::usb::{self, UsbTransport};
 use crate::{
-    check_state, rsp1a, Error, Model, BCD_BOOT_ROM, BCD_RUNNING, BOOT_ROM_PIDS, PID_RSP1,
-    PID_RSP1A, PID_RSP2, SUPPORTED_PIDS,
+    check_state, rsp1a, DeviceInfo, Error, Model, BCD_BOOT_ROM, BCD_RUNNING, BOOT_ROM_PIDS,
+    PID_RSP1, PID_RSP1A, PID_RSP2, SUPPORTED_PIDS,
 };
 use std::sync::mpsc::{sync_channel, Receiver, TrySendError};
 use std::sync::{Arc, Mutex};
@@ -147,6 +147,17 @@ pub struct Rsp<T: Transport = UsbTransport> {
 // [@ANCHOR: device_rsp2_struct]
 pub type Rsp2<T = UsbTransport> = Rsp<T>;
 
+/// The device `open_with` and `open_model_with` take: the first supported one (of `only_pid` when given) whose firmware is running, so
+/// a boot-ROM receiver listed first does not hide a running one; with none running, the first supported one (the open then reports its state).
+fn pick_supported(devs: &[DeviceInfo], only_pid: Option<u16>) -> Option<&DeviceInfo> {
+    let wanted =
+        |d: &&DeviceInfo| SUPPORTED_PIDS.contains(&d.pid) && only_pid.is_none_or(|p| p == d.pid);
+    devs.iter()
+        .filter(wanted)
+        .find(|d| d.bcd_device == BCD_RUNNING)
+        .or_else(|| devs.iter().find(wanted))
+}
+
 impl Rsp<UsbTransport> {
     /// Open the first running RSP2/RSP2pro or RSP1A with default settings.
     pub fn open() -> Result<Self, Error> {
@@ -180,7 +191,7 @@ impl Rsp<UsbTransport> {
     pub fn open_with(settings: Settings) -> Result<Self, Error> {
         // [@ANCHOR: rsp_device_rsp2_open_with]
         let devs = usb::list_devices()?;
-        let Some(info) = devs.iter().find(|d| SUPPORTED_PIDS.contains(&d.pid)) else {
+        let Some(info) = pick_supported(&devs, None) else {
             if let Some(d) = devs.first() {
                 return Err(Error::UnsupportedModel {
                     pid: d.pid,
@@ -206,7 +217,7 @@ impl Rsp<UsbTransport> {
             }
         };
         let devs = usb::list_devices()?;
-        let info = devs.iter().find(|d| d.pid == pid).ok_or(Error::NotFound)?;
+        let info = pick_supported(&devs, Some(pid)).ok_or(Error::NotFound)?;
         Self::open_device(info.pid, info.bus, info.address, info.bcd_device, settings)
     }
 
@@ -1000,6 +1011,43 @@ mod tests {
     // Tests [@ANCHOR: device_rsp2_struct]
     use super::*;
     use crate::stream::tests::s14_block;
+
+    fn dev(pid: u16, bcd_device: u16, address: u8) -> DeviceInfo {
+        DeviceInfo {
+            bus: 1,
+            address,
+            vid: crate::VID_SDRPLAY,
+            pid,
+            bcd_device,
+            model: crate::model_for_pid(pid),
+        }
+    }
+
+    // Tests [@ANCHOR: rsp_device_rsp_open_auto]
+    // Tests [@ANCHOR: rsp_device_rsp2_open_with]
+    // Tests [@ANCHOR: rsp_device_rsp_open_model_with]
+    #[test]
+    fn a_running_receiver_is_chosen_over_a_boot_rom_one_listed_first() {
+        let devs = [
+            dev(PID_RSP2, BCD_BOOT_ROM, 3),
+            dev(PID_RSP1A, BCD_RUNNING, 4),
+            dev(PID_RSP2, BCD_RUNNING, 5),
+        ];
+        assert_eq!(pick_supported(&devs, None).map(|d| d.address), Some(4));
+        assert_eq!(
+            pick_supported(&devs, Some(PID_RSP2)).map(|d| d.address),
+            Some(5)
+        );
+        // With none running, the first supported one is still returned, so open reports NotRunning.
+        let cold = [
+            dev(PID_RSP1, BCD_RUNNING, 2),
+            dev(PID_RSP2, BCD_BOOT_ROM, 3),
+        ];
+        assert_eq!(pick_supported(&cold, None).map(|d| d.address), Some(3));
+        assert!(pick_supported(&cold, Some(PID_RSP1A)).is_none());
+        assert!(pick_supported(&[], None).is_none());
+    }
+
     use crate::transport::{MockTransport, Op};
 
     fn open_mock(s: Settings) -> (Rsp2<MockTransport>, MockTransport) {
