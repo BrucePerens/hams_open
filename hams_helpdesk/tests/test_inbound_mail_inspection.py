@@ -178,8 +178,7 @@ class TestMailGatewayInspection(HamsTransactionCase):
         parked = stash["<m1@example.com>"]
         self.assertEqual(parked["ses_verdicts"], {"spam": "FAIL"})
         self.assertIn("attachments_not_read", {f["vector"] for f in parked["findings"]})
-        self.assertIn("reply_headers", parked["mail_signals"])
-        self.assertFalse(parked["mail_signals"]["reply_headers"])  # no known message is referenced
+        self.assertNotIn("reply_headers", parked["mail_signals"])
 
     def test_03_the_parked_findings_do_not_outlive_the_message(self):
         self._ingest(_mail(subject="Stash inspection test"))

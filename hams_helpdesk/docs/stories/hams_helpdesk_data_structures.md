@@ -317,7 +317,7 @@
 
 ### `MailThread` [@ANCHOR: hams_helpdesk:hams_helpdesk_mail_thread_untrusted_mail_thread]
 
-**Purpose and location.** Extends the Odoo model "mail.thread" with no new fields and the methods `message_parse`, `_with_verified_reply_headers`. Defined in `hams_helpdesk/models/mail_thread_untrusted.py:31` as an Odoo model; bases: `models.AbstractModel`. (extends `mail.thread`.) It is an abstract model: it has no table and is only mixed into others.
+**Purpose and location.** Extends the Odoo model "mail.thread" with no new fields and the method `message_parse`. Defined in `hams_helpdesk/models/mail_thread_untrusted.py:31` as an Odoo model; bases: `models.AbstractModel`. (extends `mail.thread`.) It is an abstract model: it has no table and is only mixed into others.
 
 **Fields.** none declared by this class.
 
@@ -325,9 +325,9 @@
 
 **Invariants, ownership and concurrency.** Odoo runs each request in one database transaction; rows are created, read and changed through the ORM with the caller's access rights, and nothing here is shared between threads except through the database. Constraints and defaults are those in the field list above; no other invariant is stated in the class docstring.
 
-**Methods.** `message_parse`, `_with_verified_reply_headers`.
+**Methods.** `message_parse`.
 
-**See also:** test `test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail (tests/test_inbound_spam_filter.py)`.
+**See also:** test `test_28b_reply_headers_never_exempt_bulk_mail (tests/test_inbound_spam_filter.py)`.
 
 ### `RelayException` [@ANCHOR: hams_helpdesk:hams_helpdesk_relay_exception_relay_exception]
 

@@ -373,32 +373,12 @@ def html_shape(html):
     return {"tables": tables, "table_depth": max_depth, "images": images, "tracking_pixels": pixels}
 
 
-MAX_REFERENCED_IDS = 10
-_MESSAGE_ID_RE = re.compile(r"<[^<>\s]{1,255}>")
-
-
-# [@ANCHOR: hams_helpdesk:inbound_referenced_message_ids]
-def referenced_message_ids(message):
-    """The Message-IDs (``<local@host>`` with the angle brackets) named by the ``In-Reply-To`` and ``References`` headers of
-    a parsed ``email.message.Message``, in header order without repeats, at most MAX_REFERENCED_IDS of them (the last ones,
-    which are the nearest ancestors). Pure; never raises; [] when the headers are absent or hold no ``<...>`` token."""
-    found = []
-    for name in ("In-Reply-To", "References"):
-        for value in message.get_all(name) or []:
-            for message_id in _MESSAGE_ID_RE.findall(str(value)[:20000]):
-                if message_id not in found:
-                    found.append(message_id)
-    return found[-MAX_REFERENCED_IDS:]
-
-
 # [@ANCHOR: hams_helpdesk:inbound_mail_signals]
 def mail_signals(message):
     """Header facts and HTML shape of one parsed inbound ``email.message.Message``, as a small JSON-able dict that
     detect_bulk_mail_signals() and own_authenticated_sender() read. Never raises; an unreadable part contributes
     nothing. Keys: list_unsubscribe (bool), list_id (bool), precedence (str), auto_submitted (str), spf / dkim /
-    dmarc ("pass", "fail", ... or absent), from_domain, return_path_domain, referenced_message_ids (list of the
-    Message-IDs named by In-Reply-To and References, at most MAX_REFERENCED_IDS; the sender writes them, so they prove
-    nothing until the caller has found one among stored mail, and then sets ``reply_headers`` True), has_plain (bool), plain_chars, html_chars, tables, table_depth, images, tracking_pixels."""
+    dmarc ("pass", "fail", ... or absent), from_domain, return_path_domain, has_plain (bool), plain_chars, html_chars, tables, table_depth, images, tracking_pixels."""
     signals = {}
 
     def domain_of(address_header):
@@ -410,7 +390,6 @@ def mail_signals(message):
         signals["list_id"] = bool(message.get("List-Id"))
         signals["precedence"] = str(message.get("Precedence") or "").strip().lower()[:16]
         signals["auto_submitted"] = str(message.get("Auto-Submitted") or "").strip().lower()[:32]
-        signals["referenced_message_ids"] = referenced_message_ids(message)
         signals["from_domain"] = domain_of(message.get("From"))
         signals["return_path_domain"] = domain_of(message.get("Return-Path"))
         # Only the Authentication-Results header written by Amazon SES (authserv-id amazonses.com) is believed: the sender
@@ -526,12 +505,9 @@ def bulk_mail_findings(subject, body_html, signals=None):
 # [@ANCHOR: hams_helpdesk:inbound_detect_bulk_mail_signals]
 def detect_bulk_mail_signals(subject, body_html, signals=None, threshold=BULK_SCORE_THRESHOLD):
     """Plain-English reasons when the bulk/marketing signals weigh at least ``threshold``, else []. The first
-    reason states the total; the rest list each contributing signal with its weight. A reply to an existing thread
-    (``signals["reply_headers"]`` true) is never judged by these rules. ``reply_headers`` is set by the caller that can
-    look the message up (mail_thread_untrusted.py), only when a Message-ID named by In-Reply-To or References belongs
-    to mail already stored for a ticket; the headers alone, which the sender writes, do not set it."""
-    if (signals or {}).get("reply_headers"):
-        return []
+    reason states the total; the rest list each contributing signal with its weight. Every message is judged,
+    including one with In-Reply-To or References headers: the sender writes those, and a Message-ID they already
+    received (from a mail we sent) must not exempt their mail from the rules."""
     findings = bulk_mail_findings(subject, body_html, signals)
     total = sum(weight for weight, _reason in findings)
     if total < threshold:
