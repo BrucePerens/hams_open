@@ -146,7 +146,9 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
             ("javascript:alert(1)", "script@example.com"),
             ("relative-without-slash", "relative@example.com"),
             (own_page, "own@example.com"),
-            (f"/{self.user_test.website_slug}", "path@example.com"),
+            # a different page, as a bare path: the same page from the same guest on the same day
+            # would be deduplicated by content_moderation, so it must not repeat own_page
+            (f"/{self.user_test.website_slug}/about", "path@example.com"),
         ):
             self.url_open(
                 "/website/report_violation",
