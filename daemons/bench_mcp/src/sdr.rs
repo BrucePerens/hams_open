@@ -689,12 +689,15 @@ fn write_iq(path: &Path, samples: &[Iq]) -> Result<(), String> {
     std::fs::write(path, bytes).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// The unix second plus a process-wide counter: two captures in the same second must not overwrite each other's file.
 fn stamp() -> String {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let t = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    t.to_string()
+    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{t}_{n}")
 }
 
 /// Capture one block, save the raw I/Q (little-endian f32 pairs) and return its statistics, floor and strongest peaks.
@@ -879,6 +882,12 @@ pub fn coherence(c: &Config, args: &Value) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn stamps_made_in_the_same_second_differ() {
+        let all: std::collections::HashSet<String> = (0..50).map(|_| stamp()).collect();
+        assert_eq!(all.len(), 50);
+    }
+
     use super::*;
 
     fn lime() -> Config {
