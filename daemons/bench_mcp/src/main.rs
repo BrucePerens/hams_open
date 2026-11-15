@@ -564,6 +564,37 @@ fn psu_timer(name: &str, lock: Arc<Mutex<()>>) -> psu::Timer {
     psu::Timer { lock, generation }
 }
 
+/// Switches off every supply that had an output command in this process (its switch-off timer dies with the process, so a
+/// supply left on by `bench_psu_output` would otherwise stay on after the server stops). `open` gives the link to a supply.
+fn switch_off_supplies(
+    insts: &[Instrument],
+    open: impl Fn(&Instrument) -> Result<Link, String>,
+) -> Vec<(String, Result<(), String>)> {
+    // [@ANCHOR: bench_mcp_main_psu_exit_off]
+    let mut out = Vec::new();
+    for i in insts.iter().filter(|i| i.kind == Kind::Psu) {
+        let timer = psu_timer(&i.name, instrument_lock(&i.name));
+        if timer.generation.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+            continue;
+        }
+        let r = open(i).and_then(|mut l| psu::safe_state(&mut l, &timer).map(|_| ()));
+        out.push((i.name.clone(), r));
+    }
+    out
+}
+
+/// What the server stops when it ends: its runs, the keyed rig, the Glasgow daemon, and any supply it switched on.
+fn shutdown_all(insts: &[Instrument]) {
+    procedure::shutdown();
+    radioctl::shutdown();
+    glasgow::shutdown();
+    for (name, r) in switch_off_supplies(insts, connect) {
+        if let Err(e) = r {
+            eprintln!("bench_mcp: could not switch off the supply {name:?} at exit: {e}");
+        }
+    }
+}
+
 /// `bench_psu_output`: the arguments are checked before the supply is asked anything.
 fn psu_output(
     inst: &Instrument,
@@ -734,9 +765,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if argv.first().map(|a| a.as_str()) == Some(radioctl::guard::FLAG) {
         std::process::exit(radioctl::guard::main(&argv[1..]));
     }
-    let insts = config::load()?;
+    let insts = Arc::new(config::load()?);
     // Runs of a server that died while they were active are marked lost and their instruments put in a safe state.
     procedure::recover(&insts);
+    let for_signal = insts.clone();
     // A termination signal releases a keyed rig and stops the daemons this server started, then exits.
     tokio::spawn(async {
         use tokio::signal::unix::{signal, SignalKind};
@@ -747,24 +779,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             return;
         };
         tokio::select! { _ = term.recv() => {}, _ = int.recv() => {} }
-        let _ = tokio::task::spawn_blocking(|| {
-            procedure::shutdown();
-            radioctl::shutdown();
-            glasgow::shutdown();
-        })
-        .await;
+        let _ = tokio::task::spawn_blocking(move || shutdown_all(&for_signal)).await;
         std::process::exit(143);
     });
     let service = BenchServer {
-        insts: Arc::new(insts),
+        insts: insts.clone(),
     }
     .serve(stdio())
     .await?;
     let ended = service.waiting().await;
     // Whatever way the connection ended, stop what this server started.
-    procedure::shutdown();
-    radioctl::shutdown();
-    glasgow::shutdown();
+    shutdown_all(&insts);
     ended?;
     Ok(())
 }
@@ -779,6 +804,33 @@ mod tests {
             "psu":{"driver":"atm6301","tier":"read_config","serial":"/dev/null"}}}"#,
         )
         .unwrap()
+    }
+
+    // Tests [@ANCHOR: bench_mcp_main_psu_exit_off]
+    #[test]
+    fn a_supply_switched_on_by_this_process_is_switched_off_at_exit() {
+        let cfg = config::parse(
+            r#"{"instruments":{"used":{"driver":"atm6301","tier":"full","serial":"/dev/null"},
+            "idle":{"driver":"atm6301","tier":"full","serial":"/dev/zero"}}}"#,
+        )
+        .unwrap();
+        let dev = example::testkit::FakeDevice::start(|c| match c {
+            "OUTP?" => Some("OFF".to_string()),
+            _ => None,
+        });
+        // An output command was issued for `used` only.
+        psu_timer("used", instrument_lock("used"))
+            .generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let opened = std::sync::Mutex::new(Vec::new());
+        let open = dev.link();
+        let r = switch_off_supplies(&cfg, |i| {
+            opened.lock().unwrap().push(i.name.clone());
+            open()
+        });
+        assert_eq!(*opened.lock().unwrap(), ["used"]);
+        assert!(r.len() == 1 && r[0].1.is_ok(), "{r:?}");
+        assert!(dev.received().iter().any(|c| c == "OUTP OFF"));
     }
 
     #[test]
