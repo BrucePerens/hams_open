@@ -147,6 +147,16 @@ class TestTicketUntrustedFilter(HamsTransactionCase):
         with self.assertRaises(AccessError):
             ticket.with_user(portal_user).write({"suspicion_score": 0})
 
+    def test_13b_portal_user_cannot_write_suspicion_log_ids(self):
+        portal_user = self.env["res.users"].with_user(self.admin).create(
+            {"name": "Portal L", "login": "portal_l_untrusted", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
+        )
+        ticket = self._ticket(description=HIDDEN, partner_id=portal_user.partner_id.id)
+        self.assertTrue(ticket.suspicion_log_ids)
+        with self.assertRaises(AccessError):
+            ticket.with_user(portal_user).write({"suspicion_log_ids": [(5, 0, 0)]})
+        self.assertTrue(ticket.suspicion_log_ids)
+
     def test_14_log_is_staff_only_for_portal(self):
         portal_user = self.env["res.users"].with_user(self.admin).create(
             {"name": "Portal Q", "login": "portal_q_untrusted", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
