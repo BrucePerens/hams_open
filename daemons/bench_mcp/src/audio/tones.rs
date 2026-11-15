@@ -36,8 +36,13 @@ pub fn generate(t: Tone, rate: u32, seconds: f64, level_dbfs: f64) -> Vec<f32> {
                 Tone::Sine { hz } => (2.0 * PI * hz * time).sin(),
                 Tone::Sweep { from_hz, to_hz } => {
                     let k = (to_hz / from_hz).ln() / seconds.max(1e-9);
-                    // The instantaneous frequency is from_hz * e^(k t); the phase is its integral.
-                    (2.0 * PI * from_hz * ((k * time).exp() - 1.0) / k).sin()
+                    if k.abs() < 1e-9 {
+                        // Equal ends: a sine. The integral below divides by k and would be NaN (silence once written).
+                        (2.0 * PI * from_hz * time).sin()
+                    } else {
+                        // The instantaneous frequency is from_hz * e^(k t); the phase is its integral.
+                        (2.0 * PI * from_hz * ((k * time).exp() - 1.0) / k).sin()
+                    }
                 }
                 Tone::Dual { hz1, hz2 } => {
                     0.5 * ((2.0 * PI * hz1 * time).sin() + (2.0 * PI * hz2 * time).sin())
@@ -122,6 +127,23 @@ mod tests {
         let peak = s.iter().fold(0f32, |m, x| m.max(x.abs()));
         assert!((f64::from(peak) - db_to_amp(-12.0)).abs() < 0.01, "{peak}");
         assert!(s[0].abs() < 1e-3 && s[s.len() - 1].abs() < 0.01);
+    }
+
+    // Tests [@ANCHOR: audio_tones]
+    #[test]
+    fn a_sweep_with_equal_ends_is_a_tone_not_nan() {
+        let s = generate(
+            Tone::Sweep {
+                from_hz: 1000.0,
+                to_hz: 1000.0,
+            },
+            48000,
+            0.5,
+            -12.0,
+        );
+        assert!(s.iter().all(|x| x.is_finite()));
+        let peak = s.iter().fold(0f32, |m, x| m.max(x.abs()));
+        assert!((f64::from(peak) - db_to_amp(-12.0)).abs() < 0.01, "{peak}");
     }
 
     #[test]
