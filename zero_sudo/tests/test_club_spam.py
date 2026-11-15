@@ -712,6 +712,24 @@ class TestHeadVerification(BaseCase):
         self.assertGreater(removed, 1000)
         self.assertEqual(spam.strip_spam_blocks("", HOST + "/"), ("", 0))
 
+    def test_53b_a_list_item_with_no_end_tag_is_still_cut_when_its_one_link_is_spam(self):
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_end]
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_start]
+        # `</li>` and `</p>` are optional in HTML, so a page may leave the item open until the next `<li>` or the list's end.
+        spam_link = '<a href="http://x.example/casino-slots-online">best casino slots</a>'
+        about = '<a href="/about">About</a>'
+        text, removed = spam.strip_spam_blocks("<ul><li>%s<li>%s</ul>" % (spam_link, about), HOST + "/")
+        self.assertEqual(text, "<ul><li>%s</ul>" % about)
+        self.assertEqual(removed, len("<li>" + spam_link))
+        text, removed = spam.strip_spam_blocks("<ul><li>%s</ul>" % spam_link, HOST + "/")
+        self.assertEqual(text, "<ul></ul>")
+        self.assertEqual(removed, len("<li>" + spam_link))
+        # An anchor left open at the end of its paragraph is judged too, and the honest ones around it stay.
+        text, _removed = spam.strip_spam_blocks("<p>hello <a href=\"http://x.example/casino-slots-online\">best casino slots</p><p>bye</p>", HOST + "/")
+        self.assertNotIn("casino", text)
+        self.assertIn("hello", text)
+        self.assertIn("<p>bye</p>", text)
+
 
 SPAM_DESTINATION = (
     "<html><head><title>Kudatogel - Situs Togel Online dan Slot Gacor Terpercaya</title></head><body><h1>Kudatogel</h1>"
