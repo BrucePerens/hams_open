@@ -715,22 +715,22 @@ class BackupConfig(models.Model):
             self.env.cr.execute("""
                 SELECT config_id, MAX(start_time)
                 FROM backup_snapshot
-                WHERE config_id IN %s
+                WHERE config_id IN %s AND start_time <= %s
                 GROUP BY config_id
-            """, (tuple(configs.ids),))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:COMM_test_backup_cron]  # fmt: skip
+            """, (tuple(configs.ids), now))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:COMM_test_backup_cron]  # fmt: skip
             start_times = {row[0]: row[1] for row in self.env.cr.fetchall()}
             
         for conf in configs:
             conf.action_sync_snapshots()
 
-            latest_start_time = start_times.get(conf.id)
-            if latest_start_time:
-                delta = (now - latest_start_time).total_seconds()
-                if delta > (
-                    26 * 60 * 60
-                ):  # 26 hours (allows for 24h cron jitter without false positives)
-                    stale_msg = f"""Stale Backup Alert: No new snapshots detected for {conf.name} in over 26 hours."""
-                    conf.report_backup_failure(stale_msg)
+            # A snapshot dated in the future (clock skew) is ignored by the query above. A configuration with no usable
+            # snapshot is judged by its own age instead, so one that never produced a snapshot still alerts.
+            latest_start_time = start_times.get(conf.id) or conf.create_date
+            if latest_start_time and (now - latest_start_time).total_seconds() > (
+                26 * 60 * 60
+            ):  # 26 hours (allows for 24h cron jitter without false positives)
+                stale_msg = f"""Stale Backup Alert: No new snapshots detected for {conf.name} in over 26 hours."""
+                conf.report_backup_failure(stale_msg)
 
             # Reported every hour for as long as it lasts: the incident is deduplicated by source, so it stays one open
             # incident, and pager.incident re-pages it while nobody acknowledges it (REPAGE_HOURS).
