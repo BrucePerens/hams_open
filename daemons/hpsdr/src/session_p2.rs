@@ -285,7 +285,8 @@ struct Task {
 /// a second has passed) on a timer, and decode whatever arrives.
 async fn run(mut t: Task) {
     let mut trackers = vec![SeqTracker::default(); t.senders.len()];
-    let mut iv = tokio::time::interval(t.tick);
+    // A zero period would panic in `interval` and kill the task, so the floor is one microsecond.
+    let mut iv = tokio::time::interval(t.tick.max(Duration::from_micros(1)));
     iv.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut buf = vec![0u8; 2048];
     let (mut sent_ver, mut sent_at) = (u64::MAX, Instant::now());
@@ -602,6 +603,28 @@ mod tests {
             ports,
             ..P2Config::default()
         }
+    }
+
+    // Tests [@ANCHOR: hpsdr_session_p2_run]
+    #[tokio::test]
+    async fn a_zero_tick_session_still_streams() {
+        let (emu, d, ports) = setup(P2EmulatorConfig::default(), 1).await;
+        let mut radio = Radio2::start(
+            &Handle::current(),
+            &d,
+            cfg_with(ports, vec![7_100_000], Rate::K48),
+            TxGate::new(),
+            SessionOptions {
+                tick: Duration::ZERO,
+                ..SessionOptions::default()
+            },
+        )
+        .await
+        .expect("start");
+        let mut streams = radio.take_streams();
+        take_block(&mut streams[0]).await;
+        radio.stop().await.expect("stop");
+        emu.stop();
     }
 
     // Tests [@ANCHOR: hpsdr_session_p2_radio2]
