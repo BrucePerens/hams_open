@@ -29,6 +29,10 @@ class ShiftHandoffWizard(models.TransientModel):
 
         # # Verified by [@ANCHOR: COMM_test_02_shift_handoff_wizard]
         self.ensure_one()
+        # The caller must be allowed to change this ticket under their own rights: the write below runs as the
+        # service account, so without this a helpdesk user could hand off (and read the subject of) a ticket the
+        # ticket record rule keeps from them, by creating the wizard for any ticket id.
+        self.ticket_id.check_access("write")
 
         utils = self.env["zero_sudo.security.utils"]
         # Execute modification via service account to ensure audit trail and bypass possible write restrictions.
