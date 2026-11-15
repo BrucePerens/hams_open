@@ -49,7 +49,10 @@ class PagerDutyController(http.Controller):
                 r_client = redis.Redis(connection_pool=redis_pool)
                 attempts = r_client.get(redis_key)
                 if attempts and int(attempts) >= MAX_FAILED_ATTEMPTS:
-                    _logger.warning("pager_duty update_domains: too many failed auth attempts from one source address")
+                    _logger.warning(
+                        "pager_duty update_domains: too many failed auth attempts from %s",
+                        remote_addr,
+                    )
                     # audit-ignore-i18n: Tested by [@ANCHOR: pd_domain_api_i18n]  # fmt: skip
                     return {"status": "error", "message": _("Too many attempts")}
             except redis.exceptions.RedisError as e:

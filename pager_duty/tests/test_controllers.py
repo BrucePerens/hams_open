@@ -333,7 +333,7 @@ class TestPagerControllers(HamsHttpCase):
             )
         text = "\n".join(logs.output)
         self.assertIn("too many failed auth attempts", text)
-        self.assertNotIn("127.0.0.1", text, "[!] DIAGNOSTIC FOR AI: the log must not carry the caller IP address.")
+        self.assertNotRegex(text, r"\d+\.\d+\.\d+\.\d+", "[!] DIAGNOSTIC FOR AI: the log must not carry the caller IP address.")
 
     def _redis_failing_with(self, error):
         mock_redis = self.safe_patch("odoo.addons.pager_duty.controllers.domain_api.redis")
