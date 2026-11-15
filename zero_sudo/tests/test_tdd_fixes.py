@@ -76,6 +76,20 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
             bad_credential = dict(credential, login="service_batch_test@example.com")
             self.env["res.users"].authenticate(bad_credential, {"interactive": False})
 
+    def test_a_password_write_to_a_service_account_still_saves_the_other_fields(self):
+        # Tests [@ANCHOR: zero_sudo:res_users_write]
+        service = self.env["res.users"].create(
+            {"name": "Service Keeps Fields", "login": "service_keeps_fields@example.com", "is_service_account": True, "lang": "en_US"}
+        )
+        service.write({"password": "attacker_supplied_password", "name": "Service Renamed"})
+        self.env.cr.flush()
+        self.assertEqual(service.name, "Service Renamed")
+        with self.assertRaises(Exception):
+            self.env["res.users"].authenticate(
+                {"login": "service_keeps_fields@example.com", "password": "attacker_supplied_password", "type": "password"},
+                {"interactive": False},
+            )
+
     def test_write_password_as_a_non_system_service_account_splits_by_flag(self):
         # Tests [@ANCHOR: zero_sudo:res_users_write]
         # The password branch of write() must not use

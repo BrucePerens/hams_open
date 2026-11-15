@@ -249,6 +249,15 @@ class TestCoreSecretsFromStore(TransactionCase, SafePatchMixin):
         self.assertEqual(self._row(cs.DATABASE_SECRET), STORE_SECRET)
         self.assertEqual(self._row(cs.VAPID_PRIVATE_KEY), STORE_VAPID)
 
+    def test_restore_leaves_a_row_alone_when_the_store_does_not_hold_the_key(self):
+        # Tests [@ANCHOR: zero_sudo:core_secrets_restore_to_database]
+        self._flag(True)
+        self.icp._hams_core_secrets_clear_from_database()
+        del self.store_values[cs.VAPID_PRIVATE_KEY]
+        self.assertEqual(self.icp._hams_core_secrets_restore_to_database(), [cs.DATABASE_SECRET])
+        self.assertEqual(self._row(cs.DATABASE_SECRET), STORE_SECRET)
+        self.assertEqual(self._row(cs.VAPID_PRIVATE_KEY), cs.MOVED_MARKER)
+
     def test_clear_refuses_when_the_store_lacks_a_value(self):
         # Tests [@ANCHOR: zero_sudo:core_secrets_clear_from_database]
         self._flag(True)
