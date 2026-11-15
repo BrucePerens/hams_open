@@ -165,14 +165,17 @@ fn every_icom_file_round_trips_what_it_claims_and_refuses_the_rest() {
                 Observation::Frequency(Vfo::A, start),
                 "{id}"
             );
-            write(
-                engine.as_mut(),
-                &mut rig,
-                &Op::SetFrequency(Vfo::A, Hz(7_074_000)),
-            );
+            // 7.074 MHz, or the first whole megahertz of a model that does not cover it.
+            let (low, high) = desc.frequency_limits();
+            let target = if (low..=high).contains(&Hz(7_074_000)) {
+                Hz(7_074_000)
+            } else {
+                Hz(low.0.div_ceil(1_000_000) * 1_000_000)
+            };
+            write(engine.as_mut(), &mut rig, &Op::SetFrequency(Vfo::A, target));
             assert_eq!(
                 read(engine.as_mut(), &mut rig, &Op::GetFrequency(Vfo::A)),
-                Observation::Frequency(Vfo::A, Hz(7_074_000)),
+                Observation::Frequency(Vfo::A, target),
                 "{id}"
             );
 
