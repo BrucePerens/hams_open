@@ -2,6 +2,8 @@
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
 import ast
 import datetime
+import hashlib
+import hmac
 import odoo
 import time
 from werkzeug.exceptions import NotFound
@@ -320,6 +322,23 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
             "The follower must not be removed if the token is invalid.",
         )
 
+
+    def test_02b_one_click_post_unsubscribes(self):
+        # Tests [@ANCHOR: user_websites:COMM_unsubscribe]
+        """The digest's List-Unsubscribe-Post header promises a session-less, token-less POST; it must work."""
+        utils = self.env["zero_sudo.security.utils"]
+        creator, follower = self.creator.partner_id.id, self.follower.partner_id.id
+        ts = int(time.time())
+        message = f"res.partner-{creator}-{follower}-{ts}".encode()
+        token = hmac.new(utils._get_crypto_secret().encode(), message, hashlib.sha256).hexdigest()
+        self.authenticate(None, None)
+        response = self.url_open(
+            f"/website/unsubscribe/res.partner/{creator}/{follower}/{ts}/{token}",
+            data={"List-Unsubscribe": "One-Click"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.creator.partner_id.invalidate_recordset(["message_follower_ids"])
+        self.assertNotIn(self.follower.partner_id, self.creator.partner_id.message_follower_ids.partner_id)
 
     def test_03_subscribe_to_site(self):
         # [@ANCHOR: test_subscribe_to_site]

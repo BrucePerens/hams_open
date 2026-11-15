@@ -3,6 +3,8 @@
 # -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
+import hashlib
+import hmac
 import json
 import logging
 
@@ -73,4 +75,64 @@ class UserWebsitesApi(http.Controller):
             json.dumps({"domains": unique_domains}),
             status=200,
             headers=[("Content-Type", "application/json")],
+        )
+
+    @http.route(
+        "/website/unsubscribe/<string:model>/<int:record_id>/<int:partner_id>/<int(max=99999999999):timestamp>/<string:token>",
+        type="http",
+        auth="public",
+        website=True,
+        # csrf=False: the digest mail promises RFC 8058 one-click unsubscribe (List-Unsubscribe-Post), so a
+        # mail provider POSTs this URL with no session and no CSRF token. The signed token in the URL is the
+        # only authority and nothing here acts on a session.
+        csrf=False,
+    )  # fmt: skip
+    # [@ANCHOR: user_websites:COMM_unsubscribe]
+    def unsubscribe(self, model, record_id, partner_id, timestamp, token, **kwargs):
+        # # Tested by [@ANCHOR: test_unsubscribe_secret]
+        utils = request.env["zero_sudo.security.utils"]
+        env_svc = utils._get_service_env("user_websites.user_websites_service_account")
+
+        if model not in ("res.partner", "user.websites.group"):
+            res_content = json.dumps({"error": "Forbidden"})
+            res_headers = [("Content-Type", "application/json")]
+            return request.make_response(
+                res_content,
+                status=403,
+                headers=res_headers,
+            )
+
+        record = env_svc[model].browse(record_id)
+        if not record.exists():
+            res_content = json.dumps({"error": "Forbidden"})
+            res_headers = [("Content-Type", "application/json")]
+            return request.make_response(
+                res_content,
+                status=403,
+                headers=res_headers,
+            )
+
+        db_secret = utils._get_crypto_secret()
+        if not db_secret:
+            return request.make_response(
+                json.dumps({"error": "Forbidden"}),
+                status=403,
+                headers=[("Content-Type", "application/json")],
+            )
+        message = f"{model}-{record_id}-{partner_id}-{timestamp}".encode("utf-8")
+        expected_token = hmac.new(
+            db_secret.encode("utf-8"), message, hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(expected_token.encode(), str(token).encode("utf-8", "replace")):
+            return request.make_response(
+                json.dumps({"error": "Forbidden"}),
+                status=403,
+                headers=[("Content-Type", "application/json")],
+            )
+
+        record.message_unsubscribe([partner_id])
+
+        return request.render(
+            "user_websites.unsubscribe_success", {"record_name": model}
         )
