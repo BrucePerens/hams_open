@@ -353,12 +353,9 @@ class SesWebhookController(http.Controller):
 
         # SNS delivers at least once, and retries when a 2xx is slow: a MessageId already handled for
         # this domain is acknowledged without processing it again (a second message_process would
-        # create a duplicate record, a second registration nudge). A failed one is reprocessed.
-        if payload_type == 'Notification' and request.env['ses.webhook.log'].with_user(svc_uid).search_count([
-            ('name', '=', message_id),
-            ('domain_id', '=', domain.id),
-            ('status', 'in', ('success', 'ignored')),
-        ], limit=1):
+        # create a duplicate record, a second registration nudge). A failed one is reprocessed. Two simultaneous deliveries
+        # take turns on the domain row inside _already_handled; the later one is run again by Odoo and finds the log.
+        if payload_type == 'Notification' and request.env['ses.webhook.log'].with_user(svc_uid)._already_handled(domain.id, message_id):
             _logger.info("SES Webhook: MessageId %s already handled for domain %s; acknowledged.", message_id, domain.name)
             return request.make_response("OK", status=200)
 
