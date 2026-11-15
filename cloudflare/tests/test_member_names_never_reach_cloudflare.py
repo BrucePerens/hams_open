@@ -31,7 +31,7 @@ from cryptography.fernet import Fernet
 from .test_dns_push import FakeCloudflare, MODEL
 
 MEMBER_NAMES = ("k6bp.hams.com", "K6BP.hams.com.", "www.k6bp.hams.com", "k6bp.callbook.hams.com", "kp4djt.hams.com",
-                "4x1ab.hams.com", "_acme-challenge.w1aw.hams.com")
+                "4x1ab.hams.com", "_acme-challenge.w1aw.hams.com", "3da0xx.hams.com", "ab1cdefg.hams.com", "oh2abcde.hams.com")
 OUR_NAMES = ("hams.com", "www.hams.com", "auth.hams.com", "turn.hams.com", "stun.hams.com", "ns1.hams.com",
              "ns2.hams.com", "hams1.hams.com", "relay.hams.com", "crawler.hams.com", "parked.hams.com",
              "callbook.hams.com", "acme.hams.com", "_acme-challenge.auth.hams.com", "*.hams.com",
