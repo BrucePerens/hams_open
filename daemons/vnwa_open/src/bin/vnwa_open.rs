@@ -17,11 +17,16 @@ fn main() {
         }
         Some("install-system-config") => {
             let has = |f: &str| a.iter().any(|x| x == f);
-            let root = a
-                .iter()
-                .position(|x| x == "--root")
-                .and_then(|i| a.get(i + 1))
-                .map(PathBuf::from);
+            let root = match a.iter().position(|x| x == "--root") {
+                None => None,
+                Some(i) => match a.get(i + 1).filter(|d| !d.starts_with("--")) {
+                    Some(d) => Some(PathBuf::from(d)),
+                    None => {
+                        eprintln!("vnwa_open install-system-config: --root needs a directory");
+                        std::process::exit(2);
+                    }
+                },
+            };
             let mode = if has("--check") {
                 Mode::Check
             } else if has("--uninstall") {

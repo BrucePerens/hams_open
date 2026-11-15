@@ -45,3 +45,23 @@ fn install_system_config_check_under_a_staging_root_reports_the_files_it_would_m
     let created: Vec<_> = std::fs::read_dir(&root).unwrap().collect();
     assert!(created.is_empty(), "{created:?}");
 }
+
+// Tests [@ANCHOR: vnwa_open_cli_main]
+#[test]
+fn a_root_option_without_a_directory_is_refused_instead_of_installing_into_the_real_system() {
+    // `--root` last, or followed by another option, used to leave the root unset (or take the option as the directory): the plan and
+    // an `--apply` then went to the real /etc under sudo although a staging root was asked for.
+    for args in [
+        vec!["install-system-config", "--check", "--root"],
+        vec!["install-system-config", "--root", "--apply"],
+    ] {
+        let o = run(&args);
+        assert_eq!(o.status.code(), Some(2), "{args:?}");
+        assert!(
+            String::from_utf8_lossy(&o.stderr).contains("--root needs a directory"),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+        assert!(o.stdout.is_empty(), "{args:?} printed a plan");
+    }
+}
