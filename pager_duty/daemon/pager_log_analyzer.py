@@ -92,6 +92,7 @@ def tail_file(r_client, fp, compiled_patterns):
     cur_inode = None
     f = None
     missing_logged = False
+    pending = ""  # the start of a line the writer has not finished yet
     while True:
         try:
             try:
@@ -106,8 +107,10 @@ def tail_file(r_client, fp, compiled_patterns):
             if f and st is not None and new_inode == cur_inode and st.st_size < f.tell():
                 logger.info(f"Log file {chroot_path} was truncated; reading it from the start.")
                 f.seek(0, 0)
+                pending = ""
 
             if new_inode != cur_inode:
+                pending = ""
                 if f:
                     f.close()
                 if new_inode is not None:
@@ -138,6 +141,12 @@ def tail_file(r_client, fp, compiled_patterns):
                 if not line:
                     time.sleep(0.5)  # audit-ignore-sleep
                     continue
+                # A reader that catches the writer mid-line gets half of it: matching that half reports a cut-off line and
+                # misses a pattern that spans the cut. Wait for the line end.
+                pending += line
+                if not pending.endswith("\n"):
+                    continue
+                line, pending = pending, ""
 
                 for pat in compiled_patterns:
                     if len(pat["c_reg"].findall(line)) > 0:

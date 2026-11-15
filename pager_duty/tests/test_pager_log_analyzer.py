@@ -111,6 +111,44 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
         self.assertEqual(payload["source"], "Log Analyzer: OOM")
         self.assertIn("Out Of Memory", payload["description"])
 
+    def test_02a_tail_file_waits_for_the_end_of_a_line_before_matching_it(self):
+        # Tests [@ANCHOR: pager_duty:tail_file]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as tmp:
+            tmp_path = tmp.name
+        self.addCleanup(lambda: os.path.exists(tmp_path) and os.remove(tmp_path))
+        pushed = []
+        ready = threading.Event()
+        oom_seen = threading.Event()
+
+        def _record(_key, raw):
+            payload = json.loads(raw)
+            pushed.append(payload["description"])
+            (ready if payload["source"].endswith("READY") else oom_seen).set()
+
+        mock_r_client = MagicMock()
+        mock_r_client.lpush.side_effect = _record
+        compiled = [
+            {"name": name, "severity": "critical", "website_id": None, "c_reg": re.compile(rx)}
+            for name, rx in (("READY", "tail is reading"), ("OOM", "(?i)out of memory"))
+        ]
+        thread = threading.Thread(  # burn-ignore-test-daemon-thread: daemon=True is the bound, as in test_02
+            target=pager_log_analyzer.tail_file, args=(mock_r_client, tmp_path, compiled), daemon=True,
+        )
+        thread.start()
+        deadline = time.time() + 10
+        while time.time() < deadline and not ready.is_set():  # the tail starts at the end: append until it has seen a line
+            with open(tmp_path, "a") as f:
+                f.write("tail is reading\n")
+            ready.wait(timeout=0.2)
+        self.assertTrue(ready.is_set())
+        with open(tmp_path, "a") as f:
+            f.write("kernel: Out of memory: Killed")
+        self.assertFalse(oom_seen.wait(timeout=1.5), "half a line must not be reported")
+        with open(tmp_path, "a") as f:
+            f.write(" process 42\n")
+        self.assertTrue(oom_seen.wait(timeout=10))
+        self.assertEqual(pushed[-1], "kernel: Out of memory: Killed process 42")
+
     def test_02b_config_path_follows_the_same_rule_as_the_monitor(self):
         # Tests [@ANCHOR: pager_duty:log_analyzer_resolve_config_path]
         with tempfile.TemporaryDirectory() as d:
