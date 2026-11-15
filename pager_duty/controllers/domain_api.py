@@ -78,6 +78,15 @@ class PagerDutyController(http.Controller):
             # audit-ignore-i18n: Tested by [@ANCHOR: pd_domain_api_i18n]  # fmt: skip
             return {"status": "error", "message": _("Unauthorized")}
 
+        # A string would be joined character by character, a list of numbers would crash the join.
+        if (
+            not isinstance(domains, list)
+            or len(domains) > 1000
+            or not all(isinstance(d, str) and d and len(d) <= 253 and "," not in d for d in domains)
+        ):
+            # audit-ignore-i18n: Tested by [@ANCHOR: pd_domain_api_i18n]  # fmt: skip
+            return {"status": "error", "message": _("domains must be a list of domain names")}
+
         # Call the model method to handle this using a service account
         svc_uid = request.env["zero_sudo.security.utils"]._get_service_uid(
             "pager_duty.user_pager_service_internal"
