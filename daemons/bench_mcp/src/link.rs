@@ -307,7 +307,14 @@ impl Link {
     pub fn block(&mut self, cmd: &str) -> Result<Vec<u8>, String> {
         // [@ANCHOR: bench_mcp_link_block]
         self.send(cmd)?;
-        while self.byte()? != b'#' {}
+        // The header is the first `#`; a stream of other bytes is not an instrument answering.
+        let mut skipped = 0usize;
+        while self.byte()? != b'#' {
+            skipped += 1;
+            if skipped > MAX_REPLY {
+                return Err("no block header in the reply".into());
+            }
+        }
         let nd = (self.byte()? as char)
             .to_digit(10)
             .ok_or("bad block header")? as usize;
@@ -499,6 +506,43 @@ mod tests {
         assert!(e.contains("larger than"), "{e}");
         let mut ok = Link::new(Box::new(Streaming(8)), "\n");
         assert_eq!(ok.raw_until_idle("SCDP", 300, 10).unwrap().len(), 8 * 65536);
+    }
+
+    /// A port that reads from a fixed byte string, then ends.
+    struct Bytes(std::io::Cursor<Vec<u8>>);
+
+    impl Read for Bytes {
+        fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(b)
+        }
+    }
+
+    impl Write for Bytes {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl super::Port for Bytes {
+        fn set_timeout(&mut self, _: Duration) {}
+    }
+
+    // Tests [@ANCHOR: bench_mcp_link_block]
+    #[test]
+    fn a_reply_with_no_block_header_for_a_megabyte_is_refused() {
+        let mut junk = vec![b'x'; (1 << 20) + 10];
+        junk.extend_from_slice(b"#9000000003abc");
+        let mut l = Link::new(Box::new(Bytes(std::io::Cursor::new(junk))), "\n");
+        let e = l.block("DATA?").unwrap_err();
+        assert!(e.contains("no block header"), "{e}");
+        let mut ok = Link::new(
+            Box::new(Bytes(std::io::Cursor::new(b"xx#9000000003abc".to_vec()))),
+            "\n",
+        );
+        assert_eq!(ok.block("DATA?").unwrap(), b"abc");
     }
 
     // Tests [@ANCHOR: bench_mcp_link_tcp]
