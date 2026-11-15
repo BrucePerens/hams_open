@@ -861,7 +861,7 @@ class TestSesWebhook(HamsHttpCase):
         log = self.env['ses.webhook.log'].search([('name', '=', 'msg-forged-nudge')])
         self.assertEqual(log.status, 'rejected_signature')
 
-    def test_09_webhook_url_computes_for_plain_internal_user(self):
+    def test_09_webhook_url_computes_for_the_service_account_only(self):
         # Tests [@ANCHOR: ses_webhook:COMM_compute_webhook_url]
         """
         _compute_webhook_url() used to read web.base.url via .sudo(),
@@ -886,12 +886,17 @@ class TestSesWebhook(HamsHttpCase):
         self.assertFalse(plain_user.has_group("base.group_system"))
         self.assertTrue(plain_user.has_group("base.group_user"))
 
-        domain_as_plain_user = self.domain_a.with_user(plain_user)
+        # The URL carries the secret token, so since the token became a credential a plain internal
+        # user may no longer read it (see test_10b); the webhook service account still computes it
+        # without sudo().
+        with self.assertRaises(AccessError):
+            self.domain_a.with_user(plain_user).read(["webhook_url"])
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
         self.assertTrue(
-            domain_as_plain_user.webhook_url,
-            "A plain internal user (base.group_user) MUST be able to "
-            "compute/read webhook_url on a record their own ACL grants "
-            "them read access to.",
+            self.domain_a.with_user(svc_uid).webhook_url,
+            "The webhook service account MUST be able to compute webhook_url.",
         )
 
     # ------------------------------------------------------------------
