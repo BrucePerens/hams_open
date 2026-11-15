@@ -10,7 +10,8 @@ _logger = logging.getLogger(__name__)
 
 # Source name of the pager incident that says purges are not reaching Cloudflare.
 PURGE_INCIDENT_SOURCE = "Cloudflare purge queue"
-# A purge that failed on a real API error is tried again once, this long after it failed.
+# A purge that failed on a real API error is tried again this long after it failed, and again every such period until it works
+# (a long Cloudflare outage must not lose the purges). A row that can never succeed keeps the batch it is in failing.
 RETRY_FAILED_AFTER_HOURS = 1
 
 
@@ -205,7 +206,7 @@ class CloudflarePurgeQueue(models.Model):
     @api.model
     def requeue_failed(self):
         # [@ANCHOR: cloudflare:COMM_requeue_failed_purges]
-        """Make one more attempt at purges that failed on an API error at least an hour ago.
+        """Make another attempt at purges that failed on an API error at least an hour ago (every hour, with no limit).
 
         Only for websites that have credentials now; a row that fails again goes back to failed and the
         pager incident stays open. Returns the number of rows set back to pending.
