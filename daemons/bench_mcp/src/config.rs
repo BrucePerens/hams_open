@@ -286,6 +286,26 @@ fn reject_shared_claims(insts: &[Instrument]) -> Result<(), String> {
 }
 
 /// The `connect_waits_s` of a scope entry: up to eight pauses of 0 to 3600 s between connection attempts; 2, 5, 10 and 20 s when omitted.
+/// A number field that is absent (or null) takes the default; one that is present must be a number. A mistyped supply limit
+/// (`"max_volts": "3.3"`) must not fall back to the default limit.
+fn number(c: &Value, key: &str, default: f64) -> Result<f64, String> {
+    match c.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(v) => v.as_f64().ok_or(format!("{key} must be a number")),
+    }
+}
+
+/// As `number` for a whole number that must fit the field type (a port of 70561 must not become 5025).
+fn whole<T: TryFrom<u64>>(c: &Value, key: &str, default: T) -> Result<T, String> {
+    match c.get(key) {
+        None | Some(Value::Null) => Ok(default),
+        Some(v) => v
+            .as_u64()
+            .and_then(|n| T::try_from(n).ok())
+            .ok_or(format!("{key} must be a whole number in range")),
+    }
+}
+
 fn connect_waits(c: &Value) -> Result<Vec<f64>, String> {
     // [@ANCHOR: bench_mcp_config_connect_waits]
     let Some(v) = c.get("connect_waits_s") else {
@@ -339,12 +359,12 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             tier: tier_of(c.get("tier").and_then(|t| t.as_str()))
                 .map_err(|e| format!("{name}: {e}"))?,
             host: c.get("host").and_then(|h| h.as_str()).map(String::from),
-            port: c.get("port").and_then(|p| p.as_u64()).unwrap_or(5025) as u16,
+            port: whole(c, "port", 5025).map_err(|e| format!("{name}: {e}"))?,
             serial: c.get("serial").and_then(|s| s.as_str()).map(String::from),
-            baud: c.get("baud").and_then(|b| b.as_u64()).unwrap_or(115200) as u32,
-            max_volts: c.get("max_volts").and_then(|m| m.as_f64()).unwrap_or(5.5),
-            max_amps: c.get("max_amps").and_then(|m| m.as_f64()).unwrap_or(1.0),
-            max_on_s: c.get("max_on_s").and_then(|m| m.as_f64()).unwrap_or(600.0),
+            baud: whole(c, "baud", 115200).map_err(|e| format!("{name}: {e}"))?,
+            max_volts: number(c, "max_volts", 5.5).map_err(|e| format!("{name}: {e}"))?,
+            max_amps: number(c, "max_amps", 1.0).map_err(|e| format!("{name}: {e}"))?,
+            max_on_s: number(c, "max_on_s", 600.0).map_err(|e| format!("{name}: {e}"))?,
             connect_waits_s: connect_waits(c).map_err(|e| format!("{name}: {e}"))?,
             vna: vna_config(c).map_err(|e| format!("{name}: {e}"))?,
             sdr: sdr_config(&driver_name, c).map_err(|e| format!("{name}: {e}"))?,
@@ -408,6 +428,34 @@ pub fn load() -> Result<Vec<Instrument>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: bench_mcp_config]
+    #[test]
+    fn a_mistyped_or_out_of_range_limit_port_or_baud_is_an_error_not_a_default() {
+        let psu = |extra: &str| {
+            parse(&format!(
+                r#"{{"instruments":{{"p":{{"driver":"atm6301","serial":"/dev/ttyUSB0"{extra}}}}}}}"#
+            ))
+        };
+        assert!(psu("").is_ok());
+        for bad in [
+            r#","max_volts":"3.3""#,
+            r#","max_amps":true"#,
+            r#","max_on_s":"60""#,
+            r#","baud":4294976896"#,
+            r#","baud":"9600""#,
+        ] {
+            assert!(psu(bad).is_err(), "{bad}");
+        }
+        let scope = |extra: &str| {
+            parse(&format!(
+                r#"{{"instruments":{{"s":{{"driver":"siglent_sds","host":"h"{extra}}}}}}}"#
+            ))
+        };
+        assert_eq!(scope(r#","port":5026"#).unwrap()[0].port, 5026);
+        assert!(scope(r#","port":70561"#).is_err());
+        assert!(scope(r#","port":"5025""#).is_err());
+    }
 
     // Tests [@ANCHOR: bench_mcp_config_tier_of]
     // Tests [@ANCHOR: bench_mcp_config]
