@@ -281,11 +281,6 @@ class Module(models.Model):
         help_topic = str(doc_info.get("help_topic") or "").strip()
 
         hash_key = f"zero_sudo.doc_hash_{module_name}_{name.replace(' ', '_')}"
-        existing_hash = existing_hashes.get(hash_key) if existing_hashes is not None else utils._get_kv(hash_key)
-
-        if existing_hash == content_hash:
-            return
-
         vals = {
             "name": name,
             "body": doc_body,
@@ -310,6 +305,14 @@ class Module(models.Model):
         sequence = doc_info.get("sequence")
         if isinstance(sequence, int) and not isinstance(sequence, bool):
             vals["sequence"] = sequence
+
+        # The stored hash covers the manifest fields as well as the file: flipping "public" (or the
+        # topic, icon, category, sequence) in the manifest must reach an article already installed.
+        metadata = repr(sorted((key, value) for key, value in vals.items() if key != "body"))
+        content_hash = hashlib.sha256((content_hash + metadata).encode()).hexdigest()
+        existing_hash = existing_hashes.get(hash_key) if existing_hashes is not None else utils._get_kv(hash_key)
+        if existing_hash == content_hash:
+            return
 
         # Article identity is looked up by this
         # module's OWN previously-recorded article id, never by searching
