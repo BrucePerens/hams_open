@@ -344,6 +344,12 @@ impl Installer<'_> {
                 };
                 let _ = self.do_run(argv, &mut sink);
             }
+            if self.opts.mode == Mode::Uninstall {
+                // `uninstall` records nothing to undo: what it already restored or removed stays that way, and a second run finishes the rest.
+                return Err(format!(
+                    "{e} (the uninstall stopped here; the files it already restored or removed stay so: run it again to finish)"
+                ));
+            }
             return Err(format!("{e} (the steps done before it were undone)"));
         }
         text.push_str("Done.\n");
@@ -681,6 +687,45 @@ mod tests {
                 "{} was left behind",
                 m.dest
             );
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_install_run]
+    // Tests [@ANCHOR: vnwa_open_install_uninstall]
+    #[test]
+    fn a_failed_uninstall_does_not_claim_its_steps_were_undone_and_a_second_run_finishes_it() {
+        let root = tmp("inst_unfail");
+        let rec = Recording(Mutex::new(Vec::new()));
+        installer(&root, &rec, Mode::Install, true).run().unwrap();
+        struct FailsOnSecondRemove(Mutex<u32>);
+        impl Exec for FailsOnSecondRemove {
+            fn run(&self, argv: &[String]) -> Result<(), String> {
+                let mut n = self.0.lock().unwrap();
+                if argv[0] == "rm" {
+                    *n += 1;
+                    if *n == 2 {
+                        return Err("busy".into());
+                    }
+                }
+                ProcessExec.run(argv)
+            }
+        }
+        let exec = FailsOnSecondRemove(Mutex::new(0));
+        let e = installer(&root, &exec, Mode::Uninstall, true)
+            .run()
+            .unwrap_err();
+        // `uninstall` records nothing to undo: the first file stays removed, so the message must not say it was put back.
+        assert!(e.contains("busy") && !e.contains("undone"), "{e}");
+        assert!(e.contains("run it again"), "{e}");
+        let left = managed()
+            .iter()
+            .filter(|m| root.join(m.dest.trim_start_matches('/')).exists())
+            .count();
+        assert_eq!(left, 2, "one file removed, two left");
+        installer(&root, &rec, Mode::Uninstall, true).run().unwrap();
+        for m in managed() {
+            assert!(!root.join(m.dest.trim_start_matches('/')).exists());
         }
         let _ = std::fs::remove_dir_all(&root);
     }
