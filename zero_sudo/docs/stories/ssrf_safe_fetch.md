@@ -15,7 +15,7 @@ A caller used to check a URL by resolving its host name once and rejecting unsaf
 
 ## What a Safe Address Is `[@ANCHOR: zero_sudo:ssrf_safe_fetch_is_ssrf_safe_public_ip]`
 
-`is_ssrf_safe_public_ip(ip_obj)` is true only for a globally routable address. It also names each excluded range explicitly (private, loopback, link-local, which covers the `169.254.169.254` metadata address, multicast, reserved and unspecified), so the rule stays legible and does not widen if a later Python release changes what `is_global` means.
+`is_ssrf_safe_public_ip(ip_obj)` is true only for a globally routable address. It also names each excluded range explicitly (private, loopback, link-local, which covers the `169.254.169.254` metadata address, multicast, reserved and unspecified), so the rule stays legible and does not widen if a later Python release changes what `is_global` means. `ip_obj` is an `ipaddress.IPv4Address` or `IPv6Address` and the function returns a bool, never raising for a valid address object. An IPv6 address that wraps an IPv4 one (`::ffff:a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4 `2002::/16`) is judged on the wrapped address too, and site-local IPv6 is refused. It does no network access and has no side effects. Verified by `tests/test_ssrf_safe_fetch.py`.
 
 ## Resolve Once, Fail Closed `[@ANCHOR: zero_sudo:ssrf_safe_fetch_resolve_ssrf_safe_addresses]`
 
