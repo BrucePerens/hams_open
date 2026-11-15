@@ -20,7 +20,8 @@ export class PagerBoard extends Component {
 
         onMounted(async () => {
             this.busService.addChannel("pager_duty");
-            this.busService.addEventListener("notification", this.onNotification.bind(this));
+            this.notificationHandler = this.onNotification.bind(this);
+            this.busService.addEventListener("notification", this.notificationHandler);
             // A failed first load must not skip the burn-in timer, nor leave "Loading..." on a pager board for ever.
             try {
                 await this.fetchData();
@@ -28,11 +29,17 @@ export class PagerBoard extends Component {
                 console.error("[PagerBoard] first load failed:", error);
                 this.state.on_duty = "Unavailable";
             }
-            this.burnInTimer = setInterval(() => this.applyBurnInShift(), 60000);
+            // The board may have been closed while the first load was running: no timer then.
+            if (!this.unmounted) {
+                this.burnInTimer = setInterval(() => this.applyBurnInShift(), 60000);
+            }
         });
 
         onWillUnmount(() => {
+            this.unmounted = true;
             if (this.burnInTimer) clearInterval(this.burnInTimer);
+            // The bus service outlives the board: a listener left on it keeps reloading a closed board.
+            this.busService.removeEventListener("notification", this.notificationHandler);
         });
     }
 

@@ -18,7 +18,7 @@ const BOARD = {
 
 /** Stand-ins for the two services; the orm records every call and answers get_board_data with BOARD. */
 function stubServices() {
-    const seen = { calls: [], channels: [], listeners: [] };
+    const seen = { calls: [], channels: [], listeners: [], removed: [] };
     seen.services = {
         orm: {
             call: async (model, method, args, kwargs) => {
@@ -29,6 +29,7 @@ function stubServices() {
         bus_service: {
             addChannel: (name) => seen.channels.push(name),
             addEventListener: (name, handler) => seen.listeners.push([name, handler]),
+            removeEventListener: (name, handler) => seen.removed.push([name, handler]),
         },
     };
     return seen;
@@ -80,6 +81,25 @@ describe("pager_duty_board", () => {
         await animationFrame();
         expect(board.state.on_duty).toBe("Unavailable");
         expect(Boolean(board.burnInTimer)).toBe(true);
+    });
+
+    test("closing the board removes its bus listener, and a board closed during the first load starts no timer", async () => {
+        // Tests [@ANCHOR: pager_duty:js_board_setup]
+        const seen = stubServices();
+        const first = await mountPlain(PagerBoard, seen.services);
+        await animationFrame();
+        cleanups.pop()();
+        expect(seen.removed).toEqual([seen.listeners[0]]);
+        expect(Boolean(first.burnInTimer)).toBe(true);
+        expect(first.unmounted).toBe(true);
+
+        let release;
+        seen.services.orm.call = () => new Promise((resolve) => { release = () => resolve(BOARD); });
+        const second = await mountPlain(PagerBoard, seen.services);
+        cleanups.pop()();
+        release();
+        await animationFrame();
+        expect(Boolean(second.burnInTimer)).toBe(false);
     });
 
     test("fetchData fills the state from the server's board data, passing the page's website id, and then shifts the display", async () => {
