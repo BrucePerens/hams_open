@@ -44,6 +44,8 @@ def run(cmd, timeout=60, stdin=None):
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired:
         return 124, "", "timeout"
+    except OSError as e:  # program missing or not executable: a failed step, not a crash
+        return 127, "", str(e)
 
 
 def sdrplay_devices():
