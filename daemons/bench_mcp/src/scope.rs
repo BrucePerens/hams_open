@@ -15,6 +15,7 @@ pub(crate) fn ch(args: &Value) -> Result<u8, String> {
 
 /// The unix second plus a process-wide counter: two captures in the same second (a loop of tool calls) must not overwrite each
 /// other's file.
+// [@ANCHOR: bench_mcp_scope_stamp]
 pub(crate) fn stamp() -> String {
     static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let t = std::time::SystemTime::now()
@@ -366,6 +367,7 @@ pub fn self_cal(s: &mut Link, args: &Value) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
+    // Tests [@ANCHOR: bench_mcp_scope_stamp]
     #[test]
     fn stamps_made_in_the_same_second_differ() {
         let all: std::collections::HashSet<String> = (0..50).map(|_| stamp()).collect();

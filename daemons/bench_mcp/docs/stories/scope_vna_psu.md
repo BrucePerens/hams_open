@@ -20,6 +20,10 @@ Reads which scope channel a tool call names. Every scope tool that acts on one c
 
 Returns `Ok(1)` or `Ok(2)` as `u8`. Errors: `channel must be 1 or 2` when the key is missing, null, not an unsigned whole number, or any other number (0, 3, 1.5, a string). There is no default channel. Pure function: no I/O, no lock, no side effect. Tests: `measurements_are_asked_per_channel_and_only_for_plain_item_names`, `a_capture_is_written_as_f32_volts_with_its_edges_and_a_stopped_scope_is_refused` and `settings_become_the_scopes_commands_and_bad_values_are_refused_before_sending` in `scope.rs`.
 
+### `bench_mcp_scope_stamp` [@ANCHOR: bench_mcp_scope_stamp]
+
+`stamp()` returns the unix second plus a process-wide counter (`<secs>_<n>`) used in capture file names, so two captures in the same second never overwrite each other. No arguments. Takes no arguments and cannot fail; the counter starts at zero for each process run and only grows, so the names are unique within one server run (a restart in the same second could reuse a name, which is acceptable here). No hardware access, no I/O, no locks. Test: `stamps_made_in_the_same_second_differ`.
+
 ### `bench_mcp_scope_status` [@ANCHOR: bench_mcp_scope_status]
 
 `status(s)` is the scope half of `bench_status` (tier `read_only`): one read-only look at what the scope is doing now.
@@ -445,6 +449,10 @@ The Abestop ATM6301 (0 to 60 V, 0 to 10 A) is driven over its CH340 serial port,
 | `reply` | `&str` | The line the supply returned. |
 
 Returns true when the trimmed, upper-cased reply is `OFF` or `0`; anything else (including `ON`, `1`, an empty line, an error text) is false. Its sibling `is_on` accepts `ON` or `1` and is used by `state`; a reply that is neither is shown as `off` by `state` but is not accepted as proof of off by `safe_state`. Pure function. Test: `output_reply_spellings`.
+
+### `bench_mcp_psu_output_word` [@ANCHOR: bench_mcp_psu_output_word]
+
+`output_word(reply)` (private) turns the supply's `OUTP?` answer into `on`, `off` or `unknown (the supply answered "...")`, so garbage or an empty line is never shown as `off`. Pure. Argument: `reply`, the line the supply returned. Returns a `String`; `on` and `off` use the same spellings as `is_on` and `is_off` (`ON`/`1`, `OFF`/`0`, case and surrounding whitespace ignored). It cannot fail. The `unknown` text includes the trimmed reply so the operator can see what the supply said; `safe_state` still relies on `is_off` alone as proof. Test: `an_unrecognised_output_reply_is_not_reported_as_off`.
 
 ### `bench_mcp_psu_measure` [@ANCHOR: bench_mcp_psu_measure]
 

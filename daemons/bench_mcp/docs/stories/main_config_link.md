@@ -260,6 +260,14 @@ as text. Asynchronous and threads: the instruments are blocking peers, so `call`
 runtime threads free; several calls may be in flight at once, and per-instrument ordering is the lock inside `call`. The `insts` list is shared by
 `Arc` and never changes after start.
 
+### `shutdown_all` [@ANCHOR: bench_mcp_main_shutdown_all]
+
+Called when the server ends: stops every procedure run, releases and stops the rig daemons, stops the Glasgow daemon, then switches off any supply this process switched on (see `bench_mcp_main_psu_exit_off`), printing a line to stderr for each supply that could not be switched off. Argument: the instrument list. No return value. It is `shutdown_only` with no prefix and no directory limit; tests use `shutdown_only` with a prefix that matches nothing, so they do not stop other tests' runs and daemons. Test: `shutdown_all_with_nothing_running_returns`.
+
+### `shutdown_only` [@ANCHOR: bench_mcp_main_shutdown_only]
+
+The body of `shutdown_all`, limited by a rig and instrument name `prefix` and an optional run directory `dir`: stops the procedure runs using that directory (all runs for `None`), the rig daemons and Glasgow sessions whose names start with the prefix (all for `""`), then switches off the supplies this process switched on, reporting each failure on stderr. Arguments: the instrument list, the prefix, the directory. No return value. It exists so a test can run the shutdown without stopping the runs and daemons other tests have started; production only calls it through `shutdown_all`. Test: `shutdown_all_with_nothing_running_returns`.
+
 ### `main` [@ANCHOR: bench_mcp_main_serve]
 
 The program entry point: starts the MCP server on standard input and output. It is a `tokio` async main.
@@ -312,6 +320,19 @@ Reads the `connect_waits_s` key of a scope entry: the pauses, in seconds, that `
 | `connect_waits_s` | array of 0 to 8 numbers, each 0 to 3600 | One pause per retry; the scope is tried once more than there are pauses. Omitted: 2, 5, 10, 20 (37 s in all). `[]` means one attempt and no pause. |
 
 Errors: a value that is not such an array is refused with `connect_waits_s must be up to eight numbers from 0 to 3600 (seconds)`, with the instrument name in front. It exists for the stale-session experiment: setting `[300, 600, 1800]` makes one tool call wait the scope out for 5, 10 and 30 minutes and the NO-GO text records each attempt, so the idle timeout of the scope's SCPI server can be measured without a code change. Pure: no I/O. Tests: `connect_waits_default_to_37_seconds_and_are_bounded` in `config.rs` and `a_scope_holding_a_dead_session_is_waited_out_for_as_long_as_connect_waits_s_says` in `main.rs` (a fake scope that resets new connections for 0.7 s).
+
+### `number` [@ANCHOR: bench_mcp_config_number]
+
+Reads a numeric field of an instrument entry (`config.rs`, private). Arguments: the entry, the key, a default. An absent or null field gives the default; a present field that is not a number is the error `<key> must be a number`, so a mistyped limit (`"max_volts": "3.3"`) never becomes the default limit. Pure. Test: `number_optional_number_and_whole_take_defaults_but_refuse_wrong_types`.
+
+### `optional_number` [@ANCHOR: bench_mcp_config_optional_number]
+
+As `number`, but an absent or null field is `Ok(None)` instead of a default. Same error for a non-number. Pure. Arguments: the entry (`&Value`), the key. Returns `Result<Option<f64>, String>`; used for `settle_ms` and `window_ms` of the VNA entry, where absence means the driver's own default applies. Errors: only the one named, never for absent keys. No I/O. Test: `number_optional_number_and_whole_take_defaults_but_refuse_wrong_types`.
+
+### `whole` [@ANCHOR: bench_mcp_config_whole]
+
+As `number` for a whole number that must fit the target type: a value that is not an unsigned integer or does not fit (a port of 70561 as `u16`) is the error `<key> must be a whole number in range`. Pure. Test: `number_optional_number_and_whole_take_defaults_but_refuse_wrong_types`.
+
 
 ### `vna_config` [@ANCHOR: bench_mcp_config_vna]
 

@@ -33,6 +33,7 @@ fn is_off(reply: &str) -> bool {
 }
 
 /// `on`, `off`, or `unknown`: a reply that is neither (garbage, an empty line) must not read as "off", the safe state.
+// [@ANCHOR: bench_mcp_psu_output_word]
 fn output_word(reply: &str) -> String {
     if is_on(reply) {
         "on".into()
@@ -370,6 +371,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_mcp_psu_is_off]
+    // Tests [@ANCHOR: bench_mcp_psu_output_word]
     #[test]
     fn an_unrecognised_output_reply_is_not_reported_as_off() {
         assert_eq!(output_word("ON"), "on");

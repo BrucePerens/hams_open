@@ -584,10 +584,18 @@ fn switch_off_supplies(
 }
 
 /// What the server stops when it ends: its runs, the keyed rig, the Glasgow daemon, and any supply it switched on.
+// [@ANCHOR: bench_mcp_main_shutdown_all]
 fn shutdown_all(insts: &[Instrument]) {
-    procedure::shutdown();
-    radioctl::shutdown();
-    glasgow::shutdown();
+    shutdown_only(insts, "", None);
+}
+
+/// `shutdown_all` limited to the rigs and instruments named with `prefix` and the runs using the directory `dir` (all of them
+/// for `""` and `None`), so a test can run it without stopping what other tests have started.
+// [@ANCHOR: bench_mcp_main_shutdown_only]
+fn shutdown_only(insts: &[Instrument], prefix: &str, dir: Option<&std::path::Path>) {
+    procedure::stop_all(dir);
+    radioctl::shutdown_prefix(prefix);
+    glasgow::shutdown_prefix(prefix);
     for (name, r) in switch_off_supplies(insts, connect) {
         if let Err(e) = r {
             eprintln!("bench_mcp: could not switch off the supply {name:?} at exit: {e}");
@@ -797,6 +805,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: bench_mcp_main_shutdown_all]
+    // Tests [@ANCHOR: bench_mcp_main_shutdown_only]
+    #[test]
+    fn shutdown_all_with_nothing_running_returns() {
+        let none = std::path::Path::new("/nonexistent/bench_mcp_shutdown_test");
+        shutdown_only(&[], "no_such_rig_", Some(none));
+        shutdown_only(&insts(), "no_such_rig_", Some(none));
+    }
 
     fn insts() -> Vec<Instrument> {
         config::parse(

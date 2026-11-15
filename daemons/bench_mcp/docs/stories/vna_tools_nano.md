@@ -17,6 +17,10 @@ opened wherever the code says so, so a bad request never touches the hardware.
 
 ## VNWA tools: argument helpers (`vna_tools.rs`)
 
+### `unique_stamp` [@ANCHOR: bench_mcp_vna_unique_stamp]
+
+`unique_stamp()` (`vna.rs`) returns `<unix seconds>_<counter>` for VNA output file names, so two measurements in the same second never overwrite each other. No arguments. Takes no arguments and cannot fail; the counter starts at zero for each process run and only grows, so the names are unique within one server run (a restart in the same second could reuse a name, which is acceptable here). No hardware access, no I/O, no locks. Test: `unique_stamps_made_in_the_same_second_differ`.
+
 ### `num` [@ANCHOR: bench_vna_tools_num]
 
 Reads one optional numeric argument from a tool call's JSON arguments, so every tool in this file reports a wrong type the same way. Private helper; called by

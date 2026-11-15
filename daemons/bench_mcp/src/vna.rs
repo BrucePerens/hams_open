@@ -356,6 +356,7 @@ pub fn power_cycle(cfg: &Config, args: &Value) -> Result<Value, String> {
 }
 
 /// The unix second plus a process-wide counter: two measurements in the same second must not overwrite each other's file.
+// [@ANCHOR: bench_mcp_vna_unique_stamp]
 pub(crate) fn unique_stamp() -> String {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let t = std::time::SystemTime::now()
@@ -430,6 +431,13 @@ pub fn sweep(
 pub(crate) mod tests {
     use super::*;
     use vnwa_open::audio::Complex;
+
+    // Tests [@ANCHOR: bench_mcp_vna_unique_stamp]
+    #[test]
+    fn unique_stamps_made_in_the_same_second_differ() {
+        let all: std::collections::HashSet<String> = (0..50).map(|_| unique_stamp()).collect();
+        assert_eq!(all.len(), 50);
+    }
 
     // Tests [@ANCHOR: bench_vna_power_hook]
     // Tests [@ANCHOR: bench_vna_instrument_monitoring]
