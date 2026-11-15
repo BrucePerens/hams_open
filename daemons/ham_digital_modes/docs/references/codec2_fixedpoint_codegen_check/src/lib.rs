@@ -16,6 +16,7 @@
 #[cfg(not(test))]
 use core::panic::PanicInfo;
 
+// [@ANCHOR: codegen_check_panic_handler]
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -96,6 +97,39 @@ mod tests {
     const ONE_Q40: i64 = 1 << LEVINSON_FRAC_BITS;
     const ONE_Q29: i64 = 1 << CHEB_FRAC_BITS;
 
+    // The handler exists only in the real no_std build, so the only honest check is to
+    // build that crate for a bare-metal target: rustc refuses to produce the static
+    // library unless exactly one `#[panic_handler]` with the right signature exists.
+    // Tests [@ANCHOR: codegen_check_panic_handler]
+    #[test]
+    fn the_no_std_build_has_its_panic_handler() {
+        let target_dir =
+            std::env::temp_dir().join(format!("codegen_check_nostd_{}", std::process::id()));
+        let out =
+            std::process::Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
+                .args([
+                    "build",
+                    "--release",
+                    "--lib",
+                    "--target",
+                    "riscv32imc-unknown-none-elf",
+                ])
+                .arg("--manifest-path")
+                .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
+                .env("CARGO_TARGET_DIR", &target_dir)
+                .output()
+                .expect("cargo runs");
+        let lib = target_dir
+            .join("riscv32imc-unknown-none-elf/release/libcodec2_fixedpoint_codegen_check.a");
+        let built = lib.is_file();
+        let _ = std::fs::remove_dir_all(&target_dir);
+        assert!(
+            out.status.success() && built,
+            "no_std build failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
     // Tests [@ANCHOR: codegen_check_q_mul_i128]
     #[test]
     fn q_mul_is_a_rounded_q40_product() {
@@ -147,7 +181,11 @@ mod tests {
     // Tests [@ANCHOR: codegen_check_cheb_i32]
     #[test]
     fn cheb_i32_is_bit_exact_with_i64_in_range() {
-        let coefs = [[1000, -2000, 3000, -4000, 5000, 6000], [1, 2, 3, 4, 5, 6], [0; 6]];
+        let coefs = [
+            [1000, -2000, 3000, -4000, 5000, 6000],
+            [1, 2, 3, 4, 5, 6],
+            [0; 6],
+        ];
         for coef in &coefs {
             for step in -20..=20 {
                 let x_q = (step as i64 * ONE_Q29) / 40; // |x| <= 0.5, no i32 overflow
