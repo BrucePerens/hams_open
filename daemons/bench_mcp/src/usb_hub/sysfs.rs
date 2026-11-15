@@ -214,7 +214,7 @@ fn parse_interval_us(s: &str) -> u32 {
         return v.parse().unwrap_or(0);
     }
     if let Some(v) = s.strip_suffix("ms") {
-        return v.parse::<u32>().unwrap_or(0) * 1000;
+        return v.parse::<u32>().unwrap_or(0).saturating_mul(1000);
     }
     0
 }
@@ -743,6 +743,14 @@ mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_ports_of]
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_tree]
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_controller]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_parse_interval_us]
+    #[test]
+    fn an_enormous_ms_interval_saturates_instead_of_overflowing() {
+        assert_eq!(parse_interval_us("125us"), 125);
+        assert_eq!(parse_interval_us("8ms"), 8000);
+        assert_eq!(parse_interval_us("4294967295ms"), u32::MAX);
+    }
+
     // Tests [@ANCHOR: bench_mcp_usb_hub_sysfs_interface_of]
     #[test]
     fn interface_number_is_read_as_hex_like_the_kernel_prints_it() {
