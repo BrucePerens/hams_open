@@ -49,3 +49,9 @@ This prevents an attacker who might have compromised a service account's credent
     no one to usefully receive that email, so it is suppressed specifically for service accounts,
     while an ordinary human user's own password-change notification is unaffected
     `[@ANCHOR: zero_sudo:service_account_security_notice_suppressed]`.
+
+- Core Odoo counts sign-in failures per source address, and behind the Tunnel every request arrives from
+  loopback, so one visitor's bad passwords put every visitor on cooldown. For the length of each sign-in
+  attempt the source address is the visitor's own (the trusted forwarding header, honoured only from a
+  loopback peer), so each visitor is counted separately
+  `[@ANCHOR: zero_sudo:login_cooldown_per_client_ip]`.

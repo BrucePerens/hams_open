@@ -4,9 +4,12 @@
 # This file is part of hams_open, an open source module.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import contextlib
+import ipaddress
 import secrets
 
 from odoo import api, fields, models
+from odoo.http import request
 from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 
 
@@ -39,6 +42,30 @@ class ResUsersZeroSudo(models.Model):
 
     # [@ANCHOR: zero_sudo:service_accounts_among_self]
     # Verified by [@ANCHOR: test_a_mixed_set_notifies_only_the_person]
+    # [@ANCHOR: zero_sudo:login_cooldown_per_client_ip]
+    # Verified by [@ANCHOR: test_cooldown_is_counted_per_visitor_not_per_tunnel]
+    @contextlib.contextmanager
+    def _assert_can_auth(self, user=None):
+        """Core's login cooldown is keyed on the request's REMOTE_ADDR. Behind the Tunnel that is loopback for every
+        visitor, so five bad passwords from one address put the whole site on cooldown. For the length of the attempt
+        REMOTE_ADDR is the visitor's own address (`_get_trusted_client_ip`: forwarding headers count only from a
+        loopback peer), restored afterwards; an unusable address leaves it alone."""
+        environ = request.httprequest.environ if request else None
+        original = environ.get("REMOTE_ADDR") if environ is not None else None
+        client_ip = self.env["zero_sudo.security.utils"]._get_trusted_client_ip() if environ is not None else None
+        try:
+            ipaddress.ip_address(client_ip)
+        except ValueError:
+            client_ip = None
+        if client_ip:
+            environ["REMOTE_ADDR"] = client_ip
+        try:
+            with super()._assert_can_auth(user=user):
+                yield
+        finally:
+            if client_ip:
+                environ["REMOTE_ADDR"] = original
+
     def _service_accounts_among_self(self):
         """The service accounts in `self`. Read with SQL for the reason write() gives below: is_service_account is
         groups="base.group_system", so filtering through the ORM raises AccessError for a narrower caller."""
