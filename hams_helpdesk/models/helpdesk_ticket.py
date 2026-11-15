@@ -826,6 +826,11 @@ class HelpdeskTicket(models.Model):
                 # Same shape: archiving the ticket removes it from every default (active_test)
                 # search, including that same dedup search and the admin list views.
                 "active",
+                # github_source_url is the webhook's dedup key: a portal user who set it to a real alert's URL on
+                # their own open ticket would make the genuine alert's ticket be skipped as "already covered".
+                # suspicion_log_ids is the filter's own findings record.
+                "github_source_url",
+                "suspicion_log_ids",
             }
             # Every ncmec_* field, not just the two named above: the assembled packet
             # (ncmec_report_packet), its evidence pointer (ncmec_recording_uuid,
