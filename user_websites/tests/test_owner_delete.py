@@ -161,6 +161,27 @@ class TestOwnerDelete(HamsHttpCase):
         self.assertFalse(self.env["website.page"].with_context(active_test=False).browse(self.about.id).active)
         self.assertFalse(self.env["blog.post"].with_context(active_test=False).browse(self.post.id).active)
 
+    def test_05c_delete_refuses_past_the_trash_cap(self):
+        # Tests [@ANCHOR: user_websites:fn_owner_trash_full]
+        # [@ANCHOR: test_owner_delete_refuses_past_the_trash_cap]
+        self.authenticate("delowner", "delowner")
+        second_page = self._page("/delowner/two", "two body")
+        blog = self.post.blog_id
+        second_post = self.env["blog.post"].create(
+            {"name": "Post Two", "blog_id": blog.id, "owner_user_id": self.owner.id, "is_published": True}
+        )
+        self.env.flush_all()
+        self.owner.website_page_limit = 1
+        self.safe_patch_object(type(self.env["res.users"]), "_get_blog_post_limit", return_value=1)
+        for kind, first, second in (("page", self.about, second_page), ("post", self.post, second_post)):
+            done = self._post(f"/my/site/delowner/{kind}/{first.id}/delete")
+            self.assertIn("saved=deleted", done.headers["Location"])
+            done = self._post(f"/my/site/delowner/{kind}/{second.id}/delete")
+            self.assertIn("error=trash_full", done.headers["Location"])
+            self.env.invalidate_all()
+            self.assertTrue(second.active, kind)
+        self.assertIn("deleted items are at their limit", self.url_open("/my/site/delowner?error=trash_full").text)
+
     def test_06_restore_when_the_address_was_reused_gets_a_new_address(self):
         self.authenticate("delowner", "delowner")
         self._post(f"/my/site/delowner/page/{self.about.id}/delete")

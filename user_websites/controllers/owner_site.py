@@ -668,6 +668,14 @@ class UserWebsitesOwnerController(http.Controller):
             raise request.not_found()
         return page
 
+    def _kind_limit(self, kind, profile_user):
+        utils = request.env["zero_sudo.security.utils"]
+        if profile_user:
+            return profile_user._get_page_limit() if kind == "page" else profile_user._get_blog_post_limit()
+        if kind == "page":
+            return int(utils._get_system_param("user_websites.global_website_page_limit", 100))
+        return int(utils._get_system_param("user_websites.global_blog_post_limit", 500))
+
     # [@ANCHOR: user_websites:fn_owner_restore_full]
     # Verified by [@ANCHOR: test_owner_restore_respects_the_quota]
     def _restore_full(self, kind, profile_user, profile_group):
@@ -675,15 +683,21 @@ class UserWebsitesOwnerController(http.Controller):
 
         Creating checks the limit against live rows only, so a delete-then-create cycle followed by
         restoring the old rows would grow a site past it without end; restore asks the same question."""
-        utils = request.env["zero_sudo.security.utils"]
         model = "website.page" if kind == "page" else "blog.post"
-        if profile_user:
-            limit = profile_user._get_page_limit() if kind == "page" else profile_user._get_blog_post_limit()
-        elif kind == "page":
-            limit = int(utils._get_system_param("user_websites.global_website_page_limit", 100))
-        else:
-            limit = int(utils._get_system_param("user_websites.global_blog_post_limit", 500))
+        limit = self._kind_limit(kind, profile_user)
         return self._svc()[model].search_count(self._owner_domain(profile_user, profile_group)) >= limit
+
+    # [@ANCHOR: user_websites:fn_owner_trash_full]
+    # Verified by [@ANCHOR: test_owner_delete_refuses_past_the_trash_cap]
+    def _trash_full(self, kind, profile_user, profile_group):
+        """True when this site already keeps as many owner-deleted pages or posts as its limit allows.
+
+        Deleted rows stay archived and do not count toward the live limit, so a delete-and-create loop
+        would add archived rows without end; the archive is capped at the same number as the live set."""
+        model = "website.page" if kind == "page" else "blog.post"
+        domain = self._owner_domain(profile_user, profile_group) + [("deleted_by_owner", "!=", False)]
+        archived = self._svc()[model].with_context(active_test=False).search_count(domain)
+        return archived >= self._kind_limit(kind, profile_user)
 
     # [@ANCHOR: user_websites:fn_owner_back]
     def _back(self, site_slug, flag):
@@ -737,6 +751,8 @@ class UserWebsitesOwnerController(http.Controller):
         self._rate_limit("write", WRITES_PER_MINUTE)
         slug = (profile_user or profile_group).website_slug
         now = fields.Datetime.now()
+        if self._trash_full(kind, profile_user, profile_group):
+            return self._back(site_slug, "error=trash_full")
         if kind == "page":
             page = self._own_page(profile_user, profile_group, item_id)
             if page.url == f"/{slug}":
