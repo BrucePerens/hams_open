@@ -66,6 +66,16 @@ from the function's other `callx8` sites, which resolve to the cold
 `panic_handler` apply only to the real cross-compiled build) and checks each
 function's arithmetic on the host, with no target hardware.
 
+### `panic` [@ANCHOR: codegen_check_panic_handler]
+
+The `#[panic_handler]` the no_std static library needs; it spins forever. It exists only outside `cfg(test)`, and a `PanicInfo` cannot be constructed by hand, so it cannot be called on the host.
+
+| Argument | Type | Meaning |
+|---|---|---|
+| `_info` | `&PanicInfo` | The panic description; ignored. |
+
+**Returns:** never. **Errors:** none. **Special concerns:** present only in the real build. **See also:** test `the_no_std_build_has_its_panic_handler`, which builds the crate for `riscv32imc-unknown-none-elf`; rustc fails that build without a handler.
+
 ### `q_mul_i128` [@ANCHOR: codegen_check_q_mul_i128]
 
 A Q40 fixed-point multiply: the product of two numbers each scaled by 2^40, rescaled to Q40 with rounding half up. It is the copy of `lpc.rs`'s `q_mul`, the function whose 128-bit intermediate the study inspects. On both targets the product compiles to inline widening multiplies, with no library call.
