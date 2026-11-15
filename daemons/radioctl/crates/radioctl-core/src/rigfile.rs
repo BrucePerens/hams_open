@@ -1166,10 +1166,14 @@ fn build_legacy_block(y: &YaesuLegacySection) -> Result<Option<LegacyBlock>, Rig
         if entry.at > 4 {
             return Err(bad("a command slot starts inside the five-byte block"));
         }
+        let form = entry.form.as_deref().map(legacy_form).transpose()?;
+        if form.is_some_and(|f| usize::from(entry.at) + f.width() > 5) {
+            return Err(bad("a command slot runs past the five-byte block"));
+        }
         Ok(LegacyCommand {
             template: entry.template,
             at: entry.at,
-            form: entry.form.as_deref().map(legacy_form).transpose()?,
+            form,
         })
     };
     let pair = |on: Option<[u8; 5]>, off: Option<[u8; 5]>| match (on, off) {
@@ -2235,5 +2239,18 @@ verified = { state = "unverified" }
                 "stop_bits",
             );
         }
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_legacy_block]
+    #[test]
+    fn a_legacy_frequency_slot_must_fit_inside_the_five_byte_block() {
+        let ft1000 = include_str!("../../../rigs/yaesu-ft-1000.toml");
+        let marker = "template = [0x00, 0x00, 0x00, 0x00, 0x0a]\nat = 0\n";
+        assert!(ft1000.contains(marker));
+        for at in ["2", "3", "4"] {
+            let moved = marker.replace("at = 0", &format!("at = {at}"));
+            expect_rejected(&ft1000.replace(marker, &moved), "slot");
+        }
+        assert!(parse(&ft1000.replace(marker, &marker.replace("at = 0", "at = 1"))).is_ok());
     }
 }
