@@ -40,6 +40,9 @@ class CloudflareRoutingDomain(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_domain_unlink]
     def unlink(self):
+        # Refuse BEFORE the Cloudflare call: the delete below runs with the website's credentials, and the access
+        # check inside super().unlink() comes too late to stop it (an internal or portal user can read these rows).
+        self.check_access("unlink")
         # # Verified by [@ANCHOR: COMM_test_multi_website_purge_queue]
         # spacing
         # # Verified by [@ANCHOR: COMM_test_content_hook_multi_website]
