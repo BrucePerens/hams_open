@@ -638,6 +638,12 @@ impl VirtualRig {
         }
     }
 
+    /// True when `hz` is inside the model's frequency range, the one a real rig would accept.
+    fn frequency_ok(&self, hz: Hz) -> bool {
+        let (min, max) = self.desc.frequency_limits();
+        hz >= min && hz <= max
+    }
+
     // [@ANCHOR: radioctl_virtual_civ_slot]
     /// The frequency of the selected VFO, or of the other one when `other` is true.
     fn civ_slot(&mut self, other: bool) -> &mut Hz {
@@ -658,7 +664,7 @@ impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_civ_set_freq]
     fn civ_set_freq(&mut self, params: &CivParams, other: bool, bcd: &[u8]) -> CivReply {
         match civ::decode_bcd_freq(bcd) {
-            Some(hz) if bcd.len() == params.field_len(hz) => {
+            Some(hz) if bcd.len() == params.field_len(hz) && self.frequency_ok(hz) => {
                 *self.civ_slot(other) = hz;
                 CivReply::Ok
             }
@@ -1029,7 +1035,9 @@ impl VirtualRig {
                 vec![power | split_bit | ptt_bit]
             }
             legacy::OP_SET_FREQUENCY => {
-                if let Some(hz) = legacy::decode_frequency(&[*a, *b, *c, *d], high_band) {
+                if let Some(hz) = legacy::decode_frequency(&[*a, *b, *c, *d], high_band)
+                    .filter(|hz| self.frequency_ok(*hz))
+                {
                     self.state.freq_a = hz;
                 }
                 Vec::new()
@@ -1169,6 +1177,7 @@ impl VirtualRig {
                     if let Some(hz) = block
                         .get(at..at + form.width())
                         .and_then(|b| form.decode(b))
+                        .filter(|hz| self.frequency_ok(*hz))
                     {
                         self.state.freq_a = hz;
                         return out;
@@ -1385,7 +1394,10 @@ impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_yaesu_set_frequency]
     fn yaesu_set_frequency(&mut self, vfo_a: bool, digits: &str) -> Option<String> {
         let width = self.yaesu_digits();
-        let Some(hz) = kenwood::parse_digits(digits).filter(|_| digits.len() == width) else {
+        let Some(hz) = kenwood::parse_digits(digits)
+            .filter(|_| digits.len() == width)
+            .filter(|hz| self.frequency_ok(Hz(*hz)))
+        else {
             return Some("?;".to_string());
         };
         if vfo_a {
@@ -1604,7 +1616,10 @@ impl VirtualRig {
 
     // [@ANCHOR: radioctl_virtual_set_frequency]
     fn set_frequency(&mut self, digits: &str, vfo_a: bool) -> Option<String> {
-        let Some(hz) = kenwood::parse_digits(digits).filter(|_| digits.len() == 11) else {
+        let Some(hz) = kenwood::parse_digits(digits)
+            .filter(|_| digits.len() == 11)
+            .filter(|hz| self.frequency_ok(Hz(*hz)))
+        else {
             return Some("?;".to_string());
         };
         if vfo_a {
@@ -2040,6 +2055,28 @@ mod tests {
     // Tests [@ANCHOR: radioctl_virtual_feed]
     // Tests [@ANCHOR: radioctl_virtual_kenwood_command]
     // Tests [@ANCHOR: radioctl_virtual_kenwood_id]
+    // Tests [@ANCHOR: radioctl_virtual_civ_set_freq]
+    #[test]
+    fn a_frequency_outside_the_model_range_is_refused() {
+        let mut desc = RigDescription::ts2000();
+        desc.frequency_range = Some((Hz(30_000), Hz(60_000_000)));
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        let before = rig.state().freq_a;
+        assert_eq!(rig.feed(b"FA00100000000;", T0), b"?;");
+        assert_eq!(rig.state().freq_a, before);
+        assert_eq!(rig.feed(b"FA00007000000;", T0), b"");
+        assert_eq!(rig.state().freq_a, Hz(7_000_000));
+        let mut desc = RigDescription::ic7300();
+        desc.frequency_range = Some((Hz(30_000), Hz(60_000_000)));
+        let mut rig = VirtualRig::from_description(&desc).expect("rig");
+        // 100 MHz: 00 00 00 00 01 in the five-byte field.
+        let set = [
+            0xFE, 0xFE, 0x94, 0xE0, 0x05, 0x00, 0x00, 0x00, 0x00, 0x01, 0xFD,
+        ];
+        assert_eq!(rig.feed(&set, T0), vec![0xFE, 0xFE, 0xE0, 0x94, 0xFA, 0xFD]);
+        assert_eq!(rig.state().freq_a, Hz(14_074_000));
+    }
+
     // Tests [@ANCHOR: radioctl_virtual_set_frequency]
     // Tests [@ANCHOR: radioctl_virtual_set_kenwood_mode]
     #[test]
