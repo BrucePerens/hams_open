@@ -213,10 +213,13 @@ pub fn parse_intel_hex(text: &str) -> Result<Vec<HexRecord>, RigError> {
         let kind = bytes.get(3).copied().unwrap_or(0xFF);
         let data = bytes.get(4..4 + length).unwrap_or(&[]).to_vec();
         match kind {
-            0x00 => records.push(HexRecord {
-                address: u16::from_be_bytes([hi, lo]),
-                data,
-            }),
+            0x00 => {
+                let address = u16::from_be_bytes([hi, lo]);
+                if usize::from(address) + data.len() > 0x1_0000 {
+                    return Err(bad(n, "record runs past the end of the address space"));
+                }
+                records.push(HexRecord { address, data });
+            }
             0x01 => ended = true,
             _ => return Err(bad(n, "unsupported record type")),
         }
@@ -1107,6 +1110,16 @@ mod tests {
                 e.detail
             );
         }
+    }
+
+    // Tests [@ANCHOR: radioctl_perseus_parse_intel_hex]
+    #[test]
+    fn an_intel_hex_record_may_not_run_past_0xffff() {
+        let last = parse_intel_hex(":02FFFE00AABB9C\n:00000001FF\n").unwrap();
+        assert_eq!(last[0].address, 0xFFFE);
+        let e = parse_intel_hex(":02FFFF00AABB9B\n:00000001FF\n").unwrap_err();
+        assert_eq!(e.kind, ErrorKind::Malformed);
+        assert!(e.detail.contains("past"), "{}", e.detail);
     }
 
     // Tests [@ANCHOR: radioctl_perseus_files_in_dir]
