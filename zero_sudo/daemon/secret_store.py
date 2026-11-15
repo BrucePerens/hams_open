@@ -44,7 +44,7 @@ if __package__:  # imported as odoo.addons.zero_sudo.daemon.secret_store
 else:  # a daemon that put this directory itself on sys.path (zero_sudo/daemon/README.md)
     import secret_operations
 
-SECRET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,99}$")
+SECRET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,99}\Z")  # \Z: `$` also matches before a trailing newline
 MAX_SECRET_BYTES = 64 * 1024
 DEFAULT_CREDENTIALS_FILE = "/etc/hams_secret_store/secrets"
 DEFAULT_BROKER_SOCKET = "/run/hams_secret_broker/broker.sock"

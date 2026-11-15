@@ -56,6 +56,13 @@ class TestSecretStoreFileChecks(_TempCase):
         with self.assertRaises(ValueError):
             ss.check_name("a" * 101)
 
+    def test_check_name_refuses_a_trailing_newline(self):
+        # Tests [@ANCHOR: zero_sudo:secret_store_check_name]
+        # `$` matches before a final newline, so "abc\n" used to pass and named a different file and a different secret than "abc".
+        for bad in ("abc\n", "a.b\n", "a\n\n"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                ss.check_name(bad)
+
     def test_private_file_refusals_and_messages(self):
         path = self.write("f", "x", 0o600)
         self.assertEqual(ss.check_private_file(path, ME).st_uid, ME)
