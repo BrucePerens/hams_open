@@ -21,7 +21,9 @@ pub fn parse_get_volume(s: &str) -> Result<Level, String> {
     let mut it = rest.split_whitespace();
     let volume: f64 = it
         .next()
-        .and_then(|v| v.parse().ok())
+        .and_then(|v| v.parse::<f64>().ok())
+        // `nan` and `inf` parse as numbers; a volume above the cap must never read as "not above" (NaN compares false).
+        .filter(|v| v.is_finite() && *v >= 0.0)
         .ok_or_else(|| format!("no volume number in {:?}", s.trim()))?;
     Ok(Level {
         volume,
@@ -80,6 +82,19 @@ pub fn set_mute(run: &dyn Run, node_id: u32, mute: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests [@ANCHOR: audio_levels_parse]
+    #[test]
+    fn a_non_finite_or_negative_volume_is_refused() {
+        for bad in [
+            "Volume: nan",
+            "Volume: inf",
+            "Volume: -0.5",
+            "Volume: NaN [MUTED]",
+        ] {
+            assert!(parse_get_volume(bad).is_err(), "{bad}");
+        }
+    }
 
     // Tests [@ANCHOR: audio_levels_parse]
     // Tests [@ANCHOR: bench_mcp_audio_levels_level_type]
