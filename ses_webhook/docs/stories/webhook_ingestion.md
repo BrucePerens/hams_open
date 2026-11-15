@@ -26,7 +26,8 @@ call, authenticates it, and hands the raw email off to Odoo's standard
    a missing or wrong token gets 403, and an empty or non-JSON body gets 400, see `../../README.md`) -- otherwise SNS would hammer the same failing
    delivery forever. The broad `except Exception` around processing records
    the real failure in `ses.webhook.log` rather than swallowing it, but
-   always returns 200 either way ([@ANCHOR: COMM_ses_webhook_process_catch_all]).
+   returns 200 either way ([@ANCHOR: COMM_ses_webhook_process_catch_all]),
+   except a Bounce or Complaint whose suppression failed: that answers 500 so SNS retries it and the address is not left unsuppressed.
 3. **Administration**: Administrators manage per-domain webhook configuration
    (secret tokens, computed webhook URLs) and review ingestion activity
    (payload type, status, raw payload, error messages) through the module's

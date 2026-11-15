@@ -1373,6 +1373,22 @@ class TestSesWebhook(HamsHttpCase):
         v5 = self.env["ses.webhook.pending_submission"].get_view(view_type="list")
         self.assertIn('name="sender_email"', v5["arch"])
 
+    def test_12b_failed_suppression_is_not_acknowledged_so_sns_retries(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_handle_ses_event_notification]
+        """A complaint whose suppression fails answers 500 (SNS retries it) and logs 'failed'; the later retry,
+        once the failure is gone, suppresses the address."""
+        ses_message = {"notificationType": "Complaint",
+                       "complaint": {"complainedRecipients": [{"emailAddress": "retry-me@example.com"}], "feedbackId": "f-r"}}
+        payload = self._sign({"Type": "Notification", "MessageId": "msg-suppress-fail", "Message": json.dumps(ses_message)})
+        url = f'/mail/webhook/sns?token={self.domain_a.secret_token}'
+
+        self.safe_patch_object(type(self.env['mail.blacklist']), '_add', side_effect=RuntimeError("simulated blacklist failure"))
+        response = self.url_open(url, data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 500)
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-suppress-fail')])
+        self.assertEqual(log.status, 'failed')
+        self.assertFalse(self.env['mail.blacklist'].search([('email', '=', 'retry-me@example.com')]))
+
     def test_12_processing_failure_still_returns_200_and_logs(self):
         # Tests [@ANCHOR: COMM_ses_webhook_process_catch_all]
         """
