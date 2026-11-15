@@ -6,6 +6,7 @@
 # Tests [@ANCHOR: pager_duty:scrub_log_line]
 import os
 import sys
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -23,6 +24,12 @@ class ScrubLogLine(unittest.TestCase):
             self.assertNotIn(secret, out)
         self.assertIn("login failed", out)
         self.assertIn("disk full", out)
+
+    def test_a_very_long_line_is_scrubbed_in_linear_time(self):
+        start = time.monotonic()
+        out = gm.scrub_log_line("a" * 200000 + " k6bp@example.com")
+        self.assertLess(time.monotonic() - start, 2.0)
+        self.assertNotIn("k6bp@example.com", out)
 
     def test_quoted_value_with_spaces_is_removed_whole(self):
         out = gm.scrub_log_line('db_password="two words" retry')
