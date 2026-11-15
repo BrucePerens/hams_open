@@ -55,6 +55,7 @@ from . import test_report_shield
 from . import test_mail_sender_fallback
 from . import test_rpc_exposure
 from . import test_open_source_defaults
+from . import test_image_cap_race
 from . import test_layout_seo
 
 from .open_source_defaults import pin_package

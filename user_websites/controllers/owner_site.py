@@ -78,6 +78,29 @@ IMAGE_DESCRIPTION = "user_websites site image"
 WRAP_CLASS = "uw-member-page"
 
 
+def _create_image_within_cap(attachments, res_model, res_id, vals):
+    # [@ANCHOR: user_websites:owner_create_image_within_cap]
+    # Verified by [@ANCHOR: user_websites:test_image_cap_race]
+    """Create the image attachment `vals` for the site's owner record unless the site already keeps MAX_IMAGES_PER_SITE
+    images; returns the attachment, or None when the site is full.
+
+    The owner's row is written (no value changes) before the count. Two simultaneous uploads would otherwise both count 99:
+    each REPEATABLE READ snapshot predates the other's commit, and a lock would not refresh it. Writing a row the other
+    request changed since the snapshot fails with a serialization failure, and Odoo runs the request again."""
+    if res_model == "res.users":
+        attachments.env.cr.execute("UPDATE res_users SET id = id WHERE id = %s", (res_id,))  # audit-ignore-sql: write-lock on the owner's own row
+    else:
+        attachments.env.cr.execute("UPDATE user_websites_group SET id = id WHERE id = %s", (res_id,))  # audit-ignore-sql: write-lock on the owner's own row
+    if (
+        attachments.search_count(
+            [("res_model", "=", res_model), ("res_id", "=", res_id), ("description", "=", IMAGE_DESCRIPTION)]
+        )
+        >= MAX_IMAGES_PER_SITE
+    ):
+        return None
+    return attachments.create(vals)
+
+
 def _image_mimetype(data):
     # [@ANCHOR: user_websites:owner_image_mimetype]
     # Verified by [@ANCHOR: test_owner_image_upload_rules]
@@ -808,19 +831,11 @@ class UserWebsitesOwnerController(http.Controller):
             return reply(False, "That image cannot be read, or is too large in pixels.", status=415)
         svc = self._svc()
         res_model, res_id = self._attachment_owner(profile_user, profile_group)
-        if (
-            svc["ir.attachment"].search_count(
-                [
-                    ("res_model", "=", res_model),
-                    ("res_id", "=", res_id),
-                    ("description", "=", IMAGE_DESCRIPTION),
-                ]
-            )
-            >= MAX_IMAGES_PER_SITE
-        ):
-            return reply(False, "This site has reached its image limit.", status=409)
         name = (slugify((ufile.filename or "image").rsplit(".", 1)[0]) or "image")[:60]
-        attachment = svc["ir.attachment"].create(
+        attachment = _create_image_within_cap(
+            svc["ir.attachment"],
+            res_model,
+            res_id,
             {
                 "name": name,
                 "datas": base64.b64encode(data),
@@ -829,6 +844,8 @@ class UserWebsitesOwnerController(http.Controller):
                 "res_model": res_model,
                 "res_id": res_id,
                 "description": IMAGE_DESCRIPTION,
-            }
+            },
         )
+        if not attachment:
+            return reply(False, "This site has reached its image limit.", status=409)
         return reply(True, url=f"/web/image/{attachment.id}")
