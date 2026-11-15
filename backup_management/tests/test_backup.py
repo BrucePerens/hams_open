@@ -486,7 +486,7 @@ class TestBackupManagement(RealTransactionCase):
     def test_publish_to_worker_records_the_action_on_the_job(self):
         # Tests [@ANCHOR: backup_management:COMM_backup_trigger_execution]
         config = self.config_kopia
-        self.safe_patch("pika.BlockingConnection")  # burn-ignore-pika: [@ANCHOR: backup_management:COMM_test_restore_action]
+        self.safe_patch("pika.BlockingConnection")  # burn-ignore-pika: see test_13_restore_action
         Job = self.env["backup.job"]
         Job.search([("config_id", "=", config.id)]).unlink()
         config.action_trigger_backup()
