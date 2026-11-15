@@ -393,6 +393,16 @@ class TestHelpdeskCore(HamsTransactionCase):
             ticket_as_portal.write({"partner_id": self.manager_partner.id})
             self.env.flush_all()
 
+    def test_05d_portal_cannot_set_github_source_url(self):
+        # Tests [@ANCHOR: helpdesk_micro_privilege]
+        # The webhook dedups on github_source_url; a member must not be able to claim an alert's URL.
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Source URL Probe", "partner_id": self.portal_user.partner_id.id, "stage": "new"}
+        )
+        with self.assertRaises(AccessError):
+            ticket.with_user(self.portal_user).write({"github_source_url": "https://github.com/x/y/security/dependabot/1"})
+            self.env.flush_all()
+
     def test_05c_portal_cannot_change_ticket_type_or_ncmec_fields(self):
         # Tests [@ANCHOR: helpdesk_micro_privilege]
         # ticket_type, active, and every ncmec_* field
