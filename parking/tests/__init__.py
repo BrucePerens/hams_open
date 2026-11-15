@@ -2,3 +2,4 @@
 from . import test_utils
 from . import test_models
 from . import test_http
+from . import test_inquiry_race
