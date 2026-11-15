@@ -35,10 +35,11 @@ impl Backoff {
         let mut wait = self.initial.max(Duration::from_millis(1));
         let ceiling = self.max.max(wait);
         for _ in 1..failures {
-            wait = wait.saturating_mul(self.factor.max(1)).min(ceiling);
-            if wait >= ceiling {
-                break;
+            let next = wait.saturating_mul(self.factor.max(1)).min(ceiling);
+            if next == wait {
+                break; // at the ceiling, or a factor of 1 that never grows
             }
+            wait = next;
         }
         wait.min(ceiling)
     }
@@ -68,5 +69,22 @@ mod tests {
         };
         assert_eq!(silly.delay(5), Duration::from_millis(1));
         assert_eq!(Backoff::default().delay(1), Duration::from_millis(250));
+    }
+
+    // Tests [@ANCHOR: radioctl_core_backoff_delay]
+    #[test]
+    fn a_factor_of_one_returns_at_once_for_any_failure_count() {
+        let flat = Backoff {
+            initial: Duration::from_millis(100),
+            max: Duration::from_millis(1000),
+            factor: 1,
+        };
+        let started = std::time::Instant::now();
+        assert_eq!(flat.delay(u32::MAX), Duration::from_millis(100));
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "delay looped once per failure: {:?}",
+            started.elapsed()
+        );
     }
 }
