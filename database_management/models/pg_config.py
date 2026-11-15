@@ -101,6 +101,9 @@ class PgOptimizeWizard(models.TransientModel):
         }
 
         with self.env.registry.cursor() as cr:
+            # ALTER SYSTEM cannot run inside a transaction block, and an Odoo cursor always opens one (as Odoo's own
+            # database service does for CREATE DATABASE, it takes the connection out of transaction mode first).
+            cr._cnx.autocommit = True
             for param, val in settings.items():
                 # CRITICAL: AST-compliant parameterized execution for ALTER SYSTEM
                 query = sql.SQL("ALTER SYSTEM SET {} = {}").format(
