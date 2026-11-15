@@ -21,7 +21,13 @@ export class PagerBoard extends Component {
         onMounted(async () => {
             this.busService.addChannel("pager_duty");
             this.busService.addEventListener("notification", this.onNotification.bind(this));
-            await this.fetchData();
+            // A failed first load must not skip the burn-in timer, nor leave "Loading..." on a pager board for ever.
+            try {
+                await this.fetchData();
+            } catch (error) {
+                console.error("[PagerBoard] first load failed:", error);
+                this.state.on_duty = "Unavailable";
+            }
             this.burnInTimer = setInterval(() => this.applyBurnInShift(), 60000);
         });
 
