@@ -431,17 +431,25 @@ async fn test_one(
             .map_or(0, |d| d.as_secs()),
     );
     let mut tried = None;
-    let baud = match o.baud {
-        BaudArg::Fixed(rate) => rate,
-        BaudArg::Auto if t.target == "virtual" => 19_200,
-        BaudArg::Auto => {
-            let rates = probe_baud(description, &t.target, o.unmanaged).await?;
-            let rate = rates.last().copied().unwrap_or(19_200);
-            tried = Some(rates);
-            rate
-        }
-    };
-    let rig = open(description, &t.target, baud, o.unmanaged, wire).await?;
+    let opened = async {
+        let baud = match o.baud {
+            BaudArg::Fixed(rate) => rate,
+            BaudArg::Auto if t.target == "virtual" => 19_200,
+            BaudArg::Auto => {
+                let rates = probe_baud(description, &t.target, o.unmanaged).await?;
+                let rate = rates.last().copied().unwrap_or(19_200);
+                tried = Some(rates);
+                rate
+            }
+        };
+        let rig = open(description, &t.target, baud, o.unmanaged, wire).await?;
+        Ok::<_, String>((baud, rig))
+    }
+    .await;
+    // A rig that cannot be opened leaves no half-written wire log beside the report.
+    let (baud, rig) = opened.inspect_err(|_| {
+        let _ = std::fs::remove_file(&wire_path);
+    })?;
     let mut results = run_checks_logged(&rig, plan_checks(description), Some(&wire_path)).await;
     // A virtual rig has no knob to turn.
     if t.target != "virtual" {
@@ -1024,6 +1032,10 @@ mod tests {
         )
         .await
         .is_err());
+        assert!(
+            !dir.join("test-one.txt.wire.tmp").exists(),
+            "the wire log of a rig that never opened is removed"
+        );
     }
 
     // Tests [@ANCHOR: radioctld_cli_stdin_lines_read]
