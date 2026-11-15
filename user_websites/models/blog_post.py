@@ -24,12 +24,12 @@ class BlogPost(models.Model):
     )
 
     # One title per owner. The old UNIQUE(name, owner_user_id, user_websites_group_id) never fired:
-    # one owner column is always NULL, and NULLs are distinct. Rows with no owner of that kind stay free.
+    # one owner column is always NULL, and NULLs are distinct. Rows with no owner of that kind and rows the owner deleted (deleted_by_owner set) stay free.
     _name_user_uniq = models.UniqueIndex(
-        "(name, owner_user_id) WHERE owner_user_id IS NOT NULL", "You already have a blog post with this exact title!"
+        "(name, owner_user_id) WHERE owner_user_id IS NOT NULL AND deleted_by_owner IS NULL", "You already have a blog post with this exact title!"
     )
     _name_group_uniq = models.UniqueIndex(
-        "(name, user_websites_group_id) WHERE user_websites_group_id IS NOT NULL",
+        "(name, user_websites_group_id) WHERE user_websites_group_id IS NOT NULL AND deleted_by_owner IS NULL",
         "This group already has a blog post with this exact title!",
     )
 
