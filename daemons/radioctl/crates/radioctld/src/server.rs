@@ -326,10 +326,14 @@ async fn run_client(
                 break 'client;
             }
         };
-        line_started = if lines.has_partial() {
+        // A partial line left behind by a read that also completed lines is a new line: its
+        // clock starts now, not when the line before it began.
+        line_started = if !lines.has_partial() {
+            None
+        } else if complete.is_empty() {
             line_started.or_else(|| Some(Instant::now()))
         } else {
-            None
+            Some(Instant::now())
         };
         for line in &complete {
             let (reply, close) = shared.service.answer(client, line).await;
