@@ -123,3 +123,9 @@ Forgets the record `outbound_due` made for the triple. A send that raised did no
 ### `outbound_recovered(source)` [@ANCHOR: pager_duty:outbound_recovered]
 
 Deletes every record for `source`, whatever the kind or severity, when the source is healthy again (the monitor's auto-resolve path calls it). The source's next failure is then a new alert and notifies at once instead of waiting out the quiet period. It returns nothing and is harmless for an unknown source.
+
+## Log-Tail Line Scrub in `generalized_monitor.py`
+
+### `scrub_log_line(line)` [@ANCHOR: pager_duty:scrub_log_line]
+
+`log_tail_thread` reports a matching line of another program's log as the incident text, and the incident goes on to the webhook and the SMTP fallback. `scrub_log_line` first replaces URLs, email addresses, bearer tokens and the value of secret-looking `key=value` pairs (password, token, secret, api key, cookie, authorization, credential; a quoted value is taken whole) with placeholders; the rest of the line is unchanged, and a line with none of these is returned as is. The maintenance-mode log message uses it too. Test: `daemon/test_scrub_log_line.py`.
