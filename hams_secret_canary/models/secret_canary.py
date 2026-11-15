@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import json
 import logging
+import traceback
 import os
 import time
 
@@ -33,10 +34,18 @@ def _watch_log_records(factory):
         if _tables and not record.name.startswith("hams_secret_canary"):
             try:
                 message = record.getMessage()
+                # An exception's traceback is formatted later; a key in the exception text lands there. Setting `exc_text`
+                # is what the log Formatter prints instead of formatting the traceback again.
+                trace = record.exc_text or ("".join(traceback.format_exception(*record.exc_info)) if record.exc_info else "")
                 for _loaded, salt, table in list(_tables.values()):
                     matches = detector.find_matches(message, salt, table) if table else []
-                    if matches:
-                        record.msg, record.args = detector.redact(message, salt, table), None
+                    trace_matches = detector.find_matches(trace, salt, table) if table and trace else []
+                    if matches or trace_matches:
+                        if matches:
+                            record.msg, record.args = detector.redact(message, salt, table), None
+                        if trace_matches:
+                            record.exc_text = detector.redact(trace, salt, table)
+                        matches = matches + trace_matches
                         for label, kind in matches:
                             alerts.logging_backend(None, alerts.Alarm(label, kind, "log", record.name))
                         break
