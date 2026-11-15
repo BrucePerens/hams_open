@@ -138,7 +138,7 @@ fn parse_megahertz(text: &str) -> Option<u64> {
     let micro: u64 = digits.get(..6)?.parse().ok()?;
     let units = whole.checked_mul(1_000_000)?.checked_add(micro)?;
     // Round to 10 Hz.
-    Some((units + 5) / 10 * 10)
+    Some(units.checked_add(5)? / 10 * 10)
 }
 
 impl Dialect for AorClassicDialect {
@@ -546,6 +546,8 @@ mod tests {
         assert_eq!(parse_megahertz("7.074006"), Some(7_074_010));
         assert_eq!(parse_megahertz("x"), None);
         assert_eq!(parse_megahertz("."), None);
+        // u64::MAX hertz-micro units: adding the rounding half-step must not overflow.
+        assert_eq!(parse_megahertz("18446744073709.551615"), None);
     }
 
     // Tests [@ANCHOR: radioctl_aorc_twin_new]
