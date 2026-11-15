@@ -2,9 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import datetime
 import logging
 import os
 import shutil
+from odoo import fields
 from odoo.tests import tagged
 from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -341,8 +343,53 @@ class TestKeyRegistry(RealTransactionCase):
             )
         )
 
+        # A second daemon that rotated a day ago: not due, so the cron must leave it alone. The cron
+        # swallows and logs every rotation failure, so without these checks the test could not fail.
+        fresh_user = self.env["res.users"].create(
+            {
+                "name": "Test Cron Fresh Service Account",
+                "login": "test_cron_fresh_svc",
+                "is_service_account": True,
+            }
+        )
+        fresh = (
+            self.env["daemon.key.registry"]
+            .with_user(self.manager_user.id)
+            .create(
+                {
+                    "name": "Cron Fresh Daemon",
+                    "user_id": fresh_user.id,
+                    "env_file_path": self.test_env_paths[7],
+                }
+            )
+        )
+        recent = fields.Datetime.now() - datetime.timedelta(days=1)
+        fresh.last_rotated = recent
+        self.assertFalse(registry.last_rotated, "the due daemon starts never rotated")
+
         # Test cron execution wrapper
         self.env["daemon.key.registry"]._cron_rotate_all_keys()
+
+        registry.invalidate_recordset()
+        fresh.invalidate_recordset()
+        self.assertTrue(registry.last_rotated, "the cron must rotate a daemon whose key is due")
+        self.assertFalse(registry.last_rotation_failed_at, "the due rotation must not be recorded as failed")
+        self.assertEqual(
+            self.env["res.users.apikeys"].search_count(
+                [("user_id", "=", self.service_user.id), ("name", "=", "Cron Test Daemon_key")]
+            ),
+            1,
+            "the cron must issue the due daemon's key",
+        )
+        self.assertTrue(os.path.exists(self.test_env_paths[1]), "the cron must write the due daemon's key file")
+        self.assertEqual(fresh.last_rotated, recent, "the cron must not rotate a daemon that is not due")
+        self.assertEqual(
+            self.env["res.users.apikeys"].search_count(
+                [("user_id", "=", fresh_user.id), ("name", "=", "Cron Fresh Daemon_key")]
+            ),
+            0,
+            "the cron must not issue a key for a daemon that is not due",
+        )
 
         # Call the actual trigger to fulfill the test anchor requirement
         # # Tests [@ANCHOR: COMM_cron_rotation_trigger]
@@ -351,6 +398,7 @@ class TestKeyRegistry(RealTransactionCase):
         )._trigger()
 
         registry.unlink()
+        fresh.unlink()
 
     def test_key_ownership(self):
         """Verify that the generated key belongs to the service account, not SUPERUSER."""
