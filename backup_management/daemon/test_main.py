@@ -1141,3 +1141,21 @@ class TestKopiaPolicyFlagsPrecedeTheTarget(unittest.TestCase):
         self.assertEqual(cmd[-2:], ["--", "/data/my dir"])
         self.assertIn("--keep-daily=7", cmd[3:-2])
         self.assertIn("--add-ignore=*.tmp", cmd[3:-2])
+
+
+class TestKopiaPolicyAlwaysKeepsTheNewestSnapshot(unittest.TestCase):
+    # keep_daily may be 0 (the field allows it). "--keep-latest=0" then lets kopia's retention drop the
+    # snapshot that was just taken, so the newest backup must always be kept.
+
+    def test_zero_retention_still_keeps_the_latest_snapshot(self):
+        proc = MagicMock()
+        proc.stdout.read.side_effect = [""]
+        proc.wait.return_value = 0
+        payload = {"job_id": 6, "engine": "kopia_policy", "target_path": "/data/dir", "config_id": 2,
+                   "keep_daily": 0, "keep_weekly": 0, "keep_monthly": 0}
+        with patch("main._json2_call"), patch("main.shutil.which", return_value="/usr/bin/kopia"), \
+                patch("main.subprocess.Popen", return_value=proc) as popen:
+            backup_worker.execute_job(MagicMock(), MagicMock(), MagicMock(), json.dumps(payload))
+        cmd = popen.call_args.args[0]
+        self.assertIn("--keep-latest=1", cmd)
+        self.assertNotIn("--keep-latest=0", cmd)
