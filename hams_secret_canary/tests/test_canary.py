@@ -165,6 +165,30 @@ class TestAlarm(CanaryCase):
             self.assertNotIn(SECRET, text)
         self.assertIn("log", alarms.output[0])
 
+    def test_a_secret_in_an_exception_traceback_is_redacted_and_alarmed(self):
+        # Tests [@ANCHOR: hams_secret_canary:watch_log_records]
+        with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as alarms, self.assertLogs("some.addon", "ERROR") as lines:
+            try:
+                raise ValueError("bad credentials " + SECRET)
+            except ValueError:
+                logging.getLogger("some.addon").exception("call failed")
+        formatted = "\n".join(lines.output)
+        self.assertIn("call failed", formatted)
+        self.assertIn("ValueError", formatted)
+        self.assertIn("[REDACTED:test_secret]", formatted)
+        self.assertNotIn(SECRET, formatted)
+        for text in alarms.output:
+            self.assertNotIn(SECRET, text)
+
+    def test_an_ordinary_traceback_raises_no_alarm(self):
+        # Tests [@ANCHOR: hams_secret_canary:watch_log_records]
+        with self.assertNoLogs("hams_secret_canary.alarm"), self.assertLogs("some.addon", "ERROR") as lines:
+            try:
+                raise RuntimeError("some_ordinary_missing_key_name_here")
+            except RuntimeError:
+                logging.getLogger("some.addon").exception("lookup failed")
+        self.assertIn("RuntimeError", "\n".join(lines.output))
+
     def test_logging_never_raises_in_the_caller_whatever_the_record_or_the_state(self):
         # Tests [@ANCHOR: hams_secret_canary:watch_log_records]
         token = "abcdefghijklmnopqrstuvwxyz0123456789"
@@ -316,6 +340,9 @@ class TestWsgiHook(CanaryCase, HamsHttpCase):
                 while not logs.records and time.monotonic() < deadline:
                     time.sleep(0.05)
         self.assertIn(SECRET, response.text)  # the fault does echo it: the leak this scan exists for
-        self.assertEqual(len(logs.output), 1)
-        self.assertIn("test_secret", logs.output[0])
-        self.assertNotIn(SECRET, logs.output[0])
+        # The server also logs the exception with its traceback, which the log scan now alarms on its own ("log").
+        responses = [line for line in logs.output if "seen in response" in line]
+        self.assertEqual(len(responses), 1)
+        self.assertIn("test_secret", responses[0])
+        for line in logs.output:
+            self.assertNotIn(SECRET, line)
