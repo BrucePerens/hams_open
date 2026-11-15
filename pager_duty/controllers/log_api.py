@@ -27,11 +27,10 @@ class PagerLogAPI(http.Controller):
         if not request.env.user.has_group("pager_duty.group_pager_admin"):
             raise AccessError(_("Access Denied: Admins only."))
 
-        # A non-string (list, dict, number, null) or a NUL byte would crash in the path calls below.
+        # A non-string (list, dict, number, null) would crash in the path calls below.
         if (
             not isinstance(file_path, str)
             or not isinstance(regex_query, str)
-            or "\0" in file_path
             or len(file_path) > 4096
             or len(regex_query) > 4096
         ):

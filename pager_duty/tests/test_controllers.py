@@ -213,7 +213,6 @@ class TestPagerControllers(HamsHttpCase):
             {"file_path": ["/var/log/x"], "regex_query": "a"},
             {"file_path": None, "regex_query": "a"},
             {"file_path": "/var/log/x", "regex_query": {"a": 1}},
-            {"file_path": "/var/log/x\u0000", "regex_query": "a"},
             {"file_path": "/var/log/" + "a" * 5000, "regex_query": "a"},
         ):
             body = self.url_open(

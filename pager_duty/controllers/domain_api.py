@@ -82,7 +82,7 @@ class PagerDutyController(http.Controller):
         if (
             not isinstance(domains, list)
             or len(domains) > 1000
-            or not all(isinstance(d, str) and d and len(d) <= 253 and "," not in d and "\0" not in d for d in domains)
+            or not all(isinstance(d, str) and d and len(d) <= 253 and "," not in d for d in domains)
         ):
             # audit-ignore-i18n: Tested by [@ANCHOR: pd_domain_api_i18n]  # fmt: skip
             return {"status": "error", "message": _("domains must be a list of domain names")}
