@@ -83,13 +83,16 @@ fn check_grid(freqs: &[f64]) -> Result<(f64, f64), String> {
         return Err("a time-domain transform needs at least four points".into());
     }
     let step = (freqs[freqs.len() - 1] - freqs[0]) / (freqs.len() - 1) as f64;
-    if step.is_nan()
-        || step <= 0.0
-        || freqs
-            .windows(2)
-            .any(|w| ((w[1] - w[0]) - step).abs() > step * 1e-6)
-    {
+    // A NaN anywhere must fail: `x > y` is false when either is NaN, so it is tested for by name.
+    let off_grid = |w: &[f64]| {
+        let d = ((w[1] - w[0]) - step).abs();
+        d.is_nan() || d > step * 1e-6
+    };
+    if step.is_nan() || step <= 0.0 || freqs.windows(2).any(off_grid) {
         return Err("the frequency grid must be uniform and rising".into());
+    }
+    if freqs[0] < 0.0 {
+        return Err("the frequency grid must not start below 0 Hz".into());
     }
     Ok((freqs[0], step))
 }
@@ -461,6 +464,23 @@ mod tests {
             .fold(0.0, f64::max);
         assert!(worst < 1e-6, "whole-period gate: {worst}");
         assert!(gate(&f, &s, Mode::LowPass, 5e-9, 5e-9, Window::Rectangular).is_err());
+    }
+
+    // Tests [@ANCHOR: vnwa_open_time_domain_check_grid]
+    #[test]
+    fn a_grid_with_a_nan_point_or_a_negative_start_is_refused() {
+        let s = vec![Complex { re: 1.0, im: 0.0 }; 10];
+        let t = times(10, 1e-9, 0.0);
+        let mut nan = grid(10, 1e6, 1);
+        nan[4] = f64::NAN;
+        // A negative start: the low-pass extension to DC would take `k0.round() as usize`, which saturates to 0.
+        let negative: Vec<f64> = (0..10).map(|k| (k as f64 - 3.0) * 1e6).collect();
+        for (name, f) in [("NaN point", nan), ("negative start", negative)] {
+            for mode in [Mode::LowPass, Mode::BandPass] {
+                let r = transform(&f, &s, Window::Hamming, mode, Response::Impulse, &t);
+                assert!(r.is_err(), "{name} in {mode:?} gave a result");
+            }
+        }
     }
 
     // Tests [@ANCHOR: vnwa_open_time_domain_check_grid]
