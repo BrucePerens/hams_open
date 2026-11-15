@@ -33,15 +33,21 @@ fn printable(text: &str) -> bool {
     text.bytes().all(|b| (0x20..0x7F).contains(&b))
 }
 
+/// True for an interface name that is safe on a command line: 1 to 15 bytes, not starting with `-` (it would be read as an option), and only
+/// letters, digits, `.`, `_`, `:` and `-` after that.
+pub fn plain_interface_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 15
+        && !name.starts_with('-')
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b':'))
+}
+
 // [@ANCHOR: relay_broker_hub_validate]
 /// Checks the settings; the error says which one is wrong. Free text is limited to printable ASCII, so a value cannot add a line to a configuration file.
 pub fn validate(s: &HubSettings) -> Result<(), String> {
-    let interface_ok = !s.interface.is_empty()
-        && s.interface.len() <= 15
-        && s.interface
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'.');
-    if !interface_ok {
+    if !plain_interface_name(&s.interface) {
         return Err("the wifi interface name is not a plain interface name".into());
     }
     if s.ssid.is_empty() || s.ssid.len() > 32 || !printable(&s.ssid) {
@@ -273,6 +279,10 @@ mod tests {
         assert!(mutate(|s| s.passphrase = String::new()));
         assert!(mutate(|s| s.passphrase = "p\nassword1".into()));
         assert!(mutate(|s| s.interface = "wlan0;reboot".into()));
+        assert!(mutate(|s| s.interface = "-wlan0".into()));
+        assert!(mutate(|s| s.interface = "--help".into()));
+        assert!(mutate(|s| s.interface = "wlan0/../x".into()));
+        assert!(!mutate(|s| s.interface = "wlan0:1".into()));
         assert!(mutate(|s| s.channel = 14));
         assert!(mutate(|s| s.relay_name = "re lay".into()));
         assert!(mutate(|s| s.hub_address = Ipv4Addr::new(8, 8, 8, 8)));

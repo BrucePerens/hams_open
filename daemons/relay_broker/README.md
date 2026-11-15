@@ -1125,7 +1125,7 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 ### `hub::validate` (hub.rs) [@ANCHOR: relay_broker:relay_broker_hub_validate]
 
-**Purpose.** Checks the hub settings and names the one that is wrong. Free text is limited to printable ASCII, so a value cannot add a line to a configuration file. `HubSettings` is the data structure: `interface` (a plain name of at most 15 characters from letters, digits, `_`, `-`, `.`), `ssid` (1 to 32 printable ASCII), `passphrase` (8 to 63 printable ASCII, so the hub is never open), `channel: u8` (1 to 13, or 36 to 165 when `five_ghz`), `five_ghz: bool`, `hub_address: Ipv4Addr` (private or link-local host address, not .0 or .255; the network is its /24), `relay_name` (one DNS label of letters, digits and hyphens, up to 63), `uplink_dns: Option<Ipv4Addr>` and `lease_minutes: u32` (1 to 1440).
+**Purpose.** Checks the hub settings and names the one that is wrong. Free text is limited to printable ASCII, so a value cannot add a line to a configuration file. `HubSettings` is the data structure: `interface` (a plain name of at most 15 characters from letters, digits, `_`, `-`, `.`, `:`; it may not start with `-`, which a command line would read as an option), `ssid` (1 to 32 printable ASCII), `passphrase` (8 to 63 printable ASCII, so the hub is never open), `channel: u8` (1 to 13, or 36 to 165 when `five_ghz`), `five_ghz: bool`, `hub_address: Ipv4Addr` (private or link-local host address, not .0 or .255; the network is its /24), `relay_name` (one DNS label of letters, digits and hyphens, up to 63), `uplink_dns: Option<Ipv4Addr>` and `lease_minutes: u32` (1 to 1440).
 
 **Signature.** `pub fn validate(s: &HubSettings) -> Result<(), String>`
 

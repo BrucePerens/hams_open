@@ -207,11 +207,7 @@ impl HubRunner {
         }
         if let Ok(interface) = fs::read_to_string(self.dir.join("interface")) {
             let interface = interface.trim();
-            let plain = !interface.is_empty()
-                && interface
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b'.');
-            if plain {
+            if crate::hub::plain_interface_name(interface) {
                 let _ = self.run(
                     &self.ip,
                     &["addr", "flush", "dev", interface].map(std::ffi::OsStr::new),
