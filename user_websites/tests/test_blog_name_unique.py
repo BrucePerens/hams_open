@@ -53,3 +53,15 @@ class TestBlogNameUnique(RealTransactionCase):
             for owner in ({"owner_user_id": self.user.id}, {"owner_user_id": self.other.id},
                           {"user_websites_group_id": self.group.id}):
                 self.env[model].create({"name": "Shared", **extra, **owner})
+
+    def test_06_soft_deleted_does_not_block_a_new_one(self):
+        # An owner-deleted (archived) row keeps its name but must not block recreating it.
+        blog = self.env["blog.blog"].create({"name": "Host"})
+        for model, extra in (("blog.blog", {}), ("blog.post", {"blog_id": blog.id})):
+            for owner in ({"owner_user_id": self.user.id}, {"user_websites_group_id": self.group.id}):
+                vals = {"name": "Gone", **extra, **owner}
+                old = self.env[model].create(vals)
+                old.write({"active": False, "deleted_by_owner": "2026-01-01 00:00:00"})
+                self.env[model].create(vals)  # no IntegrityError
+                with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"), self.env.cr.savepoint():
+                    self.env[model].create(vals)  # two live ones still collide
