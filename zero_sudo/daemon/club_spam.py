@@ -327,6 +327,8 @@ _ASCII_LOWER = {code: code + 32 for code in range(65, 91)}  # str.lower() can ch
 _MAX_SITEMAP_CHARS = 10_000_000  # sitemap files are capped at 50 MB by the protocol; the crawler fetches far less
 
 
+# [@ANCHOR: zero_sudo:club_spam_blocks]
+# Verified by [@ANCHOR: zero_sudo:test_club_spam_blocks]
 def _blocks(text, lower, name):
     """The inner text of every `<name ...>...</name>` element, found with str.find (linear): the regular expressions this
     replaces rescanned to the end of the file from every unclosed `<url` and `<loc>`, which took minutes on a hostile sitemap."""

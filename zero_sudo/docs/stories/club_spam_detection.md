@@ -319,3 +319,7 @@ persistence thresholds as a table.
 `lower` is the same text lower-cased, so the tag is found whatever its case while the returned value keeps the original case. A CDATA wrapper
 (`<![CDATA[ ... ]]>`) around the value is removed. `parse_sitemap` uses it to read the `loc` and `lastmod` of each entry without an XML parser,
 so a hostile or broken sitemap cannot raise here. Pure. Test: `[@ANCHOR: zero_sudo:test_club_spam_inner]`.
+
+## Finding Every Element of One Name `[@ANCHOR: zero_sudo:club_spam_blocks]`
+
+`_blocks(text, lower, name)` returns `(start, end)` spans of the inner text of every `<name ...>...</name>` element, found with `str.find` so the cost is linear. `lower` is `text` lower-cased, so the tag matches in any case; `<urlset` is not taken for `<url`. When a tag has no `>` or no closing tag it stops and returns what it has, because no later opening tag can find a closing one either. Regular expressions rescanned to the end of the file from every unclosed `<url`, which took minutes on a hostile sitemap. `parse_sitemap` is the caller. Pure. Test: `[@ANCHOR: zero_sudo:test_club_spam_blocks]`.
