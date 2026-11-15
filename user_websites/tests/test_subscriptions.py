@@ -227,6 +227,20 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
                 "Postgres session's own TimeZone setting.",
             )
 
+    def test_01d_weekly_digest_view_ids_do_not_shift_when_a_subscriber_joins(self):
+        # Tests [@ANCHOR: user_websites:COMM_weekly_digest_view_init]
+        # The send walks the view in batches by `id > last_digest_id`; an id that moves when another row appears
+        # skips one subscriber's digest or repeats another's.
+        partners = self.env["res.partner"].create([{"name": "Digest A"}, {"name": "Digest B"}])
+        early, late = partners[0], partners[1]
+        self.creator.partner_id.message_subscribe(partner_ids=[late.id])
+        view = self.env["user_websites.weekly_digest_view"]
+        before = view.search([("partner_id", "=", late.id)]).mapped("id")
+        self.assertEqual(len(before), 1)
+        self.creator.partner_id.message_subscribe(partner_ids=[early.id])
+        after = view.search([("partner_id", "=", late.id)]).mapped("id")
+        self.assertEqual(after, before, "[!] DIAGNOSTIC FOR AI: a digest row's id moved when another subscriber joined.")
+
     def test_01c_weekly_digest_view_ids_are_stable_across_repeated_queries(self):
         # user_websites_weekly_digest_view.md, finding 1:
         # `row_number() OVER ()` (no ORDER BY inside the window) numbered rows in
