@@ -979,8 +979,12 @@ impl CivEngine {
             (0x1A, [0x34, 0x00, code]) => self.decode_mode(*code, false, None),
             (0x19, [0x00, id]) => Some(Observation::ModelId(u16::from(*id))),
             (0x1C, [0x00, state]) => Some(Observation::Ptt(*state != 0)),
-            (0x15, [0x02, rest @ ..]) => decode_bcd_meter(rest).map(Observation::Signal),
-            (0x15, [0x11, rest @ ..]) => decode_bcd_meter(rest).map(Observation::Power),
+            (0x15, [0x02, rest @ ..]) => decode_bcd_meter(rest)
+                .filter(|value| *value <= MAX_METER)
+                .map(Observation::Signal),
+            (0x15, [0x11, rest @ ..]) => decode_bcd_meter(rest)
+                .filter(|value| *value <= MAX_METER)
+                .map(Observation::Power),
             (0x15, [sub, rest @ ..]) => sub_meter(*sub).and_then(|meter| {
                 decode_bcd_meter(rest)
                     .filter(|value| *value <= MAX_METER)
@@ -1240,6 +1244,23 @@ mod tests {
             data: data.to_vec(),
         }
         .to_bytes()
+    }
+
+    // Tests [@ANCHOR: radioctl_civ_engine_decode]
+    #[test]
+    fn signal_and_power_replies_above_255_are_unrecognised() {
+        let mut e = CivEngine::new(shipped("icom-ic-7300")).expect("engine");
+        for sub in [0x02u8, 0x11] {
+            let out = e.feed(&reply(0x94, 0x15, &[sub, 0x02, 0x56]), T0);
+            assert!(
+                matches!(out.as_slice(), [Inbound::Unrecognised(_)]),
+                "0256 is above the 0 to 255 scale: {out:?}"
+            );
+        }
+        let out = e.feed(&reply(0x94, 0x15, &[0x02, 0x02, 0x55]), T0);
+        assert_eq!(out, vec![Inbound::Observation(Observation::Signal(255))]);
+        let out = e.feed(&reply(0x94, 0x15, &[0x11, 0x02, 0x55]), T0);
+        assert_eq!(out, vec![Inbound::Observation(Observation::Power(255))]);
     }
 
     // Tests [@ANCHOR: radioctl_civ_encode_rit_offset]
