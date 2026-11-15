@@ -381,6 +381,36 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), signals), "a quoted Message-ID does not exempt")
         self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), dict(signals, reply_headers=True)), "nor does a claimed reply")
 
+    def test_28c_genuine_member_replies_to_a_helpdesk_notification_are_not_flagged(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_spam_reasons]
+        # With no reply exemption, a normal reply must still pass: the bulk rules need several weak signals together.
+        quoted = (
+            '<div class="gmail_quote"><blockquote style="margin:0 0 0 .8ex">'
+            "<p>Hello, your ticket #123 has a new reply.</p>"
+            '<p><a href="https://hams.com/helpdesk/123">View ticket</a></p><p>Powered by Odoo</p>'
+            "</blockquote></div>"
+        )
+        body = "<div>Thanks, that fixed it. 73, W1AW</div><br>" + quoted
+        reply_headers = (
+            "In-Reply-To: <notification-123@hams.com>\r\nReferences: <notification-123@hams.com>\r\n"
+            "X-Mailer: Apple Mail (2.3774.300.61.1.2)\r\n"
+        )
+        cases = {
+            "Gmail, HTML only": SES_PASS_HEADERS + reply_headers,
+            # Outlook / forwarding hosts often send with a Return-Path on another domain (one weak signal).
+            "Outlook, Return-Path not aligned": SES_PASS_HEADERS + reply_headers + "Return-Path: <bounce@outlook.example.org>\r\n",
+            # A vacation auto-reply is machine-generated and carries Precedence: bulk (a person's out-of-office).
+            "out-of-office auto-reply": SES_PASS_HEADERS + reply_headers + "Auto-Submitted: auto-replied\r\nPrecedence: bulk\r\n",
+        }
+        for label, headers in cases.items():
+            subject = "Re: [Ticket #123] Rotator not responding"
+            signals = mail_signals(
+                message_from_bytes(raw_message("info@hams.com", subject, from_addr="w1aw@member.example.com", body=body, headers=headers))
+            )
+            self.assertEqual(
+                inbound_spam_reasons(subject, body, signals, {"spam": "PASS", "virus": "PASS"}), [], "%s must not be flagged" % label
+            )
+
     def test_30_hostile_input_never_raises(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_html_shape]
         self.assertEqual(html_shape("<table>" * 3 + "</table>" * 9)["table_depth"], 3)
