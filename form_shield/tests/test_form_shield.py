@@ -68,7 +68,9 @@ class TestFormShield(HamsTransactionCase):
             ("non-ASCII signature", token[:-1] + "\u00e9~" + counter, (S, "bad_signature")),
             ("expired", shield_response(self.env, "contact", GUEST, age=ttl + 5), (R, "expired")),
             ("another network", shield_response(self.env, "contact", "198.51.100.7"), (R, "ip_changed")),
-            ("too fast", shield_response(self.env, "contact", GUEST, age=0), (R, "too_fast")),
+            # Difficulty 0: solving the default proof of work takes seconds on a loaded box, which would
+            # itself age the challenge past the minimum time to submit.
+            ("too fast", shield_response(self.env, "contact", GUEST, age=0, difficulty=0), (R, "too_fast")),
         ]
         for label, response, expected in cases:
             verdict = self.shield.check("contact", response)
