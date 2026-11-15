@@ -224,6 +224,17 @@ class TestSesWebhook(HamsHttpCase):
         response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=b'not json', headers={'Content-Type': 'text/plain'})
         self.assertEqual(response.status_code, 400, "Should reject invalid JSON")
 
+    def test_02b_webhook_rejects_oversized_body(self):
+        """A body over _MAX_WEBHOOK_BODY_BYTES is refused with 413 and logs nothing; a wrong token is
+        refused with 403 without the body being read."""
+        big = b'{"Type": "Notification", "pad": "' + b'a' * (1024 * 1024) + b'"}'
+        logs_before = self.env['ses.webhook.log'].search_count([])
+        response = self.url_open(f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=big, headers={'Content-Type': 'application/json'})
+        self.assertEqual(response.status_code, 413)
+        response = self.url_open('/mail/webhook/sns?token=wrong', data=big, headers={'Content-Type': 'application/json'})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.env['ses.webhook.log'].search_count([]), logs_before)
+
     def test_03_webhook_subscription_confirmation(self):
         """Verify SubscriptionConfirmation visits the SubscribeURL and logs correctly."""
         payload = {

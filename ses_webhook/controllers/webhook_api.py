@@ -176,6 +176,9 @@ def _fetch_sns_signing_cert(signing_cert_url):
 # A signing certificate is a couple of kilobytes of PEM; anything larger is not one and is cut off before it is parsed.
 _MAX_SNS_CERT_BYTES = 65536
 
+# Largest request body the webhook reads: four times the 256 KB AWS SNS allows.
+_MAX_WEBHOOK_BODY_BYTES = 1024 * 1024
+
 
 # [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
 def _verify_sns_signature(payload):
@@ -274,7 +277,6 @@ class SesWebhookController(http.Controller):
         Validates the secret token against configured domains,
         and routes to the appropriate tenant company.
         """
-        raw_data = request.httprequest.get_data(as_text=True)
         token = request.httprequest.args.get('token')
         
         if not token:
@@ -306,7 +308,14 @@ class SesWebhookController(http.Controller):
             _logger.warning("SES Webhook denied: Invalid token.")
             return request.make_response("Forbidden", status=403)
             
-        if not raw_data or not raw_data.strip():
+        # The body is read only for a caller that holds a valid token, and never past the cap (SNS
+        # itself sends at most 256 KB).
+        raw_bytes = request.httprequest.stream.read(_MAX_WEBHOOK_BODY_BYTES + 1)
+        if len(raw_bytes) > _MAX_WEBHOOK_BODY_BYTES:
+            _logger.warning("SES Webhook denied: body over %d bytes for domain %s.", _MAX_WEBHOOK_BODY_BYTES, domain.name)
+            return request.make_response("Payload too large", status=413)
+        raw_data = raw_bytes.decode('utf-8', errors='replace')
+        if not raw_data.strip():
             return request.make_response("Empty payload", status=400)
             
         try:
