@@ -182,6 +182,14 @@ class TestMemberHtmlSanitizer(BaseCase):
         clean, _hostile = sanitize_member_html('<img src="/web/image/1/pic..v2.png" alt="x">')
         self.assertIn('src="/web/image/1/pic..v2.png"', clean)
 
+    def test_malformed_link_is_dropped_not_a_crash(self):
+        # Tests [@ANCHOR: user_websites:fn_hmtl_clean_url]
+        # "http://[" makes urlsplit raise ValueError; the save must keep the text and drop the link.
+        clean, _hostile = sanitize_member_html('<p><a href="http://[::1">broken</a> after</p>')
+        self.assertIn("broken", clean)
+        self.assertIn("after", clean)
+        self.assertNotIn("href=", clean)
+
     def test_image_magic_numbers(self):
         # Tests [@ANCHOR: user_websites:owner_image_mimetype]
         # [@ANCHOR: test_owner_image_upload_rules]

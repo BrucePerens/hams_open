@@ -61,7 +61,11 @@ def _clean_url(value, image=False):
         return value if IMAGE_PATH_RE.match(value) and ".." not in value.split("?")[0].split("/") else None
     if value.startswith("#"):
         return value
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        # "http://[" is not a URL: drop the link instead of failing the whole save.
+        return None
     if not parts.scheme and not parts.netloc and value.startswith("/") and not value.startswith("//"):
         return value
     if parts.scheme.lower() in LINK_SCHEMES:
