@@ -59,13 +59,14 @@ class TestTrustedClientIpUnits(HamsTransactionCase):
         for remote in ("127.0.0.2", "::1", "::ffff:127.0.0.2"):
             self.assertEqual(utils._get_trusted_client_ip(_request(remote, **headers)), "198.51.100.4", remote)
 
-    def test_the_cloudflare_header_wins_then_the_first_forwarded_for_entry_then_the_peer(self):
+    def test_the_cloudflare_header_wins_then_the_last_forwarded_for_entry_then_the_peer(self):
         utils = _utils()
         loop = "127.0.0.2"
         self.assertEqual(utils._get_trusted_client_ip(_request(loop, **{"CF-Connecting-IP": "  198.51.100.4  "})), "198.51.100.4")
         self.assertEqual(utils._get_trusted_client_ip(_request(loop, **{"CF-Connecting-IP": "198.51.100.4", "X-Forwarded-For": "1.1.1.1"})),
                          "198.51.100.4")
-        self.assertEqual(utils._get_trusted_client_ip(_request(loop, **{"X-Forwarded-For": " 203.0.113.9 , 10.0.0.1"})), "203.0.113.9")
+        self.assertEqual(utils._get_trusted_client_ip(_request(loop, **{"X-Forwarded-For": " 10.0.0.1 , 203.0.113.9 "})), "203.0.113.9",
+                         "the last entry is the one our proxy appended; earlier ones are visitor-written")
         self.assertEqual(utils._get_trusted_client_ip(_request(loop, **{"X-Forwarded-For": "203.0.113.9"})), "203.0.113.9")
         self.assertEqual(utils._get_trusted_client_ip(_request(loop, **{"CF-Connecting-IP": "", "X-Forwarded-For": "203.0.113.9"})),
                          "203.0.113.9", "an empty Cloudflare header falls through")
