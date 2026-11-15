@@ -1500,6 +1500,9 @@ class TestSesWebhook(HamsHttpCase):
         # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
         # Test mode disables outgoing mail, so test_19 only sees that a mail.mail row exists. With the
         # real send path on (fake SMTP), the service account must be able to send it: state "sent".
+        # The nudge is sent From the company's address; a module-only install has none (a full install
+        # gets one from other modules), and mail.mail then cannot build the message.
+        self.company_a.email = "info@test-a.com"
         self.safe_patch_object(type(self.env["ir.mail_server"]), "_disable_send", new=lambda self: False)
         self.safe_patch_object(type(self.env["ir.mail_server"]), "_connect__", new=lambda self, *a, **k: None)
         self.safe_patch_object(type(self.env["ir.mail_server"]), "send_email", new=lambda self, *a, **k: "<nudge@example.com>")
