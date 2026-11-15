@@ -954,6 +954,13 @@ class TestScanAfterRequestUnits(HamsTransactionCase):
         self.assertEqual(_FakeRegistry.created, ["db1"], "db2 has another salt, so the same text does not match there")
         secret_canary.scan_after_request("leak " + TOKEN, "/x")
 
+    def test_a_database_with_no_state_is_skipped_and_does_not_stop_the_scan_of_the_others(self):
+        secret_canary._tables["fresh"] = (0, None, {})  # what `_load_state` caches before the post-init hook has run
+        secret_canary._tables["db1"] = (0, SALT, _table(lbl=TOKEN))
+        with self.assertNoLogs(secret_canary._logger, "ERROR"):
+            secret_canary.scan_after_request("leak " + TOKEN + " and a long enough clean token abcdefghijklmnop", "/x")
+        self.assertEqual(_FakeRegistry.created, ["db1"])
+
     def test_a_failure_is_logged_and_swallowed(self):
         secret_canary._tables["db1"] = (0, SALT, _table(lbl=TOKEN))
 

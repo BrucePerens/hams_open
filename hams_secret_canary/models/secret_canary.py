@@ -54,7 +54,7 @@ def scan_after_request(text, where):
     logged: it must never reach a client."""
     try:
         for dbname, (_loaded, salt, table) in list(_tables.items()):
-            matches = detector.find_matches(text, salt, table)
+            matches = detector.find_matches(text, salt, table) if table else []  # a database with no state has salt None: nothing to scan for
             if matches:
                 where = detector.redact(where, salt, table)
                 with Registry(dbname).cursor() as cr:
