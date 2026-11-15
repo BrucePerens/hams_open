@@ -29,7 +29,12 @@
                             <td t-out="log.ip_address"/>
                             <td t-out="log.reason"/>
                         </tr>
-                        <tr t-if="!state.logs.length">
+                        <tr t-if="state.loadError">
+                            <td colspan="5" class="text-center py-4 text-danger load-error" role="alert">
+                                The security logs could not be loaded. Reload the page to try again.
+                            </td>
+                        </tr>
+                        <tr t-elif="!state.logs.length">
                             <td colspan="5" class="text-center py-4 text-muted">
                                 No security logs found.
                             </td>

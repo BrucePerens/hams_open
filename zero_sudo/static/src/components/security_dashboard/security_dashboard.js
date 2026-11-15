@@ -13,6 +13,7 @@ export class SecurityDashboard extends Component {
         this.action = useService("action");
         this.state = useState({
             logs: [],
+            loadError: false,
             isPaused: false,
         });
         this.dashboardRoot = useRef("dashboardRoot");
@@ -29,7 +30,13 @@ export class SecurityDashboard extends Component {
         }, () => []);  // Owl's useEffect takes a function that returns the dependencies; an array made it throw on mount.
 
         onWillStart(async () => {
-            await this.loadLogs();
+            // A failed request must not stop the dashboard mounting, nor show "No security logs found" as if it were true.
+            try {
+                await this.loadLogs();
+            } catch (error) {
+                console.error("Failed to load the security logs:", error);
+                this.state.loadError = true;
+            }
         });
     }
 
