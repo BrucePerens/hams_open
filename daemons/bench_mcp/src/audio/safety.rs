@@ -116,8 +116,10 @@ impl<'a> VolumeGuard<'a> {
             return Ok(());
         }
         self.done = true;
-        levels::set_volume(self.run, self.id, self.before.volume)?;
-        levels::set_mute(self.run, self.id, self.before.muted)
+        // Both are attempted: a failed volume must not leave the output unmuted (or muted) as the operation changed it.
+        let volume = levels::set_volume(self.run, self.id, self.before.volume);
+        let mute = levels::set_mute(self.run, self.id, self.before.muted);
+        volume.and(mute)
     }
 }
 
@@ -236,6 +238,32 @@ mod tests {
         g.restore().unwrap();
         g.restore().unwrap();
         assert_eq!(run.volumes.borrow()[0].1, 0.1);
+    }
+
+    // Tests [@ANCHOR: bench_mcp_audio_safety_volumeguard_restore]
+    #[test]
+    fn a_failed_volume_restore_still_restores_the_mute() {
+        struct FailVolumeSet<'a>(&'a Scripted, std::cell::Cell<bool>);
+        impl Run for FailVolumeSet<'_> {
+            fn run(&self, program: &str, args: &[String]) -> Result<(bool, String), String> {
+                if self.1.get() && args.first().map(|a| a.as_str()) == Some("set-volume") {
+                    return Ok((false, "node busy".into()));
+                }
+                self.0.run(program, args)
+            }
+        }
+        let d = speaker();
+        let inner = Scripted::new(&[(d.id, 0.9, true)]);
+        let run = FailVolumeSet(&inner, std::cell::Cell::new(false));
+        let lim = Limits {
+            volume: 0.2,
+            quiet: false,
+        };
+        let (mut g, _) = VolumeGuard::apply(&run, &d, &lim, Want::Keep, true).unwrap();
+        assert!(!inner.volumes.borrow()[0].2, "unmuted for the operation");
+        run.1.set(true);
+        assert!(g.restore().is_err());
+        assert!(inner.volumes.borrow()[0].2, "the mute is put back anyway");
     }
 
     #[test]
