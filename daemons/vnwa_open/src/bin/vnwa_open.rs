@@ -16,6 +16,26 @@ fn main() {
             std::process::exit(if ok { 0 } else { 1 });
         }
         Some("install-system-config") => {
+            // Anything else (`--root=DIR`, a misspelt `--apply`) is refused: an option that is silently ignored can turn a staged run into a real one.
+            let mut value = false;
+            for x in &a[2..] {
+                if std::mem::take(&mut value) {
+                    continue;
+                }
+                value = x == "--root";
+                let known = [
+                    "--apply",
+                    "--uninstall",
+                    "--check",
+                    "--force",
+                    "--restart-audio",
+                    "--root",
+                ];
+                if !known.contains(&x.as_str()) {
+                    eprintln!("vnwa_open install-system-config: unknown option {x}");
+                    std::process::exit(2);
+                }
+            }
             let has = |f: &str| a.iter().any(|x| x == f);
             let root = match a.iter().position(|x| x == "--root") {
                 None => None,
