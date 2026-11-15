@@ -50,6 +50,10 @@ class TestManualRobustness(HamsHttpCase):
             response_direct.status_code, 404, "Archived articles must return a 404."
         )
 
+        # An id past the database integer range is "no such article", not a 500.
+        for slug in ("99999999999999999999-x", "0-x"):
+            self.assertEqual(self.url_open(f"/manual/{slug}").status_code, 404, slug)
+
         # Search should omit archived
         response_search = self.url_open("/manual/search?search=Archived")
         self.assertNotIn(

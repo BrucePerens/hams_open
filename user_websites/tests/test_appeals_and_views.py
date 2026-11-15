@@ -194,6 +194,18 @@ class TestAppealsAndViews(RealTransactionCase):
                          "a non-member must not file an appeal for a group's suspension")
         self.assertEqual(Appeal.search_count([("user_id", "=", self.user_public.id)]), 0)
 
+    def test_02b2_a_huge_group_id_is_a_plain_appeal_failure_not_a_500(self):
+        # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
+        self.user_public.is_suspended_from_websites = True
+        self.env.cr.commit()
+        self.authenticate(self.user_public.login, self.user_public.login)
+        token = odoo.http.Request.csrf_token(self)
+        for bad in ("99999999999999999999", "0", "-5"):
+            res = self.url_open("/website/submit_appeal",
+                                data={"csrf_token": token, "reason": "x", "group_id": bad},
+                                method="POST", allow_redirects=False)
+            self.assertIn("error=appeal_failed", res.headers["Location"], bad)
+
     def test_02c_an_over_long_appeal_reason_is_refused(self):
         # Tests [@ANCHOR: UX_SUBMIT_APPEAL]
         # A POST body is caller-controlled: a huge reason must not be stored whole.

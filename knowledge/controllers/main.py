@@ -281,6 +281,8 @@ class ManualLibraryController(http.Controller):
         if article_slug:
             try:
                 article_id = int(article_slug.split("-")[0])
+                if not 0 < article_id < 2**31:
+                    raise ValueError("article id out of range")
                 article = request.env["knowledge.article"].browse(article_id)
                 if not article.exists() or not article.active:
                     raise werkzeug.exceptions.NotFound()
