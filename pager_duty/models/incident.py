@@ -513,8 +513,12 @@ class PagerIncident(models.Model):
         # fails to serialize (its snapshot cannot see the earlier incident) and Odoo runs the request again, when it finds
         # the incident and counts a repeat. There is no unique index to lean on: a resolved incident of the same source
         # may exist beside the open one.
-        self.env.cr.execute("UPDATE res_company SET id = id WHERE id = %s", [self.env.ref("base.main_company").id])
+        # Only a creator needs the lock: a repeat of an open incident is found by a plain read and takes none, so a long
+        # caller transaction (the backup sync) is not serialised against every other report.
         existing = IncidentModel.search(search_domain, limit=1)
+        if not existing:
+            self.env.cr.execute("UPDATE res_company SET id = id WHERE id = %s", [self.env.ref("base.main_company").id])
+            existing = IncidentModel.search(search_domain, limit=1)
         if existing:
             # [@ANCHOR: pager_trend_window_update]
             now = fields.Datetime.now()
