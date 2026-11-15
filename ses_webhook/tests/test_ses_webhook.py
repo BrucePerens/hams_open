@@ -306,6 +306,20 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(log.domain_id, self.domain_a)
         self.assertEqual(log.company_id, self.company_a)
 
+    def test_04b_redelivered_notification_is_processed_once(self):
+        """SNS delivers at least once: the same MessageId arriving twice must not process the mail twice."""
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Twice\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = self._sign({"Type": "Notification", "MessageId": "msg-notif-twice", "Message": json.dumps(ses_message)})
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        url = f'/mail/webhook/sns?token={self.domain_a.secret_token}'
+        for _ in range(2):
+            response = self.url_open(url, data=json.dumps(payload).encode('utf-8'))
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(mock_process.call_count, 1)
+        self.assertEqual(self.env['ses.webhook.log'].search_count([('name', '=', 'msg-notif-twice')]), 1)
+
     def test_05_webhook_notification_processed_company_b(self):
         """Verify Notification extracts content and passes to mail.thread in Company B context."""
         raw_email = b"From: b@test-b.com\nTo: c@d.com\nSubject: Test B\n\nTest"
