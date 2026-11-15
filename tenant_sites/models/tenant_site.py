@@ -61,6 +61,8 @@ class TenantSite(models.Model):
         result = super().write(vals)
         self.env.registry.clear_cache('assets')
         self.env.registry.clear_cache()
+        if "website_id" in vals:
+            self._apply_public_layout()  # the new website must not keep the sign-in link and foreign layout
         return result
 
     # [@ANCHOR: tenant_sites:site_unlink]
