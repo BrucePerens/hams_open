@@ -761,6 +761,12 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         .yaesu_legacy
         .as_ref()
         .map(|y| {
+            if !(1..=2).contains(&y.stop_bits) {
+                return Err(bad(format!(
+                    "yaesu_legacy.stop_bits must be 1 or 2, not {}",
+                    y.stop_bits
+                )));
+            }
             Ok::<YaesuLegacyParams, RigError>(YaesuLegacyParams {
                 stop_bits: y.stop_bits,
                 high_band_flag: y.high_band_flag,
@@ -2215,5 +2221,19 @@ verified = { state = "unverified" }
         assert_eq!(params.spans_hz, vec![5000, 10000]);
         let bad = with_scope.replace("receivers = 1", "receivers = 3");
         expect_rejected(&format!("{bad}{fact}"), "receivers 1 or 2");
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_legacy_block]
+    // Tests [@ANCHOR: radioctl_core_rigfile_yaesu_legacy_section]
+    #[test]
+    fn a_legacy_rig_with_a_stop_bits_value_other_than_1_or_2_is_rejected() {
+        let ft1000 = include_str!("../../../rigs/yaesu-ft-1000.toml");
+        assert!(parse(ft1000).is_ok());
+        for bad in ["0", "3", "255"] {
+            expect_rejected(
+                &ft1000.replace("stop_bits = 2", &format!("stop_bits = {bad}")),
+                "stop_bits",
+            );
+        }
     }
 }
