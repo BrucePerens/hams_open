@@ -363,6 +363,39 @@ class TestPrivacyGDPR(HamsHttpCase):
         with self.assertRaises(GdprExportTokenRejected):
             Svc.export_page(token, "no_such_key", 0)
 
+    def test_01g2_export_page_starts_a_generator_that_takes_start_at_the_offset(self):
+        # Tests [@ANCHOR: user_websites:gdpr_export_page]
+        """A generator that accepts `start` is asked for just the page, not re-run from row 0 for every page (the
+        paging was quadratic for a 100k-row dataset)."""
+        total = 5000
+        produced = []
+
+        def native_rows(start=0):
+            for i in range(start, total):
+                produced.append(i)
+                yield {"n": i}
+
+        Token = self.env["ham.gdpr.export.token"]
+        token = self.env(user=self.user_privacy)["ham.gdpr.export.token"].create_for_current_user()
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("user_websites.user_gdpr_export_service")
+        Svc = Token.with_user(svc_uid)
+        users_cls = type(self.env["res.users"])
+        base = users_cls._get_gdpr_streamed_keys
+        self.safe_patch_object(
+            users_cls, "_get_gdpr_streamed_keys", new=lambda rec: dict(base(rec), big=native_rows)
+        )
+        Svc.consume_and_export(token)
+        offset = 0
+        while True:
+            page = Svc.export_page(token, "big", offset)
+            if page:
+                self.assertEqual(page[0]["n"], offset)
+            offset += len(page)
+            if len(page) < EXPORT_PAGE_ROWS:
+                break
+        self.assertEqual(offset, total)
+        self.assertLessEqual(len(produced), total + EXPORT_PAGE_ROWS, "each page must read only its own rows")
+
     def test_01f_consume_and_export_rejects_a_caller_that_is_not_the_daemon_service_account(self):
         # Tests [@ANCHOR: test_gdpr_consume_and_export_payload]
         """Hardening, 2026-09-10: consume_and_export is a public (non-

@@ -5,6 +5,7 @@
 import json
 import secrets
 from datetime import timedelta
+import inspect
 from itertools import islice
 
 from odoo import models, fields, api, _
@@ -219,7 +220,7 @@ class HamGdprExportToken(models.Model):
         """One page (at most EXPORT_PAGE_ROWS rows from `offset`) of the streamed dataset `key` for the member the
         token was issued to. The token must already have been consumed by consume_and_export (so a token never
         used for an export reads nothing) and be no older than EXPORT_WINDOW_MINUTES. A page shorter than `limit`
-        is the last. The generator is re-run per page (cheap keyset paging inside); the cost is bounded by the page."""
+        is the last. A generator that takes a `start` row is begun there (cost bounded by the page); one that does not is re-run and skipped through."""
         if not (
             self.env.user == self.env.ref("user_websites.user_gdpr_export_service")
             or self.env.user.has_group("base.group_system")
@@ -236,5 +237,10 @@ class HamGdprExportToken(models.Model):
         streamed = self._export_user(row.user_id)._get_gdpr_streamed_keys()
         if key not in streamed:
             raise GdprExportTokenRejected(_("Unknown export dataset."))
-        rows = list(islice(streamed[key](), offset, offset + limit))
+        generator = streamed[key]
+        if "start" in inspect.signature(generator).parameters:
+            # A generator that can begin at a row reads only this page; the others are re-run and skipped through.
+            rows = list(islice(generator(start=offset), limit))
+        else:
+            rows = list(islice(generator(), offset, offset + limit))
         return json.loads(json.dumps(rows, default=str))
