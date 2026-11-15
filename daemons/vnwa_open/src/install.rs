@@ -264,7 +264,10 @@ impl Installer<'_> {
                     "replace (the old file is first copied to {}{BACKUP_SUFFIX})",
                     dest.display()
                 ),
-                (Mode::Uninstall, State::Missing) => "nothing to remove".to_string(),
+                // `uninstall` puts a backup back whatever the state of the file, so the plan must too.
+                (Mode::Uninstall, State::Missing) if !self.backup_exists(&m) => {
+                    "nothing to remove".to_string()
+                }
                 (Mode::Uninstall, _) => {
                     if self.backup_exists(&m) {
                         format!("restore {}{BACKUP_SUFFIX}", dest.display())
@@ -727,6 +730,31 @@ mod tests {
         for m in managed() {
             assert!(!root.join(m.dest.trim_start_matches('/')).exists());
         }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_install_plan]
+    #[test]
+    fn the_uninstall_plan_says_restore_for_a_missing_file_whose_backup_exists_as_the_uninstall_does(
+    ) {
+        let root = tmp("inst_planbk");
+        let rec = Recording(Mutex::new(Vec::new()));
+        let dest = root.join(UDEV_DEST.trim_start_matches('/'));
+        let backup = format!("{}{BACKUP_SUFFIX}", dest.display());
+        std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+        std::fs::write(&backup, "# somebody's own rule\n").unwrap();
+        // Our file is gone (removed by hand) but the backup of the file it replaced is still there.
+        let dry = installer(&root, &rec, Mode::Uninstall, false)
+            .run()
+            .unwrap();
+        let line = dry.lines().find(|l| l.contains(UDEV_DEST)).unwrap();
+        assert!(line.contains("restore"), "{line}");
+        installer(&root, &rec, Mode::Uninstall, true).run().unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&dest).unwrap(),
+            "# somebody's own rule\n",
+            "what the plan promised"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
