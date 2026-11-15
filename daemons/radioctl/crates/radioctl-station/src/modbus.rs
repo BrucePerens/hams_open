@@ -122,6 +122,12 @@ impl ModbusBoard {
                 "modbus board: bad slave or coil count",
             ));
         }
+        if u32::from(b.coil_base) + u32::from(b.coils) > 0x1_0000 {
+            return Err(StationError::new(
+                StationErrorKind::Config,
+                "modbus board: coil_base plus coils runs past coil address 65535",
+            ));
+        }
         if !b.safe_state.is_empty() && b.safe_state.len() != usize::from(b.coils) {
             return Err(StationError::new(
                 StationErrorKind::Config,
@@ -931,6 +937,11 @@ mod tests {
         assert!(!b.verified);
         assert!(ModbusBoard::from_toml(&text.replace("coils = 16", "coils = 0")).is_err());
         assert!(ModbusBoard::from_toml("name = 1").is_err());
+        // The last coil address is 65535: a base that pushes a line past it would wrap.
+        let top = text.replace("coil_base = 0", "coil_base = 65520");
+        assert_eq!(ModbusBoard::from_toml(&top).unwrap().coil_base, 65520);
+        let past = text.replace("coil_base = 0", "coil_base = 65521");
+        assert!(ModbusBoard::from_toml(&past).is_err());
         let rtu = text
             .replace("framing = \"ascii\"", "framing = \"rtu\"")
             .replace("slave = 254", "slave = 7");
