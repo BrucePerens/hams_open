@@ -71,6 +71,11 @@ class PowerTest(unittest.TestCase):
         self.assertEqual(calls[0], (["sudo", "-n", "tee", "/sys/x; touch /tmp/pwn"], "1\n"))
         self.assertEqual(calls[1][1], "0\n")
 
+    def test_run_reports_a_missing_program_as_a_failed_step(self):
+        rc, out, err = pcs.run(["/nonexistent/uhubctl-x"], timeout=5)
+        self.assertEqual((rc, out), (127, ""))
+        self.assertIn("No such file", err)
+
 
 if __name__ == "__main__":
     unittest.main()
