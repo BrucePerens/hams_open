@@ -151,7 +151,8 @@ impl AuditLog {
     }
 
     // [@ANCHOR: relay_broker_audit_log_rotate]
-    /// Moves the full log to `<path>.1` and starts an empty one (mode 0600).
+    /// Moves the full log to `<path>.1` and starts an empty one (mode 0600). A log file that is already gone (removed by an
+    /// operator or a log tool, or a rotate whose reopen failed) is not an error: the new file is created all the same.
     fn rotate(&mut self) -> io::Result<()> {
         use std::os::unix::fs::OpenOptionsExt;
         let Some(path) = self.path.clone() else {
@@ -159,7 +160,11 @@ impl AuditLog {
         };
         let mut old = path.clone().into_os_string();
         old.push(".1");
-        std::fs::rename(&path, PathBuf::from(old))?;
+        match std::fs::rename(&path, PathBuf::from(old)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
         self.file = Some(
             OpenOptions::new()
                 .append(true)
@@ -268,5 +273,29 @@ mod tests {
             std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
             0o600
         );
+    }
+    // Tests [@ANCHOR: relay_broker_audit_log_rotate]
+    #[test]
+    fn a_log_file_removed_from_under_the_broker_is_recreated_at_the_cap() {
+        let dir = crate::testdir::TestDir::new("audit_gone");
+        let path = dir.join("events.jsonl");
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(dir.join("events.jsonl.1"));
+        let event = AuditEvent {
+            uid: 1,
+            pid: 2,
+            action: "list_devices",
+            outcome: "allowed",
+            detail: String::new(),
+        };
+        let mut log = AuditLog::open(Some(&path)).unwrap();
+        log.max_bytes = 300;
+        log.record_at(&event, 1).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        for _ in 0..20 {
+            log.record_at(&event, 2)
+                .expect("the audit log keeps working after its file was removed");
+        }
+        assert!(std::fs::metadata(&path).unwrap().len() > 0);
     }
 }
