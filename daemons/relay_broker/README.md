@@ -15,7 +15,7 @@ answers a fixed set of typed requests from authenticated local peers over a Unix
 | `grant_group` / `provision_groups` | reports which of `dialout`/`audio` the **caller's own** account lacks; changes nothing unless `apply_groups = true`, then runs `/usr/sbin/gpasswd -a USER GROUP` with a fixed argv | root or a gpasswd setuid, only with apply |
 | `bind_udp` | binds a UDP socket on a port the config lists (default only 123, the relay's time service) on the wildcard address and passes the descriptor; any other port is `Denied` | root (privileged port) |
 | `update_package` | asks for the relay package upgrade: creates `/var/lib/hams-relay-broker/update-requested`, which the package's root-owned `hams-relay-update.path` unit turns into the one fixed `apt-get install --only-upgrade hams-local-relay` (or `dnf upgrade`), because the broker itself holds no right to run a package manager; nothing from the caller; only with `update_package = true` in the config (the relay package's config turns it on) |
-| `set_system_time` / `time_status` | `set_system_time` steps the system clock to a UTC the relay chose (`CLOCK_REALTIME`; needs `CAP_SYS_TIME`), only with `set_time = true` (the relay package's config turns it on). The broker applies its own ceilings and does not trust the relay: the target must not be before the build date (2026-11-01); a step beyond `max_unproven_step_secs` (default 30) needs a GPS source or two agreeing sources; at most `max_time_steps_per_hour` (default 4) steps an hour, then one more attempt trips a circuit breaker that refuses everything for an hour. Every attempt is audited with the clock before, the target, the source and the evidence. `time_status` is read-only: the clock, steps in the last hour, breaker state, the earliest accepted target | root or `CAP_SYS_TIME` |
+| `set_system_time` / `time_status` | `set_system_time` steps the system clock to a UTC the relay chose (`CLOCK_REALTIME`; needs `CAP_SYS_TIME`), only with `set_time = true` (the relay package's config turns it on). The broker applies its own ceilings and does not trust the relay: the target must not be before the build date (2026-11-01) or more than a year past the broker's own clock (a clock earlier than the build date has no ceiling); a step beyond `max_unproven_step_secs` (default 30) needs a GPS source or two agreeing sources; at most `max_time_steps_per_hour` (default 4) steps an hour, then one more attempt trips a circuit breaker that refuses everything for an hour. Every attempt is audited with the clock before, the target, the source and the evidence. `time_status` is read-only: the clock, steps in the last hour, breaker state, the earliest accepted target | root or `CAP_SYS_TIME` |
 | `hub_takeover_start` / `hub_takeover_stop` | phase 0 of the hub: one `dnsmasq` serving the user's own /24 from the high pool .200 to .250 with 5 minute leases while the router is gone; no access point and no address change; only with `hub = true`. |
 | `hub_start` / `hub_stop` / `hub_status` | the stand-alone emergency hub: only with `hub = true` in the config. Validates the typed settings, writes `hostapd.conf` and `dnsmasq.conf` from fixed templates into `/run/hams-relay-broker/hub` (mode 0600), gives the wifi interface the hub address with `ip` and starts `hostapd -B` and `dnsmasq` with fixed argument lists; stop signals only a pid whose `/proc/PID/comm` still names the program, then removes the files | root |
 
@@ -154,7 +154,7 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 ### `TimeGuard::check` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_guard_check]
 
-**Purpose.** The decision half of the broker's own clock ceiling. It does not trust the relay's judgement: it refuses a clock step that is implausible, unproven or too frequent. `Broker::set_system_time` calls it after the config switch and before the OS call. Checks run in a fixed order: expire old state, breaker open, target before the build date, large step without proof, steps per hour (which trips the breaker).
+**Purpose.** The decision half of the broker's own clock ceiling. It does not trust the relay's judgement: it refuses a clock step that is implausible, unproven or too frequent. `Broker::set_system_time` calls it after the config switch and before the OS call. Checks run in a fixed order: expire old state, breaker open, target before the build date, target more than a year ahead of the clock, large step without proof, steps per hour (which trips the breaker).
 
 **Signature.** `pub fn check(&mut self, now: Instant, current_unix_secs: u64, target_unix_secs: u64, source: TimeSource, agreeing: u8) -> Result<(), TimeDenial>`
 
@@ -166,7 +166,7 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 | `source` | `TimeSource` | The relay's claimed source; `Gps` counts as proof by itself. |
 | `agreeing` | `u8` | How many independent sources agree with the target; 2 or more count as proof. The broker cannot verify the claim, only the relay's own evidence rule. |
 
-**Returns.** `Ok(())` when the step may proceed. An allowed step is NOT recorded: the caller calls `record_step` once the OS call succeeded. **Errors** (`TimeDenial`): `BreakerOpen` (breaker already open, or this call found the hour's step count full and opened it for an hour), `BeforeBuildDate`, `UnprovenLargeStep`. **Side effects.** Mutates the guard: expires state and may open the breaker, but never records a step. **Security.** This is the clock-poisoning ceiling: a compromised relay cannot walk the clock back or forward in a flood of steps. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs).
+**Returns.** `Ok(())` when the step may proceed. An allowed step is NOT recorded: the caller calls `record_step` once the OS call succeeded. **Errors** (`TimeDenial`): `BreakerOpen` (breaker already open, or this call found the hour's step count full and opened it for an hour), `BeforeBuildDate`, `TooFarAhead`, `UnprovenLargeStep`. The GPS source and the agreeing count come from the relay and are only advisory: the broker cannot check a fix, so the date floor and ceiling, the hourly cap and the breaker are the real limits. **Side effects.** Mutates the guard: expires state and may open the breaker, but never records a step. **Security.** This is the clock-poisoning ceiling: a compromised relay cannot walk the clock back or forward in a flood of steps. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs).
 
 ### `TimeGuard::record_step` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_guard_record_step]
 
@@ -1080,7 +1080,7 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 ### `TimeDenial::reason` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_denial_reason]
 
-**Purpose.** Gives the fixed text for each reason a clock step is refused; the same text goes to the relay in the `Denied` response and into the audit log `detail`, so the two always agree. `TimeDenial` is a small closed enum (`BeforeBuildDate`, `UnprovenLargeStep`, `BreakerOpen`), `Copy`, with no data.
+**Purpose.** Gives the fixed text for each reason a clock step is refused; the same text goes to the relay in the `Denied` response and into the audit log `detail`, so the two always agree. `TimeDenial` is a small closed enum (`BeforeBuildDate`, `TooFarAhead`, `UnprovenLargeStep`, `BreakerOpen`), `Copy`, with no data.
 
 **Signature.** `pub fn reason(self) -> &'static str`
 
@@ -1088,7 +1088,7 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 |---|---|---|
 | `self` | `TimeDenial` | The reason to describe, by value. |
 
-**Returns.** One of three static strings: "target is before the build date", "large step needs a GPS lock or two agreeing sources", "too many clock steps: circuit breaker open". **Errors.** None. **Side effects.** None; pure. **Security.** The strings carry no input, so nothing the relay sent is reflected into the log. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs) checks that a reason is non-empty.
+**Returns.** One of four static strings: "target is before the build date", "target is more than a year ahead of the clock", "large step needs a GPS lock or two agreeing sources", "too many clock steps: circuit breaker open". **Errors.** None. **Side effects.** None; pure. **Security.** The strings carry no input, so nothing the relay sent is reflected into the log. **Tests.** `the_ceilings_hold_and_the_breaker_trips_and_resets` (time_guard.rs) checks that a reason is non-empty.
 
 ### `TimeGuard::expire` (time_guard.rs) [@ANCHOR: relay_broker:relay_broker_time_guard_expire]
 
@@ -1621,6 +1621,7 @@ Every data structure of the broker, explained in full (ADR 0113): purpose, field
 |---|---|---|
 | `BeforeBuildDate` | - | The target is earlier than [`BUILD_DATE_UNIX_SECS`]. |
 | `UnprovenLargeStep` | - | A large step without a GPS source or two agreeing sources. |
+| `TooFarAhead` | - | The target is more than a year past the clock. |
 | `BreakerOpen` | - | The circuit breaker is open. |
 
 **Used by.** `check` (functions whose signature names it).
