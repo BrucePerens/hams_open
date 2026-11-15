@@ -29,7 +29,7 @@ These are the anchors of the sync and retention features. Longer treatment of th
 `backup.config.action_sync_snapshots()` (`@public_rpc`, takes only `self`, returns `True`) queues a `sync_snapshots`
 job per configuration through `_publish_to_worker`. For a Kopia configuration the worker runs `kopia snapshot list
 --json`, and on success sends the parsed list to `action_process_snapshot_data(data, "kopia")`. Each item with an `id`
-becomes a snapshot row: id, start time (`startTime` cut to seconds), size (`summary.totalBytes`), status `completed`.
+becomes a snapshot row: id, start time (`startTime` cut to seconds), size (`rootEntry.summ.size`), status `completed`, or `partial` when kopia reports failed files (`rootEntry.summ.numFailed`).
 Errors: `AccessError` unless the caller is a Backup Administrator or the service account; a parse failure is reported as
 "Sync Parse Error" through `report_backup_failure`. Odoo never runs Kopia itself. Test: `tests/test_backup.py::test_01b_sync_kopia_triggered`.
 

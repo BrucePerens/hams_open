@@ -52,7 +52,7 @@ trailer from the captured log, extracts the first JSON array or object with a re
 `backup.config.action_process_snapshot_data(data, engine="kopia")`. A parse failure is reported with
 `report_backup_failure("Sync Parse Error: ...")` and the job still ends `done`. For Kopia, each list item
 with an `id` becomes `{snapshot_id: id, start_time: startTime[:19] with T replaced by a space, size_bytes:
-summary.totalBytes, status: "completed"}`. Access: Backup Administrators or the service account, else `AccessError`.
+rootEntry.summ.size, status: "completed" or "partial" (numFailed > 0)}`. Access: Backup Administrators or the service account, else `AccessError`.
 Test: `tests/test_backup.py::test_01b_sync_kopia_triggered`.
 
 ### pgBackRest sync [@ANCHOR: backup_management:COMM_backup_sync_pgbackrest]

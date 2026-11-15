@@ -59,7 +59,7 @@ class TestBatch2Fixes(HamsTransactionCase):
         data_kopia = [{
             "id": "snap_empty",
             "startTime": "",
-            "summary": {"totalBytes": 100}
+            "rootEntry": {"summ": {"size": 100}}
         }]
         
         # This shouldn't crash
@@ -81,13 +81,26 @@ class TestBatch2Fixes(HamsTransactionCase):
         data_kopia = [{
             "id": "snap_via_public_wrapper",
             "startTime": "2026-10-01T12:00:00Z",
-            "summary": {"totalBytes": 4096},
+            "rootEntry": {"summ": {"size": 4096}},
         }]
         self.config1.action_process_snapshot_data(data_kopia, "kopia")
         snap = self.env["backup.snapshot"].search([("snapshot_id", "=", "snap_via_public_wrapper")])
         self.assertEqual(len(snap), 1)
         self.assertEqual(snap.config_id, self.config1)
         self.assertEqual(snap.size_bytes, 4096)
+
+    def test_kopia_snapshot_with_failed_files_is_partial_and_size_is_read(self):
+        # Tests [@ANCHOR: backup_management:COMM_upsert_snapshots_roundtrip_optimization]
+        # Real `kopia snapshot list --json` shape: the size is rootEntry.summ.size, failed files are summ.numFailed.
+        data_kopia = [
+            {"id": "snap_ok", "startTime": "2026-10-01T12:00:00Z", "rootEntry": {"summ": {"size": 3, "numFailed": 0}}},
+            {"id": "snap_bad", "startTime": "2026-10-02T12:00:00Z", "rootEntry": {"summ": {"size": 5, "numFailed": 2}}},
+        ]
+        self.config1._process_snapshot_data(data_kopia, "kopia")
+        ok = self.env["backup.snapshot"].search([("snapshot_id", "=", "snap_ok")])
+        bad = self.env["backup.snapshot"].search([("snapshot_id", "=", "snap_bad")])
+        self.assertEqual((ok.size_bytes, ok.status), (3, "completed"))
+        self.assertEqual((bad.size_bytes, bad.status), (5, "partial"))
 
     def test_public_snapshot_ingestion_wrapper_needs_exactly_one_config(self):
         # Tests [@ANCHOR: backup_management:COMM_action_process_snapshot_data]
