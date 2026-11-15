@@ -136,6 +136,26 @@ class TestBackupManagement(RealTransactionCase):
         jobs = self.env["backup.job"].search([("config_id", "=", self.config_kopia.id)], limit=100)
         self.assertTrue(jobs)
 
+    def test_05b_cron_trigger_goes_on_past_a_config_whose_stored_path_is_refused(self):
+        # Tests [@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]
+        # A path stored before the allowed bases changed passes no constraint now; the first such row used to abort the
+        # whole run, so no configuration after it got its backup.
+        channel = _AcceptingChannel()
+        self.safe_patch_object(
+            type(self.env["hams_rabbitmq.pool"]), "_get_channel", return_value=channel
+        )
+        self.env.cr.execute(
+            "UPDATE backup_config SET target_path = %s WHERE id = %s", ["/etc", self.config_kopia.id]
+        )
+        self.env.invalidate_all()
+        self.env["backup.config"].cron_trigger_scheduled_backups()
+        pg_job = self.env["backup.job"].search([("config_id", "=", self.config_pg.id)], limit=1)
+        self.assertTrue(pg_job.exists(), "[!] DIAGNOSTIC FOR AI: one refused path stopped the scheduled backup of every later config.")
+        refused = self.env["mail.message"].search(
+            [("model", "=", "backup.config"), ("res_id", "=", self.config_kopia.id), ("body", "ilike", "backup refused")]
+        )
+        self.assertTrue(refused, "[!] DIAGNOSTIC FOR AI: the refused configuration was not reported.")
+
     def test_05_cron_trigger_scheduled_backups_creates_a_real_job_for_every_config(self):
         # Tests [@ANCHOR: backup_management:COMM_test_cron_trigger_scheduled_backups]
 
