@@ -5,7 +5,7 @@
 //! Every exchange is bounded by a timeout. A reply that does not end in `RPRT` is an error, never a value; a connection that
 //! failed once is dropped and reopened for the single retry that a read gets. Commands that change the rig are not repeated.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::{Duration, Instant};
 
@@ -141,6 +141,9 @@ pub fn check_arg(s: &str) -> Result<&str, String> {
     Ok(s)
 }
 
+/// The longest reply line accepted (dump_state lines are well under 1 KiB).
+const MAX_LINE_BYTES: u64 = 64 * 1024;
+
 // [@ANCHOR: bench_mcp_radioctl_proto_client]
 pub struct Client {
     host: String,
@@ -223,12 +226,27 @@ impl Client {
             if Instant::now() > deadline {
                 return Err(fail("no complete reply".into()));
             }
+            // A reply line is short; a peer that sends bytes without a newline must not grow the buffer without bound,
+            // and each read may wait only for what is left of the deadline, not a fresh full timeout.
+            let left = deadline
+                .saturating_duration_since(Instant::now())
+                .max(Duration::from_millis(1));
+            r.get_ref().set_read_timeout(Some(left)).ok();
             let mut line = String::new();
             let n = r
+                .by_ref()
+                .take(MAX_LINE_BYTES)
                 .read_line(&mut line)
                 .map_err(|e| fail(format!("read failed ({e})")))?;
             if n == 0 {
                 return Err(fail("the connection was closed".into()));
+            }
+            if !line.ends_with('\n') {
+                return Err(fail(if line.len() as u64 >= MAX_LINE_BYTES {
+                    format!("a reply line of more than {MAX_LINE_BYTES} bytes without a newline")
+                } else {
+                    "the connection closed in the middle of a line".into()
+                }));
             }
             let t = line.trim_end_matches(['\r', '\n']);
             if first {
