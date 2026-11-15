@@ -266,6 +266,10 @@ def _verify_sns_signature(payload):
         return False
 
 
+# Domains already logged as having no expected topic ARN (logged once per process).
+_UNPINNED_TOPIC_LOGGED = set()
+
+
 # [@ANCHOR: ses_webhook_webhook_api_ses_webhook_controller]
 class SesWebhookController(http.Controller):
     
@@ -355,6 +359,27 @@ class SesWebhookController(http.Controller):
                 'error_message': 'AWS SNS message signature verification failed.',
             })
             return request.make_response("Forbidden", status=403)
+
+        # The signature proves AWS signed it, not which topic: a token holder could deliver through their
+        # own SNS topic. Pin the signed TopicArn to the domain's configured one; with none set, accept any
+        # topic as before and say so once per domain.
+        if domain.topic_arn and payload.get('TopicArn') != domain.topic_arn:
+            _logger.warning(
+                "SES Webhook denied: TopicArn %s is not the expected topic for domain %s (MessageId=%s).",
+                payload.get('TopicArn'), domain.name, message_id,
+            )
+            request.env['ses.webhook.log'].with_user(svc_uid).create({
+                'name': message_id,
+                'payload_type': payload_type,
+                'raw_payload': raw_data,
+                'domain_id': domain.id,
+                'status': 'rejected_topic',
+                'error_message': 'TopicArn is not the domain\'s expected SNS topic.',
+            })
+            return request.make_response("Forbidden", status=403)
+        if not domain.topic_arn and domain.id not in _UNPINNED_TOPIC_LOGGED:
+            _UNPINNED_TOPIC_LOGGED.add(domain.id)
+            _logger.info("SES Webhook: domain %s has no expected topic ARN set; accepting any SNS topic.", domain.name)
 
         # SNS delivers at least once, and retries when a 2xx is slow: a MessageId already handled for
         # this domain is acknowledged without processing it again (a second message_process would

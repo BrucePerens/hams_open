@@ -20,6 +20,7 @@
 |---|---|---|
 | `name` | `Char` | Domain Name: E.g., example.com (required=`True`) |
 | `secret_token` | `Char` | Secret Token (required=`True`; default=`lambda self: secrets.token_urlsafe(24)`; copy=`False`) |
+| `topic_arn` | `Char` | Expected SNS Topic ARN (when set, only messages signed for this topic are accepted) |
 | `company_id` | `Many2one` | Tenant (Company) (comodel `res.company`; required=`True`; default=`lambda self: self.env.company`) |
 | `webhook_url` | `Char` | Webhook URL (compute=`'_compute_webhook_url'`) |
 | `log_ids` | `One2many` | Logs (comodel `ses.webhook.log`) |
@@ -40,7 +41,7 @@
 |---|---|---|
 | `name` | `Char` | Message ID (required=`True`; readonly=`True`) |
 | `payload_type` | `Selection` | Payload Type (values `Notification`, `SubscriptionConfirmation`, `UnsubscribeConfirmation`, `Unknown`; readonly=`True`) |
-| `status` | `Selection` | Status (values `success`, `failed`, `ignored`, `rejected_subscribe_url`, `rejected_signature`; readonly=`True`) |
+| `status` | `Selection` | Status (values `success`, `failed`, `ignored`, `rejected_subscribe_url`, `rejected_signature`, `rejected_topic`; readonly=`True`) |
 | `domain_id` | `Many2one` | Webhook Domain (comodel `ses.webhook.domain`; readonly=`True`; ondelete=`'cascade'`) |
 | `company_id` | `Many2one` | mirrors the related field `'domain_id.company_id'` (comodel `res.company`; related=`'domain_id.company_id'`; store=`True`; readonly=`True`) |
 | `error_message` | `Text` | Error Message (readonly=`True`) |

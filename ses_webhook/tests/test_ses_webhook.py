@@ -534,6 +534,36 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(log.status, 'rejected_signature')
         self.assertEqual(log.domain_id, self.domain_a)
 
+    def test_27b_wrong_topic_arn_rejected_when_domain_pins_one(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_receive_sns_webhook]
+        """A validly signed message from another SNS topic is refused with 403 and its own log status
+        when the domain has an expected topic; the right topic, or no pin, is accepted."""
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Topic\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        url = f'/mail/webhook/sns?token={self.domain_a.secret_token}'
+
+        self.domain_a.topic_arn = "arn:aws:sns:us-east-1:123456789012:expected-topic"
+        payload = self._sign({"Type": "Notification", "MessageId": "msg-topic-bad", "Message": json.dumps(ses_message)})
+        response = self.url_open(url, data=json.dumps(payload).encode('utf-8'))
+        self.assertEqual(response.status_code, 403)
+        mock_process.assert_not_called()
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-topic-bad')])
+        self.assertEqual(log.status, 'rejected_topic')
+
+        payload = self._sign({
+            "Type": "Notification", "MessageId": "msg-topic-good", "Message": json.dumps(ses_message),
+            "TopicArn": "arn:aws:sns:us-east-1:123456789012:expected-topic",
+        })
+        self.assertEqual(self.url_open(url, data=json.dumps(payload).encode('utf-8')).status_code, 200)
+        self.assertEqual(mock_process.call_count, 1)
+
+        self.domain_a.topic_arn = False
+        payload = self._sign({"Type": "Notification", "MessageId": "msg-topic-unpinned", "Message": json.dumps(ses_message)})
+        self.assertEqual(self.url_open(url, data=json.dumps(payload).encode('utf-8')).status_code, 200)
+        self.assertEqual(mock_process.call_count, 2)
+
     def test_28_signature_tampered_rejected(self):
         # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
         """A validly-structured, validly-signed payload whose Message is altered AFTER signing

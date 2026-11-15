@@ -14,6 +14,7 @@ class SesWebhookDomain(models.Model):
     
     name = fields.Char(string='Domain Name', required=True, help="E.g., example.com")
     secret_token = fields.Char(string='Secret Token', required=True, copy=False, default=lambda self: secrets.token_urlsafe(24), groups=_TOKEN_GROUPS)
+    topic_arn = fields.Char(string='Expected SNS Topic ARN', help="When set, only messages signed for this SNS topic are accepted. Leave empty to accept any topic.")
     company_id = fields.Many2one('res.company', string='Tenant (Company)', required=True, default=lambda self: self.env.company)
     webhook_url = fields.Char(string='Webhook URL', compute='_compute_webhook_url', groups=_TOKEN_GROUPS)
     log_ids = fields.One2many('ses.webhook.log', 'domain_id', string='Logs')

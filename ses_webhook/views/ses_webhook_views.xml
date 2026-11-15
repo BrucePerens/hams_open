@@ -33,6 +33,7 @@
                     <group>
                         <group>
                             <field name="secret_token"/>
+                            <field name="topic_arn"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>
                         <group>
