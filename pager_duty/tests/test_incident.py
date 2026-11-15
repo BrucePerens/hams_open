@@ -261,6 +261,29 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertFalse(medium.is_escalated)
         self.assertTrue(critical.is_escalated)
 
+    def test_06c_one_failing_escalation_does_not_unflag_or_block_the_others(self):
+        # Tests [@ANCHOR: test_pager_escalation]
+        self.env.user.group_ids = [(4, self.env.ref("pager_duty.group_pager_admin").id)]
+        first = self.incident_model.create({"source": "esc_first", "severity": "high", "description": "desc"})
+        second = self.incident_model.create({"source": "esc_second", "severity": "high", "description": "desc"})
+        self.env.cr.execute(
+            "UPDATE pager_incident SET create_date = %s WHERE id IN %s",
+            (fields.Datetime.now() - datetime.timedelta(minutes=20), (first.id, second.id)),
+        )
+        real_post = type(first).message_post
+
+        def post(rec, *args, **kwargs):
+            if rec.id == first.id:
+                raise RuntimeError("mail down")
+            return real_post(rec, *args, **kwargs)
+
+        self.safe_patch_object(type(first), "message_post", post)
+        self.incident_model.action_escalate_unacknowledged()
+        first.invalidate_recordset(["is_escalated"])
+        second.invalidate_recordset(["is_escalated"])
+        self.assertFalse(first.is_escalated)
+        self.assertTrue(second.is_escalated)
+
     # [@ANCHOR: pager_duty:test_repage_if_due]
     def test_06c_an_open_incident_that_keeps_being_reported_pages_again(self):
         # Tests [@ANCHOR: pager_duty:repage_if_due]
