@@ -103,8 +103,13 @@ impl RigHandle {
                 "the transmit gate is already open; a lease needs a closed gate",
             ));
         }
+        let deadline = Instant::now().checked_add(max).ok_or_else(|| {
+            RigError::new(
+                ErrorKind::Rejected,
+                "a transmit lease must end within the clock's range",
+            )
+        })?;
         self.open_transmit_gate(permit);
-        let deadline = Instant::now() + max;
         let rig = self.clone();
         let timer = runtime.spawn(async move {
             sleep(max).await;
