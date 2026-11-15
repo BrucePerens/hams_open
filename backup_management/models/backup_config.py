@@ -326,6 +326,7 @@ class BackupConfig(models.Model):
                     "job_type": (
                         rec.engine if engine != "restore_cmd" else "kopia"
                     ),  # map restore_cmd to engine for UI
+                    "action": engine,
                     "state": "pending",
                     "output_log": "Queued in RabbitMQ...",
                 }
@@ -683,14 +684,17 @@ class BackupConfig(models.Model):
         problems = []
         Job = self.env["backup.job"]
         limit_time = now - datetime.timedelta(hours=26)
-        newest = Job.search([("config_id", "=", self.id)], order="create_date desc, id desc", limit=self.CONSECUTIVE_FAILED_JOBS_ALERT)
+        # Only backup jobs count: hourly sync_snapshots jobs succeed while every real backup fails. Jobs without an
+        # action predate the field and are counted.
+        backups = [("config_id", "=", self.id), "|", ("action", "=", False), ("action", "in", ["kopia", "pgbackrest"])]
+        newest = Job.search(backups, order="create_date desc, id desc", limit=self.CONSECUTIVE_FAILED_JOBS_ALERT)
         if len(newest) == self.CONSECUTIVE_FAILED_JOBS_ALERT and all(job.state == "failed" for job in newest):
             problems.append(
                 f"Backup Jobs Failing: the last {len(newest)} jobs for {self.name} all failed (newest: job {newest[0].id}). "
                 "Check the backup worker."
             )
-        if Job.search_count([("config_id", "=", self.id), ("create_date", "<", limit_time)], limit=1) and not Job.search_count(
-            [("config_id", "=", self.id), ("state", "=", "done"), ("create_date", ">=", limit_time)], limit=1
+        if Job.search_count(backups + [("create_date", "<", limit_time)], limit=1) and not Job.search_count(
+            backups + [("state", "=", "done"), ("create_date", ">=", limit_time)], limit=1
         ):
             problems.append(
                 f"No Successful Backup Job: no job for {self.name} has succeeded in over 26 hours. Check the backup worker."
