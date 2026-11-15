@@ -835,6 +835,7 @@ async fn start_refuses_what_it_should_before_touching_the_network() {
         e.detail
     );
     assert!(parse_ha_address("10.1.2.3").is_ok() && check_entity("switch.x").is_ok());
+    assert!(parse_ha_address("10.1.2.3:0").is_err(), "port 0 is no port");
 
     // File secrets: mode 0600 only, plain names only.
     let dir = testdir::TestDir::new("ha-secrets");

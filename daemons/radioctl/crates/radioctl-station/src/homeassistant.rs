@@ -363,6 +363,12 @@ pub fn parse_ha_address(text: &str) -> Result<SocketAddr, StationError> {
             "the Home Assistant address must be an IP address on your own network, such as 192.168.1.20",
         ));
     };
+    if addr.port() == 0 {
+        return Err(StationError::new(
+            StationErrorKind::Config,
+            "the Home Assistant port must be 1 to 65535",
+        ));
+    }
     if !is_private_or_loopback(addr.ip()) {
         return Err(StationError::new(
             StationErrorKind::Config,
