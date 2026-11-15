@@ -1,6 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+from odoo.addons.hams_helpdesk.models import res_users as helpdesk_res_users
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests.common import tagged
 
@@ -26,3 +27,14 @@ class TestHelpdeskGdpr(HamsTransactionCase):
         self.assertIn("ANN-TICKET-BODY", tickets[0]["description"])
         self.assertNotIn("BOB-TICKET-BODY", str(tickets))
         self.assertNotIn("helpdesk_tickets", Users.create({"name": "Hd None", "login": "hd_gdpr_none"})._get_gdpr_export_data())
+
+    def test_gdpr_export_marks_truncated_tickets(self):
+        # Tests [@ANCHOR: hams_helpdesk:res_users_get_gdpr_export_data]
+        ann = self.env["res.users"].create({"name": "Hd Trunc Ann", "login": "hd_gdpr_trunc"})
+        for name in ("Trunc one", "Trunc two"):
+            self.env["hams_helpdesk.ticket"].create({"name": name, "partner_id": ann.partner_id.id})
+        self.assertNotIn("truncated", ann._get_gdpr_export_data(), "under the cap: no marker")
+        self.safe_patch_object(helpdesk_res_users, "EXPORT_LIMIT", 1)
+        data = ann._get_gdpr_export_data()
+        self.assertEqual(len(data["helpdesk_tickets"]), 1)
+        self.assertEqual(data["truncated"], {"helpdesk_tickets": 1})
