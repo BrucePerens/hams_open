@@ -25,7 +25,6 @@ from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
     inbound_spam_reasons,
     mail_signals,
     own_authenticated_sender,
-    referenced_message_ids,
     ses_verdict_reasons,
     ses_verdicts,
 )
@@ -345,12 +344,11 @@ class TestBulkMailSignals(HamsTransactionCase):
         signals = self._signals("Hello", headers=forged)
         self.assertNotIn("dmarc", signals)
 
-    def test_28_replies_members_and_our_own_authenticated_senders_are_exempt(self):
+    def test_28_members_and_our_own_authenticated_senders_are_exempt(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_own_authenticated_sender]
         subject = REAL_MISSED_SPAM_NAMES[0]
         signals = self._signals(subject)
         self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), signals))
-        self.assertFalse(detect_bulk_mail_signals(subject, newsletter_body(), dict(signals, reply_headers=True)), "a reply is not judged by the bulk rules")
         self.assertEqual(inbound_spam_reasons(subject, newsletter_body(), signals, trusted_sender=True), [])
         self.assertTrue(
             inbound_spam_reasons(subject, newsletter_body(), dict(signals, dmarc="fail"), trusted_sender=True),
@@ -370,37 +368,18 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertTrue(inbound_spam_reasons("Question", "<p>x</p>", {}, {"spam": "FAIL"}))
 
     # Tests [@ANCHOR: hams_helpdesk_mail_thread_untrusted_mail_thread]
-    def test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail(self):
-        # Tests [@ANCHOR: hams_helpdesk:inbound_referenced_message_ids]
-        # Tests [@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]
-        # Tests [@ANCHOR: hams_helpdesk:inbound_reply_message_models]
+    def test_28b_reply_headers_never_exempt_bulk_mail(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_mail_signals]
         subject = REAL_MISSED_SPAM_NAMES[0]
-        forged = "In-Reply-To: <made-up@mailer.example.net>\r\nReferences: <a@x.test> <made-up@mailer.example.net>\r\n"
-        message = message_from_bytes(raw_message("info@hams.com", subject, headers=SES_PASS_HEADERS + BULK_HEADERS + forged))
-        signals = mail_signals(message)
-        self.assertEqual(signals["referenced_message_ids"], ["<made-up@mailer.example.net>", "<a@x.test>"])
-        self.assertNotIn("reply_headers", signals, "the headers alone prove nothing")
-        self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), signals), "a made-up In-Reply-To does not exempt")
-        # Through message_parse the lookup finds no stored message, so the message is still judged.
-        parsed_signals = self.env["mail.thread"]._with_verified_reply_headers(dict(signals))
-        self.assertIs(parsed_signals["reply_headers"], False)
-        self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), parsed_signals))
-        # A Message-ID that really is stored on a ticket does exempt it.
+        # The sender already received this Message-ID (mail we sent, stored on a ticket) and quotes it back.
         ticket = self.env["hams_helpdesk.ticket"].create({"name": "Earlier thread", "description": "<p>x</p>"})
         ticket.message_post(body="<p>our earlier reply</p>", message_id="<known-reply@hams.com>")
-        known = dict(signals, referenced_message_ids=["<known-reply@hams.com>"])
-        known = self.env["mail.thread"]._with_verified_reply_headers(known)
-        self.assertIs(known["reply_headers"], True)
-        self.assertEqual(inbound_spam_reasons(subject, newsletter_body(), known), [])
-        # Header parsing is bounded and tolerant.
-        many = " ".join("<m%d@x.test>" % number for number in range(50))
-        crowded = message_from_bytes(raw_message("info@hams.com", "s", headers="References: %s\r\n" % many))
-        self.assertEqual(len(referenced_message_ids(crowded)), 10)
-        self.assertEqual(referenced_message_ids(message_from_bytes(b"\xff\xfe not a message")), [])
-        self.assertEqual(
-            referenced_message_ids(message_from_bytes(raw_message("info@hams.com", "s", headers="In-Reply-To: garbage\r\n"))), []
-        )
+        quoted = "In-Reply-To: <known-reply@hams.com>\r\nReferences: <known-reply@hams.com>\r\n"
+        message = message_from_bytes(raw_message("info@hams.com", subject, headers=SES_PASS_HEADERS + BULK_HEADERS + quoted))
+        signals = mail_signals(message)
+        self.assertNotIn("reply_headers", signals)
+        self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), signals), "a quoted Message-ID does not exempt")
+        self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), dict(signals, reply_headers=True)), "nor does a claimed reply")
 
     def test_30_hostile_input_never_raises(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_html_shape]

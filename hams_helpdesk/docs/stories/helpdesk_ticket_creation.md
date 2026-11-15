@@ -104,44 +104,6 @@ stage.
 
 **Status:** Verified by `TestBulkMailSignals` (tests/test_inbound_spam_filter.py), which runs the real ticket names of hams_prod.
 
-### `referenced_message_ids` [@ANCHOR: hams_helpdesk:inbound_referenced_message_ids]
-
-Purpose: list the Message-IDs a raw inbound message says it replies to, so the caller can check them against stored mail. Pure (no
-database); called by `mail_signals()`.
-
-| Argument | Type | Meaning |
-|---|---|---|
-| `message` | `email.message.Message` | The parsed raw message; only the `In-Reply-To` and `References` headers are read (at most 20,000 characters of each). |
-
-Returns a list of `<local@host>` strings in header order without repeats, at most `MAX_REFERENCED_IDS` (10, the last ones, which are the
-nearest ancestors); `[]` when the headers are absent or hold no `<...>` token. Raises nothing for any header text.
-
-**Status:** Verified by `test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail` (tests/test_inbound_spam_filter.py).
-
-### `REPLY_MESSAGE_MODELS` [@ANCHOR: hams_helpdesk:inbound_reply_message_models]
-
-A module constant in `models/mail_thread_untrusted.py`: the list `["hams_helpdesk.ticket", "pager.incident"]` of Odoo model names a stored
-`mail.message` may belong to for its Message-ID to count as a real thread (an inbound message becomes a ticket, or a pager incident
-through the pager adapter). Read only, by `_with_verified_reply_headers()` as the `model` term of its lookup; a model that is not
-installed simply matches nothing. Immutable by convention; add a model here when another record type starts receiving inbound mail.
-
-### `_with_verified_reply_headers` [@ANCHOR: hams_helpdesk:inbound_verified_reply_headers]
-
-Purpose: decide whether a message really is a reply, because `detect_bulk_mail_signals()` skips the bulk rules for a reply and the
-sender writes `In-Reply-To` and `References` (a bulk sender could add any value and escape the weighted rules). Called by
-`mail.thread.message_parse()` (`models/mail_thread_untrusted.py`) on the `mail_signals()` dict before it is parked.
-
-| Argument | Type | Meaning |
-|---|---|---|
-| `signals` | dict | A `mail_signals()` dict; mutated (the `reply_headers` key is set) and returned. |
-
-Returns the same dict with `reply_headers` True only when one of `signals["referenced_message_ids"]` is the `message_id` of a
-`mail.message` on a `hams_helpdesk.ticket` or a `pager.incident` (`REPLY_MESSAGE_MODELS`; the service account sees only the records it can read, so an unreadable thread counts as not found and the message is judged); False otherwise, including when the list is empty. One `search_count` per message, run as
-the helpdesk service account (`hams_helpdesk.user_helpdesk_service`) because the mail-ingest identity cannot read tickets. No other
-side effect; a database error propagates to the mail ingest, which retries the message.
-
-**Status:** Verified by `test_28b_a_made_up_in_reply_to_does_not_exempt_bulk_mail`.
-
 ### `mail_signals` [@ANCHOR: hams_helpdesk:inbound_mail_signals]
 
 Purpose: read the header facts and HTML shape of one raw inbound message, once, in `mail.thread.message_parse()`, because Odoo's
@@ -158,8 +120,6 @@ logged at info level. It reads at most 400,000 characters of each text part and 
 | Key | Type | Meaning |
 |---|---|---|
 | `list_unsubscribe`, `list_id` | bool | The header is present. |
-| `referenced_message_ids` | list of str | The Message-IDs (`<local@host>`) named by `In-Reply-To` and `References`, in header order, at most 10 (the last ones). The sender writes them, so they are only a claim. |
-| `reply_headers` | bool | **Not set by `mail_signals`.** `message_parse()` sets it through `_with_verified_reply_headers()` (below): true only when one of `referenced_message_ids` is the Message-ID of a message already stored on a ticket. |
 | `precedence` | str | Lower-cased `Precedence` value, at most 16 characters. |
 | `auto_submitted` | str | Lower-cased `Auto-Submitted` value, at most 32 characters. |
 | `from_domain`, `return_path_domain` | str | Lower-cased domain of the first address of `From` and `Return-Path`, at most 255 characters; "" when absent. |
@@ -186,7 +146,7 @@ no side effects. **Status:** Verified by `test_30_hostile_input_never_raises`.
 `own_authenticated_sender(signals)`: `signals` is a `mail_signals()` dict (or None). Returns True only when `from_domain` is one of
 `OWN_SENDER_DOMAINS` (`hams.com`) or a sub-domain of it AND SES recorded a `dkim` or `dmarc` pass. A forged From line fails
 authentication and returns False; `evil-hams.com` is not a sub-domain. Pure. `inbound_spam_reasons()` returns [] for such a sender.
-**Status:** Verified by `test_28_replies_members_and_our_own_authenticated_senders_are_exempt`.
+**Status:** Verified by `test_28_members_and_our_own_authenticated_senders_are_exempt`.
 
 ### `bulk_mail_findings` [@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]
 
@@ -200,7 +160,7 @@ plain-English reason; the caller applies the threshold. Pure, never raises. The 
 
 `detect_bulk_mail_signals(subject, body_html, signals=None, threshold=BULK_SCORE_THRESHOLD)`: arguments as above; `threshold` is the
 total weight needed (live mail 5, `STORED_TICKET_SCORE_THRESHOLD` 4 for the one-off pass over stored tickets). Returns [] below the
-threshold or when `signals["reply_headers"]` is true; otherwise a first reason stating the total and the threshold followed by one
+threshold; otherwise a first reason stating the total and the threshold followed by one
 `bulk signal (+N): ...` reason per finding. Pure, never raises. **Status:** Verified by
 `test_21_the_real_missed_newsletters_are_flagged_from_the_stored_ticket_alone`.
 
