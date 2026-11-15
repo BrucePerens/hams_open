@@ -266,6 +266,8 @@ def _verify_sns_signature(payload):
         return False
 
 
+# [@ANCHOR: ses_webhook:verdict]
+# Verified by [@ANCHOR: ses_webhook:test_verdict]
 def _verdict(ses_message, name):
     """The SES receipt verdict status ('PASS', 'FAIL', 'GRAY', 'PROCESSING_FAILED'), or '' when absent or malformed."""
     receipt = ses_message.get('receipt')
