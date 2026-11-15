@@ -603,14 +603,17 @@ class BackupConfig(models.Model):
             for snap in data:
                 sid = snap.get("id")
                 if sid:
+                    # kopia reports a snapshot's size and its count of unreadable files in rootEntry.summ (there is no
+                    # top-level "summary"); a snapshot with failed files is not a complete copy of the source.
+                    summ = (snap.get("rootEntry") or {}).get("summ") or {}
                     snapshot_list.append(
                         {
                             "snapshot_id": sid,
                             "start_time": snap.get("startTime", "")[:19].replace(
                                 "T", " "
                             ) or None,
-                            "size_bytes": snap.get("summary", {}).get("totalBytes", 0),
-                            "status": "completed",
+                            "size_bytes": summ.get("size", 0),
+                            "status": "partial" if summ.get("numFailed", 0) else "completed",
                         }
                     )
         elif engine == "pgbackrest":
