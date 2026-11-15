@@ -358,7 +358,11 @@ impl Link {
                         break;
                     }
                 }
-                Err(e) => return Err(format!("raw read: {e}")),
+                Err(e) => {
+                    // The short idle timeout must not stay on the link for the next command.
+                    self.reset_timeout();
+                    return Err(format!("raw read: {e}"));
+                }
             }
         }
         self.reset_timeout();
@@ -415,6 +419,44 @@ mod tests {
             seen
         });
         (port, h)
+    }
+
+    /// A port whose reads fail with a reset and which records the timeout last set.
+    struct Resetting(std::sync::Arc<std::sync::Mutex<Duration>>);
+
+    impl Read for Resetting {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::ErrorKind::ConnectionReset.into())
+        }
+    }
+
+    impl Write for Resetting {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl super::Port for Resetting {
+        fn set_timeout(&mut self, d: Duration) {
+            *self.0.lock().unwrap() = d;
+        }
+    }
+
+    // Tests [@ANCHOR: bench_mcp_link_raw_until_idle]
+    #[test]
+    fn a_failed_raw_read_puts_the_default_timeout_back() {
+        let t = std::sync::Arc::new(std::sync::Mutex::new(Duration::ZERO));
+        let mut l = Link::new(Box::new(Resetting(t.clone())), "\n");
+        let default = *t.lock().unwrap();
+        assert!(l.raw_until_idle("SCDP", 300, 10).is_err());
+        assert_eq!(
+            *t.lock().unwrap(),
+            default,
+            "the 300 ms idle timeout stayed"
+        );
     }
 
     // Tests [@ANCHOR: bench_mcp_link_tcp]
