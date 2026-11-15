@@ -372,7 +372,7 @@ pub fn parse_hub_descriptor(text: &str) -> Option<HubDescriptor> {
         } else if let Some(r) = t.strip_prefix("nNbrPorts") {
             d.ports = num(r);
         } else if let Some(r) = t.strip_prefix("bPwrOn2PwrGood") {
-            d.power_on_to_good_ms = 2 * num(r);
+            d.power_on_to_good_ms = num(r).saturating_mul(2);
         } else if let Some(r) = t.strip_prefix("bHubContrCurrent") {
             d.controller_current_ma = num(r);
         }
@@ -408,6 +408,14 @@ pub mod tests {
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_uhub]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_uport]
     // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_switching]
+    // Tests [@ANCHOR: bench_mcp_usb_hub_uhubctl_parse_hub_descriptor]
+    #[test]
+    fn an_enormous_power_on_delay_saturates_instead_of_overflowing() {
+        let text = "Hub Descriptor:\n  wHubCharacteristic 0x0009\n  bPwrOn2PwrGood 4294967295 * 2 milli seconds\n";
+        let d = parse_hub_descriptor(text).unwrap();
+        assert_eq!(d.power_on_to_good_ms, u32::MAX);
+    }
+
     #[test]
     fn the_recorded_uhubctl_output_parses_with_and_without_descriptions() {
         for name in ["uhubctl.txt", "uhubctl_nodesc.txt"] {
