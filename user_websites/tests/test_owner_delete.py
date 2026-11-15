@@ -7,9 +7,12 @@
 Owners need a delete button on web pages and blog posts. The platform retains
 data, so Delete archives the record and hides it everywhere; it is restorable; the home page stays.
 """
+from types import SimpleNamespace
+
 import odoo.http
 from odoo.tests import tagged
 
+from odoo.addons.user_websites.controllers import owner_site
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 ARCH = (
@@ -160,6 +163,21 @@ class TestOwnerDelete(HamsHttpCase):
         self.env.invalidate_all()
         self.assertFalse(self.env["website.page"].with_context(active_test=False).browse(self.about.id).active)
         self.assertFalse(self.env["blog.post"].with_context(active_test=False).browse(self.post.id).active)
+
+    def test_05d_kind_limit_is_the_members_or_the_global_limit(self):
+        # Tests [@ANCHOR: user_websites:fn_owner_kind_limit]
+        # [@ANCHOR: test_owner_kind_limit_is_the_members_or_the_global_limit]
+        self.safe_patch_object(owner_site, "request", SimpleNamespace(env=self.env))
+        controller = owner_site.UserWebsitesOwnerController()
+        self.owner.website_page_limit = 7
+        self.safe_patch_object(type(self.env["res.users"]), "_get_blog_post_limit", return_value=3)
+        self.assertEqual(controller._kind_limit("page", self.owner), 7, "a member's own page limit")
+        self.assertEqual(controller._kind_limit("post", self.owner), 3, "a member's own post limit")
+        params = self.env["ir.config_parameter"]
+        params.set_param("user_websites.global_website_page_limit", "11")
+        params.set_param("user_websites.global_blog_post_limit", "13")
+        self.assertEqual(controller._kind_limit("page", None), 11, "a group site has the global page limit")
+        self.assertEqual(controller._kind_limit("post", None), 13, "a group site has the global post limit")
 
     def test_05c_delete_refuses_past_the_trash_cap(self):
         # Tests [@ANCHOR: user_websites:fn_owner_trash_full]
