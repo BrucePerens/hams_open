@@ -11,3 +11,10 @@ Test: `test_a_blacklisted_recipient_is_dropped_before_send`.
 `MailMailBlacklist._send` runs the blacklist drop only on mails still in state `outgoing`, then hands the whole set to
 core `_send`. A mail already `sent` or `exception` keeps its recipients untouched, so a later re-send call cannot rewrite
 the addresses of history that was delivered. Test: `test_send_filters_only_outgoing_mail`.
+
+## Dropping blacklisted recipients [@ANCHOR: hams_base:mail_drop_blacklisted_recipients]
+
+`MailMailBlacklist._drop_blacklisted_recipients` collects every normalized address in `email_to`, `email_cc` and
+`recipient_ids`, looks them up in the active `mail.blacklist` rows through the mail service user, and rewrites each mail
+to keep only the other addresses and partners. When nothing is left for a mail it marks it `exception` with a failure
+reason. Test: `test_drop_keeps_other_recipients_and_partners`.
