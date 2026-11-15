@@ -452,9 +452,14 @@ _LOG_SECRET_RE = re.compile(
 )
 
 
+# A Cookie or Set-Cookie header is a list of name=value pairs, so everything after it on the line is removed.
+_LOG_COOKIE_RE = re.compile(r"(?i)\b((?:set-)?cookie\s*[:=]\s*)[^\n]+")
+
+
 # [@ANCHOR: pager_duty:scrub_log_line]
 def scrub_log_line(line):
     """The log line with emails, URLs, bearer tokens and secret-looking key=value values replaced."""
+    line = _LOG_COOKIE_RE.sub(lambda m: m.group(1) + "<redacted>", line)
     line = _LOG_URL_RE.sub("<url>", line)
     line = _LOG_EMAIL_RE.sub("<email>", line)
     line = _LOG_BEARER_RE.sub("bearer <redacted>", line)

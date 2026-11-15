@@ -55,6 +55,13 @@ class ScrubLogLine(unittest.TestCase):
         self.assertNotIn("dXNlcjpwYXNzd29yZA", out)
         self.assertIn("to upstream", out)
 
+    def test_a_cookie_header_with_several_pairs_is_removed_whole(self):
+        out = gm.scrub_log_line("got Cookie: sid=abc123; csrf=xyz789; theme=dark then retry")
+        for secret in ("abc123", "xyz789", "theme"):
+            self.assertNotIn(secret, out)
+        out = gm.scrub_log_line("reply Set-Cookie: sid=abc123; Path=/; HttpOnly")
+        self.assertNotIn("abc123", out)
+
     def test_plain_line_unchanged(self):
         self.assertEqual(gm.scrub_log_line("Failed to renew certificate"), "Failed to renew certificate")
 
