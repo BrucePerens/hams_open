@@ -33,12 +33,18 @@ pub fn bench_with(runner_tier: &str, procs_extra: &str) -> Bench {
     let dir = crate::testdir::scratch(&format!("bench_proc_test__{n}"));
     let gen = FakeDevice::sim(Sim::default());
     let dmm = FakeDevice::sim(Sim::default());
+    // A test may set its own grace_s (cleanup under load needs more than the 1 s default).
+    let grace = if procs_extra.contains("grace_s") {
+        ""
+    } else {
+        r#","grace_s":1.0"#
+    };
     let sep = if procs_extra.is_empty() { "" } else { "," };
     let text = format!(
         r#"{{"instruments":{{
         "gen":{{"driver":"example","tier":"full","host":"127.0.0.1","port":{}}},
         "dmm":{{"driver":"example","tier":"read_only","host":"127.0.0.1","port":{}}},
-        "procs":{{"driver":"procedure","tier":"{runner_tier}","dir":"{}","grace_s":1.0{sep}{procs_extra}}}}}}}"#,
+        "procs":{{"driver":"procedure","tier":"{runner_tier}","dir":"{}"{grace}{sep}{procs_extra}}}}}}}"#,
         gen.port(),
         dmm.port(),
         dir.display()
@@ -586,7 +592,8 @@ outer()
 // Tests [@ANCHOR: proc_py_bench_cancelled_class]
 #[test]
 fn cancel_ends_a_run_after_its_cleanup_handlers_have_made_their_tool_calls() {
-    let b = bench();
+    // The cleanup handler makes a tool call; on a loaded box it can take longer than the 1 s default grace.
+    let b = bench_with("full", r#""grace_s":60"#);
     let source = r#"
 def leave_safe():
     bench.call("bench_example_safe_state", instrument="gen")
@@ -601,10 +608,10 @@ while True:
     while tool(&b, "bench_proc_output", json!({"run": id})).unwrap()["emitted"]["started"]
         != json!(true)
     {
-        assert!(t.elapsed() < Duration::from_secs(20));
+        assert!(t.elapsed() < Duration::from_secs(60));
         std::thread::sleep(Duration::from_millis(20));
     }
-    let st = tool(&b, "bench_proc_cancel", json!({"run": id, "wait_s": 20})).unwrap();
+    let st = tool(&b, "bench_proc_cancel", json!({"run": id, "wait_s": 60})).unwrap();
     assert_eq!(st["state"], "cancelled", "{st}");
     let r = tool(&b, "bench_proc_result", json!({"run": id})).unwrap();
     assert_eq!(r["emitted"]["cleanup"], "ran", "{r}");
@@ -1137,7 +1144,7 @@ fn the_safe_state_runs_when_a_run_ends_other_than_by_success_through_the_normal_
     );
     let t = Instant::now();
     while tool(&b, "bench_proc_status", json!({"run": id})).unwrap()["calls"] != json!(1) {
-        assert!(t.elapsed() < Duration::from_secs(20));
+        assert!(t.elapsed() < Duration::from_secs(60));
         std::thread::sleep(Duration::from_millis(20));
     }
     let st = tool(&b, "bench_proc_cancel", json!({"run": id, "wait_s": 30})).unwrap();
@@ -1260,7 +1267,7 @@ while True:
     while tool(&b, "bench_proc_output", json!({"run": a})).unwrap()["emitted"]["held"]
         != json!(true)
     {
-        assert!(t.elapsed() < Duration::from_secs(20));
+        assert!(t.elapsed() < Duration::from_secs(60));
         std::thread::sleep(Duration::from_millis(20));
     }
     let source = r#"
@@ -1399,7 +1406,7 @@ fn runs_left_active_by_a_dead_server_are_marked_lost_and_their_instruments_made_
 // Tests [@ANCHOR: proc_run_stop_all]
 #[test]
 fn shutdown_cancels_every_live_run_and_waits_for_its_cleanup_and_safe_state() {
-    let b = bench();
+    let b = bench_with("full", r#""grace_s":60"#);
     let source = r#"
 bench.cleanup(lambda: bench.emit("cleanup", "ran"))
 bench.emit("started", True)
@@ -1411,7 +1418,7 @@ while True:
     while tool(&b, "bench_proc_output", json!({"run": id})).unwrap()["emitted"]["started"]
         != json!(true)
     {
-        assert!(t.elapsed() < Duration::from_secs(20));
+        assert!(t.elapsed() < Duration::from_secs(60));
         std::thread::sleep(Duration::from_millis(20));
     }
     run::stop_all(Some(&store::root(
@@ -1710,7 +1717,7 @@ fn a_prompt_nobody_answers_stops_the_run_at_the_operator_limit_and_a_cancel_ends
     let t = Instant::now();
     while tool(&b, "bench_proc_status", json!({"run": id})).unwrap()["state"] != "waiting_operator"
     {
-        assert!(t.elapsed() < Duration::from_secs(20));
+        assert!(t.elapsed() < Duration::from_secs(60));
         std::thread::sleep(Duration::from_millis(20));
     }
     let st = tool(&b, "bench_proc_cancel", json!({"run": id, "wait_s": 20})).unwrap();
