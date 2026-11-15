@@ -56,7 +56,7 @@ RabbitMQ...".
 For Kopia the command is `["kopia", "restore", <snapshot_id>, "/var/lib/odoo/backups/restore_<job.id>"]`. The
 destination is derived from the database-assigned job id, not from `restore_target_path` or from the snapshot label,
 because both of those are free text a tenant administrator could point at another tenant's repository or at a system
-path; the chosen destination is appended to the job log. `restore_target_path` stays required but is unused for Kopia;
+path; the chosen destination is appended to the job log. The worker deletes `restore_*` directories under `/var/lib/odoo/backups` that are more than 7 days old before each Kopia restore (`_prune_old_restores`, [@ANCHOR: backup_management:COMM_prune_old_restores]), so restored copies do not accumulate; copy what you need out within a week. `restore_target_path` stays required but is unused for Kopia;
 to-do: relabel or make it optional per engine. The JSON payload carries `job_id`, `config_id`, `engine="restore_cmd"`,
 `cmd_args`, `snapshot_id`, `svc_uid`, `kopia_password` and the storage fields (`storage_type`, `bucket_name`,
 `endpoint_url`, `access_key`, `secret_key`) so an S3/B2 restore uses the right repository. It contains secrets, so it

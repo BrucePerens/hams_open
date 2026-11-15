@@ -117,6 +117,26 @@ class OdooUnavailableError(OdooAPIError):
 REQUEUE_DELAY_SECONDS = 20
 
 
+RESTORE_BASE = "/var/lib/odoo/backups"
+RESTORE_KEEP_DAYS = 7
+
+
+# [@ANCHOR: backup_management:COMM_prune_old_restores]
+# Verified by [@ANCHOR: backup_management:COMM_test_prune_old_restores]
+def _prune_old_restores(base=RESTORE_BASE, keep_days=RESTORE_KEEP_DAYS):
+    """Remove restore_<job id> directories under base that were last modified more than keep_days ago, so restored
+    copies do not accumulate. Called before each kopia restore. Symlinks and anything not named restore_* are left alone."""
+    limit = time.time() - keep_days * 86400
+    try:
+        names = os.listdir(base)
+    except OSError:
+        return
+    for name in names:
+        path = os.path.join(base, name)
+        if name.startswith("restore_") and os.path.isdir(path) and not os.path.islink(path) and os.path.getmtime(path) < limit:
+            shutil.rmtree(path, ignore_errors=True)
+
+
 # [@ANCHOR: backup_management:COMM_strip_endpoint_scheme]
 # Verified by [@ANCHOR: backup_management:COMM_test_strip_endpoint_scheme]
 def _strip_endpoint_scheme(endpoint_url):
@@ -741,6 +761,7 @@ def execute_job(ch, method, properties, body):
                 if not (abs_path == allowed_restore_base or abs_path.startswith(allowed_restore_base + "/")):
                     err_msg = f"""Malicious path outside allowed base directory: {abs_path}"""
                     raise PermissionError(err_msg)
+                _prune_old_restores()
 
             elif cmd[0] == "pgbackrest":
                 # Expected: ['pgbackrest', 'restore', '--stanza=...', '--set=...']
