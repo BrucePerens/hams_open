@@ -1195,7 +1195,7 @@ def execute_check(check, client=None):
             if res.returncode != 0:
                 return (
                     False,
-                    f"SNMP failed: {res.stderr.strip() or res.stdout.strip()[:100]}",
+                    f"SNMP failed: {scrub_log_line(res.stderr.strip() or res.stdout.strip()[:100])}",
                 )
             expect = parse_env(check.get("expect"))
             if expect and expect not in res.stdout:
@@ -1264,7 +1264,7 @@ def execute_check(check, client=None):
                 timeout=10,
             )
             if res.returncode != 0:
-                return False, f"HTTP/3 Curl failed: {res.stderr[:100]}"
+                return False, f"HTTP/3 Curl failed: {scrub_log_line(res.stderr)[:100]}"
             if expect and expect not in res.stdout:
                 return False, "HTTP/3 body mismatch"
             return True, "OK"
@@ -1516,7 +1516,7 @@ def execute_check(check, client=None):
                 timeout=60,
             )
             if res.returncode != 0:
-                message = f"Synthetic failure (Code {res.returncode}): {res.stderr[:100]}"
+                message = f"Synthetic failure (Code {res.returncode}): {scrub_log_line(res.stderr)[:100]}"
                 # Graduated-severity extension, 2026-09-22: a synthetic script that wants finer
                 # control than the flat "high" every other failing check gets (e.g. an
                 # expiring-credential check whose urgency genuinely grows as the deadline
@@ -1600,7 +1600,7 @@ def execute_check(check, client=None):
                 )
                 if res.returncode != 0:
                     failed = [
-                        line.strip()
+                        scrub_log_line(line.strip())
                         for line in (res.stdout + "\n" + res.stderr).split("\n")
                         if "Failed to renew" in line or "Challenge failed" in line
                     ]
@@ -1651,7 +1651,7 @@ def execute_check(check, client=None):
                 shell=False,
             )
             if res.returncode != 0:
-                return False, f"pg_dump pre-flight failed: {res.stderr[:100]}"
+                return False, f"pg_dump pre-flight failed: {scrub_log_line(res.stderr)[:100]}"
             return True, "OK"
         except (
             ConnectionError,
@@ -1670,7 +1670,7 @@ def execute_check(check, client=None):
                 [exe, "-t"], capture_output=True, text=True, timeout=15
             )
             if res.returncode != 0:
-                return False, f"Nginx config error: {res.stderr[:100]}"
+                return False, f"Nginx config error: {scrub_log_line(res.stderr)[:100]}"
             return True, "OK"
         except (
             ConnectionError,
@@ -1690,7 +1690,7 @@ def execute_check(check, client=None):
                 [exe, "-d", conf], capture_output=True, text=True, timeout=30
             )
             if res.returncode != 0:
-                return False, f"Logrotate dry-run failed: {res.stderr[:100]}"
+                return False, f"Logrotate dry-run failed: {scrub_log_line(res.stderr)[:100]}"
             return True, "OK"
         except (
             ConnectionError,
@@ -1714,7 +1714,7 @@ def execute_check(check, client=None):
                 timeout=15,
             )
             if res.returncode != 0:
-                return False, f"Cloudflared tunnel info failed: {res.stderr[:100]}"
+                return False, f"Cloudflared tunnel info failed: {scrub_log_line(res.stderr)[:100]}"
             return True, "OK"
         except (
             ConnectionError,
@@ -1763,7 +1763,7 @@ def execute_check(check, client=None):
             if res.returncode != 0:
                 return (
                     False,
-                    f"ICMP ping failed: {res.stderr.strip() or res.stdout.strip()[:100]}",
+                    f"ICMP ping failed: {scrub_log_line(res.stderr.strip() or res.stdout.strip()[:100])}",
                 )
             return True, "OK"
         except (
@@ -1788,7 +1788,7 @@ def execute_check(check, client=None):
                 timeout=10,
             )
             if res.returncode != 0:
-                return False, f"Docker inspect failed: {res.stderr.strip()[:100]}"
+                return False, f"Docker inspect failed: {scrub_log_line(res.stderr.strip())[:100]}"
             if res.stdout.strip().lower() != "true":
                 return False, f"Docker container {target} is not running"
             return True, "OK"
@@ -1972,7 +1972,7 @@ def execute_check(check, client=None):
                     timeout=10,
                 )
                 if res.returncode != 0:
-                    return False, f"Systemctl list-units failed: {res.stderr.strip()}"
+                    return False, f"Systemctl list-units failed: {scrub_log_line(res.stderr.strip())}"
 
                 failed_names = parse_failed_unit_names(res.stdout, ignored)
                 failed_svcs = failed_units_report(exe, failed_names)
