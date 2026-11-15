@@ -148,3 +148,32 @@ async fn garbage_on_the_wire_never_stops_the_server() {
     assert_eq!(good.ask("f").await, "14060000\n");
     daemon.stop().await;
 }
+
+// Tests [@ANCHOR: radioctld_server_run_client]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_new_partial_line_gets_its_own_line_timeout() {
+    let text = config_text(
+        "[server]\nline_timeout_secs = 2",
+        "kx3",
+        "elecraft-kx3.toml",
+        false,
+        false,
+    );
+    let daemon = start(&text).await;
+    let mut slow = Client::connect(&daemon).await;
+    slow.send_raw(b"\n").await;
+    // First line begins now and ends 1.4 s later, together with the start of the next one.
+    slow.send_raw(b"f").await;
+    tokio::time::sleep(Duration::from_millis(1400)).await;
+    slow.send_raw(b"\nf").await;
+    assert_eq!(slow.read_reply().await, "14060000\n");
+    // The second line began 1.4 s ago too, 2.8 s after the first began; it still has 0.6 s.
+    tokio::time::sleep(Duration::from_millis(1400)).await;
+    slow.send_raw(b"\n").await;
+    assert_eq!(
+        slow.read_reply().await,
+        "14060000\n",
+        "the second line was timed from the start of the first"
+    );
+    daemon.stop().await;
+}
