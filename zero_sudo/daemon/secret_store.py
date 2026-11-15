@@ -208,7 +208,7 @@ def encrypt_value(key, name, plaintext):
 def decrypt_value(key, name, token):
     """The plaintext of a token made by `encrypt_value` for the same key and name; SecretStoreError
     for a token of another format, another key or another name (the message never holds the token)."""
-    prefix, _, body = token.partition(".")
+    prefix, _, body = token.partition(".") if isinstance(token, str) else (None, "", "")  # a JSON lookup may hold a number
     if prefix != ENCRYPTED_FORMAT.decode() or len(key) != 32:
         raise SecretStoreError(f"secret {name!r}: not a {ENCRYPTED_FORMAT.decode()} token or wrong key size")
     try:
