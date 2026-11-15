@@ -779,6 +779,9 @@ class TestAuditEdgeCases(RealTransactionCase):
         blog = self.env["blog.blog"].create({"name": "Suspended Blog", "owner_user_id": self.test_user.id})
         self.env.cr.commit()
         _async_unpublish_content(self.env.cr.dbname, [self.test_user.id])
+        # The worker commits on its own cursor. This cursor's REPEATABLE READ snapshot may have started
+        # before that (another module's post-commit query is enough), so end it to read the committed row.
+        self.env.cr.rollback()
         self.env.invalidate_all()
         self.assertFalse(blog.with_context(active_test=False).active)
 
