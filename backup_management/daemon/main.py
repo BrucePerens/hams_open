@@ -655,7 +655,7 @@ def execute_job(ch, method, properties, body):
             cmd = ["kopia", "policy", "set"]
             cmd.extend(
                 [
-                    f"--keep-latest={keep_daily}",
+                    f"--keep-latest={max(keep_daily, 1)}",  # never 0: the newest snapshot must survive
                     f"--keep-daily={keep_daily}",
                     f"--keep-weekly={keep_weekly}",
                     f"--keep-monthly={keep_monthly}",
