@@ -1345,18 +1345,14 @@ class UserWebsitesController(http.Controller):
                     return request.redirect("/my/home?error=appeal_failed")
                 vals["group_id"] = group.id
                 suspended = group.is_suspended_from_websites
-                open_domain = [("group_id", "=", group.id), ("state", "=", "new")]
             else:
                 vals["user_id"] = request.env.user.id
                 suspended = env_svc["res.users"].browse(request.env.user.id).is_suspended_from_websites
-                open_domain = [("user_id", "=", request.env.user.id), ("state", "=", "new")]
 
             # An appeal answers a suspension, and one pending appeal per target is enough: a member
             # who is not suspended, or who already has one waiting, would only add moderator work.
-            if not suspended or env_svc["content.violation.appeal"].search_count(open_domain):
+            if not suspended or not env_svc["content.violation.appeal"]._create_if_none_open(vals):
                 return request.redirect("/my/home?error=appeal_failed")
-
-            env_svc["content.violation.appeal"].create(vals)
         except (KeyError, ValueError) as e:   # Tested by [@ANCHOR: UX_SUBMIT_APPEAL]
             _logger.warning("Appeal creation failed: %s", e)
             return request.redirect("/my/home?error=appeal_failed")
