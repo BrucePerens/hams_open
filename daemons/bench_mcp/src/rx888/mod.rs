@@ -1281,7 +1281,7 @@ mod tests {
         let name = format!("orphantest{}", std::process::id());
         let work = tempdir::Dir::new();
         let script = work.0.join("radiod");
-        std::fs::write(&script, "#!/bin/sh\nexec sleep 8\n").unwrap();
+        std::fs::write(&script, "#!/bin/sh\nsleep 8\n").unwrap();
         std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
             .unwrap();
         let (lib, presets) = (work.0.join("rx888.so"), work.0.join("presets.conf"));
