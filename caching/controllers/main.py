@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
 import logging
+import os
 from odoo import http, tools
 from odoo.http import request
 import werkzeug.exceptions
@@ -36,9 +37,16 @@ class ServiceWorkerController(http.Controller):
         # siblings do: serve the template straight off disk, skip the cache
         # write, log it once per request at warning level.
         content = None
+        try:
+            sw_path = tools.file_path("caching/static/src/sw/sw.js")
+            # The key carries the template file's modification time: a key that outlived a deploy kept serving the
+            # previous sw.js template for up to a day, so a fixed worker never reached the browsers.
+            redis_key = f"caching_sw_js_content:{os.stat(sw_path).st_mtime_ns}"
+        except OSError:
+            raise werkzeug.exceptions.NotFound()
         r = get_redis_connection(request.env)
         try:
-            cached_js = r.get("caching_sw_js_content")
+            cached_js = r.get(redis_key)
         except redis.RedisError as e:
             _logger.warning("Redis unavailable serving /sw.js, reading from disk: %s", e)
             cached_js = None
@@ -48,13 +56,13 @@ class ServiceWorkerController(http.Controller):
 
         if not content:
             try:
-                with tools.file_open("caching/static/src/sw/sw.js", "r") as f:
+                with open(sw_path, "r", encoding="utf-8") as f:
                     content = f.read()
             except FileNotFoundError:
                 raise werkzeug.exceptions.NotFound()
             if r is not None:
                 try:
-                    r.setex("caching_sw_js_content", 86400, content)
+                    r.setex(redis_key, 86400, content)
                 except redis.RedisError as e:
                     _logger.warning("Could not cache /sw.js template in Redis: %s", e)
 
