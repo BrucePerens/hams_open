@@ -35,7 +35,8 @@ class TEscWarningFilter(logging.Filter):
         return True
 
 
-# Attach to the root logger to intercept messages from ir.qweb or any view rendering
-logging.getLogger().addFilter(TEscWarningFilter())
+# A filter on the ROOT logger is only asked about records logged on the root logger itself, never about records that arrive
+# from a child logger, so it never saw QWeb's warning. Attach it to the logger that emits it.
+logging.getLogger("odoo.addons.base.models.ir_qweb").addFilter(TEscWarningFilter())
 
 # [@ANCHOR: zero_sudo:COMM_zero_sudo_doc_installer]

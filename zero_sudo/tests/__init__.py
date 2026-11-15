@@ -22,6 +22,7 @@ from . import test_persona_sweeps
 from . import test_purge_cron_migration
 from . import test_security_utils
 from . import test_login_cooldown_client_ip
+from . import test_tesc_warning_filter
 from . import test_service_uid_no_default_env
 from . import test_service_account_security_notices
 from . import test_session_cookie_hardening

@@ -1195,7 +1195,6 @@ class TestSecurityUtils(HamsTransactionCase):
         )
         self.assertIsNone(utils._get_trusted_client_ip())
 
-    # Tests [@ANCHOR: zero_sudo___init___tesc_warning_filter]
     def test_29_preload_service_uid_cache_populates_known_service_accounts_only(self):
         # Tests [@ANCHOR: zero_sudo:preload_service_uid_cache]
         """The service user-IDs are loaded into a hash table at start-up. _register_hook() (which every real server startup already
