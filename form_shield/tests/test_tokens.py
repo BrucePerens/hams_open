@@ -1,4 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import json
+import os
+import shutil
+import subprocess
+import unittest
+
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests import tagged
 
@@ -16,8 +22,30 @@ VECTOR_COUNTER = 23661
 VECTOR_DIFFICULTY_20_COUNTER = 1843084
 
 
+POW_CORE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "static", "src", "pow", "pow_core.js")
+)
+NON_ASCII_FORM = "contact-\u00e9\u4e2d"
+
+
 @tagged("post_install", "-at_install", "form_shield")
 class TestTokens(HamsTransactionCase):
+    @unittest.skipUnless(shutil.which("node"), "node not installed")
+    def test_pow_core_js_hashes_non_ascii_form_ids_as_utf8(self):
+        # Tests [@ANCHOR: form_shield:pow_ascii_bytes]
+        script = (
+            "require(process.argv[1]);"
+            "const a=JSON.parse(process.argv[2]);"
+            "console.log(FormShieldPow.solve(a[0],a[1],a[2]));"
+        )
+        out = subprocess.run(
+            ["node", "-e", script, POW_CORE, json.dumps([VECTOR_TOKEN, NON_ASCII_FORM, 12])],
+            check=True, capture_output=True, text=True, timeout=60,
+        ).stdout
+        counter = int(out)
+        self.assertEqual(counter, tokens.solve_pow(VECTOR_TOKEN, NON_ASCII_FORM, 12))
+        self.assertTrue(tokens.pow_valid(VECTOR_TOKEN, NON_ASCII_FORM, counter, 12))
+
     # [@ANCHOR: form_shield:test_pow_vector_matches_the_browser_solver]
     def test_pow_vector_matches_the_browser_solver(self):
         # Tests [@ANCHOR: form_shield:leading_zero_bits]
