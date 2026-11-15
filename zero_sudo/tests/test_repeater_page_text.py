@@ -167,6 +167,7 @@ class TestUnitAmounts(BaseCase):
         self.assertLess(time.monotonic() - started, 2)
 
 
+@tagged("post_install", "-at_install")
 class TestRepeaterPageStructure(BaseCase):
     # Tests [@ANCHOR: zero_sudo:repeater_page_text_section_scope_for_frequency]
 
