@@ -232,7 +232,8 @@ fn secs(
         .as_f64()
         .filter(|n| n.is_finite())
         .ok_or_else(|| format!("{key} must be a number of seconds"))?;
-    let d = Duration::from_secs_f64(n.max(0.0));
+    // A huge finite number would panic in `from_secs_f64`; it is simply out of range.
+    let d = Duration::try_from_secs_f64(n.max(0.0)).unwrap_or(Duration::MAX);
     if d < min || d > max {
         return Err(format!(
             "{key} must be between {} and {} seconds",
@@ -737,6 +738,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(v["steps"][0], "sudo -n uhubctl -N -l 3-2 -p 4 -a off");
+    }
+
+    // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_secs]
+    #[test]
+    fn a_huge_number_of_seconds_is_out_of_range_not_a_panic() {
+        let (min, max) = (Duration::from_secs(1), Duration::from_secs(60));
+        for big in [json!(1e300), json!(1.8e19), json!(f64::MAX)] {
+            let e = secs(&json!({"t": big}), "t", min, min, max).unwrap_err();
+            assert!(e.contains("t must be between"), "{e}");
+        }
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_hubs_resolve_port]
