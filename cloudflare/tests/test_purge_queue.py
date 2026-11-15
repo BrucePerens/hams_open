@@ -261,7 +261,7 @@ class TestPurgeFailureAlerts(RealTransactionCase):
             "Cloudflare purge queue", website_id=self.website.id
         )
 
-    def test_04_failed_rows_are_retried_once_an_hour_later_with_credentials(self):
+    def test_04_failed_rows_are_retried_every_hour_with_credentials(self):
         # Tests [@ANCHOR: cloudflare:COMM_requeue_failed_purges]
         self.website.write({"cloudflare_api_token": "t", "cloudflare_zone_id": "z"})
         rows = self.Queue.create(
@@ -276,6 +276,14 @@ class TestPurgeFailureAlerts(RealTransactionCase):
         rows.invalidate_recordset()
         self.assertEqual(self.Queue.requeue_failed(), 3)
         self.assertEqual(set(rows.mapped("state")), {"pending"})
+        # No retry limit: a row that fails again is put back an hour later again (documented in the README).
+        rows.write({"state": "failed"})
+        self.env.cr.execute(  # audit-ignore-sql: test back-dates write_date
+            "UPDATE cloudflare_purge_queue SET write_date = now() at time zone 'utc' - interval '2 hours' WHERE id = ANY(%s)",
+            (rows.ids,),
+        )
+        rows.invalidate_recordset()
+        self.assertEqual(self.Queue.requeue_failed(), 3)
 
     def test_05_failed_rows_without_credentials_are_not_retried(self):
         # Tests [@ANCHOR: cloudflare:COMM_requeue_failed_purges]

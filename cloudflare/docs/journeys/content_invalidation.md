@@ -25,9 +25,9 @@ The scheduled action "Cloudflare: Process Cache Purge Queue" runs `process_queue
 
 ### `process_queue` batches records by website [@ANCHOR: COMM_cf_process_queue_logic]
 
-`process_queue()` takes up to 30 pending rows per batch and at most 10 batches per run, always for one website at a time so credentials are never mixed between zones. Rows for a website with no API token or zone id are dropped and a pager incident is raised. Successful rows are deleted; failed rows are marked `failed`, retried once an hour, and raise a pager incident.
+`process_queue()` takes up to 30 pending rows per batch and at most 10 batches per run, always for one website at a time so credentials are never mixed between zones. Rows for a website with no API token or zone id are dropped and a pager incident is raised. Successful rows are deleted; failed rows are marked `failed`, put back to pending every hour for as long as their website has credentials (there is no retry limit), and raise a pager incident.
 
-- Purge commands are sent to Cloudflare in batches (per the [module README](../../README.md): the cron runs every minute, up to 10 batches of 30 entries per run; entries for a website with no API token or Zone ID, or whose API call fails, are marked `failed` and not retried). The code differs in two ways: rows without credentials are deleted rather than marked, and failed rows are retried once, after an hour.
+- Purge commands are sent to Cloudflare in batches (per the [module README](../../README.md): the cron runs every minute, up to 10 batches of 30 entries per run; entries for a website with no API token or Zone ID, or whose API call fails, are marked `failed` and not retried). The code differs in two ways: rows without credentials are deleted rather than marked, and failed rows are retried every hour, with no limit, while their website has credentials.
 
 ### Status
 
