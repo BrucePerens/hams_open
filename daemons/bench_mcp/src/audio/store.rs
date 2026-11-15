@@ -96,7 +96,7 @@ pub fn prune(dir: &Path, max_files: usize, days: u64) -> usize {
         .collect();
     files.sort();
     let cutoff = SystemTime::now()
-        .checked_sub(Duration::from_secs(days * 86400))
+        .checked_sub(Duration::from_secs(days.saturating_mul(86400)))
         .unwrap_or(SystemTime::UNIX_EPOCH);
     let mut removed = 0;
     let total = files.len();
@@ -180,6 +180,16 @@ mod tests {
             .unwrap();
         assert_eq!(prune(&d, 10, 14), 1);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    // Tests [@ANCHOR: audio_store_retention]
+    #[test]
+    fn an_enormous_retention_days_keeps_recent_files() {
+        let d = scratch("prune-huge-days");
+        std::fs::write(d.join("new.wav"), b"x").unwrap();
+        // days * 86400 overflows u64: it must neither panic nor wrap into a short retention.
+        assert_eq!(prune(&d, 10, u64::MAX / 2), 0);
+        assert!(d.join("new.wav").exists());
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_store_new_path]
