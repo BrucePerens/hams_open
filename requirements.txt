@@ -1,1 +1,1 @@
-google-antigravity
+google-antigravity==0.1.23
