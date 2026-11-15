@@ -342,6 +342,17 @@ class TestSitemaps(BaseCase):
             with self.subTest(url=url):
                 self.assertEqual(spam.is_spam_feed_sitemap(url), expected)
 
+    def test_14_a_inner_reads_the_first_tag_and_strips_cdata(self):
+        # [@ANCHOR: zero_sudo:test_club_spam_inner]
+        # Tests [@ANCHOR: zero_sudo:club_spam_inner]
+        text = "<url><loc> <![CDATA[ https://example.org/a ]]> </loc><loc>second</loc></url>"
+        self.assertEqual(spam._inner(text, text.lower(), "loc"), "https://example.org/a")
+        plain = "<LastMod>2026-10-22</LastMod>"
+        self.assertEqual(spam._inner(plain, plain.lower(), "lastmod"), "2026-10-22")
+        self.assertIsNone(spam._inner(text, text.lower(), "lastmod"))
+        unclosed = "<loc>no end"
+        self.assertIsNone(spam._inner(unclosed, unclosed.lower(), "loc"))
+
     def test_14_dates_are_ages_and_nonsense_is_unknown(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_age_days]
         for text, expected in [

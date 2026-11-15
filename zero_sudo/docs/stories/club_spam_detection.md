@@ -312,3 +312,10 @@ a word the reader treats as a secret.
 (in the same file): the spam titles and slugs, honest club titles that must not be flagged, sitemaps with
 real dates, the stamped plugin sitemaps, the hidden link farm, an entity bomb, hostile and broken markup, a lying daemon, and the
 persistence thresholds as a table.
+
+## Reading One Tag Out of a Sitemap Entry `[@ANCHOR: zero_sudo:club_spam_inner]`
+
+`_inner(text, lower, name)` returns the stripped text of the first `<name>...</name>` in `text`, or None when the tag is missing or never closed.
+`lower` is the same text lower-cased, so the tag is found whatever its case while the returned value keeps the original case. A CDATA wrapper
+(`<![CDATA[ ... ]]>`) around the value is removed. `parse_sitemap` uses it to read the `loc` and `lastmod` of each entry without an XML parser,
+so a hostile or broken sitemap cannot raise here. Pure. Test: `[@ANCHOR: zero_sudo:test_club_spam_inner]`.

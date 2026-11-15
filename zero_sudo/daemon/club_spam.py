@@ -349,6 +349,8 @@ def _blocks(text, lower, name):
         pos = close + len(close_tag)
 
 
+# [@ANCHOR: zero_sudo:club_spam_inner]
+# Verified by [@ANCHOR: zero_sudo:test_club_spam_inner]
 def _inner(text, lower, name):
     """The stripped text of the first `<name>...</name>` in `text` (CDATA wrapper removed), or None."""
     start = lower.find("<" + name + ">")
