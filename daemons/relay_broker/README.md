@@ -1187,7 +1187,7 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 ### `HubRunner::start` (hub_runner.rs) [@ANCHOR: relay_broker:relay_broker_hub_runner_start]
 
-**Purpose.** Brings the hub up: stops any earlier hub, creates the 0700 state directory, writes the two configuration files and an `interface` note (mode 0600), gives the interface the hub's /24 address (`ip addr replace`, `ip link set up`) and starts `hostapd` and `dnsmasq`, each with its own pid file. A failure stops what was started.
+**Purpose.** Brings the hub up: refuses (`InvalidInput`) an interface the kernel does not list as wireless (no `wireless` or `phy80211` entry under `sys_net`, default `/sys/class/net`), so `ip` never touches an uplink; stops any earlier hub, creates the 0700 state directory, writes the two configuration files and an `interface` note (mode 0600), gives the interface the hub's /24 address (`ip addr replace`, `ip link set up`) and starts `hostapd` and `dnsmasq`, each with its own pid file. A failure stops what was started.
 
 **Signature.** `pub fn start(&self, hostapd_conf: &str, dnsmasq_conf: &str, interface: &str, address: Ipv4Addr) -> io::Result<()>`
 

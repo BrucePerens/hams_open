@@ -25,6 +25,8 @@ pub struct HubRunner {
     pub dnsmasq: PathBuf,
     /// The `ip` program, used to give the wifi interface the hub's address.
     pub ip: PathBuf,
+    /// Where the kernel lists network interfaces; a wireless one has a `wireless` or `phy80211` entry here.
+    pub sys_net: PathBuf,
 }
 
 impl Default for HubRunner {
@@ -34,6 +36,7 @@ impl Default for HubRunner {
             hostapd: PathBuf::from("/usr/sbin/hostapd"),
             dnsmasq: PathBuf::from("/usr/sbin/dnsmasq"),
             ip: PathBuf::from("/usr/sbin/ip"),
+            sys_net: PathBuf::from("/sys/class/net"),
         }
     }
 }
@@ -155,6 +158,13 @@ impl HubRunner {
         interface: &str,
         address: Ipv4Addr,
     ) -> io::Result<()> {
+        let nic = self.sys_net.join(interface);
+        if !nic.join("wireless").exists() && !nic.join("phy80211").exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("{interface} is not a wireless interface"),
+            ));
+        }
         self.stop()?;
         fs::DirBuilder::new()
             .recursive(true)
@@ -276,7 +286,10 @@ mod tests {
             hostapd: root.join("fake_hostapd"),
             dnsmasq: root.join("fake_dnsmasq"),
             ip: root.join("fake_ip"),
+            sys_net: root.join("sys_net"),
         };
+        fs::create_dir_all(root.join("sys_net/wlan0/wireless")).unwrap();
+        fs::create_dir_all(root.join("sys_net/eth0")).unwrap();
         (runner, root)
     }
 
@@ -325,6 +338,21 @@ mod tests {
         assert!(!hub.dir.join("hostapd.conf").exists());
         let ip = fs::read_to_string(root.join("ip.log")).unwrap();
         assert!(ip.contains("addr flush dev wlan0"), "{ip}");
+    }
+
+    // Tests [@ANCHOR: relay_broker_hub_runner_start]
+    #[test]
+    fn a_hub_will_not_start_on_an_interface_that_is_not_wireless() {
+        let (hub, root) = fake("not_wireless");
+        for name in ["eth0", "nonexistent"] {
+            let e = hub
+                .start("a\n", "b\n", name, Ipv4Addr::new(192, 168, 50, 1))
+                .unwrap_err();
+            assert_eq!(e.kind(), io::ErrorKind::InvalidInput);
+        }
+        assert_eq!(hub.status(), (false, false));
+        assert!(!root.join("ip.log").exists(), "no ip command ran");
+        assert!(!hub.dir.join("hostapd.conf").exists());
     }
 
     // Tests [@ANCHOR: relay_broker_hub_runner_takeover_start]
