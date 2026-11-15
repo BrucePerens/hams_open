@@ -355,6 +355,16 @@ pub fn power_cycle(cfg: &Config, args: &Value) -> Result<Value, String> {
     Ok(out)
 }
 
+/// The unix second plus a process-wide counter: two measurements in the same second must not overwrite each other's file.
+pub(crate) fn unique_stamp() -> String {
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    format!("{t}_{}", COUNTER.fetch_add(1, Ordering::Relaxed))
+}
+
 pub fn sweep(
     cfg: &Config,
     args: &Value,
@@ -365,10 +375,7 @@ pub fn sweep(
     let a = sweep_args(args, cfg)?;
     let mut vna = hw.open_vna(a.config.clone())?;
     let points = vna.sweep(a.start_hz, a.stop_hz, a.points)?;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let stamp = unique_stamp();
     let file = out_dir.join(format!("vna_sweep_{stamp}.csv"));
     std::fs::write(&file, csv(&points)).map_err(|e| format!("{}: {e}", file.display()))?;
     // With `calibration` (a file from bench_vna_calibrate_build) and the same `cable` text, the corrected values go to a second CSV; the
@@ -755,6 +762,23 @@ pub(crate) mod tests {
             "no VNWA on the bus"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Tests [@ANCHOR: bench_vna_sweep]
+    #[test]
+    fn two_sweeps_in_the_same_second_keep_both_files() {
+        let dir = crate::testdir::TestDir::new("bench_vna_sweep_twice");
+        let sim = Sim::healthy();
+        let args = json!({"start_hz": 1e6, "points": 1, "point_ms": 5});
+        let files: std::collections::HashSet<String> = (0..4)
+            .map(|_| {
+                vna_sweep_ok(&sim, &args, &dir)["file"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect();
+        assert_eq!(files.len(), 4, "{files:?}");
     }
 
     fn vna_sweep_ok(sim: &Sim, args: &Value, dir: &crate::testdir::TestDir) -> Value {
