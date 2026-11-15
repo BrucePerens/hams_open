@@ -158,6 +158,7 @@ class TestTicketUntrustedFilter(HamsTransactionCase):
         self.assertTrue(ticket.suspicion_log_ids)
 
     def test_13c_a_portal_user_cannot_switch_the_filter_off_with_a_context_key(self):
+        # Tests [@ANCHOR: hams_helpdesk:untrusted_bypassed]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_write]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_message_post]
         # A client may send any context on call_kw; the bypass key is for the mixin's own bookkeeping and for staff.
