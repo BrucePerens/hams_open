@@ -71,6 +71,17 @@ describe("pager_duty_board", () => {
         expect(document.body.textContent).toInclude("Disk");
     });
 
+    test("setup still starts the burn-in timer and stops saying Loading when the first load fails", async () => {
+        // Tests [@ANCHOR: pager_duty:js_board_setup]
+        const seen = stubServices();
+        seen.services.orm.call = async () => { throw new Error("network down"); };
+        patchWithCleanup(console, { error: () => {} });
+        const board = await mountPlain(PagerBoard, seen.services);
+        await animationFrame();
+        expect(board.state.on_duty).toBe("Unavailable");
+        expect(Boolean(board.burnInTimer)).toBe(true);
+    });
+
     test("fetchData fills the state from the server's board data, passing the page's website id, and then shifts the display", async () => {
         // Tests [@ANCHOR: pager_duty:js_board_fetch_data]
         const seen = [];
