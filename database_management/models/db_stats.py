@@ -227,7 +227,10 @@ class DatabaseQueryStat(models.Model):
                 -- back (restoring the setting) while carrying the plan out in the message.
                 BEGIN
                     SET LOCAL transaction_read_only = on;
-                    FOR plan_line IN EXECUTE 'EXPLAIN (ANALYZE, BUFFERS) ' || q LOOP
+                    -- pg_stat_statements text has $1, $2 placeholders that cannot be run, so those
+                    -- get a generic plan (no execution, PostgreSQL 16+); plain queries are run.
+                    FOR plan_line IN EXECUTE (CASE WHEN q ~ '\\$[0-9]'
+                        THEN 'EXPLAIN (GENERIC_PLAN) ' ELSE 'EXPLAIN (ANALYZE, BUFFERS) ' END) || q LOOP
                         full_plan := full_plan || plan_line || E'\\n';
                     END LOOP;
                     RAISE EXCEPTION USING ERRCODE = 'DBX01', MESSAGE = full_plan;

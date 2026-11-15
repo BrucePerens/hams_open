@@ -38,6 +38,13 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
         self.assertTrue(called, msg)
 
 
+    def test_tdd_explain_parameterised_query(self):
+        # Tests [@ANCHOR: COMM_db_explain_query]
+        # pg_stat_statements keeps $1/$2 placeholders; EXPLAIN ANALYZE cannot run those.
+        cr = self.env.cr
+        cr.execute("SELECT dba_explain_query(%s)", ("SELECT * FROM res_users WHERE id = $1 AND login = $2",))
+        self.assertIn("res_users", cr.fetchone()[0])
+
     def test_tdd_explain_refuses_data_modifying_with(self):
         # Tests [@ANCHOR: COMM_db_explain_query]
         cr = self.env.cr
