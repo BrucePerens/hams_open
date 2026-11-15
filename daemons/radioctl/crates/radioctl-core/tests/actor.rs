@@ -81,7 +81,10 @@ async fn set_frequency_outside_the_rig_range_is_refused_before_the_wire() {
         assert_eq!(err.kind, ErrorKind::Rejected, "{hz}");
     }
     for hz in [30_000, 7_074_000, 74_800_000] {
-        handle.set_frequency(Vfo::A, Hz(hz)).await.expect("in range");
+        handle
+            .set_frequency(Vfo::A, Hz(hz))
+            .await
+            .expect("in range");
     }
     // A description with no range gets the generous default.
     let plain = RigDescription::ic7300();

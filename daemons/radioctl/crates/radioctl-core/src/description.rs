@@ -1172,7 +1172,8 @@ impl RigDescription {
     /// The `(min, max)` frequency `SetFrequency` accepts, both inclusive: the model's own range,
     /// or 0 Hz to [`DEFAULT_MAX_FREQUENCY`] when the rig file states none.
     pub fn frequency_limits(&self) -> (Hz, Hz) {
-        self.frequency_range.unwrap_or((Hz(0), DEFAULT_MAX_FREQUENCY))
+        self.frequency_range
+            .unwrap_or((Hz(0), DEFAULT_MAX_FREQUENCY))
     }
 
     // [@ANCHOR: radioctl_core_description_mode_code]
