@@ -211,5 +211,5 @@ installed. A failure is logged (a warning naming the exception type) and swallow
 ### `hams_secret_canary:mail_backend`
 
 **Purpose.** One `mail.mail` (subject, label, source, place; no value) to the `base.user_admin` partner's address,
-created as `zero_sudo.mail_service_internal` and sent by the normal mail queue. Logs a warning and queues nothing when
+created as `zero_sudo.mail_service_internal` (every field HTML-escaped: the place is a request path an outsider chooses) and sent by the normal mail queue. Logs a warning and queues nothing when
 the administrator has no address; does nothing when `env` is `None`. Test: `TestAlarm`.

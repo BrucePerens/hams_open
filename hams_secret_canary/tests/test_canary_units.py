@@ -458,6 +458,14 @@ class TestAlertBackends(HamsTransactionCase):
             "auto_delete": False})])
         self.assertIsNone(alerts.mail_backend(None, self.ALARM))
 
+    def test_the_mail_body_escapes_the_request_path(self):
+        # Tests [@ANCHOR: hams_secret_canary:mail_backend]
+        env = _Env()
+        alerts.mail_backend(env, alerts.Alarm("stripe_key", "canary", "response", "/<a href=//evil.test>x</a>"))
+        body = env.service.created[0][1]["body_html"]
+        self.assertNotIn("<a href", body)
+        self.assertIn("/&lt;a href=//evil.test&gt;x&lt;/a&gt;", body)
+
     def test_the_mail_backend_without_an_address_logs_and_queues_nothing(self):
         for email in (False, "", None):
             env = _Env()
