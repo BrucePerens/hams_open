@@ -78,6 +78,14 @@ pub fn setup_block(p: &SetupParams) -> Result<Vec<Request>, String> {
             p.rf_level
         ));
     }
+    for (name, f) in [("freq_hz", p.freq_hz), ("previous_hz", p.previous_hz)] {
+        // `sweep_word` and `sweep_offset_tail` saturate NaN and a negative value to 0, which would silently set the unit to 0 Hz.
+        if !(f.is_finite() && f >= 0.0) {
+            return Err(format!(
+                "{name}: the frequency {f} Hz must be finite and not negative"
+            ));
+        }
+    }
     if p.freq_hz != p.previous_hz && !(3..=4).contains(&p.counter) {
         return Err(format!(
             "step counter {}: the offset divisor is only verified for counters 3 and 4 (or an unchanged frequency)",
@@ -147,6 +155,42 @@ mod tests {
 
     include!("setup_vectors.rs");
     include!("timing_vectors.rs");
+
+    // Tests [@ANCHOR: vnwa_open_setup_block]
+    #[test]
+    fn a_frequency_that_is_not_finite_or_is_negative_is_refused_instead_of_becoming_zero_hertz() {
+        // `sweep_word` saturates NaN and a negative frequency to word 0, so the unit would have been set to 0 Hz and the point reported
+        // at the frequency that was asked for.
+        let ok = SetupParams {
+            freq_hz: 10.0e6,
+            previous_hz: 10.0e6,
+            n_rf: 10,
+            n_lo: 9,
+            if_hz: 12_000.0,
+            point_ms: 60.0,
+            counter: 3,
+            mode: 0,
+            rf_level: 0x3fff,
+        };
+        assert!(setup_block(&ok).is_ok());
+        for bad in [f64::NAN, -1.0, f64::INFINITY, f64::NEG_INFINITY] {
+            for p in [
+                SetupParams {
+                    freq_hz: bad,
+                    previous_hz: bad,
+                    ..ok
+                },
+                SetupParams { freq_hz: bad, ..ok },
+                SetupParams {
+                    previous_hz: bad,
+                    ..ok
+                },
+            ] {
+                let e = setup_block(&p).unwrap_err();
+                assert!(e.contains("frequency"), "{bad}: {e}");
+            }
+        }
+    }
 
     // Tests [@ANCHOR: vnwa_open_setup_block]
     // Tests [@ANCHOR: vnwa_open_point_time_fields]
