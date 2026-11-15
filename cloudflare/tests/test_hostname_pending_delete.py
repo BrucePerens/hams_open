@@ -43,7 +43,7 @@ class TestHostnamePendingDelete(RealTransactionCase):
         self.website = self.env["website"].create(
             {
                 "name": "Pending Delete Test Site",
-                "domain": "https://pending-delete-test.example",
+                "domain": "pending-delete-test.example",
             }
         )
         self.website.write(
@@ -60,7 +60,7 @@ class TestHostnamePendingDelete(RealTransactionCase):
     def _domain(self, slug="pending-delete-1"):
         return self.env["edge.routing.domain"].create(
             {
-                "name": "https://pending-delete-test.example",
+                "name": "pending-delete-test.example",
                 "target_slug": slug,
             }
         )

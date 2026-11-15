@@ -69,9 +69,15 @@ class CloudflareRoutingDomain(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "cloudflare.user_cloudflare_tunnel"
         )
+        # Odoo stores website.domain normalised with a scheme
+        # ("https://x"), while edge.routing.domain.name is a bare FQDN, so
+        # match both forms and key the result by the bare name.
         names = self.mapped("name")
-        websites = self.env["website"].with_user(svc_uid).search([("domain", "in", names)], limit=len(names))
-        return {w.domain: w for w in websites if w.domain}
+        wanted = names + ["https://" + n for n in names] + ["http://" + n for n in names]
+        websites = self.env["website"].with_user(svc_uid).search(
+            [("domain", "in", wanted)], limit=len(wanted)
+        )
+        return {w.domain.split("://", 1)[-1]: w for w in websites if w.domain}
 
     # [@ANCHOR: cloudflare:COMM_create_custom_hostname_batch]
     def _create_cloudflare_custom_hostname_batch(self):
