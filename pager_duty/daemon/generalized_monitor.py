@@ -440,6 +440,26 @@ def outbound_recovered(source):
         del LAST_OUTBOUND[key]
 
 
+# A log line is another program's text: it can carry an email, a URL with a query string, a password=... pair or a bearer
+# token, and it goes to the incident and the webhook. These are removed before it is reported.
+_LOG_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_LOG_URL_RE = re.compile(r"(?i)\b(?:https?|wss?|ftp)://\S+")
+_LOG_BEARER_RE = re.compile(r"(?i)\bbearer\s+[\w.~+/=-]+")
+_LOG_SECRET_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])([\w.-]{0,40}?(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|cookie|authorization|"
+    r"credential)[\w.-]{0,40}['\"]?\s*[=:]\s*)(\"[^\"\n]*\"|'[^'\n]*'|[^\s,;&'\"]+)"
+)
+
+
+# [@ANCHOR: pager_duty:scrub_log_line]
+def scrub_log_line(line):
+    """The log line with emails, URLs, bearer tokens and secret-looking key=value values replaced."""
+    line = _LOG_URL_RE.sub("<url>", line)
+    line = _LOG_EMAIL_RE.sub("<email>", line)
+    line = _LOG_BEARER_RE.sub("bearer <redacted>", line)
+    return _LOG_SECRET_RE.sub(lambda m: m.group(1) + "<redacted>", line)
+
+
 # [@ANCHOR: pager_duty:fallback_notify]
 def fallback_notify(source, msg, severity):
     # During pagerduty maintenance (a planned restart; `pagerduty-maintenance start`) the Odoo outage is expected, so
@@ -2270,12 +2290,12 @@ def log_tail_thread(client, check):
                             f"[{name}] Suppressed log alert during grace period."
                         )
                     elif pagerduty_maintenance.read_flag()["state"] == pagerduty_maintenance.ACTIVE:
-                        logger.info(f"[{name}] pagerduty maintenance active: log alert NOT reported: {line.strip()}")
+                        logger.info(f"[{name}] pagerduty maintenance active: log alert NOT reported: {scrub_log_line(line.strip())}")
                     else:
                         report(
                             client,
                             name,
-                            line.strip(),
+                            scrub_log_line(line.strip()),
                             "critical",
                             website_id=website_id,
                         )
