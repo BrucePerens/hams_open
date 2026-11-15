@@ -12,6 +12,10 @@ _logger = logging.getLogger(__name__)
 
 MAX_FAILED_ATTEMPTS = 10
 FAILED_ATTEMPTS_WINDOW = 60
+# edge_routing sends every custom domain and DNS zone in one list (the push replaces the certbot target), in pages of 1000
+# when it reads them, and /api/v1/user_websites/domains is written to survive more than 5000: a limit of 1000 here refused
+# the whole list, and so stopped every update of the certbot check, once there were more.
+MAX_DOMAINS = 20000
 
 
 # [@ANCHOR: pager_duty_domain_api_pager_duty_controller]
@@ -81,7 +85,7 @@ class PagerDutyController(http.Controller):
         # A string would be joined character by character, a list of numbers would crash the join.
         if (
             not isinstance(domains, list)
-            or len(domains) > 1000
+            or len(domains) > MAX_DOMAINS
             or not all(isinstance(d, str) and d and len(d) <= 253 and "," not in d for d in domains)
         ):
             # audit-ignore-i18n: Tested by [@ANCHOR: pd_domain_api_i18n]  # fmt: skip

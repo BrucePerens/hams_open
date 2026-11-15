@@ -228,6 +228,19 @@ class TestPagerControllers(HamsHttpCase):
             self.assertEqual(body["result"]["status"], "error", bad)
         self.assertFalse(self.env["pager.check"].search([("check_type", "=", "certbot")]))
 
+    def test_04d_update_domains_takes_a_list_of_more_than_a_thousand_domains(self):
+        # Tests [@ANCHOR: pager_duty:update_domains]
+        # edge_routing pushes every custom domain and DNS zone as one list; the whole list used to be refused above 1000.
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "the-real-secret")
+        domains = [f"member{index}.example.org" for index in range(1500)]
+        response = self.url_open(
+            "/api/v1/pager_duty/update_domains",
+            json={"jsonrpc": "2.0", "method": "call", "params": {"domains": domains, "api_identity": "the-real-secret"}},
+        )
+        self.assertEqual(response.json()["result"]["status"], "success")
+        certbot = self.env["pager.check"].search([("check_type", "=", "certbot")], limit=1)
+        self.assertEqual(len(certbot.target.split(",")), 1500)
+
     def test_02d_log_search_routes_reject_non_string_parameters_cleanly(self):
         # Tests [@ANCHOR: pager_duty:search_logs]
         # Tests [@ANCHOR: pager_duty:search_logs_poll]
