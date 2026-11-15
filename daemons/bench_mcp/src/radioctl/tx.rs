@@ -190,8 +190,10 @@ impl Drop for Keyed<'_> {
         // [@ANCHOR: radioctl_tx_keyed_drop]
         // Reached only when `release` did not finish: a panic, or an early return that skipped it.
         if !self.released {
-            let _ = guard::unkey(self.k.host, self.k.port, self.k.min_power);
-            lock(&ACTIVE).remove(self.k.rig);
+            // Forgotten only once the release is confirmed: while it is not, the server's own stop (`release_prefix`) must still try.
+            if guard::unkey(self.k.host, self.k.port, self.k.min_power).is_ok() {
+                lock(&ACTIVE).remove(self.k.rig);
+            }
             // The watchdog is dropped with `watch`: its pipe closes without `done`.
         }
     }
@@ -538,6 +540,58 @@ mod tests {
         assert_eq!(s.rfpower, 0.05);
         drop(s);
         assert!(!is_active("tx_drop"));
+    }
+
+    // Tests [@ANCHOR: radioctl_tx_keyed_drop]
+    #[test]
+    fn a_drop_that_cannot_release_the_rig_keeps_it_on_the_active_list() {
+        let port = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap().port()
+        };
+        let dir = crate::testdir::TestDir::new("bench_mcp-keyed-drop-fails");
+        let spawner = ThreadSpawner {
+            events: Arc::new(Mutex::new(vec![])),
+        };
+        let k = Keying {
+            rig: "tx_drop_fails",
+            host: "127.0.0.1",
+            port,
+            dir: &dir,
+            spawner: &spawner,
+            min_power: None,
+            purpose: Purpose {
+                tool: "t".into(),
+                reason: "r".into(),
+                by: "b".into(),
+                frequency_hz: 7e6,
+                mode: "USB".into(),
+                power_w: 1.0,
+                kind: "test".into(),
+            },
+            limit_swr: None,
+            limit_power_w: None,
+            previous_rfpower: None,
+        };
+        lock(&ACTIVE).insert(
+            "tx_drop_fails".into(),
+            Active {
+                host: "127.0.0.1".into(),
+                port,
+                min_power: None,
+            },
+        );
+        drop(Keyed {
+            k: &k,
+            watch: None,
+            released: false,
+        });
+        let still_listed = is_active("tx_drop_fails");
+        lock(&ACTIVE).remove("tx_drop_fails");
+        assert!(
+            still_listed,
+            "the rig could not be released, so the server's stop must still try it"
+        );
     }
 
     // Tests [@ANCHOR: radioctl_tx_keyed_released_flag]
