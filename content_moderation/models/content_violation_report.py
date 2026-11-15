@@ -106,15 +106,16 @@ class ContentViolationReport(models.Model):
     def create(self, vals_list):
         """A guest's second report of the same URL from the same network on the same day returns the
         first report instead of adding another."""
+        Report = self.env["content.violation.report"]
+        keys = [False if vals.get("reported_by_user_id") else self._guest_dedupe_key(vals.get("target_url")) for vals in vals_list]
+        known = {r.guest_dedupe_key: r for r in Report.search([("guest_dedupe_key", "in", [k for k in keys if k])], limit=len(keys))}
         records = self.browse()
         fresh = []
-        for vals in vals_list:
-            key = False if vals.get("reported_by_user_id") else self._guest_dedupe_key(vals.get("target_url"))
+        for vals, key in zip(vals_list, keys):
+            if key and key in known:
+                records |= known[key]
+                continue
             if key:
-                existing = self.search([("guest_dedupe_key", "=", key)], limit=1)
-                if existing:
-                    records |= existing
-                    continue
                 vals = dict(vals, guest_dedupe_key=key)
             fresh.append(vals)
         return records | super().create(fresh) if fresh else records

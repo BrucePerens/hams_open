@@ -105,6 +105,7 @@
         </field>
     </record>
 
+    <!-- audit-ignore-view-resolution: the default kanban/list/form views of this model are the intended ones -->
     <record id="action_content_violation_report" model="ir.actions.act_window">
         <field name="name">Violation Reports</field>
         <field name="res_model">content.violation.report</field>
@@ -116,6 +117,7 @@
         </field>
     </record>
 
+    <!-- audit-ignore-view-resolution: the default kanban/list/form views of this model are the intended ones -->
     <record id="action_my_content_violation_report" model="ir.actions.act_window">
         <field name="name">My Reports</field>
         <field name="res_model">content.violation.report</field>
