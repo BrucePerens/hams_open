@@ -442,10 +442,15 @@ def _run_pgbackrest_via_sidecar(cmd, config, job_id, channel=None):
             try:
                 with open(result_path) as f:
                     result = json.load(f)
+            except ValueError as e:
+                # Not valid JSON: report the job failed with the reason instead of raising out of the job handler.
+                result = {"return_code": 1, "output": f"The pgbackrest sidecar's result file for job {job_id} is unreadable: {e}"}
             finally:
                 os.remove(result_path)
             if os.path.exists(request_path):
                 os.remove(request_path)
+            if not isinstance(result, dict):
+                return 1, f"The pgbackrest sidecar's result file for job {job_id} is not a JSON object."
             return result.get("return_code", 1), result.get("output", "")
         if channel is not None:
             # Services the RabbitMQ connection's own heartbeat while we

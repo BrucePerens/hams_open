@@ -258,6 +258,19 @@ class TestRunPgbackrestViaSidecar(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self._tmpdir, "request-99.json")))
         self.assertFalse(os.path.exists(os.path.join(self._tmpdir, "result-99.json")))
 
+    def test_an_unreadable_result_file_fails_the_job_instead_of_raising(self):
+        # Tests [@ANCHOR: backup_management:COMM_pgbackrest_privileged_sidecar]
+        def fake_sidecar():
+            self._wait_for_file(os.path.join(self._tmpdir, "request-98.json"))
+            with open(os.path.join(self._tmpdir, "result-98.json"), "w") as f:
+                f.write('{"return_code": 0, "outp')
+
+        threading.Thread(target=fake_sidecar, daemon=True).start()
+        return_code, output = backup_worker._run_pgbackrest_via_sidecar(["pgbackrest", "backup"], {"storage_type": "local"}, 98)
+        self.assertEqual(return_code, 1)
+        self.assertIn("unreadable", output)
+        self.assertFalse(os.path.exists(os.path.join(self._tmpdir, "result-98.json")))
+
     def test_request_file_carries_s3_secrets_but_not_in_argv(self):
         captured = {}
 
