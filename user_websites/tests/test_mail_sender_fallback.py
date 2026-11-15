@@ -33,6 +33,9 @@ class TestMailSenderFallback(HamsTransactionCase):
 
     def _senders(self):
         return {
+            "user_websites.email_template_content_violation": self._render(
+                "user_websites.email_template_content_violation", "email_from", self.report
+            ),
             "user_websites.email_template_pending_violations_summary": self._render(
                 "user_websites.email_template_pending_violations_summary", "email_from", self.company
             ),
@@ -80,3 +83,13 @@ class TestMailSenderFallback(HamsTransactionCase):
             ):
                 with self.subTest(xmlid=xmlid, field=field, default=default):
                     self.assertNotIn("yourcompany.com", self._render(xmlid, field, record) or "")
+
+    # [@ANCHOR: test_violation_report_is_not_sent_from_the_reporters_address]
+    def test_violation_report_is_not_sent_from_the_reporters_address(self):
+        # Tests [@ANCHOR: user_websites:mail_sender_fallback]
+        self._default_from(_DEFAULT_FROM)
+        template = self.env.ref("user_websites.email_template_content_violation")
+        sender = self._render("user_websites.email_template_content_violation", "email_from", self.report)
+        self.assertNotIn("reporter@example.org", sender)
+        body = template._render_field("body_html", [self.report.id])[self.report.id]
+        self.assertIn("reporter@example.org", body)
