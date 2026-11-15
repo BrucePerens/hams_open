@@ -27,6 +27,16 @@ class PagerLogAPI(http.Controller):
         if not request.env.user.has_group("pager_duty.group_pager_admin"):
             raise AccessError(_("Access Denied: Admins only."))
 
+        # A non-string (list, dict, number, null) or a NUL byte would crash in the path calls below.
+        if (
+            not isinstance(file_path, str)
+            or not isinstance(regex_query, str)
+            or "\0" in file_path
+            or len(file_path) > 4096
+            or len(regex_query) > 4096
+        ):
+            return {"error": _("file_path and regex_query must be strings.")}
+
         # CWE-22 Path Traversal Prevention
         if ".." in file_path.split(os.path.sep):
             raise AccessError(_("Illegal path traversal detected."))
@@ -86,7 +96,9 @@ class PagerLogAPI(http.Controller):
     def search_logs_poll(self, job_id):
         if not request.env.user.has_group("pager_duty.group_pager_admin"):
             raise AccessError(_("Access Denied."))
-        
+
+        if not isinstance(job_id, str):
+            return {"error": _("job_id must be a string.")}
         job = request.env["pager.log.search.job"].search([("uuid", "=", job_id)], limit=1)
         if not job:
             return {"error": "Job not found"}
