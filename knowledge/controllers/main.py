@@ -4,7 +4,7 @@
 from odoo import http
 from odoo.http import request
 from odoo.exceptions import AccessError, UserError
-from odoo.tools import html2plaintext, html_sanitize
+from odoo.tools import escape_psql, html2plaintext, html_sanitize
 import werkzeug.exceptions
 import logging
 import re
@@ -359,7 +359,8 @@ class ManualLibraryController(http.Controller):
             raise werkzeug.exceptions.NotFound()
         domain = self._internal_domain()
         if search:
-            domain += ["|", ("name", "ilike", search), ("body", "ilike", search)]
+            like = f"%{escape_psql(search)}%"
+            domain += ["|", ("name", "=ilike", like), ("body", "=ilike", like)]
         articles = request.env["knowledge.article"].search(domain, limit=1000)
         return request.render(
             "knowledge.internal_index_template",
@@ -383,7 +384,8 @@ class ManualLibraryController(http.Controller):
         # manuals are searched, for every reader including administrators.
         domain = self._help_domain()
         if search:
-            domain += ["|", ("name", "ilike", search), ("body", "ilike", search)]
+            like = f"%{escape_psql(search)}%"
+            domain += ["|", ("name", "=ilike", like), ("body", "=ilike", like)]
 
         articles = request.env["knowledge.article"].search(domain, limit=1000)
 
