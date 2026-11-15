@@ -499,6 +499,7 @@ class _HomeParser(HTMLParser):
         if tag == "a":
             self.finish_anchor()
 
+    # [@ANCHOR: zero_sudo:club_spam_parser_finish_anchor]
     def finish_anchor(self):
         """Keeps the open anchor, if any. Called at `</a>`, at the next `<a>` (HTML ends the open one there) and when the page ends."""
         if self._anchor is not None:

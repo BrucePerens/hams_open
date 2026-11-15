@@ -122,6 +122,12 @@ instance serves one page and is not reusable or thread-safe.
 generator and marker attributes, sets `_in_title`, counts a skip-text element, pushes non-void elements on the stack, and for an `<a>` with an
 `href` starts `_anchor` (address cut to 300 characters). Void elements (`br`, `img`, `meta`, ...) are never pushed. Returns nothing.
 
+### _HomeParser.finish_anchor `[@ANCHOR: zero_sudo:club_spam_parser_finish_anchor]`
+
+`finish_anchor()` keeps the link being read, if any: it collapses the link text's whitespace, cuts it to the title limit, appends the dict to `links`
+(unless the list is full) and clears `_anchor`. It is called at `</a>`, at the next `<a>` (HTML ends the open link there) and by `extract_home_evidence`
+when the page ends, so a link with no end tag is still kept. With no open link it does nothing. Returns nothing.
+
 ### _HomeParser.handle_endtag `[@ANCHOR: zero_sudo:club_spam_parser_end]`
 
 `handle_endtag(tag)` pops the stack back to the nearest open element of that tag (a stray end tag with no match changes nothing, which

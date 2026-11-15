@@ -445,6 +445,7 @@ class TestHomePage(BaseCase):
     def test_21b_a_link_with_no_end_tag_is_still_read(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_extract_home_evidence]
         # Tests [@ANCHOR: zero_sudo:club_spam_parser_start]
+        # Tests [@ANCHOR: zero_sudo:club_spam_parser_finish_anchor]
         # `</a>` may be left out: the next `<a>` and the end of the page end the open link, as they do in a browser.
         spam_href = "http://x.example/casino-slots-online"
         for markup in ('<p><a href="%s">best casino slots' % spam_href,
