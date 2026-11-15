@@ -2,6 +2,7 @@
 
 import { Interaction } from "@web/public/interaction";
 import { registry } from "@web/core/registry";
+import { session } from "@web/session";
 
 /**
  * URL Toast Notification Widget
@@ -122,6 +123,9 @@ export class AdminViolationToast extends Interaction {
 
     // [@ANCHOR: user_websites:js_toast_notifications_admin_start]
     start() {
+        // The queue is for moderators, who are logged in. A public visitor's page may come from the edge cache; asking
+        // the origin on top of that, for every page view, would send every visit to Odoo anyway.
+        if (session.is_website_user) return;
         void this._checkPendingReports();
     }
 
