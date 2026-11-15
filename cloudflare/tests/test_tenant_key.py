@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 from cryptography.fernet import InvalidToken
 from psycopg2 import IntegrityError
-from odoo.exceptions import ConcurrencyError
+from odoo.exceptions import ConcurrencyError, UserError
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -121,6 +121,26 @@ class TestCloudflareTenantKey(HamsTransactionCase):
         self.assertIsNone(
             self.env["cloudflare.tenant.key"]._get_or_create_fernet(self.company_a)
         )
+
+    def test_unusable_key_error_differs_from_missing_key(self):
+        # Tests [@ANCHOR: cloudflare:COMM_crypt_field]
+        website = self.env["website"].browse()
+        mock_fernet = self.safe_patch(
+            "odoo.addons.cloudflare.models.website.WebsiteCloudflare._get_fernet"
+        )
+        mock_fernet.return_value = None
+        mock_secret = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils"
+            "._get_crypto_secret"
+        )
+        mock_secret.return_value = ""
+        with self.assertRaises(UserError) as missing:
+            website._crypt_field("x")
+        mock_secret.return_value = "not-a-fernet-key"
+        with self.assertRaises(UserError) as unusable:
+            website._crypt_field("x")
+        self.assertIn("no deployment-wide", str(missing.exception))
+        self.assertIn("malformed", str(unusable.exception))
 
     def test_a_company_can_hold_only_one_wrapped_key(self):
         # Tests [@ANCHOR: cloudflare:COMM_tenant_key_compute_name]
