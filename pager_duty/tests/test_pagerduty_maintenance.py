@@ -182,6 +182,7 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
     def _fallback(self, flag_path):
         mock_smtp = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP")
         mock_smtp.return_value.__enter__.return_value = MagicMock()
+        generalized_monitor.LAST_OUTBOUND.clear()  # the e-mail is sent at most once an hour per source
         saved = dict(os.environ)
         os.environ.update({"PAGER_FALLBACK_EMAIL": "a@test.com", "SMTP_HOST": "smtp.test.com",
                            "PAGERDUTY_MAINTENANCE_FILE": flag_path})

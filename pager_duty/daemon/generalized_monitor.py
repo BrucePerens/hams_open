@@ -406,6 +406,22 @@ def is_in_maintenance(check):
     return False
 
 
+# A check that keeps failing is reported to Odoo on every failing pass (that is its occurrence count), but the Discord-style
+# webhook and the SMTP fallback e-mail are for a person: they go out for one source at most this often, not every pass.
+OUTBOUND_REPEAT_SECONDS = 3600
+LAST_OUTBOUND = {}
+
+
+def outbound_due(kind, source):
+    """True when `kind` ("webhook" or "smtp") may notify a person about `source` now; records that it did."""
+    now = time.time()
+    last = LAST_OUTBOUND.get((kind, source))
+    if last is not None and now - last < OUTBOUND_REPEAT_SECONDS:
+        return False
+    LAST_OUTBOUND[(kind, source)] = now
+    return True
+
+
 # [@ANCHOR: pager_duty:fallback_notify]
 def fallback_notify(source, msg, severity):
     # During pagerduty maintenance (a planned restart; `pagerduty-maintenance start`) the Odoo outage is expected, so
@@ -418,6 +434,9 @@ def fallback_notify(source, msg, severity):
             "pagerduty maintenance active (%s): SMTP fallback e-mail NOT sent. %s - %s",
             pagerduty_maintenance.describe(flag), source, msg,
         )
+        return
+    if not outbound_due("smtp", source):
+        logger.info("SMTP fallback e-mail for %s was sent within the last %ss; not repeated", source, OUTBOUND_REPEAT_SECONDS)
         return
     fallback_email = os.environ.get("PAGER_FALLBACK_EMAIL")
     smtp_host = os.environ.get("SMTP_HOST")
@@ -496,7 +515,11 @@ def extract_severity_prefix(msg, default="high"):
 def report(client, source, msg, severity="high", website_id=False, units=()):
     # [@ANCHOR: daemon_report_incident]
     webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
-    if webhook_url:
+    if webhook_url and pagerduty_maintenance.read_flag()["state"] == pagerduty_maintenance.ACTIVE:
+        logger.info("pagerduty maintenance active: webhook for %s not sent", source)
+    elif webhook_url and not outbound_due("webhook", source):
+        logger.info("Webhook for %s was sent within the last %ss; not repeated", source, OUTBOUND_REPEAT_SECONDS)
+    elif webhook_url:
         try:
             payload = {
                 "content": f"🚨 **[PAGER ALERT]**\n**Source:** {source}\n**Severity:** {severity}\n**Details:** {msg}"
