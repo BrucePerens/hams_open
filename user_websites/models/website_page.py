@@ -288,12 +288,14 @@ class WebsitePage(models.Model):
                 for e in root.iter()
                 if isinstance(e.tag, str) and e.tag.rpartition("}")[2].lower() == "meta"
             ]:
-                http_equiv = elem.attrib.get("http-equiv", "")
-                if http_equiv.strip().lower() == "refresh":
-                    blocked_content = elem.attrib.get("content", "")
-                    del elem.attrib["http-equiv"]
-                    if "content" in elem.attrib:
-                        del elem.attrib["content"]
+                # Attribute names are matched case-insensitively: the arch is XML (HTTP-EQUIV is another
+                # attribute there) but the browser's HTML parser reads it as http-equiv.
+                equiv_names = [n for n in elem.attrib if n.lower() == "http-equiv"]
+                if any(elem.attrib[n].strip().lower() == "refresh" for n in equiv_names):
+                    content_names = [n for n in elem.attrib if n.lower() == "content"]
+                    blocked_content = ";".join(elem.attrib[n] for n in content_names)
+                    for n in equiv_names + content_names:
+                        del elem.attrib[n]
                     elem.attrib["data-blocked-http-equiv"] = "refresh"
                     elem.attrib["data-blocked-content"] = blocked_content
                     was_modified = True
