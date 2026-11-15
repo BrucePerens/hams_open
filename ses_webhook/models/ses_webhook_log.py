@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from odoo import fields, models
+from odoo import api, fields, models
 
 # [@ANCHOR: ses_webhook_ses_webhook_log_ses_webhook_log]
 class SesWebhookLog(models.Model):
@@ -25,3 +25,19 @@ class SesWebhookLog(models.Model):
     company_id = fields.Many2one('res.company', related='domain_id.company_id', store=True, readonly=True)
     error_message = fields.Text(string='Error Message', readonly=True)
     raw_payload = fields.Text(string='Raw JSON Payload', readonly=True)
+
+    # [@ANCHOR: ses_webhook:already_handled]
+    @api.model
+    def _already_handled(self, domain_id, message_id):
+        """True when this MessageId was already processed for the domain (a failed one does not count: it is reprocessed).
+
+        The log row is written after the message is processed, so a search alone lets two simultaneous deliveries both
+        process it. A no-change UPDATE of the domain row makes them take turns: the later one fails to serialize (its
+        snapshot cannot see the earlier log) and Odoo runs the request again, when the search finds the log. There is no
+        unique index to lean on: failed and rejected attempts of one MessageId are logged too."""
+        self.env.cr.execute("UPDATE ses_webhook_domain SET id = id WHERE id = %s", [domain_id])
+        return bool(self.search_count([
+            ('name', '=', message_id),
+            ('domain_id', '=', domain_id),
+            ('status', 'in', ('success', 'ignored')),
+        ], limit=1))

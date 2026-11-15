@@ -75,3 +75,7 @@
 **Methods.** `_compute_name`, `create_and_notify`.
 
 **See also:** test `test_04_no_truncate_methods_and_service_account_cannot_delete (tests/test_purge_cron_migration.py)`.
+
+### `SesWebhookLog._already_handled(domain_id, message_id)` [@ANCHOR: ses_webhook:already_handled]
+
+`-> bool`, `@api.model`. Called by the webhook route for a Notification before it processes it. It runs a no-change `UPDATE ses_webhook_domain SET id = id` for the domain, then says whether a log row with this MessageId and domain and status `success` or `ignored` exists (a `failed` one is reprocessed). The UPDATE makes two simultaneous deliveries of one MessageId take turns: the later one fails to serialize (its snapshot cannot see the earlier log row, which is written after processing), Odoo runs the request again, and the search then finds the log and the route acknowledges without processing. A unique index cannot do this: failed and rejected attempts of one MessageId are logged too. Test: `test_a_simultaneous_double_delivery_is_not_processed_twice`.
