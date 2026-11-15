@@ -1131,13 +1131,14 @@ class TestSecurityUtils(HamsTransactionCase):
         # Tests [@ANCHOR: zero_sudo:get_trusted_client_ip]
         utils = self.env["zero_sudo.security.utils"]
         mock_obj = self._mock_request_obj(
-            "::1", {"X-Forwarded-For": "8.8.4.4, 10.0.0.1"}
+            "::1", {"X-Forwarded-For": "9.9.9.9, 8.8.4.4"}  # burn-ignore-ssrf-test-value
         )
         self.assertEqual(
             utils._get_trusted_client_ip(mock_obj),
             "8.8.4.4",
-            "Only the first (real client) hop of a comma-separated "
-            "X-Forwarded-For chain must be used.",
+            "Only the LAST hop (appended by our own proxy) of a "
+            "comma-separated X-Forwarded-For chain may be used; the first "
+            "entries are written by the visitor.",
         )
 
     def test_28b2_get_trusted_client_ip_trusts_cf_header_from_ipv4_mapped_loopback(self):
