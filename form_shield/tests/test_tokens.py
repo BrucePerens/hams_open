@@ -109,6 +109,15 @@ class TestTokens(HamsTransactionCase):
         for malformed in ("", "v1", "v2." + ".".join(fields[1:]), ".".join(fields[:-1]), token + ".x"):
             self.assertEqual(tokens.parse_challenge(KEY, malformed)[1], tokens.BAD_FORMAT, malformed)
 
+    def test_correctly_signed_token_with_non_numeric_field_is_bad_format(self):
+        # Tests [@ANCHOR: form_shield:parse_challenge]
+        for index in (2, 3, 4):
+            fields = tokens.make_challenge(KEY, "203.0.113.9", 1000, 12, tokens.KIND_POW, 600).split(".")
+            fields[index] = "x1"
+            body = ".".join(fields[:7])
+            signed = body + "." + tokens._mac(KEY, body)[: tokens.SIGNATURE_CHARS]
+            self.assertEqual(tokens.parse_challenge(KEY, signed), (None, tokens.BAD_FORMAT), index)
+
     def test_non_ascii_signature_is_a_bad_signature_not_an_exception(self):
         # Tests [@ANCHOR: form_shield:parse_challenge]
         token = tokens.make_challenge(KEY, "203.0.113.9", 1000, 12, tokens.KIND_POW, 600)
