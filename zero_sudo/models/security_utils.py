@@ -417,7 +417,8 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
             return cf_ip.strip()
         fw_ip = request_obj.httprequest.headers.get("X-Forwarded-For")
         if fw_ip:
-            return fw_ip.split(",")[0].strip()
+            # The LAST entry: our own proxy appended it. The earlier entries are whatever the visitor sent.
+            return fw_ip.split(",")[-1].strip()
         return remote_addr
 
     @api.model
