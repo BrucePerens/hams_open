@@ -134,3 +134,21 @@ class TestManualFeatures(HamsHttpCase):
         # and its manifest entry does not opt in with "public": True. See the
         # zero_sudo internal-doc-exposure guard.
         self.assertFalse(article.is_published)
+
+    def test_04_feedback_with_an_unusable_article_id_is_not_a_server_error(self):
+        # Tests [@ANCHOR: controller_manual_feedback]
+        self.authenticate(None, None)
+        token = odoo.http.Request.csrf_token(self)
+        for data in (
+            {"article_id": "abc", "is_helpful": "1"},
+            {"article_id": str(10**30), "is_helpful": "1"},
+            {"article_id": str(2**31), "is_helpful": "1"},
+            {"article_id": "-1", "is_helpful": "1"},
+            {"article_id": "9" * 5000, "is_helpful": "1"},
+            {"is_helpful": "1"},
+            {},
+        ):
+            response = self.url_open("/manual/feedback", data={"csrf_token": token, **data}, method="POST")
+            self.assertEqual(response.status_code, 200, repr(data)[:40])
+        self.searchable_article.invalidate_recordset(["helpful_count", "unhelpful_count"])
+        self.assertEqual((self.searchable_article.helpful_count, self.searchable_article.unhelpful_count), (0, 0))

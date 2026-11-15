@@ -485,7 +485,7 @@ class ManualLibraryController(http.Controller):
         ["/manual/feedback"], type="http", auth="public", methods=["POST"], website=True
     )
     def manual_feedback(
-        self, article_id, is_helpful, website_feedback_honeypot=None, **kwargs
+        self, article_id=None, is_helpful=None, website_feedback_honeypot=None, **kwargs
     ):
         # [@ANCHOR: controller_manual_feedback]
 
@@ -511,8 +511,12 @@ class ManualLibraryController(http.Controller):
             return request.redirect(safe_redirect)
 
         try:
-            # Fetch without sudo() first to ensure the user actually has Read access to the article
-            article = request.env["knowledge.article"].browse(int(article_id))
+            # Fetch without sudo() first to ensure the user actually has Read access to the article.
+            # A missing, non-numeric or database-overflowing id is "no such article", never a 500.
+            wanted_id = int(article_id)
+            if not 0 < wanted_id < 2**31:
+                raise ValueError("article id out of range")
+            article = request.env["knowledge.article"].browse(wanted_id)
             if article.exists():
                 # Enforce access check to prevent voting on articles the user can't read
                 article.check_access("read")
@@ -541,7 +545,7 @@ class ManualLibraryController(http.Controller):
                     )
                 article.invalidate_recordset(["helpful_count", "unhelpful_count"])
                 request.session[session_key] = True
-        except (ValueError, AccessError) as e:
+        except (TypeError, ValueError, AccessError) as e:
             # Silently fail on bad input or unauthorized access to prevent brute-force discovery
             _logger.warning("Feedback submission failed gracefully: %s", e)
 
