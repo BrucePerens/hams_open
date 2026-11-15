@@ -732,6 +732,34 @@ fn a_failed_fifo_start_is_still_followed_by_a_stop_on_drop() {
 }
 
 #[test]
+fn a_failed_fifo_stop_is_sent_again_on_the_next_stop() {
+    // Tests [@ANCHOR: elad_radio_stop]
+    for (model, fail_at, stop) in [
+        (Model::S2, 2, (REQ_FIFO, 0u16)),
+        (Model::Duo, 3, (REQ_DUO_GATEWAY, 0)),
+    ] {
+        let fake = fake_unit();
+        let mut r = Radio::open(
+            FailNthOut {
+                inner: fake.clone(),
+                count: 0,
+                fail_at,
+            },
+            model,
+            opts(FpgaState::LoadedExternally, 192_000),
+        )
+        .unwrap();
+        r.start().unwrap();
+        assert!(r.stop().is_err(), "the stop request fails");
+        let before = outs(&fake).len();
+        r.stop().unwrap();
+        let sent = outs(&fake);
+        assert_eq!(sent.len(), before + 1, "{model:?}: the retry sends a stop");
+        assert_eq!(sent.last().copied(), Some(stop), "{model:?}: {sent:?}");
+    }
+}
+
+#[test]
 fn a_failed_front_end_write_leaves_the_recorded_state_unchanged() {
     // Tests [@ANCHOR: elad_radio_set_front_end]
     // Tests [@ANCHOR: elad_radio_write_front_end]
