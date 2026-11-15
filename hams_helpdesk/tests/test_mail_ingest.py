@@ -319,6 +319,20 @@ class TestMailIngest(HamsTransactionCase):
         self.assertTrue(notes, "The ticket must record why it was quarantined.")
         self.assertIn("compliance/violation scare spam", notes[0].body)
 
+    def test_07b_the_spam_log_line_carries_no_sender_address(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spam_filter]
+        # The quarantine log line named the sender's email address; logs must carry no personal data.
+        raw = self._raw_email(
+            "support@hams.com",
+            subject="Action Required: 5 Pending Violation Reports",
+            from_addr="spamlogsender@example.net",
+        )
+        with self.assertLogs("odoo.addons.hams_helpdesk.models.helpdesk_ticket", level="INFO") as logs:
+            self._ingest(raw)
+        text = "\n".join(logs.output)
+        self.assertIn("flagged as likely spam", text)
+        self.assertNotIn("spamlogsender@example.net", text, "[!] DIAGNOSTIC FOR AI: the log must not carry the sender address.")
+
     def test_08_brand_impersonation_link_in_body_is_quarantined(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spam_filter]
         # The body-based signal (msg_dict["body"]), not just the subject:

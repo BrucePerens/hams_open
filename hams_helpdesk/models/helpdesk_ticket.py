@@ -1482,8 +1482,8 @@ class HelpdeskTicket(models.Model):
             _logger.info(
                 "Inbound email %r from %s flagged as likely spam/phishing by "
                 "the mail-ingestion filter: %s",
-                msg_dict.get("subject"),
-                msg_dict.get("email_from"),
+                scrub_text(msg_dict.get("subject")),
+                scrub_text(msg_dict.get("email_from")),
                 "; ".join(spam_reasons),
             )
         ticket = super().message_new(msg_dict, custom_values=values)
