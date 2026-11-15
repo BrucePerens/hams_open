@@ -81,6 +81,21 @@ PAGE = (
 )
 
 
+def assert_scales_linearly(test, run, small, factor=8):
+    """Fails when `run(n)` costs more than 3x `factor` times as much for `factor` times the input (linear is
+    `factor`x, quadratic `factor`^2 x). Compares this machine's own timings, so load does not fail it; best of
+    three on each side drops a one-off stall."""
+    def cost(n):
+        costs = []
+        for _ in range(3):
+            started = time.perf_counter()
+            run(n)
+            costs.append(time.perf_counter() - started)
+        return min(costs)
+    small_cost = cost(small)
+    test.assertLess(cost(small * factor), max(small_cost, 0.02) * factor * 3)
+
+
 @tagged("post_install", "-at_install")
 class TestRepeaterPageText(BaseCase):
 
@@ -162,9 +177,8 @@ class TestUnitAmounts(BaseCase):
 
     def test_a_long_run_of_digits_is_read_once(self):
         # Tests [@ANCHOR: zero_sudo:repeater_page_text_unit_amounts]
-        started = time.monotonic()
         self.assertEqual(list(_unit_amounts("1" * 20000 + " W")), ["1" * 20000])
-        self.assertLess(time.monotonic() - started, 2)
+        assert_scales_linearly(self, lambda n: list(_unit_amounts("1" * n + " W")), 2000)
 
 
 class TestRepeaterPageStructure(BaseCase):
@@ -405,14 +419,13 @@ class TestOrbitingRepeater(BaseCase):
         # Tests [@ANCHOR: zero_sudo:repeater_page_text_grounded_notes]
         # Tests [@ANCHOR: zero_sudo:repeater_page_text_node_operator_callsigns]
         # Tests [@ANCHOR: zero_sudo:repeater_page_text_page_date]
-        n = 100_000
-        started = time.monotonic()
-        grounded_notes("1," * n + "x", "page")
-        grounded_notes("1" * n + " x", "page")
-        node_operator_callsigns("node" + " " * n)
-        node_operator_callsigns("node operator" + " " * n)
-        page_date("updated" + " " * n)
-        self.assertLess(time.monotonic() - started, 5)
+        def hostile(n):
+            grounded_notes("1," * n + "x", "page")
+            grounded_notes("1" * n + " x", "page")
+            node_operator_callsigns("node" + " " * n)
+            node_operator_callsigns("node operator" + " " * n)
+            page_date("updated" + " " * n)
+        assert_scales_linearly(self, hostile, 5000)
         # The amounts the notes claim are still found, in any layout.
         self.assertEqual(grounded_notes("It runs 50 watts. It runs 1,000 miles.", "Power 50 W.")[1], ["It runs 1,000 miles."])
         self.assertEqual(node_operator_callsigns("node 469520 operated by KC0REO; node operator: W1AW"), {"KC0REO", "W1AW"})
