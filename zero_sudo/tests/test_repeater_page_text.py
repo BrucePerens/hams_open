@@ -175,6 +175,17 @@ class TestUnitAmounts(BaseCase):
         self.assertEqual(list(_unit_amounts("Net at 7 pm on 146.94 MHz.")), [])
         self.assertEqual(list(_unit_amounts("")), [])
 
+    def test_a_bare_leading_point_is_a_decimal_point_only_when_it_starts_the_number(self):
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_unit_amounts]
+        # Tests [@ANCHOR: zero_sudo:repeater_page_text_grounded_notes]
+        self.assertEqual(list(_unit_amounts("Power is .5 W here.")), ["0.5"])
+        self.assertEqual(list(_unit_amounts(".25 kW at night")), ["0.25"])
+        self.assertEqual(list(_unit_amounts("It ends.50 W next")), ["50"])
+        self.assertEqual(list(_unit_amounts("and then...50 W")), ["50"])
+        # The note says half a watt: a page that says 5 W does not back it, a page that says 0.5 W does.
+        self.assertEqual(grounded_notes("Power is .5 W.", "Output power 5 W"), ("", ["Power is .5 W."]))
+        self.assertEqual(grounded_notes("Power is .5 W.", "Output power 0.5 W"), ("Power is .5 W.", []))
+
     def test_a_long_run_of_digits_is_read_once(self):
         # Tests [@ANCHOR: zero_sudo:repeater_page_text_unit_amounts]
         self.assertEqual(list(_unit_amounts("1" * 20000 + " W")), ["1" * 20000])

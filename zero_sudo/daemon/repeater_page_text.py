@@ -411,7 +411,11 @@ def _unit_amounts(sentence):
     """The numbers of `sentence` that are followed by a unit of power or distance (50 W, 1,000 miles). Each run of digits, commas and
     points is looked at once, from its first digit (a regular expression that started at every digit of a long run was quadratic)."""
     for run in _NUMBER_RUN.finditer(sentence):
-        amount = run.group().lstrip(",.")
+        amount = run.group().lstrip(",")
+        if amount.startswith(".") and amount[1:2].isdigit() and (run.start() == 0 or sentence[run.start() - 1].isspace()):
+            amount = "0" + amount  # ".5 W" is half a watt, not five
+        else:
+            amount = amount.lstrip(".")  # a sentence's own point or an ellipsis in front of the number
         if amount and _UNIT_TAIL.match(sentence, run.end()):
             yield amount
 
