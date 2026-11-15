@@ -351,7 +351,11 @@ pub fn parse_server(url: &str) -> Result<ServerUrl, String> {
         }
     };
     let port = match port {
-        Some(p) => p.parse().map_err(|_| format!("{url}: bad port"))?,
+        Some(p) => p
+            .parse::<u16>()
+            .ok()
+            .filter(|port| *port != 0)
+            .ok_or_else(|| format!("{url}: bad port"))?,
         None if tls => 443,
         None => 80,
     };
@@ -741,6 +745,8 @@ mod tests {
             "hams.com",
             "https://",
             "http://localhost.evil.com/",
+            "https://hams.com:0/x",
+            "http://127.0.0.1:0/",
         ] {
             assert!(parse_server(bad).is_err(), "{bad}");
         }
