@@ -50,6 +50,11 @@ class ScrubLogLine(unittest.TestCase):
         self.assertNotIn("words", out)
         self.assertIn("retry", out)
 
+    def test_a_basic_authorization_header_is_removed_whole(self):
+        out = gm.scrub_log_line("sent Authorization: Basic dXNlcjpwYXNzd29yZA== to upstream")
+        self.assertNotIn("dXNlcjpwYXNzd29yZA", out)
+        self.assertIn("to upstream", out)
+
     def test_plain_line_unchanged(self):
         self.assertEqual(gm.scrub_log_line("Failed to renew certificate"), "Failed to renew certificate")
 

@@ -448,7 +448,7 @@ _LOG_URL_RE = re.compile(r"(?i)\b(?:https?|wss?|ftp)://\S+")
 _LOG_BEARER_RE = re.compile(r"(?i)\bbearer\s+[\w.~+/=-]+")
 _LOG_SECRET_RE = re.compile(
     r"(?i)(?<![A-Za-z0-9])([\w.-]{0,40}?(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|cookie|authorization|"
-    r"credential)[\w.-]{0,40}['\"]?\s*[=:]\s*)(\"[^\"\n]*\"|'[^'\n]*'|[^\s,;&'\"]+)"
+    r"credential)[\w.-]{0,40}['\"]?\s*[=:]\s*)(\"[^\"\n]*\"|'[^'\n]*'|(?:(?:bearer|basic)\s+)?[^\s,;&'\"]+)"
 )
 
 
