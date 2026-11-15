@@ -195,6 +195,31 @@ class TestRobustnessAndBoundaries(HamsHttpCase):
         )
         self.assertFalse(report, "A honeypot-triggered submission must not create a real report.")
 
+    def test_03e_member_reporting_the_same_url_twice_gets_no_error(self):
+        # [@ANCHOR: test_report_violation_member_duplicate]
+        """The report table is unique per (url, reporter): a second report of the same page by the
+        same member used to hit the constraint and answer a 500. It is now a quiet success with
+        no second row."""
+        Report = self.env["content.violation.report"]
+        self.authenticate(self.user_test.login, self.user_test.login)
+        for _attempt in range(2):
+            response = self.url_open(
+                "/website/report_violation",
+                data={
+                    "csrf_token": odoo.http.Request.csrf_token(self),
+                    **shield_fields(self.env, "report_violation"),
+                    "url": "/report-duplicate-member-test",
+                    "description": "Reported twice by one member, test_03e",
+                },
+                method="POST",
+                allow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 303)
+            self.assertIn("report_submitted=1", response.headers.get("Location", ""))
+        self.assertEqual(
+            Report.search_count([("description", "=", "Reported twice by one member, test_03e")]), 1
+        )
+
     def test_03c_violation_report_records_logged_in_reporter(self):
         # [@ANCHOR: test_report_violation_records_logged_in_reporter]
         # Tests [@ANCHOR: report_violation_records_logged_in_reporter]
