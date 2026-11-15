@@ -586,8 +586,10 @@ impl UsbDevice for Elektor507Twin {
         if endpoint != BULK_OUT {
             return Err(UsbFailure::Stall);
         }
-        for byte in data {
-            self.sample(*byte);
+        if self.bitbang {
+            for byte in data {
+                self.sample(*byte);
+            }
         }
         Ok(data.len())
     }

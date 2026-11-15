@@ -342,3 +342,20 @@ async fn a_rig_over_the_link_and_the_fake_bus_sets_up_and_tunes() {
 // Tests [@ANCHOR: radioctl_elektor507_elektor507_twin]
 // Tests [@ANCHOR: radioctl_elektor507_pll]
 // Tests [@ANCHOR: radioctl_elektor507_samples]
+
+// Tests [@ANCHOR: radioctl_elektor507_twin_bulk_write]
+#[test]
+fn bulk_writes_before_the_bit_bang_mode_do_not_reach_the_clock_chip() {
+    let mut engine = Elektor507Engine::new(description()).expect("engine");
+    let mut twin = Elektor507Twin::new(&description()).expect("twin");
+    let request = engine
+        .encode(&Op::SetFrequency(Vfo::A, Hz(7_000_000)))
+        .expect("encode");
+    let transfer = radioctl_core::usb_wire::UsbTransfer::decode(&request.bytes)
+        .expect("frame")
+        .0;
+    let reply = radioctl_core::usb_wire::execute(&mut twin, &transfer, T);
+    assert_eq!(reply.status, UsbStatus::Ok);
+    assert_eq!(twin.frequency(), None, "the pins are not in bit-bang mode");
+    assert_eq!(twin.register(REG_PUMP), 0);
+}
