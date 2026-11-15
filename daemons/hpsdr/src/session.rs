@@ -436,6 +436,18 @@ mod tests {
         emu.stop();
     }
 
+    // Tests [@ANCHOR: hpsdr_emulator_run_p1]
+    #[tokio::test]
+    async fn a_zero_pace_emulator_still_answers_discovery() {
+        let (emu, d) = setup(EmulatorConfig {
+            pace: Duration::ZERO,
+            ..EmulatorConfig::default()
+        })
+        .await;
+        assert_eq!(d.protocol, Protocol::P1);
+        emu.stop();
+    }
+
     // Tests [@ANCHOR: hpsdr_session_radio]
     // Tests [@ANCHOR: hpsdr_session_session_options]
     // Tests [@ANCHOR: hpsdr_emulator_tone]

@@ -248,7 +248,8 @@ async fn run_p1(sock: UdpSocket, cfg: EmulatorConfig, c: Arc<EmulatorCounters>) 
     let mut rf = P1Config::default();
     let mut dest: Option<SocketAddr> = None;
     let (mut seq, mut n, mut cursor) = (0u32, 0u64, 0u8);
-    let mut tick = tokio::time::interval(cfg.pace);
+    // A zero period would panic in `interval` and kill the task, so the floor is one microsecond.
+    let mut tick = tokio::time::interval(cfg.pace.max(Duration::from_micros(1)));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut buf = vec![0u8; 2048];
     loop {
