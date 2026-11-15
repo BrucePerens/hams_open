@@ -380,10 +380,10 @@ class WebsitePage(models.Model):
             # element checks above ever seeing it. Re-spell every "<" in text as the entity
             # "&lt;" (the node then holds the five characters, which the browser shows as "<").
             # A second pass finds no "<" left, so saving again changes nothing.
+            # A comment or processing instruction has no markup of its own to check here (its text is
+            # not rendered), but the text after it is a tail like any other and QWeb writes that raw too.
             for node in root.iter():
-                if not isinstance(node.tag, str):
-                    continue
-                if node.text and "<" in node.text:
+                if isinstance(node.tag, str) and node.text and "<" in node.text:
                     node.text = node.text.replace("<", "&lt;")
                 if node.tail and "<" in node.tail:
                     node.tail = node.tail.replace("<", "&lt;")

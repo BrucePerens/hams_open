@@ -49,6 +49,9 @@ RAW_TEXT_VECTORS = [
     ("text_entity_img", "<p>&lt;img src=x onerror=window.__xss=1&gt;</p>"),
     ("text_cdata_script", "<div><![CDATA[<script>window.__xss=1</script>]]></div>"),
     ("text_entity_in_tail", "<b>x</b>&lt;iframe src=javascript:window.__xss=1&gt;"),
+    # The text after a comment or a processing instruction is that node's tail, and QWeb writes it raw too.
+    ("text_entity_after_comment", "<div><!--c-->&lt;script&gt;window.__xss=1&lt;/script&gt;</div>"),
+    ("text_entity_after_pi", "<p><?x y?>&lt;img src=x onerror=window.__xss=1&gt;</p>"),
 ]
 
 
@@ -64,6 +67,8 @@ def assert_arch_is_safe(test, name, arch):
     test.assertIsNotNone(root, name)
     for element in root.iter():
         if not isinstance(element.tag, str):
+            # A comment or processing instruction: its tail is page text like any other.
+            test.assertNotIn("<", element.tail or "", f"{name}: markup-bearing text after a comment: {element.tail!r}")
             continue
         tag = _local(element.tag)
         for text in (element.text, element.tail):
