@@ -49,16 +49,25 @@ class TestFormShieldHttp(HamsHttpCase):
     # [@ANCHOR: form_shield:test_challenge_endpoint_caps_question_requests]
     # Tests [@ANCHOR: form_shield:question_budget]
     def test_challenge_endpoint_caps_question_requests(self):
-        # A bot asking for kind=q (difficulty 0) to skip the proof of work gets only a few.
+        # A bot asking for kind=q (difficulty 0) to skip the proof of work gets only a few; the budget is a setting.
+        self.env["ir.config_parameter"].set_param("form_shield.question_budget_per_hour", "3")
         statuses = [
             self.url_open("/form_shield/challenge", data={"kind": "q"}, method="POST").status_code
-            for _ in range(7)
+            for _ in range(5)
         ]
-        self.assertEqual(statuses, [200] * 5 + [429] * 2)
+        self.assertEqual(statuses, [200] * 3 + [429] * 2)
         # The proof of work is not rationed by this.
         self.assertEqual(
             self.url_open("/form_shield/challenge", data={"kind": "pow"}, method="POST").status_code, 200
         )
+
+    def test_question_budget_defaults_to_ten_an_hour(self):
+        # Tests [@ANCHOR: form_shield:question_budget]
+        statuses = [
+            self.url_open("/form_shield/challenge", data={"kind": "q"}, method="POST").status_code
+            for _ in range(12)
+        ]
+        self.assertEqual(statuses, [200] * 10 + [429] * 2)
 
     def test_challenge_is_bound_to_the_forwarded_network(self):
         # Tests [@ANCHOR: form_shield:ip_tag]

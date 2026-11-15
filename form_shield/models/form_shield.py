@@ -30,7 +30,7 @@ DEFAULT_TTL = 7200
 DEFAULT_MIN_AGE = 3
 DEFAULT_QUESTION_MIN_AGE = 6
 HIGHEST_DIFFICULTY = 28
-QUESTION_BUDGET = 5
+DEFAULT_QUESTION_BUDGET = 10
 QUESTION_BUDGET_WINDOW = 3600
 
 OK = "ok"
@@ -103,7 +103,7 @@ class FormShield(models.AbstractModel):
         """True while this network may still ask for a question challenge over the endpoint.
 
         The question has difficulty 0, so the endpoint (where the client names the kind) hands
-        it out only a few times an hour per network: enough for a browser that cannot run the
+        it out only a limited number of times an hour per network (`form_shield.question_budget_per_hour`, default 10, so several members behind one shared address can each get one): enough for a browser that cannot run the
         proof of work, too few for a bot to use it as a way round the work. Redis down counts
         as no budget."""
         tag = tokens.ip_tag(self._signing_key(), self._client_address())
@@ -115,7 +115,7 @@ class FormShield(models.AbstractModel):
                 client.expire(key, QUESTION_BUDGET_WINDOW)
         except (redis.exceptions.RedisError, OSError):
             return False
-        return used <= QUESTION_BUDGET
+        return used <= self._int_param("form_shield.question_budget_per_hour", DEFAULT_QUESTION_BUDGET)
 
     # [@ANCHOR: form_shield:issue]
     # Verified by [@ANCHOR: form_shield:test_challenge_endpoint_issues_signed_uncacheable_json]

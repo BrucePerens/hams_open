@@ -127,7 +127,7 @@ The wire format of a challenge is `v1.<kind>.<issued>.<expires>.<difficulty>.<no
 
 ### The shield model (`models/form_shield.py`, `form.shield`)
 
-`form.shield` is an abstract model; a form calls `env["form.shield"].check(...)` (or `check_form`) once per submission and acts on the returned `Verdict(ok, outcome, reason)` namedtuple. `outcome` is one of `ok`, `silent` (a program: answer like a success and store nothing), `retry` (a person: ask them to try again), `question` (no answer at all: offer the question), `limited` (rate limit, HTTP 429) or `unavailable` (Redis down, HTTP 503). Tunables are `ir.config_parameter` keys: `form_shield.difficulty` (default 19, capped at 28), `form_shield.ttl_seconds` (7200), `form_shield.min_age_seconds` (3), `form_shield.question_min_age_seconds` (6), `form_shield.retention_days` (90).
+`form.shield` is an abstract model; a form calls `env["form.shield"].check(...)` (or `check_form`) once per submission and acts on the returned `Verdict(ok, outcome, reason)` namedtuple. `outcome` is one of `ok`, `silent` (a program: answer like a success and store nothing), `retry` (a person: ask them to try again), `question` (no answer at all: offer the question), `limited` (rate limit, HTTP 429) or `unavailable` (Redis down, HTTP 503). Tunables are `ir.config_parameter` keys: `form_shield.difficulty` (default 19, capped at 28), `form_shield.ttl_seconds` (7200), `form_shield.min_age_seconds` (3), `form_shield.question_min_age_seconds` (6), `form_shield.question_budget_per_hour` (10), `form_shield.retention_days` (90).
 
 ### `_int_param(name, default)` [@ANCHOR: form_shield:int_param]
 
@@ -143,7 +143,7 @@ The wire format of a challenge is `v1.<kind>.<issued>.<expires>.<difficulty>.<no
 
 ### `question_budget_left()` [@ANCHOR: form_shield:question_budget] Example: `env["form.shield"].question_budget_left()`
 
-`-> bool`. Counts one question-challenge request for the caller's network (keyed hash, one Redis counter, one hour) and says whether it is within 5. The challenge route calls it before issuing kind `q`, which has difficulty 0 and would otherwise let a bot skip the proof of work; over budget the route answers 429 `question_limit`. Redis down gives False. Test: `test_challenge_endpoint_caps_question_requests`.
+`-> bool`. Counts one question-challenge request for the caller's network (keyed hash, one Redis counter, one hour) and says whether it is within `form_shield.question_budget_per_hour` (default 10, so several members behind one shared address are not locked out). The challenge route calls it before issuing kind `q`, which has difficulty 0 and would otherwise let a bot skip the proof of work; over budget the route answers 429 `question_limit`. Redis down gives False. Test: `test_challenge_endpoint_caps_question_requests`.
 
 ### `issue(kind="pow")` [@ANCHOR: form_shield:issue]
 
@@ -230,7 +230,7 @@ Seeds `form_shield.signing_key` with `secrets.token_hex(32)` when it is not set 
 
 ### Challenge route (`controllers/form_shield_api.py`) [@ANCHOR: form_shield:challenge_route]
 
-`FormShieldController.challenge(self, kind="pow", **_ignored)`, route `POST /form_shield/challenge`, `auth="public"`, `csrf=False`, `readonly=True`, `save_session=False`, no sitemap entry. `kind="q"` asks for a question challenge (rationed to 5 an hour per network, then 429), anything else a proof of work. Returns the JSON of `form.shield.issue(kind)` with `Cache-Control: no-store`. A POST rather than a GET because pages that call it may come from Cloudflare's edge cache and every visitor needs a challenge of their own (network-bound, single-use). It sets no cookie and writes nothing, so it needs no session or CSRF (cross-site request forgery) token: all it can do is hand out a signed string. Test: `test_challenge_endpoint_issues_signed_uncacheable_json`.
+`FormShieldController.challenge(self, kind="pow", **_ignored)`, route `POST /form_shield/challenge`, `auth="public"`, `csrf=False`, `readonly=True`, `save_session=False`, no sitemap entry. `kind="q"` asks for a question challenge (rationed to `form_shield.question_budget_per_hour`, default 10, an hour per network, then 429), anything else a proof of work. Returns the JSON of `form.shield.issue(kind)` with `Cache-Control: no-store`. A POST rather than a GET because pages that call it may come from Cloudflare's edge cache and every visitor needs a challenge of their own (network-bound, single-use). It sets no cookie and writes nothing, so it needs no session or CSRF (cross-site request forgery) token: all it can do is hand out a signed string. Test: `test_challenge_endpoint_issues_signed_uncacheable_json`.
 
 ### Refusal helpers (`refusal.py`)
 
