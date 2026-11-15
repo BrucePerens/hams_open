@@ -308,9 +308,15 @@ class PagerIncident(models.Model):
                 ).mapped("partner_id")
 
             msg_body = _("🚨 ESCALATION: Incident open for > 15 minutes!")
-            inc.with_user(mail_svc).message_post(
-                body=msg_body, partner_ids=partners.ids)   # fmt: skip
-        incidents.write({"is_escalated": True})
+            # Flag each incident as it is paged, in its own savepoint: one failing post must not leave the
+            # incidents already paged unflagged (they would be paged again on the next run) nor stop the rest.
+            try:
+                with self.env.cr.savepoint():
+                    inc.with_user(mail_svc).message_post(
+                        body=msg_body, partner_ids=partners.ids)   # fmt: skip
+                    inc.write({"is_escalated": True})
+            except Exception:  # audit-ignore-catch-all: any mail failure for one incident must not stop or unflag the others
+                _logger.exception("Escalation of incident %s failed; it is retried on the next run", inc.id)
 
     # [@ANCHOR: pager_duty:notify_on_duty]
     def _notify_on_duty(self, incident, website_id, msg_body):
