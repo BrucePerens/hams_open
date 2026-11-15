@@ -5,6 +5,8 @@
 CREDENTIAL_FIELDS = ("cloudflare_api_token_crypt", "cloudflare_zone_id")
 
 
+# [@ANCHOR: cloudflare:restore_credentials_after_test]
+# Verified by [@ANCHOR: COMM_test_queue_batching_and_rate_limiting]
 def restore_credentials_after_test(case, website):
     """Puts `website`'s Cloudflare credentials back, and commits, when `case` ends.
 
