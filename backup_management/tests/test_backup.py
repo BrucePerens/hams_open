@@ -430,3 +430,32 @@ class TestBackupManagement(RealTransactionCase):
         self.safe_patch_object(type(config), "action_sync_snapshots")
         self.env["backup.config"].cron_sync_all_backups()
         self.assertTrue(any("No Successful Backup Job" in c.args[0] for c in reported.call_args_list))
+
+    def test_cron_sync_all_backups_alerts_for_old_config_without_snapshot_or_with_future_snapshot(self):
+        # Tests [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
+        config = self.config_kopia
+        now = fields.Datetime.now()
+        self.env["backup.job"].search([("config_id", "=", config.id)]).unlink()
+        self.env["backup.snapshot"].search([("config_id", "=", config.id)]).unlink()
+        reported = self.safe_patch_object(type(config), "report_backup_failure")
+        self.safe_patch_object(type(config), "action_sync_snapshots")
+
+        def stale_alerts():
+            reported.reset_mock()
+            self.env["backup.config"].cron_sync_all_backups()
+            return [c for c in reported.call_args_list if "Stale Backup Alert" in c.args[0] and config.name in c.args[0]]
+
+        self.assertEqual(stale_alerts(), [])  # a new config with no snapshot is not alarming
+        self.env.cr.execute(
+            "UPDATE backup_config SET create_date = %s WHERE id = %s", (now - datetime.timedelta(hours=40), config.id)
+        )
+        config.invalidate_recordset(["create_date"])
+        self.assertEqual(len(stale_alerts()), 1)  # old config, no snapshot at all
+        self.env["backup.snapshot"].create(
+            {"config_id": config.id, "snapshot_id": "snap_future", "start_time": now + datetime.timedelta(days=3)}
+        )
+        self.assertEqual(len(stale_alerts()), 1)  # a snapshot dated in the future does not count
+        self.env["backup.snapshot"].create(
+            {"config_id": config.id, "snapshot_id": "snap_recent", "start_time": now - datetime.timedelta(hours=1)}
+        )
+        self.assertEqual(stale_alerts(), [])
