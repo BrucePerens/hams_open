@@ -107,7 +107,7 @@ class CloudflareDNSRecord(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_dns_record_constraints]
     # Verified by [@ANCHOR: COMM_test_dns_record_constraints]
-    @api.constrains("name", "type", "content", "proxied", "cf_record_id")
+    @api.constrains("name", "type", "content", "proxied", "cf_record_id", "active")
     def _check_record(self):
         # Archived rows are not pushed, so they never clash, whatever active_test the caller carries.
         same_keys = self.env["cloudflare.dns.record"].with_context(active_test=True).search([("name", "in", self.mapped("name"))], limit=10000)

@@ -262,6 +262,13 @@ class TestDnsRecordModel(HamsTransactionCase):
         with self.assertRaises(ValidationError):
             self._make(name="hams.com", type="TXT", content="v=spf1 -all", proxied=True)
 
+    def test_01b_unarchiving_a_row_that_duplicates_an_active_one_is_refused(self):
+        old = self._make(name="dup.hams.com", content="66.135.10.57")
+        old.active = False
+        self._make(name="dup.hams.com", content="66.135.10.57")
+        with self.assertRaises(ValidationError):
+            old.active = True
+
     # Tests [@ANCHOR: cloudflare:COMM_dns_record_glue_unproxied]
     def test_02_a_nameserver_name_must_be_dns_only_whichever_row_comes_first(self):
         self._make(name="callbook.hams.com", type="NS", content="ns1.hams.com", proxied=False)
