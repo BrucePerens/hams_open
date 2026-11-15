@@ -148,13 +148,16 @@ class UserWebsitesWeeklyDigestView(models.Model):
 
     # [@ANCHOR: user_websites:COMM_weekly_digest_view_init]
     def init(self):
+        # The id is the follower row's own id (unique, and one follower row is in one half of the UNION only). A row number
+        # shifted whenever a subscriber was added or left between two batches of the send, so the batch cursor
+        # (user_websites.last_digest_id) skipped one digest or sent one twice.
         tools.drop_view_if_exists(self.env.cr, self._table)
         with self.env.cr.savepoint():
             self.env.cr.execute(
                 """
                 CREATE OR REPLACE VIEW user_websites_weekly_digest_view AS (
                 SELECT
-                    row_number() OVER (ORDER BY f.partner_id, u.partner_id) as id,
+                    min(f.id) as id,
                     'Weekly Digest SQL View'::varchar as name,
                     f.partner_id as partner_id,
                     p.name as author_name,
@@ -173,7 +176,7 @@ class UserWebsitesWeeklyDigestView(models.Model):
                 UNION ALL
 
                 SELECT
-                    row_number() OVER (ORDER BY f.partner_id, g.id) + 5000000 as id,
+                    min(f.id) as id,
                     'Weekly Digest SQL View'::varchar as name,
                     f.partner_id as partner_id,
                     g.name as author_name,
