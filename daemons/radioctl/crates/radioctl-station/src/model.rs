@@ -202,6 +202,9 @@ impl ChannelDef {
             ChannelKind::Selector { ways, .. } if !(1..=64).contains(&ways) => {
                 bad("a selector has 1 to 64 ways".into())
             }
+            ChannelKind::Selector { ways, .. } if self.line.checked_add(ways - 1).is_none() => {
+                bad("the selector's ways run past the last line number".into())
+            }
             ChannelKind::Momentary { pulse_ms } if pulse_ms == 0 || pulse_ms > 10_000 => {
                 bad("a momentary pulse is 1 to 10000 ms".into())
             }
@@ -810,6 +813,15 @@ steps = [
             def.dependents(&DeviceId("ic7300".into())),
             vec![DeviceId("amp".into())]
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_station_channel_validate]
+    #[test]
+    fn a_selector_whose_ways_run_past_the_last_line_is_refused() {
+        // line + ways saturated, so lines() came back short and a write indexed past its end.
+        let text = SAMPLE.replace("line = 2", "line = 4294967294");
+        let err = StationDef::from_toml(&text).unwrap_err();
+        assert!(err.detail.contains("past the last line"), "{}", err.detail);
     }
 
     // Tests [@ANCHOR: radioctl_station_def_validate]
