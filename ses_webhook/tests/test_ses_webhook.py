@@ -861,7 +861,7 @@ class TestSesWebhook(HamsHttpCase):
         log = self.env['ses.webhook.log'].search([('name', '=', 'msg-forged-nudge')])
         self.assertEqual(log.status, 'rejected_signature')
 
-    def test_09_webhook_url_computes_for_plain_internal_user(self):
+    def test_09_webhook_url_computes_for_the_service_account_only(self):
         # Tests [@ANCHOR: ses_webhook:COMM_compute_webhook_url]
         """
         _compute_webhook_url() used to read web.base.url via .sudo(),
@@ -886,12 +886,17 @@ class TestSesWebhook(HamsHttpCase):
         self.assertFalse(plain_user.has_group("base.group_system"))
         self.assertTrue(plain_user.has_group("base.group_user"))
 
-        domain_as_plain_user = self.domain_a.with_user(plain_user)
+        # The URL carries the secret token, so since the token became a credential a plain internal
+        # user may no longer read it (see test_10b); the webhook service account still computes it
+        # without sudo().
+        with self.assertRaises(AccessError):
+            self.domain_a.with_user(plain_user).read(["webhook_url"])
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
         self.assertTrue(
-            domain_as_plain_user.webhook_url,
-            "A plain internal user (base.group_user) MUST be able to "
-            "compute/read webhook_url on a record their own ACL grants "
-            "them read access to.",
+            self.domain_a.with_user(svc_uid).webhook_url,
+            "The webhook service account MUST be able to compute webhook_url.",
         )
 
     # ------------------------------------------------------------------
@@ -933,6 +938,25 @@ class TestSesWebhook(HamsHttpCase):
             self.domain_b.with_user(user_a).read(["name"])
         with self.assertRaises(AccessError):
             self.domain_c.with_user(user_a).read(["name"])
+
+    def test_10b_secret_token_is_hidden_from_plain_internal_users(self):
+        """The token is a credential in the webhook URL: an internal user sees the domain's name
+        but can read neither secret_token nor webhook_url; an administrator still can."""
+        user_a = self.env["res.users"].create({
+            "name": "SES Webhook User Token",
+            "login": "ses_webhook_user_token",
+            "company_id": self.company_a.id,
+            "company_ids": [(6, 0, [self.company_a.id])],
+            "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
+        })
+        domain = self.domain_a.with_user(user_a)
+        self.assertEqual(domain.read(["name"])[0]["name"], "test-a.com")
+        with self.assertRaises(AccessError):
+            domain.read(["secret_token"])
+        with self.assertRaises(AccessError):
+            domain.read(["webhook_url"])
+        self.assertEqual(self.domain_a.secret_token, "mock_secret_a")
+        self.assertIn("token=mock_secret_a", self.domain_a.webhook_url)
 
     def test_13_domain_multi_company_isolation_symmetric(self):
         """
