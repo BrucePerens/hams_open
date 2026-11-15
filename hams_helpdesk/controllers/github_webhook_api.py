@@ -144,6 +144,13 @@ class GithubWebhookController(http.Controller):
             # against the identical "valid JSON, wrong top-level shape" case.
             return request.make_response("Bad Request", status=400)
 
+        # A signed delivery is genuine but may be a replay: handle each X-GitHub-Delivery id once. GitHub's own
+        # retry of a delivery we answered 200 to is dropped too, which is what the ticket dedup did anyway.
+        delivery_id = request.httprequest.headers.get("X-GitHub-Delivery", "")[:100]
+        if delivery_id and not request.env["hams_helpdesk.github_delivery"].with_user(svc_uid)._claim(delivery_id):
+            _logger.info("GitHub webhook: ignoring replayed delivery %r.", delivery_id)
+            return request.make_response("OK", status=200)
+
         Ticket = request.env["hams_helpdesk.ticket"].with_user(svc_uid)
 
         if event_type == "dependabot_alert":
