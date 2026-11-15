@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, test } from "@odoo/hoot";
 import { animationFrame } from "@odoo/hoot-dom";
 import { App } from "@odoo/owl";
+import { patchWithCleanup } from "@web/../tests/web_test_helpers";
 import { getTemplate } from "@web/core/templates";
 import { BackupBoard } from "@backup_management/components/board/board";
 
@@ -57,6 +58,17 @@ describe("backup_management_board", () => {
         expect(board.state.configs).toEqual(CONFIGS);
         expect(board.state.isLoading).toBe(false);
         expect(document.body.textContent).toInclude("main");
+    });
+
+    test("a failed request leaves the board mounted with an error message instead of loading for ever", async () => {
+        // Tests [@ANCHOR: backup_management:js_board_fetch_data]
+        const orm = { call: async () => { throw new Error("network down"); } };
+        patchWithCleanup(console, { error: () => {} });
+        const board = await mountPlain(BackupBoard, { orm, website: {} });
+        await animationFrame();
+        expect(board.state.isLoading).toBe(false);
+        expect(board.state.loadError).toBe(true);
+        expect(document.body.textContent).toInclude("could not be loaded");
     });
 
     test("fetchData asks for the current website's configurations, or all of them when there is no website", async () => {

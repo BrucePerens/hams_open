@@ -15,6 +15,7 @@ export class BackupBoard extends Component {
         this.state = useState({
             configs: [],
             isLoading: true,
+            loadError: false,
         });
 
         onMounted(async () => {
@@ -44,7 +45,14 @@ export class BackupBoard extends Component {
         if (this.website.currentWebsite) {
             context.website_id = this.website.currentWebsite.id;
         }
-        this.state.configs = await this.orm.call("backup.config", "get_board_data", [], { context: context });
+        // A failed request must not leave the board loading for ever (and reject unhandled from the mount or the Refresh button).
+        try {
+            this.state.configs = await this.orm.call("backup.config", "get_board_data", [], { context: context });
+            this.state.loadError = false;
+        } catch (error) {
+            console.error("Failed to load the backup board:", error);
+            this.state.loadError = true;
+        }
         this.state.isLoading = false;
     }
 }

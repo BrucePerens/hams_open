@@ -33,6 +33,9 @@
                         </div>
                     </div>
                 </t>
+                <t t-elif="state.loadError">
+                    <div class="alert alert-danger load-error" role="alert">The backup board could not be loaded. Use Refresh to try again.</div>
+                </t>
                 <t t-else="">
                     <div class="row">
                         <t t-foreach="state.configs || []" t-as="conf" t-key="conf.id">
