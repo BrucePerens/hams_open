@@ -122,6 +122,15 @@ impl ModbusBoard {
                 "modbus board: bad slave or coil count",
             ));
         }
+        if b.reply_timeout_ms > crate::model::MAX_MS || b.inter_frame_ms > crate::model::MAX_MS {
+            return Err(StationError::new(
+                StationErrorKind::Config,
+                format!(
+                    "modbus board: a time field is at most {} ms",
+                    crate::model::MAX_MS
+                ),
+            ));
+        }
         if u32::from(b.coil_base) + u32::from(b.coils) > 0x1_0000 {
             return Err(StationError::new(
                 StationErrorKind::Config,
@@ -942,6 +951,13 @@ mod tests {
         assert_eq!(ModbusBoard::from_toml(&top).unwrap().coil_base, 65520);
         let past = text.replace("coil_base = 0", "coil_base = 65521");
         assert!(ModbusBoard::from_toml(&past).is_err());
+        for (from, to) in [
+            ("reply_timeout_ms = 1000", "reply_timeout_ms = 3600001"),
+            ("inter_frame_ms = 20", "inter_frame_ms = 3600001"),
+        ] {
+            assert!(text.contains(from), "{from}");
+            assert!(ModbusBoard::from_toml(&text.replace(from, to)).is_err());
+        }
         let rtu = text
             .replace("framing = \"ascii\"", "framing = \"rtu\"")
             .replace("slave = 254", "slave = 7");
