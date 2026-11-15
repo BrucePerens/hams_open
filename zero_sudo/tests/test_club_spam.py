@@ -728,6 +728,7 @@ class TestHeadVerification(BaseCase):
 
     def test_53b_a_list_item_with_no_end_tag_is_still_cut_when_its_one_link_is_spam(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_strip_end]
+        # Tests [@ANCHOR: zero_sudo:club_spam_strip_close]
         # Tests [@ANCHOR: zero_sudo:club_spam_strip_start]
         # `</li>` and `</p>` are optional in HTML, so a page may leave the item open until the next `<li>` or the list's end.
         spam_link = '<a href="http://x.example/casino-slots-online">best casino slots</a>'

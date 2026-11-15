@@ -286,6 +286,10 @@ inherited: each frame stands alone because the rule is applied when the element 
 `handle_data(data)` appends the text to every open `<a>` frame on the stack, so a link's anchor text is complete when its end tag comes
 (and so nested markup inside a link counts). It does not look at any other text. Returns nothing.
 
+### _StripParser._close `[@ANCHOR: zero_sudo:club_spam_strip_close]`
+
+`_close(frame, end)` judges one element that has just ended at character offset `end`: it scores a real `<a>` link, passes link flags to the open parent, and appends the element's span when it is a spam block (the rules are listed under `handle_endtag` below). Returns nothing. Tested by `test_53b_a_list_item_with_no_end_tag_is_still_cut_when_its_one_link_is_spam`.
+
 ### _StripParser.handle_endtag `[@ANCHOR: zero_sudo:club_spam_strip_end]`
 
 `handle_endtag(tag)` closes the nearest open frame of that tag (an unmatched end tag is ignored) and decides. For an `<a>` with a real
