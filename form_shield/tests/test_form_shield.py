@@ -184,6 +184,31 @@ class TestFormShield(HamsTransactionCase):
         self.assertTrue(attempt("192.0.2.1").ok)
         self.assertEqual(attempt("100.64.0.1").reason, "rate_global")
 
+    def test_question_budget_is_none_left_when_redis_is_down(self):
+        # Tests [@ANCHOR: form_shield:check]
+        def broken(model):
+            raise redis.exceptions.ConnectionError("down")
+
+        with self.safe_patch_object_cm(type(self.shield), "_redis", broken):
+            self.assertFalse(self.shield.question_budget_left())
+
+    def test_question_budget_runs_out_after_the_configured_count(self):
+        # Tests [@ANCHOR: form_shield:check]
+        self.env["ir.config_parameter"].set_param("form_shield.question_budget_per_hour", "2")
+        self.assertEqual([self.shield.question_budget_left() for _i in range(3)], [True, True, False])
+
+    def test_a_non_numeric_setting_falls_back_to_the_default(self):
+        # Tests [@ANCHOR: form_shield:check]
+        self.env["ir.config_parameter"].set_param("form_shield.ttl_seconds", "ten")
+        with self.assertLogs("odoo.addons.form_shield.models.form_shield", "ERROR"):
+            self.assertEqual(self.shield._int_param("form_shield.ttl_seconds", 77), 77)
+
+    def test_missing_signing_key_is_an_error_not_an_empty_key(self):
+        # Tests [@ANCHOR: form_shield:signing_key]
+        self.env["ir.config_parameter"].set_param("form_shield.signing_key", False)
+        with self.assertRaises(RuntimeError):
+            self.shield._signing_key()
+
     def test_redis_down_is_reported_not_skipped(self):
         # Tests [@ANCHOR: form_shield:check]
         response = shield_response(self.env, "contact", GUEST)
