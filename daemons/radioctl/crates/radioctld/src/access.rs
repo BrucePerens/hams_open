@@ -86,15 +86,25 @@ impl AllowList {
                 .trim()
                 .parse()
                 .map_err(|_| format!("allow-list entry {entry:?} is not an IP address"))?;
+            // A prefix written against an IPv4-mapped IPv6 address counts bits of the 128-bit
+            // address: /96 is the mapped zero network, /120 a mapped /24.
+            let mapped = matches!(addr, IpAddr::V6(v6) if v6.to_ipv4_mapped().is_some());
             let addr = normalise(addr);
             let longest = if addr.is_ipv4() { 32 } else { 128 };
             let prefix = match prefix_text {
-                Some(p) => p
-                    .trim()
-                    .parse::<u8>()
-                    .ok()
-                    .filter(|p| *p <= longest)
-                    .ok_or_else(|| format!("allow-list entry {entry:?} has a bad prefix length"))?,
+                Some(p) => {
+                    let bad = || format!("allow-list entry {entry:?} has a bad prefix length");
+                    let p = p.trim().parse::<u8>().map_err(|_| bad())?;
+                    let p = if mapped {
+                        p.checked_sub(96).ok_or_else(bad)?
+                    } else {
+                        p
+                    };
+                    if p > longest {
+                        return Err(bad());
+                    }
+                    p
+                }
                 None => longest,
             };
             nets.push(Net { addr, prefix });
@@ -165,8 +175,29 @@ mod tests {
     // Tests [@ANCHOR: radioctld_access_parse]
     #[test]
     fn bad_entries_are_rejected() {
-        for bad in ["nonsense", "10.0.0.0/33", "10.0.0.0/x", "::1/129", ""] {
+        for bad in [
+            "nonsense",
+            "10.0.0.0/33",
+            "10.0.0.0/x",
+            "::1/129",
+            "",
+            // /24 of a mapped address is a 128-bit prefix far wider than any IPv4 net
+            "::ffff:10.0.0.0/24",
+            "::ffff:10.0.0.0/129",
+        ] {
             assert!(AllowList::parse(&[bad.to_string()]).is_err(), "{bad}");
         }
+    }
+
+    // Tests [@ANCHOR: radioctld_access_parse]
+    #[test]
+    fn a_prefix_on_a_mapped_address_counts_the_ipv6_bits() {
+        let allow = list(&["::ffff:10.0.0.0/104"]);
+        assert!(allow.allows(ip("10.1.2.3")));
+        assert!(allow.allows(ip("::ffff:10.1.2.3")));
+        assert!(!allow.allows(ip("11.0.0.1")));
+        let one = list(&["::ffff:192.168.1.5/128"]);
+        assert!(one.allows(ip("192.168.1.5")));
+        assert!(!one.allows(ip("192.168.1.6")));
     }
 }
