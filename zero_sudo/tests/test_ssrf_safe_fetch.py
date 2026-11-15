@@ -283,6 +283,63 @@ class TestSsrfSafeFetch(HamsTransactionCase):
         self.assertEqual(accepted["conn"].getpeername()[1], client_sock.getsockname()[1])
         accepted["conn"].close()
 
+    def test_resolve_ssrf_safe_addresses_refuses_an_empty_answer(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_resolve_ssrf_safe_addresses]
+        self.safe_patch("socket.getaddrinfo", return_value=[])
+        with self.assertRaisesRegex(sf.SSRFValidationError, "no addresses returned"):
+            sf.resolve_ssrf_safe_addresses("empty-answer.example", "test-context")
+
+    def _closed_local_port(self):
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        probe.bind(("127.0.0.1", 0))  # burn-ignore-self-hosted-server: finds a free local port, closed again at once
+        port = probe.getsockname()[1]
+        probe.close()
+        return port
+
+    def test_pinned_create_connection_raises_the_connect_error_instead_of_falling_back(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_pinned_create_connection]
+        port = self._closed_local_port()
+        validated = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", port))]  # burn-ignore-self-hosted-server: a closed local port
+        with self.assertRaises(ConnectionRefusedError):
+            sf._pinned_create_connection(validated)(("anything.invalid", port))
+
+    def test_pinned_create_connection_with_no_stream_address_says_so(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_pinned_create_connection]
+        validated = [(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP, "", ("127.0.0.1", 9))]  # burn-ignore-self-hosted-server: only a datagram entry, never dialled
+        with self.assertRaisesRegex(OSError, "No validated addresses to connect to for anything.invalid"):
+            sf._pinned_create_connection(validated)(("anything.invalid", 9))
+
+    def test_pinned_create_connection_applies_the_timeout_and_source_address(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_pinned_create_connection]
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(("127.0.0.1", 0))  # burn-ignore-self-hosted-server: local server for this test only
+        server.listen(1)
+        self.addCleanup(server.close)
+        port = server.getsockname()[1]
+        validated = [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("127.0.0.1", port))]  # burn-ignore-self-hosted-server: the local server above
+        client = sf._pinned_create_connection(validated)(
+            ("anything.invalid", port), timeout=2.5, source_address=("127.0.0.1", 0)  # burn-ignore-self-hosted-server: loopback source
+        )
+        self.addCleanup(client.close)
+        self.assertEqual(client.gettimeout(), 2.5)
+        self.assertEqual(client.getsockname()[0], "127.0.0.1")  # burn-ignore-self-hosted-server: loopback source
+
+    def test_urlopen_ssrf_safe_passes_the_timeout_to_the_opener(self):
+        # Tests [@ANCHOR: zero_sudo:ssrf_safe_fetch_urlopen_ssrf_safe]
+        calls = []
+
+        class _Opener:
+            def open(self, request, **kwargs):
+                calls.append((request, kwargs))
+                return "response"
+
+        self.safe_patch_object(sf, "_build_ssrf_safe_opener", lambda *args, **kwargs: _Opener())
+        self.assertEqual(sf.urlopen_ssrf_safe("https://example.invalid/", "ctx", timeout=7), "response")
+        self.assertEqual(calls, [("https://example.invalid/", {"timeout": 7})])
+        calls.clear()
+        sf.urlopen_ssrf_safe("https://example.invalid/", "ctx")
+        self.assertEqual(calls, [("https://example.invalid/", {})])
+
     # ------------------------------------------------------------------
     # Layer 3: urlopen_ssrf_safe end to end -- real TLS, real Host/SNI
     # ------------------------------------------------------------------
