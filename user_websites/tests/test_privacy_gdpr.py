@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. Licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
+from odoo.addons.user_websites.models import res_users as res_users_module
 import odoo
 import odoo.tests
 from odoo import fields
@@ -530,6 +531,34 @@ class TestPrivacyGDPR(HamsHttpCase):
         user.invalidate_recordset()
         self.assertFalse(user.gdpr_erasure_pending, "The re-run must clear the marker.")
         self.assertFalse(self.page.exists(), "The re-run must finish the erasure.")
+
+    def test_02e_a_permanently_failing_erasure_stops_retrying_and_pages_once(self):
+        # Tests [@ANCHOR: user_websites:gdpr_erasure_attempts_field]
+        # Tests [@ANCHOR: user_websites:cron_resume_gdpr_erasure]
+        """After GDPR_ERASURE_MAX_ATTEMPTS failures the cron skips the member and one pager incident is opened."""
+        def failing_unlink(pages):
+            raise ValueError("simulated permanent failure")
+
+        reported = []
+        self.safe_patch_object(
+            res_users_module, "_report_unpublish_failure", new=lambda env, description, source=None: reported.append(source)
+        )
+        user = self.env["res.users"].with_context(active_test=False).browse(self.user_privacy.id)
+        with self.safe_patch_object_cm(type(self.env["website.page"]), "unlink", new=failing_unlink):
+            for _attempt in range(res_users_module.GDPR_ERASURE_MAX_ATTEMPTS + 3):
+                self.env["res.users"]._cron_resume_gdpr_erasure() if user.gdpr_erasure_pending else self.user_privacy._gdpr_erasure_run()
+                user.invalidate_recordset()
+        self.assertEqual(user.gdpr_erasure_attempts, res_users_module.GDPR_ERASURE_MAX_ATTEMPTS)
+        self.assertEqual(len(reported), 1, "The pager is told once, when the cron gives up.")
+        self.assertTrue(user.gdpr_erasure_pending, "The marker stays so an operator can resume it.")
+
+        user.with_env(self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.gdpr_service_internal")).write(
+            {"gdpr_erasure_attempts": 0}
+        )
+        self.env["res.users"]._cron_resume_gdpr_erasure()
+        user.invalidate_recordset()
+        self.assertFalse(user.gdpr_erasure_pending, "Resetting the counter lets the cron finish the erasure.")
+        self.assertEqual(user.gdpr_erasure_attempts, 0)
 
     def test_02d_the_member_is_told_the_erasure_continues_not_given_an_error(self):
         # Tests [@ANCHOR: user_websites:COMM_privacy_delete_content]

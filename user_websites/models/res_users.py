@@ -33,6 +33,10 @@ _logger = logging.getLogger(__name__)
 UNPUBLISH_INCIDENT_SOURCE = "User Websites: background unpublish"
 
 
+# A permanently failing erasure is retried by the cron this many times, then left for an operator (and paged).
+GDPR_ERASURE_MAX_ATTEMPTS = 6
+
+
 def _pager_incident_model(env):
     # [@ANCHOR: user_websites:COMM_unpublish_pager_incident_model]
     """The pager.incident model as the pager service user, or None when pager_duty is not installed.
@@ -46,7 +50,7 @@ def _pager_incident_model(env):
     )["pager.incident"]
 
 
-def _report_unpublish_failure(env, description):
+def _report_unpublish_failure(env, description, source=None):
     # [@ANCHOR: user_websites:COMM_report_unpublish_failure]
     """Open a pager incident saying a suspension's background unpublish did not finish.
 
@@ -65,7 +69,7 @@ def _report_unpublish_failure(env, description):
         transaction.default_env = incidents.env
         try:
             incidents.report_incident(
-                {"source": UNPUBLISH_INCIDENT_SOURCE, "severity": "high", "description": description}
+                {"source": source or UNPUBLISH_INCIDENT_SOURCE, "severity": "high", "description": description}
             )
             env.cr.commit()
         finally:
@@ -264,6 +268,16 @@ class ResUsers(models.Model):
         default=False,
         copy=False,
         index=True,
+        prefetch="user_websites",
+    )
+
+    # [@ANCHOR: user_websites:gdpr_erasure_attempts_field]
+    # Failed runs of the erasure chain since the last success; the cron stops at GDPR_ERASURE_MAX_ATTEMPTS and a pager
+    # incident says so. An operator who fixed the cause sets it back to 0 and the cron picks the member up again.
+    gdpr_erasure_attempts = fields.Integer(
+        string="GDPR Erasure Failed Attempts",
+        default=0,
+        copy=False,
         prefetch="user_websites",
     )
 
@@ -900,9 +914,24 @@ class ResUsers(models.Model):
             _logger.exception("GDPR erasure of user %s did not finish; the cron will resume it", self.id)
             if not is_test:
                 self.env.cr.rollback()
+            self._note_gdpr_erasure_failure(env_svc, is_test)
             return False
-        self.with_env(env_svc).write({"gdpr_erasure_pending": False})
+        self.with_env(env_svc).write({"gdpr_erasure_pending": False, "gdpr_erasure_attempts": 0})
         return True
+
+    def _note_gdpr_erasure_failure(self, env_svc, is_test):
+        """Count a failed run (committed, so it survives the rollback) and page once when the cron gives up on the member."""
+        attempts = self.with_env(env_svc).gdpr_erasure_attempts + 1
+        self.with_env(env_svc).write({"gdpr_erasure_attempts": attempts})
+        if not is_test:
+            self.env.cr.commit()
+        if attempts == GDPR_ERASURE_MAX_ATTEMPTS:
+            _report_unpublish_failure(
+                self.env,
+                f"The GDPR erasure of user {self.id} failed {attempts} times; the cron has stopped retrying it. "
+                "The account is deactivated and its marker is set. Fix the cause, then set gdpr_erasure_attempts to 0.",
+                source=f"user_websites:gdpr_erasure:{self.id}",
+            )
 
     # [@ANCHOR: user_websites:cron_resume_gdpr_erasure]
     # Verified by [@ANCHOR: user_websites:test_gdpr_erasure_run_marks_and_resumes]
@@ -910,7 +939,9 @@ class ResUsers(models.Model):
     def _cron_resume_gdpr_erasure(self):
         """Run the erasure chain again for every member whose erasure did not finish."""
         env_svc = self.env["zero_sudo.security.utils"]._get_service_env("zero_sudo.gdpr_service_internal")
-        pending = env_svc["res.users"].with_context(active_test=False).search([("gdpr_erasure_pending", "=", True)])
+        pending = env_svc["res.users"].with_context(active_test=False).search(
+            [("gdpr_erasure_pending", "=", True), ("gdpr_erasure_attempts", "<", GDPR_ERASURE_MAX_ATTEMPTS)]
+        )
         is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
         for user in pending:
             if user._gdpr_erasure_run() and not is_test:
