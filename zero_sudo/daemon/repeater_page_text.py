@@ -52,13 +52,13 @@ _DESIGNATOR = re.compile(r"^(?P<base>[A-Z0-9]{1,3}[0-9][A-Z]{1,4})(?P<suffix>[/-
 _CALL = r"[A-Za-z0-9]{1,3}[0-9][A-Za-z]{1,4}"
 _CALLSIGN_TOKEN = re.compile(rf"(?<![A-Za-z0-9/.-])({_CALL})(?:[/-](?:R|RPT|REP)\b)?(?![A-Za-z0-9])")
 _OPERATOR_PATTERNS = (
-    re.compile(rf"\bnode\s*(?:#|number|no\.?)?\s*\d{{3,7}}\s*(?:is\s+|are\s+)?(?:operated|run|owned|sponsored|maintained|hosted|provided)\s+by\s+({_CALL})\b", re.I),
-    re.compile(rf"\bnode\s+(?:operator|owner|sysop|sponsor)\s*(?:is\b|:)?\s*({_CALL})\b", re.I),
+    re.compile(rf"\bnode(?:\s*(?:#|number|no\.?))?\s*\d{{3,7}}\s*(?:is\s+|are\s+)?(?:operated|run|owned|sponsored|maintained|hosted|provided)\s+by\s+({_CALL})\b", re.I),
+    re.compile(rf"\bnode\s+(?:operator|owner|sysop|sponsor)\s*(?:(?:is\b|:)\s*)?({_CALL})\b", re.I),
     re.compile(rf"\b({_CALL})\s+(?:operates|runs|hosts|sponsors|maintains)\s+(?:the\s+|this\s+)?(?:echolink\s+|allstar\s+|irlp\s+)?node\b", re.I),
 )
 _MONTHS = "jan feb mar apr may jun jul aug sep oct nov dec".split()
 _MONTH = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*"
-_LABEL = r"(?:last\s+)?(?:updated?|revised?|revision|modified|as\s+of|dated?)\s*(?:on\b|:|-)?\s*"
+_LABEL = r"(?:last\s+)?(?:updated?|revised?|revision|modified|as\s+of|dated?)\s*(?:(?:on\b|:|-)\s*)?"
 _DATE_FORMS = (
     ("dmy", re.compile(rf"(\d{{1,2}})(?:st|nd|rd|th)?[-\s/.]*({_MONTH})\.?[-\s/.,]*(\d{{4}})", re.I)),
     ("mdy", re.compile(rf"({_MONTH})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})", re.I)),
@@ -343,7 +343,8 @@ def callsign_adjacent(page_text, callsign, freq):
 _NUMBER_TOKEN = re.compile(r"(?<![\d.,])\d[\d.,]*\d|\d")
 _NUMBER_TOLERANCE = 0.00051
 _TONE_TOLERANCE = 0.06
-_UNIT_CLAIM = re.compile(r"(\d[\d,.]*)\s*(?:w|watts?|kw|kilowatts?|miles?|mi|km|kilometers?|ft|feet|foot|meters?)\b", re.I)
+_UNIT_TAIL = re.compile(r"\s*(?:w|watts?|kw|kilowatts?|miles?|mi|km|kilometers?|ft|feet|foot|meters?)\b", re.I)
+_NUMBER_RUN = re.compile(r"[\d,.]+")
 _AGENCY_WORDS = (
     "u.s. navy", "navy", "army", "air force", "marines", "coast guard", "national guard", "fema", "red cross", "noaa", "skywarn",
     "department of defense", "homeland security", "sheriff", "police", "fire department", "hospital",
@@ -404,6 +405,15 @@ def number_on_page(page_text, value, tolerance=_TONE_TOLERANCE):
     return _near(_page_numbers(page_text), float(value), tolerance)
 
 
+def _unit_amounts(sentence):
+    """The numbers of `sentence` that are followed by a unit of power or distance (50 W, 1,000 miles). Each run of digits, commas and
+    points is looked at once, from its first digit (a regular expression that started at every digit of a long run was quadratic)."""
+    for run in _NUMBER_RUN.finditer(sentence):
+        amount = run.group().lstrip(",.")
+        if amount and _UNIT_TAIL.match(sentence, run.end()):
+            yield amount
+
+
 # [@ANCHOR: zero_sudo:repeater_page_text_grounded_notes]
 # Verified by [@ANCHOR: zero_sudo:test_repeater_page_text_grounding]
 def grounded_notes(notes, page_text):
@@ -415,8 +425,8 @@ def grounded_notes(notes, page_text):
     low = page_text.lower() if isinstance(page_text, str) else ""
     kept, dropped = [], []
     for sentence in re.split(r"(?<![A-Z]\.)(?<=[.!?])\s+", notes.strip()):
-        unsupported = any(not number_on_page(page_text, float(m.group(1).replace(",", "")), 0.001)
-                          for m in _UNIT_CLAIM.finditer(sentence) if re.fullmatch(r"[\d,]+(?:\.\d+)?", m.group(1)))
+        unsupported = any(not number_on_page(page_text, float(amount.replace(",", "")), 0.001)
+                          for amount in _unit_amounts(sentence) if re.fullmatch(r"[\d,]+(?:\.\d+)?", amount))
         unsupported = unsupported or any(re.search(rf"(?<![a-z]){re.escape(w)}(?![a-z])", sentence.lower()) and w not in low
                                          for w in _AGENCY_WORDS)
         (dropped if unsupported else kept).append(sentence)
