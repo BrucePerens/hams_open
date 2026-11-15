@@ -146,37 +146,37 @@ fn vna_config(c: &Value) -> Result<vnwa_open::sweep::Config, String> {
     // [@ANCHOR: bench_mcp_config_vna]
     let mut v = vnwa_open::sweep::Config::default();
     let text = |k: &str| c.get(k).and_then(|x| x.as_str()).map(String::from);
-    let num = |k: &str| c.get(k).and_then(|x| x.as_f64());
     if let Some(t) = text("codec_s11") {
         v.codec_s11 = Some(t);
     }
     if let Some(t) = text("codec_s21") {
         v.codec_s21 = Some(t);
     }
-    if let Some(x) = num("if_hz") {
-        v.if_hz = x;
-    }
-    if let Some(x) = num("point_ms") {
-        v.point_ms = x;
+    // A present value of the wrong type is an error, not the default (a mistyped `if_hz` or `rf_level` would otherwise run
+    // the unit at settings the operator did not write).
+    v.if_hz = number(c, "if_hz", v.if_hz)?;
+    v.point_ms = number(c, "point_ms", v.point_ms)?;
+    for k in ["codec_s11", "codec_s21", "hub"] {
+        if c.get(k).is_some_and(|x| !x.is_null() && !x.is_string()) {
+            return Err(format!("{k} must be text"));
+        }
     }
     // The power-switching hub port the unit is on (`uhubctl -l <hub> -p <port>`): both keys or neither.
-    match (text("hub"), c.get("hub_port").and_then(|x| x.as_u64())) {
-        (Some(hub), Some(port)) => {
-            let port = u8::try_from(port).map_err(|_| "hub_port must be 1 to 255".to_string())?;
-            v.hub = Some(vnwa_open::power::HubPort { hub, port });
+    let hub_port = whole::<u8>(c, "hub_port", 0)?;
+    match (text("hub"), c.get("hub_port").filter(|x| !x.is_null())) {
+        (Some(hub), Some(_)) => {
+            v.hub = Some(vnwa_open::power::HubPort {
+                hub,
+                port: hub_port,
+            });
         }
         (None, None) => {}
         _ => return Err("hub and hub_port must be given together".into()),
     }
-    if let Some(x) = c.get("retries").and_then(|x| x.as_u64()) {
-        v.retries = u32::try_from(x).map_err(|_| "retries is too large".to_string())?;
-    }
-    v.settle_ms = num("settle_ms");
-    v.window_ms = num("window_ms");
-    if let Some(x) = c.get("rf_level").and_then(|x| x.as_u64()) {
-        v.rf_level = u16::try_from(x)
-            .map_err(|_| "rf_level is above the 14-bit maximum 16383".to_string())?;
-    }
+    v.retries = whole(c, "retries", v.retries)?;
+    v.settle_ms = optional_number(c, "settle_ms")?;
+    v.window_ms = optional_number(c, "window_ms")?;
+    v.rf_level = whole(c, "rf_level", v.rf_level)?;
     vnwa_open::sweep::check(&v)?;
     Ok(v)
 }
@@ -292,6 +292,16 @@ fn number(c: &Value, key: &str, default: f64) -> Result<f64, String> {
     match c.get(key) {
         None | Some(Value::Null) => Ok(default),
         Some(v) => v.as_f64().ok_or(format!("{key} must be a number")),
+    }
+}
+
+fn optional_number(c: &Value, key: &str) -> Result<Option<f64>, String> {
+    match c.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_f64()
+            .map(Some)
+            .ok_or(format!("{key} must be a number")),
     }
 }
 
@@ -455,6 +465,28 @@ mod tests {
         assert_eq!(scope(r#","port":5026"#).unwrap()[0].port, 5026);
         assert!(scope(r#","port":70561"#).is_err());
         assert!(scope(r#","port":"5025""#).is_err());
+    }
+
+    // Tests [@ANCHOR: bench_mcp_config_vna]
+    #[test]
+    fn a_mistyped_vna_setting_is_an_error_not_the_default() {
+        let vna = |extra: &str| {
+            parse(&format!(
+                r#"{{"instruments":{{"vna":{{"driver":"vnwa_open"{extra}}}}}}}"#
+            ))
+        };
+        assert!(vna(r#","hub":"1-1","hub_port":2"#).is_ok());
+        for bad in [
+            r#","if_hz":"4000""#,
+            r#","point_ms":"30""#,
+            r#","rf_level":"100""#,
+            r#","retries":"3""#,
+            r#","settle_ms":"5""#,
+            r#","hub":5,"hub_port":"2""#,
+            r#","hub":"1-1","hub_port":300"#,
+        ] {
+            assert!(vna(bad).is_err(), "{bad}");
+        }
     }
 
     // Tests [@ANCHOR: bench_mcp_config_tier_of]
