@@ -556,6 +556,7 @@ def report(client, source, msg, severity="high", website_id=False, units=()):
 
 # [@ANCHOR: pager_duty:auto_resolve]
 def auto_resolve(client, source, website_id=False):
+    """Asks Odoo to resolve the open incidents of a source that is healthy again. True when Odoo did it."""
     try:
         client.execute(
             "pager.incident",
@@ -566,8 +567,10 @@ def auto_resolve(client, source, website_id=False):
         logger.info(
             f"[{source}] System stable. Auto-resolved open incidents. (Website: {website_id})"
         )
+        return True
     except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
         logger.error(f"Failed to auto-resolve incidents for {source}: {e}")
+        return False
 
 
 # Verified by [@ANCHOR: pager_duty:test_amqp_check_full_transaction]
@@ -2111,10 +2114,13 @@ def polling_thread(client, check):
     clean_loops = 0
     failures_in_a_row = 0
     clean_before_streak = 0
+    # True until Odoo has confirmed the resolve for the current healthy stretch: a failed resolve call is tried again on the
+    # next passing pass, not left until the check fails and recovers again. A failure starts a new stretch.
+    resolve_pending = True
 
     def one_pass():
         """Runs the check once, records the result, reports or resolves. Returns seconds to wait before the next run."""
-        nonlocal clean_loops, failures_in_a_row, clean_before_streak
+        nonlocal clean_loops, failures_in_a_row, clean_before_streak, resolve_pending
         THREAD_HEARTBEATS[key] = time.time()
         CHECK_UNITS.pop(key, None)
         success, msg = execute_check(check, client)
@@ -2125,8 +2131,8 @@ def polling_thread(client, check):
             FAILING_CHECKS.discard(key)
             FAILING_NAMES.discard(name)
             clean_loops += 1
-            if clean_loops == 3:
-                auto_resolve(client, name, website_id=website_id)
+            if clean_loops >= 3 and resolve_pending:
+                resolve_pending = not auto_resolve(client, name, website_id=website_id)
             return interval
 
         # A planned restart (`sudo pagerduty-maintenance start`): the failure is expected, so it is not counted and not
@@ -2155,6 +2161,7 @@ def polling_thread(client, check):
 
         FAILING_CHECKS.add(key)
         FAILING_NAMES.add(name)
+        resolve_pending = True
         if time.time() - thread_start_time < grace:
             logger.info(
                 f"[{name}] Startup grace period active. Suppressing failure: {msg}"
