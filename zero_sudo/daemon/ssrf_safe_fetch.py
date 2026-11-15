@@ -78,6 +78,9 @@ class SSRFValidationError(Exception):
 
 
 # [@ANCHOR: zero_sudo:ssrf_safe_fetch_is_ssrf_safe_public_ip]
+_NAT64_WELL_KNOWN_PREFIX = ipaddress.ip_network("64:ff9b::/96")
+
+
 def is_ssrf_safe_public_ip(ip_obj):
     """Returns True only for an address a server-initiated download has any
     legitimate reason to reach. `is_global` alone already excludes every range
@@ -88,6 +91,16 @@ def is_ssrf_safe_public_ip(ip_obj):
     address, RFC 1918/4193 private-use ranges, multicast, "reserved," and
     unspecified/0.0.0.0 addresses) is legible without cross-referencing the
     ipaddress module's own docs."""
+    if ip_obj.version == 6:
+        # An IPv6 literal that wraps an IPv4 address (::ffff:a.b.c.d mapped, 64:ff9b::/96 NAT64, 2002::/16 6to4)
+        # must pass on the wrapped address too; Python's own verdict on these differs between releases.
+        embedded = ip_obj.ipv4_mapped or ip_obj.sixtofour
+        if embedded is None and ip_obj in _NAT64_WELL_KNOWN_PREFIX:
+            embedded = ipaddress.IPv4Address(int(ip_obj) & 0xFFFFFFFF)
+        if embedded is not None and not is_ssrf_safe_public_ip(embedded):
+            return False
+        if ip_obj.is_site_local:
+            return False
     return (
         ip_obj.is_global
         and not ip_obj.is_private

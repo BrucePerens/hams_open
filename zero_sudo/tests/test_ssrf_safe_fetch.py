@@ -142,6 +142,12 @@ class TestSsrfSafeFetch(HamsTransactionCase):
         self.assertFalse(is_safe(ipaddress.ip_address("224.0.0.1")))
         self.assertFalse(is_safe(ipaddress.ip_address("0.0.0.0")))
         self.assertFalse(is_safe(ipaddress.ip_address("::1")))
+        # Wrapped IPv4 and deprecated site-local IPv6 never pass.
+        self.assertFalse(is_safe(ipaddress.ip_address("fec0::1")))
+        self.assertFalse(is_safe(ipaddress.ip_address("::ffff:169.254.169.254")))
+        self.assertFalse(is_safe(ipaddress.ip_address("64:ff9b::a9fe:a9fe")))
+        self.assertFalse(is_safe(ipaddress.ip_address("2002:7f00:1::")))
+        self.assertTrue(is_safe(ipaddress.ip_address("2606:4700:4700::1111")))
 
     # Tests [@ANCHOR: zero_sudo_ssrf_safe_fetch_ssrfvalidation_error]
     def test_resolve_ssrf_safe_addresses_raises_for_a_missing_hostname(self):
