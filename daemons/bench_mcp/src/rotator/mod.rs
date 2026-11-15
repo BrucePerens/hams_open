@@ -260,6 +260,8 @@ pub fn limits(c: &mut Client, cfg: &Config) -> Result<([f64; 4], String), String
             .find_map(|l| l.strip_prefix(&format!("{k}=")))
             .or_else(|| r.kv(long))
             .and_then(|v| v.trim().parse::<f64>().ok())
+            // "NaN" parses as a float, and every comparison with it is false, so a NaN limit would let any target through.
+            .filter(|x| x.is_finite())
     };
     let own = [
         get("min_az", "Minimum Azimuth"),
@@ -615,6 +617,40 @@ mod tests {
         };
         assert_eq!(names("read_only"), ["bench_rotator_status"]);
         assert_eq!(names("read_config").len(), 4);
+    }
+
+    // Tests [@ANCHOR: rotator_limits]
+    #[test]
+    fn limits_that_are_not_finite_numbers_are_no_limits() {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let s = seen.clone();
+        let fake = FakeRadioctld::serve(move |c| {
+            s.lock().unwrap().push(c.to_string());
+            match c {
+                "get_pos" => ok(&["Azimuth: 10.0", "Elevation: 5.0"]),
+                "dump_state" => ok(&[
+                    "Minimum Azimuth: NaN",
+                    "Maximum Azimuth: nan",
+                    "Minimum Elevation: NaN",
+                    "Maximum Elevation: NaN",
+                    "done",
+                ]),
+                _ => ok(&[]),
+            }
+        });
+        let b = bench("rot_nan", fake.port, "read_config", "");
+        let e = call(
+            &b,
+            "bench_rotator_point",
+            &json!({"azimuth_deg": 90, "elevation_deg": 10}),
+        )
+        .unwrap_err();
+        assert!(e.contains("reports no limits"), "{e}");
+        assert!(seen
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|c| !c.starts_with("set_pos")));
     }
 
     // Tests [@ANCHOR: rotator_target_check]
