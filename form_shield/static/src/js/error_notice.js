@@ -29,7 +29,8 @@ const DEFAULT_MESSAGE = _t("We could not send the form. Please try again.");
 // [@ANCHOR: form_shield:notice_text]
 // Verified by [@ANCHOR: form_shield:test_error_notice_messages]
 export function noticeText(reason) {
-    return MESSAGES[reason] || DEFAULT_MESSAGE;
+    // The reason comes from the URL: only our own keys, never inherited ones ("constructor").
+    return Object.hasOwn(MESSAGES, reason) ? MESSAGES[reason] : DEFAULT_MESSAGE;
 }
 
 // [@ANCHOR: form_shield_js_error_notice_form_shield_error_notice]

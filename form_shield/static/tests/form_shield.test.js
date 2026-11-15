@@ -116,6 +116,10 @@ describe("form_shield", () => {
         // Anything else gets one shared default, which is none of the specific messages.
         expect(noticeText("something new")).toBe(noticeText("something else"));
         expect(texts.has(noticeText("something new"))).toBe(false);
+        // A reason is read from the URL: names inherited from Object are not reasons.
+        for (const inherited of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+            expect(noticeText(inherited)).toBe(noticeText("something new"));
+        }
     });
 
     // [@ANCHOR: form_shield:test_difficulty_zero_needs_no_work]
