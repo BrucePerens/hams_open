@@ -416,6 +416,8 @@ class SesWebhookController(http.Controller):
             'domain_id': domain.id,
         }
 
+        # A failed bounce/complaint suppression must not be acknowledged: SNS would drop the event and the address would be mailed again.
+        suppression_failed = False
         try:
             if payload_type == 'SubscriptionConfirmation':
                 subscribe_url = payload.get('SubscribeURL')
@@ -453,11 +455,13 @@ class SesWebhookController(http.Controller):
                 # field found" and lose the suppression signal entirely.
                 notification_type = ses_message.get('notificationType')
                 if notification_type in ('Bounce', 'Complaint'):
+                    suppression_failed = True
                     suppressed = self._handle_ses_event_notification(notification_type, ses_message)
                     _logger.info(
                         "SES %s notification for domain %s: suppressed %d address(es).",
                         notification_type, domain.name, len(suppressed),
                     )
+                    suppression_failed = False
                     log_vals.update({'status': 'success'})
                     return request.make_response("OK", status=200)
 
@@ -599,6 +603,8 @@ class SesWebhookController(http.Controller):
             # provided by the same service account's unconditional rule.
             request.env['ses.webhook.log'].with_user(svc_uid).create(log_vals)
 
+        if suppression_failed:
+            return request.make_response("Suppression failed", status=500)
         return request.make_response("OK", status=200)
 
     # [@ANCHOR: ses_webhook:COMM_handle_ses_event_notification]
