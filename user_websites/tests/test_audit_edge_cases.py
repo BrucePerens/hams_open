@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import psycopg2
 from unittest.mock import MagicMock
 
 from odoo.exceptions import AccessError
@@ -771,3 +772,46 @@ class TestAuditEdgeCases(RealTransactionCase):
         self.assertEqual(report.state, "new")
         report.action_mark_under_review()
         self.assertEqual(report.state, "under_review")
+
+    def test_11_async_unpublish_deactivates_the_suspended_members_blogs(self):
+        # Tests [@ANCHOR: user_websites:COMM_async_unpublish_content]
+        """A suspended member's blog containers go inactive, not only their pages and posts."""
+        blog = self.env["blog.blog"].create({"name": "Suspended Blog", "owner_user_id": self.test_user.id})
+        self.env.cr.commit()
+        _async_unpublish_content(self.env.cr.dbname, [self.test_user.id])
+        self.env.invalidate_all()
+        self.assertFalse(blog.with_context(active_test=False).active)
+
+    def test_12_async_unpublish_key_error_is_logged_and_opens_a_pager_incident(self):
+        # Tests [@ANCHOR: user_websites:COMM_report_unpublish_failure]
+        """A KeyError/ValueError mid-unpublish leaves content published: it must be logged and paged."""
+        incidents = self._recording_pager()
+        mock_get_service_env = self.safe_patch(
+            "odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env"
+        )
+        mock_get_service_env.side_effect = KeyError("simulated missing key")
+        with self.assertLogs("odoo.addons.user_websites.models.res_users", level="ERROR") as log_ctx:
+            _async_unpublish_content(self.env.cr.dbname, [self.test_user.id])
+        self.assertTrue(any("Fatal error during background unpublish" in m for m in log_ctx.output))
+        incidents.report_incident.assert_called_once()
+
+    def test_13_async_unpublish_without_the_provisioner_logs_and_does_nothing(self):
+        # Tests [@ANCHOR: user_websites:COMM_async_unpublish_content]
+        """With no sys_provisioner the task must log, touch nothing, and still release its cursor."""
+        fake_cr = MagicMock()
+        fake_cr.fetchone.return_value = None
+        fake_registry = MagicMock()
+        fake_registry.cursor.return_value = fake_cr
+        self.safe_patch("odoo.addons.user_websites.models.res_users.Registry", return_value=fake_registry)
+        with self.assertLogs("odoo.addons.user_websites.models.res_users", level="ERROR") as log_ctx:
+            _async_unpublish_content("anydb", [self.test_user.id])
+        self.assertTrue(any("sys_provisioner is missing" in m for m in log_ctx.output))
+        fake_cr.close.assert_called_once()
+
+    def test_14_group_write_keeps_the_real_cause_of_an_unrelated_integrity_error(self):
+        # Tests [@ANCHOR: user_websites:COMM_group_write]
+        """A non-slug constraint failure must not be relabelled as a slug problem."""
+        group = self.env["user.websites.group"].create({"name": "FK Guard Group"})
+        with self.assertRaises(psycopg2.IntegrityError):
+            group.write({"odoo_group_id": 999999999})
+            self.env.flush_all()
