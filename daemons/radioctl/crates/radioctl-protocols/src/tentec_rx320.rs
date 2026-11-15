@@ -332,12 +332,12 @@ impl VendorTwin for Rx320Twin {
             if held.len() < need {
                 break;
             }
-            let frame = self.rx.take(need).unwrap_or_default();
-            if need > 1 && frame.last() != Some(&CR) {
-                // Not a frame after all: resynchronise on the next byte.
-                self.rx.push(&frame[1..], now);
+            if need > 1 && held[need - 1] != CR {
+                // Not a frame after all: drop its first byte and resynchronise on the next.
+                self.rx.take(1);
                 continue;
             }
+            let frame = self.rx.take(need).unwrap_or_default();
             match (first, frame.as_slice()) {
                 (b'X', b"XX\r") => out.extend_from_slice(b" DSP START"),
                 (b'P', b"P1\r") => out.extend_from_slice(b" RADIO START"),
@@ -425,6 +425,15 @@ mod tests {
         assert_eq!(default_filter(Mode::Cw), 27);
         assert_eq!(default_filter(Mode::Am), 0);
         assert_eq!(default_filter(Mode::Usb), 14);
+    }
+
+    // Tests [@ANCHOR: radioctl_tentec_rx320_twin_feed]
+    #[test]
+    fn a_junk_prefix_does_not_swallow_the_frame_behind_it() {
+        let mut t = Rx320Twin::new(&shipped()).expect("twin");
+        // `GGW` looks like a 3-byte G frame without its CR; the W frame starts inside it.
+        t.feed(b"GGW\x05\r", T0);
+        assert_eq!(t.filter, 5);
     }
 
     // Tests [@ANCHOR: radioctl_tentec_rx320_engine_new]
