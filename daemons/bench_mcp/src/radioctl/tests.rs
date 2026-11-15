@@ -2706,3 +2706,27 @@ fn stopping_the_daemon_of_a_rig_that_may_be_keyed_releases_it_first_or_refuses()
         true
     );
 }
+
+// Tests [@ANCHOR: radioctl_exchange]
+#[test]
+fn a_reply_line_without_a_newline_is_cut_off_instead_of_buffered_forever() {
+    use std::io::{Read, Write};
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let h = std::thread::spawn(move || {
+        let (mut s, _) = l.accept().unwrap();
+        let mut b = [0u8; 64];
+        let _ = s.read(&mut b);
+        let chunk = [b'x'; 8192];
+        // Never a newline; stops when the client hangs up.
+        while s.write_all(&chunk).is_ok() {}
+    });
+    let mut c = Client::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
+    let t0 = std::time::Instant::now();
+    let e = c.command("get_freq").unwrap_err();
+    assert!(matches!(e, RigError::Link(_)), "{e}");
+    assert!(e.to_string().contains("without a newline"), "{e}");
+    assert!(t0.elapsed() < Duration::from_secs(3));
+    drop(c);
+    h.join().unwrap();
+}
