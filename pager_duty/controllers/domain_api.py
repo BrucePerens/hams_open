@@ -41,7 +41,9 @@ class PagerDutyController(http.Controller):
         # counting only failed attempts per source IP rather than
         # debouncing every call, since legitimate callers may need to push
         # domain updates more than once within the window.
-        remote_addr = request.httprequest.remote_addr or "unknown"
+        # The real visitor, not the socket peer: behind the tunnel the peer is one loopback address for everyone, so
+        # one attacker's wrong guesses would lock the real caller out too.
+        remote_addr = request.env["zero_sudo.security.utils"]._get_trusted_client_ip() or "unknown"
         redis_key = f"pager_duty_domain_api_failed_attempts:{remote_addr}"
         r_client = None
         if redis and redis_pool:
