@@ -284,6 +284,9 @@ class TestPurgeFailureAlerts(RealTransactionCase):
         self.assertEqual(set(rows.mapped("state")), {"pending"})
         # No retry limit: a row that fails again is put back an hour later again (documented in the README).
         rows.write({"state": "failed"})
+        # write() is only flushed at the next search; the raw UPDATE would run first and the flush would then stamp
+        # write_date = now, so the rows would not be an hour old and requeue_failed() would return 0.
+        rows.flush_recordset()
         self.env.cr.execute(  # audit-ignore-sql: test back-dates write_date
             "UPDATE cloudflare_purge_queue SET write_date = now() at time zone 'utc' - interval '2 hours' WHERE id = ANY(%s)",
             (rows.ids,),
