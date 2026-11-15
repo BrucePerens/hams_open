@@ -61,11 +61,11 @@ impl Config {
 
 fn port_key(k: &str) -> Result<(), String> {
     // [@ANCHOR: bench_mcp_usb_hub_port_key]
+    // The key is compared as text with `hub/port` built from the tree, so it must be in exactly that form: a real device
+    // path, and a port number without a leading zero that fits `u32` ("3-2/02" would never match "3-2/2", and a critical
+    // port with such a key was silently unprotected).
     let ok = k.split_once('/').is_some_and(|(h, p)| {
-        !h.is_empty()
-            && !p.is_empty()
-            && p.bytes().all(|b| b.is_ascii_digit())
-            && (h.starts_with("usb") || h.contains('-'))
+        sysfs::is_device_name(h) && p.parse::<u32>().is_ok_and(|n| n.to_string() == p)
     });
     if ok {
         Ok(())
@@ -560,6 +560,17 @@ mod tests {
         );
         assert!(bad(json!({"critical_devices": ["zzzz:0000"]})).contains("vid:pid"));
         assert!(bad(json!({"ports": {"3-2/2": {"label": " "}}})).contains("empty"));
+    }
+
+    #[test]
+    fn a_port_key_that_could_never_match_the_tree_is_refused() {
+        for bad in ["3-2/02", "3-2/+2", "3-2/4294967296", "x-y/1", "3-2./1", "3-2/", "/2", "usb/1", "3-2/2/3"] {
+            let e = parse_config(&json!({"ports": {bad: {"critical": true}}})).unwrap_err();
+            assert!(e.contains("port key"), "{bad}: {e}");
+        }
+        for ok in ["3-2/2", "usb3/1", "3-2.2.1/10", "1-1/0"] {
+            parse_config(&json!({"ports": {ok: {}}})).unwrap();
+        }
     }
 
     #[test]
