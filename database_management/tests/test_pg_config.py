@@ -38,6 +38,7 @@ class TestPgConfig(HamsTransactionCase):
         )
         mock_cr = MagicMock(spec=Cursor)
         mock_cr.transaction = MagicMock()
+        mock_cr._cnx = MagicMock(autocommit=False)
         
         @contextmanager
         def mock_cursor():
@@ -45,7 +46,11 @@ class TestPgConfig(HamsTransactionCase):
 
         self.safe_patch_object(self.env.registry, "cursor", side_effect=mock_cursor)
         res = wizard.action_apply_optimizations()
-            
+        self.assertIs(
+            mock_cr._cnx.autocommit,
+            True,
+            "[!] DIAGNOSTIC FOR AI: ALTER SYSTEM cannot run in a transaction block; the wizard's cursor must be in autocommit mode.",
+        )
         msg_client = "[!] DIAGNOSTIC FOR AI: pg.optimize.wizard.action_apply_optimizations should return a client action."
         self.assertEqual(res.get("type"), "ir.actions.client", msg_client)
 
