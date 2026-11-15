@@ -6,6 +6,10 @@ Nothing here contacts a real service: urlopen and SMTP are replaced.
 """
 # Tests [@ANCHOR: daemon_report_incident]
 # Tests [@ANCHOR: pager_duty:fallback_notify]
+# Tests [@ANCHOR: pager_duty:outbound_due]
+# Tests [@ANCHOR: pager_duty:outbound_failed]
+# Tests [@ANCHOR: pager_duty:outbound_recovered]
+# [@ANCHOR: pager_duty:test_outbound_throttle]
 import os
 import sys
 import unittest

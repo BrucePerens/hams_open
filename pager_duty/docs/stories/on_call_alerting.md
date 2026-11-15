@@ -107,3 +107,19 @@ Post-migration for version 1.2. Arguments: `cr` (the database cursor) and `versi
 `hams_helpdesk.ticket._triage_cleared()` [@ANCHOR: pager_duty:helpdesk_ticket_triage_cleared_method] is the override that adds this module's tickets to the ones hams_helpdesk retires before notifying anyone. It takes no arguments and returns the recordset of cleared tickets: core's result plus the tickets whose pager incidents are all resolved (a ticket shared by several incidents clears only when none is still unresolved, and a ticket from inbound mail is a person's message and never clears). It reads incidents as the pager service account. Test: `test_01_a_resolved_incident_retires_its_new_ticket_with_a_note`.
 
 Odoo only marks a refused mail `exception`, and the password reset form answers the same for members and strangers, so a refusal (the outgoing server, for example SES, rejecting it) is invisible to the person asking. `models/mail_mail.py` therefore raises a high `pager.incident` with source `mail_send_failure` whenever a send fails for a reason other than a bad recipient address. [@ANCHOR: pager_duty:mail_failure_pages_operator] `report_incident` keeps one open incident per source, so an outage pages once and repeats only count (and re-page after the usual interval) instead of paging once per user. The report runs on its own cursor, never raises, and its text is fixed: no recipient address, subject, token or server message. [@ANCHOR: pager_duty:page_mail_failure] Tests: `tests/test_mail_failure_pages_operator.py`.
+
+## Outbound Notification Throttle in `generalized_monitor.py`
+
+The monitor daemon runs a pass every few seconds, so a source that stays broken would send the webhook or the SMTP fallback on every pass. Three module-level functions in `daemon/generalized_monitor.py` keep an in-memory table, `LAST_OUTBOUND`, keyed by `(kind, source, severity)` and valued by the time of the last send. `OUTBOUND_REPEAT_SECONDS` (3600) is the quiet period. The table lives in the daemon process only, so a restart forgets it and the next failure notifies at once. None of the three functions touches the network, files or a lock. They are not thread safe, because the daemon loop is single threaded. Verified by `daemon/test_outbound_throttle.py` (plain unittest, no Odoo), which replaces `urlopen` and SMTP.
+
+### `outbound_due(kind, source, severity="")` [@ANCHOR: pager_duty:outbound_due]
+
+Asks whether `kind` (`"webhook"` or `"smtp"`) may notify a person about `source` at `severity` now. It returns True and records the current time when there was no earlier send for that triple or the last one is at least `OUTBOUND_REPEAT_SECONDS` old, and False while the quiet period runs. A different severity is a different alert, so a rise from medium to critical is never held back by the earlier medium page. Callers must call it before sending, and call `outbound_failed` if the send then fails.
+
+### `outbound_failed(kind, source, severity="")` [@ANCHOR: pager_duty:outbound_failed]
+
+Forgets the record `outbound_due` made for the triple. A send that raised did not reach a person, so it must not count as sent: the next pass asks `outbound_due` again and tries again. It returns nothing and is harmless when no record exists.
+
+### `outbound_recovered(source)` [@ANCHOR: pager_duty:outbound_recovered]
+
+Deletes every record for `source`, whatever the kind or severity, when the source is healthy again (the monitor's auto-resolve path calls it). The source's next failure is then a new alert and notifies at once instead of waiting out the quiet period. It returns nothing and is harmless for an unknown source.
