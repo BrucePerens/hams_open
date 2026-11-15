@@ -321,6 +321,25 @@ class TestKeyRegistry(RealTransactionCase):
             target_user = self.env.ref(user_xml_id)
         self.assertIn(usage_group, target_user.group_ids)
 
+    def test_a_service_account_cannot_take_over_another_daemons_row(self):
+        """A daemon row is bound to the account it was registered for."""
+        # Tests [@ANCHOR: COMM_register_daemon_row_bound_to_identity]
+        daemon_name = "Bound Daemon"
+        model = self.env["daemon.key.registry"]
+        model.with_user(self.manager_user.id).register_daemon(daemon_name, self.service_user.login, self.test_env_paths[0])
+        thief = self.env["res.users"].create(
+            {"name": "Other Service", "login": "other_service_account", "is_service_account": True}
+        )
+        self.addCleanup(thief.unlink)
+        with self.assertRaises(AccessError):
+            model.with_user(thief.id).register_daemon(daemon_name, thief.login, self.test_env_paths[1])
+        row = model.with_user(self.manager_user.id).search([("name", "=", daemon_name)])
+        self.assertEqual(row.user_id, self.service_user)
+        self.assertEqual(row.env_file_path, self.test_env_paths[0])
+        # The owner and a manager may still re-register it.
+        model.with_user(self.service_user.id).register_daemon(daemon_name, self.service_user.login, self.test_env_paths[0])
+        model.with_user(self.manager_user.id).register_daemon(daemon_name, self.service_user.login, self.test_env_paths[0])
+
     def test_cron_rotate_all_keys(self):
         """Test cron rotation and trigger functionality."""
         # [@ANCHOR: COMM_test_cron_rotate_all_keys]
