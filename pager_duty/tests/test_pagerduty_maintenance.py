@@ -270,3 +270,48 @@ class TestPagerdutyMaintenance(HamsTransactionCase):
         self.assertTrue(os.path.exists(self.path), "the flag must still pause paging")
         self.assertEqual(pm.main(["--file", self.path, "end"], now=NOW, out=out), 0)
         self.assertFalse(os.path.exists(self.path))
+
+    def _run_log_tail_with_one_matching_line(self):
+        """Runs log_tail_thread over a real log file that gains one matching line; returns the mock Odoo client."""
+
+        class _StopLoop(Exception):
+            pass
+
+        log_path = os.path.join(self.dir, "app.log")
+        with open(log_path, "w", encoding="utf-8") as handle:
+            handle.write("old\n")
+        sleeps = []
+
+        def fake_sleep(_seconds):
+            sleeps.append(1)
+            if len(sleeps) == 1:
+                with open(log_path, "a", encoding="utf-8") as handle:
+                    handle.write("ERROR disk on fire\n")
+            else:
+                raise _StopLoop()
+
+        self.safe_patch_object(generalized_monitor.time, "sleep", side_effect=fake_sleep)
+        client = MagicMock()
+        check = {"name": "Maint Log Tail", "type": "log", "target": log_path, "regex": "ERROR"}
+        saved = os.environ.get("PAGERDUTY_MAINTENANCE_FILE")
+        os.environ["PAGERDUTY_MAINTENANCE_FILE"] = self.path
+        try:
+            with self.assertRaises(_StopLoop):
+                generalized_monitor.log_tail_thread(client, check)
+        finally:
+            if saved is None:
+                os.environ.pop("PAGERDUTY_MAINTENANCE_FILE", None)
+            else:
+                os.environ["PAGERDUTY_MAINTENANCE_FILE"] = saved
+        return client
+
+    def test_log_tail_reports_a_matching_line_without_a_flag(self):
+        # Tests [@ANCHOR: pager_duty:log_tail_thread]
+        client = self._run_log_tail_with_one_matching_line()
+        self.assertEqual(client.execute.call_count, 1)
+
+    def test_log_tail_does_not_report_during_maintenance(self):
+        # Tests [@ANCHOR: pager_duty:log_tail_thread]
+        self._write(set_at=int(time.time()), until=int(time.time()) + 600)
+        client = self._run_log_tail_with_one_matching_line()
+        client.execute.assert_not_called()
