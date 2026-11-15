@@ -8,9 +8,14 @@ from odoo import models, fields, api, exceptions, _
 from odoo.tools import config
 from odoo.addons.edge_routing.utils import RESERVED_SLUGS
 import logging
+import re
 import requests
 
 _logger = logging.getLogger(__name__)
+
+# A real DNS name: two or more dot-separated labels of letters, digits and inner hyphens. This list is
+# comma-joined into the certbot check target and sent to Cloudflare, so a comma, slash or space must never get in.
+_FQDN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
 # [@ANCHOR: edge_routing_domain_edge_routing_domain]
@@ -29,7 +34,7 @@ class EdgeRoutingDomain(models.Model):
     @api.constrains("name", "target_slug")
     def _check_name(self):
         for record in self:
-            if not record.name or "." not in record.name:
+            if not record.name or not _FQDN_RE.match(record.name.lower()):
                 raise exceptions.ValidationError(
                     _("Domain must be a valid FQDN (e.g. www.myclub.org)")
                 )
