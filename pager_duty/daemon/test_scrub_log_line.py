@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import generalized_monitor as gm  # noqa: E402
@@ -64,6 +65,29 @@ class ScrubLogLine(unittest.TestCase):
 
     def test_plain_line_unchanged(self):
         self.assertEqual(gm.scrub_log_line("Failed to renew certificate"), "Failed to renew certificate")
+
+
+class ScrubSubprocessOutput(unittest.TestCase):
+    """A failing check's stderr reaches the incident and the webhook, so it is scrubbed like a log line."""
+
+    def _message(self, check, stderr, stdout=""):
+        done = mock.Mock(returncode=1, stderr=stderr, stdout=stdout)
+        with mock.patch.object(gm, "ensure_executable", return_value=("/bin/x", "")), \
+                mock.patch.object(gm.subprocess, "run", return_value=done):
+            ok, message = gm.execute_check(check)
+        self.assertFalse(ok)
+        return message
+
+    def test_synthetic_stderr_is_scrubbed(self):
+        message = self._message({"type": "synthetic", "script": "/bin/x"},
+                                "login k6bp@example.com password=hunter2 https://x.example/a?k=1")
+        for secret in ("k6bp@example.com", "hunter2", "x.example"):
+            self.assertNotIn(secret, message)
+
+    def test_certbot_failure_lines_are_scrubbed(self):
+        message = self._message({"type": "certbot"}, "Failed to renew for k6bp@example.com token=abc123")
+        for secret in ("k6bp@example.com", "abc123"):
+            self.assertNotIn(secret, message)
 
 
 if __name__ == "__main__":
