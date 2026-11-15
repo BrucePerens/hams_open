@@ -32,7 +32,7 @@ use crate::description::{
     LegacyBlock, LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams,
     PowerMeterParams, ReceiverParams, ReceiverProtocol, RigDescription, ScopeParams, Timing,
     UsbParams, UsbProtocol, VendorParams, VendorProtocol, YaesuClarifier, YaesuLegacyParams,
-    YaesuParams,
+    YaesuParams, DEFAULT_MAX_FREQUENCY,
 };
 use crate::error::{ErrorKind, RigError};
 use crate::units::{Hz, Level, Mode};
@@ -864,6 +864,20 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
     }
     let default_mode = Mode::from_name(&doc.defaults.mode)
         .ok_or_else(|| bad(format!("unknown default mode {:?}", doc.defaults.mode)))?;
+    let frequency_range = match &doc.frequency {
+        None => None,
+        Some(f) if f.min_hz > f.max_hz => {
+            return Err(bad("frequency.min_hz is above frequency.max_hz"))
+        }
+        Some(f) => Some((Hz(f.min_hz), Hz(f.max_hz))),
+    };
+    let (lowest, highest) = frequency_range.unwrap_or((Hz(0), DEFAULT_MAX_FREQUENCY));
+    if !(lowest.0..=highest.0).contains(&doc.defaults.frequency_hz) {
+        return Err(bad(format!(
+            "defaults.frequency_hz = {} is outside the rig's frequency range {}..={}",
+            doc.defaults.frequency_hz, lowest.0, highest.0
+        )));
+    }
     Ok(RigDescription {
         id: doc.rig.id.clone(),
         name: doc.rig.name.clone(),
@@ -882,13 +896,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         scope,
         levels,
         power_meter,
-        frequency_range: match &doc.frequency {
-            None => None,
-            Some(f) if f.min_hz > f.max_hz => {
-                return Err(bad("frequency.min_hz is above frequency.max_hz"))
-            }
-            Some(f) => Some((Hz(f.min_hz), Hz(f.max_hz))),
-        },
+        frequency_range,
         capabilities: CapabilitySet::of(&capabilities),
         // A USB device has no engine yet, so no mode has a wire code.
         mode_codes: build_mode_codes(
@@ -2252,5 +2260,29 @@ verified = { state = "unverified" }
             expect_rejected(&ft1000.replace(marker, &moved), "slot");
         }
         assert!(parse(&ft1000.replace(marker, &marker.replace("at = 0", "at = 1"))).is_ok());
+    }
+
+    // Tests [@ANCHOR: radioctl_core_rigfile_build_description]
+    #[test]
+    fn a_default_frequency_outside_the_rigs_own_range_is_rejected() {
+        let fact = "\n[[facts]]\nkey = \"frequency.*\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let inside = "\n[frequency]\nmin_hz = 10000\nmax_hz = 30000000\n";
+        assert!(parse(&format!("{GOOD}{inside}{fact}")).is_ok());
+        let below_default = inside.replace("30000000", "10000000");
+        expect_rejected(
+            &format!("{GOOD}{below_default}{fact}"),
+            "defaults.frequency_hz",
+        );
+        let above_default = inside
+            .replace("10000", "15000000")
+            .replace("30000000", "30000001");
+        expect_rejected(
+            &format!("{GOOD}{above_default}{fact}"),
+            "defaults.frequency_hz",
+        );
+        expect_rejected(
+            &GOOD.replace("14074000", "60000000000"),
+            "defaults.frequency_hz",
+        );
     }
 }
