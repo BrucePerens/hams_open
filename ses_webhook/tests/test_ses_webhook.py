@@ -564,6 +564,42 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(self.url_open(url, data=json.dumps(payload).encode('utf-8')).status_code, 200)
         self.assertEqual(mock_process.call_count, 2)
 
+    def test_27c_failed_sender_verdicts_refuse_the_mail(self):
+        # Tests [@ANCHOR: ses_webhook:failed_sender_check]
+        """DMARC FAIL, or SPF and DKIM both FAIL, is logged rejected_sender and not processed; PASS, GRAY,
+        PROCESSING_FAILED, a single FAIL and missing verdicts are processed."""
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Verdict\n\nTest"
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.return_value = True
+        url = f'/mail/webhook/sns?token={self.domain_a.secret_token}'
+
+        def deliver(message_id, receipt):
+            ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+            if receipt is not None:
+                ses_message["receipt"] = {k: {"status": v} for k, v in receipt.items()}
+            payload = self._sign({"Type": "Notification", "MessageId": message_id, "Message": json.dumps(ses_message)})
+            self.assertEqual(self.url_open(url, data=json.dumps(payload).encode('utf-8')).status_code, 200)
+            return self.env['ses.webhook.log'].search([('name', '=', message_id)]).status
+
+        refused = {
+            'v-dmarc': {'dmarcVerdict': 'FAIL', 'spfVerdict': 'PASS', 'dkimVerdict': 'PASS'},
+            'v-both': {'spfVerdict': 'FAIL', 'dkimVerdict': 'FAIL', 'dmarcVerdict': 'GRAY'},
+        }
+        for message_id, receipt in refused.items():
+            self.assertEqual(deliver(message_id, receipt), 'rejected_sender', message_id)
+        mock_process.assert_not_called()
+
+        accepted = {
+            'v-pass': {'spfVerdict': 'PASS', 'dkimVerdict': 'PASS', 'dmarcVerdict': 'PASS'},
+            'v-gray': {'spfVerdict': 'PASS', 'dkimVerdict': 'PASS', 'dmarcVerdict': 'GRAY'},
+            'v-one-fail': {'spfVerdict': 'FAIL', 'dkimVerdict': 'PASS', 'dmarcVerdict': 'GRAY'},
+            'v-pf': {'spfVerdict': 'PROCESSING_FAILED', 'dkimVerdict': 'PROCESSING_FAILED', 'dmarcVerdict': 'PROCESSING_FAILED'},
+            'v-none': None,
+        }
+        for message_id, receipt in accepted.items():
+            self.assertEqual(deliver(message_id, receipt), 'success', message_id)
+        self.assertEqual(mock_process.call_count, len(accepted))
+
     def test_28_signature_tampered_rejected(self):
         # Tests [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
         """A validly-structured, validly-signed payload whose Message is altered AFTER signing

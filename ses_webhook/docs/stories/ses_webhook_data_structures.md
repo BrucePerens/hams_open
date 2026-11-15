@@ -41,7 +41,7 @@
 |---|---|---|
 | `name` | `Char` | Message ID (required=`True`; readonly=`True`) |
 | `payload_type` | `Selection` | Payload Type (values `Notification`, `SubscriptionConfirmation`, `UnsubscribeConfirmation`, `Unknown`; readonly=`True`) |
-| `status` | `Selection` | Status (values `success`, `failed`, `ignored`, `rejected_subscribe_url`, `rejected_signature`, `rejected_topic`; readonly=`True`) |
+| `status` | `Selection` | Status (values `success`, `failed`, `ignored`, `rejected_subscribe_url`, `rejected_signature`, `rejected_topic`, `rejected_sender`; readonly=`True`) |
 | `domain_id` | `Many2one` | Webhook Domain (comodel `ses.webhook.domain`; readonly=`True`; ondelete=`'cascade'`) |
 | `company_id` | `Many2one` | mirrors the related field `'domain_id.company_id'` (comodel `res.company`; related=`'domain_id.company_id'`; store=`True`; readonly=`True`) |
 | `error_message` | `Text` | Error Message (readonly=`True`) |
@@ -80,3 +80,7 @@
 ### `SesWebhookLog._already_handled(domain_id, message_id)` [@ANCHOR: ses_webhook:already_handled]
 
 `-> bool`, `@api.model`. Called by the webhook route for a Notification before it processes it. It runs a no-change `UPDATE ses_webhook_domain SET id = id` for the domain, then says whether a log row with this MessageId and domain and status `success` or `ignored` exists (a `failed` one is reprocessed). The UPDATE makes two simultaneous deliveries of one MessageId take turns: the later one fails to serialize (its snapshot cannot see the earlier log row, which is written after processing), Odoo runs the request again, and the search then finds the log and the route acknowledges without processing. A unique index cannot do this: failed and rejected attempts of one MessageId are logged too. Test: `test_a_simultaneous_double_delivery_is_not_processed_twice`.
+
+### `_failed_sender_check(ses_message)` [@ANCHOR: ses_webhook:failed_sender_check]
+
+`-> str`, module function in `controllers/webhook_api.py`. Reads the SES `receipt` verdicts of a Notification and returns the reason to refuse the mail, or `''` to accept it. A DMARC `FAIL`, or `FAIL` for both SPF and DKIM, is refused: the route logs it with status `rejected_sender` and never calls `message_process` (which would post as the user the From header names). `PASS`, `GRAY` (a domain without a DMARC record), `PROCESSING_FAILED`, a single SPF or DKIM `FAIL` and missing or malformed verdicts are accepted. Test: `test_27c_failed_sender_verdicts_refuse_the_mail`.

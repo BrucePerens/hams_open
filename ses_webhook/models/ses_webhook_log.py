@@ -21,6 +21,7 @@ class SesWebhookLog(models.Model):
         ('rejected_subscribe_url', 'Rejected Subscribe URL'),
         ('rejected_signature', 'Rejected: Invalid AWS SNS Signature'),
         ('rejected_topic', 'Rejected: Wrong SNS Topic'),
+        ('rejected_sender', 'Rejected: Sender Failed SES Authentication'),
     ], string='Status', readonly=True)
     domain_id = fields.Many2one('ses.webhook.domain', string='Webhook Domain', readonly=True, ondelete='cascade')
     company_id = fields.Many2one('res.company', related='domain_id.company_id', store=True, readonly=True)

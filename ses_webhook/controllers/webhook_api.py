@@ -266,6 +266,25 @@ def _verify_sns_signature(payload):
         return False
 
 
+def _verdict(ses_message, name):
+    """The SES receipt verdict status ('PASS', 'FAIL', 'GRAY', 'PROCESSING_FAILED'), or '' when absent or malformed."""
+    receipt = ses_message.get('receipt')
+    verdict = receipt.get(name) if isinstance(receipt, dict) else None
+    status = verdict.get('status') if isinstance(verdict, dict) else None
+    return status if isinstance(status, str) else ''
+
+
+# [@ANCHOR: ses_webhook:failed_sender_check]
+def _failed_sender_check(ses_message):
+    """Why the mail must be refused, or '' to accept it: DMARC FAIL, or both SPF and DKIM FAIL.
+    PASS, GRAY (a domain with no DMARC record), PROCESSING_FAILED and missing verdicts are accepted."""
+    if _verdict(ses_message, 'dmarcVerdict') == 'FAIL':
+        return 'SES reports a DMARC FAIL verdict.'
+    if _verdict(ses_message, 'spfVerdict') == 'FAIL' and _verdict(ses_message, 'dkimVerdict') == 'FAIL':
+        return 'SES reports FAIL verdicts for both SPF and DKIM.'
+    return ''
+
+
 # Domains already logged as having no expected topic ARN (logged once per process).
 _UNPINNED_TOPIC_LOGGED = set()
 
@@ -447,6 +466,14 @@ class SesWebhookController(http.Controller):
                 if not raw_email:
                     _logger.warning("SES Webhook received Notification with no 'content' field for domain %s.", domain.name)
                     log_vals.update({'status': 'ignored', 'error_message': 'No content field found.'})
+                elif (failed_check := _failed_sender_check(ses_message)):
+                    # SES's own verdicts say the mail is forged: never hand it to message_process,
+                    # which would post it as whichever user the From header names.
+                    _logger.warning(
+                        "SES Webhook: refused mail for domain %s (MessageId=%s): %s.",
+                        domain.name, message_id, failed_check,
+                    )
+                    log_vals.update({'status': 'rejected_sender', 'error_message': failed_check})
                 else:
                     email_bytes = raw_email.encode('utf-8')
 
