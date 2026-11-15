@@ -144,9 +144,18 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
             }
         )
 
+    def _untrusted_bypassed(self):
+        """True when the context asks to skip the filter (the mixin's own bookkeeping and staff tools) and the caller may.
+        The flag is a context key and a client can put any context key on a `call_kw` request, so it is ignored for a
+        portal or public user: they are the strangers the filter exists for."""
+        if not self.env.context.get("untrusted_filter_bypass"):
+            return False
+        user = self.env.user
+        return not (user._is_public() or user.has_group("base.group_portal"))
+
     # [@ANCHOR: hams_helpdesk:untrusted_write]
     def write(self, vals):
-        if self.env.context.get("untrusted_filter_bypass"):
+        if self._untrusted_bypassed():
             return super().write(vals)
         specs = self._untrusted_field_specs()
         if not (set(vals) & set(specs)) and not (set(vals) & set(SUSPICION_FIELDS)):
@@ -166,7 +175,7 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
         body = kwargs.get("body")
         results = []
         raw = {}
-        if body and not self.env.context.get("untrusted_filter_bypass"):
+        if body and not self._untrusted_bypassed():
             text = str(body)
             result = ut.sanitize_any(text, MESSAGE_BODY_LIMIT, "message_body")
             if result.text != text:
