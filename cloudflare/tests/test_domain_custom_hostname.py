@@ -28,7 +28,7 @@ class TestDomainCustomHostname(RealTransactionCase):
         mock_fernet.return_value = Fernet(fernet_key)
 
         self.website = self.env["website"].create(
-            {"name": "Domain Sync Test Site", "domain": "https://domain-sync-test.example"}
+            {"name": "Domain Sync Test Site", "domain": "domain-sync-test.example"}
         )
         self.website.write(
             {"cloudflare_api_token": "tok", "cloudflare_zone_id": "zone"}
@@ -50,12 +50,12 @@ class TestDomainCustomHostname(RealTransactionCase):
 
         domain = self.env["edge.routing.domain"].create(
             {
-                "name": "https://domain-sync-test.example",
+                "name": "domain-sync-test.example",
                 "target_slug": "domain-sync-test",
             }
         )
         mock_create.assert_called_once_with(
-            "https://domain-sync-test.example", "tok", "zone"
+            "domain-sync-test.example", "tok", "zone"
         )
         self.assertEqual(domain.cloudflare_hostname_id, "hostname_123")
         self.assertEqual(domain.ssl_status, "pending_deployment")
@@ -72,7 +72,7 @@ class TestDomainCustomHostname(RealTransactionCase):
         # current, intentional behavior.
         domain = self.env["edge.routing.domain"].create(
             {
-                "name": "https://no-such-website.example",
+                "name": "no-such-website.example",
                 "target_slug": "no-such-website",
             }
         )
@@ -88,7 +88,7 @@ class TestDomainCustomHostname(RealTransactionCase):
         mock_create.return_value = (True, {"id": "hostname_456", "ssl": {"status": "active"}})
         domain = self.env["edge.routing.domain"].create(
             {
-                "name": "https://domain-sync-test.example",
+                "name": "domain-sync-test.example",
                 "target_slug": "domain-sync-test-2",
             }
         )
@@ -111,7 +111,7 @@ class TestDomainCustomHostname(RealTransactionCase):
         mock_create.return_value = (True, {"id": "hostname_fail", "ssl": {"status": "active"}})
         domain = self.env["edge.routing.domain"].create(
             {
-                "name": "https://domain-sync-test.example",
+                "name": "domain-sync-test.example",
                 "target_slug": "domain-sync-test-fail",
             }
         )
@@ -137,7 +137,7 @@ class TestDomainCustomHostname(RealTransactionCase):
         )
         domain = self.env["edge.routing.domain"].create(
             {
-                "name": "https://domain-sync-test.example",
+                "name": "domain-sync-test.example",
                 "target_slug": "domain-sync-test-3",
             }
         )
