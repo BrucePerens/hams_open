@@ -22,3 +22,7 @@
 **Methods.** `action_mark_under_review`, `action_dismiss`, `action_take_action_and_strike`, `_apply_enforcement_action`.
 
 **See also:** test `test_01_create_report (tests/test_content_violation_report.py)`.
+
+## Guest report dedupe
+
+`guest_dedupe_key` (Char, indexed, UNIQUE, not copied, read-only): for a report made during a web request by a guest, `sha256(ip_tag|target_url|day)` where `ip_tag` is the form shield's keyed hash of the visitor's network prefix; empty otherwise. `_guest_dedupe_key(target_url)` [@ANCHOR: content_moderation:guest_dedupe_key] computes it (False for members or without a request). `create` [@ANCHOR: content_moderation:create_guest_dedupe] returns the existing report instead of adding one when a guest repeats the same URL from the same network on the same day, so the (url, reporter) constraint's blind spot for NULL reporters is closed without storing an address. Test: `test_guest_reports_are_deduplicated`.

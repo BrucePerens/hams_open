@@ -41,6 +41,7 @@ this extraction itself, only unblocked.
         "mail",
         "portal",
         "zero_sudo",
+        "form_shield",
     ],
     "data": [
         "security/content_moderation_security.xml",
