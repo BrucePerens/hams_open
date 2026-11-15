@@ -49,6 +49,10 @@ describe("form_shield", () => {
         );
         expect(core.solve(VECTOR_TOKEN, VECTOR_FORM, 16)).toBe(VECTOR_COUNTER);
         expect(core.leadingZeroBits(new Uint32Array([0, 0x00ffffff, 0, 0, 0, 0, 0, 0]))).toBe(40);
+        // A non-ASCII form id is hashed as UTF-8, like the server (tokens.py), not masked to 7 bits.
+        expect(core.hex(core.sha256Words("\u00e9"))).toBe(
+            "4a99557e4033c3539de2eb65472017cad5f9557f7a0625a09f1c3f6e2ba69c4c"
+        );
         // A different form gives a different answer.
         expect(core.solve(VECTOR_TOKEN, "other", 12)).not.toBe(core.solve(VECTOR_TOKEN, VECTOR_FORM, 12));
     });

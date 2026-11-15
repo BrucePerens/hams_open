@@ -8,7 +8,7 @@
  * Web Worker (importScripts) and the page bundle (main-thread fallback for a browser without
  * workers), and so the hoot test loads exactly what ships.
  *
- * The hash is SHA-256 over the ASCII bytes of  <challenge>:<form_id>:<counter>  with the counter
+ * The hash is SHA-256 over the UTF-8 bytes of  <challenge>:<form_id>:<counter>  with the counter
  * in decimal from 0; the answer is the SMALLEST counter whose digest starts with `difficulty` zero
  * bits. tokens.py (pow_digest/solve_pow) computes the same thing; tests/test_tokens.py and
  * form_shield.test.js assert the same vector. The SHA-256 is written out here because
@@ -77,14 +77,10 @@
     // [@ANCHOR: form_shield:pow_ascii_bytes]
     // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function asciiBytes(text) {
-        const bytes = new Uint8Array(text.length);
-        for (let i = 0; i < text.length; i++) {
-            bytes[i] = text.charCodeAt(i) & 0x7f;
-        }
-        return bytes;
+        return new TextEncoder().encode(text);
     }
 
-    /* SHA-256 of an ASCII string, as 8 big-endian words (Uint32Array). For tests and small uses. */
+    /* SHA-256 of a string's UTF-8 bytes, as 8 big-endian words (Uint32Array). For tests and small uses. */
     // [@ANCHOR: form_shield:pow_sha256_words]
     // Verified by [@ANCHOR: form_shield:test_pow_core_js_solves_the_shared_vector]
     function sha256Words(text) {
