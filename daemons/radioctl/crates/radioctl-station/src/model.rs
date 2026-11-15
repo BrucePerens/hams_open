@@ -6,6 +6,10 @@ use crate::error::{StationError, StationErrorKind};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// The longest any station time field (`*_ms`) may be: one hour. A larger value only comes from a
+/// typo, and a `u64` of milliseconds added to an `Instant` overflows and panics.
+pub const MAX_MS: u64 = 3_600_000;
+
 // [@ANCHOR: radioctl_station_model_channel_id]
 /// The name of a switch channel.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -197,6 +201,25 @@ impl ChannelDef {
                 return bad("a safe port needs a selector".into())
             }
             _ => {}
+        }
+        let times: &[u64] = match self.kind {
+            ChannelKind::Power {
+                inrush_stagger_ms,
+                min_off_ms,
+                ..
+            } => &[inrush_stagger_ms, min_off_ms],
+            ChannelKind::Selector { settle_ms, .. } => &[settle_ms],
+            ChannelKind::Momentary { pulse_ms } => &[pulse_ms],
+            ChannelKind::Input { debounce_ms } => &[debounce_ms],
+            ChannelKind::Amplifier { pulse_ms, .. } => &[pulse_ms],
+            ChannelKind::Ptt {
+                max_on_ms,
+                min_off_ms,
+            } => &[max_on_ms, min_off_ms],
+            ChannelKind::Output => &[],
+        };
+        if times.iter().any(|t| *t > MAX_MS) {
+            return bad(format!("a time field is at most {MAX_MS} ms"));
         }
         match self.kind {
             ChannelKind::Selector { ways, .. } if !(1..=64).contains(&ways) => {
@@ -564,6 +587,15 @@ impl StationDef {
             if !devs.insert(&d.id) {
                 return bad(format!("device {} is defined twice", d.id.0));
             }
+            if [d.settle_ms, d.ready_timeout_ms, d.off_delay_ms]
+                .iter()
+                .any(|t| *t > MAX_MS)
+            {
+                return bad(format!(
+                    "device {}: a time field is at most {MAX_MS} ms",
+                    d.id.0
+                ));
+            }
             let sources: Vec<(&ChannelId, bool)> = match &d.power {
                 PowerSource::AlwaysOn => vec![],
                 PowerSource::Channel { channel } => vec![(channel, false)],
@@ -649,6 +681,12 @@ impl StationDef {
         for p in &self.profiles {
             if !names.insert(&p.name) {
                 return bad(format!("profile {} is defined twice", p.name));
+            }
+            if p.timeout_ms > MAX_MS {
+                return bad(format!(
+                    "profile {}: timeout_ms is at most {MAX_MS} ms",
+                    p.name
+                ));
             }
             for s in &p.steps {
                 match s {
@@ -822,6 +860,32 @@ steps = [
         let text = SAMPLE.replace("line = 2", "line = 4294967294");
         let err = StationDef::from_toml(&text).unwrap_err();
         assert!(err.detail.contains("past the last line"), "{}", err.detail);
+    }
+
+    // Tests [@ANCHOR: radioctl_station_def_validate]
+    // Tests [@ANCHOR: radioctl_station_channel_validate]
+    #[test]
+    fn a_time_field_past_one_hour_is_refused() {
+        let over = MAX_MS + 1;
+        let cases = [
+            ("min_off_ms = 500", format!("min_off_ms = {over}")),
+            ("min_off_ms = 500", format!("inrush_stagger_ms = {over}")),
+            ("settle_ms = 20", format!("settle_ms = {over}")),
+            ("settle_ms = 10", format!("settle_ms = {over}")),
+            ("ready_timeout_ms = 1000", format!("ready_timeout_ms = {over}")),
+            ("off_delay_ms = 100", format!("off_delay_ms = {over}")),
+            ("name = \"hf_on\"", format!("name = \"hf_on\"\ntimeout_ms = {over}")),
+            (
+                "line = 5\n",
+                format!("line = 5\n[[channels]]\nid = \"in\"\ntype = \"input\"\ndriver = \"bank\"\nline = 6\ndebounce_ms = {over}\n"),
+            ),
+        ];
+        for (from, to) in cases {
+            let err = StationDef::from_toml(&SAMPLE.replacen(from, &to, 1)).unwrap_err();
+            assert!(err.detail.contains("3600000"), "{to}: {}", err.detail);
+        }
+        let at = format!("settle_ms = {MAX_MS}");
+        assert!(StationDef::from_toml(&SAMPLE.replacen("settle_ms = 20", &at, 1)).is_ok());
     }
 
     // Tests [@ANCHOR: radioctl_station_def_validate]
