@@ -45,6 +45,8 @@
 // own precedent of skipping branches a hoot unit test can't safely reach
 // and relying on the tour instead.
 import { describe, expect, mockFetch, test } from "@odoo/hoot";
+import { patchWithCleanup } from "@web/../tests/web_test_helpers";
+import { session } from "@web/session";
 import { AdminViolationToast, MODERATION_TOAST_KEY, MODERATION_TOAST_TTL_MS, REPORT_ERRORS, UrlToastNotification, readSeen, shouldShowToast, writeSeen } from "@user_websites/js/toast_notifications";
 
 // _checkPendingReports() never returns its own fetch(...).then().then()
@@ -155,6 +157,17 @@ describe("toast_notifications", () => {
         UrlToastNotification.prototype.start.call({ _checkUrlForNotifications: () => checked.push("url") });
         AdminViolationToast.prototype.start.call({ _checkPendingReports: () => { checked.push("admin"); return Promise.resolve(); } });
         expect(checked).toEqual(["url", "admin"]);
+    });
+
+    test("the moderation queue is not asked for on behalf of a public visitor", () => {
+        // Tests [@ANCHOR: user_websites:js_toast_notifications_admin_start]
+        const checked = [];
+        patchWithCleanup(session, { is_website_user: true });
+        AdminViolationToast.prototype.start.call({ _checkPendingReports: () => { checked.push("admin"); return Promise.resolve(); } });
+        expect(checked).toEqual([]);
+        patchWithCleanup(session, { is_website_user: false });
+        AdminViolationToast.prototype.start.call({ _checkPendingReports: () => { checked.push("admin"); return Promise.resolve(); } });
+        expect(checked).toEqual(["admin"]);
     });
 
     /** Runs _checkUrlForNotifications() on a page whose address is `search`; the method reads document.location, which a test
