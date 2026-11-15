@@ -222,10 +222,11 @@ def capacity_problem(zone_name, limit, current, creates, deletes):
     return None
 
 
-# A callsign as a DNS label: one or two letters or digits, one digit, one to four letters (k6bp, w1aw, kp4djt, 4x1ab).
+# A callsign as a DNS label: one to three letters or digits, one digit, one to five letters (k6bp, w1aw, kp4djt, 4x1ab,
+# 3da0xx). The same shape daemons/callbook_dns_export/parking_dns.py parks; a narrower one let 3da0xx.hams.com through.
 # The infrastructure names under hams.com (www, auth, turn, stun, relay, crawler, parked, mail, ns1, ns2, hams1,
 # callbook, acme) have none of this shape.
-CALLSIGN_LABEL = re.compile(r"[a-z0-9]{1,2}[0-9][a-z]{1,4}")
+CALLSIGN_LABEL = re.compile(r"[a-z0-9]{1,3}[0-9][a-z]{1,5}")
 # Members' names live under this domain only; a hostname in a tenant's own domain is that tenant's business.
 MEMBER_DOMAIN = "hams.com"
 
