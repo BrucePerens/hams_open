@@ -447,13 +447,15 @@ pub fn pll(lo_hz: u64, div: u64, ppb: i64) -> Result<Pll, Error> {
     let q = num.div_ceil(den).saturating_sub(1);
     let units = q / PLL_SUB as u128;
     let sub = (q % PLL_SUB as u128) as u32;
-    let n = (units / PLL_MOD as u128) as u32;
-    let frac = (units % PLL_MOD as u128) as u32;
-    if !(1..=0xff).contains(&n) {
+    // Range-checked before it is narrowed: `as u32` would wrap a huge integer part into 1..=0xff.
+    let n_wide = units / PLL_MOD as u128;
+    if !(1..=0xff).contains(&n_wide) {
         return Err(Error::InvalidArgument(format!(
-            "PLL integer {n} out of range"
+            "PLL integer {n_wide} out of range"
         )));
     }
+    let n = n_wide as u32;
+    let frac = (units % PLL_MOD as u128) as u32;
     let r2 = tuner_word(2, (n << 12) | frac);
     let r3 = tuner_word(3, sub);
     let vco =
@@ -952,6 +954,19 @@ mod tests {
         for &(rf, r3) in r3_cases {
             assert_eq!(t2(rf).1, r3, "r3 at {rf} Hz");
         }
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_encode_pll]
+    fn pll_integer_part_is_range_checked_before_it_is_narrowed() {
+        // n = lo * div / 96 MHz; for this LO it is 2^32 + 5, which `as u32` turned into 5, a value that passed the 1..=0xff check and
+        // produced words for a quite different frequency.
+        let lo = ((1u64 << 32) + 5) * 48_000_000;
+        assert!(matches!(pll(lo, 2, 0), Err(Error::InvalidArgument(_))));
+        assert!(matches!(
+            pll(u64::MAX, 32, 0),
+            Err(Error::InvalidArgument(_))
+        ));
     }
 
     #[test]
