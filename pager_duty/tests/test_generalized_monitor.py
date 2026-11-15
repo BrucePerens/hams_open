@@ -33,6 +33,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
             "odoo.addons.pager_duty.daemon.generalized_monitor.smtplib.SMTP"
         )
 
+        generalized_monitor.LAST_OUTBOUND.clear()  # the e-mail is sent at most once an hour per source
         orig_env = dict(os.environ)
         os.environ.update(
             {"PAGER_FALLBACK_EMAIL": "admin@test.com", "SMTP_HOST": "smtp.test.com"}
