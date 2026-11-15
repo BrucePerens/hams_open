@@ -77,6 +77,17 @@ class RedisZsetTests(unittest.TestCase):
         ok, _ = run(f"redis-zset:{self.KEY}", 1800, FakeRedis(zsets={self.KEY: [(b"b", NOW + 30)]}))
         self.assertTrue(ok)
 
+    def test_a_score_far_in_the_future_fails_instead_of_passing_forever(self):
+        # A millisecond epoch (1.8e12) is a time 56000 years from now: it must not count as a fresh record.
+        ok, msg = run(f"redis-zset:{self.KEY}", 1800, FakeRedis(zsets={self.KEY: [(b"b", NOW * 1000)]}))
+        self.assertFalse(ok)
+        self.assertIn("future", msg)
+        ok, msg = run("redis-key:k", 1800, FakeRedis(keys={"k": str(int(NOW * 1000))}))
+        self.assertFalse(ok)
+        self.assertIn("future", msg)
+        ok, _ = run(f"redis-zset:{self.KEY}", 1800, FakeRedis(zsets={self.KEY: [(b"b", NOW + 3600)]}))
+        self.assertTrue(ok)
+
     def test_an_unreachable_redis_fails_with_the_reason(self):
         ok, msg = run(f"redis-zset:{self.KEY}", 1800, FakeRedis(error=redis_lib.ConnectionError("refused")))
         self.assertFalse(ok)

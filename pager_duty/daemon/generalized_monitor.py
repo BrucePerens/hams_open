@@ -931,6 +931,11 @@ def _freshness_feed(names, max_age, now, client):
     return False, f"{len(problems)} of {len(parts)} feeds are stale: " + "; ".join(problems)
 
 
+# A newest-record time this far ahead of the clock is not clock skew (a value in milliseconds reads as the year 50000), and it
+# would pass every check forever.
+FRESHNESS_FUTURE_SECONDS = 3600
+
+
 # [@ANCHOR: pager_duty:check_freshness]
 def check_freshness(check, now=None, redis_factory=None, client=None):
     """Run one freshness check: (ok, message). The message names the source, the age and the limit. `client` is the Odoo
@@ -978,6 +983,11 @@ def check_freshness(check, now=None, redis_factory=None, client=None):
         logger.warning("Freshness check %s failed: %s", target, e)
         return False, f"Could not read {target}: {e}"
     age = now - newest
+    if age < -FRESHNESS_FUTURE_SECONDS:
+        return False, (
+            f"{target}: newest record is dated {_human_age(-age)} in the future, so it is not a time this host's clock "
+            "can compare (milliseconds instead of seconds?)"
+        )
     if age > max_age:
         return False, (
             f"{target}: newest record is {_human_age(age)} old (limit {_human_age(max_age)}); "
