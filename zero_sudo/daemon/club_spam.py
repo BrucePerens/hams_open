@@ -986,6 +986,8 @@ class _StripParser(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag in _VOID:
             return
+        if tag == "li" and self._stack and self._stack[-1]["tag"] == "li":
+            self._close(self._stack.pop(), self._offset())  # an omitted `</li>`: the new item ends the open one
         attrs = {k: (v or "") for k, v in attrs}
         frame = {
             "tag": tag, "start": self._offset(), "anchors": [],
@@ -1006,11 +1008,16 @@ class _StripParser(HTMLParser):
         index = next((i for i in range(len(self._stack) - 1, -1, -1) if self._stack[i]["tag"] == tag), None)
         if index is None:
             return
-        frames = self._stack[index:]
-        del self._stack[index:]
-        frame = frames[0]
-        end = self.source.find(">", self._offset())
+        here = self._offset()
+        end = self.source.find(">", here)
         end = len(self.source) if end < 0 else end + 1
+        while len(self._stack) > index + 1:  # elements whose own end tag was omitted (`<li>` with no `</li>`) end where this one starts
+            self._close(self._stack.pop(), here)
+        self._close(self._stack.pop(), end)
+
+    def _close(self, frame, end):
+        """Judges one element that has just ended at character offset `end`: its flagged anchors are passed to the open parent."""
+        tag = frame["tag"]
         if tag == "a" and frame["href"] and not re.match(r"(?i)(?:mailto|tel|javascript|sms|data):|#", frame["href"]):
             url = frame["href"] if re.match(r"(?i)https?://", frame["href"]) else _join(self.base_url, frame["href"])
             flagged = score_entry(url, " ".join(frame["text"].split())).flagged
