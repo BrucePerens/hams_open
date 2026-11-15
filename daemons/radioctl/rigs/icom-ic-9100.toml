@@ -31,6 +31,10 @@ timeout_ms = 1000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 30000
+max_hz = 1320000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -136,3 +140,8 @@ verified = { state = "manual-checked", reference = "Icom IC-9100 Instruction Man
 key = "capability.read-meters"
 provenance = { kind = "manual", reference = "Icom IC-9100 Instruction Manual (IC-9100_ENG_2a.pdf, sha256 1ac4d513003b84d6c9fc5d531ae60b85d699291c941653be6bd7d674e95c6fb1), CI-V command table, PDF page 194: 15 11 to 15 14 (Po, SWR, ALC, COMP meter levels, 0000 to 0255)", note = "Obtained under Icom's download terms (individual use, accepted on the owner's instruction 2026-11-10). The IC-9100 table lists only 15 11 (Po), 15 12 (SWR), 15 13 (ALC) and 15 14 (COMP): no Vd or Id meter, so the radio is expected to refuse 15 15 and 15 16 and radioctl serves those two from the default scale. `read-power` (15 11, Po) is claimed from the same row. Per-model scale points are in radioctld meter_cal; facts only, nothing copied." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Icom IC-9100 Instruction Manual (IC-9100_ENG_2a.pdf): PDF page 206, Specifications, frequency coverage, receive 0.030 ~ 60.000, 136.000 ~ 174.000, 420.000 ~ 480.000, 1240.000 ~ 1320.000 MHz", note = "Hull of the receive ranges, so the gaps between them are accepted; the 1.2 GHz band needs the optional UX-9100. The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "PDF page 206, Specifications, frequency coverage, receive 0.030 ~ 60.000, 136.000 ~ 174.000, 420.000 ~ 480.000, 1240.000 ~ 1320.000 MHz" }

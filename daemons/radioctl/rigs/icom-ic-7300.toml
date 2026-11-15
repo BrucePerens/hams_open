@@ -33,6 +33,10 @@ timeout_ms = 1000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 30000
+max_hz = 74800000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -148,3 +152,8 @@ verified = { state = "unverified" }
 key = "capability.read-meters"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h C_RD_SQSM 0x15 with S_SWR 0x12, S_ALC 0x13, S_CMP 0x14, S_VD 0x15, S_ID 0x16; rigs/icom/icom.c icom_get_level (the sub-command per level, a 2-byte BCD reading); rigs/icom/ic7300.c has_get_level and the swr_cal, alc_cal, comp_meter_cal, vd_meter_cal, id_meter_cal tables", note = "Facts only, no code or table copied. The readings are reported raw (0 to 255): Hamlib converts them with per-model calibration tables, which are measurements radioctl does not copy, so `read-swr` (a ratio in tenths) is not claimed. Read-only; works with the transmit gate closed. Bench: compare the raw SWR, ALC, Id and Vd with the front panel meter while keyed into the dummy load at minimum power; unkeyed the transmitter meters should read 0." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Icom IC-7300 Basic Manual (IC-7300_ENG_BM_12.pdf): PDF page 68, Specifications, frequency coverage, receiver 0.030000 ~ 74.800000 MHz", note = "The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "PDF page 68, Specifications, frequency coverage, receiver 0.030000 ~ 74.800000 MHz" }

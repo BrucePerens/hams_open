@@ -26,6 +26,10 @@ timeout_ms = 2000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 30000
+max_hz = 60000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -119,3 +123,8 @@ verified = { state = "unverified" }
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu 'FTDX3000 Series CAT Operation Reference Book' (2006-D), file FTDX3000_CAT_OM_ENG_2006-D.PDF, http://yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX3000_CAT_OM_ENG_2006-D.PDF, sha256 9024a93d854f613255d5122787cc5640c8c61f444bb6d7563059bda087996778: MD, PDF p. 12: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK (RTTY-LSB), 7 CW-R, 8 PKT-L, 9 FSK-R (RTTY-USB), A PKT-FM, B FM-N, C PKT-U, D AM-N", note = "Mapping to radioctl modes is ours: 6 is rtty, 9 is rtty-r, 8 (PKT-L) is data-r and C (PKT-U) is data; A, B and D are not described." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Yaesu FTDX3000 CAT Operation Reference Manual: FA, P1 range 0030000 - 60000000 Hz", note = "The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "FA, P1 range 0030000 - 60000000 Hz" }

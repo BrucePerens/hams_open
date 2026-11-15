@@ -27,6 +27,10 @@ timeout_ms = 1000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 30000
+max_hz = 75000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -125,3 +129,8 @@ verified = { state = "unverified" }
 key = "yaesu.clarifier"
 provenance = { kind = "manual", reference = "Yaesu 'FT-710 CAT Operation Reference Manual' (2306-C), file FT-710_CAT_OM_ENG_2306-C.pdf, sha256 fdf62b8a5c89e321381d69c53292a6ded045f1ceeeaf04ae21ce856e8e2ff8c2: CF CLAR ON/OFF, PDF p. 9 (P1 0 main band, P2 0 fixed; P3 0 setting: P4 receive clarifier 0 off or 1 on, P5 transmit clarifier 0 off or 1 on, P6-P8 000; P3 1 frequency: P4 sign, P5-P8 0000-9999 Hz); XT, PDF p. 23 (TX CLAR); IF, PDF p. 15 (P3 offset, P4 and P5 flags)", note = "The FT-710 has CF for both clarifier switches and for the offset; there is no RT, RC, RU or RD in the guide. The engine remembers the last transmit state so a receive switch re-sends it, and the receive state for a transmit switch. Page numbers are the guide's own pages from the text of the PDF; unverified." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Yaesu FT-710 CAT Operation Reference Manual 2306-C: FA, P1 range 000030000 - 075000000 Hz", note = "The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "FA, P1 range 000030000 - 075000000 Hz" }

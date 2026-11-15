@@ -34,6 +34,10 @@ timeout_ms = 1000
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 30000
+max_hz = 60000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -144,3 +148,8 @@ verified = { state = "unverified" }
 key = "capability.read-meters"
 provenance = { kind = "manual", reference = "Icom IC-7610 CI-V Reference Guide (IC-7610_ENG_CI-V_4.pdf, sha256 708675dd8adae67e53e4acd919e293c0fe6c710b90db69b52aadeead8128d9ff), command 15 table, PDF page 5: 15 11 to 15 16 (Po, SWR, ALC, COMP, Vd, Id meter levels, 0000 to 0255)", note = "Obtained under Icom's download terms (individual use, accepted on the owner's instruction 2026-11-10). Per-model scale points are in radioctld meter_cal; facts only, nothing copied." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Icom IC-7610 CI-V Reference Guide (IC-7610_ENG_CI-V_4.pdf): PDF page 16, command 27 1A scope selectable frequency ranges, 0.03 ~ 1.60 MHz up to 45.00 ~ 60.00 MHz", note = "The guide gives no coverage line; the scope range table spans the receiver. The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "PDF page 16, Command 27 1A scope selectable frequency ranges, 0.03 ~ 1.60 MHz up to 45.00 ~ 60.00 MHz" }

@@ -37,6 +37,10 @@ timeout_ms = 600
 retries = 2
 inter_command_ms = 0
 
+[frequency]
+min_hz = 490000
+max_hz = 148000000
+
 [defaults]
 frequency_hz = 14060000
 mode = "cw"
@@ -175,3 +179,8 @@ verified = { state = "unverified" }
 key = "mode.*"
 provenance = { kind = "manual", reference = "Programmer's Reference Rev. G5: MD (Operating Mode) p. 16: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 DATA, 7 CW-REV, 9 DATA-REV", note = "FM does not apply to the KX2." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "manual", reference = "Elecraft K3 Owner's Manual D10 (E740107): Specifications, Frequency Range: main and sub receivers 490 kHz - 30 MHz and 44-54 MHz; 144-148 MHz with K144XV", note = "Hull including the K144XV option. The range is the manual's, not measured on a radio." }
+verified = { state = "manual-checked", reference = "Specifications, Frequency Range: main and sub receivers 490 kHz - 30 MHz and 44-54 MHz; 144-148 MHz with K144XV" }
