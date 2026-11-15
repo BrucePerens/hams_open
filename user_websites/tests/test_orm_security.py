@@ -480,6 +480,18 @@ class TestORMSecurity(RealTransactionCase):
         self.assertIn("javascript", a_attrs.get("data-blocked-t-att-href", ""))
         self.assertIn("javascript", img_attrs.get("data-blocked-t-att-src", ""))
 
+    def test_10b_meta_refresh_is_blocked_whatever_the_attribute_case(self):
+        # Tests [@ANCHOR: website_page_sanitize_arch]
+        # The arch is XML, where HTTP-EQUIV is not http-equiv, but the browser reads both as the same attribute.
+        cleaned, was_modified = self.env["website.page"]._sanitize_user_arch(
+            '<meta HTTP-EQUIV=" Refresh " CONTENT="0;url=https://attacker.example/"/>'
+        )
+        self.assertTrue(was_modified)
+        attrs = etree.fromstring(f"<root>{cleaned}</root>").find(".//meta").attrib
+        self.assertEqual([n for n in attrs if n.lower() in ("http-equiv", "content")], [])
+        self.assertEqual(attrs.get("data-blocked-http-equiv"), "refresh")
+        self.assertIn("attacker.example", attrs.get("data-blocked-content", ""))
+
     def test_10_qweb_arch_sanitization_blocks_base_and_meta_refresh(self):
         # Adversarial security review, 2026-09-03: neither <base> (rewrites
         # relative-URL resolution for the WHOLE rendered page) nor
