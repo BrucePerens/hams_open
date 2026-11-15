@@ -735,7 +735,13 @@ class BackupConfig(models.Model):
             .ids
         )
         for conf in configs:
-            conf.action_sync_snapshots()
+            # A stored path the validator no longer accepts (the allowed bases changed, or a symlink now leads
+            # elsewhere) must not stop the sync, the stale-backup alerts and the drills of every other configuration.
+            try:
+                conf.action_sync_snapshots()
+            except UserError as exc:
+                conf.report_backup_failure(_("Backup sync refused: %s", exc))
+                continue
 
             # A snapshot dated in the future (clock skew) is ignored by the query above. A configuration with no usable
             # snapshot is judged by its own age instead, so one that never produced a snapshot still alerts.
