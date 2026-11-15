@@ -427,6 +427,14 @@ impl Station {
         {
             self.check_amp_powered(device)?;
         }
+        if let Some(d) = self
+            .def
+            .devices
+            .iter()
+            .find(|d| matches!(&d.power, PowerSource::Momentary { on, .. } if on == id))
+        {
+            self.check_power_on(d)?;
+        }
         self.board.pulse(id).await
     }
 
@@ -1173,5 +1181,31 @@ mod tests {
         bank.set_fault(Fault::FailWrites);
         let rep = st.all_off().await;
         assert_eq!(rep.failed.len(), 2);
+    }
+    // Tests [@ANCHOR: radioctl_station_station_pulse]
+    #[tokio::test(start_paused = true)]
+    async fn pulsing_a_power_button_keeps_the_power_on_preconditions() {
+        // The amplifier is switched on by a momentary button, and needs the radio on first.
+        let text = crate::model::tests::SAMPLE
+            .replace(
+                "power = { source = \"channel\", channel = \"amp_pwr\" }",
+                "power = { source = \"momentary\", on = \"btn\" }",
+            )
+            .replace("min_off_ms = 500\n", "");
+        let def = StationDef::from_toml(&text).unwrap();
+        let bank = VirtualBank::new();
+        let mut b = Switchboard::new();
+        for c in def.channels.clone() {
+            b.add_channel(c, Arc::new(bank.clone())).unwrap();
+        }
+        let st = Station::new(def, Arc::new(b), vec![], None).unwrap();
+        let refused = st.pulse(&ch("btn")).await.unwrap_err();
+        assert_eq!(refused.kind, StationErrorKind::Refused, "{refused:?}");
+        assert!(bank.log().is_empty(), "no pulse reached the board");
+        assert_eq!(
+            st.power_on(&dev("amp")).await.unwrap_err().kind,
+            StationErrorKind::Refused,
+            "power_on refuses the same way"
+        );
     }
 }
