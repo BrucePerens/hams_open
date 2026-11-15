@@ -157,6 +157,26 @@ class TestTicketUntrustedFilter(HamsTransactionCase):
             ticket.with_user(portal_user).write({"suspicion_log_ids": [(5, 0, 0)]})
         self.assertTrue(ticket.suspicion_log_ids)
 
+    def test_13c_a_portal_user_cannot_switch_the_filter_off_with_a_context_key(self):
+        # Tests [@ANCHOR: hams_helpdesk:untrusted_write]
+        # Tests [@ANCHOR: hams_helpdesk:untrusted_message_post]
+        # A client may send any context on call_kw; the bypass key is for the mixin's own bookkeeping and for staff.
+        portal_user = self.env["res.users"].with_user(self.admin).create(
+            {"name": "Portal B", "login": "portal_b_untrusted", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
+        )
+        ticket = self._ticket(partner_id=portal_user.partner_id.id)
+        as_portal = ticket.with_user(portal_user).with_context(untrusted_filter_bypass=True)
+        as_portal.write({"description": HIDDEN, "name": "x​y"})
+        self.assertNotIn("CANARY7731", ticket.description)
+        self.assertEqual(ticket.name, "xy")
+        self.assertTrue(ticket.suspicious)
+        as_portal.message_post(body=HIDDEN, message_type="comment", subtype_xmlid="mail.mt_comment")
+        self.assertNotIn("CANARY7731", ticket.message_ids[0].body)
+        # Staff keep the bypass: the mixin's own write and the staff tools rely on it.
+        staff = ticket.with_context(untrusted_filter_bypass=True)
+        staff.write({"description": "<p>staff text</p>"})
+        self.assertIn("staff text", ticket.description)
+
     def test_14_log_is_staff_only_for_portal(self):
         portal_user = self.env["res.users"].with_user(self.admin).create(
             {"name": "Portal Q", "login": "portal_q_untrusted", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
