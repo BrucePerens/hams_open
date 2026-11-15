@@ -668,6 +668,8 @@ class UserWebsitesOwnerController(http.Controller):
             raise request.not_found()
         return page
 
+    # [@ANCHOR: user_websites:fn_owner_kind_limit]
+    # Verified by [@ANCHOR: test_owner_kind_limit_is_the_members_or_the_global_limit]
     def _kind_limit(self, kind, profile_user):
         utils = request.env["zero_sudo.security.utils"]
         if profile_user:
