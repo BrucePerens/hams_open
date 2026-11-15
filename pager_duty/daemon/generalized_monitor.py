@@ -412,14 +412,26 @@ OUTBOUND_REPEAT_SECONDS = 3600
 LAST_OUTBOUND = {}
 
 
-def outbound_due(kind, source):
-    """True when `kind` ("webhook" or "smtp") may notify a person about `source` now; records that it did."""
+def outbound_due(kind, source, severity=""):
+    """True when `kind` ("webhook" or "smtp") may notify a person about `source` at `severity` now; records that it
+    did. A higher or lower severity is a different alert and is not held back by an earlier one."""
     now = time.time()
-    last = LAST_OUTBOUND.get((kind, source))
+    last = LAST_OUTBOUND.get((kind, source, severity))
     if last is not None and now - last < OUTBOUND_REPEAT_SECONDS:
         return False
-    LAST_OUTBOUND[(kind, source)] = now
+    LAST_OUTBOUND[(kind, source, severity)] = now
     return True
+
+
+def outbound_failed(kind, source, severity=""):
+    """A send that did not go out does not count as sent: the next pass tries again."""
+    LAST_OUTBOUND.pop((kind, source, severity), None)
+
+
+def outbound_recovered(source):
+    """The source is healthy again, so its next failure is a new alert and notifies at once."""
+    for key in [k for k in LAST_OUTBOUND if k[1] == source]:
+        del LAST_OUTBOUND[key]
 
 
 # [@ANCHOR: pager_duty:fallback_notify]
@@ -435,7 +447,7 @@ def fallback_notify(source, msg, severity):
             pagerduty_maintenance.describe(flag), source, msg,
         )
         return
-    if not outbound_due("smtp", source):
+    if not outbound_due("smtp", source, severity):
         logger.info("SMTP fallback e-mail for %s was sent within the last %ss; not repeated", source, OUTBOUND_REPEAT_SECONDS)
         return
     fallback_email = os.environ.get("PAGER_FALLBACK_EMAIL")
@@ -471,6 +483,7 @@ def fallback_notify(source, msg, severity):
         logger.info("Successfully dispatched SMTP fallback email.")
     except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
         logger.critical(f"SMTP Fallback completely failed: {e}")
+        outbound_failed("smtp", source, severity)
 
 
 # Graduated thresholds, in days, ordered from least to most urgent -- the first one a credential's
@@ -517,7 +530,7 @@ def report(client, source, msg, severity="high", website_id=False, units=()):
     webhook_url = os.environ.get("PAGER_WEBHOOK_URL")
     if webhook_url and pagerduty_maintenance.read_flag()["state"] == pagerduty_maintenance.ACTIVE:
         logger.info("pagerduty maintenance active: webhook for %s not sent", source)
-    elif webhook_url and not outbound_due("webhook", source):
+    elif webhook_url and not outbound_due("webhook", source, severity):
         logger.info("Webhook for %s was sent within the last %ss; not repeated", source, OUTBOUND_REPEAT_SECONDS)
     elif webhook_url:
         try:
@@ -538,6 +551,7 @@ def report(client, source, msg, severity="high", website_id=False, units=()):
             Exception,
         ) as e:  # audit-ignore-catch-all
             logger.warning("Webhook dispatch failed: %s", e)
+            outbound_failed("webhook", source, severity)
 
     try:
         payload = {"source": source, "description": msg, "severity": severity}
@@ -567,6 +581,7 @@ def auto_resolve(client, source, website_id=False):
         logger.info(
             f"[{source}] System stable. Auto-resolved open incidents. (Website: {website_id})"
         )
+        outbound_recovered(source)
         return True
     except (ConnectionError, socket.timeout, Exception) as e:  # audit-ignore-catch-all
         logger.error(f"Failed to auto-resolve incidents for {source}: {e}")

@@ -38,6 +38,25 @@ class OutboundThrottle(unittest.TestCase):
             gm.report(mock.Mock(), "Other", "full")
         self.assertEqual(urlopen.call_count, 2)
 
+    def test_a_higher_severity_is_not_held_back_by_an_earlier_alert(self):
+        with mock.patch.object(gm.urllib.request, "urlopen") as urlopen:
+            gm.report(mock.Mock(), "Disk", "filling", severity="medium")
+            gm.report(mock.Mock(), "Disk", "full", severity="critical")
+        self.assertEqual(urlopen.call_count, 2)
+
+    def test_a_webhook_that_failed_is_tried_again_next_pass(self):
+        with mock.patch.object(gm.urllib.request, "urlopen", side_effect=OSError("down")) as urlopen:
+            gm.report(mock.Mock(), "Disk", "full")
+            gm.report(mock.Mock(), "Disk", "full")
+        self.assertEqual(urlopen.call_count, 2)
+
+    def test_a_failure_after_recovery_notifies_at_once(self):
+        with mock.patch.object(gm.urllib.request, "urlopen") as urlopen:
+            gm.report(mock.Mock(), "Disk", "full")
+            self.assertTrue(gm.auto_resolve(mock.Mock(), "Disk"))
+            gm.report(mock.Mock(), "Disk", "full again")
+        self.assertEqual(urlopen.call_count, 2)
+
     def test_the_webhook_posts_again_after_the_repeat_interval(self):
         with mock.patch.object(gm.urllib.request, "urlopen") as urlopen, mock.patch.object(gm.time, "time") as now:
             now.return_value = 1000.0
