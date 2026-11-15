@@ -172,6 +172,14 @@ impl EmulatorP2 {
     /// Bind `127.0.0.1:port` (0 picks a free port) for discovery and General, plus the ports of
     /// `cfg.ports`, and serve Protocol 2 on `handle`.
     pub fn start(handle: &Handle, port: u16, cfg: P2EmulatorConfig) -> Result<Self, HpsdrError> {
+        // The DDC-specific and high-priority parsers index 6 bytes per DDC into a 1444-byte packet, so a
+        // count of 237 or more would panic on the first packet; the port block holds at most 16.
+        if cfg.num_ddcs > 16 {
+            return Err(HpsdrError::Config(format!(
+                "emulator num_ddcs {} (0..=16)",
+                cfg.num_ddcs
+            )));
+        }
         let cmd = bind(handle, port)?;
         let addr = cmd.local_addr()?;
         let ddc_spec = Arc::new(bind(handle, cfg.ports.ddc_specific)?);
@@ -437,6 +445,20 @@ mod tests {
     // Tests [@ANCHOR: hpsdr_emulator_p2_emulator_p2]
     // Tests [@ANCHOR: hpsdr_emulator_p2_p2_counters]
     // Tests [@ANCHOR: hpsdr_emulator_p2_p2_emulator_config]
+    #[tokio::test]
+    async fn start_rejects_a_ddc_count_that_would_overrun_the_packet() {
+        // Tests [@ANCHOR: hpsdr_emulator_p2_start]
+        let r = EmulatorP2::start(
+            &Handle::current(),
+            0,
+            P2EmulatorConfig {
+                num_ddcs: 255,
+                ..Default::default()
+            },
+        );
+        assert!(matches!(r, Err(HpsdrError::Config(_))));
+    }
+
     #[tokio::test]
     async fn listens_on_loopback_only_and_answers_discovery() {
         // Tests [@ANCHOR: hpsdr_emulator_p2_start]
