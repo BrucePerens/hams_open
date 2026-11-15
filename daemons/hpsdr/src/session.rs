@@ -789,7 +789,14 @@ mod tests {
         .await
         .expect("start");
         let mut s = radio.take_streams().remove(0);
-        tokio::time::sleep(Duration::from_millis(400)).await;
+        // Bounded wait for the first drop, not a fixed sleep: a loaded machine may be slow to produce one.
+        for _ in 0..300 {
+            let now = s.stats();
+            if now.dropped_blocks > 0 && now.lost_packets > 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
         let st = s.stats();
         assert!(
             st.dropped_blocks > 0,
