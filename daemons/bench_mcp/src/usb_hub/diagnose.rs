@@ -522,8 +522,8 @@ mod tests {
         let (_d, sys) = writable_sys();
         let t = Tree::read(&sys).unwrap();
         // 2^32 + 1 used to wrap to port 1 of the hub.
-        let e = missing_target(&t, &cfg(), &json!({"hub": "3-2", "port": 4294967297u64}))
-            .unwrap_err();
+        let e =
+            missing_target(&t, &cfg(), &json!({"hub": "3-2", "port": 4294967297u64})).unwrap_err();
         assert!(e.contains("too large"), "{e}");
         let ok = missing_target(&t, &cfg(), &json!({"hub": "3-2", "port": 1})).unwrap();
         assert_eq!(ok, ("3-2".to_string(), 1));
