@@ -55,4 +55,4 @@ class TestDaemonStopAndPollGuards(common.HamsTransactionCase):
         # Tests [@ANCHOR: zero_sudo:_poll_health_check]
         """A daemon that never becomes healthy must fail loudly, not report success."""
         with self.assertRaisesRegex(UserError, "health check failed"):
-            self.env["zero_sudo.daemon.utils"]._poll_health_check("http://127.0.0.1:1/health", timeout=0, interval=0.1)
+            self.env["zero_sudo.daemon.utils"]._poll_health_check("http://odoo:1/health", timeout=0, interval=0.1)
