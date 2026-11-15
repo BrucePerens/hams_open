@@ -38,3 +38,4 @@ from . import test_phishing_link_defang
 from . import test_untrusted_text_api
 from . import test_daemon_reporter_unreadable_key
 from . import test_helpdesk_gdpr
+from . import test_portal_access

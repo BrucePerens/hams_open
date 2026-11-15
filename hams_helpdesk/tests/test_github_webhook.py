@@ -145,6 +145,36 @@ class TestGithubWebhookHttp(HamsHttpCase):
         # Tests [@ANCHOR: hams_helpdesk:github_verify_signature]
         self.assertFalse(_verify_github_signature(b"{}", _TEST_SECRET, "sha256=" + "\u00e9" * 64))
 
+    def test_github_signature_without_the_sha256_prefix_is_refused(self):
+        # Tests [@ANCHOR: hams_helpdesk:github_verify_signature]
+        body = b"{}"
+        good = _sign_github_payload(body, _TEST_SECRET)
+        self.assertTrue(_verify_github_signature(body, _TEST_SECRET, good))
+        self.assertFalse(_verify_github_signature(body, _TEST_SECRET, good[len("sha256="):]))
+        # Seven characters of anything but "sha256=" in front of a correct digest: only the prefix check refuses it.
+        self.assertFalse(_verify_github_signature(body, _TEST_SECRET, "sha1===" + good[len("sha256="):]))
+
+    def test_github_signature_with_an_unusable_secret_is_refused_not_an_error(self):
+        # Tests [@ANCHOR: hams_helpdesk:github_verify_signature]
+        self.assertFalse(_verify_github_signature(b"{}", "\ud800", "sha256=" + "0" * 64))
+        self.assertFalse(_verify_github_signature("not bytes", _TEST_SECRET, "sha256=" + "0" * 64))
+
+    def test_github_webhook_dependabot_alert_without_a_url_creates_nothing(self):
+        # Tests [@ANCHOR: COMM_github_webhook_handle_dependabot_alert]
+        self._configure_secret()
+        payload = _dependabot_alert_payload(action="created")
+        del payload["alert"]["html_url"]
+        self.assertEqual(self._post("dependabot_alert", payload).status_code, 200)
+        self.assertFalse(self.Ticket.search([]))
+
+    def test_github_webhook_workflow_run_without_a_url_creates_nothing(self):
+        # Tests [@ANCHOR: COMM_github_webhook_handle_workflow_run]
+        self._configure_secret()
+        payload = _workflow_run_payload(conclusion="failure")
+        del payload["workflow_run"]["html_url"]
+        self.assertEqual(self._post("workflow_run", payload).status_code, 200)
+        self.assertFalse(self.Ticket.search([]))
+
     # Tests [@ANCHOR: hams_helpdesk_github_webhook_api_github_webhook_controller]
     def test_github_webhook_wrong_key_signature_is_denied(self):
         # A signature computed with a DIFFERENT secret than the one configured -- distinct
