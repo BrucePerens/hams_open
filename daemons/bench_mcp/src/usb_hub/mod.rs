@@ -86,7 +86,16 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
         for (k, v) in map {
             port_key(k)?;
             let text = |f: &str| v.get(f).and_then(|x| x.as_str()).map(String::from);
-            let flag = |f: &str| v.get(f).and_then(|x| x.as_bool()).unwrap_or(false);
+            if !v.is_object() {
+                return Err(format!("port {k}: must be an object"));
+            }
+            // A protection flag that is not a boolean ("critical": "true") must not read as false: that would leave
+            // the port unprotected without a word.
+            let flag = |f: &str| match v.get(f) {
+                None | Some(Value::Null) => Ok(false),
+                Some(Value::Bool(b)) => Ok(*b),
+                Some(_) => Err(format!("port {k}: {f} must be true or false")),
+            };
             let label = text("label");
             if let Some(l) = &label {
                 if l.trim().is_empty() {
@@ -104,8 +113,8 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
                 k.clone(),
                 PortCfg {
                     label,
-                    critical: flag("critical"),
-                    hub_uplink_ok: flag("hub_uplink_ok"),
+                    critical: flag("critical")?,
+                    hub_uplink_ok: flag("hub_uplink_ok")?,
                     confirmed_by_hand: text("confirmed_by_hand"),
                     state_cleared: text("state_cleared"),
                     vbus_measured: text("vbus_measured"),
@@ -551,6 +560,21 @@ mod tests {
         );
         assert!(bad(json!({"critical_devices": ["zzzz:0000"]})).contains("vid:pid"));
         assert!(bad(json!({"ports": {"3-2/2": {"label": " "}}})).contains("empty"));
+    }
+
+    #[test]
+    fn a_protection_flag_that_is_not_a_boolean_is_refused_not_read_as_false() {
+        for v in [json!("true"), json!(1), json!("yes"), json!([true])] {
+            for f in ["critical", "hub_uplink_ok"] {
+                let e = parse_config(&json!({"ports": {"3-2/2": {f: v}}})).unwrap_err();
+                assert!(e.contains(&format!("{f} must be true or false")), "{e}");
+            }
+        }
+        assert!(parse_config(&json!({"ports": {"3-2/2": true}})).is_err());
+        let c =
+            parse_config(&json!({"ports": {"3-2/2": {"critical": true, "hub_uplink_ok": null}}}))
+                .unwrap();
+        assert!(c.ports["3-2/2"].critical && !c.ports["3-2/2"].hub_uplink_ok);
     }
 
     // Tests [@ANCHOR: bench_mcp_usb_hub_resolve_device]
