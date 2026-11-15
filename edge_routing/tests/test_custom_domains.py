@@ -78,6 +78,14 @@ class TestCustomDomains(HamsTransactionCase):
             self.domain_model.create({"name": "notadomain", "target_slug": "testclub2"})
             self.env.flush_all()
 
+    def test_02b_domain_with_separator_or_junk_is_rejected(self):
+        # Tests [@ANCHOR: edge_routing:COMM_domain_check_name]
+        """The name is comma-joined into the certbot check target: a comma, slash, space or underscore label is refused."""
+        for bad in ("a.com,evil.com", "a.com/x", "a b.com", "-a.com", "a..com", "a.com.", "x" * 64 + ".com"):
+            with self.subTest(name=bad), self.assertRaises(ValidationError):
+                self.domain_model.create({"name": bad, "target_slug": "testclub2b"})
+                self.env.flush_all()
+
     def test_03_empty_domain_name_is_rejected(self):
         with self.assertRaises(ValidationError):
             self.domain_model.create({"name": "", "target_slug": "testclub3"})
