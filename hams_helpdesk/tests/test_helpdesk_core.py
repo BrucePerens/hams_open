@@ -166,6 +166,36 @@ class TestHelpdeskCore(HamsTransactionCase):
         self.assertIn("Official Shift Handoff Executed", audit_trail)
         self.assertIn("Proceed with DB restart", audit_trail)
 
+    def test_02b_shift_handoff_refuses_a_ticket_the_caller_cannot_write(self):
+        """A helpdesk user cannot hand off a ticket assigned to someone else: the wizard writes as the service
+        account, so it must check the caller's own access first."""
+        # Tests [@ANCHOR: helpdesk_handoff_execution]
+        # Tests [@ANCHOR: hams_helpdesk_shift_handoff_shift_handoff_wizard]
+        others_ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Someone Else's Ticket", "user_id": self.manager_user.id}
+        )
+        agent = self.env["res.users"].create(
+            {
+                "name": "Plain Helpdesk Agent",
+                "login": "plain_agent_handoff_test",
+                "group_ids": [(6, 0, [self.env.ref("hams_helpdesk.group_helpdesk_user").id])],
+            }
+        )
+        wizard = (
+            self.env["hams_helpdesk.shift_handoff"]
+            .with_user(agent)
+            .create(
+                {
+                    "ticket_id": others_ticket.id,
+                    "new_user_id": agent.id,
+                    "handoff_notes": "Taking it.",
+                }
+            )
+        )
+        with self.assertRaises(AccessError):
+            wizard.action_confirm_handoff()
+        self.assertEqual(others_ticket.user_id, self.manager_user, "The ticket stays with its assignee.")
+
     def test_03_portal_security_rules(self):
         """Verify DevSecOps compliance: Portal users can ONLY access their own explicitly owned tickets."""
         # Ensure company context is consistent
