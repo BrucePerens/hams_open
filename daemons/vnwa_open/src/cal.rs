@@ -648,6 +648,10 @@ impl Calibration {
             _ => Err(format!("missing {key} line")),
         };
         let (has_one, has_thru) = (flag(lines.next(), "onport")?, flag(lines.next(), "thru")?);
+        if !has_one && !has_thru {
+            // `build` refuses this ("nothing to calibrate"); a file must not get one in by the back door.
+            return Err("the file holds neither the one-port terms nor the through".into());
+        }
         let (mut freqs, mut e00, mut e11, mut tr, mut th) =
             (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
         for (ln, line) in lines.enumerate() {
@@ -827,6 +831,33 @@ mod tests {
             .s11(10e6, ONE)
             .unwrap_err()
             .contains("no open/short/load"));
+    }
+
+    // Tests [@ANCHOR: vnwa_open_cal_file]
+    #[test]
+    fn a_file_that_holds_neither_the_one_port_terms_nor_the_through_is_refused_like_build_does() {
+        let thru = [c(1.0, 0.0), c(1.0, 0.0), c(1.0, 0.0)];
+        let text = Calibration::new(vec![1e6, 2e6, 3e6], None, None, None, Some(&thru))
+            .unwrap()
+            .to_text();
+        assert!(Calibration::from_text(&text).is_ok());
+        // The same file with the through taken out: `onport no`, `thru no` and only the frequency on each line.
+        let empty: String = text
+            .lines()
+            .map(|l| {
+                if l == "thru yes" {
+                    "thru no".to_string()
+                } else if l.starts_with(|ch: char| ch.is_ascii_digit()) && !l.starts_with("points")
+                {
+                    l.split_whitespace().next().unwrap().to_string()
+                } else {
+                    l.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let e = Calibration::from_text(&empty).unwrap_err();
+        assert!(e.contains("neither"), "{e}");
     }
 
     // Tests [@ANCHOR: vnwa_open_cal_file]
