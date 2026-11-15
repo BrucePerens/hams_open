@@ -570,7 +570,12 @@ impl VendorTwin for TentecTwin {
     // [@ANCHOR: radioctl_tentec_twin_front_panel]
     fn front_panel(&mut self, panel: Panel) -> Result<Vec<u8>, String> {
         match panel {
-            Panel::Frequency(hz) => self.freq[0] = hz.0,
+            Panel::Frequency(hz) => {
+                if self.dialect != Dialect::Orion && encode_frequency(hz).is_none() {
+                    return Err("a binary Ten-Tec holds a frequency in four bytes".into());
+                }
+                self.freq[0] = hz.0;
+            }
             Panel::Ptt(on) => self.ptt = on,
             Panel::Mode(_) => {
                 return Err("the Ten-Tec twin takes mode changes over the wire".into())
@@ -632,6 +637,21 @@ mod tests {
     fn engine_refuses_other_families() {
         assert!(TentecEngine::new(RigDescription::ts2000()).is_err());
         assert!(TentecTwin::new(&RigDescription::ts2000()).is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_tentec_twin_front_panel]
+    #[test]
+    fn a_binary_twin_refuses_a_front_panel_frequency_beyond_four_bytes() {
+        let mut t = TentecTwin::new(&shipped("tentec-tt-538")).expect("twin");
+        assert!(t.front_panel(Panel::Frequency(Hz(5_000_000_000))).is_err());
+        assert_eq!(t.snapshot().expect("snapshot").frequency, Hz(t.freq[0]));
+        assert_ne!(t.freq[0], 5_000_000_000);
+        let answer = t.feed(b"?A\r", T0);
+        assert_eq!(decode_frequency(&answer[1..5]), Some(Hz(t.freq[0])));
+        let mut orion = TentecTwin::new(&shipped("tentec-tt-565")).expect("twin");
+        orion
+            .front_panel(Panel::Frequency(Hz(5_000_000_000)))
+            .expect("orion text field holds it");
     }
 
     // Tests [@ANCHOR: radioctl_tentec_engine_encode]
