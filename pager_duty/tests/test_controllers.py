@@ -178,6 +178,58 @@ class TestPagerControllers(HamsHttpCase):
             self.assertEqual(response.json()["result"]["status"], "error", identity)
             self.assertIn("Unauthorized", response.json()["result"]["message"])
 
+    def test_04c_update_domains_rejects_a_domains_value_that_is_not_a_list_of_names(self):
+        # Tests [@ANCHOR: pager_duty:update_domains]
+        # A string used to be joined character by character into the certbot target; a list of numbers crashed.
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "the-real-secret")
+        for bad in ("example.com", {"a": 1}, [1, 2], [["x"]], [None], [""], ["a,b"], 7, True):
+            response = self.url_open(
+                "/api/v1/pager_duty/update_domains",
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "call",
+                    "params": {"domains": bad, "api_identity": "the-real-secret"},
+                },
+            )
+            body = response.json()
+            self.assertNotIn("error", body, bad)
+            self.assertEqual(body["result"]["status"], "error", bad)
+        self.assertFalse(self.env["pager.check"].search([("check_type", "=", "certbot")]))
+
+    def test_02d_log_search_routes_reject_non_string_parameters_cleanly(self):
+        # Tests [@ANCHOR: pager_duty:search_logs]
+        # Tests [@ANCHOR: pager_duty:search_logs_poll]
+        self.env["res.users"].create(
+            {
+                "name": "Log Type Admin",
+                "login": "log_type_admin",
+                "password": "log_type_admin",
+                "group_ids": [(6, 0, [self.env.ref("pager_duty.group_pager_admin").id])],
+            }
+        )
+        self.env.flush_all()
+        self.authenticate("log_type_admin", "log_type_admin")
+        for params in (
+            {"file_path": ["/var/log/x"], "regex_query": "a"},
+            {"file_path": None, "regex_query": "a"},
+            {"file_path": "/var/log/x", "regex_query": {"a": 1}},
+            {"file_path": "/var/log/x\u0000", "regex_query": "a"},
+            {"file_path": "/var/log/" + "a" * 5000, "regex_query": "a"},
+        ):
+            body = self.url_open(
+                "/api/v1/pager/logs/search",
+                json={"jsonrpc": "2.0", "method": "call", "params": params},
+            ).json()
+            self.assertNotIn("error", body, params)
+            self.assertIn("error", body["result"], params)
+        for job_id in (["a"], {"a": 1}, 5, None):
+            body = self.url_open(
+                "/api/v1/pager/logs/search_poll",
+                json={"jsonrpc": "2.0", "method": "call", "params": {"job_id": job_id}},
+            ).json()
+            self.assertNotIn("error", body, job_id)
+            self.assertIn("error", body["result"], job_id)
+
     def test_04_update_domains_rejects_a_wrong_identity(self):
         # _set_system_param()'s WRITE whitelist doesn't cover this key (only
         # the READ whitelist does, per security_utils.py -- production
