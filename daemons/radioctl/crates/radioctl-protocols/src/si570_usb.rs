@@ -679,7 +679,9 @@ impl UsbDevice for Si570Twin {
         {
             let f = &mut self.fifi;
             match (index, data) {
-                (FIFI_VOLUME, [a, b]) => f.volume = i16::from_le_bytes([*a, *b]),
+                (FIFI_VOLUME, [a, b]) if (0..=100).contains(&i16::from_le_bytes([*a, *b])) => {
+                    f.volume = i16::from_le_bytes([*a, *b]);
+                }
                 (FIFI_MODE, [m]) if *m <= 3 => f.mode = *m,
                 (FIFI_WIDTH, [a, b, c, d]) => f.width = u32::from_le_bytes([*a, *b, *c, *d]),
                 (FIFI_PREAMP, [p]) if *p <= 1 => f.preamp = *p,
@@ -751,5 +753,40 @@ impl UsbDevice for Si570Twin {
         _timeout: Duration,
     ) -> Result<Vec<u8>, UsbFailure> {
         Err(UsbFailure::Stall)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests [@ANCHOR: radioctl_si570_usb_twin_control_out]
+    #[test]
+    fn the_fifisdr_twin_stalls_a_volume_outside_0_to_100() {
+        let path = format!("{}/../../rigs/fifi-sdr.toml", env!("CARGO_MANIFEST_DIR"));
+        let text = std::fs::read_to_string(path).expect("rig file");
+        let desc = radioctl_core::rigfile::parse(&text)
+            .expect("loads")
+            .description;
+        let mut twin = Si570Twin::new(&desc).expect("twin");
+        let t = Duration::from_millis(10);
+        let write = |twin: &mut Si570Twin, v: i16| {
+            twin.control_out(
+                VENDOR_OUT,
+                REQUEST_FIFISDR_WRITE,
+                0,
+                FIFI_VOLUME,
+                &v.to_le_bytes(),
+                t,
+            )
+        };
+        assert_eq!(write(&mut twin, 80), Ok(2));
+        for bad in [101, -1, i16::MAX, i16::MIN] {
+            assert_eq!(write(&mut twin, bad), Err(UsbFailure::Stall), "{bad}");
+        }
+        assert_eq!(
+            twin.control_in(VENDOR_IN, REQUEST_FIFISDR_READ, 0, FIFI_VOLUME, 2, t),
+            Ok(80i16.to_le_bytes().to_vec())
+        );
     }
 }
