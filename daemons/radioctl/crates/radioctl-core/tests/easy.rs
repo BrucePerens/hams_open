@@ -176,6 +176,19 @@ async fn a_lease_opens_the_gate_only_for_its_permit_and_refuses_what_is_unsafe()
     drop(lease);
 }
 
+// Tests [@ANCHOR: radioctl_core_easy_transmit_lease]
+#[tokio::test(start_paused = true)]
+async fn a_lease_longer_than_the_clock_can_count_is_refused_and_leaves_the_gate_closed() {
+    let (rig, _control) = ic7300();
+    assert_eq!(
+        rig.transmit_lease(permit(), Duration::MAX)
+            .err()
+            .map(|e| e.kind),
+        Some(ErrorKind::Rejected)
+    );
+    assert_eq!(rig.transmit_permit(), None);
+}
+
 // Tests [@ANCHOR: radioctl_core_easy_lease_remaining]
 // Tests [@ANCHOR: radioctl_core_easy_lease_key]
 // Tests [@ANCHOR: radioctl_core_easy_lease_unkey]
