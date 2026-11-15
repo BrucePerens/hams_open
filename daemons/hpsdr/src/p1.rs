@@ -219,7 +219,8 @@ impl P1Config {
                 self.preamp = cc[3] & 4 != 0;
                 self.dither = cc[3] & 8 != 0;
                 self.random = cc[3] & 16 != 0;
-                self.num_rx = ((cc[4] >> 3) & 7) + 1;
+                // The wire field holds 0..=7 (1..=8 receivers); clamp so a hostile 8 cannot index past rx_hz.
+                self.num_rx = (((cc[4] >> 3) & 7) + 1).min(MAX_RX);
             }
             1 => self.tx_hz = word,
             2..=8 => self.rx_hz[usize::from(addr - 2)] = word,
@@ -538,6 +539,16 @@ pub fn encode_status_cc(st: &HardwareStatus, addr: u8) -> [u8; 5] {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn apply_cc_clamps_receiver_count() {
+        // Tests [@ANCHOR: hpsdr_p1_config_apply_cc]
+        let mut c = P1Config::default();
+        c.apply_cc(&[0, 0, 0, 0, 7 << 3]);
+        assert_eq!(c.num_rx, MAX_RX);
+        assert!(c.validate().is_ok());
+        assert_eq!(c.addresses().len(), usize::from(MAX_RX) + 4);
+    }
+
     use super::*;
     use std::time::Duration;
 
