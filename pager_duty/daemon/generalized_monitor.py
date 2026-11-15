@@ -442,7 +442,8 @@ def outbound_recovered(source):
 
 # A log line is another program's text: it can carry an email, a URL with a query string, a password=... pair or a bearer
 # token, and it goes to the incident and the webhook. These are removed before it is reported.
-_LOG_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# The local part is bounded (RFC 5321: 64): an unbounded run rescans to the end of a long log line from every start (quadratic).
+_LOG_EMAIL_RE = re.compile(r"[\w.+-]{1,64}@[\w-]+(?:\.[\w-]+)+")
 _LOG_URL_RE = re.compile(r"(?i)\b(?:https?|wss?|ftp)://\S+")
 _LOG_BEARER_RE = re.compile(r"(?i)\bbearer\s+[\w.~+/=-]+")
 _LOG_SECRET_RE = re.compile(
