@@ -611,7 +611,12 @@ pub fn boot(inst: &Instrument, usb_root: &Path) -> Result<Value, String> {
     }
 }
 
-pub fn radiod_start(inst: &Instrument, args: &Value, usb_root: &Path) -> Result<Value, String> {
+pub fn radiod_start(
+    inst: &Instrument,
+    args: &Value,
+    usb_root: &Path,
+    net_root: &Path,
+) -> Result<Value, String> {
     // [@ANCHOR: bench_mcp_rx888_radiod_start]
     let cfg = &inst.rx888;
     if let Some(pid) = running_pid(&inst.name) {
@@ -658,7 +663,7 @@ pub fn radiod_start(inst: &Instrument, args: &Value, usb_root: &Path) -> Result<
             usb_json(&seen)["state"]
         ));
     }
-    if !loopback_multicast(Path::new("/sys/class/net")) {
+    if !loopback_multicast(net_root) {
         return Err("multicast is off on the loopback interface, and radiod runs on loopback only. A person must run: sudo ip link set dev lo multicast on (it lasts until reboot).".into());
     }
     for (what, p) in [
@@ -696,12 +701,19 @@ pub fn radiod_start(inst: &Instrument, args: &Value, usb_root: &Path) -> Result<
         .stderr(logf2)
         .spawn()
         .map_err(|e| format!("cannot start {}: {e}", cfg.radiod.display()))?;
+    let mut child = child;
     let pid = child.id();
-    std::fs::write(
+    if let Err(e) = std::fs::write(
         dir.join(format!("rx888-{}.pid", inst.name)),
         format!("{pid}\n"),
-    )
-    .map_err(|e| e.to_string())?;
+    ) {
+        // Nothing records this radiod yet: stop it here, or it runs on with no pid file and no entry for radiod_stop to find.
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(format!(
+            "cannot write the pid file ({e}); radiod was stopped"
+        ));
+    }
     running().lock().unwrap_or_else(|p| p.into_inner()).insert(
         inst.name.clone(),
         Running {
@@ -843,7 +855,9 @@ pub fn call_with(
         "bench_rx888_status" => status(inst, usb_root),
         "bench_rx888_frontend" => frontend(inst),
         "bench_rx888_boot" => boot(inst, usb_root),
-        "bench_rx888_radiod_start" => radiod_start(inst, args, usb_root),
+        "bench_rx888_radiod_start" => {
+            radiod_start(inst, args, usb_root, Path::new("/sys/class/net"))
+        }
         "bench_rx888_radiod_stop" => radiod_stop(inst),
         "bench_rx888_tune" => radio::tune(inst, args),
         "bench_rx888_spectrum" => radio::spectrum(inst, args),
@@ -1259,6 +1273,53 @@ mod tests {
             !radiod_config_text(&Config::default(), "d", 64_800_000, None, None, 2)
                 .contains("gain =")
         );
+    }
+
+    // Tests [@ANCHOR: bench_mcp_rx888_radiod_start]
+    #[test]
+    fn a_radiod_whose_pid_file_cannot_be_written_is_stopped_not_orphaned() {
+        let name = format!("orphantest{}", std::process::id());
+        let work = tempdir::Dir::new();
+        let script = work.0.join("radiod");
+        std::fs::write(&script, "#!/bin/sh\nsleep 8\n").unwrap();
+        std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+        let (lib, presets) = (work.0.join("rx888.so"), work.0.join("presets.conf"));
+        std::fs::write(&lib, "").unwrap();
+        std::fs::write(&presets, "").unwrap();
+        let net = work.0.join("net");
+        std::fs::create_dir_all(net.join("lo")).unwrap();
+        std::fs::write(net.join("lo/flags"), "0x1009\n").unwrap();
+        let usb = sysfs(&[("2-3.2", "04b4", "00f1", "5000")]);
+        let insts = crate::config::parse(&format!(
+            r#"{{"instruments":{{"{name}":{{"driver":"rx888","tier":"read_config","radiod":"{}","driver_library":"{}","presets":"{}"}}}}}}"#,
+            script.display(),
+            lib.display(),
+            presets.display()
+        ))
+        .unwrap();
+        let dir = crate::out_dir();
+        let conf = dir.join(format!("rx888-{name}.conf"));
+        // A directory where the pid file goes makes the write fail after radiod has been spawned.
+        std::fs::create_dir_all(dir.join(format!("rx888-{name}.pid"))).unwrap();
+        let e = radiod_start(&insts[0], &json!({}), &usb.0, &net).unwrap_err();
+        assert!(e.contains("pid file"), "{e}");
+        let conf_text = conf.display().to_string();
+        let alive = std::fs::read_dir("/proc")
+            .unwrap()
+            .flatten()
+            .filter(|p| {
+                p.file_name()
+                    .to_string_lossy()
+                    .bytes()
+                    .all(|b| b.is_ascii_digit())
+            })
+            .any(|p| {
+                std::fs::read(p.path().join("cmdline"))
+                    .map(|c| String::from_utf8_lossy(&c).contains(&conf_text))
+                    .unwrap_or(false)
+            });
+        assert!(!alive, "radiod is still running with no pid file");
     }
 
     // Tests [@ANCHOR: bench_mcp_rx888_is_our_radiod]
