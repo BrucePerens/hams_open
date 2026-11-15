@@ -11,6 +11,8 @@ from odoo.tools import email_normalize, email_split
 class MailMailBlacklist(models.Model):
     _inherit = "mail.mail"
 
+    # [@ANCHOR: hams_base:mail_send_filters_outgoing]
+    # Verified by [@ANCHOR: test_send_filters_only_outgoing_mail]
     # Verified by [@ANCHOR: test_a_blacklisted_recipient_is_dropped_before_send]
     def _send(self, *args, **kwargs):
         outgoing = self.filtered(lambda m: m.state == "outgoing")

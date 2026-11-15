@@ -20,3 +20,15 @@ class TestMailBlacklist(HamsTransactionCase):
         only = self.env["mail.mail"].create({"subject": "Digest", "body_html": "<p>x</p>", "email_to": "bounced@example.com"})
         only._send()
         self.assertEqual(only.state, "exception")
+
+    # [@ANCHOR: test_send_filters_only_outgoing_mail]
+    # Tests [@ANCHOR: hams_base:mail_send_filters_outgoing]
+    def test_send_filters_only_outgoing_mail(self):
+        self.env["mail.blacklist"]._add("bounced@example.com")
+        done = self.env["mail.mail"].create(
+            {"subject": "Old", "body_html": "<p>x</p>", "email_to": "bounced@example.com, ok@example.com"}
+        )
+        done.write({"state": "sent"})
+        done._send()
+        self.assertEqual(done.state, "sent")
+        self.assertEqual(done.email_to, "bounced@example.com, ok@example.com")
