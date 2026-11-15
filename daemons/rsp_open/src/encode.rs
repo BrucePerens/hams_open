@@ -783,7 +783,12 @@ pub fn adc_clock(adc_hz: u32, ppb: i64, flag12: bool) -> Result<AdcClock, Error>
     let d = (div / 2 - 1) as u32;
     // N + frac/2^21 = f * div / 4 MHz / (1 + ppb/1e9); frac rounds down.
     let num: u128 = f as u128 * div as u128 * (1u128 << 21) * 1_000_000_000u128;
-    let den: u128 = (4 * M) as u128 * (1_000_000_000i128 + ppb as i128) as u128;
+    let scale = 1_000_000_000i128 + ppb as i128;
+    if scale <= 0 {
+        // Zero would divide by zero below and a negative value would wrap in the cast.
+        return Err(Error::InvalidArgument("ppm correction out of range".into()));
+    }
+    let den: u128 = (4 * M) as u128 * scale as u128;
     let q = num / den;
     let n = (q >> 21) as u32;
     let frac = (q & 0x1f_ffff) as u32;
@@ -1114,6 +1119,14 @@ mod tests {
         assert_eq!(board_front_transient(false), 0xa5);
         assert_eq!(board_write_args(0x12, 0x5d), (0x125d, 0x0040));
         assert_eq!(board_write_args(0x01, 0x00), (0x0100, 0x0040));
+    }
+
+    #[test]
+    // Tests [@ANCHOR: rsp_encode_adc_clock]
+    fn adc_clock_refuses_a_correction_that_zeroes_the_reference() {
+        for ppb in [-1_000_000_000, -1_000_000_001, i64::MIN] {
+            assert!(adc_clock(8_000_000, ppb, true).is_err(), "ppb {ppb}");
+        }
     }
 
     #[test]
