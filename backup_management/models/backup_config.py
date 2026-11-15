@@ -730,16 +730,19 @@ class BackupConfig(models.Model):
             # A snapshot dated in the future (clock skew) is ignored by the query above. A configuration with no usable
             # snapshot is judged by its own age instead, so one that never produced a snapshot still alerts.
             latest_start_time = start_times.get(conf.id) or conf.create_date
+            problems = []
             if latest_start_time and (now - latest_start_time).total_seconds() > (
                 26 * 60 * 60
             ):  # 26 hours (allows for 24h cron jitter without false positives)
                 stale_msg = f"""Stale Backup Alert: No new snapshots detected for {conf.name} in over 26 hours."""
-                conf.report_backup_failure(stale_msg)
+                problems.append(stale_msg)
 
             # Reported every hour for as long as it lasts: the incident is deduplicated by source, so it stays one open
             # incident, and pager.incident re-pages it while nobody acknowledges it (REPAGE_HOURS).
-            for job_problem in conf._backup_job_problems(now):
-                conf.report_backup_failure(job_problem)
+            problems.extend(conf._backup_job_problems(now))
+            # One report per configuration per run: pager.incident drops a second report for the same source within 60 s.
+            if problems:
+                conf.report_backup_failure("\n".join(problems))
 
             if conf.restore_drill_script:
                 delta_drill = (
