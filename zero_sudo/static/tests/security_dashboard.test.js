@@ -61,6 +61,17 @@ describe("zero_sudo_security_dashboard", () => {
         expect(root.style.transform).toBe("");
     });
 
+    test("setup still mounts, with an error line instead of 'No security logs found', when the log request fails", async () => {
+        // Tests [@ANCHOR: zero_sudo:js_security_dashboard_setup]
+        const { services } = stubServices();
+        services.orm = { searchRead: async () => { throw new Error("network down"); } };
+        patchWithCleanup(console, { error: () => {} });
+        const dashboard = await mountPlain(SecurityDashboard, services);
+        expect(dashboard.state.loadError).toBe(true);
+        expect(document.body.textContent).toInclude("could not be loaded");
+        expect(document.body.textContent).not.toInclude("No security logs found");
+    });
+
     test("loadLogs reads the newest hundred security log entries", async () => {
         // Tests [@ANCHOR: zero_sudo:js_security_dashboard_load_logs]
         const { calls, services } = stubServices();
