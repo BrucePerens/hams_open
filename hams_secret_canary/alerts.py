@@ -7,6 +7,7 @@ import logging
 from dataclasses import dataclass
 
 from odoo import fields
+from odoo.tools import html_escape
 
 _logger = logging.getLogger("hams_secret_canary.alarm")
 BACKENDS = {}
@@ -74,7 +75,7 @@ def mail_backend(env, alarm):
     mail_env["mail.mail"].create({
         "subject": "Secret canary tripped: %s" % alarm.label,
         "body_html": "<p>A %s (%s) was seen in %s: %s.</p><p>This detects a leak after it happened.</p>"
-                     % (alarm.kind, alarm.label, alarm.source, alarm.where),
+                     % (html_escape(alarm.kind), html_escape(alarm.label), html_escape(alarm.source), html_escape(alarm.where)),
         "email_to": address,
         "auto_delete": False,
     })
