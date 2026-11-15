@@ -446,6 +446,15 @@ class UserWebsitesController(http.Controller):
             # field the modal asks them for.
             if not request.env.user._is_public():
                 create_vals["reported_by_user_id"] = request.env.user.id
+                # Verified by [@ANCHOR: test_report_violation_member_duplicate]
+                # One report per (page, member) is a table constraint: a repeat is answered like
+                # a success rather than let the constraint raise a 500.
+                if env_svc["content.violation.report"].search_count(
+                    [("target_url", "=", url), ("reported_by_user_id", "=", request.env.user.id)]
+                ):
+                    return request.redirect(
+                        _report_violation_redirect_target(url, "report_submitted=1")
+                    )
 
             if slug:
                 # Resolve the owner or group
