@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import subprocess
 
 logging.basicConfig(
@@ -162,12 +163,24 @@ def _process_one(request_path):
         logger.exception("Job %s failed", job_id)
         result = {"return_code": 1, "output": f"Sidecar error: {e}"}
 
-    tmp_result_path = result_path + f".tmp-{os.getpid()}"
+    # SPOOL_DIR is writable by the odoo worker, so root must never follow a link planted there: an
+    # unpredictable temp name made with O_EXCL|O_NOFOLLOW, then a rename relative to the directory fd
+    # (rename replaces a link at the destination itself, it never writes through it).
+    tmp_name = f".result-{job_id}.{secrets.token_hex(8)}.tmp"
     try:
-        with open(tmp_result_path, "w") as f:
-            json.dump(result, f)
-        os.rename(tmp_result_path, result_path)
-        os.chmod(result_path, 0o644)  # readable back by backup_worker (odoo), which owns the spool dir
+        dir_fd = os.open(SPOOL_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            fd = os.open(
+                tmp_name, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600, dir_fd=dir_fd
+            )
+            with os.fdopen(fd, "w") as f:
+                json.dump(result, f)
+                f.flush()
+                os.fsync(f.fileno())
+                os.fchmod(f.fileno(), 0o644)  # readable back by backup_worker (odoo), which owns the spool dir
+            os.replace(tmp_name, os.path.basename(result_path), src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        finally:
+            os.close(dir_fd)
         os.remove(request_path)  # shortens the S3/B2 secret's lifetime on disk
     except OSError:
         # A bare, unwrapped os.remove() here would mean that if

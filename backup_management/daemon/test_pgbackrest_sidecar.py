@@ -205,10 +205,40 @@ class TestProcessOne(unittest.TestCase):
         mode = os.stat(result_path).st_mode & 0o777
         self.assertEqual(mode, 0o644)
 
-    @patch("pgbackrest_sidecar.os.chmod")
+    @patch("pgbackrest_sidecar.subprocess.run")
+    def test_a_planted_symlink_at_the_temp_name_is_not_followed(self, mock_run):
+        # The spool dir is writable by the odoo worker; root must not write through its planted links.
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok")
+        victim = os.path.join(self._tmpdir, "victim")
+        with open(victim, "w") as f:
+            f.write("keep")
+        request_path = self._write_request("7", ["pgbackrest", "backup", "--stanza=hams_prod"])
+        with patch.object(sidecar.secrets, "token_hex", return_value="aa"):
+            os.symlink(victim, os.path.join(self._tmpdir, ".result-7.aa.tmp"))
+            sidecar._process_one(request_path)  # must not raise
+        with open(victim) as f:
+            self.assertEqual(f.read(), "keep")
+
+    @patch("pgbackrest_sidecar.subprocess.run")
+    def test_a_planted_symlink_at_the_destination_is_replaced_not_followed(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="ok")
+        victim = os.path.join(self._tmpdir, "victim")
+        with open(victim, "w") as f:
+            f.write("keep")
+        os.symlink(victim, os.path.join(self._tmpdir, "result-8.json"))
+        request_path = self._write_request("8", ["pgbackrest", "backup", "--stanza=hams_prod"])
+
+        sidecar._process_one(request_path)
+
+        with open(victim) as f:
+            self.assertEqual(f.read(), "keep")
+        self.assertFalse(os.path.islink(os.path.join(self._tmpdir, "result-8.json")))
+        self.assertEqual(os.stat(os.path.join(self._tmpdir, "result-8.json")).st_mode & 0o777, 0o644)
+
+    @patch("pgbackrest_sidecar.os.fchmod")
     @patch("pgbackrest_sidecar.subprocess.run")
     def test_a_failure_writing_the_result_renames_the_request_instead_of_looping(
-        self, mock_run, mock_chmod
+        self, mock_run, mock_fchmod
     ):
         # If writing/finishing the result
         # file fails for any reason, the request file must stop matching
@@ -216,7 +246,7 @@ class TestProcessOne(unittest.TestCase):
         # re-triggers this same request immediately, forever, until
         # systemd's StartLimitBurst trips and fails the .path unit itself.
         mock_run.return_value = MagicMock(returncode=0, stdout="ok")
-        mock_chmod.side_effect = OSError("disk full")
+        mock_fchmod.side_effect = OSError("disk full")
         request_path = self._write_request("6", ["pgbackrest", "backup", "--stanza=hams_prod"])
 
         sidecar._process_one(request_path)  # must not raise
