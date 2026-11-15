@@ -322,3 +322,23 @@ class TestZeroSudoDocInstaller(common.HamsTransactionCase):
             fresh.write_date, write_date,
             "A second run with the same content is a no-op.",
         )
+
+    def test_a_manifest_change_without_a_file_change_reaches_the_installed_article(self):
+        # Tests [@ANCHOR: zero_sudo:install_single_doc]
+        # The stored hash used to cover the file only, so taking "public" off a manifest entry
+        # (the way to pull a manual back from the Help pages) left the installed article published.
+        Module = self.env["ir.module.module"]
+        utils = self.env["zero_sudo.security.utils"]
+        Article = self.env["knowledge.article"]
+
+        name = "Manifest Flag Refresh Test Doc"
+        article_id_key = f"zero_sudo.doc_article_id_zero_sudo_{name.replace(' ', '_')}"
+        doc_info = {"name": name, "path": "data/documentation.html", "public": True}
+        Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
+        article = Article.browse(int(utils._get_kv(article_id_key)))
+        self.assertTrue(article.is_published)
+
+        del doc_info["public"]
+        Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
+        self.assertFalse(article.is_published, "Dropping the manifest flag unpublishes the article.")
+        self.assertEqual(article.internal_permission, "none")
