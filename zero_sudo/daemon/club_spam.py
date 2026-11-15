@@ -1015,6 +1015,7 @@ class _StripParser(HTMLParser):
             self._close(self._stack.pop(), here)
         self._close(self._stack.pop(), end)
 
+    # [@ANCHOR: zero_sudo:club_spam_strip_close]
     def _close(self, frame, end):
         """Judges one element that has just ended at character offset `end`: its flagged anchors are passed to the open parent."""
         tag = frame["tag"]
