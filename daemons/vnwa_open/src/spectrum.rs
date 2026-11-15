@@ -116,7 +116,11 @@ impl Vna {
         })?;
         usb.read(0x58, tracking_level, tracking_level, 64)?;
         usb.send_all(&block)?;
-        usb.read_patient(0x0d, 0x0303, 0, 64, &c.stall_pauses_ms)?;
+        if c.stall_pauses_ms.is_empty() {
+            usb.read(0x0d, 0x0303, 0, 64)?;
+        } else {
+            usb.read_patient(0x0d, 0x0303, 0, 64, &c.stall_pauses_ms)?;
+        }
         let mark = cap21.mark();
         let frames = |ms: f64| (ms / 1000.0 * f64::from(SAMPLE_RATE)).round() as usize;
         let f = cap21.frames_after(
@@ -185,8 +189,30 @@ mod tests {
         assert!(band_rms(&y, 100.0, 10_000.0) < 1.0);
     }
 
-    // Tests [@ANCHOR: vnwa_open_sa_spectrum]
     // Tests [@ANCHOR: vnwa_open_spectrum_sa_once]
+    #[test]
+    fn an_empty_stall_pause_list_means_the_default_transfer_retry_for_the_0x0d_read() {
+        use crate::transport::{Scripted, TransferError};
+        // The 0x58 read and the nine requests of the block succeed, the 0x0d read stalls once. `Config::stall_pauses_ms` says an empty list
+        // uses the default transfer retry (as `measure` does); `read_patient` with an empty list tried once and failed the point.
+        let mut outcomes: Vec<Result<Vec<u8>, TransferError>> =
+            (0..10).map(|_| Ok(Vec::new())).collect();
+        outcomes.push(Err(TransferError::Transient("stall".into())));
+        let cfg = crate::sweep::Config {
+            point_ms: 5.0,
+            stall_pauses_ms: Vec::new(),
+            ..crate::sweep::Config::default()
+        };
+        let (c1, _f1) = crate::capture::synthetic_capture(|_| [0, 0]);
+        let (c2, _f2) =
+            crate::capture::synthetic_capture(|i| [(1000.0 * (i as f64 * 0.1).sin()) as i16, 0]);
+        let unit = crate::usb::Vnwa::with_transport(Box::new(Scripted::new(outcomes)));
+        let vna = Vna::with_parts(cfg, unit, c1, c2);
+        vna.sa_once(10e6, 5_000.0, 0).unwrap();
+        assert_eq!(vna.session.usb.resends(), 1);
+    }
+
+    // Tests [@ANCHOR: vnwa_open_sa_spectrum]
     #[test]
     fn a_spectrum_refuses_settings_that_would_leave_holes_or_leave_the_unit_range() {
         assert_eq!(spectrum_plan(10e6, 10.01e6, 5, 5_000.0, 0), Ok(2_500.0));
