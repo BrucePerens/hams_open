@@ -87,6 +87,7 @@ class BackupRestoreWizard(models.TransientModel):
                 "config_id": self.snapshot_id.config_id.id,
                 "website_id": self.snapshot_id.config_id.website_id.id,
                 "job_type": self.snapshot_id.config_id.engine,
+                "action": "restore",
                 "state": "pending",
                 "output_log": "Restore queued in RabbitMQ...",
             }

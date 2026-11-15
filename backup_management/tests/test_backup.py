@@ -459,3 +459,36 @@ class TestBackupManagement(RealTransactionCase):
             {"config_id": config.id, "snapshot_id": "snap_recent", "start_time": now - datetime.timedelta(hours=1)}
         )
         self.assertEqual(stale_alerts(), [])
+
+    def test_backup_job_problems_ignore_sync_and_other_non_backup_jobs(self):
+        # Tests [@ANCHOR: backup_management:backup_job_problems]
+        # Hourly sync_snapshots jobs succeed while every real backup job fails: they must not hide the failure.
+        config = self.config_kopia
+        Job = self.env["backup.job"]
+        now = fields.Datetime.now()
+        Job.search([("config_id", "=", config.id)]).unlink()
+
+        def make(action, state, hours_ago):
+            job = Job.create({"config_id": config.id, "job_type": "kopia", "action": action, "state": state})
+            self.env.cr.execute(
+                "UPDATE backup_job SET create_date = %s WHERE id = %s", (now - datetime.timedelta(hours=hours_ago), job.id)
+            )
+            job.invalidate_recordset(["create_date"])
+
+        make("kopia", "failed", 40)
+        for hours_ago in (3, 2, 1, 0.5):
+            make("sync_snapshots", "done", hours_ago)
+        problems = config._backup_job_problems(now)
+        self.assertTrue(any("No Successful Backup Job" in p for p in problems))
+        make("kopia", "done", 0.2)
+        self.assertEqual(config._backup_job_problems(now), [])
+
+    def test_publish_to_worker_records_the_action_on_the_job(self):
+        # Tests [@ANCHOR: backup_management:COMM_backup_trigger_execution]
+        config = self.config_kopia
+        self.safe_patch("pika.BlockingConnection")  # burn-ignore-pika: [@ANCHOR: backup_management:COMM_test_restore_action]
+        Job = self.env["backup.job"]
+        Job.search([("config_id", "=", config.id)]).unlink()
+        config.action_trigger_backup()
+        config._publish_to_worker("sync_snapshots")
+        self.assertEqual(sorted(Job.search([("config_id", "=", config.id)]).mapped("action")), ["kopia", "sync_snapshots"])

@@ -41,6 +41,11 @@ class BackupJob(models.Model):
         default="pending",
         required=True,
     )
+    action = fields.Char(
+        string="Action",
+        help="What the job does: kopia or pgbackrest for a backup, otherwise sync_snapshots, kopia_policy, restore_drill, "
+        "restore. Empty on jobs made before this field existed.",
+    )
     output_log = fields.Text(string="Live Output Log")
 
     # [@ANCHOR: backup_management:COMM_append_log]
