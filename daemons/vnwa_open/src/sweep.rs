@@ -107,6 +107,9 @@ impl Config {
     }
 }
 
+/// The longest `first_wait_ms` or `min_gap_ms` accepted: one hour.
+pub const MAX_WAIT_MS: f64 = 3_600_000.0;
+
 /// Refuses a configuration the unit or the analysis cannot use: an IF that does not divide 48 kHz into a whole number of
 /// samples, a time per point outside the program's range, a level above 14 bits, a window that runs past the emission.
 pub fn check(c: &Config) -> Result<(), String> {
@@ -124,6 +127,17 @@ pub fn check(c: &Config) -> Result<(), String> {
             "rf_level {} is above the 14-bit maximum 16383",
             c.rf_level
         ));
+    }
+    for (name, ms) in [
+        ("first_wait_ms", c.first_wait_ms),
+        ("min_gap_ms", c.min_gap_ms),
+    ] {
+        // `sweep` and `measure_once` turn these into a `Duration`, which panics on an infinite or huge value.
+        if !(0.0..=MAX_WAIT_MS).contains(&ms) {
+            return Err(format!(
+                "{name} {ms} is not between 0 and {MAX_WAIT_MS} ms (one hour)"
+            ));
+        }
     }
     let (settle, window) = (c.settle(), c.window());
     let steady_end = 5.0 * c.point_ms;
@@ -1016,6 +1030,40 @@ mod tests {
             },
         );
         assert!((m - 1.0).abs() < 1e-9 && (p - 2.0).abs() < 1e-9, "{m} {p}");
+    }
+
+    // Tests [@ANCHOR: vnwa_open_sweep_check]
+    #[test]
+    fn a_wait_that_is_negative_not_finite_or_longer_than_an_hour_is_refused_not_left_to_panic_in_the_sweep(
+    ) {
+        // `Duration::from_secs_f64` panics on an infinite or huge value, and `sweep` / `measure_once` build one from these two fields.
+        for bad in [f64::INFINITY, f64::NAN, -1.0, 3.6e6 + 1.0, 1e300] {
+            for (name, c) in [
+                (
+                    "first_wait_ms",
+                    Config {
+                        first_wait_ms: bad,
+                        ..Config::default()
+                    },
+                ),
+                (
+                    "min_gap_ms",
+                    Config {
+                        min_gap_ms: bad,
+                        ..Config::default()
+                    },
+                ),
+            ] {
+                let e = check(&c).unwrap_err();
+                assert!(e.contains(name), "{name} {bad}: {e}");
+            }
+        }
+        let ok = Config {
+            first_wait_ms: 3.6e6,
+            min_gap_ms: 360.0,
+            ..Config::default()
+        };
+        assert!(check(&ok).is_ok());
     }
 
     // Tests [@ANCHOR: vnwa_open_sweep_check]
