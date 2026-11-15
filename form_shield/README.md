@@ -58,7 +58,7 @@ office: Settings, Form shield counters.
 ## Settings (system parameters)
 
 `form_shield.difficulty` (19 leading zero bits), `form_shield.min_age_seconds` (3),
-`form_shield.question_min_age_seconds` (6), `form_shield.ttl_seconds` (7200),
+`form_shield.question_min_age_seconds` (6), `form_shield.question_budget_per_hour` (10), `form_shield.ttl_seconds` (7200),
 `form_shield.retention_days` (90). `form_shield.signing_key` is generated at install; never print it.
 
 ## Not done on purpose
