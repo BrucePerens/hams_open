@@ -13,6 +13,7 @@ exercised here against a real website whose domain matches the routing
 domain's own name, with only the outbound Cloudflare API calls mocked.
 """
 from cryptography.fernet import Fernet
+from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
@@ -149,3 +150,20 @@ class TestDomainCustomHostname(RealTransactionCase):
         mock_get.return_value = (True, {"ssl": {"status": "active"}})
         domain.action_sync_ssl_status()
         self.assertEqual(domain.ssl_status, "active")
+
+    def test_unlink_by_a_user_without_the_right_deletes_nothing_at_cloudflare(self):
+        # Tests [@ANCHOR: cloudflare:COMM_domain_unlink]
+        mock_create = self.safe_patch("odoo.addons.cloudflare.models.domain.cf_utils.create_custom_hostname")
+        mock_create.return_value = (True, {"id": "hostname_keep", "ssl": {"status": "active"}})
+        domain = self.env["edge.routing.domain"].create(
+            {"name": "domain-sync-test.example", "target_slug": "domain-sync-test-acl"}
+        )
+        member = self.env["res.users"].create(
+            {"name": "Domain Reader", "login": "domain_reader_acl", "group_ids": [(6, 0, [self.env.ref("base.group_user").id])]}
+        )
+        mock_delete = self.safe_patch("odoo.addons.cloudflare.models.domain.cf_utils.delete_custom_hostname")
+        mock_delete.return_value = (True, "deleted")
+        with self.assertRaises(AccessError):
+            domain.with_user(member).unlink()
+        mock_delete.assert_not_called()
+        self.assertTrue(domain.exists())
