@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo.tests import common, tagged
+import gzip
 import zipfile
 import io
 
@@ -183,3 +184,32 @@ class TestDmarcParser(common.TransactionCase):
             "[!] DIAGNOSTIC FOR AI: a zip member declaring a size over the "
             "cap must be refused before it's ever decompressed into memory.",
         )
+
+    def test_gzip_report_is_parsed(self):
+        # Tests [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
+        report = self.DmarcReport.process_dmarc_attachment('report.xml.gz', gzip.compress(self.sample_xml.encode()))
+        self.assertEqual(report.org_name, "google.com")
+
+    def test_gzip_expanding_past_the_cap_is_refused(self):
+        # Tests [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
+        """A gzip bomb from any rua= sender must be refused, not inflated into memory."""
+        bomb = gzip.compress(b"0" * (_MAX_DECOMPRESSED_BYTES + 1))
+        with self.assertLogs("odoo.addons.hams_base.models.dmarc_report", level="WARNING") as logs:
+            self.assertFalse(self.DmarcReport.process_dmarc_attachment('report.xml.gz', bomb))
+        self.assertTrue(any("Refusing to decompress" in m for m in logs.output))
+
+    def test_unusable_attachments_are_dropped_without_a_record(self):
+        # Tests [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
+        """Unknown extension, unparseable XML and XML lacking the required sections all yield False."""
+        before = self.DmarcReport.search_count([])
+        process = self.DmarcReport.process_dmarc_attachment
+        self.assertFalse(process('report.txt', b"hello"))
+        self.assertFalse(process('report.xml', b"<feedback><unclosed>"))
+        self.assertFalse(process('report.xml', b"<feedback><report_metadata/></feedback>"))
+        self.assertEqual(self.DmarcReport.search_count([]), before)
+
+    def test_unparsed_email_record_merges_custom_values(self):
+        # Tests [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
+        report = self.DmarcReport.message_new({'subject': 'Hello'}, custom_values={'report_id': 'cv-1'})
+        self.assertEqual(report.org_name, "Unparsed Email: Hello")
+        self.assertEqual(report.report_id, 'cv-1')
