@@ -377,7 +377,8 @@ async fn run(io: Io, cfg: P2EmulatorConfig, c: Arc<P2Counters>) {
     };
     let (mut seq, mut at) = (vec![0u32; k], vec![0u64; k]);
     let mut status_seq = 0u32;
-    let mut tick = tokio::time::interval(cfg.pace);
+    // A zero period would panic in `interval` and kill the task, so the floor is one microsecond.
+    let mut tick = tokio::time::interval(cfg.pace.max(Duration::from_micros(1)));
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let (mut b0, mut b1, mut b2, mut b3) = (
         vec![0u8; 2048],
@@ -445,6 +446,32 @@ mod tests {
     // Tests [@ANCHOR: hpsdr_emulator_p2_emulator_p2]
     // Tests [@ANCHOR: hpsdr_emulator_p2_p2_counters]
     // Tests [@ANCHOR: hpsdr_emulator_p2_p2_emulator_config]
+    // Tests [@ANCHOR: hpsdr_emulator_p2_run]
+    #[tokio::test]
+    async fn a_zero_pace_emulator_still_answers_discovery() {
+        let ports = loopback_ports(2).expect("ports");
+        let emu = EmulatorP2::start(
+            &Handle::current(),
+            0,
+            P2EmulatorConfig {
+                ports,
+                pace: Duration::ZERO,
+                ..Default::default()
+            },
+        )
+        .expect("binds");
+        let c = bind(&Handle::current(), 0).expect("client");
+        c.send_to(&p2::discovery_packet(), emu.addr())
+            .await
+            .expect("send");
+        let mut b = [0u8; 128];
+        tokio::time::timeout(Duration::from_secs(2), c.recv_from(&mut b))
+            .await
+            .expect("answered in time")
+            .expect("reply");
+        emu.stop();
+    }
+
     #[tokio::test]
     async fn start_rejects_a_ddc_count_that_would_overrun_the_packet() {
         // Tests [@ANCHOR: hpsdr_emulator_p2_start]
