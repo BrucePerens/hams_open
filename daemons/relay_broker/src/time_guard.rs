@@ -2,7 +2,8 @@
 //! The clock ceiling for `set_system_time` (RELAY_TIME_WITHOUT_THE_INTERNET.md): the broker applies its own limits and does
 //! not trust the relay's judgement. The target must not be before the build date; a step beyond `max_unproven_step_secs`
 //! needs a GPS source or two agreeing independent sources; at most `max_steps_per_hour` steps an hour, and one more attempt
-//! trips a circuit breaker that refuses everything for an hour.
+//! trips a circuit breaker that refuses everything for an hour. The GPS source and the agreeing count are values the relay reports, so
+//! they are advisory: the broker cannot check a fix, and the date floor and ceiling, the hourly cap and the breaker are the real limits.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -11,6 +12,8 @@ use crate::wire::TimeSource;
 
 /// 2026-11-01 00:00:00 UTC: no target earlier than the code's own age is believable.
 pub const BUILD_DATE_UNIX_SECS: u64 = 1_793_491_200;
+/// How far past the broker's own clock a target may be: one year.
+const MAX_AHEAD_SECS: u64 = 365 * 24 * 3600;
 /// The window the step count and the breaker use.
 const HOUR: Duration = Duration::from_secs(3600);
 
@@ -20,6 +23,8 @@ const HOUR: Duration = Duration::from_secs(3600);
 pub enum TimeDenial {
     /// The target is earlier than [`BUILD_DATE_UNIX_SECS`].
     BeforeBuildDate,
+    /// The target is more than a year past the current clock.
+    TooFarAhead,
     /// A large step without a GPS source or two agreeing sources.
     UnprovenLargeStep,
     /// The circuit breaker is open.
@@ -32,6 +37,7 @@ impl TimeDenial {
     pub fn reason(self) -> &'static str {
         match self {
             TimeDenial::BeforeBuildDate => "target is before the build date",
+            TimeDenial::TooFarAhead => "target is more than a year ahead of the clock",
             TimeDenial::UnprovenLargeStep => "large step needs a GPS lock or two agreeing sources",
             TimeDenial::BreakerOpen => "too many clock steps: circuit breaker open",
         }
@@ -78,7 +84,7 @@ impl TimeGuard {
     // [@ANCHOR: relay_broker_time_guard_check]
     /// Decides whether the clock may be stepped from `current_unix_secs` to `target_unix_secs`. An allowed step is NOT recorded
     /// here (the caller records it with `record_step` once the OS call succeeded); a refusal because of the step count trips
-    /// the breaker.
+    /// the breaker. `source` and `agreeing` are what the relay reported; they are advisory, not verified.
     pub fn check(
         &mut self,
         now: Instant,
@@ -93,6 +99,12 @@ impl TimeGuard {
         }
         if target_unix_secs < BUILD_DATE_UNIX_SECS {
             return Err(TimeDenial::BeforeBuildDate);
+        }
+        // A clock before the build date is known to be wrong, so it gives no reference for a ceiling.
+        if current_unix_secs >= BUILD_DATE_UNIX_SECS
+            && target_unix_secs > current_unix_secs.saturating_add(MAX_AHEAD_SECS)
+        {
+            return Err(TimeDenial::TooFarAhead);
         }
         let step = current_unix_secs.abs_diff(target_unix_secs);
         let proven = source == TimeSource::Gps || agreeing >= 2;
@@ -144,6 +156,34 @@ mod tests {
         // Before the build date: refused whatever the source.
         assert_eq!(
             g.check(t0, T, BUILD_DATE_UNIX_SECS - 1, TimeSource::Gps, 3),
+            Err(TimeDenial::BeforeBuildDate)
+        );
+        // More than a year ahead of the clock is refused whatever the source; a clock before the build date has no ceiling.
+        assert_eq!(
+            g.check(t0, T, T + MAX_AHEAD_SECS + 1, TimeSource::Gps, 3),
+            Err(TimeDenial::TooFarAhead)
+        );
+        assert_eq!(
+            g.check(t0, T, u64::MAX, TimeSource::Gps, 3),
+            Err(TimeDenial::TooFarAhead)
+        );
+        assert_eq!(
+            g.check(t0, T, T + MAX_AHEAD_SECS, TimeSource::Gps, 0),
+            Ok(())
+        );
+        assert_eq!(
+            g.check(
+                t0,
+                0,
+                BUILD_DATE_UNIX_SECS + 5 * MAX_AHEAD_SECS,
+                TimeSource::Gps,
+                0
+            ),
+            Ok(())
+        );
+        // 2019 is before the build date.
+        assert_eq!(
+            g.check(t0, T, 1_560_000_000, TimeSource::Gps, 3),
             Err(TimeDenial::BeforeBuildDate)
         );
         // A small step needs no proof; a large one needs GPS or two sources.
