@@ -344,7 +344,10 @@ fn manual_checked_ranges_are_the_manuals_and_marked_manual_checked() {
             .find(|f| f.key == "frequency.*")
             .unwrap_or_else(|| panic!("{id}: no frequency.* fact"));
         assert!(
-            matches!(fact.verified, radioctl_core::rigfile::Verified::ManualChecked { .. }),
+            matches!(
+                fact.verified,
+                radioctl_core::rigfile::Verified::ManualChecked { .. }
+            ),
             "{id}: frequency.* is not manual-checked"
         );
     }
