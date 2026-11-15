@@ -73,6 +73,12 @@ pub fn parse_private_address(text: &str) -> Result<SocketAddr, StationError> {
             "the device address must be an IP address on your own network, such as 192.168.1.50",
         ));
     };
+    if addr.port() == 0 {
+        return Err(StationError::new(
+            StationErrorKind::Config,
+            "the device port must be 1 to 65535",
+        ));
+    }
     if !is_private_or_loopback(addr.ip()) {
         return Err(StationError::new(
             StationErrorKind::Config,
@@ -302,6 +308,7 @@ mod tests {
             "[2001:db8::1]:80",
             "::ffff:8.8.8.8",
             "172.32.0.1",
+            "10.0.0.2:0",
         ] {
             assert!(parse_private_address(bad).is_err(), "{bad}");
         }
