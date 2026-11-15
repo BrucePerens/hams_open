@@ -219,11 +219,7 @@ pub fn spectrum(
         .collect();
     peaks.sort_by(|a, b| b.1.total_cmp(&a.1));
     peaks.truncate(10);
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let file = out_dir.join(format!("vna_spectrum_{stamp}.csv"));
+    let file = out_dir.join(format!("vna_spectrum_{}.csv", crate::vna::unique_stamp()));
     let mut csv = String::from("freq_hz,rms_counts,db_rel_floor\n");
     for p in &sp {
         csv.push_str(&format!(
@@ -709,6 +705,23 @@ mod tests {
             );
         }
         assert_eq!(sim.vna_opens.get(), opens);
+    }
+
+    // Tests [@ANCHOR: bench_vna_spectrum]
+    #[test]
+    fn two_spectra_in_the_same_second_keep_both_files() {
+        let dir = crate::testdir::TestDir::new("bench_vt_sa_twice");
+        let sim = crate::vna::tests::Sim::healthy();
+        let args = json!({"start_hz": 1e6, "stop_hz": 1.01e6, "points": 3, "band_hz": 15000, "point_ms": 5});
+        let files: std::collections::HashSet<String> = (0..4)
+            .map(|_| {
+                spectrum(&Config::default(), &args, &dir, &sim).unwrap()["file"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect();
+        assert_eq!(files.len(), 4, "{files:?}");
     }
 
     // Tests [@ANCHOR: bench_vna_tools_calibrate_measure]
