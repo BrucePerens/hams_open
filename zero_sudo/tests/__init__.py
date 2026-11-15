@@ -124,3 +124,4 @@ from . import test_secret_broker_units  # noqa: E402
 from . import test_secret_provision_units  # noqa: E402
 from . import test_secret_store_units  # noqa: E402
 from . import test_dashboard_doc_link_rel  # noqa: E402
+from . import test_daemon_stop_and_poll_guards  # noqa: E402
