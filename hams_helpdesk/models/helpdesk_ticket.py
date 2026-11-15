@@ -463,6 +463,10 @@ class HelpdeskTicket(models.Model):
 
         # The triage verdict is written only by _triage_record_verdict(); nothing a caller sends can set it.
         vals_list = [{k: v for k, v in vals.items() if k not in _TRIAGE_FIELDS} for vals in vals_list]
+        # The title is copied into mail Subject headers: keep it one line (line breaks would break or split the header).
+        for vals in vals_list:
+            if isinstance(vals.get("name"), str):
+                vals["name"] = " ".join(vals["name"].split()) or vals["name"]
 
         hold_seconds = self._triage_hold_seconds()
 

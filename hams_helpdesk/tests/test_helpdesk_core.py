@@ -57,6 +57,14 @@ class TestHelpdeskCore(HamsTransactionCase):
         self.assertIn("7 other server exception tickets", note)
 
     # Tests [@ANCHOR: hams_helpdesk_calendar_event_calendar_event]
+    def test_ticket_name_is_one_line(self):
+        """A title with line breaks (portal form, inbound subject) becomes one line: it is copied into mail Subject headers."""
+        # Tests [@ANCHOR: COMM_helpdesk_ticket_creation]
+        ticket = self.env["hams_helpdesk.ticket"].with_user(self.manager_user).create(
+            {"name": "Help\r\nBcc: evil@example.com\n  now", "description": "x"}
+        )
+        self.assertEqual(ticket.name, "Help Bcc: evil@example.com now")
+
     def test_01_ticket_creation_and_routing(self):
         """Verify ticket creation routes to on-duty user, subscribes customer, and fires bus toast."""
         # [@ANCHOR: COMM_test_01_ticket_creation_and_routing]
