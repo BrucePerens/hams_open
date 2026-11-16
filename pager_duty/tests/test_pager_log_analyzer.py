@@ -111,6 +111,26 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
         self.assertEqual(payload["source"], "Log Analyzer: OOM")
         self.assertIn("Out Of Memory", payload["description"])
 
+    def test_02b_tail_file_matches_a_line_that_never_ends_once_it_is_too_long(self):
+        # Tests [@ANCHOR: pager_duty:tail_file]
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as tmp:
+            tmp_path = tmp.name
+        self.addCleanup(lambda: os.path.exists(tmp_path) and os.remove(tmp_path))
+        mock_r_client = MagicMock()
+        compiled = [{"name": "OOM", "severity": "critical", "website_id": None, "c_reg": re.compile("(?i)out of memory")}]
+        stop_event = threading.Event()
+        mock_r_client.lpush.side_effect = lambda *args, **kwargs: stop_event.set()
+        thread = threading.Thread(  # burn-ignore-test-daemon-thread: daemon=True is the bound, as in test_02
+            target=pager_log_analyzer.tail_file, args=(mock_r_client, tmp_path, compiled), daemon=True
+        )
+        thread.start()
+        deadline = time.time() + 10
+        while time.time() < deadline and not stop_event.is_set():
+            with open(tmp_path, "a") as f:
+                f.write("Out Of Memory " + "x" * (2 * pager_log_analyzer.MAX_LINE_CHARS))
+            stop_event.wait(timeout=0.2)
+        self.assertTrue(stop_event.is_set(), "a line with no newline must be matched once it passes the cap")
+
     def test_02a_tail_file_waits_for_the_end_of_a_line_before_matching_it(self):
         # Tests [@ANCHOR: pager_duty:tail_file]
         with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as tmp:
