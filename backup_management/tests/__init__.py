@@ -19,3 +19,4 @@ from . import test_hooks
 from . import test_rpc_exposure
 from . import test_board_hoot
 from . import test_path_and_restore_refusals
+from . import test_backup_config_refusals
