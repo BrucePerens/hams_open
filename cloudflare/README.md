@@ -142,16 +142,72 @@ The module enforces website-level isolation through the website's company: recor
 
 Active `cloudflare.rate.limit` rows (matching expression, mitigation action, requests per period, period, mitigation timeout; counted per IP and Cloudflare data centre) are pushed to the zone's rate-limiting ruleset (phase `http_ratelimit`) in two steps like the cache rules: a plan that only reads Cloudflare, then an explicit apply. A rule is managed when its description equals a row's name, active or not; rules Odoo does not manage are carried through untouched and stay ahead of the managed ones, and an inactive row's rule is deleted. A row without an expression or action refuses the plan (an empty expression would limit the whole site). The ruleset read is checked: an unreadable ruleset is refused, never taken for empty (the bug class of hams_open #2672). Apply does one ruleset write, reports its result, and plans again to confirm nothing is left to write. Pushing twice writes nothing the second time. Tokens never appear in messages.
 
-- `[@ANCHOR: cloudflare:COMM_rate_limit_plan_view]` `_view(rule)` is the part of a rule that decides what it does (action, expression, description, enabled and the rate-limit numbers), compared to tell `update` from `unchanged`. **Tests:** `test_update_by_id_unchanged_is_no_write_inactive_is_deleted`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_plan_summary]` `_summary(rule)` words one rule for the plan text. **Tests:** `test_empty_zone_creates_and_unmanaged_survive_first`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_plan_merge]` `merge(remote_rules, desired, managed_names)` returns `rules` (unmanaged first, then managed), one entry per create, update, unchanged, delete or keep, a `problems` list (duplicate names, or a failed proof that unmanaged rules are unchanged) and a SHA-256 `hash`. Pure. **Tests:** `test_empty_zone_creates_and_unmanaged_survive_first`, `test_duplicates_are_refused_and_hash_follows_the_zone`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_plan_render]` `render(plan, ruleset_state)` gives the plan text. **Tests:** `test_render`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_build_rules]` `_build_rate_limit_rules(website)` turns the website's active rows into Cloudflare rules and lists rows that cannot be pushed. **Tests:** `test_row_becomes_a_ratelimit_rule`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_plan]` `plan_rate_limits(website_id=None)` reads the zone (GET only) and returns `ok`, `message`, `text`, `hash`, `writes`, `rules`, `ruleset_id`, `ruleset_name`. **Tests:** `test_unreadable_ruleset_is_refused_not_treated_as_empty`, `test_plan_writes_nothing_stale_hash_refused_and_bad_rows_refused`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_push]` `action_push_rate_limits(website_id=None, plan_hash=None)` applies the plan and returns `(ok, text)`. **Tests:** `test_push_creates_then_second_push_has_nothing_to_do`, `test_unmanaged_rules_are_carried_through_by_update`, `test_missing_credentials_and_failed_write_are_reported`, `test_inactive_row_is_removed_from_the_zone`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_website]` `_rate_limit_website(website_id)` returns the given website or the current one. **Tests:** `test_rate_limit_website_resolves_id_or_current`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_toast]` `_rate_limit_toast(title, message, ok, sticky)` builds the display_notification action. **Tests:** `test_rate_limit_toast_shape`.
-- `[@ANCHOR: cloudflare:COMM_rate_limit_row_plan_push]` and `[@ANCHOR: cloudflare:COMM_rate_limit_row_push_to_cloudflare]` are the form buttons "Show plan (changes nothing)" and "Push rate limits to Cloudflare", run through the WAF service user. **Tests:** `test_form_buttons_plan_then_push`.
+
+### `_view(rule)` [@ANCHOR: cloudflare:COMM_rate_limit_plan_view]
+
+**Purpose.** In `utils/rate_limit_plan.py`: picks out the part of a Cloudflare rate-limiting rule that decides what it does, so the planner can tell an `update` from `unchanged`. **Arguments.** `rule`, one rule dict as Cloudflare returns it or as Odoo builds it. **Returns.** a dict of the compared fields plus a nested `ratelimit` dict of the rate-limit fields (`COMPARED_FIELDS` and `RATELIMIT_FIELDS`). **Special concerns.** Pure, no network; fields outside those lists, such as ids and timestamps, never count as a change.
+
+**Tests.** `test_update_by_id_unchanged_is_no_write_inactive_is_deleted`.
+
+### `_summary(rule)` [@ANCHOR: cloudflare:COMM_rate_limit_plan_summary]
+
+**Purpose.** In `utils/rate_limit_plan.py`: words one rule in a single line for the plan text the administrator reviews before applying. **Arguments.** `rule`, a rule dict. **Returns.** one string: the action, the request limit per period, the mitigation timeout and the matching expression. **Special concerns.** Pure, no network and no writes; a rule with no `ratelimit` part shows the numbers as None.
+
+**Tests.** `test_empty_zone_creates_and_unmanaged_survive_first`.
+
+### `merge(remote_rules, desired, managed_names)` [@ANCHOR: cloudflare:COMM_rate_limit_plan_merge]
+
+**Purpose.** In `utils/rate_limit_plan.py`: the planner. It compares the rules Cloudflare has with the rules Odoo wants. **Arguments.** `remote_rules` is the zone's current rule list, `desired` the rules built from the active rows, `managed_names` the set of descriptions Odoo manages. **Returns.** `rules` (unmanaged first, then managed), one entry per create, update, unchanged, delete or keep, a `problems` list (duplicate names, or a failed proof that unmanaged rules are unchanged) and a SHA-256 `hash`. **Special concerns.** Pure; the hash follows the zone, so an apply insists on the reviewed plan.
+
+**Tests.** `test_empty_zone_creates_and_unmanaged_survive_first`, `test_duplicates_are_refused_and_hash_follows_the_zone`.
+
+### `render(plan, ruleset_state)` [@ANCHOR: cloudflare:COMM_rate_limit_plan_render]
+
+**Purpose.** In `utils/rate_limit_plan.py`: turns a plan into the text shown to the administrator. **Arguments.** `plan`, the dict from `merge`, and `ruleset_state`, a short text describing the zone's ruleset. **Returns.** a multi-line string with a header line naming the ruleset state, one line per entry (create, update, delete, keep, unchanged) and a summary of how many changes the push would make. **Special concerns.** Pure, no network, and it never writes anything.
+
+**Tests.** `test_render`.
+
+### `_build_rate_limit_rules(website)` [@ANCHOR: cloudflare:COMM_rate_limit_build_rules]
+
+**Purpose.** In `models/rate_limit_push.py`: turns the website's active `cloudflare.rate.limit` rows into Cloudflare rate-limiting rules. **Arguments.** `website`, a `website` record. **Returns.** a pair of the rule list and a list of rows that cannot be pushed, each with the reason. **Special concerns.** Reads Odoo only. A row that cannot be expressed as a rule is reported, not silently skipped, and refuses the plan.
+
+**Tests.** `test_row_becomes_a_ratelimit_rule`.
+
+### `plan_rate_limits(website_id=None)` [@ANCHOR: cloudflare:COMM_rate_limit_plan]
+
+**Purpose.** In `models/rate_limit_push.py`: step one of the push. It reads the zone and says what a push would change. **Arguments.** `website_id`, the website to plan for, default the current one. **Returns.** a dict with `ok`, `message`, `text`, `hash`, `writes`, `rules`, `ruleset_id` and `ruleset_name`. **Special concerns.** GET only: it writes nothing to Cloudflare. Missing credentials, an unreadable ruleset or a row that cannot be pushed give `ok` False; an unreadable ruleset is refused, never treated as empty.
+
+**Tests.** `test_unreadable_ruleset_is_refused_not_treated_as_empty`, `test_plan_writes_nothing_stale_hash_refused_and_bad_rows_refused`.
+
+### `action_push_rate_limits(website_id=None, plan_hash=None)` [@ANCHOR: cloudflare:COMM_rate_limit_push]
+
+**Purpose.** In `models/rate_limit_push.py`: step two of the push. It applies the plan to the zone's rate-limiting ruleset. **Arguments.** `website_id`, default the current website; `plan_hash`, the hash the administrator reviewed, which the push compares against a fresh plan. **Returns.** `(ok, text)`. **Special concerns.** A changed zone since the review is refused. After writing it reads the ruleset back and reports a mismatch. Missing credentials and a failed write are reported, not raised. Rules Odoo does not manage are carried through untouched.
+
+**Tests.** `test_push_creates_then_second_push_has_nothing_to_do`, `test_unmanaged_rules_are_carried_through_by_update`, `test_missing_credentials_and_failed_write_are_reported`, `test_inactive_row_is_removed_from_the_zone`.
+
+### `_rate_limit_website(website_id)` [@ANCHOR: cloudflare:COMM_rate_limit_website]
+
+**Purpose.** In `models/rate_limit_push.py`: picks the website that a plan or push is about. **Arguments.** `website_id`, a website id or empty. **Returns.** the `website` record for that id, or the current website when the id is empty. **Special concerns.** Reads only; an id that matches no website gives an empty record, which the callers treat as a refusal. Used by the plan and the push so both choose the same website.
+
+**Tests.** `test_rate_limit_website_resolves_id_or_current`.
+
+### `_rate_limit_toast(title, message, ok, sticky)` [@ANCHOR: cloudflare:COMM_rate_limit_toast]
+
+**Purpose.** In `models/rate_limit_push.py`: builds the pop-up message the two form buttons return. **Arguments.** `title` and `message` are the shown text, `ok` chooses the success or danger style, `sticky` keeps it on screen until dismissed. **Returns.** an `ir.actions.client` dict with tag `display_notification`. **Special concerns.** Pure; it only builds the dict and does not read or write any record.
+
+**Tests.** `test_rate_limit_toast_shape`.
+
+### `action_plan_rate_limit_push()` [@ANCHOR: cloudflare:COMM_rate_limit_row_plan_push]
+
+**Purpose.** The form button "Show plan (changes nothing)" on a `cloudflare.rate.limit` row. **Arguments.** none besides the single row (`ensure_one`). **Returns.** a toast action showing the plan text, or the refusal message when the plan is not ok. **Special concerns.** Public RPC; it runs `plan_rate_limits` as the WAF service user `cloudflare.user_cloudflare_waf`, for the row's website or the current one, and writes nothing to Cloudflare.
+
+**Tests.** `test_form_buttons_plan_then_push`.
+
+### `action_push_rate_limit_to_cloudflare()` [@ANCHOR: cloudflare:COMM_rate_limit_row_push_to_cloudflare]
+
+**Purpose.** The form button "Push rate limits to Cloudflare" on a `cloudflare.rate.limit` row. **Arguments.** none besides the single row (`ensure_one`). **Returns.** a toast action: success, or a sticky danger message when the push failed. **Special concerns.** Public RPC; it pushes every active rate limit of the row's website through `action_push_rate_limits` as the WAF service user, so one button applies the whole website's rules, not only this row.
+
+**Tests.** `test_form_buttons_plan_then_push`.
 
 ## Pure planner interface (`utils/cache_plan.py`, `utils/dns_plan.py`)
 
@@ -521,11 +577,75 @@ The journey in `docs/journeys/traffic_handling.md` shows how edge data is used: 
 
 The `cloudflare.zone.settings` row (SSL mode, Auto Minify, Bot Fight Mode) is pushed to the zone in two steps, like the cache rules: a plan that only reads Cloudflare, then an explicit apply. A website must have exactly one such row (a row with no website counts for every website); more or fewer is refused. An empty SSL mode leaves the zone's SSL mode alone; Auto Minify and Bot Fight Mode are always pushed (unticked means off). The settings are read one by one with checked reads; one that cannot be read refuses the whole plan, because an unreadable setting is not an unset one (the bug class of hams_open #2672). Apply writes only the settings that differ, reports each as OK or FAILED, and then plans again to confirm nothing is left to write. Pushing twice writes nothing the second time. Tokens never appear in messages.
 
-- `[@ANCHOR: cloudflare:COMM_zone_settings_plan_desired]` `desired_from_row(ssl_mode, auto_minify, bot_fight_mode)` returns the wanted `ssl`, `minify` (css, html and js all on or all off) and `bot_fight_mode` values; `ssl` is absent when the SSL mode is empty. **Tests:** `test_row_to_wanted_settings`.
-- `[@ANCHOR: cloudflare:COMM_zone_settings_plan_make]` `make(remote, desired)` returns `changes` (only the settings whose current value differs), one `update` or `unchanged` entry per setting, and a SHA-256 `hash` of the changes and the current values, so applying insists on the reviewed plan. Pure. **Tests:** `test_only_differences_are_changes_and_hash_follows_the_zone`.
-- `[@ANCHOR: cloudflare:COMM_zone_settings_plan_show]` `_show(value)` words one value for the plan text. **Tests:** `test_only_differences_are_changes_and_hash_follows_the_zone`.
-- `[@ANCHOR: cloudflare:COMM_zone_settings_plan_render]` `render(plan)` gives one line per entry and a summary of how many settings would change. **Tests:** `test_render_lists_entries_and_summary`.
-- `[@ANCHOR: cloudflare:COMM_zone_settings_plan]` `plan_zone_settings(website_id=None)` reads the zone (GET only) and returns `ok`, `message`, `text`, `hash`, `writes` and `changes`; `ok` is False for missing credentials, a wrong row count or an unreadable setting. **Tests:** `test_unreadable_setting_is_refused_not_treated_as_unset`, `test_plan_writes_nothing_and_stale_hash_is_refused`, `test_missing_credentials_and_row_count_are_refused`.
-- `[@ANCHOR: cloudflare:COMM_zone_settings_push]` `action_push_zone_settings(website_id=None, plan_hash=None)` applies the plan, optionally only if `plan_hash` still matches, and returns `(ok, text)` with one OK/FAILED line per written setting. **Tests:** `test_push_writes_only_what_differs`, `test_second_push_has_nothing_to_do`, `test_each_failed_write_is_reported_and_the_rest_still_tried`.
-- `[@ANCHOR: cloudflare:COMM_zone_settings_row_plan_push]` and `[@ANCHOR: cloudflare:COMM_zone_settings_row_push_to_cloudflare]` are the form buttons "Show plan (changes nothing)" and "Push zone settings to Cloudflare"; they run the manager through the WAF service user. `[@ANCHOR: cloudflare:COMM_features_notification]` `_notification(title, message, ok, sticky)` builds the toast they return. **Tests:** `test_form_buttons_plan_then_push_via_service_user`.
-- `[@ANCHOR: cloudflare:COMM_cf_api_get_zone_setting_checked]`, `[@ANCHOR: cloudflare:COMM_cf_api_get_bot_fight_mode_checked]` and `[@ANCHOR: cloudflare:COMM_cf_api_update_bot_fight_mode]` in `utils/cloudflare_api.py` return `("ok", value)` or `("error", message)` for a read, and `(ok, message)` for the Bot Fight Mode write. **Tests:** `test_api_helpers_tell_unreadable_from_a_value`.
+
+### `desired_from_row(ssl_mode, auto_minify, bot_fight_mode)` [@ANCHOR: cloudflare:COMM_zone_settings_plan_desired]
+
+**Purpose.** In `utils/zone_settings_plan.py`: turns a `cloudflare.zone.settings` row into the values the zone should have. **Arguments.** the row's SSL mode, Auto Minify flag and Bot Fight Mode flag. **Returns.** a dict with `ssl`, `minify` (css, html and js all on or all off) and `bot_fight_mode`; `ssl` is absent when the SSL mode is empty. **Special concerns.** Pure, no network.
+
+**Tests.** `test_row_to_wanted_settings`.
+
+### `make(remote, desired)` [@ANCHOR: cloudflare:COMM_zone_settings_plan_make]
+
+**Purpose.** In `utils/zone_settings_plan.py`: the planner that compares the zone's current settings with the wanted ones. **Arguments.** `remote`, the settings read from Cloudflare, and `desired`, from `desired_from_row`. **Returns.** `changes` (only the settings whose current value differs), one `update` or `unchanged` entry per setting, and a SHA-256 `hash` of the changes and the current values. **Special concerns.** Pure; the hash lets the apply insist on the plan the administrator reviewed.
+
+**Tests.** `test_only_differences_are_changes_and_hash_follows_the_zone`.
+
+### `_show(value)` [@ANCHOR: cloudflare:COMM_zone_settings_plan_show]
+
+**Purpose.** In `utils/zone_settings_plan.py`: words one setting value for the plan text. **Arguments.** `value`, a string, boolean or dict read from or wanted for the zone. **Returns.** a short human-readable string. **Special concerns.** Pure, no network and no writes. A dict (the minify setting) shows as sorted `key value` pairs; anything else as `str(value)`.
+
+**Tests.** `test_only_differences_are_changes_and_hash_follows_the_zone`.
+
+### `render(plan)` [@ANCHOR: cloudflare:COMM_zone_settings_plan_render]
+
+**Purpose.** In `utils/zone_settings_plan.py`: turns a zone-settings plan into the text the administrator reviews. **Arguments.** `plan`, the dict from `make`. **Returns.** a multi-line string with one line per entry and a closing summary of how many settings would change. **Special concerns.** Pure, no network, and it never writes anything.
+
+**Tests.** `test_render_lists_entries_and_summary`.
+
+### `plan_zone_settings(website_id=None)` [@ANCHOR: cloudflare:COMM_zone_settings_plan]
+
+**Purpose.** In `models/config_manager.py`: step one of the zone settings push; it reads the zone and says what a push would change. **Arguments.** `website_id`, default the current website. **Returns.** a dict with `ok`, `message`, `text`, `hash`, `writes` and `changes`. **Special concerns.** GET only. `ok` is False for missing credentials, a wrong row count (a website must have exactly one settings row) or an unreadable setting, because an unreadable setting is not an unset one.
+
+**Tests.** `test_unreadable_setting_is_refused_not_treated_as_unset`, `test_plan_writes_nothing_and_stale_hash_is_refused`, `test_missing_credentials_and_row_count_are_refused`.
+
+### `action_push_zone_settings(website_id=None, plan_hash=None)` [@ANCHOR: cloudflare:COMM_zone_settings_push]
+
+**Purpose.** In `models/config_manager.py`: step two; it applies the zone settings plan. **Arguments.** `website_id`, default the current website; `plan_hash`, optional, the hash the administrator reviewed. **Returns.** `(ok, text)` with one OK or FAILED line per written setting. **Special concerns.** It writes only the settings that differ. When `plan_hash` no longer matches a fresh plan the push is refused. A failed write is reported and the remaining settings are still tried.
+
+**Tests.** `test_push_writes_only_what_differs`, `test_second_push_has_nothing_to_do`, `test_each_failed_write_is_reported_and_the_rest_still_tried`.
+
+### `action_plan_zone_settings_push()` [@ANCHOR: cloudflare:COMM_zone_settings_row_plan_push]
+
+**Purpose.** The form button "Show plan (changes nothing)" on a `cloudflare.zone.settings` row. **Arguments.** none besides the single row. **Returns.** a toast action with the plan text or the refusal message. **Special concerns.** It runs the config manager's `plan_zone_settings` as the WAF service user and writes nothing to Cloudflare; the toast is built by `_notification`.
+
+**Tests.** `test_form_buttons_plan_then_push_via_service_user`.
+
+### `action_push_zone_settings_to_cloudflare()` [@ANCHOR: cloudflare:COMM_zone_settings_row_push_to_cloudflare]
+
+**Purpose.** The form button "Push zone settings to Cloudflare" on a `cloudflare.zone.settings` row. **Arguments.** none besides the single row. **Returns.** a toast action: success, or a sticky danger message on failure. **Special concerns.** It runs the config manager's `action_push_zone_settings` as the WAF service user, so the row's own user needs no Cloudflare access.
+
+**Tests.** `test_form_buttons_plan_then_push_via_service_user`.
+
+### `_notification(title, message, ok, sticky)` [@ANCHOR: cloudflare:COMM_features_notification]
+
+**Purpose.** In `models/cloudflare_features.py`: builds the toast the zone settings form buttons return. **Arguments.** `title` and `message` are the shown text, `ok` chooses success or danger, `sticky` keeps it on screen. **Returns.** an `ir.actions.client` dict with tag `display_notification`. **Special concerns.** Pure; it reads and writes no record.
+
+**Tests.** `test_form_buttons_plan_then_push_via_service_user`.
+
+### `get_zone_setting_checked(setting_id, token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_get_zone_setting_checked]
+
+**Purpose.** In `utils/cloudflare_api.py`: reads one zone setting so that an unreadable setting can be told from a real value. **Arguments.** the Cloudflare setting id, the API token and the zone id. **Returns.** `("ok", value)` or `("error", message)`. **Special concerns.** GET only; a failed read is an error, never an empty value, so the plan refuses instead of treating the setting as unset.
+
+**Tests.** `test_api_helpers_tell_unreadable_from_a_value`.
+
+### `get_bot_fight_mode_checked(token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_get_bot_fight_mode_checked]
+
+**Purpose.** In `utils/cloudflare_api.py`: reads the zone's Bot Fight Mode, which has its own endpoint, with the same checked result as `get_zone_setting_checked`. **Arguments.** the API token and the zone id. **Returns.** `("ok", value)` or `("error", message)`. **Special concerns.** GET only; an unreadable answer is an error and refuses the plan.
+
+**Tests.** `test_api_helpers_tell_unreadable_from_a_value`.
+
+### `update_bot_fight_mode(value, token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_update_bot_fight_mode]
+
+**Purpose.** In `utils/cloudflare_api.py`: writes the zone's Bot Fight Mode. **Arguments.** `value`, a boolean, the API token and the zone id. **Returns.** `(ok, message)`; `ok` is False with Cloudflare's message when the write fails. **Special concerns.** It never raises on an API error, so the push can report FAILED and still try the other settings.
+
+**Tests.** `test_api_helpers_tell_unreadable_from_a_value`.

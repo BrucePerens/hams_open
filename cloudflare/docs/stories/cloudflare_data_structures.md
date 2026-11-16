@@ -646,3 +646,32 @@
         * *Given* a tunnel record exists for a website
         * *When* another record with the same Cloudflare tunnel id is created for that website
         * *Then* the database MUST refuse it, and the upgrade MUST delete older duplicates keeping the first.
+
+### `CloudflareConfigManagerRateLimit` [@ANCHOR: cloudflare:cloudflare_rate_limit_push_cloudflare_config_manager_rate_limit]
+
+**Purpose and location.** The rate limit push: extends the config manager with the plan and apply steps that push `cloudflare.rate.limit` rows to the zone's rate-limiting ruleset. Defined in `cloudflare/models/rate_limit_push.py:15` as an abstract Odoo model; it inherits `cloudflare.config.manager` (`_inherit = "cloudflare.config.manager"`) and adds methods to it.
+
+It declares no fields of its own and has no table.
+
+**Class attributes.** `_inherit = "cloudflare.config.manager"`. Module constants `RATE_LIMIT_PHASE = "http_ratelimit"` and `CHARACTERISTICS = ["cf.colo.id", "ip.src"]` fix the ruleset phase and that requests are counted per IP and Cloudflare data centre.
+
+**Invariants, ownership and concurrency.** It is called as the WAF service user, which holds the Cloudflare credentials. The plan only reads Cloudflare; the apply writes only the rules Odoo manages and carries other rules through untouched. Nothing is shared between threads except through the database.
+
+**Methods.** `_rate_limit_website`, `_build_rate_limit_rules`, `plan_rate_limits`, `action_push_rate_limits`.
+
+**See also:** test `test_rate_limit_website_resolves_id_or_current`.
+
+### `CloudflareRateLimitButtons` [@ANCHOR: cloudflare:cloudflare_rate_limit_push_cloudflare_rate_limit_buttons]
+
+**Purpose and location.** The form buttons of the rate limit row: "Show plan (changes nothing)" and "Push rate limits to Cloudflare". Defined in `cloudflare/models/rate_limit_push.py:115` as an Odoo model; it inherits `cloudflare.rate.limit` (`_inherit = "cloudflare.rate.limit"`) and adds methods only.
+
+It declares no fields of its own; the fields are those of `CloudflareRateLimit` (name, match criteria, mitigation action, website).
+
+**Class attributes.** `_inherit = "cloudflare.rate.limit"`.
+
+**Invariants, ownership and concurrency.** Both buttons act on one row (`ensure_one`) and run the config manager as the WAF service user, for the row's website or the current website; a push applies every active rate limit of that website. They return a toast action and never raise on a Cloudflare error.
+
+**Methods.** `_rate_limit_toast`, `action_plan_rate_limit_push`, `action_push_rate_limit_to_cloudflare`.
+
+**See also:** test `test_form_buttons_plan_then_push`.
+

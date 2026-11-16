@@ -171,6 +171,7 @@ class TestRateLimitPush(HamsTransactionCase):
         self.assertEqual(self.mock_update.call_args[0][1]["rules"], [])
 
     def test_rate_limit_website_resolves_id_or_current(self):
+        # Tests [@ANCHOR: cloudflare_rate_limit_push_cloudflare_config_manager_rate_limit]
         # Tests [@ANCHOR: cloudflare:COMM_rate_limit_website]
         mgr = self._mgr()
         self.assertEqual(mgr._rate_limit_website(self.website.id), self.website)
@@ -184,6 +185,7 @@ class TestRateLimitPush(HamsTransactionCase):
         self.assertEqual(self.row._rate_limit_toast("T", "M", False, True)["params"]["type"], "danger")
 
     def test_form_buttons_plan_then_push(self):
+        # Tests [@ANCHOR: cloudflare_rate_limit_push_cloudflare_rate_limit_buttons]
         # Tests [@ANCHOR: cloudflare:COMM_rate_limit_row_plan_push]
         # Tests [@ANCHOR: cloudflare:COMM_rate_limit_row_push_to_cloudflare]
         self.mock_get.return_value = ("absent", None)
