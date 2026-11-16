@@ -464,6 +464,55 @@ def update_zone_setting(setting_name, value, token, zone_id):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_get_zone_setting_checked]
+def get_zone_setting_checked(setting_id, token, zone_id):
+    """One zone setting's value as ("ok", value), or ("error", message) when it could not be read.
+
+    A planner must not take an unreadable setting for "not set": a push of that would overwrite it blind."""
+    if not token or not zone_id:
+        return "error", "Missing credentials."
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/settings/{setting_id}"
+    response = _make_request("GET", endpoint, token, "Cloudflare Get Zone Setting API failed", timeout=10)
+    if response is None:
+        return "error", "API Error"
+    if response.status_code != 200:
+        return "error", f"HTTP {response.status_code}"
+    result = _json_result(response)
+    if result is None or "value" not in result:
+        return "error", "unexpected response"
+    return "ok", result["value"]
+
+
+# [@ANCHOR: cloudflare:COMM_cf_api_get_bot_fight_mode_checked]
+def get_bot_fight_mode_checked(token, zone_id):
+    """The zone's Bot Fight Mode as ("ok", bool), or ("error", message)."""
+    if not token or not zone_id:
+        return "error", "Missing credentials."
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/bot_management"
+    response = _make_request("GET", endpoint, token, "Cloudflare Get Bot Management API failed", timeout=10)
+    if response is None:
+        return "error", "API Error"
+    if response.status_code != 200:
+        return "error", f"HTTP {response.status_code}"
+    result = _json_result(response)
+    if result is None or not isinstance(result.get("fight_mode"), bool):
+        return "error", "unexpected response"
+    return "ok", result["fight_mode"]
+
+
+# [@ANCHOR: cloudflare:COMM_cf_api_update_bot_fight_mode]
+def update_bot_fight_mode(value, token, zone_id):
+    if not token or not zone_id:
+        return False, "Missing credentials"
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/bot_management"
+    response = _make_request(
+        "PUT", endpoint, token, "Cloudflare Update Bot Management API failed", json={"fight_mode": bool(value)}, timeout=10
+    )
+    if response and response.status_code == 200:
+        return True, "Bot Fight Mode updated successfully."
+    return False, "API Error"
+
+
 # [@ANCHOR: cloudflare:COMM_cf_api_list_cfd_tunnels]
 def list_cfd_tunnels(account_id, token):
     # # Verified by [@ANCHOR: COMM_test_cf_sync_tunnels]

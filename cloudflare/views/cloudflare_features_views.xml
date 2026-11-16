@@ -126,6 +126,11 @@
             <field name="model">cloudflare.zone.settings</field>
             <field name="arch" type="xml">
                 <form>
+                    <header>
+                        <button name="action_plan_zone_settings_push" type="object" string="Show plan (changes nothing)"/>
+                        <button name="action_push_zone_settings_to_cloudflare" type="object" string="Push zone settings to Cloudflare" class="btn-primary"
+                                confirm="Write these settings to the live Cloudflare zone?"/>
+                    </header>
                     <sheet>
                         <group>
                             <field name="name"/>
