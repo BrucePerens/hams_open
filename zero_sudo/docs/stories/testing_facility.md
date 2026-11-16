@@ -16,7 +16,7 @@ The `zero_sudo` module provides a comprehensive testing framework that enables t
 
 **Added behaviour.** `setUpClass` makes a test Fernet key, patches the secret readers, writes the frozen `web.base.url` rows and clears caches; `setUp` flushes the Redis cache; `start_daemon` starts a real daemon process; `tearDownClass` stops them. Each is documented in its own entry below.
 
-**Errors and side effects.** Nothing is raised by the class itself. It touches the database (config parameter rows, inside the class transaction), the process environment (`HAMS_CRYPTO_KEY` if unset) and Redis (`flushall` per test). Not thread-safe: Odoo runs the tests of one process one after another.
+**Errors and side effects.** Nothing is raised by the class itself. It touches the database (config parameter rows, inside the class transaction), the process environment (`HAMS_CRYPTO_KEY` if unset) and Redis (`flushdb` per test). Not thread-safe: Odoo runs the tests of one process one after another.
 
 **See also.** Tests `zero_sudo/tests/test_facility.py`, `test_harness_helpers.py`.
 
@@ -130,7 +130,7 @@ The [module README](../../README.md) attributes the end-of-test Database Leak Pr
 ## Base Class Lifecycle, In Detail
 ### HamsTransactionCase Setup `[@ANCHOR: zero_sudo:hams_transaction_case_setup]`
 
-`HamsTransactionCase.setUp(self)` runs Odoo's own `setUp`, then obtains the Redis connection through `get_redis_connection(self.env)` and calls `flushall()` on it when one is configured, so a leftover key from a prior test can never leak into the next one's assertions. Any exception from Redis is logged at warning level and swallowed: a Redis-less install (a tenant instance) runs the same tests. It has no arguments and returns nothing. The flush is global to the Redis server (`flushall`, not `flushdb`), which is safe only on a test box with no other Redis users. The global `BaseCase` teardown patch (below) flushes the database again afterwards.
+`HamsTransactionCase.setUp(self)` runs Odoo's own `setUp`, then obtains the Redis connection through `get_redis_connection(self.env)` and calls `flushdb()` on it when one is configured, so a leftover key from a prior test can never leak into the next one's assertions. Any exception from Redis is logged at warning level and swallowed: a Redis-less install (a tenant instance) runs the same tests. It has no arguments and returns nothing. The flush covers only the connection's own Redis database (`flushdb`, not `flushall`), so other test slots on the host, which use their own databases, are left alone. The global `BaseCase` teardown patch (below) flushes the database again afterwards.
 
 ### HamsTransactionCase Teardown `[@ANCHOR: zero_sudo:hams_transaction_case_teardown_class]`
 
