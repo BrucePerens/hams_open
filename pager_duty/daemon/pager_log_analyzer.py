@@ -84,6 +84,10 @@ def push_anomaly(r_client, payload, retry_seconds=5):
 
 
 # --- 4. Tailing Engine ---
+# The longest line tail_file holds before it matches it as it stands.
+MAX_LINE_CHARS = 65536
+
+
 # [@ANCHOR: pager_duty:tail_file]
 def tail_file(r_client, fp, compiled_patterns):
     chroot_path = translate_path(fp)
@@ -144,14 +148,15 @@ def tail_file(r_client, fp, compiled_patterns):
                     cur_inode = None
 
             if f:
-                line = f.readline()
+                line = f.readline(MAX_LINE_CHARS)
                 if not line:
                     time.sleep(0.5)  # audit-ignore-sleep
                     continue
                 # A reader that catches the writer mid-line gets half of it: matching that half reports a cut-off line and
-                # misses a pattern that spans the cut. Wait for the line end.
+                # misses a pattern that spans the cut. Wait for the line end, but never hold more than MAX_LINE_CHARS:
+                # a log with no newline would otherwise grow `pending` without bound.
                 pending += line
-                if not pending.endswith("\n"):
+                if not pending.endswith("\n") and len(pending) < MAX_LINE_CHARS:
                     continue
                 line, pending = pending, ""
 
