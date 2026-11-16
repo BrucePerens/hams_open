@@ -1072,8 +1072,17 @@ class HelpdeskTicket(models.Model):
             _logger.warning(
                 "Triage review window ended without a verdict for tickets %s: sending their notifications anyway.", due.ids
             )
-            due._triage_release_notification()
-        return len(due)
+            released = 0
+            for ticket in due:
+                # One ticket that raises must not roll back the others: they stay held and the cron fails open every minute.
+                try:
+                    with self.env.cr.savepoint():
+                        ticket._triage_release_notification()
+                    released += 1
+                except Exception:  # per-ticket isolation; logged with the traceback, the ticket stays held for the next run
+                    _logger.exception("Releasing the held notification of helpdesk ticket %s failed; it stays held.", ticket.id)
+            return released
+        return 0
 
     # [@ANCHOR: hams_helpdesk:triage_cleared]
     def _triage_cleared(self):

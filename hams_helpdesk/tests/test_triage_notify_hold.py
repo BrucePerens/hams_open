@@ -137,6 +137,24 @@ class TestTriageNotifyHold(HamsTransactionCase):
         self.assertTrue(any(kind == "simple_notification" for _target, kind in watch.bus))
         self.assertEqual(self.Ticket._cron_release_held_notifications(), 0, "released once only")
 
+    def test_06b_one_ticket_that_raises_does_not_keep_the_others_held(self):
+        # Tests [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
+        self._hold(20)
+        bad = self._new_ticket("Ticket that fails to release")
+        good = self._new_ticket("Ticket that releases")
+        past = fields.Datetime.now() - timedelta(seconds=1)
+        (bad | good).write({"notify_release_at": past})
+        real = type(self.Ticket)._triage_release_notification
+
+        def release(tickets):
+            if bad in tickets:
+                raise ValueError("boom")
+            return real(tickets)
+
+        self.safe_patch_object(type(self.Ticket), "_triage_release_notification", release)
+        self.assertEqual(self.Ticket._cron_release_held_notifications(), 1)
+        self.assertEqual((bad.notify_state, good.notify_state), ("held", "sent"))
+
     def test_07_a_held_ticket_a_person_puts_in_spam_is_never_announced(self):
         # Tests [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
         self._hold(20)
