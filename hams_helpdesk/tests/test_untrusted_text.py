@@ -284,10 +284,19 @@ class TestUntrustedTextCorpus(BaseCase):
 
     def test_a_very_long_link_text_is_scanned_in_linear_time(self):
         # 20000 letters in one link took about 7 s to scan for a host name (quadratic); the scan sees the first 300.
-        started = time.monotonic()
-        result = ut.sanitize_html('<a href="https://evil.example/x">' + "a" * 20000 + "</a>")
-        self.assertLess(time.monotonic() - started, 2)
-        self.assertFalse(has_finding(result, "link_text_href_mismatch"))
+        # No absolute budget: CPU time at two sizes in this process, best of three; linear is 4x for 4x the input,
+        # quadratic 16x.
+        costs = {}
+        for size in (5000, 20000):
+            best = None
+            for _ in range(3):
+                started = time.process_time()
+                result = ut.sanitize_html('<a href="https://evil.example/x">' + "a" * size + "</a>")
+                spent = time.process_time() - started
+                best = spent if best is None else min(best, spent)
+            costs[size] = best
+            self.assertFalse(has_finding(result, "link_text_href_mismatch"))
+        self.assertLess(costs[20000], 8.0 * max(costs[5000], 0.02), f"not linear: {costs}")
 
     def test_matching_link_is_not_flagged(self):
         result = ut.sanitize_html('<a href="https://example.com/a">example.com</a>')

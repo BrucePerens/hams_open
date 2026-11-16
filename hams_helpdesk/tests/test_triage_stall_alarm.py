@@ -95,9 +95,13 @@ class TestTriageStallAlarm(HamsTransactionCase):
     def test_04_the_delay_from_creation_to_the_agents_verdict_is_recorded(self):
         # Tests [@ANCHOR: hams_helpdesk:triage_record_verdict]
         ticket = self._ticket(45)
+        before = fields.Datetime.now()
         ticket.with_user(self.agent_uid).mcp_record_verdict("real", "A member")
+        after = fields.Datetime.now()
+        # Bracketed by the clock read before and after the call, so the result does not depend on how long the call took.
+        self.assertGreaterEqual(ticket.triage_delay_seconds, int((before - ticket.create_date).total_seconds()))
+        self.assertLessEqual(ticket.triage_delay_seconds, int((after - ticket.create_date).total_seconds()))
         self.assertGreaterEqual(ticket.triage_delay_seconds, 45)
-        self.assertLess(ticket.triage_delay_seconds, 45 + 120)
         rules = self.Ticket.create({"name": "Rules verdict", "description": "<p>x</p>"})
         rules._triage_record_verdict("spam", "rule hit", "rules")
         self.assertEqual(rules.triage_delay_seconds, 0, "only the agent's review delay is measured")
