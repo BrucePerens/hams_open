@@ -1011,6 +1011,41 @@ class TestPruneOldRestores(unittest.TestCase):
         backup_worker._prune_old_restores("/nonexistent/restore/base", 7)
 
 
+class TestSilentCommandKeepsTheConnectionAlive(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+
+    @patch("main._json2_call")
+    @patch("main.subprocess.Popen")
+    @patch("main.shutil.which", return_value="/usr/bin/kopia")
+    def test_a_silent_command_does_not_starve_the_rabbitmq_heartbeat(self, mock_which, mock_popen, mock_json2):
+        # Tests [@ANCHOR: backup_management:test_a_silent_command_does_not_starve_the_rabbitmq_heartbeat]
+        # Tests [@ANCHOR: backup_management:read_stdout_chunks]
+        # The read loop blocked in stdout.read() for the whole run, so pika never answered a heartbeat: after the broker's
+        # window the connection was reset, the finished job could not be acknowledged and was run again.
+        serviced = threading.Event()
+        proc = MagicMock()
+
+        def read(size):
+            # A silent command: nothing comes until the connection has been serviced (the old loop never did).
+            serviced.wait(timeout=5)
+            return ""
+
+        proc.stdout.read.side_effect = read
+        proc.wait.return_value = 0
+        mock_popen.return_value = proc
+        ch = MagicMock()
+        ch.connection.process_data_events.side_effect = lambda time_limit=0: serviced.set()
+        method = MagicMock()
+        method.delivery_tag = "tag-7"
+        body = backup_worker.json.dumps(
+            {"job_id": 7, "engine": "kopia", "target_path": "/var/lib/odoo/backups/site1", "config_id": 4, "storage_type": "local"}
+        )
+        backup_worker.execute_job(ch, method, MagicMock(), body)
+
+        self.assertTrue(serviced.is_set(), "the connection was never serviced while the command ran")
+        ch.basic_ack.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
 
