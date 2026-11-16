@@ -695,8 +695,8 @@ pub mod testkit {
         pub chunk: usize,
         /// Added to S11's real part, so two fakes give different results.
         pub offset: f64,
-        /// Milliseconds a data or scan reply takes.
-        pub delay_ms: u64,
+        /// A data or scan reply waits at this barrier: two fakes sharing one prove their callers run at once.
+        pub gate: Option<Arc<std::sync::Barrier>>,
         pub garbage: bool,
         pub silent: bool,
         pub sweep: (u64, u64, usize),
@@ -713,7 +713,7 @@ pub mod testkit {
                 board: "NanoVNA-H",
                 chunk: 0,
                 offset: 0.0,
-                delay_ms: 0,
+                gate: None,
                 garbage: false,
                 silent: false,
                 sweep: (50_000, 900_000_000, 101),
@@ -745,8 +745,10 @@ pub mod testkit {
         }
 
         fn reply(&mut self, line: &str) -> Vec<String> {
-            if self.delay_ms > 0 && (line.starts_with("data") || line.starts_with("scan")) {
-                std::thread::sleep(std::time::Duration::from_millis(self.delay_ms));
+            if let Some(gate) = &self.gate {
+                if line.starts_with("data") || line.starts_with("scan") {
+                    gate.wait();
+                }
             }
             let w: Vec<&str> = line.split_whitespace().collect();
             let num = |i: usize| w.get(i).and_then(|s| s.parse::<u64>().ok());

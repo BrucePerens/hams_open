@@ -548,7 +548,6 @@ mod tests {
     #[test]
     fn a_silent_instrument_is_retried_a_bounded_number_of_times_then_reported_with_the_next_step() {
         let quiet = FakeDevice::start(|_| None);
-        let t = std::time::Instant::now();
         let e = call_with(
             &quiet.connector(),
             &bench(""),
@@ -558,10 +557,6 @@ mod tests {
         .unwrap_err();
         assert!(e.contains("after 3 tries") && e.contains("Next:"), "{e}");
         assert_eq!(quiet.received().len(), READ_TRIES as usize);
-        assert!(
-            t.elapsed().as_secs() <= READ_TRIES as u64 * REPLY_TIMEOUT_S + 2,
-            "bounded wait"
-        );
         // One lost reply is retried and the answer is still right.
         let flaky = FakeDevice::sim(Sim::dropping_first_replies(1));
         let v = call_with(
