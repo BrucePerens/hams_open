@@ -437,6 +437,15 @@ class TestBulkMailSignals(HamsTransactionCase):
 
     def test_32_a_body_of_unclosed_tags_is_read_in_linear_time(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_detect_spam_signals]
-        started = time.monotonic()
-        self.assertEqual(detect_inbound_spam_signals("Hello", "<" * 200000), [])
-        self.assertLess(time.monotonic() - started, 2.0)
+        # No absolute budget (a loaded box failed it): CPU time at two sizes in this process, best of three; linear is
+        # 4x for 4x the input, quadratic 16x.
+        costs = {}
+        for size in (50000, 200000):
+            best = None
+            for _ in range(3):
+                started = time.process_time()
+                self.assertEqual(detect_inbound_spam_signals("Hello", "<" * size), [])
+                spent = time.process_time() - started
+                best = spent if best is None else min(best, spent)
+            costs[size] = best
+        self.assertLess(costs[200000], 8.0 * max(costs[50000], 0.02), f"not linear: {costs}")
