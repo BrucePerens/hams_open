@@ -2312,7 +2312,9 @@ def log_tail_thread(client, check):
             if cur_inode != new_inode:
                 if f:
                     f.close()
-                f = open(filepath, "r")
+                # errors="replace": a log can hold bytes that are not UTF-8, and the UnicodeDecodeError ended this thread
+                # (the watchdog then restarted the whole daemon after the heartbeat went stale).
+                f = open(filepath, "r", errors="replace")
                 if cur_inode is None:
                     f.seek(0, 2)
                 else:
