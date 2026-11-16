@@ -614,6 +614,27 @@ class TestPrivacyGDPR(HamsHttpCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Your erasure is under way", response.text)
 
+    # [@ANCHOR: user_websites:test_erasure_form_choices_reach_the_hook]
+    def test_02e_erasure_form_choices_reach_the_hook(self):
+        # Tests [@ANCHOR: user_websites:COMM_privacy_delete_content]
+        # Tests [@ANCHOR: user_websites:gdpr_store_erasure_choices]
+        """The fields posted with the erasure form are handed to `_gdpr_store_erasure_choices` for the signed-in member,
+        before the erasure runs (an extension module stores its question's answer there)."""
+        seen = []
+        owner_model = type(self.env["res.users"])
+
+        def record(users, choices):
+            seen.append((users.id, choices, users.active))
+
+        self.safe_patch_object(owner_model, "_gdpr_store_erasure_choices", new=record)
+        self.authenticate(self.user_privacy.login, self.user_privacy.login)
+        self.url_open(
+            "/my/privacy/delete_content",
+            data={"csrf_token": odoo.http.Request.csrf_token(self), "extra_choice": "keep"},
+            method="POST",
+        )
+        self.assertEqual(seen, [(self.user_privacy.id, {"extra_choice": "keep"}, True)])
+
     def test_03_self_writeable_fields_idiom(self):
         # Tests [@ANCHOR: test_user_websites_self_writeable_fields]
         # Tests [@ANCHOR: user_websites:fn_users_self_writeable_fields]
