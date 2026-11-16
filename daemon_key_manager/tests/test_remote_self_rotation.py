@@ -141,6 +141,7 @@ class TestRemoteSelfRotation(RealTransactionCase):
         self.assertEqual(response.json()["status"], "not_due")
 
         self._make_due(registry)
+        due_at = fields.Datetime.now()
         response = self._rotate(name, old_key)
         self.assertEqual(response.status_code, 200, response.text[:300])
         issued = response.json()
@@ -159,8 +160,9 @@ class TestRemoteSelfRotation(RealTransactionCase):
 
         self._reload()
         self.assertEqual(registry.pending_key_id, 0)
-        age = fields.Datetime.now() - registry.last_rotated
-        self.assertLess(age, datetime.timedelta(minutes=5))
+        # Stamped by this rotation: not before the moment it became due (no "within N minutes" budget).
+        self.assertGreaterEqual(registry.last_rotated, due_at - datetime.timedelta(seconds=1))
+        self.assertLessEqual(registry.last_rotated, fields.Datetime.now())
         self.assertEqual(self._read_key(path), new_key, "local copy kept current")
 
         # And the cycle restarts: the new key is now the active one, not due.
