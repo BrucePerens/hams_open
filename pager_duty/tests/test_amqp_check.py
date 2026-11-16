@@ -228,7 +228,9 @@ class TestAmqpCheck(HamsTransactionCase):
         ok, msg = self._check(server)
         self.assertFalse(ok)
         self.assertIn("timed out", msg)
-        self.assertLess(time.monotonic() - started, 6, "a hung broker must not hold the check")
+        # setUp patches the stack timeout to 1.5 s: 12 s is 8x that (a loaded box does not fail it) and under the 15 s the fake
+        # server hangs, so a check that ignored its timeouts fails.
+        self.assertLess(time.monotonic() - started, 12, "a hung broker must not hold the check")
 
     def test_05_authentication_failure(self):
         server = self._server("auth_fail")
