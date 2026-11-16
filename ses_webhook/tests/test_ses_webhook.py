@@ -22,7 +22,7 @@ from odoo.addons.ses_webhook.controllers.webhook_api import (
     _fetch_sns_signing_cert as _REAL_FETCH_SNS_SIGNING_CERT,
 )
 
-from odoo.addons.ses_webhook.controllers.webhook_api import _verdict
+from odoo.addons.ses_webhook.controllers.webhook_api import SesWebhookController, _verdict
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
@@ -1433,6 +1433,24 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(len(log), 1)
         self.assertEqual(log.status, 'failed')
         self.assertIn('simulated processing failure', log.error_message)
+
+    def test_12b_processing_failure_opens_a_pager_incident_while_still_answering_200(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_report_processing_failure]
+        raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Test Failure\n\nTest"
+        ses_message = {"notificationType": "Received", "content": raw_email.decode('utf-8')}
+        payload = self._sign({"Type": "Notification", "MessageId": "msg-alert-failure", "Message": json.dumps(ses_message)})
+        mock_process = self.safe_patch('odoo.addons.mail.models.mail_thread.MailThread.message_process')
+        mock_process.side_effect = RuntimeError("simulated processing failure")
+        reports = []
+        self.safe_patch_object(
+            SesWebhookController, '_report_processing_failure',
+            lambda ctrl, domain_name, message_id, error: reports.append((domain_name, message_id, str(error))),
+        )
+        response = self.url_open(
+            f'/mail/webhook/sns?token={self.domain_a.secret_token}', data=json.dumps(payload).encode('utf-8'),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(reports, [(self.domain_a.name, 'msg-alert-failure', 'simulated processing failure')])
 
     def test_19_unmatched_sender_is_gated_not_processed(self):
         # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
