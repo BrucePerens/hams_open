@@ -113,6 +113,20 @@ class WebsiteCloudflare(models.Model):
         names = (self.cloudflare_purge_hosts or "").replace(",", "\n").split()
         return list(dict.fromkeys(name.lower() for name in names))
 
+    # [@ANCHOR: cloudflare:COMM_website_shared_zone_refusal]
+    # Verified by [@ANCHOR: cloudflare:COMM_test_shared_zone_refusal]
+    def _cloudflare_shared_zone_refusal(self):
+        """Why a zone-wide change (WAF, cache rules, zone settings, rate limits) must not be pushed for this website,
+        or "" when it may. A website that lists cloudflare_purge_hosts shares its zone with other domains: those
+        pushes replace a whole ruleset or setting of the zone, which would overwrite what the other domains rely on."""
+        self.ensure_one()
+        if not self._cloudflare_purge_hosts():
+            return ""
+        return _(
+            "REFUSED: %(site)s shares its Cloudflare zone with other domains (its hostnames are listed in Settings > "
+            "Cloudflare), and this change would replace a whole ruleset or setting of that zone. Make the change at "
+            "Cloudflare, scoped to this website's host names.", site=self.name)
+
     # [@ANCHOR: cloudflare:COMM_get_fernet]
     def _get_fernet(self):
         # Bug fix (night-watch, 2026-09-17): this used to search
