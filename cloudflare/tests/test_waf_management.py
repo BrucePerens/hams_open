@@ -107,15 +107,15 @@ class TestWafManagement(HamsTransactionCase):
         """The default rules pushed to Cloudflare read back as two "SECURITY" rules; the pull must not hit the unique name."""
         # Tests [@ANCHOR: cf_action_pull_waf_rules]
         # Tests [@ANCHOR: cloudflare:COMM_waf_rule_vals_from_cloudflare]
-        mock_get_ruleset = self.safe_patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset")
-        mock_get_ruleset.return_value = {
+        mock_get_ruleset = self.safe_patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset_checked")
+        mock_get_ruleset.return_value = ("ok", {
             "rules": [
                 {"id": "r1", "description": r["description"], "action": r["action"], "expression": r["expression"], "enabled": True}
                 for r in DEFAULT_WAF_RULES
             ]
             + [{"id": "r4", "action": "block", "expression": "ip.src eq 1.1.1.1"}]
             + [{"id": "r5", "description": None, "action": "block", "expression": "ip.src eq 2.2.2.2"}]
-        }
+        })
         success, _msg = (
             self.env["cloudflare.config.manager"].with_user(self.svc_uid).action_pull_waf_rules(website_id=self.website.id)
         )
@@ -137,9 +137,9 @@ class TestWafManagement(HamsTransactionCase):
         )
 
         mock_get_ruleset = self.safe_patch(
-            "odoo.addons.cloudflare.models.config_manager.get_zone_ruleset"
+            "odoo.addons.cloudflare.models.config_manager.get_zone_ruleset_checked"
         )
-        mock_get_ruleset.return_value = {
+        mock_get_ruleset.return_value = ("ok", {
             "rules": [
                 {
                     "id": "abc",
@@ -149,7 +149,7 @@ class TestWafManagement(HamsTransactionCase):
                     "enabled": True,
                 }
             ]
-        }
+        })
 
         success, _msg = (
             self.env["cloudflare.config.manager"]
@@ -184,7 +184,7 @@ class TestWafManagement(HamsTransactionCase):
         )
 
         mock_get = self.safe_patch(
-            "odoo.addons.cloudflare.models.config_manager.get_zone_ruleset"
+            "odoo.addons.cloudflare.models.config_manager.get_zone_ruleset_checked"
         )
         mock_update = self.safe_patch(
             "odoo.addons.cloudflare.models.config_manager.update_zone_ruleset"
@@ -193,7 +193,7 @@ class TestWafManagement(HamsTransactionCase):
             "odoo.addons.cloudflare.models.config_manager.create_zone_ruleset"
         )
 
-        mock_get.return_value = {"id": "ruleset_777"}
+        mock_get.return_value = ("ok", {"id": "ruleset_777"})
         mock_update.return_value = (True, "Updated")
 
         success, _msg = (
@@ -209,6 +209,26 @@ class TestWafManagement(HamsTransactionCase):
 
         payload = mock_update.call_args[0][1]
         self.assertEqual(payload["rules"][0]["action"], "managed_challenge")
+
+    def test_04b_pull_and_push_leave_a_ruleset_that_could_not_be_read_alone(self):
+        """An outage or a token that cannot read the zone is not an empty ruleset: nothing is deleted or overwritten."""
+        # Tests [@ANCHOR: cf_action_pull_waf_rules]
+        # Tests [@ANCHOR: cf_action_push_waf_rules]
+        rule = self.env["cloudflare.waf.rule"].create(
+            {"name": "Keep Me", "action": "block", "expression": "ip.src eq 3.3.3.3", "website_id": self.website.id}
+        )
+        base = "odoo.addons.cloudflare.models.config_manager."
+        self.safe_patch(base + "get_zone_ruleset_checked").return_value = ("error", "HTTP 500")
+        create = self.safe_patch(base + "create_zone_ruleset")
+        update = self.safe_patch(base + "update_zone_ruleset")
+        manager = self.env["cloudflare.config.manager"].with_user(self.svc_uid)
+        pulled, _msg = manager.action_pull_waf_rules(website_id=self.website.id)
+        pushed, _msg = manager.action_push_waf_rules(website_id=self.website.id)
+        self.assertFalse(pulled)
+        self.assertFalse(pushed)
+        self.assertTrue(rule.exists(), "a failed read must not delete the local rules")
+        create.assert_not_called()
+        update.assert_not_called()
 
     def test_05_execute_ban_missing_website(self):
         # [@ANCHOR: COMM_test_05_execute_ban_missing_website]
