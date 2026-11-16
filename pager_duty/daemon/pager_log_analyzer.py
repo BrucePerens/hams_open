@@ -115,7 +115,9 @@ def tail_file(r_client, fp, compiled_patterns):
                     f.close()
                 if new_inode is not None:
                     try:
-                        f = open(chroot_path, "r")
+                        # errors="replace": a log can hold bytes that are not UTF-8 (a binary write, a mangled line), and the
+                        # UnicodeDecodeError ended this thread silently while the daemon looked alive.
+                        f = open(chroot_path, "r", errors="replace")
                         if cur_inode is not None:
                             f.seek(0, 0)
                         else:
@@ -194,7 +196,7 @@ def redis_search_listener(r_client):
 
                 # Perform a simple full scan and keep the 500 most recent matches
                 if os.path.exists(chroot_path):
-                    with open(chroot_path, "r") as f:
+                    with open(chroot_path, "r", errors="replace") as f:
                         for line in f:
                             if len(c_reg.findall(line)) > 0:
                                 matches_deque.append(line.strip())
