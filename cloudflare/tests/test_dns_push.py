@@ -463,6 +463,34 @@ class TestDnsPush(HamsTransactionCase):
         self.assertEqual(row.dns_push_apply(plan["hash"]), [], "a plan of problems applies as nothing")
         self.assertEqual(self.cf.writes(), [])
 
+    def test_10b_rows_in_a_zone_that_is_gone_write_nothing_and_a_retired_row_is_archived(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_gone_retire_entry]
+        # [@ANCHOR: cloudflare:COMM_test_dns_gone_retire_entry]
+        """After the DNS move the token sees no hams.com zone: nothing is created or updated there, and a row
+        marked Retire (its record went with the zone) is archived instead of showing a problem for ever."""
+        linked = self.cf.add("hams.com", "legacy.hams.com", "NS", "ns1.hams.com")
+        retired = self._row("legacy.hams.com", "NS", "ns1.hams.com", cf_record_id=linked["id"], retire=True)
+        wanted = self._row("www.hams.com", "CNAME", "hams.perens.com", proxied=True)
+        unlinked = self._row("old.hams.com", "A", "192.0.2.50", retire=True)
+        del self.cf.zones["hams.com"]
+        rows = retired | wanted | unlinked
+        plan = rows.dns_push_plan()
+        by_name = {e["name"]: e for e in plan["entries"]}
+        self.assertTrue(by_name["legacy.hams.com"].get("already_gone"))
+        self.assertEqual(by_name["www.hams.com"]["action"], "problem")
+        self.assertEqual(by_name["old.hams.com"]["action"], "problem")
+        results = rows.dns_push_apply(plan["hash"])
+        self.assertEqual(results, ["archived NS legacy.hams.com (already absent at Cloudflare)"])
+        self.assertFalse(retired.active)
+        self.assertTrue(wanted.active)
+        self.assertEqual(self.cf.writes(), [])
+        # An unreadable Cloudflare says nothing about the zone: that row stays a problem and is not archived.
+        again = self._row("legacy2.hams.com", "NS", "ns1.hams.com", cf_record_id=linked["id"], retire=True)
+        self.cf.fail_reads = True
+        entry = again.dns_push_plan()["entries"][0]
+        self.assertEqual(entry["action"], "problem")
+        self.assertTrue(again.active)
+
     def test_11_the_problems_hook_can_veto_the_whole_push(self):
         row = self._row("veto.hams.com", "A", "192.0.2.41")
         hook = self.safe_patch("odoo.addons.cloudflare.models.dns_record.CloudflareDNSRecord._dns_problems")
