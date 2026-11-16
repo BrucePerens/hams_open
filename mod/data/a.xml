@@ -1,0 +1,35 @@
+<odoo>
+<data noupdate="1">
+<record id="pad0" model="ir.rule"><field name="name">padding 0</field></record>
+<record id="pad1" model="ir.rule"><field name="name">padding 1</field></record>
+<record id="pad2" model="ir.rule"><field name="name">padding 2</field></record>
+<record id="pad3" model="ir.rule"><field name="name">padding 3</field></record>
+<record id="pad4" model="ir.rule"><field name="name">padding 4</field></record>
+<record id="pad5" model="ir.rule"><field name="name">padding 5</field></record>
+<record id="pad6" model="ir.rule"><field name="name">padding 6</field></record>
+<record id="pad7" model="ir.rule"><field name="name">padding 7</field></record>
+<record id="pad8" model="ir.rule"><field name="name">padding 8</field></record>
+<record id="pad9" model="ir.rule"><field name="name">padding 9</field></record>
+<record id="pad10" model="ir.rule"><field name="name">padding 10</field></record>
+<record id="pad11" model="ir.rule"><field name="name">padding 11</field></record>
+<record id="pad12" model="ir.rule"><field name="name">padding 12</field></record>
+<record id="pad13" model="ir.rule"><field name="name">padding 13</field></record>
+<record id="pad14" model="ir.rule"><field name="name">padding 14</field></record>
+<record id="pad15" model="ir.rule"><field name="name">padding 15</field></record>
+<record id="pad16" model="ir.rule"><field name="name">padding 16</field></record>
+<record id="pad17" model="ir.rule"><field name="name">padding 17</field></record>
+<record id="pad18" model="ir.rule"><field name="name">padding 18</field></record>
+<record id="pad19" model="ir.rule"><field name="name">padding 19</field></record>
+<record id="pad20" model="ir.rule"><field name="name">padding 20</field></record>
+<record id="pad21" model="ir.rule"><field name="name">padding 21</field></record>
+<record id="pad22" model="ir.rule"><field name="name">padding 22</field></record>
+<record id="pad23" model="ir.rule"><field name="name">padding 23</field></record>
+<record id="pad24" model="ir.rule"><field name="name">padding 24</field></record>
+<record id="pad25" model="ir.rule"><field name="name">padding 25</field></record>
+<record id="pad26" model="ir.rule"><field name="name">padding 26</field></record>
+<record id="pad27" model="ir.rule"><field name="name">padding 27</field></record>
+<record id="pad28" model="ir.rule"><field name="name">padding 28</field></record>
+<record id="pad29" model="ir.rule"><field name="name">padding 29</field></record>
+<record id="r1" model="ir.rule"><field name="name">old</field></record>
+</data>
+</odoo>
