@@ -80,6 +80,13 @@ class WebsiteCloudflare(models.Model):
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
         help="The Zone ID of your domain on Cloudflare.",
     )
+    cloudflare_purge_hosts = fields.Text(
+        string="CF Hostnames in a Shared Zone",
+        groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
+        help="Only when the Zone ID above is a zone this website shares with other domains (it is served there as a "
+        "Cloudflare for SaaS custom hostname): the host names it answers to, one per line or comma separated "
+        "(hams.com, www.hams.com). Purge Everything then purges these host names only, never the whole zone.",
+    )
     cloudflare_account_id = fields.Char(
         string="CF Account ID",
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
@@ -96,6 +103,15 @@ class WebsiteCloudflare(models.Model):
         groups="base.group_system,cloudflare.group_cloudflare_purge,cloudflare.group_cloudflare_waf,cloudflare.group_cloudflare_tunnel",
         help="Secret key for Cloudflare Turnstile integration.",
     )
+
+    # [@ANCHOR: cloudflare:COMM_website_purge_hosts]
+    # Verified by [@ANCHOR: cloudflare:COMM_test_website_purge_hosts]
+    def _cloudflare_purge_hosts(self):
+        """The host names of cloudflare_purge_hosts, lower case, each once, in the order written. Empty: this
+        website has its zone to itself and Purge Everything may purge the zone."""
+        self.ensure_one()
+        names = (self.cloudflare_purge_hosts or "").replace(",", "\n").split()
+        return list(dict.fromkeys(name.lower() for name in names))
 
     # [@ANCHOR: cloudflare:COMM_get_fernet]
     def _get_fernet(self):

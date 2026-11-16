@@ -342,6 +342,14 @@ Creates a Cloudflare Tunnel in the account with `POST /accounts/<account_id>/cfd
 
 Fetches a tunnel's run token with `GET /accounts/<account_id>/cfd_tunnel/<tunnel_id>/token`. It returns `(True, run_token)` when the answer is 200 and its `result` is a string, `(False, "Missing credentials")` without a request, or `(False, "API Error")`. On failure the second value is an error text and never a token, so a caller may log it only on the failure path. The run token lets anyone run the tunnel, so it is a secret: the daemon code gives it to the systemd unit through a private file, not a command line. A GET, so it is retried on a transient error. **Tests:** `TestCloudflareApiCalls.test_05_tunnel_create_token_list_and_delete`.
 
+### `purge_hosts(hosts, token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_purge_hosts]
+
+`purge_hosts(hosts, token, zone_id)` in `utils/cloudflare_api.py` posts `{"hosts": [...]}` to the zone's `purge_cache` endpoint, 30 host names per call, and returns True when every call answered 200 (an empty list is True, missing credentials False). It purges everything cached for those host names and nothing else in the zone, which is what Purge Everything must do for a website that shares its zone. See also `test_06b_purge_hosts_posts_hosts_in_chunks_of_thirty` in `tests/test_cloudflare_api_calls.py`.
+
+### Purge hosts of a website in a shared zone [@ANCHOR: cloudflare:COMM_website_purge_hosts]
+
+`website.cloudflare_purge_hosts` (Settings > Cloudflare, empty by default) lists the host names a website answers to inside a zone it shares with other domains, for example hams.com served as a Cloudflare for SaaS custom hostname of the perens.com zone. `_cloudflare_purge_hosts()` returns them lower case, each once. When the list is not empty, Purge Everything (the queue's `everything` row and the Manual Cache Purge wizard) calls `purge_hosts` for those names instead of `purge_everything`, so the shared zone's other content is never wiped. URL and tag purges are unchanged. See also `test_a_website_in_a_shared_zone_purges_its_hosts_not_the_zone` in `tests/test_purge_everything.py`.
+
 ### `purge_everything(token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_purge_everything]
 
 POSTs `{"purge_everything": true}` to the zone's `purge_cache` endpoint with a 10 second timeout, which clears the whole zone's cache. It returns True only when Cloudflare answers 200; a missing token or zone, a failed call or any other status returns False. It does not raise. The purge queue calls it for an `everything` row and then removes the website's earlier pending rows, because the wipe covers them. A purge cannot be undone, so it is for the administrator's "Everything" choice and the purge queue only. **Tests:** `TestCloudflareApiCalls.test_06_purge_everything_posts_the_purge_flag`.

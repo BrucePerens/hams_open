@@ -2,7 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 from odoo import models, fields, _
 from odoo.exceptions import UserError
-from odoo.addons.cloudflare.utils.cloudflare_api import purge_everything, purge_urls, purge_tags
+from odoo.addons.cloudflare.utils.cloudflare_api import purge_everything, purge_hosts, purge_urls, purge_tags
 from odoo.addons.zero_sudo import public_rpc
 
 
@@ -51,7 +51,8 @@ class CloudflarePurgeWizard(models.TransientModel):
         msg_fail_all = _("Failed to purge everything from Cloudflare cache.")
 
         if self.purge_type == "everything":
-            success = purge_everything(token, zone_id)
+            hosts = self.website_id._cloudflare_purge_hosts()
+            success = purge_hosts(hosts, token, zone_id) if hosts else purge_everything(token, zone_id)
             if success:
                 return {
                     "type": "ir.actions.client",

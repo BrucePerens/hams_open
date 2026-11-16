@@ -156,6 +156,22 @@ class TestCloudflareApiCalls(HamsTransactionCase):
         self.assertFalse(api.purge_everything("", ZONE))
         self.assertFalse(api.purge_everything("t", ""))
 
+    def test_06b_purge_hosts_posts_hosts_in_chunks_of_thirty(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cf_api_purge_hosts]
+        # [@ANCHOR: COMM_test_cf_api_purge_hosts]
+        self.mock.return_value = _Answer({"success": True})
+        self.assertTrue(api.purge_hosts(["hams.com", "www.hams.com"], "t", ZONE))
+        self.assertEqual(self._sent(), ("POST", f"{BASE}/zones/{ZONE}/purge_cache",
+                                        {"hosts": ["hams.com", "www.hams.com"]}))
+        self.mock.reset_mock()
+        self.assertTrue(api.purge_hosts([f"h{i}.example" for i in range(65)], "t", ZONE))
+        self.assertEqual([len(c.kwargs["json"]["hosts"]) for c in self.mock.call_args_list], [30, 30, 5])
+        self.mock.return_value = None
+        self.assertFalse(api.purge_hosts(["hams.com"], "t", ZONE))
+        self.assertFalse(api.purge_hosts(["hams.com"], "", ZONE))
+        self.assertFalse(api.purge_hosts(["hams.com"], "t", ""))
+        self.assertTrue(api.purge_hosts([], "t", ZONE))
+
     def test_07_purge_urls_sends_chunks_of_thirty(self):
         # Tests [@ANCHOR: cloudflare:COMM_cf_api_purge_urls]
         self.mock.return_value = _Answer({"success": True})
