@@ -485,9 +485,15 @@ mod tests {
         // The clock is passed in, so the count is exact on any machine load.
         let now = Instant::now();
         assert_eq!(frames_since(None, 4096, now), 0);
-        assert_eq!(frames_since(Some(now - Duration::from_millis(10)), 4096, now), 480);
+        assert_eq!(
+            frames_since(Some(now - Duration::from_millis(10)), 4096, now),
+            480
+        );
         // A stalled stream cannot push the mark past one period.
-        assert_eq!(frames_since(Some(now - Duration::from_secs(5)), 241, now), 241);
+        assert_eq!(
+            frames_since(Some(now - Duration::from_secs(5)), 241, now),
+            241
+        );
     }
 
     // Tests [@ANCHOR: vnwa_open_overrun_window]
