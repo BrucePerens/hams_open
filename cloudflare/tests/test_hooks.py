@@ -26,7 +26,7 @@ class TestCloudflareHooks(HamsTransactionCase):
 
         # Tests [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
         self.env.ref("cloudflare.user_cloudflare_waf")
-        get_zone_ruleset = self.safe_patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset")
+        get_zone_ruleset = self.safe_patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset_checked")
         backups = self.env["cloudflare.config.backup"].search_count([])
         rules = self.env["cloudflare.waf.rule"].search_count([])
         post_init_hook(self.env)
