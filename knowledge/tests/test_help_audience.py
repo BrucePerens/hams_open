@@ -156,6 +156,15 @@ class TestHelpAudience(HamsHttpCase):
                 response = self.url_open(article.website_url)
                 self.assertEqual(response.status_code, 404, (login, article.name))
 
+    def test_04b_a_named_member_opens_an_internal_article_and_others_still_get_404(self):
+        # Tests [@ANCHOR: knowledge:can_open_article]
+        self.story.write({"member_ids": [(4, self.staff_user.id)]})
+        self._as("zorkmid_staff")
+        self.assertEqual(self.url_open(self.story.website_url).status_code, 200)
+        self.assertEqual(self.url_open(self.published_internal.website_url).status_code, 404)
+        self._as("zorkmid_member")
+        self.assertEqual(self.url_open(self.story.website_url).status_code, 404)
+
     def test_05_internal_article_by_name_is_404_for_non_administrators(self):
         for login in (None, "zorkmid_member", "zorkmid_staff"):
             self._as(login)
