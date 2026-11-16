@@ -291,7 +291,7 @@ fn the_batch_ids_and_frequency_widths_match_the_sources_and_no_two_files_share_a
 // Tests [@ANCHOR: radioctl_virtual_yaesu_tx_band]
 #[test]
 fn the_dual_band_yaesus_pick_the_transmit_band_with_ft_and_refuse_the_other_receiver_ops() {
-    for id in ["yaesu-ftdx-5000", "yaesu-ftdx-9000"] {
+    for id in ["yaesu-ft-2000", "yaesu-ftdx-5000", "yaesu-ftdx-9000"] {
         let desc = described(id);
         assert!(desc.capabilities.has(Capability::Receivers), "{id}");
         assert!(
