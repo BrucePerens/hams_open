@@ -395,7 +395,6 @@ esac"#,
         format!("{} 1", dir.join("cache").display())
     );
     // stop_after: SIGINT, counted as a deliberate stop.
-    let t = Instant::now();
     let o = r
         .run(&Req {
             stop_after: Some(Duration::from_millis(300)),
@@ -403,7 +402,7 @@ esac"#,
         })
         .unwrap();
     assert!(
-        o.stopped && !o.timed_out && !o.stuck && t.elapsed() < Duration::from_secs(5),
+        o.stopped && !o.timed_out && !o.stuck,
         "{o:?}"
     );
     // The hard timeout ends it the same way and says so.

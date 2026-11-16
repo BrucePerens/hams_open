@@ -243,7 +243,7 @@ impl Capture {
     pub fn mark(&self) -> u64 {
         // [@ANCHOR: vnwa_open_capture_mark]
         let ring = self.ring.0.lock().unwrap();
-        ring.total + frames_since(ring.last_delivery, ring.period)
+        ring.total + frames_since(ring.last_delivery, ring.period, Instant::now())
     }
 
     /// How many overruns have been reported since the stream started.
@@ -391,10 +391,10 @@ impl Drop for SyntheticFeed {
 }
 
 /// The frames that have passed since the last delivery of a period (the clock times the rate), at most one period.
-fn frames_since(last_delivery: Option<Instant>, period: u64) -> u64 {
+fn frames_since(last_delivery: Option<Instant>, period: u64, now: Instant) -> u64 {
     // [@ANCHOR: vnwa_open_capture_frames_since]
     match last_delivery {
-        Some(t) => ((t.elapsed().as_secs_f64() * SAMPLE_RATE as f64) as u64).min(period),
+        Some(t) => ((now.duration_since(t).as_secs_f64() * SAMPLE_RATE as f64) as u64).min(period),
         None => 0,
     }
 }
@@ -482,13 +482,12 @@ mod tests {
     // Tests [@ANCHOR: vnwa_open_capture_frames_since]
     #[test]
     fn the_mark_adds_the_frames_since_the_last_delivery_up_to_one_period() {
-        assert_eq!(frames_since(None, 4096), 0);
-        let t = Instant::now() - Duration::from_millis(10);
-        let n = frames_since(Some(t), 4096);
-        assert!((480..=560).contains(&n), "{n}");
+        // The clock is passed in, so the count is exact on any machine load.
+        let now = Instant::now();
+        assert_eq!(frames_since(None, 4096, now), 0);
+        assert_eq!(frames_since(Some(now - Duration::from_millis(10)), 4096, now), 480);
         // A stalled stream cannot push the mark past one period.
-        let old = Instant::now() - Duration::from_secs(5);
-        assert_eq!(frames_since(Some(old), 241), 241);
+        assert_eq!(frames_since(Some(now - Duration::from_secs(5)), 241, now), 241);
     }
 
     // Tests [@ANCHOR: vnwa_open_overrun_window]

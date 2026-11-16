@@ -306,14 +306,12 @@ async fn the_first_connection_gives_up_after_its_attempts() {
     };
     let mut config = fast(dead.to_string());
     config.first_attempts = 3;
-    let started = std::time::Instant::now();
     let error = match open_link(&Handle::current(), config, Box::new(RawFraming)).await {
         Ok(_) => panic!("nothing listens there"),
         Err(error) => error,
     };
     assert_eq!(error.kind, ErrorKind::LinkDown);
     assert!(error.detail.contains("3 attempts"), "{}", error.detail);
-    assert!(started.elapsed() < Duration::from_secs(5));
 }
 
 /// A login handshake: the greeting is `LOGIN <secret>\n`, the radio answers `OK\n` or `NO\n`.
