@@ -183,6 +183,13 @@ authentication or its sender is neither a user nor a participant (the ticket's c
 before). Decision: the support@ alias accepts any sender, so a stranger who knows a Message-ID cannot post a customer-visible message.
 Verified by `test_17_a_spoofed_reply_lands_as_a_note_not_in_the_members_name`.
 
+### `inbound_create_rate_reasons` [@ANCHOR: hams_helpdesk:inbound_create_rate_reasons]
+
+`hams_helpdesk.ticket._inbound_create_rate_reasons(email_from)` (model method), called by `message_new()` for a sender who is not a member.
+Counts one ticket per call in an hourly Redis counter (`expiring_counter`) per sender address (limit 5) and per sender domain (limit 30).
+Over either limit it returns a reason and the ticket starts in the Spam stage (never dropped). Redis down: the mail is accepted.
+Verified by `test_19_an_anonymous_sender_over_the_hourly_limit_is_quarantined`.
+
 ### A quarantined ticket mails nobody [@ANCHOR: hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail]
 
 `create()` switches off Odoo's own "you have been assigned" email (the `mail_auto_subscribe_no_notify` context key) when every ticket
