@@ -226,14 +226,26 @@ class TestUserArchSvgSanitizer(HamsHttpCase):
 
     def test_09_review_findings_in_the_member_page_path(self):
         """The adversarial review's vectors (huge repeated blocks, style overlay)."""
-        started = time.monotonic()
         cleaned, modified = self.sanitize("<div>" + "<svg><rect/></svg>" * 20000 + "</div>")
-        self.assertLess(time.monotonic() - started, 5.0, "many svg blocks pinned the worker")
         self.assertTrue(modified)
         self.assertLessEqual(cleaned.count("<svg"), 1000)
-        started = time.monotonic()
-        self.sanitize("<p>" + "<svg></svg><b>x</b>" * 20000 + "</p>")
-        self.assertLess(time.monotonic() - started, 5.0)
+        # No absolute budget (a loaded box failed it): CPU time at two sizes in this process, best of three; linear is
+        # 4x for 4x the input, quadratic 16x.
+        for label, make in (
+            ("many svg blocks", lambda n: "<div>" + "<svg><rect/></svg>" * n + "</div>"),
+            ("svg blocks between text", lambda n: "<p>" + "<svg></svg><b>x</b>" * n + "</p>"),
+        ):
+            costs = {}
+            for count in (5000, 20000):
+                arch = make(count)
+                best = None
+                for _ in range(3):
+                    started = time.process_time()
+                    self.sanitize(arch)
+                    spent = time.process_time() - started
+                    best = spent if best is None else min(best, spent)
+                costs[count] = best
+            self.assertLess(costs[20000], 8.0 * max(costs[5000], 0.02), f"{label} pinned the worker: {costs}")
         cleaned, _ = self.sanitize(
             '<svg style="margin-left:-5000px;margin-top:-5000px;width:20000px;height:20000px">'
             '<rect width="100%" height="100%" fill="transparent"/></svg>'
