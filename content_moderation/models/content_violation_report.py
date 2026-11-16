@@ -67,7 +67,7 @@ class ContentViolationReport(models.Model):
     )
 
     reported_by_user_id = fields.Many2one(
-        "res.users", string="Reported By (Internal User)", ondelete="set null"
+        "res.users", string="Reported By (Internal User)", ondelete="set null", index=True
     )
     reported_by_email = fields.Char(string="Reported By (Guest Email)")
 
