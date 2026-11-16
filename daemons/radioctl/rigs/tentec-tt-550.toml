@@ -24,6 +24,10 @@ timeout_ms = 100
 retries = 4
 inter_command_ms = 0
 
+[frequency]
+min_hz = 100000
+max_hz = 30000000
+
 [defaults]
 frequency_hz = 14074000
 mode = "usb"
@@ -82,3 +86,8 @@ verified = { state = "unverified" }
 key = "vendor.dialect"
 provenance = { kind = "manual", reference = "Ten-Tec Pegasus Programmer's Reference Guide Rev 2.0, pegasus_550prg2.pdf (sha256 abbcc833b190611b608a4e7f58a5c326498b12df2ccb1db385b5631ff83f583a), PDF page 12 (N frame, Ch Cl Fh Fl Bh Bl CR, receive tuning formulas) and page 16 (M with receive and transmit mode digits 0 AM 1 USB 2 LSB 3 CW 4 FM; W with filter number 0 to 33)", note = "The fine-factor formula in the guide is misprinted; the coarse and BFO formulas and the frame layouts were compared." }
 verified = { state = "manual-checked", reference = "Pegasus Programmer's Reference Guide Rev 2.0, PDF pp. 12 and 16" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "program-output", reference = "`rigctl --dump-caps` (Hamlib 4.6.2) frequency range lines for this model: receive 100 kHz to 30 MHz (region 2 range; Hamlib lists no region 1 range)", note = "The lowest and highest frequency Hamlib lists, so the gaps between its ranges are accepted; Hamlib's ranges, not a measurement of the radio." }
+verified = { state = "unverified" }
