@@ -443,6 +443,7 @@ class TestGithubWebhookHttp(HamsHttpCase):
 
     def test_github_webhook_replayed_delivery_id_opens_no_second_ticket(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_github_delivery_claim]
+        # Tests [@ANCHOR: hams_helpdesk_github_delivery_github_delivery]
         self._configure_secret()
         payload = _dependabot_alert_payload()
         url = payload["alert"]["html_url"]

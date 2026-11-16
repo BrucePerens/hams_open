@@ -14,6 +14,7 @@ from odoo import fields, models
 RETENTION_DAYS = 7
 
 
+# [@ANCHOR: hams_helpdesk_github_delivery_github_delivery]
 class GithubDelivery(models.Model):
     _name = "hams_helpdesk.github_delivery"
     _description = "GitHub webhook delivery already processed"
