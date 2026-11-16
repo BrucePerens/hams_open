@@ -8,3 +8,4 @@ from . import test_pg_config
 from . import test_tdd
 from . import test_tours
 from . import test_explain_and_ha_refusals
+from . import test_migration_1_1
