@@ -509,16 +509,17 @@ class WebsitePage(models.Model):
             return page.id
         return False
 
-    def _lock_quota_rows(self, table, ids):
+    def _lock_quota_rows(self, ids, group=False):
         # [@ANCHOR: user_websites:page_quota_lock_rows]
         # Verified by [@ANCHOR: user_websites:test_page_quota_race]
         """Write (no value change) the owner rows before the quota count. Two simultaneous creates would
         otherwise both count N-1: each REPEATABLE READ snapshot predates the other's commit. Writing a row the
         other request changed since the snapshot fails with a serialization failure, and Odoo runs the request
         again (the same device as the image cap in owner_site)."""
-        self.env.cr.execute(  # audit-ignore-sql: write-lock on the owners' own rows
-            f"UPDATE {table} SET id = id WHERE id = ANY(%s)", (sorted(ids),)
-        )
+        if group:
+            self.env.cr.execute("UPDATE user_websites_group SET id = id WHERE id = ANY(%s)", (sorted(ids),))  # audit-ignore-sql: write-lock on the owners' own rows
+        else:
+            self.env.cr.execute("UPDATE res_users SET id = id WHERE id = ANY(%s)", (sorted(ids),))  # audit-ignore-sql: write-lock on the owners' own rows
 
     @api.model_create_multi
     # [@ANCHOR: website_page_create]
@@ -715,7 +716,7 @@ class WebsitePage(models.Model):
                 )
                 user_limits = {user.id: user._get_page_limit() for user in users}
 
-            self._lock_quota_rows("res_users", unique_owner_ids)
+            self._lock_quota_rows(unique_owner_ids)
             existing_counts = {u_id: 0 for u_id in unique_owner_ids}
             page_counts = (
                 self.env["website.page"]
@@ -768,7 +769,7 @@ class WebsitePage(models.Model):
                 )
             )
 
-            self._lock_quota_rows("user_websites_group", unique_group_ids)
+            self._lock_quota_rows(unique_group_ids, group=True)
             existing_group_counts = {g_id: 0 for g_id in unique_group_ids}
             group_counts = (
                 self.env["website.page"]

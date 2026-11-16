@@ -41,9 +41,7 @@ class TestPageQuotaRace(RealTransactionCase):
         with self.registry.cursor() as cr:
             env = odoo.api.Environment(cr, svc_uid, {})
             pages = env["website.page"].with_context(active_test=False).search([("owner_user_id", "=", user_id)])
-            views = pages.view_id
             pages.unlink()
-            views.unlink()
             cr.execute("SELECT partner_id FROM res_users WHERE id = %s", (user_id,))
             partner_id = cr.fetchone()[0]
             cr.execute("DELETE FROM res_users WHERE id = %s", (user_id,))
