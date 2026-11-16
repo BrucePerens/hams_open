@@ -1217,7 +1217,10 @@ def execute_check(check, client=None):
                 result = subprocess.run(
                     [exe, "+trace", domain], capture_output=True, text=True, timeout=10
                 )
-                if result.returncode == 0 and domain in result.stdout:
+                # dig +trace exits 0 and prints the name it was asked about (its header line) even for a name that does not
+                # exist, so only an address answer for the name counts; otherwise the resolver below decides.
+                answer = re.compile(rf"^{re.escape(domain.rstrip('.'))}\.?\s+\d+\s+IN\s+(?:A|AAAA|CNAME)\s", re.IGNORECASE | re.MULTILINE)
+                if result.returncode == 0 and answer.search(result.stdout):
                     return True, "OK"
             socket.gethostbyname(domain)
             return True, "OK"
