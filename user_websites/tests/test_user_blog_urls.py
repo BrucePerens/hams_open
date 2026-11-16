@@ -12,6 +12,7 @@ import re
 import odoo.http
 from odoo.tests import tagged
 
+from odoo.addons.user_websites.controllers import blog_urls
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 
@@ -159,6 +160,24 @@ class TestUserBlogUrls(HamsHttpCase):
         self.assertIn(f"/burlowner/blog/{self.post_slug}", response.text)
         self.assertNotIn("Unfinished Draft", response.text)
         self.assertEqual(self.url_open("/burlother/blog/feed").status_code, 404)
+
+    def test_08b_the_feed_limit_is_clamped_and_a_junk_limit_falls_back_to_fifteen(self):
+        # Tests [@ANCHOR: user_websites:COMM_user_blog_feed]
+        for title in ("Second Post", "Third Post"):
+            self.env["blog.post"].create(
+                {"name": title, "blog_id": self.blog.id, "owner_user_id": self.owner.id, "is_published": True, "content": "<p>x</p>"}
+            )
+        self.env.flush_all()
+
+        def entries(limit):
+            return self.url_open(f"/burlowner/blog/feed?limit={limit}").text.count("<entry")
+
+        self.assertEqual(entries(1), 1)
+        self.assertEqual(entries(0), 1, "a limit below one is raised to one")
+        self.assertEqual(entries(-5), 1)
+        self.assertEqual(entries("abc"), 3, "a non-number gives the default of 15, which shows all three posts")
+        self.safe_patch_object(blog_urls, "FEED_POSTS_MAX", 2)
+        self.assertEqual(entries(999), 2, "a limit over the maximum is cut to the maximum")
 
     def test_09_post_page_links_stay_on_the_callsign_address(self):
         # Tests [@ANCHOR: user_websites:COMM_site_blog_url_init]
