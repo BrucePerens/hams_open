@@ -4,10 +4,18 @@
 from odoo.tests.common import tagged, BaseCase
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
-from odoo.addons.cloudflare.utils import zone_settings_plan
+from odoo.addons.cloudflare.utils import cloudflare_api as api, zone_settings_plan
 
 MGR = "odoo.addons.cloudflare.models.config_manager."
 ALL_OFF = {"ssl": "full", "minify": {"css": "off", "html": "off", "js": "off"}, "bot_fight_mode": False}
+
+
+class Resp:
+    def __init__(self, status, body):
+        self.status_code, self._body = status, body
+
+    def json(self):
+        return self._body
 
 
 @tagged("post_install", "-at_install")
@@ -176,15 +184,6 @@ class TestZoneSettingsPush(HamsTransactionCase):
         # Tests [@ANCHOR: cloudflare:COMM_cf_api_get_zone_setting_checked]
         # Tests [@ANCHOR: cloudflare:COMM_cf_api_get_bot_fight_mode_checked]
         # Tests [@ANCHOR: cloudflare:COMM_cf_api_update_bot_fight_mode]
-        from odoo.addons.cloudflare.utils import cloudflare_api as api
-
-        class Resp:
-            def __init__(self, status, body):
-                self.status_code, self._body = status, body
-
-            def json(self):
-                return self._body
-
         req = self.safe_patch("odoo.addons.cloudflare.utils.cloudflare_api._make_request")
         req.return_value = Resp(200, {"result": {"id": "ssl", "value": "strict"}})
         self.assertEqual(api.get_zone_setting_checked("ssl", "t", "z"), ("ok", "strict"))
