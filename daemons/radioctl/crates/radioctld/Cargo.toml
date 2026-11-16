@@ -49,7 +49,7 @@ getrandom = "0.4"
 # The self-update: the relay's own signed bundles (zipsign, the same pinned version the relay's updater uses), their
 # sha256, and the one executable read out of the zip.
 zipsign-api = { version = "=0.2.2", default-features = false, features = ["verify-zip"] }
-sha2 = "0.10"
+sha2 = "0.11"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 # The binary owns the one runtime (multi-thread); the library only takes a Handle.
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "net", "macros", "signal"] }
