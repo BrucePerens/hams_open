@@ -894,6 +894,15 @@ class ResUsers(models.Model):
         })
         return res
 
+    # [@ANCHOR: user_websites:gdpr_store_erasure_choices]
+    # Verified by [@ANCHOR: user_websites:test_erasure_form_choices_reach_the_hook]
+    def _gdpr_store_erasure_choices(self, choices):
+        """Hook: called by /my/privacy/delete_content with the posted form fields (a dict of strings) BEFORE the erasure
+        runs, so a module that adds a question to the erasure form (for example what to do with a member's forum
+        posts) can store the answer on the account for its `_execute_gdpr_erasure` to read, also when the cron resumes
+        the erasure later. Nothing here: the base erasure asks nothing."""
+        self.ensure_one()
+
     # [@ANCHOR: user_websites:gdpr_erasure_run]
     # Verified by [@ANCHOR: user_websites:test_gdpr_erasure_run_marks_and_resumes]
     def _gdpr_erasure_run(self):
