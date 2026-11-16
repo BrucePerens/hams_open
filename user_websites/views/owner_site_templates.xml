@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
+    <!-- [@ANCHOR: user_websites:template_literals_translatable] -->
 
     <!-- The owner's toolbar: shown above the site's own navbar only to the person who owns the site
          (or a member of the owning group), on every page of that site. [@ANCHOR: user_websites:UX_OWNER_TOOLBAR]
@@ -28,7 +29,7 @@
                     <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                     <input type="hidden" name="publish" t-att-value="'0' if uw_page.website_published else '1'"/>
                     <input type="hidden" name="next" t-att-value="'%s/page/%s' % (uw_manage, uw_page.id)"/>
-                    <button type="submit" class="btn btn-sm btn-outline-light"><t t-out="'Unpublish this page' if uw_page.website_published else 'Publish this page'"/></button>
+                    <button type="submit" class="btn btn-sm btn-outline-light"><t t-if="uw_page.website_published">Unpublish this page</t><t t-else="">Publish this page</t></button>
                 </form>
                 <a t-if="uw_page and uw_page.url != '/' + resolved_slug" class="btn btn-sm btn-outline-danger" t-attf-href="#{uw_manage}/page/#{uw_page.id}/delete"><i class="fa fa-trash me-1" aria-hidden="true"/>Delete</a>
                 <a class="btn btn-sm btn-outline-light ms-lg-auto" t-attf-href="#{request.httprequest.path}?visitor=1"><i class="fa fa-eye me-1" aria-hidden="true"/>View as visitor</a>
@@ -105,13 +106,13 @@
                                 <tr t-foreach="pages" t-as="p">
                                     <td t-out="p.name"/>
                                     <td><a t-att-href="p.url"><code t-out="p.url"/></a></td>
-                                    <td><span t-attf-class="badge #{'bg-success' if p.website_published else 'bg-warning text-dark'}" t-out="'Published' if p.website_published else 'Unpublished'"/></td>
+                                    <td><span t-attf-class="badge #{'bg-success' if p.website_published else 'bg-warning text-dark'}"><t t-if="p.website_published">Published</t><t t-else="">Unpublished</t></span></td>
                                     <td class="text-nowrap">
                                         <a class="btn btn-sm btn-outline-secondary" t-attf-href="/my/site/#{site_slug}/page/#{p.id}">Edit<span class="visually-hidden"> <t t-out="p.name"/></span></a>
                                         <form t-attf-action="/my/site/#{site_slug}/page/#{p.id}/publish" method="post" class="d-inline">
                                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                             <input type="hidden" name="publish" t-att-value="'0' if p.website_published else '1'"/>
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary"><t t-out="'Unpublish' if p.website_published else 'Publish'"/><span class="visually-hidden"> <t t-out="p.name"/></span></button>
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary"><t t-if="p.website_published">Unpublish</t><t t-else="">Publish</t><span class="visually-hidden"> <t t-out="p.name"/></span></button>
                                         </form>
                                         <a t-if="p.url != home_url" class="btn btn-sm btn-outline-danger uw-delete-link" t-attf-href="/my/site/#{site_slug}/page/#{p.id}/delete" t-att-data-uw-title="p.name" t-attf-data-uw-action="/my/site/#{site_slug}/page/#{p.id}/delete" data-uw-what="page">Delete<span class="visually-hidden"> <t t-out="p.name"/></span></a>
                                     </td>
@@ -137,14 +138,14 @@
                             <tbody>
                                 <tr t-foreach="posts" t-as="post">
                                     <td t-out="post.name"/>
-                                    <td><span t-attf-class="badge #{'bg-success' if post.is_published else 'bg-warning text-dark'}" t-out="'Published' if post.is_published else 'Draft'"/></td>
+                                    <td><span t-attf-class="badge #{'bg-success' if post.is_published else 'bg-warning text-dark'}"><t t-if="post.is_published">Published</t><t t-else="">Draft</t></span></td>
                                     <td class="text-nowrap">
                                         <a class="btn btn-sm btn-outline-secondary" t-attf-href="/blog_post/edit/#{post.id}">Edit<span class="visually-hidden"> <t t-out="post.name"/></span></a>
                                         <a class="btn btn-sm btn-outline-secondary" t-att-href="post.website_url">View<span class="visually-hidden"> <t t-out="post.name"/></span></a>
                                         <form t-attf-action="/my/site/#{site_slug}/post/#{post.id}/publish" method="post" class="d-inline">
                                             <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                                             <input type="hidden" name="publish" t-att-value="'0' if post.is_published else '1'"/>
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary"><t t-out="'Unpublish' if post.is_published else 'Publish'"/><span class="visually-hidden"> <t t-out="post.name"/></span></button>
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary"><t t-if="post.is_published">Unpublish</t><t t-else="">Publish</t><span class="visually-hidden"> <t t-out="post.name"/></span></button>
                                         </form>
                                         <a class="btn btn-sm btn-outline-danger uw-delete-link" t-attf-href="/my/site/#{site_slug}/post/#{post.id}/delete" t-att-data-uw-title="post.name" t-attf-data-uw-action="/my/site/#{site_slug}/post/#{post.id}/delete" data-uw-what="post">Delete<span class="visually-hidden"> <t t-out="post.name"/></span></a>
                                     </td>
@@ -254,7 +255,7 @@
             <t t-set="additional_title" t-value="('Edit page' if page else 'New page')"/>
             <t t-set="website_meta_description">Write or change a page on your hams.com website with the visual editor. Save a draft, then publish it when you are ready for visitors to read it. Add pictures.</t>
             <div id="wrap" class="container my-4">
-                <h1 class="h2" t-out="'Edit page' if page else 'New page'"/>
+                <h1 class="h2"><t t-if="page">Edit page</t><t t-else="">New page</t></h1>
                 <div t-if="saved" class="alert alert-success" role="status">Saved.</div>
                 <div t-if="error" class="alert alert-danger" role="alert">
                     <t t-if="error == 'title'">Please give the page a title of at most 120 characters.</t>

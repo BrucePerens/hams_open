@@ -96,3 +96,6 @@ A rule for the three mail templates in `data/user_websites_data.xml` (content vi
 ### `_lock_for_resolution()` [@ANCHOR: user_websites:appeal_lock_for_resolution]
 
 `content.violation.appeal._lock_for_resolution()`. Called first by `action_approve` and `action_reject`: it row-locks the appeals (`SELECT ... FOR UPDATE NOWAIT`, inside a savepoint) and re-reads `state`, so two moderators cannot both see `new` and then approve and reject the same appeal. A row another moderator holds raises `UserError` at once instead of waiting. Test: `test_appeal_resolution_refuses_a_row_being_resolved`.
+
+### Words inside owner-site template expressions are translated [@ANCHOR: user_websites:template_literals_translatable]
+Odoo translates template text but not a string literal inside `t-out`. The owner pages (Published/Unpublished/Draft, Publish/Unpublish, Edit page/New page) therefore showed English to owners using another language. They are now plain text under `t-if`/`t-else`, and the `user_websites` test `test_template_literals_translatable` fails if English prose is put back inside an expression in any `views/` template of this repo.
