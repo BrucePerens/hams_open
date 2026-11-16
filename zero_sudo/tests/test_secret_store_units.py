@@ -277,7 +277,9 @@ class TestBrokerClientAndStore(_TempCase):
         started = time.monotonic()
         with self.assertRaises(OSError):
             ss.BrokerClient(path, timeout=0.3).call("op")
-        self.assertLess(time.monotonic() - started, 5)
+        # The timeout is wall clock by nature. 9 s is 30x the 0.3 s asked for (a loaded box does not fail it) and still
+        # under the 10 s default, so a client that ignored its `timeout` argument fails.
+        self.assertLess(time.monotonic() - started, 9)
         self.assertEqual(ss.BrokerClient(path).timeout, 10.0)
 
     def test_get_names_the_backends_it_tried(self):
