@@ -6,7 +6,6 @@ from odoo import models, api, fields, _
 from odoo.exceptions import AccessError
 from ..utils import cache_plan
 from ..utils.cloudflare_api import (
-    get_zone_ruleset,
     get_zone_ruleset_checked,
     update_zone_ruleset,
     create_zone_ruleset,
@@ -288,9 +287,11 @@ class CloudflareConfigManager(models.AbstractModel):
         )
         token, zone_id = website._get_cloudflare_credentials()
 
-        existing_ruleset = get_zone_ruleset(
+        state, existing_ruleset = get_zone_ruleset_checked(
             "http_request_firewall_custom", token, zone_id
         )
+        if state == "error":
+            return False, f"REFUSED: the Cloudflare ruleset for {website.name} could not be read ({existing_ruleset}); nothing was changed."
         if not existing_ruleset:
             return (
                 False,
@@ -344,9 +345,11 @@ class CloudflareConfigManager(models.AbstractModel):
             "rules": cf_rules_payload,
         }
 
-        existing_ruleset = get_zone_ruleset(
+        state, existing_ruleset = get_zone_ruleset_checked(
             "http_request_firewall_custom", token, zone_id
         )
+        if state == "error":
+            return False, f"REFUSED: the Cloudflare ruleset for {website.name} could not be read ({existing_ruleset}); nothing was pushed."
         if existing_ruleset and "id" in existing_ruleset:
             return update_zone_ruleset(
                 existing_ruleset["id"], ruleset_payload, token, zone_id

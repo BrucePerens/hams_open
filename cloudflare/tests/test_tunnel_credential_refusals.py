@@ -99,7 +99,6 @@ class TestTunnelCredentialRefusals(HamsTransactionCase):
         # Tests [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
         tunnel = self._tunnel("edgeerr", True)
         website = tunnel.website_id
-        self.safe_patch(MANAGER + "get_zone_ruleset").return_value = None  # what an outage looked like before
         self.safe_patch(MANAGER + "get_zone_ruleset_checked").return_value = ("error", "HTTP 500")
         push = self.safe_patch_object(type(self.env["cloudflare.config.manager"]), "action_push_waf_rules")
         self.env["cloudflare.config.manager"].initialize_cloudflare_state()
