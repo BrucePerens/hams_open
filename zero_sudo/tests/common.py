@@ -1530,7 +1530,8 @@ class HamsTransactionCase(TransactionCase, SafePatchMixin, PersonaMixin):
         r = get_redis_connection(self.env)
         if r:
             try:
-                r.flushall()
+                # flushdb, not flushall: flushall also wipes the Redis databases of every other test slot on the host.
+                r.flushdb()
             except Exception as e:  # audit-ignore-catch-all
                 logging.getLogger(__name__).warning("Suppressed: %s", e)
 
