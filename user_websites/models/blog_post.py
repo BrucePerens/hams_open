@@ -127,6 +127,18 @@ class BlogPost(models.Model):
                 urls.add(f"/{post.user_websites_group_id.website_slug}/blog")
         return list(urls)
 
+    def _lock_quota_rows(self, ids, group=False):
+        # [@ANCHOR: user_websites:post_quota_lock_rows]
+        # Verified by [@ANCHOR: user_websites:test_post_quota_race]
+        """Write (no value change) the owner rows before the quota count. Two simultaneous creates would
+        otherwise both count N-1: each REPEATABLE READ snapshot predates the other's commit. Writing a row the
+        other request changed since the snapshot fails with a serialization failure, and Odoo runs the request
+        again (the same device as the image cap in owner_site)."""
+        if group:
+            self.env.cr.execute("UPDATE user_websites_group SET id = id WHERE id = ANY(%s)", (sorted(ids),))  # audit-ignore-sql: write-lock on the owners' own rows
+        else:
+            self.env.cr.execute("UPDATE res_users SET id = id WHERE id = ANY(%s)", (sorted(ids),))  # audit-ignore-sql: write-lock on the owners' own rows
+
     def _check_blog_post_quota(self, vals_list):
         # [@ANCHOR: user_websites_blog_post_quota_check]
 
@@ -173,6 +185,7 @@ class BlogPost(models.Model):
             users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
             limits = {user.id: user._get_blog_post_limit() for user in users}
 
+            self._lock_quota_rows(unique_owner_ids)
             existing_counts = {u_id: 0 for u_id in unique_owner_ids}
             for owner, count in (
                 self.env["blog.post"]
@@ -206,6 +219,7 @@ class BlogPost(models.Model):
                     "user_websites.global_blog_post_limit", 500
                 )
             )
+            self._lock_quota_rows(unique_group_ids, group=True)
             existing_group_counts = {g_id: 0 for g_id in unique_group_ids}
             for group, count in (
                 self.env["blog.post"]
