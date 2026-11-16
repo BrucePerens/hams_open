@@ -646,9 +646,10 @@ class TestOwnerSite(HamsHttpCase):
         self.assertEqual(self._upload(PNG).status_code, 429)
         redis_client.delete(upload_key)
         self.safe_patch_object(owner_site, "expiring_counter", side_effect=redis.RedisError("simulated"))
-        # The refusal is a 503 in the controller; the error page for it is missing on this box, so only "refused" is asserted.
         before = self.env["ir.attachment"].search_count([("res_model", "=", "res.users"), ("res_id", "=", self.owner.id)])
-        self.assertGreaterEqual(self._upload(PNG).status_code, 400, "a limiter that cannot count fails closed")
+        refused = self._upload(PNG)
+        self.assertEqual(refused.status_code, 503, "a limiter that cannot count fails closed, as a clean 503")
+        self.assertEqual(refused.headers.get("Retry-After"), "30")
         self.assertEqual(
             self.env["ir.attachment"].search_count([("res_model", "=", "res.users"), ("res_id", "=", self.owner.id)]), before
         )

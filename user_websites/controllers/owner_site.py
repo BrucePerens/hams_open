@@ -42,7 +42,7 @@ import redis
 from PIL import Image, ImageOps, UnidentifiedImageError, WebPImagePlugin
 from lxml import etree, html as lxml_html
 from markupsafe import Markup
-from werkzeug.exceptions import ServiceUnavailable, TooManyRequests
+from werkzeug.exceptions import TooManyRequests
 
 from odoo import fields, http
 from odoo.http import request
@@ -322,7 +322,15 @@ class UserWebsitesOwnerController(http.Controller):
             count = expiring_counter(redis_client, key, 60)
         except redis.exceptions.RedisError as e:
             _logger.error("Owner-site rate limiter unavailable: %s", e)
-            raise ServiceUnavailable("The site tools are temporarily unavailable.")
+            # A plain response, not ServiceUnavailable: Odoo renders the http_routing.503 template for it, which
+            # does not exist, and the visitor gets a 418.
+            raise SiteResponse(
+                request.make_response(
+                    "The site tools are temporarily unavailable. Please try again shortly.",
+                    headers=[("Content-Type", "text/plain; charset=utf-8"), ("Retry-After", "30")],
+                    status=503,
+                )
+            )
         if count > limit:
             raise TooManyRequests("Too many changes in a minute. Please wait and try again.")
 
