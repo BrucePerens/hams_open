@@ -659,7 +659,9 @@ def find_zone_id(name, token):
     if body is None or not isinstance(body.get("result") or [], list):
         return False, "API Error"
     for zone in body.get("result") or []:
-        if (zone.get("name") or "").lower() == name.lower():
+        # A zone whose domain's name servers went elsewhere is "moved" (then deleted): another server is authoritative
+        # for it, so a record written there is never answered. It counts as no zone, so nothing is planned into it.
+        if (zone.get("name") or "").lower() == name.lower() and zone.get("status") not in ("moved", "deleted"):
             return True, zone.get("id")
     return True, None
 
