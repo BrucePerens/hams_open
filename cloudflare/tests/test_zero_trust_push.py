@@ -170,6 +170,7 @@ class TestZeroTrustPush(HamsTransactionCase):
         self.assertIn("OK create Blocked", msg)
 
     def test_unreadable_list_is_refused_not_treated_as_empty(self):
+        # Tests [@ANCHOR: cloudflare_zero_trust_push_cloudflare_config_manager_zero_trust]
         # Tests [@ANCHOR: cloudflare:COMM_zero_trust_plan]
         self.mock_list.side_effect = lambda acc, token: ("error", "HTTP 403")
         ok, msg = self._push()
@@ -197,7 +198,15 @@ class TestZeroTrustPush(HamsTransactionCase):
         self.assertFalse(ok)
         self.assertIn("Missing API token or account id", msg)
 
+    def test_zero_trust_toast_shape(self):
+        # Tests [@ANCHOR: cloudflare:COMM_zero_trust_toast]
+        ok = self.staff._zero_trust_toast("T", "M", True, False)
+        self.assertEqual(ok["tag"], "display_notification")
+        self.assertEqual(ok["params"], {"title": "T", "message": "M", "type": "success", "sticky": False})
+        self.assertEqual(self.staff._zero_trust_toast("T", "M", False, True)["params"]["type"], "danger")
+
     def test_form_buttons_plan_then_push(self):
+        # Tests [@ANCHOR: cloudflare_zero_trust_push_cloudflare_zero_trust_policy_buttons]
         # Tests [@ANCHOR: cloudflare:COMM_zero_trust_row_plan_push]
         # Tests [@ANCHOR: cloudflare:COMM_zero_trust_row_push_to_cloudflare]
         res = self.staff.action_plan_zero_trust_push()

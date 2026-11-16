@@ -8,6 +8,7 @@ from ..utils import zero_trust_plan
 from ..utils.access_api import list_access_policies_checked, write_access_policy
 
 
+# [@ANCHOR: cloudflare:cloudflare_zero_trust_push_cloudflare_config_manager_zero_trust]
 class CloudflareConfigManagerZeroTrust(models.AbstractModel):
     _inherit = "cloudflare.config.manager"
 
@@ -76,9 +77,11 @@ class CloudflareConfigManagerZeroTrust(models.AbstractModel):
         return all_ok, "\n".join(lines)
 
 
+# [@ANCHOR: cloudflare:cloudflare_zero_trust_push_cloudflare_zero_trust_policy_buttons]
 class CloudflareZeroTrustPolicyButtons(models.Model):
     _inherit = "cloudflare.zero.trust.policy"
 
+    # [@ANCHOR: cloudflare:COMM_zero_trust_toast]
     def _zero_trust_toast(self, title, message, ok, sticky):
         return {
             "type": "ir.actions.client",

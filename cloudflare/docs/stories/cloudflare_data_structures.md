@@ -667,3 +667,31 @@ It declares no `fields.*` columns of its own.
 
 **Invariants, ownership and concurrency.** Holds no state. Each button needs a single record (`ensure_one`), uses the row's website or the current one, and reports a failed push as a sticky danger toast. Nothing is shared between threads except through the database.
 
+### `CloudflareConfigManagerZeroTrust` [@ANCHOR: cloudflare:cloudflare_zero_trust_push_cloudflare_config_manager_zero_trust]
+
+**Purpose and location.** The Zero Trust policy push: extends the config manager with the plan and apply steps that push `cloudflare.zero.trust.policy` rows to the account's reusable Access policies. Defined in `cloudflare/models/zero_trust_push.py:12` as an abstract Odoo model; it inherits `cloudflare.config.manager` (`_inherit = "cloudflare.config.manager"`) and adds methods to it.
+
+It declares no fields of its own and has no table.
+
+**Class attributes.** `_inherit = "cloudflare.config.manager"`.
+
+**Invariants, ownership and concurrency.** It is called as the WAF service user, which holds the Cloudflare credentials. The plan only reads Cloudflare; the apply creates or updates only the policies Odoo manages, by id, and never deletes. Nothing is shared between threads except through the database.
+
+**Methods.** `plan_zero_trust_policies`, `action_push_zero_trust_policies`.
+
+**See also:** test `test_unreadable_list_is_refused_not_treated_as_empty`.
+
+### `CloudflareZeroTrustPolicyButtons` [@ANCHOR: cloudflare:cloudflare_zero_trust_push_cloudflare_zero_trust_policy_buttons]
+
+**Purpose and location.** The form buttons of the Zero Trust policy row: "Show plan (changes nothing)" and "Push Zero Trust policies to Cloudflare". Defined in `cloudflare/models/zero_trust_push.py:81` as an Odoo model; it inherits `cloudflare.zero.trust.policy` (`_inherit = "cloudflare.zero.trust.policy"`) and adds methods only.
+
+It declares no fields of its own; the fields are those of `CloudflareZeroTrustPolicy` (name, action, identity-provider ids, website).
+
+**Class attributes.** `_inherit = "cloudflare.zero.trust.policy"`.
+
+**Invariants, ownership and concurrency.** Both buttons act on one row (`ensure_one`) and run the config manager as the WAF service user, for the row's website or the current website; a push applies all of that website's Zero Trust policies. They return a toast action and never raise on a Cloudflare error.
+
+**Methods.** `_zero_trust_toast`, `action_plan_zero_trust_push`, `action_push_zero_trust_to_cloudflare`.
+
+**See also:** test `test_form_buttons_plan_then_push`.
+
