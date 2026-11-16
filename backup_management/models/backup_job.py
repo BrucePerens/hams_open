@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import datetime
 import logging
-from odoo import models, fields
+from odoo import api, models, fields
 from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
@@ -17,14 +17,26 @@ class BackupJob(models.Model):
     _order = "create_date desc"
 
     config_id = fields.Many2one(
-        "backup.config", string="Configuration", required=True, ondelete="cascade"
+        "backup.config",
+        string="Configuration",
+        # History is kept when the configuration is deleted (Bruce, 2026-11-16); website_id and
+        # company_id are stored copies, so the record stays scoped to its tenant.
+        ondelete="set null",
+        index=True,
     )
-    website_id = fields.Many2one(
-        "website", string="Website", related="config_id.website_id", store=True
-    )
-    company_id = fields.Many2one(
-        "res.company", string="Company", related="config_id.company_id", store=True
-    )
+    # Stored copies of the configuration's website and company that a configuration delete does not clear
+    # (a stored related field would be), so the kept record stays in its tenant.
+    website_id = fields.Many2one("website", string="Website", compute="_compute_tenant", store=True)
+    company_id = fields.Many2one("res.company", string="Company", compute="_compute_tenant", store=True)
+    # [@ANCHOR: backup_management:job_compute_tenant]
+    # Verified by [@ANCHOR: backup_management:test_history_survives_config_delete]
+    @api.depends("config_id.website_id", "config_id.company_id")
+    def _compute_tenant(self):
+        for rec in self:
+            if rec.config_id:
+                rec.website_id = rec.config_id.website_id
+                rec.company_id = rec.config_id.company_id
+
     job_type = fields.Selection(
         [("kopia", "Kopia"), ("pgbackrest", "pgBackRest")],
         string="Job Type",
