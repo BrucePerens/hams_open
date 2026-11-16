@@ -9,8 +9,11 @@ from odoo.tests.common import tagged
 @tagged("post_install", "-at_install")
 class TestDomainsApi(HamsHttpCase):
 
+    IDENTITY_HEADERS = {"X-Api-Identity": "domains-secret"}
+
     def setUp(self):
         super().setUp()
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "domains-secret")
         # cloudflare _inherit's edge.routing.domain and auto-provisions a
         # real Cloudflare custom hostname on create(), requiring a
         # matching website.domain record to exist -- unrelated to what
@@ -57,7 +60,7 @@ class TestDomainsApi(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:COMM_api_domains]
         # Tests [@ANCHOR: COMM_test_domains_api_returns_all_domains]
         """Test that the /api/v1/user_websites/domains endpoint returns all domains."""
-        response = self.url_open("/api/v1/user_websites/domains")
+        response = self.url_open("/api/v1/user_websites/domains", headers=self.IDENTITY_HEADERS)
         self.assertEqual(response.status_code, 200)
 
         data = response.json()
@@ -65,6 +68,13 @@ class TestDomainsApi(HamsHttpCase):
         domains = data["domains"]
 
         self.assertIn("testdomain1.com", domains)
+
+    # Tests [@ANCHOR: user_websites:COMM_api_domains]
+    def test_domains_api_refuses_a_caller_without_the_shared_secret(self):
+        for headers in ({}, {"X-Api-Identity": "wrong"}):
+            response = self.url_open("/api/v1/user_websites/domains", headers=headers)
+            self.assertEqual(response.status_code, 401)
+            self.assertNotIn("domains", response.json())
 
     # Tests [@ANCHOR: user_websites:COMM_api_domains]
     # Tests [@ANCHOR: COMM_test_domains_api_refuses_a_partial_list]
@@ -81,6 +91,6 @@ class TestDomainsApi(HamsHttpCase):
             return real(this, xml_id, *args, **kwargs)
 
         self.safe_patch_object(utils_cls, "_get_service_env", failing)
-        response = self.url_open("/api/v1/user_websites/domains")
+        response = self.url_open("/api/v1/user_websites/domains", headers=self.IDENTITY_HEADERS)
         self.assertEqual(response.status_code, 503)
         self.assertNotIn("domains", response.json())
