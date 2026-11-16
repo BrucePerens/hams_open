@@ -1,4 +1,0 @@
-There were permission problems while accessing USB.
-Follow https://git.io/JIB2Z for a fix!
-No compatible devices detected!
-Run with -h to get usage info.
