@@ -21,7 +21,6 @@ def _sign(key, body):
 
 @tagged("post_install", "-at_install", "form_shield")
 class TestTokenGuards(HamsTransactionCase):
-    # [@ANCHOR: form_shield:test_tokens_guards_ip_tag_and_challenge_shape]
     def test_ip_tag_and_challenge_shape(self):
         # Tests [@ANCHOR: form_shield:ip_tag]
         # Tests [@ANCHOR: form_shield:ip_tag_hash]
@@ -37,7 +36,6 @@ class TestTokenGuards(HamsTransactionCase):
         self.assertEqual(fields[7], _sign(KEY, ".".join(fields[:7])))
         self.assertNotEqual(token, tokens.make_challenge(KEY, "203.0.113.9", 1000, 12, tokens.KIND_POW, 600))
 
-    # [@ANCHOR: form_shield:test_tokens_guards_ip_prefix]
     def test_ip_prefix_networks(self):
         # Tests [@ANCHOR: form_shield:ip_tag]
         self.assertEqual(tokens.ip_prefix("  203.0.113.9 "), "203.0.113.0/24")
@@ -48,7 +46,6 @@ class TestTokenGuards(HamsTransactionCase):
         self.assertEqual(tokens.ip_prefix(""), "none")
         self.assertEqual(tokens.ip_prefix("203.0.113.9/24"), "none")
 
-    # [@ANCHOR: form_shield:test_tokens_guards_split_response]
     def test_split_response_limits(self):
         # Tests [@ANCHOR: form_shield:split_response]
         self.assertEqual(tokens.split_response("abc~42"), ("abc", "42"))
@@ -61,7 +58,6 @@ class TestTokenGuards(HamsTransactionCase):
         self.assertEqual(tokens.split_response("a" * 395 + "~" + "1234"), ("a" * 395, "1234"))
         self.assertEqual(tokens.split_response("a" * 396 + "~" + "1234"), (None, None))
 
-    # [@ANCHOR: form_shield:test_tokens_guards_parse_challenge]
     def test_parse_challenge_refusals_and_fields(self):
         # Tests [@ANCHOR: form_shield:parse_challenge]
         # Tests [@ANCHOR: form_shield:parsed_challenge]
@@ -88,7 +84,6 @@ class TestTokenGuards(HamsTransactionCase):
             body = ".".join(broken)
             self.assertEqual(tokens.parse_challenge(KEY, body + "." + _sign(KEY, body)), (None, tokens.BAD_FORMAT), index)
 
-    # [@ANCHOR: form_shield:test_tokens_guards_pow_edges]
     def test_pow_edges(self):
         # Tests [@ANCHOR: form_shield:leading_zero_bits]
         # Tests [@ANCHOR: form_shield:pow_valid]
@@ -115,7 +110,6 @@ class TestTokenGuards(HamsTransactionCase):
         # Nothing between `start` and the answer solves it (the search does not skip a counter).
         self.assertFalse(any(tokens.pow_valid(TOKEN, FORM, c, 16) for c in range(COUNTER + 1, later)))
 
-    # [@ANCHOR: form_shield:test_tokens_guards_question_edges]
     def test_question_edges(self):
         # Tests [@ANCHOR: form_shield:question_numbers]
         # Tests [@ANCHOR: form_shield:question_text]
