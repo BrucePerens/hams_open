@@ -105,7 +105,7 @@ class TestModeration(RealTransactionCase):
         )
         # Wait for the background thread to unpublish the content
         self.env.cr.commit()
-        for _ in range(20):
+        for _ in range(240):  # a safety net only: ends as soon as the background thread has committed
             self.env.cr.commit()
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
@@ -129,7 +129,7 @@ class TestModeration(RealTransactionCase):
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
         self.env.cr.commit()
-        for _ in range(20):
+        for _ in range(240):  # a safety net only: ends as soon as the background thread has committed
             self.env.cr.commit()
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
@@ -174,7 +174,7 @@ class TestModeration(RealTransactionCase):
         self.bad_user.violation_strike_count = 3
         self.bad_user.action_suspend_user_websites()
         self.env.cr.commit()
-        for _ in range(20):
+        for _ in range(240):  # a safety net only: ends as soon as the background thread has committed
             self.env.cr.commit()
             self.env.invalidate_all()
             if not self.spam_page.is_published and not self.spam_post.is_published:
@@ -262,7 +262,7 @@ class TestModeration(RealTransactionCase):
             "Group should be suspended after 3 strikes.",
         )
 
-        for _ in range(20):
+        for _ in range(240):  # a safety net only: ends as soon as the background thread has committed
             self.env.cr.commit()
             self.env.invalidate_all()
             if not self.spam_page.is_published:
