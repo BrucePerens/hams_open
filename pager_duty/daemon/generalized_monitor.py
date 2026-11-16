@@ -386,6 +386,27 @@ def log_anomaly_in_maintenance(payload):
     return True
 
 
+# [@ANCHOR: pager_duty:forward_log_anomaly]
+# Verified by [@ANCHOR: pager_duty:test_forward_log_anomaly_scrubs_the_line]
+def forward_log_anomaly(client, payload):
+    """Reports one log-analyzer anomaly to Odoo (and the webhook / SMTP fallback), unless maintenance is active.
+
+    The line is another program's text, so it is scrubbed (scrub_log_line) first, exactly as log_tail_thread does for the
+    daemon's own log checks: the analyzer's matches used to reach the incident, the webhook and the log with emails, URLs
+    and password=... values intact."""
+    payload = dict(payload, description=scrub_log_line(str(payload["description"])))
+    if log_anomaly_in_maintenance(payload):
+        return False
+    report(
+        client,
+        payload["source"],
+        payload["description"],
+        payload["severity"],
+        website_id=payload.get("website_id"),
+    )
+    return True
+
+
 # [@ANCHOR: pager_duty:is_in_maintenance]
 def is_in_maintenance(check):
     maint_start_str = check.get("maint_start")
@@ -2458,16 +2479,7 @@ if __name__ == "__main__":
                 res = r.blpop("pager_log_anomalies", timeout=5)
                 if res:
                     _, data = res
-                    payload = json.loads(data)
-                    if log_anomaly_in_maintenance(payload):
-                        continue
-                    report(
-                        cl,
-                        payload["source"],
-                        payload["description"],
-                        payload["severity"],
-                        website_id=payload.get("website_id"),
-                    )
+                    forward_log_anomaly(cl, json.loads(data))
             except (
                 ConnectionError,
                 socket.timeout,
