@@ -23,10 +23,27 @@ class SesWebhookLog(models.Model):
         ('rejected_topic', 'Rejected: Wrong SNS Topic'),
         ('rejected_sender', 'Rejected: Sender Failed SES Authentication'),
     ], string='Status', readonly=True)
-    domain_id = fields.Many2one('ses.webhook.domain', string='Webhook Domain', readonly=True, ondelete='cascade')
-    company_id = fields.Many2one('res.company', related='domain_id.company_id', store=True, readonly=True)
+    # The audit rows are kept when their domain is deleted (Bruce, 2026-11-16); company_id is a stored copy, so a kept row
+    # stays visible to its company (a compute that keeps its value, not a related field, which the delete would clear), and domain_name still says which domain it was.
+    domain_id = fields.Many2one('ses.webhook.domain', string='Webhook Domain', readonly=True, ondelete='set null', index=True)
+    domain_name = fields.Char(string='Domain Name', compute='_compute_domain_name', store=True, readonly=True)
+    company_id = fields.Many2one('res.company', compute='_compute_company_id', store=True, readonly=True)
     error_message = fields.Text(string='Error Message', readonly=True)
     raw_payload = fields.Text(string='Raw JSON Payload', readonly=True)
+
+    @api.depends('domain_id.company_id')
+    def _compute_company_id(self):
+        for log in self:
+            if log.domain_id:
+                log.company_id = log.domain_id.company_id
+
+    # [@ANCHOR: ses_webhook:log_compute_domain_name]
+    # Verified by [@ANCHOR: ses_webhook:test_log_survives_domain_delete]
+    @api.depends('domain_id.name')
+    def _compute_domain_name(self):
+        for log in self:
+            if log.domain_id:
+                log.domain_name = log.domain_id.name
 
     # [@ANCHOR: ses_webhook:already_handled]
     @api.model
