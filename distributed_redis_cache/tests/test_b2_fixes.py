@@ -391,6 +391,38 @@ class TestB2Fixes(HamsTransactionCase):
             "the same as it already clears _local_cache.",
         )
 
+    def test_poll_failure_flushes_local_cache_when_redis_returns(self):
+        # Tests [@ANCHOR: distributed_redis_cache:COMM_poll_and_clear_local_cache]
+        # A write made while Redis was unreachable never bumped the invalidation counter, so a worker that saw the same
+        # counter value before and after the outage would keep its (never-expiring) L1 entries forever. A failed poll
+        # must make the next successful poll flush L1 even though the counter did not change.
+        redis_cache._last_cache_counter = "same-counter"
+        redis_cache._local_cache["k"] = "stale"
+
+        class DownRedis:
+            def get(self, key):
+                raise redis_cache.redis.ConnectionError("down")
+
+        class UpRedis:
+            def get(self, key):
+                return "same-counter"
+
+        self.safe_patch(
+            "odoo.addons.distributed_redis_cache.redis_cache.get_redis_connection",
+            return_value=DownRedis(),
+        )
+        redis_cache.poll_and_clear_local_cache(self.env)
+        self.assertIn("k", redis_cache._local_cache, "an unreachable Redis alone must not flush L1 (it is the fallback).")
+        self.safe_patch(
+            "odoo.addons.distributed_redis_cache.redis_cache.get_redis_connection",
+            return_value=UpRedis(),
+        )
+        redis_cache.poll_and_clear_local_cache(self.env)
+        self.assertNotIn("k", redis_cache._local_cache, "the first good poll after a failed one must flush L1.")
+        redis_cache._local_cache["k2"] = "fresh"
+        redis_cache.poll_and_clear_local_cache(self.env)
+        self.assertIn("k2", redis_cache._local_cache, "only one flush per outage.")
+
     def test_clear_db_config_cache_drops_only_the_named_databases_entry(self):
         # Tests [@ANCHOR: distributed_redis_cache:clear_db_config_cache]
         redis_pool._db_configs["db_a"] = ("host-a", 6379, None)
