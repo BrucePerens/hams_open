@@ -604,8 +604,12 @@ class SesWebhookController(http.Controller):
         # non-2xx response makes SNS retry indefinitely) -- any failure
         # is logged to ses.webhook.log with status='failed' instead.
         except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: ses_webhook_process_catch_all]  # fmt: skip
-            _logger.error("Failed to process SNS Webhook: %s", str(e))
+            _logger.exception("Failed to process SNS Webhook %s for domain %s", message_id, domain.name)
             log_vals.update({'status': 'failed', 'error_message': str(e)})
+            if not suppression_failed:
+                # 200 stays (SNS must not retry), but nobody reads the log unprompted, so a lost member mail would go
+                # unnoticed: open a pager incident. A suppression failure answers 500 and SNS retries it, so it is not reported.
+                self._report_processing_failure(domain.name, message_id, e)
             
         finally:
             # log_vals['company_id'] is a related field computed from
@@ -617,6 +621,40 @@ class SesWebhookController(http.Controller):
         if suppression_failed:
             return request.make_response("Suppression failed", status=500)
         return request.make_response("OK", status=200)
+
+    # [@ANCHOR: ses_webhook:COMM_report_processing_failure]
+    def _report_processing_failure(self, domain_name, message_id, error):
+        """Open a pager incident for a notification that could not be processed (the raw payload stays in ses.webhook.log).
+
+        Returns False without pager_duty installed or when the incident cannot be opened (logged); never raises, because the
+        200 answer and the failed log row must still happen.
+        """
+        try:
+            if "pager.incident" not in request.env:
+                return False
+            incidents = request.env['zero_sudo.security.utils']._get_service_env(
+                "pager_duty.user_pager_service_internal"
+            )["pager.incident"]
+            # Odoo 19's Many2many.write_real() re-checks res.partner read as the transaction's default env, so the pager
+            # service account must be that env while it posts on the incident (hams_base does the same).
+            transaction = incidents.env.transaction
+            previous = transaction.default_env
+            transaction.default_env = incidents.env
+            try:
+                incidents.report_incident({
+                    "source": "SES webhook: inbound mail not processed",
+                    "severity": "high",
+                    "description": (
+                        f"SNS message {message_id} for domain {domain_name} failed ({type(error).__name__}: {error}). "
+                        "SNS was answered 200 so it will not retry; the raw payload is in the failed ses.webhook.log row."
+                    ),
+                })
+            finally:
+                transaction.default_env = previous
+            return True
+        except Exception:  # audit-ignore-catch-all: alerting must not change the 200 answer or lose the failed log row; the original failure is already logged
+            _logger.exception("Could not open the pager incident for SES webhook message %s", message_id)
+            return False
 
     # [@ANCHOR: ses_webhook:COMM_handle_ses_event_notification]
     def _handle_ses_event_notification(self, notification_type, ses_message):

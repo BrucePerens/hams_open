@@ -28,6 +28,8 @@ call, authenticates it, and hands the raw email off to Odoo's standard
    the real failure in `ses.webhook.log` rather than swallowing it, but
    returns 200 either way ([@ANCHOR: COMM_ses_webhook_process_catch_all]),
    except a Bounce or Complaint whose suppression failed: that answers 500 so SNS retries it and the address is not left unsuppressed.
+   Every other failure also opens a pager incident when pager_duty is installed, because nobody reads the log unprompted and a member's
+   mail would otherwise be lost silently ([@ANCHOR: ses_webhook:COMM_report_processing_failure]).
 3. **Administration**: Administrators manage per-domain webhook configuration
    (secret tokens, computed webhook URLs) and review ingestion activity
    (payload type, status, raw payload, error messages) through the module's
