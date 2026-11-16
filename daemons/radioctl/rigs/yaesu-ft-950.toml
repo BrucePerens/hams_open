@@ -5,7 +5,7 @@
 # Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
 # Gaps and open questions: No read-power (RM 5 is not PO here) and no levels (MG is 000-255 here, the engine's range is 0-100). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify"]
 
 [rig]
 id = "yaesu-ft-950"
@@ -15,6 +15,7 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 310
 frequency_digits = 8
+levels = { mic-gain = [0, 255] }
 
 [timing]
 timeout_ms = 2000
@@ -103,4 +104,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "manual", reference = "Yaesu 'FT-950 CAT Operation Reference Book' (Copyright 2007), file FT-950_CAT_Manual_ENG.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-950_CAT_Manual_ENG.pdf, sha256 8a3e89671ac9e2a62fdd8645eeb0ca42ee6340156a4d2976acaa38fde81dea89: MD, PDF p. 12: 1 LSB, 2 USB, 3 CW, 4 FM, 5 AM, 6 FSK (RTTY-LSB), 7 CW-R, 8 PKT-L, 9 FSK-R (RTTY-USB), A PKT-FM, B FM-N, C PKT-U, D AM-N", note = "Mapping to radioctl modes is ours: 6 is rtty, 9 is rtty-r, 8 (PKT-L) is data-r and C (PKT-U) is data; A, B and D are not described." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.levels"
+provenance = { kind = "manual", reference = "Yaesu 'FT-950 CAT Operation Reference Book' (Copyright 2007), file FT-950_CAT_Manual_ENG.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-950_CAT_Manual_ENG.pdf, sha256 8a3e89671ac9e2a62fdd8645eeb0ca42ee6340156a4d2976acaa38fde81dea89: AG p. 5, KS p. 11, MG p. 12, PC p. 14, RG p. 15", note = "AG P2 and RG P2 000-255 (P1 0 fixed), MG 000-255, PC 005-100, KS 004-060 WPM; only MG differs from the engine's default ranges. Where this block is silent the engine's default range applies." }
 verified = { state = "unverified" }
