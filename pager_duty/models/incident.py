@@ -30,6 +30,7 @@ TREND_OCCURRENCE_THRESHOLD = 5
 # manual triage. "high" (the field's own default) and "critical" keep
 # today's unchanged immediate-page behavior.
 TREND_TRACKED_SEVERITIES = ("low", "medium")
+SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
 # A paging incident that is still open (not acknowledged, not resolved) while its source keeps reporting it is announced
 # again this many hours after the last time it paged. 2026-10-28 to 11-05: a backup failure paged once, sat unacknowledged in
@@ -533,7 +534,17 @@ class PagerIncident(models.Model):
             }
             if window_expired:
                 write_vals["window_start"] = now
+            # [@ANCHOR: pager_duty:report_incident_severity_raise]
+            # A report of the same source at a higher severity (an expiry ladder: low at 30 days, critical at 2) raises the
+            # open incident, and pages when the new severity pages; keeping the first severity left it silent for good.
+            raised = SEVERITY_RANK.get(vals.get("severity"), -1) > SEVERITY_RANK.get(existing.severity, -1)
+            if raised:
+                write_vals["severity"] = vals["severity"]
+                if vals["severity"] not in TREND_TRACKED_SEVERITIES:
+                    write_vals["last_paged"] = now
             existing.write(write_vals)
+            if raised and vals["severity"] not in TREND_TRACKED_SEVERITIES:
+                self._notify_on_duty(existing, website_id, _("Incident severity raised to %s", vals["severity"]))
 
             if (
                 existing.severity in TREND_TRACKED_SEVERITIES
