@@ -24,8 +24,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 274 |
-| manual-checked | 38 |
+| unverified | 251 |
+| manual-checked | 61 |
 | transcript-checked | 0 |
 | hardware-verified | 1 |
 
@@ -144,10 +144,10 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 23004 | DTTS Microwave Society | DttSP UDP | D | other_network | - | - | unverified | - | not applicable |
 | 33001 | ELAD | FDM-DUO | D | other_serial | - | `elad-fdm-duo` | unverified | - | described |
 | 2021 | Elecraft | K2 | A | elecraft_ascii | elecraft | `elecraft-k2` | unverified | - | described |
-| 2029 | Elecraft | K3 | A | elecraft_ascii | elecraft | `elecraft-k3` | unverified | - | described |
-| 2043 | Elecraft | K3S | A | elecraft_ascii | elecraft | `elecraft-k3s` | unverified | - | described |
-| 2047 | Elecraft | K4 | A | elecraft_ascii | elecraft | `elecraft-k4` | unverified | - | described |
-| 2044 | Elecraft | KX2 | A | elecraft_ascii | elecraft | `elecraft-kx2` | unverified | - | described |
+| 2029 | Elecraft | K3 | A | elecraft_ascii | elecraft | `elecraft-k3` | manual-checked | - | described |
+| 2043 | Elecraft | K3S | A | elecraft_ascii | elecraft | `elecraft-k3s` | manual-checked | - | described |
+| 2047 | Elecraft | K4 | A | elecraft_ascii | elecraft | `elecraft-k4` | manual-checked | - | described |
+| 2044 | Elecraft | KX2 | A | elecraft_ascii | elecraft | `elecraft-kx2` | manual-checked | - | described |
 | 2045 | Elecraft | KX3 | A | elecraft_ascii | elecraft | `elecraft-kx3` | hardware-verified | K6BP (bench run by Claude on bruce-toughpad), 2026-11-05 | described |
 | 2038 | Elecraft | XG3 | A | elecraft_ascii | elecraft | `elecraft-xg3` | manual-checked | - | described |
 | 25001 | Elektor | Elektor 3/04 | D | other_serial | - | - | unverified | - | not applicable |
@@ -185,7 +185,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3008 | Icom | IC-575 | A | icom_civ | civ | `icom-ic-575` | unverified | - | described |
 | 3060 | Icom | IC-7000 | A | icom_civ | civ | `icom-ic-7000` | unverified | - | described |
 | 3055 | Icom | IC-703 | A | icom_civ | civ | `icom-ic-703` | unverified | - | described |
-| 3085 | Icom | IC-705 | A | icom_civ | civ | `icom-ic-705` | unverified | - | described |
+| 3085 | Icom | IC-705 | A | icom_civ | civ | `icom-ic-705` | manual-checked | - | described |
 | 3009 | Icom | IC-706 | A | icom_civ | civ | `icom-ic-706` | unverified | - | described |
 | 3010 | Icom | IC-706MkII | A | icom_civ | civ | `icom-ic-706mkii` | unverified | - | described |
 | 3011 | Icom | IC-706MkIIG | A | icom_civ | civ | `icom-ic-706mkiig` | manual-checked | - | described |
@@ -197,7 +197,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3015 | Icom | IC-726 | A | icom_civ | civ | `icom-ic-726` | unverified | - | described |
 | 3016 | Icom | IC-728 | A | icom_civ | civ | `icom-ic-728` | unverified | - | described |
 | 3017 | Icom | IC-729 | A | icom_civ | civ | `icom-ic-729` | unverified | - | described |
-| 3073 | Icom | IC-7300 | A | icom_civ | civ | `icom-ic-7300` | unverified | - | described |
+| 3073 | Icom | IC-7300 | A | icom_civ | civ | `icom-ic-7300` | manual-checked | - | described |
 | 3019 | Icom | IC-735 | A | icom_civ | civ | `icom-ic-735` | unverified | - | described |
 | 3020 | Icom | IC-736 | A | icom_civ | civ | `icom-ic-736` | unverified | - | described |
 | 3021 | Icom | IC-737 | A | icom_civ | civ | `icom-ic-737` | unverified | - | described |
@@ -212,7 +212,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3057 | Icom | IC-756PROIII | A | icom_civ | civ | `icom-ic-756proiii` | unverified | - | described |
 | 3063 | Icom | IC-7600 | A | icom_civ | civ | `icom-ic-7600` | manual-checked | - | described |
 | 3028 | Icom | IC-761 | A | icom_civ | civ | `icom-ic-761` | unverified | - | described |
-| 3078 | Icom | IC-7610 | A | icom_civ | civ | `icom-ic-7610` | unverified | - | described |
+| 3078 | Icom | IC-7610 | A | icom_civ | civ | `icom-ic-7610` | manual-checked | - | described |
 | 3029 | Icom | IC-765 | A | icom_civ | civ | `icom-ic-765` | unverified | - | described |
 | 3062 | Icom | IC-7700 | A | icom_civ | civ | `icom-ic-7700` | manual-checked | - | described |
 | 3030 | Icom | IC-775 | A | icom_civ | civ | `icom-ic-775` | unverified | - | described |
@@ -275,7 +275,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2035 | Kenwood | TM-V71(A) | B | kenwood_hh_ascii | kenwood_hh | `kenwood-tm-v71` | unverified | - | described |
 | 2030 | Kenwood | TRC-80 | A | kenwood_ascii | kenwood | `kenwood-trc-80` | unverified | - | described |
 | 2025 | Kenwood | TS-140S | A | kenwood_ascii | kenwood | `kenwood-ts-140s` | unverified | - | described |
-| 2014 | Kenwood | TS-2000 | A | kenwood_ascii | kenwood | `kenwood-ts-2000` | unverified | - | described |
+| 2014 | Kenwood | TS-2000 | A | kenwood_ascii | kenwood | `kenwood-ts-2000` | manual-checked | - | described |
 | 2002 | Kenwood | TS-440S | A | kenwood_ascii | kenwood | `kenwood-ts-440s` | manual-checked | - | described |
 | 2003 | Kenwood | TS-450S | A | kenwood_ascii | kenwood | `kenwood-ts-450s` | manual-checked | - | described |
 | 2028 | Kenwood | TS-480 | A | kenwood_ascii | kenwood | `kenwood-ts-480` | manual-checked | - | described |
@@ -382,40 +382,40 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1024 | Yaesu | FT-1000MP | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000mp` | unverified | - | described |
 | 1029 | Yaesu | FT-2000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-2000` | unverified | - | described |
 | 1027 | Yaesu | FT-450 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450` | manual-checked | - | described |
-| 1046 | Yaesu | FT-450D | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450d` | unverified | - | described |
+| 1046 | Yaesu | FT-450D | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450d` | manual-checked | - | described |
 | 1039 | Yaesu | FT-600 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-600` | unverified | - | described |
 | 1047 | Yaesu | FT-650 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-650` | unverified | - | described |
-| 1049 | Yaesu | FT-710 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-710` | unverified | - | described |
+| 1049 | Yaesu | FT-710 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-710` | manual-checked | - | described |
 | 1010 | Yaesu | FT-736R | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-736r` | unverified | - | described |
 | 1005 | Yaesu | FT-747GX | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-747gx` | unverified | - | described |
 | 1006 | Yaesu | FT-757GX | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-757gx` | unverified | - | described |
 | 1007 | Yaesu | FT-757GXII | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-757gxii` | unverified | - | described |
 | 1009 | Yaesu | FT-767GX | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-767gx` | unverified | - | described |
-| 1020 | Yaesu | FT-817 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-817` | unverified | - | described |
+| 1020 | Yaesu | FT-817 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-817` | manual-checked | - | described |
 | 1041 | Yaesu | FT-818 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-818` | unverified | - | described |
 | 1011 | Yaesu | FT-840 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-840` | unverified | - | described |
 | 1001 | Yaesu | FT-847 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-847` | unverified | - | described |
 | 1038 | Yaesu | FT-847UNI | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-847uni` | unverified | - | described |
-| 1022 | Yaesu | FT-857 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-857d` | unverified | - | described |
+| 1022 | Yaesu | FT-857 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-857d` | manual-checked | - | described |
 | 1015 | Yaesu | FT-890 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-890` | unverified | - | described |
-| 1036 | Yaesu | FT-891 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-891` | unverified | - | described |
+| 1036 | Yaesu | FT-891 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-891` | manual-checked | - | described |
 | 1023 | Yaesu | FT-897 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897` | unverified | - | described |
-| 1043 | Yaesu | FT-897D | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897d` | unverified | - | described |
+| 1043 | Yaesu | FT-897D | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897d` | manual-checked | - | described |
 | 1013 | Yaesu | FT-900 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-900` | unverified | - | described |
 | 1014 | Yaesu | FT-920 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-920` | unverified | - | described |
 | 1028 | Yaesu | FT-950 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-950` | unverified | - | described |
 | 1031 | Yaesu | FT-980 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-980` | unverified | - | described |
 | 1016 | Yaesu | FT-990 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-990` | unverified | - | described |
 | 1048 | Yaesu | FT-990 Old Rom | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-990-oldrom` | unverified | - | described |
-| 1035 | Yaesu | FT-991 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-991a` | unverified | - | described |
-| 1042 | Yaesu | FTDX-10 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx10` | unverified | - | described |
-| 1040 | Yaesu | FTDX-101D | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx101d` | unverified | - | described |
-| 1044 | Yaesu | FTDX-101MP | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-101mp` | unverified | - | described |
-| 1034 | Yaesu | FTDX-1200 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-1200` | unverified | - | described |
-| 1037 | Yaesu | FTDX-3000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-3000` | unverified | - | described |
-| 1032 | Yaesu | FTDX-5000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-5000` | unverified | - | described |
-| 1030 | Yaesu | FTDX-9000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000` | unverified | - | described |
-| 1050 | Yaesu | FTDX-9000 Old | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000-old` | unverified | - | described |
+| 1035 | Yaesu | FT-991 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-991a` | manual-checked | - | described |
+| 1042 | Yaesu | FTDX-10 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx10` | manual-checked | - | described |
+| 1040 | Yaesu | FTDX-101D | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx101d` | manual-checked | - | described |
+| 1044 | Yaesu | FTDX-101MP | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-101mp` | manual-checked | - | described |
+| 1034 | Yaesu | FTDX-1200 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-1200` | manual-checked | - | described |
+| 1037 | Yaesu | FTDX-3000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-3000` | manual-checked | - | described |
+| 1032 | Yaesu | FTDX-5000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-5000` | manual-checked | - | described |
+| 1030 | Yaesu | FTDX-9000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000` | manual-checked | - | described |
+| 1050 | Yaesu | FTDX-9000 Old | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-9000-old` | manual-checked | - | described |
 | 1025 | Yaesu | MARK-V Field FT-1000MP | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000mp-mkv-field` | unverified | - | described |
 | 1004 | Yaesu | MARK-V FT-1000MP | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000mp-mkv` | unverified | - | described |
 | 1026 | Yaesu | VR-5000 | B | yaesu_legacy | yaesu_legacy | `yaesu-vr-5000` | unverified | - | described |
