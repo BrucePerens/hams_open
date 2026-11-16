@@ -10,6 +10,7 @@
                 <field name="create_date"/>
                 <field name="user_id"/>
                 <field name="group_id"/>
+                <field name="target_label" optional="hide"/>
                 <field name="state" widget="badge" 
                        decoration-danger="state=='new'" 
                        decoration-success="state=='approved'" 
@@ -34,6 +35,7 @@
                         <h1>
                             <field name="user_id" readonly="1" invisible="not user_id"/>
                             <field name="group_id" readonly="1" invisible="not group_id"/>
+                            <field name="target_label" readonly="1" invisible="user_id or group_id"/>
                         </h1>
                     </div>
                     <group>
