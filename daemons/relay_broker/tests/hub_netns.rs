@@ -12,7 +12,7 @@ mod common;
 
 use std::net::Ipv4Addr;
 use std::process::{Child, Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use common::temp_dir;
 use relay_broker::hub::{dnsmasq_conf, hostapd_conf, HubSettings};
@@ -218,16 +218,14 @@ fn the_generated_hub_config_runs_in_real_dnsmasq_and_parses_in_real_hostapd() {
     );
 
     // DHCP: poll until dnsmasq answers.
-    let started = Instant::now();
+    let mut attempts = 0;
     let lease = loop {
         let (ok, text) = in_ns(CLIENT_NS, &["python3", "-I", "-c", DHCP_PROBE]);
         if ok {
             break text;
         }
-        assert!(
-            started.elapsed() < Duration::from_secs(15),
-            "no DHCP offer from dnsmasq: {text}"
-        );
+        attempts += 1;
+        assert!(attempts < 30, "no DHCP offer from dnsmasq: {text}");
         std::thread::sleep(Duration::from_millis(500));
     };
     let get = |key: &str| {
