@@ -66,7 +66,15 @@ class UserWebsitesApi(http.Controller):
                 dns_env_svc = utils._get_service_env("ham_dns.user_dns_api_service")
                 all_domains.extend(read_all_names(dns_env_svc["ham.dns.zone"]))
             except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: test_domains_api_returns_all_domains]
+                # Verified by [@ANCHOR: COMM_test_domains_api_refuses_a_partial_list]
+                # A list without the DNS zones would be taken as the full one: those domains' certificates would
+                # quietly stop being renewed. Refuse instead; the caller retries (edge_routing's PagerDuty push does the same).
                 _logger.exception("Failed to fetch ham.dns.zone domains: %s", e)
+                return request.make_response(
+                    json.dumps({"error": "the DNS zone list could not be read"}),
+                    status=503,
+                    headers=[("Content-Type", "application/json"), ("Retry-After", "60")],
+                )
 
         # Deduplicate and format
         unique_domains = list(set(all_domains))
