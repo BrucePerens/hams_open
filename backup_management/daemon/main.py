@@ -897,7 +897,10 @@ def execute_job(ch, method, properties, body):
                             text_chunk=unsent_buffer,
                         )
                         unsent_buffer = ""
-                    except urllib.error.URLError as e:
+                    except OdooAPIError as e:
+                        # _json2_call raises OdooAPIError (OdooUnavailableError for a connection failure or 5xx),
+                        # never URLError. The text stays in unsent_buffer and goes out with the final update; the
+                        # running command must not be abandoned over a log line.
                         logger.warning("Throttled log update failed: %s", e)
                     last_update = time.time()
 

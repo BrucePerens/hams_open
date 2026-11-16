@@ -704,6 +704,51 @@ class TestExecuteJobS3B2CommandBuilding(unittest.TestCase):
         self.assertEqual(job_id, 3)
 
 
+class TestLogUpdateFailureDuringARunningCommand(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:COMM_test_backup_worker_real]
+
+    @patch("main.time")
+    @patch("main._json2_call")
+    @patch("main.subprocess.Popen")
+    @patch("main.shutil.which", return_value="/usr/bin/kopia")
+    def test_a_failed_throttled_log_update_does_not_abandon_the_running_command(
+        self, mock_which, mock_popen, mock_json2, mock_time
+    ):
+        # _json2_call turns every connection failure and 5xx into OdooUnavailableError, never URLError, so a log update
+        # that failed while Odoo restarted escaped the read loop: the still-running snapshot was never waited for, and the
+        # job was requeued and run a second time on top of it.
+        ticks = iter(range(0, 1000, 3))
+        mock_time.time.side_effect = lambda: next(ticks)
+        proc = MagicMock()
+        proc.stdout.read.side_effect = ["first output\n", "second output\n", ""]
+        proc.wait.return_value = 0
+        mock_popen.return_value = proc
+
+        def json2(model, method, **kwargs):
+            if method == "append_log" and "first output" in kwargs["text_chunk"] and not json2.failed:
+                json2.failed = True
+                raise backup_worker.OdooUnavailableError("JSON-2 API HTTP Error 502")
+            return True
+
+        json2.failed = False
+        mock_json2.side_effect = json2
+        ch = MagicMock()
+        method = MagicMock()
+        method.delivery_tag = "tag-9"
+        body = backup_worker.json.dumps(
+            {"job_id": 9, "engine": "kopia", "target_path": "/var/lib/odoo/backups/site1", "config_id": 4, "storage_type": "local"}
+        )
+        backup_worker.execute_job(ch, method, MagicMock(), body)
+
+        proc.wait.assert_called_once()
+        ch.basic_nack.assert_not_called()
+        ch.basic_ack.assert_called_once()
+        writes = [c.kwargs["vals"] for c in mock_json2.call_args_list if c.args[:2] == ("backup.job", "write")]
+        self.assertEqual(writes[-1], {"state": "done"})
+        sent = "".join(c.kwargs["text_chunk"] for c in mock_json2.call_args_list if c.args[:2] == ("backup.job", "append_log"))
+        self.assertIn("second output", sent)
+
+
 class TestUnexpectedExceptionIsolation(unittest.TestCase):
     """An exception outside execute_job's expected types fails that one job."""
 
