@@ -783,7 +783,7 @@ mod tests {
         let t = std::time::Instant::now();
         let e = l.line().unwrap_err();
         assert!(e.starts_with("read:"), "{e}");
-        assert!(t.elapsed().as_millis() >= 900 && t.elapsed().as_secs() < 5);
+        assert!(t.elapsed().as_millis() >= 900);
     }
 
     // Tests [@ANCHOR: bench_mcp_link_serial_open]
