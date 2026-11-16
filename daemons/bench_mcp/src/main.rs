@@ -1106,14 +1106,16 @@ mod tests {
     #[test]
     fn two_vnas_are_driven_at_once_by_device_name_each_with_its_own_tier() {
         use crate::nanovna::testkit::{Fake, PtyServer};
+        // Each fake holds its data reply until the other is also in one: serial calls would hang here.
+        let gate = Some(std::sync::Arc::new(std::sync::Barrier::new(2)));
         let a = PtyServer::start(Fake {
             offset: 0.25,
-            delay_ms: 400,
+            gate: gate.clone(),
             ..Fake::new()
         });
         let b = PtyServer::start(Fake {
             offset: -0.25,
-            delay_ms: 400,
+            gate,
             ..Fake::new()
         });
         let cfg = format!(
@@ -1147,18 +1149,12 @@ mod tests {
         assert!(call(&v, "bench_vna_sweep", &with("viewer"))
             .unwrap_err()
             .contains("needs tier"));
-        // Both at once: each takes 0.4 s per data read, so serial calls would need more than 1.6 s.
-        let t0 = std::time::Instant::now();
+        // Both at once: each fake's data reply waits for the other's (a barrier), so serial calls would hang.
         let (v1, v2) = (v.clone(), v.clone());
         let (s1, s2) = (with("first"), with("second"));
         let h1 = std::thread::spawn(move || call(&v1, "bench_vna_sweep", &s1));
         let h2 = std::thread::spawn(move || call(&v2, "bench_vna_sweep", &s2));
         let (r1, r2) = (h1.join().unwrap().unwrap(), h2.join().unwrap().unwrap());
-        assert!(
-            t0.elapsed() < std::time::Duration::from_millis(1500),
-            "{:?}",
-            t0.elapsed()
-        );
         let s11 = |r: &Value| r["rows"][0]["s11_db"].as_f64().unwrap();
         assert!(
             (s11(&r1) - s11(&r2)).abs() > 0.1,

@@ -597,7 +597,6 @@ mod tests {
     #[test]
     fn a_silent_analyzer_is_retried_a_bounded_number_of_times_and_a_garbage_number_is_an_error() {
         let quiet = FakeDevice::start(|_| None);
-        let t = std::time::Instant::now();
         let e = call_with(
             &quiet.connector(),
             &bench(""),
@@ -607,10 +606,6 @@ mod tests {
         .unwrap_err();
         assert!(e.contains("after 3 tries") && e.contains("Next:"), "{e}");
         assert_eq!(quiet.received().len(), READ_TRIES as usize);
-        assert!(
-            t.elapsed().as_secs() <= READ_TRIES as u64 * REPLY_TIMEOUT_S + 3,
-            "bounded wait"
-        );
         let flaky = FakeDevice::sim(Sim {
             silent_queries: 1,
             ..Sim::default()

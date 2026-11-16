@@ -255,11 +255,9 @@ fn a_server_killed_while_the_rig_is_keyed_is_covered_by_the_watchdog_and_the_nex
     let _ = id;
     // The watchdog process had the other end of the server's pipe: it un-keys the rig within moments, long before the 20 s are up.
     // The wait is an event (the PTT reads 0); the bound only has to be well under the interval, so a slow machine cannot fail it.
-    let killed = Instant::now();
     wait_until(12, "the watchdog to un-key the rig", || {
         ptt_of(port).as_deref() == Some("0")
     });
-    assert!(killed.elapsed() < Duration::from_secs(12));
     assert!(
         b.managed().join("dr.keyed.json").exists(),
         "the dead server could not remove its record"
