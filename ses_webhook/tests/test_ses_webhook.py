@@ -1500,6 +1500,17 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(self.env['mail.mail'].search_count([]), before)
         self.assertFalse(self.env['mail.mail'].search([('email_to', '=', 'unknown')]))
 
+    def test_19d_a_sender_is_nudged_once_a_day(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+            "ses_webhook.user_ses_webhook_service_internal"
+        )
+        submissions = self.env['ses.webhook.pending_submission'].with_user(svc_uid).with_company(self.company_a)
+        for _round in range(3):
+            submissions.create_and_notify(sender_email="loop@test-a.com", raw_content="x", domain=self.domain_a)
+        self.assertEqual(submissions.search_count([('sender_email', '=', 'loop@test-a.com')]), 3)
+        self.assertEqual(len(self.env['mail.mail'].search([('email_to', '=', 'loop@test-a.com')])), 1)
+
     def test_19c_the_registration_nudge_is_really_sent_not_left_in_exception(self):
         # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
         # Test mode disables outgoing mail, so test_19 only sees that a mail.mail row exists. With the
