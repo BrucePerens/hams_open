@@ -355,6 +355,28 @@ class TestPagerIncidentStandard(HamsTransactionCase):
         self.assertGreater(incident.last_paged, old)
         self.assertEqual(incident.occurrence_count, 2)
 
+    def test_06e_a_higher_severity_report_for_an_open_incident_raises_it_and_pages(self):
+        # Tests [@ANCHOR: pager_duty:report_incident_severity_raise]
+        # A credential-expiry check reports the same source at low (30 days left), then high, then critical (2 days left).
+        # The dedupe used to keep the first, silent "low" incident, so the later, paging severities never paged anyone.
+        self.safe_patch("odoo.addons.pager_duty.models.incident.redis_pool", None)
+        source = "expiry_ladder"
+        low_id = self.incident_model.report_incident({"source": source, "severity": "low", "description": "30 days left"})
+        incident = self.incident_model.browse(low_id)
+        notified = self.safe_patch_object(type(incident), "_notify_on_duty")
+        self.assertEqual(self.incident_model.report_incident({"source": source, "severity": "low", "description": "29 days left"}), low_id)
+        notified.assert_not_called()
+        self.assertEqual(self.incident_model.report_incident({"source": source, "severity": "critical", "description": "2 days left"}), low_id)
+        incident.invalidate_recordset(["severity", "last_paged"])
+        self.assertEqual(incident.severity, "critical")
+        notified.assert_called_once()
+        self.assertIn("critical", notified.call_args.args[2])
+        # A later, lower severity report does not lower it again.
+        self.incident_model.report_incident({"source": source, "severity": "high", "description": "6 days left"})
+        incident.invalidate_recordset(["severity"])
+        self.assertEqual(incident.severity, "critical")
+        notified.assert_called_once()
+
     def test_04_views_render(self):
         # [@ANCHOR: test_pager_view]
         v1 = self.env["pager.incident"].get_view(view_type="form")
