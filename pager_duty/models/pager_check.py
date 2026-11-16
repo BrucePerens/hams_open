@@ -656,7 +656,10 @@ class PagerCheck(models.Model):
             # after the fact -- avoids the create-then-chmod race
             # entirely: the file is never briefly (or permanently)
             # world-readable.
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            # Written beside the target and renamed over it: a failure part way (a full disk) leaves the previous file whole.
+            # Truncating the target first left an empty one, which halts the daemon's next start ("Failed to parse ... as valid JSON").
+            tmp_path = f"{path}.tmp.{os.getpid()}"
+            fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             # The 0o600 mode argument above only applies when
             # os.open() actually CREATES the file. Re-exporting over a pager_config.json
             # that already exists -- the overwhelmingly common case, since every
@@ -667,12 +670,17 @@ class PagerCheck(models.Model):
             # practice. fchmod() on the already-open, already-truncated fd tightens it
             # BEFORE any credential is written into it, so there is still no window where
             # the current contents are readable by another local account.
-            os.fchmod(fd, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                # fd is now owned by `f` -- its own `with` exit closes it,
-                # on every path including a write failure, so there is no
-                # separate os.close() to pair with this os.open().
-                f.write(json_content)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    os.fchmod(f.fileno(), 0o600)
+                    # fd is now owned by `f` -- its own `with` exit closes it,
+                    # on every path including a write failure, so there is no
+                    # separate os.close() to pair with this os.open().
+                    f.write(json_content)
+                os.replace(tmp_path, path)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
         except OSError as e:
             _logger.warning("Failed to write daemon configuration to %s: %s", path, e)
             write_error = e
