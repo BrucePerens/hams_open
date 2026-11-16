@@ -5,7 +5,6 @@
 An injected SystemExit is only raised when the thread next runs Python bytecode, so a thread blocked in a C call (here a lock
 acquire, standing in for a socket read) never sees it. Every later test's teardown used to re-wait the full timeout on it."""
 import threading
-import time
 
 from odoo.addons.zero_sudo.tests import common
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -36,12 +35,19 @@ class TestWerkzeugThreadWait(HamsTransactionCase):
 
         self.addCleanup(cleanup)
 
-        first = time.time()
+        joins = []
+        real_join = thread.join
+
+        def counting_join(timeout=None):
+            joins.append(timeout)
+            return real_join(0.05)  # a short real wait: the thread is stuck whatever timeout is asked for
+
+        self.safe_patch_object(thread, "join", counting_join)
         common.wait_for_werkzeug_threads(timeout=0.3)
-        self.assertGreaterEqual(time.time() - first, 0.3, "the first teardown does wait for the thread")
+        self.assertTrue(joins, "the first teardown does wait for the thread")
         self.assertIn(thread, common._abandoned_werkzeug_threads)
         self.assertIn(thread, common._active_werkzeug_threads, "it stays tracked until it really returns")
 
-        second = time.time()
+        joins.clear()
         common.wait_for_werkzeug_threads(timeout=30.0)
-        self.assertLess(time.time() - second, 15.0, "a thread already proven un-interruptible is not waited on again")
+        self.assertEqual(joins, [], "a thread already proven un-interruptible is not waited on again")
