@@ -149,6 +149,8 @@ Active `cloudflare.rate.limit` rows (matching expression, mitigation action, req
 - `[@ANCHOR: cloudflare:COMM_rate_limit_build_rules]` `_build_rate_limit_rules(website)` turns the website's active rows into Cloudflare rules and lists rows that cannot be pushed. **Tests:** `test_row_becomes_a_ratelimit_rule`.
 - `[@ANCHOR: cloudflare:COMM_rate_limit_plan]` `plan_rate_limits(website_id=None)` reads the zone (GET only) and returns `ok`, `message`, `text`, `hash`, `writes`, `rules`, `ruleset_id`, `ruleset_name`. **Tests:** `test_unreadable_ruleset_is_refused_not_treated_as_empty`, `test_plan_writes_nothing_stale_hash_refused_and_bad_rows_refused`.
 - `[@ANCHOR: cloudflare:COMM_rate_limit_push]` `action_push_rate_limits(website_id=None, plan_hash=None)` applies the plan and returns `(ok, text)`. **Tests:** `test_push_creates_then_second_push_has_nothing_to_do`, `test_unmanaged_rules_are_carried_through_by_update`, `test_missing_credentials_and_failed_write_are_reported`, `test_inactive_row_is_removed_from_the_zone`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_website]` `_rate_limit_website(website_id)` returns the given website or the current one. **Tests:** `test_rate_limit_website_resolves_id_or_current`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_toast]` `_rate_limit_toast(title, message, ok, sticky)` builds the display_notification action. **Tests:** `test_rate_limit_toast_shape`.
 - `[@ANCHOR: cloudflare:COMM_rate_limit_row_plan_push]` and `[@ANCHOR: cloudflare:COMM_rate_limit_row_push_to_cloudflare]` are the form buttons "Show plan (changes nothing)" and "Push rate limits to Cloudflare", run through the WAF service user. **Tests:** `test_form_buttons_plan_then_push`.
 
 ## Pure planner interface (`utils/cache_plan.py`, `utils/dns_plan.py`)
