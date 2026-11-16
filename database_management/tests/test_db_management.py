@@ -103,7 +103,14 @@ class TestDatabaseManagement(HamsTransactionCase):
         # Tests [@ANCHOR: COMM_test_dba_cron]
         mock_env = MagicMock()
         with self.safe_patch("odoo.addons.zero_sudo.models.security_utils.ZeroSudoSecurityUtils._get_service_env", return_value=mock_env):
-            self.env.ref("database_management.cron_check_bloat")._trigger()
+            cron = self.env.ref("database_management.cron_check_bloat")
+            Trigger = self.env["ir.cron.trigger"].with_user(self.env.ref("base.user_root"))
+            before = Trigger.search_count([("cron_id", "=", cron.id)])
+            cron._trigger()
+            self.assertEqual(
+                Trigger.search_count([("cron_id", "=", cron.id)]), before + 1,
+                "triggering the bloat cron must schedule one run",
+            )
             
     def test_02b_bloat_alert_synergy(self):
         # Tests [@ANCHOR: COMM_bloat_alert_synergy]
