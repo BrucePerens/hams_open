@@ -6,7 +6,9 @@ OnFailure unit waits out an Odoo restart instead of exiting 1 and leaving a fail
 """
 import io
 import os
+import shutil
 import sys
+import tempfile
 import threading
 import unittest
 import urllib.error
@@ -227,6 +229,35 @@ class _RedirectProbe:
         for server in (self.first, self.sink):
             server.shutdown()
             server.server_close()
+
+
+class RefusalTests(unittest.TestCase):
+    def test_a_key_file_without_the_key_is_refused(self):
+        # Tests [@ANCHOR: hams_helpdesk:daemon_load_key]
+        path = os.path.join(tempfile.mkdtemp(), "key.env")
+        self.addCleanup(shutil.rmtree, os.path.dirname(path), ignore_errors=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("# comment\nOTHER=1\nODOO_RPC_KEY=\n")
+        with self.assertRaises(er.ReportError) as raised:
+            er.load_key(path)
+        self.assertIn("no ODOO_RPC_KEY", str(raised.exception))
+
+    def test_an_answer_that_is_not_json_is_a_report_error_without_the_body(self):
+        # Tests [@ANCHOR: hams_helpdesk:daemon_post_report]
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b"<html>secret-body</html>"
+        with mock.patch.object(er, "load_key", return_value="k"), mock.patch.object(er._OPENER, "open", return_value=response):
+            with self.assertRaises(er.ReportError) as raised:
+                er.post_report({"unit": "a.service"}, url="http://odoo:8069")
+        self.assertNotIsInstance(raised.exception, er.OdooUnavailable)
+        self.assertNotIn("secret-body", str(raised.exception))
+
+    def test_an_unreadable_journal_or_unit_result_is_empty_text(self):
+        # Tests [@ANCHOR: hams_helpdesk:daemon_journal_tail]
+        # Tests [@ANCHOR: hams_helpdesk:daemon_unit_result]
+        with mock.patch.object(er.subprocess, "run", side_effect=FileNotFoundError("journalctl")):
+            self.assertEqual(er.journal_tail("a.service"), "")
+            self.assertEqual(er.unit_result("a.service"), "")
 
 
 class PostReportRefusesARedirectTests(unittest.TestCase):
